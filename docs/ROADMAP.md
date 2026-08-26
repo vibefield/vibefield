@@ -1105,7 +1105,7 @@ ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-0
 pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata **0.13.0** (via ICE;
 the lockfile holds one physical strata/Loro graph) ·
 `@vibecook/ice` **0.11.0** (registry pin; **bumped 2026-08-25 — build-selected magnet grid,
-Dot default plus device-local Dot/Needle tuning**, with the runtime classic/magnet preference
+Dot default plus device-local Dot/Needle tuning and the full 11-field UI Bench contract**, with the runtime classic/magnet preference
 retired; pin-drift history 2026-08-07: this line and `CLAUDE.md` had trailed the manifests
 at 0.2.0) · **`apps/ios` is in
 lockstep too** (`Package.resolved`: ghosttea 0.9.2 / truffle 0.7.12), which is what retires the

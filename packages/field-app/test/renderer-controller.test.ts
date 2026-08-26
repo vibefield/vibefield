@@ -359,7 +359,7 @@ describe("the renderer/window target controller", () => {
     await activated.promise;
     expect(isCommandBound(`${id}.run`)).toBe(false);
     expect(hasSurface(`${id}.panel`)).toBe(false);
-    expect(doc.querySelector("link[data-vf-plugin-style]")).toBeNull();
+    expect(doc.querySelector("[data-vf-plugin-style]")).toBeNull();
 
     release.resolve();
     await loading;
@@ -374,7 +374,7 @@ describe("the renderer/window target controller", () => {
     expect(signal?.aborted).toBe(true);
     expect(isCommandBound(`${id}.run`)).toBe(false);
     expect(hasSurface(`${id}.panel`)).toBe(false);
-    expect(doc.querySelector("link[data-vf-plugin-style]")).toBeNull();
+    expect(doc.querySelector("[data-vf-plugin-style]")).toBeNull();
     await disabled;
     await runtime.close();
   });

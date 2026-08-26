@@ -1,9 +1,15 @@
+import type { PoleSource } from "@vibecook/ice/ground";
 import { ground } from "@vibecook/ice/ground";
 import { InfiniteCanvas, type InfiniteCanvasProps } from "@vibecook/ice/react";
 import { type ReactElement, useMemo } from "react";
 import { haloPoles } from "../cursor/halo-poles";
 
-export type InfiniteCanvasGroundProps = Omit<InfiniteCanvasProps, "ground">;
+export interface InfiniteCanvasGroundProps extends Omit<InfiniteCanvasProps, "ground"> {
+  /** Extra app-owned field sources, used by isolated real-ground specimens. */
+  additionalPoleSources?: readonly PoleSource[];
+}
+
+const NO_ADDITIONAL_POLES: readonly PoleSource[] = [];
 
 /**
  * The field's canonical P0 composition: ICE's build-selected magnet grid,
@@ -16,8 +22,12 @@ export type InfiniteCanvasGroundProps = Omit<InfiniteCanvasProps, "ground">;
  * runIf-gated Cur producer settles back to zero idle frames.
  */
 export function InfiniteCanvasGround(props: InfiniteCanvasGroundProps): ReactElement {
+  const { additionalPoleSources = NO_ADDITIONAL_POLES, ...canvasProps } = props;
   // A ground factory owns one mount's renderer state. Keep it stable for the
   // component lifetime; InfiniteCanvas disposes the resulting layer on unmount.
-  const groundFactory = useMemo(() => ground({ poles: haloPoles() }), []);
-  return <InfiniteCanvas {...props} ground={groundFactory} />;
+  const groundFactory = useMemo(
+    () => ground({ poles: [haloPoles(), ...additionalPoleSources] }),
+    [additionalPoleSources],
+  );
+  return <InfiniteCanvas {...canvasProps} ground={groundFactory} />;
 }

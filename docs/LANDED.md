@@ -4278,3 +4278,15 @@ existing chrome-owned presentation state into the same `canvasGridConfig`.
 Focused grid/persistence/Settings/UI-Bench tests are 21/21; the real shared ICE
 specimen was eyeballed Dot→Needle in light and Needle in dark; `pnpm verify`
 again exits 0 after the follow-up.
+
+**Same-day Design System completion.** The visual-tweak workbench now owns a
+typed `magnetGrid` block matching all eleven fields of ICE 0.11's
+`GridMagnetConfig`: glyph, reach, polarity, widget-source valve/strength/radius,
+alignment, needle length/width, source cap, and zoom fade. Every control flows
+through `canvasGridConfig` into the same `InfiniteCanvasGround` used by the
+product; the isolated bench adds ICE's local-pointer pole so field tuning is
+observable without a document, while product composition remains halo-driven.
+Preset exports move to v3 and round-trip the complete block; v1/v2 imports
+migrate to the reviewed defaults atomically. Focused grid/codec/control tests
+are 15/15, field-app typecheck is green, and browser verification exercised the
+real GPU specimen from Dot/60px to Needle/120px.

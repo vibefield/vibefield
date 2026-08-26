@@ -1,4 +1,5 @@
 import { createCanvasEngine, type GridConfig } from "@vibecook/ice";
+import { localPointerPoles, type PoleSource } from "@vibecook/ice/ground";
 import { type CSSProperties, type ReactElement, useEffect, useState } from "react";
 import { InfiniteCanvasGround } from "../field/InfiniteCanvasGround";
 
@@ -9,6 +10,8 @@ export interface InfiniteCanvasGroundPreviewProps {
   interactive?: boolean;
   label?: string;
 }
+
+const PREVIEW_POLE_SOURCES: readonly PoleSource[] = [localPointerPoles()];
 
 /**
  * A controller-free mount of the production ground. The bench supplies only a
@@ -62,6 +65,7 @@ function LiveGround({
     <InfiniteCanvasGround
       engine={engine}
       grid={grid}
+      additionalPoleSources={PREVIEW_POLE_SOURCES}
       className="vf-ds-ground-preview__canvas"
       style={style}
     />

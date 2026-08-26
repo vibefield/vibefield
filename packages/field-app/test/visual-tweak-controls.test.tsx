@@ -44,6 +44,17 @@ describe("VisualTweakControls", () => {
     expect(controls).not.toBeNull();
     expect(controls?.textContent).toContain("Canvas palette");
     expect(controls?.textContent).toContain("World grid");
+    expect(controls?.textContent).toContain("Magnet grid");
+    expect(controls?.textContent).toContain("Field reach");
+    expect(controls?.textContent).toContain("Polarity");
+    expect(controls?.textContent).toContain("Widget silhouettes");
+    expect(controls?.textContent).toContain("Widget strength");
+    expect(controls?.textContent).toContain("Widget corner radius");
+    expect(controls?.textContent).toContain("Needle alignment");
+    expect(controls?.textContent).toContain("Needle half-length / dot swell");
+    expect(controls?.textContent).toContain("Needle half-width");
+    expect(controls?.textContent).toContain("Source buffer cap");
+    expect(controls?.textContent).toContain("Field fade below zoom");
     expect(controls?.textContent).toContain("Overlap feedback");
     expect(controls?.textContent).toContain("Import JSON");
     expect(controls?.textContent).toContain("Export JSON");
@@ -70,6 +81,26 @@ describe("VisualTweakControls", () => {
       fineSpacing?.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(latest.worldGrid.spacings[0]).toBe(24);
+
+    const reach = document.querySelector<HTMLInputElement>('input[aria-label="Reach"]');
+    act(() => {
+      setter?.call(reach, "90");
+      reach?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(latest.magnetGrid.reach).toBe(90);
+
+    const maxSources = document.querySelector<HTMLInputElement>('input[aria-label="Max sources"]');
+    act(() => {
+      setter?.call(maxSources, "63.5");
+      maxSources?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(latest.magnetGrid.maxSources).toBe(64);
+
+    const repel = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Repel",
+    );
+    act(() => repel?.click());
+    expect(latest.magnetGrid.polarity).toBe(-1);
 
     const reset = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent === "Reset",

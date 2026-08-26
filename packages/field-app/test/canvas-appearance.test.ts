@@ -12,7 +12,19 @@ describe("canvas appearance", () => {
       dotColor: [166 / 255, 166 / 255, 166 / 255],
       dotAlpha: 0.85,
       dotRadius: [1.5, 1.5],
-      magnet: { glyph: "dot" },
+      magnet: {
+        glyph: "dot",
+        reach: 60,
+        polarity: 1,
+        widgets: true,
+        widgetStrength: 1,
+        widgetRadius: 12,
+        alwaysAlign: false,
+        needleLength: 5,
+        needleWidth: 0.55,
+        maxSources: 256,
+        fadeZoom: 0,
+      },
     });
     expect(defaultCanvasGridConfig(true).dotColor).toEqual([138 / 255, 138 / 255, 138 / 255]);
   });
@@ -20,22 +32,29 @@ describe("canvas appearance", () => {
   it("returns isolated editable values without mutating product defaults", () => {
     const editable = defaultCanvasAppearance();
     editable.worldGrid.spacings[0] = 32;
+    editable.magnetGrid.reach = 90;
     editable.canvasPalette.dotLight = "#123456";
 
     expect(canvasGridConfig(editable, false)).toMatchObject({
       spacings: [32, 100, 500],
       dotColor: [18 / 255, 52 / 255, 86 / 255],
+      magnet: { reach: 90 },
     });
     expect(defaultCanvasAppearance().worldGrid.spacings[0]).toBe(20);
+    expect(defaultCanvasAppearance().magnetGrid.reach).toBe(60);
     expect(defaultCanvasAppearance().canvasPalette.dotLight).toBe("#A6A6A6");
   });
 
   describe("build-selected magnet grid (ICE 0.11.0)", () => {
     it("defaults to dots and accepts needle tuning without a renderer switch", () => {
       const grid = defaultCanvasGridConfig(false);
-      expect(grid.magnet).toEqual({ glyph: "dot" });
+      expect(grid.magnet).toMatchObject({ glyph: "dot", reach: 60, maxSources: 256 });
       expect(grid.magnet).not.toHaveProperty("enabled");
-      expect(defaultCanvasGridConfig(false, "needle").magnet).toEqual({ glyph: "needle" });
+      expect(defaultCanvasGridConfig(false, "needle").magnet).toMatchObject({
+        glyph: "needle",
+        reach: 60,
+        maxSources: 256,
+      });
       expect(grid).toMatchObject({
         spacings: [20, 100, 500],
         dotRadius: [1.5, 1.5],
@@ -52,10 +71,23 @@ describe("canvas appearance", () => {
       expect(defaultCanvasGridConfig(false).dotColor).toEqual([166 / 255, 166 / 255, 166 / 255]);
     });
 
-    it("does not leak implementation tuning into editable appearance defaults", () => {
-      defaultCanvasGridConfig(false);
-      expect(defaultCanvasAppearance().worldGrid).not.toHaveProperty("magnet");
-      expect(defaultCanvasGridConfig(false).magnet).toEqual({ glyph: "dot" });
+    it("projects every editable magnet field through the shared grid contract", () => {
+      const appearance = defaultCanvasAppearance();
+      appearance.magnetGrid = {
+        glyph: "needle",
+        reach: 75,
+        polarity: -1,
+        widgets: false,
+        widgetStrength: 1.5,
+        widgetRadius: 18,
+        alwaysAlign: true,
+        needleLength: 7,
+        needleWidth: 0.8,
+        maxSources: 64,
+        fadeZoom: 0.4,
+      };
+
+      expect(canvasGridConfig(appearance, false).magnet).toEqual(appearance.magnetGrid);
     });
   });
 });

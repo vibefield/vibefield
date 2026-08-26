@@ -1,3 +1,4 @@
+import { SegmentedControl } from "@vibefield/design-kit";
 import { type ChangeEvent, type ReactElement, useRef, useState } from "react";
 import {
   deserializeVisualTweaks,
@@ -18,6 +19,7 @@ export function VisualTweakControls({ value, onChange }: VisualTweakControlsProp
 
   const palette = value.canvasPalette;
   const grid = value.worldGrid;
+  const magnet = value.magnetGrid;
   const overlap = value.overlapFeedback;
 
   const setPalette = (key: keyof typeof palette, next: string): void => {
@@ -28,6 +30,9 @@ export function VisualTweakControls({ value, onChange }: VisualTweakControlsProp
   };
   const setGrid = <K extends keyof typeof grid>(key: K, next: (typeof grid)[K]): void => {
     onChange({ ...value, worldGrid: { ...grid, [key]: next } });
+  };
+  const setMagnet = <K extends keyof typeof magnet>(key: K, next: (typeof magnet)[K]): void => {
+    onChange({ ...value, magnetGrid: { ...magnet, [key]: next } });
   };
   const setPair = (
     key: "glowAlpha" | "glowSize" | "rimAlpha",
@@ -181,6 +186,104 @@ export function VisualTweakControls({ value, onChange }: VisualTweakControlsProp
               levelWeight[index] = next;
               setGrid("levelWeight", levelWeight);
             }}
+          />
+        </TweakSection>
+
+        <TweakSection title="Magnet grid">
+          <ChoiceField label="Glyph">
+            <SegmentedControl
+              options={["Dot", "Needle"]}
+              value={magnet.glyph === "dot" ? "Dot" : "Needle"}
+              onChange={(next) => setMagnet("glyph", next === "Dot" ? "dot" : "needle")}
+              label="Magnet grid glyph"
+            />
+          </ChoiceField>
+          <SingleField
+            label="Field reach"
+            inputLabel="Reach"
+            value={magnet.reach}
+            min={0}
+            max={1_000}
+            step={5}
+            onChange={(next) => setMagnet("reach", next)}
+          />
+          <ChoiceField label="Polarity">
+            <SegmentedControl
+              options={["Attract", "Repel"]}
+              value={magnet.polarity === 1 ? "Attract" : "Repel"}
+              onChange={(next) => setMagnet("polarity", next === "Attract" ? 1 : -1)}
+              label="Magnet grid polarity"
+            />
+          </ChoiceField>
+          <ChoiceField label="Widget silhouettes">
+            <SegmentedControl
+              options={["On", "Off"]}
+              value={magnet.widgets ? "On" : "Off"}
+              onChange={(next) => setMagnet("widgets", next === "On")}
+              label="Widget silhouette sources"
+            />
+          </ChoiceField>
+          <SingleField
+            label="Widget strength"
+            inputLabel="Strength"
+            value={magnet.widgetStrength}
+            min={0}
+            max={100}
+            step={0.05}
+            onChange={(next) => setMagnet("widgetStrength", next)}
+          />
+          <SingleField
+            label="Widget corner radius"
+            inputLabel="Radius"
+            value={magnet.widgetRadius}
+            min={0}
+            max={1_000}
+            step={1}
+            onChange={(next) => setMagnet("widgetRadius", next)}
+          />
+          <ChoiceField label="Needle alignment">
+            <SegmentedControl
+              options={["Responsive", "Always"]}
+              value={magnet.alwaysAlign ? "Always" : "Responsive"}
+              onChange={(next) => setMagnet("alwaysAlign", next === "Always")}
+              label="Needle alignment"
+            />
+          </ChoiceField>
+          <SingleField
+            label="Needle half-length / dot swell"
+            inputLabel="Half-length"
+            value={magnet.needleLength}
+            min={0}
+            max={100}
+            step={0.05}
+            onChange={(next) => setMagnet("needleLength", next)}
+          />
+          <SingleField
+            label="Needle half-width"
+            inputLabel="Half-width"
+            value={magnet.needleWidth}
+            min={0}
+            max={50}
+            step={0.05}
+            onChange={(next) => setMagnet("needleWidth", next)}
+          />
+          <SingleField
+            label="Source buffer cap"
+            inputLabel="Max sources"
+            value={magnet.maxSources}
+            min={0}
+            max={256}
+            step={1}
+            onChange={(next) => setMagnet("maxSources", Math.round(next))}
+          />
+          <SingleField
+            label="Field fade below zoom"
+            inputLabel="Fade zoom"
+            value={magnet.fadeZoom}
+            min={0}
+            max={1_000}
+            step={0.05}
+            onChange={(next) => setMagnet("fadeZoom", next)}
           />
         </TweakSection>
 
@@ -430,6 +533,21 @@ function SingleField({
   );
 }
 
+function ChoiceField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}): ReactElement {
+  return (
+    <div className="vf-ds-tweak-choice">
+      <span>{label}</span>
+      {children}
+    </div>
+  );
+}
+
 function NumberField({
   label,
   value,
@@ -456,7 +574,11 @@ function NumberField({
         max={max}
         step={step}
         className="vf-ds-tweak-number__input"
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (!Number.isFinite(next)) return;
+          onChange(Math.min(Math.max(next, min), max));
+        }}
       />
     </label>
   );

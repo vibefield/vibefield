@@ -66,6 +66,14 @@ The ICE ground projection uses `spacings: [20, 100, 500]`, `dotAlpha: 0.85`,
 `fadeIn: [12, 16]`, `fadeOut: [120, 200]`, `dotRadius: [1.5, 1.5]`, and
 `levelWeight: [1, 0]`.
 
+The selected magnet implementation is configured through ICE's complete
+`GridMagnetConfig` contract: `glyph: "dot"`, `reach: 60`, `polarity: 1`,
+`widgets: true`, `widgetStrength: 1`, `widgetRadius: 12`, `alwaysAlign: false`,
+`needleLength: 5`, `needleWidth: 0.55`, `maxSources: 256`, and `fadeZoom: 0`.
+These are appearance data, not renderer selection. The UI Bench owns a control
+for every field and projects them into its live shared `InfiniteCanvasGround`
+specimen; Canvas Settings exposes only the user-facing Dot/Needle preference.
+
 **The magnet ink (decided 2026-08-25; ICE 0.11 amendment).** Renderer choice is
 build-time: Vibe Field consumes ICE's magnet build. There is no classic/magnet
 toggle. The selected field must be visible while it responds, so its dark ink

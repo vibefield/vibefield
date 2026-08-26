@@ -9,7 +9,11 @@ export type {
   OverlapFeedbackColors,
   OverlapFeedbackTuning,
 } from "@vibefield/design-kit/card-appearance";
-export type { CanvasPalette, WorldGridAppearance } from "../../field/canvas-appearance";
+export type {
+  CanvasPalette,
+  MagnetGridAppearance,
+  WorldGridAppearance,
+} from "../../field/canvas-appearance";
 
 /**
  * Editable appearance data owned by the isolated design bench, not the app.

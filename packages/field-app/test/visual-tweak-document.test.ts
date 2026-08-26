@@ -29,6 +29,19 @@ describe("visual tweak document", () => {
         dotRadius: [1.5, 1.5],
         levelWeight: [1, 0],
       },
+      magnetGrid: {
+        glyph: "dot",
+        reach: 60,
+        polarity: 1,
+        widgets: true,
+        widgetStrength: 1,
+        widgetRadius: 12,
+        alwaysAlign: false,
+        needleLength: 5,
+        needleWidth: 0.55,
+        maxSources: 256,
+        fadeZoom: 0,
+      },
       overlapFeedback: {
         colors: {
           glowLight: "#FFFFFF",
@@ -45,7 +58,7 @@ describe("visual tweak document", () => {
     });
   });
 
-  it("round-trips every canvas, world-grid, and overlap property", () => {
+  it("round-trips every canvas, world-grid, magnet-grid, and overlap property", () => {
     const values = defaultVisualTweakValues();
     values.canvasPalette.bgLight = "#123456";
     values.canvasPalette.dotDark = "#ABCDEF";
@@ -56,6 +69,19 @@ describe("visual tweak document", () => {
     values.worldGrid.fadeOut = [140, 360];
     values.worldGrid.dotRadius = [0.5, 1.25];
     values.worldGrid.levelWeight = [0.9, -0.1];
+    values.magnetGrid = {
+      glyph: "needle",
+      reach: 85,
+      polarity: -1,
+      widgets: false,
+      widgetStrength: 1.75,
+      widgetRadius: 20,
+      alwaysAlign: true,
+      needleLength: 8,
+      needleWidth: 0.9,
+      maxSources: 96,
+      fadeZoom: 0.35,
+    };
     values.overlapFeedback.colors.rimDark = "#102030";
     values.overlapFeedback.glowAlpha = [0.12, 0.78];
     values.overlapFeedback.glowSize = [42, 144];
@@ -101,6 +127,22 @@ describe("visual tweak document", () => {
       VisualTweakDocumentError,
     );
 
+    const missingMagnetValue = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+      magnetGrid: Record<string, unknown>;
+    };
+    delete missingMagnetValue.magnetGrid["widgetStrength"];
+    expect(() => deserializeVisualTweaks(JSON.stringify(missingMagnetValue))).toThrow(
+      VisualTweakDocumentError,
+    );
+
+    const fractionalSourceCap = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+      magnetGrid: Record<string, unknown>;
+    };
+    fractionalSourceCap.magnetGrid["maxSources"] = 63.5;
+    expect(() => deserializeVisualTweaks(JSON.stringify(fractionalSourceCap))).toThrow(
+      "magnetGrid.maxSources must be an integer",
+    );
+
     const invalidRange = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
       overlapFeedback: Record<string, unknown>;
     };
@@ -115,9 +157,9 @@ describe("visual tweak document", () => {
       string,
       unknown
     >;
-    document["version"] = 3;
+    document["version"] = 4;
     expect(() => deserializeVisualTweaks(JSON.stringify(document))).toThrow(
-      "Unsupported visual tweak version: 3",
+      "Unsupported visual tweak version: 4",
     );
   });
 
@@ -130,6 +172,18 @@ describe("visual tweak document", () => {
     delete document["worldGrid"];
     expect(deserializeVisualTweaks(JSON.stringify(document)).worldGrid).toEqual(
       defaultVisualTweakValues().worldGrid,
+    );
+  });
+
+  it("migrates version 2 exports with the reviewed complete magnet block", () => {
+    const document = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as Record<
+      string,
+      unknown
+    >;
+    document["version"] = 2;
+    delete document["magnetGrid"];
+    expect(deserializeVisualTweaks(JSON.stringify(document)).magnetGrid).toEqual(
+      defaultVisualTweakValues().magnetGrid,
     );
   });
 

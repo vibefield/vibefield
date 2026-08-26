@@ -1,5 +1,6 @@
 import type {
   CanvasPalette,
+  MagnetGridAppearance,
   OverlapFeedbackColors,
   OverlapFeedbackTuning,
   VisualTweakValues,
@@ -8,10 +9,10 @@ import type {
 import { defaultVisualTweakValues } from "./visual-tweaks";
 
 export const VISUAL_TWEAK_DOCUMENT_KIND = "vibefield.visual-tweaks";
-export const VISUAL_TWEAK_DOCUMENT_VERSION = 2;
+export const VISUAL_TWEAK_DOCUMENT_VERSION = 3;
 export const VISUAL_TWEAK_FILE_NAME = "vibefield-visual-tweaks.json";
 
-export interface VisualTweakDocumentV2 extends VisualTweakValues {
+export interface VisualTweakDocumentV3 extends VisualTweakValues {
   kind: typeof VISUAL_TWEAK_DOCUMENT_KIND;
   version: typeof VISUAL_TWEAK_DOCUMENT_VERSION;
 }
@@ -23,7 +24,7 @@ export class VisualTweakDocumentError extends Error {
   }
 }
 
-export function visualTweakDocument(values: VisualTweakValues): VisualTweakDocumentV2 {
+export function visualTweakDocument(values: VisualTweakValues): VisualTweakDocumentV3 {
   return {
     kind: VISUAL_TWEAK_DOCUMENT_KIND,
     version: VISUAL_TWEAK_DOCUMENT_VERSION,
@@ -36,6 +37,7 @@ export function visualTweakDocument(values: VisualTweakValues): VisualTweakDocum
       dotRadius: [...values.worldGrid.dotRadius],
       levelWeight: [...values.worldGrid.levelWeight],
     },
+    magnetGrid: { ...values.magnetGrid },
     overlapFeedback: {
       colors: { ...values.overlapFeedback.colors },
       glowAlpha: [...values.overlapFeedback.glowAlpha],
@@ -69,7 +71,7 @@ export function deserializeVisualTweaks(serialized: string): VisualTweakValues {
     throw new VisualTweakDocumentError(`Expected kind "${VISUAL_TWEAK_DOCUMENT_KIND}".`);
   }
   const version = document["version"];
-  if (version !== 1 && version !== VISUAL_TWEAK_DOCUMENT_VERSION) {
+  if (version !== 1 && version !== 2 && version !== VISUAL_TWEAK_DOCUMENT_VERSION) {
     throw new VisualTweakDocumentError(
       `Unsupported visual tweak version: ${String(document["version"])}.`,
     );
@@ -115,7 +117,15 @@ export function deserializeVisualTweaks(serialized: string): VisualTweakValues {
       ? defaultVisualTweakValues().worldGrid
       : parseWorldGrid(record(document["worldGrid"], "worldGrid"));
 
-  return { canvasPalette, worldGrid, overlapFeedback };
+  // Version 3 is the first complete magnet-grid preset. Older documents get
+  // the reviewed product block as one unit; inventing a partial field would
+  // make their live canvas irreproducible.
+  const magnetGrid =
+    version < 3
+      ? defaultVisualTweakValues().magnetGrid
+      : parseMagnetGrid(record(document["magnetGrid"], "magnetGrid"));
+
+  return { canvasPalette, worldGrid, magnetGrid, overlapFeedback };
 }
 
 function parseWorldGrid(grid: Record<string, unknown>): WorldGridAppearance {
@@ -126,6 +136,22 @@ function parseWorldGrid(grid: Record<string, unknown>): WorldGridAppearance {
     fadeOut: pair(grid["fadeOut"], "worldGrid.fadeOut", 0, 100_000),
     dotRadius: pair(grid["dotRadius"], "worldGrid.dotRadius", 0, 50),
     levelWeight: pair(grid["levelWeight"], "worldGrid.levelWeight", -10, 10),
+  };
+}
+
+function parseMagnetGrid(magnet: Record<string, unknown>): MagnetGridAppearance {
+  return {
+    glyph: oneOf(magnet["glyph"], "magnetGrid.glyph", ["dot", "needle"]),
+    reach: numberIn(magnet["reach"], "magnetGrid.reach", 0, 1_000),
+    polarity: oneOf(magnet["polarity"], "magnetGrid.polarity", [1, -1]),
+    widgets: booleanValue(magnet["widgets"], "magnetGrid.widgets"),
+    widgetStrength: numberIn(magnet["widgetStrength"], "magnetGrid.widgetStrength", 0, 100),
+    widgetRadius: numberIn(magnet["widgetRadius"], "magnetGrid.widgetRadius", 0, 1_000),
+    alwaysAlign: booleanValue(magnet["alwaysAlign"], "magnetGrid.alwaysAlign"),
+    needleLength: numberIn(magnet["needleLength"], "magnetGrid.needleLength", 0, 100),
+    needleWidth: numberIn(magnet["needleWidth"], "magnetGrid.needleWidth", 0, 50),
+    maxSources: integerIn(magnet["maxSources"], "magnetGrid.maxSources", 0, 256),
+    fadeZoom: numberIn(magnet["fadeZoom"], "magnetGrid.fadeZoom", 0, 1_000),
   };
 }
 
@@ -148,6 +174,32 @@ function numberIn(value: unknown, path: string, min: number, max: number): numbe
     throw new VisualTweakDocumentError(`${path} must be between ${min} and ${max}.`);
   }
   return value;
+}
+
+function integerIn(value: unknown, path: string, min: number, max: number): number {
+  const next = numberIn(value, path, min, max);
+  if (!Number.isInteger(next)) {
+    throw new VisualTweakDocumentError(`${path} must be an integer.`);
+  }
+  return next;
+}
+
+function booleanValue(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new VisualTweakDocumentError(`${path} must be true or false.`);
+  }
+  return value;
+}
+
+function oneOf<const T extends string | number>(
+  value: unknown,
+  path: string,
+  choices: readonly T[],
+): T {
+  if (!choices.includes(value as T)) {
+    throw new VisualTweakDocumentError(`${path} must be one of ${choices.join(", ")}.`);
+  }
+  return value as T;
 }
 
 function pair(value: unknown, path: string, min: number, max: number): [number, number] {

@@ -416,6 +416,29 @@
   font-size: 9px;
 }
 
+.vf-ds-tweak-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(136px, 1.35fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+}
+
+.vf-ds-tweak-choice > span {
+  color: var(--vf-text-secondary);
+  font-size: 9px;
+}
+
+.vf-ds-tweak-choice .vf-ui-segmented {
+  width: 100%;
+}
+
+.vf-ds-tweak-choice .vf-ui-segmented button {
+  min-width: 0;
+  padding-inline: 7px;
+  font-size: 8px;
+}
+
 .vf-ds-tweak-number {
   min-width: 0;
 }

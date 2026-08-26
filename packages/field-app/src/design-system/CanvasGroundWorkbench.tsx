@@ -19,7 +19,7 @@ export function CanvasGroundWorkbench({ dark }: { dark: boolean }): ReactElement
           <InfiniteCanvasGroundPreview
             grid={grid}
             background="var(--vf-canvas-bg)"
-            label="Live ICE infinite-canvas dot grid"
+            label="Live ICE infinite-canvas magnet grid"
           />
           <div className="vf-ds-ground-lab__badge">
             <span aria-hidden="true" />
@@ -28,15 +28,15 @@ export function CanvasGroundWorkbench({ dark }: { dark: boolean }): ReactElement
           <div className="vf-ds-ground-lab__hint">Drag to pan · ⌘/ctrl + wheel to zoom</div>
           <dl className="vf-ds-ground-lab__facts">
             <div>
-              <dt>Spacing</dt>
-              <dd>{values.worldGrid.spacings.join(" / ")}</dd>
+              <dt>Glyph</dt>
+              <dd>{values.magnetGrid.glyph}</dd>
             </div>
             <div>
-              <dt>Radius</dt>
-              <dd>{values.worldGrid.dotRadius.join(" → ")} px</dd>
+              <dt>Reach</dt>
+              <dd>{values.magnetGrid.reach} px</dd>
             </div>
             <div>
-              <dt>Fade</dt>
+              <dt>Grid fade</dt>
               <dd>
                 {values.worldGrid.fadeIn.join("–")} / {values.worldGrid.fadeOut.join("–")}
               </dd>

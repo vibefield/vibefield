@@ -1,4 +1,4 @@
-import type { GridConfig } from "@vibecook/ice";
+import type { GridConfig, GridMagnetConfig } from "@vibecook/ice";
 import { hexToRgb01 } from "./theme-constants";
 
 /** Theme-aware colors used by the physical canvas surface. */
@@ -25,9 +25,13 @@ export interface WorldGridAppearance {
   levelWeight: [number, number];
 }
 
+/** The complete tuning contract of ICE's build-selected magnet grid. */
+export type MagnetGridAppearance = GridMagnetConfig;
+
 export interface CanvasAppearance {
   canvasPalette: CanvasPalette;
   worldGrid: WorldGridAppearance;
+  magnetGrid: MagnetGridAppearance;
 }
 
 /** Glyph tuning exposed by the build-selected magnet implementation. */
@@ -54,6 +58,19 @@ export function defaultCanvasAppearance(): CanvasAppearance {
       dotRadius: [1.5, 1.5],
       levelWeight: [1, 0],
     },
+    magnetGrid: {
+      glyph: "dot",
+      reach: 60,
+      polarity: 1,
+      widgets: true,
+      widgetStrength: 1,
+      widgetRadius: 12,
+      alwaysAlign: false,
+      needleLength: 5,
+      needleWidth: 0.55,
+      maxSources: 256,
+      fadeZoom: 0,
+    },
   };
 }
 
@@ -67,12 +84,12 @@ export function defaultCanvasAppearance(): CanvasAppearance {
 export function canvasGridConfig(
   values: CanvasAppearance,
   dark: boolean,
-  glyph: MagnetGridGlyph = "dot",
+  glyph: MagnetGridGlyph = values.magnetGrid.glyph,
 ): GridConfig {
   return {
     ...values.worldGrid,
     dotColor: hexToRgb01(dark ? values.canvasPalette.magnetDotDark : values.canvasPalette.dotLight),
-    magnet: { glyph },
+    magnet: { ...values.magnetGrid, glyph },
   };
 }
 

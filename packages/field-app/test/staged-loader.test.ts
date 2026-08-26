@@ -135,7 +135,7 @@ function deps(id: string, over: Partial<StagedLoaderDeps> = {}): StagedLoaderDep
 afterEach(() => {
   // The loader defaults to the live document; the rows above that let it do so
   // must not leave a plugin stylesheet behind for the next file.
-  for (const link of [...document.querySelectorAll("link[data-vf-plugin-style]")]) link.remove();
+  for (const node of [...document.querySelectorAll("[data-vf-plugin-style]")]) node.remove();
 });
 
 describe("the staged loader", () => {
