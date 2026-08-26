@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => ({
   // map; serve injects the SAME map with `/@id/` virtual-module targets, so a
   // dev fieldd's staged approvals resolve too (corrected 2026-08-24 — the
   // plugin's own doc carries the incident). Only `design`/`live-surfaces-lab`
-  // go without it: the Bench builds no plugin host.
+  // go without it: the browser catalog builds no plugin host.
   plugins: [
     tailwindcss(),
     react(),
@@ -63,7 +63,7 @@ export default defineConfig(({ mode }) => ({
       "@vibecook/strata-ecs",
     ],
   },
-  // Dev always optimizes the union of the product and UI Bench graphs. Both
+  // Dev optimizes the union of product, Studio, and browser-catalog graphs. All
   // surfaces share this cache, so changing launch modes must never leave the
   // product renderer consuming a design-only optimizer result. Fiber is
   // explicit through its linked-workspace owner (Vite's nested-dependency
@@ -79,12 +79,12 @@ export default defineConfig(({ mode }) => ({
     include: ["@vibefield/field-app > @react-three/fiber"],
   },
   build: {
-    // A bench bundle is useful for isolated inspection, but it is development
+    // A catalog bundle is useful for isolated inspection, but it is development
     // material and therefore lands under the ignored dev root. Production's
     // renderer directory can never be replaced by a design build.
     outDir:
       mode === "design"
-        ? join(import.meta.dirname, "..", "..", ".vibefield", "ui-bench", "renderer")
+        ? join(import.meta.dirname, "..", "..", ".vibefield", "studio", "catalog-renderer")
         : // TP-S0c: the perf lab builds the SAME product entry with the same
           // plugins; the only differences from production are the
           // `__VIBEFIELD_TERMINAL_PERF_LAB__` define above and this directory.

@@ -78,7 +78,7 @@ function workspaceWrapper(): HTMLElement | null {
 }
 
 describe("BootRoot reveal (the top-edge click contract)", () => {
-  it("keeps design-bench controls out of the synchronous product face", () => {
+  it("keeps Design System controls out of the synchronous product face", () => {
     const { machine } = fakeMachine();
     host = document.createElement("div");
     document.body.appendChild(host);

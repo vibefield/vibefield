@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const mainBundle = join(packageRoot, "dist", "main", "index.cjs");
-const BENCH_MARKERS = ["VibeField UI Bench", "VIBEFIELD_UI_BENCH_URL", "vibefield-ui-bench-only"];
+const CATALOG_MARKERS = [
+  "vibefield-design-catalog-only",
+  // Legacy tripwires stay guarded even after the standalone shell is removed.
+  "VibeField UI Bench",
+  "VIBEFIELD_UI_BENCH_URL",
+  "vibefield-ui-bench-only",
+];
 const STUDIO_MARKERS = ["VibeField Studio", "VIBEFIELD_STUDIO_OPEN", "vibefield-studio-only"];
 // TP-S0c: the perf lab RUNNER lives in the separate testing bundle
 // (dist/testing/smoke.cjs) that main reaches by a runtime-external import, the
@@ -17,7 +23,7 @@ if (!existsSync(mainBundle)) {
 }
 
 const contents = readFileSync(mainBundle, "utf8");
-const leaked = [...BENCH_MARKERS, ...STUDIO_MARKERS, ...LAB_MARKERS].filter((marker) =>
+const leaked = [...CATALOG_MARKERS, ...STUDIO_MARKERS, ...LAB_MARKERS].filter((marker) =>
   contents.includes(marker),
 );
 if (leaked.length > 0) {
@@ -25,5 +31,5 @@ if (leaked.length > 0) {
 }
 
 process.stdout.write(
-  `production main boundary OK — ${statSync(mainBundle).size.toLocaleString("en-US")} bytes; Studio, UI Bench, and perf lab absent\n`,
+  `production main boundary OK — ${statSync(mainBundle).size.toLocaleString("en-US")} bytes; Studio, Design System catalog, and perf lab absent\n`,
 );

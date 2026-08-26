@@ -1,2 +1,4 @@
-export const STUDIO_PRODUCT_PORT_CHANNEL = "vibefield:studio:product-port:v1";
-export const STUDIO_PUBLISHER_PORT_CHANNEL = "vibefield:studio:publisher-port:v1";
+export {
+  STUDIO_PRODUCT_PORT_CHANNEL,
+  STUDIO_PUBLISHER_PORT_CHANNEL,
+} from "@vibefield/contracts/registries";

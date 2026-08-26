@@ -4290,3 +4290,32 @@ Preset exports move to v3 and round-trip the complete block; v1/v2 imports
 migrate to the reviewed defaults atomically. Focused grid/codec/control tests
 are 15/15, field-app typecheck is green, and browser verification exercised the
 real GPU specimen from Dot/60px to Needle/120px.
+
+## DEV — VibeField Studio replaces the standalone UI Bench
+
+2026-08-26. The appearance workbench and real product now run under one
+Studio-capable development host. `b8133466`/`86598f6d` established one complete
+`ProductAppearance` document and projection path; `8597ce8e` added separate
+product/Studio renderer and preload entries over the ordinary desktop host;
+`60a5e767` added the bounded MessagePort router, revision/ack protocol, latest
+snapshot slot, reload grace, and product-owned strict parser; `714ebaa7` added
+explicit Live controls, delivery status, Bring App Forward, and the
+development-only product disclosure; `57c725e4` added the boot-scoped local
+runner command endpoint and child-process IPC so `pnpm dev:studio` and
+`pnpm dev:design` attach to an active `pnpm dev` instead of creating a second
+stack.
+
+The old standalone Electron Bench shell and its runner are deleted. The
+browser-only catalog remains as `pnpm dev:design:web`, has no live-product
+authority, and builds only under `.vibefield/studio/catalog-renderer/`.
+Appearance preview is a complete in-memory override above persisted product
+preferences; Live off, Studio close/crash/timeout, or host disposal clears it
+without writing settings or source. Product and Studio use separate sandboxed
+windows, preloads, and sessions. Production main/preload/renderer entries have
+no Studio or catalog edge, enforced both structurally and by artifact scans.
+
+**Landing gates:** repository preflight green; development runner 80/80;
+focused Studio shell 24/24 and catalog/boot ownership 17/17; contracts,
+field-app, and electron-shell typechecks green; browser catalog build green;
+production main 960,015 bytes and renderer 45 files / 9,671,545 bytes with
+Studio, Design System catalog, and perf-lab markers absent.

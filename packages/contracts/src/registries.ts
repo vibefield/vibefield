@@ -14,6 +14,11 @@ export const DESKTOP_APP_ID = "com.jamesyong.vibefield" as const;
  * consuming the same identity (EDP §5.6). */
 export const DESKTOP_TRAY_GUID = "c524c40e-05b6-4d89-bbb9-82ba4e97ea91" as const;
 
+/** Development-only MessagePort handoff channels. The Electron Studio graph
+ * consumes them, while production entries have no edge to that graph. */
+export const STUDIO_PRODUCT_PORT_CHANNEL = "vibefield:studio:product-port:v1" as const;
+export const STUDIO_PUBLISHER_PORT_CHANNEL = "vibefield:studio:publisher-port:v1" as const;
+
 /** One place for every port VibeField binds or reserves. */
 export const PORTS = {
   /** fieldd product API — renderer control plane (loopback WS, JSON-RPC text). D27.

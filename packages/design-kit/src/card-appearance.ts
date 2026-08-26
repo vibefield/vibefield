@@ -21,7 +21,7 @@ export interface OverlapFeedbackTuning {
 
 /**
  * The reviewed CardShell appearance. CSS tokens mirror this value so normal
- * app rendering and the UI Bench reset to the same product defaults.
+ * app rendering and Studio reset to the same product defaults.
  */
 export const OVERLAP_FEEDBACK_DEFAULTS = {
   colors: {
@@ -37,7 +37,7 @@ export const OVERLAP_FEEDBACK_DEFAULTS = {
   rimRadius: 600,
 } as const;
 
-/** Return isolated editable values for consumers such as the UI Bench. */
+/** Return isolated editable values for consumers such as Studio. */
 export function defaultOverlapFeedbackTuning(): OverlapFeedbackTuning {
   return {
     colors: { ...OVERLAP_FEEDBACK_DEFAULTS.colors },

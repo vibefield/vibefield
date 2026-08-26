@@ -195,7 +195,7 @@ function interoperableSingletonSource(
 }
 
 /**
- * The plugin, in BOTH commands — only the UI Bench goes without it (the config
+ * The plugin, in BOTH commands — only the browser catalog goes without it (the config
  * excludes this plugin for `design`/`live-surfaces-lab`, which build no plugin
  * host).
  *

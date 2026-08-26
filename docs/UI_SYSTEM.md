@@ -73,18 +73,21 @@ access and pane modifier, provider glyph, and context boundary.
 
 ## Working loop
 
-Run `pnpm dev:design` for the canonical single-page catalog in its dedicated Electron UI Bench.
-The bench uses the production window/security factory while deliberately omitting the product
-preload, users, daemons, plugins, tray, and diagnostics. Its generated shell and Electron user
-data stay under `.vibefield/ui-bench/`, so it can run beside the full application without touching
-product state. Use `pnpm dev:design:web` when a browser-only HMR loop is sufficient.
+Run `pnpm dev:design` for the canonical single-page catalog inside VibeField Studio. Studio and the
+real product share one supervised development host and Vite server, while remaining separate
+sandboxed windows with separate preloads and sessions. A second invocation attaches to the active
+runner and opens or focuses Studio; it does not start another stack. Studio receives only the
+bounded live-appearance preview capability and never receives product preload, user, daemon,
+plugin, tray, or diagnostic capabilities. Use `pnpm dev:design:web` when a catalog-only browser HMR
+loop with no live-product authority is sufficient.
 
 Use `pnpm --filter @vibefield/field-app test` for DOM and ownership guards, and
-`pnpm --filter @vibefield/electron-shell build:design` for an ignored standalone bench bundle.
-That design build also lands under `.vibefield/ui-bench/`; it never replaces the production
-renderer output. The normal renderer build has only `index.html` as an entry and runs a leakage
-check that fails if a bench document or marker reaches `dist/renderer`. Desktop packaging then
-applies its existing exact stage allowlist as a second boundary.
+`pnpm --filter @vibefield/electron-shell build:design` for an ignored standalone browser-catalog
+bundle. That build lands under `.vibefield/studio/catalog-renderer/`; it never replaces the
+production renderer output. The normal renderer build has only `index.html` as a document entry
+and runs a leakage check that fails if a catalog or Studio document/marker reaches
+`dist/renderer`. Desktop packaging then applies its existing exact stage allowlist as a second
+boundary.
 
 The ownership test intentionally rejects old catalog-only replicas and production selector
 definitions in catalog CSS. That makes fidelity a maintained boundary rather than a one-time

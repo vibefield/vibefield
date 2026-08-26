@@ -9,8 +9,8 @@ import { TerminalMirrorSurface } from "../terminal/mirror";
 // this file supplies the props a HOST supplies (the cull answer, the camera)
 // and lets `TerminalMirrorSurface` render itself.
 //
-// What the bench can and cannot show, stated rather than faked. The widget is
-// runtime-free here for the same reason `GodviewPreview` is: the UI Bench runs
+// What the catalog can and cannot show, stated rather than faked. The widget is
+// runtime-free here for the same reason `GodviewPreview` is: the catalog runs
 // with no daemons, no preload and no pool transport, so the surface renders the
 // same honest `session unavailable` face the live app shows on a browser-only
 // host. Everything ELSE is real and is what this entry is for — the card, the
@@ -58,7 +58,7 @@ export function TerminalMirrorPreview(): ReactElement {
       </div>
       <div className="vf-ds-mirror-stage">
         <TerminalMirrorSurface
-          sessionId="design-bench-session"
+          sessionId="design-system-session"
           culled={culled}
           cameraScale={scale}
           cameraSettled={settled}

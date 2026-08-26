@@ -31,7 +31,7 @@ test("the onboarding dev define overrides the packaged renderer default", async 
   assert.equal(config.define?.__VIBEFIELD_FORCE_ONBOARDING__, "true");
 });
 
-test("product and UI Bench launches share one complete dependency optimizer graph", async () => {
+test("product, Studio, and browser catalog share one dependency optimizer graph", async () => {
   const configs = await Promise.all(
     ["development", "design"].map((mode) =>
       resolveConfig(
@@ -56,7 +56,7 @@ test("product and UI Bench launches share one complete dependency optimizer grap
   }
 });
 
-test("the production renderer and development UI Bench have disjoint build outputs", async () => {
+test("the production renderer and browser catalog have disjoint build outputs", async () => {
   const [production, design] = await Promise.all(
     ["production", "design"].map((mode) =>
       resolveConfig(
@@ -73,9 +73,9 @@ test("the production renderer and development UI Bench have disjoint build outpu
   // P8b-3 §11.6: the product document, plus one entry chunk per host singleton
   // so the import map has an address to name. The exact specifier list is
   // contracts' and is pinned there (electron-shell's host-singletons test);
-  // what this row owns is the SHAPE — the product build carries them, the bench
-  // build carries none, and the two halves are asserted together because the
-  // bench getting a plugin loader it has no daemon for is the mistake.
+  // what this row owns is the SHAPE — the product build carries them, the catalog
+  // build carries none, and the two halves are asserted together because a
+  // browser catalog getting a plugin loader it has no daemon for is the mistake.
   const productionInputs = Object.keys(production.build.rollupOptions.input);
   const singletonInputs = productionInputs.filter((name) => name.startsWith("singleton-"));
   assert.ok(singletonInputs.length > 0, "the production renderer emits host singleton chunks");
@@ -94,5 +94,8 @@ test("the production renderer and development UI Bench have disjoint build outpu
     design.build.rollupOptions.input["design-system"],
     join(workspacePaths.repoRoot, "packages/electron-shell/src/renderer-host/design-system.html"),
   );
-  assert.equal(design.build.outDir, join(workspacePaths.repoRoot, ".vibefield/ui-bench/renderer"));
+  assert.equal(
+    design.build.outDir,
+    join(workspacePaths.repoRoot, ".vibefield/studio/catalog-renderer"),
+  );
 });

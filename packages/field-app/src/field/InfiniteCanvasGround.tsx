@@ -13,7 +13,7 @@ const NO_ADDITIONAL_POLES: readonly PoleSource[] = [];
 
 /**
  * The field's canonical P0 composition: ICE's build-selected magnet grid,
- * wires, and snap guides in one GPU canvas. Product and design-bench specimens
+ * wires, and snap guides in one GPU canvas. Product and Design System specimens
  * mount this same component so the catalog cannot drift into an approximation.
  *
  * The cursor halo is wired as the magnet grid's pole source (ICE design-010;

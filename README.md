@@ -45,8 +45,9 @@ pnpm install
 pnpm preflight      # tool versions + import-boundary walls
 pnpm hooks:install  # one-time: wires scripts/git-hooks (the dev-local push guard)
 pnpm dev            # desktop app dev loop
-pnpm dev:design     # Electron UI Bench, no daemon or product data required
-pnpm dev:design:web # optional browser-only UI Bench loop
+pnpm dev:studio     # desktop app + development Studio
+pnpm dev:design     # open/focus Studio on the active dev host
+pnpm dev:design:web # optional browser-only catalog loop (no live app authority)
 pnpm verify         # full gate: typecheck · biome · rustfmt/clippy · TS+Rust tests · gen freshness
 ```
 
@@ -74,7 +75,9 @@ long-running stack:
   probe (dev runs `leave-running`, the production shape); only a daemon-plane change reaps and
   respawns the pair. The runner owns final teardown at session end. Dev state, logs, snapshots,
   and Electron user data are isolated under `.vibefield/dev/`; an atomically published
-  per-worktree lock refuses a second live stack.
+  per-worktree lock refuses a second live stack. Studio commands from a second CLI invocation
+  attach through a boot-scoped local command endpoint; they never start another daemon, Vite, or
+  Electron stack.
 - Nx watches the complete workspace graph and runs initial plus affected typechecks in the
   background. `pnpm build`, `pnpm test`, and `pnpm typecheck` use the same graph and local cache;
   `pnpm verify` remains the uncropped release-quality gate.
@@ -83,13 +86,15 @@ The development watcher is deliberately repository-bounded: it does not monitor
 `../p008/truffle` or its manifests. After changing dependencies or package manifests, run
 `pnpm install` and restart `pnpm dev`; installs are never performed implicitly by the watcher.
 
-`pnpm dev:design` starts the single-page interface index in a dedicated Electron UI Bench. It
-reuses the production BrowserWindow and security policy, but its empty preload and isolated
-`.vibefield/ui-bench/` user-data root give it no user, daemon, plugin, tray, or diagnostic
-capabilities. The renderer imports the shipping token sheet and production view compositions;
-runtime-bound chrome receives deterministic fixture adapters for light/dark and state review.
-It can run alongside `pnpm dev`. `pnpm dev:design:web` keeps the faster browser-only loop on port
-5174 when native window behavior is irrelevant. Ownership and contribution rules live in
+`pnpm dev:studio` starts the real product and VibeField Studio under the same runner, Vite server,
+and Electron host. `pnpm dev:design` is the compatibility entry focused on that same Studio; when
+`pnpm dev` is already running it opens or focuses Studio through the local runner command endpoint.
+Studio has its own sandboxed window, non-persistent session, and narrow appearance-preview preload;
+it receives no product, daemon, plugin, user, tray, or diagnostic capabilities. The renderer
+imports shipping tokens and production view compositions, and Live mode applies one complete,
+ephemeral appearance snapshot without changing product settings. `pnpm dev:design:web` keeps the
+faster catalog-only loop on port 5174 when native behavior and live app preview are unnecessary.
+Ownership and contribution rules live in
 [`docs/UI_SYSTEM.md`](docs/UI_SYSTEM.md).
 
 Design docs live in `draft/` — local-only, tracked on the `dev-local` branch

@@ -2,7 +2,7 @@ import type { ProductSessionRosterItem } from "@vibefield/contracts";
 import type { ReactElement } from "react";
 // The VIEW's own module, not the registration door: a catalog wants the
 // component, and reaching it through `terminal/widget/index.ts` would drag the
-// prefab builder and the face policy into a bench that registers nothing.
+// prefab builder and the face policy into a catalog that registers nothing.
 import { SessionPickerView } from "../terminal/widget/SessionPickerView";
 
 // The catalog's fixture ADAPTER for the built-in mirror's session picker
@@ -13,7 +13,7 @@ import { SessionPickerView } from "../terminal/widget/SessionPickerView";
 // its markup or CSS. There is therefore no picker markup here — only rows and
 // roster states, which is exactly the seam `SessionPickerView` was split out
 // for: it takes a roster and a state and renders, so every face it can wear is
-// reachable in a bench with no daemon under it.
+// reachable in a catalog with no daemon under it.
 //
 // The five states are the whole point. A picker that only ever showed "here are
 // your sessions" would hide the four answers that actually matter on a cold

@@ -116,7 +116,7 @@ Two consequences worth carrying into the visual pass:
 
 - **WIN-5 visual polish** — Windows titlebar/chrome (**WIN-D9 is James's decision**: keep the
   default frame or go custom/WCO), tray `.ico` (may be placeholder), forced-colors block, the
-  "Shift" glyph label. Needs a **UI Bench eyeball**, not more porting. `pnpm dev:design` is the Bench.
+  "Shift" glyph label. Needs a **Studio eyeball**, not more porting. Run `pnpm dev:design`.
 - **WIN-7 live mesh witness** — the tsnet-vs-host-Tailscale coexistence spike + the Mac↔Windows
   two-device proof (docs sync, remote attach). Needs a **tailnet auth key** (`TRUFFLE_TEST_AUTHKEY`
   for the `#[ignore]`d probes). The box runs host Tailscale, so coexistence is the exact

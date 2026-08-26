@@ -160,10 +160,10 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | NF — native floor | NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4, with peers authenticated by tailnet WhoIs | `specs/native-floor.md` | per-device tokens (GT-D6) whenever the token work is wanted — NOT gated upstream (the v3 claim was retracted) |
 | IOS — companion | **IN FLIGHT** — IOS-0/2/2f + IOS-EL8, and **IOS-3a…3e + the 3r review landed** 2026-08-05/06 (peer terminals are bubbles; the card attaches; appearance + upstream's reconnect banner) | `thinking-ios-app.md` §10 · `research/ios-app-design.md` | **IOS-3c's capability/Keychain leg never landed — the phone attaches VIEW-ONLY.** That, plus the live-device run, is what remains of the attach story; artifact catalog/open = AH-5 |
 | GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** + **GT-5a…d the code review's fixes** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | the deck's own ladder is done. James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module; smoke row 13b unskips when a peer can be staged in the harness |
-| UI — design system | **LANDED** 2026-08-05/06, James's hands — tokens → primitives → production compositions → a catalog that mounts shipping views → `pnpm dev:design` UI Bench, with ownership enforced by test | `DESIGN.md` (authority) · **`docs/UI_SYSTEM.md`** (where it lives in code) | the catalog's own acceptance is an eyeball (light/dark · keyboard focus · reduced motion · narrow); `codex/settings-review-fixes` is unmerged and undecided |
+| UI — design system | **LANDED** 2026-08-05/06; **Studio architecture landed 2026-08-26** — tokens → primitives → production compositions → a catalog that mounts shipping views → one real product + isolated Studio under the active dev host, with explicit ephemeral live appearance and ownership enforced by test | `DESIGN.md` (authority) · **`docs/UI_SYSTEM.md`** (where it lives in code) | the catalog's own acceptance is an eyeball (light/dark · keyboard focus · reduced motion · narrow); the browser-only catalog remains available without live-product authority |
 | UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
-| WIN — Windows port | **IN FLIGHT** — WIN-0…4 landed `5ffd30b`/`85cce04`/`f982d27` (2026-08-11; ratified 2026-08-10, James: "follow your plan"): gate + dev loop portable, the endpoint law in two languages (WIN-D1), the native plane on named pipes with a real stderr floor, the pair's probe/env/spawn doors, the stop VERB (WIN-D5; WIN-D3 resolved by construction) — all proven on the box (WORKSTATION4090) · **WIN-6 terminal hosting landed `03cc648`** (WIN-D2 adopted 2026-08-11: hosting in GA — the ConPTY kill matrix, two-plane adoption, and frame-plane I/O all on the box; the case-variant env-strip gap booked upstream as G13) · **WIN-5 the app BOOTS on Windows** (`51aa3ab`) — `pnpm smoke` green headless over ssh: shell + pipe-joined daemon pair + renderer + a live godview terminal, all on the box · **WIN-7 opened** (`edd5882`) — the mesh finds its `.exe` sidecar on Windows | `draft/thinking-windows-port.md` (plan; spec graduates with the track) | box gates green (Rust workspace incl. terminal_unit 14/14 · terminal_mesh 7/7 · mesh unit 3/3; fieldd terminal-seam 3/3 · terminal-kill-matrix 6/6 · the full fieldd suite 454/2-skip (the 2 = the tracked concurrent-edit doc-sync pair) · fieldd-client 12/12 · field-app 417; `pnpm smoke` boots headless over ssh); next: WIN-5 VISUAL polish (WIN-D9 chrome, tray `.ico`, glyphs — needs a UI Bench eyeball), WIN-7 live mesh witness (needs a tailnet auth key), WIN-8 packaging + the EL8 pin delta (electron-builder vs EDP-39) |
+| WIN — Windows port | **IN FLIGHT** — WIN-0…4 landed `5ffd30b`/`85cce04`/`f982d27` (2026-08-11; ratified 2026-08-10, James: "follow your plan"): gate + dev loop portable, the endpoint law in two languages (WIN-D1), the native plane on named pipes with a real stderr floor, the pair's probe/env/spawn doors, the stop VERB (WIN-D5; WIN-D3 resolved by construction) — all proven on the box (WORKSTATION4090) · **WIN-6 terminal hosting landed `03cc648`** (WIN-D2 adopted 2026-08-11: hosting in GA — the ConPTY kill matrix, two-plane adoption, and frame-plane I/O all on the box; the case-variant env-strip gap booked upstream as G13) · **WIN-5 the app BOOTS on Windows** (`51aa3ab`) — `pnpm smoke` green headless over ssh: shell + pipe-joined daemon pair + renderer + a live godview terminal, all on the box · **WIN-7 opened** (`edd5882`) — the mesh finds its `.exe` sidecar on Windows | `draft/thinking-windows-port.md` (plan; spec graduates with the track) | box gates green (Rust workspace incl. terminal_unit 14/14 · terminal_mesh 7/7 · mesh unit 3/3; fieldd terminal-seam 3/3 · terminal-kill-matrix 6/6 · the full fieldd suite 454/2-skip (the 2 = the tracked concurrent-edit doc-sync pair) · fieldd-client 12/12 · field-app 417; `pnpm smoke` boots headless over ssh); next: WIN-5 VISUAL polish (WIN-D9 chrome, tray `.ico`, glyphs — needs a Studio eyeball), WIN-7 live mesh witness (needs a tailnet auth key), WIN-8 packaging + the EL8 pin delta (electron-builder vs EDP-39) |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
 ## In flight now
@@ -653,9 +653,11 @@ selectors — and `c188195` did the migration the rule implies at a net **585 li
 across 52 files. The load-bearing claim is that **the catalog mounts shipping views, not
 replicas**, and it is a maintained boundary rather than a cleanup: `ui-system-boundaries.test.ts`
 rejects catalog-only replicas and production selectors in catalog CSS. `3ca1f8a` gave it
-`pnpm dev:design`, an isolated Electron UI Bench on the production window/security factory with
-no preload, daemons, users, tray, or diagnostics, plus two leakage gates keeping bench artifacts
-out of `dist/renderer`. The episode worth remembering: `11765bc`'s import was *correct* by R5's
+`pnpm dev:design`, originally an isolated Electron UI Bench on the production window/security
+factory. On 2026-08-26 that standalone shell was retired in favor of one Studio-capable dev host:
+the real product and isolated Studio now share the supervisor and Vite server, with a narrow
+ephemeral appearance router and production leakage gates. The episode worth remembering:
+`11765bc`'s import was *correct* by R5's
 own description and the wall failed anyway, leaving `pnpm verify` red at preflight on main for
 about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
@@ -692,7 +694,7 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   PROVEN** (`51aa3ab` — the whole app runs on Windows: `pnpm smoke` green headless over ssh, shell +
   pipe-joined daemon pair + renderer + a live godview terminal) and **WIN-7's sidecar resolves**
   (`edd5882` — the mesh finds `sidecar-slim.exe`). Next: WIN-5 VISUAL polish (WIN-D9 chrome, tray
-  `.ico`, glyphs — a UI Bench eyeball, not porting), WIN-7's live mesh witness (needs a tailnet auth
+  `.ico`, glyphs — a Studio eyeball, not porting), WIN-7's live mesh witness (needs a tailnet auth
   key — the coexistence spike is cheap, the box runs host Tailscale today), WIN-8 packaging. Named
   residue, none blocking: the WIN-6 env-case gap is booked
   upstream as G13 (a case-variant private-env key leaks past ghosttea's case-sensitive strip on
@@ -1087,7 +1089,8 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   the old cadence for an A/B — your feel decides the default (GT-3p, unresolved by design).
 - **The UI catalog (`pnpm dev:design`)** — its own stated acceptance, never yet run as a pass:
   light/dark, keyboard focus, reduced motion, and narrow layout across every cataloged view.
-  The bench exists precisely so this is one command and no daemons (UI track, 2026-08-07).
+  Studio makes this one command beside the real product; `pnpm dev:design:web` remains the
+  daemon-free catalog-only loop (UI track, updated 2026-08-26).
 - **IOS-3 on a real device** — the whole point of the slice and the only thing no fixture can
   stand in for: a peer's terminal as a bubble, ATTACH, the live TUI over the tailnet, the
   settings sheet's themes applying to a running attachment, and the reconnect banner on a daemon
@@ -1105,7 +1108,7 @@ ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-0
 pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata **0.13.0** (via ICE;
 the lockfile holds one physical strata/Loro graph) ·
 `@vibecook/ice` **0.11.0** (registry pin; **bumped 2026-08-25 — build-selected magnet grid,
-Dot default plus device-local Dot/Needle tuning and the full 11-field UI Bench contract**, with the runtime classic/magnet preference
+Dot default plus device-local Dot/Needle tuning and the full 11-field Studio contract**, with the runtime classic/magnet preference
 retired; pin-drift history 2026-08-07: this line and `CLAUDE.md` had trailed the manifests
 at 0.2.0) · **`apps/ios` is in
 lockstep too** (`Package.resolved`: ghosttea 0.9.2 / truffle 0.7.12), which is what retires the

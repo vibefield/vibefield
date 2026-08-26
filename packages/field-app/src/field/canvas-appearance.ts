@@ -38,7 +38,7 @@ export interface CanvasAppearance {
 export type MagnetGridGlyph = "dot" | "needle";
 
 /**
- * The reviewed product appearance. A factory keeps design-bench edits and
+ * The reviewed product appearance. A factory keeps Studio edits and
  * imports isolated from the immutable defaults consumed by the app.
  */
 export function defaultCanvasAppearance(): CanvasAppearance {
@@ -93,7 +93,7 @@ export function canvasGridConfig(
   };
 }
 
-/** Stable magnet grid consumed by product and design-bench renderers. */
+/** Stable magnet grid consumed by product and Design System renderers. */
 export function defaultCanvasGridConfig(dark: boolean, glyph: MagnetGridGlyph = "dot"): GridConfig {
   return canvasGridConfig(defaultCanvasAppearance(), dark, glyph);
 }

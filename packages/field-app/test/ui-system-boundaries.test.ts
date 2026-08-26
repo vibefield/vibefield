@@ -42,7 +42,7 @@ describe("UI system ownership boundaries", () => {
 
   it("keeps the terminal mirror's fixture an ADAPTER, never a replica (TP-S2)", () => {
     // The rule that bites hardest on a widget whose live state needs a daemon:
-    // the bench cannot show terminal pixels, and the tempting fix is to draw a
+    // the catalog cannot show terminal pixels, and the tempting fix is to draw a
     // convincing fake. So the fixture is held to supplying only what a HOST
     // supplies — the cull answer and the camera — and to owning none of the
     // widget's own classes.
@@ -57,7 +57,7 @@ describe("UI system ownership boundaries", () => {
   });
 
   it("keeps the session picker's fixture an ADAPTER too (TP-S2b-widget)", () => {
-    // The picker was split out of the widget precisely so the bench could reach
+    // The picker was split out of the widget precisely so the catalog could reach
     // its five roster states with no daemon under it. That only pays if the
     // fixture supplies DATA — rows and a state — and never markup: a catalog
     // that redrew the list would be showing a picture of a picker while the
@@ -126,7 +126,7 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
-  it("keeps visual experimentation in the bench and the product appearance stable", () => {
+  it("keeps visual experimentation in Studio and the product appearance stable", () => {
     const boot = source("boot/BootRoot.tsx");
     const field = source("field.tsx");
     const stage = source("field/CanvasStage.tsx");

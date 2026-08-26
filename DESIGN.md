@@ -70,7 +70,7 @@ The selected magnet implementation is configured through ICE's complete
 `GridMagnetConfig` contract: `glyph: "dot"`, `reach: 60`, `polarity: 1`,
 `widgets: true`, `widgetStrength: 0.1`, `widgetRadius: 12`, `alwaysAlign: false`,
 `needleLength: 5`, `needleWidth: 0.55`, `maxSources: 256`, and `fadeZoom: 0`.
-These are appearance data, not renderer selection. The UI Bench owns a control
+These are appearance data, not renderer selection. Studio owns a control
 for every field and projects them into its live shared `InfiniteCanvasGround`
 specimen; Canvas Settings exposes only the user-facing Dot/Needle preference.
 
@@ -263,7 +263,7 @@ read as an immediate response to the hold").
 | **Hover / active** (tiles, buttons) | `scale(1.03)` hover · `scale(0.95)` active · fills step `black/5 → black/10` (dark `white/10 → white/20`) · `cursor-grab/-grabbing`. |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
 
-Glow/rim knobs are live CSS vars (UI Bench adjustable, defaults in code):
+Glow/rim knobs are live CSS vars (Studio adjustable, defaults in code):
 `--ic-glow-size-t/-c: 60px` · `--ic-glow-alpha-t: 0.5` / `-c: 0.25` · glow color
 light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
 `--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` · `--ic-rim-alpha-t: 0.85` /

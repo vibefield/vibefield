@@ -20,7 +20,7 @@ import "./mirror-widget.css";
 // and engine operations in the controller"). It takes a roster and a state and
 // renders; it reads nothing and writes nothing. `TerminalMirrorWidget` owns the
 // read (`refreshTerminalRoster`) and the write (the durable prop); the catalog
-// mounts THIS with fixture rows, which is how the bench shows five states it
+// mounts THIS with fixture rows, which is how the catalog shows five states it
 // could never reach with no daemon under it.
 //
 // WHAT IT MAY SHOW. `ProductSessionRosterItem`s (TPv3 §5.3, TP-D4): id, class,

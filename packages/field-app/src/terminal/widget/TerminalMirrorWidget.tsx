@@ -50,7 +50,7 @@ import "./mirror-widget.css";
 // refinement. `culled` is left undefined for the same family of reason: the
 // widget self-observes with an IntersectionObserver against the VISUAL rect,
 // which already accounts for the plane's transform, and is right in the canvas,
-// a panel and the bench alike.
+// a panel and the catalog alike.
 
 interface MirrorWidgetProps extends Record<string, unknown> {
   sessionId: string;

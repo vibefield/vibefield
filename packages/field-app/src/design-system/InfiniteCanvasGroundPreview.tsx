@@ -14,7 +14,7 @@ export interface InfiniteCanvasGroundPreviewProps {
 const PREVIEW_POLE_SOURCES: readonly PoleSource[] = [localPointerPoles()];
 
 /**
- * A controller-free mount of the production ground. The bench supplies only a
+ * A controller-free mount of the production ground. The catalog supplies only a
  * disposable empty engine; ICE still owns camera gestures and GPU rendering.
  */
 export function InfiniteCanvasGroundPreview({
