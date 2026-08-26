@@ -6,6 +6,7 @@ import { createChangeBuffer } from "./change-buffer.mjs";
 import {
   classifyCriticalChange,
   discoverPluginProjects,
+  rendererArtifactsOf,
   serviceModulesOf,
 } from "./critical-changes.mjs";
 import { watchCriticalRoots } from "./critical-watcher.mjs";
@@ -79,6 +80,8 @@ async function main() {
   pluginProjects = await discoverPluginProjects(repoRoot);
   log.info("preparing generated manifests and native contracts");
   await runTracked(pnpmCommand, ["-r", "--if-present", "run", "gen:manifest"], "plugin manifests");
+  pluginProjects = await discoverPluginProjects(repoRoot);
+  await buildAllPluginArtifacts();
   await runTracked(pnpmCommand, ["gen"], "contract generation");
   log.info("building the repository-owned native sidecar");
   await runTracked(cargoCommand, ["build", "-p", "field-native"], "field-native build");
@@ -221,6 +224,17 @@ function createCriticalQueue() {
         );
         pluginProjects = await discoverPluginProjects(repoRoot);
       },
+      async allPluginBuilds() {
+        await buildAllPluginArtifacts();
+      },
+      async pluginBuild(project) {
+        log.info(`building ${project} plugin artifact`);
+        await runTracked(
+          pnpmCommand,
+          ["--filter", project, "run", "build"],
+          `${project} plugin build`,
+        );
+      },
       async contracts() {
         log.info("contracts changed; regenerating schemas and Rust bindings");
         await runTracked(pnpmCommand, ["gen"], "contract generation");
@@ -306,6 +320,14 @@ function createTypechecks() {
   });
 }
 
+async function buildAllPluginArtifacts() {
+  if (pluginProjects.length === 0) return;
+  log.info("building scoped plugin artifacts");
+  const filters = pluginProjects.flatMap((project) => ["--filter", project.name]);
+  await runTracked(pnpmCommand, [...filters, "run", "build"], "plugin artifact builds");
+  pluginProjects = await discoverPluginProjects(repoRoot);
+}
+
 async function restartDesktop(reasons) {
   const result = await handoffDesktopRuntime({
     electron,
@@ -377,6 +399,7 @@ function daemonPlaneInputs() {
     paths.nativeOutput,
     ...pluginProjects.flatMap((project) => [
       join(repoRoot, project.manifestFile),
+      ...rendererArtifactsOf(project).map((artifact) => join(repoRoot, artifact)),
       ...serviceModulesOf(project).map((module) => join(repoRoot, module)),
     ]),
   ];
@@ -497,6 +520,9 @@ function describeCriticalBatch(batch) {
   if (batch.contracts) labels.push("contracts");
   if (batch.native) labels.push("field-native");
   if (batch.allManifests || batch.manifests.length > 0) labels.push("plugin manifests");
+  if (batch.allPluginBuilds || batch.pluginBuilds.length > 0) {
+    labels.push("plugin artifacts");
+  }
   if (batch.runtime) labels.push("plugin runtime");
   return labels.join(" + ") || "runtime metadata";
 }

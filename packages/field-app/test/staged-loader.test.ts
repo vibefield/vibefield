@@ -385,6 +385,31 @@ describe("the plugin stylesheet link", () => {
     expect(links(doc)[0]?.getAttribute("href")).toBe(styleUrl);
   });
 
+  it("does not reorder app styles — the selector scope is the collision boundary", () => {
+    // `plugin-build` roots every emitted selector beneath data-vf-plugin.
+    // Publication order is therefore lifecycle order only; moving a link in
+    // front of the app sheet would turn source order back into false isolation.
+    const doc = fresh();
+    const appSheet = doc.createElement("style");
+    appSheet.textContent = ".x{}";
+    doc.head.appendChild(appSheet);
+    ensureStyleLink(doc, "alpha", "rev-1", styleUrl);
+    const inHead = [...doc.head.children];
+    expect(inHead.indexOf(links(doc)[0] as Element)).toBeGreaterThan(inHead.indexOf(appSheet));
+    // A second plugin appends independently; neither disturbs prior nodes.
+    ensureStyleLink(doc, "beta", "rev-1", styleUrl);
+    const again = [...doc.head.children];
+    expect(again[0]).toBe(appSheet);
+    expect(links(doc).map((link) => link.dataset["vfPluginStyle"])).toEqual(["alpha", "beta"]);
+  });
+
+  it("appends when the head carries no stylesheet yet", () => {
+    const doc = fresh();
+    ensureStyleLink(doc, "alpha", "rev-1", styleUrl);
+    expect(links(doc)).toHaveLength(1);
+    expect(links(doc)[0]?.parentElement).toBe(doc.head);
+  });
+
   it("replaces the link when the install revision moves", () => {
     const doc = fresh();
     ensureStyleLink(doc, "alpha", "rev-1", styleUrl);

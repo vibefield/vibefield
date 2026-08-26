@@ -159,9 +159,12 @@ describe("buildPlugin", () => {
     const root = fixture({
       "vibefield.plugin.json": manifest({ renderer: "./dist/renderer.js" }),
       "src/renderer.ts":
+        'import "./renderer.css";\n' +
         'import { defineRendererPlugin } from "@vibefield/plugin-sdk";\n' +
         'import { UiButton } from "@vibefield/plugin-sdk/ui";\n' +
-        "export default defineRendererPlugin({ activate: () => UiButton });\n",
+        'const face = "fixed text-black/50 dark:text-white/50";\n' +
+        "export default defineRendererPlugin({ activate: () => [UiButton, face] });\n",
+      "src/renderer.css": ".fixture-card { display: grid; }\n",
     });
 
     const report = await buildPlugin({ root });
@@ -170,6 +173,14 @@ describe("buildPlugin", () => {
     const out = readFileSync(join(root, "dist", "renderer.js"), "utf8");
     expect(out).toMatch(/from\s*"@vibefield\/plugin-sdk"/);
     expect(out).toMatch(/from\s*"@vibefield\/plugin-sdk\/ui"/);
+    const css = readFileSync(join(root, "dist", "renderer.css"), "utf8");
+    const scope = '[data-vf-plugin="com.example.fixture"]';
+    expect(css).toContain(`${scope} .fixture-card`);
+    expect(css).toContain(`${scope} .fixed`);
+    expect(css).toContain(`${scope} .text-black\\/50`);
+    expect(css).toContain(`${scope} .dark\\:text-white\\/50`);
+    expect(css).not.toContain("@layer");
+    expect(css).not.toContain("@property");
     expect(report.stages.at(-1)?.detail).toContain("emitted specifiers all mappable");
   });
 

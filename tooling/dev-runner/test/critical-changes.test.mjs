@@ -7,6 +7,8 @@ const plugins = [
     name: "@vibefield/plugin-example-kv",
     root: "examples/plugins/kv-service",
     manifestFile: "examples/plugins/kv-service/vibefield.plugin.json",
+    rendererEntry: "examples/plugins/kv-service/dist/renderer.js",
+    rendererStyle: "examples/plugins/kv-service/dist/renderer.css",
     serviceEntry: "examples/plugins/kv-service/service.js",
     serviceModules: [
       "examples/plugins/kv-service/service.js",
@@ -34,7 +36,16 @@ test("classifies only changes that require generated output or a process restart
     kind: "plugin-runtime",
     project: "@vibefield/plugin-example-kv",
   });
-  assert.equal(classifyCriticalChange("examples/plugins/kv-service/src/index.ts", plugins), null);
+  assert.deepEqual(classifyCriticalChange("examples/plugins/kv-service/src/index.ts", plugins), {
+    kind: "plugin-build",
+    project: "@vibefield/plugin-example-kv",
+  });
+  assert.deepEqual(classifyCriticalChange("tooling/plugin-build/src/build.ts", plugins), {
+    kind: "all-plugin-builds",
+  });
+  assert.deepEqual(classifyCriticalChange("examples/plugins/shared/card.css", plugins), {
+    kind: "all-plugin-builds",
+  });
 });
 
 test("every module in a service's import closure is restart-triggering", () => {
@@ -42,9 +53,10 @@ test("every module in a service's import closure is restart-triggering", () => {
     kind: "plugin-runtime",
     project: "@vibefield/plugin-example-kv",
   });
+  // A shared module can belong to renderer and service graphs at once. The
+  // conservative all-build classification also performs the runtime refresh.
   assert.deepEqual(classifyCriticalChange("examples/plugins/shared/format.js", plugins), {
-    kind: "plugin-runtime",
-    project: "@vibefield/plugin-example-kv",
+    kind: "all-plugin-builds",
   });
   // A descriptor without the resolved closure (resolution failed) still
   // covers its entry file.

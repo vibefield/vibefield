@@ -21,6 +21,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { builtinModules } from "node:module";
 import { join, relative, resolve } from "node:path";
+import { scopePluginCss } from "./css-scope";
 import {
   HOST_SINGLETON_EXTERNALS,
   HOST_SINGLETON_MODULE_SPECIFIERS,
@@ -41,9 +42,12 @@ const SERVICE_SOURCES = ["src/service.ts", "src/service.tsx", "src/service.js"] 
 /** Utilities and theme WITHOUT preflight: a plugin's stylesheet loads into a
  * page the host already reset, and shipping preflight again would restyle the
  * host's own DOM from inside a plugin. `@source` points the v4 scanner at the
- * plugin's sources rather than trusting auto-detection from a cwd we do not own. */
+ * plugin's sources rather than trusting auto-detection from a cwd we do not
+ * own. The host's explicit `.dark` state is the theme authority in both app
+ * themes; a plugin must not independently follow the OS media query. */
 const TAILWIND_ENTRY = `@import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+@custom-variant dark (&:where(.dark, .dark *));
 @source "../../src";
 `;
 
@@ -176,6 +180,7 @@ function entryPath(root: string, declared: string): string {
 async function bundleRenderer(
   root: string,
   declared: string,
+  pluginId: string,
 ): Promise<{ detail: string; modules: string[]; specifiers: string[] }> {
   const source = firstExisting(root, RENDERER_SOURCES);
   if (source === undefined) {
@@ -250,6 +255,17 @@ async function bundleRenderer(
     throw new PluginBuildError(`renderer bundle did not produce ${declared}`, "renderer bundle");
   }
   const css = join(outDir, "renderer.css");
+  if (existsSync(css)) {
+    try {
+      const compiled = await readFile(css, "utf8");
+      writeFileSync(css, scopePluginCss(compiled, pluginId));
+    } catch (error) {
+      throw new PluginBuildError(
+        `renderer stylesheet could not be scoped beneath data-vf-plugin=${JSON.stringify(pluginId)} (§11.5): ${error instanceof Error ? error.message : String(error)}`,
+        "renderer bundle",
+      );
+    }
+  }
   return {
     detail: `${declared}${existsSync(css) ? " + renderer.css" : " (no stylesheet)"}`,
     modules,
@@ -315,7 +331,7 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<BuildRep
 
   const rendererEntry = manifest.entries?.renderer;
   if (rendererEntry !== undefined) {
-    const { detail, modules, specifiers } = await bundleRenderer(root, rendererEntry);
+    const { detail, modules, specifiers } = await bundleRenderer(root, rendererEntry, manifest.id);
     linked.push(...modules);
     emitted.push(...specifiers);
     stages.push({ stage: "renderer bundle", ok: true, detail });

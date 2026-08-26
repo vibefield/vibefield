@@ -48,9 +48,17 @@ export async function refreshPluginDescriptor(
 
 async function describePlugin(repoRoot, root, name, resolveModules) {
   const manifestFile = join(root, "vibefield.plugin.json");
+  let rendererEntry = null;
+  let rendererStyle = null;
   let serviceEntry = null;
   try {
     const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+    const renderer = manifest?.entries?.renderer;
+    if (typeof renderer === "string" && renderer.length > 0) {
+      const rendererPath = resolve(dirname(manifestFile), renderer);
+      rendererEntry = normalize(relative(repoRoot, rendererPath));
+      rendererStyle = normalize(relative(repoRoot, join(dirname(rendererPath), "renderer.css")));
+    }
     const entry = manifest?.entries?.service;
     if (typeof entry === "string" && entry.length > 0) {
       serviceEntry = normalize(relative(repoRoot, resolve(dirname(manifestFile), entry)));
@@ -69,6 +77,8 @@ async function describePlugin(repoRoot, root, name, resolveModules) {
     name,
     root: normalize(relative(repoRoot, root)),
     manifestFile: normalize(relative(repoRoot, manifestFile)),
+    rendererEntry,
+    rendererStyle,
     serviceEntry,
     serviceModules,
   };
@@ -77,6 +87,12 @@ async function describePlugin(repoRoot, root, name, resolveModules) {
 export function serviceModulesOf(project) {
   if (Array.isArray(project.serviceModules)) return project.serviceModules;
   return project.serviceEntry ? [project.serviceEntry] : [];
+}
+
+export function rendererArtifactsOf(project) {
+  return [project.rendererEntry, project.rendererStyle].filter(
+    (path) => typeof path === "string" && path.length > 0,
+  );
 }
 
 export function classifyCriticalChange(path, pluginProjects) {
@@ -94,22 +110,34 @@ export function classifyCriticalChange(path, pluginProjects) {
     return { kind: "native" };
   }
   if (file.startsWith("tooling/plugin-build/src/")) {
-    return { kind: "all-manifests" };
+    return { kind: "all-plugin-builds" };
   }
 
   const pluginLayout = file.match(/^(plugins|examples\/plugins)\/[^/]+\/(.+)$/);
   if (pluginLayout) {
     const inside = pluginLayout[2];
+    const known = pluginProjects.find((project) => file.startsWith(`${project.root}/`));
     if (
       inside === "package.json" ||
       inside === "src/manifest.ts" ||
       inside.startsWith("scripts/")
     ) {
-      const known = pluginProjects.find((project) => file.startsWith(`${project.root}/`));
       return known ? { kind: "manifest", project: known.name } : { kind: "all-manifests" };
     }
     if (inside === "vibefield.plugin.json") {
       return { kind: "plugin-runtime" };
+    }
+    if (known && serviceModulesOf(known).includes(file)) {
+      return { kind: "plugin-runtime", project: known.name };
+    }
+    if (known && inside.startsWith("src/")) {
+      return { kind: "plugin-build", project: known.name };
+    }
+    // A plugin may share renderer modules or assets with a sibling directory.
+    // There is no safe owning-project inference for that layout, so rebuild
+    // every artifact rather than leave one plugin serving stale bytes.
+    if (!known && /\.(?:css|js|jsx|mjs|ts|tsx|svg|png|jpe?g|webp|woff2?)$/i.test(inside)) {
+      return { kind: "all-plugin-builds" };
     }
   }
 

@@ -19,6 +19,7 @@
     "@vibefield/contracts": "workspace:*",
     "@vitejs/plugin-react": "^6.0.3",
     "esbuild": "catalog:",
+    "postcss": "^8.5.20",
     "tailwindcss": "catalog:",
     "vite": "^8.1.5"
   },

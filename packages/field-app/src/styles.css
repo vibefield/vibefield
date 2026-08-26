@@ -2,10 +2,11 @@
    `@import "tailwindcss"` pulls in theme + preflight + utilities — no JS config,
    no PostCSS; the @tailwindcss/vite plugin does the scanning and compiling.
    The design-kit token sheet carries DESIGN.md's --vf- and --ic- vars (imported
-   here, never redefined). The @source globs point the class scanner at code the
-   Vite graph doesn't reach on its own — the design-kit kit and the plugins — so
-   their Tailwind classes survive the production build. (P0 answer: scan them
-   from the shell here; per-plugin compiled CSS is the distribution-era answer.) */
+   here, never redefined). The design-kit @source covers host-owned shared
+   components outside Vite's source root. Plugin source is intentionally NOT
+   scanned here: plugin-build emits each renderer's compiled CSS beneath its
+   data-vf-plugin boundary (plugin spec §11.5), so installed plugins never add
+   global utilities to the host sheet. */
 @import "tailwindcss";
 @import "@vibefield/design-kit/tokens.css";
 @import "./styles/base.css";
@@ -16,14 +17,6 @@
 @import "./godview/views/swarm/swarm.css";
 @import "./godview/views/swarm/agent-bubble.css";
 @custom-variant dark (&:where(.dark, .dark *));
-/* Three hops from packages/field-app/src → repo root. These were written as
-   four hops from the file's pre-3a home (apps/desktop/renderer/src) and rode
-   the 3a rename unchanged — pointing ABOVE the repo, so Tailwind silently
-   scanned nothing and every plugin utility class vanished from the built CSS
-   (field report 2026-07-23: "dom widgets look quite off"). The bundle
-   assert's CSS canaries now fail the build if a source tree's classes drop.
-   Slice L0 moved plugins to the repo root (plugins/ + examples/plugins/) —
-   same hazard class, globs re-pointed WITH the move, canaries prove it. */
+/* Three hops from packages/field-app/src → repo root. Shared host primitives
+   sit behind a workspace symlink, so auto-detection cannot see them. */
 @source "../../../packages/design-kit/src";
-@source "../../../plugins";
-@source "../../../examples/plugins";

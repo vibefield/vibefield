@@ -8,8 +8,10 @@ export function createCriticalTaskQueue({
   let pendingContracts = false;
   let pendingNative = false;
   let pendingAllManifests = false;
+  let pendingAllPluginBuilds = false;
   let pendingRuntime = false;
   const pendingManifests = new Set();
+  const pendingPluginBuilds = new Set();
   let retry = [];
   let running = false;
   let healthy = true;
@@ -45,7 +47,9 @@ export function createCriticalTaskQueue({
     if (change.kind === "contracts") pendingContracts = true;
     else if (change.kind === "native") pendingNative = true;
     else if (change.kind === "all-manifests") pendingAllManifests = true;
+    else if (change.kind === "all-plugin-builds") pendingAllPluginBuilds = true;
     else if (change.kind === "manifest") pendingManifests.add(change.project);
+    else if (change.kind === "plugin-build") pendingPluginBuilds.add(change.project);
     else if (change.kind === "plugin-runtime") pendingRuntime = true;
   }
 
@@ -54,8 +58,10 @@ export function createCriticalTaskQueue({
       pendingContracts ||
       pendingNative ||
       pendingAllManifests ||
+      pendingAllPluginBuilds ||
       pendingRuntime ||
-      pendingManifests.size > 0
+      pendingManifests.size > 0 ||
+      pendingPluginBuilds.size > 0
     );
   }
 
@@ -66,14 +72,18 @@ export function createCriticalTaskQueue({
       contracts: pendingContracts,
       native: pendingNative,
       allManifests: pendingAllManifests,
+      allPluginBuilds: pendingAllPluginBuilds,
       runtime: pendingRuntime,
       manifests: [...pendingManifests].sort(),
+      pluginBuilds: [...pendingPluginBuilds].sort(),
     };
     pendingContracts = false;
     pendingNative = false;
     pendingAllManifests = false;
+    pendingAllPluginBuilds = false;
     pendingRuntime = false;
     pendingManifests.clear();
+    pendingPluginBuilds.clear();
     return batch;
   }
 
@@ -93,13 +103,31 @@ export function createCriticalTaskQueue({
           }
           if (batch.contracts) await handlers.contracts();
           if (batch.contracts || batch.native) await handlers.native();
-          if (batch.runtime) await handlers.pluginRuntime();
+          if (batch.allManifests || batch.allPluginBuilds) {
+            await handlers.allPluginBuilds();
+          } else {
+            const projects = new Set([...batch.manifests, ...batch.pluginBuilds]);
+            for (const project of [...projects].sort()) await handlers.pluginBuild(project);
+          }
+          if (
+            batch.runtime ||
+            batch.allManifests ||
+            batch.allPluginBuilds ||
+            batch.manifests.length > 0 ||
+            batch.pluginBuilds.length > 0
+          ) {
+            await handlers.pluginRuntime();
+          }
           healthy = true;
           onSuccess(batch);
         } catch (error) {
           if (batch.allManifests) failedBatch.push({ kind: "all-manifests" });
+          if (batch.allPluginBuilds) failedBatch.push({ kind: "all-plugin-builds" });
           for (const project of batch.manifests) {
             failedBatch.push({ kind: "manifest", project });
+          }
+          for (const project of batch.pluginBuilds) {
+            failedBatch.push({ kind: "plugin-build", project });
           }
           if (batch.contracts) failedBatch.push({ kind: "contracts" });
           if (batch.native) failedBatch.push({ kind: "native" });
@@ -143,8 +171,10 @@ export function createCriticalTaskQueue({
       pendingContracts = false;
       pendingNative = false;
       pendingAllManifests = false;
+      pendingAllPluginBuilds = false;
       pendingRuntime = false;
       pendingManifests.clear();
+      pendingPluginBuilds.clear();
       retry = [];
       notifyIdle();
     },

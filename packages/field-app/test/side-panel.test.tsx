@@ -86,6 +86,11 @@ describe("hud.side-panel host stage", () => {
     expect(panel?.dataset.open).toBe("true");
     expect(panel?.getAttribute("aria-hidden")).toBe("false");
     expect(container?.textContent).toContain("Plugin panel content");
+    const styleBoundary = container?.querySelector<HTMLElement>(
+      '[data-vf-plugin="vibefield.test-panel"]',
+    );
+    expect(styleBoundary?.style.display).toBe("contents");
+    expect(styleBoundary?.querySelector("button")?.textContent).toBe("Plugin panel content");
     act(() => container?.querySelector("button")?.click());
     expect(onClose).toHaveBeenCalledTimes(1);
 

@@ -150,15 +150,11 @@ if (args.includes("--assert")) {
       problems.push(`${rel}: shell bundle missing under ${distDir} (stale report path?)`);
     }
   }
-  // CSS canaries — one utility per SCANNED SOURCE TREE. The silent-CSS bug
-  // class has struck three times (B2 stale ice dist; 3a symlink-blind
-  // auto-detection; 3a's stale @source hops in styles.css that dropped every
-  // plugin class for a day). Aggregate size hid the last one; per-tree
-  // canaries cannot. Bracket-free names so CSS escaping never false-negatives.
-  const CSS_CANARIES = [
-    ["tabular-nums", "field-app (ZoomPill)"],
-    ["leading-none", "plugins (widgetlab cards)"],
-  ];
+  // Host CSS canary. Plugin source is no longer scanned into this document:
+  // plugin-build emits a separately tested, selector-scoped renderer.css for
+  // each artifact (§11.5). Keeping a plugin utility canary here would require
+  // recreating the global source scan whose leakage this boundary removed.
+  const CSS_CANARIES = [["tabular-nums", "field-app (ZoomPill)"]];
   // Read EVERY built stylesheet, not the first one: the renderer emits one CSS
   // per chunk (main + workspace + shared), so a `find` first-match graded a
   // canary against whichever name sorted first and reported utilities missing

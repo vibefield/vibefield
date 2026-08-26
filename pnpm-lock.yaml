@@ -809,6 +809,9 @@ importers:
       esbuild:
         specifier: 'catalog:'
         version: 0.28.1
+      postcss:
+        specifier: ^8.5.20
+        version: 8.5.20
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3

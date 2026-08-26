@@ -12,6 +12,8 @@ test("coalesces contract/native edits into one ordered native rebuild", async ()
     handlers: {
       allManifests: async () => calls.push("all-manifests"),
       manifest: async (project) => calls.push(`manifest:${project}`),
+      allPluginBuilds: async () => calls.push("all-plugin-builds"),
+      pluginBuild: async (project) => calls.push(`plugin-build:${project}`),
       contracts: async () => calls.push("contracts"),
       native: async () => calls.push("native"),
       pluginRuntime: async () => calls.push("plugin-runtime"),
@@ -46,6 +48,8 @@ test("keeps the last valid runtime on failure and retries on the next relevant e
     handlers: {
       allManifests: async () => {},
       manifest: async () => {},
+      allPluginBuilds: async () => {},
+      pluginBuild: async () => {},
       contracts: async () => {
         attempts += 1;
         if (attempts === 1) throw new Error("invalid contract");
@@ -94,6 +98,8 @@ test("does not strand a corrective edit saved while the failing build is still r
     handlers: {
       allManifests: async () => {},
       manifest: async () => {},
+      allPluginBuilds: async () => {},
+      pluginBuild: async () => {},
       contracts: async () => {
         attempts += 1;
         calls.push(`contracts:${attempts}`);
@@ -129,5 +135,64 @@ test("does not strand a corrective edit saved while the failing build is still r
   ]);
   assert.deepEqual(calls, ["contracts:1", "failure", "contracts:2", "native"]);
   assert.equal(queue.healthy, true);
+  queue.close();
+});
+
+test("regenerates manifests before one coalesced plugin build and runtime refresh", async () => {
+  const calls = [];
+  const queue = createCriticalTaskQueue({
+    handlers: {
+      allManifests: async () => calls.push("all-manifests"),
+      manifest: async (project) => calls.push(`manifest:${project}`),
+      allPluginBuilds: async () => calls.push("all-plugin-builds"),
+      pluginBuild: async (project) => calls.push(`plugin-build:${project}`),
+      contracts: async () => calls.push("contracts"),
+      native: async () => calls.push("native"),
+      pluginRuntime: async () => calls.push("plugin-runtime"),
+    },
+    onBusyChange() {},
+    onSuccess() {},
+    onFailure: (error) => {
+      throw error;
+    },
+    debounceMs: 1,
+  });
+
+  queue.enqueue({ kind: "manifest", project: "@vibefield/plugin-note" });
+  queue.enqueue({ kind: "plugin-build", project: "@vibefield/plugin-note" });
+  await queue.waitForIdle();
+
+  assert.deepEqual(calls, [
+    "manifest:@vibefield/plugin-note",
+    "plugin-build:@vibefield/plugin-note",
+    "plugin-runtime",
+  ]);
+  queue.close();
+});
+
+test("an all-manifests refresh rebuilds every plugin artifact", async () => {
+  const calls = [];
+  const queue = createCriticalTaskQueue({
+    handlers: {
+      allManifests: async () => calls.push("all-manifests"),
+      manifest: async () => {},
+      allPluginBuilds: async () => calls.push("all-plugin-builds"),
+      pluginBuild: async () => {},
+      contracts: async () => {},
+      native: async () => {},
+      pluginRuntime: async () => calls.push("plugin-runtime"),
+    },
+    onBusyChange() {},
+    onSuccess() {},
+    onFailure: (error) => {
+      throw error;
+    },
+    debounceMs: 1,
+  });
+
+  queue.enqueue({ kind: "all-manifests" });
+  await queue.waitForIdle();
+
+  assert.deepEqual(calls, ["all-manifests", "all-plugin-builds", "plugin-runtime"]);
   queue.close();
 });

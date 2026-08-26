@@ -1,6 +1,7 @@
 import { UnavailableState } from "@vibefield/design-kit";
 import { Component, type ReactElement, type ReactNode, useSyncExternalStore } from "react";
 import { getRendererLogger } from "../logging";
+import { PluginStyleBoundary } from "../plugin-host/PluginStyleBoundary";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import {
   getSurfacesSnapshot,
@@ -92,7 +93,9 @@ export function PluginSurfaceHost({
             : ({ slot, windowId } as const);
         return (
           <SurfaceErrorBoundary key={s.seq} surfaceId={s.surfaceId}>
-            <Surface {...props} />
+            <PluginStyleBoundary pluginId={s.pluginId}>
+              <Surface {...props} />
+            </PluginStyleBoundary>
           </SurfaceErrorBoundary>
         );
       })}

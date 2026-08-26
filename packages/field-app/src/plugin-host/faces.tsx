@@ -7,6 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { getRendererLogger } from "../logging";
+import { PluginStyleBoundary } from "./PluginStyleBoundary";
 import { getPluginRegistrySnapshot, subscribePluginRegistry } from "./plugin-registry-store";
 
 // The spine-owned non-normal faces (spec §12.4) + the per-widget failure
@@ -139,7 +140,13 @@ export function withPluginFace(opts: {
       );
     return (
       <WidgetFaceBoundary type={type} surface={surface}>
-        <Real {...props} />
+        {surface === "dom" ? (
+          <PluginStyleBoundary pluginId={pluginId}>
+            <Real {...props} />
+          </PluginStyleBoundary>
+        ) : (
+          <Real {...props} />
+        )}
       </WidgetFaceBoundary>
     );
   }
