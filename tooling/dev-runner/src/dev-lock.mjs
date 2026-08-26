@@ -30,15 +30,18 @@ export async function acquireDevLock({
   runnerPid = process.pid,
   pidAlive = isPidAlive,
   platform = process.platform,
+  bootId = randomBytes(16).toString("hex"),
 }) {
+  if (!/^[a-f0-9]{32}$/.test(bootId)) throw new DevLockError("invalid development boot identity");
   await mkdir(dirname(lockDir), { recursive: true });
   const ownerPath = join(lockDir, OWNER_FILE);
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const initial = {
-      version: 1,
+      version: 2,
       repoRoot,
       runnerPid,
+      bootId,
       electronPid: null,
       buildId: null,
       startedAt: Date.now(),
@@ -244,13 +247,19 @@ function createHandle({ lockDir, ownerPath, record, runnerPid }) {
   };
 }
 
+export async function readDevLockOwner(lockDir) {
+  return readOwner(join(lockDir, OWNER_FILE));
+}
+
 async function readOwner(path) {
   try {
     const value = JSON.parse(await readFile(path, "utf8"));
     if (
-      value?.version !== 1 ||
+      (value?.version !== 1 && value?.version !== 2) ||
       !Number.isInteger(value.runnerPid) ||
       value.runnerPid <= 0 ||
+      (value.version === 2 &&
+        (typeof value.bootId !== "string" || !/^[a-f0-9]{32}$/.test(value.bootId))) ||
       (value.electronPid !== null &&
         (!Number.isInteger(value.electronPid) || value.electronPid <= 0))
     ) {

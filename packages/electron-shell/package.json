@@ -13,7 +13,7 @@
     "build:live-surfaces-lab": "vite build --mode live-surfaces-lab",
     "build:design": "vite build --mode design",
     "dev:studio": "node ../../tooling/dev-runner/src/cli.mjs --studio",
-    "dev:design": "node ../../tooling/dev-runner/src/cli.mjs --studio",
+    "dev:design": "node ../../tooling/dev-runner/src/cli.mjs --studio=design",
     "dev:design:web": "vite --mode design --open /design-system.html",
     "dev:renderer": "vite",
     "test": "vitest run",

@@ -7,17 +7,21 @@ import type {
 import { installNavigationPolicy, installPermissionPolicy } from "../main/security";
 import { createHostAuxiliaryWindow, loadRenderer } from "../main/windows";
 import { STUDIO_PRODUCT_PORT_CHANNEL, STUDIO_PUBLISHER_PORT_CHANNEL } from "./channels";
+import type { StudioCommandHost, StudioHostCommand } from "./command-channel";
 import { StudioRouter } from "./router";
 import { studioProductRendererUrl, studioRendererUrl } from "./url";
 
 export const STUDIO_SESSION_PARTITION = "vibefield-studio";
 
-export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevelopmentExtension {
+export function createStudioHost(opts: {
+  openAtStartup: boolean;
+}): DesktopDevelopmentExtension & StudioCommandHost {
   const preloadPath = join(__dirname, "..", "preload", "studio.cjs");
   let context: DevelopmentExtensionContext | null = null;
   let window: BrowserWindow | null = null;
   let opening: Promise<BrowserWindow> | null = null;
   let productWindow: BrowserWindow | null = null;
+  let desiredOpen = opts.openAtStartup;
   const router = new StudioRouter(Date.now, () => {
     if (productWindow === null || productWindow.isDestroyed()) return;
     if (productWindow.isMinimized()) productWindow.restore();
@@ -40,6 +44,7 @@ export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevel
   };
 
   const open = async (): Promise<BrowserWindow> => {
+    desiredOpen = true;
     if (window !== null && !window.isDestroyed()) {
       if (window.isMinimized()) window.restore();
       window.show();
@@ -64,6 +69,7 @@ export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevel
       const lifetime = context.adoptHostAuxiliary(next);
       window = next;
       next.once("closed", () => {
+        desiredOpen = false;
         router.closeStudio("studio-closed");
         lifetime.dispose();
         if (window === next) window = null;
@@ -90,7 +96,31 @@ export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevel
     return attempt;
   };
 
+  const status = (): Record<string, unknown> => ({
+    state: context === null ? "starting" : "ready",
+    studio: window !== null && !window.isDestroyed() ? "open" : "closed",
+    studioRequested: desiredOpen,
+    productConnected: router.state().productConnected,
+  });
+
+  const handleCommand = async (command: StudioHostCommand): Promise<Record<string, unknown>> => {
+    if (command.type === "studio.open" || command.type === "studio.focus") {
+      desiredOpen = true;
+      if (context === null) return { ...status(), state: "queued" };
+      await open();
+      return { ...status(), section: command.type === "studio.open" ? command.section : undefined };
+    }
+    if (command.type === "studio.close") {
+      desiredOpen = false;
+      if (opening !== null) await opening.catch(() => undefined);
+      if (window !== null && !window.isDestroyed()) window.close();
+      return { ...status(), studio: "closed", studioRequested: false };
+    }
+    return status();
+  };
+
   return {
+    handleCommand,
     productRendererUrl: studioProductRendererUrl,
     async onProductWindowReady(nextContext) {
       context = nextContext;
@@ -110,9 +140,10 @@ export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevel
       attachProductPort(nextContext.productWindow);
     },
     async onHostReady() {
-      if (opts.openAtStartup) await open();
+      if (desiredOpen) await open();
     },
     dispose() {
+      desiredOpen = false;
       context = null;
       productWindow = null;
       router.dispose();

@@ -20,6 +20,7 @@ import { workspacePaths as paths, repoRoot } from "./paths.mjs";
 import { cargoCommand, pnpmCommand, runCommand, terminateChild } from "./processes.mjs";
 import { readDevProduct } from "./product.mjs";
 import { createRestartCoordinator } from "./restart-coordinator.mjs";
+import { sendRunnerCommand, startRunnerCommandServer } from "./runner-command.mjs";
 import { handoffDesktopRuntime } from "./runtime-handoff.mjs";
 import {
   pruneRuntimeSnapshots,
@@ -31,6 +32,7 @@ import { createTypecheckScheduler } from "./typecheck-scheduler.mjs";
 import { startRendererServer } from "./vite-server.mjs";
 
 let devLock = null;
+let commandServer = null;
 let builds = null;
 let renderer = null;
 let electron = null;
@@ -49,7 +51,21 @@ const criticalChanges = createChangeBuffer();
 const transientChildren = new Set();
 const crashTimes = [];
 const forceOnboarding = process.argv.includes("--force-onboarding");
-const studioAtStartup = process.argv.includes("--studio");
+const studioArgument = process.argv.find(
+  (argument) => argument === "--studio" || argument.startsWith("--studio="),
+);
+const initialStudioCommand =
+  studioArgument === undefined
+    ? null
+    : studioArgument === "--studio"
+      ? { type: "studio.open" }
+      : studioArgument === "--studio=design" || studioArgument === "--studio=appearance"
+        ? { type: "studio.open", section: studioArgument.slice("--studio=".length) }
+        : null;
+if (studioArgument !== undefined && initialStudioCommand === null) {
+  throw new Error(`unsupported Studio launch argument: ${studioArgument}`);
+}
+let studioRequested = initialStudioCommand !== null;
 
 process.on("SIGINT", () => void shutdown(0, "SIGINT"));
 process.on("SIGTERM", () => void shutdown(0, "SIGTERM"));
@@ -62,11 +78,31 @@ async function main() {
     mkdir(paths.logRoot, { recursive: true }),
     mkdir(paths.electronUserData, { recursive: true }),
   ]);
+  if (initialStudioCommand !== null) {
+    const attached = await sendRunnerCommand({
+      endpoint: paths.commandEndpoint,
+      lockDir: paths.lockDir,
+      repoRoot,
+      command: initialStudioCommand,
+    });
+    if (attached.status === "handled") {
+      log.info(
+        `Studio request accepted by the active development runner (${attached.result.state})`,
+      );
+      return;
+    }
+  }
   devLock = await acquireDevLock({
     lockDir: paths.lockDir,
     dataRoot: paths.dataRoot,
     repoRoot,
   });
+  commandServer = await startRunnerCommandServer({
+    endpoint: paths.commandEndpoint,
+    bootId: devLock.record.bootId,
+    handle: handleRunnerCommand,
+  });
+  log.info("development command endpoint ready");
 
   // Observe critical source roots before any generator or native build reads
   // them. Until the serialized refresh queue exists, events are deduplicated
@@ -106,7 +142,7 @@ async function main() {
   electron = createElectronStack({
     paths,
     viteUrl: renderer.url,
-    studioOpen: studioAtStartup,
+    studioOpen: studioRequested,
     lock: devLock,
     log,
     onUnexpectedExit: handleElectronExit,
@@ -169,6 +205,18 @@ async function main() {
   });
   typechecks.requestFull();
   log.info("Nx is watching every workspace project; typechecks run in the background");
+}
+
+async function handleRunnerCommand(command) {
+  if (command.type === "studio.open" || command.type === "studio.focus") studioRequested = true;
+  if (command.type === "studio.close") studioRequested = false;
+  if (electron === null) {
+    return {
+      state: command.type === "studio.status" ? "starting" : "queued",
+      studioRequested,
+    };
+  }
+  return electron.command(command);
 }
 
 // GT-2d: a daemon nobody supervises still answers its socket forever (the
@@ -492,6 +540,11 @@ function shutdown(code, reason) {
     criticalQueue?.close();
     stopCriticalWatcher?.();
     stopCriticalWatcher = null;
+    await commandServer?.close().catch((error) => {
+      code = 1;
+      log.error(`could not close the development command endpoint: ${messageOf(error)}`);
+    });
+    commandServer = null;
     await nxWatcher?.close().catch((error) => log.warn(messageOf(error)));
     // The runner is the daemon custodian (the shell runs leave-running in
     // dev), so final teardown reaps the pair here — the only place it happens

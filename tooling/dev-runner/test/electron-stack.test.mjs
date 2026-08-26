@@ -3,12 +3,13 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import { createElectronStack } from "../src/electron-stack.mjs";
 
-function setup() {
+function setup({ studioOpen = true } = {}) {
   const child = new EventEmitter();
-  Object.assign(child, { pid: 1234, exitCode: null, signalCode: null });
+  Object.assign(child, { pid: 1234, exitCode: null, signalCode: null, connected: true });
   const updates = [];
   const products = [];
   const exits = [];
+  const commands = [];
   let spawnArgs = null;
   let terminateArgs = null;
   const stack = createElectronStack({
@@ -20,7 +21,7 @@ function setup() {
       logRoot: "/repo/.vibefield/dev/logs",
     },
     viteUrl: "http://127.0.0.1:5174/",
-    studioOpen: true,
+    studioOpen,
     lock: {
       async update(value) {
         updates.push(value);
@@ -33,6 +34,19 @@ function setup() {
     electronExecutable: "/electron",
     spawnProcess(...args) {
       spawnArgs = args;
+      child.send = (message, callback) => {
+        commands.push(message);
+        callback(null);
+        queueMicrotask(() =>
+          child.emit("message", {
+            version: 1,
+            type: "vibefield.dev-command-result",
+            requestId: message.requestId,
+            ok: true,
+            result: { state: "delivered" },
+          }),
+        );
+      };
       queueMicrotask(() => child.emit("spawn"));
       return child;
     },
@@ -54,6 +68,7 @@ function setup() {
     updates,
     products,
     exits,
+    commands,
     getSpawnArgs: () => spawnArgs,
     getTerminateArgs: () => terminateArgs,
     stack,
@@ -89,7 +104,28 @@ test("starts Electron directly with isolated state and the daemon build identity
   assert.equal(options.env.FIELDD_DATA_PORT, "0");
   assert.equal(options.env.VITE_DEV_SERVER_URL, "http://127.0.0.1:5174/");
   assert.equal(options.env.VIBEFIELD_STUDIO_OPEN, "1");
+  assert.deepEqual(options.stdio, ["inherit", "inherit", "inherit", "ipc"]);
   assert.deepEqual(fixture.updates, [{ electronPid: 1234, buildId: "dev-current" }]);
+});
+
+test("queues Studio intent before Electron starts and delivers commands over child IPC", async () => {
+  const fixture = setup({ studioOpen: false });
+  assert.deepEqual(await fixture.stack.command({ type: "studio.open", section: "design" }), {
+    state: "queued",
+    studioRequested: true,
+  });
+  await fixture.stack.start(runtime);
+  assert.equal(fixture.getSpawnArgs()[2].env.VIBEFIELD_STUDIO_OPEN, "1");
+
+  assert.deepEqual(await fixture.stack.command({ type: "studio.close" }), {
+    state: "delivered",
+  });
+  assert.deepEqual(fixture.commands.at(-1), {
+    version: 1,
+    type: "vibefield.dev-command",
+    requestId: "runner-1",
+    command: { type: "studio.close" },
+  });
 });
 
 test("a shell-only stop leaves the daemon pair for the next shell to adopt", async () => {

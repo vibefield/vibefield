@@ -19,8 +19,11 @@ export function createElectronStack({
 }) {
   let child = null;
   let currentDaemonBuildId = null;
+  let studioRequested = studioOpen;
+  let commandSequence = 0;
   let stopping = false;
   let exitCleanup = Promise.resolve();
+  const pendingCommands = new Map();
 
   async function start(runtime) {
     if (child !== null) throw new Error("Electron is already running");
@@ -28,7 +31,7 @@ export function createElectronStack({
     const env = buildChildEnv(process.env, {
       set: {
         VITE_DEV_SERVER_URL: viteUrl,
-        VIBEFIELD_STUDIO_OPEN: studioOpen ? "1" : "0",
+        VIBEFIELD_STUDIO_OPEN: studioRequested ? "1" : "0",
         // The adoption gate compares product.json's buildId against this value,
         // and product.json describes the DAEMON plane — a shell-only rebuild
         // must still adopt the running fieldd, so the daemon identity is what
@@ -55,15 +58,17 @@ export function createElectronStack({
       {
         cwd: paths.desktopRoot,
         env,
-        stdio: "inherit",
+        stdio: ["inherit", "inherit", "inherit", "ipc"],
       },
     );
     child = next;
     currentDaemonBuildId = daemonBuildId;
     let initialized = false;
     let earlyExit = null;
+    next.on("message", (message) => receiveCommandResult(next, message));
     next.once("exit", (code, signal) => {
       if (child === next) child = null;
+      rejectPendingCommands(new Error("Electron exited before answering a development command"));
       if (stopping) return;
       if (!initialized) {
         earlyExit = { code, signal };
@@ -124,6 +129,75 @@ export function createElectronStack({
     if (alsoStopDaemons) await stopDaemons();
   }
 
+  async function command(value) {
+    if (value.type === "studio.open" || value.type === "studio.focus") studioRequested = true;
+    if (value.type === "studio.close") studioRequested = false;
+    const running = child;
+    if (running === null || running.connected !== true || typeof running.send !== "function") {
+      return {
+        state: value.type === "studio.status" ? "starting" : "queued",
+        studioRequested,
+      };
+    }
+
+    commandSequence += 1;
+    const requestId = `runner-${commandSequence}`;
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pendingCommands.delete(requestId);
+        reject(new Error("Electron did not answer the development command"));
+      }, 2_000);
+      timeout.unref?.();
+      pendingCommands.set(requestId, { resolve, reject, timeout });
+      try {
+        running.send(
+          { version: 1, type: "vibefield.dev-command", requestId, command: value },
+          (error) => {
+            if (error === null) return;
+            const pending = pendingCommands.get(requestId);
+            if (pending === undefined) return;
+            pendingCommands.delete(requestId);
+            clearTimeout(pending.timeout);
+            pending.reject(error);
+          },
+        );
+      } catch (error) {
+        const pending = pendingCommands.get(requestId);
+        pendingCommands.delete(requestId);
+        clearTimeout(timeout);
+        pending?.reject(error);
+      }
+    });
+  }
+
+  function receiveCommandResult(sender, message) {
+    if (
+      child !== sender ||
+      message?.version !== 1 ||
+      message.type !== "vibefield.dev-command-result" ||
+      typeof message.requestId !== "string"
+    ) {
+      return;
+    }
+    const pending = pendingCommands.get(message.requestId);
+    if (pending === undefined) return;
+    pendingCommands.delete(message.requestId);
+    clearTimeout(pending.timeout);
+    if (message.ok === true && typeof message.result === "object" && message.result !== null) {
+      pending.resolve(message.result);
+    } else {
+      pending.reject(new Error("Electron rejected the development command"));
+    }
+  }
+
+  function rejectPendingCommands(error) {
+    for (const pending of pendingCommands.values()) {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    pendingCommands.clear();
+  }
+
   return {
     get running() {
       return child !== null;
@@ -132,6 +206,7 @@ export function createElectronStack({
       return child?.pid ?? null;
     },
     start,
+    command,
     stop,
     stopDaemons,
   };
