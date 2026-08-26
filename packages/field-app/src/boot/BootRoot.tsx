@@ -5,6 +5,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import type { AppearanceOverrideSource } from "../appearance";
 import type { BootMachine, BootView } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
 import "./boot.css";
@@ -24,7 +25,13 @@ import "./boot.css";
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
 
-export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
+export function BootRoot({
+  machine,
+  appearanceOverrideSource,
+}: {
+  machine: BootMachine;
+  appearanceOverrideSource?: AppearanceOverrideSource;
+}): ReactElement {
   const view = useSyncExternalStore(machine.subscribe, machine.view);
   const ready = machine.ready;
   const revealed = view.phase === "interactive";
@@ -59,6 +66,7 @@ export function BootRoot({ machine }: { machine: BootMachine }): ReactElement {
             <ready.mod.FieldView
               manager={ready.manager}
               plugins={ready.plugins}
+              {...(appearanceOverrideSource === undefined ? {} : { appearanceOverrideSource })}
               {...(ready.profile === undefined ? {} : { profile: ready.profile })}
             />
           </ready.mod.FielddProvider>

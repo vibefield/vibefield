@@ -3,7 +3,7 @@ import {
   type OverlapFeedbackTuning,
 } from "@vibefield/design-kit/card-appearance";
 import { type CanvasAppearance, defaultCanvasAppearance } from "../field/canvas-appearance";
-import { hexToRgb255 } from "../field/theme-constants";
+import { hexToRgb255 } from "./color";
 
 export type {
   OverlapFeedbackColors,

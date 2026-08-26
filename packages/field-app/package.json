@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./appearance": "./src/appearance/index.ts",
     "./design-system": "./src/design-system/mount.tsx",
     "./host-kit": "./src/host-kit.ts",
     "./logging": "./src/logging.ts",

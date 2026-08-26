@@ -75,7 +75,7 @@ export default defineConfig(({ mode }) => ({
     entries:
       mode === "live-surfaces-lab"
         ? ["spike-live-surfaces-lab.html"]
-        : ["index.html", "studio.html", "design-system.html"],
+        : ["index.html", "studio-product.html", "studio.html", "design-system.html"],
     include: ["@vibefield/field-app > @react-three/fiber"],
   },
   build: {

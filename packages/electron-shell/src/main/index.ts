@@ -1301,7 +1301,11 @@ async function main(
               registry.markClosing(window);
             },
           );
-          await loadRenderer(window, MODE, VITE_URL);
+          await loadRenderer(
+            window,
+            MODE,
+            DEVELOPMENT_EXTENSION?.productRendererUrl(VITE_URL) ?? VITE_URL,
+          );
           await DEVELOPMENT_EXTENSION?.onProductWindowReady({
             productWindow: window,
             rendererBaseUrl: VITE_URL,

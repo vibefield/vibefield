@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { hexToRgb255 } from "../../field/theme-constants";
+import { hexToRgb255 } from "../../appearance/color";
 import type { AgentVisualStatus } from "./agent-status";
 
 // The monitor's colors, READ FROM THE TOKENS — `deck-theme.ts`'s idiom, applied

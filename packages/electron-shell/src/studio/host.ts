@@ -1,12 +1,14 @@
 import { join } from "node:path";
-import { type BrowserWindow, session } from "electron";
+import { type BrowserWindow, MessageChannelMain, session } from "electron";
 import type {
   DesktopDevelopmentExtension,
   DevelopmentExtensionContext,
 } from "../main/development-extension";
 import { installNavigationPolicy, installPermissionPolicy } from "../main/security";
 import { createHostAuxiliaryWindow, loadRenderer } from "../main/windows";
-import { studioRendererUrl } from "./url";
+import { STUDIO_PRODUCT_PORT_CHANNEL, STUDIO_PUBLISHER_PORT_CHANNEL } from "./channels";
+import { StudioRouter } from "./router";
+import { studioProductRendererUrl, studioRendererUrl } from "./url";
 
 export const STUDIO_SESSION_PARTITION = "vibefield-studio";
 
@@ -15,6 +17,22 @@ export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevel
   let context: DevelopmentExtensionContext | null = null;
   let window: BrowserWindow | null = null;
   let opening: Promise<BrowserWindow> | null = null;
+  let productWindow: BrowserWindow | null = null;
+  const router = new StudioRouter();
+
+  const attachProductPort = (target: BrowserWindow): void => {
+    if (target.isDestroyed()) return;
+    const { port1, port2 } = new MessageChannelMain();
+    router.attachProduct(port1);
+    target.webContents.postMessage(STUDIO_PRODUCT_PORT_CHANNEL, null, [port2]);
+  };
+
+  const attachStudioPort = (target: BrowserWindow): void => {
+    if (target.isDestroyed()) return;
+    const { port1, port2 } = new MessageChannelMain();
+    router.attachStudio(port1);
+    target.webContents.postMessage(STUDIO_PUBLISHER_PORT_CHANNEL, null, [port2]);
+  };
 
   const open = async (): Promise<BrowserWindow> => {
     if (window !== null && !window.isDestroyed()) {
@@ -41,9 +59,12 @@ export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevel
       const lifetime = context.adoptHostAuxiliary(next);
       window = next;
       next.once("closed", () => {
+        router.closeStudio("studio-closed");
         lifetime.dispose();
         if (window === next) window = null;
       });
+      next.webContents.on("did-finish-load", () => attachStudioPort(next));
+      next.webContents.on("render-process-gone", () => router.closeStudio("studio-crashed"));
       installNavigationPolicy(next, "dev");
       try {
         await loadRenderer(next, "dev", studioRendererUrl(context.rendererBaseUrl));
@@ -65,14 +86,31 @@ export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevel
   };
 
   return {
+    productRendererUrl: studioProductRendererUrl,
     async onProductWindowReady(nextContext) {
       context = nextContext;
+      if (productWindow !== nextContext.productWindow) {
+        productWindow = nextContext.productWindow;
+        productWindow.webContents.on("did-finish-load", () => {
+          if (productWindow === nextContext.productWindow) {
+            attachProductPort(nextContext.productWindow);
+          }
+        });
+        productWindow.webContents.on("render-process-gone", () => router.detachProductEndpoint());
+        productWindow.once("closed", () => {
+          if (productWindow === nextContext.productWindow) productWindow = null;
+          router.detachProductEndpoint();
+        });
+      }
+      attachProductPort(nextContext.productWindow);
     },
     async onHostReady() {
       if (opts.openAtStartup) await open();
     },
     dispose() {
       context = null;
+      productWindow = null;
+      router.dispose();
       if (window !== null && !window.isDestroyed()) window.destroy();
       window = null;
     },

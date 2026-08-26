@@ -5,7 +5,7 @@ import {
   isGhostteaShaderEffect,
   TERMINAL_THEMES,
 } from "@vibecook/ghosttea-react/workspace";
-import { hexToRgb01 } from "../field/theme-constants";
+import { hexToRgb01 } from "../appearance/color";
 import { type DeckAppearance, deckThemeNameForMode } from "./deck-appearance";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 

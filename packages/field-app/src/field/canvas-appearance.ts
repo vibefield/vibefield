@@ -1,5 +1,5 @@
 import type { GridConfig, GridMagnetConfig } from "@vibecook/ice";
-import { hexToRgb01 } from "./theme-constants";
+import { hexToRgb01 } from "../appearance/color";
 
 /** Theme-aware colors used by the physical canvas surface. */
 export interface CanvasPalette {

@@ -9,8 +9,13 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
-import { effectiveProductAppearance } from "./appearance/appearance-override-store";
+import {
+  type AppearanceOverrideSnapshot,
+  type AppearanceOverrideSource,
+  effectiveProductAppearance,
+} from "./appearance/appearance-override-store";
 import { productAppearanceCssVariables } from "./appearance/product-appearance";
 import { emitCanvasReadyMarker } from "./development-console";
 import type { DocManager } from "./doc-manager";
@@ -45,10 +50,20 @@ import { useTheme } from "./theme";
 // The window IS the field (2026-07-21): no app bar — the theme toggle floats
 // top-right, diagnostics live inside Settings.
 
+const EMPTY_APPEARANCE_SNAPSHOT: AppearanceOverrideSnapshot = Object.freeze({
+  revision: 0,
+  appearance: null,
+});
+const EMPTY_APPEARANCE_SOURCE: AppearanceOverrideSource = Object.freeze({
+  snapshot: () => EMPTY_APPEARANCE_SNAPSHOT,
+  subscribe: () => () => undefined,
+});
+
 export function FieldView({
   manager,
   plugins,
   profile,
+  appearanceOverrideSource,
 }: {
   manager: DocManager;
   /** P8b-3 — the staged set the boot phase resolved. Absent only in harnesses
@@ -57,6 +72,8 @@ export function FieldView({
   plugins?: PreparedRendererPlugins;
   /** Real supervisor-owned identity; absent harnesses run without presence. */
   profile?: FieldUserProfile;
+  /** Optional host-provided ephemeral full-appearance override. */
+  appearanceOverrideSource?: AppearanceOverrideSource;
 }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
   // Shared seams between units: the stage publishes its GL/halo teardown for
@@ -138,6 +155,11 @@ export function FieldView({
   const [trayOpen, setTrayOpenRaw] = useState(false);
   const [docsOpen, setDocsOpenRaw] = useState(false);
   const chrome = useChromeState();
+  const appearanceSource = appearanceOverrideSource ?? EMPTY_APPEARANCE_SOURCE;
+  const appearanceOverride = useSyncExternalStore(
+    appearanceSource.subscribe,
+    appearanceSource.snapshot,
+  );
   // One modal surface at a time: sheets dismiss Settings when opened, while
   // ChromeLayer performs the inverse when Settings or the command palette opens.
   const setTrayOpen = useCallback(
@@ -182,8 +204,8 @@ export function FieldView({
   const hudMotion = docState.phase === "loading" ? "out" : hudReturning ? "in" : "idle";
 
   const effectiveAppearance = useMemo(
-    () => effectiveProductAppearance(null, chrome.magnetGridGlyph),
-    [chrome.magnetGridGlyph],
+    () => effectiveProductAppearance(appearanceOverride.appearance, chrome.magnetGridGlyph),
+    [appearanceOverride.appearance, chrome.magnetGridGlyph],
   );
   const effectiveGrid = useMemo(
     () => canvasGridConfig(effectiveAppearance, dark),
@@ -200,7 +222,14 @@ export function FieldView({
   const keymapOverrides = useFieldKeymapOverrides(chrome.showSettings);
 
   return (
-    <div className="field-wrap" data-doc-transition={hudMotion} style={effectiveAppearanceStyle}>
+    <div
+      className="field-wrap"
+      data-doc-transition={hudMotion}
+      {...(appearanceOverride.appearance === null
+        ? {}
+        : { "data-appearance-override-revision": appearanceOverride.revision })}
+      style={effectiveAppearanceStyle}
+    >
       {/* The recede (reference design): the canvas eases to 0.98 while the
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.

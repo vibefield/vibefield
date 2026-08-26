@@ -1,5 +1,6 @@
 import { FielddClient } from "@vibefield/fieldd-client";
 import { createRoot } from "react-dom/client";
+import type { AppearanceOverrideSource } from "./appearance";
 import { BootRoot } from "./boot/BootRoot";
 import { createBootMachine } from "./boot/machine";
 import { type FieldHost, setHost } from "./host";
@@ -15,7 +16,11 @@ import "./tw.css";
 // it. The reveal fires once, fully warm. Everything heavy lives in the
 // workspace chunk; this module stays splash-bundle small.
 
-export function mountFieldApp(opts: { container: HTMLElement; host: FieldHost }): void {
+export function mountFieldApp(opts: {
+  container: HTMLElement;
+  host: FieldHost;
+  appearanceOverrideSource?: AppearanceOverrideSource;
+}): void {
   setHost(opts.host);
   setRendererLogger(opts.host.logger);
   performance.mark("vf:renderer:entry");
@@ -53,7 +58,14 @@ export function mountFieldApp(opts: { container: HTMLElement; host: FieldHost })
   });
 
   // synchronous first paint (ESR §5.4.2) — no await before this render
-  createRoot(opts.container).render(<BootRoot machine={machine} />);
+  createRoot(opts.container).render(
+    <BootRoot
+      machine={machine}
+      {...(opts.appearanceOverrideSource === undefined
+        ? {}
+        : { appearanceOverrideSource: opts.appearanceOverrideSource })}
+    />,
+  );
   requestAnimationFrame(() => {
     performance.mark("vf:renderer:first-frame");
     machine.start();

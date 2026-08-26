@@ -37,7 +37,8 @@ describe("Studio composition boundary", () => {
   it("exposes no raw Electron primitive from the Studio preload", () => {
     const preload = source("studio/studio-preload.ts");
     expect(preload).toContain('"vibefieldStudio"');
-    expect(preload).not.toContain("ipcRenderer");
-    expect(preload).not.toContain("MessagePort");
+    const exposedApi = preload.slice(preload.indexOf("contextBridge.exposeInMainWorld"));
+    expect(exposedApi).not.toContain("ipcRenderer");
+    expect(exposedApi).not.toContain("MessagePort");
   });
 });

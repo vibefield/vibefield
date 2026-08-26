@@ -9,6 +9,7 @@ export interface DevelopmentExtensionContext {
 
 /** Optional host composition supplied only by a development entry graph. */
 export interface DesktopDevelopmentExtension {
+  productRendererUrl(rendererBaseUrl: string): string;
   onProductWindowReady(context: DevelopmentExtensionContext): Promise<void>;
   onHostReady(): Promise<void>;
   dispose(): void;

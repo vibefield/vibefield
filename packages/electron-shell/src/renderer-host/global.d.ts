@@ -17,6 +17,8 @@ import type {
   SupportBundlePreviewV1,
   SupportBundleSelectionV1,
 } from "@vibefield/contracts/diagnostics";
+import type { ProductAppearanceRendererApi } from "../studio/product-preload-bridge";
+import type { StudioRendererApi } from "../studio/studio-preload-bridge";
 
 /** The whole user, the way every users door answers — a caller never has to
  * guess what its call did to the rest of the record. Declared once here because
@@ -40,6 +42,8 @@ declare global {
   const __VIBEFIELD_TERMINAL_PERF_LAB__: boolean;
 
   interface Window {
+    vibefieldStudio: StudioRendererApi;
+    vibefieldStudioAppearance: ProductAppearanceRendererApi;
     vibefield: {
       readonly platform: ShellPlatform;
       claimLiveSurfacePortBridge(): string;
