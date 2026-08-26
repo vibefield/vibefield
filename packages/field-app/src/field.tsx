@@ -16,6 +16,7 @@ import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { defaultCanvasGridConfig } from "./field/canvas-appearance";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
+import { useMagnetDots } from "./field/use-magnet-dots";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import type { FieldUserProfile } from "./host";
@@ -56,6 +57,7 @@ export function FieldView({
   profile?: FieldUserProfile;
 }): ReactElement {
   const { dark, toggle: toggleTheme } = useTheme();
+  const { magnetDots, setMagnetDots } = useMagnetDots();
   // Shared seams between units: the stage publishes its GL/halo teardown for
   // the session's engine disposal (the GL disposal order invariant); chrome
   // publishes the live devtools handle for the stage's GL profiling lanes.
@@ -178,7 +180,10 @@ export function FieldView({
 
   const hudMotion = docState.phase === "loading" ? "out" : hudReturning ? "in" : "idle";
 
-  const effectiveGrid = useMemo(() => defaultCanvasGridConfig(dark), [dark]);
+  const effectiveGrid = useMemo(
+    () => defaultCanvasGridConfig(dark, magnetDots),
+    [dark, magnetDots],
+  );
 
   // I1 (ice 0.4.0): the C key's "selection decides" behavior rides the engine
   // keymap's own override surface — stable entries; runs read the Settings
@@ -213,6 +218,8 @@ export function FieldView({
         registry={registry}
         dark={dark}
         onToggleTheme={toggleTheme}
+        magnetDots={magnetDots}
+        onMagnetDotsChange={setMagnetDots}
         hudMotion={hudMotion}
         docState={docState}
         trayOpen={trayOpen}

@@ -69,6 +69,8 @@ export function ChromeLayer({
   registry,
   dark,
   onToggleTheme,
+  magnetDots,
+  onMagnetDotsChange,
   hudMotion,
   docState,
   trayOpen,
@@ -83,6 +85,8 @@ export function ChromeLayer({
   registry: PluginRegistry<WidgetType>;
   dark: boolean;
   onToggleTheme: () => void;
+  magnetDots: boolean;
+  onMagnetDotsChange: (on: boolean) => void;
   hudMotion: "out" | "in" | "idle";
   docState: DocManagerState;
   trayOpen: boolean;
@@ -421,6 +425,8 @@ export function ChromeLayer({
           desktopState={desktopState}
           dark={dark}
           onToggleTheme={onToggleTheme}
+          magnetDots={magnetDots}
+          onMagnetDotsChange={onMagnetDotsChange}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
           onClose={() => {

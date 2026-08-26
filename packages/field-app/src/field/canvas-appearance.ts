@@ -68,7 +68,19 @@ export function canvasGridConfig(values: CanvasAppearance, dark: boolean): GridC
   };
 }
 
-/** The stable grid consumed by the product renderer. */
-export function defaultCanvasGridConfig(dark: boolean): GridConfig {
-  return canvasGridConfig(defaultCanvasAppearance(), dark);
+/**
+ * The stable grid consumed by the product renderer. `magnetDots` opts the
+ * canvas into the magnet grid's DOT mode (ICE design-010; the device
+ * preference lives in use-magnet-dots.ts) — sites stay on the lattice and
+ * swell with the field our cursor halo drives, resting at the classic dot
+ * radius. OFF omits the block entirely: absence is the off state, and an
+ * explicit off block would ride this spread through `configureGrid` and
+ * clobber any factory-level enable (design-010 §10.1).
+ */
+export function defaultCanvasGridConfig(dark: boolean, magnetDots = false): GridConfig {
+  const appearance = defaultCanvasAppearance();
+  if (magnetDots) {
+    appearance.worldGrid.magnet = { enabled: true, glyph: "dot" };
+  }
+  return canvasGridConfig(appearance, dark);
 }

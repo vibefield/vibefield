@@ -44,6 +44,9 @@ interface SettingsPanelProps {
   desktopState?: DesktopShellState | null;
   dark?: boolean;
   onToggleTheme?: () => void;
+  /** Magnet grid, dot mode (ICE design-010) — a device preference. */
+  magnetDots?: boolean;
+  onMagnetDotsChange?: (on: boolean) => void;
   diagnosticsRequest?: number;
   diagnosticsInitiallyOpen?: boolean;
   onClose: () => void;
@@ -140,6 +143,8 @@ export function SettingsPanel({
   desktopState = null,
   dark = false,
   onToggleTheme,
+  magnetDots = false,
+  onMagnetDotsChange,
   diagnosticsRequest = 0,
   diagnosticsInitiallyOpen = false,
   onClose,
@@ -430,6 +435,21 @@ export function SettingsPanel({
                 Exit layer
               </button>
             </div>
+          </SettingsRow>
+        </SettingsSection>
+
+        <SettingsSection title="Grid" description="How the canvas ground reads beneath your cards.">
+          <SettingsRow
+            title="Magnetic dots"
+            description="Grid dots swell toward the cursor and around card edges instead of sitting still. Saved for this device."
+            divider={false}
+          >
+            <SettingsSwitch
+              label="Magnetic dots"
+              checked={magnetDots}
+              disabled={onMagnetDotsChange === undefined}
+              onChange={(on) => onMagnetDotsChange?.(on)}
+            />
           </SettingsRow>
         </SettingsSection>
 
