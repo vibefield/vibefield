@@ -6,8 +6,10 @@ import {
 import {
   defaultProductAppearance,
   type ProductAppearance,
+  productAppearanceCssVariables,
 } from "../src/appearance/product-appearance";
 import { serializeVisualTweaks } from "../src/appearance/product-appearance-document";
+import { canvasGridConfig } from "../src/field/canvas-appearance";
 
 function appearanceWithReach(reach: number): ProductAppearance {
   const appearance = defaultProductAppearance();
@@ -87,5 +89,18 @@ describe("appearance override store", () => {
     override.magnetGrid.glyph = "dot";
     expect(effectiveProductAppearance(override, "needle")).toBe(override);
     expect(effectiveProductAppearance(override, "needle").magnetGrid.glyph).toBe("dot");
+  });
+
+  it("projects grid and product CSS from the same effective snapshot", () => {
+    const override = appearanceWithReach(480);
+    override.canvasPalette.bgDark = "#123456";
+    override.overlapFeedback.rimRadius = 720;
+    const effective = effectiveProductAppearance(override, "needle");
+
+    expect(canvasGridConfig(effective, true).magnet).toMatchObject({ reach: 480, glyph: "dot" });
+    expect(productAppearanceCssVariables(effective, true)).toMatchObject({
+      "--vf-canvas-bg": "#123456",
+      "--ic-rim-radius": "720px",
+    });
   });
 });

@@ -135,7 +135,9 @@ describe("UI system ownership boundaries", () => {
     expect(boot).not.toContain("VisualTweak");
     expect(boot).not.toContain("dev-tweaks");
     expect(field).not.toContain("VisualTweak");
-    expect(field).toContain("defaultCanvasGridConfig");
+    expect(field).toContain("effectiveProductAppearance");
+    expect(field).toContain("canvasGridConfig(effectiveAppearance, dark)");
+    expect(field).toContain("productAppearanceCssVariables(effectiveAppearance, dark)");
     expect(stage).toContain("InfiniteCanvasGround");
     expect(workbench).toContain("ProductAppearance");
     expect(workbench).not.toContain("useState");

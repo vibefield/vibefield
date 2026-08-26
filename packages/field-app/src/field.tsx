@@ -1,6 +1,7 @@
 import type { DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
+  type CSSProperties,
   type ReactElement,
   useCallback,
   useEffect,
@@ -9,12 +10,14 @@ import {
   useRef,
   useState,
 } from "react";
+import { effectiveProductAppearance } from "./appearance/appearance-override-store";
+import { productAppearanceCssVariables } from "./appearance/product-appearance";
 import { emitCanvasReadyMarker } from "./development-console";
 import type { DocManager } from "./doc-manager";
 import { useDocSyncFeed } from "./doc-sync-store";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
-import { defaultCanvasGridConfig } from "./field/canvas-appearance";
+import { canvasGridConfig } from "./field/canvas-appearance";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
@@ -178,9 +181,17 @@ export function FieldView({
 
   const hudMotion = docState.phase === "loading" ? "out" : hudReturning ? "in" : "idle";
 
+  const effectiveAppearance = useMemo(
+    () => effectiveProductAppearance(null, chrome.magnetGridGlyph),
+    [chrome.magnetGridGlyph],
+  );
   const effectiveGrid = useMemo(
-    () => defaultCanvasGridConfig(dark, chrome.magnetGridGlyph),
-    [dark, chrome.magnetGridGlyph],
+    () => canvasGridConfig(effectiveAppearance, dark),
+    [dark, effectiveAppearance],
+  );
+  const effectiveAppearanceStyle = useMemo(
+    () => productAppearanceCssVariables(effectiveAppearance, dark) as CSSProperties,
+    [dark, effectiveAppearance],
   );
 
   // I1 (ice 0.4.0): the C key's "selection decides" behavior rides the engine
@@ -189,7 +200,7 @@ export function FieldView({
   const keymapOverrides = useFieldKeymapOverrides(chrome.showSettings);
 
   return (
-    <div className="field-wrap" data-doc-transition={hudMotion}>
+    <div className="field-wrap" data-doc-transition={hudMotion} style={effectiveAppearanceStyle}>
       {/* The recede (reference design): the canvas eases to 0.98 while the
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.
