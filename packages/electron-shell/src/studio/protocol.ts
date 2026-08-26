@@ -14,7 +14,8 @@ export type AppearanceClearReason =
 export type StudioToHost =
   | { type: "studio.ready"; protocol: typeof STUDIO_PROTOCOL_VERSION }
   | { type: "appearance.publish"; requestId: string; serialized: string }
-  | { type: "appearance.clear"; requestId: string };
+  | { type: "appearance.clear"; requestId: string }
+  | { type: "product.focus"; requestId: string };
 
 export type HostToProduct =
   | { type: "appearance.apply"; revision: number; serialized: string }
@@ -96,6 +97,8 @@ export function parseStudioToHost(raw: unknown): StudioToHost {
       };
     case "appearance.clear":
       return { type: "appearance.clear", requestId: requestId(message["requestId"]) };
+    case "product.focus":
+      return { type: "product.focus", requestId: requestId(message["requestId"]) };
     default:
       throw new StudioProtocolError("malformed");
   }

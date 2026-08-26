@@ -18,6 +18,7 @@ export interface StudioRendererApi {
   readonly environment: "electron";
   publishAppearance(serialized: string): string;
   clearAppearance(): string;
+  focusProduct(): void;
   onMessage(handler: (message: HostToStudio) => void): () => void;
 }
 
@@ -64,6 +65,12 @@ export class StudioPreloadBridge {
     const requestId = this.nextRequestId();
     this.pending = { type: "appearance.clear", requestId };
     this.scheduleFlush();
+    return requestId;
+  }
+
+  focusProduct(): string {
+    const requestId = this.nextRequestId();
+    this.port?.postMessage({ type: "product.focus", requestId } satisfies StudioToHost);
     return requestId;
   }
 

@@ -299,6 +299,113 @@ a {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-green) 14%, transparent);
 }
 
+.vf-ds-studio-toolbar {
+  display: flex;
+  width: min(420px, 42vw);
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--vf-ds-line);
+  border-radius: 18px;
+  background: var(--vf-ds-panel);
+  padding: 14px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(24px) saturate(1.1);
+}
+
+.vf-ds-studio-toolbar__status,
+.vf-ds-studio-toolbar__actions {
+  display: flex;
+  align-items: center;
+}
+
+.vf-ds-studio-toolbar__status {
+  gap: 10px;
+}
+
+.vf-ds-studio-toolbar__status > span {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vf-ds-faint);
+}
+
+.vf-ds-studio-toolbar[data-live="true"] .vf-ds-studio-toolbar__status > span {
+  background: var(--vf-green);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--vf-green) 14%, transparent);
+}
+
+.vf-ds-studio-toolbar__status > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.vf-ds-studio-toolbar__status strong {
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.vf-ds-studio-toolbar__status small {
+  overflow: hidden;
+  color: var(--vf-ds-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-ds-studio-toolbar__actions {
+  gap: 8px;
+}
+
+.vf-ds-studio-toolbar__actions button {
+  height: 32px;
+  border: 1px solid var(--vf-ds-line);
+  border-radius: 999px;
+  background: var(--vf-ds-soft);
+  padding: 0 12px;
+  color: var(--vf-ds-ink);
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.vf-ds-studio-toolbar__actions button:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-ds-studio-toolbar__actions button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.vf-ds-studio-live {
+  min-width: 74px;
+}
+
+.vf-ds-studio-live[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--vf-ds-ink);
+  color: var(--vf-ds-page);
+}
+
+@media (max-width: 700px) {
+  .vf-ds-hero-actions:has(.vf-ds-studio-toolbar) {
+    position: static;
+    width: 100%;
+    margin-top: 24px;
+  }
+
+  .vf-ds-studio-toolbar {
+    width: 100%;
+  }
+
+  .vf-ds-studio-toolbar__status small {
+    white-space: normal;
+  }
+}
+
 .vf-ds-hero-facts {
   display: grid;
   grid-column: 1 / -1;

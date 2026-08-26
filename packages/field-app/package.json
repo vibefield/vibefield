@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./appearance": "./src/appearance/index.ts",
     "./design-system": "./src/design-system/mount.tsx",
+    "./design-system/studio-controller": "./src/design-system/studio-controller.ts",
     "./host-kit": "./src/host-kit.ts",
     "./logging": "./src/logging.ts",
     "./terminal-perf-lab": "./src/perf/terminal-perf-lab.ts",

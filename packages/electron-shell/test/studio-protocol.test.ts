@@ -14,6 +14,10 @@ describe("Studio protocol", () => {
       type: "studio.ready",
       protocol: 1,
     });
+    expect(parseStudioToHost({ type: "product.focus", requestId: "focus-1" })).toEqual({
+      type: "product.focus",
+      requestId: "focus-1",
+    });
     expect(
       parseProductToHost({ type: "appearance.rejected", revision: 4, code: "invalid-document" }),
     ).toEqual({ type: "appearance.rejected", revision: 4, code: "invalid-document" });

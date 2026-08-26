@@ -16,6 +16,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { AccentChip, AccentPicker, type AccentSlot } from "../account/AccentPicker";
 import { defaultProductAppearance, type ProductAppearance } from "../appearance/product-appearance";
@@ -46,6 +47,7 @@ import { FilePillPreview } from "./FilePillPreview";
 import { GodviewPreview } from "./GodviewPreview";
 import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 import { OnboardingPreview } from "./OnboardingPreview";
+import type { DesignSystemStudioController, DesignSystemStudioState } from "./studio-controller";
 import { TerminalMirrorPreview } from "./TerminalMirrorPreview";
 import { TerminalSessionPickerPreview } from "./TerminalSessionPickerPreview";
 
@@ -228,11 +230,33 @@ function initialDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-export function DesignSystemPage(): ReactElement {
+const CATALOG_STUDIO_STATE: DesignSystemStudioState = Object.freeze({
+  appearance: defaultProductAppearance(),
+  live: false,
+  productConnected: false,
+  revision: null,
+  appliedRevision: null,
+  rejection: null,
+});
+const CATALOG_STUDIO_CONTROLLER: Pick<DesignSystemStudioController, "snapshot" | "subscribe"> =
+  Object.freeze({
+    snapshot: () => CATALOG_STUDIO_STATE,
+    subscribe: () => () => undefined,
+  });
+
+export function DesignSystemPage({
+  studio,
+}: {
+  studio?: DesignSystemStudioController;
+}): ReactElement {
   const [dark, setDark] = useState(initialDark);
   const [activeSection, setActiveSection] = useState("overview");
   const [magnetGridGlyph, setMagnetGridGlyph] = useState<MagnetGridGlyph>("dot");
-  const [appearance, setAppearance] = useState(defaultProductAppearance);
+  const [catalogAppearance, setCatalogAppearance] = useState(defaultProductAppearance);
+  const studioSource = studio ?? CATALOG_STUDIO_CONTROLLER;
+  const studioState = useSyncExternalStore(studioSource.subscribe, studioSource.snapshot);
+  const appearance = studio === undefined ? catalogAppearance : studioState.appearance;
+  const setAppearance = studio === undefined ? setCatalogAppearance : studio.setAppearance;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -271,19 +295,27 @@ export function DesignSystemPage(): ReactElement {
             <span>VibeField interface index</span>
           </div>
           <div className="vf-ds-hero-copy">
-            <p className="vf-ds-kicker">Design system · live renderer inventory</p>
+            <p className="vf-ds-kicker">
+              {studio === undefined
+                ? "Design system · live renderer inventory"
+                : "VibeField Studio · Design System"}
+            </p>
             <h1>The field, in one frame.</h1>
             <p>
-              The current VibeField visual language, gathered from the production renderer. Use this
-              page to compare primitives, interaction states, field chrome, and the control room
-              without booting a daemon or opening a document.
+              {studio === undefined
+                ? "The current VibeField visual language, gathered from the production renderer. Use this page to compare primitives, interaction states, field chrome, and the control room without booting a daemon or opening a document."
+                : "Inspect the production renderer inventory and tune one complete appearance snapshot against the running app. Live preview is explicit, temporary, and never changes product settings."}
             </p>
           </div>
           <div className="vf-ds-hero-actions">
-            <div className="vf-ds-live-pill">
-              <span />
-              renderer styles
-            </div>
+            {studio === undefined ? (
+              <div className="vf-ds-live-pill">
+                <span />
+                renderer styles
+              </div>
+            ) : (
+              <StudioToolbar controller={studio} state={studioState} />
+            )}
           </div>
           <div className="vf-ds-hero-facts">
             <HeroFact value="3" label="surface families" />
@@ -294,11 +326,13 @@ export function DesignSystemPage(): ReactElement {
           <div className="vf-ds-callout">
             <Icon name="sparkles" />
             <div>
-              <strong>What is live here</strong>
+              <strong>
+                {studio === undefined ? "What is live here" : "Studio preview boundary"}
+              </strong>
               <span>
-                Tokens, primitives, and controller-free production views are mounted directly.
-                Fixture adapters replace runtime data only; engine-rendered cards use deterministic
-                state fixtures.
+                {studio === undefined
+                  ? "Tokens, primitives, and controller-free production views are mounted directly. Fixture adapters replace runtime data only; engine-rendered cards use deterministic state fixtures."
+                  : "The local specimen always follows these controls. The running app follows only while Live is on; closing Studio or pausing restores its normal appearance."}
               </span>
             </div>
           </div>
@@ -455,6 +489,79 @@ export function DesignSystemPage(): ReactElement {
       />
     </div>
   );
+}
+
+function StudioToolbar({
+  controller,
+  state,
+}: {
+  controller: DesignSystemStudioController;
+  state: DesignSystemStudioState;
+}): ReactElement {
+  const status = studioStatusCopy(state);
+  return (
+    <div className="vf-ds-studio-toolbar" data-live={state.live ? "true" : "false"}>
+      <div className="vf-ds-studio-toolbar__status" role="status">
+        <span aria-hidden="true" />
+        <div>
+          <strong>{status.title}</strong>
+          <small>{status.detail}</small>
+        </div>
+      </div>
+      <div className="vf-ds-studio-toolbar__actions">
+        <button
+          type="button"
+          className="vf-ds-studio-live"
+          aria-pressed={state.live}
+          onClick={() => controller.setLive(!state.live)}
+        >
+          {state.live ? "Live on" : "Go live"}
+        </button>
+        <button
+          type="button"
+          className="vf-ds-studio-focus"
+          disabled={!state.productConnected}
+          onClick={() => controller.focusProduct()}
+        >
+          Bring App Forward
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function studioStatusCopy(state: DesignSystemStudioState): {
+  title: string;
+  detail: string;
+} {
+  if (!state.live) {
+    return {
+      title: "Local changes",
+      detail: "Live preview is off. Product settings are unchanged.",
+    };
+  }
+  if (!state.productConnected) {
+    return {
+      title: "App unavailable",
+      detail: "Changes stay local until the product reconnects.",
+    };
+  }
+  if (state.rejection !== null) {
+    return {
+      title: "Snapshot rejected",
+      detail: "The last valid product appearance remains active.",
+    };
+  }
+  if (state.revision !== null && state.appliedRevision === state.revision) {
+    return {
+      title: `Applied revision ${state.revision}`,
+      detail: "Previewing in the running app. Product settings are unchanged.",
+    };
+  }
+  return {
+    title: state.revision === null ? "Connecting" : `Sending revision ${state.revision}`,
+    detail: "Waiting for the running app to acknowledge the complete snapshot.",
+  };
 }
 
 function CanvasGroundSection({

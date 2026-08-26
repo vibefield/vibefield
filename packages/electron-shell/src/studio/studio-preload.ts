@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld("vibefieldStudio", {
   environment: "electron" as const,
   publishAppearance: (serialized: string): string => bridge.publish(serialized),
   clearAppearance: (): string => bridge.clear(),
+  focusProduct: (): void => {
+    bridge.focusProduct();
+  },
   onMessage: (handler: Parameters<typeof bridge.subscribe>[0]): (() => void) =>
     bridge.subscribe(handler),
 });

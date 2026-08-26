@@ -37,7 +37,10 @@ export class StudioRouter {
   private rateWindowStartedAt = 0;
   private rateWindowCount = 0;
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly focusProduct: () => void = () => undefined,
+  ) {}
 
   attachStudio(port: StudioRouterPort): void {
     this.cancelDisconnect();
@@ -65,6 +68,10 @@ export class StudioRouter {
         }
         if (!this.studioReady || !this.acceptRate()) {
           this.protocolFailure();
+          return;
+        }
+        if (message.type === "product.focus") {
+          this.focusProduct();
           return;
         }
         if (message.type === "appearance.publish") {

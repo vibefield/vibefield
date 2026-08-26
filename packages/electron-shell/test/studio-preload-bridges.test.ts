@@ -63,6 +63,15 @@ describe("Studio preload bridges", () => {
     expect(listener).toHaveBeenCalledOnce();
   });
 
+  it("sends the bounded product-focus command directly", () => {
+    const bridge = new StudioPreloadBridge((callback) => callback());
+    const port = new FakeRendererPort();
+    bridge.attach(port);
+
+    expect(bridge.focusProduct()).toBe("studio-1");
+    expect(port.sent.at(-1)).toEqual({ type: "product.focus", requestId: "studio-1" });
+  });
+
   it("retains one product command until the renderer subscribes and acknowledges it", () => {
     const bridge = new ProductPreloadBridge("product-1");
     const port = new FakeRendererPort();

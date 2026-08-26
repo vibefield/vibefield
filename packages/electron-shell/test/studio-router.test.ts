@@ -177,6 +177,20 @@ describe("StudioRouter", () => {
     expect(router.state().rejection).toBe("invalid-document");
   });
 
+  it("accepts only a ready Studio endpoint as the product-focus authority", () => {
+    const focus = vi.fn();
+    const router = new StudioRouter(Date.now, focus);
+    const unready = new FakePort();
+    router.attachStudio(unready);
+    unready.receive({ type: "product.focus", requestId: "focus-0" });
+    expect(focus).not.toHaveBeenCalled();
+    expect(unready.closed).toBe(true);
+
+    const studio = readyStudio(router);
+    studio.receive({ type: "product.focus", requestId: "focus-1" });
+    expect(focus).toHaveBeenCalledOnce();
+  });
+
   it("leaves no reload-grace timer behind when the host disposes", () => {
     vi.useFakeTimers();
     const router = new StudioRouter();

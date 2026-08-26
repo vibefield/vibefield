@@ -15,7 +15,7 @@ export interface VisualTweakControlsProps {
   onChange: (value: ProductAppearance) => void;
 }
 
-/** The complete former in-app tweak surface, now owned by the UI Bench. */
+/** Complete browser-compatible controls owned by the Design System workbench. */
 export function VisualTweakControls({ value, onChange }: VisualTweakControlsProps): ReactElement {
   const [status, setStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,10 +77,10 @@ export function VisualTweakControls({ value, onChange }: VisualTweakControlsProp
     <div className="vf-ds-tweak-controls" data-visual-tweak-controls>
       <header className="vf-ds-tweak-controls__header">
         <div>
-          <span>Design bench</span>
-          <h3>Visual tweaks</h3>
+          <span>Appearance</span>
+          <h3>Visual tuning</h3>
         </div>
-        <p>Changes are scoped to this specimen. Export a reviewed preset before editing source.</p>
+        <p>Changes update the specimen immediately. Studio Live mode can mirror them to the app.</p>
       </header>
       <div className="vf-ds-tweak-controls__body">
         <TweakSection title="Canvas palette">

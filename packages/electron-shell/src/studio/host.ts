@@ -18,7 +18,12 @@ export function createStudioHost(opts: { openAtStartup: boolean }): DesktopDevel
   let window: BrowserWindow | null = null;
   let opening: Promise<BrowserWindow> | null = null;
   let productWindow: BrowserWindow | null = null;
-  const router = new StudioRouter();
+  const router = new StudioRouter(Date.now, () => {
+    if (productWindow === null || productWindow.isDestroyed()) return;
+    if (productWindow.isMinimized()) productWindow.restore();
+    productWindow.show();
+    productWindow.focus();
+  });
 
   const attachProductPort = (target: BrowserWindow): void => {
     if (target.isDestroyed()) return;

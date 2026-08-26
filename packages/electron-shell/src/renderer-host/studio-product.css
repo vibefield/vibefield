@@ -1,0 +1,19 @@
+.vf-studio-product-indicator {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 100000;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.88);
+  padding: 7px 11px;
+  color: rgba(255, 255, 255, 0.9);
+  font:
+    650 10px / 1.2 ui-sans-serif,
+    system-ui,
+    sans-serif;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px) saturate(1.1);
+}

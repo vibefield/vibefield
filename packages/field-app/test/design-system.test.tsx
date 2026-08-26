@@ -2,8 +2,13 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defaultProductAppearance } from "../src/appearance/product-appearance";
 import { DesignSystemPage } from "../src/design-system/DesignSystemPage";
+import type {
+  DesignSystemStudioController,
+  DesignSystemStudioState,
+} from "../src/design-system/studio-controller";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,6 +55,34 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe("design system page", () => {
+  it("exposes explicit Studio live and product-focus controls only when hosted", async () => {
+    const state: DesignSystemStudioState = {
+      appearance: defaultProductAppearance(),
+      live: false,
+      productConnected: true,
+      revision: null,
+      appliedRevision: null,
+      rejection: null,
+    };
+    const setLive = vi.fn();
+    const focusProduct = vi.fn();
+    const studio: DesignSystemStudioController = {
+      snapshot: () => state,
+      subscribe: () => () => undefined,
+      setAppearance: vi.fn(),
+      setLive,
+      focusProduct,
+    };
+    await act(async () => root?.render(<DesignSystemPage studio={studio} />));
+
+    expect(container?.textContent).toContain("VibeField Studio · Design System");
+    expect(container?.textContent).toContain("Local changes");
+    await act(async () => button("Go live").click());
+    await act(async () => button("Bring App Forward").click());
+    expect(setLive).toHaveBeenCalledWith(true);
+    expect(focusProduct).toHaveBeenCalledOnce();
+  });
+
   it("renders the complete single-page inventory", () => {
     expect(container?.querySelectorAll(".vf-ds-sidebar nav a")).toHaveLength(11);
     expect(container?.querySelectorAll(".vf-ds-section")).toHaveLength(10);
