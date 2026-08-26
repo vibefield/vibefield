@@ -3,8 +3,13 @@ import {
   type HostToProduct,
   type HostToStudio,
   MAX_PUBLISHES_PER_SECOND,
+  type ProductConnectionState,
+  type ProductContext,
   parseProductToHost,
   parseStudioToHost,
+  type StudioDisconnectReason,
+  StudioProtocolError,
+  type StudioSection,
   type StudioStatus,
 } from "./protocol";
 
@@ -27,6 +32,10 @@ export class StudioRouter {
   private productGeneration = 0;
   private studioReady = false;
   private productReady = false;
+  private productConnection: ProductConnectionState = "unavailable";
+  private productInstanceId: string | null = null;
+  private productContext: ProductContext | null = null;
+  private hasConnectedProduct = false;
   private latestSerialized: string | null = null;
   private live = false;
   private currentRevision: number | null = null;
@@ -64,10 +73,17 @@ export class StudioRouter {
             live: this.live,
           });
           this.publishStatus();
+          if (this.productContext !== null) {
+            this.postStudio({ type: "product.context", ...this.productContext });
+          }
           return;
         }
-        if (!this.studioReady || !this.acceptRate()) {
-          this.protocolFailure();
+        if (!this.studioReady) {
+          this.protocolFailure("malformed");
+          return;
+        }
+        if (!this.acceptRate()) {
+          this.protocolFailure("rate-limited");
           return;
         }
         if (message.type === "product.focus") {
@@ -79,6 +95,7 @@ export class StudioRouter {
           this.latestSerialized = message.serialized;
           this.live = true;
           this.currentRevision = revision;
+          this.appliedRevision = null;
           this.rejection = null;
           this.postStudio({
             type: "appearance.accepted",
@@ -92,6 +109,7 @@ export class StudioRouter {
         const revision = this.nextRevision();
         this.live = false;
         this.currentRevision = revision;
+        this.appliedRevision = null;
         this.rejection = null;
         this.postStudio({
           type: "appearance.accepted",
@@ -100,8 +118,8 @@ export class StudioRouter {
         });
         this.postProduct({ type: "appearance.clear", revision, reason: "live-disabled" });
         this.publishStatus();
-      } catch {
-        this.protocolFailure();
+      } catch (error) {
+        this.protocolFailure(protocolErrorReason(error));
       }
     });
     port.once("close", () => {
@@ -118,17 +136,41 @@ export class StudioRouter {
     const generation = ++this.productGeneration;
     this.productPort = port;
     this.productReady = false;
+    this.productConnection = this.hasConnectedProduct ? "reconnecting" : "connecting";
+    this.productInstanceId = null;
+    this.productContext = null;
+    this.appliedRevision = null;
+    this.rejection = null;
+    this.publishStatus();
     port.on("message", (event) => {
       if (this.productPort !== port || generation !== this.productGeneration) return;
       try {
         const message = parseProductToHost(event.data);
         if (message.type === "product.ready") {
+          if (this.productReady) throw new StudioProtocolError("malformed");
           this.productReady = true;
+          this.productConnection = "connected";
+          this.productInstanceId = message.instanceId;
+          this.hasConnectedProduct = true;
+          this.appliedRevision = null;
+          this.rejection = null;
           this.replayProduct();
           this.publishStatus();
           return;
         }
-        if (!this.productReady || message.revision !== this.currentRevision) return;
+        if (message.type === "product.context") {
+          if (!this.productReady) return;
+          this.productContext = { theme: message.theme, zoom: message.zoom };
+          this.postStudio(message);
+          return;
+        }
+        if (
+          !this.productReady ||
+          message.revision !== this.currentRevision ||
+          message.instanceId !== this.productInstanceId
+        ) {
+          return;
+        }
         if (message.type === "appearance.applied") {
           this.appliedRevision = message.revision;
           this.rejection = null;
@@ -165,6 +207,11 @@ export class StudioRouter {
     this.productPort?.close();
     this.productPort = null;
     this.productReady = false;
+    this.productConnection = "unavailable";
+    this.productInstanceId = null;
+    this.productContext = null;
+    this.appliedRevision = null;
+    this.rejection = null;
     this.productGeneration += 1;
     this.publishStatus();
   }
@@ -179,6 +226,10 @@ export class StudioRouter {
     });
   }
 
+  navigateStudio(section: StudioSection): void {
+    this.postStudio({ type: "studio.navigate", section });
+  }
+
   dispose(): void {
     this.cancelDisconnect();
     this.clearProductOverride("host-disposed");
@@ -190,6 +241,9 @@ export class StudioRouter {
     this.productGeneration += 1;
     this.studioReady = false;
     this.productReady = false;
+    this.productConnection = "unavailable";
+    this.productInstanceId = null;
+    this.productContext = null;
     studioPort?.close();
     productPort?.close();
     this.cancelDisconnect();
@@ -225,7 +279,7 @@ export class StudioRouter {
 
   private status(): StudioStatus {
     return {
-      productConnected: this.productReady,
+      productConnection: this.productConnection,
       live: this.live,
       revision: this.currentRevision,
       appliedRevision: this.appliedRevision,
@@ -251,7 +305,8 @@ export class StudioRouter {
     return this.rateWindowCount <= MAX_PUBLISHES_PER_SECOND;
   }
 
-  private protocolFailure(): void {
+  private protocolFailure(reason: StudioDisconnectReason): void {
+    this.studioPort?.postMessage({ type: "studio.disconnected", reason } satisfies HostToStudio);
     this.closeStudio("protocol-error");
   }
 
@@ -259,6 +314,11 @@ export class StudioRouter {
     if (this.productPort !== port || generation !== this.productGeneration) return;
     this.productPort = null;
     this.productReady = false;
+    this.productConnection = "unavailable";
+    this.productInstanceId = null;
+    this.productContext = null;
+    this.appliedRevision = null;
+    this.rejection = null;
     this.publishStatus();
   }
 
@@ -280,8 +340,13 @@ export class StudioRouter {
     const revision = this.nextRevision();
     this.live = false;
     this.currentRevision = revision;
+    this.appliedRevision = null;
     this.rejection = null;
     this.postProduct({ type: "appearance.clear", revision, reason });
     this.publishStatus();
   }
+}
+
+function protocolErrorReason(error: unknown): StudioDisconnectReason {
+  return error instanceof StudioProtocolError ? error.code : "malformed";
 }

@@ -16,7 +16,11 @@ export class ElectronStudioController implements DesignSystemStudioController {
   private state: DesignSystemStudioState = Object.freeze({
     appearance: defaultProductAppearance(),
     live: false,
-    productConnected: false,
+    productConnection: "unavailable",
+    productContext: null,
+    transportError: null,
+    requestedSection: null,
+    navigationRevision: 0,
     revision: null,
     appliedRevision: null,
     rejection: null,
@@ -58,7 +62,7 @@ export class ElectronStudioController implements DesignSystemStudioController {
     switch (message.type) {
       case "studio.snapshot": {
         if (message.serialized === null) {
-          this.update({ live: message.live, revision: message.revision });
+          this.update({ live: message.live, revision: message.revision, transportError: null });
           return;
         }
         try {
@@ -66,6 +70,7 @@ export class ElectronStudioController implements DesignSystemStudioController {
             appearance: deserializeVisualTweaks(message.serialized),
             live: message.live,
             revision: message.revision,
+            transportError: null,
           });
         } catch {
           this.update({
@@ -77,7 +82,11 @@ export class ElectronStudioController implements DesignSystemStudioController {
         return;
       }
       case "studio.status":
-        this.update(message.status);
+        this.update({
+          ...message.status,
+          ...(message.status.productConnection === "connected" ? {} : { productContext: null }),
+          transportError: null,
+        });
         return;
       case "appearance.accepted":
         this.update({ revision: message.revision, appliedRevision: null, rejection: null });
@@ -91,6 +100,23 @@ export class ElectronStudioController implements DesignSystemStudioController {
         if (message.revision === this.state.revision) {
           this.update({ rejection: message.code });
         }
+        return;
+      case "product.context":
+        this.update({ productContext: { theme: message.theme, zoom: message.zoom } });
+        return;
+      case "studio.navigate":
+        this.update({
+          requestedSection: message.section,
+          navigationRevision: this.state.navigationRevision + 1,
+        });
+        return;
+      case "studio.disconnected":
+        this.update({
+          productConnection: "unavailable",
+          productContext: null,
+          appliedRevision: null,
+          transportError: message.reason,
+        });
     }
   }
 

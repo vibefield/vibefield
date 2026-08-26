@@ -3,7 +3,17 @@ import type { ProductAppearance } from "../appearance/product-appearance";
 export interface DesignSystemStudioState {
   appearance: ProductAppearance;
   live: boolean;
-  productConnected: boolean;
+  productConnection: "unavailable" | "connecting" | "connected" | "reconnecting";
+  productContext: { theme: "light" | "dark"; zoom: number } | null;
+  transportError:
+    | "malformed"
+    | "oversized"
+    | "rate-limited"
+    | "version-mismatch"
+    | "transport-closed"
+    | null;
+  requestedSection: "design" | "appearance" | null;
+  navigationRevision: number;
   revision: number | null;
   appliedRevision: number | null;
   rejection: "invalid-document" | "stale-revision" | null;

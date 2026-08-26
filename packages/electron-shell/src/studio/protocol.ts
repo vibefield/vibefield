@@ -1,8 +1,14 @@
-export const STUDIO_PROTOCOL_VERSION = 1 as const;
+export const STUDIO_PROTOCOL_VERSION = 2 as const;
 export const MAX_APPEARANCE_BYTES = 64 * 1024;
 export const MAX_PUBLISHES_PER_SECOND = 120;
 
 export type AppearanceRejectCode = "invalid-document" | "stale-revision";
+export type ProductConnectionState = "unavailable" | "connecting" | "connected" | "reconnecting";
+export type StudioSection = "design" | "appearance";
+export interface ProductContext {
+  theme: "light" | "dark";
+  zoom: number;
+}
 export type AppearanceClearReason =
   | "live-disabled"
   | "studio-closed"
@@ -23,15 +29,17 @@ export type HostToProduct =
 
 export type ProductToHost =
   | { type: "product.ready"; protocol: typeof STUDIO_PROTOCOL_VERSION; instanceId: string }
-  | { type: "appearance.applied"; revision: number }
+  | { type: "appearance.applied"; revision: number; instanceId: string }
   | {
       type: "appearance.rejected";
       revision: number;
       code: AppearanceRejectCode;
-    };
+      instanceId: string;
+    }
+  | ({ type: "product.context" } & ProductContext);
 
 export interface StudioStatus {
-  productConnected: boolean;
+  productConnection: ProductConnectionState;
   live: boolean;
   revision: number | null;
   appliedRevision: number | null;
@@ -52,13 +60,17 @@ export type HostToStudio =
       revision: number | null;
       serialized: string | null;
       live: boolean;
-    };
+    }
+  | ({ type: "product.context" } & ProductContext)
+  | { type: "studio.navigate"; section: StudioSection }
+  | { type: "studio.disconnected"; reason: StudioDisconnectReason };
 
 export type StudioProtocolErrorCode =
   | "malformed"
   | "oversized"
   | "rate-limited"
   | "version-mismatch";
+export type StudioDisconnectReason = StudioProtocolErrorCode | "transport-closed";
 
 export class StudioProtocolError extends Error {
   constructor(readonly code: StudioProtocolErrorCode) {
@@ -117,13 +129,20 @@ export function parseProductToHost(raw: unknown): ProductToHost {
         instanceId: identifier(message["instanceId"]),
       };
     case "appearance.applied":
-      return { type: "appearance.applied", revision: revision(message["revision"]) };
+      return {
+        type: "appearance.applied",
+        revision: revision(message["revision"]),
+        instanceId: identifier(message["instanceId"]),
+      };
     case "appearance.rejected":
       return {
         type: "appearance.rejected",
         revision: revision(message["revision"]),
         code: rejectCode(message["code"]),
+        instanceId: identifier(message["instanceId"]),
       };
+    case "product.context":
+      return { type: "product.context", ...productContext(message) };
     default:
       throw new StudioProtocolError("malformed");
   }
@@ -157,7 +176,7 @@ export function parseHostToStudio(raw: unknown): HostToStudio {
       return {
         type: "studio.status",
         status: {
-          productConnected: booleanValue(status["productConnected"]),
+          productConnection: productConnection(status["productConnection"]),
           live: booleanValue(status["live"]),
           revision: nullableRevision(status["revision"]),
           appliedRevision: nullableRevision(status["appliedRevision"]),
@@ -187,6 +206,12 @@ export function parseHostToStudio(raw: unknown): HostToStudio {
           message["serialized"] === null ? null : assertSerializedAppearance(message["serialized"]),
         live: booleanValue(message["live"]),
       };
+    case "product.context":
+      return { type: "product.context", ...productContext(message) };
+    case "studio.navigate":
+      return { type: "studio.navigate", section: studioSection(message["section"]) };
+    case "studio.disconnected":
+      return { type: "studio.disconnected", reason: disconnectReason(message["reason"]) };
     default:
       throw new StudioProtocolError("malformed");
   }
@@ -223,6 +248,52 @@ function nullableRevision(value: unknown): number | null {
 
 function booleanValue(value: unknown): boolean {
   if (typeof value !== "boolean") throw new StudioProtocolError("malformed");
+  return value;
+}
+
+function productConnection(value: unknown): ProductConnectionState {
+  if (
+    value !== "unavailable" &&
+    value !== "connecting" &&
+    value !== "connected" &&
+    value !== "reconnecting"
+  ) {
+    throw new StudioProtocolError("malformed");
+  }
+  return value;
+}
+
+function productContext(value: Record<string, unknown>): ProductContext {
+  const theme = value["theme"];
+  const zoom = value["zoom"];
+  if (
+    (theme !== "light" && theme !== "dark") ||
+    typeof zoom !== "number" ||
+    !Number.isFinite(zoom)
+  ) {
+    throw new StudioProtocolError("malformed");
+  }
+  if (zoom <= 0 || zoom > 100) throw new StudioProtocolError("malformed");
+  return { theme, zoom };
+}
+
+function studioSection(value: unknown): StudioSection {
+  if (value !== "design" && value !== "appearance") {
+    throw new StudioProtocolError("malformed");
+  }
+  return value;
+}
+
+function disconnectReason(value: unknown): StudioDisconnectReason {
+  if (
+    value !== "malformed" &&
+    value !== "oversized" &&
+    value !== "rate-limited" &&
+    value !== "version-mismatch" &&
+    value !== "transport-closed"
+  ) {
+    throw new StudioProtocolError("malformed");
+  }
   return value;
 }
 

@@ -100,7 +100,7 @@ export function createStudioHost(opts: {
     state: context === null ? "starting" : "ready",
     studio: window !== null && !window.isDestroyed() ? "open" : "closed",
     studioRequested: desiredOpen,
-    productConnected: router.state().productConnected,
+    productConnected: router.state().productConnection === "connected",
   });
 
   const handleCommand = async (command: StudioHostCommand): Promise<Record<string, unknown>> => {
@@ -108,6 +108,9 @@ export function createStudioHost(opts: {
       desiredOpen = true;
       if (context === null) return { ...status(), state: "queued" };
       await open();
+      if (command.type === "studio.open" && command.section !== undefined) {
+        router.navigateStudio(command.section);
+      }
       return { ...status(), section: command.type === "studio.open" ? command.section : undefined };
     }
     if (command.type === "studio.close") {

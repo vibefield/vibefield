@@ -10,17 +10,27 @@ import {
 
 describe("Studio protocol", () => {
   it("accepts only the closed v1 message shapes", () => {
-    expect(parseStudioToHost({ type: "studio.ready", protocol: 1 })).toEqual({
+    expect(parseStudioToHost({ type: "studio.ready", protocol: 2 })).toEqual({
       type: "studio.ready",
-      protocol: 1,
+      protocol: 2,
     });
     expect(parseStudioToHost({ type: "product.focus", requestId: "focus-1" })).toEqual({
       type: "product.focus",
       requestId: "focus-1",
     });
     expect(
-      parseProductToHost({ type: "appearance.rejected", revision: 4, code: "invalid-document" }),
-    ).toEqual({ type: "appearance.rejected", revision: 4, code: "invalid-document" });
+      parseProductToHost({
+        type: "appearance.rejected",
+        revision: 4,
+        code: "invalid-document",
+        instanceId: "p-1",
+      }),
+    ).toEqual({
+      type: "appearance.rejected",
+      revision: 4,
+      code: "invalid-document",
+      instanceId: "p-1",
+    });
     expect(
       parseHostToProduct({ type: "appearance.clear", revision: 5, reason: "studio-closed" }),
     ).toEqual({ type: "appearance.clear", revision: 5, reason: "studio-closed" });
@@ -29,7 +39,7 @@ describe("Studio protocol", () => {
       StudioProtocolError,
     );
     expect(() =>
-      parseProductToHost({ type: "product.ready", protocol: 2, instanceId: "p-1" }),
+      parseProductToHost({ type: "product.ready", protocol: 1, instanceId: "p-1" }),
     ).toThrowError(/version-mismatch/);
   });
 
@@ -54,9 +64,9 @@ describe("Studio protocol", () => {
   it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
     "rejects an invalid revision: %s",
     (revision) => {
-      expect(() => parseProductToHost({ type: "appearance.applied", revision })).toThrowError(
-        /malformed/,
-      );
+      expect(() =>
+        parseProductToHost({ type: "appearance.applied", revision, instanceId: "p-1" }),
+      ).toThrowError(/malformed/);
     },
   );
 });

@@ -56,10 +56,19 @@ export class ProductPreloadBridge {
   }
 
   applied(revision: number): void {
-    this.port?.postMessage(parseProductToHost({ type: "appearance.applied", revision }));
+    this.port?.postMessage(
+      parseProductToHost({ type: "appearance.applied", revision, instanceId: this.instanceId }),
+    );
   }
 
   rejected(revision: number, code: AppearanceRejectCode): void {
-    this.port?.postMessage(parseProductToHost({ type: "appearance.rejected", revision, code }));
+    this.port?.postMessage(
+      parseProductToHost({
+        type: "appearance.rejected",
+        revision,
+        code,
+        instanceId: this.instanceId,
+      }),
+    );
   }
 }

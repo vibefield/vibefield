@@ -12,6 +12,7 @@ export interface RendererPort {
   start(): void;
   close(): void;
   onmessage: ((event: { data: unknown }) => void) | null;
+  onclose: (() => void) | null;
 }
 
 export interface StudioRendererApi {
@@ -33,8 +34,11 @@ export class StudioPreloadBridge {
   constructor(private readonly scheduleFrame: (callback: () => void) => void) {}
 
   attach(port: RendererPort): void {
-    this.port?.close();
+    const previous = this.port;
+    this.port = null;
+    previous?.close();
     this.port = port;
+    let hostReasonReceived = false;
     port.onmessage = (event) => {
       if (this.port !== port) return;
       let message: HostToStudio;
@@ -43,7 +47,15 @@ export class StudioPreloadBridge {
       } catch {
         return;
       }
+      if (message.type === "studio.disconnected") hostReasonReceived = true;
       for (const listener of [...this.listeners]) listener(message);
+    };
+    port.onclose = () => {
+      if (this.port !== port) return;
+      this.port = null;
+      if (!hostReasonReceived) {
+        this.notify({ type: "studio.disconnected", reason: "transport-closed" });
+      }
     };
     port.start();
     port.postMessage({ type: "studio.ready", protocol: STUDIO_PROTOCOL_VERSION });
@@ -79,6 +91,10 @@ export class StudioPreloadBridge {
     return () => this.listeners.delete(handler);
   }
 
+  private notify(message: HostToStudio): void {
+    for (const listener of [...this.listeners]) listener(message);
+  }
+
   private scheduleFlush(): void {
     if (this.framePending || this.pending === null || this.port === null) return;
     this.framePending = true;
@@ -100,7 +116,7 @@ export class StudioPreloadBridge {
 }
 
 export const INITIAL_STUDIO_STATUS: StudioStatus = Object.freeze({
-  productConnected: false,
+  productConnection: "unavailable",
   live: false,
   revision: null,
   appliedRevision: null,

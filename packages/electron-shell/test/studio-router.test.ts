@@ -40,14 +40,14 @@ class FakePort implements StudioRouterPort {
 function readyStudio(router: StudioRouter): FakePort {
   const port = new FakePort();
   router.attachStudio(port);
-  port.receive({ type: "studio.ready", protocol: 1 });
+  port.receive({ type: "studio.ready", protocol: 2 });
   return port;
 }
 
 function readyProduct(router: StudioRouter, instanceId = "product-1"): FakePort {
   const port = new FakePort();
   router.attachProduct(port);
-  port.receive({ type: "product.ready", protocol: 1, instanceId });
+  port.receive({ type: "product.ready", protocol: 2, instanceId });
   return port;
 }
 
@@ -74,7 +74,7 @@ describe("StudioRouter", () => {
       serialized: '{"one":1}',
     });
 
-    product.receive({ type: "appearance.applied", revision: 1 });
+    product.receive({ type: "appearance.applied", revision: 1, instanceId: "product-1" });
     expect(studio.sent).toContainEqual({ type: "appearance.applied", revision: 1 });
 
     studio.receive({ type: "appearance.clear", requestId: "r-2" });
@@ -101,10 +101,48 @@ describe("StudioRouter", () => {
       serialized: '{"reach":2}',
     });
 
-    firstProduct.receive({ type: "appearance.applied", revision: 2 });
+    firstProduct.receive({
+      type: "appearance.applied",
+      revision: 2,
+      instanceId: "product-1",
+    });
     expect(router.state().appliedRevision).toBeNull();
-    replacement.receive({ type: "appearance.applied", revision: 2 });
+    replacement.receive({ type: "appearance.applied", revision: 2, instanceId: "product-2" });
     expect(router.state().appliedRevision).toBe(2);
+  });
+
+  it("requires a fresh acknowledgement after a previously applied product is replaced", () => {
+    const router = new StudioRouter();
+    const studio = readyStudio(router);
+    const firstProduct = readyProduct(router);
+
+    studio.receive({ type: "appearance.publish", requestId: "r-1", serialized: "{}" });
+    firstProduct.receive({
+      type: "appearance.applied",
+      revision: 1,
+      instanceId: "product-1",
+    });
+    expect(router.state()).toMatchObject({
+      productConnection: "connected",
+      appliedRevision: 1,
+    });
+
+    const replacement = new FakePort();
+    router.attachProduct(replacement);
+    expect(router.state()).toMatchObject({
+      productConnection: "reconnecting",
+      appliedRevision: null,
+    });
+    replacement.receive({ type: "product.ready", protocol: 2, instanceId: "product-2" });
+    expect(router.state()).toMatchObject({
+      productConnection: "connected",
+      appliedRevision: null,
+    });
+
+    replacement.receive({ type: "appearance.applied", revision: 1, instanceId: "product-1" });
+    expect(router.state().appliedRevision).toBeNull();
+    replacement.receive({ type: "appearance.applied", revision: 1, instanceId: "product-2" });
+    expect(router.state().appliedRevision).toBe(1);
   });
 
   it("keeps the product override through a Studio reload grace and clears on expiry", () => {
@@ -168,6 +206,7 @@ describe("StudioRouter", () => {
       type: "appearance.rejected",
       revision: 1,
       code: "invalid-document",
+      instanceId: "product-1",
     });
     expect(studio.sent).toContainEqual({
       type: "appearance.rejected",
@@ -175,6 +214,20 @@ describe("StudioRouter", () => {
       code: "invalid-document",
     });
     expect(router.state().rejection).toBe("invalid-document");
+  });
+
+  it("reports a stable protocol failure before disconnecting the Studio endpoint", () => {
+    const router = new StudioRouter();
+    const studio = readyStudio(router);
+    studio.sent.length = 0;
+
+    studio.receive({ type: "appearance.publish", requestId: "bad id", serialized: "{}" });
+
+    expect(studio.sent).toContainEqual({
+      type: "studio.disconnected",
+      reason: "malformed",
+    });
+    expect(studio.closed).toBe(true);
   });
 
   it("accepts only a ready Studio endpoint as the product-focus authority", () => {

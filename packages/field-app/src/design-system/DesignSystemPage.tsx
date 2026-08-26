@@ -233,7 +233,11 @@ function initialDark(): boolean {
 const CATALOG_STUDIO_STATE: DesignSystemStudioState = Object.freeze({
   appearance: defaultProductAppearance(),
   live: false,
-  productConnected: false,
+  productConnection: "unavailable",
+  productContext: null,
+  transportError: null,
+  requestedSection: null,
+  navigationRevision: 0,
   revision: null,
   appliedRevision: null,
   rejection: null,
@@ -520,7 +524,7 @@ function StudioToolbar({
         <button
           type="button"
           className="vf-ds-studio-focus"
-          disabled={!state.productConnected}
+          disabled={state.productConnection !== "connected"}
           onClick={() => controller.focusProduct()}
         >
           Bring App Forward
@@ -540,7 +544,7 @@ function studioStatusCopy(state: DesignSystemStudioState): {
       detail: "Live preview is off. Product settings are unchanged.",
     };
   }
-  if (!state.productConnected) {
+  if (state.productConnection !== "connected") {
     return {
       title: "App unavailable",
       detail: "Changes stay local until the product reconnects.",

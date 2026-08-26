@@ -59,7 +59,11 @@ describe("design system page", () => {
     const state: DesignSystemStudioState = {
       appearance: defaultProductAppearance(),
       live: false,
-      productConnected: true,
+      productConnection: "connected",
+      productContext: { theme: "dark", zoom: 1.25 },
+      transportError: null,
+      requestedSection: null,
+      navigationRevision: 0,
       revision: null,
       appliedRevision: null,
       rejection: null,

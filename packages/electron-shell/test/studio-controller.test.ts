@@ -89,7 +89,7 @@ describe("ElectronStudioController", () => {
     harness.emit({
       type: "studio.status",
       status: {
-        productConnected: true,
+        productConnection: "connected",
         live: true,
         revision: 8,
         appliedRevision: null,
@@ -103,7 +103,7 @@ describe("ElectronStudioController", () => {
     expect(controller.snapshot()).toMatchObject({
       appearance: restored,
       live: true,
-      productConnected: true,
+      productConnection: "connected",
       revision: 8,
       appliedRevision: 8,
       rejection: null,
