@@ -53,8 +53,9 @@ in the split.
   test-only devDependency; runtime deps stay browser-safe) · `design-kit` — the DESIGN KIT
   (tokens + primitives, shared with plugin-sdk), not electron-shell's UI · `electron-shell` —
   composition root (main/preload/renderer-host + the renderer vite build; no product logic).
-  The UI Bench splits the same way: `electron-shell/src/design-bench` is the window bootstrap,
-  `field-app/src/design-system` is the catalog page it mounts.
+  Studio preserves that split: `electron-shell/src/studio` owns the development-only host,
+  protocol, and narrow preloads; `field-app/src/design-system` remains the Electron-free catalog
+  and appearance workbench it mounts. The browser-only catalog is a separate authority-free entry.
 - **Plugin system:** `plugin-sdk` (the R10 door; its `ui.ts` is the only design-kit re-export
   plugins may touch) · `plugin-runtime` · `tooling/plugin-build`; product plugins live at the
   repo root. `tooling/dev-runner` is the `pnpm dev` supervisor; `apps/*` are packaging roots.
@@ -94,10 +95,13 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
   affected typechecks. Restarts are plane-aware: shell-only edits restart Electron and re-adopt
   the running daemons (dev is `leave-running`; the runner owns teardown); daemon-plane edits
   bounce the pair. Its isolated state is `.vibefield/dev/`; it never watches sibling trees.
-- `pnpm dev:design` — the UI Bench: the single-page catalog in an isolated Electron window on
-  the production window/security factory, with no preload, daemons, users, plugins, tray, or
-  diagnostics. State lives in `.vibefield/ui-bench/`, so it runs beside `pnpm dev`. Use it for
-  any UI work; `pnpm dev:design:web` is the browser-only loop. Rules in `docs/UI_SYSTEM.md`.
+- `pnpm dev:studio` — the real product plus VibeField Studio under the same runner, Vite server,
+  Electron host, and daemon pair. `pnpm dev:design` opens or focuses Studio's Design System
+  section and attaches to an active `pnpm dev` when one exists; it never starts a parallel stack.
+  Studio has its own sandboxed window, ephemeral session, and narrow preload. Use
+  `pnpm dev:design:web` for the catalog-only browser loop. Rules in `docs/UI_SYSTEM.md`.
+- `pnpm smoke:studio` — opt-in physical Electron gate for Studio/product session and preload
+  isolation, real UI edit/apply, product reload replay, Studio-close restoration, and fieldd.
 - `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` — headless desktop smoke checks
 - `pnpm build` / `pnpm typecheck` / `pnpm test` — Nx task graph with conservative local caching;
   use `pnpm exec nx graph` or `pnpm exec nx affected -t <target>` to inspect/select work

@@ -94,6 +94,8 @@ it receives no product, daemon, plugin, user, tray, or diagnostic capabilities. 
 imports shipping tokens and production view compositions, and Live mode applies one complete,
 ephemeral appearance snapshot without changing product settings. `pnpm dev:design:web` keeps the
 faster catalog-only loop on port 5174 when native behavior and live app preview are unnecessary.
+`pnpm smoke:studio` runs the physical Electron acceptance path: a real Studio UI edit reaches the
+real product, survives a product reload, clears when Studio closes, and keeps fieldd operational.
 Ownership and contribution rules live in
 [`docs/UI_SYSTEM.md`](docs/UI_SYSTEM.md).
 

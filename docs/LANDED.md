@@ -4322,3 +4322,20 @@ System catalog, and perf-lab markers absent. Physical Electron verification
 confirmed queued and ready-state command attachment, Live revision delivery
 from Dot to Needle, product disclosure at revisions 1 and 2, and immediate
 restoration when Live was paused.
+
+**Cross-audit closure.** `dc0563de` made development shell outputs structurally
+disjoint from production and taught the production verifier to scan the exact
+main/preload/renderer artifact set; `f8d91359` fenced acknowledgements to the
+active product instance and made reconnect/disconnect state honest;
+`ba89c676` completed product theme/zoom context, section navigation, catalog-only
+copy, and Settings ownership. `c78f0cd2` added the `pnpm smoke:studio` physical
+Electron gate and fixed the failure it exposed: protocol v3 now proves
+main→product→main delivery with a matching connection ID before claiming
+Connected, while transferred ports are generation-fenced against out-of-order
+arrival. The gate edits magnet reach and overlap radius through the real Studio
+UI, observes the real product, reloads and verifies replay, closes Studio and
+verifies restoration, and checks the live fieldd door without logging its token.
+Two consecutive physical runs passed; electron-shell 642/2-skip and dev-runner
+84/84 were green. Intentional smoke shutdown no longer reports cancelled
+background typechecks, and endpoint derivation now has an explicit Windows
+named-pipe witness.

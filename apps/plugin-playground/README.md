@@ -5,8 +5,8 @@ The headless widget-state **verdict runner** (plugin spec §5.4 item 5, §24.2
 
 It renders every declared widget state of a plugin with no window, no daemon and
 no build step, and answers pass/fail per state with a machine-readable
-diagnostic. It is scriptable acceptance, not a visual bench — the UI Bench
-(`pnpm dev:design`) exists for eyes; this exists for agents and CI.
+diagnostic. It is scriptable acceptance, not a visual bench — VibeField Studio
+(`pnpm dev:design`) exists for eyes beside the real product; this exists for agents and CI.
 
 ```sh
 node apps/plugin-playground/bin/plugin-playground.mjs plugins/note

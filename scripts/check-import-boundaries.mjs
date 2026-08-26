@@ -94,8 +94,8 @@ function matchesForbid(spec, forbid) {
 // `@vibefield/field-app` (no subpath) is the public root and allowed; `/main`,
 // `/preload`, `/host` are the declared entries (spec §8.2), plus field-app's
 // browser-safe `/logging` seam, its exported `/spike` implementation consumed by
-// the shell's test-only spike page, and `/design-system`, the UI Bench entry the
-// shell's renderer-host mounts.
+// the shell's test-only spike page, and `/design-system`, the browser-safe catalog
+// entry mounted by Studio and the catalog-only renderer host.
 //
 // KNOWN DEBT (2026-08-07): this set is a SECOND source of truth for what each
 // package publishes — the first is the `exports` map in its own package.json,
