@@ -73,6 +73,7 @@ function mount(node: ReactElement): void {
 describe("widgetlab panels", () => {
   it("SettingsPanel presents categorized pages and preserves the canvas tools", async () => {
     const engine = makeEngine();
+    const onMagnetGridGlyphChange = vi.fn();
     // SystemSection (diagnostics live inside Settings) reads the fieldd hooks —
     // a provider with a never-connected client renders the honest idle state.
     const client = new FielddClient({ url: "ws://127.0.0.1:1", token: "test" });
@@ -82,6 +83,8 @@ describe("widgetlab panels", () => {
         { client },
         createElement(SettingsPanel, {
           engine,
+          magnetGridGlyph: "dot",
+          onMagnetGridGlyphChange,
           onClose: () => {},
         }),
       ),
@@ -112,8 +115,17 @@ describe("widgetlab panels", () => {
 
     act(() => category("Canvas")?.click());
     expect(container?.textContent).not.toContain("World grid");
+    expect(container?.textContent).not.toContain("Magnetic dots");
+    expect(container?.textContent).toContain("Magnet glyph");
     expect(container?.textContent).toContain("Zoom range");
     expect(container?.textContent).toContain("Card behavior");
+    const glyphControl = container?.querySelector('fieldset[aria-label="Magnet glyph"]');
+    const glyphButtons = Array.from(glyphControl?.querySelectorAll("button") ?? []);
+    expect(
+      glyphButtons.find((button) => button.textContent === "Dot")?.getAttribute("aria-pressed"),
+    ).toBe("true");
+    act(() => glyphButtons.find((button) => button.textContent === "Needle")?.click());
+    expect(onMagnetGridGlyphChange).toHaveBeenCalledWith("needle");
     const numberInputs = container?.querySelectorAll('input[type="number"]');
     expect(numberInputs?.length ?? 0).toBeGreaterThan(0);
 
@@ -166,6 +178,8 @@ describe("widgetlab panels", () => {
         { client },
         createElement(SettingsPanel, {
           engine,
+          magnetGridGlyph: "dot",
+          onMagnetGridGlyphChange: () => {},
           onClose: () => {},
         }),
       ),

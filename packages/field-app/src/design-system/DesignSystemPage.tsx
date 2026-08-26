@@ -19,13 +19,14 @@ import {
 } from "react";
 import { AccentChip, AccentPicker, type AccentSlot } from "../account/AccentPicker";
 import { primaryCls, quietCls } from "../boot/onboarding/wizard-ui";
-import { defaultCanvasGridConfig } from "../field/canvas-appearance";
+import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../field/canvas-appearance";
 import { roundButtonCls } from "../field/theme-constants";
 import { LoadingVeilView } from "../hud/LoadingVeil";
 import { NavigationBreadcrumbsView } from "../hud/NavigationBreadcrumbs";
 import { SidePanelFrame } from "../hud/SidePanelStage";
 import { WidgetTrayFrame, WidgetTrayToolSwitcherView } from "../hud/WidgetTray";
 import { ZoomPillView } from "../hud/ZoomPill";
+import { MagnetGridSection } from "../panels/MagnetGridSection";
 import { SettingsDialog, type SettingsPage } from "../panels/SettingsDialog";
 import {
   buttonCls,
@@ -229,6 +230,7 @@ function initialDark(): boolean {
 export function DesignSystemPage(): ReactElement {
   const [dark, setDark] = useState(initialDark);
   const [activeSection, setActiveSection] = useState("overview");
+  const [magnetGridGlyph, setMagnetGridGlyph] = useState<MagnetGridGlyph>("dot");
 
   useEffect(() => {
     const root = document.documentElement;
@@ -389,9 +391,16 @@ export function DesignSystemPage(): ReactElement {
         <CanvasGroundSection dark={dark} />
         <ControlsSection />
         <StatusSection />
-        <ChromeSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
+        <ChromeSection
+          dark={dark}
+          magnetGridGlyph={magnetGridGlyph}
+          onToggleTheme={() => setDark((value) => !value)}
+        />
         <CardsSection />
-        <SurfacesSection />
+        <SurfacesSection
+          magnetGridGlyph={magnetGridGlyph}
+          onMagnetGridGlyphChange={setMagnetGridGlyph}
+        />
         <OnboardingSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <GodviewSection />
 
@@ -704,9 +713,11 @@ function StatusSection(): ReactElement {
 
 function ChromeSection({
   dark,
+  magnetGridGlyph,
   onToggleTheme,
 }: {
   dark: boolean;
+  magnetGridGlyph: MagnetGridGlyph;
   onToggleTheme: () => void;
 }): ReactElement {
   const [docsOpen, setDocsOpen] = useState(false);
@@ -714,7 +725,10 @@ function ChromeSection({
   const [trayTool, setTrayTool] = useState<"select" | "pan" | "connect">("select");
   const [trayCategory, setTrayCategory] = useState("All");
   const [zoom, setZoom] = useState(100);
-  const groundGrid = useMemo(() => defaultCanvasGridConfig(dark), [dark]);
+  const groundGrid = useMemo(
+    () => defaultCanvasGridConfig(dark, magnetGridGlyph),
+    [dark, magnetGridGlyph],
+  );
 
   const openDocs = (): void => {
     setDocsOpen((open) => !open);
@@ -906,7 +920,13 @@ function CardsSection(): ReactElement {
   );
 }
 
-function SurfacesSection(): ReactElement {
+function SurfacesSection({
+  magnetGridGlyph,
+  onMagnetGridGlyphChange,
+}: {
+  magnetGridGlyph: MagnetGridGlyph;
+  onMagnetGridGlyphChange: (glyph: MagnetGridGlyph) => void;
+}): ReactElement {
   const [settingsOn, setSettingsOn] = useState(true);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   return (
@@ -958,6 +978,8 @@ function SurfacesSection(): ReactElement {
                   />
                 </SettingsRow>
               </SettingsSection>
+            ) : settingsPage === "canvas" ? (
+              <MagnetGridSection glyph={magnetGridGlyph} onGlyphChange={onMagnetGridGlyphChange} />
             ) : (
               <UnavailableState
                 compact

@@ -6,14 +6,15 @@ import {
 } from "../src/field/canvas-appearance";
 
 describe("canvas appearance", () => {
-  it("projects the reviewed light and dark dot colors onto one grid contract", () => {
+  it("projects the reviewed magnet appearance onto one grid contract", () => {
     expect(defaultCanvasGridConfig(false)).toMatchObject({
       spacings: [20, 100, 500],
       dotColor: [166 / 255, 166 / 255, 166 / 255],
       dotAlpha: 0.85,
       dotRadius: [1.5, 1.5],
+      magnet: { glyph: "dot" },
     });
-    expect(defaultCanvasGridConfig(true).dotColor).toEqual([28 / 255, 28 / 255, 28 / 255]);
+    expect(defaultCanvasGridConfig(true).dotColor).toEqual([138 / 255, 138 / 255, 138 / 255]);
   });
 
   it("returns isolated editable values without mutating product defaults", () => {
@@ -29,18 +30,12 @@ describe("canvas appearance", () => {
     expect(defaultCanvasAppearance().canvasPalette.dotLight).toBe("#A6A6A6");
   });
 
-  describe("magnet dot mode (ICE design-010)", () => {
-    it("OMITS the magnet block when off — absence is the off state (§10.1)", () => {
-      // An explicit {enabled:false} would ride this spread through
-      // configureGrid and clobber any factory-level enable upstream.
-      expect(defaultCanvasGridConfig(false)).not.toHaveProperty("magnet");
-      expect(defaultCanvasGridConfig(false, false)).not.toHaveProperty("magnet");
-    });
-
-    it("enables ONLY the dot glyph when on, leaving the rest of the grid intact", () => {
-      const grid = defaultCanvasGridConfig(false, true);
-      expect(grid.magnet).toEqual({ enabled: true, glyph: "dot" });
-      // The classic contract is untouched — magnet replaces pixels, not config.
+  describe("build-selected magnet grid (ICE 0.11.0)", () => {
+    it("defaults to dots and accepts needle tuning without a renderer switch", () => {
+      const grid = defaultCanvasGridConfig(false);
+      expect(grid.magnet).toEqual({ glyph: "dot" });
+      expect(grid.magnet).not.toHaveProperty("enabled");
+      expect(defaultCanvasGridConfig(false, "needle").magnet).toEqual({ glyph: "needle" });
       expect(grid).toMatchObject({
         spacings: [20, 100, 500],
         dotRadius: [1.5, 1.5],
@@ -48,19 +43,19 @@ describe("canvas appearance", () => {
       });
     });
 
-    it("carries the theme dot color into magnet mode (both themes)", () => {
-      expect(defaultCanvasGridConfig(true, true).dotColor).toEqual([28 / 255, 28 / 255, 28 / 255]);
-      expect(defaultCanvasGridConfig(false, true).dotColor).toEqual([
-        166 / 255,
-        166 / 255,
-        166 / 255,
-      ]);
+    it("uses the legible magnet ink in dark and the shared ink in light", () => {
+      // DESIGN.md §2.1 (2026-08-25): the classic dark grid whispers on purpose
+      // (#1C1C1C on #171717), but the selected responsive field must be visible
+      // — magnet carries the experiment's #8A8A8A in dark. Light was already
+      // legible and stays on the shared #A6A6A6.
+      expect(defaultCanvasGridConfig(true).dotColor).toEqual([138 / 255, 138 / 255, 138 / 255]);
+      expect(defaultCanvasGridConfig(false).dotColor).toEqual([166 / 255, 166 / 255, 166 / 255]);
     });
 
-    it("does not leak the magnet block into the shared defaults", () => {
-      defaultCanvasGridConfig(false, true);
+    it("does not leak implementation tuning into editable appearance defaults", () => {
+      defaultCanvasGridConfig(false);
       expect(defaultCanvasAppearance().worldGrid).not.toHaveProperty("magnet");
-      expect(defaultCanvasGridConfig(false)).not.toHaveProperty("magnet");
+      expect(defaultCanvasGridConfig(false).magnet).toEqual({ glyph: "dot" });
     });
   });
 });

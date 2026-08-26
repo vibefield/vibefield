@@ -4243,3 +4243,38 @@ here (DESIGN.md governs both):** enabling magnet as the product default, and
 the dark-ink question — our dark dot `#1C1C1C` sits 5/255 above the canvas
 and vanishes as needles; the upstream experiment used `#8A8A8A`-class ink.
 Bench tweak controls for the magnet knobs ride the same decision.
+
+## EL8 — ice 0.11.0: magnet is the build, dots are the product
+
+2026-08-25. This entry supersedes the 0.10.0 consumer posture above without
+rewriting its historical facts. Upstream design-010 revision 5 separates
+classic and magnet into complete `GridPassFactory` implementations over one
+parent-facing config/dependency contract; the published package wires magnet
+only, so classic has no runtime edge and `GridMagnetConfig.enabled` no longer
+exists. Vibe Field consumes that architecture directly: exact pin 0.10.0 →
+0.11.0; `canvasGridConfig` always states `{ magnet: { glyph: "dot" } }`; the
+`vf-magnet-dots` localStorage reader, Settings switch, and four-layer prop chain
+are deleted. Dot is fixed product policy, not a second renderer switch.
+
+The halo remains an injected `PoleSource` and is now honestly always subscribed
+for the selected pass. Its producer still runIf-gates and settles, preserving
+the zero-frame idle contract. DESIGN.md §2.1 closes the product ink decision:
+the selected dark lattice uses the experiment's legible `#8A8A8A`, light keeps
+`#A6A6A6`, and the classic alternate's `#1C1C1C` stays recorded as alternate-
+build design data. Product and UI Bench mount the same `InfiniteCanvasGround`;
+both themes render the real dot glyph, and Canvas Settings contains no renderer
+toggle. The lock holds ONE ice@0.11.0 / strata-ecs@0.13.0 /
+loro-crdt@1.13.8 graph. **Focused gates:** field-app typecheck; canvas-
+appearance + panels + visual-tweak-document 15/15; browser verification in
+both themes. **Full gate:** `pnpm verify` verbatim exit 0.
+
+**Same-day glyph follow-up, before this consumption event was committed.** The
+fixed-dot sentence above is superseded only at the selected implementation's
+tuning seam: Canvas Settings now offers an explicit Dot/Needle segmented
+control, defaults to Dot, and persists `vf-magnet-grid-glyph` per device. It
+changes only `GridMagnetConfig.glyph`; it does not restore `enabled`, ship the
+classic pass, or introduce a renderer-selection edge. The setting rides the
+existing chrome-owned presentation state into the same `canvasGridConfig`.
+Focused grid/persistence/Settings/UI-Bench tests are 21/21; the real shared ICE
+specimen was eyeballed Dot→Needle in light and Needle in dark; `pnpm verify`
+again exits 0 after the follow-up.

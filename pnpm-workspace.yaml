@@ -82,13 +82,14 @@ overrides:
   # canonical UTF-8 JSON bytes of the complete raw cell and enforces the claim
   # before both default publication and runtime mutation. PRC-4g2 consumes that
   # local bound, then adds the host's aggregate transport-headroom admission.
-  # 2026-08-25 bumped 0.9.0 → 0.10.0 — the magnet grid (ICE design-010/M17):
-  # GridConfig.magnet (absence = off; the classic grid is byte-identical when
-  # the block is never mentioned), the PoleSource injection seam, and the
-  # readSpatial broad-phase. Our cursor halo drives the field through the
-  # haloPoles adapter (field-app cursor/halo-poles.ts); the design-010 §10.7
-  # runIf gating landed here ahead of the bump (4a1642d4).
-  "@vibecook/ice": 0.10.0
+  # 2026-08-25 bumped 0.9.0 → 0.10.0 for the first magnet-grid release.
+  # 2026-08-25 bumped 0.10.0 → 0.11.0 — classic and magnet are complete
+  # GridPassFactory implementations selected at build time. The published
+  # package wires magnet only; GridMagnetConfig.enabled and the runtime renderer
+  # switch are gone. Vibe Field defaults glyph:"dot", exposes dot/needle as
+  # selected-pass tuning, and wires its runIf-gated cursor halo as an always-
+  # live PoleSource.
+  "@vibecook/ice": 0.11.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -165,7 +166,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.10.0'
+  - '@vibecook/ice@0.11.0'
   - '@vibecook/ghosttea-client@0.11.1'
   - '@vibecook/ghosttea-protocol@0.11.1'
   - '@vibecook/chopsticks-adapter-acp@0.1.4'

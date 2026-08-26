@@ -92,9 +92,14 @@ export function VisualTweakControls({ value, onChange }: VisualTweakControlsProp
             onChange={(v) => setPalette("dotLight", v)}
           />
           <ColorField
-            label="Dots · dark"
+            label="Classic dots · dark (alternate)"
             value={palette.dotDark}
             onChange={(v) => setPalette("dotDark", v)}
+          />
+          <ColorField
+            label="Magnet glyph ink · dark (selected)"
+            value={palette.magnetDotDark}
+            onChange={(v) => setPalette("magnetDotDark", v)}
           />
         </TweakSection>
 

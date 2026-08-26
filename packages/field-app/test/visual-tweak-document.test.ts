@@ -17,6 +17,7 @@ describe("visual tweak document", () => {
       canvasPalette: {
         dotLight: "#A6A6A6",
         dotDark: "#1C1C1C",
+        magnetDotDark: "#8A8A8A",
         bgLight: "#FAFAFA",
         bgDark: "#171717",
       },
@@ -48,6 +49,7 @@ describe("visual tweak document", () => {
     const values = defaultVisualTweakValues();
     values.canvasPalette.bgLight = "#123456";
     values.canvasPalette.dotDark = "#ABCDEF";
+    values.canvasPalette.magnetDotDark = "#FEDCBA";
     values.worldGrid.spacings = [12, 96, 768];
     values.worldGrid.dotAlpha = 0.72;
     values.worldGrid.fadeIn = [5, 18];
@@ -66,6 +68,18 @@ describe("visual tweak document", () => {
     expect(raw["kind"]).toBe(VISUAL_TWEAK_DOCUMENT_KIND);
     expect(raw["version"]).toBe(VISUAL_TWEAK_DOCUMENT_VERSION);
     expect(deserializeVisualTweaks(serialized)).toEqual(values);
+  });
+
+  it("defaults the magnet ink for documents saved before it existed", () => {
+    // Tolerant reader: the magnet ink joined the palette 2026-08-25 (DESIGN.md
+    // §2.1); an older saved document carries no key and must load with the
+    // reviewed default instead of being rejected.
+    const document = JSON.parse(serializeVisualTweaks(defaultVisualTweakValues())) as {
+      canvasPalette: Record<string, unknown>;
+    };
+    delete document.canvasPalette["magnetDotDark"];
+    const loaded = deserializeVisualTweaks(JSON.stringify(document));
+    expect(loaded.canvasPalette.magnetDotDark).toBe("#8A8A8A");
   });
 
   it("rejects partial and out-of-range files instead of applying half a preset", () => {

@@ -84,6 +84,12 @@ export function deserializeVisualTweaks(serialized: string): VisualTweakValues {
     bgDark: hex(palette["bgDark"], "canvasPalette.bgDark"),
     dotLight: hex(palette["dotLight"], "canvasPalette.dotLight"),
     dotDark: hex(palette["dotDark"], "canvasPalette.dotDark"),
+    // Tolerant reader: documents saved before the magnet ink existed
+    // (DESIGN.md §2.1, 2026-08-25) carry no key — they get the reviewed default.
+    magnetDotDark:
+      palette["magnetDotDark"] === undefined
+        ? defaultVisualTweakValues().canvasPalette.magnetDotDark
+        : hex(palette["magnetDotDark"], "canvasPalette.magnetDotDark"),
   };
   const overlapColors: OverlapFeedbackColors = {
     glowLight: hex(colors["glowLight"], "overlapFeedback.colors.glowLight"),

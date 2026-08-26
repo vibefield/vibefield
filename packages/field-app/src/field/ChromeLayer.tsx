@@ -28,8 +28,10 @@ import { ZoomPill } from "../hud/ZoomPill";
 import { SettingsPanel } from "../panels";
 import * as commandRegistry from "../plugin-host/command-registry";
 import { ThemeToggleButton } from "../ThemeToggleButton";
+import type { MagnetGridGlyph } from "./canvas-appearance";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
 import { fabCls } from "./theme-constants";
+import { useMagnetGridGlyph } from "./use-magnet-grid-glyph";
 
 // ChromeLayer (§5.4.3): HUD, file pill, the tray (DESIGN.md's bottom toolbar),
 // settings, and overlays — WITHOUT owning document or engine lifetime. All the
@@ -50,16 +52,21 @@ export interface ChromeState {
   setShowSettings: Dispatch<SetStateAction<boolean>>;
   showEcs: boolean;
   setShowEcs: Dispatch<SetStateAction<boolean>>;
+  magnetGridGlyph: MagnetGridGlyph;
+  setMagnetGridGlyph: (glyph: MagnetGridGlyph) => void;
 }
 
 export function useChromeState(): ChromeState {
   const [showSettings, setShowSettings] = useState(false);
   const [showEcs, setShowEcs] = useState(false);
+  const { magnetGridGlyph, setMagnetGridGlyph } = useMagnetGridGlyph();
   return {
     showSettings,
     setShowSettings,
     showEcs,
     setShowEcs,
+    magnetGridGlyph,
+    setMagnetGridGlyph,
   };
 }
 
@@ -69,8 +76,6 @@ export function ChromeLayer({
   registry,
   dark,
   onToggleTheme,
-  magnetDots,
-  onMagnetDotsChange,
   hudMotion,
   docState,
   trayOpen,
@@ -85,8 +90,6 @@ export function ChromeLayer({
   registry: PluginRegistry<WidgetType>;
   dark: boolean;
   onToggleTheme: () => void;
-  magnetDots: boolean;
-  onMagnetDotsChange: (on: boolean) => void;
   hudMotion: "out" | "in" | "idle";
   docState: DocManagerState;
   trayOpen: boolean;
@@ -425,8 +428,8 @@ export function ChromeLayer({
           desktopState={desktopState}
           dark={dark}
           onToggleTheme={onToggleTheme}
-          magnetDots={magnetDots}
-          onMagnetDotsChange={onMagnetDotsChange}
+          magnetGridGlyph={chrome.magnetGridGlyph}
+          onMagnetGridGlyphChange={chrome.setMagnetGridGlyph}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
           onClose={() => {

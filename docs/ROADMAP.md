@@ -1102,12 +1102,12 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
 ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-06; preflight
-pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata **0.11.0** (via ICE — corrected
-2026-08-09; this line said 0.10.0 while `pnpm-workspace.yaml:95` and the lockfile resolve
-0.11.0) ·
-`@vibecook/ice` **0.4.0** (registry pin; **bumped 2026-08-09 — the I1/I4/I5 consumption**, the
-same night upstream released; pin-drift history 2026-08-07: this line and `CLAUDE.md` had
-trailed the manifests at 0.2.0) · **`apps/ios` is in
+pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata **0.13.0** (via ICE;
+the lockfile holds one physical strata/Loro graph) ·
+`@vibecook/ice` **0.11.0** (registry pin; **bumped 2026-08-25 — build-selected magnet grid,
+Dot default plus device-local Dot/Needle tuning**, with the runtime classic/magnet preference
+retired; pin-drift history 2026-08-07: this line and `CLAUDE.md` had trailed the manifests
+at 0.2.0) · **`apps/ios` is in
 lockstep too** (`Package.resolved`: ghosttea 0.9.2 / truffle 0.7.12), which is what retires the
 staleness debt above. **The 0.9.2 release exists because of GT-4**: our
 `=0.7.12` and upstream's `=0.7.11` could not resolve together, and James moved ghosttea to

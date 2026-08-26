@@ -58,12 +58,22 @@ the temporary system-control panel exposes that alpha for live tuning.
 | Token | Light | Dark |
 |---|---|---|
 | `--vf-canvas-bg` | `#FAFAFA` | `#171717` |
-| `--vf-canvas-dot` (GL ground) | `#A6A6A6` | `#1C1C1C` |
+| `--vf-canvas-dot` (classic alternate build) | `#A6A6A6` | `#1C1C1C` |
+| `--vf-canvas-magnet-ink` (selected GL ground) | `#A6A6A6` | `#8A8A8A` |
 | `--vf-canvas-dot` (CSS fallback) | `rgba(0,0,0,0.16)` | `rgba(255,255,255,0.08)` |
 
 The ICE ground projection uses `spacings: [20, 100, 500]`, `dotAlpha: 0.85`,
 `fadeIn: [12, 16]`, `fadeOut: [120, 200]`, `dotRadius: [1.5, 1.5]`, and
 `levelWeight: [1, 0]`.
+
+**The magnet ink (decided 2026-08-25; ICE 0.11 amendment).** Renderer choice is
+build-time: Vibe Field consumes ICE's magnet build. There is no classic/magnet
+toggle. The selected field must be visible while it responds, so its dark ink
+is the experiment's `#8A8A8A`; light keeps `#A6A6A6`. The classic alternate's
+`#1C1C1C` whisper remains recorded for the build that wires that implementation,
+but it does not ride the current production path. Dot/needle is tuning inside
+the selected magnet implementation: Dot is the default, and Canvas Settings
+may persist either glyph as a device presentation preference.
 
 ### 2.2 Surfaces
 

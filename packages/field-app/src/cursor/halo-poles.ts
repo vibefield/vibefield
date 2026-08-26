@@ -14,8 +14,9 @@
  *    (design-010 §10.7), so hover redraws self-terminate — an idle canvas
  *    stays at zero ground frames with the field wired.
  *
- * Inert until `grid.magnet.enabled` is on (the pass gates the subscription),
- * so wiring this costs nothing while the appearance keeps magnet off.
+ * ICE 0.11 selects the magnet pass at build time, so this source is always
+ * subscribed while the ground is mounted. The Cur systems stop stamping once
+ * settled, preserving the measured zero-frame idle behavior.
  */
 import { defineQuery, type World } from "@vibecook/ice";
 import type { Pole, PoleSource } from "@vibecook/ice/ground";

@@ -13,8 +13,10 @@ import {
 import type { DesktopShellState, SettingsUndoResult, ShellPlatform } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { lazy, type ReactElement, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { AccountSection } from "./AccountSection";
 import { DesktopSection } from "./DesktopSection";
+import { MagnetGridSection } from "./MagnetGridSection";
 import { MeshSection } from "./MeshSection";
 import { PluginsSection } from "./PluginsSection";
 import { SettingsDialog, type SettingsPage } from "./SettingsDialog";
@@ -44,9 +46,8 @@ interface SettingsPanelProps {
   desktopState?: DesktopShellState | null;
   dark?: boolean;
   onToggleTheme?: () => void;
-  /** Magnet grid, dot mode (ICE design-010) — a device preference. */
-  magnetDots?: boolean;
-  onMagnetDotsChange?: (on: boolean) => void;
+  magnetGridGlyph: MagnetGridGlyph;
+  onMagnetGridGlyphChange: (glyph: MagnetGridGlyph) => void;
   diagnosticsRequest?: number;
   diagnosticsInitiallyOpen?: boolean;
   onClose: () => void;
@@ -143,8 +144,8 @@ export function SettingsPanel({
   desktopState = null,
   dark = false,
   onToggleTheme,
-  magnetDots = false,
-  onMagnetDotsChange,
+  magnetGridGlyph,
+  onMagnetGridGlyphChange,
   diagnosticsRequest = 0,
   diagnosticsInitiallyOpen = false,
   onClose,
@@ -438,20 +439,7 @@ export function SettingsPanel({
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection title="Grid" description="How the canvas ground reads beneath your cards.">
-          <SettingsRow
-            title="Magnetic dots"
-            description="Grid dots swell toward the cursor and around card edges instead of sitting still. Saved for this device."
-            divider={false}
-          >
-            <SettingsSwitch
-              label="Magnetic dots"
-              checked={magnetDots}
-              disabled={onMagnetDotsChange === undefined}
-              onChange={(on) => onMagnetDotsChange?.(on)}
-            />
-          </SettingsRow>
-        </SettingsSection>
+        <MagnetGridSection glyph={magnetGridGlyph} onGlyphChange={onMagnetGridGlyphChange} />
 
         <SettingsSection
           title="Card behavior"
