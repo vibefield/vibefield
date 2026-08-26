@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import { createElectronStack } from "../src/electron-stack.mjs";
 
-function setup({ studioOpen = true } = {}) {
+function setup({ studioOpen = true, studioPhysical = false } = {}) {
   const child = new EventEmitter();
   Object.assign(child, { pid: 1234, exitCode: null, signalCode: null, connected: true });
   const updates = [];
@@ -22,6 +22,7 @@ function setup({ studioOpen = true } = {}) {
     },
     viteUrl: "http://127.0.0.1:5174/",
     studioOpen,
+    studioPhysical,
     lock: {
       async update(value) {
         updates.push(value);
@@ -104,8 +105,16 @@ test("starts Electron directly with isolated state and the daemon build identity
   assert.equal(options.env.FIELDD_DATA_PORT, "0");
   assert.equal(options.env.VITE_DEV_SERVER_URL, "http://127.0.0.1:5174/");
   assert.equal(options.env.VIBEFIELD_STUDIO_OPEN, "1");
+  assert.equal(options.env.VIBEFIELD_STUDIO_PHYSICAL, "0");
   assert.deepEqual(options.stdio, ["inherit", "inherit", "inherit", "ipc"]);
   assert.deepEqual(fixture.updates, [{ electronPid: 1234, buildId: "dev-current" }]);
+});
+
+test("marks only the opt-in Studio physical Electron composition", async () => {
+  const fixture = setup({ studioPhysical: true });
+  await fixture.stack.start(runtime);
+
+  assert.equal(fixture.getSpawnArgs()[2].env.VIBEFIELD_STUDIO_PHYSICAL, "1");
 });
 
 test("queues Studio intent before Electron starts and delivers commands over child IPC", async () => {

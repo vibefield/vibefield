@@ -51,11 +51,13 @@ const criticalChanges = createChangeBuffer();
 const transientChildren = new Set();
 const crashTimes = [];
 const forceOnboarding = process.argv.includes("--force-onboarding");
+const studioPhysical = process.argv.includes("--studio-physical");
 const studioArgument = process.argv.find(
   (argument) => argument === "--studio" || argument.startsWith("--studio="),
 );
-const initialStudioCommand =
-  studioArgument === undefined
+const initialStudioCommand = studioPhysical
+  ? { type: "studio.open", section: "appearance" }
+  : studioArgument === undefined
     ? null
     : studioArgument === "--studio"
       ? { type: "studio.open" }
@@ -78,7 +80,7 @@ async function main() {
     mkdir(paths.logRoot, { recursive: true }),
     mkdir(paths.electronUserData, { recursive: true }),
   ]);
-  if (initialStudioCommand !== null) {
+  if (initialStudioCommand !== null && !studioPhysical) {
     const attached = await sendRunnerCommand({
       endpoint: paths.commandEndpoint,
       lockDir: paths.lockDir,
@@ -143,6 +145,7 @@ async function main() {
     paths,
     viteUrl: renderer.url,
     studioOpen: studioRequested,
+    studioPhysical,
     lock: devLock,
     log,
     onUnexpectedExit: handleElectronExit,
@@ -180,6 +183,11 @@ async function main() {
   await pruneSnapshots(initialRuntime.buildId);
   log.info(`desktop started (Electron pid ${electronPid}, build ${currentBuildId})`);
 
+  if (studioPhysical) {
+    log.info("Studio physical acceptance owns this short-lived host; background Nx watch skipped");
+    return;
+  }
+
   typechecks = createTypechecks();
   nxWatcher = await startNxWatcher({
     repoRoot,
@@ -194,6 +202,7 @@ async function main() {
       }
     },
     onUnexpectedExit: ({ code, signal }) => {
+      if (shuttingDown) return;
       void fatal(
         new Error(
           `Nx workspace watcher exited unexpectedly (${
@@ -408,6 +417,10 @@ async function restartDesktop(reasons) {
 
 function handleElectronExit({ code, signal }) {
   if (shuttingDown) return;
+  if (studioPhysical) {
+    void shutdown(code === 0 ? 0 : 2, "Studio physical acceptance finished");
+    return;
+  }
   if (code === 0) {
     void shutdown(0, "desktop window closed");
     return;

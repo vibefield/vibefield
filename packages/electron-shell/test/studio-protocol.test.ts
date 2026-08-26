@@ -9,14 +9,25 @@ import {
 } from "../src/studio/protocol";
 
 describe("Studio protocol", () => {
-  it("accepts only the closed v1 message shapes", () => {
-    expect(parseStudioToHost({ type: "studio.ready", protocol: 2 })).toEqual({
+  it("accepts only the closed protocol message shapes", () => {
+    expect(parseStudioToHost({ type: "studio.ready", protocol: 3 })).toEqual({
       type: "studio.ready",
-      protocol: 2,
+      protocol: 3,
     });
     expect(parseStudioToHost({ type: "product.focus", requestId: "focus-1" })).toEqual({
       type: "product.focus",
       requestId: "focus-1",
+    });
+    expect(
+      parseHostToProduct({
+        type: "product.connect",
+        protocol: 3,
+        connectionId: "product-port-1",
+      }),
+    ).toEqual({
+      type: "product.connect",
+      protocol: 3,
+      connectionId: "product-port-1",
     });
     expect(
       parseProductToHost({
@@ -39,7 +50,12 @@ describe("Studio protocol", () => {
       StudioProtocolError,
     );
     expect(() =>
-      parseProductToHost({ type: "product.ready", protocol: 1, instanceId: "p-1" }),
+      parseProductToHost({
+        type: "product.ready",
+        protocol: 2,
+        instanceId: "p-1",
+        connectionId: "product-port-1",
+      }),
     ).toThrowError(/version-mismatch/);
   });
 

@@ -6,7 +6,11 @@ import type {
 } from "../main/development-extension";
 import { installNavigationPolicy, installPermissionPolicy } from "../main/security";
 import { createHostAuxiliaryWindow, loadRenderer } from "../main/windows";
-import { STUDIO_PRODUCT_PORT_CHANNEL, STUDIO_PUBLISHER_PORT_CHANNEL } from "./channels";
+import {
+  STUDIO_PRODUCT_PORT_CHANNEL,
+  STUDIO_PUBLISHER_PORT_CHANNEL,
+  type StudioPortEnvelope,
+} from "./channels";
 import type { StudioCommandHost, StudioHostCommand } from "./command-channel";
 import { StudioRouter } from "./router";
 import { studioProductRendererUrl, studioRendererUrl } from "./url";
@@ -15,6 +19,7 @@ export const STUDIO_SESSION_PARTITION = "vibefield-studio";
 
 export function createStudioHost(opts: {
   openAtStartup: boolean;
+  physicalAcceptance?: boolean;
 }): DesktopDevelopmentExtension & StudioCommandHost {
   const preloadPath = join(__dirname, "..", "preload", "studio.cjs");
   let context: DevelopmentExtensionContext | null = null;
@@ -22,6 +27,9 @@ export function createStudioHost(opts: {
   let opening: Promise<BrowserWindow> | null = null;
   let productWindow: BrowserWindow | null = null;
   let desiredOpen = opts.openAtStartup;
+  let physicalAcceptanceStarted = false;
+  let productPortGeneration = 0;
+  let studioPortGeneration = 0;
   const router = new StudioRouter(Date.now, () => {
     if (productWindow === null || productWindow.isDestroyed()) return;
     if (productWindow.isMinimized()) productWindow.restore();
@@ -31,16 +39,26 @@ export function createStudioHost(opts: {
 
   const attachProductPort = (target: BrowserWindow): void => {
     if (target.isDestroyed()) return;
+    productPortGeneration += 1;
     const { port1, port2 } = new MessageChannelMain();
     router.attachProduct(port1);
-    target.webContents.postMessage(STUDIO_PRODUCT_PORT_CHANNEL, null, [port2]);
+    target.webContents.postMessage(
+      STUDIO_PRODUCT_PORT_CHANNEL,
+      { generation: productPortGeneration } satisfies StudioPortEnvelope,
+      [port2],
+    );
   };
 
   const attachStudioPort = (target: BrowserWindow): void => {
     if (target.isDestroyed()) return;
+    studioPortGeneration += 1;
     const { port1, port2 } = new MessageChannelMain();
     router.attachStudio(port1);
-    target.webContents.postMessage(STUDIO_PUBLISHER_PORT_CHANNEL, null, [port2]);
+    target.webContents.postMessage(
+      STUDIO_PUBLISHER_PORT_CHANNEL,
+      { generation: studioPortGeneration } satisfies StudioPortEnvelope,
+      [port2],
+    );
   };
 
   const open = async (): Promise<BrowserWindow> => {
@@ -143,7 +161,17 @@ export function createStudioHost(opts: {
       attachProductPort(nextContext.productWindow);
     },
     async onHostReady() {
-      if (desiredOpen) await open();
+      if (!desiredOpen) return;
+      const studioWindow = await open();
+      if (opts.physicalAcceptance !== true || physicalAcceptanceStarted) return;
+      physicalAcceptanceStarted = true;
+      if (productWindow === null) throw new Error("Studio physical gate has no product window");
+      const { runStudioPhysicalAcceptance } = await import("./physical-acceptance");
+      await runStudioPhysicalAcceptance({
+        productWindow,
+        studioWindow,
+        studioPartition: STUDIO_SESSION_PARTITION,
+      });
     },
     dispose() {
       desiredOpen = false;

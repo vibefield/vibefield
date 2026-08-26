@@ -1,4 +1,4 @@
-import { Camera } from "@vibecook/ice";
+import { Camera, type CanvasEngine } from "@vibecook/ice";
 import type { DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
@@ -166,10 +166,6 @@ export function FieldView({
     appearanceSource.subscribe,
     appearanceSource.snapshot,
   );
-  const zoom = useReactiveResource(ce, Camera, cameraZoom);
-  useEffect(() => {
-    onPresentationContextChange?.({ theme: dark ? "dark" : "light", zoom });
-  }, [dark, onPresentationContextChange, zoom]);
   // One modal surface at a time: sheets dismiss Settings when opened, while
   // ChromeLayer performs the inverse when Settings or the command palette opens.
   const setTrayOpen = useCallback(
@@ -240,6 +236,9 @@ export function FieldView({
         : { "data-appearance-override-revision": appearanceOverride.revision })}
       style={effectiveAppearanceStyle}
     >
+      {onPresentationContextChange !== undefined && (
+        <PresentationContextReporter ce={ce} dark={dark} report={onPresentationContextChange} />
+      )}
       {/* The recede (reference design): the canvas eases to 0.98 while the
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.
@@ -278,4 +277,18 @@ export function FieldView({
       />
     </div>
   );
+}
+
+function PresentationContextReporter({
+  ce,
+  dark,
+  report,
+}: {
+  ce: CanvasEngine;
+  dark: boolean;
+  report: ProductPresentationContextReporter;
+}): null {
+  const zoom = useReactiveResource(ce, Camera, cameraZoom);
+  useEffect(() => report({ theme: dark ? "dark" : "light", zoom }), [dark, report, zoom]);
+  return null;
 }

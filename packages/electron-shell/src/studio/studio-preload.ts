@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { STUDIO_PUBLISHER_PORT_CHANNEL } from "./channels";
+import { parseStudioPortGeneration, STUDIO_PUBLISHER_PORT_CHANNEL } from "./channels";
 import type { RendererPort } from "./studio-preload-bridge";
 import { StudioPreloadBridge } from "./studio-preload-bridge";
 
@@ -9,9 +9,12 @@ const isolatedWindow = globalThis as unknown as {
 const bridge = new StudioPreloadBridge((callback) =>
   isolatedWindow.requestAnimationFrame(callback),
 );
-ipcRenderer.on(STUDIO_PUBLISHER_PORT_CHANNEL, (event) => {
+ipcRenderer.on(STUDIO_PUBLISHER_PORT_CHANNEL, (event, envelope: unknown) => {
   const port = event.ports[0] as RendererPort | undefined;
-  if (port !== undefined) bridge.attach(port);
+  const generation = parseStudioPortGeneration(envelope);
+  if (port === undefined) return;
+  if (generation === null) port.close();
+  else bridge.attach(port, generation);
 });
 
 contextBridge.exposeInMainWorld("vibefieldStudio", {

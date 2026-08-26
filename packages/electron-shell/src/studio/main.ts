@@ -4,6 +4,7 @@ import { createStudioHost } from "./host";
 
 const studioHost = createStudioHost({
   openAtStartup: process.env["VIBEFIELD_STUDIO_OPEN"] === "1",
+  physicalAcceptance: process.env["VIBEFIELD_STUDIO_PHYSICAL"] === "1",
 });
 installStudioCommandChannel(studioHost);
 registerDesktopDevelopmentExtension(studioHost);

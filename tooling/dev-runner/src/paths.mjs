@@ -7,10 +7,14 @@ export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "
 const devRoot = join(repoRoot, ".vibefield", "dev");
 const devBuildRoot = join(devRoot, "build");
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
-const commandEndpoint =
-  process.platform === "win32"
-    ? `\\\\.\\pipe\\vibefield-dev-${createHash("sha256").update(repoRoot).digest("hex").slice(0, 20)}`
-    : join(devRoot, "runner.sock");
+
+export function commandEndpointFor(root, developmentRoot, platform = process.platform) {
+  return platform === "win32"
+    ? `\\\\.\\pipe\\vibefield-dev-${createHash("sha256").update(root).digest("hex").slice(0, 20)}`
+    : join(developmentRoot, "runner.sock");
+}
+
+const commandEndpoint = commandEndpointFor(repoRoot, devRoot);
 
 export const workspacePaths = Object.freeze({
   repoRoot,

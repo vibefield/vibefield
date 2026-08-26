@@ -29,11 +29,17 @@ export class StudioPreloadBridge {
   private pending: StudioToHost | null = null;
   private framePending = false;
   private requestSequence = 0;
+  private portGeneration = 0;
   private readonly listeners = new Set<(message: HostToStudio) => void>();
 
   constructor(private readonly scheduleFrame: (callback: () => void) => void) {}
 
-  attach(port: RendererPort): void {
+  attach(port: RendererPort, generation: number): void {
+    if (!Number.isSafeInteger(generation) || generation <= this.portGeneration) {
+      port.close();
+      return;
+    }
+    this.portGeneration = generation;
     const previous = this.port;
     this.port = null;
     previous?.close();

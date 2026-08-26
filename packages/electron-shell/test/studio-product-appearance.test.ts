@@ -1,12 +1,14 @@
 import { defaultProductAppearance, serializeVisualTweaks } from "@vibefield/field-app/appearance";
 import { describe, expect, it, vi } from "vitest";
 import { createStudioProductAppearanceSource } from "../src/renderer-host/studio-product-appearance";
-import type { ProductAppearanceRendererApi } from "../src/studio/product-preload-bridge";
-import type { HostToProduct } from "../src/studio/protocol";
+import type {
+  ProductAppearanceCommand,
+  ProductAppearanceRendererApi,
+} from "../src/studio/product-preload-bridge";
 
 describe("Studio product appearance adapter", () => {
   it("applies, rejects, and clears complete snapshots with exact acknowledgements", () => {
-    const commandHandlers: Array<(command: HostToProduct) => void> = [];
+    const commandHandlers: Array<(command: ProductAppearanceCommand) => void> = [];
     const unsubscribe = vi.fn();
     const applied = vi.fn();
     const rejected = vi.fn();

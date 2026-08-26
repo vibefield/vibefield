@@ -1,4 +1,4 @@
-export const STUDIO_PROTOCOL_VERSION = 2 as const;
+export const STUDIO_PROTOCOL_VERSION = 3 as const;
 export const MAX_APPEARANCE_BYTES = 64 * 1024;
 export const MAX_PUBLISHES_PER_SECOND = 120;
 
@@ -24,11 +24,21 @@ export type StudioToHost =
   | { type: "product.focus"; requestId: string };
 
 export type HostToProduct =
+  | {
+      type: "product.connect";
+      protocol: typeof STUDIO_PROTOCOL_VERSION;
+      connectionId: string;
+    }
   | { type: "appearance.apply"; revision: number; serialized: string }
   | { type: "appearance.clear"; revision: number; reason: AppearanceClearReason };
 
 export type ProductToHost =
-  | { type: "product.ready"; protocol: typeof STUDIO_PROTOCOL_VERSION; instanceId: string }
+  | {
+      type: "product.ready";
+      protocol: typeof STUDIO_PROTOCOL_VERSION;
+      instanceId: string;
+      connectionId: string;
+    }
   | { type: "appearance.applied"; revision: number; instanceId: string }
   | {
       type: "appearance.rejected";
@@ -127,6 +137,7 @@ export function parseProductToHost(raw: unknown): ProductToHost {
         type: "product.ready",
         protocol: STUDIO_PROTOCOL_VERSION,
         instanceId: identifier(message["instanceId"]),
+        connectionId: identifier(message["connectionId"]),
       };
     case "appearance.applied":
       return {
@@ -151,6 +162,15 @@ export function parseProductToHost(raw: unknown): ProductToHost {
 export function parseHostToProduct(raw: unknown): HostToProduct {
   const message = record(raw);
   switch (message["type"]) {
+    case "product.connect":
+      if (message["protocol"] !== STUDIO_PROTOCOL_VERSION) {
+        throw new StudioProtocolError("version-mismatch");
+      }
+      return {
+        type: "product.connect",
+        protocol: STUDIO_PROTOCOL_VERSION,
+        connectionId: identifier(message["connectionId"]),
+      };
     case "appearance.apply":
       return {
         type: "appearance.apply",

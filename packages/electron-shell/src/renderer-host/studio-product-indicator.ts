@@ -15,6 +15,9 @@ export function installStudioProductIndicator(source: AppearanceOverrideSource):
     }
     indicator.textContent = `Studio preview · revision ${snapshot.revision}`;
     indicator.dataset.revision = String(snapshot.revision);
+    indicator.dataset.magnetGlyph = snapshot.appearance.magnetGrid.glyph;
+    indicator.dataset.magnetReach = String(snapshot.appearance.magnetGrid.reach);
+    indicator.dataset.rimRadius = String(snapshot.appearance.overlapFeedback.rimRadius);
     if (!indicator.isConnected) document.body.append(indicator);
   };
 

@@ -23,6 +23,7 @@
     "smoke:godview": "pnpm build:all && electron . --smoke-godview",
     "smoke:terminal-direct": "pnpm build:all && electron . --smoke-godview --terminal-direct-proof",
     "smoke:canvas": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-canvas",
+    "smoke:studio": "node ../../tooling/dev-runner/src/cli.mjs --studio-physical",
     "smoke:plugin-restart": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-plugin-restart",
     "lab:plugin-runtime:soak": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-plugin-runtime-soak.mjs",
     "lab:plugin-runtime:soak:24h": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-plugin-runtime-soak.mjs --hours 24 --cycle-delay-ms 45000 --warmup-samples 8 --minimum-graded-samples 24 --footprint",

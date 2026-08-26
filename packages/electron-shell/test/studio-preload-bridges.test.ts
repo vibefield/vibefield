@@ -29,9 +29,9 @@ describe("Studio preload bridges", () => {
     const frames: Array<() => void> = [];
     const bridge = new StudioPreloadBridge((callback) => frames.push(callback));
     const port = new FakeRendererPort();
-    bridge.attach(port);
+    bridge.attach(port, 1);
 
-    expect(port.sent).toEqual([{ type: "studio.ready", protocol: 2 }]);
+    expect(port.sent).toEqual([{ type: "studio.ready", protocol: 3 }]);
     expect(bridge.publish('{"reach":1}')).toBe("studio-1");
     expect(bridge.publish('{"reach":2}')).toBe("studio-2");
     expect(frames).toHaveLength(1);
@@ -48,7 +48,7 @@ describe("Studio preload bridges", () => {
     const port = new FakeRendererPort();
     const listener = vi.fn();
     bridge.subscribe(listener);
-    bridge.attach(port);
+    bridge.attach(port, 1);
 
     port.receive({ type: "execute", code: "arbitrary" });
     expect(listener).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe("Studio preload bridges", () => {
     const first = new FakeRendererPort();
     const listener = vi.fn();
     bridge.subscribe(listener);
-    bridge.attach(first);
+    bridge.attach(first, 1);
 
     first.close();
     expect(listener).toHaveBeenLastCalledWith({
@@ -79,7 +79,7 @@ describe("Studio preload bridges", () => {
     });
 
     const second = new FakeRendererPort();
-    bridge.attach(second);
+    bridge.attach(second, 2);
     second.receive({ type: "studio.disconnected", reason: "version-mismatch" });
     second.close();
     expect(listener).toHaveBeenLastCalledWith({
@@ -91,7 +91,7 @@ describe("Studio preload bridges", () => {
   it("sends the bounded product-focus command directly", () => {
     const bridge = new StudioPreloadBridge((callback) => callback());
     const port = new FakeRendererPort();
-    bridge.attach(port);
+    bridge.attach(port, 1);
 
     expect(bridge.focusProduct()).toBe("studio-1");
     expect(port.sent.at(-1)).toEqual({ type: "product.focus", requestId: "studio-1" });
@@ -100,11 +100,24 @@ describe("Studio preload bridges", () => {
   it("retains one product command until the renderer subscribes and acknowledges it", () => {
     const bridge = new ProductPreloadBridge("product-1");
     const port = new FakeRendererPort();
-    bridge.attach(port);
-    expect(port.sent).toEqual([{ type: "product.ready", protocol: 2, instanceId: "product-1" }]);
+    bridge.attach(port, 1);
+    expect(port.sent).toEqual([]);
+    connectProductBridge(port, "product-1");
 
     port.receive({ type: "appearance.apply", revision: 1, serialized: "{}" });
     port.receive({ type: "appearance.clear", revision: 2, reason: "live-disabled" });
+    port.receive({ type: "execute", code: "arbitrary" });
+    expect(bridge.physicalState()).toEqual({
+      received: 3,
+      parseFailures: 1,
+      handlerAttached: false,
+      dispatches: 0,
+      completions: 0,
+      pending: { type: "appearance.clear", revision: 2 },
+      lastCommand: { type: "appearance.clear", revision: 2 },
+      generation: 1,
+      connected: true,
+    });
     const handler = vi.fn();
     bridge.subscribe(handler);
     expect(handler).toHaveBeenCalledOnce();
@@ -112,6 +125,12 @@ describe("Studio preload bridges", () => {
       type: "appearance.clear",
       revision: 2,
       reason: "live-disabled",
+    });
+    expect(bridge.physicalState()).toMatchObject({
+      handlerAttached: true,
+      dispatches: 1,
+      completions: 1,
+      pending: null,
     });
 
     bridge.applied(2);
@@ -133,7 +152,8 @@ describe("Studio preload bridges", () => {
     const port = new FakeRendererPort();
 
     bridge.context({ theme: "light", zoom: 1 });
-    bridge.attach(port);
+    bridge.attach(port, 1);
+    connectProductBridge(port, "product-1");
     bridge.context({ theme: "dark", zoom: 1.1 });
     bridge.context({ theme: "dark", zoom: 1.25 });
     expect(flushes).toHaveLength(1);
@@ -145,4 +165,45 @@ describe("Studio preload bridges", () => {
     bridge.context({ theme: "dark", zoom: 1.5 });
     expect(flushes).toHaveLength(1);
   });
+
+  it("keeps the newest product port when transfers arrive out of order", () => {
+    const bridge = new ProductPreloadBridge("product-1");
+    const newest = new FakeRendererPort();
+    const stale = new FakeRendererPort();
+
+    bridge.attach(newest, 2);
+    bridge.attach(stale, 1);
+    connectProductBridge(newest, "product-1", "product-port-2");
+
+    expect(stale.closed).toBe(true);
+    expect(stale.sent).toEqual([]);
+    expect(bridge.physicalState().generation).toBe(2);
+  });
+
+  it("keeps the newest Studio port when transfers arrive out of order", () => {
+    const bridge = new StudioPreloadBridge((callback) => callback());
+    const newest = new FakeRendererPort();
+    const stale = new FakeRendererPort();
+
+    bridge.attach(newest, 2);
+    bridge.attach(stale, 1);
+
+    expect(newest.sent).toEqual([{ type: "studio.ready", protocol: 3 }]);
+    expect(stale.closed).toBe(true);
+    expect(stale.sent).toEqual([]);
+  });
 });
+
+function connectProductBridge(
+  port: FakeRendererPort,
+  instanceId: string,
+  connectionId = "product-port-1",
+): void {
+  port.receive({ type: "product.connect", protocol: 3, connectionId });
+  expect(port.sent.at(-1)).toEqual({
+    type: "product.ready",
+    protocol: 3,
+    instanceId,
+    connectionId,
+  });
+}

@@ -40,20 +40,60 @@ class FakePort implements StudioRouterPort {
 function readyStudio(router: StudioRouter): FakePort {
   const port = new FakePort();
   router.attachStudio(port);
-  port.receive({ type: "studio.ready", protocol: 2 });
+  port.receive({ type: "studio.ready", protocol: 3 });
   return port;
 }
 
 function readyProduct(router: StudioRouter, instanceId = "product-1"): FakePort {
   const port = new FakePort();
   router.attachProduct(port);
-  port.receive({ type: "product.ready", protocol: 2, instanceId });
+  completeProductHandshake(port, instanceId);
   return port;
+}
+
+function completeProductHandshake(port: FakePort, instanceId: string): void {
+  const connect = port.sent.at(-1);
+  expect(connect).toMatchObject({ type: "product.connect", protocol: 3 });
+  if (
+    typeof connect !== "object" ||
+    connect === null ||
+    !("connectionId" in connect) ||
+    typeof connect.connectionId !== "string"
+  ) {
+    throw new Error("router did not issue a bounded product connection handshake");
+  }
+  port.receive({
+    type: "product.ready",
+    protocol: 3,
+    instanceId,
+    connectionId: connect.connectionId,
+  });
 }
 
 afterEach(() => vi.useRealTimers());
 
 describe("StudioRouter", () => {
+  it("claims a product connection only after a matching bidirectional handshake", () => {
+    const router = new StudioRouter();
+    const product = new FakePort();
+    router.attachProduct(product);
+
+    expect(router.state().productConnection).toBe("connecting");
+    const connect = product.sent.at(-1);
+    expect(connect).toMatchObject({ type: "product.connect", protocol: 3 });
+    product.receive({
+      type: "product.ready",
+      protocol: 3,
+      instanceId: "product-1",
+      connectionId: "wrong-port",
+    });
+    expect(router.state().productConnection).toBe("unavailable");
+
+    const replacement = readyProduct(router, "product-2");
+    expect(replacement.closed).toBe(false);
+    expect(router.state().productConnection).toBe("connected");
+  });
+
   it("assigns revisions monotonically and never claims applied before product ack", () => {
     const router = new StudioRouter();
     const studio = readyStudio(router);
@@ -133,7 +173,7 @@ describe("StudioRouter", () => {
       productConnection: "reconnecting",
       appliedRevision: null,
     });
-    replacement.receive({ type: "product.ready", protocol: 2, instanceId: "product-2" });
+    completeProductHandshake(replacement, "product-2");
     expect(router.state()).toMatchObject({
       productConnection: "connected",
       appliedRevision: null,

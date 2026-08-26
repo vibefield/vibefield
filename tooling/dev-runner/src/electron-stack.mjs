@@ -8,6 +8,7 @@ export function createElectronStack({
   paths,
   viteUrl,
   studioOpen = false,
+  studioPhysical = false,
   lock,
   log,
   onUnexpectedExit,
@@ -32,6 +33,7 @@ export function createElectronStack({
       set: {
         VITE_DEV_SERVER_URL: viteUrl,
         VIBEFIELD_STUDIO_OPEN: studioRequested ? "1" : "0",
+        VIBEFIELD_STUDIO_PHYSICAL: studioPhysical ? "1" : "0",
         // The adoption gate compares product.json's buildId against this value,
         // and product.json describes the DAEMON plane — a shell-only rebuild
         // must still adopt the running fieldd, so the daemon identity is what

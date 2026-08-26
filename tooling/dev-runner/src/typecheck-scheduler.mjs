@@ -32,9 +32,9 @@ export function createTypecheckScheduler({
     try {
       if (runEverything) await runFull();
       else await runAffected(changed);
-      onSuccess(runEverything ? null : changed);
+      if (!closed) onSuccess(runEverything ? null : changed);
     } catch (error) {
-      onFailure(error);
+      if (!closed) onFailure(error);
     } finally {
       running = false;
       if (full || files.size > 0) schedule(0);

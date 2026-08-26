@@ -8,21 +8,44 @@ import {
 } from "./protocol";
 import type { RendererPort } from "./studio-preload-bridge";
 
+export type ProductAppearanceCommand = Exclude<HostToProduct, { type: "product.connect" }>;
+
 export interface ProductAppearanceRendererApi {
-  onCommand(handler: (command: HostToProduct) => void): () => void;
+  onCommand(handler: (command: ProductAppearanceCommand) => void): () => void;
   reportApplied(revision: number): void;
   reportRejected(revision: number, code: AppearanceRejectCode): void;
   reportContext(context: ProductContext): void;
+  /** Present only in the opt-in physical acceptance composition. */
+  physicalState?(): ProductPreloadPhysicalState;
+}
+
+export interface ProductPreloadPhysicalState {
+  readonly received: number;
+  readonly parseFailures: number;
+  readonly handlerAttached: boolean;
+  readonly dispatches: number;
+  readonly completions: number;
+  readonly pending: { type: HostToProduct["type"]; revision: number | null } | null;
+  readonly lastCommand: { type: HostToProduct["type"]; revision: number | null } | null;
+  readonly generation: number;
+  readonly connected: boolean;
 }
 
 /** Receive-only product bridge with one pending command across boot ordering. */
 export class ProductPreloadBridge {
   private port: RendererPort | null = null;
-  private handler: ((command: HostToProduct) => void) | null = null;
-  private pending: HostToProduct | null = null;
+  private handler: ((command: ProductAppearanceCommand) => void) | null = null;
+  private pending: ProductAppearanceCommand | null = null;
   private currentContext: ProductContext | null = null;
   private sentContext: ProductContext | null = null;
   private contextScheduled = false;
+  private received = 0;
+  private parseFailures = 0;
+  private dispatches = 0;
+  private completions = 0;
+  private lastCommand: HostToProduct | null = null;
+  private portGeneration = 0;
+  private connected = false;
 
   constructor(
     private readonly instanceId: string,
@@ -31,9 +54,16 @@ export class ProductPreloadBridge {
     },
   ) {}
 
-  attach(port: RendererPort): void {
+  attach(port: RendererPort, generation: number): void {
+    if (!Number.isSafeInteger(generation) || generation <= this.portGeneration) {
+      port.close();
+      return;
+    }
+    this.portGeneration = generation;
     this.port?.close();
     this.port = port;
+    this.connected = false;
+    this.pending = null;
     this.sentContext = null;
     port.onmessage = (event) => {
       if (this.port !== port) return;
@@ -41,26 +71,36 @@ export class ProductPreloadBridge {
       try {
         command = parseHostToProduct(event.data);
       } catch {
+        this.parseFailures += 1;
         return;
       }
+      this.received += 1;
+      this.lastCommand = command;
+      if (command.type === "product.connect") {
+        if (this.connected) return;
+        this.connected = true;
+        port.postMessage({
+          type: "product.ready",
+          protocol: STUDIO_PROTOCOL_VERSION,
+          instanceId: this.instanceId,
+          connectionId: command.connectionId,
+        });
+        this.scheduleContextFlush();
+        return;
+      }
+      if (!this.connected) return;
       if (this.handler === null) this.pending = command;
-      else this.handler(command);
+      else this.dispatch(command, this.handler);
     };
     port.start();
-    port.postMessage({
-      type: "product.ready",
-      protocol: STUDIO_PROTOCOL_VERSION,
-      instanceId: this.instanceId,
-    });
-    this.scheduleContextFlush();
   }
 
-  subscribe(handler: (command: HostToProduct) => void): () => void {
+  subscribe(handler: (command: ProductAppearanceCommand) => void): () => void {
     this.handler = handler;
     if (this.pending !== null) {
       const pending = this.pending;
       this.pending = null;
-      handler(pending);
+      this.dispatch(pending, handler);
     }
     return () => {
       if (this.handler === handler) this.handler = null;
@@ -68,12 +108,14 @@ export class ProductPreloadBridge {
   }
 
   applied(revision: number): void {
+    if (!this.connected) return;
     this.port?.postMessage(
       parseProductToHost({ type: "appearance.applied", revision, instanceId: this.instanceId }),
     );
   }
 
   rejected(revision: number, code: AppearanceRejectCode): void {
+    if (!this.connected) return;
     this.port?.postMessage(
       parseProductToHost({
         type: "appearance.rejected",
@@ -91,18 +133,66 @@ export class ProductPreloadBridge {
     this.scheduleContextFlush();
   }
 
+  physicalState(): ProductPreloadPhysicalState {
+    return Object.freeze({
+      received: this.received,
+      parseFailures: this.parseFailures,
+      handlerAttached: this.handler !== null,
+      dispatches: this.dispatches,
+      completions: this.completions,
+      pending: commandMetadata(this.pending),
+      lastCommand: commandMetadata(this.lastCommand),
+      generation: this.portGeneration,
+      connected: this.connected,
+    });
+  }
+
+  private dispatch(
+    command: ProductAppearanceCommand,
+    handler: (command: ProductAppearanceCommand) => void,
+  ): void {
+    this.dispatches += 1;
+    handler(command);
+    this.completions += 1;
+  }
+
   private scheduleContextFlush(): void {
-    if (this.contextScheduled || this.port === null || this.currentContext === null) return;
+    if (
+      this.contextScheduled ||
+      this.port === null ||
+      !this.connected ||
+      this.currentContext === null
+    ) {
+      return;
+    }
     if (sameContext(this.currentContext, this.sentContext)) return;
     this.contextScheduled = true;
     this.scheduleContext(() => {
       this.contextScheduled = false;
       const current = this.currentContext;
-      if (this.port === null || current === null || sameContext(current, this.sentContext)) return;
+      if (
+        this.port === null ||
+        !this.connected ||
+        current === null ||
+        sameContext(current, this.sentContext)
+      ) {
+        return;
+      }
       this.sentContext = current;
       this.port.postMessage({ type: "product.context", ...current });
     });
   }
+}
+
+function commandMetadata(
+  command: HostToProduct | null,
+): ProductPreloadPhysicalState["lastCommand"] {
+  return command === null
+    ? null
+    : {
+        type: command.type,
+        revision: command.type === "product.connect" ? null : command.revision,
+      };
 }
 
 function sameContext(a: ProductContext | null, b: ProductContext | null): boolean {

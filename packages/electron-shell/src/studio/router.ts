@@ -7,6 +7,7 @@ import {
   type ProductContext,
   parseProductToHost,
   parseStudioToHost,
+  STUDIO_PROTOCOL_VERSION,
   type StudioDisconnectReason,
   StudioProtocolError,
   type StudioSection,
@@ -34,6 +35,7 @@ export class StudioRouter {
   private productReady = false;
   private productConnection: ProductConnectionState = "unavailable";
   private productInstanceId: string | null = null;
+  private productConnectionId: string | null = null;
   private productContext: ProductContext | null = null;
   private hasConnectedProduct = false;
   private latestSerialized: string | null = null;
@@ -142,6 +144,7 @@ export class StudioRouter {
     this.productReady = false;
     this.productConnection = this.hasConnectedProduct ? "reconnecting" : "connecting";
     this.productInstanceId = null;
+    this.productConnectionId = `product-port-${generation}`;
     this.productContext = null;
     this.appliedRevision = null;
     this.rejection = null;
@@ -152,6 +155,9 @@ export class StudioRouter {
         const message = parseProductToHost(event.data);
         if (message.type === "product.ready") {
           if (this.productReady) throw new StudioProtocolError("malformed");
+          if (message.connectionId !== this.productConnectionId) {
+            throw new StudioProtocolError("malformed");
+          }
           this.productReady = true;
           this.productConnection = "connected";
           this.productInstanceId = message.instanceId;
@@ -194,6 +200,11 @@ export class StudioRouter {
     });
     port.once("close", () => this.detachProduct(port, generation));
     port.start();
+    port.postMessage({
+      type: "product.connect",
+      protocol: STUDIO_PROTOCOL_VERSION,
+      connectionId: this.productConnectionId,
+    });
   }
 
   closeStudio(reason: AppearanceClearReason): void {
@@ -213,6 +224,7 @@ export class StudioRouter {
     this.productReady = false;
     this.productConnection = "unavailable";
     this.productInstanceId = null;
+    this.productConnectionId = null;
     this.productContext = null;
     this.appliedRevision = null;
     this.rejection = null;
@@ -248,6 +260,7 @@ export class StudioRouter {
     this.productReady = false;
     this.productConnection = "unavailable";
     this.productInstanceId = null;
+    this.productConnectionId = null;
     this.productContext = null;
     studioPort?.close();
     productPort?.close();
@@ -321,6 +334,7 @@ export class StudioRouter {
     this.productReady = false;
     this.productConnection = "unavailable";
     this.productInstanceId = null;
+    this.productConnectionId = null;
     this.productContext = null;
     this.appliedRevision = null;
     this.rejection = null;
