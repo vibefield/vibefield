@@ -4314,8 +4314,11 @@ without writing settings or source. Product and Studio use separate sandboxed
 windows, preloads, and sessions. Production main/preload/renderer entries have
 no Studio or catalog edge, enforced both structurally and by artifact scans.
 
-**Landing gates:** repository preflight green; development runner 80/80;
-focused Studio shell 24/24 and catalog/boot ownership 17/17; contracts,
-field-app, and electron-shell typechecks green; browser catalog build green;
-production main 960,015 bytes and renderer 45 files / 9,671,545 bytes with
-Studio, Design System catalog, and perf-lab markers absent.
+**Landing gates:** full `pnpm verify` green; development runner 80/80; focused
+Studio shell 24/24 and catalog/boot ownership 17/17; contracts, field-app, and
+electron-shell typechecks green; browser catalog build green; production main
+960,015 bytes and renderer 45 files / 9,673,134 bytes with Studio, Design
+System catalog, and perf-lab markers absent. Physical Electron verification
+confirmed queued and ready-state command attachment, Live revision delivery
+from Dot to Needle, product disclosure at revisions 1 and 2, and immediate
+restoration when Live was paused.
