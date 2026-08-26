@@ -8,7 +8,7 @@ import {
 describe("canvas appearance", () => {
   it("projects the reviewed magnet appearance onto one grid contract", () => {
     expect(defaultCanvasGridConfig(false)).toMatchObject({
-      spacings: [20, 100, 500],
+      spacings: [25, 125, 250],
       dotColor: [166 / 255, 166 / 255, 166 / 255],
       dotAlpha: 0.85,
       dotRadius: [1.5, 1.5],
@@ -17,7 +17,7 @@ describe("canvas appearance", () => {
         reach: 60,
         polarity: 1,
         widgets: true,
-        widgetStrength: 1,
+        widgetStrength: 0.1,
         widgetRadius: 12,
         alwaysAlign: false,
         needleLength: 5,
@@ -36,11 +36,11 @@ describe("canvas appearance", () => {
     editable.canvasPalette.dotLight = "#123456";
 
     expect(canvasGridConfig(editable, false)).toMatchObject({
-      spacings: [32, 100, 500],
+      spacings: [32, 125, 250],
       dotColor: [18 / 255, 52 / 255, 86 / 255],
       magnet: { reach: 90 },
     });
-    expect(defaultCanvasAppearance().worldGrid.spacings[0]).toBe(20);
+    expect(defaultCanvasAppearance().worldGrid.spacings[0]).toBe(25);
     expect(defaultCanvasAppearance().magnetGrid.reach).toBe(60);
     expect(defaultCanvasAppearance().canvasPalette.dotLight).toBe("#A6A6A6");
   });
@@ -56,7 +56,7 @@ describe("canvas appearance", () => {
         maxSources: 256,
       });
       expect(grid).toMatchObject({
-        spacings: [20, 100, 500],
+        spacings: [25, 125, 250],
         dotRadius: [1.5, 1.5],
         dotAlpha: 0.85,
       });

@@ -62,13 +62,13 @@ the temporary system-control panel exposes that alpha for live tuning.
 | `--vf-canvas-magnet-ink` (selected GL ground) | `#A6A6A6` | `#8A8A8A` |
 | `--vf-canvas-dot` (CSS fallback) | `rgba(0,0,0,0.16)` | `rgba(255,255,255,0.08)` |
 
-The ICE ground projection uses `spacings: [20, 100, 500]`, `dotAlpha: 0.85`,
-`fadeIn: [12, 16]`, `fadeOut: [120, 200]`, `dotRadius: [1.5, 1.5]`, and
+The ICE ground projection uses `spacings: [25, 125, 250]`, `dotAlpha: 0.85`,
+`fadeIn: [25, 35]`, `fadeOut: [120, 200]`, `dotRadius: [1.5, 1.5]`, and
 `levelWeight: [1, 0]`.
 
 The selected magnet implementation is configured through ICE's complete
 `GridMagnetConfig` contract: `glyph: "dot"`, `reach: 60`, `polarity: 1`,
-`widgets: true`, `widgetStrength: 1`, `widgetRadius: 12`, `alwaysAlign: false`,
+`widgets: true`, `widgetStrength: 0.1`, `widgetRadius: 12`, `alwaysAlign: false`,
 `needleLength: 5`, `needleWidth: 0.55`, `maxSources: 256`, and `fadeZoom: 0`.
 These are appearance data, not renderer selection. The UI Bench owns a control
 for every field and projects them into its live shared `InfiniteCanvasGround`
