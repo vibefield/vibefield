@@ -74,14 +74,17 @@ catalog stays the single composition root without ever owning foreign markup. (A
 - Show meaningful states, including empty, loading, unavailable, disabled, and failure states.
 - Verify light/dark, keyboard focus, reduced motion, and narrow layout before considering a
   component cataloged.
-- **Import kit leaves from boot-reachable code, never the barrel.** `@vibefield/design-kit`'s
-  index re-exports the GL surface (`GlLiftGroup` → `@vibecook/ice/r3f` → three → loro), so one
-  class-name import from a module the splash can reach puts the entire 3D world in the eager
-  bundle. Use a deep entry (`@vibefield/design-kit/primitives`, `/visuals`) there. The kit
-  declares `"sideEffects": ["*.css"]` so the barrel is survivable — every JS module in it must
-  stay pure for that to hold, and a module that needs real import-time side effects belongs
-  outside the kit. `pnpm bundle:assert` (inside `pnpm verify`) is the tripwire; it caught this
-  four days late once because it only ran in `smoke:canvas` (2026-08-10).
+- **Import kit leaves from boot-reachable code, never the barrel.** The kit's GL-card surface
+  (`GlLiftGroup` → `@vibecook/ice/r3f` → three) lives behind the dedicated `./gl` entry since
+  2026-08-28 — the root barrel is GL-free by construction, so one stray class-name import can no
+  longer pull the 3D world into the splash (the 2026-08-10 incident's class). The rule still
+  stands at a lower stake: the barrel's card chrome reaches `@vibecook/ice` core (→ loro), so
+  boot-reachable code imports the deep entries (`@vibefield/design-kit/primitives`, `/visuals`)
+  and leaves the rest of the kit to lazy chunks. The kit declares `"sideEffects": ["*.css"]` so
+  the barrel is survivable — every JS module in it must stay pure for that to hold, and a module
+  that needs real import-time side effects belongs outside the kit. `pnpm bundle:assert` (inside
+  `pnpm verify`) is the tripwire; it caught this four days late once because it only ran in
+  `smoke:canvas` (2026-08-10).
 
 ## Working loop
 

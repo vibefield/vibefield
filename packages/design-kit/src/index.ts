@@ -5,8 +5,10 @@ export {
   type OverlapFeedbackColors,
   type OverlapFeedbackTuning,
 } from "./card-appearance";
-export { makeGlCardChrome } from "./GlCardChrome";
-export { GlLiftGroup } from "./GlLiftGroup";
+// The GL-card surface (GlLiftGroup, makeGlCardChrome) lives in "./gl" — its
+// runtime @vibecook/ice/r3f import reaches three/R3F, and this barrel stays
+// GL-free by construction so a boot-reachable import can never pull the 3D
+// world (2026-08-28; the 2026-08-10 splash-bundle incident's class).
 export { previewBackground, setPreviewBackground } from "./preview";
 export {
   EmptyState,

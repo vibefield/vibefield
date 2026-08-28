@@ -8,10 +8,8 @@ export {
   CARD_RADIUS,
   CardShell,
   EmptyState,
-  GlLiftGroup,
   type GradientStop,
   InlineNotice,
-  makeGlCardChrome,
   PlaceholderFace,
   previewBackground,
   SegmentedControl,
@@ -28,3 +26,9 @@ export {
   uiLabelClass,
   useDragLift,
 } from "@vibefield/design-kit";
+// The GL-card surface rides the kit's dedicated /gl entry (2026-08-28: kept
+// out of the kit's root barrel so DOM-only consumers never reach three/R3F).
+// The SDK door re-exports it unchanged — plugin imports stay exactly as they
+// were; a plugin that mounts GL cards is a lazy chunk and pays for the 3D
+// world only when it loads.
+export { GlLiftGroup, makeGlCardChrome } from "@vibefield/design-kit/gl";
