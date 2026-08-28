@@ -8,6 +8,7 @@
 import { useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
 import { CardShell } from "@vibefield/plugin-sdk/ui";
 import type { ReactElement } from "react";
+import { WEATHER_GRADIENT } from "./content-tokens";
 
 const TYPE = "vibefield.widgetlab.weather";
 
@@ -96,9 +97,6 @@ function ConditionGlyph({ condition }: { condition: WeatherCondition }): ReactEl
       );
   }
 }
-
-/** The card's sky gradient — exported for the folder preview minis (preview.ts). */
-export const WEATHER_GRADIENT = "linear-gradient(135deg, #3A86FF 0%, #1D4ED8 55%, #0B2AB5 100%)";
 
 function WeatherView({ entity, world }: WidgetComponentProps): ReactElement {
   const props = useWidgetProps<WeatherProps>(world, entity, TYPE);

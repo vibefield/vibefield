@@ -47,6 +47,15 @@ projection, DOM, accessibility, identity layers, and arrival motion. Field compo
 circle without starting the physics engine and inventories every valid source/status combination,
 access and pane modifier, provider glyph, and context boundary.
 
+When a staged view or content token lives in another workspace package, the catalog composes it
+through that package's `./design-system` export — a fixture-adapter door beside the shipping code
+(`@vibefield/plugin-browser/design-system` is the template; `@vibefield/plugin-widgetlab/design-system`
+carries content tokens the same way). Catalog code imports another workspace package only through
+that door, the design-kit foundation, or `@vibefield/contracts` types; any other internal path is
+rejected by the ownership test. A future package that owns a whole viewport — a History or
+Assistant plugin, an extracted spine library — ships its specimens behind the same entry, so this
+catalog stays the single composition root without ever owning foreign markup. (Added 2026-08-28.)
+
 ## Rules for new UI
 
 - Add or change visual constants in `DESIGN.md`, then project them into `tokens.css`.
@@ -59,6 +68,9 @@ access and pane modifier, provider glyph, and context boundary.
   services, and engine operations in the controller.
 - Add the real view to the catalog with a deterministic adapter. Never copy its markup or CSS into
   a `vf-ds-*` replica.
+- A package that owns product views or shared content tokens ships a `./design-system` entry
+  exporting its fixture adapters and tokens; the catalog composes that entry and never reaches
+  package internals.
 - Show meaningful states, including empty, loading, unavailable, disabled, and failure states.
 - Verify light/dark, keyboard focus, reduced motion, and narrow layout before considering a
   component cataloged.

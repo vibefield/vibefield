@@ -1,4 +1,4 @@
-import { WEATHER_GRADIENT } from "@vibefield/plugin-widgetlab";
+import { WEATHER_GRADIENT } from "@vibefield/plugin-widgetlab/design-system";
 import { type ReactElement, useState } from "react";
 import { Section, Specimen } from "../catalog-ui";
 

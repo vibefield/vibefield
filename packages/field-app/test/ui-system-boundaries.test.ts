@@ -81,6 +81,38 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("useTerminalPool");
   });
 
+  it("keeps cross-package catalog composition on design-system doors", () => {
+    // The catalog composes another workspace package only through its stated
+    // doors — the design-kit foundation, contracts types, or the package's own
+    // `/design-system` fixture-adapter entry (the plugin-browser precedent,
+    // docs/UI_SYSTEM.md §Catalog fidelity). Any other internal path would let
+    // the catalog quietly grow a private copy of a package's seam, which is the
+    // replica rule's failure mode arriving through the import graph.
+    const allowedDoor = (specifier: string): boolean =>
+      specifier === "@vibefield/contracts" ||
+      specifier === "@vibefield/design-kit" ||
+      specifier.startsWith("@vibefield/design-kit/") ||
+      /^@vibefield\/[^/]+\/design-system$/.test(specifier);
+    const offenders: string[] = [];
+    const visit = (relativeDir: string): void => {
+      for (const entry of readdirSync(join(PACKAGE_ROOT, "src", relativeDir), {
+        withFileTypes: true,
+      })) {
+        const relativePath = `${relativeDir}/${entry.name}`;
+        if (entry.isDirectory()) {
+          visit(relativePath);
+        } else if (/\.tsx?$/.test(entry.name)) {
+          for (const match of source(relativePath).matchAll(/from\s+"(@vibefield\/[^"]+)"/g)) {
+            const specifier = match[1] ?? "";
+            if (!allowedDoor(specifier)) offenders.push(`${relativePath} → ${specifier}`);
+          }
+        }
+      }
+    };
+    visit("design-system");
+    expect(offenders).toEqual([]);
+  });
+
   it("mounts production views instead of the retired catalog replicas", () => {
     const page = catalogPageSources();
     const onboarding = source("design-system/OnboardingPreview.tsx");
