@@ -4339,3 +4339,44 @@ Two consecutive physical runs passed; electron-shell 642/2-skip and dev-runner
 84/84 were green. Intentional smoke shutdown no longer reports cancelled
 background typechecks, and endpoint derivation now has an explicit Windows
 named-pipe witness.
+
+## UI — the catalog decomposes; composition doors and the kit barrel become structural
+
+2026-08-28. Three slices prepare the UI system for the four-views era without
+moving working product code. `c81c6af1` splits the 1,705-line DesignSystemPage
+into a ~175-line shell plus one module per section under
+`design-system/sections/` (verbatim moves; shared harness chrome in
+`catalog-ui.tsx`, the Studio toolbar and its status copy in
+`StudioToolbar.tsx`), and `ui-system-boundaries.test.ts` now discovers
+`sections/*.tsx`, so the replica and production-view rules cover a new section
+the moment its file exists. scenes.css was deliberately not split: a flat
+1,499-line sheet with no per-section structure is classification risk for zero
+behavior gain.
+
+`6630874a` makes cross-package catalog composition a stated, enforced door
+(docs/UI_SYSTEM.md §Catalog fidelity): catalog code imports another workspace
+package only through `@vibefield/contracts`, the design-kit foundation, or that
+package's own `./design-system` entry — the plugin-browser precedent
+generalized into the rail every future view package rides. The one standing
+violation was paid rather than excepted: widgetlab's WEATHER_GRADIENT moved to
+a leaf `content-tokens.ts` behind the plugin's new `./design-system` door, and
+the ownership test names any other path file → specifier.
+
+`9cbcd799` moves the GL-card surface (GlLiftGroup, makeGlCardChrome) behind
+design-kit's dedicated `./gl` entry: the root barrel is GL-free by
+construction, retiring the 2026-08-10 splash-bundle class structurally instead
+of by rule. plugin-sdk's `ui.ts` re-points internally, so the curated SDK
+surface is byte-identical and every widgetlab GL card compiles unchanged. The
+honest bound: the barrel still reaches `@vibecook/ice` core (→ loro) through
+CardShell's chrome projection, so the boot-path leaf-import rule stands at a
+lower stake — dated corrections at both comment sites, never a silent
+retirement.
+
+**Landing gates:** per-slice `pnpm verify` verbatim exit 0 (three runs);
+field-app design-system + boundaries suites green including the new
+composition-door test; design-kit, plugin-sdk, field-app, and widgetlab
+typechecks; widgetlab 4/4; bundle:assert OK (initial 516.1 KB raw / 138.5 KB
+gz, world lazy, three.module its own lazy chunk); `TMPDIR=/tmp pnpm
+smoke:canvas` exit 0 with the census witnessed
+({"widgetTypes":23,"plugins":6,"stagedPlugins":5}, all five staged stylesheets
+loaded including vibefield.widgetlab).
