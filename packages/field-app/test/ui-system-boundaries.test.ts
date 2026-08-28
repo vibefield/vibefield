@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -8,6 +8,16 @@ import { describe, expect, it } from "vitest";
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (relativePath: string): string =>
   readFileSync(join(PACKAGE_ROOT, "src", relativePath), "utf8");
+
+/** Every catalog page module: the shell plus each section, discovered so a new
+ * section is covered by these boundaries the moment it exists. */
+const catalogPageSources = (): string => {
+  const sections = readdirSync(join(PACKAGE_ROOT, "src", "design-system", "sections"))
+    .filter((name) => name.endsWith(".tsx"))
+    .sort()
+    .map((name) => source(`design-system/sections/${name}`));
+  return [source("design-system/DesignSystemPage.tsx"), ...sections].join("\n");
+};
 
 describe("UI system ownership boundaries", () => {
   it("keeps the app and catalog stylesheets as manifests", () => {
@@ -72,7 +82,7 @@ describe("UI system ownership boundaries", () => {
   });
 
   it("mounts production views instead of the retired catalog replicas", () => {
-    const page = source("design-system/DesignSystemPage.tsx");
+    const page = catalogPageSources();
     const onboarding = source("design-system/OnboardingPreview.tsx");
     const agentBubbles = source("design-system/AgentBubblePreview.tsx");
     const groundWorkbench = source("design-system/CanvasGroundWorkbench.tsx");
