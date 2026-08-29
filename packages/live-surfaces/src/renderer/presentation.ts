@@ -17,6 +17,13 @@ export type LiveSurfacePresentationTickResult =
   | { readonly kind: "idle" }
   | LiveSurfacePresentResult;
 
+/** DT-2b — the DOM-era consume door's result. No GPU snapshot exists on this
+ * path; the metadata is the whole fact. */
+export type LiveSurfacePresentationConsumeResult =
+  | { readonly kind: "idle" }
+  | { readonly kind: "consumed"; readonly metadata: LiveSurfaceFrameMetadataV1 }
+  | { readonly kind: "dropped"; readonly reason: "consumer-rejected" | "consumer-threw" };
+
 export interface LiveSurfacePresentationStats {
   readonly ticks: number;
   readonly idleTicks: number;
@@ -24,6 +31,8 @@ export interface LiveSurfacePresentationStats {
   readonly droppedDeviceUnavailable: number;
   readonly droppedAllocationFailed: number;
   readonly droppedCopyFailed: number;
+  /** Frames handed to `presentLatestVia` whose consumer rejected or threw. */
+  readonly droppedConsumerRejected: number;
 }
 
 export interface LiveSurfacePresentationTextureSupportSnapshot {
@@ -83,6 +92,7 @@ export class LiveSurfacePresentation<
   #droppedDeviceUnavailable = 0;
   #droppedAllocationFailed = 0;
   #droppedCopyFailed = 0;
+  #droppedConsumerRejected = 0;
 
   constructor(
     private readonly attachment: LiveSurfaceRendererAttachment<TFrame>,
@@ -120,6 +130,7 @@ export class LiveSurfacePresentation<
       droppedDeviceUnavailable: this.#droppedDeviceUnavailable,
       droppedAllocationFailed: this.#droppedAllocationFailed,
       droppedCopyFailed: this.#droppedCopyFailed,
+      droppedConsumerRejected: this.#droppedConsumerRejected,
     };
   }
 
@@ -131,6 +142,43 @@ export class LiveSurfacePresentation<
   replaceDevice(device: LiveSurfaceGpuDevice<TFrame>): number {
     if (this.#closed) throw new Error("cannot replace the device of a closed presentation");
     return this.#textures.replaceDevice(device);
+  }
+
+  /**
+   * DT-2b — the DOM-era present door: hand the one latest frame to a
+   * SYNCHRONOUS consumer (typically `context2d.drawImage(frame, …)` — the
+   * foundation lab's own on-screen path) instead of the WebGPU store. The
+   * lease is released — and the frame therefore closed — on every path, before
+   * this method returns; a consumer must not retain the frame. The GPU store
+   * is untouched, so the later GL/ICE compositor era composes with this door
+   * rather than replacing it.
+   */
+  presentLatestVia(
+    consumer: (frame: TFrame, metadata: LiveSurfaceFrameMetadataV1) => boolean,
+  ): LiveSurfacePresentationConsumeResult {
+    this.#ticks += 1;
+    const lease = this.attachment.takeFrame();
+    if (lease === null) {
+      this.#idleTicks += 1;
+      return { kind: "idle" };
+    }
+    try {
+      let accepted = false;
+      try {
+        accepted = consumer(lease.frame.value, lease.frame.metadata);
+      } catch {
+        this.#droppedConsumerRejected += 1;
+        return { kind: "dropped", reason: "consumer-threw" };
+      }
+      if (!accepted) {
+        this.#droppedConsumerRejected += 1;
+        return { kind: "dropped", reason: "consumer-rejected" };
+      }
+      this.#presented += 1;
+      return { kind: "consumed", metadata: lease.frame.metadata };
+    } finally {
+      lease.release();
+    }
   }
 
   /** Consumes at most the one latest pending frame and always releases its lease. */

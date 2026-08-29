@@ -182,4 +182,57 @@ describe("LiveSurfacePresentation", () => {
       }),
     ).toThrow(/closed live surface presentation/);
   });
+
+  it("presentLatestVia hands the frame to a synchronous consumer and always closes it", () => {
+    const result = setup();
+    const source: FakeFrame = { close: vi.fn() };
+    result.attachment.acceptFrame(source, {
+      v: 1,
+      attachmentId: result.attachment.attachmentId,
+      metadata: metadata(),
+    });
+    const seen: Array<{ frame: FakeFrame; sequence: string }> = [];
+    const tick = result.presentation.presentLatestVia((frame, frameMetadata) => {
+      seen.push({ frame, sequence: frameMetadata.sequence });
+      expect(frame.close).not.toHaveBeenCalled();
+      return true;
+    });
+    expect(tick.kind).toBe("consumed");
+    if (tick.kind === "consumed") expect(tick.metadata.sequence).toBe("1");
+    expect(seen).toHaveLength(1);
+    expect(source.close).toHaveBeenCalledOnce();
+    expect(result.presentation.stats.presented).toBe(1);
+    expect(result.presentation.stats.droppedConsumerRejected).toBe(0);
+    expect(result.presentation.presentLatestVia(() => true).kind).toBe("idle");
+  });
+
+  it("presentLatestVia counts a rejecting or throwing consumer and still closes the frame", () => {
+    const result = setup();
+    const rejected: FakeFrame = { close: vi.fn() };
+    result.attachment.acceptFrame(rejected, {
+      v: 1,
+      attachmentId: result.attachment.attachmentId,
+      metadata: metadata("1"),
+    });
+    expect(result.presentation.presentLatestVia(() => false)).toEqual({
+      kind: "dropped",
+      reason: "consumer-rejected",
+    });
+    expect(rejected.close).toHaveBeenCalledOnce();
+
+    const thrown: FakeFrame = { close: vi.fn() };
+    result.attachment.acceptFrame(thrown, {
+      v: 1,
+      attachmentId: result.attachment.attachmentId,
+      metadata: metadata("2"),
+    });
+    expect(
+      result.presentation.presentLatestVia(() => {
+        throw new Error("draw failed");
+      }),
+    ).toEqual({ kind: "dropped", reason: "consumer-threw" });
+    expect(thrown.close).toHaveBeenCalledOnce();
+    expect(result.presentation.stats.droppedConsumerRejected).toBe(2);
+    expect(result.presentation.stats.presented).toBe(0);
+  });
 });
