@@ -216,10 +216,14 @@ interface PluginStyleCensus {
 
 /** The census this smoke defends, and why it takes two numbers (P8-D2).
  *
- * `widgetTypes` is the product fact — 23 types: 22 across the five
+ * `widgetTypes` is the product fact — 24 types: 23 across the five
  * renderer-bearing plugins plus the HOST'S OWN built-in terminal mirror
  * (TP-S2b-widget, 2026-08-22) — and it is what a loading regression actually
- * costs a user. `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback
+ * costs a user. The 23rd plugin-side type is DT-3's `vibefield.browser.page`,
+ * and it moves this number WITHOUT moving `stagedPlugins`: `vibefield.browser`
+ * was already one of the five (it staged a renderer module for the Artifact Hub
+ * side panel) and has gained a second, unrelated contribution rather than
+ * becoming a sixth plugin. `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback
  * can satisfy the census on its own, so without this number a renderer that
  * quietly fell back would look exactly like one that staged correctly.
  * Asserting both is what keeps the two loaders from diverging — the field must
@@ -233,7 +237,7 @@ interface PluginStyleCensus {
  * unmoved is precisely what "the host registers it outside the plugin door"
  * looks like from here. */
 const CANVAS_CENSUS = {
-  widgetTypes: 23,
+  widgetTypes: 24,
   minStagedPlugins: 5,
   // The current five renderer plugins all ship scoped CSS. A link alone is not
   // evidence: the 2026-08-25 regression left all five links published but their

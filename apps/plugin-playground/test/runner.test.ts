@@ -75,10 +75,18 @@ describe("the repo's own plugins", () => {
     }
   });
 
+  // The subject was `vibefield.browser` until DT-3 gave it a canvas card, which
+  // is the whole reason this row names its plugin rather than taking whichever
+  // one happens to declare nothing: the empty pass has to be witnessed by a
+  // plugin that is deliberately widget-less, and `kv-service` is the repo's —
+  // service-only, staging no renderer module at all.
   it("a plugin with no canvas widgets is an honest empty pass", async () => {
-    const result = await run({ pluginDir: join(REPO, "plugins", "browser"), loader: harness });
+    const result = await run({
+      pluginDir: join(REPO, "examples", "plugins", "kv-service"),
+      loader: harness,
+    });
     expect(result.summary).toMatchObject({
-      plugin: "vibefield.browser",
+      plugin: "vibefield.example.kv",
       widgets: 0,
       states: 0,
       refused: 0,

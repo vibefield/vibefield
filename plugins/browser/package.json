@@ -22,8 +22,11 @@
   },
   "devDependencies": {
     "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@vibefield/plugin-build": "workspace:*",
+    "happy-dom": "^20.0.0",
     "react": "catalog:",
+    "react-dom": "catalog:",
     "tsx": "^4.19.0",
     "typescript": "catalog:",
     "vitest": "catalog:"

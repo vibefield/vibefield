@@ -1,12 +1,15 @@
 {
   "activation": [
-    "onSurface:vibefield.browser.artifacts"
+    "onSurface:vibefield.browser.artifacts",
+    "onWidget:vibefield.browser.page"
   ],
   "capabilities": [
     "artifact.publish",
     "workspace.read",
     "shell.dialog",
-    "shell.open"
+    "shell.open",
+    "surface.attach",
+    "surface.browser"
   ],
   "contributes": {
     "surfaces": [
@@ -15,6 +18,65 @@
         "order": 100,
         "slot": "hud.side-panel",
         "title": "Artifacts"
+      }
+    ],
+    "widgets": [
+      {
+        "category": "Tools",
+        "defaultSize": {
+          "h": 380,
+          "w": 520
+        },
+        "description": "A live web page on the canvas — navigate it where it sits",
+        "groups": {
+          "address": [
+            "url"
+          ],
+          "chrome": [
+            "showChrome"
+          ],
+          "title": [
+            "title"
+          ]
+        },
+        "interaction": {
+          "keyboard": "exclusive",
+          "keyboardEscape": "release",
+          "movable": true,
+          "resizable": true,
+          "selectable": true,
+          "snap": "target"
+        },
+        "minSize": {
+          "h": 200,
+          "w": 280
+        },
+        "preview": {
+          "kind": "color",
+          "value": "#1c1f26"
+        },
+        "props": {
+          "showChrome": {
+            "default": true,
+            "kind": "boolean"
+          },
+          "title": {
+            "default": "",
+            "kind": "string"
+          },
+          "url": {
+            "default": "about:blank",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "widget"
+        ],
+        "schemaVersion": 1,
+        "sizeMode": "fixed",
+        "surface": "dom",
+        "title": "Browser",
+        "type": "vibefield.browser.page"
       }
     ]
   },

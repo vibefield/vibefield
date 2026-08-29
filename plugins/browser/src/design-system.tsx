@@ -1,7 +1,14 @@
 import type { ArtifactView } from "@vibefield/contracts";
-import type { PluginProductClient } from "@vibefield/plugin-sdk";
-import { type ReactElement, useMemo } from "react";
+import type {
+  PluginProductClient,
+  PluginSurfaceHandle,
+  PluginSurfaceState,
+  PluginSurfaceStatus,
+  PluginSurfaceViewProps,
+} from "@vibefield/plugin-sdk";
+import { type ComponentType, type ReactElement, useMemo } from "react";
 import { ArtifactPanel } from "./ArtifactPanel";
+import { BrowserPageView } from "./BrowserPageView";
 
 export type ArtifactPanelPreviewState = "empty" | "loading" | "populated" | "unavailable";
 
@@ -80,6 +87,78 @@ export function ArtifactPanelPreview({
         windowId: "design-system",
         requestClose: () => undefined,
       }}
+    />
+  );
+}
+
+// --- the canvas browser card (DT-3d) -----------------------------------------
+
+/** The states a browser card can actually be in, as the catalog needs to see
+ * them: attaching, live with committed truth, live before any truth has
+ * arrived (the read-only address bar), and lost. */
+export type BrowserPagePreviewState = "attaching" | "loading" | "live" | "blank" | "lost";
+
+/** A handle that reports one fixed state and swallows every command. Not a mock
+ * of the pool — a FIXTURE for the face: the card under it is the shipping
+ * component, and this is the only thing a catalog page has no way to supply. */
+function fixtureHandle(state: BrowserPagePreviewState): PluginSurfaceHandle {
+  const status: PluginSurfaceStatus =
+    state === "attaching" ? "attaching" : state === "lost" ? "lost" : "live";
+  const browser =
+    status !== "live" || state === "blank"
+      ? null
+      : {
+          url: "https://vibefield.example/board",
+          title: "The field, as a page",
+          loading: state === "loading",
+          canGoBack: true,
+          canGoForward: false,
+        };
+  const snapshot: PluginSurfaceState = Object.freeze({
+    status,
+    browser,
+    error: state === "lost" ? new Error("the producer went away") : null,
+  });
+  return Object.freeze({
+    status,
+    browser,
+    error: snapshot.error,
+    onState(listener: (next: PluginSurfaceState) => void): () => void {
+      listener(snapshot);
+      return () => undefined;
+    },
+    setDemand: () => undefined,
+    navigate: () => false,
+    retry: () => undefined,
+    release: () => undefined,
+  });
+}
+
+/**
+ * Design-page adapter for the real canvas browser card.
+ *
+ * `SurfaceView` is INJECTED because the card cannot reach the host's shipping
+ * presentation from inside a plugin (R10 — the SDK is the only door, and the
+ * real view arrives through `ctx.pool`). The catalog holds that component and
+ * passes it in, so the specimen keeps the production markup, interaction state
+ * and CSS, with only the handle and the document write replaced.
+ */
+export function BrowserPagePreview({
+  SurfaceView,
+  state = "live",
+}: {
+  SurfaceView: ComponentType<PluginSurfaceViewProps>;
+  state?: BrowserPagePreviewState;
+}): ReactElement {
+  const handle = useMemo(() => fixtureHandle(state), [state]);
+  return (
+    <BrowserPageView
+      handle={handle}
+      SurfaceView={SurfaceView}
+      url="https://vibefield.example/board"
+      title={state === "blank" ? "" : "The field, as a page"}
+      showChrome
+      onCommit={() => undefined}
     />
   );
 }
