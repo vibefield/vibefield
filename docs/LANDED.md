@@ -4593,3 +4593,59 @@ with gesture-edged url commits, nav chrome per DESIGN.md over the SDK ui door,
 `SurfaceView interactive` gated the terminal-mirror way, census rows. Merge, review, and
 the staged-chain witness land with the DT-3 completion entry; the both-themes eyeball
 stays James's.
+
+## DT-3 COMPLETE — a page you can steer where it sits
+
+2026-08-29 just past midnight. **DT-3d `d7abb669`** (Opus builder in `../vf-dt3`,
+claim-verified against the code before the ff-merge): the canvas browser widget joins
+`vibefield.browser` BESIDE its Artifacts panel — manifest widget contribution
+`vibefield.browser.page` with the repo's FIRST per-prop conflict groups
+(`address`/`title`/`chrome`, the DT-D7 split so a rename never fights a re-bind),
+capabilities gain the two surface scopes, and the card acquires through `ctx.pool` with
+key == reuseKey == the entity key. The gesture-edge law as shipped: a submitted address is
+durable IMMEDIATELY (intent, whether or not the page loads), one gesture arms exactly one
+edge so an immediate redirect lands while SPA history noise never rewrites the document,
+and an empty title fills once. Engagement is the note card's double-click, `keyboard:
+"exclusive"` + `keyboardEscape: "release"` — the OPPOSITE call from the terminal mirror's,
+for the opposite reason — and engaging moves focus onto the host view's own element
+(the builder's own find: without it the ring said "yours" while keys still panned, and
+blur-to-leave could never fire). Census: `widgetTypes` 23 → 24 with `stagedPlugins`
+honestly UNMOVED (the plugin was already staged for the panel), and the playground's
+empty-pass subject renamed to the genuinely widget-less `kv-service`. The playground
+renders the real card as an independent mount witness; 20 plugin tests + 42 playground.
+
+**Recorded ceilings and trade-offs (the builder's, verified):** a plugin has NO durable
+entity key (`Entity` is a branded runtime number; the ECS runtime is key-ignorant), so
+`reuseKey` re-binds within one renderer generation — remount, cull, grace — but cannot
+promise reload continuity from plugin code today; the surface a reload orphans is swept by
+main's stale-incarnation sweep and the card re-attaches to its durable url, which is the
+half of the promise DT-D7 actually makes. The redirect trade-off is one-edge-per-gesture,
+chosen over never-following (which would lose the address the user actually reached).
+
+**DT-3d follow-ups `3afd7e4a`** (mine): the catalog mounts the shipping card —
+`BrowserPagePreview` through the plugin's design-system door, the real `SurfaceView`
+injected as an adapter over the section's own fixture pool (chrome states from the
+plugin's fixture, moving pixels from the pool; engagement, the §10.2 map, and the demand
+fold run live in `pnpm dev:design:web`). The walls HELD during composition:
+`ui-system-boundaries` refused a plugin-sdk type import in the catalog and the types now
+derive from the door itself. The SDK's stale "no plugin can mint" paragraph got its dated
+correction at source (the builder's finding). **`1b496795`** (mine): the evening's
+flakiest gate row fixed at source — `native_logging`'s 5s mgmt-bind deadline widened to
+its sibling's 15s, on the builder's measurement that the daemon binds in ~0.13s and only
+load ever tripped it.
+
+**Gate record, stated plainly:** the landing gate was DELIBERATELY HELD ~1h through a
+200+ load average (James's own `search-bench` run — a gate under it would have measured
+the benchmark); once the box settled to its normal weather the first run redded ONE row
+(`godview-tuning` reset-and-close, 5.9s under suite concurrency, 7/7 green in 2s
+isolated — the load-tail class, unrelated to this tree) and **the second run exits 0
+verbatim as DT-3's landing gate.**
+
+**Still owed, named:** the physical acceptance — on-canvas navigate + type into a REAL
+page — is James's both-themes eyeball (`pnpm dev`, add a Browser card, double-click in;
+esc leaves); `pnpm smoke:canvas` witnesses the census row when next run. And the product
+authority chain (`surface.open` → custody → attach → close over real daemons) still has
+NO headless smoke section — the lab-era smoke exercises producers and tickets directly.
+Carried as DT-4's opening row, where the pickers will need the same rig.
+**Next:** DT-4 `vibefield.devtools` (Simulator + window-capture widgets, pickers over
+`surface.sources`, `engines.platforms: ["darwin"]`) → DT-5 the agent-control lane.
