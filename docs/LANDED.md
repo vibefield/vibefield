@@ -4596,6 +4596,17 @@ stays James's.
 
 ## DT-3 COMPLETE — a page you can steer where it sits
 
+> **Errata (2026-08-29 morning, James's report: "not working at all"):** this entry
+> declared a steerable page on unit suites, the playground mount, and gates — and NO ONE
+> HAD EVER RUN IT. Three product defects stood between the code below and a working card,
+> all found by the first live run and fixed in §DT-3e: every plugin mint was structurally
+> impossible (the door rode the plugin lease, which can never carry the renderer identity
+> fieldd binds surfaces to — two facts BOTH pinned in suites since DT-1, never joined),
+> the window token carried no surface scopes, and the tray sandbox-mounted the real card
+> into a hidden live browser runtime. The claims below about the CHAIN's design remain
+> accurate; the claim that it worked was unearned. The lesson is now law in this repo's
+> practice: an end-to-end feature is not COMPLETE until a live witness has run.
+
 2026-08-29 just past midnight. **DT-3d `d7abb669`** (Opus builder in `../vf-dt3`,
 claim-verified against the code before the ff-merge): the canvas browser widget joins
 `vibefield.browser` BESIDE its Artifacts panel — manifest widget contribution
@@ -4649,3 +4660,51 @@ NO headless smoke section — the lab-era smoke exercises producers and tickets 
 Carried as DT-4's opening row, where the pickers will need the same rig.
 **Next:** DT-4 `vibefield.devtools` (Simulator + window-capture widgets, pickers over
 `surface.sources`, `engines.platforms: ["darwin"]`) → DT-5 the agent-control lane.
+
+## DT-3e — the first live run, three defects, and the witness that now guards them
+
+2026-08-29 morning. James: "it is not working at all, do the validation thoroughly." He
+was right on every count. Three commits, one gate, and the ledger's first entry whose
+primary artifact is a stack of screenshots.
+
+**Defect 1 `d9a0e103` — every plugin mint was structurally impossible.** fieldd's window
+gate derives `rendererParticipant` from the caller's principal; TokenService refuses a
+token that is both plugin- and renderer-bound; the door minted on the plugin's lease
+client anyway → FORBIDDEN_SCOPE on every mint, every card permanently lost. The two
+truths were EACH pinned in suites since DT-1 — and never joined, because every unit fake
+happily answered `surface.open`. The fix: the mint and the custody close ride the
+WINDOW's own connection (`currentWindowClient`, resolved per call across daemon
+replacement); the DT-D3 per-plugin half moves into the door as an effective-grants gate
+refusing with fieldd's own vocabulary; the window token mints
+`surface.attach`/`surface.browser`/`surface.capture` beside `terminal.attach` (same
+posture: only spine code holds a window token, and the pool door is that spine code).
+Via-attribution on the wire stays future work — LSF-D6 forbids caller-supplied owner.
+
+**Defect 2 (same commit) — the scopes were never on the token.** Even a correctly-routed
+mint would have failed the fabric's registry check: `system.mintWindowToken`'s scope list
+predated the surface vocabulary.
+
+**Defect 3 `8886f1d6` — the tray held a live browser behind its closed face.** ICE's
+preview tiers sandbox-mount the REAL component when a widget declares no preview; this
+widget's real component acquires a live surface on mount. The smoke's card census caught
+a second `.vf-browser-page` under `vf-widget-tray__tile`, live at about:blank.
+`BrowserPagePreviewTile` (tier 3) is now the tray's picture-of-a-page — no pool, no
+handle, no ops.
+
+**The witness `d5735150` — `pnpm smoke:browser-widget`.** Real daemons, real renderer,
+staged plugin, a page served from the smoke's own process, screenshots at every rung
+(default `/tmp/vf-browser-widget-smoke`): registration → readiness-gated spawn through
+the engine's own op → mint/custody/ticket/attach/producer → frames on the card's canvas
+→ committed truth in the chrome → double-click engagement → **one typed string traveling
+Electron input → the view's §10.2 map → the ticketed port → the ops gate → CDP → the
+page's own input → its title → navigation truth → the card's footer** → URL-bar steering
+to a second page. Two consecutive exit-0 runs; the second on a machine whose GPU process
+was fully disabled — the CPU fallback carried every frame, which upgrades that fallback
+from designed to demonstrated. Findings the harness surfaced on the way, recorded in its
+comments: a spawn fired before `data-doc-loading` flips lands in a world first-run setup
+is about to replace (users are veiled from this; harnesses are not), and DOM-position
+probes sample scenery when the tray also renders the widget's face.
+
+**Gate:** `pnpm verify` exit 0 over the batch, at a 190 load average — the
+`native_logging` deadline widening from `1b496795` earning its keep. **Still James's:**
+the both-themes eyeball, now with a working thing to look at.
