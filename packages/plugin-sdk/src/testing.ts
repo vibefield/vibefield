@@ -8,8 +8,10 @@ import type {
   PluginAttachmentPool,
   PluginLiveSurfaceOptions,
   PluginLogger,
+  PluginSurfaceBrowserState,
   PluginSurfaceDemand,
   PluginSurfaceHandle,
+  PluginSurfaceNavigation,
   PluginSurfaceProps,
   PluginSurfaceState,
   PluginSurfaceStatus,
@@ -80,11 +82,15 @@ export interface MockLiveSurface {
   readonly options: PluginLiveSurfaceOptions;
   /** Every demand this holder declared, `initialDemand` first. */
   readonly demands: PluginSurfaceDemand[];
+  /** Every chrome navigation the plugin fired while the mock was live. */
+  readonly navigations: PluginSurfaceNavigation[];
   readonly handle: PluginSurfaceHandle;
   readonly released: boolean;
   readonly retries: number;
   /** Drive the fake: `set("live")`, `set("lost", error)`. Released is terminal. */
   set(status: PluginSurfaceStatus, error?: Error | null): void;
+  /** Drive the browser truth the handle reports (chrome renders from THIS). */
+  setBrowser(state: PluginSurfaceBrowserState | null): void;
 }
 
 /** The mock's `SurfaceView`: the production view's OBSERVABLE contract — a box
@@ -109,16 +115,25 @@ function mockLiveSurface(
 ): MockLiveSurface {
   const listeners = new Set<(state: PluginSurfaceState) => void>();
   const demands: PluginSurfaceDemand[] = [options.initialDemand];
+  const navigations: PluginSurfaceNavigation[] = [];
   let status: PluginSurfaceStatus = "attaching";
+  let browser: PluginSurfaceBrowserState | null = null;
   let error: Error | null = null;
   let retries = 0;
-  const state = (): PluginSurfaceState => ({ status, error });
+  const state = (): PluginSurfaceState => ({
+    status,
+    browser: status === "live" ? browser : null,
+    error,
+  });
   const notify = (): void => {
     for (const listener of [...listeners]) listener(state());
   };
   const handle: PluginSurfaceHandle = {
     get status(): PluginSurfaceStatus {
       return status;
+    },
+    get browser(): PluginSurfaceBrowserState | null {
+      return state().browser;
     },
     get error(): Error | null {
       return error;
@@ -132,6 +147,13 @@ function mockLiveSurface(
       assertOpen();
       if (status === "released") return;
       demands.push(demand);
+    },
+    navigate(command): boolean {
+      assertOpen();
+      // The production contract: only a LIVE browser surface can be steered.
+      if (status !== "live" || browser === null) return false;
+      navigations.push(command);
+      return true;
     },
     retry(): void {
       assertOpen();
@@ -153,6 +175,7 @@ function mockLiveSurface(
     key: options.key,
     options,
     demands,
+    navigations,
     handle,
     get released(): boolean {
       return status === "released";
@@ -164,6 +187,11 @@ function mockLiveSurface(
       if (status === "released") return;
       status = next;
       error = nextError;
+      notify();
+    },
+    setBrowser(next): void {
+      if (status === "released") return;
+      browser = next;
       notify();
     },
   };

@@ -383,6 +383,27 @@ function clampBrowserState(
   };
 }
 
+/** The special keys the wire carries by NAME. CDP acts on most of them only
+ * when a Windows virtual key code rides along, and the wire deliberately does
+ * not carry one — the code is presentation-neutral producer knowledge, derived
+ * here once rather than trusted from every sender. */
+const KEY_VIRTUAL_CODES: Readonly<Record<string, number>> = {
+  Backspace: 8,
+  Tab: 9,
+  Enter: 13,
+  Escape: 27,
+  " ": 32,
+  PageUp: 33,
+  PageDown: 34,
+  End: 35,
+  Home: 36,
+  ArrowLeft: 37,
+  ArrowUp: 38,
+  ArrowRight: 39,
+  ArrowDown: 40,
+  Delete: 46,
+};
+
 /** Wire input (CSS logical, validated by contracts) → the engine's request.
  * A pass-through by design: coordinates are NEVER re-scaled here (LSF §10.2);
  * the engine's own bounds and staleness checks stay the authority. */
@@ -412,6 +433,7 @@ function browserInputRequest(
     };
   }
   if (input.kind === "text") return { kind: "text", geometryRevision, text: input.text };
+  const virtualKeyCode = KEY_VIRTUAL_CODES[input.key];
   return {
     kind: "key",
     geometryRevision,
@@ -425,6 +447,7 @@ function browserInputRequest(
       ...(input.modifiers.shift ? { shift: true } : {}),
     },
     ...(input.autoRepeat === undefined ? {} : { autoRepeat: input.autoRepeat }),
+    ...(virtualKeyCode === undefined ? {} : { windowsVirtualKeyCode: virtualKeyCode }),
   };
 }
 

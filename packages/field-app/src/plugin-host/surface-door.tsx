@@ -96,9 +96,14 @@ function defaultResolvePool(): SurfacePool<ProductSurfaceFrame> | null {
  * nothing on this host to retry against.
  */
 function unavailableHandle(error: Error): PluginSurfaceHandle {
-  const state: PluginSurfaceState = Object.freeze({ status: "lost" as const, error });
+  const state: PluginSurfaceState = Object.freeze({
+    status: "lost" as const,
+    browser: null,
+    error,
+  });
   return Object.freeze({
     status: "lost" as const,
+    browser: null,
     error,
     onState(listener: (state: PluginSurfaceState) => void): () => void {
       listener(state);
@@ -106,6 +111,10 @@ function unavailableHandle(error: Error): PluginSurfaceHandle {
     },
     setDemand(): void {
       // Nothing is attached, so there is no fold to move.
+    },
+    navigate(): boolean {
+      // No surface to steer.
+      return false;
     },
     retry(): void {
       // No producer, no authority, nothing to mint against.
@@ -119,19 +128,49 @@ function unavailableHandle(error: Error): PluginSurfaceHandle {
 /** The pool's handle minus `presentation` — PA-22, by absence rather than by
  * convention. `key` is gone too: the plugin knows the name it asked for, and
  * the namespaced one is the host's business. */
+/** The pool's browser truth → the SDK's structural shape. An explicit copy,
+ * not a cast: the wire schema is `.passthrough()` (tolerant reader), and a
+ * narrowing door must not forward fields it never promised. */
+function narrowBrowserState(
+  state: SurfaceHandle<ProductSurfaceFrame>["browser"],
+): PluginSurfaceState["browser"] {
+  if (state === null) return null;
+  return {
+    url: state.url,
+    ...(state.title === undefined ? {} : { title: state.title }),
+    loading: state.loading,
+    canGoBack: state.canGoBack,
+    canGoForward: state.canGoForward,
+  };
+}
+
 function narrowHandle(real: SurfaceHandle<ProductSurfaceFrame>): PluginSurfaceHandle {
   return Object.freeze({
     get status() {
       return real.status;
     },
+    get browser() {
+      return narrowBrowserState(real.browser);
+    },
     get error() {
       return real.error;
     },
     onState(listener: (state: PluginSurfaceState) => void): () => void {
-      return real.onState((state) => listener({ status: state.status, error: state.error }));
+      return real.onState((state) =>
+        listener({
+          status: state.status,
+          browser: narrowBrowserState(state.browser),
+          error: state.error,
+        }),
+      );
     },
     setDemand(demand: Parameters<PluginSurfaceHandle["setDemand"]>[0]): void {
       real.setDemand(demand);
+    },
+    // Navigation is narrowed THROUGH, raw input is not: `sendInput` stays on
+    // the real handle for the shipping view, which owns the coordinate map.
+    navigate(command: Parameters<PluginSurfaceHandle["navigate"]>[0]): boolean {
+      return real.navigate(command);
     },
     retry(): void {
       real.retry();

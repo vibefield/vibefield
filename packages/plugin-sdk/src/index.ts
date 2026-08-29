@@ -479,8 +479,31 @@ export interface PluginLiveSurfaceOptions {
  * which other holders may still be watching. */
 export type PluginSurfaceStatus = "attaching" | "live" | "lost" | "released";
 
+/** The browser producer's committed navigation truth (DT-D6): what the page
+ * actually is, for chrome that renders facts — a URL bar, back/forward
+ * affordances, a loading veil. Structural on purpose; the field vocabulary is
+ * the contracts wire shape's. */
+export interface PluginSurfaceBrowserState {
+  readonly url: string;
+  readonly title?: string;
+  readonly loading: boolean;
+  readonly canGoBack: boolean;
+  readonly canGoForward: boolean;
+}
+
+/** A chrome navigation command for a browser surface (DT-D6). */
+export type PluginSurfaceNavigation =
+  | { readonly action: "go"; readonly url: string }
+  | { readonly action: "back" }
+  | { readonly action: "forward" }
+  | { readonly action: "reload" }
+  | { readonly action: "stop" };
+
 export interface PluginSurfaceState {
   readonly status: PluginSurfaceStatus;
+  /** Committed navigation truth while live on a browser surface; null on
+   * every other kind and in every other state. */
+  readonly browser: PluginSurfaceBrowserState | null;
   /** Why the last attach or attachment ended. Never carries a ticket. */
   readonly error: Error | null;
 }
@@ -497,11 +520,22 @@ export interface PluginSurfaceState {
  */
 export interface PluginSurfaceHandle {
   readonly status: PluginSurfaceStatus;
+  readonly browser: PluginSurfaceBrowserState | null;
   readonly error: Error | null;
-  /** Fires immediately with the current state, then on every change. */
+  /** Fires immediately with the current state, then on every change —
+   * including committed navigation truth moving under a live browser surface. */
   onState(listener: (state: PluginSurfaceState) => void): () => void;
   /** Re-declare THIS holder's intent. The host refolds every holder's demand. */
   setDemand(demand: PluginSurfaceDemand): void;
+  /**
+   * Fire one chrome navigation command at a live browser surface (DT-D6).
+   * Soft-fail: false when the surface is not live or is not a browser. A
+   * MALFORMED command (an over-long or control-charactered URL) throws in the
+   * caller's frame like any coherence bug. What a plugin can NOT do from here
+   * is raw input — pointer and key events belong to `SurfaceView`, which maps
+   * them against the displayed frame itself.
+   */
+  navigate(command: PluginSurfaceNavigation): boolean;
   /** Mint fresh and re-attach after a loss. A no-op in any other state. */
   retry(): void;
   /** Drop this holder's claim. Idempotent, and done for you on deactivation. */
@@ -510,7 +544,10 @@ export interface PluginSurfaceHandle {
 
 export interface PluginSurfaceViewProps {
   readonly handle: PluginSurfaceHandle;
-  /** The holder is interactively engaged (raises fps + priority, DT-D5). */
+  /** The holder is interactively engaged: raises fps + priority (DT-D5) AND
+   * forwards pointer/wheel/keyboard from the canvas into the surface
+   * (DT-D6) — the view owns the coordinate mapping, the plugin never sees a
+   * raw event. Gate this on the widget's own input boundary. */
   readonly interactive?: boolean;
   readonly className?: string;
 }

@@ -61,6 +61,7 @@ function attachingPool(): SurfacePool<ProductSurfaceFrame> {
   const state: SurfaceHandleState<ProductSurfaceFrame> = {
     status: "attaching",
     presentation: null,
+    browser: null,
     error: null,
   };
   return {
@@ -71,12 +72,15 @@ function attachingPool(): SurfacePool<ProductSurfaceFrame> {
         state,
         status: "attaching",
         presentation: null,
+        browser: null,
         error: null,
         onState(listener) {
           listener(state);
           return () => undefined;
         },
         setDemand() {},
+        sendInput: () => false,
+        navigate: () => false,
         retry() {},
         release() {},
       };

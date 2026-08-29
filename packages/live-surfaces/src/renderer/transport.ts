@@ -119,14 +119,16 @@ export class LiveSurfaceRendererAttachment<
    * Soft-fail by design — `false`, never a throw: input arrives per pointer
    * sample, and losing a race with a detach or a dying port is an ordinary
    * frame of that stream, not an error the sender can act on. The event is
-   * stamped with the CURRENT summary's geometry revision — the geometry this
-   * renderer just mapped its coordinates against — and the producer drops the
-   * event if that revision is no longer current (LSF §10.2: stale input is
-   * dropped, never re-mapped). No geometry yet means nothing to map against.
+   * stamped with the geometry revision the sender MAPPED ITS COORDINATES
+   * AGAINST — pass it explicitly when mapping against a displayed frame's
+   * geometry (the honest §10.2 contract: the pixels the user actually clicked)
+   * — falling back to the current summary's for chrome-originated events with
+   * no frame in hand. The producer drops a stale revision rather than
+   * re-mapping. No revision from either source means nothing to map against.
    */
-  sendInput(event: LiveSurfaceInputEventV1): boolean {
+  sendInput(event: LiveSurfaceInputEventV1, geometryRevision?: number): boolean {
     if (this.#closed) return false;
-    const revision = this.#summary.geometry?.revision;
+    const revision = geometryRevision ?? this.#summary.geometry?.revision;
     if (revision === undefined) return false;
     const input = LiveSurfaceInputEventV1.parse(event);
     try {

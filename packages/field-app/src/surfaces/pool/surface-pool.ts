@@ -44,7 +44,13 @@
 // disposes it on pagehide; a pool that disposed it would tear down a capability
 // belonging to the window, not to any surface.
 
-import type { LiveSurfaceAttachTicketV1, LiveSurfaceDemandV1 } from "@vibefield/contracts";
+import type {
+  LiveSurfaceAttachTicketV1,
+  LiveSurfaceBrowserStateV1,
+  LiveSurfaceDemandV1,
+  LiveSurfaceInputEventV1,
+  LiveSurfaceNavigationCommandV1,
+} from "@vibefield/contracts";
 import {
   type LiveSurfaceClosableFrame,
   LiveSurfacePresentation,
@@ -149,6 +155,10 @@ export interface SurfaceHandleState<TFrame extends LiveSurfaceClosableFrame> {
   readonly status: SurfaceHandleStatus;
   /** Present exactly while `status === "live"`. */
   readonly presentation: LiveSurfacePresentation<TFrame> | null;
+  /** The browser producer's committed navigation truth (DT-D6) — url, title,
+   * loading, history reach — while live on a browser surface; null otherwise.
+   * Chrome renders THIS, never its own guess of where the page went. */
+  readonly browser: LiveSurfaceBrowserStateV1 | null;
   /** Why the last attach or attachment ended. Never carries a ticket. */
   readonly error: Error | null;
 }
@@ -158,11 +168,21 @@ export interface SurfaceHandle<TFrame extends LiveSurfaceClosableFrame> {
   readonly state: SurfaceHandleState<TFrame>;
   readonly status: SurfaceHandleStatus;
   readonly presentation: LiveSurfacePresentation<TFrame> | null;
+  readonly browser: LiveSurfaceBrowserStateV1 | null;
   readonly error: Error | null;
   /** Fires immediately with the current state, then on every change. */
   onState(listener: (state: SurfaceHandleState<TFrame>) => void): () => void;
   /** Re-declare THIS holder's intent. The pool refolds and emits at most once. */
   setDemand(demand: SurfaceDemandRequest): void;
+  /**
+   * Fire one human input event at the live attachment (DT-D6). Soft-fail —
+   * false when not live, released, or the send lost a race with a close.
+   * `geometryRevision` is the revision the caller MAPPED ITS COORDINATES
+   * AGAINST (the displayed frame's); omitted, the current summary's is used.
+   */
+  sendInput(event: LiveSurfaceInputEventV1, geometryRevision?: number): boolean;
+  /** Fire one chrome navigation command. Same soft-fail contract. */
+  navigate(command: LiveSurfaceNavigationCommandV1): boolean;
   /** Mint fresh and re-attach after a loss. A no-op in any other state. */
   retry(): void;
   /** Drop this holder's claim. Idempotent. */
@@ -270,16 +290,25 @@ class PoolHandle<TFrame extends LiveSurfaceClosableFrame> implements SurfaceHand
    * stay side-effect free — the mutating half runs at the next touchpoint.
    */
   get state(): SurfaceHandleState<TFrame> {
-    if (this.#released) return { status: "released", presentation: null, error: null };
+    if (this.#released) {
+      return { status: "released", presentation: null, browser: null, error: null };
+    }
     const entry = this.entry;
     if (entry.status === "live" && (entry.attachment === null || entry.attachment.closed)) {
-      return { status: "lost", presentation: null, error: entry.error };
+      return { status: "lost", presentation: null, browser: null, error: entry.error };
     }
     if (entry.status === "live" && entry.presentation !== null) {
-      return { status: "live", presentation: entry.presentation, error: null };
+      return {
+        status: "live",
+        presentation: entry.presentation,
+        browser: entry.attachment?.summary.browser ?? null,
+        error: null,
+      };
     }
-    if (entry.status === "lost") return { status: "lost", presentation: null, error: entry.error };
-    return { status: "attaching", presentation: null, error: null };
+    if (entry.status === "lost") {
+      return { status: "lost", presentation: null, browser: null, error: entry.error };
+    }
+    return { status: "attaching", presentation: null, browser: null, error: null };
   }
 
   get status(): SurfaceHandleStatus {
@@ -290,8 +319,26 @@ class PoolHandle<TFrame extends LiveSurfaceClosableFrame> implements SurfaceHand
     return this.state.presentation;
   }
 
+  get browser(): SurfaceHandleState<TFrame>["browser"] {
+    return this.state.browser;
+  }
+
   get error(): Error | null {
     return this.state.error;
+  }
+
+  sendInput(event: LiveSurfaceInputEventV1, geometryRevision?: number): boolean {
+    if (this.#released) return false;
+    const attachment = this.entry.attachment;
+    if (this.entry.status !== "live" || attachment === null || attachment.closed) return false;
+    return attachment.sendInput(event, geometryRevision);
+  }
+
+  navigate(command: LiveSurfaceNavigationCommandV1): boolean {
+    if (this.#released) return false;
+    const attachment = this.entry.attachment;
+    if (this.entry.status !== "live" || attachment === null || attachment.closed) return false;
+    return attachment.sendNavigation(command);
   }
 
   onState(listener: (state: SurfaceHandleState<TFrame>) => void): () => void {
@@ -571,8 +618,14 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
     entry.emittedIntent = null;
     entry.emittedDemand = null;
     // Registered last: `onSummary` calls back synchronously, and the entry must
-    // already read as live before the pool can be asked to reconcile it.
-    entry.unobserve = attachment.onSummary(() => this.#reconcile(entry));
+    // already read as live before the pool can be asked to reconcile it. A
+    // summary that did NOT close the attachment still moved state the holders
+    // render — browser navigation truth, geometry — so they are notified;
+    // the close path notifies through `#reconcile`'s own bookkeeping instead.
+    entry.unobserve = attachment.onSummary(() => {
+      this.#reconcile(entry);
+      if (entry.attachment === attachment && !attachment.closed) this.#notify(entry);
+    });
     this.#projectDemand(entry);
     if (entry.holders.size === 0) this.#armGrace(entry);
     this.#notify(entry);

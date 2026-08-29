@@ -44,6 +44,8 @@ const TICKET: LiveSurfaceAttachTicketV1 = {
 interface AcquiredEntry {
   readonly key: string;
   readonly demands: SurfaceDemandRequest[];
+  /** Navigation commands the plugin's narrowed handle passed through. */
+  readonly navigations: unknown[];
   released: boolean;
   /** The door's ticket source, kept so a test can spend one mint deliberately. */
   mint(): Promise<SurfaceTicketGrant>;
@@ -64,6 +66,7 @@ function fakePool(): FakePool {
       const entry: AcquiredEntry = {
         key,
         demands: [opts.initialDemand],
+        navigations: [],
         released: false,
         mint: () => opts.tickets.mint(),
         close: (surfaceId) => opts.tickets.close?.(surfaceId),
@@ -71,8 +74,8 @@ function fakePool(): FakePool {
       acquired.push(entry);
       const state = (): SurfaceHandleState<ProductSurfaceFrame> =>
         entry.released
-          ? { status: "released", presentation: null, error: null }
-          : { status: "attaching", presentation: null, error: null };
+          ? { status: "released", presentation: null, browser: null, error: null }
+          : { status: "attaching", presentation: null, browser: null, error: null };
       return {
         key,
         get state() {
@@ -82,6 +85,7 @@ function fakePool(): FakePool {
           return state().status;
         },
         presentation: null,
+        browser: null,
         error: null,
         onState(listener) {
           listener(state());
@@ -89,6 +93,11 @@ function fakePool(): FakePool {
         },
         setDemand(demand) {
           entry.demands.push(demand);
+        },
+        sendInput: () => false,
+        navigate: (command) => {
+          entry.navigations.push(command);
+          return true;
         },
         retry() {
           // Nothing attaches in this fake; retry is exercised by the pool's own suite.
@@ -307,8 +316,28 @@ describe("ctx.pool.liveSurface", () => {
     // or a GPU object through this object at all.
     expect("presentation" in handle).toBe(false);
     expect(Object.keys(handle)).not.toContain("presentation");
-    // What it DOES carry is the narrowed state.
+    // Raw input is narrowed AWAY too (DT-D6): pointer/key events belong to the
+    // shipping view's coordinate map, never to plugin code.
+    expect("sendInput" in handle).toBe(false);
+    // What it DOES carry is the narrowed state and chrome navigation.
     expect(staged.handles[0]?.status).toBe("attaching");
+    expect(staged.handles[0]?.browser).toBeNull();
+
+    await staged.deactivate();
+  });
+
+  it("passes chrome navigation through to the pool handle (DT-D6)", async () => {
+    const pool = fakePool();
+    const staged = await stageWithPool(pool, [{ key: "preview" }]);
+
+    expect(staged.handles[0]?.navigate({ action: "go", url: "https://example.test/next" })).toBe(
+      true,
+    );
+    expect(staged.handles[0]?.navigate({ action: "back" })).toBe(true);
+    expect(staged.acquired[0]?.navigations).toEqual([
+      { action: "go", url: "https://example.test/next" },
+      { action: "back" },
+    ]);
 
     await staged.deactivate();
   });

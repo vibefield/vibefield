@@ -88,6 +88,7 @@ function fakeHandle(initial: SurfaceHandleStatus = "live") {
   const state = (): SurfaceHandleState<Frame> => ({
     status,
     presentation: (status === "live" ? (presentation as never) : null) as never,
+    browser: null,
     error: null,
   });
   const handle: SurfaceHandle<Frame> = {
@@ -101,6 +102,9 @@ function fakeHandle(initial: SurfaceHandleStatus = "live") {
     get presentation() {
       return state().presentation;
     },
+    get browser() {
+      return null;
+    },
     get error() {
       return null;
     },
@@ -112,6 +116,8 @@ function fakeHandle(initial: SurfaceHandleStatus = "live") {
     setDemand(demand) {
       demands.push(demand);
     },
+    sendInput: () => false,
+    navigate: () => false,
     retry: vi.fn(),
     release: vi.fn(),
   };
