@@ -4425,3 +4425,59 @@ order recorded at source in `thinking-prod-dogfood-packs.md`). Nothing in the tr
 in this pass; the un-ledgered 8/24–25 PLUG commits (`b4adabb2` staged plugins in the dev
 document · `3e638961` staged boot serving hardened · `b521466e` per-plugin CSS isolation)
 are named here rather than given late entries of their own.
+
+## DT-1 + DT-2a — the authority path is real end to end; the pool waits behind the seam
+
+2026-08-28, four commits in one evening, two by Opus worktree builders under review.
+**DT-1a `b35f3132`** (the vocabulary, both sides plumbed): three scopes
+(`surface.attach/browser/capture`; `surface.control` reserved, none tailnet), three
+`surface.*` method rows (locality local; the kind→scope matrix documented as the
+service-level gate), the redacted product shapes, and the three INTERNAL shell provider
+doors (`shell.surfaces.enumerate/mint/release`) with fieldd's contract rows, ProductAPI's
+typed internal helpers, and main-side dispatch landing together so the exact-set provider
+registration never broke. **DT-1c `501bb978`** (the main-side authority, the security
+heart): production custody over the LSF runtimes — capture kinds dedupe on the canonical
+source (one SCK session per watched window), `reuseKey` entries re-bind the SAME running
+runtime across renderer reload (the reason main custody exists; `SurfaceOpenParamsV1` and
+the mint door gained the optional key), un-keyed entries sweep when their document dies,
+window death releases everything it owned; the renderer boundary gained `resolveCurrent`
+(participant AND incarnation must match a live generation — a stale document can never
+bind new authority, LSF-D6/D14); enumeration REDACTS to {kind, sourceRef, title, appName};
+caps 64/32 → RESOURCE_EXHAUSTED; 16-case authority suite. **DT-1b `5d35b0b0`** (fieldd's
+policy door, builder-built): `surface.sources/open/close` registered beside their peers —
+the kind→scope matrix on top of the fabric's automatic registry-scope gate (verified at
+`product-api.ts` `def.scope !== null`), the local-window binding read off the local-token
+principal's PRC-D14 `rendererParticipant` (absent = FORBIDDEN_SCOPE — mcp/tailnet/peer
+AND shell-main refused: a surface is a view inside one window), a bounded 64-entry replay
+map keyed {tokenId, participant, INCARNATION, idempotencyKey} storing the in-flight
+promise (a racing retry collapses onto one mint; failures evict), and the attempt→outcome
+audit pair whose serialized ledger provably contains no URL, sourceRef, UDID, or ticket
+token. **DT-2a `0e3b6056`** (the renderer pool, builder-built): one refcounted attachment
+per key per window over the transport the product-host has claimed-and-parked since LSF —
+generation-stamped single-flight (concurrent acquires spend ONE ticket), 60s grace that
+folds demand to PAUSED while nobody holds (PF6: grace keeps the session warm, never a
+licence to keep capturing), a pool-owned never-reset demand-revision counter, host-close
+reconciled from `attachment.closed` (the transport's own close paths don't always notify —
+read from the code, tested both ways), and a snapshot that cannot carry a ticket by
+construction. `mountFieldApp` gained the optional `host.liveSurfaces` seam;
+`getSurfacePool(host)` answers null in the browser-only catalog.
+
+**Findings worth the ledger:** (1) `owner.pluginId` on the mint door has NO reachable
+caller in v1 — TokenService refuses a token bound to both a plugin and a renderer window
+("ambiguous bindings"), so plugin provenance on surfaces waits for via-attribution in the
+caller context or a token-model decision; the suite pins BOTH halves of the unreachability
+rather than leaving it looking supported. The DT-3 browser widget is unaffected: plugin
+renderer code calls on the WINDOW token. (2) The builder's raw-NUL separator made its own
+source file binary to git while tsc/vitest/biome stayed green — caught pre-commit via
+`git show --stat` reading `Bin`; now a standing memory. (3) A verify run in main while a
+worktree builder ran real-daemon suites (load 124) redded fieldd's TC-S1 supervision row
+plus field-app's known 'serving' flake — both load artifacts; the gate re-ran green quiet.
+
+**Gates:** per-slice typechecks + suites green (electron-shell 658+16 · fieldd full suite
+×9 by the builder, 673 passed/3 skipped · field-app 677); `pnpm verify` verbatim exit 0 at
+DT-1a and DT-1c; on the merged tree the gate ran three times — the first two each redded
+ONE pre-existing timing row under load spikes (the finding-3 collision, then field-native's
+sweep-budget row at load 44–66, green in isolation at 2.26s), **the third run exits 0
+verbatim and is the landing gate of record.**
+**Next:** DT-2b (presentation + ICE demand adapter + the `ctx.pool` SDK door) → DT-3 the
+browser widget through the staged chain.
