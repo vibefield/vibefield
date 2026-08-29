@@ -39,7 +39,7 @@ import { getRendererLogger } from "../logging";
 import type { ProductSurfaceFrame, SurfacePool } from "../surfaces/pool";
 import { getActiveCanvasEngine } from "./canvas-engine-ref";
 import * as commandRegistry from "./command-registry";
-import { createPluginProductClient } from "./plugin-client";
+import { createPluginProductClient, currentWindowClient } from "./plugin-client";
 import { createPluginSurfacePool } from "./surface-door";
 import * as surfaceRegistry from "./surface-registry";
 
@@ -122,6 +122,12 @@ export interface RendererActivationDeps {
    * window's one surface pool from the FieldHost; `null` is the honest answer on
    * a host with no live-surface plane, not a failure. */
   readonly resolveSurfacePool?: () => SurfacePool<ProductSurfaceFrame> | null;
+  /** Test seam for the surface mint connection (DT-3e). Production resolves the
+   * WINDOW's client — the one principal fieldd can bind a surface to; the
+   * plugin lease deliberately cannot (see surface-door's header). */
+  readonly surfaceMintClient?: () => {
+    request(method: string, params?: unknown): Promise<unknown>;
+  } | null;
   /** PRC-3d controller seam. The attempt keeps its own scope, but this owner closes it at the
    * controller's synchronous authority edge and awaits its quiescence during adapter cleanup. */
   readonly ownerScope?: ActivationScope;
@@ -431,10 +437,12 @@ function buildActivation(
     // drop the claim without waiting for the whole activation to end.
     const pool: PluginAttachmentPool = createPluginSurfacePool({
       pluginId: spec.id,
-      // The guarded client — the same caller `ctx.client` rides, so the mint's
-      // identity, grants and via-attribution are identical to any other call
-      // this plugin makes, and a mint after close fails like any other call.
-      client,
+      // DT-3e: the mint rides the WINDOW's connection — fieldd derives the
+      // renderer identity a surface binds to from the caller's principal, and
+      // a plugin lease can never carry one. The per-plugin half of the policy
+      // is the effective-grants gate below.
+      mintClient: deps.surfaceMintClient ?? currentWindowClient,
+      grantedCapabilities: () => spec.effectiveCapabilities,
       assertOpen,
       own: (label, release) => {
         ownedBy.track(label, {

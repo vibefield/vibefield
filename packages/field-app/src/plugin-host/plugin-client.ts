@@ -127,6 +127,10 @@ export class PluginClientLeaseBroker {
     this.renewBeforeMs = options.renewBeforeMs ?? DEFAULT_RENEW_BEFORE_MS;
   }
 
+  currentWindowClient(): Pick<FielddClient, "request"> | null {
+    return this.backend?.windowClient ?? null;
+  }
+
   setBackend(next: PluginClientBackend | null): void {
     if (
       next === this.backend ||
@@ -410,6 +414,18 @@ const defaultBroker = new PluginClientLeaseBroker();
 
 export function setPluginClientBackend(next: PluginClientBackend | null): void {
   defaultBroker.setBackend(next);
+}
+
+/** DT-3e — the WINDOW's own product connection, for the ONE plugin-facing door
+ * that cannot ride a plugin lease: live-surface custody calls. fieldd's window
+ * gate derives the renderer identity from the caller's principal, and
+ * TokenService refuses a token that is both plugin- and renderer-bound
+ * ("ambiguous bindings" — pinned in fieldd's own suite), so a plugin lease can
+ * NEVER mint a surface. The pool door mints on the window token and enforces
+ * the per-plugin surface scopes itself, renderer-side. Null while the daemon
+ * is away or the shell has not seeded a backend. */
+export function currentWindowClient(): Pick<FielddClient, "request"> | null {
+  return defaultBroker.currentWindowClient();
 }
 
 export function refreshPluginProductClient(

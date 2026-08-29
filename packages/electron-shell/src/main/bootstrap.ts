@@ -337,6 +337,11 @@ async function mint(
     // attach+create+terminate in the v1 posture (GT-D6), and only spine code
     // holds a window token. The terminal.manage split is the named upgrade
     // before any plugin reaches a terminal.
+    // DT-3e: surface.* rides the window token because fieldd binds a surface
+    // to the caller's renderer identity and a plugin lease can never carry
+    // one ("ambiguous bindings"); the pool door in field-app is the spine
+    // code that mediates plugin access, gating per-plugin grants before any
+    // mint reaches this token.
     scopes: [
       "doc.read",
       "doc.write",
@@ -347,6 +352,9 @@ async function mint(
       "diagnostics.manage",
       "settings.manage",
       "terminal.attach",
+      "surface.attach",
+      "surface.browser",
+      "surface.capture",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

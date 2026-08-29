@@ -147,7 +147,23 @@ function recordingClient(calls: RecordedCall[]) {
 
 // ── the plugin under the harness ────────────────────────────────────────────
 
-function record(id: string): PluginRecord {
+/** DT-3e — the WINDOW-client seam the mint rides. Separate from the plugin's
+ * own recording client so a test can PROVE which principal each call took. */
+function recordingMintClient(calls: RecordedCall[]) {
+  return {
+    async request(method: string, params?: unknown): Promise<unknown> {
+      calls.push({ method, params });
+      if (method === "surface.open") {
+        return { surfaceId: "surface_door_test_0001", ticket: TICKET };
+      }
+      return {};
+    },
+  };
+}
+
+const SURFACE_GRANTS = ["surface.attach", "surface.browser"];
+
+function record(id: string, granted: readonly string[] = SURFACE_GRANTS): PluginRecord {
   return {
     id,
     version: "1.0.0",
@@ -158,8 +174,8 @@ function record(id: string): PluginRecord {
     state: "enabled",
     compatible: true,
     enabled: true,
-    requestedCapabilities: [],
-    grantedCapabilities: [],
+    requestedCapabilities: [...granted],
+    grantedCapabilities: [...granted],
     deniedCapabilities: [],
     grantGeneration: 1,
     contributions: { widgets: [], commands: [], surfaces: [], capabilities: [] },
@@ -179,7 +195,11 @@ function moduleRow(id: string): PluginModuleUrls {
 
 interface Staged {
   readonly handles: PluginSurfaceHandle[];
+  /** Everything the PLUGIN's own lease client saw. Stays empty for surface
+   * custody — the whole DT-3e point. */
   readonly calls: RecordedCall[];
+  /** Everything the WINDOW's client saw — where mints and closes actually ride. */
+  readonly mintCalls: RecordedCall[];
   readonly acquired: AcquiredEntry[];
   readonly pluginId: string;
   deactivate(): Promise<void>;
@@ -192,13 +212,15 @@ let nextPluginId = 0;
 async function stageWithPool(
   poolFake: FakePool | null,
   acquires: readonly { key: string; reuseKey?: string }[],
+  granted: readonly string[] = SURFACE_GRANTS,
 ): Promise<Staged> {
   nextPluginId += 1;
   const pluginId = `vibefield.doortest${nextPluginId}`;
   const handles: PluginSurfaceHandle[] = [];
   const calls: RecordedCall[] = [];
+  const mintCalls: RecordedCall[] = [];
   const candidate = await stageStagedRenderer(
-    record(pluginId),
+    record(pluginId, granted),
     moduleRow(pluginId),
     {
       activate(ctx: RendererPluginContext) {
@@ -217,12 +239,14 @@ async function stageWithPool(
     {
       productClient: recordingClient(calls),
       resolveSurfacePool: () => poolFake?.pool ?? null,
+      surfaceMintClient: () => recordingMintClient(mintCalls),
     },
   );
   candidate.commit();
   return {
     handles,
     calls,
+    mintCalls,
     acquired: poolFake?.acquired ?? [],
     pluginId,
     deactivate: () => candidate.dispose(),
@@ -257,7 +281,7 @@ describe("ctx.pool.liveSurface", () => {
     await staged.deactivate();
   });
 
-  it("mints through surface.open with source and reuseKey, and no idempotencyKey", async () => {
+  it("mints through surface.open on the WINDOW client, never the plugin lease", async () => {
     const pool = fakePool();
     const staged = await stageWithPool(pool, [{ key: "preview", reuseKey: "card-7" }]);
 
@@ -267,8 +291,12 @@ describe("ctx.pool.liveSurface", () => {
     const grant = await staged.acquired[0]?.mint();
     expect(grant).toEqual({ ticket: TICKET, surfaceId: "surface_door_test_0001" });
 
-    expect(staged.calls).toHaveLength(1);
-    const call = staged.calls[0];
+    // DT-3e — the whole point, pinned: fieldd binds a surface to the caller's
+    // renderer identity, which only the WINDOW principal carries; the plugin's
+    // own lease client must see NOTHING.
+    expect(staged.calls).toEqual([]);
+    expect(staged.mintCalls).toHaveLength(1);
+    const call = staged.mintCalls[0];
     expect(call?.method).toBe("surface.open");
     expect(call?.params).toEqual({ source: SOURCE, reuseKey: "card-7" });
     // The pool's single-flight already prevents a client-side double mint; the
@@ -284,12 +312,12 @@ describe("ctx.pool.liveSurface", () => {
     const staged = await stageWithPool(pool, [{ key: "preview" }]);
 
     await staged.acquired[0]?.mint();
-    expect(staged.calls[0]?.params).toEqual({ source: SOURCE });
+    expect(staged.mintCalls[0]?.params).toEqual({ source: SOURCE });
 
     await staged.deactivate();
   });
 
-  it("pays custody back through surface.close on the same client", async () => {
+  it("pays custody back through surface.close on the window client too", async () => {
     const pool = fakePool();
     const staged = await stageWithPool(pool, [{ key: "preview" }]);
 
@@ -298,11 +326,29 @@ describe("ctx.pool.liveSurface", () => {
 
     // The pool decides WHEN (grace lapse, loss, supersession — its own suite's
     // law); the door's job is only that the payback rides `surface.close` with
-    // the custody id the mint returned, on the plugin's own product client.
-    expect(staged.calls.at(-1)).toEqual({
+    // the custody id the mint returned — on the client that outlives the
+    // activation, because the grace timer routinely does.
+    expect(staged.mintCalls.at(-1)).toEqual({
       method: "surface.close",
       params: { surfaceId: "surface_door_test_0001" },
     });
+    expect(staged.calls).toEqual([]);
+
+    await staged.deactivate();
+  });
+
+  it("refuses an ungranted plugin at the door with fieldd's own vocabulary", async () => {
+    const pool = fakePool();
+    const staged = await stageWithPool(pool, [{ key: "preview" }], ["surface.attach"]);
+
+    // surface.attach alone does not license CREATING a browser source
+    // (DT-D3's kind matrix) — the face names the missing scope, nothing was
+    // acquired, and no mint reached any client.
+    expect(staged.handles[0]?.status).toBe("lost");
+    expect(staged.handles[0]?.error?.message).toContain("FORBIDDEN_SCOPE");
+    expect(staged.handles[0]?.error?.message).toContain("surface.browser");
+    expect(staged.acquired).toEqual([]);
+    expect(staged.mintCalls).toEqual([]);
 
     await staged.deactivate();
   });

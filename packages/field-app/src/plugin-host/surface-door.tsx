@@ -20,21 +20,28 @@
 //      activation's own scope (PRC-1), so the release is the ownership tree's
 //      to perform, not the plugin's to remember.
 //
-// AUTHORITY IS NOT HERE. The mint is `surface.open` on the plugin's own product
-// client, so fieldd decides whether this principal holds `surface.attach` (the
-// registry scope on that method, checked by ProductAPI before the handler runs,
-// plus SurfaceService's own kind→scope matrix). The door does not gate, it
-// reports: a refusal arrives as a `lost` handle carrying the daemon's own words.
-// (`surface.attach`/`surface.browser`/`surface.capture` became renderer-eligible
-// in DT-2b-3, so a granted plugin really mints here; an ungranted one still
-// gets the refusal face this path was built to show.)
+// WHERE AUTHORITY LIVES (corrected 2026-08-29 — DT-3e). The original wiring
+// minted on the plugin's own lease client, which CANNOT work: fieldd's window
+// gate derives `rendererParticipant` from the caller's principal, TokenService
+// refuses a token that is both plugin- and renderer-bound ("ambiguous
+// bindings", pinned in fieldd's suite), so every plugin-lease mint answered
+// FORBIDDEN_SCOPE — the DT-3 card shipped permanently lost, found in the first
+// live run. The truth now: the mint rides the WINDOW's own client (the one
+// principal that carries the renderer identity a surface must bind to), fieldd
+// still gates the WINDOW (scopes + window binding + replay + custody), and the
+// PER-PLUGIN half of DT-D3 — which plugin may attach, which kinds it may
+// create — is enforced HERE against the plugin's granted capabilities.
+// Renderer-side enforcement is one trust domain (any code in this process
+// shares it; EL7's adversary is other same-uid processes, which the window
+// token and ticket binding still exclude), and via-attribution on the wire
+// stays the recorded future path — `owner` cannot be caller-supplied without
+// violating LSF-D6's no-caller-identifier-becomes-authority law.
 
 import { SurfaceOpenResultV1 } from "@vibefield/contracts";
 import { UnavailableState } from "@vibefield/design-kit/primitives";
 import type {
   PluginAttachmentPool,
   PluginLiveSurfaceOptions,
-  PluginProductClient,
   PluginSurfaceHandle,
   PluginSurfaceState,
   PluginSurfaceViewProps,
@@ -62,16 +69,27 @@ const REAL_HANDLES = new WeakMap<PluginSurfaceHandle, SurfaceHandle<ProductSurfa
 
 export interface PluginSurfacePoolDeps {
   readonly pluginId: string;
-  /** The plugin-principal client — the SAME caller `ctx.client` rides, so a
-   * mint carries this plugin's identity, grants and via-attribution rather than
-   * the window's. */
-  readonly client: PluginProductClient;
+  /** The WINDOW's product connection, resolved per call because the backend is
+   * swapped on daemon replacement. Null = daemon away, an honest lost face. */
+  readonly mintClient: () => {
+    request(method: string, params?: unknown): Promise<unknown>;
+  } | null;
+  /** The plugin's granted capabilities, read live — the DT-D3 per-plugin gate
+   * runs here (see the header): `surface.attach` to attach at all, plus the
+   * kind's own creation scope. */
+  readonly grantedCapabilities: () => readonly string[];
   /** The activation's ownership tree (PRC-1). Every acquire is tracked here. */
   readonly own: (label: string, release: () => void) => void;
   /** The context's activity gate — the same one `ctx.client` calls. */
   readonly assertOpen: () => void;
   /** Test/host seam. Production resolves the window's one pool from FieldHost. */
   readonly resolvePool?: () => SurfacePool<ProductSurfaceFrame> | null;
+}
+
+/** DT-D3's kind→creation-scope matrix, the same rows SurfaceService enforces
+ * daemon-side for the window principal. */
+function creationScopeFor(kind: string): string {
+  return kind === "browser" ? "surface.browser" : "surface.capture";
 }
 
 /** The window's pool, or null on any host that has no live-surface plane. A
@@ -224,8 +242,20 @@ export function createPluginSurfacePool(deps: PluginSurfacePoolDeps): PluginAtta
       // Coherence first, and deliberately UNCAUGHT: "live at 0fps" is the
       // caller's bug, and the pool's door exists so the throw lands in the
       // frame of the acquire that was wrong (surfaces/pool/demand.ts). Only the
-      // host's absence becomes a face.
+      // host's absence — and an ungranted plugin — becomes a face.
       const initialDemand = normalizeSurfaceDemandIntent(opts.initialDemand);
+      // The DT-D3 per-plugin gate (see the header for why it lives here). The
+      // refusal face carries the same vocabulary fieldd uses, so a plugin
+      // author reads one language wherever the denial happened.
+      const granted = deps.grantedCapabilities();
+      const creationScope = creationScopeFor(opts.source.kind);
+      for (const scope of ["surface.attach", creationScope]) {
+        if (!granted.includes(scope)) {
+          return unavailableHandle(
+            new Error(`FORBIDDEN_SCOPE: plugin ${deps.pluginId} is not granted ${scope}`),
+          );
+        }
+      }
       const key = `${deps.pluginId}:${opts.key}`;
       const pool = resolvePool();
       if (pool === null) {
@@ -246,7 +276,11 @@ export function createPluginSurfacePool(deps: PluginSurfacePoolDeps): PluginAtta
               // Sending a key here would fuse two DELIBERATE attempts — the
               // retry after a loss is the common one — into a replayed answer
               // carrying a ticket that was already spent.
-              const raw = await deps.client.request("surface.open", {
+              const windowClient = deps.mintClient();
+              if (windowClient === null) {
+                throw new Error("no fieldd connection (daemon away or still booting)");
+              }
+              const raw = await windowClient.request("surface.open", {
                 source: opts.source,
                 ...(opts.reuseKey === undefined ? {} : { reuseKey: opts.reuseKey }),
               });
@@ -258,11 +292,12 @@ export function createPluginSurfacePool(deps: PluginSurfacePoolDeps): PluginAtta
               // (DT-D2: grace lapse, loss, supersession — never mere unmount,
               // never window unload). Deliberately NOT behind `assertOpen`:
               // this is pool hygiene, not a plugin-initiated call, and the
-              // grace timer routinely outlives the activation that minted.
-              // When it fires after deactivation this client is closed and the
-              // request rejects — the pool swallows that, and main's stale
-              // sweep / window-death release remain the backstops.
-              await deps.client.request("surface.close", { surfaceId });
+              // grace timer routinely outlives the activation that minted —
+              // which is also why it rides the WINDOW client (alive as long as
+              // the window) rather than dying with the activation's lease.
+              const windowClient = deps.mintClient();
+              if (windowClient === null) return;
+              await windowClient.request("surface.close", { surfaceId });
             },
           },
         });

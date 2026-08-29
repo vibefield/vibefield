@@ -103,10 +103,8 @@ function attachingPool(): SurfacePool<ProductSurfaceFrame> {
 function poolDoor(surfacePool: SurfacePool<ProductSurfaceFrame> | null) {
   return createPluginSurfacePool({
     pluginId: "vibefield.viewtest",
-    client: {
-      request: async () => ({}),
-      subscribe: async () => ({ snapshot: {}, unsubscribe: () => undefined }),
-    },
+    mintClient: () => ({ request: async () => ({}) }),
+    grantedCapabilities: () => ["surface.attach", "surface.browser"],
     own: () => undefined,
     assertOpen: () => undefined,
     resolvePool: () => surfacePool,
