@@ -144,7 +144,11 @@ impl TestClient {
 
 async fn wait_for_native(data_dir: &Path, process: &mut NativeProcess) -> PathBuf {
     let socket = data_dir.join("native/run/mgmt.sock");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    // 15s to match resource_governance's identical wait: the daemon binds in
+    // ~0.13s unloaded, but this suite runs beside concurrent agent builds and
+    // a 5s window left no headroom — this row redded gates under load, never
+    // under a defect (measured 2026-08-28).
+    let deadline = Instant::now() + Duration::from_secs(15);
     loop {
         if !process.is_running() {
             let output = process.exited_output();
