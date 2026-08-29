@@ -1,6 +1,7 @@
 import { defineRendererPlugin } from "@vibefield/plugin-sdk";
 import { createElement } from "react";
 import { ArtifactPanel } from "./ArtifactPanel";
+import { BrowserPagePreviewTile } from "./BrowserPagePreviewTile";
 import { createBrowserPageWidget } from "./BrowserPageWidget";
 import { ARTIFACT_SURFACE, BROWSER_PAGE_TYPE } from "./manifest";
 
@@ -17,7 +18,15 @@ export default defineRendererPlugin({
     // last painted frame).
     ctx.widgets.register({
       type: BROWSER_PAGE_TYPE,
-      binding: { component: createBrowserPageWidget(ctx.pool) },
+      // `preview` is DELIBERATE, not decoration: with it absent the tray
+      // sandbox-mounts the REAL card with default props, and the real card's
+      // mount acquires a live browser runtime — a hidden producer behind a
+      // closed tray (found live by the DT-3e validation smoke). The preview
+      // is a picture of a page; only a spawned card ever costs a surface.
+      binding: {
+        component: createBrowserPageWidget(ctx.pool),
+        preview: { component: BrowserPagePreviewTile },
+      },
     });
   },
 });

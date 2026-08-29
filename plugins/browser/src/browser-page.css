@@ -97,3 +97,10 @@
   color: var(--vf-text-faint);
   font-size: 11px;
 }
+
+/* The tray preview's inert page area — a picture of a page, never a page.
+   The real card's mount acquires a LIVE browser runtime, so the tray must
+   not mount it (ICE preview tier 3; found live by the DT-3e smoke). */
+.vf-browser-page__page--preview {
+  background: var(--vf-canvas-bg);
+}
