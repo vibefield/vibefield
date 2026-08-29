@@ -164,6 +164,8 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | WIN — Windows port | **IN FLIGHT** — WIN-0…4 landed `5ffd30b`/`85cce04`/`f982d27` (2026-08-11; ratified 2026-08-10, James: "follow your plan"): gate + dev loop portable, the endpoint law in two languages (WIN-D1), the native plane on named pipes with a real stderr floor, the pair's probe/env/spawn doors, the stop VERB (WIN-D5; WIN-D3 resolved by construction) — all proven on the box (WORKSTATION4090) · **WIN-6 terminal hosting landed `03cc648`** (WIN-D2 adopted 2026-08-11: hosting in GA — the ConPTY kill matrix, two-plane adoption, and frame-plane I/O all on the box; the case-variant env-strip gap booked upstream as G13) · **WIN-5 the app BOOTS on Windows** (`51aa3ab`) — `pnpm smoke` green headless over ssh: shell + pipe-joined daemon pair + renderer + a live godview terminal, all on the box · **WIN-7 opened** (`edd5882`) — the mesh finds its `.exe` sidecar on Windows | `draft/thinking-windows-port.md` (plan; spec graduates with the track) | box gates green (Rust workspace incl. terminal_unit 14/14 · terminal_mesh 7/7 · mesh unit 3/3; fieldd terminal-seam 3/3 · terminal-kill-matrix 6/6 · the full fieldd suite 454/2-skip (the 2 = the tracked concurrent-edit doc-sync pair) · fieldd-client 12/12 · field-app 417; `pnpm smoke` boots headless over ssh); next: WIN-5 VISUAL polish (WIN-D9 chrome, tray `.ico`, glyphs — needs a Studio eyeball), WIN-7 live mesh witness (needs a tailnet auth key), WIN-8 packaging + the EL8 pin delta (electron-builder vs EDP-39) |
+| LSF — live surfaces foundation | **LANDED 2026-08-15/16** (`9a8ee9b1`…`90b54219`; spec RATIFIED v0.9) — browser OSR + SCK/Simulator producers, ticketed transport, renderer WebGPU store, Swift capture helper, labs + 20-min soaks all green on macOS; **ledgered LATE 2026-08-28** (entry §LSF — the second recurrence of the 2026-08-07 drift class) | `specs/live-surfaces-foundation.md` (LSF-D1…D16) | consumed by DT below; **DEFERRED (2026-08-28, James):** the §18 Windows rows (LSF-3/3C/6) and the LSF-4 signed-helper artifact (rides EDP/WP10) |
+| DT — dev tool pack | **IN FLIGHT — DT-0 RATIFIED 2026-08-28 (James, same day as the draft); REORDERED FIRST among the production packs** (mind map's MM-D1…D14 gate unchanged, order at source in `thinking-prod-dogfood-packs.md`); DT-D1…D12 in force and DT-D10's deltas FOLDED (PF2 amendment · 03·A §5.5 supersession · sharedTexture EL8 pin-note · roster rows · `ctx.pool`/P8-D4 closure notes) — browser widget into `vibefield.browser` + mac-only `vibefield.devtools` (Simulator · window capture) | `thinking-devtools-pack.md` (DT-D1…D12) · `specs/live-surfaces-foundation.md` | **DT-1 authority door · DT-2 pool+presentation** (parallel worktrees) → DT-3 browser widget → DT-4 devtools pack → DT-5 control lane |
 | AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
 
 ## In flight now
@@ -532,6 +534,25 @@ calibration holds all 14 gates at zero while proving Electron's suspension block
 runner records raw OS ranges around seven-reading medians, measures duration monotonically, rejects
 an observation gap over five minutes, and cannot label a short prefix as the 24-hour claim. Literal
 duration remains PRC-6c2b.
+
+**DT.** The dev tool pack opens, reordered to FIRST among the production packs (James,
+2026-08-28 — mind map has prior work pending; macOS lands first, the Windows port defers
+with the LSF Windows rows). The foundation it consumes is already landed and ratified:
+track LSF (2026-08-15/16, ledgered late — see the reconciliation entry) built the whole
+local runtime, and the production preload/renderer-host even carry the transport today;
+what's missing is exactly four seams, named in `thinking-devtools-pack.md` §3 — the
+authority door (no production `issue()` caller; `surface.*`/`shell.surfaces.*` don't
+exist), the surfaces pool + ICE demand adapter + `ctx.pool` SDK door (P8-D4's closure,
+absent from the SDK by honest omission), the widget faces themselves, and DT-D10's
+ratification deltas (PF2 amendment · 03·A §5.5 supersession · EL8 pin notes — **FOLDED at
+ratification**). DT-0 is **RATIFIED as DT-D1…D12** (James, 2026-08-28, same day as the
+draft): browser face lands in `vibefield.browser`,
+Simulator + window capture in a new mac-only `vibefield.devtools` (`engines.platforms`
+already exists in the manifest schema); scopes `surface.attach/browser/capture` with
+`surface.control` reserved for the DT-5 agent lane (LSF-3C's selected
+`webContents.debugger` boundary; pixels never depend on control). The ladder: DT-1
+authority · DT-2 pool/presentation (parallel worktrees, open now) · DT-3 browser
+widget through the real staged chain · DT-4 the devtools pack · DT-5 the control lane.
 
 **GT.** The control room is open and corrected. v0.3 (GT-2e) dissolved the second session
 authority James smelled behind an `sh-3.2$` pane: the workspace now owns pane births through

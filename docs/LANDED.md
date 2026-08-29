@@ -4380,3 +4380,48 @@ gz, world lazy, three.module its own lazy chunk); `TMPDIR=/tmp pnpm
 smoke:canvas` exit 0 with the census witnessed
 ({"widgetTypes":23,"plugins":6,"stagedPlugins":5}, all five staged stylesheets
 loaded including vibefield.widgetlab).
+
+## LSF — the live-surfaces foundation (reconciliation entry, owed since 2026-08-16)
+
+2026-08-28, recording work landed 2026-08-15/16. **This entry is twelve days late** — the
+track landed with zero presence in this ledger, ROADMAP, or DECISIONS, the same drift class
+the 2026-08-07 reconciliation pass fixed for IOS-3 and the UI system; an onboarding read
+found it. The work itself:
+
+**LSF-0…6 landed on main across `9a8ee9b1`…`90b54219`** (~17 commits interleaved with
+PRC-0…3), and `specs/live-surfaces-foundation.md` was RATIFIED at v0.9 (2026-08-16,
+LSF-D1…D16). One window-scoped Live Surfaces runtime with two pixel-producer families —
+Chromium OSR shared textures, and ScreenCaptureKit with secure IOSurface Mach handoff (the
+iOS Simulator as an SCK specialization: simctl + cross-Space window resolution +
+Accessibility `iOSContentGroup` crop). What's real: `contracts/src/live-surfaces.ts` (wire
+vocabulary) · `packages/live-surfaces` (pure lifecycle/demand/frame-queue runtime, renderer
+inbox + WebGPU texture store, the frozen `LiveSurfacePresentation` handoff, soak/fault
+testing) · `electron-shell/src/main/live-surfaces/` (window host, ticket table, texture
+forwarder, guarded browser producer + security policy, SCK/Simulator producers, the
+main-private control-binding seam) · the Swift accessory capture helper + least-privilege
+adapter under `apps/desktop` · four lab entry points incl. two 20-minute soaks. The
+production preload and product renderer host already carry the transport (one-use nonce
+bridge, four ports per renderer generation) — claimed on every product boot, no consumer
+yet.
+
+**Evidence highlights:** the final macOS soaks held ten Browser + four SCK surfaces for
+20 minutes — 328,038 shared frames exactly reconciled, zero quarantine, zero primary-path
+CPU conversions, two forced helper kills and two WebGPU device losses recovered (worst
+recovery gap 852.5 ms; scoped main duty 6.76%; import p95 0.080 ms); the real-Simulator
+mixed run reconciled 313,759 frames including a live rotation rebind. **LSF-3C** proved
+stock agent-browser 0.34.0 against the exact offscreen targets — all 24 AB cases — and
+**selected the production containment boundary**: an authenticated target-scoped loopback
+transport over `webContents.debugger` via the `browser.provider`/`directPage` seam; the raw
+Electron debugging endpoint is forbidden, with the attack demonstrated on record
+(`draft/browser-spike/report-agent-browser-*.json`).
+
+**Still open, deferred deliberately (2026-08-28, the DT reorder):** the LSF §18 Windows
+rows (LSF-3 lab · LSF-3C AB matrix · LSF-6 soak) and the LSF-4 signed/notarized
+helper artifact (credential-bound; rides EDP/WP10). The foundation's consumer is track
+**DT — the dev tool pack** (`draft/thinking-devtools-pack.md`, DT-D1…D12 — RATIFIED the
+same day, deltas folded), which
+James ordered FIRST among the production packs on 2026-08-28 (mind map's gate unchanged;
+order recorded at source in `thinking-prod-dogfood-packs.md`). Nothing in the tree changed
+in this pass; the un-ledgered 8/24–25 PLUG commits (`b4adabb2` staged plugins in the dev
+document · `3e638961` staged boot serving hardened · `b521466e` per-plugin CSS isolation)
+are named here rather than given late entries of their own.
