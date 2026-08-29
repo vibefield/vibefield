@@ -4518,5 +4518,78 @@ in the worktree memory) and the second run caught TWO REAL defects of mine (stal
 docs; a test pinning the pre-compliance copy) — fixed, amended unpushed into `7f48ce0e`,
 and **the final run exits 0 verbatim as DT-2's landing gate.** Suites at close: field-app
 86 files/697 · plugin-sdk 6/28 · the full 24-project graph green.
-**Next:** DT-2b (presentation + ICE demand adapter + the `ctx.pool` SDK door) → DT-3 the
-browser widget through the staged chain.
+**Next:** DT-3 the browser widget through the staged chain, custody-close fix first.
+*(This line originally repeated the DT-1 entry's "next: DT-2b" by copy slip — corrected
+2026-08-28 late evening in the same sitting; the ROADMAP row was always right.)*
+
+## DT-3 platform wave — custody paid back, the input lane opens, the plugin steers
+
+2026-08-28 late evening, three commits, all mine, each gate-verbatim exit 0.
+
+**DT-3a `596dbf89` — the custody debt retired.** `SurfaceTicketSource.mint()` now returns
+a grant `{ticket, surfaceId?}` and gains an optional `close(surfaceId)`; the pool retains
+one CustodyClaim per installed attachment and pays every successful mint back EXACTLY once
+at the moment its use permanently ends — loss, grace lapse, supersession by a retry's fresh
+mint, attach-failure-after-mint, and the attach that resolves into an already-dropped entry
+(the claim closes via the SOURCE that minted it; a later acquire may have swapped
+`entry.tickets`). The ONE deliberate exception is pool dispose and failures caused by it:
+the window is unloading and reuse-keyed custody surviving into the next document IS the
+reload continuity main custody exists for; window death stays main's own cleanup. The
+plugin door wires close to fieldd `surface.close` on the plugin's own client, deliberately
+NOT behind `assertOpen` — the grace timer routinely outlives the activation that minted.
+**Recorded caveat:** a close firing after deactivation rides a closed client and rejects;
+the pool swallows it and main's stale sweep/window-death release absorb the residual
+custody — one idle runtime per reuse key per window lifetime, worst case. Snapshot gains
+`custodyCloses` for the census conservation check. Door header errata at source:
+"always refuses" stopped being true at DT-2b-3.
+
+**DT-3b `8261f275` — the input lane.** The spike left a complete CDP input engine in the
+browser producer with the note "authorization is deliberately outside
+LiveSurfaceAttachment"; this is that authorization. Contracts gain
+`LiveSurfaceInputEventV1` (pointer/wheel/key/text — CSS LOGICAL coordinates per LSF §10.2,
+bounds matching the engine's own), `LiveSurfaceNavigationCommandV1`,
+`LiveSurfaceBrowserStateV1` (committed url/title/loading/history truth riding runtime
+summaries), and input/navigate renderer control messages stamped with the geometry
+revision the sender mapped against — none of it crossing to Rust (the renderer control
+port never touches fieldd; gen unchanged, gate-checked). The control session forwards
+behind the redeemed ticket's operations with three deliberate asymmetries: unknown
+attachment = SILENT drop (the stream races the host's own detach by design — a fault
+would let an ordinary race tear down every surface in the window), missing operation
+grant = protocol fault, generation closed (grants are fixed for the attachment's lifetime
+and the shipping sender checks first — nothing legitimate produces it, EL7), laneless
+runtime = drop. The ticket vocabulary gains "navigate"; the authority mints browser
+tickets `view+pointer+keyboard+navigate` and keeps capture/Simulator view-only (DT-D6),
+pinned both ways in the authority suite. The producer translates wire→engine UNSCALED
+(the double-scaling class), counts engine refusals as dropped stream frames, re-validates
+`go` URLs against the same top-level scheme policy as the initial load, and publishes
+navigation truth CLAMPED to wire bounds — a page's 9KB URL degrades to truncation, never
+to the schema fault that would kill the generation. The transport's renderer attachment
+gains soft-fail `sendInput`/`sendNavigation`; the LSF "no semantic control" law is
+restated, not repealed — CDP sessions and DOM access (DT-5's broker) still have no
+surface on the attachment.
+
+**DT-3c `653771a0` — the renderer half.** The pool handle carries
+`sendInput`/`navigate`/`browser` (summary changes that do not close the attachment now
+notify holders, so a URL bar tracks the page without polling); `sendInput` takes the
+sender's EXPLICIT geometry revision — §10.2's honest reading is the revision the
+coordinates were mapped against, the displayed frame's, not whatever summary is newest.
+`input-map.ts` is the one place canvas box → logical space happens (contain-fit letterbox
+answers null rather than clamping a click onto the page edge; visibleRect origin offsets
+BEFORE the logical ratio; unit-pinned against the dpr² double-scaling class).
+`LiveSurfaceView` wires pointer/wheel/key/text only while `interactive`, maps against the
+displayed frame's geometry captured at the draw sink, types through the committed-text
+lane beside key events (CDP key events alone insert nothing), and leaves right-click to
+the page. The producer derives virtual key codes for the named special keys — producer
+knowledge, never sender-trusted wire. The door narrows navigation THROUGH and raw input
+AWAY (the PA-22 companion: input belongs to the view's map); `browser` truth is an
+explicit field-by-field copy, passthrough extras stripped. The SDK mock pool drives
+browser truth (`setBrowser`) and records `navigations` for widget tests.
+
+**In flight at this entry:** the DT-3d widget itself — an Opus builder in `../vf-dt3`
+extending the EXISTING `plugins/browser` (`vibefield.browser` is today the Artifacts
+side-panel plugin; the ratified design adds the canvas widget INTO it) — manifest widget
+contribution + `surface.attach`/`surface.browser`, DT-D7 durable `{url,title,showChrome?}`
+with gesture-edged url commits, nav chrome per DESIGN.md over the SDK ui door,
+`SurfaceView interactive` gated the terminal-mirror way, census rows. Merge, review, and
+the staged-chain witness land with the DT-3 completion entry; the both-themes eyeball
+stays James's.
