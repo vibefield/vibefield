@@ -1,0 +1,32 @@
+/* DT-2b — LiveSurfaceView composition (UI_SYSTEM layer 3: styling lives beside
+ * the component, namespaced, token-fed). The canvas is content, not chrome:
+ * no material, no shadow — the widget's CardShell owns chrome. */
+
+.vf-live-surface-view {
+  position: relative;
+  display: grid;
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.vf-live-surface-view__canvas {
+  grid-area: 1 / 1;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+}
+
+/* The non-live faces sit over the last painted frame (a canvas keeps it — the
+ * D15 static face for free) and speak in the caption ramp, colorless: loading
+ * and loss are not §2.5 states. */
+.vf-live-surface-view__face {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--vf-text-tertiary);
+  text-align: center;
+}

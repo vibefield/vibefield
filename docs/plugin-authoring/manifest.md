@@ -99,6 +99,9 @@ with `entry-kind` even when the manifest asks for it.
 | `shell.webcontents` | yes | — |
 | `shell.windows` | yes | — |
 | `storage.self` | yes | yes |
+| `surface.attach` | yes | — |
+| `surface.browser` | yes | — |
+| `surface.capture` | yes | — |
 | `terminal.attach` | yes | — |
 | `workspace.read` | yes | yes |
 

@@ -1324,6 +1324,14 @@ export const PLUGIN_CAPABILITY_ELIGIBILITY: Readonly<
   // renderer-eligible (terminal via the pool; shell.* are window powers;
   // agent spawn/control start renderer-side — service expansion is a decision)
   "terminal.attach": { renderer: true },
+  // DT-2b-2 finding closed (DT-D3): surfaces ride the pool exactly like
+  // terminal.attach, and a surface is a view inside ONE window — the
+  // SurfaceService's participant gate refuses window-less principals anyway,
+  // so eligibility states the same truth. `surface.control` stays absent:
+  // reserved for the DT-5 broker lane, minted by no v1 manifest.
+  "surface.attach": { renderer: true },
+  "surface.browser": { renderer: true },
+  "surface.capture": { renderer: true },
   "agent.spawn": { renderer: true },
   "agent.control": { renderer: true },
   "shell.windows": { renderer: true },

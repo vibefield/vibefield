@@ -30,7 +30,7 @@
 // state, not a bug, and it is the one the face was built to show.
 
 import { SurfaceOpenResultV1 } from "@vibefield/contracts";
-import { UnavailableState } from "@vibefield/design-kit";
+import { UnavailableState } from "@vibefield/design-kit/primitives";
 import type {
   PluginAttachmentPool,
   PluginLiveSurfaceOptions,

@@ -140,6 +140,6 @@ describe("ctx.pool.SurfaceView", () => {
       view.querySelector("[data-live-surface-status]")?.getAttribute("data-live-surface-status"),
     ).toBe("attaching");
     expect(view.querySelector("canvas")).not.toBeNull();
-    expect(view.textContent).toContain("Connecting surface");
+    expect(view.textContent).toContain("connecting surface");
   });
 });

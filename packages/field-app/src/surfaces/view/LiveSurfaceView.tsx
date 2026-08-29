@@ -11,10 +11,12 @@
 // chrome; the catalog and DT-3 both mount THIS component (UI_SYSTEM: the
 // catalog mounts the shipping view, never a replica).
 
+import { UiButton, UnavailableState } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useEffect, useRef, useSyncExternalStore } from "react";
 import type { ProductSurfaceFrame } from "../pool/host-pool";
 import type { SurfaceHandle } from "../pool/surface-pool";
 import { createSurfaceViewController, type SurfaceViewController } from "./view-controller";
+import "./live-surface-view.css";
 
 export interface LiveSurfaceViewProps {
   readonly handle: SurfaceHandle<ProductSurfaceFrame>;
@@ -119,37 +121,25 @@ export function LiveSurfaceView(props: LiveSurfaceViewProps): ReactElement {
   return (
     <div
       data-live-surface-status={status}
-      {...(props.className === undefined ? {} : { className: props.className })}
-      style={{ position: "relative", display: "grid", inlineSize: "100%", blockSize: "100%" }}
+      className={`vf-live-surface-view ${props.className ?? ""}`.trim()}
     >
-      <canvas
-        ref={canvasRef}
-        style={{
-          gridArea: "1 / 1",
-          inlineSize: "100%",
-          blockSize: "100%",
-          // The last painted frame persists through pause/grace by nature of a
-          // canvas — the D15 compact/static face for free.
-          objectFit: "contain",
-        }}
-      />
+      <canvas ref={canvasRef} className="vf-live-surface-view__canvas" />
       {status !== "live" ? (
-        <div
-          style={{
-            gridArea: "1 / 1",
-            display: "grid",
-            placeItems: "center",
-            font: "var(--vf-font-caption, inherit)",
-            color: "var(--vf-fg-muted, currentColor)",
-          }}
-        >
-          {status === "attaching" ? "Connecting surface…" : null}
+        <div className="vf-live-surface-view__face">
+          {status === "attaching" ? <span>connecting surface…</span> : null}
           {status === "lost" ? (
-            <button type="button" onClick={() => controllerRef.current?.retry()}>
-              Surface lost — retry
-            </button>
+            <>
+              <UnavailableState
+                compact
+                title="Surface lost"
+                description="the producer went away — the last frame is kept"
+              />
+              <UiButton variant="quiet" onClick={() => controllerRef.current?.retry()}>
+                Reconnect
+              </UiButton>
+            </>
           ) : null}
-          {status === "released" ? "Surface released" : null}
+          {status === "released" ? <span>surface released</span> : null}
         </div>
       ) : null}
     </div>
