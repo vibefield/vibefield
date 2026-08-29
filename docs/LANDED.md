@@ -4479,5 +4479,44 @@ DT-1a and DT-1c; on the merged tree the gate ran three times — the first two e
 ONE pre-existing timing row under load spikes (the finding-3 collision, then field-native's
 sweep-budget row at load 44–66, green in isolation at 2.26s), **the third run exits 0
 verbatim and is the landing gate of record.**
+
+## DT-2 COMPLETE — surfaces paint, plugins reach them, the catalog shows them
+
+2026-08-28 evening, three more commits. **DT-2b `1aef94ec`** (mine): `presentLatestVia` —
+the additive DOM-era consume door on the frozen presentation seam (one latest frame to a
+synchronous consumer, lease released and frame closed on every path; the foundation lab's
+own 2D `drawImage` on-screen path productized; the WebGPU store untouched for the GL/ICE
+compositor era) — plus the field-app view layer: the element→demand law (invisibility folds
+to paused@0 at the source, PF6; apparent device-pixel size maps to the reference fps
+buckets), the headless view controller (its own suite caught the mount-push defect before
+commit), and the shipping `LiveSurfaceView`. **DT-2b-2 `d8440045`** (builder-built,
+reviewed): the catalog's LiveSurfacesSection mounting the SHIPPING view over a real pool on
+a fake transport with OffscreenCanvas→`VideoFrame` fixture frames (honest UnavailableState
+where WebCodecs is absent), and the `ctx.pool` SDK door with `{liveSurface}` — keys
+namespaced `${pluginId}:${key}`, the narrowed handle with `presentation` ABSENT (PA-22; the
+real handle lives in a WeakMap only `SurfaceView` can reach), acquisitions tracked on the
+activation's own PRC-1 scope so deactivation releases everything, pool-null hosts answer a
+permanently-lost handle with honest words, mint = one `surface.open` per attach attempt on
+the plugin's own guarded client with deliberately NO idempotencyKey (the service replay map
+is for wire retries; fusing deliberate retries would replay a spent ticket).
+**DT-2b-3 `7f48ce0e`** (mine): the builder's finding closed at source —
+`surface.attach/browser/capture` join `PLUGIN_CAPABILITY_ELIGIBILITY` renderer-eligible
+(my DT-1a omission had left the door complete but every plugin mint refusable), the
+regenerated authoring docs riding the same commit per the gen law; the design-kit import
+moves to the `/primitives` deep entry; and the LiveSurfaceView compliance pass after
+reading DESIGN.md/UI_SYSTEM in full (colocated namespaced stylesheet, the real
+`--vf-text-*` ramp, UnavailableState + quiet UiButton faces, lowercase stage-label voice).
+
+**Named debt (the one DT-2 leaves open):** nothing calls `surface.close` yet — the pool
+releases ATTACHMENTS, but main-side custody releases only on window death, stale-incarnation
+sweep, or caps (32/64 → RESOURCE_EXHAUSTED). Bounded, honest, and carried to DT-3's top:
+`SurfaceTicketSource` grows a close half wired to `surface.close` on the pool's permanent
+entry drop. **Gate record, stated plainly:** the first landing run redded one further
+load-tail row (`native_logging` link-death, green in isolation at 5.48s — the fourth
+distinct pre-existing timing row of the evening, prompting the batched-gate discipline now
+in the worktree memory) and the second run caught TWO REAL defects of mine (stale generated
+docs; a test pinning the pre-compliance copy) — fixed, amended unpushed into `7f48ce0e`,
+and **the final run exits 0 verbatim as DT-2's landing gate.** Suites at close: field-app
+86 files/697 · plugin-sdk 6/28 · the full 24-project graph green.
 **Next:** DT-2b (presentation + ICE demand adapter + the `ctx.pool` SDK door) → DT-3 the
 browser widget through the staged chain.
