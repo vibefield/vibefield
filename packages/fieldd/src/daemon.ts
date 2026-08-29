@@ -122,6 +122,7 @@ import {
 } from "./service-host";
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
+import { createSurfaceService } from "./surface-service";
 import { TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
 
@@ -850,6 +851,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => ({ outcome: "succeeded" }),
       );
     });
+
+    // DT-1b — the live-surface policy door. Registered beside the other
+    // shell-dispatching methods because it is one: the service decides whether
+    // a surface may exist (the kind→scope matrix on top of the row's
+    // `surface.attach`, the local-window binding, idempotent replay, the audit
+    // pair) and Electron main mints it. Until DT-1c lands the main-side
+    // authority the doors answer UNAVAILABLE, and so does this.
+    const surfaces = createSurfaceService({ api, audit, logger });
+    api.register("surface.sources", (ctx, params) => surfaces.sources(ctx, params));
+    api.register("surface.open", (ctx, params) => surfaces.open(ctx, params));
+    api.register("surface.close", (ctx, params) => surfaces.close(ctx, params));
 
     api.register("system.health", () => health());
     // WIN-D5 — the stop verb. The response flushes first (setImmediate), then
