@@ -1,6 +1,7 @@
 import type { LiveSurfaceDemandV1 } from "@vibefield/contracts";
 import { UnavailableState } from "@vibefield/design-kit";
-import { type ReactElement, useEffect, useState } from "react";
+import { BrowserPagePreview } from "@vibefield/plugin-browser/design-system";
+import { type ComponentProps, type ReactElement, useEffect, useState } from "react";
 import {
   createFixtureSurfaceHost,
   fixtureSurfacesSupported,
@@ -42,10 +43,15 @@ export function LiveSurfacesSection(): ReactElement {
               <FixtureSurfaceStage grant={false} />
             </Specimen>
           </div>
+          <Specimen title="Browser card (DT-3)" source="plugins/browser/src/BrowserPageView.tsx">
+            <BrowserCardStage />
+          </Specimen>
           <p className="vf-ds-surface-caption">
             These are FIXTURE frames, painted in this tab. The real producers live in Electron main
             — the catalog has no privileged process to capture from, so it supplies the transport
-            and invents only the source.
+            and invents only the source. The browser card is the SHIPPING widget face over those
+            same frames: its chrome states come from the plugin&apos;s own preview fixture, the
+            pixels from this section&apos;s pool — double-click engages, esc leaves.
           </p>
         </>
       ) : (
@@ -55,6 +61,54 @@ export function LiveSurfacesSection(): ReactElement {
         />
       )}
     </Section>
+  );
+}
+
+/**
+ * The DT-3 browser card, composed the only way the walls allow: the plugin's
+ * design-system entry exports the SHIPPING `BrowserPageView` behind a preview
+ * that takes `SurfaceView` as a prop (R10 — a plugin cannot reach the host's
+ * presentation), and THIS side injects it. The adapter deliberately ignores the
+ * preview's own fixture handle for pixels: chrome states are the plugin
+ * fixture's business, the moving frames are this section's real pool — so
+ * engagement, the §10.2 input mapping, and the demand fold all run live here.
+ */
+/** The preview's own view contract, read through the design-system door — the
+ * walls allow no plugin-sdk import here, and none is needed: the door already
+ * states what it takes. */
+type PreviewSurfaceView = ComponentProps<typeof BrowserPagePreview>["SurfaceView"];
+type PreviewSurfaceViewProps = ComponentProps<PreviewSurfaceView>;
+
+function BrowserCardStage(): ReactElement {
+  const [view, setView] = useState<PreviewSurfaceView | null>(null);
+
+  useEffect(() => {
+    const host = createFixtureSurfaceHost({});
+    const claim = host.pool.acquire("catalog:browser-card", {
+      tickets: host.tickets,
+      initialDemand: { mode: "live", targetFps: 15, priority: 50, interactive: false },
+    });
+    function FixtureSurfaceView(props: PreviewSurfaceViewProps): ReactElement {
+      return (
+        <LiveSurfaceView
+          handle={claim}
+          {...(props.interactive === undefined ? {} : { interactive: props.interactive })}
+          {...(props.className === undefined ? {} : { className: props.className })}
+        />
+      );
+    }
+    setView(() => FixtureSurfaceView);
+    return () => {
+      setView(null);
+      claim.release();
+      host.dispose();
+    };
+  }, []);
+
+  return (
+    <div className="vf-ds-surface-stage">
+      {view === null ? null : <BrowserPagePreview SurfaceView={view} state="live" />}
+    </div>
   );
 }
 

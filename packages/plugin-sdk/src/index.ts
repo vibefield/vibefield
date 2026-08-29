@@ -100,11 +100,13 @@ export interface RendererPluginContext {
    * absence a plugin would have to interpret. The same face answers a host with
    * no live-surface plane at all (the browser catalog).
    *
-   * STATE OF PLAY, stated rather than implied: `surface.attach` is NOT yet in
-   * `PLUGIN_CAPABILITY_ELIGIBILITY`, so no plugin can request it and every real
-   * mint refuses today. The door is complete and the refusal is honest; making
-   * it grantable is a contracts decision (which entry kinds, at what risk tier),
-   * deliberately not smuggled in with the plumbing. */
+   * STATE OF PLAY (corrected 2026-08-28 — this paragraph originally said
+   * `surface.attach` was not yet plugin-eligible, which DT-2b-3 falsified the
+   * same evening it was written): `surface.attach`/`surface.browser`/
+   * `surface.capture` are renderer-eligible in `PLUGIN_CAPABILITY_ELIGIBILITY`
+   * (contracts/plugins.ts), so a granted plugin really mints here —
+   * `vibefield.browser` is the first. An ungranted one still gets the refusal
+   * face this door was built to show. */
   readonly pool: PluginAttachmentPool;
   /** present iff the manifest DECLARES contributes.commands (§8.3/§10.2 — the
    * absent-API law: no contribution, no API surface) */
