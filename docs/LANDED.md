@@ -4708,3 +4708,54 @@ probes sample scenery when the tray also renders the widget's face.
 **Gate:** `pnpm verify` exit 0 over the batch, at a 190 load average — the
 `native_logging` deadline widening from `1b496795` earning its keep. **Still James's:**
 the both-themes eyeball, now with a working thing to look at.
+
+## DT-3f — the page lays out at the card: the logical viewport follows demand
+
+2026-08-29 evening. James's second live report: "when a url is loaded, it is not filling
+up the entire card size." Right again — oryzo.ai sat as a 1024×768 picture in the
+top-left of his resized card, spilling over the foot. Two defects locked together, and
+the DT-3e smoke could not have seen either: its 640×480 spawn was exactly the producer's
+4:3 default aspect.
+
+**The loop, measured live before the fix** (the new geometry probe, run 1: canvas
+element 900×675 in a 900×532 well, backing 1108×831): the surface canvas was a grid
+item, so its intrinsic backing sized the implicit track — the ELEMENT took the frame's
+aspect and overflowed the well; the demand derived from that element then echoed the
+frame's aspect back to the producer, whose `safeEffectiveRaster` accepted only
+±1%-of-4:3 requests against a base pinned at the source's construction-time viewport.
+Element ← frame ← demand ← element: locked at 4:3 whatever the card's shape, with
+`Emulation.setDeviceMetricsOverride` re-pinning the layout forever.
+
+**The fix `175d40a5` — LSF D8's first variable, wired.** `LiveSurfaceDemandV1` grows an
+optional `logicalViewport`; the view declares its element's CSS box as the layout ask
+(pre-DPR and pre-zoom — `clientWidth` is a layout metric, so board zoom stays a
+presentation transform); folds take the largest-AREA holder's viewport WHOLE; the
+browser producer is born at the demanded viewport, actuates viewport+raster together on
+the stabilization debounce, and reports the CURRENT layout as frame geometry, which
+input mapping already keys on. The canvas element is inset-pinned (no more grid-track
+feedback) and the native base derives from the call's viewport. Two regression shapes
+worth their names: the lib demand tracker's defensive copy silently DROPPED unknown
+fields (a new demand field could parse, ride the wire, and never reach the producer),
+and the view-controller compared demand with a hand-rolled field list that would have
+missed the new field — both now ride shared equality, both pinned.
+
+**The witness `322f20dd`.** The smoke spawns non-4:3 (with the reason in place), polls
+geometry to SHAPE (element spans the well, backing aspect = element aspect ±2% —
+density is transport policy), and gains an input-free relayout rung: a card BORN at
+`/size` whose page names its own layout viewport into committed truth. **Full ladder
+exit 0** on software rendering at load ~100, run 10 of the night: geometry exact
+(element 900×532 in a 900×532 well, backing 1248×738 — the CPU-clamp of the demanded
+1800×1064, aspect matched to 0.04%) · the size card laid out at its OWN 700×392 well —
+two cards, two viewports, one lane · typed:hi through the whole input chain · URL-bar
+steer · the steered `/size` re-laying the first card out at 900×532. Runs 2–9 each
+failed at a DIFFERENT rung, all host-caused — the software GL context bind flaps per
+launch and a GL-dead world keeps painted DOM but mounts no new island; a mid-run
+re-veil froze typed input twice; a starved producer went 20s frameless while truth
+kept flowing. The harness now names and heals that weather: GL-death relaunch (≤3
+windows) · per-attempt spawn offsets (a dead window's orphan restored later and
+stacked two cards under one double-click) · a sustained settled gate · note-card and
+browser-at-proven-rect controls that grade WHICH half broke on a terminal failure ·
+45s frame patience. `pnpm verify` exit 0 (the `behavior-conformance` churn red in the
+first gate run re-ran green 3× in isolation — the known suite-concurrency class).
+**Still James's:** the dev-mode eyeball on real hardware GL, where none of the smoke's
+lotteries exist.
