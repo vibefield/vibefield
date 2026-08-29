@@ -27,6 +27,7 @@ import type {
   SupportBundlePreviewV1,
   SupportBundleSelectionV1,
 } from "@vibefield/contracts/diagnostics";
+import type { LiveSurfaceRendererTransport } from "@vibefield/live-surfaces/renderer";
 import type { RendererLogger } from "./logging";
 
 export type FieldDiagnosticEvent =
@@ -75,6 +76,22 @@ export interface FieldGodviewHost {
   onState(handler: (state: GodviewState) => void): () => void;
 }
 
+/** The Live Surfaces seam (DT-2a). The renderer host claims the main-world port
+ * handoff once per renderer generation — before product or plugin activation,
+ * because the ports ARE the capability and a later listener must not see them —
+ * and hands the resulting transport through here.
+ *
+ * A promise, not a transport: the claim happens at host bootstrap and the ports
+ * arrive one window message later. Optional like `diagnostics`/`godview`: the
+ * browser-only catalog has no privileged main process to claim from, and
+ * `getSurfacePool` answers null there rather than pretending.
+ *
+ * The HOST owns the transport's lifetime (it disposes on pagehide); the pool in
+ * front of it owns only attachments. */
+export interface FieldLiveSurfacesHost {
+  readonly transport: Promise<LiveSurfaceRendererTransport<VideoFrame>>;
+}
+
 /** The profile record `usersUpdate` answers with — the whole user, so a caller
  * never has to guess what its write did to the rest of it. A structural subset
  * of the `UserRecord` contract (`contracts/src/users.ts`): the extra
@@ -112,6 +129,7 @@ export interface FieldHost {
   readonly diagnostics?: FieldDiagnosticsHost;
   readonly platform?: ShellPlatform;
   readonly godview?: FieldGodviewHost;
+  readonly liveSurfaces?: FieldLiveSurfacesHost;
   /** The profile write seam (UA-3). `users.json` is SUPERVISOR-owned, not
    * fieldd's (UA-D10), so the one door to it is main — which is why this is a
    * host capability and not a product method. Every field is optional because

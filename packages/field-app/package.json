@@ -25,6 +25,7 @@
     "@vibecook/ice": "*",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/fieldd-client": "workspace:*",
+    "@vibefield/live-surfaces": "workspace:*",
     "@vibefield/plugin-browser": "workspace:*",
     "@vibefield/plugin-field-tools": "workspace:*",
     "@vibefield/plugin-note": "workspace:*",

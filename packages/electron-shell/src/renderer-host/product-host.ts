@@ -104,6 +104,12 @@ export function mountProductHost(
         set: (open) => window.vibefield.godview.set(open),
         onState: (handler) => window.vibefield.godview.onState(handler),
       },
+      // DT-2a: the claimed transport reaches the product instead of only being
+      // parked here. The promise is handed over as-is — the pool behind the seam
+      // awaits it — while the LIFETIME stays this adapter's: pagehide above
+      // still disposes the receiver and the transport, in that order, because
+      // the window generation that claimed the ports is what ends.
+      liveSurfaces: { transport: liveSurfaceReceiver.transport },
     },
   });
 }

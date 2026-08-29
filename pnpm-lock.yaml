@@ -406,6 +406,9 @@ importers:
       '@vibefield/fieldd-client':
         specifier: workspace:*
         version: link:../fieldd-client
+      '@vibefield/live-surfaces':
+        specifier: workspace:*
+        version: link:../live-surfaces
       '@vibefield/plugin-browser':
         specifier: workspace:*
         version: link:../../plugins/browser
