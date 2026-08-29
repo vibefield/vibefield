@@ -16,6 +16,7 @@ export class LiveSurfaceDemandConflictError extends Error {
 
 function copyDemand(demand: LiveSurfaceDemandV1): LiveSurfaceDemandV1 {
   const targetRasterSize = demand.targetRasterSize;
+  const logicalViewport = demand.logicalViewport;
   return {
     revision: demand.revision,
     mode: demand.mode,
@@ -26,6 +27,14 @@ function copyDemand(demand: LiveSurfaceDemandV1): LiveSurfaceDemandV1 {
           targetRasterSize: {
             width: targetRasterSize.width,
             height: targetRasterSize.height,
+          },
+        }),
+    ...(logicalViewport === undefined
+      ? {}
+      : {
+          logicalViewport: {
+            width: logicalViewport.width,
+            height: logicalViewport.height,
           },
         }),
     priority: demand.priority,
@@ -41,7 +50,9 @@ function demandsEqual(left: LiveSurfaceDemandV1, right: LiveSurfaceDemandV1): bo
     left.priority === right.priority &&
     left.interactive === right.interactive &&
     left.targetRasterSize?.width === right.targetRasterSize?.width &&
-    left.targetRasterSize?.height === right.targetRasterSize?.height
+    left.targetRasterSize?.height === right.targetRasterSize?.height &&
+    left.logicalViewport?.width === right.logicalViewport?.width &&
+    left.logicalViewport?.height === right.logicalViewport?.height
   );
 }
 

@@ -65,6 +65,21 @@ describe("demandFromElementFacts", () => {
     const runaway = demandFromElementFacts(facts({ cssWidth: 100_000, devicePixelRatio: 10 }));
     expect(runaway.targetRasterSize?.width).toBe(4096);
   });
+
+  // DT-3f — the element's CSS box is the layout ask, pre-DPR: the raster
+  // scales with density, the viewport does not, and that split is the whole of
+  // LSF D8 at this seam.
+  it("declares the element box as the logical viewport, untouched by DPR", () => {
+    const intent = demandFromElementFacts(
+      facts({ cssWidth: 900, cssHeight: 532, devicePixelRatio: 2 }),
+    );
+    expect(intent.logicalViewport).toEqual({ width: 900, height: 532 });
+    expect(intent.targetRasterSize).toEqual({ width: 1800, height: 1064 });
+    const dark = demandFromElementFacts(facts({ elementVisible: false }));
+    expect(dark.logicalViewport).toBeUndefined();
+    const runaway = demandFromElementFacts(facts({ cssWidth: 100_000 }));
+    expect(runaway.logicalViewport?.width).toBe(8192);
+  });
 });
 
 interface FakePresentation {

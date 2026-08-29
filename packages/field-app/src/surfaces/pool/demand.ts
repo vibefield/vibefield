@@ -21,6 +21,7 @@ import {
   LIVE_SURFACE_FPS_BUCKETS_V1,
   type LiveSurfaceDemandV1,
   type LiveSurfaceFpsBucketV1,
+  type LiveSurfaceLogicalSizeV1,
   type LiveSurfacePixelSizeV1,
 } from "@vibefield/contracts";
 
@@ -40,6 +41,10 @@ export interface SurfaceDemandIntent {
   readonly mode: SurfaceDemandMode;
   readonly targetFps: LiveSurfaceFpsBucketV1;
   readonly targetRasterSize?: LiveSurfacePixelSizeV1 | undefined;
+  /** The layout size this holder wants the source laid out at (LSF D8's first
+   * variable; DT-3f). CSS logical units, so it may be fractional. Absent means
+   * no layout opinion. */
+  readonly logicalViewport?: LiveSurfaceLogicalSizeV1 | undefined;
   readonly priority: number;
   readonly interactive: boolean;
 }
@@ -83,6 +88,25 @@ function normalizeRasterSize(
   return Object.freeze({ width: size.width, height: size.height });
 }
 
+/** Mirrors `LiveSurfaceLogicalSizeV1`: finite, positive, bounded — and logical,
+ * so fractional CSS sizes are legitimate. */
+function normalizeLogicalViewport(
+  size: LiveSurfaceLogicalSizeV1 | undefined,
+): LiveSurfaceLogicalSizeV1 | undefined {
+  if (size === undefined) return undefined;
+  if (
+    !Number.isFinite(size.width) ||
+    !Number.isFinite(size.height) ||
+    size.width <= 0 ||
+    size.height <= 0 ||
+    size.width > 32_768 ||
+    size.height > 32_768
+  ) {
+    throw new RangeError("a surface demand logical viewport must be a bounded positive size");
+  }
+  return Object.freeze({ width: size.width, height: size.height });
+}
+
 /**
  * Validate one holder's request and strip it to the fields the fold reads.
  *
@@ -105,22 +129,27 @@ export function normalizeSurfaceDemandIntent(request: SurfaceDemandRequest): Sur
     throw new RangeError("paused and hibernated surface demand require zero FPS");
   }
   const targetRasterSize = normalizeRasterSize(request.targetRasterSize);
+  const logicalViewport = normalizeLogicalViewport(request.logicalViewport);
   return Object.freeze({
     mode: request.mode,
     targetFps: request.targetFps,
     ...(targetRasterSize === undefined ? {} : { targetRasterSize }),
+    ...(logicalViewport === undefined ? {} : { logicalViewport }),
     priority: request.priority,
     interactive: request.interactive,
   });
 }
 
-function area(size: LiveSurfacePixelSizeV1 | undefined): number {
+function area(size: { width: number; height: number } | undefined): number {
   return size === undefined ? 0 : size.width * size.height;
 }
 
 /**
  * The fold: strongest mode, greatest fps, greatest raster area, greatest
- * priority, interactive if ANY holder is.
+ * priority, interactive if ANY holder is. The logical viewport folds the way
+ * the raster does — the largest-area holder's viewport, taken WHOLE (mixing
+ * one holder's width with another's height would name a layout nobody asked
+ * for; a source has one layout, and the biggest viewer is the honest owner).
  *
  * Ties on raster area keep the incumbent, so the emitted demand does not churn
  * as equal-area holders come and go. The result is coherent by construction: a
@@ -133,6 +162,7 @@ export function coalesceSurfaceDemand(
   let mode: SurfaceDemandMode | null = null;
   let targetFps: LiveSurfaceFpsBucketV1 = 0;
   let targetRasterSize: LiveSurfacePixelSizeV1 | undefined;
+  let logicalViewport: LiveSurfaceLogicalSizeV1 | undefined;
   let priority = 0;
   let interactive = false;
 
@@ -141,6 +171,9 @@ export function coalesceSurfaceDemand(
     if (intent.targetFps > targetFps) targetFps = intent.targetFps;
     if (area(intent.targetRasterSize) > area(targetRasterSize)) {
       targetRasterSize = intent.targetRasterSize;
+    }
+    if (area(intent.logicalViewport) > area(logicalViewport)) {
+      logicalViewport = intent.logicalViewport;
     }
     if (intent.priority > priority) priority = intent.priority;
     interactive = interactive || intent.interactive;
@@ -151,6 +184,7 @@ export function coalesceSurfaceDemand(
     mode,
     targetFps: mode === "live" ? targetFps : 0,
     ...(targetRasterSize === undefined ? {} : { targetRasterSize }),
+    ...(logicalViewport === undefined ? {} : { logicalViewport }),
     priority,
     interactive,
   });
@@ -167,7 +201,9 @@ export function surfaceDemandIntentsEqual(
     left.priority === right.priority &&
     left.interactive === right.interactive &&
     left.targetRasterSize?.width === right.targetRasterSize?.width &&
-    left.targetRasterSize?.height === right.targetRasterSize?.height
+    left.targetRasterSize?.height === right.targetRasterSize?.height &&
+    left.logicalViewport?.width === right.logicalViewport?.width &&
+    left.logicalViewport?.height === right.logicalViewport?.height
   );
 }
 
@@ -183,6 +219,14 @@ export function toWireDemand(intent: SurfaceDemandIntent, revision: number): Liv
           targetRasterSize: {
             width: intent.targetRasterSize.width,
             height: intent.targetRasterSize.height,
+          },
+        }),
+    ...(intent.logicalViewport === undefined
+      ? {}
+      : {
+          logicalViewport: {
+            width: intent.logicalViewport.width,
+            height: intent.logicalViewport.height,
           },
         }),
     priority: intent.priority,

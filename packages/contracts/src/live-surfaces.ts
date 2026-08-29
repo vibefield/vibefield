@@ -226,6 +226,13 @@ export const LiveSurfaceDemandV1 = z
     mode: z.enum(["live", "paused", "hibernated"]),
     targetFps: LiveSurfaceFpsBucketV1,
     targetRasterSize: LiveSurfacePixelSizeV1.optional(),
+    /** The layout size the holder wants the source to lay out at (CSS logical
+     * units — LSF D8's first variable, distinct from the raster and from the
+     * presentation transform). Producers whose capability block declares
+     * `resizeLogicalViewport: false` ignore it; for a browser source it is the
+     * page's viewport, so a card-sized holder gets a card-sized layout
+     * (DT-3f). Absent means "no layout opinion": the source keeps its own. */
+    logicalViewport: LiveSurfaceLogicalSizeV1.optional(),
     priority: z.number().int().min(0).max(100),
     interactive: z.boolean(),
   })

@@ -49,7 +49,6 @@ function safeEffectiveRaster(
 
 class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly controlContents;
-  readonly #baseRaster;
   #remoteLoadStarted = false;
   #debuggerAttached = false;
   #commandTail: Promise<void> = Promise.resolve();
@@ -60,7 +59,6 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     readonly bootstrapReady: Promise<void>,
   ) {
     this.controlContents = window.webContents;
-    this.#baseRaster = baseRaster(options);
   }
 
   loadURL(url: string): Promise<void> {
@@ -106,7 +104,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     logicalViewport: { width: number; height: number },
     deviceScaleFactor: number,
   ): Promise<{ width: number; height: number }> {
-    const effective = safeEffectiveRaster(requested, this.#baseRaster);
+    // The base derives from THIS call's viewport (DT-3f), never the
+    // construction-time one: the viewport now follows the card, and a raster
+    // judged against a stale base would reject every request whose aspect had
+    // legitimately moved with the layout.
+    const effective = safeEffectiveRaster(requested, {
+      width: integerDimension(logicalViewport.width * deviceScaleFactor),
+      height: integerDimension(logicalViewport.height * deviceScaleFactor),
+    });
     return this.enqueue(async () => {
       if (this.isDestroyed()) throw new Error("Browser surface was destroyed during resize");
       await this.bootstrapReady;

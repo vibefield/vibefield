@@ -237,11 +237,14 @@ function increment(value: number, name: string): number {
   return value + 1;
 }
 
-function defaultRaster(source: LiveSurfaceBrowserSourceV1): LiveSurfacePixelSizeV1 {
-  const scale = source.deviceScaleFactor ?? 1;
+function defaultRaster(
+  viewport: LiveSurfaceBrowserSourceV1["logicalViewport"],
+  deviceScaleFactor: number,
+): LiveSurfacePixelSizeV1 {
+  const scale = deviceScaleFactor;
   const candidate = {
-    width: Math.max(1, Math.min(16_384, Math.round(source.logicalViewport.width * scale))),
-    height: Math.max(1, Math.min(16_384, Math.round(source.logicalViewport.height * scale))),
+    width: Math.max(1, Math.min(16_384, Math.round(viewport.width * scale))),
+    height: Math.max(1, Math.min(16_384, Math.round(viewport.height * scale))),
   };
   const pixels = candidate.width * candidate.height;
   if (pixels <= 67_108_864) return candidate;
@@ -250,6 +253,24 @@ function defaultRaster(source: LiveSurfaceBrowserSourceV1): LiveSurfacePixelSize
     width: Math.max(1, Math.floor(candidate.width * boundedScale)),
     height: Math.max(1, Math.floor(candidate.height * boundedScale)),
   };
+}
+
+/** The producer's own copy of the native adapter's dimension rounding, so the
+ * logical size geometry reports is the one the page actually laid out at. */
+function roundedViewport(
+  viewport: LiveSurfaceBrowserSourceV1["logicalViewport"],
+): LiveSurfaceBrowserSourceV1["logicalViewport"] {
+  return {
+    width: Math.max(1, Math.min(16_384, Math.round(viewport.width))),
+    height: Math.max(1, Math.min(16_384, Math.round(viewport.height))),
+  };
+}
+
+function sameViewport(
+  left: LiveSurfaceBrowserSourceV1["logicalViewport"],
+  right: LiveSurfaceBrowserSourceV1["logicalViewport"],
+): boolean {
+  return left.width === right.width && left.height === right.height;
 }
 
 function clampCpuRaster(size: LiveSurfacePixelSizeV1): LiveSurfacePixelSizeV1 {
@@ -275,6 +296,14 @@ function copyDemand(demand: LiveSurfaceDemandV1): LiveSurfaceDemandV1 {
             height: demand.targetRasterSize.height,
           },
         }),
+    ...(demand.logicalViewport === undefined
+      ? {}
+      : {
+          logicalViewport: {
+            width: demand.logicalViewport.width,
+            height: demand.logicalViewport.height,
+          },
+        }),
     priority: demand.priority,
     interactive: demand.interactive,
   };
@@ -298,10 +327,21 @@ function aggregateDemand(
         : "hibernated";
   let width = 0;
   let height = 0;
+  // Largest-area viewport, taken WHOLE (mixing axes from two holders would
+  // name a layout nobody asked for) — same rule as the renderer pool's fold.
+  let logicalViewport: LiveSurfaceDemandV1["logicalViewport"];
   for (const demand of selected) {
     if (demand.targetRasterSize !== undefined) {
       width = Math.max(width, demand.targetRasterSize.width);
       height = Math.max(height, demand.targetRasterSize.height);
+    }
+    if (
+      demand.logicalViewport !== undefined &&
+      (logicalViewport === undefined ||
+        demand.logicalViewport.width * demand.logicalViewport.height >
+          logicalViewport.width * logicalViewport.height)
+    ) {
+      logicalViewport = demand.logicalViewport;
     }
   }
   return {
@@ -312,6 +352,9 @@ function aggregateDemand(
         ? (Math.max(...live.map((demand) => demand.targetFps)) as LiveSurfaceDemandV1["targetFps"])
         : 0,
     ...(width > 0 && height > 0 ? { targetRasterSize: { width, height } } : {}),
+    ...(logicalViewport === undefined
+      ? {}
+      : { logicalViewport: { width: logicalViewport.width, height: logicalViewport.height } }),
     priority: Math.max(...selected.map((demand) => demand.priority)),
     interactive: selected.some((demand) => demand.interactive),
   };
@@ -482,6 +525,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #restartTimer: ReturnType<typeof setTimeout> | null = null;
   #effectiveDemand: LiveSurfaceDemandV1 | null = null;
   #transport: "shared-texture" | "cpu-bgra" | undefined;
+  /** The logical viewport the page is CURRENTLY laid out at (DT-3f): starts as
+   * the source's, follows aggregated demand once actuation lands. Geometry
+   * reports THIS, never the source's construction-time value. */
+  #viewport: LiveSurfaceBrowserSourceV1["logicalViewport"];
   #geometry: LiveSurfaceGeometryV1 | undefined;
   #geometryKey = "";
   #geometryRevision = 0;
@@ -518,6 +565,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (!isAllowedBrowserTopLevelUrl(this.source.initialUrl)) {
       throw new Error("Browser source initial URL must use HTTP or HTTPS");
     }
+    this.#viewport = roundedViewport(this.source.logicalViewport);
     this.#native = options.native;
     this.#controlTargets = options.controlTargets;
     this.#requestSharedTexture = options.requestSharedTexture ?? true;
@@ -861,18 +909,23 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.resetProducerObservations();
     this.#error = undefined;
     const epoch = this.#lifecycle.snapshot.producerEpoch;
+    // A producer started under live demand is born at the demanded layout —
+    // the source's own viewport is only the no-opinion fallback (DT-3f).
+    const viewport = this.wantedViewport();
     const demandRaster = this.#effectiveDemand?.targetRasterSize;
-    const initialRaster = demandRaster ?? defaultRaster(this.source);
+    const initialRaster =
+      demandRaster ?? defaultRaster(viewport, this.source.deviceScaleFactor ?? 1);
     let window: BrowserSurfaceNativeWindow;
     try {
       window = this.#native.createWindow({
         partition: browserSurfacePartition(this.source),
         persistent: this.source.profile.mode === "persistent",
-        logicalViewport: this.source.logicalViewport,
+        logicalViewport: viewport,
         initialBackingRaster: initialRaster,
         deviceScaleFactor: this.source.deviceScaleFactor ?? 1,
         requestSharedTexture: this.#requestSharedTexture,
       });
+      this.#viewport = viewport;
       this.#window = window;
       const removePaint = window.onPaint((paint) => this.acceptPaint(window, epoch, paint));
       const removeGone = window.onRenderProcessGone((reason) =>
@@ -892,11 +945,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         this.#startupTimeoutMs,
       );
       void window
-        .setBackingRaster(
-          initialRaster,
-          this.source.logicalViewport,
-          this.source.deviceScaleFactor ?? 1,
-        )
+        .setBackingRaster(initialRaster, viewport, this.source.deviceScaleFactor ?? 1)
         .then(() => {
           if (!this.isCurrent(window, epoch)) return;
           this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
@@ -915,6 +964,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         sourceError("security-rejected", "Browser source could not start safely", "permanent"),
       );
     }
+  }
+
+  /** The layout the page should be at NOW: aggregated demand's, else the
+   * source's own — both through the same rounding the native adapter applies. */
+  private wantedViewport(): LiveSurfaceBrowserSourceV1["logicalViewport"] {
+    return roundedViewport(this.#effectiveDemand?.logicalViewport ?? this.source.logicalViewport);
   }
 
   private acceptPaint(
@@ -1141,7 +1196,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     ) {
       return null;
     }
-    const key = `${codedSize.width}:${codedSize.height}:${visibleRect.x}:${visibleRect.y}:${visibleRect.width}:${visibleRect.height}:${this.source.logicalViewport.width}:${this.source.logicalViewport.height}`;
+    const key = `${codedSize.width}:${codedSize.height}:${visibleRect.x}:${visibleRect.y}:${visibleRect.width}:${visibleRect.height}:${this.#viewport.width}:${this.#viewport.height}`;
     if (key !== this.#geometryKey) {
       this.#geometryRevision = increment(this.#geometryRevision, "Browser geometry revision");
       this.#geometryKey = key;
@@ -1155,9 +1210,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         width: visibleRect.width,
         height: visibleRect.height,
       },
+      // The CURRENT layout (DT-3f), never the source's construction-time
+      // viewport: input maps against a frame's logicalSize, so this must name
+      // the layout the page was actually painted at.
       logicalSize: {
-        width: this.source.logicalViewport.width,
-        height: this.source.logicalViewport.height,
+        width: this.#viewport.width,
+        height: this.#viewport.height,
       },
       orientation: 0,
     };
@@ -1198,15 +1256,22 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (window === null || demand?.mode !== "live") return;
     if (this.#rasterTimer !== null) clearTimeout(this.#rasterTimer);
     const epoch = this.#lifecycle.snapshot.producerEpoch;
-    const requested = demand.targetRasterSize ?? defaultRaster(this.source);
+    // Viewport and raster actuate TOGETHER on the same stabilization debounce:
+    // a drag-resize streams demand, and each is one CDP emulation pass. The
+    // viewport flips `#viewport` only once the native window confirms, so
+    // geometry keeps naming the layout frames were actually painted at.
+    const viewport = this.wantedViewport();
+    const requested =
+      demand.targetRasterSize ?? defaultRaster(viewport, this.source.deviceScaleFactor ?? 1);
     const bounded = this.#transport === "cpu-bgra" ? clampCpuRaster(requested) : requested;
     this.#rasterTimer = setTimeout(() => {
       this.#rasterTimer = null;
       if (!this.isCurrent(window, epoch) || this.#effectiveDemand?.mode !== "live") return;
       void window
-        .setBackingRaster(bounded, this.source.logicalViewport, this.source.deviceScaleFactor ?? 1)
+        .setBackingRaster(bounded, viewport, this.source.deviceScaleFactor ?? 1)
         .then(() => {
           if (this.isCurrent(window, epoch) && this.#effectiveDemand?.mode === "live") {
+            this.#viewport = viewport;
             window.invalidate();
           }
         })
@@ -1264,17 +1329,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // Reconnecting already advanced producerEpoch. Reuse the normal constructor
     // path without a second lifecycle transition.
     const epoch = this.#lifecycle.snapshot.producerEpoch;
-    const initialRaster = this.#effectiveDemand?.targetRasterSize ?? defaultRaster(this.source);
+    const viewport = this.wantedViewport();
+    const initialRaster =
+      this.#effectiveDemand?.targetRasterSize ??
+      defaultRaster(viewport, this.source.deviceScaleFactor ?? 1);
     try {
       const window = this.#native.createWindow({
         partition: browserSurfacePartition(this.source),
         persistent: this.source.profile.mode === "persistent",
-        logicalViewport: this.source.logicalViewport,
+        logicalViewport: viewport,
         initialBackingRaster: initialRaster,
         deviceScaleFactor: this.source.deviceScaleFactor ?? 1,
         requestSharedTexture: this.#requestSharedTexture,
       });
       this.#window = window;
+      this.#viewport = viewport;
       this.#callbacks = {
         removePaint: window.onPaint((paint) => this.acceptPaint(window, epoch, paint)),
         removeGone: window.onRenderProcessGone((reason) =>
@@ -1294,11 +1363,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         this.#startupTimeoutMs,
       );
       void window
-        .setBackingRaster(
-          initialRaster,
-          this.source.logicalViewport,
-          this.source.deviceScaleFactor ?? 1,
-        )
+        .setBackingRaster(initialRaster, viewport, this.source.deviceScaleFactor ?? 1)
         .then(() => {
           if (this.isCurrent(window, epoch)) {
             this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);

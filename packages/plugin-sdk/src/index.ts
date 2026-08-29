@@ -18,6 +18,7 @@
 import type {
   LiveSurfaceDemandV1,
   LiveSurfaceFpsBucketV1,
+  LiveSurfaceLogicalSizeV1,
   LiveSurfacePixelSizeV1,
   LiveSurfaceSourceSpecV1,
 } from "@vibefield/contracts";
@@ -460,6 +461,10 @@ export interface PluginSurfaceDemand {
   readonly mode: LiveSurfaceDemandV1["mode"];
   readonly targetFps: LiveSurfaceFpsBucketV1;
   readonly targetRasterSize?: LiveSurfacePixelSizeV1 | undefined;
+  /** The layout size to lay the source out at (DT-3f; CSS logical units).
+   * Holders that mount the pool's `SurfaceView` never set this — the view
+   * declares its own element box. */
+  readonly logicalViewport?: LiveSurfaceLogicalSizeV1 | undefined;
   readonly priority: number;
   readonly interactive: boolean;
 }

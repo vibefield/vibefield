@@ -8,7 +8,7 @@
 
 import type { LiveSurfaceFrameMetadataV1 } from "@vibefield/contracts";
 import type { LiveSurfaceClosableFrame } from "@vibefield/live-surfaces/renderer";
-import type { SurfaceDemandIntent } from "../pool/demand";
+import { type SurfaceDemandIntent, surfaceDemandIntentsEqual } from "../pool/demand";
 import type { SurfaceHandle, SurfaceHandleState } from "../pool/surface-pool";
 import { demandFromElementFacts, type SurfaceElementFacts } from "./element-demand";
 
@@ -82,14 +82,9 @@ export function createSurfaceViewController<TFrame extends LiveSurfaceClosableFr
 
   const applyFacts = (): void => {
     const next = demandFromElementFacts(facts);
-    const moved =
-      intent === null ||
-      next.mode !== intent.mode ||
-      next.targetFps !== intent.targetFps ||
-      next.priority !== intent.priority ||
-      next.interactive !== intent.interactive ||
-      next.targetRasterSize?.width !== intent.targetRasterSize?.width ||
-      next.targetRasterSize?.height !== intent.targetRasterSize?.height;
+    // The pool's own field-wise equality, so a new demand field (the logical
+    // viewport was the second) can never move without moving the wire.
+    const moved = intent === null || !surfaceDemandIntentsEqual(next, intent);
     intent = next;
     if (moved && handle.status !== "released") handle.setDemand(next);
     if (shouldTick()) scheduleTick();

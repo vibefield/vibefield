@@ -35,6 +35,22 @@ describe("LiveSurfaceDemandTracker", () => {
     expect(() => tracker.update(demand(1, 60))).toThrow(LiveSurfaceDemandConflictError);
   });
 
+  // DT-3f regression shape: the tracker's defensive copy DROPPED any field it
+  // did not know, so a new demand field could parse, ride the wire, and still
+  // never reach the producer. The viewport is pinned here as the field that
+  // found it.
+  it("carries the logical viewport through copy and treats it as conflicting content", () => {
+    const tracker = new LiveSurfaceDemandTracker();
+    tracker.update({ ...demand(1), logicalViewport: { width: 900, height: 532 } });
+    expect(tracker.current?.logicalViewport).toEqual({ width: 900, height: 532 });
+    expect(() =>
+      tracker.update({ ...demand(1), logicalViewport: { width: 901, height: 532 } }),
+    ).toThrow(LiveSurfaceDemandConflictError);
+    expect(
+      tracker.update({ ...demand(1), logicalViewport: { width: 900, height: 532 } }).kind,
+    ).toBe("duplicate");
+  });
+
   it("copies caller-owned demand and reports whether frames are requested", () => {
     const tracker = new LiveSurfaceDemandTracker();
     const input = demand(1);

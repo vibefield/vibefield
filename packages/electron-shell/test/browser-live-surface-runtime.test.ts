@@ -42,6 +42,7 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   destroyed = false;
   readonly frameRates: number[] = [];
   readonly backingRasters: Array<{ width: number; height: number }> = [];
+  readonly rasterViewports: Array<{ width: number; height: number }> = [];
   readonly mouseInputs: BrowserSurfaceNativeMouseInput[] = [];
   readonly keyInputs: BrowserSurfaceNativeKeyInput[] = [];
   readonly textInputs: string[] = [];
@@ -77,8 +78,12 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     this.frameRates.push(fps);
   }
 
-  async setBackingRaster(requested: { width: number; height: number }) {
+  async setBackingRaster(
+    requested: { width: number; height: number },
+    logicalViewport: { width: number; height: number },
+  ) {
     this.backingRasters.push({ ...requested });
+    this.rasterViewports.push({ ...logicalViewport });
     return requested;
   }
 
@@ -217,12 +222,14 @@ function demand(
   mode: LiveSurfaceDemandV1["mode"],
   targetFps: LiveSurfaceDemandV1["targetFps"] = mode === "live" ? 30 : 0,
   targetRasterSize?: { width: number; height: number },
+  logicalViewport?: { width: number; height: number },
 ): LiveSurfaceDemandV1 {
   return {
     revision,
     mode,
     targetFps,
     ...(targetRasterSize === undefined ? {} : { targetRasterSize }),
+    ...(logicalViewport === undefined ? {} : { logicalViewport }),
     priority: mode === "live" ? 50 : 0,
     interactive: mode === "live",
   };
@@ -703,6 +710,95 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await vi.advanceTimersByTimeAsync(300);
     expect(result.native.windows[0]?.backingRasters).toEqual([{ width: 640, height: 360 }]);
     expect(result.native.windows[0]?.invalidate).not.toHaveBeenCalled();
+    result.runtime.dispose();
+  });
+
+  // DT-3f — the logical viewport follows demand: the page LAYS OUT at the
+  // holder's size, geometry names that layout, and a restarted producer is
+  // born at it. The 2026-08-29 live finding: without this lane every card got
+  // a permanent 1024×768 layout whatever its own size.
+  it("is born at the demanded viewport and re-lays-out when demand moves it", async () => {
+    vi.useFakeTimers();
+    const result = setup({ rasterStabilizationMs: 300 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(
+      demand(1, "live", 30, { width: 800, height: 500 }, { width: 800, height: 500 }),
+    );
+    const window = result.native.windows[0];
+    expect(window?.options.logicalViewport).toEqual({ width: 800, height: 500 });
+    expect(window?.rasterViewports).toEqual([{ width: 800, height: 500 }]);
+    window?.paint(sharedPaint(800, 500).paint);
+    expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 800, height: 500 });
+    const firstRevision = result.runtime.summary.geometry?.revision;
+
+    renderer.attachment.setDemand(
+      demand(2, "live", 30, { width: 600, height: 420 }, { width: 600.4, height: 419.6 }),
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    // Fractional CSS sizes actuate at the same rounding the native adapter
+    // applies, so geometry and emulation can never disagree by a pixel.
+    expect(window?.rasterViewports.at(-1)).toEqual({ width: 600, height: 420 });
+    window?.paint(sharedPaint(600, 420).paint);
+    const geometry = result.runtime.summary.geometry;
+    expect(geometry?.logicalSize).toEqual({ width: 600, height: 420 });
+    expect(geometry?.revision).not.toBe(firstRevision);
+    result.runtime.dispose();
+  });
+
+  it("frames painted before a viewport actuation keep naming the old layout", async () => {
+    vi.useFakeTimers();
+    const result = setup({ rasterStabilizationMs: 300 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    const window = result.native.windows[0];
+    window?.paint(sharedPaint(320, 180).paint);
+    expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 320, height: 180 });
+
+    renderer.attachment.setDemand(
+      demand(2, "live", 30, { width: 900, height: 532 }, { width: 900, height: 532 }),
+    );
+    // The stabilization window has not elapsed: a frame that arrives now was
+    // painted at the OLD layout, and its geometry must say so.
+    window?.paint(sharedPaint(320, 180).paint);
+    expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 320, height: 180 });
+    await vi.advanceTimersByTimeAsync(300);
+    window?.paint(sharedPaint(900, 532).paint);
+    expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 900, height: 532 });
+    result.runtime.dispose();
+  });
+
+  it("reconnects a crashed producer at the demanded viewport, not the source's", async () => {
+    vi.useFakeTimers();
+    const result = setup({ restartLimit: 1 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(
+      demand(1, "live", 30, { width: 900, height: 532 }, { width: 900, height: 532 }),
+    );
+    result.native.windows[0]?.paint(sharedPaint(900, 532).paint);
+    result.native.windows[0]?.crash();
+    await vi.advanceTimersByTimeAsync(0);
+    const reconnected = result.native.windows[1];
+    expect(reconnected?.options.logicalViewport).toEqual({ width: 900, height: 532 });
+    reconnected?.paint(sharedPaint(900, 532).paint);
+    expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 900, height: 532 });
+    result.runtime.dispose();
+  });
+
+  it("aggregates the largest-area viewport whole across attachments", async () => {
+    vi.useFakeTimers();
+    const result = setup({ rasterStabilizationMs: 300 });
+    const first = attach(result.runtime, "attachment_browser_00000001");
+    const second = attach(result.runtime, "attachment_browser_00000002");
+    first.attachment.setDemand(
+      demand(1, "live", 30, { width: 640, height: 360 }, { width: 640, height: 360 }),
+    );
+    result.native.windows[0]?.paint(sharedPaint().paint);
+    // A taller-but-smaller viewport must not lend its height to the winner.
+    second.attachment.setDemand(
+      demand(1, "live", 30, { width: 200, height: 900 }, { width: 200, height: 900 }),
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(result.native.windows[0]?.rasterViewports.at(-1)).toEqual({ width: 640, height: 360 });
     result.runtime.dispose();
   });
 });

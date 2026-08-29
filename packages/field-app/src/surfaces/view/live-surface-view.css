@@ -8,10 +8,19 @@
   inline-size: 100%;
   block-size: 100%;
   min-block-size: 0;
+  /* A frame mid-resize may not match the box; it letterboxes, never spills. */
+  overflow: hidden;
 }
 
+/* Absolutely pinned, NOT a grid item (DT-3f): as a grid item the canvas's
+ * intrinsic backing sized the implicit track, so the element's height followed
+ * the FRAME's aspect and overflowed the well — and the demand derived from the
+ * element then echoed the frame's aspect back to the producer, locking the
+ * loop at the wrong shape. Inset against the wrapper, the box is the well's,
+ * always; object-fit letterboxes whatever the frame is that instant. */
 .vf-live-surface-view__canvas {
-  grid-area: 1 / 1;
+  position: absolute;
+  inset: 0;
   inline-size: 100%;
   block-size: 100%;
   object-fit: contain;

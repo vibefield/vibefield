@@ -119,6 +119,29 @@ describe("LSF-1 Live Surfaces contracts", () => {
         interactive: true,
       }).success,
     ).toBe(true);
+    // DT-3f: demand may carry a layout ask — logical units, so fractional CSS
+    // sizes are legitimate — and a viewport with a zero side is not a layout.
+    expect(
+      LiveSurfaceDemandV1.safeParse({
+        revision: 4,
+        mode: "live",
+        targetFps: 30,
+        targetRasterSize: { width: 1800, height: 1064 },
+        logicalViewport: { width: 900.5, height: 532 },
+        priority: 50,
+        interactive: false,
+      }).success,
+    ).toBe(true);
+    expect(
+      LiveSurfaceDemandV1.safeParse({
+        revision: 5,
+        mode: "live",
+        targetFps: 30,
+        logicalViewport: { width: 0, height: 532 },
+        priority: 50,
+        interactive: false,
+      }).success,
+    ).toBe(false);
     expect(
       LiveSurfaceDemandV1.safeParse({
         revision: 2,

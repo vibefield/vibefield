@@ -31,6 +31,10 @@ function fpsForApparentSize(devicePixelSide: number): SurfaceDemandIntent["targe
 }
 
 const MAX_RASTER_SIDE = 4096;
+/** Half the wire schema's ceiling: a card this size is already absurd, and the
+ * producer clamps again — this bound only keeps a runaway layout request from
+ * ever reaching the wire. */
+const MAX_VIEWPORT_SIDE = 8192;
 
 export function demandFromElementFacts(facts: SurfaceElementFacts): SurfaceDemandIntent {
   const dpr =
@@ -53,6 +57,14 @@ export function demandFromElementFacts(facts: SurfaceElementFacts): SurfaceDeman
     mode: "live",
     targetFps: facts.interactive ? 60 : fpsForApparentSize(Math.max(width, height)),
     targetRasterSize: { width, height },
+    // The element's own CSS box IS the layout the holder wants (DT-3f, LSF
+    // D8): layout units, pre-DPR — and pre-zoom, because `clientWidth` is a
+    // layout metric a canvas transform never touches, so zooming the board
+    // stays a presentation transform and never reflows the page.
+    logicalViewport: {
+      width: Math.min(MAX_VIEWPORT_SIDE, Math.max(1, facts.cssWidth)),
+      height: Math.min(MAX_VIEWPORT_SIDE, Math.max(1, facts.cssHeight)),
+    },
     priority: facts.interactive ? 80 : 50,
     interactive: facts.interactive,
   };

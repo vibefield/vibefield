@@ -20,11 +20,13 @@ import {
 } from "@vibefield/live-surfaces/renderer";
 import { describe, expect, it } from "vitest";
 import {
+  coalesceSurfaceDemand,
   createSurfacePool,
   type SurfaceDemandRequest,
   type SurfaceHandleState,
   type SurfacePoolTimers,
   type SurfaceTicketSource,
+  surfaceDemandIntentsEqual,
 } from "../src/surfaces/pool";
 
 const SURFACE_ID = "surface_0123456789abcdef";
@@ -688,5 +690,45 @@ describe("surface pool", () => {
     // the snapshot: failures are recorded as a stage, never as a message.
     expect(rejected.error?.message).toContain(TOKEN_MARKER);
     expect(JSON.stringify(pool.snapshot())).not.toContain(TOKEN_MARKER);
+  });
+});
+
+// DT-3f — the fold's viewport rule, pinned at the unit: largest AREA wins and
+// the winner's viewport travels WHOLE, because a source has one layout and a
+// width from one holder crossed with a height from another names a layout
+// nobody asked for.
+describe("coalesceSurfaceDemand · logical viewport", () => {
+  const live = (viewport?: { width: number; height: number }) => ({
+    mode: "live" as const,
+    targetFps: 30 as const,
+    priority: 50,
+    interactive: false,
+    ...(viewport === undefined ? {} : { logicalViewport: viewport }),
+  });
+
+  it("takes the largest-area holder's viewport whole", () => {
+    const folded = coalesceSurfaceDemand([
+      live({ width: 640, height: 360 }),
+      live({ width: 200, height: 900 }),
+      live(),
+    ]);
+    expect(folded?.logicalViewport).toEqual({ width: 640, height: 360 });
+  });
+
+  it("stays absent when no holder has a layout opinion, and moves equality", () => {
+    const folded = coalesceSurfaceDemand([live(), live()]);
+    expect(folded?.logicalViewport).toBeUndefined();
+    expect(
+      surfaceDemandIntentsEqual(
+        live({ width: 900, height: 532 }),
+        live({ width: 900, height: 533 }),
+      ),
+    ).toBe(false);
+    expect(
+      surfaceDemandIntentsEqual(
+        live({ width: 900, height: 532 }),
+        live({ width: 900, height: 532 }),
+      ),
+    ).toBe(true);
   });
 });
