@@ -158,6 +158,42 @@ export function FieldView({
     };
   }, [registry, stagedPlugins, plugins?.runtime]);
 
+  useEffect(() => {
+    // The CANVAS_READY bargain (development-console.ts), extended one door: a
+    // headless smoke has no hands, so the field exposes ONE narrow driving
+    // surface — spawn a widget through the engine's own op, list the widget
+    // types the palette would list. Reads plus one op this bundle's own
+    // palette already performs; no authority beyond what renderer code holds.
+    const door = {
+      widgetTypes: (): string[] => [...registry.allWidgets().keys()],
+      spawnWidget: (
+        type: string,
+        opts: {
+          x: number;
+          y: number;
+          w: number;
+          h: number;
+          props?: Record<string, unknown>;
+        },
+      ): string =>
+        String(
+          ce.ops.spawnWidget(type, {
+            x: opts.x,
+            y: opts.y,
+            w: opts.w,
+            h: opts.h,
+            undoable: false,
+            ...(opts.props === undefined ? {} : { props: opts.props }),
+          }),
+        ),
+    };
+    const scope = globalThis as Record<string, unknown>;
+    scope["__vfFieldSmoke"] = door;
+    return () => {
+      if (scope["__vfFieldSmoke"] === door) delete scope["__vfFieldSmoke"];
+    };
+  }, [ce, registry]);
+
   const [trayOpen, setTrayOpenRaw] = useState(false);
   const [docsOpen, setDocsOpenRaw] = useState(false);
   const chrome = useChromeState();

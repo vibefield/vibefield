@@ -366,6 +366,355 @@ export async function runSmokeCanvas(opts: {
   app.exit(ok ? 0 : 2);
 }
 
+const BROWSER_WIDGET_TYPE = "vibefield.browser.page";
+
+/** Poll a renderer-side expression until it answers true. On timeout the
+ * FAILURE carries the last value of `diagnose` — the smoke's whole job is to
+ * name where the chain stopped, not that it stopped. */
+async function waitForRendererFact(
+  win: BrowserWindow,
+  label: string,
+  timeoutMs: number,
+  expression: string,
+  diagnose?: string,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if ((await win.webContents.executeJavaScript(expression, true)) === true) return;
+    await sleep(100);
+  }
+  const detail =
+    diagnose === undefined
+      ? ""
+      : ` — ${JSON.stringify(await win.webContents.executeJavaScript(diagnose, true))}`;
+  throw new Error(`${label} did not happen within ${timeoutMs}ms${detail}`);
+}
+
+/** Probes address the card WHOSE ADDRESS NAMES THE SMOKE'S OWN PAGE — the DOM
+ * holds more `.vf-browser-page` nodes than the board shows (run 6's finding: a
+ * second node rendering default about:blank, later in DOM order than the real
+ * card), so position-based selection samples scenery. The probed page URL is
+ * substituted per run. */
+const TARGET_BROWSER_CARD =
+  `[...document.querySelectorAll(".vf-browser-page")].find((card) => ` +
+  `(card.querySelector(".vf-browser-page__address")?.value ?? "").startsWith("http://127.0.0.1:"))`;
+
+/** The card's own account of itself, for failure messages and checkpoints. */
+const BROWSER_CARD_DIAGNOSIS = `(() => {
+  const card = ${TARGET_BROWSER_CARD};
+  if (card === undefined) return { card: false, cards: document.querySelectorAll(".vf-browser-page").length };
+  const face = card.querySelector("[data-live-surface-status]");
+  const address = card.querySelector(".vf-browser-page__address");
+  return {
+    card: true,
+    cards: document.querySelectorAll(".vf-browser-page").length,
+    status: face?.getAttribute("data-live-surface-status") ?? null,
+    faceText: face?.textContent ?? null,
+    address: address ? address.value : null,
+    addressDisabled: address ? address.disabled : null,
+    footer: card.querySelector(".vf-browser-page__label")?.textContent ?? null,
+    stage: card.querySelector(".vf-browser-page__stage")?.textContent ?? null,
+    all: [...document.querySelectorAll(".vf-browser-page")].map((node) => ({
+      address: node.querySelector(".vf-browser-page__address")?.value ?? null,
+      ancestry: (() => {
+        const names = [];
+        let parent = node.parentElement;
+        for (let depth = 0; depth < 4 && parent; depth += 1) {
+          if (parent.className) names.push(String(parent.className).split(" ")[0]);
+          parent = parent.parentElement;
+        }
+        return names.join("<");
+      })(),
+    })),
+  };
+})()`;
+
+/** Sample the newest card's canvas for a picture: byte spread across RGBA.
+ * -1 = no canvas, -2 = no context, 0 = uniform (never painted, or a truly
+ * blank page). */
+const BROWSER_CARD_PIXEL_SPREAD = `(() => {
+  const canvas = ${TARGET_BROWSER_CARD}?.querySelector("canvas");
+  if (!(canvas instanceof HTMLCanvasElement) || canvas.width === 0) return -1;
+  const context = canvas.getContext("2d");
+  if (context === null) return -2;
+  const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  let min = 255, max = 0;
+  for (let index = 0; index < data.length; index += 97) {
+    const value = data[index];
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  return max - min;
+})()`;
+
+/**
+ * DT-3e — the browser widget through the WHOLE product chain, live: real
+ * daemons, the real renderer, the staged plugin, `ctx.pool`, fieldd's window
+ * gate, main custody, an Electron OSR producer, frames on the canvas, and the
+ * DT-D6 input lane — one typed string travels renderer input → ticketed port →
+ * ops gate → CDP → the page itself → its title → navigation truth → summary →
+ * the card's footer. The page is served from THIS process so no network and no
+ * external site is in the loop, and every checkpoint drops a PNG so a human
+ * can see what the harness saw.
+ */
+export async function runSmokeBrowserWidget(opts: {
+  handle: FielddHandle;
+  supervisor: FielddSupervisor;
+  root: string;
+  registry: WindowRegistry;
+  preloadPath: string;
+  viteUrl: string;
+  beforeExit: () => Promise<void>;
+  onWindow?: (window: BrowserWindow) => void;
+}): Promise<void> {
+  // The echo page: typing into it renames it, so committed truth proves the
+  // input lane end to end. `/second` exists for a URL-bar navigation.
+  const page = createServer((req, res) => {
+    const second = req.url === "/second";
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(
+      `<!doctype html><title>${second ? "second page" : "vf smoke page"}</title>` +
+        `<body style="background:#2a9d6f;margin:0"><input id="t" autofocus ` +
+        `style="font-size:24px;margin:24px;width:70%">` +
+        `<script>const t=document.getElementById("t");` +
+        `t.addEventListener("input",()=>{document.title="typed:"+t.value;});` +
+        `addEventListener("mousedown",()=>t.focus());</script>`,
+    );
+  });
+  await new Promise<void>((resolve) => page.listen(0, "127.0.0.1", resolve));
+  const pageUrl = `http://127.0.0.1:${(page.address() as AddressInfo).port}/`;
+
+  const shotDir = process.env["VF_SMOKE_SHOT_DIR"] ?? "/tmp/vf-browser-widget-smoke";
+  mkdirSync(shotDir, { recursive: true });
+  let shotIndex = 0;
+  // Visible on purpose, unlike the other smokes: capturePage on a hidden
+  // window is throttle-hostage on macOS, and the screenshots ARE the deliverable.
+  const win = createMainWindow({
+    mode: "smoke-browser-widget",
+    preloadPath: opts.preloadPath,
+    show: true,
+  });
+  opts.registry.adopt(win);
+  opts.onWindow?.(win);
+  const shot = async (label: string): Promise<void> => {
+    try {
+      shotIndex += 1;
+      const image = await win.webContents.capturePage();
+      const file = join(shotDir, `${String(shotIndex).padStart(2, "0")}-${label}.png`);
+      writeFileSync(file, image.toPNG());
+      console.log(`SMOKE_BROWSER_WIDGET_SHOT ${file}`);
+    } catch (error) {
+      console.log(`SMOKE_BROWSER_WIDGET_SHOT_FAILED ${label}: ${String(error)}`);
+    }
+  };
+  const js = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const checkpoint = async (label: string): Promise<void> => {
+    console.log(
+      `SMOKE_BROWSER_WIDGET ${label} ${JSON.stringify(await js(BROWSER_CARD_DIAGNOSIS))}`,
+    );
+  };
+  if (process.env["VF_SMOKE_DEBUG"]) {
+    win.webContents.on("console-message", (...args: unknown[]) => {
+      console.log(`[renderer] ${args.map((a) => JSON.stringify(a)).join(" ")}`);
+    });
+  }
+
+  let ok = false;
+  try {
+    await loadRenderer(win, "smoke-browser-widget", opts.viteUrl);
+    await waitForConsole(win, "CANVAS_READY ", 45_000);
+    await shot("canvas-ready");
+
+    // Renderer-side throws must arrive as WORDS, not as Electron's generic
+    // "Script failed to execute": every driving expression rides this wrapper.
+    const attempt = async <T>(
+      expression: string,
+    ): Promise<{ ok: true; value: T } | { ok: false; error: string }> =>
+      js(
+        `(() => { try { return { ok: true, value: (${expression}) }; } ` +
+          `catch (error) { return { ok: false, error: String((error && error.stack) || error) }; } })()`,
+      );
+
+    // 1 — registration: the palette would list the type, or nothing else matters.
+    const typesResult = await attempt<string[]>("globalThis.__vfFieldSmoke.widgetTypes()");
+    if (!typesResult.ok) throw new Error(`widgetTypes failed: ${typesResult.error}`);
+    if (!typesResult.value.includes(BROWSER_WIDGET_TYPE)) {
+      throw new Error(
+        `widget type ${BROWSER_WIDGET_TYPE} is not registered (got ${typesResult.value.length})`,
+      );
+    }
+
+    // 2 — spawn through the engine's own op, exactly what the palette does —
+    // but only once the PRODUCT says it is ready. CANVAS_READY precedes the
+    // doc session going live, and first-run setup regenerates the engine while
+    // the veil is up: a spawn fired into that churn lands in a world about to
+    // be replaced (run 5's finding — the Position control read null). A user
+    // cannot click through the veil; the smoke does not get to either.
+    await waitForRendererFact(
+      win,
+      "the doc opened",
+      45_000,
+      `document.querySelector('[data-doc-loading="false"]') !== null`,
+    );
+    await sleep(1_500);
+    const spawnExpression =
+      `globalThis.__vfFieldSmoke.spawnWidget(${JSON.stringify(BROWSER_WIDGET_TYPE)}, ` +
+      `{ x: 160, y: 120, w: 640, h: 480, props: { url: ${JSON.stringify(pageUrl)} } })`;
+    const spawnDeadline = Date.now() + 30_000;
+    const spawnErrors = new Set<string>();
+    let spawnedEntity = "";
+    for (;;) {
+      const spawned = await attempt<string>(spawnExpression);
+      if (spawned.ok) {
+        spawnedEntity = spawned.value;
+        break;
+      }
+      spawnErrors.add(spawned.error.split("\n")[0] ?? spawned.error);
+      if (Date.now() > spawnDeadline) {
+        throw new Error(
+          `spawnWidget never succeeded within 30s — errors: ${[...spawnErrors].join(" · ")}`,
+        );
+      }
+      await sleep(250);
+    }
+    // A retried spawn is a FINDING even when it eventually lands: the palette
+    // takes this same path, and whatever threw here throws under a user's hand.
+    if (spawnErrors.size > 0) {
+      console.log(`SMOKE_BROWSER_WIDGET spawn-retried ${JSON.stringify([...spawnErrors])}`);
+    }
+    console.log(`SMOKE_BROWSER_WIDGET spawned entity=${spawnedEntity}`);
+    await waitForRendererFact(
+      win,
+      "the browser card mounted",
+      15_000,
+      `${TARGET_BROWSER_CARD} !== undefined`,
+    );
+    await checkpoint("mounted");
+    await shot("card-mounted");
+
+    // 3 — the custody chain: mint → ticket → attach → producer → frames.
+    await waitForRendererFact(
+      win,
+      "the surface went live",
+      30_000,
+      `${TARGET_BROWSER_CARD}?.querySelector("[data-live-surface-status]")` +
+        `?.getAttribute("data-live-surface-status") === "live"`,
+      BROWSER_CARD_DIAGNOSIS,
+    );
+    // 4 — committed navigation truth reaches the address bar.
+    await waitForRendererFact(
+      win,
+      "navigation truth reached the chrome",
+      20_000,
+      `${TARGET_BROWSER_CARD}?.querySelector(".vf-browser-page__address")?.value === ${JSON.stringify(pageUrl)}`,
+      BROWSER_CARD_DIAGNOSIS,
+    );
+    await checkpoint("live");
+    await shot("live-with-truth");
+
+    // 5 — pixels: the page paints a green ground; a dead canvas is uniform
+    // zero. Patient, because the first frame may ride the CPU fallback (three
+    // texture-less paints before it engages, 10fps after) — and on a machine
+    // whose GPU process is down, that fallback IS the product's answer.
+    console.log(
+      `SMOKE_BROWSER_WIDGET gpu ${JSON.stringify(app.getGPUFeatureStatus?.() ?? "unknown")}`,
+    );
+    await waitForRendererFact(
+      win,
+      "frames reached the card's canvas",
+      20_000,
+      `(${BROWSER_CARD_PIXEL_SPREAD}) > 0`,
+      BROWSER_CARD_PIXEL_SPREAD,
+    );
+
+    // 6 — engage: the deliberate double-click, delivered the way a user's
+    // arrives (Electron input events into this window, never OS injection).
+    const pageRect = await js<{ x: number; y: number }>(`(() => {
+      const rect = (${TARGET_BROWSER_CARD}).querySelector(".vf-browser-page__page").getBoundingClientRect();
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+    })()`);
+    for (const clickCount of [1, 2]) {
+      win.webContents.sendInputEvent({
+        type: "mouseDown",
+        x: pageRect.x,
+        y: pageRect.y,
+        button: "left",
+        clickCount,
+      });
+      win.webContents.sendInputEvent({
+        type: "mouseUp",
+        x: pageRect.x,
+        y: pageRect.y,
+        button: "left",
+        clickCount,
+      });
+      await sleep(60);
+    }
+    await waitForRendererFact(
+      win,
+      "the card engaged",
+      10_000,
+      `${TARGET_BROWSER_CARD}?.getAttribute("data-engaged") === "true"`,
+      BROWSER_CARD_DIAGNOSIS,
+    );
+    await shot("engaged");
+
+    // 7 — type through the WHOLE lane. The page echoes into its title, the
+    // producer publishes the title as committed truth, the footer shows it.
+    for (const key of ["h", "i"]) {
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: key });
+      win.webContents.sendInputEvent({ type: "char", keyCode: key });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: key });
+      await sleep(60);
+    }
+    await waitForRendererFact(
+      win,
+      "typed text echoed back through navigation truth",
+      15_000,
+      `${TARGET_BROWSER_CARD}?.querySelector(".vf-browser-page__label")?.textContent === "typed:hi"`,
+      BROWSER_CARD_DIAGNOSIS,
+    );
+    await checkpoint("typed");
+    await shot("typed-echo");
+
+    // 8 — steer from the URL bar: React-controlled input driven at the DOM.
+    await js(`(() => {
+      const address = (${TARGET_BROWSER_CARD}).querySelector(".vf-browser-page__address");
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+      setter.call(address, ${JSON.stringify(`${pageUrl}second`)});
+      address.dispatchEvent(new Event("input", { bubbles: true }));
+      address.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      return true;
+    })()`);
+    await waitForRendererFact(
+      win,
+      "the URL bar steered the page",
+      20_000,
+      `${TARGET_BROWSER_CARD}?.querySelector(".vf-browser-page__label")?.textContent === "second page"`,
+      BROWSER_CARD_DIAGNOSIS,
+    );
+    await checkpoint("navigated");
+    await shot("navigated-second");
+
+    console.log("SMOKE_BROWSER_WIDGET ok");
+    ok = true;
+  } catch (error) {
+    console.error(
+      `SMOKE_BROWSER_WIDGET failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    await shot("failure");
+    try {
+      await checkpoint("failure");
+    } catch {
+      // The renderer may be gone; the screenshot already carries the scene.
+    }
+  }
+  page.close();
+  await teardown(opts.supervisor, opts.root, opts.beforeExit);
+  app.exit(ok ? 0 : 2);
+}
+
 async function waitForCondition(
   label: string,
   timeoutMs: number,

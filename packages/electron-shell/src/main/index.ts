@@ -1273,6 +1273,39 @@ async function main(
     return;
   }
 
+  if (MODE === "smoke-browser-widget") {
+    await (await testing()).runSmokeBrowserWidget({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
+      beforeExit: closeEvidence,
+      onWindow: (window) => {
+        installLiveSurfaceHost(window, logger);
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch((error) => {
+              logger.error(
+                "desktop.crash.refresh_failed",
+                "Electron could not refresh crash evidence after a renderer exited",
+                error,
+              );
+            });
+          },
+        });
+        installDiagnostics(window);
+      },
+    });
+    return;
+  }
+
   if (MODE === "smoke-plugin-restart") {
     await (await testing()).runSmokePluginRestart({
       handle: await fielddReady,
