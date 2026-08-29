@@ -17,6 +17,14 @@
 //   - a leaked attachment. Every exit — release, grace expiry, host close, pool
 //     dispose, an attach that resolves after its entry is gone — ends with the
 //     attachment disposed and the entry forgotten.
+//   - orphaned custody. Main-side, every mint is a +1 on a custody entry
+//     (DT-1c counts owner mints), so every successful mint here is paid back
+//     with exactly one `close` when its use permanently ends — loss, grace
+//     lapse, supersession by a retry's fresh mint, a stale resolution. The ONE
+//     deliberate exception is pool dispose: the window is unloading, and
+//     reuse-keyed custody surviving into the next document is the reload
+//     continuity main custody exists to provide; window death is main's own
+//     cleanup.
 //
 // TWO TRANSPORT FACTS THIS MODULE IS BUILT AROUND (read from the code at
 // packages/live-surfaces/src/renderer/transport.ts, not assumed):
@@ -66,7 +74,33 @@ export const SURFACE_POOL_GRACE_MS = 60_000;
  * what the source returns.
  */
 export interface SurfaceTicketSource {
-  mint(): Promise<LiveSurfaceAttachTicketV1>;
+  mint(): Promise<SurfaceTicketGrant>;
+  /**
+   * Pay back the custody behind one spent mint (DT-D2: the grace lapse or the
+   * widget's deletion, never the pane's mere unmount). Optional because some
+   * sources have no custody plane at all — the catalog fixture, the labs.
+   * Best-effort by contract: the pool swallows rejections, because by the time
+   * a close can fail the renderer has nothing to act with — the authority's
+   * stale sweep and window-death release are the backstops.
+   */
+  close?(surfaceId: string): void | Promise<void>;
+}
+
+export interface SurfaceTicketGrant {
+  /** The one-use attach authority. Spent on `transport.attach`, never stored. */
+  readonly ticket: LiveSurfaceAttachTicketV1;
+  /** The custody entry behind the ticket, when the source has one. The pool
+   * retains THIS — never the ticket — so the mint can be paid back with one
+   * `close` when its use permanently ends. */
+  readonly surfaceId?: string;
+}
+
+/** One successful mint's unpaid custody debt. It closes via the SOURCE that
+ * minted it: `entry.tickets` may be swapped by a later acquire, and a claim
+ * must not be paid back through someone else's authority. */
+interface CustodyClaim {
+  readonly source: SurfaceTicketSource;
+  readonly surfaceId: string;
 }
 
 /** One-shot timers, injectable so tests drive grace expiry off a fake clock. */
@@ -166,6 +200,10 @@ export interface SurfacePoolSnapshot {
   readonly liveAttachments: number;
   readonly pendingGraceTimers: number;
   readonly mints: number;
+  /** Custody closes REQUESTED (sources with no `close` never count). The
+   * census's conservation check: mints minus live attachments minus closes
+   * should be zero on a quiet pool that survived no reload. */
+  readonly custodyCloses: number;
   readonly entries: readonly SurfacePoolEntrySnapshot[];
 }
 
@@ -182,6 +220,9 @@ interface PoolEntry<TFrame extends LiveSurfaceClosableFrame> {
   tickets: SurfaceTicketSource;
   readonly holders: Set<PoolHandle<TFrame>>;
   attachment: LiveSurfaceRendererAttachment<TFrame> | null;
+  /** The installed attachment's unpaid mint. Null exactly when `attachment` is
+   * null — a claim never outlives its use, and never predates installation. */
+  claim: CustodyClaim | null;
   presentation: LiveSurfacePresentation<TFrame> | null;
   unobserve: (() => void) | null;
   /** Bumped per attach so a resolution that lost its race can identify itself. */
@@ -312,6 +353,7 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
   readonly #timers: SurfacePoolTimers;
   #disposed = false;
   #mints = 0;
+  #closes = 0;
 
   constructor(deps: SurfacePoolDeps<TFrame>) {
     this.#transport = Promise.resolve(deps.transport);
@@ -348,6 +390,7 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
         tickets: opts.tickets,
         holders: new Set(),
         attachment: null,
+        claim: null,
         presentation: null,
         unobserve: null,
         generation: 0,
@@ -398,6 +441,7 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
       pendingGraceTimers: [...this.#entries.values()].filter((entry) => entry.cancelGrace !== null)
         .length,
       mints: this.#mints,
+      custodyCloses: this.#closes,
       entries,
     };
   }
@@ -470,20 +514,30 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
     entry.error = null;
     this.#notify(entry);
 
+    // Captured HERE, not read at close time: a later acquire may swap
+    // `entry.tickets`, and this mint's custody must be paid back through the
+    // authority that minted it.
+    const source = entry.tickets;
     void (async () => {
       let stage: SurfacePoolFailure = "transport";
+      let claim: CustodyClaim | null = null;
       try {
         const transport = await this.#transport;
         stage = "mint";
-        const ticket = await entry.tickets.mint();
+        const grant = await source.mint();
+        claim = grant.surfaceId === undefined ? null : { source, surfaceId: grant.surfaceId };
         entry.mints += 1;
         this.#mints += 1;
         stage = "attach";
         // The ticket is spent here and never stored: from this line on the pool
         // holds an attachment, and nothing that can be serialized holds a token.
-        const attachment = await transport.attach(ticket);
-        this.#attached(entry, generation, attachment);
+        const attachment = await transport.attach(grant.ticket);
+        this.#attached(entry, generation, attachment, claim);
       } catch (error) {
+        // The mint may have succeeded even though its use never began — a
+        // rejected attach, a dead transport. That custody is already owed,
+        // unless the failure IS the window unloading (the dispose exception).
+        if (!this.#disposed) this.#closeClaim(claim);
         this.#attachFailed(entry, generation, stage, toError(error));
       }
     })();
@@ -493,15 +547,22 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
     entry: PoolEntry<TFrame>,
     generation: number,
     attachment: LiveSurfaceRendererAttachment<TFrame>,
+    claim: CustodyClaim | null,
   ): void {
     const stale =
       this.#disposed || generation !== entry.generation || this.#entries.get(entry.key) !== entry;
     if (stale) {
+      // The pool stopped wanting this before it arrived. Its mint still
+      // happened — pay it back, except on dispose (reload continuity).
+      if (!this.#disposed) this.#closeClaim(claim);
       disposeQuietly(attachment);
       return;
     }
     entry.attaching = false;
     entry.attachment = attachment;
+    // Null here by construction: an attach only starts with no attachment
+    // installed, and every exit that removed one settled its claim with it.
+    entry.claim = claim;
     entry.presentation = new LiveSurfacePresentation<TFrame>(attachment);
     entry.status = "live";
     entry.failure = null;
@@ -583,6 +644,13 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
   /** Release the attachment and its observation. Leaves the entry in the map. */
   #teardown(entry: PoolEntry<TFrame>): void {
     this.#cancelGrace(entry);
+    const claim = entry.claim;
+    entry.claim = null;
+    // Dispose is the ONE exit that leaves custody standing: the window is
+    // unloading, and reuse-keyed custody surviving into the next document is
+    // the reload continuity main custody exists to provide. Every other road
+    // through here — loss, grace lapse, drop — pays the mint back.
+    if (!this.#disposed) this.#closeClaim(claim);
     const unobserve = entry.unobserve;
     entry.unobserve = null;
     if (unobserve !== null) unobserve();
@@ -601,6 +669,24 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
   #dropEntry(entry: PoolEntry<TFrame>): void {
     this.#teardown(entry);
     if (this.#entries.get(entry.key) === entry) this.#entries.delete(entry.key);
+  }
+
+  /**
+   * Pay one mint's custody debt. Fire-and-forget by design: by the time a
+   * close can fail the renderer has nothing left to act with, and the
+   * authority's stale sweep and window-death release are the backstops. A
+   * source with no `close` owes nothing (no custody plane behind it).
+   */
+  #closeClaim(claim: CustodyClaim | null): void {
+    if (claim === null) return;
+    const close = claim.source.close;
+    if (close === undefined) return;
+    this.#closes += 1;
+    void (async () => {
+      await close.call(claim.source, claim.surfaceId);
+    })().catch(() => {
+      // Refused or unreachable. The backstops above clean up.
+    });
   }
 
   // ── demand ────────────────────────────────────────────────────────────────

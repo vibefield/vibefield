@@ -250,16 +250,25 @@ const TOKEN_MARKER = "TICKETSECRET";
 
 interface CountingTicketSource extends SurfaceTicketSource {
   readonly minted: string[];
+  /** Custody paid back, in close order — the surfaceIds the pool named. */
+  readonly closed: string[];
 }
 
 function ticketSource(): CountingTicketSource {
   const minted: string[] = [];
+  const closed: string[] = [];
   return {
     minted,
+    closed,
     async mint() {
       const token = `${TOKEN_MARKER}_${"a".repeat(24)}_${minted.length + 1}`;
       minted.push(token);
-      return { v: 1, token };
+      // A distinct custody id per mint: the authority counts owner MINTS, so
+      // the conservation law under test is one close per mint, not per key.
+      return { ticket: { v: 1, token }, surfaceId: `custody_${minted.length}` };
+    },
+    async close(surfaceId) {
+      closed.push(surfaceId);
     },
   };
 }
@@ -310,9 +319,11 @@ describe("surface pool", () => {
       expect(handle.status).toBe("released");
     }
 
-    // Held warm, not torn down: the grace window is the whole point.
+    // Held warm, not torn down: the grace window is the whole point — and a
+    // warm attachment's custody is still in use, so nothing has closed yet.
     expect(pool.snapshot().liveAttachments).toBe(4);
     expect(pool.snapshot().pendingGraceTimers).toBe(4);
+    expect(tickets.closed).toHaveLength(0);
 
     clock.advance(GRACE_MS);
     await settle();
@@ -324,6 +335,9 @@ describe("surface pool", () => {
     expect(clock.pending).toBe(0);
     expect(host.detaches).toHaveLength(4);
     expect(tickets.minted).toHaveLength(4);
+    // The grace lapse is a permanent end (DT-D2): every mint is paid back.
+    expect(tickets.closed.sort()).toEqual(["custody_1", "custody_2", "custody_3", "custody_4"]);
+    expect(snapshot.custodyCloses).toBe(4);
   });
 
   it("shares one in-flight attach across concurrent acquires of one key", async () => {
@@ -484,11 +498,16 @@ describe("surface pool", () => {
     expect(snapshot.entries[0]?.failure).toBe("host-close");
     expect(snapshot.liveAttachments).toBe(0);
 
+    // The loss settled the first mint's custody the moment the pool saw it.
+    expect(tickets.closed).toEqual(["custody_1"]);
+
     const next = pool.acquire("closed-by-host", { tickets, initialDemand: LIVE_30 });
     await settle();
     expect(next.status).toBe("live");
     expect(tickets.minted).toHaveLength(2);
     expect(host.attaches).toHaveLength(2);
+    // The second mint's custody is in use, not owed.
+    expect(tickets.closed).toEqual(["custody_1"]);
   });
 
   it("notifies holders directly when the loss arrives as a closed summary", async () => {
@@ -522,6 +541,8 @@ describe("surface pool", () => {
     expect(tickets.minted).toHaveLength(2);
     expect(host.attaches).toHaveLength(2);
     expect(pool.snapshot().entries[0]?.failure).toBeNull();
+    // Supersession: the dead attachment's mint paid back, the new one's held.
+    expect(tickets.closed).toEqual(["custody_1"]);
 
     // Revisions never restart with the attachment they are declared against.
     const revisions = host.demands.map((entry) => entry.demand.revision);
@@ -538,11 +559,14 @@ describe("surface pool", () => {
     expect(handle.status).toBe("lost");
     expect(handle.error?.message).toMatch(/permission-denied/u);
     expect(pool.snapshot().entries[0]?.failure).toBe("attach");
+    // The mint succeeded even though its use never began: still owed, and paid.
+    expect(tickets.closed).toEqual(["custody_1"]);
 
     handle.retry();
     await settle();
     expect(handle.status).toBe("live");
     expect(tickets.minted).toHaveLength(2);
+    expect(tickets.closed).toEqual(["custody_1"]);
   });
 
   it("drains everything on dispose, and disposes idempotently", async () => {
@@ -568,6 +592,11 @@ describe("surface pool", () => {
     expect(snapshot.disposed).toBe(true);
     expect(snapshot.entries).toHaveLength(0);
     expect(snapshot.liveAttachments).toBe(0);
+    // Dispose is the window unloading: custody deliberately STANDS, because
+    // reuse-keyed entries re-bind on reload and window death is main's own
+    // cleanup. Attachments detach; mints are not paid back here.
+    expect(tickets.closed).toHaveLength(0);
+    expect(snapshot.custodyCloses).toBe(0);
 
     expect(() => pool.dispose()).not.toThrow();
     expect(host.detaches).toHaveLength(3);
@@ -586,6 +615,54 @@ describe("surface pool", () => {
 
     expect(handle.status).toBe("lost");
     expect(() => pool.dispose()).not.toThrow();
+    expect(pool.snapshot().entries).toHaveLength(0);
+    // Same unload story as dispose: custody survives for the next document.
+    expect(tickets.closed).toHaveLength(0);
+  });
+
+  it("pays back a mint whose attach resolved after its entry was already dropped", async () => {
+    const host = await fakeSurfaceHost();
+    const clock = fakeClock();
+    let releaseMint: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseMint = resolve;
+    });
+    const minted: string[] = [];
+    const closed: string[] = [];
+    const tickets: SurfaceTicketSource = {
+      async mint() {
+        await gate;
+        const token = `${TOKEN_MARKER}_${"g".repeat(24)}_${minted.length + 1}`;
+        minted.push(token);
+        return { ticket: { v: 1, token }, surfaceId: `custody_gated_${minted.length}` };
+      },
+      async close(surfaceId) {
+        closed.push(surfaceId);
+      },
+    };
+    const pool = createSurfacePool<LiveSurfaceClosableFrame>({
+      transport: Promise.resolve(host.transport),
+      now: () => clock.now(),
+      graceMs: GRACE_MS,
+      timers: clock.timers,
+    });
+
+    // Acquire, release while the mint is still gated, and let grace lapse: the
+    // entry is gone before the mint ever resolves.
+    const handle = pool.acquire("late", { tickets, initialDemand: LIVE_30 });
+    await settle();
+    handle.release();
+    clock.advance(GRACE_MS);
+    expect(pool.snapshot().entries).toHaveLength(0);
+
+    // Now the mint lands, the attach completes, and the pool wants none of it:
+    // the attachment is disposed AND the mint is paid back — a ticket spent
+    // into a dropped entry must not strand custody main-side.
+    releaseMint();
+    await settle();
+    expect(minted).toHaveLength(1);
+    expect(closed).toEqual(["custody_gated_1"]);
+    expect(host.detaches).toHaveLength(1);
     expect(pool.snapshot().entries).toHaveLength(0);
   });
 

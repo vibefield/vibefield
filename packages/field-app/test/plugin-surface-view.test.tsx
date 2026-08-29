@@ -88,6 +88,7 @@ function attachingPool(): SurfacePool<ProductSurfaceFrame> {
         liveAttachments: 0,
         pendingGraceTimers: 0,
         mints: 0,
+        custodyCloses: 0,
         entries: [],
       };
     },

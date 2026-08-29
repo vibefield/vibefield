@@ -25,9 +25,9 @@
 // registry scope on that method, checked by ProductAPI before the handler runs,
 // plus SurfaceService's own kind→scope matrix). The door does not gate, it
 // reports: a refusal arrives as a `lost` handle carrying the daemon's own words.
-// Today that is EVERY plugin — `surface.attach` is not yet plugin-eligible in
-// contracts — so this path is complete and currently always refuses. That is a
-// state, not a bug, and it is the one the face was built to show.
+// (`surface.attach`/`surface.browser`/`surface.capture` became renderer-eligible
+// in DT-2b-3, so a granted plugin really mints here; an ungranted one still
+// gets the refusal face this path was built to show.)
 
 import { SurfaceOpenResultV1 } from "@vibefield/contracts";
 import { UnavailableState } from "@vibefield/design-kit/primitives";
@@ -211,7 +211,19 @@ export function createPluginSurfacePool(deps: PluginSurfacePoolDeps): PluginAtta
                 source: opts.source,
                 ...(opts.reuseKey === undefined ? {} : { reuseKey: opts.reuseKey }),
               });
-              return SurfaceOpenResultV1.parse(raw).ticket;
+              const opened = SurfaceOpenResultV1.parse(raw);
+              return { ticket: opened.ticket, surfaceId: opened.surfaceId };
+            },
+            async close(surfaceId: string) {
+              // The pool pays each mint back when its use permanently ends
+              // (DT-D2: grace lapse, loss, supersession — never mere unmount,
+              // never window unload). Deliberately NOT behind `assertOpen`:
+              // this is pool hygiene, not a plugin-initiated call, and the
+              // grace timer routinely outlives the activation that minted.
+              // When it fires after deactivation this client is closed and the
+              // request rejects — the pool swallows that, and main's stale
+              // sweep / window-death release remain the backstops.
+              await deps.client.request("surface.close", { surfaceId });
             },
           },
         });

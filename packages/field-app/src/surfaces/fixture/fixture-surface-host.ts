@@ -26,7 +26,6 @@
 // module and the cross-package rule keeps its teeth.
 
 import type {
-  LiveSurfaceAttachTicketV1,
   LiveSurfaceDemandV1,
   LiveSurfaceFrameMetadataV1,
   LiveSurfaceRuntimeSummaryV1,
@@ -35,7 +34,7 @@ import {
   type LiveSurfaceMessagePort,
   LiveSurfaceRendererTransport,
 } from "@vibefield/live-surfaces/renderer";
-import type { SurfaceTicketSource } from "../pool";
+import type { SurfaceTicketGrant, SurfaceTicketSource } from "../pool";
 import { createSurfacePool, type ProductSurfaceFrame, type SurfacePool } from "../pool";
 
 /** Frames are produced at this cadence and this size regardless of demand: the
@@ -351,8 +350,10 @@ export function createFixtureSurfaceHost(opts: FixtureSurfaceHostOptions = {}): 
   return {
     pool,
     tickets: {
-      mint(): Promise<LiveSurfaceAttachTicketV1> {
-        return Promise.resolve({ v: 1, token: FIXTURE_TICKET_TOKEN });
+      // No `surfaceId` on the grant and no `close`: the fixture has no custody
+      // plane, and the pool's contract makes that a source that owes nothing.
+      mint(): Promise<SurfaceTicketGrant> {
+        return Promise.resolve({ ticket: { v: 1, token: FIXTURE_TICKET_TOKEN } });
       },
     },
     demands,

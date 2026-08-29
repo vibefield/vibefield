@@ -24,6 +24,7 @@ import type {
   SurfaceHandle,
   SurfaceHandleState,
   SurfacePool,
+  SurfaceTicketGrant,
 } from "../src/surfaces/pool";
 
 const SOURCE: LiveSurfaceSourceSpecV1 = {
@@ -45,7 +46,9 @@ interface AcquiredEntry {
   readonly demands: SurfaceDemandRequest[];
   released: boolean;
   /** The door's ticket source, kept so a test can spend one mint deliberately. */
-  mint(): Promise<LiveSurfaceAttachTicketV1>;
+  mint(): Promise<SurfaceTicketGrant>;
+  /** The source's custody payback half, delegated the same way. */
+  close(surfaceId: string): void | Promise<void>;
 }
 
 interface FakePool {
@@ -63,6 +66,7 @@ function fakePool(): FakePool {
         demands: [opts.initialDemand],
         released: false,
         mint: () => opts.tickets.mint(),
+        close: (surfaceId) => opts.tickets.close?.(surfaceId),
       };
       acquired.push(entry);
       const state = (): SurfaceHandleState<ProductSurfaceFrame> =>
@@ -101,6 +105,7 @@ function fakePool(): FakePool {
         liveAttachments: 0,
         pendingGraceTimers: 0,
         mints: 0,
+        custodyCloses: 0,
         entries: [],
       };
     },
@@ -248,8 +253,10 @@ describe("ctx.pool.liveSurface", () => {
     const staged = await stageWithPool(pool, [{ key: "preview", reuseKey: "card-7" }]);
 
     // The door builds the ticket source; spending one mint is what sends it.
-    const ticket = await staged.acquired[0]?.mint();
-    expect(ticket).toEqual(TICKET);
+    // The grant carries BOTH halves of the open: the one-use ticket for the
+    // attach, and the custody id the pool retains for the eventual payback.
+    const grant = await staged.acquired[0]?.mint();
+    expect(grant).toEqual({ ticket: TICKET, surfaceId: "surface_door_test_0001" });
 
     expect(staged.calls).toHaveLength(1);
     const call = staged.calls[0];
@@ -269,6 +276,24 @@ describe("ctx.pool.liveSurface", () => {
 
     await staged.acquired[0]?.mint();
     expect(staged.calls[0]?.params).toEqual({ source: SOURCE });
+
+    await staged.deactivate();
+  });
+
+  it("pays custody back through surface.close on the same client", async () => {
+    const pool = fakePool();
+    const staged = await stageWithPool(pool, [{ key: "preview" }]);
+
+    const grant = await staged.acquired[0]?.mint();
+    await staged.acquired[0]?.close(grant?.surfaceId ?? "");
+
+    // The pool decides WHEN (grace lapse, loss, supersession — its own suite's
+    // law); the door's job is only that the payback rides `surface.close` with
+    // the custody id the mint returned, on the plugin's own product client.
+    expect(staged.calls.at(-1)).toEqual({
+      method: "surface.close",
+      params: { surfaceId: "surface_door_test_0001" },
+    });
 
     await staged.deactivate();
   });

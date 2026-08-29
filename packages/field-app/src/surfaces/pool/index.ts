@@ -29,5 +29,6 @@ export {
   type SurfacePoolFailure,
   type SurfacePoolSnapshot,
   type SurfacePoolTimers,
+  type SurfaceTicketGrant,
   type SurfaceTicketSource,
 } from "./surface-pool";
