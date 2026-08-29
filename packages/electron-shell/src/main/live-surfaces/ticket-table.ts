@@ -1,7 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { LiveSurfaceAttachTicketV1, type LiveSurfaceSourceSpecV1 } from "@vibefield/contracts";
 
-export type LiveSurfacePresentationOperation = "view" | "pointer" | "keyboard" | "resize" | "crop";
+export type LiveSurfacePresentationOperation =
+  | "view"
+  | "pointer"
+  | "keyboard"
+  | "navigate"
+  | "resize"
+  | "crop";
 
 export interface LiveSurfaceTicketBinding<TAuthority> {
   readonly targetWebContentsId: number;

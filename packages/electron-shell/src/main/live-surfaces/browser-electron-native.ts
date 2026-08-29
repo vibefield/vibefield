@@ -5,6 +5,7 @@ import type {
   BrowserSurfaceNativeMouseInput,
   BrowserSurfaceNativeWindow,
   BrowserSurfaceNativeWindowOptions,
+  BrowserSurfaceNavigationState,
   BrowserSurfacePaint,
 } from "./browser-producer";
 import {
@@ -146,6 +147,51 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       await this.ensureDebugger();
       await this.window.webContents.debugger.sendCommand("Input.insertText", { text });
     });
+  }
+
+  navigate(action: "back" | "forward" | "reload" | "stop"): void {
+    if (this.isDestroyed()) return;
+    const contents = this.window.webContents;
+    if (action === "back") {
+      if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
+      return;
+    }
+    if (action === "forward") {
+      if (contents.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
+      return;
+    }
+    if (action === "reload") {
+      contents.reload();
+      return;
+    }
+    contents.stop();
+  }
+
+  onNavigationState(listener: (state: BrowserSurfaceNavigationState) => void): () => void {
+    const contents = this.window.webContents;
+    const emit = (): void => {
+      // The about:blank bootstrap document is plumbing, not navigation truth.
+      if (this.isDestroyed() || !this.#remoteLoadStarted) return;
+      listener({
+        url: contents.getURL(),
+        title: contents.getTitle(),
+        loading: contents.isLoading(),
+        canGoBack: contents.navigationHistory.canGoBack(),
+        canGoForward: contents.navigationHistory.canGoForward(),
+      });
+    };
+    contents.on("did-navigate", emit);
+    contents.on("did-navigate-in-page", emit);
+    contents.on("page-title-updated", emit);
+    contents.on("did-start-loading", emit);
+    contents.on("did-stop-loading", emit);
+    return () => {
+      contents.off("did-navigate", emit);
+      contents.off("did-navigate-in-page", emit);
+      contents.off("page-title-updated", emit);
+      contents.off("did-start-loading", emit);
+      contents.off("did-stop-loading", emit);
+    };
   }
 
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void {

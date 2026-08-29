@@ -99,7 +99,7 @@ function mintParams(
 }
 
 describe("LiveSurfaceAuthority", () => {
-  it("mints a browser runtime and issues a window-bound view ticket", () => {
+  it("mints a browser runtime and issues a window-bound interaction ticket", () => {
     const { authority, factories, issued, windows } = fixture();
     const alice = participant("window-1", "document-1");
     windows.set(alice.incarnation, { webContentsId: 7 });
@@ -111,7 +111,8 @@ describe("LiveSurfaceAuthority", () => {
     expect(result.ticket.token).toMatch(/^ticket-1/);
     expect(issued[0]).toMatchObject({
       sourceKind: "browser",
-      operations: ["view"],
+      // DT-D6: browser surfaces carry the human interaction ops.
+      operations: ["view", "pointer", "keyboard", "navigate"],
       principalId: "window-1",
     });
   });
@@ -143,7 +144,7 @@ describe("LiveSurfaceAuthority", () => {
   });
 
   it("dedupes capture mints on the canonical source and refcounts owners", () => {
-    const { authority, factories, windows, disposed } = fixture();
+    const { authority, factories, windows, disposed, issued } = fixture();
     const alice = participant("window-1", "document-1");
     const bob = participant("window-2", "document-1");
     windows.set(alice.incarnation, { webContentsId: 7 });
@@ -155,6 +156,8 @@ describe("LiveSurfaceAuthority", () => {
     expect(factories.sckWindow).toHaveBeenCalledTimes(1);
     expect(second.surfaceId).toBe(first.surfaceId);
     expect(second.ticket.token).not.toBe(first.ticket.token);
+    // DT-D6: capture stays view-only — no input op ever rides an sck ticket.
+    expect(issued[0]?.operations).toEqual(["view"]);
 
     expect(authority.release({ surfaceId: first.surfaceId, rendererParticipant: alice })).toEqual({
       released: true,

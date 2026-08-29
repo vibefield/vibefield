@@ -313,7 +313,7 @@ describe("LiveSurfaceRendererTransport", () => {
     expect(transport.protocolFaults).toBe(1);
   });
 
-  it("detaches locally and emits no semantic-control surface", async () => {
+  it("detaches locally and exposes the human lane but no semantic control", async () => {
     const { attachment, hostControl } = await attachedTransport();
     attachment.setDemand({
       revision: 1,
@@ -331,6 +331,47 @@ describe("LiveSurfaceRendererTransport", () => {
     const rendererMessages = (hostControl.peer?.sent ?? []) as Array<{ type?: string }>;
     expect(rendererMessages.filter((message) => message.type === "demand")).toHaveLength(1);
     expect(rendererMessages.filter((message) => message.type === "detach")).toHaveLength(1);
-    expect("navigate" in attachment).toBe(false);
+    // DT-D6 moved HUMAN interaction — input events, navigation commands — onto
+    // the attachment, ops-gated main-side by the ticket. SEMANTIC control (CDP
+    // sessions, DOM access: the DT-5 broker lane) still has no surface here.
+    expect(typeof attachment.sendInput).toBe("function");
+    expect(typeof attachment.sendNavigation).toBe("function");
+    expect("debugger" in attachment).toBe(false);
+    expect("sendCommand" in attachment).toBe(false);
+  });
+
+  it("stamps input with the geometry the renderer mapped against, soft-failing without one", async () => {
+    const { attachment, hostControl } = await attachedTransport();
+
+    // The initial summary carries no geometry: nothing to map coordinates
+    // against, so the stream soft-fails rather than inventing a revision.
+    expect(attachment.sendInput({ kind: "pointer", action: "move", x: 1, y: 2 })).toBe(false);
+
+    hostControl.postMessage({
+      v: 1,
+      type: "summary",
+      attachmentId: "attachment_0123456789abcdef",
+      summary: { ...summary(), geometry: metadata("1").geometry },
+    });
+    expect(attachment.sendInput({ kind: "pointer", action: "move", x: 1, y: 2 })).toBe(true);
+    expect(attachment.sendNavigation({ action: "go", url: "https://example.test/" })).toBe(true);
+
+    const rendererMessages = (hostControl.peer?.sent ?? []) as Array<Record<string, unknown>>;
+    expect(rendererMessages.find((message) => message.type === "input")).toMatchObject({
+      v: 1,
+      attachmentId: "attachment_0123456789abcdef",
+      geometryRevision: 1,
+      input: { kind: "pointer", action: "move", x: 1, y: 2 },
+    });
+    expect(rendererMessages.find((message) => message.type === "navigate")).toMatchObject({
+      v: 1,
+      attachmentId: "attachment_0123456789abcdef",
+      navigation: { action: "go", url: "https://example.test/" },
+    });
+
+    // A closed attachment's stream simply ends — false, never a throw.
+    attachment.dispose();
+    expect(attachment.sendInput({ kind: "pointer", action: "move", x: 1, y: 2 })).toBe(false);
+    expect(attachment.sendNavigation({ action: "reload" })).toBe(false);
   });
 });

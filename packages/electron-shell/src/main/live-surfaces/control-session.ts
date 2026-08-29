@@ -44,6 +44,8 @@ interface ManagedAttachment {
   readonly runtime: LiveSurfaceRuntimeAttachment;
   readonly textureSink: LiveSurfaceTextureFrameSink | null;
   readonly demand: LiveSurfaceDemandTracker;
+  /** The redeemed ticket's grant, captured at attach — the input lane's gate. */
+  readonly operations: readonly LiveSurfacePresentationOperation[];
   summary: LiveSurfaceRuntimeSummaryV1;
   lastFrameSequence: bigint | null;
   cpuFrameInFlight: { readonly producerEpoch: number; readonly sequence: string } | null;
@@ -165,6 +167,49 @@ export class LiveSurfaceControlSession {
       case "detach":
         this.detach(message.attachmentId, true);
         return;
+      case "input": {
+        // Unknown attachment is a SILENT drop, not a fault: input is a
+        // fire-and-forget stream that races the host's own detach by design —
+        // a mousemove posted a beat before `detached` lands here after the
+        // registry forgot the id, and killing the generation for that would
+        // let an ordinary race tear down every surface in the window.
+        const attachment = this.#attachments.get(message.attachmentId);
+        if (attachment === undefined || !attachment.active) return;
+        // The op gate is NOT a race: grants are fixed for the attachment's
+        // lifetime and the shipping sender checks capabilities before it ever
+        // sends. Input without its grant means a renderer that is not running
+        // our code — fail the generation closed (EL7).
+        const required: LiveSurfacePresentationOperation =
+          message.input.kind === "key" || message.input.kind === "text" ? "keyboard" : "pointer";
+        if (!attachment.operations.includes(required)) {
+          this.protocolFault("input arrived without its operation grant");
+          return;
+        }
+        const dispatch = attachment.runtime.dispatchInput;
+        if (dispatch === undefined) return; // view-only runtime: drop
+        try {
+          dispatch.call(attachment.runtime, message.input, message.geometryRevision);
+        } catch {
+          this.protocolFault("runtime rejected a validated input event");
+        }
+        return;
+      }
+      case "navigate": {
+        const attachment = this.#attachments.get(message.attachmentId);
+        if (attachment === undefined || !attachment.active) return;
+        if (!attachment.operations.includes("navigate")) {
+          this.protocolFault("navigation arrived without its operation grant");
+          return;
+        }
+        const navigate = attachment.runtime.navigate;
+        if (navigate === undefined) return;
+        try {
+          navigate.call(attachment.runtime, message.navigation);
+        } catch {
+          this.protocolFault("runtime rejected a validated navigation command");
+        }
+        return;
+      }
       case "cpu-frame-ack": {
         const attachment = this.#attachments.get(message.attachmentId);
         if (attachment === undefined || !attachment.active) return;
@@ -294,6 +339,7 @@ export class LiveSurfaceControlSession {
         runtime,
         textureSink,
         demand: new LiveSurfaceDemandTracker(),
+        operations,
         summary,
         lastFrameSequence: null,
         cpuFrameInFlight: null,

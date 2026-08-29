@@ -1,11 +1,14 @@
 import {
   LiveSurfaceBrowserSourceV1 as BrowserSourceSchema,
   type LiveSurfaceBrowserSourceV1,
+  type LiveSurfaceBrowserStateV1,
   type LiveSurfaceDemandV1,
   type LiveSurfaceErrorV1,
   type LiveSurfaceFrameMetadataV1,
   type LiveSurfaceGeometryV1,
   LiveSurfaceIdV1,
+  type LiveSurfaceInputEventV1,
+  type LiveSurfaceNavigationCommandV1,
   type LiveSurfacePixelSizeV1,
   type LiveSurfaceRuntimeSummaryV1,
 } from "@vibefield/contracts";
@@ -81,9 +84,23 @@ export interface BrowserSurfaceNativeWindow {
   dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void>;
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void>;
   dispatchText(text: string): Promise<void>;
+  /** History/loading navigation. `go` rides `loadURL` so the initial-load and
+   * chrome-navigation paths share one policy gate. */
+  navigate(action: "back" | "forward" | "reload" | "stop"): void;
+  /** Committed navigation truth, emitted on every URL/title/loading/history
+   * change. The adapter reads the values fresh at emit time. */
+  onNavigationState(listener: (state: BrowserSurfaceNavigationState) => void): () => void;
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void;
   onRenderProcessGone(listener: (reason: string) => void): () => void;
   onDestroyed(listener: () => void): () => void;
+}
+
+export interface BrowserSurfaceNavigationState {
+  readonly url: string;
+  readonly title: string;
+  readonly loading: boolean;
+  readonly canGoBack: boolean;
+  readonly canGoForward: boolean;
 }
 
 export interface BrowserSurfaceNativeWindowOptions {
@@ -193,6 +210,10 @@ export interface BrowserLiveSurfaceRuntimeStats {
   readonly cpuFramesAccepted: number;
   readonly producerTextureReleases: number;
   readonly importedReferencesReleased: number;
+  readonly inputRequests: number;
+  readonly inputDropped: number;
+  readonly navigationRequests: number;
+  readonly navigationDropped: number;
   readonly effectiveDemand: LiveSurfaceDemandV1 | null;
 }
 
@@ -206,6 +227,7 @@ interface SourceCallbacks {
   readonly removePaint: () => void;
   readonly removeGone: () => void;
   readonly removeDestroyed: () => void;
+  readonly removeNavigation: () => void;
 }
 
 function increment(value: number, name: string): number {
@@ -328,6 +350,84 @@ function validKeyToken(value: string): boolean {
   );
 }
 
+const MAX_BROWSER_STATE_URL = 8_192;
+const MAX_BROWSER_STATE_TITLE = 512;
+
+function stripControlCharacters(value: string): string {
+  return [...value]
+    .filter((character) => {
+      const code = character.charCodeAt(0);
+      return code > 0x1f && code !== 0x7f;
+    })
+    .join("");
+}
+
+/**
+ * Native navigation truth → the bounded wire block. Clamped HERE because the
+ * page chooses its own URL and title lengths, and a summary that fails its
+ * schema downstream would read as a protocol fault and kill the renderer
+ * generation — a 9KB URL must degrade to truncation, never to teardown.
+ */
+function clampBrowserState(
+  state: BrowserSurfaceNavigationState,
+): LiveSurfaceBrowserStateV1 | undefined {
+  const url = stripControlCharacters(state.url).slice(0, MAX_BROWSER_STATE_URL);
+  if (url.length === 0) return undefined;
+  const title = stripControlCharacters(state.title).slice(0, MAX_BROWSER_STATE_TITLE);
+  return {
+    url,
+    ...(title.length === 0 ? {} : { title }),
+    loading: state.loading,
+    canGoBack: state.canGoBack,
+    canGoForward: state.canGoForward,
+  };
+}
+
+/** Wire input (CSS logical, validated by contracts) → the engine's request.
+ * A pass-through by design: coordinates are NEVER re-scaled here (LSF §10.2);
+ * the engine's own bounds and staleness checks stay the authority. */
+function browserInputRequest(
+  input: LiveSurfaceInputEventV1,
+  geometryRevision: number,
+): BrowserSurfaceInputRequest {
+  if (input.kind === "pointer") {
+    return {
+      kind: "mouse",
+      geometryRevision,
+      type: input.action,
+      x: input.x,
+      y: input.y,
+      ...(input.action === "move" ? {} : { button: input.button ?? "left" }),
+      ...(input.clickCount === undefined ? {} : { clickCount: input.clickCount }),
+    };
+  }
+  if (input.kind === "wheel") {
+    return {
+      kind: "wheel",
+      geometryRevision,
+      x: input.x,
+      y: input.y,
+      deltaX: input.deltaX,
+      deltaY: input.deltaY,
+    };
+  }
+  if (input.kind === "text") return { kind: "text", geometryRevision, text: input.text };
+  return {
+    kind: "key",
+    geometryRevision,
+    type: input.action,
+    key: input.key,
+    code: input.code,
+    modifiers: {
+      ...(input.modifiers.alt ? { alt: true } : {}),
+      ...(input.modifiers.ctrl ? { control: true } : {}),
+      ...(input.modifiers.meta ? { meta: true } : {}),
+      ...(input.modifiers.shift ? { shift: true } : {}),
+    },
+    ...(input.autoRepeat === undefined ? {} : { autoRepeat: input.autoRepeat }),
+  };
+}
+
 function keyModifierMask(modifiers: BrowserSurfaceKeyModifiers | undefined): number {
   if (modifiers === undefined) return 0;
   return (
@@ -363,6 +463,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #geometryKey = "";
   #geometryRevision = 0;
   #sequence = 0n;
+  /** Last committed navigation truth. Survives producer restarts on purpose:
+   * chrome keeps showing the last known URL through a reconnect gap. */
+  #browserState: LiveSurfaceBrowserStateV1 | undefined;
   #error: LiveSurfaceErrorV1 | undefined;
   #lastPublishedSummary = "";
   #cpuPaintStreak = 0;
@@ -381,6 +484,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #cpuFramesAccepted = 0;
   #producerTextureReleases = 0;
   #importedReferencesReleased = 0;
+  #inputRequests = 0;
+  #inputDropped = 0;
+  #navigationRequests = 0;
+  #navigationDropped = 0;
 
   constructor(options: BrowserLiveSurfaceRuntimeOptions) {
     this.surfaceId = LiveSurfaceIdV1.parse(options.surfaceId);
@@ -418,6 +525,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       capabilities: BROWSER_CAPABILITIES,
       ...(this.#transport === undefined ? {} : { transport: this.#transport }),
       ...(this.#geometry === undefined ? {} : { geometry: this.#geometry }),
+      ...(this.#browserState === undefined ? {} : { browser: this.#browserState }),
       ...(this.#error === undefined ? {} : { error: this.#error }),
     };
   }
@@ -438,6 +546,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       cpuFramesAccepted: this.#cpuFramesAccepted,
       producerTextureReleases: this.#producerTextureReleases,
       importedReferencesReleased: this.#importedReferencesReleased,
+      inputRequests: this.#inputRequests,
+      inputDropped: this.#inputDropped,
+      navigationRequests: this.#navigationRequests,
+      navigationDropped: this.#navigationDropped,
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
     };
   }
@@ -493,6 +605,25 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         if (result.kind !== "accepted") return;
         runtime.#demandUpdates += 1;
         runtime.reconcileDemand();
+      },
+      // The DT-D6 lane's runtime half. The control session has already run the
+      // ticket's operation gate; what remains here is the ENGINE's own truth —
+      // availability, geometry staleness, bounds — and its refusals are
+      // ordinary dropped frames of a fire-and-forget stream, counted and
+      // swallowed, never thrown back up the port.
+      dispatchInput(input, geometryRevision) {
+        if (disposed || !record.active) return;
+        runtime.#inputRequests += 1;
+        void runtime.dispatchInput(browserInputRequest(input, geometryRevision)).catch(() => {
+          runtime.#inputDropped += 1;
+        });
+      },
+      navigate(command) {
+        if (disposed || !record.active) return;
+        runtime.#navigationRequests += 1;
+        void runtime.navigate(command).catch(() => {
+          runtime.#navigationDropped += 1;
+        });
       },
       dispose() {
         if (disposed) return;
@@ -623,6 +754,44 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     });
   }
 
+  /**
+   * Chrome navigation companion to `dispatchInput` — same availability gate.
+   * `go` re-validates against the SAME top-level scheme policy as the initial
+   * load, and rides `loadURL` so browser-security's will-navigate guard sits
+   * beneath both paths; history/loading actions carry no URL at all.
+   */
+  async navigate(command: LiveSurfaceNavigationCommandV1): Promise<void> {
+    const window = this.#window;
+    if (
+      this.#closed ||
+      window === null ||
+      window.isDestroyed() ||
+      this.#lifecycle.snapshot.state !== "live"
+    ) {
+      throw new Error("Browser surface is not available for navigation");
+    }
+    if (command.action === "go") {
+      if (!isAllowedBrowserTopLevelUrl(command.url)) {
+        throw new Error("Browser navigation URL must use HTTP or HTTPS");
+      }
+      await window.loadURL(command.url);
+      return;
+    }
+    window.navigate(command.action);
+  }
+
+  private acceptNavigationState(
+    window: BrowserSurfaceNativeWindow,
+    epoch: number,
+    state: BrowserSurfaceNavigationState,
+  ): void {
+    if (!this.ownsProducer(window, epoch)) return;
+    const clamped = clampBrowserState(state);
+    if (clamped === undefined) return;
+    this.#browserState = clamped;
+    this.publishSummary();
+  }
+
   private reconcileDemand(): void {
     this.#effectiveDemand = aggregateDemand(this.#attachments.values());
     const demand = this.#effectiveDemand;
@@ -689,7 +858,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       const removeDestroyed = window.onDestroyed(() =>
         this.handleProducerGone(window, epoch, "WebContents destroyed"),
       );
-      this.#callbacks = { removePaint, removeGone, removeDestroyed };
+      const removeNavigation = window.onNavigationState((state) =>
+        this.acceptNavigationState(window, epoch, state),
+      );
+      this.#callbacks = { removePaint, removeGone, removeDestroyed, removeNavigation };
       this.#producersStarted += 1;
       this.applyFrameRate();
       this.#startupTimer = setTimeout(
@@ -1088,6 +1260,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeDestroyed: window.onDestroyed(() =>
           this.handleProducerGone(window, epoch, "WebContents destroyed"),
         ),
+        removeNavigation: window.onNavigationState((state) =>
+          this.acceptNavigationState(window, epoch, state),
+        ),
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -1145,6 +1320,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     callbacks?.removePaint();
     callbacks?.removeGone();
     callbacks?.removeDestroyed();
+    callbacks?.removeNavigation();
     if (window === null) return;
     this.#controlTargets?.revoke(this.surfaceId, window.controlContents);
     if (!window.isDestroyed()) window.destroy();

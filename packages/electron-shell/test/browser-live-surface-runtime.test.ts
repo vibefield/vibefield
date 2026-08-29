@@ -12,6 +12,7 @@ import {
   type BrowserSurfaceNativeMouseInput,
   type BrowserSurfaceNativeWindow,
   type BrowserSurfaceNativeWindowOptions,
+  type BrowserSurfaceNavigationState,
   type BrowserSurfacePaint,
 } from "../src/main/live-surfaces/browser-producer";
 import type { LiveSurfaceRuntimeAttachContext } from "../src/main/live-surfaces/runtime";
@@ -45,6 +46,7 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   readonly keyInputs: BrowserSurfaceNativeKeyInput[] = [];
   readonly textInputs: string[] = [];
   readonly loadedUrls: string[] = [];
+  readonly navigations: Array<"back" | "forward" | "reload" | "stop"> = [];
   readonly startPainting = vi.fn();
   readonly stopPainting = vi.fn();
   readonly invalidate = vi.fn();
@@ -90,6 +92,19 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
 
   async dispatchText(text: string): Promise<void> {
     this.textInputs.push(text);
+  }
+
+  navigate(action: "back" | "forward" | "reload" | "stop"): void {
+    this.navigations.push(action);
+  }
+
+  onNavigationState(listener: (state: BrowserSurfaceNavigationState) => void): () => void {
+    this.#events.on("navigation", listener);
+    return () => this.#events.off("navigation", listener);
+  }
+
+  emitNavigationState(state: BrowserSurfaceNavigationState): void {
+    this.#events.emit("navigation", state);
   }
 
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void {
@@ -379,6 +394,85 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(result.runtime.summary).toMatchObject({ state: "live", producerEpoch: 2 });
     await flush();
     expect(result.native.windows[1]?.loadedUrls).toEqual([source().initialUrl]);
+    result.runtime.dispose();
+  });
+
+  it("carries the DT-D6 lane: wire input, chrome navigation, and committed nav truth", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+    const window = result.native.windows[0];
+    window?.paint(sharedPaint().paint);
+    await flush();
+    const revision = result.runtime.summary.geometry?.revision ?? 0;
+
+    // Wire events arrive in CSS logical coordinates and pass through UNSCALED
+    // (LSF §10.2 — the double-scaling class): what the wire said is what CDP
+    // receives, and the engine's own validation stays the authority.
+    renderer.attachment.dispatchInput?.(
+      { kind: "pointer", action: "down", x: 160, y: 90, button: "left", clickCount: 1 },
+      revision,
+    );
+    renderer.attachment.dispatchInput?.(
+      { kind: "wheel", x: 10, y: 12, deltaX: 0, deltaY: 40 },
+      revision,
+    );
+    renderer.attachment.dispatchInput?.(
+      {
+        kind: "key",
+        action: "down",
+        key: "a",
+        code: "KeyA",
+        modifiers: { alt: false, ctrl: false, meta: true, shift: false },
+      },
+      revision,
+    );
+    renderer.attachment.dispatchInput?.({ kind: "text", text: "hello" }, revision);
+    await flush();
+    expect(window?.mouseInputs).toEqual([
+      { type: "mousePressed", x: 160, y: 90, button: "left", clickCount: 1 },
+      { type: "mouseWheel", x: 10, y: 12, deltaX: 0, deltaY: 40 },
+    ]);
+    expect(window?.keyInputs).toEqual([{ type: "keyDown", key: "a", code: "KeyA", modifiers: 4 }]);
+    expect(window?.textInputs).toEqual(["hello"]);
+
+    // A stale geometry revision is dropped and counted, never re-mapped.
+    renderer.attachment.dispatchInput?.(
+      { kind: "pointer", action: "move", x: 1, y: 1 },
+      revision - 1,
+    );
+    await flush();
+    expect(window?.mouseInputs).toHaveLength(2);
+    expect(result.runtime.stats.inputRequests).toBe(5);
+    expect(result.runtime.stats.inputDropped).toBe(1);
+
+    // Navigation: `go` re-validates the top-level scheme policy; history and
+    // loading actions ride the native without any URL at all.
+    renderer.attachment.navigate?.({ action: "go", url: "https://example.test/next" });
+    renderer.attachment.navigate?.({ action: "back" });
+    renderer.attachment.navigate?.({ action: "go", url: "file:///etc/passwd" });
+    await flush();
+    expect(window?.loadedUrls).toContain("https://example.test/next");
+    expect(window?.loadedUrls.some((url) => url.startsWith("file:"))).toBe(false);
+    expect(window?.navigations).toEqual(["back"]);
+    expect(result.runtime.stats.navigationRequests).toBe(3);
+    expect(result.runtime.stats.navigationDropped).toBe(1);
+
+    // Committed navigation truth rides summaries, clamped to the wire bounds
+    // so a page's 9KB URL degrades to truncation, never to a schema fault.
+    window?.emitNavigationState({
+      url: `https://example.test/${"q".repeat(9_000)}`,
+      title: `title ${"t".repeat(600)}`,
+      loading: false,
+      canGoBack: true,
+      canGoForward: false,
+    });
+    const browser = result.runtime.summary.browser;
+    expect(browser?.url).toHaveLength(8_192);
+    expect(browser?.title).toHaveLength(512);
+    expect(browser).toMatchObject({ loading: false, canGoBack: true, canGoForward: false });
+    expect(renderer.summaries.at(-1)?.browser?.canGoBack).toBe(true);
+
     result.runtime.dispose();
   });
 

@@ -371,6 +371,22 @@ export const LiveSurfaceAttachTicketV1 = z
   .passthrough();
 export type LiveSurfaceAttachTicketV1 = z.infer<typeof LiveSurfaceAttachTicketV1>;
 
+/** The browser producer's committed navigation truth, carried on runtime
+ * summaries so chrome (URL bar, back/forward) renders facts, never guesses.
+ * Plain state like `error` — no revision of its own; the control port is FIFO
+ * and the producer publishes monotonically. Part of the DT-D6 input lane (its
+ * event and command shapes live beside the renderer control union below). */
+export const LiveSurfaceBrowserStateV1 = z
+  .object({
+    url: LiveSurfaceUrlV1,
+    title: LiveSurfaceBoundedTextV1.optional(),
+    loading: z.boolean(),
+    canGoBack: z.boolean(),
+    canGoForward: z.boolean(),
+  })
+  .passthrough();
+export type LiveSurfaceBrowserStateV1 = z.infer<typeof LiveSurfaceBrowserStateV1>;
+
 export const LiveSurfaceRuntimeSummaryV1 = z
   .object({
     v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
@@ -381,6 +397,8 @@ export const LiveSurfaceRuntimeSummaryV1 = z
     capabilities: LiveSurfacePresentationCapabilitiesV1,
     transport: LiveSurfaceTransportV1.optional(),
     geometry: LiveSurfaceGeometryV1.optional(),
+    /** Browser sources only: the producer's committed navigation truth. */
+    browser: LiveSurfaceBrowserStateV1.optional(),
     error: LiveSurfaceErrorV1.optional(),
   })
   .passthrough();
@@ -412,6 +430,85 @@ export const LiveSurfaceAttachmentDescriptorV1 = z
     }
   });
 export type LiveSurfaceAttachmentDescriptorV1 = z.infer<typeof LiveSurfaceAttachmentDescriptorV1>;
+
+// ── the human input lane (DT-3 — thinking-devtools-pack.md DT-D6) ──
+// Fire-and-forget renderer→main events on the SAME generation-scoped control
+// port the attachment already rides, gated main-side by the ticket's
+// operations ("pointer"/"keyboard"/"navigate" — browser sources mint them,
+// capture and Simulator stay view-only). Coordinates are CSS LOGICAL pixels in
+// the surface's `logicalSize` space (LSF §10.2): the sender maps its canvas
+// box to logical space and NEVER re-scales by raster or visibleRect; the
+// input envelope carries the geometry revision that mapping used, and the
+// PRODUCER drops stale revisions rather than guessing.
+
+export const LiveSurfacePointerButtonV1 = z.enum(["left", "middle", "right"]);
+export type LiveSurfacePointerButtonV1 = z.infer<typeof LiveSurfacePointerButtonV1>;
+
+export const LiveSurfaceKeyModifiersV1 = z
+  .object({
+    alt: z.boolean(),
+    ctrl: z.boolean(),
+    meta: z.boolean(),
+    shift: z.boolean(),
+  })
+  .passthrough();
+export type LiveSurfaceKeyModifiersV1 = z.infer<typeof LiveSurfaceKeyModifiersV1>;
+
+const LiveSurfaceLogicalCoordinateV1 = z.number().finite().min(0).max(LIVE_SURFACE_MAX_DIMENSION);
+
+export const LiveSurfaceInputEventV1 = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("pointer"),
+      action: z.enum(["move", "down", "up"]),
+      x: LiveSurfaceLogicalCoordinateV1,
+      y: LiveSurfaceLogicalCoordinateV1,
+      /** Absent on `move`; a down/up without one is the primary button. */
+      button: LiveSurfacePointerButtonV1.optional(),
+      clickCount: z.number().int().min(1).max(3).optional(),
+    })
+    .passthrough(),
+  z
+    .object({
+      kind: z.literal("wheel"),
+      x: LiveSurfaceLogicalCoordinateV1,
+      y: LiveSurfaceLogicalCoordinateV1,
+      deltaX: z.number().finite().min(-100_000).max(100_000),
+      deltaY: z.number().finite().min(-100_000).max(100_000),
+    })
+    .passthrough(),
+  z
+    .object({
+      kind: z.literal("key"),
+      action: z.enum(["down", "up"]),
+      /** DOM `KeyboardEvent.key` / `.code`; the producer re-validates both. */
+      key: z.string().min(1).max(32),
+      code: z.string().min(1).max(64),
+      modifiers: LiveSurfaceKeyModifiersV1,
+      autoRepeat: z.boolean().optional(),
+    })
+    .passthrough(),
+  z
+    .object({
+      kind: z.literal("text"),
+      /** Committed text (typing, IME composition end, paste). Long pastes are
+       * chunked by the sender; the bound matches the producer's own. */
+      text: z.string().min(1).max(16_384),
+    })
+    .passthrough(),
+]);
+export type LiveSurfaceInputEventV1 = z.infer<typeof LiveSurfaceInputEventV1>;
+
+/** Chrome-initiated navigation on a browser surface. `go` is re-validated by
+ * the producer against the same top-level scheme policy as the initial load. */
+export const LiveSurfaceNavigationCommandV1 = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("go"), url: LiveSurfaceUrlV1 }).passthrough(),
+  z.object({ action: z.literal("back") }).passthrough(),
+  z.object({ action: z.literal("forward") }).passthrough(),
+  z.object({ action: z.literal("reload") }).passthrough(),
+  z.object({ action: z.literal("stop") }).passthrough(),
+]);
+export type LiveSurfaceNavigationCommandV1 = z.infer<typeof LiveSurfaceNavigationCommandV1>;
 
 /** Renderer → main messages carried only by the generation-scoped control port. */
 export const LiveSurfaceRendererControlMessageV1 = z.discriminatedUnion("type", [
@@ -445,6 +542,25 @@ export const LiveSurfaceRendererControlMessageV1 = z.discriminatedUnion("type", 
       attachmentId: LiveSurfaceAttachmentIdV1,
       producerEpoch: LiveSurfaceRevisionV1,
       sequence: LiveSurfaceSequenceV1,
+    })
+    .passthrough(),
+  z
+    .object({
+      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+      type: z.literal("input"),
+      attachmentId: LiveSurfaceAttachmentIdV1,
+      /** The geometry the sender mapped its coordinates against. Stale
+       * revisions are dropped by the producer, never re-mapped (LSF §10.2). */
+      geometryRevision: LiveSurfaceRevisionV1,
+      input: LiveSurfaceInputEventV1,
+    })
+    .passthrough(),
+  z
+    .object({
+      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+      type: z.literal("navigate"),
+      attachmentId: LiveSurfaceAttachmentIdV1,
+      navigation: LiveSurfaceNavigationCommandV1,
     })
     .passthrough(),
 ]);

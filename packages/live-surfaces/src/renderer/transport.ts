@@ -3,6 +3,8 @@ import {
   LiveSurfaceDemandV1,
   LiveSurfaceFrameEnvelopeV1,
   LiveSurfaceHostControlMessageV1,
+  LiveSurfaceInputEventV1,
+  LiveSurfaceNavigationCommandV1,
   type LiveSurfacePortBootstrapV1,
   type LiveSurfaceRuntimeSummaryV1,
 } from "@vibefield/contracts";
@@ -51,7 +53,10 @@ function errorFromHost(message: string): Error {
   return error;
 }
 
-/** Renderer-local handle. It owns no source and exposes no semantic browser control. */
+/** Renderer-local handle. It owns no source and exposes no SEMANTIC browser
+ * control (CDP sessions, DOM access — the DT-5 broker lane): what it carries
+ * beyond frames is human interaction only — demand, input events, navigation
+ * commands — all ops-gated main-side by the ticket that minted it. */
 export class LiveSurfaceRendererAttachment<
   TFrame extends LiveSurfaceClosableFrame = LiveSurfaceClosableFrame,
 > {
@@ -106,6 +111,55 @@ export class LiveSurfaceRendererAttachment<
 
   takeFrame(): LiveSurfaceFrameLease<TFrame> | null {
     return this.#queue.take();
+  }
+
+  /**
+   * Fire one human input event down the control port (DT-D6).
+   *
+   * Soft-fail by design — `false`, never a throw: input arrives per pointer
+   * sample, and losing a race with a detach or a dying port is an ordinary
+   * frame of that stream, not an error the sender can act on. The event is
+   * stamped with the CURRENT summary's geometry revision — the geometry this
+   * renderer just mapped its coordinates against — and the producer drops the
+   * event if that revision is no longer current (LSF §10.2: stale input is
+   * dropped, never re-mapped). No geometry yet means nothing to map against.
+   */
+  sendInput(event: LiveSurfaceInputEventV1): boolean {
+    if (this.#closed) return false;
+    const revision = this.#summary.geometry?.revision;
+    if (revision === undefined) return false;
+    const input = LiveSurfaceInputEventV1.parse(event);
+    try {
+      this.sendControl({
+        v: 1,
+        type: "input",
+        attachmentId: this.attachmentId,
+        geometryRevision: revision,
+        input,
+      });
+    } catch {
+      // The port died mid-send; the transport has already disposed itself and
+      // this attachment is closing. The stream simply ends.
+      return false;
+    }
+    return true;
+  }
+
+  /** Fire one navigation command (browser surfaces). Same soft-fail contract. */
+  sendNavigation(command: LiveSurfaceNavigationCommandV1): boolean {
+    if (this.#closed) return false;
+    const navigation = LiveSurfaceNavigationCommandV1.parse(command);
+    try {
+      this.sendControl({
+        v: 1,
+        type: "navigate",
+        attachmentId: this.attachmentId,
+        navigation,
+      });
+    } catch {
+      return false;
+    }
+    return true;
   }
 
   onSummary(listener: (summary: LiveSurfaceRuntimeSummaryV1) => void): () => void {

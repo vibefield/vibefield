@@ -1,5 +1,10 @@
 import { EventEmitter } from "node:events";
-import type { LiveSurfaceDemandV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
+import type {
+  LiveSurfaceDemandV1,
+  LiveSurfaceInputEventV1,
+  LiveSurfaceNavigationCommandV1,
+  LiveSurfaceRuntimeSummaryV1,
+} from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   LiveSurfaceControlSession,
@@ -57,10 +62,16 @@ function summary(
 class FakeAuthority implements LiveSurfaceRuntimeAuthority {
   readonly surfaceId = "surface_0123456789abcdef";
   readonly demands: LiveSurfaceDemandV1[] = [];
+  readonly inputs: Array<{ input: LiveSurfaceInputEventV1; geometryRevision: number }> = [];
+  readonly navigations: LiveSurfaceNavigationCommandV1[] = [];
   readonly dispose = vi.fn();
   context: LiveSurfaceRuntimeAttachContext | null = null;
   initialSummary = summary();
   onAttach: ((context: LiveSurfaceRuntimeAttachContext) => void) | null = null;
+  /** When true the returned attachment carries the DT-D6 lane members; the
+   * default (false) models a view-only runtime with no lane at all. */
+  withInputLane = false;
+  inputThrows = false;
 
   attach(context: LiveSurfaceRuntimeAttachContext) {
     this.context = context;
@@ -68,6 +79,17 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
     return {
       summary: this.initialSummary,
       setDemand: (demand: LiveSurfaceDemandV1) => this.demands.push(demand),
+      ...(this.withInputLane
+        ? {
+            dispatchInput: (input: LiveSurfaceInputEventV1, geometryRevision: number) => {
+              if (this.inputThrows) throw new Error("runtime input fault");
+              this.inputs.push({ input, geometryRevision });
+            },
+            navigate: (command: LiveSurfaceNavigationCommandV1) => {
+              this.navigations.push(command);
+            },
+          }
+        : {}),
       dispose: this.dispose,
     };
   }
@@ -76,6 +98,10 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
 function setup(
   createTextureSink?: () => LiveSurfaceTextureFrameSink,
   configureAuthority?: (authority: FakeAuthority) => void,
+  operations: Parameters<LiveSurfaceTicketTable<unknown>["issue"]>[0]["operations"] = [
+    "view",
+    "pointer",
+  ],
 ) {
   const port = new FakeMainPort();
   const tickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>({
@@ -88,7 +114,7 @@ function setup(
     rendererGeneration: 3,
     surfaceId: authority.surfaceId,
     sourceKind: "browser",
-    operations: ["view", "pointer"],
+    operations,
     authority,
   });
   const protocolFaults: string[] = [];
@@ -550,5 +576,141 @@ describe("LiveSurfaceControlSession", () => {
     expect(unknown.session.closed).toBe(true);
     expect(unknown.authority.dispose).toHaveBeenCalledTimes(1);
     expect(unknown.protocolFaults).toEqual(["demand named an unknown attachment"]);
+  });
+
+  it("forwards granted input and navigation to the runtime with the sender's revision", () => {
+    const result = setup(
+      undefined,
+      (authority) => {
+        authority.withInputLane = true;
+      },
+      ["view", "pointer", "keyboard", "navigate"],
+    );
+    attach(result);
+    result.port.receive({
+      v: 1,
+      type: "input",
+      attachmentId: "attachment_0123456789abcdef",
+      geometryRevision: 7,
+      input: { kind: "pointer", action: "move", x: 10, y: 20 },
+    });
+    result.port.receive({
+      v: 1,
+      type: "input",
+      attachmentId: "attachment_0123456789abcdef",
+      geometryRevision: 7,
+      input: {
+        kind: "key",
+        action: "down",
+        key: "a",
+        code: "KeyA",
+        modifiers: { alt: false, ctrl: false, meta: false, shift: false },
+      },
+    });
+    result.port.receive({
+      v: 1,
+      type: "navigate",
+      attachmentId: "attachment_0123456789abcdef",
+      navigation: { action: "go", url: "https://example.test/" },
+    });
+    expect(result.protocolFaults).toEqual([]);
+    expect(result.session.closed).toBe(false);
+    expect(result.authority.inputs).toEqual([
+      { input: { kind: "pointer", action: "move", x: 10, y: 20 }, geometryRevision: 7 },
+      {
+        input: {
+          kind: "key",
+          action: "down",
+          key: "a",
+          code: "KeyA",
+          modifiers: { alt: false, ctrl: false, meta: false, shift: false },
+        },
+        geometryRevision: 7,
+      },
+    ]);
+    expect(result.authority.navigations).toEqual([{ action: "go", url: "https://example.test/" }]);
+  });
+
+  it("drops input for an unknown attachment silently — the stream races detach by design", () => {
+    const result = setup(undefined, (authority) => {
+      authority.withInputLane = true;
+    });
+    attach(result);
+    result.port.receive({
+      v: 1,
+      type: "input",
+      attachmentId: "attachment_9999999999999999",
+      geometryRevision: 1,
+      input: { kind: "pointer", action: "move", x: 1, y: 1 },
+    });
+    expect(result.session.closed).toBe(false);
+    expect(result.protocolFaults).toEqual([]);
+    expect(result.authority.inputs).toEqual([]);
+  });
+
+  it("fails the generation closed on input or navigation without its operation grant", () => {
+    // The default grant is view+pointer: keyboard input cannot be legitimate.
+    const keyboard = setup(undefined, (authority) => {
+      authority.withInputLane = true;
+    });
+    attach(keyboard);
+    keyboard.port.receive({
+      v: 1,
+      type: "input",
+      attachmentId: "attachment_0123456789abcdef",
+      geometryRevision: 1,
+      input: {
+        kind: "text",
+        text: "never",
+      },
+    });
+    expect(keyboard.session.closed).toBe(true);
+    expect(keyboard.protocolFaults).toEqual(["input arrived without its operation grant"]);
+    expect(keyboard.authority.inputs).toEqual([]);
+
+    const navigation = setup(undefined, (authority) => {
+      authority.withInputLane = true;
+    });
+    attach(navigation);
+    navigation.port.receive({
+      v: 1,
+      type: "navigate",
+      attachmentId: "attachment_0123456789abcdef",
+      navigation: { action: "reload" },
+    });
+    expect(navigation.session.closed).toBe(true);
+    expect(navigation.protocolFaults).toEqual(["navigation arrived without its operation grant"]);
+    expect(navigation.authority.navigations).toEqual([]);
+  });
+
+  it("drops granted input on a runtime with no lane, and faults a runtime that throws", () => {
+    // A view-only runtime simply has no member: silent drop, session intact.
+    const laneless = setup(undefined, undefined, ["view", "pointer"]);
+    attach(laneless);
+    laneless.port.receive({
+      v: 1,
+      type: "input",
+      attachmentId: "attachment_0123456789abcdef",
+      geometryRevision: 1,
+      input: { kind: "pointer", action: "move", x: 1, y: 1 },
+    });
+    expect(laneless.session.closed).toBe(false);
+    expect(laneless.protocolFaults).toEqual([]);
+
+    // A runtime that throws SYNCHRONOUSLY on a validated event is a fault.
+    const throwing = setup(undefined, (authority) => {
+      authority.withInputLane = true;
+      authority.inputThrows = true;
+    });
+    attach(throwing);
+    throwing.port.receive({
+      v: 1,
+      type: "input",
+      attachmentId: "attachment_0123456789abcdef",
+      geometryRevision: 1,
+      input: { kind: "pointer", action: "move", x: 1, y: 1 },
+    });
+    expect(throwing.session.closed).toBe(true);
+    expect(throwing.protocolFaults).toEqual(["runtime rejected a validated input event"]);
   });
 });
