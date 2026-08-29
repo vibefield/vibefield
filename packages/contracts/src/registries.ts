@@ -288,6 +288,17 @@ export const SCOPES = [
   "audit.append", // shell-originated audit actions; local-only
   "settings.manage", // trusted desktop shell/renderer app-preference surface
   "tokens.mint", // shell-main only: mint per-window renderer tokens (Track A bootstrap)
+  // DT-D3 (thinking-devtools-pack.md) — the live-surface doors. Deliberately
+  // three: `attach` redeems view tickets and drives demand on any kind;
+  // `browser` creates browser sources (and later carries their human input +
+  // navigation); `capture` creates SCK window/Simulator sources — split out
+  // because capturing OTHER apps' windows is a different consent class
+  // (Screen Recording gravity, A5/EL7). `surface.control` (the DT-5 agent
+  // lane) is reserved and deliberately NOT minted by any v1 manifest.
+  // None of these enter TAILNET_SCOPES: a surface is a window on THIS device.
+  "surface.attach",
+  "surface.browser",
+  "surface.capture",
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 

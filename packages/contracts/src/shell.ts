@@ -2,6 +2,14 @@ import { z } from "zod";
 import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle } from "./artifacts";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind } from "./errors";
+import {
+  LiveSurfaceAttachTicketV1,
+  LiveSurfaceIdV1,
+  LiveSurfaceSourceSpecV1,
+  SURFACE_LIMITS,
+  SurfaceEnumerationKindV1,
+  SurfaceSourceDescriptorV1,
+} from "./live-surfaces";
 import { PluginId } from "./plugins";
 
 // Shell-boundary contracts (ESR spec §6.1): the shapes that cross the Electron
@@ -226,6 +234,12 @@ export const SHELL_CLIENT_PROVIDER_METHODS = [
 export const SHELL_INTERNAL_PROVIDER_METHODS = [
   "shell.webcontents.captureArtifactPreview",
   "shell.renderer.requestReplacement",
+  // DT-1 (thinking-devtools-pack.md DT-D2) — the live-surface authority doors.
+  // Internal like the capture door: only fieldd's SurfaceService dispatches
+  // them, with an explicit fieldd caller; no client reaches them directly.
+  "shell.surfaces.enumerate",
+  "shell.surfaces.mint",
+  "shell.surfaces.release",
 ] as const;
 export const SHELL_PROVIDER_METHODS = [
   ...SHELL_CLIENT_PROVIDER_METHODS,
@@ -376,6 +390,53 @@ export const ShellRendererRequestReplacementResult = z.object({ requested: z.boo
 export type ShellRendererRequestReplacementResult = z.infer<
   typeof ShellRendererRequestReplacementResult
 >;
+
+// DT-1 — the live-surface authority (thinking-devtools-pack.md DT-D2). fieldd
+// is the policy door (scopes/audit/idempotency on `surface.*`); these shapes
+// carry the mechanism half into Electron main, which owns producers and the
+// one-use ticket table. LSF-D6/D14: no caller-supplied identifier becomes
+// authority — the renderer participant comes from fieldd's own token
+// derivation (PRC-D14), and `owner` is log provenance, never authority.
+
+export const SURFACE_AUTHORITY_LIMITS = {
+  ENUMERATE_DEADLINE_MS: 5_000,
+  MINT_DEADLINE_MS: 10_000,
+  RELEASE_DEADLINE_MS: 5_000,
+} as const;
+
+export const ShellSurfacesEnumerateParams = z
+  .object({ kind: SurfaceEnumerationKindV1 })
+  .passthrough();
+export type ShellSurfacesEnumerateParams = z.infer<typeof ShellSurfacesEnumerateParams>;
+
+export const ShellSurfacesEnumerateResult = z
+  .object({
+    sources: z.array(SurfaceSourceDescriptorV1).max(SURFACE_LIMITS.MAX_ENUMERATED_SOURCES),
+  })
+  .passthrough();
+export type ShellSurfacesEnumerateResult = z.infer<typeof ShellSurfacesEnumerateResult>;
+
+export const ShellSurfacesMintParams = z
+  .object({
+    rendererParticipant: RendererParticipantIdentity,
+    source: LiveSurfaceSourceSpecV1,
+    owner: z.object({ pluginId: PluginId.optional() }).passthrough().optional(),
+  })
+  .passthrough();
+export type ShellSurfacesMintParams = z.infer<typeof ShellSurfacesMintParams>;
+
+export const ShellSurfacesMintResult = z
+  .object({ surfaceId: LiveSurfaceIdV1, ticket: LiveSurfaceAttachTicketV1 })
+  .passthrough();
+export type ShellSurfacesMintResult = z.infer<typeof ShellSurfacesMintResult>;
+
+export const ShellSurfacesReleaseParams = z
+  .object({ surfaceId: LiveSurfaceIdV1, rendererParticipant: RendererParticipantIdentity })
+  .passthrough();
+export type ShellSurfacesReleaseParams = z.infer<typeof ShellSurfacesReleaseParams>;
+
+export const ShellSurfacesReleaseResult = z.object({ released: z.boolean() }).passthrough();
+export type ShellSurfacesReleaseResult = z.infer<typeof ShellSurfacesReleaseResult>;
 
 export const ShellProviderRegisterParams = z
   .object({ methods: z.array(ShellProviderMethod).min(1).max(SHELL_PROVIDER_METHODS.length) })

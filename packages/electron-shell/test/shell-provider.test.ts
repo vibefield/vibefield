@@ -103,6 +103,11 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
     openExternal: vi.fn(async () => undefined),
     captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
     requestRendererReplacement: vi.fn(() => ({ requested: true })),
+    enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),
+    mintSurfaceTicket: vi.fn(async () => {
+      throw { kind: "UNAVAILABLE" };
+    }),
+    releaseSurface: vi.fn(async () => ({ released: false })),
     ...nativeOverrides,
   };
   const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
@@ -136,6 +141,11 @@ describe("RecoveringShellProvider", () => {
         openExternal: vi.fn(async () => undefined),
         captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
         requestRendererReplacement: vi.fn(() => ({ requested: true })),
+        enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),
+        mintSurfaceTicket: vi.fn(async () => {
+          throw { kind: "UNAVAILABLE" };
+        }),
+        releaseSurface: vi.fn(async () => ({ released: false })),
       };
       const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
 
@@ -360,6 +370,11 @@ describe("RecoveringShellProvider", () => {
       openExternal: vi.fn(async () => undefined),
       captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
       requestRendererReplacement: vi.fn(() => ({ requested: true })),
+      enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),
+      mintSurfaceTicket: vi.fn(async () => {
+        throw { kind: "UNAVAILABLE" };
+      }),
+      releaseSurface: vi.fn(async () => ({ released: false })),
     };
     const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
     await coordinator.ensure();

@@ -513,3 +513,67 @@ export const LiveSurfaceFrameEnvelopeV1 = z
     }
   });
 export type LiveSurfaceFrameEnvelopeV1 = z.infer<typeof LiveSurfaceFrameEnvelopeV1>;
+
+// ── surface.* product-API shapes (DT-1 — thinking-devtools-pack.md DT-D2/DT-D3) ──
+// TS-only like the rest of this file. fieldd owns policy (scopes, audit,
+// idempotency); Electron main owns mechanism (producers, tickets). The
+// privileged source specification crosses fieldd exactly once on `surface.open`
+// and never returns to a caller; enumeration rows are REDACTED to what a
+// picker face needs (LSF-16: routing identity, never authority).
+
+export const LiveSurfaceSourceKindV1 = z.enum(["browser", "sck-window", "ios-simulator"]);
+export type LiveSurfaceSourceKindV1 = z.infer<typeof LiveSurfaceSourceKindV1>;
+
+/** Only capture kinds enumerate: browser sources are created, never listed. */
+export const SurfaceEnumerationKindV1 = z.enum(["sck-window", "ios-simulator"]);
+export type SurfaceEnumerationKindV1 = z.infer<typeof SurfaceEnumerationKindV1>;
+
+export const SURFACE_LIMITS = {
+  MAX_ENUMERATED_SOURCES: 256,
+  IDEMPOTENCY_KEY_CHARS: 64,
+} as const;
+
+/** One redacted picker row. `sourceRef` is the producer boundary's opaque
+ * stable reference; window-server ids, raw UDID paths, and native handles
+ * never appear here. */
+export const SurfaceSourceDescriptorV1 = z
+  .object({
+    kind: SurfaceEnumerationKindV1,
+    sourceRef: LiveSurfaceBoundedTextV1,
+    title: LiveSurfaceBoundedTextV1.optional(),
+    appName: LiveSurfaceBoundedTextV1.optional(),
+  })
+  .passthrough();
+export type SurfaceSourceDescriptorV1 = z.infer<typeof SurfaceSourceDescriptorV1>;
+
+export const SurfaceSourcesParamsV1 = z.object({ kind: SurfaceEnumerationKindV1 }).passthrough();
+export type SurfaceSourcesParamsV1 = z.infer<typeof SurfaceSourcesParamsV1>;
+
+export const SurfaceSourcesResultV1 = z
+  .object({
+    sources: z.array(SurfaceSourceDescriptorV1).max(SURFACE_LIMITS.MAX_ENUMERATED_SOURCES),
+  })
+  .passthrough();
+export type SurfaceSourcesResultV1 = z.infer<typeof SurfaceSourcesResultV1>;
+
+export const SurfaceOpenParamsV1 = z
+  .object({
+    source: LiveSurfaceSourceSpecV1,
+    idempotencyKey: z.string().min(1).max(SURFACE_LIMITS.IDEMPOTENCY_KEY_CHARS).optional(),
+  })
+  .passthrough();
+export type SurfaceOpenParamsV1 = z.infer<typeof SurfaceOpenParamsV1>;
+
+/** The ticket is one-use and bound main-side to the calling window + renderer
+ * generation; the surfaceId is runtime identity for `surface.close`, never a
+ * durable key (LSF §5). */
+export const SurfaceOpenResultV1 = z
+  .object({ surfaceId: LiveSurfaceIdV1, ticket: LiveSurfaceAttachTicketV1 })
+  .passthrough();
+export type SurfaceOpenResultV1 = z.infer<typeof SurfaceOpenResultV1>;
+
+export const SurfaceCloseParamsV1 = z.object({ surfaceId: LiveSurfaceIdV1 }).passthrough();
+export type SurfaceCloseParamsV1 = z.infer<typeof SurfaceCloseParamsV1>;
+
+export const SurfaceCloseResultV1 = z.object({ closed: z.boolean() }).passthrough();
+export type SurfaceCloseResultV1 = z.infer<typeof SurfaceCloseResultV1>;

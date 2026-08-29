@@ -241,6 +241,38 @@ export class ProductApi extends EventEmitter {
     return this.shellProvider.provides("shell.webcontents.captureArtifactPreview");
   }
 
+  // DT-1 — the SurfaceService's typed doors to the main-side authority. Like
+  // the capture door, these are deliberately not ProductAPI methods: only the
+  // fieldd service enters, with an explicit fieldd caller (policy — scopes,
+  // audit, idempotency — has already run in the service).
+  surfacesEnumerate(
+    params: import("@vibefield/contracts").ShellSurfacesEnumerateParams,
+  ): Promise<import("@vibefield/contracts").ShellSurfacesEnumerateResult> {
+    return this.shellProvider.callInternal("shell.surfaces.enumerate", params) as Promise<
+      import("@vibefield/contracts").ShellSurfacesEnumerateResult
+    >;
+  }
+
+  surfacesMint(
+    params: import("@vibefield/contracts").ShellSurfacesMintParams,
+  ): Promise<import("@vibefield/contracts").ShellSurfacesMintResult> {
+    return this.shellProvider.callInternal("shell.surfaces.mint", params) as Promise<
+      import("@vibefield/contracts").ShellSurfacesMintResult
+    >;
+  }
+
+  surfacesRelease(
+    params: import("@vibefield/contracts").ShellSurfacesReleaseParams,
+  ): Promise<import("@vibefield/contracts").ShellSurfacesReleaseResult> {
+    return this.shellProvider.callInternal("shell.surfaces.release", params) as Promise<
+      import("@vibefield/contracts").ShellSurfacesReleaseResult
+    >;
+  }
+
+  surfaceAuthorityAvailable(): boolean {
+    return this.shellProvider.provides("shell.surfaces.mint");
+  }
+
   /** The dynamic execution tail: the router owns gating and validation; this
    * owns only the wire protocol (subId minting + delta frames, P5 shape). */
   private async executeDynamic(

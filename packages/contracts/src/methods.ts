@@ -1090,4 +1090,33 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // ── surface.* (DT-1 — thinking-devtools-pack.md DT-D2/DT-D3) ──
+  // The registry scope is the BASE gate; one row carries one scope, so the
+  // SurfaceService additionally enforces the kind→scope matrix on `open`
+  // (browser → surface.browser · sck-window/ios-simulator → surface.capture),
+  // service-level and tested. `sources` lists capture kinds only, hence the
+  // capture scope outright. locality "local": a surface is a window on THIS
+  // device — remote surfaces are not a v1 concept, and none of these rows may
+  // ever gain `guestOk` or enter a tailnet preset.
+  defineMethod({
+    surface: "product",
+    method: "surface.sources",
+    scope: "surface.capture",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "surface.open",
+    scope: "surface.attach",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "surface.close",
+    scope: "surface.attach",
+    idempotent: true,
+    locality: "local",
+  }),
 ];

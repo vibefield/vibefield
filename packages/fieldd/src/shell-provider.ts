@@ -17,8 +17,15 @@ import {
   type ShellProviderResolveResult,
   ShellRendererRequestReplacementParams,
   ShellRendererRequestReplacementResult,
+  ShellSurfacesEnumerateParams,
+  ShellSurfacesEnumerateResult,
+  ShellSurfacesMintParams,
+  ShellSurfacesMintResult,
+  ShellSurfacesReleaseParams,
+  ShellSurfacesReleaseResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
+  SURFACE_AUTHORITY_LIMITS,
 } from "@vibefield/contracts";
 import { RpcCallError } from "./native-link";
 
@@ -68,6 +75,25 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
     // bound. This request must resolve early enough for Electron's subsequent
     // process-gone event to cross back before that grace expires.
     deadlineMs: RENDERER_REPLACEMENT_REQUEST_DEADLINE_MS,
+  },
+  // DT-1 — the live-surface authority doors (internal; SurfaceService only).
+  "shell.surfaces.enumerate": {
+    input: ShellSurfacesEnumerateParams,
+    output: ShellSurfacesEnumerateResult,
+    deadlineMs: SURFACE_AUTHORITY_LIMITS.ENUMERATE_DEADLINE_MS,
+  },
+  "shell.surfaces.mint": {
+    input: ShellSurfacesMintParams,
+    output: ShellSurfacesMintResult,
+    // Mint returns before any OS permission prompt resolves: producer creation
+    // is lazy, and a denied Screen Recording consent surfaces later as the
+    // runtime's own permission-denied state, never as a mint timeout.
+    deadlineMs: SURFACE_AUTHORITY_LIMITS.MINT_DEADLINE_MS,
+  },
+  "shell.surfaces.release": {
+    input: ShellSurfacesReleaseParams,
+    output: ShellSurfacesReleaseResult,
+    deadlineMs: SURFACE_AUTHORITY_LIMITS.RELEASE_DEADLINE_MS,
   },
 };
 

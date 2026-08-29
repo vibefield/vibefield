@@ -11,6 +11,15 @@ import {
   ShellRendererRequestReplacementParams,
   type ShellRendererRequestReplacementResult,
   ShellRendererRequestReplacementResult as ShellRendererRequestReplacementResultSchema,
+  ShellSurfacesEnumerateParams,
+  type ShellSurfacesEnumerateResult,
+  ShellSurfacesEnumerateResult as ShellSurfacesEnumerateResultSchema,
+  ShellSurfacesMintParams,
+  type ShellSurfacesMintResult,
+  ShellSurfacesMintResult as ShellSurfacesMintResultSchema,
+  ShellSurfacesReleaseParams,
+  type ShellSurfacesReleaseResult,
+  ShellSurfacesReleaseResult as ShellSurfacesReleaseResultSchema,
   ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
   ShellWebContentsCaptureArtifactPreviewResult as ShellWebContentsCaptureArtifactPreviewResultSchema,
@@ -40,6 +49,14 @@ export interface ShellProviderNative {
   requestRendererReplacement(
     params: ShellRendererRequestReplacementParams,
   ): ShellRendererRequestReplacementResult | Promise<ShellRendererRequestReplacementResult>;
+  // DT-1 — the live-surface authority (fieldd's SurfaceService is the sole
+  // dispatcher; the broker has already validated params against contracts).
+  enumerateSurfaceSources(
+    params: ShellSurfacesEnumerateParams,
+    signal: AbortSignal,
+  ): Promise<ShellSurfacesEnumerateResult>;
+  mintSurfaceTicket(params: ShellSurfacesMintParams): Promise<ShellSurfacesMintResult>;
+  releaseSurface(params: ShellSurfacesReleaseParams): Promise<ShellSurfacesReleaseResult>;
 }
 
 interface ActiveCall {
@@ -81,7 +98,9 @@ function safeProviderError(
             ? "the exact renderer generation is unavailable"
             : method === "shell.webcontents.captureArtifactPreview"
               ? "preview capture is unavailable"
-              : "the primary window is unavailable"
+              : method.startsWith("shell.surfaces.")
+                ? "the live-surface authority is unavailable"
+                : "the primary window is unavailable"
           : kind === "RESOURCE_EXHAUSTED"
             ? "the preview could not fit within the image budget"
             : "the desktop operation failed",
@@ -285,6 +304,20 @@ export class RecoveringShellProvider {
       } finally {
         this.captureBusy = false;
       }
+    }
+    if (call.method === "shell.surfaces.enumerate") {
+      const params = ShellSurfacesEnumerateParams.parse(call.params);
+      return ShellSurfacesEnumerateResultSchema.parse(
+        await this.native.enumerateSurfaceSources(params, signal),
+      );
+    }
+    if (call.method === "shell.surfaces.mint") {
+      const params = ShellSurfacesMintParams.parse(call.params);
+      return ShellSurfacesMintResultSchema.parse(await this.native.mintSurfaceTicket(params));
+    }
+    if (call.method === "shell.surfaces.release") {
+      const params = ShellSurfacesReleaseParams.parse(call.params);
+      return ShellSurfacesReleaseResultSchema.parse(await this.native.releaseSurface(params));
     }
 
     const params = ShellDialogPickFolderParams.parse(call.params);

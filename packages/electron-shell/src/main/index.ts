@@ -844,6 +844,12 @@ async function main(
         requestRendererReplacement: ({ rendererParticipant }) => ({
           requested: windowRendererBoundary?.requestReplacement(rendererParticipant) === true,
         }),
+        // DT-1a staging: the authority module lands with DT-1c; until then the
+        // doors answer honest UNAVAILABLE so the exact provider set stays
+        // registered and fieldd's SurfaceService can ship against real wiring.
+        enumerateSurfaceSources: () => Promise.reject({ kind: "UNAVAILABLE" }),
+        mintSurfaceTicket: () => Promise.reject({ kind: "UNAVAILABLE" }),
+        releaseSurface: () => Promise.reject({ kind: "UNAVAILABLE" }),
       },
       logger.child({ component: "shell.provider" }),
     );
