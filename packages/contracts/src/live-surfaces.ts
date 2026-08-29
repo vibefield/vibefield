@@ -556,9 +556,22 @@ export const SurfaceSourcesResultV1 = z
   .passthrough();
 export type SurfaceSourcesResultV1 = z.infer<typeof SurfaceSourcesResultV1>;
 
+/** DT-1c — caller-scoped continuity key (typically the widget's durable entity
+ * key). Custody in Electron main dedupes mints on {participant, kind, reuseKey},
+ * so a renderer reload re-binds the SAME still-running runtime (the reason
+ * main-side custody exists) instead of leaking one per reload. Optional: a
+ * mint without it is fresh each time and swept when its document dies. */
+export const SurfaceReuseKeyV1 = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9._:-]+$/u);
+export type SurfaceReuseKeyV1 = z.infer<typeof SurfaceReuseKeyV1>;
+
 export const SurfaceOpenParamsV1 = z
   .object({
     source: LiveSurfaceSourceSpecV1,
+    reuseKey: SurfaceReuseKeyV1.optional(),
     idempotencyKey: z.string().min(1).max(SURFACE_LIMITS.IDEMPOTENCY_KEY_CHARS).optional(),
   })
   .passthrough();

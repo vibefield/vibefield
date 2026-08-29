@@ -8,6 +8,7 @@ import {
   LiveSurfaceSourceSpecV1,
   SURFACE_LIMITS,
   SurfaceEnumerationKindV1,
+  SurfaceReuseKeyV1,
   SurfaceSourceDescriptorV1,
 } from "./live-surfaces";
 import { PluginId } from "./plugins";
@@ -420,6 +421,7 @@ export const ShellSurfacesMintParams = z
   .object({
     rendererParticipant: RendererParticipantIdentity,
     source: LiveSurfaceSourceSpecV1,
+    reuseKey: SurfaceReuseKeyV1.optional(),
     owner: z.object({ pluginId: PluginId.optional() }).passthrough().optional(),
   })
   .passthrough();

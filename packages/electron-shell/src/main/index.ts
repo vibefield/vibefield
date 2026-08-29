@@ -58,6 +58,11 @@ import {
   registerWindowBootstrap,
 } from "./ipc";
 import { installLifecycle } from "./lifecycle";
+import { LiveSurfaceAuthority } from "./live-surfaces/authority";
+import {
+  createProductionLiveSurfaceSupport,
+  type ProductionLiveSurfaceSupport,
+} from "./live-surfaces/authority-production";
 import { isGuardedBrowserSurfaceSession } from "./live-surfaces/browser-security";
 import { createElectronLiveSurfaceTextureTransferApi } from "./live-surfaces/electron-texture-transfer";
 import type { LiveSurfaceRuntimeAuthority } from "./live-surfaces/runtime";
@@ -158,6 +163,10 @@ const registry = new WindowRegistry();
 const liveSurfaceTickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>();
 const liveSurfaceWindowHosts = new Map<number, LiveSurfaceWindowHost>();
 const liveSurfaceTextureBudgets = new Map<string, LiveSurfaceTextureTransferBudget>();
+// DT-1c — production surface custody. Assigned once resources resolve; null
+// only before boot completes or after shell teardown (doors answer UNAVAILABLE).
+let liveSurfaceAuthority: LiveSurfaceAuthority | null = null;
+let liveSurfaceSupport: ProductionLiveSurfaceSupport | null = null;
 const ensureFieldd: FielddSupervisor["ensure"] = (options) => {
   if (fielddHandles !== null) return fielddHandles.ensure(options);
   if (supervisor !== null) return supervisor.ensure(options);
@@ -180,6 +189,10 @@ function disposeShellState(): void {
   primaryWindowOpener = null;
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
+  liveSurfaceAuthority?.dispose();
+  liveSurfaceAuthority = null;
+  void liveSurfaceSupport?.dispose();
+  liveSurfaceSupport = null;
   liveSurfaceWindowHosts.clear();
   liveSurfaceTextureBudgets.clear();
   liveSurfaceTickets.clear();
@@ -204,7 +217,11 @@ function installLiveSurfaceHost(window: Electron.BrowserWindow, logger: Logger):
     liveSurfaceTextureBudgets,
   ).install();
   liveSurfaceWindowHosts.set(window.id, host);
+  const webContentsId = window.webContents.id;
   const dispose = (): void => {
+    // Custody never outlives its window (DT-1c): reopen re-creates surfaces
+    // from durable widget props.
+    liveSurfaceAuthority?.releaseAllForWebContents(webContentsId);
     host.dispose();
     liveSurfaceWindowHosts.delete(window.id);
     shellDisposers.delete(dispose);
@@ -834,6 +851,29 @@ async function main(
         { ...transition, ...replacement },
       );
     });
+    // DT-1c — production surface custody behind the provider doors. Window
+    // resolution reads the live boundary at CALL time (it is assigned later in
+    // boot, like requestReplacement's use below); hosts are looked up by the
+    // webContents identity the boundary proved.
+    liveSurfaceSupport = createProductionLiveSurfaceSupport({
+      capture: resources.macosLiveSurfaceCapture,
+      logger: logger.child({ component: "live-surfaces.capture" }),
+    });
+    liveSurfaceAuthority = new LiveSurfaceAuthority({
+      resolveWindow: (identity) => windowRendererBoundary?.resolveCurrent(identity) ?? null,
+      hostFor: (webContentsId) => {
+        for (const host of liveSurfaceWindowHosts.values()) {
+          if (!host.window.isDestroyed() && host.window.webContents.id === webContentsId) {
+            return host;
+          }
+        }
+        return null;
+      },
+      factories: liveSurfaceSupport.factories,
+      enumeration:
+        resources.macosLiveSurfaceCapture === null ? null : liveSurfaceSupport.enumeration,
+      logger: logger.child({ component: "live-surfaces.authority" }),
+    });
     const shellProvider = new RecoveringShellProvider(
       bundle.handles,
       {
@@ -844,12 +884,21 @@ async function main(
         requestRendererReplacement: ({ rendererParticipant }) => ({
           requested: windowRendererBoundary?.requestReplacement(rendererParticipant) === true,
         }),
-        // DT-1a staging: the authority module lands with DT-1c; until then the
-        // doors answer honest UNAVAILABLE so the exact provider set stays
-        // registered and fieldd's SurfaceService can ship against real wiring.
-        enumerateSurfaceSources: () => Promise.reject({ kind: "UNAVAILABLE" }),
-        mintSurfaceTicket: () => Promise.reject({ kind: "UNAVAILABLE" }),
-        releaseSurface: () => Promise.reject({ kind: "UNAVAILABLE" }),
+        enumerateSurfaceSources: (params) => {
+          const authority = liveSurfaceAuthority;
+          if (authority === null) return Promise.reject({ kind: "UNAVAILABLE" });
+          return authority.enumerate(params);
+        },
+        mintSurfaceTicket: async (params) => {
+          const authority = liveSurfaceAuthority;
+          if (authority === null) throw { kind: "UNAVAILABLE" };
+          return authority.mint(params);
+        },
+        releaseSurface: async (params) => {
+          const authority = liveSurfaceAuthority;
+          if (authority === null) throw { kind: "UNAVAILABLE" };
+          return authority.release(params);
+        },
       },
       logger.child({ component: "shell.provider" }),
     );

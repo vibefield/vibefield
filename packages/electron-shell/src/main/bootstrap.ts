@@ -35,6 +35,10 @@ export interface WindowRendererBoundary {
   /** Requests termination of only the exact still-current renderer generation.
    * True means Electron accepted the request, not that process death occurred. */
   requestReplacement(identity: RendererParticipantIdentityValue): boolean;
+  /** DT-1c: resolves an exact CURRENT identity (participant AND incarnation) to
+   * its live sender. Null for stale incarnations, retired generations, and
+   * destroyed senders — a stale renderer document can never bind new authority. */
+  resolveCurrent(identity: RendererParticipantIdentityValue): { webContentsId: number } | null;
   /** Requests every current document generation after fieldd's boot authority
    * changes. The later process-gone events remain the positive death facts. */
   requestAllReplacements(): { requested: number; unavailable: number };
@@ -265,6 +269,22 @@ export function createBootstrapHandler(deps: {
       }
     }
     return false;
+  };
+  handle.resolveCurrent = (identity) => {
+    const parsed = RendererParticipantIdentity.parse(identity);
+    for (const generation of generations.values()) {
+      if (
+        generation.identity.participantId !== parsed.participantId ||
+        generation.identity.incarnation !== parsed.incarnation ||
+        generation.retired
+      ) {
+        continue;
+      }
+      const sender = generation.sender as unknown as SenderLike;
+      if (sender.isDestroyed()) return null;
+      return { webContentsId: sender.id };
+    }
+    return null;
   };
   handle.requestAllReplacements = () => {
     let requested = 0;
