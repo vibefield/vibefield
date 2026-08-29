@@ -1497,3 +1497,48 @@
   border-radius: var(--vf-radius-card);
   background: var(--vf-fill);
 }
+
+/* The live-surface fixture staging (DT-2b-2): a box the SHIPPING LiveSurfaceView
+   sizes itself into, plus a readout of the wire demand the pool actually emitted.
+   Everything the view owns is the view's — the catalog gives it a box, a caption
+   and nothing else (docs/UI_SYSTEM.md). */
+.vf-ds-surface-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vf-ds-surface-box {
+  display: flex;
+  height: 220px;
+  overflow: hidden;
+  border-radius: var(--vf-radius-card);
+  background: var(--vf-fill);
+}
+
+.vf-ds-surface-readout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.vf-ds-surface-readout dt {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.vf-ds-surface-readout dd {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.vf-ds-surface-caption {
+  margin: 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}

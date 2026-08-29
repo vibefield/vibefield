@@ -8,12 +8,19 @@
 //
 // P3 SUBSET, honest by omission (§10.2 — unavailable APIs are ABSENT, never
 // stubs): ctx carries plugin/logger/signal/track/widgets/client. Commands,
-// surfaces, and the canvas handle (ctx.canvas) arrive at P6; pool arrives with
-// its runtime. ctx.plugin's manifestHash/installRevision are OPTIONAL because
+// surfaces, and the canvas handle (ctx.canvas) arrive at P6; `pool` arrives
+// with its runtime — DT-2b-2 gives it one, and its first and only kind is
+// `liveSurface`. ctx.plugin's manifestHash/installRevision are OPTIONAL because
 // two loaders supply the context: the staged loader (§19.2) knows both from the
 // approved module row, and the dev-only bundled path has neither — a plugin
 // riding the app bundle was never installed, so there is no install to revise.
 
+import type {
+  LiveSurfaceDemandV1,
+  LiveSurfaceFpsBucketV1,
+  LiveSurfacePixelSizeV1,
+  LiveSurfaceSourceSpecV1,
+} from "@vibefield/contracts";
 import type { ComponentType } from "react";
 import type { PluginBehaviorBindingAPI } from "./behavior";
 
@@ -80,6 +87,25 @@ export interface RendererPluginContext {
   readonly logger: PluginLogger;
   readonly widgets: RendererWidgetAPI;
   readonly client: PluginProductClient;
+  /** DT-2b-2 — the window's shared attachment pool. `liveSurface` is its first
+   * and only kind; other kinds join with their consumers (A7).
+   *
+   * PRESENT UNCONDITIONALLY, unlike `settings`/`surfaces`/`canvas`, and the
+   * §10.2 reason cuts the other way here: those doors are gated because the
+   * host is their whole authority, so an ungranted one has nothing honest to
+   * do. This door's authority is `surface.attach` — the registry scope on
+   * `surface.open` (contracts/methods.ts), checked by ProductAPI before the
+   * handler runs — so an unentitled plugin gets a `lost` handle carrying the
+   * daemon's own refusal, which is more honest than a missing property whose
+   * absence a plugin would have to interpret. The same face answers a host with
+   * no live-surface plane at all (the browser catalog).
+   *
+   * STATE OF PLAY, stated rather than implied: `surface.attach` is NOT yet in
+   * `PLUGIN_CAPABILITY_ELIGIBILITY`, so no plugin can request it and every real
+   * mint refuses today. The door is complete and the refusal is honest; making
+   * it grantable is a contracts decision (which entry kinds, at what risk tier),
+   * deliberately not smuggled in with the plumbing. */
+  readonly pool: PluginAttachmentPool;
   /** present iff the manifest DECLARES contributes.commands (§8.3/§10.2 — the
    * absent-API law: no contribution, no API surface) */
   readonly commands?: RendererCommandAPI;
@@ -409,6 +435,98 @@ export type PluginSurfaceProps =
  * handle (auto-tracked — §18.1). */
 export interface RendererSurfaceAPI {
   register(surfaceId: string, component: ComponentType<PluginSurfaceProps>): Disposable;
+}
+
+// --- the attachment pool (DT-2b-2, DT-D4) ------------------------------------
+
+/**
+ * One holder's declared demand — `LiveSurfaceDemandV1` MINUS its `revision`.
+ *
+ * Declared structurally here rather than imported, for two reasons that are
+ * really one. The revision-free shape exists only inside field-app's pool
+ * (`surfaces/pool/demand.ts`, `SurfaceDemandIntent`), and the SDK cannot depend
+ * on the host — but that is also the correct boundary: a `revision` is the
+ * POOL's serialization of the one folded wire demand, and a holder that could
+ * name one could collide with another holder of the same surface. Every field
+ * type still comes from `@vibefield/contracts`, so this stays one edit away
+ * from the wire it feeds.
+ *
+ * `targetRasterSize` is written `| undefined` rather than plainly optional so a
+ * caller under `exactOptionalPropertyTypes` may pass a value it computed.
+ */
+export interface PluginSurfaceDemand {
+  readonly mode: LiveSurfaceDemandV1["mode"];
+  readonly targetFps: LiveSurfaceFpsBucketV1;
+  readonly targetRasterSize?: LiveSurfacePixelSizeV1 | undefined;
+  readonly priority: number;
+  readonly interactive: boolean;
+}
+
+export interface PluginLiveSurfaceOptions {
+  /** This plugin's name for the surface. The host namespaces it by plugin id,
+   * so two plugins naming the same key can never share an attachment. */
+  readonly key: string;
+  readonly source: LiveSurfaceSourceSpecV1;
+  /** DT-1c continuity: a mint carrying one re-binds the SAME still-running
+   * runtime across a renderer reload instead of leaking a new one. */
+  readonly reuseKey?: string;
+  readonly initialDemand: PluginSurfaceDemand;
+}
+
+/** `attaching` and `live` are the surface's; `lost` says the attachment went
+ * away and nothing will bring it back on its own (`retry()` mints fresh);
+ * `released` is terminal for THIS handle and says nothing about the surface,
+ * which other holders may still be watching. */
+export type PluginSurfaceStatus = "attaching" | "live" | "lost" | "released";
+
+export interface PluginSurfaceState {
+  readonly status: PluginSurfaceStatus;
+  /** Why the last attach or attachment ended. Never carries a ticket. */
+  readonly error: Error | null;
+}
+
+/**
+ * A plugin's claim on one live surface.
+ *
+ * NARROWER THAN THE HOST'S HANDLE BY CONSTRUCTION (PA-22): no presentation, no
+ * ticket, no transport, no frame. A plugin renders through `SurfaceView` and
+ * never touches frames or GPU objects in v1 — the frames are transferred
+ * `VideoFrame`s whose leases the host must close on a fixed schedule, and a
+ * handle that exposed one would be handing plugin code an object it could
+ * retain past its lease.
+ */
+export interface PluginSurfaceHandle {
+  readonly status: PluginSurfaceStatus;
+  readonly error: Error | null;
+  /** Fires immediately with the current state, then on every change. */
+  onState(listener: (state: PluginSurfaceState) => void): () => void;
+  /** Re-declare THIS holder's intent. The host refolds every holder's demand. */
+  setDemand(demand: PluginSurfaceDemand): void;
+  /** Mint fresh and re-attach after a loss. A no-op in any other state. */
+  retry(): void;
+  /** Drop this holder's claim. Idempotent, and done for you on deactivation. */
+  release(): void;
+}
+
+export interface PluginSurfaceViewProps {
+  readonly handle: PluginSurfaceHandle;
+  /** The holder is interactively engaged (raises fps + priority, DT-D5). */
+  readonly interactive?: boolean;
+  readonly className?: string;
+}
+
+/**
+ * The window's shared attachment pool, as plugins see it.
+ *
+ * `liveSurface` never throws for an unavailable host or an unentitled caller:
+ * both answer with a handle that is already `lost` and says why. The failure a
+ * plugin must render is a face, not an exception at mount.
+ */
+export interface PluginAttachmentPool {
+  liveSurface(opts: PluginLiveSurfaceOptions): PluginSurfaceHandle;
+  /** The SHIPPING live-surface view, bound to the host's own presentation
+   * path. A plugin gives it a handle and a box; everything else is the host's. */
+  readonly SurfaceView: ComponentType<PluginSurfaceViewProps>;
 }
 
 /** §12.7 A2-tier STOPGAP: the curated canvas tier (PA-27 — a provenance-

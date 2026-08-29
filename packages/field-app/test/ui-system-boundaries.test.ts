@@ -81,6 +81,32 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("useTerminalPool");
   });
 
+  it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
+    // The temptation for a widget whose pixels need a privileged producer is to
+    // draw convincing ones. The catalog is held to supplying what a HOST
+    // supplies — a transport, a pool, a ticket, frames — and to owning no
+    // painting: a second canvas here would be a replica of the shipping view,
+    // drifting from it the moment either changed.
+    const section = source("design-system/sections/LiveSurfacesSection.tsx");
+    expect(section).toContain("LiveSurfaceView");
+    expect(section).not.toContain("<canvas");
+    // A CALL, not a mention: the section's own prose names the view's
+    // `drawImage` path, and a bare substring match would forbid explaining it.
+    expect(section).not.toMatch(/drawImage\s*\(/);
+    expect(section).not.toContain("<style");
+    // The ACQUIRER releases (03·A C-3): a section mounts and unmounts, and a
+    // claim it forgot would hold an attachment for the life of the tab.
+    expect(section).toMatch(/\.release\(\)/);
+    expect(section).toMatch(/\.dispose\(\)/);
+    // And the fixture host stays OUT of the catalog tree on purpose: it needs
+    // the real `@vibefield/live-surfaces` transport (the attachment class has
+    // private fields, so no structural fake can reach `LiveSurfacePresentation`),
+    // which the cross-package door rule below forbids inside design-system/.
+    expect(source("surfaces/fixture/fixture-surface-host.ts")).toContain(
+      "LiveSurfaceRendererTransport",
+    );
+  });
+
   it("keeps cross-package catalog composition on design-system doors", () => {
     // The catalog composes another workspace package only through its stated
     // doors — the design-kit foundation, contracts types, or the package's own
@@ -148,6 +174,7 @@ describe("UI system ownership boundaries", () => {
       "CanvasGroundWorkbench",
       "InfiniteCanvasGroundPreview",
       "InfiniteCanvasGround",
+      "LiveSurfaceView",
       "TerminalMirrorPreview",
       "TerminalMirrorSurface",
       "TerminalSessionPickerPreview",

@@ -10,6 +10,7 @@ import { ControlsSection } from "./sections/ControlsSection";
 import { FoundationsSection } from "./sections/FoundationsSection";
 import { GodviewSection } from "./sections/GodviewSection";
 import { InventorySection } from "./sections/InventorySection";
+import { LiveSurfacesSection } from "./sections/LiveSurfacesSection";
 import { OnboardingSection } from "./sections/OnboardingSection";
 import { OverviewSection } from "./sections/OverviewSection";
 import { StatusSection } from "./sections/StatusSection";
@@ -25,9 +26,10 @@ const NAV_ITEMS = [
   ["chrome", "Field chrome", "06"],
   ["cards", "Living cards", "07"],
   ["surfaces", "Panels & overlays", "08"],
-  ["onboarding", "Onboarding", "09"],
-  ["godview", "Control room", "10"],
-  ["inventory", "Coverage index", "11"],
+  ["live-surfaces", "Live surfaces", "09"],
+  ["onboarding", "Onboarding", "10"],
+  ["godview", "Control room", "11"],
+  ["inventory", "Coverage index", "12"],
 ] as const;
 
 function initialDark(): boolean {
@@ -127,6 +129,7 @@ export function DesignSystemPage({
           magnetGridGlyph={magnetGridGlyph}
           onMagnetGridGlyphChange={setMagnetGridGlyph}
         />
+        <LiveSurfacesSection />
         <OnboardingSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <GodviewSection />
         <InventorySection />

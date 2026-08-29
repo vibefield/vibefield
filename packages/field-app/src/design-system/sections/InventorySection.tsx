@@ -129,7 +129,7 @@ export function InventorySection(): ReactElement {
   return (
     <Section
       id="inventory"
-      index="11"
+      index="12"
       eyebrow="Coverage index"
       title="The interface, accounted for"
       description="A compact audit list for the current renderer. It makes omissions visible while the rendered specimens keep the visual decisions comparable."

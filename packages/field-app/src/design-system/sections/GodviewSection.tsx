@@ -9,7 +9,7 @@ export function GodviewSection(): ReactElement {
   return (
     <Section
       id="godview"
-      index="10"
+      index="11"
       eyebrow="Control room"
       title="A deliberate change of register"
       description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The complete circle inventory below makes its state grammar explicit instead of leaving it buried in the physics view."

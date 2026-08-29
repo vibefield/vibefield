@@ -23,6 +23,7 @@ import {
   type CommandInvocation,
   createStorageSurfaces,
   type Disposable,
+  type PluginAttachmentPool,
   type PluginLogger,
   type PluginProductClient,
   type PluginSettingsAPI,
@@ -35,9 +36,11 @@ import {
 } from "@vibefield/plugin-sdk";
 import type { ComponentType } from "react";
 import { getRendererLogger } from "../logging";
+import type { ProductSurfaceFrame, SurfacePool } from "../surfaces/pool";
 import { getActiveCanvasEngine } from "./canvas-engine-ref";
 import * as commandRegistry from "./command-registry";
 import { createPluginProductClient } from "./plugin-client";
+import { createPluginSurfacePool } from "./surface-door";
 import * as surfaceRegistry from "./surface-registry";
 
 // The host-owned renderer harness (spec §10.3, P3a): construct the context,
@@ -115,6 +118,10 @@ interface ActivationSpec {
 export interface RendererActivationDeps {
   /** Test/alternate transport seam. Production uses the plugin-principal client factory. */
   readonly productClient?: PluginProductClient;
+  /** Test/alternate host seam for `ctx.pool` (DT-2b-2). Production resolves the
+   * window's one surface pool from the FieldHost; `null` is the honest answer on
+   * a host with no live-surface plane, not a failure. */
+  readonly resolveSurfacePool?: () => SurfacePool<ProductSurfaceFrame> | null;
   /** PRC-3d controller seam. The attempt keeps its own scope, but this owner closes it at the
    * controller's synchronous authority edge and awaits its quiescence during adapter cleanup. */
   readonly ownerScope?: ActivationScope;
@@ -418,6 +425,27 @@ function buildActivation(
       },
     });
 
+    // DT-2b-2 — the attachment pool door, built per SCOPE for the same reason
+    // `client.subscribe` records its release on `ownedBy`: an acquisition made
+    // inside an effect belongs to that effect's lifetime, and closing it must
+    // drop the claim without waiting for the whole activation to end.
+    const pool: PluginAttachmentPool = createPluginSurfacePool({
+      pluginId: spec.id,
+      // The guarded client — the same caller `ctx.client` rides, so the mint's
+      // identity, grants and via-attribution are identical to any other call
+      // this plugin makes, and a mint after close fails like any other call.
+      client,
+      assertOpen,
+      own: (label, release) => {
+        ownedBy.track(label, {
+          dispose() {
+            release();
+          },
+        });
+      },
+      ...(deps.resolveSurfacePool === undefined ? {} : { resolvePool: deps.resolveSurfacePool }),
+    });
+
     const settings: PluginSettingsAPI | undefined =
       rawStorage === undefined
         ? undefined
@@ -512,6 +540,7 @@ function buildActivation(
       // §11.2: every call rides the plugin's own lazy product connection, with the child scope's
       // activity gate wrapped around it.
       client,
+      pool,
       ...(declaredCommands.size > 0
         ? {
             commands: Object.freeze({

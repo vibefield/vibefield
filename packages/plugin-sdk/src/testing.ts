@@ -1,12 +1,19 @@
 import type { BehaviorContribution } from "@vibefield/contracts";
-import type { ComponentType } from "react";
+import { type ComponentType, createElement, type ReactElement, useSyncExternalStore } from "react";
 import { type AnyBehaviorDef, describeBehavior } from "./behavior";
 import type {
   CommandInvocation,
   Disposable,
   DynamicMethodHandler,
+  PluginAttachmentPool,
+  PluginLiveSurfaceOptions,
   PluginLogger,
+  PluginSurfaceDemand,
+  PluginSurfaceHandle,
   PluginSurfaceProps,
+  PluginSurfaceState,
+  PluginSurfaceStatus,
+  PluginSurfaceViewProps,
   RendererPluginContext,
   RendererPluginModule,
   ServicePluginContext,
@@ -19,8 +26,10 @@ type MockCommandHandler = (args: unknown, invocation: CommandInvocation) => void
 type MockSurfaceComponent = ComponentType<PluginSurfaceProps>;
 
 // §5.4.4 — the mock host lives WITH the SDK contract it mocks. Runs a renderer
-// module's activate against a collecting context: no engine, no daemon, no
-// React. Widget-state fixture rendering (the playground) builds on this later.
+// module's activate against a collecting context: no engine, no daemon, and no
+// React beyond the pool's placeholder view — the one thing a plugin cannot
+// exercise without an element to render. Widget-state fixture rendering (the
+// playground) builds on this later.
 
 export interface MockActivation {
   bindings: Map<string, WidgetBinding>;
@@ -32,6 +41,9 @@ export interface MockActivation {
   /** surface id → bound component (§13.2) — ctx.surfaces is present iff the
    * options DECLARE the surfaces contribution (declaredSurfaces supplied) */
   surfaces: Map<string, MockSurfaceComponent>;
+  /** plugin-declared key → the fake attachment ctx.pool.liveSurface handed out,
+   * in acquisition order. `ctx.pool` is unconditional, so this is always live. */
+  liveSurfaces: Map<string, MockLiveSurface>;
   logs: Array<{ level: "debug" | "info" | "warn" | "error"; message: string }>;
   disposables: Disposable[];
   /** abort the mock session (fires ctx.signal; further registers throw) */
@@ -59,6 +71,102 @@ export interface MockPluginHostOptions {
   /** the opaque canvas handle ctx.canvas.engine() returns. Supplying this makes
    * ctx.canvas present (mirrors canvas.read/write being granted — §12.7). */
   canvasEngine?: unknown;
+}
+
+/** One fake attachment, plus the levers a test drives it with. The production
+ * pool moves these states off a real transport; here the test is the host. */
+export interface MockLiveSurface {
+  readonly key: string;
+  readonly options: PluginLiveSurfaceOptions;
+  /** Every demand this holder declared, `initialDemand` first. */
+  readonly demands: PluginSurfaceDemand[];
+  readonly handle: PluginSurfaceHandle;
+  readonly released: boolean;
+  readonly retries: number;
+  /** Drive the fake: `set("live")`, `set("lost", error)`. Released is terminal. */
+  set(status: PluginSurfaceStatus, error?: Error | null): void;
+}
+
+/** The mock's `SurfaceView`: the production view's OBSERVABLE contract — a box
+ * carrying `data-live-surface-status` that tracks the handle — and nothing
+ * else. No canvas, no frames: a mock that painted would be claiming a
+ * presentation path the mock host does not have. */
+function MockSurfaceView(props: PluginSurfaceViewProps): ReactElement {
+  const status = useSyncExternalStore(
+    (onStoreChange) => props.handle.onState(onStoreChange),
+    () => props.handle.status,
+  );
+  return createElement("div", {
+    "data-live-surface-status": status,
+    ...(props.interactive === true ? { "data-live-surface-interactive": "true" } : {}),
+    ...(props.className === undefined ? {} : { className: props.className }),
+  });
+}
+
+function mockLiveSurface(
+  options: PluginLiveSurfaceOptions,
+  assertOpen: () => void,
+): MockLiveSurface {
+  const listeners = new Set<(state: PluginSurfaceState) => void>();
+  const demands: PluginSurfaceDemand[] = [options.initialDemand];
+  let status: PluginSurfaceStatus = "attaching";
+  let error: Error | null = null;
+  let retries = 0;
+  const state = (): PluginSurfaceState => ({ status, error });
+  const notify = (): void => {
+    for (const listener of [...listeners]) listener(state());
+  };
+  const handle: PluginSurfaceHandle = {
+    get status(): PluginSurfaceStatus {
+      return status;
+    },
+    get error(): Error | null {
+      return error;
+    },
+    onState(listener): () => void {
+      listeners.add(listener);
+      listener(state());
+      return () => listeners.delete(listener);
+    },
+    setDemand(demand): void {
+      assertOpen();
+      if (status === "released") return;
+      demands.push(demand);
+    },
+    retry(): void {
+      assertOpen();
+      if (status !== "lost") return;
+      retries += 1;
+      status = "attaching";
+      error = null;
+      notify();
+    },
+    release(): void {
+      if (status === "released") return;
+      status = "released";
+      error = null;
+      notify();
+      listeners.clear();
+    },
+  };
+  return {
+    key: options.key,
+    options,
+    demands,
+    handle,
+    get released(): boolean {
+      return status === "released";
+    },
+    get retries(): number {
+      return retries;
+    },
+    set(next, nextError = null): void {
+      if (status === "released") return;
+      status = next;
+      error = nextError;
+      notify();
+    },
+  };
 }
 
 function isDisposable(value: unknown): value is Disposable {
@@ -180,6 +288,7 @@ export async function activateWithMockHost(
   const behaviors = new Map<string, AnyBehaviorDef>();
   const commands = new Map<string, MockCommandHandler>();
   const surfaces = new Map<string, MockSurfaceComponent>();
+  const liveSurfaces = new Map<string, MockLiveSurface>();
   const widgetGenerations = new Map<string, symbol>();
   const commandGenerations = new Map<string, symbol>();
   const surfaceGenerations = new Map<string, symbol>();
@@ -254,6 +363,19 @@ export async function activateWithMockHost(
           return Promise.reject(new Error("mock host: no product connection"));
         },
       },
+      pool: {
+        liveSurface(options: PluginLiveSurfaceOptions): PluginSurfaceHandle {
+          assertOpen();
+          const surface = mockLiveSurface(options, assertOpen);
+          liveSurfaces.set(options.key, surface);
+          // Production releases every handle a plugin acquired when the
+          // activation closes (§18.1). The mock owns the same inverse, so a
+          // test asserts the law rather than the mock's convenience.
+          ownedBy.track({ dispose: () => surface.handle.release() });
+          return surface.handle;
+        },
+        SurfaceView: MockSurfaceView,
+      } satisfies PluginAttachmentPool,
       ...(declaredCommands !== undefined
         ? {
             commands: {
@@ -406,6 +528,7 @@ export async function activateWithMockHost(
     behaviors,
     commands,
     surfaces,
+    liveSurfaces,
     logs,
     disposables,
     abort: () => void root.close(),

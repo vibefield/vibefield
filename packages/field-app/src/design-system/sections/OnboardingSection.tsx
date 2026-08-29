@@ -12,7 +12,7 @@ export function OnboardingSection({
   return (
     <Section
       id="onboarding"
-      index="09"
+      index="10"
       eyebrow="Onboarding"
       title="The complete Setup Assistant"
       description="Every shipping pane, alternate entry, transitional face, and completion refusal is mounted from production code. Change a pane once and both onboarding and this catalog move together."
