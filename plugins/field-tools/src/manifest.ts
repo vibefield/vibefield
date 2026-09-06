@@ -62,7 +62,16 @@ export const fieldToolsManifest: PluginManifestV1 = {
         // Folders are widgets too (2026-07-17): container.provides lets a
         // folder file into another folder — nesting was engine-supported all
         // along, only the missing Provides blocked the match.
-        container: { accepts: ["widget"], provides: ["widget"] },
+        // The PORTAL insets (2026-09-06): the preview rect the folder's body shows its
+        // inside through (folder.tsx PORTAL: pad 10 on three sides, the 36px bar below it). ICE's
+        // `resolvePortal` reads these for the enter/exit flight, so the flight and the
+        // DOM minis (folder.tsx PORTAL) now map the arrival onto the SAME rect; before
+        // this the flight used the full body and the minis the inset rect.
+        container: {
+          accepts: ["widget"],
+          provides: ["widget"],
+          portal: { top: 10, right: 10, bottom: 36, left: 10 },
+        },
         props: {
           title: { kind: "string", default: "Folder" },
           accent: { kind: "string", default: "#7B96FF" },

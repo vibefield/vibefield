@@ -31,6 +31,8 @@ describe("plugin-field-tools", () => {
     expect(widgets.find((w) => w.type === "vibefield.field-tools.folder")?.container).toEqual({
       accepts: ["widget"],
       provides: ["widget"],
+      // the portal insets = folder.tsx's PORTAL rect (pad 10, bar 36): the flight and the minis agree
+      portal: { top: 10, right: 10, bottom: 36, left: 10 },
     });
     expect(
       widgets.find((w) => w.type === "vibefield.field-tools.comment")?.interaction?.sweepContained,
