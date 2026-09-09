@@ -4848,3 +4848,45 @@ are IOS-5b. **Tests 182 green** (135 → 168 on the branch; 182 merged with 3c):
 equal-width keys, no predictive bar, Send quiet then inverted, CTRL inverted with its lock dot,
 the strip with its Enter. **Device-gated:** the kit's row actually gone, `git status` sent from
 Draft, Esc/Tab/arrows landing in a shell, a three-line draft arriving in zsh as one block.
+
+## IOS-5b — the latch reaches the terminal: Live mode's Ctrl, the long-press fans, the Meta burst
+
+**LANDED 2026-09-09, `e6617827`** (fast-forwarded onto `ios/keyboard`). Built by a briefed agent in
+a worktree in parallel with IOS-5c; the orchestrator reviewed and integrated. K-D3 stops being a
+plan: **one latch, ours, meaning the same thing whichever responder holds the keyboard.**
+
+**What landed.** `FieldTerminal/SoftwareInputLatch.swift` — the shaping as a pure function: a
+single-character commit under modifiers becomes that keystroke, Enter and deleteBackward their
+named keys, a multi-character commit / paste / already-shaped key event `nil` (forwarded
+untouched); it reproduces the shape of the kit's own accessory latch, read at the pinned 0.10.1
+checkout, because the kit's is internal, single-shot and blind to our rail.
+`TerminalAttachment.softwareInputLatch` — a public CONSUMING closure the host installs at attach
+and clears in `closeCard` (the sink holds the attachment and this holds the card: a retain cycle
+only that clear breaks); `handleSoftwareInput` consults it once per event, never for a paste, and
+presses the shaped keystroke instead of forwarding; the old body became a private
+`deliverSoftwareInput` that `sendDraft`/`typeText` use, because the card already spent its latch
+at the tap and a second consumption would put Ctrl on the Enter that ends a draft. With no latch
+installed the path is byte-for-byte the old one. `InputCardModel`: `takeLatchForTerminal` (the
+Live half), `tapChord` (a fan key names its own modifiers — `^C`, never `^^C`; the latch is spent,
+a locked one stays locked; the Meta burst rides along since a chord is a keystroke), `metaArmed`
+with `armMeta`/`metaExpired` on the arm's 3 s discipline, `showFan`/`closeFan`.
+`FieldInput/KeyPopover.swift` — the fan as a value (catalog + rows) and its presentation: CTRL
+fans to the design's ten chords in two rows with one-word subtitles, ← → ↑ ↓ to HOME END PGUP
+PGDN, TAB to ⇧TAB, ESC to META. `Haptics.swift` — light to arm, medium to lock, soft to release,
+rigid for a chord, called from the VIEW (the model has no UIKit in it on purpose).
+
+**Decisions named at source.** The fan is a `.popover` with compact adaptation and its keys are
+TAPPED, not slid onto: the card lives in a `safeAreaInset`, so a fan must stand outside the card's
+bounds, and slide-and-release wants it drawn inside them. Long press is 0.35 s, shorter than the
+field's 520 ms hold-to-create, which makes an agent and wants deliberation. A long press ends in
+a touch-up, so every rail key's action checks `openFan` first. Closing a fan gives the keyboard
+back only if the composer had it. A multi-character commit spends the arm and passes through: an
+IME composition has no single key to name. Alt has no rail slot (design decision 4): Esc-then-x
+already is Alt-x for readline/emacs/zsh, and the burst exists for tmux, which wants the escape
+and the key as one.
+
+**Tests 182 → 208 green:** `SoftwareInputLatchTests` (9), `InputActTests` +12, `KeyFanTests` (5).
+**Witnessed** in the simulator, both themes: the fan anchored above CTRL with its arrow, META
+inverted on ESC, the strip in Live with the mode key lit. **Device-gated, and it is the slice's
+real gate:** Ctrl-R then text; Ctrl-X Ctrl-S through a lock; vim Esc `:q!`; ⇧Tab; a Meta-arrow
+tmux binding; whether the popover takes the keyboard in Live; every haptic.
