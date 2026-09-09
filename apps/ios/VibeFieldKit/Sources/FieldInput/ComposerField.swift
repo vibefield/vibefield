@@ -58,6 +58,9 @@ struct ComposerField: UIViewRepresentable {
       view.refreshPlaceholder()
     }
     context.coordinator.applyFocus(model.fieldFocused, to: view)
+    // --- IOS-5d: the `⋯` keypad rises in the system keyboard's place.
+    context.coordinator.applyKeypad(model.keypadShown && model.mode == .draft, to: view)
+    // --- end IOS-5d
     context.coordinator.reportHeight(of: view)
   }
 
@@ -69,6 +72,15 @@ struct ComposerField: UIViewRepresentable {
     /// same rule holds here, for the same reason.
     private var appliedFocus: Bool?
     private var reportedHeight: CGFloat?
+    // --- IOS-5d ------------------------------------------------------------
+    /// The keypad, made once and kept.
+    ///
+    /// Rebuilding it per toggle would throw away the SwiftUI hosting
+    /// controller that draws it — and with it the page the design says the
+    /// keypad remembers.
+    private var keypad: KeypadInputView?
+    private var appliedKeypad: Bool?
+    // --- end IOS-5d ----------------------------------------------------------
 
     init(model: InputCardModel, height: Binding<CGFloat>) {
       self.model = model
@@ -126,6 +138,34 @@ struct ComposerField: UIViewRepresentable {
         }
       }
     }
+
+    // --- IOS-5d ------------------------------------------------------------
+    /// Swap the keyboard for our keypad, or back.
+    ///
+    /// This is Draft's whole half of K-D5: the field is OURS, so replacing
+    /// what rises under it is one property. (Live has no such field — the
+    /// Metal view is `final` and exposes no input view — which is why the
+    /// other half is a hidden responder.)
+    ///
+    /// `reloadInputViews` is what makes the swap visible while the keyboard is
+    /// already up, and it is deferred for the same reason the responder calls
+    /// are: it re-lays the keyboard, and doing that inside a SwiftUI update
+    /// pass resizes this view's own ancestors mid-pass.
+    func applyKeypad(_ wanted: Bool, to view: UITextView) {
+      guard appliedKeypad != wanted else { return }
+      appliedKeypad = wanted
+      if wanted {
+        if keypad == nil { keypad = KeypadInputView(model: model) }
+        view.inputView = keypad
+      } else {
+        view.inputView = nil
+      }
+      Task { @MainActor in
+        guard view.isFirstResponder else { return }
+        view.reloadInputViews()
+      }
+    }
+    // --- end IOS-5d ----------------------------------------------------------
 
     /// Measure, clamp, and report — on the next turn, because a binding written
     /// during `updateUIView` is a mutation inside the update it came from.

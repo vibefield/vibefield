@@ -24,7 +24,7 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
 | `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface — plus (IOS-3c) the per-host mirror-write key store |
-| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a): the composer field, the rail, the sticky-Ctrl latch, and the acts they emit — plus (IOS-5b) the long-press fans, the Meta burst and the haptic table. Its own target on purpose (K-D1) — a keyboard is state machines all the way down, and the IOS-3 review found every serious bug living in the one module that had no test target. It takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
+| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a): the composer field, the rail, the sticky-Ctrl latch, and the acts they emit — plus (IOS-5b) the long-press fans, the Meta burst and the haptic table, (IOS-5c) the reply/paste chips and the closed row, and (IOS-5d) the `+` menu (scan, snippets, clipboard history) and the `⋯` keypad with its three pages. Its own target on purpose (K-D1) — a keyboard is state machines all the way down, and the IOS-3 review found every serious bug living in the one module that had no test target. It takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 **Write keys (IOS-3c).** The mirror-write capability a desktop grants this
@@ -98,6 +98,11 @@ reach states no `simctl` touch can:
 | `-vf-demo-input-chips` | with `-vf-demo-input-card`, stamps one fixture Claude permission's reply chips onto the card — `1 YES` · `2 YES, DON'T ASK` · `3 NO` · `ESC`, in the waiting tier's inversion — so the contextual row above the composer can be looked at. The chips and the acts they emit are the shipping code; the permission they answer is invented, because no bubble the phone can attach to carries an agent facet yet (see below) |
 | `-vf-demo-input-closed` | with `-vf-demo-input-card`, the card with the keyboard down: one row, the chips (if any) beside `KEYBOARD`. It is the resting state of a card nobody has typed into, and a screenshot cannot tap its way out of the keyboard to reach it |
 | `-vf-demo-paste-review` | with `-vf-demo-input-card`, opens the paste-review sheet on fixture text. The sheet is otherwise reachable only by tapping a SYSTEM paste control with five lines or more on the pasteboard, and a headless run can do neither — the same door `-vf-open-write-key` opens, for the same reason |
+| `-vf-demo-input-keypad` | with `-vf-demo-input-card`, brings the `⋯` keypad up three seconds in — on the **Keys** page, or on `=symbols` / `=combos` (`-vf-demo-input-keypad=combos`). The keypad REPLACES the system keyboard, so it is reachable only by tapping `⋯`, and a screenshot has no finger. It waits because the card has to be on screen first: a keypad needs a responder to rise under. Add `-vf-demo-input-live` to see the same keypad riding the hidden responder (K-D5) with the terminal holding the mode |
+| `-vf-demo-input-plus` | with `-vf-demo-input-card`, opens the `+` menu — SCAN TEXT · SNIPPETS · CLIPBOARD HISTORY, with the glyph rotated 45° to `×`. The attach items the design also lists are ABSENT rather than greyed out (K-D6, below) |
+| `-vf-demo-input-snippets` | with `-vf-demo-input-card`, opens the Snippets sheet holding ONE fixture snippet (`STATUS` · `git status --short`, sends Enter) in a scratch `UserDefaults` suite that is wiped at launch — a fixture must never write into, or read out of, what a real user saved |
+| `-vf-demo-input-history` | with `-vf-demo-input-card`, opens the Clipboard History sheet on two fixture entries in the same scratch suite. The real ring is fed only by pastes made THROUGH this card; nothing in the app ever reads the pasteboard's contents on its own |
+| `-vf-demo-input-scan` | with `-vf-demo-input-card`, opens the Scan Text cover. On every simulator this is the honest-missing face — `DataScannerViewController.isSupported` is false without a camera — which is precisely the state worth looking at, since it is the one a screenshot run can ever reach |
 
 Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
@@ -143,8 +148,19 @@ arm, medium to lock, soft to release, rigid for a chord;
 and since IOS-5c the card answers back — reply chips derived from
 the agent feed's own pending permissions, the paste chip on the system paste
 control (so there is no "allow paste" alert), the five-line paste review, and the
-closed row, which is what the card is whenever the keyboard is down.
-243 headless tests.
+closed row, which is what the card is whenever the keyboard is down;
+and since IOS-5d the card has its two doors: `+` at the left of the composer row
+opens Scan Text (VisionKit's text scanner, a tapped line into the draft),
+Snippets (saved commands in `UserDefaults`, each marked for whether it sends
+Enter, multi-line going through the same review) and Clipboard History (the last
+twenty things pasted through this card — fed by our own paste path and never by
+reading the pasteboard, which is the alert the paste chip exists to avoid), and
+`⋯` at the right of the rail replaces the system keyboard with a keypad of three
+pages: Keys (the named keys, the far ends, the arrows, F1–F12 and the Ctrl/Alt
+latches), Symbols (thirty punctuation keys, into the draft in one mode and
+through in the other) and Combos (emacs, tmux, readline and screen as ordered
+keystroke sequences — `^B c` is two presses, not one chord), with `abc` giving
+the letters back. 297 headless tests.
 
 Honest-missing (each says so on screen where it shows): **typing has not been
 witnessed on a device** — the key now rides every attach as its access token
@@ -158,9 +174,21 @@ this device being granted writes, and conflating them was a review finding; the
 input card is therefore **not on screen** on any attachment this device cannot
 type into (K-D2) — a rail of keys that cannot reach a terminal is the disabled
 affordance D-i6 forbids, and the honest view-only line already says why. The
-card's remaining pieces are absent rather than inert: the `+` menu and the `⋯`
-keypad are IOS-5d, the mic is a slice of its own, and the reply/paste chips are
-IOS-5c. IOS-5b's own gate is a device too: the latch reaching the terminal
+card's remaining piece is absent rather than inert: the mic is a slice of its
+own. **The `+` menu ships without Photo, Take Photo and Choose File (K-D6)** and
+without a greyed row where they would go: moving a file from this phone to a
+desktop needs a mesh verb VibeField does not have — EL2 keeps bytes off the
+control plane and no ticketed socket has ever been minted for a phone-to-host
+file — so the three text sources ship and the attach half arrives with the verb.
+**The keypad in Live rides a hidden responder (K-D5)**: ghosttea's Metal view is
+`final` and exposes no input view of its own, so a zero-size `UIKeyInput` takes
+the keyboard off it and brings the keypad up in its place; the keys still reach
+the terminal through the card's own sink, but while the keypad is up a paired
+hardware keyboard types into nothing. The fix upstream is one line
+(`customInputView` on the Metal view) and the petition is batched into the next
+planned pin bump, per K-D5. The keypad's "Record" — the design's fourth combo
+entry, which would capture a sequence off the rail into a new key — is not
+built. IOS-5b's own gate is a device too: the latch reaching the terminal
 (`Ctrl-R` then text, `Ctrl-X Ctrl-S` through a lock), vim's `Esc :q!`, ⇧Tab, and
 a Meta-arrow tmux binding all want a shell on the far end of a real mesh, so the
 simulator witnessed the fans and the META state and nothing about what they

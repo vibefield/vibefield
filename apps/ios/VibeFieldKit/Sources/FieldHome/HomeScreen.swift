@@ -77,6 +77,13 @@ public struct HomeScreen: View {
   // `PasteboardWatcher`.
   @State private var pasteboard = PasteboardWatcher()
   // --- end IOS-5c
+  // --- IOS-5d: the two stores behind the `+` menu. They are the SCREEN's,
+  // like the card model, because both outlive a single attachment and neither
+  // belongs to one: a snippet written against one desktop is still a snippet
+  // at the next.
+  @State private var snippets = SnippetStore()
+  @State private var clipboardHistory = ClipboardHistory()
+  // --- end IOS-5d
   #if DEBUG
     /// `-vf-demo-input-card`: mount the card over the demo fixture, which has
     /// no attachment to grant anything. Pixels, never a claim.
@@ -280,6 +287,63 @@ public struct HomeScreen: View {
                 pnpm verify
                 """)
           }
+          // --- IOS-5d ----------------------------------------------------
+          // Every door IOS-5d added is opened by a finger and by nothing else:
+          // the keypad replaces the system keyboard, the `+` menu is a
+          // popover, and the two sheets hang off it. A headless run can reach
+          // none of them, which would make the whole slice unlookable — the
+          // same reason `-vf-open-write-key` and `-vf-demo-paste-review`
+          // exist, and the same disclaimer: these force the FACE, and no
+          // fixture here claims a terminal answered.
+          //
+          // They wait, because the card has to be on screen first: a keypad
+          // needs a responder to rise under and a sheet needs a presented
+          // card to rise from.
+          let keypadArgument = ProcessInfo.processInfo.arguments.first {
+            $0.hasPrefix(DemoArguments.keypad)
+          }
+          let showSnippets =
+            ProcessInfo.processInfo.arguments.contains("-vf-demo-input-snippets")
+          let showHistory =
+            ProcessInfo.processInfo.arguments.contains("-vf-demo-input-history")
+          let showPlus = ProcessInfo.processInfo.arguments.contains("-vf-demo-input-plus")
+          let showScan = ProcessInfo.processInfo.arguments.contains("-vf-demo-input-scan")
+
+          // A scratch defaults suite, wiped at launch: a fixture must never
+          // write into the snippets or the history a real user has.
+          if showSnippets {
+            let suite = UserDefaults(suiteName: DemoArguments.suite)
+            suite?.removePersistentDomain(forName: DemoArguments.suite)
+            let store = SnippetStore(defaults: suite ?? .standard)
+            store.add(
+              Snippet(title: "STATUS", text: "git status --short", sendsEnter: true))
+            snippets = store
+          }
+          if showHistory {
+            let suite = UserDefaults(suiteName: DemoArguments.suite)
+            suite?.removePersistentDomain(forName: DemoArguments.suite)
+            let store = ClipboardHistory(defaults: suite ?? .standard)
+            store.record("cd ~/Projects/project100/vibe-field && pnpm verify")
+            store.record(
+              "error: could not read Username for 'https://github.com'\nfatal: could not "
+                + "read from remote")
+            clipboardHistory = store
+          }
+
+          if keypadArgument != nil || showSnippets || showHistory || showPlus || showScan {
+            Task {
+              try? await Task.sleep(for: .seconds(3))
+              if let keypadArgument {
+                inputCard.keypadPage = DemoArguments.page(from: keypadArgument)
+                inputCard.setKeypad(true)
+              }
+              if showPlus { inputCard.showPlusMenu() }
+              if showSnippets { inputCard.surface = .snippets }
+              if showHistory { inputCard.surface = .clipboardHistory }
+              if showScan { inputCard.surface = .scanText }
+            }
+          }
+          // --- end IOS-5d ------------------------------------------------
         }
         // --- end IOS-5c --------------------------------------------------
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
@@ -518,7 +582,71 @@ public struct HomeScreen: View {
       .fieldGlassSheet()
     }
     // --- end IOS-5c --------------------------------------------------------
+    // --- IOS-5d: the `+` menu's doors, on the same presenter and for the same
+    // reason — the root is behind this sheet.
+    //
+    // Two presentations rather than one: Scan Text is a viewfinder, and a
+    // camera behind a detent is a camera nobody can aim.
+    .sheet(
+      item: Binding(
+        get: { inputCard.surface == .scanText ? nil : inputCard.surface },
+        set: { if $0 == nil { inputCard.closeSurface() } })
+    ) { surface in
+      cardSurface(surface)
+    }
+    .fullScreenCover(
+      isPresented: Binding(
+        get: { inputCard.surface == .scanText },
+        set: { if !$0 { inputCard.closeSurface() } })
+    ) {
+      ScanTextCover(
+        onText: { text in
+          // The cover closes on the take: the line is in the draft and there
+          // is nothing left to aim at.
+          inputCard.closeSurface()
+          inputCard.acceptPaste(text)
+        },
+        onClose: { inputCard.closeSurface() })
+    }
+    // --- end IOS-5d --------------------------------------------------------
   }
+
+  // --- IOS-5d ----------------------------------------------------------------
+  @ViewBuilder
+  private func cardSurface(_ surface: CardSurface) -> some View {
+    switch surface {
+    case .snippets:
+      SnippetsSheet(
+        store: snippets,
+        onUse: { snippet in
+          inputCard.closeSurface()
+          inputCard.useSnippet(snippet)
+        }
+      )
+      .presentationDetents([.medium, .large])
+      .presentationDragIndicator(.visible)
+      .presentationCornerRadius(40)
+      .fieldGlassSheet()
+    case .clipboardHistory:
+      ClipboardHistorySheet(
+        history: clipboardHistory,
+        onUse: { text in
+          inputCard.closeSurface()
+          inputCard.acceptPaste(text)
+        }
+      )
+      .presentationDetents([.medium, .large])
+      .presentationDragIndicator(.visible)
+      .presentationCornerRadius(40)
+      .fieldGlassSheet()
+    case .scanText:
+      // Unreachable: the binding above sends this one to the cover. A
+      // `EmptyView` rather than a `fatalError` because an exhaustive switch
+      // over a surface enum should not be a crash site.
+      EmptyView()
+    }
+  }
+  // --- end IOS-5d --------------------------------------------------------------
 
   // --- IOS-5c --------------------------------------------------------------
   /// The card's chips, derived from the bubble it was raised on (K-D4).
@@ -753,6 +881,11 @@ public struct HomeScreen: View {
     inputCard.chips = replyChips(for: bubble)
     pasteboard.sample()
     // --- end IOS-5c
+    // --- IOS-5d: the ring the card's own pastes feed. Installed here rather
+    // than at attach because the card records what the USER pasted through it,
+    // which is true whether or not a terminal ever answered.
+    inputCard.history = clipboardHistory
+    // --- end IOS-5d
     // A key note belongs to the card it was raised on. Removing a key from the
     // settings sheet can leave one standing with no card open, and it must not
     // greet the next session as if it were about that one.
@@ -924,6 +1057,26 @@ public struct HomeScreen: View {
 
   #if DEBUG
     private static let writeKeyArgument = "-vf-write-key="
+
+    // --- IOS-5d ------------------------------------------------------------
+    /// The names IOS-5d's fixtures answer to, in one place.
+    ///
+    /// `-vf-demo-input-keypad` takes an optional page (`=symbols`, `=combos`),
+    /// which is why it is a PREFIX rather than a flag: three arguments for
+    /// three pages would be three ways to say the same thing.
+    private enum DemoArguments {
+      static let keypad = "-vf-demo-input-keypad"
+      /// A scratch defaults suite for the snippet and history fixtures. It is
+      /// wiped before use so a screenshot run can never write into — or read
+      /// out of — what a real user saved.
+      static let suite = "com.jamesyong.vibefield.ios.demo"
+
+      static func page(from argument: String) -> KeypadPage {
+        let value = argument.dropFirst(keypad.count).drop(while: { $0 == "=" })
+        return KeypadPage(rawValue: String(value)) ?? .keys
+      }
+    }
+    // --- end IOS-5d ----------------------------------------------------------
   #endif
 }
 

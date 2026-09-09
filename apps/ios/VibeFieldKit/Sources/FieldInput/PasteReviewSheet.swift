@@ -12,11 +12,23 @@ import SwiftUI
 /// wants to change is a paste that belongs in the draft.
 public struct PasteReviewSheet: View {
   private let text: String
+  // --- IOS-5d: what SEND will do, so the sheet can say it.
+  private let commit: PendingPaste.Commit
+  // --- end IOS-5d
   private let onSend: () -> Void
   private let onCancel: () -> Void
 
-  public init(text: String, onSend: @escaping () -> Void, onCancel: @escaping () -> Void) {
+  public init(
+    text: String,
+    // --- IOS-5d: defaulted, so IOS-5c's one call site is unchanged. The
+    // paste chip's text never runs; a snippet's may.
+    commit: PendingPaste.Commit = .paste,
+    // --- end IOS-5d
+    onSend: @escaping () -> Void,
+    onCancel: @escaping () -> Void
+  ) {
     self.text = text
+    self.commit = commit
     self.onSend = onSend
     self.onCancel = onCancel
   }
@@ -26,7 +38,7 @@ public struct PasteReviewSheet: View {
       // `textMuted` like the write-key sheet's eyebrow, for the same reason:
       // this sheet sits over the field, where a bright bubble behind the glass
       // leaves a faint eyebrow unreadable in light mode.
-      Text("PASTE INTO TERMINAL")
+      Text(eyebrow)
         .font(FieldType.mono(9, .heavy))
         .tracking(FieldType.tracking(0.18, of: 9))
         .foregroundStyle(FieldPalette.textMuted)
@@ -36,7 +48,7 @@ public struct PasteReviewSheet: View {
         .foregroundStyle(FieldPalette.textMain)
         .padding(.top, 6)
 
-      Text("it goes in as one block, and nothing runs until you press Enter")
+      Text(promise)
         .font(FieldType.mono(9))
         .foregroundStyle(FieldPalette.textMuted)
         .fixedSize(horizontal: false, vertical: true)
@@ -55,6 +67,27 @@ public struct PasteReviewSheet: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     // No background: the sheet's liquid glass is the surface.
   }
+
+  // --- IOS-5d ---------------------------------------------------------------
+  /// The heading. A snippet that runs is a different question from a paste,
+  /// and asking it under the same word would be the sheet agreeing to
+  /// something it was not shown.
+  private var eyebrow: String {
+    commit == .run ? "RUN IN TERMINAL" : "PASTE INTO TERMINAL"
+  }
+
+  /// The one line under the count, and the only place on this card where a
+  /// wrong sentence would cost something: SEND on a snippet marked "sends
+  /// Enter" runs the block, and the sheet has to say so before the tap.
+  private var promise: String {
+    switch commit {
+    case .paste, .type:
+      return "it goes in as one block, and nothing runs until you press Enter"
+    case .run:
+      return "it goes in as one block AND RUNS — this snippet sends Enter"
+    }
+  }
+  // --- end IOS-5d -------------------------------------------------------------
 
   private var lineSummary: String {
     let count = pasteLineCount(text)

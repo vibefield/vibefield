@@ -35,13 +35,75 @@ public enum InputAct: Equatable, Sendable {
 /// question twice, and a fresh identity would re-present a sheet the user has
 /// already answered.
 public struct PendingPaste: Identifiable, Equatable, Sendable {
+  // --- IOS-5d ---------------------------------------------------------------
+  /// What SEND on the review sheet actually does.
+  ///
+  /// IOS-5c had one answer because there was one source: the paste chip, whose
+  /// text is always a block with no Enter behind it. IOS-5d added a second —
+  /// a snippet, which may have been written to RUN — and a sheet that says
+  /// "nothing runs until you press Enter" over text that runs on SEND would be
+  /// the one lie on this card. So the commit rides with the text, and the
+  /// sheet reads it.
+  public enum Commit: Equatable, Sendable {
+    /// The kit's paste op: one block, bracketed where the far program asks
+    /// for it, and nothing runs.
+    case paste
+    /// Typed through as input, still with no Enter behind it.
+    case type
+    /// The block, then Enter. Only a snippet the user marked "sends Enter"
+    /// reaches this, and the sheet says so in as many words.
+    case run
+  }
+
   public let text: String
+  public let commit: Commit
+  // --- end IOS-5d -----------------------------------------------------------
   public var id: String { text }
 
-  public init(text: String) {
+  public init(text: String, commit: Commit = .paste) {
     self.text = text
+    self.commit = commit
   }
 }
+
+// --- IOS-5d -----------------------------------------------------------------
+/// A door the `+` menu opens.
+///
+/// Three, and exactly three (K-D6): Photo, Take Photo and Choose File are
+/// ABSENT rather than disabled, because a phone-to-host file transport does
+/// not exist — EL2 says bytes ride ticketed direct sockets, and no mesh verb
+/// has been minted to carry a file from this phone to a desktop. A greyed
+/// "Choose File" would promise a door with nothing behind it, which is the one
+/// thing D-i6 forbids. They arrive with the verb, not before it.
+public enum CardSurface: String, Identifiable, Equatable, Sendable {
+  case snippets
+  case clipboardHistory
+  case scanText
+
+  public var id: String { rawValue }
+}
+
+/// Which face of the `⋯` keypad is showing.
+///
+/// Three pages rather than one long grid, because the three have different
+/// natures: Keys and Combos are always key EVENTS, while Symbols is text in
+/// Draft and input in Live. Mixing them would make one keypad whose keys mean
+/// two things depending on where on it you press.
+public enum KeypadPage: String, Equatable, Sendable, CaseIterable {
+  case keys
+  case symbols
+  case combos
+
+  /// The segmented row's face. Mono 9 heavy, like every other label here.
+  public var title: String {
+    switch self {
+    case .keys: return "KEYS"
+    case .symbols: return "SYMBOLS"
+    case .combos: return "COMBOS"
+    }
+  }
+}
+// --- end IOS-5d -------------------------------------------------------------
 // --- end IOS-5c -----------------------------------------------------------
 
 /// The sticky Ctrl, as a pure value.
@@ -168,6 +230,29 @@ public final class InputCardModel {
   /// A paste too long to send unseen, waiting for the review sheet's answer.
   public var pendingPasteReview: PendingPaste?
   // --- end IOS-5c
+  // --- IOS-5d ---------------------------------------------------------------
+  /// Whether OUR keypad is standing in for the system keyboard.
+  ///
+  /// It is one flag for both modes even though the mechanism differs — in
+  /// Draft the composer field swaps its own `inputView`, in Live a hidden
+  /// responder rides one (K-D5) — because the user's fact is the same either
+  /// way: the letters are gone and the terminal keys are there. The views
+  /// listen and each does its half.
+  public private(set) var keypadShown = false
+  /// The page the keypad is on. It SURVIVES `reset`, which the rest of this
+  /// model does not: the design says the keypad remembers its last page, and a
+  /// person who works in tmux wants Combos again next time.
+  public var keypadPage: KeypadPage = .keys
+  /// Whether the `+` menu is open. The glyph rotates 45° from it, which is the
+  /// whole reason this is state rather than a system `Menu` — see `PlusMenu`.
+  public private(set) var plusMenuOpen = false
+  /// The door the `+` menu asked for, or none. The host presents it.
+  public var surface: CardSurface?
+  /// The ring of pasted text, installed by the host. Absent is a card that
+  /// records nothing and works the same otherwise — the demo fixture, and any
+  /// host that has not asked for a history.
+  @ObservationIgnored public var history: ClipboardHistory?
+  // --- end IOS-5d -----------------------------------------------------------
   /// Installed by the host at attach, cleared when the card closes. Absent is
   /// a card with nowhere to send — it still renders and still accepts taps,
   /// which is what the demo fixture is.
@@ -182,6 +267,9 @@ public final class InputCardModel {
   /// Whether the composer held the keyboard when the fan opened. See
   /// `closeFan` — it restores, and never raises.
   @ObservationIgnored private var keyboardWasUpBeforeFan = false
+  // --- IOS-5d: the same bookkeeping for the `+` menu, which is a presentation
+  // for the same reason the fan is and takes the keyboard the same way.
+  @ObservationIgnored private var keyboardWasUpBeforeMenu = false
   // --- end IOS-5b -----------------------------------------------------------
 
   public init() {}
@@ -284,7 +372,12 @@ public final class InputCardModel {
     // single place that knows which mode owns the keys.
     fieldFocused = mode == .draft
     // --- IOS-5c: the twin flag, kept exclusive with it.
-    terminalFocused = mode == .live
+    // --- IOS-5d: unless the keypad is up in Live, where the responder holding
+    // the keys is the hidden keypad host and NOT the terminal. Claiming the
+    // terminal has focus there would ask the Metal view to take the keyboard
+    // back and close the keypad the user just opened.
+    terminalFocused = mode == .live && !keypadShown
+    // --- end IOS-5d
     // --- end IOS-5c
   }
 
@@ -301,9 +394,23 @@ public final class InputCardModel {
     case none
     case composer
     case terminal
+    // --- IOS-5d
+    /// Our own keypad, in place of the system keyboard.
+    ///
+    /// Its own case rather than folded into the other two, because it is a
+    /// different fact in both modes at once: in Draft the composer is still
+    /// the responder but the letters are gone, and in Live the terminal has
+    /// RESIGNED to a hidden host. What the card needs from this answer is the
+    /// same in both — the keyboard is up, so do not collapse to one row — and
+    /// naming it keeps that testable instead of implied.
+    case keypad
+    // --- end IOS-5d
   }
 
   public var keyboardOwner: KeyboardOwner {
+    // --- IOS-5d: the keypad IS the keyboard while it is up, in either mode.
+    if keypadShown { return .keypad }
+    // --- end IOS-5d
     switch mode {
     case .draft: return fieldFocused ? .composer : .none
     case .live: return terminalFocused ? .terminal : .none
@@ -324,6 +431,11 @@ public final class InputCardModel {
   public func dismissKeyboard() {
     fieldFocused = false
     terminalFocused = false
+    // --- IOS-5d: the keypad rides a first responder, so putting the keyboard
+    // down puts it away too — and the flag has to follow, or the card would
+    // hold a rail over a keypad that is no longer on screen.
+    keypadShown = false
+    // --- end IOS-5d
   }
 
   /// A reply chip. It sends only if it is STILL on the row.
@@ -352,7 +464,21 @@ public final class InputCardModel {
   /// program, and a program dropped into a live shell runs. The threshold is
   /// the design's (§4, the `+` menu's "multi-line goes through review").
   public func acceptPaste(_ text: String) {
+    acceptPaste(text, remember: true)
+  }
+
+  // --- IOS-5d ---------------------------------------------------------------
+  /// The same door, with the ring made optional.
+  ///
+  /// `remember` is false for exactly one caller: a snippet, which is already
+  /// saved under `+` and would otherwise appear twice — once as the snippet
+  /// the user wrote and once as a thing they "pasted". Scanned text DOES get
+  /// remembered: it came from outside the phone and there is nowhere else to
+  /// find it again.
+  public func acceptPaste(_ text: String, remember: Bool) {
     guard !text.isEmpty else { return }
+    if remember { history?.record(text) }
+    // --- end IOS-5d ---------------------------------------------------------
     switch mode {
     case .draft:
       if draft.isEmpty {
@@ -375,7 +501,14 @@ public final class InputCardModel {
   public func confirmPasteReview() {
     guard let pending = pendingPasteReview else { return }
     pendingPasteReview = nil
-    emit(.paste(pending.text))
+    // --- IOS-5d: what SEND means is the pending paste's own, not this
+    // method's — a snippet marked "sends Enter" arrives here to RUN.
+    switch pending.commit {
+    case .paste: emit(.paste(pending.text))
+    case .type: emit(.typeText(pending.text))
+    case .run: emit(.sendDraft(pending.text))
+    }
+    // --- end IOS-5d
   }
 
   /// CANCEL, and every other way the sheet can close. Nothing is sent and the
@@ -435,7 +568,161 @@ public final class InputCardModel {
     openFan = nil
     keyboardWasUpBeforeFan = false
     // --- end IOS-5b ---------------------------------------------------------
+    // --- IOS-5d: every door the card opened closes with it. `keypadPage` is
+    // deliberately NOT reset — the design says the keypad remembers its last
+    // page, and that memory is a preference rather than session state.
+    keypadShown = false
+    plusMenuOpen = false
+    keyboardWasUpBeforeMenu = false
+    surface = nil
+    // --- end IOS-5d
   }
+
+  // --- IOS-5d ---------------------------------------------------------------
+
+  // MARK: - The keypad
+
+  /// The `⋯` key. Up, down, and nothing else on the same gesture.
+  public func toggleKeypad() {
+    setKeypad(!keypadShown)
+  }
+
+  /// `abc` and every other way the keypad closes, plus the way it opens.
+  ///
+  /// The responder work is the views' — the composer swaps its `inputView`,
+  /// the hidden host takes and gives back the keys — but the FLAGS are here,
+  /// because "who holds the keyboard" has exactly one owner in this app and it
+  /// is not a `UIViewRepresentable`.
+  public func setKeypad(_ shown: Bool) {
+    guard keypadShown != shown else { return }
+    keypadShown = shown
+    switch (mode, shown) {
+    case (.draft, true):
+      // The field keeps the responder; only what rises under it changes.
+      fieldFocused = true
+    case (.draft, false):
+      fieldFocused = true
+    case (.live, true):
+      // The hidden host is about to take the keys off the Metal view. Saying
+      // so here rather than waiting for `onFocusChange` keeps the card from
+      // rendering one frame of a terminal that thinks it still has them.
+      terminalFocused = false
+    case (.live, false):
+      // The terminal takes the keyboard back, through the same nonce the
+      // KEYBOARD chip uses — the request has to be distinguishable from the
+      // last one or the surface would rightly skip it.
+      requestKeyboard()
+    }
+  }
+
+  /// A key on the keypad's Symbols page.
+  ///
+  /// Two behaviours, and the design names both (§4): a symbol TYPES into the
+  /// draft or goes THROUGH in Live. The latch outranks both — `Ctrl` then backslash
+  /// is a control byte in either mode, and leaving it in the draft would eat a
+  /// modifier the user just armed, which is the same rule `interceptCharacter`
+  /// enforces for the system keyboard.
+  public func typeSymbol(_ character: Character) {
+    if latch.phase != .off || metaArmed {
+      let modifiers = consumeModifiers()
+      emit(.keystroke(TerminalKeystroke(.character(character), modifiers: modifiers)))
+      return
+    }
+    switch mode {
+    case .draft: draft.append(character)
+    case .live: emit(.typeText(String(character)))
+    }
+  }
+
+  /// A combo off the Combos page: its presses, in order.
+  ///
+  /// The latch is SPENT and not applied. A combo names every key it presses —
+  /// `^B c` is a control chord and then a plain `c` — and folding an armed
+  /// Ctrl into it would make `^B ^C`, which is not what anyone armed it for.
+  /// Spending it is still right: an arm the user answered with a combo must
+  /// not survive onto the next letter they type. The Meta burst goes the same
+  /// way and for the same reason, which is the one place this differs from
+  /// `tapChord`: a chord is one keystroke and can carry a burst, a combo is a
+  /// script and the burst has no single key to ride.
+  public func sendCombo(_ combo: Combo) {
+    _ = consumeModifiers()
+    for stroke in combo.strokes {
+      emit(.keystroke(stroke))
+    }
+  }
+
+  // MARK: - The `+` menu and its doors
+
+  /// `+` was tapped.
+  public func showPlusMenu() {
+    keyboardWasUpBeforeMenu = fieldFocused
+    plusMenuOpen = true
+  }
+
+  /// The menu closed — picked from, or dismissed by a tap outside.
+  ///
+  /// It gives the keyboard back on a dismissal and NOT on a pick, for the same
+  /// reason `closeFan` restores conditionally: a sheet is about to rise over
+  /// this card, and raising a keyboard into it would fight the presentation
+  /// for the same screen.
+  public func closePlusMenu(restoringKeyboard: Bool = true) {
+    plusMenuOpen = false
+    if restoringKeyboard, keyboardWasUpBeforeMenu { fieldFocused = true }
+    keyboardWasUpBeforeMenu = false
+  }
+
+  /// An item on the `+` menu: close the menu, then open the door.
+  ///
+  /// The two are deliberately not one turn. A popover and a sheet are both
+  /// presentations of the same controller, and asking for the second while the
+  /// first is still dismissing is a sheet that never appears — the finding
+  /// IOS-5c recorded when it moved the review sheet off the root. So the menu
+  /// goes first and the door follows it.
+  public func requestSurface(_ wanted: CardSurface) {
+    closePlusMenu(restoringKeyboard: false)
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(Self.surfaceHandoff))
+      self?.surface = wanted
+    }
+  }
+
+  /// Long enough for a popover to finish leaving. Named because a bare 260 in
+  /// the middle of a `Task` reads as a guess rather than as a handoff.
+  static let surfaceHandoff = 260
+
+  /// The door closed, however it was closed.
+  public func closeSurface() {
+    surface = nil
+  }
+
+  /// A snippet was tapped.
+  ///
+  /// Draft never sends: the snippet lands in the draft on its own line and the
+  /// user finishes it, which is the whole reason Draft exists. Live sends —
+  /// with Enter when the snippet was written to run, without when it was
+  /// written to be completed — and goes through the review first when it is
+  /// long enough to be a program rather than a command (five lines, IOS-5c's
+  /// threshold, applied to the same kind of danger).
+  public func useSnippet(_ snippet: Snippet) {
+    let text = snippet.text
+    guard !text.isEmpty else { return }
+    switch mode {
+    case .draft:
+      // `remember: false` — it is already saved under `+`, and a history that
+      // lists the user's own snippets back to them is noise.
+      acceptPaste(text, remember: false)
+    case .live:
+      let commit: PendingPaste.Commit = snippet.sendsEnter ? .run : .type
+      if pasteLineCount(text) >= Self.pasteReviewLines {
+        pendingPasteReview = PendingPaste(text: text, commit: commit)
+      } else if snippet.sendsEnter {
+        emit(.sendDraft(text))
+      } else {
+        emit(.typeText(text))
+      }
+    }
+  }
+  // --- end IOS-5d -------------------------------------------------------------
 
   // MARK: - Plumbing
 
