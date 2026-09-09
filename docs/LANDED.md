@@ -4798,3 +4798,53 @@ simulator can stand in for. James's device run. Found on the way: the Xcode work
 `Package.resolved` had recorded ghosttea 0.9.3 since `cec95a84` while the manifest and the
 kit's own resolved file said 0.10.1 — every build re-resolved on the fly, so only the record
 was wrong; `997baf8a` moves it.
+
+## IOS-5a — the card and the rail: the keyboard design lands in the field, Draft mode
+
+**LANDED 2026-09-09, `639bd60f`, merged onto `ios/keyboard` at `b5692752`** (with IOS-3c,
+`9b07fc61`). The finalized KeyboardLab design ("Composer + Rail", `research/mobile-terminal/
+KeyboardLab/DESIGN-PROPOSALS.md`, decisions §11) meets the real seam per `thinking-ios-keyboard.md`
+§2–§3 and §8: re-skinned into D-i2's godview mono, carried by the session sheet's own liquid glass,
+each key a `FieldChip`-shaped 44 pt key, attention as inversion and never hue, and the copy rule
+kept — the word "Live" never reaches the screen; the mode is a terminal glyph and the strip says
+"Typing into terminal". Built by a briefed agent in a worktree in parallel with IOS-3c; the
+orchestrator reviewed, merged (three files, all keep-both) and gated the merged tree.
+
+**What landed.** `FieldTerminal/TerminalKeystroke.swift` — `TerminalKey` / `TerminalModifiers` /
+`TerminalKeystroke`, the public vocabulary the card composes in, and the module-internal encoder to
+the kit's hardware-key event: the named usages and the `|`/`~` rows COPIED from the kit's own
+accessory table so our rail and the row we switched off cannot drift, the rest of the US layout
+derived from the HID table, unencodable characters `nil` rather than a wrong byte.
+`TerminalAttachment` grows `press(_:)`, `sendDraft(_:)` (paste, then Enter; empty is Enter alone;
+never trimmed) and `typeText(_:)`, all through `ensureControlForTyping()`. `TerminalSurface` grows
+`showsKitAccessoryRow` (default **false** — K-D3: the kit's fifteen-key row is off because ours
+replaces it), `wantsFocus` (the Live half of two-modes/two-first-responders) and
+`keyboardAppearance`; responder changes ride the next main turn, because a keyboard raised inside
+a SwiftUI update pass resizes the view's own ancestors mid-pass. The new target **`FieldInput`**
+(K-D1) holds `InputCardModel` (two modes, the draft, the sticky-Ctrl `LatchState` as a pure value,
+one `InputAct` sink), `ComposerField` (a `UIViewRepresentable` carrying the kit's trait set —
+no autocorrect, no smart punctuation, no predictive bar — 1→5 lines, single-character
+interception while latched) and `InputCard` (the composer row over eight rail keys); it takes
+`FieldTerminal` for the vocabulary only and names no Ghosttea product, so "the card composes a
+terminal without knowing how one works" is a fact the manifest enforces. `FieldHomeModel.
+inputCardFace` (K-D2): the card is on screen for exactly one state — a live attachment this device
+may type into; every other state renders nothing (D-i6). `HomeScreen`: one `@State`, one
+`.safeAreaInset` on the session card, the sink installed at attach and cleared on close.
+
+**Findings on the way, recorded at source.** Newlines are exempt from latch interception (no key
+on this layout produces one; a latched Return is IOS-5b's Live path). The composer's text inset
+had to live inside the text view — set from outside it left the placeholder half a character left
+of the caret, caught in the simulator. The send path is the HOST's decision: the kit's paste op
+rides the wire as `paste`, the host answers it through `session.paste` → `encode_paste` → the vt
+shim's `eg_terminal_encode_paste`, which reads the terminal's own bracketed-paste mode and hands
+it to `ghostty_paste_encode` — so a draft is bracketed exactly when the far program has DECSET
+2004 on, which is why Send is a paste and not a run of keystrokes.
+
+**Absent, not inert (D-i6):** the design's `+` menu and `⋯` keypad are IOS-5d; the mic needs the
+Speech framework and its usage strings; the latch in Live mode, the long-press fans and haptics
+are IOS-5b. **Tests 182 green** (135 → 168 on the branch; 182 merged with 3c):
+`TerminalKeystrokeTests` (10), `LatchStateTests` (6), `InputActTests` (14), `InputCardFaceTests`
+(3). **Witnessed** in the simulator, both themes: the card above the keyboard, both rows 44 pt,
+equal-width keys, no predictive bar, Send quiet then inverted, CTRL inverted with its lock dot,
+the strip with its Enter. **Device-gated:** the kit's row actually gone, `git status` sent from
+Draft, Esc/Tab/arrows landing in a shell, a three-line draft arriving in zsh as one block.
