@@ -127,9 +127,10 @@ public struct LatchState: Equatable, Sendable {
   /// what the CTRL key's own appearance is drawn from.
   public var modifiers: TerminalModifiers { phase == .off ? [] : .control }
 
-  /// VoiceOver's name for the key in this phase. The announcement is IOS-5e;
-  /// the label is now, because a control whose state is only a fill is
-  /// invisible to a screen reader until it is named.
+  /// VoiceOver's name for the key in this phase. A control whose state is only
+  /// a fill is invisible to a screen reader until it is named; the matching
+  /// ANNOUNCEMENT, for a reader whose focus is elsewhere on the card when the
+  /// phase moves, is `InputAnnouncement.latch` (IOS-5e).
   public var accessibilityLabel: String {
     switch phase {
     case .off: return "Control"
@@ -137,6 +138,22 @@ public struct LatchState: Equatable, Sendable {
     case .locked: return "Control locked"
     }
   }
+
+  // --- IOS-5e ---------------------------------------------------------------
+  /// What the NEXT tap will do.
+  ///
+  /// A three-phase control cannot be read from its current state alone: a
+  /// button named "Control armed" gives a screen reader no way to know that
+  /// pressing it locks rather than releases. VoiceOver reads a hint after the
+  /// label, which is exactly where that belongs.
+  public var accessibilityHint: String {
+    switch phase {
+    case .off: return "Arms Control for the next key"
+    case .armed: return "Locks Control until you release it"
+    case .locked: return "Releases Control"
+    }
+  }
+  // --- end IOS-5e -----------------------------------------------------------
 
   public mutating func tap() {
     switch phase {

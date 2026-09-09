@@ -17,20 +17,45 @@ import SwiftUI
 /// sit on its blur.
 struct TerminalKeypad: View {
   let model: InputCardModel
+  // --- IOS-5e ---------------------------------------------------------------
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  // --- end IOS-5e -----------------------------------------------------------
 
-  /// The whole keypad's height, close enough to a system keyboard that the
-  /// card does not jump when the two swap.
+  /// The whole keypad's height at the base text step, close enough to a system
+  /// keyboard that the card does not jump when the two swap. The accessibility
+  /// step is `InputCardMetrics.keypadHeight`, which the input view carrying
+  /// this asks for in UIKit terms.
   static let height: CGFloat = 260
 
   private static let gap: CGFloat = 5
   private static let padding: CGFloat = 6
-  static let keyHeight: CGFloat = 38
+
+  private var keyHeight: CGFloat { InputCardMetrics.keypadKeyHeight(for: dynamicTypeSize) }
+  private var labelSize: CGFloat { InputCardMetrics.labelSize(for: dynamicTypeSize) }
+  private var glyphSize: CGFloat { InputCardMetrics.glyphSize(for: dynamicTypeSize) }
+  /// A symbol's face IS the character, so it is set larger than a label at both
+  /// steps — `|` at 9 pt is a hairline nobody can aim at.
+  private var symbolSize: CGFloat { InputCardMetrics.actionGlyphSize(for: dynamicTypeSize) + 2 }
+  /// The two pieces of prose on the keypad: a pack's heading, and the line that
+  /// says where a symbol goes. One step under a key's label, which is what
+  /// keeps them reading as annotation rather than as keys.
+  private var noteSize: CGFloat { labelSize - 1 }
 
   var body: some View {
     VStack(spacing: Self.gap) {
       header
       page
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // --- IOS-5e ---------------------------------------------------------
+        // The page change is a CROSS-FADE and has never been a slide: a page
+        // that flew in from the side would put the carousel this whole design
+        // replaced back on the keyboard, one layer down. Under Reduce Motion it
+        // is a cut, which is the one transition with no movement in it at all.
+        .id(model.keypadPage)
+        .transition(.opacity)
+        .animation(reduceMotion ? nil : FieldMotion.ease(0.14), value: model.keypadPage)
+      // --- end IOS-5e ---------------------------------------------------------
     }
     .padding(Self.padding)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -47,17 +72,24 @@ struct TerminalKeypad: View {
     HStack(spacing: Self.gap) {
       ForEach(KeypadPage.allCases, id: \.rawValue) { candidate in
         Button {
+          // IOS-5e: `.selectionChanged` and only on an actual change — the
+          // system's texture for moving through a set of choices, and a
+          // selection haptic for re-picking the page you are on would be a
+          // buzz that reports nothing.
+          guard model.keypadPage != candidate else { return }
           model.keypadPage = candidate
+          InputHaptics.page()
         } label: {
           Text(candidate.title)
-            .font(FieldType.mono(9, .heavy))
-            .tracking(FieldType.tracking(0.08, of: 9))
+            .font(FieldType.mono(labelSize, .heavy))
+            .tracking(FieldType.tracking(0.08, of: labelSize))
             .foregroundStyle(
               model.keypadPage == candidate
                 ? FieldPalette.panelBackground : FieldPalette.textMain
             )
+            .lineLimit(1)
             .frame(maxWidth: .infinity)
-            .frame(height: 28)
+            .frame(height: headerHeight)
             .background(keyShape(inverted: model.keypadPage == candidate))
         }
         .buttonStyle(KeyPressStyle())
@@ -67,16 +99,23 @@ struct TerminalKeypad: View {
 
       Button {
         model.setKeypad(false)
+        // IOS-5e: the letters are coming back, which is a change to what the
+        // whole bottom of the screen is.
+        InputAnnouncement.post(InputAnnouncement.keypad(false))
       } label: {
         Text("abc")
-          .font(FieldType.mono(11, .heavy))
+          .font(FieldType.mono(labelSize + 2, .heavy))
           .foregroundStyle(FieldPalette.textMain)
-          .frame(width: 52, height: 28)
+          .frame(width: 52, height: headerHeight)
           .background(keyShape(inverted: false))
       }
       .buttonStyle(KeyPressStyle())
       .accessibilityLabel("Letters")
     }
+  }
+
+  private var headerHeight: CGFloat {
+    InputCardMetrics.keypadHeaderHeight(accessibility: dynamicTypeSize.isAccessibilitySize)
   }
 
   @ViewBuilder
@@ -132,10 +171,10 @@ struct TerminalKeypad: View {
             model.tapKey(.function(number))
           } label: {
             Text("F\(number)")
-              .font(FieldType.mono(9, .heavy))
-              .tracking(FieldType.tracking(0.08, of: 9))
+              .font(FieldType.mono(labelSize, .heavy))
+              .tracking(FieldType.tracking(0.08, of: labelSize))
               .foregroundStyle(FieldPalette.textMain)
-              .frame(width: 44, height: Self.keyHeight)
+              .frame(width: 44, height: keyHeight)
               .background(keyShape(inverted: false))
           }
           .buttonStyle(KeyPressStyle())
@@ -143,7 +182,7 @@ struct TerminalKeypad: View {
         }
       }
     }
-    .frame(height: Self.keyHeight)
+    .frame(height: keyHeight)
     .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
   }
 
@@ -166,15 +205,19 @@ struct TerminalKeypad: View {
         case .locked: InputHaptics.lock()
         case .off: InputHaptics.release()
         }
+        // IOS-5e: the same sentence the rail's CTRL says, because it is the
+        // same latch. Two keys for one state would be two announcements only
+        // if the state were two things, and it is one.
+        InputAnnouncement.post(InputAnnouncement.latch(model.latch.phase))
       } label: {
         Text("CTRL")
-          .font(FieldType.mono(9, .heavy))
-          .tracking(FieldType.tracking(0.08, of: 9))
+          .font(FieldType.mono(labelSize, .heavy))
+          .tracking(FieldType.tracking(0.08, of: labelSize))
           .foregroundStyle(
             model.latch.phase == .off ? FieldPalette.textMain : FieldPalette.panelBackground
           )
           .frame(maxWidth: .infinity)
-          .frame(height: Self.keyHeight)
+          .frame(height: keyHeight)
           .background(keyShape(inverted: model.latch.phase != .off))
           .overlay(alignment: .topTrailing) {
             if model.latch.phase == .locked {
@@ -187,19 +230,23 @@ struct TerminalKeypad: View {
       }
       .buttonStyle(KeyPressStyle())
       .accessibilityLabel(model.latch.accessibilityLabel)
+      .accessibilityHint(model.latch.accessibilityHint)
 
       Button {
         model.armMeta()
         InputHaptics.arm()
+        // IOS-5e: "Meta armed for the next key" — the key is drawn ALT and the
+        // burst is what it actually arms, so the sentence names the burst.
+        InputAnnouncement.post(InputAnnouncement.metaArmed)
       } label: {
         Text("ALT")
-          .font(FieldType.mono(9, .heavy))
-          .tracking(FieldType.tracking(0.08, of: 9))
+          .font(FieldType.mono(labelSize, .heavy))
+          .tracking(FieldType.tracking(0.08, of: labelSize))
           .foregroundStyle(
             model.metaArmed ? FieldPalette.panelBackground : FieldPalette.textMain
           )
           .frame(maxWidth: .infinity)
-          .frame(height: Self.keyHeight)
+          .frame(height: keyHeight)
           .background(keyShape(inverted: model.metaArmed))
       }
       .buttonStyle(KeyPressStyle())
@@ -230,10 +277,10 @@ struct TerminalKeypad: View {
               model.typeSymbol(character)
             } label: {
               Text(String(character))
-                .font(FieldType.mono(15, .medium))
+                .font(FieldType.mono(symbolSize, .medium))
                 .foregroundStyle(FieldPalette.textMain)
                 .frame(maxWidth: .infinity)
-                .frame(height: Self.keyHeight)
+                .frame(height: keyHeight)
                 .background(keyShape(inverted: false))
             }
             .buttonStyle(KeyPressStyle())
@@ -248,7 +295,7 @@ struct TerminalKeypad: View {
         model.mode == .draft
           ? "symbols go into the draft" : "symbols go straight to the terminal"
       )
-      .font(FieldType.mono(8))
+      .font(FieldType.mono(noteSize))
       .foregroundStyle(FieldPalette.textFaint)
       .padding(.top, 2)
     }
@@ -282,8 +329,8 @@ struct TerminalKeypad: View {
         ForEach(ComboCatalog.packs) { pack in
           VStack(alignment: .leading, spacing: Self.gap) {
             Text(pack.title)
-              .font(FieldType.mono(8, .heavy))
-              .tracking(FieldType.tracking(0.18, of: 8))
+              .font(FieldType.mono(noteSize, .heavy))
+              .tracking(FieldType.tracking(0.18, of: noteSize))
               .foregroundStyle(FieldPalette.textMuted)
             comboGrid(pack.combos)
           }
@@ -310,18 +357,18 @@ struct TerminalKeypad: View {
             } label: {
               VStack(spacing: 1) {
                 Text(combo.label)
-                  .font(FieldType.mono(9, .heavy))
-                  .tracking(FieldType.tracking(0.08, of: 9))
+                  .font(FieldType.mono(labelSize, .heavy))
+                  .tracking(FieldType.tracking(0.08, of: labelSize))
                   .foregroundStyle(FieldPalette.textMain)
                 Text(combo.subtitle)
-                  .font(FieldType.mono(7))
+                  .font(FieldType.mono(InputCardMetrics.subtitleSize(for: dynamicTypeSize)))
                   .foregroundStyle(FieldPalette.textMuted)
                   .lineLimit(1)
                   .minimumScaleFactor(0.8)
               }
               .padding(.horizontal, 4)
               .frame(maxWidth: .infinity)
-              .frame(height: Self.keyHeight)
+              .frame(height: keyHeight)
               .background(keyShape(inverted: false))
             }
             .buttonStyle(KeyPressStyle())
@@ -330,7 +377,7 @@ struct TerminalKeypad: View {
           // A short last row keeps the grid rather than stretching its keys.
           if row.count < 4 {
             ForEach(0..<(4 - row.count), id: \.self) { _ in
-              Color.clear.frame(maxWidth: .infinity).frame(height: Self.keyHeight)
+              Color.clear.frame(maxWidth: .infinity).frame(height: keyHeight)
             }
           }
         }
@@ -345,11 +392,11 @@ struct TerminalKeypad: View {
   ) -> some View {
     Button(action: action) {
       Text(text)
-        .font(FieldType.mono(9, .heavy))
-        .tracking(FieldType.tracking(0.08, of: 9))
+        .font(FieldType.mono(labelSize, .heavy))
+        .tracking(FieldType.tracking(0.08, of: labelSize))
         .foregroundStyle(FieldPalette.textMain)
         .frame(maxWidth: .infinity)
-        .frame(height: Self.keyHeight)
+        .frame(height: keyHeight)
         .background(keyShape(inverted: false))
     }
     .buttonStyle(KeyPressStyle())
@@ -361,10 +408,10 @@ struct TerminalKeypad: View {
   ) -> some View {
     Button(action: action) {
       Image(systemName: glyph)
-        .font(.system(size: 13, weight: .heavy))
+        .font(.system(size: glyphSize, weight: .heavy))
         .foregroundStyle(FieldPalette.textMain)
         .frame(maxWidth: .infinity)
-        .frame(height: Self.keyHeight)
+        .frame(height: keyHeight)
         .background(keyShape(inverted: false))
     }
     .buttonStyle(KeyPressStyle())

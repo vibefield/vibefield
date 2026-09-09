@@ -129,6 +129,12 @@ public struct PasteReviewSheet: View {
           .background(RoundedRectangle(cornerRadius: 8).fill(FieldPalette.textMain))
       }
       .buttonStyle(.plain)
+      // --- IOS-5e: the sheet's whole reason, said to a reader who cannot see
+      // the promise line above it. SEND means two different things here and
+      // one of them RUNS the block — a four-letter label cannot carry that.
+      .accessibilityLabel("Send")
+      .accessibilityHint(promise)
+      // --- end IOS-5e
 
       Button(action: onCancel) {
         Text("CANCEL")

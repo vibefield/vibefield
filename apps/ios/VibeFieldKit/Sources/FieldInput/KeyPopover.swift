@@ -132,18 +132,34 @@ extension View {
   /// tap on ESC still sends Escape. So the long press runs alongside it and the
   /// button's action checks `openFan` — the touch-up that ends a long press is
   /// not a tap on the key.
+  /// **Reduce Motion (IOS-5e).** A popover ARRIVES as a scale out of the key it
+  /// is anchored to — UIKit's animation, not ours, with no API to swap it for a
+  /// fade. What we can do is refuse to animate the state change that presents
+  /// it, which lands the fan with no scale and no spring; `KeyFanView` then
+  /// fades its own content in, so what a reader who asked for less motion gets
+  /// is the fade the setting wants rather than a bare cut. `reduceMotion` is
+  /// passed in because a `View` extension has no environment of its own.
   @MainActor
   @ViewBuilder
   func fan(
     _ fan: KeyFan?,
     on model: InputCardModel,
+    reduceMotion: Bool = false,
     pick: @escaping (KeyFan.Item) -> Void
   ) -> some View {
     if let fan {
       self
         .simultaneousGesture(
           LongPressGesture(minimumDuration: KeyFanPresentation.longPress)
-            .onEnded { _ in model.showFan(fan) }
+            .onEnded { _ in
+              guard reduceMotion else {
+                model.showFan(fan)
+                return
+              }
+              var transaction = Transaction()
+              transaction.disablesAnimations = true
+              withTransaction(transaction) { model.showFan(fan) }
+            }
         )
         .popover(
           item: Binding(
@@ -177,11 +193,22 @@ enum KeyFanPresentation {
 struct KeyFanView: View {
   let fan: KeyFan
   let select: (KeyFan.Item) -> Void
+  // --- IOS-5e ---------------------------------------------------------------
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// The fade. False for one frame, then true — which is the whole of the
+  /// fan's Reduce Motion arrival, since the presentation itself was landed with
+  /// animations off (see `View.fan`).
+  @State private var shown = false
+  // --- end IOS-5e -----------------------------------------------------------
 
-  /// Shorter than the rail's 44 pt: two rows of full-height keys plus the
-  /// popover's own chrome would stand taller than the card it belongs to.
-  private static let keyHeight: CGFloat = 40
   private static let gap: CGFloat = 6
+
+  /// Shorter than the rail's key at both text steps: two rows of full-height
+  /// keys plus the popover's own chrome would stand taller than the card the
+  /// fan belongs to.
+  private var keyHeight: CGFloat { InputCardMetrics.fanKeyHeight(for: dynamicTypeSize) }
+  private var labelSize: CGFloat { InputCardMetrics.labelSize(for: dynamicTypeSize) }
 
   var body: some View {
     VStack(spacing: Self.gap) {
@@ -195,6 +222,13 @@ struct KeyFanView: View {
     }
     .padding(Self.gap + 2)
     .background(FieldPalette.panelBackground)
+    // --- IOS-5e: the fan's own arrival, for a reader who asked for no motion.
+    .opacity(reduceMotion && !shown ? 0 : 1)
+    .onAppear {
+      guard reduceMotion else { return }
+      withAnimation(FieldMotion.ease(0.14)) { shown = true }
+    }
+    // --- end IOS-5e
   }
 
   private func key(_ item: KeyFan.Item) -> some View {
@@ -203,18 +237,19 @@ struct KeyFanView: View {
     } label: {
       VStack(spacing: 1) {
         Text(item.label)
-          .font(FieldType.mono(9, .heavy))
-          .tracking(FieldType.tracking(0.08, of: 9))
+          .font(FieldType.mono(labelSize, .heavy))
+          .tracking(FieldType.tracking(0.08, of: labelSize))
           .foregroundStyle(FieldPalette.textMain)
         if !item.subtitle.isEmpty {
           Text(item.subtitle)
-            .font(FieldType.mono(7))
+            .font(FieldType.mono(InputCardMetrics.subtitleSize(for: dynamicTypeSize)))
             .foregroundStyle(FieldPalette.textMuted)
+            .lineLimit(1)
         }
       }
       .padding(.horizontal, 6)
       .frame(minWidth: 44)
-      .frame(height: Self.keyHeight)
+      .frame(height: keyHeight)
       .background(
         RoundedRectangle(cornerRadius: 6)
           .fill(FieldPalette.panelBackground.opacity(0.8))

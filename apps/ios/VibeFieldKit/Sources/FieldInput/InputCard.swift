@@ -15,6 +15,15 @@ import SwiftUI
 /// The copy rule from the design's decision table holds throughout: the word
 /// "Live" never reaches the screen. The mode is a terminal glyph, and the strip
 /// says what is happening rather than what it is called.
+///
+/// **IOS-5e — the card at every size and to every reader.** Three environment
+/// values reach in here now. `dynamicTypeSize` takes the whole card up one step
+/// at accessibility sizes (`InputCardMetrics`, where the rule and its reasons
+/// live). `accessibilityReduceMotion` turns off the two animations that MOVE
+/// something — the `+` glyph's rotation and the mic's breath — and leaves the
+/// cross-fades alone, because a fade is what Reduce Motion asks for rather than
+/// what it forbids. And every state this card draws as a fill now also SAYS
+/// itself (`InputAnnouncement`): armed, locked, released, the mode, the keypad.
 public struct InputCard: View {
   private let model: InputCardModel
   // --- IOS-5c: the pasteboard's own state, so the paste chip can appear
@@ -24,20 +33,31 @@ public struct InputCard: View {
   // --- end IOS-5c
   /// The composer's measured height. One line at rest; the card grows UPWARD
   /// as the draft does, which is why the row is bottom-aligned.
-  @State private var composerHeight: CGFloat = InputCard.rowHeight
+  @State private var composerHeight: CGFloat = InputCardMetrics.baseRowHeight
   @Environment(\.colorScheme) private var colorScheme
+  // --- IOS-5e ---------------------------------------------------------------
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  /// Passed down to the fans, which are presentations and cannot read an
+  /// environment the card has not handed them.
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  // --- end IOS-5e -----------------------------------------------------------
 
   public init(model: InputCardModel, pasteboard: PasteboardWatcher? = nil) {
     self.model = model
     self.pasteboard = pasteboard
   }
 
-  /// The design's geometry, named once: 8 pt padding, 6 pt gaps, 44 pt rows —
-  /// 110 pt of chrome at one line.
-  static let rowHeight: CGFloat = 44
+  /// The design's geometry: 8 pt padding, 6 pt gaps, 44 pt rows — 110 pt of
+  /// chrome at one line. The row height and every type size on the card are the
+  /// numbers that move with the reader's text size, and they move in
+  /// `InputCardMetrics` rather than here.
   private static let gap: CGFloat = 6
   private static let padding: CGFloat = 8
   private static let cornerRadius: CGFloat = 6
+
+  private var rowHeight: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
+  private var labelSize: CGFloat { InputCardMetrics.labelSize(for: dynamicTypeSize) }
+  private var glyphSize: CGFloat { InputCardMetrics.glyphSize(for: dynamicTypeSize) }
 
   public var body: some View {
     // --- IOS-5c: three faces, not one. With the keyboard down the card is a
@@ -50,6 +70,10 @@ public struct InputCard: View {
         VStack(spacing: Self.gap) {
           if !ChipsRow.isEmpty(model: model, pasteboard: pasteboard) {
             ChipsRow(model: model, pasteboard: pasteboard)
+              // IOS-5e: opacity and nothing else, at every motion setting. The
+              // row arriving is the only thing that changes, and a chip that
+              // flew in from an edge would be the one piece of this card that
+              // moved for decoration.
               .transition(.opacity)
           }
           if model.mode == .draft {
@@ -62,6 +86,12 @@ public struct InputCard: View {
       }
     }
     .padding(Self.padding)
+    // --- IOS-5e: the card's widest, centred. See `InputCardMetrics.maximumWidth`
+    // — across an iPad's 1024 pt inset the nine keys would be 108 pt buttons
+    // under the middle of the screen, where no thumb is.
+    .frame(maxWidth: InputCardMetrics.maximumWidth)
+    .frame(maxWidth: .infinity)
+    // --- end IOS-5e
     // --- IOS-5d ---------------------------------------------------------------
     // The keypad's hidden responder for Live (K-D5). It is zero-size and never
     // hit, but it must be IN the hierarchy at all times: `becomeFirstResponder`
@@ -98,11 +128,13 @@ public struct InputCard: View {
       ComposerField(
         model: model,
         height: $composerHeight,
-        keyboardAppearance: colorScheme == .dark ? .dark : .light
+        keyboardAppearance: colorScheme == .dark ? .dark : .light,
+        // IOS-5e: the one prose-sized mono on the card (K-D7), so it is the one
+        // size that scales as prose rather than as an instrument marking.
+        textSize: InputCardMetrics.composerTextSize(for: dynamicTypeSize)
       )
-      .frame(height: max(Self.rowHeight, composerHeight))
+      .frame(height: max(rowHeight, composerHeight))
       .background(keyShape(inverted: false))
-      .accessibilityLabel("Message or command")
 
       // --- IOS-5d mic ---
       DictationKey(model: model)
@@ -123,21 +155,30 @@ public struct InputCard: View {
       // --- end IOS-5d
       HStack(spacing: 7) {
         Image(systemName: "terminal")
-          .font(.system(size: 13, weight: .heavy))
+          .font(.system(size: glyphSize, weight: .heavy))
         Text("Typing into terminal")
-          .font(FieldType.mono(9, .heavy))
-          .tracking(FieldType.tracking(0.08, of: 9))
+          .font(FieldType.mono(labelSize, .heavy))
+          .tracking(FieldType.tracking(0.08, of: labelSize))
+          // IOS-5e: one line, always. At accessibility sizes on the narrowest
+          // phone this sentence is wider than the strip, and both other ways
+          // out are worse than an ellipsis — wrapping makes the strip taller
+          // than the row it shares, and shrinking makes it the one label on the
+          // card smaller than the keys beside it.
+          .lineLimit(1)
+          .truncationMode(.tail)
       }
       .foregroundStyle(FieldPalette.textMain)
       .padding(.horizontal, 11)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .frame(height: Self.rowHeight)
+      .frame(height: rowHeight)
       .background(keyShape(inverted: false))
       .accessibilityElement()
+      // A truncated strip still says the whole sentence: the ellipsis is a fact
+      // about the width, not about the mode.
       .accessibilityLabel("Typing into terminal")
 
       key(
-        glyph: "return", label: "Enter", width: Self.rowHeight,
+        glyph: "return", label: "Enter", width: rowHeight,
         action: { model.tapKey(.enter) })
     }
   }
@@ -147,18 +188,30 @@ public struct InputCard: View {
   /// with nothing left to type.
   private var sendKey: some View {
     Button {
+      // IOS-5e: felt only when something LEFT. The empty path is Enter, and a
+      // keystroke on this card is never felt. Read before the tap, because
+      // `tapSend` clears the draft on its way past.
+      let carried = !model.draft.isEmpty
       model.tapSend()
+      if carried { InputHaptics.sent() }
     } label: {
       Image(systemName: "arrow.up")
-        .font(.system(size: 15, weight: .heavy))
+        .font(
+          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .heavy)
+        )
         .foregroundStyle(
           model.draft.isEmpty ? FieldPalette.textMuted : FieldPalette.panelBackground
         )
-        .frame(width: Self.rowHeight, height: Self.rowHeight)
+        .frame(width: rowHeight, height: rowHeight)
         .background(keyShape(inverted: !model.draft.isEmpty))
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel("Send")
+    // IOS-5e: the one control here whose act cannot be guessed from its name.
+    // An arrow that sometimes sends a paste AND an Enter and sometimes sends
+    // only Enter has to say both before the tap.
+    .accessibilityHint(
+      "Sends the draft as a paste followed by Enter; with an empty draft, sends Enter")
   }
 
   // MARK: - Row 2, the rail
@@ -173,7 +226,14 @@ public struct InputCard: View {
       key(
         glyph: "terminal",
         label: model.mode == .live ? "Typing into terminal" : "Type into terminal",
-        inverted: model.mode == .live, action: { model.toggleMode() })
+        inverted: model.mode == .live,
+        action: {
+          model.toggleMode()
+          // IOS-5e: the mode is drawn as a lit key and a changed row, and both
+          // are invisible to a reader whose focus is elsewhere on the card.
+          // Announced AFTER the flip, so it names the mode now in force.
+          InputAnnouncement.post(InputAnnouncement.mode(model.mode))
+        })
       escapeKey
       controlKey
       key(text: "TAB", label: "Tab", fan: .tab, action: { model.tapKey(.tab) })
@@ -198,9 +258,22 @@ public struct InputCard: View {
         glyph: "ellipsis",
         label: model.keypadShown ? "Letters" : "Terminal keypad",
         inverted: model.keypadShown,
-        action: { model.toggleKeypad() })
+        action: {
+          model.toggleKeypad()
+          // IOS-5e: the letters just left, or came back. Without this a screen
+          // reader finds out by exploring the keyboard again and meeting a
+          // different one.
+          InputAnnouncement.post(InputAnnouncement.keypad(model.keypadShown))
+        })
       // --- end IOS-5d --------------------------------------------------------
     }
+    // --- IOS-5e: the rail is one thing, and VoiceOver should say so before it
+    // reads nine keys. `.contain` rather than `.combine`: every key still has
+    // to be reachable and tappable on its own, and combining them would make
+    // the rail a single button that does nothing.
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Terminal keys")
+    // --- end IOS-5e
     // --- IOS-5c: swipe the rail down to put the keyboard away.
     //
     // There is no scroll view on this sheet to hang
@@ -259,13 +332,20 @@ public struct InputCard: View {
       case .off: InputHaptics.release()
       }
       // --- end IOS-5b ---
+      // --- IOS-5e ---
+      // And said, for the reason it is felt. This is the design's own
+      // acceptance item (§10: "VoiceOver announces Ctrl armed and locked"), and
+      // it is the one state on the card that changes what a key SOMEWHERE ELSE
+      // will do — the label alone only reaches a reader focused on CTRL.
+      InputAnnouncement.post(InputAnnouncement.latch(model.latch.phase))
+      // --- end IOS-5e ---
     } label: {
       Text("CTRL")
-        .font(FieldType.mono(9, .heavy))
-        .tracking(FieldType.tracking(0.08, of: 9))
+        .font(FieldType.mono(labelSize, .heavy))
+        .tracking(FieldType.tracking(0.08, of: labelSize))
         .foregroundStyle(armed ? FieldPalette.panelBackground : FieldPalette.textMain)
         .frame(maxWidth: .infinity)
-        .frame(height: Self.rowHeight)
+        .frame(height: rowHeight)
         .background(keyShape(inverted: armed))
         .overlay(alignment: .topTrailing) {
           if model.latch.phase == .locked {
@@ -278,8 +358,11 @@ public struct InputCard: View {
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(model.latch.accessibilityLabel)
+    // IOS-5e: what the NEXT tap does, which on a three-phase control cannot be
+    // guessed from the phase it is in.
+    .accessibilityHint(model.latch.accessibilityHint)
     // --- IOS-5b: the chord fan ---
-    .fan(.control, on: model, pick: pick)
+    .fan(.control, on: model, reduceMotion: reduceMotion, pick: pick)
     // --- end IOS-5b ---
   }
 
@@ -299,16 +382,16 @@ public struct InputCard: View {
       action()
     } label: {
       Text(text)
-        .font(FieldType.mono(9, .heavy))
-        .tracking(FieldType.tracking(0.08, of: 9))
+        .font(FieldType.mono(labelSize, .heavy))
+        .tracking(FieldType.tracking(0.08, of: labelSize))
         .foregroundStyle(inverted ? FieldPalette.panelBackground : FieldPalette.textMain)
         .frame(maxWidth: .infinity)
-        .frame(height: Self.rowHeight)
+        .frame(height: rowHeight)
         .background(keyShape(inverted: inverted))
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(label)
-    .fan(fan, on: model, pick: pick)
+    .fan(fan, on: model, reduceMotion: reduceMotion, pick: pick)
   }
 
   /// `width` is the strip's Enter and nothing else: rail keys are equal-width
@@ -326,15 +409,15 @@ public struct InputCard: View {
       action()
     } label: {
       Image(systemName: glyph)
-        .font(.system(size: 13, weight: .heavy))
+        .font(.system(size: glyphSize, weight: .heavy))
         .foregroundStyle(inverted ? FieldPalette.panelBackground : FieldPalette.textMain)
         .frame(maxWidth: width == nil ? .infinity : nil)
-        .frame(width: width, height: Self.rowHeight)
+        .frame(width: width, height: rowHeight)
         .background(keyShape(inverted: inverted))
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(label)
-    .fan(fan, on: model, pick: pick)
+    .fan(fan, on: model, reduceMotion: reduceMotion, pick: pick)
   }
 
   // --- IOS-5b ---------------------------------------------------------------
@@ -348,13 +431,18 @@ public struct InputCard: View {
     model.closeFan()
     switch item.act {
     case .stroke(let stroke): model.tapChord(stroke)
-    case .meta: model.armMeta()
+    case .meta:
+      model.armMeta()
+      // IOS-5e: an arm is an arm. The burst changes what the next key means and
+      // its only sign is ESC wearing META, which a reader elsewhere cannot see.
+      InputAnnouncement.post(InputAnnouncement.metaArmed)
     }
     InputHaptics.chord()
   }
   // --- end IOS-5b -----------------------------------------------------------
 
-  /// One shape for every key on the card: the `FieldChip` recipe at 44 pt.
+  /// One shape for every key on the card: the `FieldChip` recipe, at whatever
+  /// height the reader's text size asks for.
   @ViewBuilder
   private func keyShape(inverted: Bool) -> some View {
     if inverted {

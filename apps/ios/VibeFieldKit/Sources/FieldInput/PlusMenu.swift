@@ -23,9 +23,13 @@ import SwiftUI
 /// the same keyboard bookkeeping.
 struct PlusMenu: View {
   let model: InputCardModel
+  // --- IOS-5e ---------------------------------------------------------------
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  // --- end IOS-5e -----------------------------------------------------------
 
   /// The composer row's own height — the `+` is square in it.
-  private let side: CGFloat = InputCard.rowHeight
+  private var side: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
 
   var body: some View {
     Button {
@@ -35,10 +39,20 @@ struct PlusMenu: View {
       model.showPlusMenu()
     } label: {
       Image(systemName: "plus")
-        .font(.system(size: 15, weight: .heavy))
+        .font(
+          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .heavy)
+        )
         .foregroundStyle(FieldPalette.textMain)
-        .rotationEffect(.degrees(model.plusMenuOpen ? 45 : 0))
-        .animation(FieldMotion.ease(0.18), value: model.plusMenuOpen)
+        // --- IOS-5e ---------------------------------------------------------
+        // The design turns this glyph 45° into a `×` while the menu is open.
+        // Under Reduce Motion it does not turn: the rotation is decoration —
+        // the popover standing open is what says the menu is open — and a
+        // spinning glyph is exactly the movement the setting asks us to stop.
+        // It does not switch to a drawn `×` instead, because a different glyph
+        // appearing with no motion reads as a different control.
+        .rotationEffect(.degrees(!reduceMotion && model.plusMenuOpen ? 45 : 0))
+        .animation(reduceMotion ? nil : FieldMotion.ease(0.18), value: model.plusMenuOpen)
+        // --- end IOS-5e -----------------------------------------------------
         .frame(width: side, height: side)
         .background(
           RoundedRectangle(cornerRadius: 6)
@@ -65,6 +79,9 @@ struct PlusMenu: View {
 /// The menu's own pixels: three rows in the card's voice.
 struct PlusMenuList: View {
   let model: InputCardModel
+  // --- IOS-5e ---------------------------------------------------------------
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  // --- end IOS-5e -----------------------------------------------------------
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -75,7 +92,11 @@ struct PlusMenuList: View {
       row("CLIPBOARD HISTORY", glyph: "list.clipboard", surface: .clipboardHistory)
     }
     .padding(.vertical, 4)
-    .frame(width: 226)
+    // IOS-5e: `CLIPBOARD HISTORY` at mono 11 with its tracking is wider than
+    // 226 pt, and a menu row that truncates its own verb is a menu you have to
+    // guess at. The popover is free to be wider — it is drawn over the
+    // terminal, not inside the card.
+    .frame(width: dynamicTypeSize.isAccessibilitySize ? 268 : 226)
     .background(FieldPalette.panelBackground)
   }
 
@@ -92,16 +113,19 @@ struct PlusMenuList: View {
     } label: {
       HStack(spacing: 10) {
         Image(systemName: glyph)
-          .font(.system(size: 13, weight: .medium))
+          .font(.system(size: InputCardMetrics.glyphSize(for: dynamicTypeSize), weight: .medium))
           .frame(width: 18)
         Text(title)
-          .font(FieldType.mono(9, .heavy))
-          .tracking(FieldType.tracking(0.08, of: 9))
+          .font(FieldType.mono(InputCardMetrics.labelSize(for: dynamicTypeSize), .heavy))
+          .tracking(
+            FieldType.tracking(0.08, of: InputCardMetrics.labelSize(for: dynamicTypeSize))
+          )
+          .lineLimit(1)
         Spacer(minLength: 0)
       }
       .foregroundStyle(FieldPalette.textMain)
       .padding(.horizontal, 12)
-      .frame(height: 42)
+      .frame(height: dynamicTypeSize.isAccessibilitySize ? 50 : 42)
       .contentShape(Rectangle())
     }
     .buttonStyle(KeyPressStyle())

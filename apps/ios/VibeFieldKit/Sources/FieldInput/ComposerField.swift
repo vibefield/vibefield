@@ -16,12 +16,58 @@ struct ComposerField: UIViewRepresentable {
   /// The measured height, reported upward so the card grows with the draft.
   @Binding var height: CGFloat
   let keyboardAppearance: UIKeyboardAppearance
+  // --- IOS-5e ---------------------------------------------------------------
+  /// The draft's point size, from `InputCardMetrics.composerTextSize`.
+  ///
+  /// It is passed IN rather than read from the environment here because a
+  /// `UIViewRepresentable` has no `body` to read it in, and because the card is
+  /// the one place that should decide how big anything on it is.
+  let textSize: CGFloat
+  // --- end IOS-5e -----------------------------------------------------------
 
   /// One line at rest, five before it starts scrolling. Past five the draft is
   /// long enough that the terminal underneath matters more than the text.
   static let maximumLines = 5
 
   func makeCoordinator() -> Coordinator { Coordinator(model: model, height: $height) }
+
+  // --- IOS-5e ---------------------------------------------------------------
+  /// The ROW decides how wide this field is. It must never ask.
+  ///
+  /// **The defect this fixes**, found by IOS-5e's screenshot sweep and visible
+  /// in both themes: with a long single-line draft, the whole card overflowed
+  /// the screen — the `+` clipped off the left edge, Send off the right, and
+  /// the rail's `>_` and `⋯` with them. A `UITextView` with scrolling off has
+  /// an intrinsic content size that grows to fit its text on ONE line, and
+  /// without a `sizeThatFits` SwiftUI takes that intrinsic width as the
+  /// representable's whole answer — as its minimum as well as its ideal. So
+  /// the `HStack` could not shrink the field below the width of the sentence
+  /// in it, and pushed everything else past both edges.
+  ///
+  /// Answering the proposal makes the field fully flexible: zero when the row
+  /// asks for its minimum, everything when the row asks for its maximum, and
+  /// the leftover after the three fixed-width keys in practice.
+  ///
+  /// It is also where the HEIGHT is measured, for a reason the first fix
+  /// exposed: `updateUIView` runs BEFORE layout, so `view.bounds.width` there
+  /// is the width from the last pass — which, on the pass that first narrows
+  /// this field, is the old wide one. Measured there, a wrapping sentence
+  /// still reports one line and the field clips its own text instead of
+  /// growing. The proposal is the width this view is ABOUT to have, so it is
+  /// the only honest thing to measure against.
+  func sizeThatFits(
+    _ proposal: ProposedViewSize, uiView: InputTextView, context: Context
+  ) -> CGSize? {
+    // `.zero` and `.infinity` are SwiftUI asking how flexible this view is, not
+    // how tall it would be at a real width. Answer the width; measure nothing.
+    guard let width = proposal.width, width.isFinite, width > 0 else {
+      return CGSize(
+        width: proposal.width ?? uiView.bounds.width, height: proposal.height ?? height)
+    }
+    let measured = context.coordinator.measure(uiView, width: width)
+    return CGSize(width: width, height: proposal.height ?? measured)
+  }
+  // --- end IOS-5e -----------------------------------------------------------
 
   func makeUIView(context: Context) -> InputTextView {
     let view = InputTextView()
@@ -42,12 +88,26 @@ struct ComposerField: UIViewRepresentable {
     view.isScrollEnabled = false
     view.placeholder = "message or command"
     view.text = model.draft
+    // --- IOS-5e ---------------------------------------------------------------
+    // The field's spoken name. The placeholder is lowercase godview copy and
+    // VoiceOver reads a text view's placeholder as its value, not its label —
+    // so without this the composer announces itself as "text field" and nothing
+    // else. It is set on the UIKit view rather than as a SwiftUI modifier
+    // because the `UITextView` is its own accessibility element and a label
+    // hung on the representable does not always reach it.
+    view.accessibilityLabel = "Message or command"
+    // --- end IOS-5e -----------------------------------------------------------
     return view
   }
 
   func updateUIView(_ view: InputTextView, context: Context) {
     context.coordinator.model = model
     view.keyboardAppearance = keyboardAppearance
+    // --- IOS-5e: the reader's text size reached the card, and the draft is the
+    // one thing on it that is prose. The placeholder follows the same size, or
+    // the empty field would be a different type ramp from the full one.
+    view.applyTextSize(textSize)
+    // --- end IOS-5e
     view.textColor = UIColor(FieldPalette.textMain)
     view.tintColor = UIColor(FieldPalette.textMain)
     view.placeholderColor = UIColor(FieldPalette.textFaint)
@@ -59,7 +119,13 @@ struct ComposerField: UIViewRepresentable {
     }
     context.coordinator.applyFocus(model.fieldFocused, to: view)
     // --- IOS-5d: the `⋯` keypad rises in the system keyboard's place.
-    context.coordinator.applyKeypad(model.keypadShown && model.mode == .draft, to: view)
+    // --- IOS-5e: and it is told the reader's text size, because its height
+    // depends on it and a `UIInputView` that is not in a window yet cannot ask.
+    context.coordinator.applyKeypad(
+      model.keypadShown && model.mode == .draft,
+      accessibility: context.environment.dynamicTypeSize.isAccessibilitySize,
+      to: view)
+    // --- end IOS-5e
     // --- end IOS-5d
     context.coordinator.reportHeight(of: view)
   }
@@ -151,14 +217,26 @@ struct ComposerField: UIViewRepresentable {
     /// already up, and it is deferred for the same reason the responder calls
     /// are: it re-lays the keyboard, and doing that inside a SwiftUI update
     /// pass resizes this view's own ancestors mid-pass.
-    func applyKeypad(_ wanted: Bool, to view: UITextView) {
-      guard appliedKeypad != wanted else { return }
-      appliedKeypad = wanted
-      if wanted {
-        if keypad == nil { keypad = KeypadInputView(model: model) }
-        view.inputView = keypad
-      } else {
-        view.inputView = nil
+    func applyKeypad(_ wanted: Bool, accessibility: Bool, to view: UITextView) {
+      // IOS-5e: a text-size change while the keypad is already up is its own
+      // reason to reload — the keyboard keeps whatever frame it committed until
+      // it is asked again.
+      var sizeChanged = false
+      if let keypad, keypad.isAccessibilitySize != accessibility {
+        keypad.isAccessibilitySize = accessibility
+        sizeChanged = true
+      }
+      guard appliedKeypad != wanted || sizeChanged else { return }
+      if appliedKeypad != wanted {
+        appliedKeypad = wanted
+        if wanted {
+          if keypad == nil {
+            keypad = KeypadInputView(model: model, isAccessibilitySize: accessibility)
+          }
+          view.inputView = keypad
+        } else {
+          view.inputView = nil
+        }
       }
       Task { @MainActor in
         guard view.isFirstResponder else { return }
@@ -167,22 +245,36 @@ struct ComposerField: UIViewRepresentable {
     }
     // --- end IOS-5d ----------------------------------------------------------
 
-    /// Measure, clamp, and report — on the next turn, because a binding written
-    /// during `updateUIView` is a mutation inside the update it came from.
-    func reportHeight(of view: UITextView) {
-      guard let font = view.font, view.bounds.width > 0 else { return }
+    /// Measure at a width, clamp to the 1→5-line range, and report — on the
+    /// next turn, because a binding written during a layout pass is a mutation
+    /// inside the update it came from.
+    ///
+    /// IOS-5e made the width a PARAMETER rather than reading `view.bounds`:
+    /// `sizeThatFits` knows the width this view is about to have, and
+    /// `updateUIView` only knows the width it used to have. Both call in here.
+    @discardableResult
+    func measure(_ view: UITextView, width: CGFloat) -> CGFloat {
+      guard let font = view.font, width > 0 else { return reportedHeight ?? 0 }
       let chrome = view.textContainerInset.top + view.textContainerInset.bottom
       let oneLine = (chrome + font.lineHeight).rounded(.up)
       let full = (chrome + font.lineHeight * CGFloat(maximumLines)).rounded(.up)
       let fitted = view.sizeThatFits(
-        CGSize(width: view.bounds.width, height: .greatestFiniteMagnitude)
+        CGSize(width: width, height: .greatestFiniteMagnitude)
       ).height
       let clamped = min(max(fitted, oneLine), full)
       view.isScrollEnabled = fitted > full
-      guard reportedHeight != clamped else { return }
+      guard reportedHeight != clamped else { return clamped }
       reportedHeight = clamped
       let binding = height
       Task { @MainActor in binding.wrappedValue = clamped }
+      return clamped
+    }
+
+    /// The typing path: the view is laid out by now, so its own bounds are the
+    /// width to measure against.
+    func reportHeight(of view: UITextView) {
+      guard view.bounds.width > 0 else { return }
+      measure(view, width: view.bounds.width)
     }
   }
 }
@@ -238,4 +330,18 @@ final class InputTextView: UITextView {
   func refreshPlaceholder() {
     placeholderLabel.isHidden = !(text ?? "").isEmpty
   }
+
+  // --- IOS-5e ---------------------------------------------------------------
+  /// Take the card's text size, for the draft and the placeholder together.
+  ///
+  /// Guarded on the current size because setting `font` on a `UITextView`
+  /// re-lays its whole text storage, and `updateUIView` runs on every card
+  /// update — a re-layout per keystroke would be a stutter with no cause on
+  /// screen.
+  func applyTextSize(_ size: CGFloat) {
+    guard font?.pointSize != size else { return }
+    font = .monospacedSystemFont(ofSize: size, weight: .regular)
+    placeholderLabel.font = .monospacedSystemFont(ofSize: size, weight: .regular)
+  }
+  // --- end IOS-5e -----------------------------------------------------------
 }

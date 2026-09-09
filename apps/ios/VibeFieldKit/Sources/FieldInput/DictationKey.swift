@@ -30,6 +30,10 @@ struct DictationKey: View {
   /// The breath. Flipped when listening starts and stops; the animation
   /// attached to it is what repeats.
   @State private var breathing = false
+  // --- IOS-5e ---------------------------------------------------------------
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  // --- end IOS-5e -----------------------------------------------------------
 
   /// The card's key chrome, restated rather than reached for.
   ///
@@ -45,6 +49,8 @@ struct DictationKey: View {
   private static let breathFloor: Double = 0.62
 
   private var listening: Bool { session.state.isListening }
+  /// The composer row's height — the mic is square in it, like the `+`.
+  private var side: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
 
   var body: some View {
     Button {
@@ -60,12 +66,22 @@ struct DictationKey: View {
       }
     } label: {
       Image(systemName: "mic")
-        .font(.system(size: 15, weight: .heavy))
+        .font(
+          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .heavy)
+        )
         .foregroundStyle(listening ? FieldPalette.panelBackground : FieldPalette.textMain)
-        .frame(width: InputCard.rowHeight, height: InputCard.rowHeight)
+        .frame(width: side, height: side)
         .background(keyShape)
-        .opacity(listening && breathing ? Self.breathFloor : 1)
+        // --- IOS-5e ---------------------------------------------------------
+        // Under Reduce Motion the key does not breathe. It still INVERTS while
+        // it listens, which is the state itself and not the decoration — what
+        // goes is the slow pulse, which is a forever-repeating animation on
+        // screen and the exact shape the setting exists to stop. The state is
+        // not lost with it: the fill says listening, the label says
+        // "Dictating, tap to stop", and IOS-5e's announcements say the rest.
+        .opacity(!reduceMotion && listening && breathing ? Self.breathFloor : 1)
         .animation(breath, value: breathing)
+        // --- end IOS-5e -----------------------------------------------------
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(listening ? "Dictating, tap to stop" : "Dictate into the draft")
@@ -108,7 +124,10 @@ struct DictationKey: View {
   private var notice: some View {
     if let line = session.state.notice {
       Text(line)
-        .font(FieldType.mono(9))
+        // IOS-5e: this line is a sentence rather than a marking — the one time
+        // this key speaks prose — so it rides the label step like the rest of
+        // the card's copy.
+        .font(FieldType.mono(InputCardMetrics.labelSize(for: dynamicTypeSize)))
         .foregroundStyle(FieldPalette.textMuted)
         .multilineTextAlignment(.trailing)
         .fixedSize(horizontal: false, vertical: true)
@@ -136,7 +155,11 @@ struct DictationKey: View {
   /// it is one direction. The way back to rest is a plain ease: a key that
   /// stopped listening should settle, not fade out of a rhythm.
   private var breath: Animation {
-    listening
+    // IOS-5e: nothing repeating under Reduce Motion, in either direction — a
+    // curve back to rest is still a curve, and there is nothing to come back
+    // from when the key never left.
+    if reduceMotion { return FieldMotion.ease(0.12) }
+    return listening
       ? .easeInOut(duration: FieldMotion.breathePeriod / 2).repeatForever(autoreverses: true)
       : FieldMotion.ease(0.12)
   }

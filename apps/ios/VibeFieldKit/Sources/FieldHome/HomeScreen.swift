@@ -192,6 +192,22 @@ public struct HomeScreen: View {
           remoteField = RemoteSessionField(source: DemoRemoteSource())
           remoteField.start()
         }
+        // --- IOS-5e ------------------------------------------------------
+        // `-vf-demo-landscape`: turn the scene on its side.
+        //
+        // The card's landscape and iPad behaviour is a real question — nine
+        // equal keys across a 900 pt inset are not keys any more, which is why
+        // `InputCardMetrics.maximumWidth` exists — and `simctl` cannot answer
+        // it: `xcrun simctl ui` offers appearance, contrast and content size,
+        // and nothing that rotates a device. Rotating by hand needs
+        // Simulator.app, which a headless run does not have. So the rotation
+        // becomes a launch argument, for exactly the reason every other
+        // argument in this block exists: it is the only way to a picture of a
+        // state, and it cannot run in Release.
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-landscape") {
+          requestLandscape()
+        }
+        // --- end IOS-5e ---------------------------------------------------
         if ProcessInfo.processInfo.arguments.contains("-vf-open-settings") {
           settingsSheetOpen = true
         }
@@ -587,6 +603,16 @@ public struct HomeScreen: View {
     ) { pending in
       PasteReviewSheet(
         text: pending.text,
+        // --- IOS-5e: the sheet has to be TOLD what SEND will do.
+        //
+        // IOS-5d gave `PendingPaste` a `commit` and `PasteReviewSheet` a
+        // matching parameter, and left this one call site on the default — so a
+        // snippet marked "sends Enter" arriving at the review read "nothing
+        // runs until you press Enter" over text that `confirmPasteReview` then
+        // RAN. That is the one lie the sheet's own doc comment forbids. The
+        // pending paste has always carried the answer; this hands it over.
+        commit: pending.commit,
+        // --- end IOS-5e
         onSend: { inputCard.confirmPasteReview() },
         onCancel: { inputCard.cancelPasteReview() }
       )
@@ -1091,6 +1117,23 @@ public struct HomeScreen: View {
       }
     }
     // --- end IOS-5d ----------------------------------------------------------
+
+    // --- IOS-5e --------------------------------------------------------------
+    /// Ask the window scene to turn on its side, for `-vf-demo-landscape`.
+    ///
+    /// `requestGeometryUpdate` is the only door: a scene's orientation is the
+    /// system's to grant, and the app can do no more than ask. The error
+    /// handler is empty on purpose — a refusal (an iPad in Stage Manager, a
+    /// device held in a dock) leaves the screenshot in portrait, which is a
+    /// true picture of what happened and not a failure to report.
+    private func requestLandscape() {
+      guard
+        let scene = UIApplication.shared.connectedScenes
+          .compactMap({ $0 as? UIWindowScene }).first
+      else { return }
+      scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { _ in }
+    }
+    // --- end IOS-5e ------------------------------------------------------------
   #endif
 }
 

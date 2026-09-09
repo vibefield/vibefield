@@ -17,6 +17,9 @@ import SwiftUI
 struct ClosedRow: View {
   let model: InputCardModel
   let pasteboard: PasteboardWatcher?
+  // --- IOS-5e ---------------------------------------------------------------
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  // --- end IOS-5e -----------------------------------------------------------
 
   private static let gap: CGFloat = 6
   private static let cornerRadius: CGFloat = 6
@@ -39,11 +42,16 @@ struct ClosedRow: View {
       model.requestKeyboard()
     } label: {
       Text("KEYBOARD")
-        .font(FieldType.mono(9, .heavy))
-        .tracking(FieldType.tracking(0.08, of: 9))
+        .font(FieldType.mono(InputCardMetrics.labelSize(for: dynamicTypeSize), .heavy))
+        .tracking(
+          FieldType.tracking(0.08, of: InputCardMetrics.labelSize(for: dynamicTypeSize))
+        )
         .foregroundStyle(FieldPalette.textMuted)
+        .lineLimit(1)
         .padding(.horizontal, 10)
-        .frame(height: ChipsRow.height)
+        // IOS-5e: the same step the chips beside it take, so the closed row
+        // stays one row of one height.
+        .frame(height: InputCardMetrics.chipHeight(for: dynamicTypeSize))
         .background(
           RoundedRectangle(cornerRadius: Self.cornerRadius)
             .fill(FieldPalette.panelBackground.opacity(0.8))

@@ -17,10 +17,33 @@ import UIKit
 final class KeypadInputView: UIInputView {
   private let host: UIHostingController<TerminalKeypad>
 
-  init(model: InputCardModel) {
+  // --- IOS-5e ---------------------------------------------------------------
+  /// Whether the reader's text size is an accessibility one, which is what this
+  /// view's HEIGHT depends on.
+  ///
+  /// **Why it is handed in rather than read from `traitCollection`.** It was
+  /// read from the trait collection first, and the sweep caught what that
+  /// costs: a view that is not yet in a window has no content size category to
+  /// answer with, so the first `intrinsicContentSize` UIKit asked for came back
+  /// at the base height — the keyboard's frame was committed at 260 pt, the
+  /// trait arrived a moment later, and the keypad grew 52 pt UPWARD over the
+  /// card's own rail. The card's SwiftUI side knows the size before any of this
+  /// happens, so it says so.
+  var isAccessibilitySize: Bool {
+    didSet {
+      guard isAccessibilitySize != oldValue else { return }
+      invalidateIntrinsicContentSize()
+    }
+  }
+  // --- end IOS-5e -----------------------------------------------------------
+
+  init(model: InputCardModel, isAccessibilitySize: Bool) {
+    self.isAccessibilitySize = isAccessibilitySize
     host = UIHostingController(rootView: TerminalKeypad(model: model))
     super.init(
-      frame: CGRect(x: 0, y: 0, width: 320, height: TerminalKeypad.height),
+      frame: CGRect(
+        x: 0, y: 0, width: 320,
+        height: InputCardMetrics.keypadHeight(accessibility: isAccessibilitySize)),
       inputViewStyle: .keyboard)
     allowsSelfSizing = true
     // The input view's own material is the ground, the way a system keyboard's
@@ -42,8 +65,14 @@ final class KeypadInputView: UIInputView {
     fatalError("init(coder:) has not been implemented")
   }
 
+  /// IOS-5e: the keypad's keys grow at accessibility text sizes and its FRAME
+  /// has to grow with them, or the Keys page clips its last row — the row the
+  /// design put the Alt latch on. An `inputView` is measured by this and by
+  /// nothing else.
   override var intrinsicContentSize: CGSize {
-    CGSize(width: UIView.noIntrinsicMetric, height: TerminalKeypad.height)
+    CGSize(
+      width: UIView.noIntrinsicMetric,
+      height: InputCardMetrics.keypadHeight(accessibility: isAccessibilitySize))
   }
 }
 
@@ -112,6 +141,20 @@ struct KeypadHost: UIViewRepresentable {
   }
 
   func updateUIView(_ view: KeypadResponderView, context: Context) {
+    // --- IOS-5e: the text size, from the environment this representable sits
+    // in — see `KeypadInputView.isAccessibilitySize` for why UIKit is told
+    // rather than asked. A size change while the keypad is already up needs
+    // `reloadInputViews` as well, or the keyboard keeps the frame it committed.
+    let accessibility = context.environment.dynamicTypeSize.isAccessibilitySize
+    if let keypad = view.inputView as? KeypadInputView, keypad.isAccessibilitySize != accessibility
+    {
+      keypad.isAccessibilitySize = accessibility
+      Task { @MainActor in
+        guard view.isFirstResponder else { return }
+        view.reloadInputViews()
+      }
+    }
+    // --- end IOS-5e
     let wanted = wantsResponder
     guard context.coordinator.applied != wanted else { return }
     context.coordinator.applied = wanted
@@ -121,7 +164,7 @@ struct KeypadHost: UIViewRepresentable {
     // own parent's layout — which cost the whole card one silent render before
     // it was moved here.
     if wanted, view.inputView == nil {
-      view.inputView = KeypadInputView(model: model)
+      view.inputView = KeypadInputView(model: model, isAccessibilitySize: accessibility)
     }
     // The same discipline the composer and the terminal surface both follow:
     // a responder change made inside a SwiftUI update pass resizes this view's
