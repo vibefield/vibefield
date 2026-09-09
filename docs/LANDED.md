@@ -4970,3 +4970,55 @@ not allowed to cost the mic. **Tests 261 green on the merged tree** (`DictationT
 string rules, no Speech in tests). **Witnessed** in the simulator under `-vf-demo-input-dictating`,
 both themes. **Device-gated:** the two permission prompts, a real transcript, partial-then-refine
 against live recognition, whether recognition stayed on the device, the zero-channel refusal.
+
+## IOS-5d — the card grows its doors: the `+` menu (scan · snippets · history) and the `⋯` keypad
+
+**LANDED 2026-09-09, `3e46ab07`, merged onto `ios/keyboard` at `59e80ba1`** (two files
+conflicted — the README and one doc comment in `InputCard.swift` where the `+` lane and the mic
+rider had each described the row without the other; the rest merged clean, including the
+project's Info keys). Built by a briefed agent in a worktree in parallel with the mic rider; the
+orchestrator reviewed, merged and gated the merged tree. The design's last two pieces of the card,
+and both land with their absences named rather than greyed out.
+
+**`+`, at the left of the composer row.** A 44 pt key whose glyph rotates to `×` while its menu is
+open, over three items: SCAN TEXT, SNIPPETS, CLIPBOARD HISTORY. A `.popover`, not a system `Menu`
+(`Menu` publishes no open state to rotate from, and a `UIMenu` would be the second borrowed system
+surface on this card after the paste control). **Scan Text** (`ScanText.swift`): VisionKit's
+`DataScannerViewController` in a full-screen cover, tap-to-take, inserting through 5c's
+`acceptPaste`; on a device with no scanner — every simulator — the item is still THERE and the
+cover says "text scanning needs a camera on this device". **Snippets** (`SnippetStore.swift`,
+`SnippetsSheet.swift`): `UserDefaults` under `vf.input.snippets`, an inline editor on the
+composer's own `InputTextView` (so a snippet cannot be smart-quoted at the moment it is written),
+the `⏎` mark for "sends Enter"; nothing seeded — a shipped alias is the app guessing at
+somebody's shell. **Clipboard History** (`ClipboardHistory.swift`, `ClipboardHistorySheet.swift`):
+the last twenty strings pasted THROUGH this card, de-duplicated against the ring, fed by
+`acceptPaste` and by nothing else — never by reading `UIPasteboard.general.string`, which is the
+alert the paste chip exists to avoid.
+
+**`⋯`, the rail's ninth key.** It REPLACES the system keyboard rather than stacking on it, so the
+card never moves: Draft swaps the composer field's own `inputView`; **Live rides a hidden
+`UIKeyInput` responder (K-D5)** — ghosttea's Metal view is `final` and exposes no input view —
+and `abc` gives the keyboard back through `requestKeyboard`'s nonce. Three pages: Keys (named
+keys, far ends, arrows, a scrolling F1–F12, the Ctrl/Alt latches), Symbols (thirty punctuation
+keys in three rows of ten — fifteen across a phone is 21 pt, and the design's own floor is the
+33 pt of an iOS letter key), Combos (`ComboCatalog`: emacs · tmux · readline · screen as ORDERED
+keystroke sequences — `^B c` is a control chord and then a plain `c`, because `^B ^C` interrupts
+instead of making a window). `keyboardOwner` gains `.keypad`: the keypad up is the keyboard up in
+both modes, which keeps the card from folding to its closed row under it.
+
+**Absent, not inert (D-i6).** Photo, Take Photo and Choose File ship as nothing at all (K-D6): a
+phone-to-host file wants a mesh verb VibeField has not minted, EL2 keeping bytes off the control
+plane. "Record" is not built. While the keypad is up in Live a paired hardware keyboard types into
+nothing — the cost of the hidden responder; the one-line `customInputView` petition K-D5 batches
+into the next pin bump is the fix. **Judgment calls recorded at source:** a combo SPENDS an armed
+latch without applying it (a script has no single key for a modifier to ride); a snippet inserted
+into the draft is not recorded in the history (it is already saved under `+`); `PendingPaste` grew
+a `commit`, so the review sheet can say "it goes in as one block AND RUNS" over a snippet that
+sends Enter rather than 5c's "nothing runs until you press Enter", which would have been the one
+lie on this card. **Tests 315 green on the merged tree** (243 → 297 on the branch: the
+snippet and history stores round-tripped against a real `UserDefaults` suite, because the encoder
+and the key are the half of persistence that breaks). **Witnessed** in the simulator, both themes:
+the `+` and its rotated `×` with three items, the nine-key rail, the keypad on all three pages in
+both modes, the Snippets and Clipboard History sheets, the scanner's honest line.
+**Device-gated:** `|` and `~` from Symbols reaching a shell, `^B c` opening a tmux window, a
+snippet with Enter running and one without not running, Scan Text on a camera.
