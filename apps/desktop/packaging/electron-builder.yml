@@ -139,6 +139,11 @@ mac:
     - Contents/Resources/bin/sidecar-slim
     - Contents/Resources/bin/live-surface-capture-helper
     - Contents/Resources/bin/live-surface-adapter.node
+    # SNAP-D5/D9: the screenshot helper is a nested BUNDLE (TCC keys consent on it), staged
+    # whole under bin/; the signer seals its executable inside-out with the app. Optional in
+    # the stage — a package without it boots and answers `helper-missing` — so WP10's signer
+    # must tolerate its absence in a preview and require it under --require-complete.
+    - Contents/Resources/bin/field-screenshot-helper.app/Contents/MacOS/field-screenshot-helper
   # Hardened runtime is on from the first package even though nothing is signed yet, so the
   # entitlement set is exercised from the start rather than discovered at notarization time.
   hardenedRuntime: true

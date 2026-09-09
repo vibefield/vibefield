@@ -11,6 +11,7 @@ import {
   DesktopShellState as DesktopShellStateSchema,
   IPC_CHANNELS,
   PluginModuleResolution,
+  type ScreenshotCaptureResult,
   type ShellCommand,
   ShellCommandRequest,
   type UserRecord,
@@ -19,6 +20,7 @@ import {
 import { SupportBundleExportV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { type Logger, resolvePlatformLogRoot } from "@vibefield/logging";
+import { ScreenshotTool } from "@vibefield/screenshot";
 import {
   createUser,
   ensureUsersRoot,
@@ -53,6 +55,7 @@ import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-
 import { GodviewRegistry, installGodviewDoubleShift } from "./godview";
 import {
   registerGodviewToggle,
+  registerScreenshotCapture,
   registerUsersRoster,
   registerUsersUpdate,
   registerWindowBootstrap,
@@ -156,6 +159,9 @@ let crashArtifacts: CrashArtifactManager | null = null;
 let supportBundles: SupportBundleService | null = null;
 let trayController: TrayController | null = null;
 let godviewStates: GodviewRegistry | null = null;
+// SNAP-D1 — the one screenshot tool per shell boot; null before the windowed
+// modes construct it and after teardown (the door answers `disposed`).
+let screenshotTool: ScreenshotTool | null = null;
 let primaryWindowOpener: (() => Promise<Electron.BrowserWindow>) | null = null;
 const shellDisposers = new Set<() => void>();
 const getSupervisor = () => supervisor;
@@ -186,6 +192,10 @@ function disposeShellState(): void {
   trayController = null;
   godviewStates?.dispose();
   godviewStates = null;
+  // A live helper dies with the shell: an overlay must never outlive the app
+  // that asked for it, and its capture settles `disposed` rather than hanging.
+  screenshotTool?.dispose();
+  screenshotTool = null;
   primaryWindowOpener = null;
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
@@ -1103,6 +1113,68 @@ async function main(
     onChanged: (state) => redrawMenu({ godviewOpen: state.open }),
   });
   registerGodviewToggle(registry, godviewStates, logger.child({ component: "ipc.godview" }));
+
+  // SNAP-D1/D3 — the native screenshot helper. One tool per shell boot, one
+  // capture at a time; the IPC door and the View menu's item ask it for the
+  // SAME capture, so neither can hold an idea of "live" the other cannot see.
+  // The helper's path is the §4.3 resource contract's (null = no helper for
+  // this platform, and the tool says so); its lifecycle rides the desktop log.
+  const screenshotLogger = logger.child({ component: "screenshot" });
+  screenshotTool = new ScreenshotTool({
+    helperPath: resources.screenshotHelperPath,
+    onEvent: (event) => {
+      if (event.kind === "lifecycle") {
+        screenshotLogger.info(event.event, "screenshot helper lifecycle", event.attrs);
+      } else {
+        screenshotLogger.debug(
+          "screenshot.helper.stderr",
+          "the screenshot helper wrote to stderr",
+          {
+            line: event.line,
+          },
+        );
+      }
+    },
+  });
+  const captureScreenshot = (): Promise<ScreenshotCaptureResult> =>
+    screenshotTool?.capture() ??
+    Promise.resolve({
+      status: "error",
+      code: "disposed",
+      message: "the screenshot tool is not available",
+    });
+  registerScreenshotCapture(
+    registry,
+    captureScreenshot,
+    logger.child({ component: "ipc.screenshot" }),
+  );
+  /** The menu item's action: the same capture the door runs, plus the one face
+   * main owes the user on this path — a macOS Screen Recording refusal names
+   * the setting to flip, because the helper cannot open it and no page is
+   * watching a menu-triggered capture. Everything else is logged; on `ok` the
+   * clipboard already holds the still (SNAP-D4). */
+  const takeScreenshot = (): void => {
+    void captureScreenshot().then(async (result) => {
+      if (result.status !== "error" || result.code !== "permission-denied") return;
+      const darwin = process.platform === "darwin";
+      const { response } = await dialog.showMessageBox({
+        type: "warning",
+        title: "Screen Recording",
+        message: "Screen Recording is off for VibeField.",
+        detail: darwin
+          ? "Turn it on in System Settings › Privacy & Security › Screen Recording, then take the screenshot again."
+          : result.message,
+        buttons: darwin ? ["Open Settings", "OK"] : ["OK"],
+        defaultId: 0,
+        cancelId: darwin ? 1 : 0,
+      });
+      if (darwin && response === 0) {
+        await shell.openExternal(
+          "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+        );
+      }
+    });
+  };
   /** The accelerator's and the menu item's one action. The focused window is
    * the subject — that is what "toggle" means from a menu — falling back to the
    * primary window, which is the only one v1 has and the one a hidden harness
@@ -1141,6 +1213,8 @@ async function main(
     redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
       toggleGodview,
       closeWindow,
+      // SNAP-D5: no helper for this platform ⇒ the item stays, disabled.
+      ...(resources.screenshotHelperPath === null ? {} : { takeScreenshot }),
     });
   }
 

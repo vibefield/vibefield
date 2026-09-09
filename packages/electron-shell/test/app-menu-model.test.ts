@@ -6,6 +6,8 @@ import {
   GODVIEW_GESTURE_HINT,
   GODVIEW_ITEM_ID,
   type MenuPlatform,
+  SCREENSHOT_ITEM_ID,
+  screenshotAccelerator,
 } from "../src/main/app-menu-model";
 
 // Godview's gesture is ⇧⇧ and lives OUTSIDE this template (a double tap is a
@@ -149,5 +151,46 @@ describe("buildAppMenu", () => {
     expect(roles.has("togglefullscreen")).toBe(true);
     // Quit lives in the app menu on darwin and in File everywhere else.
     expect(roles.has(platform === "darwin" ? "appMenu" : "quit")).toBe(true);
+  });
+});
+
+describe("Take Screenshot (SNAP-D3)", () => {
+  const takeScreenshot = () => undefined;
+  const withScreenshot = { ...actions, takeScreenshot };
+
+  it.each(PLATFORMS)(
+    "offers the item with the prototype's chord as an APPLICATION accelerator (%s)",
+    (platform) => {
+      const item = find(
+        buildAppMenu(platform, { godviewOpen: false }, withScreenshot),
+        SCREENSHOT_ITEM_ID,
+      );
+      expect(item).toMatchObject({ label: "Take Screenshot", enabled: true });
+      expect(item?.accelerator).toBe(screenshotAccelerator(platform));
+      expect(item?.accelerator).toBe(platform === "darwin" ? "Control+Command+A" : "Alt+A");
+      expect(item?.click).toBe(takeScreenshot);
+      // no role: this is our command, not one of Electron's
+      expect(item?.role).toBeUndefined();
+    },
+  );
+
+  it.each(PLATFORMS)("stays present-but-disabled where no helper exists (%s)", (platform) => {
+    // SNAP-D5: an absent item reads as a missing feature; a disabled one with
+    // its chord still showing reads as "not here yet", which is the truth on a
+    // platform without a helper or in a dev tree before its first build.
+    const item = find(buildAppMenu(platform, { godviewOpen: false }, actions), SCREENSHOT_ITEM_ID);
+    expect(item?.enabled).toBe(false);
+    expect(item?.click).toBeUndefined();
+    expect(item?.accelerator).toBe(screenshotAccelerator(platform));
+  });
+
+  it.each(PLATFORMS)("claims its chord exactly once, in every overlay state (%s)", (platform) => {
+    for (const godviewOpen of [false, true]) {
+      const items = flatten(buildAppMenu(platform, { godviewOpen }, withScreenshot));
+      expect(
+        items.filter((item) => item.accelerator === screenshotAccelerator(platform)),
+      ).toHaveLength(1);
+      expect(items.filter((item) => item.id === SCREENSHOT_ITEM_ID)).toHaveLength(1);
+    }
   });
 });

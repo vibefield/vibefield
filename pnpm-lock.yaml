@@ -333,6 +333,9 @@ importers:
       '@vibefield/logging':
         specifier: workspace:*
         version: link:../logging
+      '@vibefield/screenshot':
+        specifier: workspace:*
+        version: link:../screenshot
       '@vibefield/users':
         specifier: workspace:*
         version: link:../users
@@ -654,6 +657,22 @@ importers:
       react:
         specifier: 'catalog:'
         version: 19.2.7
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(supports-color@7.2.0)(tsx@4.23.1)(yaml@2.9.0)
+
+  packages/screenshot:
+    dependencies:
+      '@vibefield/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

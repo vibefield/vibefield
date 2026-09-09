@@ -29,6 +29,7 @@
     "@vibefield/fieldd-supervisor": "workspace:*",
     "@vibefield/live-surfaces": "workspace:*",
     "@vibefield/logging": "workspace:*",
+    "@vibefield/screenshot": "workspace:*",
     "@vibefield/users": "workspace:*"
   },
   "devDependencies": {

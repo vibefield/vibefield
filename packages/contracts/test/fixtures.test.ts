@@ -46,6 +46,7 @@ import {
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
+import { ScreenshotCaptureResult, ScreenshotHelperEvent } from "../src/screenshot";
 import { TerminalCreateParams } from "../src/terminal";
 import {
   AttachControlLeg,
@@ -123,6 +124,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "support-manifest": SupportBundleManifestV1,
   "terminal-routes": TerminalRouteSnapshot,
   "terminal-create-params": TerminalCreateParams,
+  // SNAP-D2 — the screenshot helper's stdout line and the shell's answer; the
+  // Swift harness and the Rust crate parse these same files.
+  "screenshot-helper-event": ScreenshotHelperEvent,
+  "screenshot-capture-result": ScreenshotCaptureResult,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

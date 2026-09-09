@@ -1,0 +1,5 @@
+{
+  "status": "error",
+  "code": "helper-timeout",
+  "message": "the screenshot helper did not show its overlay within 20000 ms"
+}

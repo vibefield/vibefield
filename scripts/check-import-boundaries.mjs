@@ -426,6 +426,16 @@ const RULES = [
       (s.startsWith("@vibefield/") && s !== "@vibefield/contracts") ||
       ["electron", "react", "react-dom", "ws"].includes(s),
   },
+  {
+    id: "R19",
+    // SNAP-D1: the screenshot host library is Node-only spine code, like the
+    // supervisor (R3) — Electron main composes it and a vitest drives it with a
+    // scripted fake helper, which only works while nothing in it needs Electron.
+    enforce: true,
+    description: "no electron import under packages/screenshot/src",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/screenshot/src"),
+    importTest: (s) => importsModule(s, "electron"),
+  },
 ];
 
 // Enforce map (spec §8.3 slice 2): --enforce gates ONLY on enforce-true rules.
@@ -754,6 +764,11 @@ function runSelfTest() {
       file: "packages/live-surfaces/src/uses-electron.ts",
       body: 'import { sharedTexture } from "electron";\n',
     },
+    {
+      id: "R19",
+      file: "packages/screenshot/src/uses-electron.ts",
+      body: 'import { clipboard } from "electron";\n',
+    },
   ];
   const cleans = [
     // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
@@ -869,6 +884,12 @@ function runSelfTest() {
     {
       file: "packages/live-surfaces/src/clean-core.ts",
       body: 'import type { LiveSurfaceDemandV1 } from "@vibefield/contracts";\nexport type Demand = LiveSurfaceDemandV1;\n',
+    },
+    // R19 allows node builtins and contracts under packages/screenshot — it is
+    // the supervisor's shape, not live-surfaces': a child process IS its job.
+    {
+      file: "packages/screenshot/src/clean-spawn.ts",
+      body: 'import { spawn } from "node:child_process";\nimport { ScreenshotHelperEvent } from "@vibefield/contracts";\nexport const s = spawn;\nexport const e = ScreenshotHelperEvent;\n',
     },
   ];
 

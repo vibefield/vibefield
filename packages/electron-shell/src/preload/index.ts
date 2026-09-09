@@ -7,6 +7,9 @@ import {
   GodviewState as GodviewStateSchema,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
+  ScreenshotCaptureRequest,
+  type ScreenshotCaptureResult,
+  ScreenshotCaptureResult as ScreenshotCaptureResultSchema,
   type ShellCommand,
   ShellPlatform,
   type UserRecord,
@@ -264,6 +267,19 @@ contextBridge.exposeInMainWorld("vibefield", {
       ),
     onState: (handler: (state: GodviewState) => void): (() => void) =>
       godviewState.subscribe(handler),
+  },
+  /** SNAP-D3 — one native screenshot through main: the still's path on disk
+   * (it is on the clipboard too), a cancel, or a typed error. Main serialises
+   * captures — a second call while one is live answers `busy` — and the View
+   * menu's item runs the same capture. Validated both ways, like every door. */
+  screenshot: {
+    capture: async (): Promise<ScreenshotCaptureResult> =>
+      ScreenshotCaptureResultSchema.parse(
+        await ipcRenderer.invoke(
+          IPC_CHANNELS.screenshotCapture,
+          ScreenshotCaptureRequest.parse({}),
+        ),
+      ),
   },
   diagnostics: {
     query: (query: unknown) => diagnostics.query(query),

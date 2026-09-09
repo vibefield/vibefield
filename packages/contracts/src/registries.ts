@@ -522,4 +522,9 @@ export const IPC_CHANNELS = {
   /** renderer → main invoke: UsersSwitchParams → UserRecord — attach
    * re-target + window reload (UA-D15); same-user switch is a no-op */
   usersSwitch: "vibefield:users:switch",
+  /** renderer → main invoke: ScreenshotCaptureRequest → ScreenshotCaptureResult
+   * — the native screenshot helper, one capture at a time (SNAP-D3). The View
+   * menu's Take Screenshot item asks main for the SAME capture, so neither
+   * door holds an opinion the other cannot see. */
+  screenshotCapture: "vibefield:screenshot:capture",
 } as const;

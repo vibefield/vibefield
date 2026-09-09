@@ -45,8 +45,10 @@ in the split.
 - **Wire truth:** `contracts` — the zero-dep root of the graph, imported from every
   environment (renderer, workers, Node daemons; Rust side generated). Keep it dependency-free.
 - **Node-only spine libraries**, consumed by the Node hosts (fieldd, Electron main), never by
-  browser-compatible code: `logging` + `audit` (LOG track), `users` (UA track).
-- **Daemon plane:** `fieldd` · `field-native` (the sole Cargo workspace member) ·
+  browser-compatible code: `logging` + `audit` (LOG track), `users` (UA track), `screenshot`
+  (SNAP track — the host side of the native screenshot helper; wall R19 keeps Electron out).
+- **Daemon plane:** `fieldd` · `field-native` (the sole Cargo workspace member — the Windows
+  screenshot helper crate under `apps/desktop/native` is its OWN workspace root, SNAP-D7) ·
   `fieldd-supervisor` (a library inside Electron main, never its own process) ·
   `fieldd-client` (the renderer/worker client).
 - **Renderer plane:** `field-app` — the browser-compatible product (`@vibefield/fieldd` is a
@@ -103,6 +105,12 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
 - `pnpm smoke:studio` — opt-in physical Electron gate for Studio/product session and preload
   isolation, real UI edit/apply, product reload replay, Studio-close restoration, and fieldd.
 - `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` — headless desktop smoke checks
+- `pnpm --filter @vibefield/desktop build:screenshot-helper` / `test:screenshot-helper` /
+  `verify:screenshot-helper` — the native screenshot helper (Swift on macOS, Rust on Windows;
+  `apps/desktop/native/*/screenshot-helper`). Outside `pnpm verify` like the SCK helper and the
+  iOS app: `verify:screenshot-helper` is the live witness (a real `--capture-test`, no overlay),
+  the Windows crate's gates are in its README (SNAP-D7). Never run the helper's `--once` on a
+  developer's live display from an agent — it is a full-screen overlay.
 - `pnpm build` / `pnpm typecheck` / `pnpm test` — Nx task graph with conservative local caching;
   use `pnpm exec nx graph` or `pnpm exec nx affected -t <target>` to inspect/select work
 - `pnpm verify` — THE gate; run before every commit: preflight → typecheck → biome →

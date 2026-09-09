@@ -166,6 +166,34 @@ const PLAN = [
           mode: DATA_MODE,
           produce: "pnpm --filter @vibefield/desktop run build:live-surfaces-native",
         },
+        {
+          // SNAP-D5/D9: the screenshot helper is a nested BUNDLE — TCC keys Screen
+          // Recording consent on it — staged whole so its Info.plist, PkgInfo and
+          // signature seal travel with the executable. OPTIONAL like field-native: a
+          // package without it boots and answers `helper-missing` at capture time.
+          stage: "bin/field-screenshot-helper.app",
+          from: "apps/desktop/build/native/macos/field-screenshot-helper.app",
+          kind: "dir",
+          exec: ["Contents/MacOS/field-screenshot-helper"],
+          optional:
+            "the screenshot helper is absent — the packaged app will have no Take Screenshot",
+          produce: "pnpm --filter @vibefield/desktop run build:screenshot-helper",
+        },
+      ]
+    : []),
+  ...(process.platform === "win32"
+    ? [
+        {
+          // SNAP-D7: the Windows helper is its own cargo workspace; the desktop package's
+          // build script copies the release exe here. Same optionality as the bundle above.
+          stage: "bin/field-screenshot-helper.exe",
+          from: "apps/desktop/build/native/windows/field-screenshot-helper.exe",
+          kind: "file",
+          mode: EXEC_MODE,
+          optional:
+            "the screenshot helper is absent — the packaged app will have no Take Screenshot",
+          produce: "pnpm --filter @vibefield/desktop run build:screenshot-helper",
+        },
       ]
     : []),
   {
@@ -340,14 +368,24 @@ const fail = (message) => {
   process.exit(1);
 };
 
-const walkSource = (absDir, stagePrefix, files, skipped) => {
+// `exec` names the entry-relative paths inside a walked directory that are executables (a
+// nested .app bundle's Contents/MacOS binary — SNAP-D5); everything else a directory entry
+// carries is data. Modes are still SET, never inherited, per the rule above.
+const walkSource = (
+  absDir,
+  stagePrefix,
+  files,
+  skipped,
+  exec = new Set(),
+  entryStage = stagePrefix,
+) => {
   for (const entry of readdirSync(absDir, { withFileTypes: true }).sort((a, b) =>
     a.name < b.name ? -1 : 1,
   )) {
     const abs = join(absDir, entry.name);
     const stage = `${stagePrefix}/${entry.name}`;
     if (entry.isDirectory()) {
-      walkSource(abs, stage, files, skipped);
+      walkSource(abs, stage, files, skipped, exec, entryStage);
       continue;
     }
     // Dirent classification is lstat-based, so a non-file here is a symlink/socket/device.
@@ -356,7 +394,8 @@ const walkSource = (absDir, stagePrefix, files, skipped) => {
       skipped.push({ stage, abs, classes });
       continue;
     }
-    files.push({ stage, abs, mode: DATA_MODE });
+    const withinEntry = stage.slice(entryStage.length + 1);
+    files.push({ stage, abs, mode: exec.has(withinEntry) ? EXEC_MODE : DATA_MODE });
   }
 };
 
@@ -380,8 +419,15 @@ const resolvePlan = () => {
     if (entry.kind === "dir") {
       if (!statSync(abs).isDirectory()) fail(`${entry.from} is not a directory`);
       const before = files.length;
-      walkSource(abs, entry.stage, files, skipped);
+      walkSource(abs, entry.stage, files, skipped, new Set(entry.exec ?? []));
       if (files.length === before) missing.push(entry); // present but empty is the same gap
+      // An executable the entry NAMES must exist in the walk: a bundle whose binary went
+      // missing is a stage that fails at first spawn, which is what this check is for.
+      for (const rel of entry.exec ?? []) {
+        if (!files.some((f) => f.stage === `${entry.stage}/${rel}`)) {
+          fail(`${entry.from} lacks its declared executable ${rel}`);
+        }
+      }
       continue;
     }
     // A named entry that trips §7.3 means the ALLOWLIST is wrong, which is not something to

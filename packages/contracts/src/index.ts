@@ -22,6 +22,7 @@ export * from "./plugin-runtime";
 export * from "./plugin-update";
 export * from "./plugins";
 export * from "./registries";
+export * from "./screenshot";
 export * from "./shell";
 export * from "./terminal";
 export * from "./terminal-pipeline";

@@ -11,6 +11,7 @@ import type {
   DesktopShellState,
   GodviewState,
   RendererParticipantIdentity,
+  ScreenshotCaptureResult,
   ShellCommand,
   ShellPlatform,
   WindowTerminalBootstrap,
@@ -165,6 +166,14 @@ export interface FieldHost {
   /** UA-5 — attach to an existing user (UA-D15). Switching to the user already
    * attached is main's no-op. Same reload race as `usersCreate`. */
   readonly usersSwitch?: (params: { userId: string }) => Promise<FieldUserProfile>;
+  /** SNAP-D3 — the native screenshot helper, through main. Optional like the
+   * users doors: a browser harness has no helper to spawn, and a surface that
+   * offers the capture renders disabled and says so. The answer is the
+   * contract's own result — a still on disk (and on the clipboard), a cancel,
+   * or a typed error such as `helper-missing` or `permission-denied`. How the
+   * still reaches the canvas is the consumer slice's decision (SNAP-D4); no
+   * product surface calls this yet. */
+  readonly screenshotCapture?: () => Promise<ScreenshotCaptureResult>;
   getConnection(): Promise<FieldConnection>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
 members = ["packages/field-native"]
+# SNAP-D7 (2026-09-09): the Windows screenshot helper is its OWN workspace root
+# (its manifest carries `[workspace]`), excluded here so `cargo test/clippy
+# --workspace` — the mac gate — never tries to build Win32-only code. Its gates
+# are the box and, from any host, `cargo check --target x86_64-pc-windows-msvc`
+# inside that directory (`apps/desktop/native/windows/screenshot-helper/README.md`).
+exclude = ["apps/desktop/native/windows/screenshot-helper"]
 
 [workspace.dependencies]
 # EL8 — version lockstep: exactly one truffle-core revision across every crate in

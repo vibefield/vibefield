@@ -64,6 +64,40 @@ describe("resolveDevelopmentResources", () => {
     expect(dev.fieldNativePath).toBe(join(REPO, "target", "debug", "field-native"));
   });
 
+  it("points the screenshot helper at the per-platform native build, inside its bundle on macOS", () => {
+    // SNAP-D5/D9: the bundle is the unit macOS keys consent on; the executable
+    // the tool spawns lives inside it. Windows builds a bare .exe; every other
+    // platform has no helper and says so with null rather than a path to nothing.
+    expect(dev.screenshotHelperPath).toBe(
+      join(
+        REPO,
+        "apps",
+        "desktop",
+        "build",
+        "native",
+        "macos",
+        "field-screenshot-helper.app",
+        "Contents",
+        "MacOS",
+        "field-screenshot-helper",
+      ),
+    );
+    const win = resolveDevelopmentResources({
+      repoRoot: REPO,
+      electronExecPath: ELECTRON,
+      platform: "win32",
+    });
+    expect(win.screenshotHelperPath).toBe(
+      join(REPO, "apps", "desktop", "build", "native", "windows", "field-screenshot-helper.exe"),
+    );
+    const linux = resolveDevelopmentResources({
+      repoRoot: REPO,
+      electronExecPath: ELECTRON,
+      platform: "linux",
+    });
+    expect(linux.screenshotHelperPath).toBeNull();
+  });
+
   it("offers both plugin roots, including the dev-linked pack", () => {
     expect(dev.pluginRoots.bundled).toEqual([join(REPO, "plugins")]);
     expect(dev.pluginRoots.devLinked).toEqual([join(REPO, "examples", "plugins")]);
@@ -98,6 +132,28 @@ describe("resolvePackagedResources", () => {
       adapterPath: join(RESOURCES, "bin", "live-surface-adapter.node"),
     });
     expect(pkg.pluginRoots.bundled).toEqual([join(RESOURCES, "plugins", "bundled")]);
+    // the bundle sits flat under bin/ beside the other native helpers
+    expect(pkg.screenshotHelperPath).toBe(
+      join(
+        RESOURCES,
+        "bin",
+        "field-screenshot-helper.app",
+        "Contents",
+        "MacOS",
+        "field-screenshot-helper",
+      ),
+    );
+  });
+
+  it("does not make the screenshot helper a boot-fatal resource (SNAP-D5)", () => {
+    // Every OTHER packaged binary is asserted before anything spawns; the
+    // screenshot helper is optional in the stage, so a package without it must
+    // boot and answer `helper-missing` at capture time instead.
+    const okHeads = (path: string): Uint8Array | null =>
+      path.includes("field-screenshot-helper") ? null : MACHO_ARM64;
+    expect(() =>
+      assertPackagedResources(pkg, { nodeArch: "arm64", readHead: okHeads }),
+    ).not.toThrow();
   });
 
   it("execs a REAL fieldd executable, not Electron wearing a hat (EDP-14)", () => {
@@ -123,6 +179,7 @@ describe("resolvePackagedResources", () => {
       ...(pkg.macosLiveSurfaceCapture === null
         ? []
         : [pkg.macosLiveSurfaceCapture.helperPath, pkg.macosLiveSurfaceCapture.adapterPath]),
+      ...(pkg.screenshotHelperPath === null ? [] : [pkg.screenshotHelperPath]),
       ...pkg.pluginRoots.bundled,
       ...Object.values(pkg.tray).flatMap((set) => Object.values(set)),
     ].join("\n");
@@ -143,7 +200,15 @@ describe("resolvePackagedResources", () => {
     });
     expect(win.fieldNativePath.endsWith("field-native.exe")).toBe(true);
     expect(win.macosLiveSurfaceCapture).toBeNull();
+    expect(win.screenshotHelperPath?.endsWith("field-screenshot-helper.exe")).toBe(true);
     expect(pkg.fieldNativePath.endsWith("field-native")).toBe(true);
+    expect(
+      resolvePackagedResources({
+        resourcesPath: RESOURCES,
+        electronExecPath: ELECTRON,
+        platform: "linux",
+      }).screenshotHelperPath,
+    ).toBeNull();
   });
 
   it("carries all three tray states and preserves the macOS Template suffix", () => {

@@ -40,6 +40,10 @@ export interface AppMenuActions {
    * close item drops `role: "close"` to release ⌘W (see `closeWindowItem`) and
    * therefore loses the role's built-in behaviour along with its accelerator. */
   closeWindow?: () => void;
+  /** Take a screenshot with the native helper (SNAP-D3). Undefined where no
+   * helper exists for the platform or in a mode with no window — the item
+   * stays, disabled, the same honest face Godview wears. */
+  takeScreenshot?: () => void;
 }
 
 export interface AppMenuState {
@@ -80,6 +84,32 @@ export const GODVIEW_GESTURE_HINT = "⇧ ⇧";
 export const CLOSE_WINDOW_ITEM_ID = "window-close";
 
 export const GODVIEW_ITEM_ID = "view-godview";
+
+export const SCREENSHOT_ITEM_ID = "view-screenshot";
+
+/** The prototype's chord, kept: it is WeChat's own on both platforms, which is
+ * the muscle memory the tool exists to serve. An APPLICATION accelerator, live
+ * only while VibeField is focused — a global shortcut would take the chord from
+ * every other app for as long as VibeField runs, and that wants a preference
+ * before it wants a registration (SNAP-1). Collision check, 2026-09-09: nothing
+ * in ghostty, macOS or this shell binds ⌃⌘A (⌘⇧3/4/5 are the system's); on
+ * Windows Alt+A is free because no menu title here carries an `&A` mnemonic. */
+export function screenshotAccelerator(platform: MenuPlatform): string {
+  return platform === "darwin" ? "Control+Command+A" : "Alt+A";
+}
+
+/** `Take Screenshot` — the View menu's door to the native helper. The chord
+ * rides on the item even while it is disabled, so a platform without a helper
+ * still teaches what the gesture will be (SNAP-D5: present, disabled, honest). */
+function screenshotItem(platform: MenuPlatform, actions: AppMenuActions): AppMenuItem {
+  return {
+    id: SCREENSHOT_ITEM_ID,
+    label: "Take Screenshot",
+    accelerator: screenshotAccelerator(platform),
+    enabled: actions.takeScreenshot !== undefined,
+    ...(actions.takeScreenshot !== undefined ? { click: actions.takeScreenshot } : {}),
+  };
+}
 
 /** `Godview` — a checkbox, because main knows the answer (§9 voice: buttons say
  * what they do; a state we hold is stated, not implied).
@@ -159,6 +189,7 @@ export function buildAppMenu(
       label: "View",
       submenu: [
         godviewItem(state, actions),
+        screenshotItem(platform, actions),
         { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },
