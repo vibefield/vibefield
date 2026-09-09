@@ -4890,3 +4890,52 @@ and the key as one.
 inverted on ESC, the strip in Live with the mode key lit. **Device-gated, and it is the slice's
 real gate:** Ctrl-R then text; Ctrl-X Ctrl-S through a lock; vim Esc `:q!`; ⇧Tab; a Meta-arrow
 tmux binding; whether the popover takes the keyboard in Live; every haptic.
+
+## IOS-5c — the card answers for the agent: reply chips from the feed, the paste chip, the closed row
+
+**LANDED 2026-09-09, `7d3aba75`, merged onto `ios/keyboard` at `f7a2f52e`** (one README conflict;
+the code merged clean against IOS-5b because both lanes kept their hunks delimited). Built by a
+briefed agent in a worktree in parallel with IOS-5b; the orchestrator reviewed, merged and gated
+the merged tree. The design's contextual row lands under **K-D4: chips read the FEED, never the
+frame.** A frame reaches this phone as TRF1 bytes only the Metal renderer can decode, so the
+design's regex-over-the-last-rows detection (decision 3) is not merely unnecessary here, it is
+impossible — and the feed is the better source anyway, being the same fact that made the bubble
+loud.
+
+**What landed.** `FieldAgents`: `AgentFacet.permissions`, carried by `fieldBubble(from:)` — only
+an AGENT bubble has any, which is exactly why the chips are fixture-only today. `FieldInput/
+ReplyChips.swift`: a pure `replyChips(provider:permissions:)` — Claude gets `1 YES · 2 YES, DON'T
+ASK · 3 NO · ESC`, TYPED through the attachment because its TUI owns the dialog; codex/grok/acp
+get nothing, their approval being a structured resolve over a product API that does not exist
+(`thinking-ar` §7), and a chip with nowhere to send is the dead control D-i6 forbids — the card's
+"approve at the desktop" line stays. `InputCardModel`: `chips` + `tapChip`'s stale rule (matched
+by id, because the host re-derives the row on every bubble change), `acceptPaste` (the draft
+appends on its own line; the terminal sends outright under five lines and reviews at five or
+more), `InputAct.paste`, `keyboardOwner` over `fieldFocused` and a new `terminalFocused`,
+`requestKeyboard`/`dismissKeyboard`. Views: `ChipsRow` (the waiting tier's inversion, so the
+bubble that raised the card and the chip agree), `PasteChip` on a `UIPasteControl` (no "allow
+paste" alert), `PasteboardWatcher` (`changeCount` and `hasStrings`, never the contents),
+`PasteReviewSheet`, `ClosedRow` (chips beside `KEYBOARD` whenever the keyboard is down).
+`FieldTerminal`: `TerminalAttachment.pasteText` (a block with no Enter behind it);
+`TerminalSurface.onFocusChange` reports what the responder call ACHIEVED rather than what it
+asked for, plus a `focusEpoch` so `KEYBOARD` can re-ask at an unchanged intent.
+
+**Findings, recorded at source.** A squashed `UIPasteControl` stops drawing itself — pinned to
+the row's 32 pt it rendered as a bare accent rectangle with no icon and no label, both themes; it
+sizes itself now and the row follows. Its label stays the system's, in the system font — the one
+thing on this card that does not speak `FieldType.mono`, and the API offers no way to change it;
+the trade is the design's own (§4): the chip exists so paste costs no permanent button, and an
+alert per use would cost more than the button did. The design's "preview of the first line" is
+out for the same reason — a preview means reading the pasteboard before being asked to.
+Interactive dismissal is a swipe on the rail: there is no scroll view on this sheet, and a drag
+on the terminal is a selection. The fixture's chips had to move INSIDE the derivation — stamped
+beside it they were wiped by the next honest re-derivation, a remote bubble having no agent
+facet.
+
+**Absent, not inert (D-i6):** the design's password-prompt chip (decision 8) is not buildable on
+the phone at all — it wants the last row's text. **Fixture-only, and it is a fact about the feed,
+not the chips:** the bubbles this phone can attach to are remote terminals; the real feed is AR
+via IOS-4. **Tests 243 green on the merged tree** (182 → 217 on the branch). **Witnessed** in
+the simulator, both themes: the chips row over the composer, the paste chip, the closed row, the
+review sheet. **Device-gated:** a real permission from a real agent feed, and a chip tapped
+against it.
