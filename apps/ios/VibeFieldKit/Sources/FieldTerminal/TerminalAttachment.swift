@@ -366,6 +366,41 @@ public final class TerminalAttachment {
     forward(.scroll(Int64(rows)))
   }
 
+  // MARK: - The input card's verbs (IOS-5a)
+
+  /// One rail key. A stroke this layout cannot encode is a no-op and says
+  /// nothing: the rail only offers keys it can send, so an unencodable one is
+  /// a programming error rather than news for the user, and a status line that
+  /// blamed the terminal for it would be a lie about who refused.
+  public func press(_ stroke: TerminalKeystroke) {
+    guard let event = stroke.ghostteaEvent() else { return }
+    _ = handleHardwareKey(event)
+  }
+
+  /// Send the composer's draft: a paste, then Enter.
+  ///
+  /// The paste op is what makes a three-line draft arrive as ONE input rather
+  /// than three commands — the host encodes it through its own terminal model,
+  /// which wraps it in the bracketed-paste sequences exactly when the program
+  /// on the far end has enabled them (DECSET 2004) and otherwise writes the
+  /// text with newlines normalized. Sending the text as keystrokes could not
+  /// do that: bracketing is the host terminal's decision, not ours.
+  ///
+  /// An empty draft is Enter alone, which is the whole point of a Send that is
+  /// never disabled (D-i6): with nothing to say, the act is still "run it".
+  /// The draft is NOT trimmed — a draft of spaces is a draft the user typed.
+  public func sendDraft(_ text: String) {
+    if !text.isEmpty { handleSoftwareInput(.paste(text)) }
+    handleSoftwareInput(.enter)
+  }
+
+  /// Literal text with no Enter behind it — the keypad's symbol keys and the
+  /// chips that type an answer without committing it.
+  public func typeText(_ text: String) {
+    guard !text.isEmpty else { return }
+    handleSoftwareInput(.text(text))
+  }
+
   // MARK: - Lifecycle nudges
 
   /// §8.2: foreground dials immediately rather than waiting out a schedule; a

@@ -1,3 +1,4 @@
+import FieldTerminal
 import SwiftUI
 import Testing
 
@@ -256,6 +257,44 @@ struct KeyEntryTests {
           sessionSharesWrites: shared, hasWriteKey: held)
         #expect(offered == (copy == "view only — this device has no write key for this host"))
       }
+    }
+  }
+}
+
+// MARK: - The input card's face
+
+/// K-D2, pinned: the card exists for exactly one state. Every other phase
+/// renders nothing rather than a keyboard that cannot reach a terminal — the
+/// disabled-affordance shape D-i6 forbids.
+@Suite("the input card's face")
+struct InputCardFaceTests {
+  @Test("a live session this device may type into shows the card")
+  func liveAndWritable() {
+    #expect(FieldHomeModel.inputCardFace(phase: .live, acceptsInput: true) == .shown)
+  }
+
+  /// The honest view-only line already says why. A rail under it would be a
+  /// promise the next tap breaks.
+  @Test("a live view-only session shows no card")
+  func liveViewOnly() {
+    #expect(FieldHomeModel.inputCardFace(phase: .live, acceptsInput: false) == .hidden)
+  }
+
+  /// `acceptsInput` is composed upstream and can outlive the phase that made
+  /// it true by one observation; the phase is asked for too so a suspended
+  /// session cannot hold a keyboard up on a stale grant.
+  @Test("no other phase shows a card, whatever the grant says")
+  func everyOtherPhaseHides() {
+    let phases: [TerminalPhase] = [
+      .idle,
+      .connecting,
+      .suspended("paused in the background"),
+      .ended("the host closed it"),
+      .failed("the mesh is not up on this device"),
+    ]
+    for phase in phases {
+      #expect(FieldHomeModel.inputCardFace(phase: phase, acceptsInput: true) == .hidden)
+      #expect(FieldHomeModel.inputCardFace(phase: phase, acceptsInput: false) == .hidden)
     }
   }
 }

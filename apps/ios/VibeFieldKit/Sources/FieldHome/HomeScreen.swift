@@ -1,5 +1,6 @@
 import FieldAgents
 import FieldDesign
+import FieldInput
 import FieldMesh
 import FieldTerminal
 import SwiftUI
@@ -65,6 +66,19 @@ public struct HomeScreen: View {
   #if DEBUG
     @State private var demoRemoteActive = false
   #endif
+  // --- IOS-5a: the input card ---------------------------------------------
+  /// The card above the keyboard: the draft, the latch, the mode. It is state
+  /// of the SCREEN rather than of an attachment, because it outlives none of
+  /// them — `closeCard` resets it, and a draft typed for one session must not
+  /// arrive in the next.
+  @State private var inputCard = InputCardModel()
+  #if DEBUG
+    /// `-vf-demo-input-card`: mount the card over the demo fixture, which has
+    /// no attachment to grant anything. Pixels, never a claim.
+    @State private var demoInputCard = false
+  #endif
+  // --- end IOS-5a ---------------------------------------------------------
+  @Environment(\.colorScheme) private var colorScheme
   @Environment(\.scenePhase) private var scenePhase
 
   public init() {}
@@ -171,6 +185,32 @@ public struct HomeScreen: View {
           writeKeySheetHost = MirrorWriteHost(
             deviceID: "demo-device-01", deviceName: "studio")
         }
+        // --- IOS-5a ------------------------------------------------------
+        // The card needs a LIVE attachment this device may type into, and a
+        // simulator has no mesh — so this forces the face and prints the acts
+        // instead of sending them. It is a fixture for looking at our own
+        // pixels; nothing here can run in Release.
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-card") {
+          demoInputCard = true
+          inputCard.sink = { act in print("input act:", act) }
+          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-live") {
+            inputCard.mode = .live
+          } else {
+            inputCard.fieldFocused = true
+          }
+          // The states a screenshot cannot tap its way into: a filled draft
+          // (inverted Send, the field grown past one line) with the latch
+          // held (inverted CTRL and its dot). Fixture text, plainly so.
+          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-draft") {
+            inputCard.draft = "git status --short\ngit log --oneline -5"
+            // LOCKED rather than armed: an armed latch has a 3 s window and
+            // would be gone before a screenshot could be taken, which is the
+            // window working rather than the fixture failing.
+            inputCard.tapControl()
+            inputCard.tapControl()
+          }
+        }
+        // --- end IOS-5a --------------------------------------------------
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
           Task {
             try? await Task.sleep(for: .seconds(2))
@@ -367,7 +407,40 @@ public struct HomeScreen: View {
     ) {
       liveTerminal(title: bubble?.project)
     }
+    // --- IOS-5a: the card rides the bottom safe area, above the keyboard ---
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      if inputCardFace == .shown {
+        InputCard(model: inputCard)
+      }
+    }
+    // --- end IOS-5a --------------------------------------------------------
   }
+
+  // --- IOS-5a --------------------------------------------------------------
+  /// K-D2: the card exists only for a live attachment this device may type
+  /// into. `FieldHomeModel.inputCardFace` owns the rule; this only supplies it
+  /// with what the screen holds.
+  private var inputCardFace: FieldHomeModel.InputCardFace {
+    #if DEBUG
+      if demoInputCard { return .shown }
+    #endif
+    guard let attachment else { return .hidden }
+    return FieldHomeModel.inputCardFace(
+      phase: attachment.phase, acceptsInput: attachment.acceptsInput)
+  }
+
+  /// The card emits acts; the attachment has verbs. This is the whole join,
+  /// and it is the reason `FieldInput` never learns what a Ghosttea type is.
+  private func installInputSink(on attachment: TerminalAttachment) {
+    inputCard.sink = { act in
+      switch act {
+      case .keystroke(let stroke): attachment.press(stroke)
+      case .sendDraft(let text): attachment.sendDraft(text)
+      case .typeText(let text): attachment.typeText(text)
+      }
+    }
+  }
+  // --- end IOS-5a ----------------------------------------------------------
 
   @ViewBuilder
   private func liveTerminal(title: String?) -> some View {
@@ -376,6 +449,11 @@ public struct HomeScreen: View {
         frame: attachment.frame,
         visible: true,
         configuration: attachment.presentation,
+        // --- IOS-5a: two modes, two first responders. The kit's own
+        // fifteen-key row is off (K-D3) — the card's rail replaces it.
+        wantsFocus: inputCard.mode == .live,
+        keyboardAppearance: colorScheme == .dark ? .dark : .light,
+        // --- end IOS-5a
         accessibilityTitle: title ?? "Remote terminal",
         accessibilityConnectionState: attachmentNote ?? "attached",
         onGridSize: { size in attachment.setViewport(cols: size.columns, rows: size.rows) },
@@ -556,6 +634,9 @@ public struct HomeScreen: View {
         accessToken: writeKeys.capability(for: remote.deviceID))
       self.attachment = attachment
       attachedDeviceID = remote.deviceID
+      // --- IOS-5a ---
+      installInputSink(on: attachment)
+      // --- end IOS-5a ---
       // A starting grid the surface immediately corrects through onGridSize —
       // the host needs SOME viewport to open with, and 80×24 is the one every
       // terminal has agreed on since the VT100.
@@ -577,6 +658,10 @@ public struct HomeScreen: View {
     attachRefusal = nil
     copiedNote = nil
     writeKeyNote = nil
+    // --- IOS-5a: a draft belongs to the session it was typed for ---
+    inputCard.sink = nil
+    inputCard.reset()
+    // --- end IOS-5a ---
     guard let attachment else { return }
     self.attachment = nil
     Task { await attachment.detach() }

@@ -19,6 +19,7 @@ let package = Package(
     .library(name: "FieldAgents", targets: ["FieldAgents"]),
     .library(name: "FieldMesh", targets: ["FieldMesh"]),
     .library(name: "FieldTerminal", targets: ["FieldTerminal"]),
+    .library(name: "FieldInput", targets: ["FieldInput"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
   ],
   dependencies: [
@@ -80,11 +81,20 @@ let package = Package(
         .product(name: "GhostteaAppearance", package: "ghosttea"),
       ]
     ),
+    // The input card (IOS-5a): the composer, the rail, the latch — K-D1's own
+    // target rather than more of FieldHome. The IOS-3 review's finding was that
+    // every serious bug it found lived in the one module with no test target,
+    // and a keyboard is state machines all the way down (a latch, two modes,
+    // two first responders). It takes FieldTerminal for the KEYSTROKE
+    // VOCABULARY ONLY and lists no Ghosttea product, which is what makes
+    // "the card composes a terminal without knowing how one works" a fact the
+    // manifest enforces rather than a habit.
+    .target(name: "FieldInput", dependencies: ["FieldDesign", "FieldAgents", "FieldTerminal"]),
     // The home screen: swarm field rendering, bubble chrome, session card.
     .target(
       name: "FieldHome",
       dependencies: [
-        "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal",
+        "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
       ],
       resources: [.process("Resources")]
     ),
@@ -92,6 +102,7 @@ let package = Package(
     .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
     .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),
     .testTarget(name: "FieldTerminalTests", dependencies: ["FieldTerminal"]),
+    .testTarget(name: "FieldInputTests", dependencies: ["FieldInput"]),
     // The home screen's DECISIONS, which is all of it that is testable without
     // a simulator — and, until this target existed, all of it that was
     // untested: the integrator carried three state-machine bugs (the parked

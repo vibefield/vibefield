@@ -24,6 +24,7 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
 | `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface — plus (IOS-3c) the per-host mirror-write key store |
+| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a): the composer field, the rail, the sticky-Ctrl latch, and the acts they emit. Its own target on purpose (K-D1) — a keyboard is state machines all the way down, and the IOS-3 review found every serious bug living in the one module that had no test target. It takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 **Write keys (IOS-3c).** The mirror-write capability a desktop grants this
@@ -91,6 +92,7 @@ reach states no `simctl` touch can:
 | `-vf-open-settings` | opens the terminal appearance sheet |
 | `-vf-open-write-key` | opens the WRITE KEY sheet on the demo host, the one surface a tap is otherwise the only way to reach |
 | `-vf-write-key=<secret>` | swaps the Keychain for an in-memory write-key store whose **wildcard** answers for any host, so `-vf-auto-attach` can type against a serving desktop with no finger on the glass; it also seeds one explicit demo host (`studio`) so the settings sheet's WRITE KEYS section has a row to render. A launch argument is visible to `ps` — a DEBUG smoke aid, never a way to carry a real secret onto a phone |
+| `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; add `-vf-demo-input-live` for the strip instead of the composer |
 
 Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
@@ -118,18 +120,28 @@ themes + 4 shader ports in the settings sheet, and upstream's reconnect banner;
 and since IOS-3c the write key has a home: the per-host Keychain store above,
 ENTER KEY on the card's invitation (and on the status row of a live attachment
 that is view-only for want of one), the sheet that takes it, and the WRITE KEYS
-section that lists and revokes. 149 headless tests.
+section that lists and revokes; and since IOS-5a the input card — a composer
+field carrying the kit's own trait set (no autocorrect, no smart quotes, no
+predictive bar), Send as a bracketed paste followed by Enter, and a rail of
+eight terminal keys with a sticky Ctrl, over a keystroke vocabulary that encodes
+to HID usages. 182 headless tests.
 
 Honest-missing (each says so on screen where it shows): **typing has not been
-witnessed on a device** — the key now rides every attach as its access token,
-but the gate that proves it (type into a desktop's session and watch it land)
-wants a phone, a tailnet, and a serving desktop, so it is a device run and no
-simulator can stand in for it. A phone holding no key for a host still says so
-before the tap as well as after, because the session being shared read-write is
-a different fact from this device being granted writes, and conflating them was
-a review finding. Approvals render as facts, never as buttons, until the
-approvals track lands; the agent feed is still the mock until fieldd's
-`agent.*` exists (IOS-4).
+witnessed on a device** — the key now rides every attach as its access token
+and the card sends through the same attachment, but the gate that proves either
+(type into a desktop's session and watch it land) wants a phone, a tailnet, and
+a serving desktop, so it is a device run and no simulator can stand in for it.
+A phone holding no key for a host still says so before the tap as well as
+after, because the session being shared read-write is a different fact from
+this device being granted writes, and conflating them was a review finding; the
+input card is therefore **not on screen** on any attachment this device cannot
+type into (K-D2) — a rail of keys that cannot reach a terminal is the disabled
+affordance D-i6 forbids, and the honest view-only line already says why. The
+card's remaining pieces are absent rather than inert: the `+` menu and the `⋯`
+keypad are IOS-5d, the mic is a slice of its own, and the mode toggle's other
+half (the terminal taking the keyboard) with the long-press fans is IOS-5b.
+Approvals render as facts, never as buttons, until the approvals track lands;
+the agent feed is still the mock until fieldd's `agent.*` exists (IOS-4).
 
 Vendor glyph geometry: LobeHub Lobe Icons v5.14.0 (MIT), the set the desktop
 godview embeds.
