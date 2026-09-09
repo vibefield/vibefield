@@ -4939,3 +4939,34 @@ via IOS-4. **Tests 243 green on the merged tree** (182 → 217 on the branch). *
 the simulator, both themes: the chips row over the composer, the paste chip, the closed row, the
 review sheet. **Device-gated:** a real permission from a real agent feed, and a chip tapped
 against it.
+
+## IOS-5d (mic rider) — the mic lands in the draft: on-device dictation, never straight into the terminal
+
+**LANDED 2026-09-09, `bac6561d`, merged onto `ios/keyboard` at `63ba79d3`** (one README
+conflict; the Swift merged clean against IOS-5c). The composer row's third control, deferred from
+IOS-5a because it needs the Speech framework and usage strings; built by a briefed agent in a
+worktree in parallel with IOS-5d proper. `Dictation.swift` — `DictationSession`, a `@MainActor
+@Observable` over `SFSpeechRecognizer` + `AVAudioEngine`: `start()` asks for speech and then the
+microphone (two grants, two sentences — a phone that will not transcribe is a different problem
+from one that will not listen), installs the tap and streams partials; `stop()` commits exactly
+the text on screen. Recognition pinned to the device wherever `supportsOnDeviceRecognition`
+allows; audio streamed buffer by buffer, stored nowhere; no transcript logged. `DictationKey.swift`
+— the 44 pt key between the field and Send in the card's chip shape, inverted and breathing on
+`FieldMotion.breathePeriod` while it listens. `InputCardModel` gains `appendDictation` /
+`replaceDictationTail` / `commitDictation` (the dictated span is character offsets that prove
+themselves against the draft on every use, so Send, an edit or `reset()` need no clause of their
+own). Two `INFOPLIST_KEY_*` usage strings, both configurations; `PrivacyInfo.xcprivacy`
+deliberately UNCHANGED — mic and speech are not required-reason APIs and nothing leaves the device
+by default; the server fallback is disclosed in the usage string itself.
+
+**Decisions named at source.** Dictation lands in the DRAFT and never on the wire (a misheard word
+that went straight to the terminal would already be a command). The mic is ABSENT from Live's
+strip, where the design draws one: Live has no draft on screen, so a mic there would fill a field
+nobody can see or type into the terminal, the one thing this control refuses to do (D-i6). The
+honest line for a refused grant or an absent recognizer stands ABOVE the row for three seconds
+rather than growing the card — the terminal's grid follows the card's height through `onGridSize
+→ setViewport`, and a reflow to say one sentence is the wrong trade. `duckOthers` is a courtesy
+not allowed to cost the mic. **Tests 261 green on the merged tree** (`DictationTests`, 18 — pure
+string rules, no Speech in tests). **Witnessed** in the simulator under `-vf-demo-input-dictating`,
+both themes. **Device-gated:** the two permission prompts, a real transcript, partial-then-refine
+against live recognition, whether recognition stayed on the device, the zero-channel refusal.
