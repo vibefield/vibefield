@@ -459,6 +459,21 @@ public final class TerminalAttachment {
     deliverSoftwareInput(.text(text))
   }
 
+  // --- IOS-5c
+  /// One block of text as a paste, with NO Enter behind it — the paste chip's
+  /// verb.
+  ///
+  /// `sendDraft` is this op followed by a commit; this one deliberately stops
+  /// short. A pasted block lands in whatever line editor is running and waits
+  /// for the user to finish it, which is the whole reason pasting into a live
+  /// shell is survivable — and it rides `.paste` rather than `.text` so the
+  /// host brackets it when the far program has DECSET 2004 on.
+  public func pasteText(_ text: String) {
+    guard !text.isEmpty else { return }
+    handleSoftwareInput(.paste(text))
+  }
+  // --- end IOS-5c
+
   // MARK: - Lifecycle nudges
 
   /// §8.2: foreground dials immediately rather than waiting out a schedule; a

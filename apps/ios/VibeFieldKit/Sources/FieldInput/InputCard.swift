@@ -17,13 +17,19 @@ import SwiftUI
 /// says what is happening rather than what it is called.
 public struct InputCard: View {
   private let model: InputCardModel
+  // --- IOS-5c: the pasteboard's own state, so the paste chip can appear
+  // exactly when there is something new to offer. Optional because a card
+  // without a host has no watcher, and the demo fixture is one of those.
+  private let pasteboard: PasteboardWatcher?
+  // --- end IOS-5c
   /// The composer's measured height. One line at rest; the card grows UPWARD
   /// as the draft does, which is why the row is bottom-aligned.
   @State private var composerHeight: CGFloat = InputCard.rowHeight
   @Environment(\.colorScheme) private var colorScheme
 
-  public init(model: InputCardModel) {
+  public init(model: InputCardModel, pasteboard: PasteboardWatcher? = nil) {
     self.model = model
+    self.pasteboard = pasteboard
   }
 
   /// The design's geometry, named once: 8 pt padding, 6 pt gaps, 44 pt rows —
@@ -34,15 +40,32 @@ public struct InputCard: View {
   private static let cornerRadius: CGFloat = 6
 
   public var body: some View {
-    VStack(spacing: Self.gap) {
-      if model.mode == .draft {
-        draftRow
+    // --- IOS-5c: three faces, not one. With the keyboard down the card is a
+    // single row (the design's `MainClosed`); with it up, the contextual chips
+    // row rides above row 1 whenever it has something to say.
+    Group {
+      if model.keyboardOwner == .none {
+        ClosedRow(model: model, pasteboard: pasteboard)
       } else {
-        terminalStrip
+        VStack(spacing: Self.gap) {
+          if !ChipsRow.isEmpty(model: model, pasteboard: pasteboard) {
+            ChipsRow(model: model, pasteboard: pasteboard)
+              .transition(.opacity)
+          }
+          if model.mode == .draft {
+            draftRow
+          } else {
+            terminalStrip
+          }
+          rail
+        }
       }
-      rail
     }
     .padding(Self.padding)
+    .animation(FieldMotion.ease(0.24), value: model.chips)
+    .animation(FieldMotion.ease(0.24), value: pasteboard?.hasNewContent ?? false)
+    .animation(FieldMotion.ease(0.24), value: model.keyboardOwner)
+    // --- end IOS-5c
   }
 
   // MARK: - Row 1
@@ -142,6 +165,24 @@ public struct InputCard: View {
         glyph: "arrow.right", label: "Right arrow", fan: KeyFan.arrow(.arrowRight),
         action: { model.tapKey(.arrowRight) })
     }
+    // --- IOS-5c: swipe the rail down to put the keyboard away.
+    //
+    // There is no scroll view on this sheet to hang
+    // `.scrollDismissesKeyboard(.interactively)` on — the session card is a
+    // VStack over a Metal surface — and the terminal below cannot take the
+    // gesture either, because a drag there is a selection. So the rail itself
+    // is the handle: it is the one strip of chrome that exists in both modes
+    // and holds no scrollable content of its own. Simultaneous rather than
+    // exclusive so the keys keep their taps; 20 pt before it engages, so a
+    // finger sliding off a key is still a key.
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 20)
+        .onEnded { value in
+          guard value.translation.height > 24, abs(value.translation.width) < 44 else { return }
+          model.dismissKeyboard()
+        }
+    )
+    // --- end IOS-5c
   }
 
   // --- IOS-5b ---------------------------------------------------------------

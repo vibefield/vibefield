@@ -95,6 +95,9 @@ reach states no `simctl` touch can:
 | `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; add `-vf-demo-input-live` for the strip instead of the composer, or `-vf-demo-input-draft` for a filled draft under a locked CTRL |
 | `-vf-demo-input-fan` | opens the CTRL long-press fan three seconds in — the ten chords in two rows, anchored above the key. The only way to a fan without a finger, and the fan is the whole of IOS-5b that a screenshot can show |
 | `-vf-demo-input-meta` | holds ESC in its armed META state by re-arming the burst once a second. The burst is a 3 s window BY DESIGN and a screenshot run is slower than that, so the fixture keeps re-arming rather than pretending the window is longer; the state in the picture is the real one |
+| `-vf-demo-input-chips` | with `-vf-demo-input-card`, stamps one fixture Claude permission's reply chips onto the card — `1 YES` · `2 YES, DON'T ASK` · `3 NO` · `ESC`, in the waiting tier's inversion — so the contextual row above the composer can be looked at. The chips and the acts they emit are the shipping code; the permission they answer is invented, because no bubble the phone can attach to carries an agent facet yet (see below) |
+| `-vf-demo-input-closed` | with `-vf-demo-input-card`, the card with the keyboard down: one row, the chips (if any) beside `KEYBOARD`. It is the resting state of a card nobody has typed into, and a screenshot cannot tap its way out of the keyboard to reach it |
+| `-vf-demo-paste-review` | with `-vf-demo-input-card`, opens the paste-review sheet on fixture text. The sheet is otherwise reachable only by tapping a SYSTEM paste control with five lines or more on the pasteboard, and a headless run can do neither — the same door `-vf-open-write-key` opens, for the same reason |
 
 Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
@@ -136,11 +139,17 @@ and every rail key but the mode toggle holds a fan under a 0.35 s press: ten
 chords under CTRL, each arrow's far end, ⇧Tab under TAB, and the Meta burst
 under ESC (`.option` on exactly the next keystroke, with ESC wearing an inverted
 META while it is armed). Haptics say which transition just happened: light to
-arm, medium to lock, soft to release, rigid for a chord. 208 headless tests.
+arm, medium to lock, soft to release, rigid for a chord;
+and since IOS-5c the card answers back — reply chips derived from
+the agent feed's own pending permissions, the paste chip on the system paste
+control (so there is no "allow paste" alert), the five-line paste review, and the
+closed row, which is what the card is whenever the keyboard is down.
+243 headless tests.
 
 Honest-missing (each says so on screen where it shows): **typing has not been
 witnessed on a device** — the key now rides every attach as its access token
-and the card sends through the same attachment, but the gate that proves either
+and the card sends through the same attachment, and (IOS-5c) neither has a chip
+been tapped against a real agent — the gate that proves any of them
 (type into a desktop's session and watch it land) wants a phone, a tailnet, and
 a serving desktop, so it is a device run and no simulator can stand in for it.
 A phone holding no key for a host still says so before the tap as well as
@@ -163,6 +172,22 @@ announcements for latch states are still IOS-5e — the labels are here, the
 announcements are not.
 Approvals render as facts, never as buttons, until the approvals track lands;
 the agent feed is still the mock until fieldd's `agent.*` exists (IOS-4).
+
+**The chips are witnessed on the fixture only, and that is a fact about the feed
+rather than about the chips (IOS-5c).** A reply chip is derived from the card
+bubble's own pending permissions (`AgentFacet.permissions`), and only an AGENT
+bubble carries those. The bubbles this phone can attach to are remote TERMINALS
+discovered over the mesh: they have no agent facet, so they derive no chips —
+correctly. The mock fleet's agents do wait on permissions, and have no terminal to
+type an answer into. The two halves meet when the agent feed reaches the phone
+(IOS-4 / the AR plane); until then `-vf-demo-input-chips` is the only place the
+row renders, and this paragraph is the disclaimer. Structured approvals — codex,
+grok and acp, which resolve over a product API instead of by typing — are
+**absent** rather than inert for as long as that API does not exist
+(`thinking-ar-agent-plane.md` §7); the card's "approve at the desktop" line stands
+in their place. The design's password-prompt chip is not buildable here at all: it
+wants the last row's TEXT, and a frame reaches this phone as bytes only the Metal
+renderer can read.
 
 Vendor glyph geometry: LobeHub Lobe Icons v5.14.0 (MIT), the set the desktop
 godview embeds.

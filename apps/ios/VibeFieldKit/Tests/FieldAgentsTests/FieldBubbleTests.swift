@@ -112,6 +112,13 @@ private func row(
           cwdLabel: "/Users/james/Projects/vibe-field"))
   }
 
+  /// K-D4's other half. A terminal has no agent facet, so it has no
+  /// permissions and can raise no chips — which is every remote session on the
+  /// field today. The chips wait for the agent feed to reach the phone.
+  @Test func aTerminalBubbleHasNoPermissionsToAnswer() {
+    #expect(fieldBubble(from: row()).agent == nil)
+  }
+
   @Test func createdAtComesFromThePeersMilliseconds() {
     let bubble = fieldBubble(from: row(createdAtMs: 1_700_000_000_500))
     #expect(bubble.createdAt == Date(timeIntervalSince1970: 1_700_000_000.5))
@@ -166,6 +173,27 @@ private func row(
           provider: .codex, modelName: "o5", branch: "ios-bootstrap", contextUsedPercent: 41))
     // A session that has not reported yet has a provider and nothing else.
     #expect(fieldBubble(from: snapshot(state: nil))?.agent == AgentFacet(provider: .codex))
+  }
+
+  /// IOS-5c, K-D4: what the agent is WAITING ON rides the facet, because the
+  /// card's reply chips are derived from the feed and never from the terminal
+  /// frame — the phone cannot read one.
+  @Test func facetCarriesWhatTheAgentIsWaitingOn() {
+    let waiting = AgentRuntimeState(permissions: [AgentPermission(tool: "Bash")])
+    #expect(fieldBubble(from: snapshot(state: waiting))?.agent?.permissions == [
+      AgentPermission(tool: "Bash")
+    ])
+    // The tier and the chips agree by construction: the same fact makes the
+    // bubble loud and gives the card something to answer with.
+    #expect(fieldBubble(from: snapshot(state: waiting))?.status == .waiting)
+  }
+
+  /// Not waiting is not "waiting on nothing we can name": an agent with no
+  /// pending permission carries an EMPTY list, and a snapshot that has not
+  /// reported at all carries the same — neither raises a chip.
+  @Test func anAgentThatIsNotWaitingCarriesNoPermissions() {
+    #expect(fieldBubble(from: snapshot(state: AgentRuntimeState()))?.agent?.permissions == [])
+    #expect(fieldBubble(from: snapshot(state: nil))?.agent?.permissions == [])
   }
 
   @Test func aTerminatedSessionLeavesTheField() {

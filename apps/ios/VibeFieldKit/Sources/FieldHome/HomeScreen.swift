@@ -72,10 +72,21 @@ public struct HomeScreen: View {
   /// them — `closeCard` resets it, and a draft typed for one session must not
   /// arrive in the next.
   @State private var inputCard = InputCardModel()
+  // --- IOS-5c: whether the pasteboard holds something this card has not been
+  // offered yet. It reads the change count and never the contents — see
+  // `PasteboardWatcher`.
+  @State private var pasteboard = PasteboardWatcher()
+  // --- end IOS-5c
   #if DEBUG
     /// `-vf-demo-input-card`: mount the card over the demo fixture, which has
     /// no attachment to grant anything. Pixels, never a claim.
     @State private var demoInputCard = false
+    // --- IOS-5c: `-vf-demo-input-chips`. It has to be REMEMBERED rather than
+    // stamped once: every path that re-derives the row would otherwise wipe
+    // the fixture the moment discovery polled (a remote bubble has no agent
+    // facet, so the honest derivation is `[]`).
+    @State private var demoInputChips = false
+    // --- end IOS-5c
   #endif
   // --- end IOS-5a ---------------------------------------------------------
   @Environment(\.colorScheme) private var colorScheme
@@ -233,6 +244,44 @@ public struct HomeScreen: View {
           // --- end IOS-5b --------------------------------------------------
         }
         // --- end IOS-5a --------------------------------------------------
+        // --- IOS-5c ------------------------------------------------------
+        // The arguments are re-read rather than the `demoInputCard` flag being
+        // consulted: it was assigned two lines up, and a card whose fixture
+        // silently did nothing because a `@State` had not settled is exactly
+        // the kind of thing a fixture must not be able to do.
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-card") {
+          // The fixture has no Metal surface to report a first responder, so
+          // the flag the strip is derived from is stamped rather than earned.
+          if inputCard.mode == .live { inputCard.terminalFocused = true }
+          // The keyboard DOWN: the card collapses to the closed row — which on
+          // a real card is simply how a session opens.
+          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-closed") {
+            inputCard.fieldFocused = false
+            inputCard.terminalFocused = false
+          }
+          // A pending permission that no bubble on this field can carry: a
+          // remote terminal has no agent facet, which is today's reality
+          // rather than a bug. The chips and the acts they emit are the
+          // shipping code; the permission they answer is invented, and the
+          // README says so.
+          demoInputChips =
+            ProcessInfo.processInfo.arguments.contains("-vf-demo-input-chips")
+          // The review sheet is otherwise reachable only by tapping a SYSTEM
+          // paste control with five lines on the pasteboard, and a headless
+          // run can do neither — so its pixels could never be looked at. The
+          // same door `-vf-open-write-key` opens, for the same reason.
+          if ProcessInfo.processInfo.arguments.contains("-vf-demo-paste-review") {
+            inputCard.pendingPasteReview = PendingPaste(
+              text: """
+                #!/bin/sh
+                set -eu
+                cd ~/Projects/project100/vibe-field
+                pnpm install --frozen-lockfile
+                pnpm verify
+                """)
+          }
+        }
+        // --- end IOS-5c --------------------------------------------------
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
           Task {
             try? await Task.sleep(for: .seconds(2))
@@ -285,6 +334,10 @@ public struct HomeScreen: View {
         // session only re-snapshots. Calling upstream's resume on a session
         // that never left would force a spurious reconnect.
         attachment?.resumeFromForeground()
+        // --- IOS-5c: coming back is the other honest moment to look at the
+        // pasteboard — copying happens in the app the user just left.
+        pasteboard.sample()
+        // --- end IOS-5c
       case .background:
         // The orderly counterpart — without it `resumeFromForeground` has
         // nothing to resume from (upstream §8.2).
@@ -300,6 +353,11 @@ public struct HomeScreen: View {
     .onChange(of: bubbles) { _, next in
       guard let selection, let match = next.first(where: { $0.id == selection.id }) else { return }
       cardBubble = match
+      // --- IOS-5c: the row IS the feed, re-derived rather than accumulated.
+      // A permission resolved anywhere takes its chips off the card here, and
+      // `tapChip` refuses anything that is no longer on the row.
+      inputCard.chips = replyChips(for: match)
+      // --- end IOS-5c
     }
     // A `suspended(host absent)` attachment NEVER ends on its own — upstream's
     // engine stops dialing and waits to be told, and its own comment says
@@ -432,11 +490,57 @@ public struct HomeScreen: View {
     // --- IOS-5a: the card rides the bottom safe area, above the keyboard ---
     .safeAreaInset(edge: .bottom, spacing: 0) {
       if inputCardFace == .shown {
-        InputCard(model: inputCard)
+        // --- IOS-5c: the watcher rides in so the paste chip can appear.
+        InputCard(model: inputCard, pasteboard: pasteboard)
+        // --- end IOS-5c
       }
     }
     // --- end IOS-5a --------------------------------------------------------
+    // --- IOS-5c: a long paste, read before it goes through.
+    //
+    // Presented from the session card rather than from the root, because the
+    // root is behind this sheet: a second presentation from the same
+    // controller is a sheet that never appears.
+    .sheet(
+      item: Binding(
+        get: { inputCard.pendingPasteReview },
+        // Every dismissal that is not SEND is a cancel — the swipe included.
+        set: { if $0 == nil { inputCard.cancelPasteReview() } })
+    ) { pending in
+      PasteReviewSheet(
+        text: pending.text,
+        onSend: { inputCard.confirmPasteReview() },
+        onCancel: { inputCard.cancelPasteReview() }
+      )
+      .presentationDetents([.medium])
+      .presentationDragIndicator(.visible)
+      .presentationCornerRadius(40)
+      .fieldGlassSheet()
+    }
+    // --- end IOS-5c --------------------------------------------------------
   }
+
+  // --- IOS-5c --------------------------------------------------------------
+  /// The card's chips, derived from the bubble it was raised on (K-D4).
+  ///
+  /// A remote terminal bubble has no agent facet, so it derives nothing — and
+  /// that is every attachable session on the field today. The chips arrive for
+  /// real when the agent feed does (IOS-4/AR); until then the only place they
+  /// render is the fixture, and the record says so.
+  private func replyChips(for bubble: FieldBubble?) -> [ReplyChip] {
+    #if DEBUG
+      // The fixture answers in place of a feed this phone does not have yet.
+      // It sits INSIDE the derivation rather than beside it, so the row cannot
+      // be wiped by the next honest re-derivation.
+      if demoInputChips {
+        return FieldInput.replyChips(
+          provider: .claude, permissions: [AgentPermission(tool: "Bash")])
+      }
+    #endif
+    guard let agent = bubble?.agent else { return [] }
+    return FieldInput.replyChips(provider: agent.provider, permissions: agent.permissions)
+  }
+  // --- end IOS-5c ------------------------------------------------------------
 
   // --- IOS-5a --------------------------------------------------------------
   /// K-D2: the card exists only for a live attachment this device may type
@@ -459,6 +563,9 @@ public struct HomeScreen: View {
       case .keystroke(let stroke): attachment.press(stroke)
       case .sendDraft(let text): attachment.sendDraft(text)
       case .typeText(let text): attachment.typeText(text)
+      // --- IOS-5c: a block, with no Enter behind it.
+      case .paste(let text): attachment.pasteText(text)
+      // --- end IOS-5c
       }
     }
     // --- IOS-5b: the second half of the same join --------------------------
@@ -483,7 +590,14 @@ public struct HomeScreen: View {
         configuration: attachment.presentation,
         // --- IOS-5a: two modes, two first responders. The kit's own
         // fifteen-key row is off (K-D3) — the card's rail replaces it.
-        wantsFocus: inputCard.mode == .live,
+        // --- IOS-5c: the flag, not the mode — the keyboard can be down while
+        // the terminal is still the one that would take it. `onFocusChange`
+        // reports what the responder call actually achieved, and the card's
+        // closed row is that answer rendered.
+        wantsFocus: inputCard.mode == .live && inputCard.terminalFocused,
+        focusEpoch: inputCard.keyboardRequests,
+        onFocusChange: { focused in inputCard.terminalFocused = focused },
+        // --- end IOS-5c
         keyboardAppearance: colorScheme == .dark ? .dark : .light,
         // --- end IOS-5a
         accessibilityTitle: title ?? "Remote terminal",
@@ -635,6 +749,10 @@ public struct HomeScreen: View {
   /// with no subject to fall back on.
   private func openCard(on bubble: FieldBubble) {
     cardBubble = bubble
+    // --- IOS-5c: the card's context, gathered at the moment it is raised.
+    inputCard.chips = replyChips(for: bubble)
+    pasteboard.sample()
+    // --- end IOS-5c
     // A key note belongs to the card it was raised on. Removing a key from the
     // settings sheet can leave one standing with no card open, and it must not
     // greet the next session as if it were about that one.
