@@ -62,6 +62,19 @@ public struct InputCard: View {
       }
     }
     .padding(Self.padding)
+    // --- IOS-5d ---------------------------------------------------------------
+    // The keypad's hidden responder for Live (K-D5). It is zero-size and never
+    // hit, but it must be IN the hierarchy at all times: `becomeFirstResponder`
+    // on a view with no window returns false, and the moment it is needed is
+    // the moment the terminal is giving the keyboard up.
+    .background {
+      KeypadHost(model: model)
+        .frame(width: 0, height: 0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+    .animation(FieldMotion.ease(0.18), value: model.keypadShown)
+    // --- end IOS-5d -----------------------------------------------------------
     .animation(FieldMotion.ease(0.24), value: model.chips)
     .animation(FieldMotion.ease(0.24), value: pasteboard?.hasNewContent ?? false)
     .animation(FieldMotion.ease(0.24), value: model.keyboardOwner)
@@ -70,18 +83,18 @@ public struct InputCard: View {
 
   // MARK: - Row 1
 
-  /// Draft: the field and Send.
+  /// Draft: the `+`, the field and Send.
   ///
-  /// The design's `+` control is deliberately ABSENT rather than
-  /// present-and-dead (D-i6): it is IOS-5d, and a disabled button would
-  /// promise a door that is not built.
-  ///
-  /// --- IOS-5d mic: the mic is no longer one of those absences. It needed the
-  /// Speech framework and its usage strings, which is why it was a slice of
-  /// its own; it landed with `DictationKey` and sits where the desktop
-  /// Composer's foot puts it, immediately left of Send.
+  /// Both of the design's other controls are here now: `+` at the far left
+  /// (IOS-5d — Scan Text · Snippets · Clipboard History; the attach items wait
+  /// on a mesh file verb, K-D6) and the mic immediately left of Send (IOS-5d's
+  /// rider — it needed the Speech framework and its usage strings). Send stays
+  /// the one inverted-solid control: the desktop Composer's own foot.
   private var draftRow: some View {
     HStack(alignment: .bottom, spacing: Self.gap) {
+      // --- IOS-5d: the far left of the row, the desktop Composer's own foot.
+      PlusMenu(model: model)
+      // --- end IOS-5d
       ComposerField(
         model: model,
         height: $composerHeight,
@@ -103,6 +116,11 @@ public struct InputCard: View {
   /// model and comes back untouched when the mode flips.
   private var terminalStrip: some View {
     HStack(spacing: Self.gap) {
+      // --- IOS-5d: the same door, in the same place. The design's strip keeps
+      // `+` where the composer had it — a snippet is as useful with the
+      // terminal holding the keys as with the draft holding them.
+      PlusMenu(model: model)
+      // --- end IOS-5d
       HStack(spacing: 7) {
         Image(systemName: "terminal")
           .font(.system(size: 13, weight: .heavy))
@@ -145,8 +163,7 @@ public struct InputCard: View {
 
   // MARK: - Row 2, the rail
 
-  /// Eight equal keys. The design's ninth, `⋯` (the terminal keypad), is
-  /// IOS-5d and is absent here rather than present and inert.
+  /// Nine equal keys, `⋯` last (IOS-5d).
   ///
   /// Every key but the mode toggle carries a long-press fan (IOS-5b): the
   /// chords under CTRL, the far ends under the arrows, ⇧TAB under TAB, and the
@@ -172,6 +189,17 @@ public struct InputCard: View {
       key(
         glyph: "arrow.right", label: "Right arrow", fan: KeyFan.arrow(.arrowRight),
         action: { model.tapKey(.arrowRight) })
+      // --- IOS-5d ------------------------------------------------------------
+      // The keypad key. It INVERTS while the keypad is up, like every other
+      // key on this card that is holding a state — and it carries no fan: the
+      // design's long-press (the keypad's last page) is what a tap already
+      // does, the page being remembered.
+      key(
+        glyph: "ellipsis",
+        label: model.keypadShown ? "Letters" : "Terminal keypad",
+        inverted: model.keypadShown,
+        action: { model.toggleKeypad() })
+      // --- end IOS-5d --------------------------------------------------------
     }
     // --- IOS-5c: swipe the rail down to put the keyboard away.
     //
