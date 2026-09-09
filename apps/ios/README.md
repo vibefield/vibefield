@@ -24,7 +24,7 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
 | `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface — plus (IOS-3c) the per-host mirror-write key store |
-| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a): the composer field, the rail, the sticky-Ctrl latch, and the acts they emit. Its own target on purpose (K-D1) — a keyboard is state machines all the way down, and the IOS-3 review found every serious bug living in the one module that had no test target. It takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
+| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a): the composer field, the rail, the sticky-Ctrl latch, and the acts they emit — plus (IOS-5b) the long-press fans, the Meta burst and the haptic table. Its own target on purpose (K-D1) — a keyboard is state machines all the way down, and the IOS-3 review found every serious bug living in the one module that had no test target. It takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 **Write keys (IOS-3c).** The mirror-write capability a desktop grants this
@@ -92,7 +92,9 @@ reach states no `simctl` touch can:
 | `-vf-open-settings` | opens the terminal appearance sheet |
 | `-vf-open-write-key` | opens the WRITE KEY sheet on the demo host, the one surface a tap is otherwise the only way to reach |
 | `-vf-write-key=<secret>` | swaps the Keychain for an in-memory write-key store whose **wildcard** answers for any host, so `-vf-auto-attach` can type against a serving desktop with no finger on the glass; it also seeds one explicit demo host (`studio`) so the settings sheet's WRITE KEYS section has a row to render. A launch argument is visible to `ps` — a DEBUG smoke aid, never a way to carry a real secret onto a phone |
-| `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; add `-vf-demo-input-live` for the strip instead of the composer |
+| `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; add `-vf-demo-input-live` for the strip instead of the composer, or `-vf-demo-input-draft` for a filled draft under a locked CTRL |
+| `-vf-demo-input-fan` | opens the CTRL long-press fan three seconds in — the ten chords in two rows, anchored above the key. The only way to a fan without a finger, and the fan is the whole of IOS-5b that a screenshot can show |
+| `-vf-demo-input-meta` | holds ESC in its armed META state by re-arming the burst once a second. The burst is a 3 s window BY DESIGN and a screenshot run is slower than that, so the fixture keeps re-arming rather than pretending the window is longer; the state in the picture is the real one |
 
 Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
@@ -124,7 +126,17 @@ section that lists and revokes; and since IOS-5a the input card — a composer
 field carrying the kit's own trait set (no autocorrect, no smart quotes, no
 predictive bar), Send as a bracketed paste followed by Enter, and a rail of
 eight terminal keys with a sticky Ctrl, over a keystroke vocabulary that encodes
-to HID usages. 182 headless tests.
+to HID usages; and since IOS-5b that card has its other mode and its long press:
+`>_` hands the keyboard to the terminal itself (the Metal view IS the
+`UITextInput`, so Live mode is one `becomeFirstResponder` and the draft waits
+where it was), the sticky Ctrl reaches THROUGH that handoff — the attachment
+asks the card what the next key carries and shapes the keyboard's own event
+with it, so `^C` means the same thing whichever responder is holding the keys —
+and every rail key but the mode toggle holds a fan under a 0.35 s press: ten
+chords under CTRL, each arrow's far end, ⇧Tab under TAB, and the Meta burst
+under ESC (`.option` on exactly the next keystroke, with ESC wearing an inverted
+META while it is armed). Haptics say which transition just happened: light to
+arm, medium to lock, soft to release, rigid for a chord. 208 headless tests.
 
 Honest-missing (each says so on screen where it shows): **typing has not been
 witnessed on a device** — the key now rides every attach as its access token
@@ -138,8 +150,17 @@ input card is therefore **not on screen** on any attachment this device cannot
 type into (K-D2) — a rail of keys that cannot reach a terminal is the disabled
 affordance D-i6 forbids, and the honest view-only line already says why. The
 card's remaining pieces are absent rather than inert: the `+` menu and the `⋯`
-keypad are IOS-5d, the mic is a slice of its own, and the mode toggle's other
-half (the terminal taking the keyboard) with the long-press fans is IOS-5b.
+keypad are IOS-5d, the mic is a slice of its own, and the reply/paste chips are
+IOS-5c. IOS-5b's own gate is a device too: the latch reaching the terminal
+(`Ctrl-R` then text, `Ctrl-X Ctrl-S` through a lock), vim's `Esc :q!`, ⇧Tab, and
+a Meta-arrow tmux binding all want a shell on the far end of a real mesh, so the
+simulator witnessed the fans and the META state and nothing about what they
+encode to. Two shapes of the design are ours rather than its: a fan opens on the
+long press and its keys are TAPPED (the design's slide-and-release wants the fan
+drawn inside the card's own hierarchy, which wants the card out of the
+safe-area inset it lives in), and Reduce Motion, Dynamic Type and the VoiceOver
+announcements for latch states are still IOS-5e — the labels are here, the
+announcements are not.
 Approvals render as facts, never as buttons, until the approvals track lands;
 the agent feed is still the mock until fieldd's `agent.*` exists (IOS-4).
 

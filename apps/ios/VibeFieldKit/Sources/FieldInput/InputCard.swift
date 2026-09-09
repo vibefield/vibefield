@@ -116,21 +116,50 @@ public struct InputCard: View {
 
   /// Eight equal keys. The design's ninth, `⋯` (the terminal keypad), is
   /// IOS-5d and is absent here rather than present and inert.
+  ///
+  /// Every key but the mode toggle carries a long-press fan (IOS-5b): the
+  /// chords under CTRL, the far ends under the arrows, ⇧TAB under TAB, and the
+  /// Meta burst under ESC.
   private var rail: some View {
     HStack(spacing: Self.gap) {
       key(
         glyph: "terminal",
         label: model.mode == .live ? "Typing into terminal" : "Type into terminal",
         inverted: model.mode == .live, action: { model.toggleMode() })
-      key(text: "ESC", label: "Escape", action: { model.tapKey(.escape) })
+      escapeKey
       controlKey
-      key(text: "TAB", label: "Tab", action: { model.tapKey(.tab) })
-      key(glyph: "arrow.left", label: "Left arrow", action: { model.tapKey(.arrowLeft) })
-      key(glyph: "arrow.down", label: "Down arrow", action: { model.tapKey(.arrowDown) })
-      key(glyph: "arrow.up", label: "Up arrow", action: { model.tapKey(.arrowUp) })
-      key(glyph: "arrow.right", label: "Right arrow", action: { model.tapKey(.arrowRight) })
+      key(text: "TAB", label: "Tab", fan: .tab, action: { model.tapKey(.tab) })
+      key(
+        glyph: "arrow.left", label: "Left arrow", fan: KeyFan.arrow(.arrowLeft),
+        action: { model.tapKey(.arrowLeft) })
+      key(
+        glyph: "arrow.down", label: "Down arrow", fan: KeyFan.arrow(.arrowDown),
+        action: { model.tapKey(.arrowDown) })
+      key(
+        glyph: "arrow.up", label: "Up arrow", fan: KeyFan.arrow(.arrowUp),
+        action: { model.tapKey(.arrowUp) })
+      key(
+        glyph: "arrow.right", label: "Right arrow", fan: KeyFan.arrow(.arrowRight),
+        action: { model.tapKey(.arrowRight) })
     }
   }
+
+  // --- IOS-5b ---------------------------------------------------------------
+  /// ESC, and the Meta burst it holds.
+  ///
+  /// While the burst is armed the key says META and inverts: the next key is
+  /// about to mean something different, and the only place that can be said is
+  /// the key that armed it. It still sends Escape when tapped — the burst rides
+  /// the next keystroke, and Escape is one.
+  private var escapeKey: some View {
+    key(
+      text: model.metaArmed ? "META" : "ESC",
+      label: model.metaArmed ? "Escape, Meta armed for the next key" : "Escape",
+      inverted: model.metaArmed,
+      fan: .escape,
+      action: { model.tapKey(.escape) })
+  }
+  // --- end IOS-5b -----------------------------------------------------------
 
   /// The sticky Ctrl. Armed and locked both invert; locked adds the dot,
   /// because "this stays until I release it" is a different promise from
@@ -138,7 +167,21 @@ public struct InputCard: View {
   private var controlKey: some View {
     let armed = model.latch.phase != .off
     return Button {
+      // --- IOS-5b ---
+      // The fan just opened under the finger; the touch-up that follows is the
+      // long press ending, not a tap on CTRL.
+      guard model.openFan == nil else { return }
       model.tapControl()
+      // Felt, not just seen: armed and locked are two different promises and a
+      // fill alone cannot say which at arm's length. The VIEW reads the phase
+      // the model just moved to — haptics are presentation, and the model has
+      // no UIKit in it on purpose.
+      switch model.latch.phase {
+      case .armed: InputHaptics.arm()
+      case .locked: InputHaptics.lock()
+      case .off: InputHaptics.release()
+      }
+      // --- end IOS-5b ---
     } label: {
       Text("CTRL")
         .font(FieldType.mono(9, .heavy))
@@ -158,6 +201,9 @@ public struct InputCard: View {
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(model.latch.accessibilityLabel)
+    // --- IOS-5b: the chord fan ---
+    .fan(.control, on: model, pick: pick)
+    // --- end IOS-5b ---
   }
 
   // MARK: - Key chrome
@@ -166,9 +212,15 @@ public struct InputCard: View {
     text: String,
     label: String,
     inverted: Bool = false,
+    fan: KeyFan? = nil,
     action: @escaping () -> Void
   ) -> some View {
-    Button(action: action) {
+    Button {
+      // IOS-5b: a long press that opened a fan still ends in a touch-up, and
+      // that touch-up is not a tap on this key.
+      guard model.openFan == nil else { return }
+      action()
+    } label: {
       Text(text)
         .font(FieldType.mono(9, .heavy))
         .tracking(FieldType.tracking(0.08, of: 9))
@@ -179,6 +231,7 @@ public struct InputCard: View {
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(label)
+    .fan(fan, on: model, pick: pick)
   }
 
   /// `width` is the strip's Enter and nothing else: rail keys are equal-width
@@ -188,9 +241,13 @@ public struct InputCard: View {
     label: String,
     inverted: Bool = false,
     width: CGFloat? = nil,
+    fan: KeyFan? = nil,
     action: @escaping () -> Void
   ) -> some View {
-    Button(action: action) {
+    Button {
+      guard model.openFan == nil else { return }
+      action()
+    } label: {
       Image(systemName: glyph)
         .font(.system(size: 13, weight: .heavy))
         .foregroundStyle(inverted ? FieldPalette.panelBackground : FieldPalette.textMain)
@@ -200,7 +257,25 @@ public struct InputCard: View {
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(label)
+    .fan(fan, on: model, pick: pick)
   }
+
+  // --- IOS-5b ---------------------------------------------------------------
+  /// A key was picked out of an open fan.
+  ///
+  /// The fan closes first so the act cannot land twice, then the chord goes —
+  /// `tapChord`, which spends an armed latch without adding to a chord that
+  /// already names its own modifiers. META is the one item that arms instead of
+  /// sending.
+  private func pick(_ item: KeyFan.Item) {
+    model.closeFan()
+    switch item.act {
+    case .stroke(let stroke): model.tapChord(stroke)
+    case .meta: model.armMeta()
+    }
+    InputHaptics.chord()
+  }
+  // --- end IOS-5b -----------------------------------------------------------
 
   /// One shape for every key on the card: the `FieldChip` recipe at 44 pt.
   @ViewBuilder

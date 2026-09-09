@@ -209,6 +209,28 @@ public struct HomeScreen: View {
             inputCard.tapControl()
             inputCard.tapControl()
           }
+          // --- IOS-5b: the two states a long press is the only way into ----
+          // The fan is opened after the card is on screen — a popover anchored
+          // to a key that does not exist yet has nothing to point at.
+          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-fan") {
+            Task {
+              try? await Task.sleep(for: .seconds(3))
+              inputCard.showFan(.control)
+            }
+          }
+          // The burst is a 3 s window BY DESIGN, and a screenshot run is
+          // slower than that. So the fixture re-arms it on a loop rather than
+          // pretending the window is longer than it is — the state in the
+          // picture is the real one, held open by a fixture that says so.
+          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-meta") {
+            Task {
+              for _ in 0..<600 {
+                inputCard.armMeta()
+                try? await Task.sleep(for: .seconds(1))
+              }
+            }
+          }
+          // --- end IOS-5b --------------------------------------------------
         }
         // --- end IOS-5a --------------------------------------------------
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
@@ -439,6 +461,16 @@ public struct HomeScreen: View {
       case .typeText(let text): attachment.typeText(text)
       }
     }
+    // --- IOS-5b: the second half of the same join --------------------------
+    // In Draft the composer intercepts a latched character before it reaches
+    // the draft; in Live there is no field to intercept, so the latch has to
+    // meet the keyboard's own events inside the attachment. This closure is
+    // the one that carries it there — consuming, called once per event.
+    //
+    // It holds the card while the card's sink holds the attachment, which is a
+    // cycle: `closeCard` breaks it, and must.
+    attachment.softwareInputLatch = { [inputCard] in inputCard.takeLatchForTerminal() }
+    // --- end IOS-5b --------------------------------------------------------
   }
   // --- end IOS-5a ----------------------------------------------------------
 
@@ -662,6 +694,11 @@ public struct HomeScreen: View {
     inputCard.sink = nil
     inputCard.reset()
     // --- end IOS-5a ---
+    // --- IOS-5b: and so does the latch the attachment was holding ---
+    // Unconditionally, before the guard: the closure is half of a retain cycle
+    // (card → sink → attachment → latch → card), and nothing else clears it.
+    attachment?.softwareInputLatch = nil
+    // --- end IOS-5b ---
     guard let attachment else { return }
     self.attachment = nil
     Task { await attachment.detach() }

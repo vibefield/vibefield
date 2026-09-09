@@ -91,6 +91,24 @@ public final class InputCardModel {
   public var mode: Mode = .draft
   public var draft: String = ""
   public var latch = LatchState()
+  // --- IOS-5b ---------------------------------------------------------------
+  /// The Meta burst: `.option` on exactly the next keystroke, then gone.
+  ///
+  /// Alt has no rail slot (decision 4): Alt-x is ESC x for readline, emacs and
+  /// zsh, so Esc then x already does it. What Esc-then-x does NOT do is tmux,
+  /// which wants the escape and the key as one burst — so long-pressing ESC
+  /// arms this instead and the next keystroke carries `.option`, which the kit
+  /// encodes. One shot rather than a latch: a second phase here would be a
+  /// second sticky modifier with no dot to tell it from the first.
+  public private(set) var metaArmed = false
+  /// Which rail key's long-press fan is open, or none. Opened and closed
+  /// through `showFan`/`closeFan`, which also mind the keyboard.
+  ///
+  /// Card state rather than view state, for two reasons: only one fan may be
+  /// open at a time across every key, which a per-key `@State` cannot promise;
+  /// and a headless fixture with no finger can then open one to be looked at.
+  public private(set) var openFan: KeyFan?
+  // --- end IOS-5b -----------------------------------------------------------
   /// Whether the composer field wants the keyboard. Exactly one responder
   /// holds it at a time: in Live the terminal does, so this is false.
   public var fieldFocused: Bool = false
@@ -103,6 +121,12 @@ public final class InputCardModel {
   /// flip can cancel it — a stale timer disarming a latch the user re-armed is
   /// exactly the kind of ghost a 3 s window makes hard to see.
   @ObservationIgnored private var expiryTask: Task<Void, Never>?
+  // --- IOS-5b: the burst's own clock, on the arm's discipline ---------------
+  @ObservationIgnored private var metaExpiryTask: Task<Void, Never>?
+  /// Whether the composer held the keyboard when the fan opened. See
+  /// `closeFan` — it restores, and never raises.
+  @ObservationIgnored private var keyboardWasUpBeforeFan = false
+  // --- end IOS-5b -----------------------------------------------------------
 
   public init() {}
 
@@ -110,7 +134,7 @@ public final class InputCardModel {
 
   /// A rail key. It carries whatever the latch holds and spends it.
   public func tapKey(_ key: TerminalKey) {
-    let modifiers = consumeLatch()
+    let modifiers = consumeModifiers()
     emit(.keystroke(TerminalKeystroke(key, modifiers: modifiers)))
   }
 
@@ -120,6 +144,71 @@ public final class InputCardModel {
     latch.tap()
     restartExpiry()
   }
+
+  // --- IOS-5b ---------------------------------------------------------------
+  /// A chord picked out of a long-press fan — `^C`, `⇧TAB`, `HOME`.
+  ///
+  /// A fan key names its own modifiers, so the latch does not add to them: the
+  /// user asked for `^C`, not for `^^C`, and picking HOME with Ctrl held should
+  /// give Home rather than Ctrl-Home. The latch is still SPENT, though — an arm
+  /// the fan already answered must not survive onto the next typed letter — and
+  /// a locked latch stays locked, because locking was deliberate.
+  ///
+  /// The Meta burst is the one modifier that does ride along: it is a one-shot
+  /// on "the next keystroke", and a chord is a keystroke.
+  public func tapChord(_ stroke: TerminalKeystroke) {
+    let carried = consumeModifiers()
+    var stroke = stroke
+    stroke.modifiers.formUnion(carried.intersection(.option))
+    emit(.keystroke(stroke))
+  }
+
+  /// A long press landed on a rail key: show its fan.
+  public func showFan(_ fan: KeyFan) {
+    keyboardWasUpBeforeFan = fieldFocused
+    openFan = fan
+  }
+
+  /// The fan is done — picked from, or dismissed by a tap outside.
+  ///
+  /// It gives the keyboard back only if the composer had it when the fan
+  /// opened. A popover is a presentation, and a presentation can take the
+  /// first responder with it; asking for it back unconditionally would RAISE a
+  /// keyboard the user had put away, which is the opposite mistake.
+  public func closeFan() {
+    openFan = nil
+    if keyboardWasUpBeforeFan { fieldFocused = true }
+  }
+
+  /// Long-press ESC: arm `.option` for the next keystroke.
+  ///
+  /// Arming twice restarts the window rather than toggling — three seconds is
+  /// short enough that waiting one out is cheaper than a second meaning on the
+  /// same gesture.
+  public func armMeta() {
+    metaArmed = true
+    restartMetaExpiry()
+  }
+
+  /// The burst's window elapsed. Public for the same reason `latchExpired` is:
+  /// the clock is the model's, and a test drives it rather than waiting.
+  public func metaExpired() {
+    metaArmed = false
+    metaExpiryTask = nil
+  }
+
+  /// Live mode's half of the latch: what the next key from the TERMINAL's own
+  /// keyboard carries.
+  ///
+  /// The host installs this on `TerminalAttachment.softwareInputLatch`, which
+  /// calls it once per software-input event. It CONSUMES, exactly like a rail
+  /// tap does — an armed latch is spent here and a locked one is not — so the
+  /// same three-phase rule holds whichever responder holds the keyboard, which
+  /// is the whole of K-D3's "one latch, ours, in both modes".
+  public func takeLatchForTerminal() -> TerminalModifiers {
+    consumeModifiers()
+  }
+  // --- end IOS-5b -----------------------------------------------------------
 
   /// Send. Never disabled and never refuses: an empty draft is Enter, which is
   /// what "run it" means with nothing left to say (D-i6 — an absence is an
@@ -153,8 +242,11 @@ public final class InputCardModel {
   /// than text — `Ctrl` then `c` is `^C`, and the `c` must NOT also land in
   /// the draft. Returns true when the character was taken.
   public func interceptCharacter(_ character: Character) -> Bool {
-    guard latch.phase != .off else { return false }
-    let modifiers = consumeLatch()
+    // IOS-5b: the burst counts too. A Meta-armed letter typed into the composer
+    // is `Esc x` on the wire, and leaving it in the draft would swallow the
+    // burst the user just armed.
+    guard latch.phase != .off || metaArmed else { return false }
+    let modifiers = consumeModifiers()
     emit(.keystroke(TerminalKeystroke(.character(character), modifiers: modifiers)))
     return true
   }
@@ -168,18 +260,35 @@ public final class InputCardModel {
     fieldFocused = false
     expiryTask?.cancel()
     expiryTask = nil
+    // --- IOS-5b: the burst and the fan belong to the card being closed ------
+    metaArmed = false
+    metaExpiryTask?.cancel()
+    metaExpiryTask = nil
+    openFan = nil
+    keyboardWasUpBeforeFan = false
+    // --- end IOS-5b ---------------------------------------------------------
   }
 
   // MARK: - Plumbing
 
-  private func consumeLatch() -> TerminalModifiers {
-    let modifiers = latch.consume()
+  /// Take the modifiers for one key and spend what is spendable: the armed
+  /// latch (a locked one survives) and the Meta burst (always one shot).
+  private func consumeModifiers() -> TerminalModifiers {
+    var modifiers = latch.consume()
     // Only an armed latch had a clock; consuming it ends the window whether or
     // not the phase moved.
     if latch.phase != .armed {
       expiryTask?.cancel()
       expiryTask = nil
     }
+    // --- IOS-5b ---
+    if metaArmed {
+      modifiers.insert(.option)
+      metaArmed = false
+      metaExpiryTask?.cancel()
+      metaExpiryTask = nil
+    }
+    // --- end IOS-5b ---
     return modifiers
   }
 
@@ -195,6 +304,20 @@ public final class InputCardModel {
       self?.latchExpired()
     }
   }
+
+  // --- IOS-5b: the same three seconds, on its own task ----------------------
+  /// A separate clock from the latch's on purpose: the two windows are
+  /// independent (Ctrl can be locked while a burst is armed), and sharing one
+  /// task would let either arm cancel the other's window.
+  private func restartMetaExpiry() {
+    metaExpiryTask?.cancel()
+    metaExpiryTask = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(3))
+      guard !Task.isCancelled else { return }
+      self?.metaExpired()
+    }
+  }
+  // --- end IOS-5b -----------------------------------------------------------
 
   private func emit(_ act: InputAct) {
     sink?(act)
