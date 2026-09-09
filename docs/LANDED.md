@@ -4759,3 +4759,42 @@ browser-at-proven-rect controls that grade WHICH half broke on a terminal failur
 first gate run re-ran green 3× in isolation — the known suite-concurrency class).
 **Still James's:** the dev-mode eyeball on real hardware GL, where none of the smoke's
 lotteries exist.
+
+## IOS-3c — the write key has a home: the phone can be granted writes
+
+**LANDED 2026-09-09, `9b07fc61`** (+ `997baf8a`, the workspace pin record). Built by a
+briefed agent in a worktree, reviewed and integrated by the orchestrator on the `ios/keyboard`
+branch; James merges. The gate the IOS-3 entry named as unmet: `72929d8` claimed 3c and shipped
+the lifecycle without the capability — the access token rode every attach and every re-dial,
+but nothing ever assigned it, so the phone attached VIEW-ONLY for the life of the process and
+`HomeScreen.swift` said so in as many words. It now has a home, and the input card
+(`thinking-ios-keyboard.md` §8, K-D2) has its first real user.
+
+**What landed.** `FieldTerminal/MirrorWriteStore.swift`: `MirrorWriteHost` (device id + the
+NAME, stored beside the secret so a host that is offline today can still be named in a list of
+keys), `MirrorWriteStoring`, `KeychainMirrorWriteStore` — one generic-password item per host,
+service `com.jamesyong.vibefield.ios.mirror-write`, account = device id,
+`AfterFirstUnlockThisDeviceOnly` (the terminal re-presents its token from a foreground resume)
+and `kSecAttrSynchronizable = false` (a grant to ONE device must not ride iCloud Keychain to
+every device the user owns); `hosts()` asks for attributes and never data, because the one way
+to keep a secret off the screen is not to fetch it — and `InMemoryMirrorWriteStore`, the fake
+and the DEBUG seed, whose `wildcard` answers for hosts it never listed and is deliberately not
+a host. The card's invitation gains ENTER KEY exactly where the copy blames THIS device
+(`FieldHomeModel.keyEntryOffered`, pinned: never on a read-only session, never over "you can
+type here"); a live attachment that is view-only for want of a key gets the same act as a
+status chip; `WriteKeySheet` takes a key and never reads one back (REMOVE appears only when a
+key is held; an empty SAVE is a no-op, not a greyed-out control — D-i6); the settings sheet
+gains WRITE KEYS, hosts and one act, absence in words. `HomeScreen`: `mirrorWriteCapability`
+is gone — the token is read PER HOST at `beginAttachment`, and a key saved under an open
+view-only attachment re-attaches with it (detach awaited first, so the `attaching` latch's
+invariant holds). DEBUG `-vf-write-key=<secret>` / `-vf-open-write-key` compile out of Release.
+
+**Tests 149 green (was 135):** `MirrorWriteStoreTests` (10) on the fake, `write key entry` (4).
+The Keychain store is not tested headless and says why: a package test host's keychain is not
+the product's. **Witnessed** in the simulator, both themes: ENTER KEY under the invitation, "you
+can type here" with a key, the sheet, the section. **NOT witnessed, and it is the slice's real
+gate:** typing into a serving desktop — a phone, a tailnet and a mesh, none of which a
+simulator can stand in for. James's device run. Found on the way: the Xcode workspace's
+`Package.resolved` had recorded ghosttea 0.9.3 since `cec95a84` while the manifest and the
+kit's own resolved file said 0.10.1 — every build re-resolved on the fly, so only the record
+was wrong; `997baf8a` moves it.
