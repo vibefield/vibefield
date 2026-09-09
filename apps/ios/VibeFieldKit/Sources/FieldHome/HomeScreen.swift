@@ -242,6 +242,20 @@ public struct HomeScreen: View {
             }
           }
           // --- end IOS-5b --------------------------------------------------
+          // --- IOS-5d mic --------------------------------------------------
+          // Listening is a state a headless run cannot reach: it wants two
+          // permission alerts answered by a finger and a voice to speak into a
+          // simulator that has, at best, the Mac's own microphone. So this
+          // forces the FACE — an inverted, breathing mic key — and seeds the
+          // draft through the real `appendDictation`, so the picture shows the
+          // actual rule that puts heard words in the draft rather than a mock
+          // of one. Nothing here opens an audio session or asks Speech for
+          // anything: our own pixels, never a claim that something was heard.
+          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-dictating") {
+            DictationSession.demoListening = true
+            inputCard.appendDictation("run the tests and show me what fails")
+          }
+          // --- end IOS-5d mic ----------------------------------------------
         }
         // --- end IOS-5a --------------------------------------------------
         // --- IOS-5c ------------------------------------------------------

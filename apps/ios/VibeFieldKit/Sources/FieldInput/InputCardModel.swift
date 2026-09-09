@@ -413,6 +413,78 @@ public final class InputCardModel {
     return true
   }
 
+  // --- IOS-5d mic -----------------------------------------------------------
+  // MARK: - Dictation
+  //
+  // Dictation lands in the DRAFT, never on the wire, so all of it that this
+  // model owns is a string rule: where the heard text goes, and which part of
+  // the draft the next refinement is allowed to overwrite. Speech itself lives
+  // in `DictationSession` — the model stays a pure state machine with no
+  // framework in it, which is what lets these rules be tested by calling them.
+
+  /// The span the current dictation owns, as character offsets into `draft`.
+  ///
+  /// Character offsets rather than `String.Index` on purpose: the draft is
+  /// edited by a UIKit text view underneath us, and an index into a string
+  /// that has since been mutated is a trap rather than a stale number.
+  @ObservationIgnored private var dictationSpan: Range<Int>?
+
+  /// A partial arrived. The FIRST one appends; every one after it refines what
+  /// the first put there.
+  ///
+  /// Recognition does not stream words, it re-reads the whole phrase — "get
+  /// status" becoming "git status" arrives as the whole phrase again — so a
+  /// second append would leave both. The separating space is added only when
+  /// there is something to separate: an empty draft, or one already ending in
+  /// whitespace, gets none.
+  public func appendDictation(_ text: String) {
+    if validDictationSpan() != nil {
+      replaceDictationTail(text)
+      return
+    }
+    guard !text.isEmpty else { return }
+    let separator = draft.isEmpty || draft.last?.isWhitespace == true ? "" : " "
+    let start = draft.count + separator.count
+    draft += separator + text
+    dictationSpan = start..<(start + text.count)
+  }
+
+  /// Refine what dictation already put in the draft, leaving everything the
+  /// user typed around it alone.
+  ///
+  /// A no-op when no dictation is open: replacing a tail nobody started would
+  /// have to guess which words were heard rather than typed.
+  public func replaceDictationTail(_ text: String) {
+    guard let span = validDictationSpan() else { return }
+    let lower = draft.index(draft.startIndex, offsetBy: span.lowerBound)
+    let upper = draft.index(draft.startIndex, offsetBy: span.upperBound)
+    draft.replaceSubrange(lower..<upper, with: text)
+    dictationSpan = span.lowerBound..<(span.lowerBound + text.count)
+  }
+
+  /// The run ended: the heard words stop being a span and become ordinary
+  /// draft. The next dictation appends AFTER them rather than over them.
+  public func commitDictation() {
+    dictationSpan = nil
+  }
+
+  /// The span, or nil — and a stale one is dropped on the way past.
+  ///
+  /// The draft moves under this: Send clears it, the user edits it, `reset()`
+  /// empties it for the next session. Rather than a line in each of those
+  /// places, the span proves itself against the draft's length every time it
+  /// is used, so a span that no longer fits simply stops existing and the next
+  /// partial appends fresh.
+  private func validDictationSpan() -> Range<Int>? {
+    guard let span = dictationSpan else { return nil }
+    guard span.upperBound <= draft.count else {
+      dictationSpan = nil
+      return nil
+    }
+    return span
+  }
+  // --- end IOS-5d mic -------------------------------------------------------
+
   /// Back to the resting card: a new session gets a new draft, and a latch
   /// left locked on the last card must not arm the first key of the next one.
   public func reset() {
