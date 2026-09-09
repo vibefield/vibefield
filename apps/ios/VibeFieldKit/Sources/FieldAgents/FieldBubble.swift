@@ -11,17 +11,29 @@ public struct AgentFacet: Sendable, Equatable {
   public let modelName: String?
   public let branch: String?
   public let contextUsedPercent: Double?
+  /// What this agent is waiting on right now (IOS-5c, K-D4).
+  ///
+  /// It rides the FACET rather than being fetched from a snapshot at the card,
+  /// because the chips that answer a permission read the FEED and never the
+  /// terminal's frame: this phone has no text access to a frame (they arrive
+  /// as TRF1 bytes that only the Metal view can read), so an approval the user
+  /// can tap is only ever something the agent stream said. Empty is the honest
+  /// default — an agent that is not waiting has nothing to answer, and a
+  /// terminal bubble has no agent facet at all.
+  public let permissions: [AgentPermission]
 
   public init(
     provider: AgentProvider,
     modelName: String? = nil,
     branch: String? = nil,
-    contextUsedPercent: Double? = nil
+    contextUsedPercent: Double? = nil,
+    permissions: [AgentPermission] = []
   ) {
     self.provider = provider
     self.modelName = modelName
     self.branch = branch
     self.contextUsedPercent = contextUsedPercent
+    self.permissions = permissions
   }
 }
 
@@ -110,7 +122,11 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
       provider: snapshot.provider,
       modelName: state?.modelName,
       branch: state?.branch,
-      contextUsedPercent: state?.contextUsedPercent),
+      contextUsedPercent: state?.contextUsedPercent,
+      // The card's chips are derived from this and nothing else. `?? []` is
+      // not a default standing in for missing news: a snapshot with no state
+      // has not reported yet, and "not reported" is not "waiting".
+      permissions: state?.permissions ?? []),
     remote: nil)
 }
 
