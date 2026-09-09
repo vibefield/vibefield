@@ -1,3 +1,4 @@
+import FieldTerminal
 import SwiftUI
 
 /// Everything on the home screen that is a DECISION rather than a layout, kept
@@ -79,6 +80,31 @@ enum FieldHomeModel {
   static func cardFace(hasSubject: Bool, listed: Bool, attached: Bool) -> CardFace {
     guard hasSubject else { return .ended }
     return (listed || attached) ? .session : .ended
+  }
+
+  // MARK: - The input card
+
+  /// Whether the input card is on the screen at all (K-D2).
+  ///
+  /// It is shown for exactly one state: a LIVE attachment the host has granted
+  /// writes to. Every other state renders no card — not a greyed-out one.
+  /// A rail of keys that cannot reach a terminal is the disabled-affordance
+  /// shape D-i6 exists to forbid: the honest line ("view only — this device
+  /// has no write key for this host") already says why, and a dead keyboard
+  /// under it would say it a second time and worse.
+  ///
+  /// `acceptsInput` alone would very nearly do — the attachment composes it
+  /// from the live phase and the grant — but the phase is asked for again
+  /// here so this stays a total function of what the card can see, and so a
+  /// suspended session cannot keep a keyboard up on a stale `true`.
+  enum InputCardFace: Equatable {
+    case hidden
+    case shown
+  }
+
+  static func inputCardFace(phase: TerminalPhase, acceptsInput: Bool) -> InputCardFace {
+    guard phase == .live, acceptsInput else { return .hidden }
+    return .shown
   }
 
   // MARK: - Writes

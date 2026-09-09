@@ -24,6 +24,7 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
 | `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface |
+| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a): the composer field, the rail, the sticky-Ctrl latch, and the acts they emit. Its own target on purpose (K-D1) — a keyboard is state machines all the way down, and the IOS-3 review found every serious bug living in the one module that had no test target. It takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
@@ -80,6 +81,7 @@ reach states no `simctl` touch can:
 | `-vf-auto-open-card` | opens a session card, preferring an attachable remote one |
 | `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole IOS-3 path with no finger on the glass; without a mesh it proves the honest-failure path instead |
 | `-vf-open-settings` | opens the terminal appearance sheet |
+| `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; add `-vf-demo-input-live` for the strip instead of the composer |
 
 Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
@@ -103,8 +105,11 @@ the online-peer roster, and the mesh chip the bubbles physically flow around
 (`.swarmObstacle()` — the desktop obstacle pattern); and since IOS-3 the
 terminal leg: remote-session discovery putting every peer's session on the
 field as its own bubble, ATTACH over Truffle, the Ghosttea Metal surface, 602
-themes + 4 shader ports in the settings sheet, and upstream's reconnect banner.
-135 headless tests.
+themes + 4 shader ports in the settings sheet, and upstream's reconnect banner;
+and since IOS-5a the input card — a composer field carrying the kit's own trait
+set (no autocorrect, no smart quotes, no predictive bar), Send as a bracketed
+paste followed by Enter, and a rail of eight terminal keys with a sticky Ctrl,
+over a keystroke vocabulary that encodes to HID usages. 168 headless tests.
 
 Honest-missing (each says so on screen where it shows): **this device holds no
 write key** — the mirror-write capability's Keychain home is IOS-3c and has not
@@ -112,7 +117,13 @@ landed, so every attach presents no token and the card says view-only *before*
 the tap as well as after (the session being shared read-write is a different
 fact from this device being granted writes, and conflating them was a review
 finding); approvals render as facts, never as buttons, until the approvals track
-lands; the agent feed is still the mock until fieldd's `agent.*` exists (IOS-4).
+lands; the input card is therefore **not on screen** on any attachment this
+device cannot type into (K-D2) — a rail of keys that cannot reach a terminal is
+the disabled affordance D-i6 forbids, and the honest view-only line already
+says why — and the card's remaining pieces are absent rather than inert: the
+`+` menu and the `⋯` keypad are IOS-5d, the mic is a slice of its own, and the
+mode toggle's other half (the terminal taking the keyboard) with the long-press
+fans is IOS-5b; the agent feed is still the mock until fieldd's `agent.*` exists (IOS-4).
 
 Vendor glyph geometry: LobeHub Lobe Icons v5.14.0 (MIT), the set the desktop
 godview embeds.
