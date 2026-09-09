@@ -110,4 +110,20 @@ enum FieldHomeModel {
       ? "you can type here"
       : "view only — this device has no write key for this host"
   }
+
+  /// Whether to offer the act that FIXES the sentence above (IOS-3c).
+  ///
+  /// Both halves are refusals of a control that would do nothing (D-i6: an
+  /// absence is a state in words, never a dead affordance). A session nobody
+  /// shares for writing cannot be typed into with any key, so entering one
+  /// would be theatre; a device that already holds a key has nothing to enter,
+  /// and the copy beside it already says "you can type here". Only the middle
+  /// case — the host shares writes and this phone has no key — is an act.
+  ///
+  /// Deliberately NOT a function of the attachment: the offer stands before
+  /// the tap as well as after it, which is the whole point of the invitation
+  /// line saying the truth early.
+  static func keyEntryOffered(sessionSharesWrites: Bool, hasWriteKey: Bool) -> Bool {
+    sessionSharesWrites && !hasWriteKey
+  }
 }

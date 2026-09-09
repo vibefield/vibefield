@@ -59,6 +59,12 @@ struct SessionCardView<Terminal: View>: View {
   /// word, which is the honest way to say it while the words are busy.
   let cooled: Bool
   let onAttach: () -> Void
+  /// The act that fixes "no write key for this host" (IOS-3c), when there is
+  /// one to offer. `nil` means not offered and draws nothing — this card never
+  /// renders a control it cannot honour (D-i6). It is a callback rather than a
+  /// store because where a key LIVES is the host's business: the card knows
+  /// only that entering one is a thing the user may do here.
+  var onEnterKey: (() -> Void)?
   @ViewBuilder let terminal: () -> Terminal
 
   private var face: FieldHomeModel.CardFace {
@@ -265,6 +271,27 @@ struct SessionCardView<Terminal: View>: View {
         .font(FieldType.mono(9))
         .foregroundStyle(FieldPalette.textMuted)
         .multilineTextAlignment(.center)
+
+        // The one case where the sentence above names something the USER can
+        // change: the host shares writes and this phone holds no key. It is
+        // offered before the tap, because that is when the sentence appears.
+        if let onEnterKey,
+          FieldHomeModel.keyEntryOffered(
+            sessionSharesWrites: remote.readWrite, hasWriteKey: hasWriteKey)
+        {
+          Button(action: onEnterKey) {
+            Text("ENTER KEY")
+              .font(FieldType.mono(9, .heavy))
+              .tracking(FieldType.tracking(0.1, of: 9))
+              .foregroundStyle(FieldPalette.textMain)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 7)
+              .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                  .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+          }
+          .buttonStyle(.plain)
+        }
       } else {
         // The row survives and refuses honestly: a live session the peer is
         // deliberately not sharing is a fact, and hiding it would be the

@@ -46,16 +46,22 @@ public struct HomeScreen: View {
   @State private var attachedDeviceID: String?
   @State private var copiedNote: String?
   @State private var appearance = TerminalAppearanceStore.load()
-  /// The host's mirror-write secret, when this phone has been told it. Absent
-  /// is the honest default: a viewer, not a typist (GT-4a's asymmetry from the
-  /// client side). Its home is the Keychain and its UI is IOS-3c's settings.
-  ///
-  /// **Nothing assigns this yet** — the Keychain leg has not landed, so it is
-  /// `nil` for the whole life of the process and every attach presents no
-  /// token. That is not a defect on its own; what WAS a defect is copy that
-  /// promised typing anyway, so both the invitation and the view-only reason
-  /// now read this instead of guessing from the listing's `readWrite`.
-  @State private var mirrorWriteCapability: String?
+  /// Where this phone's mirror-write secrets live (IOS-3c). One per host: a
+  /// key is a grant from ONE desktop, and the absent default is the honest
+  /// one — a viewer, not a typist (GT-4a's asymmetry from the client side).
+  /// The secret leaves here exactly once, into `TerminalAttachment`'s
+  /// `accessToken`; nothing on this screen ever renders it.
+  @State private var writeKeys: any MirrorWriteStoring = KeychainMirrorWriteStore()
+  /// The store's host list, mirrored into state because a store is not
+  /// observable: SwiftUI has no way to learn that a keychain changed, so every
+  /// save and every removal refreshes this and the views read it.
+  @State private var writeKeyHosts: [MirrorWriteHost] = []
+  /// The host whose key sheet is open, or none.
+  @State private var writeKeySheetHost: MirrorWriteHost?
+  /// What the store said when it could not do as it was asked — and the one
+  /// non-failure it also carries: a key saved while an attach was already in
+  /// flight, which cannot be re-presented until the next one.
+  @State private var writeKeyNote: String?
   #if DEBUG
     @State private var demoRemoteActive = false
   #endif
@@ -115,6 +121,27 @@ public struct HomeScreen: View {
     .onAppear {
       feed.start()
       #if DEBUG
+        // `-vf-write-key=<secret>` swaps the keychain for an in-memory store
+        // whose WILDCARD answers for any host, so `-vf-auto-attach` can type
+        // against a serving desktop with no finger on the glass. It runs
+        // before anything reads a key, and it cannot exist in Release. A
+        // launch argument is visible to `ps`: this is a smoke aid, never a way
+        // to carry a real secret onto a phone.
+        if let seeded = ProcessInfo.processInfo.arguments
+          .first(where: { $0.hasPrefix(Self.writeKeyArgument) })?
+          .dropFirst(Self.writeKeyArgument.count), !seeded.isEmpty
+        {
+          let store = InMemoryMirrorWriteStore(wildcard: String(seeded))
+          // One EXPLICIT host beside the wildcard, so the settings sheet's
+          // WRITE KEYS section has a row to render headless. It names the
+          // `-vf-demo-remote` fixture's peer, and it is the same kind of
+          // object that fixture is: our own pixels, never a claim that a
+          // desktop granted anything.
+          try? store.set(
+            String(seeded),
+            for: MirrorWriteHost(deviceID: "demo-device-01", deviceName: "studio"))
+          writeKeys = store
+        }
         // Headless smoke hooks (the GhostteaApp pattern: opt-in automation,
         // Debug-only): drive flows a simulator run can't tap into.
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
@@ -135,6 +162,14 @@ public struct HomeScreen: View {
         }
         if ProcessInfo.processInfo.arguments.contains("-vf-open-settings") {
           settingsSheetOpen = true
+        }
+        // The key sheet is otherwise reachable only by a finger on ENTER KEY,
+        // and a headless run has none — so its pixels could never be looked
+        // at. Same fixture host as `-vf-demo-remote`, and the same disclaimer:
+        // our own pixels, never a claim that a desktop granted anything.
+        if ProcessInfo.processInfo.arguments.contains("-vf-open-write-key") {
+          writeKeySheetHost = MirrorWriteHost(
+            deviceID: "demo-device-01", deviceName: "studio")
         }
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
           Task {
@@ -161,6 +196,7 @@ public struct HomeScreen: View {
           }
         }
       #endif
+      refreshWriteKeys()
     }
     .onDisappear {
       feed.stop()
@@ -228,6 +264,21 @@ public struct HomeScreen: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
         .fieldGlassSheet()
+    }
+    // Entering a key, from either face of the card. `item:` rather than a
+    // flag: the sheet is ABOUT a host, and a sheet that outlived its subject
+    // would write a secret against the wrong device.
+    .sheet(item: $writeKeySheetHost) { host in
+      WriteKeySheet(
+        host: host,
+        hasKey: writeKeyHosts.contains { $0.deviceID == host.deviceID },
+        onSave: { secret in saveWriteKey(secret, for: host) },
+        onRemove: { removeWriteKey(host) }
+      )
+      .presentationDetents([.fraction(0.42), .medium])
+      .presentationDragIndicator(.visible)
+      .presentationCornerRadius(40)
+      .fieldGlassSheet()
     }
     .sheet(isPresented: $meshSheetOpen) {
       MeshSheet(model: mesh)
@@ -306,12 +357,13 @@ public struct HomeScreen: View {
       bubble: bubble,
       listed: listed,
       isAttached: attachment != nil,
-      hasWriteKey: mirrorWriteCapability != nil,
+      hasWriteKey: cardHasWriteKey,
       statusNote: attachmentNote,
       statusDetail: attachmentDetail,
       statusActions: attachmentActions,
       cooled: attachment?.banner?.coolsTerminal ?? false,
-      onAttach: { if let bubble { beginAttachment(to: bubble) } }
+      onAttach: { if let bubble { beginAttachment(to: bubble) } },
+      onEnterKey: writeKeyEntry(for: bubble)
     ) {
       liveTerminal(title: bubble?.project)
     }
@@ -344,7 +396,11 @@ public struct HomeScreen: View {
   }
 
   private var settingsSheet: some View {
-    TerminalSettingsSheet(appearance: appearance) { next in
+    TerminalSettingsSheet(
+      appearance: appearance,
+      writeKeyHosts: writeKeyHosts,
+      onRemoveWriteKey: { host in removeWriteKey(host) }
+    ) { next in
       // The PREFERENCE commits eagerly and is what every future attach is
       // seeded from. Whether the terminal currently on screen took it is a
       // different fact, and `TerminalAttachment.appearance` is the one that
@@ -372,6 +428,9 @@ public struct HomeScreen: View {
     // A copy is the most recent thing the user did, and it is transient —
     // it says so and then gets out of the way.
     if let copiedNote { return copiedNote }
+    // A store that refused is about this phone, and it outranks the mesh's
+    // news: nothing the terminal says next explains why the key did not land.
+    if let writeKeyNote { return writeKeyNote }
     if let attachRefusal { return attachRefusal }
     if let renderFailure { return "the renderer refused this frame — \(renderFailure)" }
     guard let attachment else { return nil }
@@ -399,7 +458,7 @@ public struct HomeScreen: View {
       // the two failed decides who to name.
       return FieldHomeModel.viewOnlyReason(
         sessionSharesWrites: cardBubble?.remote?.readWrite ?? false,
-        hasWriteKey: mirrorWriteCapability != nil)
+        hasWriteKey: cardHasWriteKey)
     case .suspended(let why): return "suspended — \(why)"
     case .ended(let why): return "ended — \(why)"
     case .failed(let why): return "failed — \(why)"
@@ -409,7 +468,8 @@ public struct HomeScreen: View {
   /// The banner's second line, and only ever that: our own phase words are
   /// single-line by construction, so a detail here always belongs to a banner.
   private var attachmentDetail: String? {
-    guard copiedNote == nil, attachRefusal == nil, renderFailure == nil else { return nil }
+    guard copiedNote == nil, writeKeyNote == nil, attachRefusal == nil, renderFailure == nil
+    else { return nil }
     return attachment?.banner?.detail
   }
 
@@ -417,6 +477,27 @@ public struct HomeScreen: View {
   /// `browseSessions` becomes "back to the field": upstream means "go choose
   /// another session", and on this phone the chooser IS the field.
   private var attachmentActions: [CardAction] {
+    var actions = bannerActions
+    // The invitation's ENTER KEY, in the shape the attached face has room for:
+    // once a terminal is live there is no invitation left to hang it on, and a
+    // session that refused our writes for want of a key is exactly when the
+    // act is worth offering. The card still knows nothing about a store.
+    if attachedViewOnlyForWantOfKey, let enter = writeKeyEntry(for: cardBubble) {
+      actions.append(CardAction(id: "enter-key", label: "ENTER KEY", run: enter))
+    }
+    return actions
+  }
+
+  /// A live attachment that cannot type, where the reason is ours: no key was
+  /// presented. A host that refused a key we DID present is a different fact
+  /// and offers nothing to enter.
+  private var attachedViewOnlyForWantOfKey: Bool {
+    guard let attachment, attachment.phase == .live, !attachment.acceptsInput else { return false }
+    return FieldHomeModel.keyEntryOffered(
+      sessionSharesWrites: cardBubble?.remote?.readWrite ?? false, hasWriteKey: cardHasWriteKey)
+  }
+
+  private var bannerActions: [CardAction] {
     guard let attachment, let banner = attachment.banner else { return [] }
     return banner.actions.map { action in
       let label: String =
@@ -444,6 +525,10 @@ public struct HomeScreen: View {
   /// with no subject to fall back on.
   private func openCard(on bubble: FieldBubble) {
     cardBubble = bubble
+    // A key note belongs to the card it was raised on. Removing a key from the
+    // settings sheet can leave one standing with no card open, and it must not
+    // greet the next session as if it were about that one.
+    writeKeyNote = nil
     selection = SessionSelection(id: bubble.id)
   }
 
@@ -462,10 +547,13 @@ public struct HomeScreen: View {
         attachRefusal = "the mesh is not up on this device — connect it first"
         return
       }
+      // The one place a secret leaves the store: the host's own key, read at
+      // attach and re-presented by the lifecycle on every re-dial. `nil` is
+      // the honest default and the card has already said so.
       let attachment = TerminalAttachment(
         directory: directory,
         appearance: appearance,
-        accessToken: mirrorWriteCapability)
+        accessToken: writeKeys.capability(for: remote.deviceID))
       self.attachment = attachment
       attachedDeviceID = remote.deviceID
       // A starting grid the surface immediately corrects through onGridSize —
@@ -488,9 +576,95 @@ public struct HomeScreen: View {
     renderFailure = nil
     attachRefusal = nil
     copiedNote = nil
+    writeKeyNote = nil
     guard let attachment else { return }
     self.attachment = nil
     Task { await attachment.detach() }
+  }
+
+  // MARK: - Write keys
+
+  /// Whether THIS phone holds a key for the card's host — the per-host fact
+  /// the copy needs, not the process-wide one the old flag carried.
+  ///
+  /// Both halves are deliberate. `writeKeyHosts` is the reactive mirror, and
+  /// reading it here is what makes the card re-render after a save; the store
+  /// is then asked directly because it is the authority the attach will use —
+  /// a DEBUG wildcard answers for hosts it never listed, and the card must not
+  /// promise less than the next attach is about to present.
+  private var cardHasWriteKey: Bool {
+    guard let deviceID = cardBubble?.remote?.deviceID else { return false }
+    return writeKeyHosts.contains { $0.deviceID == deviceID }
+      || writeKeys.capability(for: deviceID) != nil
+  }
+
+  /// `nil` when there is no host to enter a key FOR (an agent bubble, or no
+  /// subject at all). Whether to DRAW it is the card's own rule.
+  private func writeKeyEntry(for bubble: FieldBubble?) -> (() -> Void)? {
+    guard let remote = bubble?.remote else { return nil }
+    return {
+      writeKeySheetHost = MirrorWriteHost(
+        deviceID: remote.deviceID, deviceName: remote.deviceName)
+    }
+  }
+
+  private func refreshWriteKeys() {
+    writeKeyHosts = writeKeys.hosts()
+  }
+
+  private func saveWriteKey(_ secret: String, for host: MirrorWriteHost) {
+    writeKeySheetHost = nil
+    do {
+      try writeKeys.set(secret, for: host)
+    } catch {
+      // Surfaced on the card, never as a crash and never with the secret in
+      // it: the reason a keychain refused is the store's, and the value is
+      // nobody's.
+      writeKeyNote = "could not save the key — \(error)"
+      return
+    }
+    writeKeyNote = nil
+    refreshWriteKeys()
+    reattachWithNewKey(to: host)
+  }
+
+  private func removeWriteKey(_ host: MirrorWriteHost) {
+    writeKeySheetHost = nil
+    do {
+      try writeKeys.remove(for: host.deviceID)
+      writeKeyNote = nil
+    } catch {
+      writeKeyNote = "could not remove the key — \(error)"
+    }
+    refreshWriteKeys()
+  }
+
+  /// A key saved under an open, view-only attachment is re-presented at once:
+  /// the token rides `TerminalAttachment.init` and the lifecycle re-presents
+  /// only what it was built with, so the sole way a live session learns of a
+  /// new key is a fresh attach. Doing it here is why the user does not have to
+  /// close the card to start typing in it.
+  ///
+  /// The detach is awaited before the new attach begins — two lifecycles
+  /// against one session is exactly what `attaching` exists to prevent — and
+  /// an attach already in flight is left alone: it would swallow this one
+  /// silently, so the card says the true thing instead.
+  private func reattachWithNewKey(to host: MirrorWriteHost) {
+    guard let attachment, attachedDeviceID == host.deviceID,
+      let bubble = cardBubble, bubble.remote?.deviceID == host.deviceID
+    else { return }
+    guard !attaching else {
+      writeKeyNote = "key saved — reattach to type"
+      return
+    }
+    self.attachment = nil
+    attachedDeviceID = nil
+    renderFailure = nil
+    attachRefusal = nil
+    Task {
+      await attachment.detach()
+      beginAttachment(to: bubble)
+    }
   }
 
   /// The pasteboard confirmation, in the reference's own vocabulary — and it
@@ -507,6 +681,10 @@ public struct HomeScreen: View {
   private struct SessionSelection: Identifiable {
     let id: String
   }
+
+  #if DEBUG
+    private static let writeKeyArgument = "-vf-write-key="
+  #endif
 }
 
 #if DEBUG

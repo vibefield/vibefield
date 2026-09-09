@@ -23,8 +23,17 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
-| `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface |
+| `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface — plus (IOS-3c) the per-host mirror-write key store |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
+
+**Write keys (IOS-3c).** The mirror-write capability a desktop grants this
+phone is the value of its `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`, kept in the
+Keychain as one generic-password item per host (service
+`com.jamesyong.vibefield.ios.mirror-write`, account = the host's device id,
+`AfterFirstUnlockThisDeviceOnly`, `kSecAttrSynchronizable = false` — a grant to
+one device must not ride iCloud to the others). It leaves the store exactly
+once, as the attachment's access token, and is never displayed, exported, or
+logged: the settings sheet lists the HOSTS and offers only REMOVE.
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
 TailscaleKit binary's floor — GhostteaApp's own) · simulator is arm64-only
@@ -80,6 +89,8 @@ reach states no `simctl` touch can:
 | `-vf-auto-open-card` | opens a session card, preferring an attachable remote one |
 | `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole IOS-3 path with no finger on the glass; without a mesh it proves the honest-failure path instead |
 | `-vf-open-settings` | opens the terminal appearance sheet |
+| `-vf-open-write-key` | opens the WRITE KEY sheet on the demo host, the one surface a tap is otherwise the only way to reach |
+| `-vf-write-key=<secret>` | swaps the Keychain for an in-memory write-key store whose **wildcard** answers for any host, so `-vf-auto-attach` can type against a serving desktop with no finger on the glass; it also seeds one explicit demo host (`studio`) so the settings sheet's WRITE KEYS section has a row to render. A launch argument is visible to `ps` — a DEBUG smoke aid, never a way to carry a real secret onto a phone |
 
 Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
@@ -103,16 +114,22 @@ the online-peer roster, and the mesh chip the bubbles physically flow around
 (`.swarmObstacle()` — the desktop obstacle pattern); and since IOS-3 the
 terminal leg: remote-session discovery putting every peer's session on the
 field as its own bubble, ATTACH over Truffle, the Ghosttea Metal surface, 602
-themes + 4 shader ports in the settings sheet, and upstream's reconnect banner.
-135 headless tests.
+themes + 4 shader ports in the settings sheet, and upstream's reconnect banner;
+and since IOS-3c the write key has a home: the per-host Keychain store above,
+ENTER KEY on the card's invitation (and on the status row of a live attachment
+that is view-only for want of one), the sheet that takes it, and the WRITE KEYS
+section that lists and revokes. 149 headless tests.
 
-Honest-missing (each says so on screen where it shows): **this device holds no
-write key** — the mirror-write capability's Keychain home is IOS-3c and has not
-landed, so every attach presents no token and the card says view-only *before*
-the tap as well as after (the session being shared read-write is a different
-fact from this device being granted writes, and conflating them was a review
-finding); approvals render as facts, never as buttons, until the approvals track
-lands; the agent feed is still the mock until fieldd's `agent.*` exists (IOS-4).
+Honest-missing (each says so on screen where it shows): **typing has not been
+witnessed on a device** — the key now rides every attach as its access token,
+but the gate that proves it (type into a desktop's session and watch it land)
+wants a phone, a tailnet, and a serving desktop, so it is a device run and no
+simulator can stand in for it. A phone holding no key for a host still says so
+before the tap as well as after, because the session being shared read-write is
+a different fact from this device being granted writes, and conflating them was
+a review finding. Approvals render as facts, never as buttons, until the
+approvals track lands; the agent feed is still the mock until fieldd's
+`agent.*` exists (IOS-4).
 
 Vendor glyph geometry: LobeHub Lobe Icons v5.14.0 (MIT), the set the desktop
 godview embeds.

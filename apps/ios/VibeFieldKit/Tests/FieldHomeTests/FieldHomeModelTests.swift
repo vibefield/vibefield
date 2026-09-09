@@ -212,3 +212,50 @@ struct WriteCopyTests {
     }
   }
 }
+
+// MARK: - Entering a key
+
+/// The act that answers the sentence the suite above pins. Until IOS-3c there
+/// was nothing to offer, so "view only — this device has no write key for this
+/// host" was a dead end on screen: true, and with no way out of it.
+@Suite("write key entry")
+struct KeyEntryTests {
+  /// THE case the act exists for: the host shares writes, this phone holds no
+  /// key, so the missing thing is one the user can supply.
+  @Test("a writable session with no key offers entry")
+  func writableWithoutKeyOffers() {
+    #expect(FieldHomeModel.keyEntryOffered(sessionSharesWrites: true, hasWriteKey: false))
+  }
+
+  /// A key changes nothing about a session nobody shares for writing, so
+  /// offering to enter one would be a control that cannot do what it says.
+  @Test("a read-only session offers nothing")
+  func readOnlySessionOffersNothing() {
+    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: false, hasWriteKey: false))
+    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: false, hasWriteKey: true))
+  }
+
+  /// A device that already holds one has nothing to enter — the copy beside it
+  /// says "you can type here", and an ENTER KEY under that sentence would read
+  /// as a repair for something that is not broken.
+  @Test("a device that holds a key is not asked for one")
+  func heldKeyOffersNothing() {
+    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: true, hasWriteKey: true))
+  }
+
+  /// The invariant that ties the act to the copy: entry is offered exactly
+  /// when the invitation blames THIS device, and never when it blames the
+  /// session or promises typing.
+  @Test("entry is offered exactly where the copy names a missing key")
+  func offerAgreesWithCopy() {
+    for shared in [true, false] {
+      for held in [true, false] {
+        let copy = FieldHomeModel.writeInvitation(
+          sessionSharesWrites: shared, hasWriteKey: held)
+        let offered = FieldHomeModel.keyEntryOffered(
+          sessionSharesWrites: shared, hasWriteKey: held)
+        #expect(offered == (copy == "view only — this device has no write key for this host"))
+      }
+    }
+  }
+}
