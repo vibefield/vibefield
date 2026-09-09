@@ -4759,3 +4759,109 @@ browser-at-proven-rect controls that grade WHICH half broke on a terminal failur
 first gate run re-ran green 3× in isolation — the known suite-concurrency class).
 **Still James's:** the dev-mode eyeball on real hardware GL, where none of the smoke's
 lotteries exist.
+
+## SNAP-0 — the screenshot helper comes home: one line protocol, two native helpers, one door
+
+2026-09-09, `46c0c190`. James: "port this tool prototype properly into our vibefield project
+as a tool our electron app can use in the future, follow our coding convention and quality
+here, plan and land it solid." The prototype is `research/screenshot2` ("Deskline", three
+commits on 2026-08-18): a WeChat-style native screenshot — every display captured BEFORE any
+overlay exists, then a borderless overlay per display above the screensaver level with window
+snap, a 21× loupe, eight handles and five marks; Enter copies PNG(+TIFF/DIB) and prints one
+JSON line. Swift/AppKit on macOS (ScreenCaptureKit stills, `swiftc` from the CLT, ad-hoc
+signed `.app` because TCC keys on the bundle), Rust/Win32 on Windows (WGC → DXGI → GDI,
+PerMonitorV2, a Direct2D/GDI overlay), and a thin Electron host. The design record is
+`draft/thinking-screenshot-tool.md` (SNAP-D1…D9; DECISIONS carries the row).
+
+**Where it landed, and why there (SNAP-D1).** A screenshot helper lives for ONE capture and
+must outlive nothing — neither product truth nor native floor — so it is a shell-plane tool
+on the SCK helper's rails: the contract in `packages/contracts/src/screenshot.ts` (TS-only,
+not in the Rust gen bundle), the host in `@vibefield/screenshot` (Node-only spine library;
+wall **R19** added and self-tested), the helpers under `apps/desktop/native/{macos,windows}/
+screenshot-helper` with build/test/verify scripts beside the SCK helper's, the composition in
+the shell. Both helpers' Cargo/Swift sources are the prototype's with the changes §6 of the
+thinking doc lists — identity, the v1 protocol, no `--hide-pid`, the glass lookup.
+
+**The protocol (SNAP-D2)** gained two things the prototype's host had to guess: `v: 1` on
+every line and a typed error `code` (`permission-denied` · `capture-failed` · `no-displays` ·
+`write-failed`) beside `message`. Seven fixtures under `contracts/fixtures/screenshot-*.json`
+are parsed by zod (`test/screenshot.test.ts` + the fixtures sweep), by the Swift harness
+(`VF_CONTRACT_FIXTURES`, six files decoded, refuses to pass on fewer) and by the Rust crate's
+`contract_fixtures_decode` (five parents up from the crate — the brief said four, the builder
+measured five). Stdout is protocol only; both `--standalone` banners moved to stderr.
+
+**The host (`ScreenshotTool`).** One live helper at most, the slot reserved synchronously so
+`busy` never lies; the 20 s pre-overlay timer `ready` lifts; a strict bounded line reader
+(64 KiB) that poisons itself on the first refused line and kills the helper; typed answers
+for every other ending (`helper-missing` without spawning · `helper-spawn-failed` ·
+`helper-timeout` · `helper-exited` with the last stderr line · `helper-protocol` · `busy` ·
+`disposed`); an exit-grace kill for a helper that lingers after its answer (a lingering
+overlay would make every later capture busy); dispose kills a live helper; the last twelve
+stills stay on disk, the oldest unlinked (SNAP-D4). 30 tests drive it with a scripted fake
+helper that is a REAL node child process (real pipes, exit codes, signals) plus an
+executable shell-script fixture on the default spawn + exec-bit path.
+
+**The doors (SNAP-D3).** `registerScreenshotCapture` wires a pure `createScreenshotDoor`
+(registered sender only · request checked at the seam · the answer validated BEFORE it
+crosses — a tool returning a refused shape throws on main's side); the preload exposes
+`window.vibefield.screenshot.capture()` validated both ways; `FieldHost.screenshotCapture?`
+mirrors it for the consumer that does not exist yet. The View menu gains **Take Screenshot**
+carrying the prototype's chord — `Control+Command+A` / `Alt+A` — as an APPLICATION
+accelerator (a global chord is stolen from every other app and wants a preference first:
+SNAP-1); the item is present-but-disabled where no helper resolves (SNAP-D5), and the menu
+path shows the one dialog main owes: a macOS Screen Recording refusal names the setting.
+`DesktopResources.screenshotHelperPath` resolves the bundle's inner executable (dev:
+`apps/desktop/build/native/macos/…`; packaged: flat under `bin/`), the `.exe` on Windows,
+null elsewhere — deliberately NOT boot-fatal, unlike the SCK helper: a screenshot is a
+peripheral, and an absent helper is an honest `helper-missing` at capture time.
+
+**Packaging.** The stager's `dir` entries learn `exec` (the bundle's inner binary keeps
+0755); the `.app` (darwin) and `.exe` (win32) are OPTIONAL entries with a `produce` line;
+electron-builder's `binaries:` gains the nested executable for WP10's inside-out signing;
+`package:stage` builds the helper; `apps/desktop` gains `build:` / `test:` /
+`verify:screenshot-helper`. The Windows crate is its OWN cargo workspace root (SNAP-D7; the
+root manifest excludes it) and its `build.rs` skips the winres manifest when the HOST is not
+Windows — the measured reason the prototype's cross-target check died (`rc.exe` absent) —
+so `cargo check --target x86_64-pc-windows-msvc` and cross-target clippy are witnesses from
+any host.
+
+**Evidence.** Two Opus builders ported the helpers in parallel against complete briefs;
+every claim below was re-run by the orchestrator, not quoted. macOS: build exit 0 (arm64,
+`codesign` identifier `com.jamesyong.vibefield.screenshot-helper`, ad-hoc), harness ALL
+PASSED with 6 fixtures decoded, live `--capture-test` on this Mac `ok` 3456×2234 @2× (10.8 MB
+PNG, magic checked, then removed — the verifier now cleans the per-display stills it
+graded), identity grep empty, the SNAP-D8 lookup probed standalone (the class resolves, all
+three KVC keys read back), the verifier negative-controlled (width 99999 · `v: 2` · a
+non-PNG all fail). Windows: `cargo fmt --check`, the cross-target check and cross-target
+clippy at `-D warnings` exit 0; identity grep empty; `cargo metadata` names the crate as
+its own workspace root; the real `protocol.rs` compiled as a standalone lib at the same
+depth passes its 7 tests with an empty-fixtures negative control. The gate: `pnpm verify`
+ran VERBATIM and is RED at `pnpm lint` — 4 biome errors, all in James's untracked
+`work/composer-directions.html`, the same state `0bef361b` recorded; preflight, check:deps,
+icons:check and typecheck (25 projects) green inside it; run separately on the same tree,
+`cargo fmt --check` · `pnpm lint:rust` · `pnpm bundle:assert` · `pnpm test:rust` ·
+`pnpm gen:check` exit 0 and `pnpm test` (25 projects) red on ONE row — field-app
+doc-manager "restart honors vf-last-doc" at its 5 s timeout while swiftc and a live capture
+ran beside it — green 2× in isolation (7/7). Walls `--enforce` clean including R19;
+electron-shell 679/679 (+2 skipped) on its own; contracts 361/361.
+
+**Findings.** (1) Eight of the prototype's thirteen `Theme` members had zero readers — the
+chrome is the glass material with AppKit semantic colors; the five the overlay READS are
+DESIGN.md's (`--vf-select` ring, `--vf-red` marks, the dark backdrop dim, white handles, the
+1.5px ring weight); the eight were removed rather than left as a claim the overlay did not
+keep, and the helper README says exactly what is worn. (2) The prototype's capture-test
+could emit an `ok` with an empty path, which the contract refuses — it answers
+`write-failed` now. (3) `JSONEncoder` escapes `/` as `\/`: valid, parses, byte-differs from
+the Windows line. (4) Unknown helper flags fall through to the overlay path in both helpers
+(prototype behaviour, kept; the host passes only `--once`). (5) The Windows helper's
+`permission-denied` is now a real outcome — `request_capture_access` reports the OS
+capability status instead of only logging it.
+
+**Owed, stated plainly.** The macOS OVERLAY was not exercised live: `--once` is a
+full-screen overlay on the developer's display and no agent may put one there — James's
+first ⌃⌘A in `pnpm dev` is the witness (the port changed no overlay code beyond the glass
+lookup; the prototype ran it from its own host on 2026-08-18). No test in the Windows crate
+has run AS the crate (nothing here links Win32) — the box round is SNAP-4, spelled out in
+`docs/WINDOWS_PORT_STATUS.md`. The consumer (the still onto the canvas) is SNAP-3; the
+global chord SNAP-1; the fabric method under `surface.capture` SNAP-2. The `work/` lint red
+is James's to clear (delete the scratch file or exclude `work/` in `biome.jsonc`).
