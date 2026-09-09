@@ -49,10 +49,14 @@ public struct InputCard: View {
 
   /// Draft: the field and Send.
   ///
-  /// The design's `+` and mic controls are deliberately ABSENT rather than
-  /// present-and-dead (D-i6): `+` is IOS-5d, and the mic needs the Speech
-  /// framework and its usage strings, which is a slice of its own. A disabled
-  /// button would promise a door that is not built.
+  /// The design's `+` control is deliberately ABSENT rather than
+  /// present-and-dead (D-i6): it is IOS-5d, and a disabled button would
+  /// promise a door that is not built.
+  ///
+  /// --- IOS-5d mic: the mic is no longer one of those absences. It needed the
+  /// Speech framework and its usage strings, which is why it was a slice of
+  /// its own; it landed with `DictationKey` and sits where the desktop
+  /// Composer's foot puts it, immediately left of Send.
   private var draftRow: some View {
     HStack(alignment: .bottom, spacing: Self.gap) {
       ComposerField(
@@ -63,6 +67,10 @@ public struct InputCard: View {
       .frame(height: max(Self.rowHeight, composerHeight))
       .background(keyShape(inverted: false))
       .accessibilityLabel("Message or command")
+
+      // --- IOS-5d mic ---
+      DictationKey(model: model)
+      // --- end IOS-5d mic ---
 
       sendKey
     }

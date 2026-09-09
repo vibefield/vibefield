@@ -24,7 +24,7 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
 | `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface — plus (IOS-3c) the per-host mirror-write key store |
-| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a): the composer field, the rail, the sticky-Ctrl latch, and the acts they emit — plus (IOS-5b) the long-press fans, the Meta burst and the haptic table. Its own target on purpose (K-D1) — a keyboard is state machines all the way down, and the IOS-3 review found every serious bug living in the one module that had no test target. It takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
+| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a): the composer field, the rail, the sticky-Ctrl latch, and the acts they emit — plus (IOS-5b) the long-press fans, the Meta burst and the haptic table, and (IOS-5d's mic rider) the mic beside Send — `DictationSession` over Speech and `AVAudioEngine`, recognized on the device where the device can, landing partials in the DRAFT and never on the wire. Its own target on purpose (K-D1) — a keyboard is state machines all the way down, and the IOS-3 review found every serious bug living in the one module that had no test target. It takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 **Write keys (IOS-3c).** The mirror-write capability a desktop grants this
@@ -95,6 +95,7 @@ reach states no `simctl` touch can:
 | `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; add `-vf-demo-input-live` for the strip instead of the composer, or `-vf-demo-input-draft` for a filled draft under a locked CTRL |
 | `-vf-demo-input-fan` | opens the CTRL long-press fan three seconds in — the ten chords in two rows, anchored above the key. The only way to a fan without a finger, and the fan is the whole of IOS-5b that a screenshot can show |
 | `-vf-demo-input-meta` | holds ESC in its armed META state by re-arming the burst once a second. The burst is a 3 s window BY DESIGN and a screenshot run is slower than that, so the fixture keeps re-arming rather than pretending the window is longer; the state in the picture is the real one |
+| `-vf-demo-input-dictating` | forces the mic key's LISTENING look — inverted, breathing — and seeds the draft through the same `appendDictation` a real partial would use. Listening otherwise wants two permission alerts answered by a finger and a voice to speak into a simulator, so this is the only way to a picture of the state; it opens no audio session and asks Speech for nothing. Our own pixels, never a claim that anything was heard |
 
 Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
@@ -136,7 +137,18 @@ and every rail key but the mode toggle holds a fan under a 0.35 s press: ten
 chords under CTRL, each arrow's far end, ⇧Tab under TAB, and the Meta burst
 under ESC (`.option` on exactly the next keystroke, with ESC wearing an inverted
 META while it is armed). Haptics say which transition just happened: light to
-arm, medium to lock, soft to release, rigid for a chord. 208 headless tests.
+arm, medium to lock, soft to release, rigid for a chord; and since IOS-5d's mic
+rider the composer row has its third control: the mic between the field and
+Send, which **dictates into the draft and never into the terminal** — a
+misheard word would already be a command if it went straight down the wire,
+where in the draft it is a sentence you can still read and delete. Recognition
+is asked to stay on the device wherever the device supports it
+(`requiresOnDeviceRecognition`), the audio is streamed buffer by buffer and
+stored nowhere, and no transcript is logged. Partials land as the draft's tail
+and each refinement replaces that span rather than repeating it; the key
+inverts and breathes on the field's own slow period while it listens; a refused
+permission or an absent recognizer is one honest line beside the composer for
+three seconds, never a greyed-out key. 226 headless tests.
 
 Honest-missing (each says so on screen where it shows): **typing has not been
 witnessed on a device** — the key now rides every attach as its access token
@@ -150,8 +162,19 @@ input card is therefore **not on screen** on any attachment this device cannot
 type into (K-D2) — a rail of keys that cannot reach a terminal is the disabled
 affordance D-i6 forbids, and the honest view-only line already says why. The
 card's remaining pieces are absent rather than inert: the `+` menu and the `⋯`
-keypad are IOS-5d, the mic is a slice of its own, and the reply/paste chips are
-IOS-5c. IOS-5b's own gate is a device too: the latch reaching the terminal
+keypad are IOS-5d, and the reply/paste chips are IOS-5c. **Dictation has not
+been heard**: a headless run has no voice to speak into a simulator and no
+finger for the two permission alerts, so nothing about a real transcript, the
+grants, or whether recognition stayed on the device has been witnessed. What
+the simulator did witness is the face, forced by `-vf-demo-input-dictating`. A
+device or simulator with no audio input at all reports a zero-channel format,
+which `installTap` traps on rather than throws — that case is guarded and
+becomes the "no microphone" line rather than a crash, and it too is unwitnessed
+until someone runs it with the input unplugged. The
+mic is deliberately absent from Live's strip, where the design draws one: it
+lands words in a draft, and Live has no draft on screen, so a mic there would
+either fill a field nobody can see or type into the terminal — which is the one
+thing this control refuses to do. IOS-5b's own gate is a device too: the latch reaching the terminal
 (`Ctrl-R` then text, `Ctrl-X Ctrl-S` through a lock), vim's `Esc :q!`, ⇧Tab, and
 a Meta-arrow tmux binding all want a shell on the far end of a real mesh, so the
 simulator witnessed the fans and the META state and nothing about what they
