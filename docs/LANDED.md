@@ -5022,3 +5022,64 @@ the `+` and its rotated `×` with three items, the nine-key rail, the keypad on 
 both modes, the Snippets and Clipboard History sheets, the scanner's honest line.
 **Device-gated:** `|` and `~` from Symbols reaching a shell, `^B c` opening a tmux window, a
 snippet with Enter running and one without not running, Scan Text on a camera.
+
+## IOS-5e — the card at every size and to every reader: Dynamic Type, Reduce Motion, VoiceOver, the sweep
+
+**LANDED 2026-09-09, `1f923a30`** (fast-forwarded onto `ios/keyboard`). The last slice of the
+keyboard track; nothing here restructures what 5a–5d built. `InputCardMetrics` is the Dynamic
+Type rule as pure functions: one step at `isAccessibilitySize` and no ramp — the rail and
+composer 44 → 52 pt (the design's own "rail is 52"), every label mono 9 → 11 heavy and never
+further (a keyboard's markings are instrument markings: a scaled mono 9 at `accessibility5` is
+27 pt and nine of those fit no phone), the fan's keys 40 → 48, the keypad's 38 → 46 in a frame
+260 → 312, the chips 32 → 40, the draft's prose 13 → 15; pinned at every size the system has.
+Reduce Motion: the `+` does not turn, the mic does not breathe, the fan fades its content in with
+its presentation animation off, the keypad's page change becomes a cut; the cross-fades stay.
+VoiceOver: `InputAnnouncement` holds the words and the views post them (announcements are
+presentation, like the haptics) — "Control armed / locked / released", "Meta armed for the next
+key", "Typing into terminal" / "Drafting", "Terminal keys" / "System keyboard"; the rail is a
+container, the chips row is "Replies for the waiting agent", CTRL's hint names what the NEXT tap
+does, Send says what it sends. The haptic table completed and written whole at the top of
+`Haptics.swift`.
+
+**What the sweep found, and fixed — three real defects, none of this slice's own.** A long
+single-line draft made the composer demand its intrinsic width and the whole card overflowed
+both screen edges (`+` and Send clipped, the rail's ends with them): `ComposerField` now answers
+the layout proposal instead of asking, and measures its height against that proposal. The
+keypad's `UIInputView` read its text size from a trait collection it did not yet have,
+committed 260 pt and then grew 52 pt upward over the rail: the size is handed in from SwiftUI.
+The paste-review sheet was still constructed on IOS-5d's default commit, so a snippet marked
+"sends Enter" read "nothing runs until you press Enter" over text that SEND then ran.
+
+**The sweep:** 36 iPhone screenshots (18 states × 2 themes), 8 at accessibility XXXL, 4 on a
+13-inch iPad, a landscape witness on the phone (`simctl` cannot rotate; `-vf-demo-landscape`
+asks the window scene — honoured on iPhone, refused on iPad, recorded rather than hidden); the
+720 pt width cap witnessed centring the card on an 874 pt landscape phone. **Tests 315 → 331,
+green on iOS 26.1 and 26.5.** The README's "real vs honest-missing" paragraphs rewritten whole as
+the track's final state.
+
+## IOS-5 — the keyboard track lands: the input card, complete to its design, on `ios/keyboard`
+
+**Track complete on the branch 2026-09-09 (`9b07fc61` … `1f923a30`, 19 commits, 57 files); NOT on
+main — James merges.** One session, one orchestrator, six briefed Opus builders in worktrees
+(3c ∥ 5a, then 5b ∥ 5c, then 5d ∥ the mic rider, then 5e), every slice gated on its own branch
+and again on the merged tree, every merge conflict read rather than trusted. The design
+(`research/mobile-terminal/KeyboardLab/DESIGN-PROPOSALS.md`, final 2026-09-09) is on the phone
+whole, in the godview voice: the write key's Keychain home (3c), the composer and the rail with
+the sticky Ctrl (5a), the latch reaching the terminal's own keyboard with the fans and the Meta
+burst (5b), reply chips from the feed, the paste chip and the closed row (5c), the mic in the
+draft, the `+` menu and the `⋯` keypad (5d), and the card at every size and to every reader (5e).
+Tests 135 → 331. **K-D1…K-D7 were adopted provisionally to build against and await James's ruling**
+(`thinking-ios-keyboard.md` §8.1) — the ones that bind a future: K-D5 (the keypad in Live rides a
+hidden responder; the `customInputView` petition batches into the next pin bump), K-D6 (`+` ships
+without Photo / Take Photo / Choose File until a phone→host file verb exists).
+
+**What no simulator could witness, and what this entry therefore does NOT claim:** typing into a
+serving desktop with a key entered on the phone; Esc, Tab and the arrows landing in a shell; a
+three-line draft arriving in zsh as one bracketed block; Ctrl-R then text, Ctrl-X Ctrl-S through
+a lock, vim's `Esc :q!`, ⇧Tab, a Meta-arrow tmux binding; `|` and `~` from Symbols; `^B c`
+opening a tmux window; a snippet with Enter running and one without not; Scan Text on a camera;
+the two dictation prompts and a real transcript; a chip tapped against a real permission (the
+agent feed is IOS-4/AR's); every haptic. Each is named at its slice above. **They are James's
+device run** — a phone on the tailnet, a desktop serving with `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`
+set, the key entered through ENTER KEY. Found on the way and fixed at source: the workspace's
+`Package.resolved` had recorded ghosttea 0.9.3 since `cec95a84` while the manifest said 0.10.1.
