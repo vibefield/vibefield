@@ -5083,3 +5083,52 @@ agent feed is IOS-4/AR's); every haptic. Each is named at its slice above. **The
 device run** — a phone on the tailnet, a desktop serving with `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`
 set, the key entered through ENTER KEY. Found on the way and fixed at source: the workspace's
 `Package.resolved` had recorded ghosttea 0.9.3 since `cec95a84` while the manifest said 0.10.1.
+
+## IOS-5v — the card speaks VibeField: the canvas's chrome on the phone, godview kept for the field and the terminal
+
+**LANDED 2026-09-11, `62387ead`** (fast-forwarded onto `ios/keyboard`). James, on seeing the
+built card in the simulator: *"i dont like this design, the bubble swarm view and terminal does
+has their own style, but they are a small part of our app, our app itself should follow
+vibefield style, and i think the design in our live artifact is close to what we wanted"* —
+and, asked about scope, "focus on the keyboard first". The mono re-skin was the orchestrator's
+decision (K-D7, now REVERSED at source in `thinking-ios-keyboard.md` §8.1), not the design's.
+DESIGN.md §1.1 had already said it: the godview instrument palette is "the deliberate
+control-room exception", scoped to the agent stage and the terminal deck. So the swarm field and
+the terminal surface keep `FieldType`/`FieldPalette` untouched, and the input card and its sheets
+become the chrome family — §1's second surface family, §2's opacity ramp and hairlines, §3's SF,
+§4's radii and round pills, §5's ambient shadows — as the KeyboardLab canvas draws it. D-i2 is
+scoped accordingly in `thinking-ios-app.md` §4. **Visual only:** no behaviour, state machine,
+act, fixture or launch argument changed; the two copy changes that reached data are sentence
+case (§9) — the reply chips' labels with the keystroke as its own numbered circle, and the
+keypad's page and pack names.
+
+**The token set** (`FieldDesign`, four files, every value carrying the DESIGN.md section and the
+canvas class it came from): `ChromeType` (SF at the canvas's steps; the key label is the one
+place `ui-rounded` is used; mono is for DATA only — command text and a key's name in a fan or a
+combo), `ChromePalette` (every token a light/dark pair: dark transcribed from the canvas, light
+DERIVED by DESIGN.md — white chrome material, black/5–8 hairlines, the opacity ramp in black,
+every inversion swapped whole — and matched by eye in both themes), `ChromeMaterial` +
+`ChromeRadius` + `ChromeShadow` (the glass card, key cap, circle, floating surface and well;
+card 26 · key 9 · keypad key 7 · chip 18 · pop 14 · menu 18 · well 12 · pill round),
+`ChromeControls` (§3's eyebrow and §4's round pill in two weights). Re-skinned, every file:
+`InputCard`, `ComposerField`, `ChipsRow`/`ReplyChips`, `ClosedRow`, `PasteChip`, `KeyPopover`,
+`PlusMenu`, `DictationKey`, `TerminalKeypad`, `SnippetsSheet`, `ClipboardHistorySheet`,
+`PasteReviewSheet`, `ScanText`, and FieldHome's `WriteKeySheet`. `FieldType`/`FieldPalette` no
+longer appear anywhere in `FieldInput` — grepped, and the grep is the test. `InputCardMetrics`
+keeps its one accessibility step and moves only its floor to the canvas (labels 13 → 15, the
+field 17 → 20, chips 36 → 44, keypad keys 42 → 50); one test added pinning the base sizes to
+`ChromeRadius`.
+
+**Judgment calls, recorded at source.** The glass gradient is a dark scrim in dark mode where
+the canvas's is white — a CSS backdrop-blur changes only sharpness while `.ultraThinMaterial`
+adds vibrancy, so the canvas's white on top gave a milky panel (witnessed); set by measuring both
+renders. The chips ship as plain glass with no `--vf-orange` tint: the row exists only while an
+agent waits, so the tint would say the same thing twice and spend the one colour that means
+something. Send with an empty draft is `.circle.quiet` (the canvas's own Main artboard), not
+`.dim` — that faint reads disabled, which it is not. The strip carries no right-hand hint: the
+canvas defines one in CSS and uses it in no artboard. `UIPasteControl` ignores a translucent
+fill (witnessed), so that one chip gets a solid at the pill's resolved value with our hairline
+over it. **Tests 331 → 332 green; 36 screenshots across 18 states in both themes read beside
+the artboard renders.** Still James's: the rest of the phone's chrome (the session card's
+header and affordances, the settings sheet, the mesh sheet) is godview mono today and waits on
+his scoping; every device gate from the IOS-5 entry is unchanged by a re-skin.
