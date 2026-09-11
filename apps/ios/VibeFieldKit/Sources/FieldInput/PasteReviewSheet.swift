@@ -35,22 +35,16 @@ public struct PasteReviewSheet: View {
 
   public var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      // `textMuted` like the write-key sheet's eyebrow, for the same reason:
-      // this sheet sits over the field, where a bright bubble behind the glass
-      // leaves a faint eyebrow unreadable in light mode.
-      Text(eyebrow)
-        .font(FieldType.mono(9, .heavy))
-        .tracking(FieldType.tracking(0.18, of: 9))
-        .foregroundStyle(FieldPalette.textMuted)
+      ChromeEyebrow(eyebrow)
 
       Text(lineSummary)
-        .font(FieldType.mono(12, .medium))
-        .foregroundStyle(FieldPalette.textMain)
-        .padding(.top, 6)
+        .font(ChromeType.sans(ChromeType.sheetTitleSize, .semibold))
+        .foregroundStyle(ChromePalette.ink)
+        .padding(.top, 4)
 
       Text(promise)
-        .font(FieldType.mono(9))
-        .foregroundStyle(FieldPalette.textMuted)
+        .font(ChromeType.sans(ChromeType.sheetBodySize))
+        .foregroundStyle(ChromePalette.inkTertiary)
         .fixedSize(horizontal: false, vertical: true)
         .padding(.top, 10)
 
@@ -73,7 +67,7 @@ public struct PasteReviewSheet: View {
   /// and asking it under the same word would be the sheet agreeing to
   /// something it was not shown.
   private var eyebrow: String {
-    commit == .run ? "RUN IN TERMINAL" : "PASTE INTO TERMINAL"
+    commit == .run ? "Run in terminal" : "Paste into terminal"
   }
 
   /// The one line under the count, and the only place on this card where a
@@ -82,9 +76,9 @@ public struct PasteReviewSheet: View {
   private var promise: String {
     switch commit {
     case .paste, .type:
-      return "it goes in as one block, and nothing runs until you press Enter"
+      return "It goes in as one block, and nothing runs until you press Enter"
     case .run:
-      return "it goes in as one block AND RUNS — this snippet sends Enter"
+      return "It goes in as one block and RUNS — this snippet sends Enter"
     }
   }
   // --- end IOS-5d -------------------------------------------------------------
@@ -105,30 +99,24 @@ public struct PasteReviewSheet: View {
   private var preview: some View {
     ScrollView(.vertical) {
       Text(text)
-        .font(FieldType.mono(11))
-        .foregroundStyle(FieldPalette.textMain)
+        // The pasted text is the one thing on this sheet that must arrive
+        // byte-for-byte, so it is set in mono (§3: monospace is for data).
+        .font(ChromeType.mono(ChromeType.rowSummarySize))
+        .foregroundStyle(ChromePalette.ink)
         .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
+        .padding(12)
     }
     .frame(maxHeight: 220)
-    .background(RoundedRectangle(cornerRadius: 6).fill(FieldPalette.panelBackground.opacity(0.45)))
-    .overlay(
-      RoundedRectangle(cornerRadius: 6).strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+    .background { ChromeMaterial.well() }
   }
 
   private var acts: some View {
     HStack(spacing: 10) {
       Button(action: onSend) {
-        Text("SEND")
-          .font(FieldType.mono(11, .heavy))
-          .tracking(FieldType.tracking(0.12, of: 11))
-          .foregroundStyle(FieldPalette.panelBackground)
-          .padding(.horizontal, 18)
-          .padding(.vertical, 9)
-          .background(RoundedRectangle(cornerRadius: 8).fill(FieldPalette.textMain))
+        Text("Send")
       }
-      .buttonStyle(.plain)
+      .buttonStyle(ChromePillStyle(.primary))
       // --- IOS-5e: the sheet's whole reason, said to a reader who cannot see
       // the promise line above it. SEND means two different things here and
       // one of them RUNS the block — a four-letter label cannot carry that.
@@ -137,17 +125,9 @@ public struct PasteReviewSheet: View {
       // --- end IOS-5e
 
       Button(action: onCancel) {
-        Text("CANCEL")
-          .font(FieldType.mono(11, .heavy))
-          .tracking(FieldType.tracking(0.12, of: 11))
-          .foregroundStyle(FieldPalette.textMain)
-          .padding(.horizontal, 18)
-          .padding(.vertical, 9)
-          .overlay(
-            RoundedRectangle(cornerRadius: 8)
-              .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+        Text("Cancel")
       }
-      .buttonStyle(.plain)
+      .buttonStyle(ChromePillStyle(.secondary))
     }
   }
 }

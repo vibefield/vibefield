@@ -4,6 +4,11 @@ import UIKit
 
 /// The composer's text field, in UIKit on purpose.
 ///
+/// IOS-5v: it wears the canvas's `.field` — SF 17/22 in `ChromePalette.ink`,
+/// the placeholder at 42%, no fill and no hairline of its own. The card's glass
+/// is the surface a draft is written on; a box drawn around the text would make
+/// the one part of this card that is prose look like a tenth key.
+///
 /// The kit's Metal view already declares the whole terminal trait set —
 /// autocorrection, spell check, smart quotes/dashes/insert and
 /// autocapitalization all off — so nothing typed straight into the terminal
@@ -86,15 +91,15 @@ struct ComposerField: UIViewRepresentable {
     view.inputAccessoryView = nil
     view.backgroundColor = .clear
     view.isScrollEnabled = false
-    view.placeholder = "message or command"
+    // IOS-5v: the canvas's own copy, verbatim (`.field .ph`), in sentence case.
+    view.placeholder = "Message the agent…"
     view.text = model.draft
     // --- IOS-5e ---------------------------------------------------------------
-    // The field's spoken name. The placeholder is lowercase godview copy and
-    // VoiceOver reads a text view's placeholder as its value, not its label —
-    // so without this the composer announces itself as "text field" and nothing
-    // else. It is set on the UIKit view rather than as a SwiftUI modifier
-    // because the `UITextView` is its own accessibility element and a label
-    // hung on the representable does not always reach it.
+    // The field's spoken name. VoiceOver reads a text view's placeholder as
+    // its value, not its label — so without this the composer announces itself
+    // as "text field" and nothing else. It is set on the UIKit view rather than
+    // as a SwiftUI modifier because the `UITextView` is its own accessibility
+    // element and a label hung on the representable does not always reach it.
     view.accessibilityLabel = "Message or command"
     // --- end IOS-5e -----------------------------------------------------------
     return view
@@ -108,9 +113,9 @@ struct ComposerField: UIViewRepresentable {
     // the empty field would be a different type ramp from the full one.
     view.applyTextSize(textSize)
     // --- end IOS-5e
-    view.textColor = UIColor(FieldPalette.textMain)
-    view.tintColor = UIColor(FieldPalette.textMain)
-    view.placeholderColor = UIColor(FieldPalette.textFaint)
+    view.textColor = UIColor(ChromePalette.ink)
+    view.tintColor = UIColor(ChromePalette.ink)
+    view.placeholderColor = UIColor(ChromePalette.placeholder)
     // The model is the draft's owner: `tapSend` clears it, and the field has
     // to follow rather than hold the last thing it rendered.
     if view.text != model.draft {
@@ -298,14 +303,16 @@ final class InputTextView: UITextView {
   /// placeholder is pinned against it: setting it afterwards left the label at
   /// the old inset and the placeholder rendered half a character left of the
   /// caret, clipped by the field's own edge.
-  static let inset = UIEdgeInsets(top: 12, left: 8, bottom: 12, right: 8)
+  /// IOS-5v: the canvas's `.field` padding — `5px 6px` around 17/22 text, which
+  /// centres one line in the 44 pt row the `.target`s beside it stand in.
+  static let inset = UIEdgeInsets(top: 11, left: 6, bottom: 11, right: 6)
 
   override init(frame: CGRect, textContainer: NSTextContainer?) {
     super.init(frame: frame, textContainer: textContainer)
     textContainerInset = Self.inset
     self.textContainer.lineFragmentPadding = 0
-    font = .monospacedSystemFont(ofSize: 13, weight: .regular)
-    placeholderLabel.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+    font = .systemFont(ofSize: ChromeType.fieldSize, weight: .regular)
+    placeholderLabel.font = .systemFont(ofSize: ChromeType.fieldSize, weight: .regular)
     placeholderLabel.numberOfLines = 1
     placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
     addSubview(placeholderLabel)
@@ -340,8 +347,8 @@ final class InputTextView: UITextView {
   /// screen.
   func applyTextSize(_ size: CGFloat) {
     guard font?.pointSize != size else { return }
-    font = .monospacedSystemFont(ofSize: size, weight: .regular)
-    placeholderLabel.font = .monospacedSystemFont(ofSize: size, weight: .regular)
+    font = .systemFont(ofSize: size, weight: .regular)
+    placeholderLabel.font = .systemFont(ofSize: size, weight: .regular)
   }
   // --- end IOS-5e -----------------------------------------------------------
 }

@@ -14,6 +14,11 @@ import SwiftUI
 /// key event either way. But the design gives this state one row, and a row
 /// that is half rail is a rail with keys missing rather than a different
 /// state.
+///
+/// **IOS-5v.** The way back is the canvas's own: a 44 pt glass circle wearing a
+/// keyboard glyph, where the godview card had a chip that said `KEYBOARD`. A
+/// word is what you write when the picture would not be understood, and every
+/// phone already knows this one.
 struct ClosedRow: View {
   let model: InputCardModel
   let pasteboard: PasteboardWatcher?
@@ -21,48 +26,34 @@ struct ClosedRow: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   // --- end IOS-5e -----------------------------------------------------------
 
-  private static let gap: CGFloat = 6
-  private static let cornerRadius: CGFloat = 6
+  /// `.row` gap 8 — the closed row is the chips row with one more thing on it.
+  private static let gap: CGFloat = 8
+
+  private var side: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
 
   var body: some View {
     HStack(spacing: Self.gap) {
       if !ChipsRow.isEmpty(model: model, pasteboard: pasteboard) {
         ChipsRow(model: model, pasteboard: pasteboard)
-      } else {
-        Spacer(minLength: 0)
       }
-      keyboardChip
+      Spacer(minLength: 0)
+      keyboardButton
     }
   }
 
-  /// Quiet, in `FieldChip`'s ramp: getting the keyboard back is a door that is
-  /// merely available, and contrast in this app means something needs you.
-  private var keyboardChip: some View {
+  /// Quiet: getting the keyboard back is a door that is merely available, and
+  /// the card's one prominent control is Send.
+  private var keyboardButton: some View {
     Button {
       model.requestKeyboard()
     } label: {
-      Text("KEYBOARD")
-        .font(FieldType.mono(InputCardMetrics.labelSize(for: dynamicTypeSize), .heavy))
-        .tracking(
-          FieldType.tracking(0.08, of: InputCardMetrics.labelSize(for: dynamicTypeSize))
-        )
-        .foregroundStyle(FieldPalette.textMuted)
-        .lineLimit(1)
-        .padding(.horizontal, 10)
-        // IOS-5e: the same step the chips beside it take, so the closed row
-        // stays one row of one height.
-        .frame(height: InputCardMetrics.chipHeight(for: dynamicTypeSize))
-        .background(
-          RoundedRectangle(cornerRadius: Self.cornerRadius)
-            .fill(FieldPalette.panelBackground.opacity(0.8))
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: Self.cornerRadius)
-            .strokeBorder(FieldPalette.panelBorder, lineWidth: 1)
-        )
+      Image(systemName: "keyboard")
+        .font(.system(size: InputCardMetrics.glyphSize(for: dynamicTypeSize), weight: .semibold))
+        .foregroundStyle(ChromePalette.ink)
+        .frame(width: side, height: side)
+        .chromeGlass(radius: side / 2)
     }
-    .buttonStyle(KeyPressStyle())
-    .fixedSize()
+    .buttonStyle(KeyPressStyle(radius: side / 2))
     .accessibilityLabel("Show the keyboard")
   }
 }

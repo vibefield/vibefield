@@ -50,7 +50,7 @@ public enum ComboCatalog {
   /// the ones that work in a bare shell.
   public static let emacs = ComboPack(
     id: "emacs",
-    title: "EMACS",
+    title: "Emacs",
     combos: [
       control("emacs", "a", "line start"),
       control("emacs", "e", "line end"),
@@ -67,7 +67,7 @@ public enum ComboCatalog {
   /// rather than the binding.
   public static let tmux = ComboPack(
     id: "tmux",
-    title: "TMUX",
+    title: "Tmux",
     combos: [
       prefixed("tmux", prefix: "b", then: "c", subtitle: "new window"),
       prefixed("tmux", prefix: "b", then: "n", subtitle: "next"),
@@ -80,7 +80,7 @@ public enum ComboCatalog {
   /// The line editor every shell shares.
   public static let readline = ComboPack(
     id: "readline",
-    title: "READLINE",
+    title: "Readline",
     combos: [
       control("readline", "r", "search"),
       control("readline", "l", "clear"),
@@ -93,7 +93,7 @@ public enum ComboCatalog {
   /// screen, for the desktops that still run it.
   public static let screen = ComboPack(
     id: "screen",
-    title: "SCREEN",
+    title: "Screen",
     combos: [
       prefixed("screen", prefix: "a", then: "c", subtitle: "new"),
       prefixed("screen", prefix: "a", then: "n", subtitle: "next"),

@@ -97,9 +97,9 @@ public enum KeypadPage: String, Equatable, Sendable, CaseIterable {
   /// The segmented row's face. Mono 9 heavy, like every other label here.
   public var title: String {
     switch self {
-    case .keys: return "KEYS"
-    case .symbols: return "SYMBOLS"
-    case .combos: return "COMBOS"
+    case .keys: return "Keys"
+    case .symbols: return "Symbols"
+    case .combos: return "Combos"
     }
   }
 }
@@ -307,7 +307,7 @@ public final class InputCardModel {
   }
 
   // --- IOS-5b ---------------------------------------------------------------
-  /// A chord picked out of a long-press fan — `^C`, `⇧TAB`, `HOME`.
+  /// A chord picked out of a long-press fan — `^C`, `⇧Tab`, `Home`.
   ///
   /// A fan key names its own modifiers, so the latch does not add to them: the
   /// user asked for `^C`, not for `^^C`, and picking HOME with Ctrl held should

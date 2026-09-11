@@ -26,7 +26,11 @@ struct ReplyChipsTests {
   @Test("Claude's chips type the answer its TUI is asking for")
   func claudeTypesTheAnswer() {
     let chips = replyChips(provider: .claude, permissions: bash)
-    #expect(chips.map(\.label) == ["1 YES", "2 YES, DON'T ASK", "3 NO", "ESC"])
+    // IOS-5v: sentence case (DESIGN.md §9), and the keystroke split off into
+    // its own field because the canvas draws it in its own circle.
+    #expect(chips.map(\.label) == ["Yes", "Yes, don't ask", "No", "Esc"])
+    #expect(chips.map(\.number) == ["1", "2", "3", nil])
+    #expect(chips.map(\.spokenLabel) == ["1, Yes", "2, Yes, don't ask", "3, No", "Esc"])
     #expect(
       chips.map(\.act) == [
         .sendDraft("1"),

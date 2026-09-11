@@ -20,7 +20,7 @@ public struct KeyFan: Identifiable, Equatable, Sendable {
 
   public struct Item: Identifiable, Equatable, Sendable {
     public let id: String
-    /// The key's face: `^C`, `HOME`, `⇧TAB`, `META`.
+    /// The key's face: `^C`, `Home`, `⇧Tab`, `Meta`.
     public let label: String
     /// One word saying what it does, per the design's chord fan. Empty when the
     /// label is already the whole word (`HOME` needs no gloss).
@@ -73,21 +73,21 @@ extension KeyFan {
   /// this is the half `Esc` then `x` cannot do — tmux wants both bytes at once.
   public static let escape = KeyFan(
     id: "escape",
-    rows: [[Item("META", "one key", spoken: "Meta", act: .meta)]])
+    rows: [[Item("Meta", "one key", spoken: "Meta", act: .meta)]])
 
   /// Long-press TAB: the one shifted named key on the rail.
   public static let tab = KeyFan(
     id: "tab",
-    rows: [[Item("⇧TAB", "back", spoken: "Shift Tab", act: .stroke(.shiftTab))]])
+    rows: [[Item("⇧Tab", "back", spoken: "Shift Tab", act: .stroke(.shiftTab))]])
 
   /// Long-press an arrow: its far end. Single-key fans still go through the
   /// fan, so every long press on the rail means the same thing.
   public static func arrow(_ key: TerminalKey) -> KeyFan? {
     switch key {
-    case .arrowLeft: return one("left", "HOME", spoken: "Home", key: .home)
-    case .arrowRight: return one("right", "END", spoken: "End", key: .end)
-    case .arrowUp: return one("up", "PGUP", spoken: "Page up", key: .pageUp)
-    case .arrowDown: return one("down", "PGDN", spoken: "Page down", key: .pageDown)
+    case .arrowLeft: return one("left", "Home", spoken: "Home", key: .home)
+    case .arrowRight: return one("right", "End", spoken: "End", key: .end)
+    case .arrowUp: return one("up", "PgUp", spoken: "Page up", key: .pageUp)
+    case .arrowDown: return one("down", "PgDn", spoken: "Page down", key: .pageDown)
     default: return nil
     }
   }
@@ -184,12 +184,13 @@ enum KeyFanPresentation {
 
 // MARK: - The view
 
-/// The fan's own pixels: rows of keys in the card's shape, one size down.
+/// The fan's own pixels: the canvas's `.pop` — a floating surface at radius 14
+/// holding `.pk` keys, 6 pt of padding and 4 pt between them.
 ///
-/// It carries the card's voice rather than the popover's — mono labels, a
-/// hairline chip each, `panelBackground` under the whole thing — because a
-/// system-material popover full of monospaced keys would be the one surface in
-/// the app that looks borrowed.
+/// A chord's face stays MONOSPACED while the rail's labels do not, and that is
+/// the rule rather than an exception to it: DESIGN.md §3 gives monospace to
+/// data, and `^C` is a byte, not a word. The gloss under it is SF, because
+/// "interrupt" is.
 struct KeyFanView: View {
   let fan: KeyFan
   let select: (KeyFan.Item) -> Void
@@ -202,11 +203,13 @@ struct KeyFanView: View {
   @State private var shown = false
   // --- end IOS-5e -----------------------------------------------------------
 
-  private static let gap: CGFloat = 6
+  /// `.pop` — `padding: 6`, `gap: 4`.
+  private static let gap: CGFloat = 4
+  private static let padding: CGFloat = 6
 
-  /// Shorter than the rail's key at both text steps: two rows of full-height
-  /// keys plus the popover's own chrome would stand taller than the card the
-  /// fan belongs to.
+  /// The rail's own key height: a fan key is a key, and the fan is two rows at
+  /// most, so there is room to make them the same size as the one they came
+  /// out of.
   private var keyHeight: CGFloat { InputCardMetrics.fanKeyHeight(for: dynamicTypeSize) }
   private var labelSize: CGFloat { InputCardMetrics.labelSize(for: dynamicTypeSize) }
 
@@ -220,8 +223,8 @@ struct KeyFanView: View {
         }
       }
     }
-    .padding(Self.gap + 2)
-    .background(FieldPalette.panelBackground)
+    .padding(Self.padding)
+    .background { ChromeMaterial.floating(radius: ChromeRadius.pop, shadow: ChromeShadow.pop) }
     // --- IOS-5e: the fan's own arrival, for a reader who asked for no motion.
     .opacity(reduceMotion && !shown ? 0 : 1)
     .onAppear {
@@ -235,29 +238,27 @@ struct KeyFanView: View {
     Button {
       select(item)
     } label: {
-      VStack(spacing: 1) {
+      VStack(spacing: 2) {
+        // `.pk span` — mono 14 semibold. The chord itself is data.
         Text(item.label)
-          .font(FieldType.mono(labelSize, .heavy))
-          .tracking(FieldType.tracking(0.08, of: labelSize))
-          .foregroundStyle(FieldPalette.textMain)
+          .font(ChromeType.mono(labelSize + 1, .semibold))
+          .foregroundStyle(ChromePalette.ink)
         if !item.subtitle.isEmpty {
+          // `.pk small` — SF 9 medium at 55%.
           Text(item.subtitle)
-            .font(FieldType.mono(InputCardMetrics.subtitleSize(for: dynamicTypeSize)))
-            .foregroundStyle(FieldPalette.textMuted)
+            .font(
+              ChromeType.sans(InputCardMetrics.subtitleSize(for: dynamicTypeSize), .medium)
+            )
+            .foregroundStyle(ChromePalette.inkTertiary)
             .lineLimit(1)
         }
       }
-      .padding(.horizontal, 6)
+      .padding(.horizontal, 8)
       .frame(minWidth: 44)
       .frame(height: keyHeight)
-      .background(
-        RoundedRectangle(cornerRadius: 6)
-          .fill(FieldPalette.panelBackground.opacity(0.8))
-          .overlay(
-            RoundedRectangle(cornerRadius: 6)
-              .strokeBorder(FieldPalette.panelBorder, lineWidth: 1)
-          )
-      )
+      .background {
+        ChromeMaterial.key(fill: ChromePalette.fanKeyFill, hairline: nil, shadow: nil)
+      }
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(item.accessibilityLabel)

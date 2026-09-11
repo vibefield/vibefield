@@ -21,14 +21,14 @@ public struct ClipboardHistorySheet: View {
     VStack(alignment: .leading, spacing: 0) {
       header
       if history.entries.isEmpty {
-        Text("nothing pasted through this card yet")
-          .font(FieldType.mono(11))
-          .foregroundStyle(FieldPalette.textMuted)
+        Text("Nothing pasted through this card yet")
+          .font(ChromeType.sans(ChromeType.sheetBodySize))
+          .foregroundStyle(ChromePalette.inkTertiary)
           .padding(.horizontal, 22)
           .padding(.top, 18)
-        Text("the paste chip above the card is what fills this")
-          .font(FieldType.mono(9))
-          .foregroundStyle(FieldPalette.textFaint)
+        Text("The paste chip above the card is what fills this")
+          .font(ChromeType.sans(ChromeType.rowSummarySize))
+          .foregroundStyle(ChromePalette.placeholder)
           .padding(.horizontal, 22)
           .padding(.top, 6)
       } else {
@@ -41,27 +41,21 @@ public struct ClipboardHistorySheet: View {
   }
 
   private var header: some View {
-    HStack(alignment: .firstTextBaseline) {
-      Text("CLIPBOARD HISTORY")
-        .font(FieldType.mono(9, .heavy))
-        .tracking(FieldType.tracking(0.18, of: 9))
-        .foregroundStyle(FieldPalette.textMuted)
+    HStack(alignment: .center) {
+      VStack(alignment: .leading, spacing: 2) {
+        ChromeEyebrow("Clipboard history")
+        Text("Pasted through this card")
+          .font(ChromeType.sans(ChromeType.sheetTitleSize, .semibold))
+          .foregroundStyle(ChromePalette.ink)
+      }
       Spacer(minLength: 0)
       if !history.entries.isEmpty {
         Button {
           history.clear()
         } label: {
-          Text("CLEAR")
-            .font(FieldType.mono(9, .heavy))
-            .tracking(FieldType.tracking(0.12, of: 9))
-            .foregroundStyle(FieldPalette.textMain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .overlay(
-              RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+          Text("Clear")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ChromePillStyle(.secondary))
         .accessibilityLabel("Clear the history")
       }
     }
@@ -78,8 +72,8 @@ public struct ClipboardHistorySheet: View {
         }
         .buttonStyle(.plain)
         .listRowBackground(Color.clear)
-        .listRowSeparatorTint(FieldPalette.panelBorder)
-        .listRowInsets(EdgeInsets(top: 10, leading: 22, bottom: 10, trailing: 22))
+        .listRowSeparatorTint(ChromePalette.separator)
+        .listRowInsets(EdgeInsets(top: 8, leading: 22, bottom: 8, trailing: 22))
       }
       .onDelete { offsets in history.delete(atOffsets: offsets) }
     }
@@ -91,16 +85,17 @@ public struct ClipboardHistorySheet: View {
   /// The first line and the count. Not the whole block: a paste is often a
   /// stack trace, and a row that renders one is a row nobody can scan past.
   private func row(_ entry: String) -> some View {
-    HStack(alignment: .top, spacing: 10) {
+    HStack(alignment: .center, spacing: 10) {
       Text(firstLine(of: entry))
-        .font(FieldType.mono(11))
-        .foregroundStyle(FieldPalette.textMain)
+        .font(ChromeType.mono(ChromeType.rowCommandSize, .semibold))
+        .foregroundStyle(ChromePalette.ink)
         .lineLimit(1)
       Spacer(minLength: 0)
       Text(lineSummary(entry))
-        .font(FieldType.mono(8))
-        .foregroundStyle(FieldPalette.textMuted)
+        .font(ChromeType.sans(ChromeType.rowSummarySize))
+        .foregroundStyle(ChromePalette.inkTertiary)
     }
+    .frame(minHeight: 44)
     .contentShape(Rectangle())
   }
 
@@ -110,6 +105,6 @@ public struct ClipboardHistorySheet: View {
 
   private func lineSummary(_ entry: String) -> String {
     let count = pasteLineCount(entry)
-    return count == 1 ? "1 LINE" : "\(count) LINES"
+    return count == 1 ? "1 line" : "\(count) lines"
   }
 }

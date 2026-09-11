@@ -5,20 +5,27 @@ import SwiftUI
 /// The input card: a composer row over a rail of terminal keys, sitting on the
 /// session sheet's glass above the keyboard.
 ///
-/// The design this re-skins (KeyboardLab's "Composer + Rail") is drawn in SF
-/// on white glass; the field speaks godview mono (D-i2), so every label here
-/// is `FieldType.mono`, every color comes from `FieldPalette`, and a key that
-/// is ON inverts rather than colors — attention is contrast in this app, never
-/// hue. The card carries no background of its own: the sheet's liquid glass is
-/// the surface, and each key is a chip on it.
+/// **IOS-5v — the card speaks VibeField.** It used to speak godview: mono
+/// labels, `FieldPalette`, a key that inverted rather than filled. That was the
+/// integrator's reading of D-i2 and James reversed it on seeing the built card
+/// (K-D7, 2026-09-11): *"the bubble swarm view and terminal do have their own
+/// style, but they are a small part of our app; our app itself should follow
+/// VibeField style."* DESIGN.md §1.1 already said as much — the godview
+/// instrument palette is "the deliberate control-room exception", scoped to the
+/// agent stage and the terminal deck. So the swarm field and the terminal
+/// surface keep `FieldType`/`FieldPalette`, and this card is the CHROME family:
+/// SF type, sentence case, a glass card with a hairline over the sheet's own
+/// glass, near-colorless, with the KeyboardLab canvas as the instance —
+/// `.glass.card` radius 26, `.key` 44 pt radius 9, `.circle` 28 in a 44 pt
+/// `.target`, `.chip` a 36 pt pill.
 ///
 /// The copy rule from the design's decision table holds throughout: the word
 /// "Live" never reaches the screen. The mode is a terminal glyph, and the strip
 /// says what is happening rather than what it is called.
 ///
 /// **IOS-5e — the card at every size and to every reader.** Three environment
-/// values reach in here now. `dynamicTypeSize` takes the whole card up one step
-/// at accessibility sizes (`InputCardMetrics`, where the rule and its reasons
+/// values reach in here. `dynamicTypeSize` takes the whole card up one step at
+/// accessibility sizes (`InputCardMetrics`, where the rule and its reasons
 /// live). `accessibilityReduceMotion` turns off the two animations that MOVE
 /// something — the `+` glyph's rotation and the mic's breath — and leaves the
 /// cross-fades alone, because a fade is what Reduce Motion asks for rather than
@@ -47,27 +54,30 @@ public struct InputCard: View {
     self.pasteboard = pasteboard
   }
 
-  /// The design's geometry: 8 pt padding, 6 pt gaps, 44 pt rows — 110 pt of
-  /// chrome at one line. The row height and every type size on the card are the
-  /// numbers that move with the reader's text size, and they move in
-  /// `InputCardMetrics` rather than here.
-  private static let gap: CGFloat = 6
+  /// The canvas's geometry: the card is `padding: 8` with `gap: 6` between its
+  /// rows and `gap: 4` inside one; the chips row stands 8 above it, and the
+  /// whole stack is inset 9 from the screen's edges (`.chrome`).
+  private static let rowGap: CGFloat = 6
+  private static let keyGap: CGFloat = 4
+  private static let stackGap: CGFloat = 8
   private static let padding: CGFloat = 8
-  private static let cornerRadius: CGFloat = 6
+  private static let inset: CGFloat = 9
 
   private var rowHeight: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
   private var labelSize: CGFloat { InputCardMetrics.labelSize(for: dynamicTypeSize) }
   private var glyphSize: CGFloat { InputCardMetrics.glyphSize(for: dynamicTypeSize) }
+  private var circleSide: CGFloat { InputCardMetrics.circleDiameter(for: dynamicTypeSize) }
+  private var actionGlyph: CGFloat { InputCardMetrics.actionGlyphSize(for: dynamicTypeSize) }
 
   public var body: some View {
     // --- IOS-5c: three faces, not one. With the keyboard down the card is a
     // single row (the design's `MainClosed`); with it up, the contextual chips
-    // row rides above row 1 whenever it has something to say.
+    // row rides above the card whenever it has something to say.
     Group {
       if model.keyboardOwner == .none {
         ClosedRow(model: model, pasteboard: pasteboard)
       } else {
-        VStack(spacing: Self.gap) {
+        VStack(spacing: Self.stackGap) {
           if !ChipsRow.isEmpty(model: model, pasteboard: pasteboard) {
             ChipsRow(model: model, pasteboard: pasteboard)
               // IOS-5e: opacity and nothing else, at every motion setting. The
@@ -76,20 +86,16 @@ public struct InputCard: View {
               // moved for decoration.
               .transition(.opacity)
           }
-          if model.mode == .draft {
-            draftRow
-          } else {
-            terminalStrip
-          }
-          rail
+          card
         }
       }
     }
-    .padding(Self.padding)
+    .padding(.horizontal, Self.inset)
+    .padding(.bottom, Self.rowGap)
     // --- IOS-5e: the card's widest, centred. See `InputCardMetrics.maximumWidth`
     // — across an iPad's 1024 pt inset the nine keys would be 108 pt buttons
     // under the middle of the screen, where no thumb is.
-    .frame(maxWidth: InputCardMetrics.maximumWidth)
+    .frame(maxWidth: InputCardMetrics.maximumWidth + Self.inset * 2)
     .frame(maxWidth: .infinity)
     // --- end IOS-5e
     // --- IOS-5d ---------------------------------------------------------------
@@ -111,17 +117,39 @@ public struct InputCard: View {
     // --- end IOS-5c
   }
 
+  /// `.glass.card` — the card itself. Glass on glass, exactly as the canvas
+  /// draws it: this sits on the session sheet, which is already the system's
+  /// own material, and the hairline plus the specular top edge are what make
+  /// two translucent layers read as two rather than as haze.
+  private var card: some View {
+    VStack(spacing: Self.rowGap) {
+      if model.mode == .draft {
+        draftRow
+      } else {
+        terminalStrip
+      }
+      rail
+    }
+    .padding(Self.padding)
+    .chromeGlass(radius: ChromeRadius.card)
+  }
+
   // MARK: - Row 1
 
   /// Draft: the `+`, the field and Send.
   ///
   /// Both of the design's other controls are here now: `+` at the far left
-  /// (IOS-5d — Scan Text · Snippets · Clipboard History; the attach items wait
+  /// (IOS-5d — Scan text · Snippets · Clipboard history; the attach items wait
   /// on a mesh file verb, K-D6) and the mic immediately left of Send (IOS-5d's
-  /// rider — it needed the Speech framework and its usage strings). Send stays
-  /// the one inverted-solid control: the desktop Composer's own foot.
+  /// rider — it needed the Speech framework and its usage strings). Send is the
+  /// one prominent control: the canvas's `.circle.prominent`, the desktop
+  /// Composer's own foot.
+  ///
+  /// The row's spacing is ZERO, like the canvas's: every control is a 44 pt
+  /// `.target` around a 28 pt circle, so the air between them is the targets'
+  /// own and the whole row is still one unbroken strip of tappable chrome.
   private var draftRow: some View {
-    HStack(alignment: .bottom, spacing: Self.gap) {
+    HStack(alignment: .bottom, spacing: 0) {
       // --- IOS-5d: the far left of the row, the desktop Composer's own foot.
       PlusMenu(model: model)
       // --- end IOS-5d
@@ -129,12 +157,11 @@ public struct InputCard: View {
         model: model,
         height: $composerHeight,
         keyboardAppearance: colorScheme == .dark ? .dark : .light,
-        // IOS-5e: the one prose-sized mono on the card (K-D7), so it is the one
-        // size that scales as prose rather than as an instrument marking.
+        // IOS-5v: `.field` — SF 17/22, the one piece of prose on the card, so
+        // it is the one size here that scales as prose.
         textSize: InputCardMetrics.composerTextSize(for: dynamicTypeSize)
       )
       .frame(height: max(rowHeight, composerHeight))
-      .background(keyShape(inverted: false))
 
       // --- IOS-5d mic ---
       DictationKey(model: model)
@@ -146,19 +173,24 @@ public struct InputCard: View {
 
   /// Live: the strip and Enter. The draft is not gone — it is held in the
   /// model and comes back untouched when the mode flips.
+  ///
+  /// The strip carries no fill of its own (the canvas's `.strip` is a bare
+  /// row): in this mode the field is not a field, and drawing a key-shaped box
+  /// where the text goes would promise one.
   private var terminalStrip: some View {
-    HStack(spacing: Self.gap) {
+    HStack(spacing: Self.keyGap) {
       // --- IOS-5d: the same door, in the same place. The design's strip keeps
       // `+` where the composer had it — a snippet is as useful with the
       // terminal holding the keys as with the draft holding them.
       PlusMenu(model: model)
       // --- end IOS-5d
-      HStack(spacing: 7) {
+      HStack(spacing: 8) {
         Image(systemName: "terminal")
-          .font(.system(size: glyphSize, weight: .heavy))
+          .font(.system(size: glyphSize, weight: .semibold))
         Text("Typing into terminal")
-          .font(FieldType.mono(labelSize, .heavy))
-          .tracking(FieldType.tracking(0.08, of: labelSize))
+          .font(
+            ChromeType.sans(InputCardMetrics.stripSize(for: dynamicTypeSize), .semibold)
+          )
           // IOS-5e: one line, always. At accessibility sizes on the narrowest
           // phone this sentence is wider than the strip, and both other ways
           // out are worse than an ellipsis — wrapping makes the strip taller
@@ -167,11 +199,10 @@ public struct InputCard: View {
           .lineLimit(1)
           .truncationMode(.tail)
       }
-      .foregroundStyle(FieldPalette.textMain)
-      .padding(.horizontal, 11)
+      .foregroundStyle(ChromePalette.inkStrip)
+      .padding(.horizontal, 10)
       .frame(maxWidth: .infinity, alignment: .leading)
       .frame(height: rowHeight)
-      .background(keyShape(inverted: false))
       .accessibilityElement()
       // A truncated strip still says the whole sentence: the ellipsis is a fact
       // about the width, not about the mode.
@@ -183,11 +214,12 @@ public struct InputCard: View {
     }
   }
 
-  /// Send is never disabled. Quiet with an empty draft, inverted with text —
-  /// and an empty draft still sends, as Enter, because "run it" is a real act
-  /// with nothing left to type.
+  /// Send is never disabled. `.circle.quiet` with an empty draft, and the
+  /// canvas's one `.circle.prominent` with text in it — an empty draft still
+  /// sends, as Enter, because "run it" is a real act with nothing left to type.
   private var sendKey: some View {
-    Button {
+    let carries = !model.draft.isEmpty
+    return Button {
       // IOS-5e: felt only when something LEFT. The empty path is Enter, and a
       // keystroke on this card is never felt. Read before the tap, because
       // `tapSend` clears the draft on its way past.
@@ -195,17 +227,13 @@ public struct InputCard: View {
       model.tapSend()
       if carried { InputHaptics.sent() }
     } label: {
-      Image(systemName: "arrow.up")
-        .font(
-          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .heavy)
-        )
-        .foregroundStyle(
-          model.draft.isEmpty ? FieldPalette.textMuted : FieldPalette.panelBackground
-        )
-        .frame(width: rowHeight, height: rowHeight)
-        .background(keyShape(inverted: !model.draft.isEmpty))
+      circleFace(
+        glyph: "arrow.up",
+        fill: carries ? ChromePalette.circleProminentFill : ChromePalette.circleQuietFill,
+        hairline: carries ? nil : ChromePalette.circleHairline,
+        ink: carries ? ChromePalette.circleProminentInk : ChromePalette.circleQuietInk)
     }
-    .buttonStyle(KeyPressStyle())
+    .buttonStyle(ChromePressStyle())
     .accessibilityLabel("Send")
     // IOS-5e: the one control here whose act cannot be guessed from its name.
     // An arrow that sometimes sends a paste AND an Enter and sometimes sends
@@ -214,19 +242,33 @@ public struct InputCard: View {
       "Sends the draft as a paste followed by Enter; with an empty draft, sends Enter")
   }
 
+  /// `.target` around `.circle` — the composer row's own control shape, shared
+  /// by Send here and restated by `PlusMenu` and `DictationKey`, which are
+  /// their own views for reasons that have nothing to do with their chrome.
+  private func circleFace(
+    glyph: String, fill: Color, hairline: Color?, ink: Color
+  ) -> some View {
+    Image(systemName: glyph)
+      .font(.system(size: actionGlyph, weight: .semibold))
+      .foregroundStyle(ink)
+      .frame(width: circleSide, height: circleSide)
+      .background { ChromeMaterial.circle(fill: fill, hairline: hairline) }
+      .frame(width: rowHeight, height: rowHeight)
+  }
+
   // MARK: - Row 2, the rail
 
   /// Nine equal keys, `⋯` last (IOS-5d).
   ///
   /// Every key but the mode toggle carries a long-press fan (IOS-5b): the
-  /// chords under CTRL, the far ends under the arrows, ⇧TAB under TAB, and the
-  /// Meta burst under ESC.
+  /// chords under Ctrl, the far ends under the arrows, ⇧Tab under Tab, and the
+  /// Meta burst under Esc.
   private var rail: some View {
-    HStack(spacing: Self.gap) {
+    HStack(spacing: Self.keyGap) {
       key(
         glyph: "terminal",
         label: model.mode == .live ? "Typing into terminal" : "Type into terminal",
-        inverted: model.mode == .live,
+        tone: model.mode == .live ? .on : .normal,
         action: {
           model.toggleMode()
           // IOS-5e: the mode is drawn as a lit key and a changed row, and both
@@ -236,28 +278,28 @@ public struct InputCard: View {
         })
       escapeKey
       controlKey
-      key(text: "TAB", label: "Tab", fan: .tab, action: { model.tapKey(.tab) })
+      key(text: "Tab", label: "Tab", fan: .tab, action: { model.tapKey(.tab) })
       key(
-        glyph: "arrow.left", label: "Left arrow", fan: KeyFan.arrow(.arrowLeft),
+        glyph: "arrow.left", label: "Left arrow", tone: .nav, fan: KeyFan.arrow(.arrowLeft),
         action: { model.tapKey(.arrowLeft) })
       key(
-        glyph: "arrow.down", label: "Down arrow", fan: KeyFan.arrow(.arrowDown),
+        glyph: "arrow.down", label: "Down arrow", tone: .nav, fan: KeyFan.arrow(.arrowDown),
         action: { model.tapKey(.arrowDown) })
       key(
-        glyph: "arrow.up", label: "Up arrow", fan: KeyFan.arrow(.arrowUp),
+        glyph: "arrow.up", label: "Up arrow", tone: .nav, fan: KeyFan.arrow(.arrowUp),
         action: { model.tapKey(.arrowUp) })
       key(
-        glyph: "arrow.right", label: "Right arrow", fan: KeyFan.arrow(.arrowRight),
+        glyph: "arrow.right", label: "Right arrow", tone: .nav, fan: KeyFan.arrow(.arrowRight),
         action: { model.tapKey(.arrowRight) })
       // --- IOS-5d ------------------------------------------------------------
-      // The keypad key. It INVERTS while the keypad is up, like every other
-      // key on this card that is holding a state — and it carries no fan: the
+      // The keypad key. It lights while the keypad is up, like every other key
+      // on this card that is holding a state — and it carries no fan: the
       // design's long-press (the keypad's last page) is what a tap already
       // does, the page being remembered.
       key(
         glyph: "ellipsis",
         label: model.keypadShown ? "Letters" : "Terminal keypad",
-        inverted: model.keypadShown,
+        tone: model.keypadShown ? .on : .normal,
         action: {
           model.toggleKeypad()
           // IOS-5e: the letters just left, or came back. Without this a screen
@@ -295,31 +337,33 @@ public struct InputCard: View {
   }
 
   // --- IOS-5b ---------------------------------------------------------------
-  /// ESC, and the Meta burst it holds.
+  /// Esc, and the Meta burst it holds.
   ///
-  /// While the burst is armed the key says META and inverts: the next key is
-  /// about to mean something different, and the only place that can be said is
-  /// the key that armed it. It still sends Escape when tapped — the burst rides
-  /// the next keystroke, and Escape is one.
+  /// While the burst is armed the key says Meta and wears the canvas's
+  /// `.key.armed` fill: the next key is about to mean something different, and
+  /// the only place that can be said is the key that armed it. It still sends
+  /// Escape when tapped — the burst rides the next keystroke, and Escape is one.
   private var escapeKey: some View {
     key(
-      text: model.metaArmed ? "META" : "ESC",
+      text: model.metaArmed ? "Meta" : "Esc",
       label: model.metaArmed ? "Escape, Meta armed for the next key" : "Escape",
-      inverted: model.metaArmed,
+      tone: model.metaArmed ? .armed : .normal,
       fan: .escape,
       action: { model.tapKey(.escape) })
   }
   // --- end IOS-5b -----------------------------------------------------------
 
-  /// The sticky Ctrl. Armed and locked both invert; locked adds the dot,
-  /// because "this stays until I release it" is a different promise from
-  /// "this is spent on the next key" and a single fill cannot say both.
+  /// The sticky Ctrl. Armed is `.key.armed` and locked is `.key.locked` — one
+  /// step brighter, with the dot — because "this stays until I release it" is a
+  /// different promise from "this is spent on the next key" and a single fill
+  /// cannot say both.
   private var controlKey: some View {
-    let armed = model.latch.phase != .off
+    let phase = model.latch.phase
+    let tone: KeyTone = phase == .locked ? .locked : (phase == .armed ? .armed : .normal)
     return Button {
       // --- IOS-5b ---
       // The fan just opened under the finger; the touch-up that follows is the
-      // long press ending, not a tap on CTRL.
+      // long press ending, not a tap on Ctrl.
       guard model.openFan == nil else { return }
       model.tapControl()
       // Felt, not just seen: armed and locked are two different promises and a
@@ -336,23 +380,25 @@ public struct InputCard: View {
       // And said, for the reason it is felt. This is the design's own
       // acceptance item (§10: "VoiceOver announces Ctrl armed and locked"), and
       // it is the one state on the card that changes what a key SOMEWHERE ELSE
-      // will do — the label alone only reaches a reader focused on CTRL.
+      // will do — the label alone only reaches a reader focused on Ctrl.
       InputAnnouncement.post(InputAnnouncement.latch(model.latch.phase))
       // --- end IOS-5e ---
     } label: {
-      Text("CTRL")
-        .font(FieldType.mono(labelSize, .heavy))
-        .tracking(FieldType.tracking(0.08, of: labelSize))
-        .foregroundStyle(armed ? FieldPalette.panelBackground : FieldPalette.textMain)
+      Text("Ctrl")
+        .font(ChromeType.sans(labelSize, .semibold, rounded: true))
+        .tracking(ChromeType.keyTracking)
+        .foregroundStyle(tone.ink)
+        .lineLimit(1)
         .frame(maxWidth: .infinity)
         .frame(height: rowHeight)
-        .background(keyShape(inverted: armed))
+        .background { keyFace(tone) }
         .overlay(alignment: .topTrailing) {
-          if model.latch.phase == .locked {
+          // `.key.locked::after` — a 5 pt dot inset 5 from the corner.
+          if phase == .locked {
             Circle()
-              .fill(FieldPalette.panelBackground)
-              .frame(width: 4, height: 4)
-              .padding(4)
+              .fill(ChromePalette.keyArmedInk)
+              .frame(width: 5, height: 5)
+              .padding(5)
           }
         }
     }
@@ -371,7 +417,7 @@ public struct InputCard: View {
   private func key(
     text: String,
     label: String,
-    inverted: Bool = false,
+    tone: KeyTone = .normal,
     fan: KeyFan? = nil,
     action: @escaping () -> Void
   ) -> some View {
@@ -382,12 +428,13 @@ public struct InputCard: View {
       action()
     } label: {
       Text(text)
-        .font(FieldType.mono(labelSize, .heavy))
-        .tracking(FieldType.tracking(0.08, of: labelSize))
-        .foregroundStyle(inverted ? FieldPalette.panelBackground : FieldPalette.textMain)
+        .font(ChromeType.sans(labelSize, .semibold, rounded: true))
+        .tracking(ChromeType.keyTracking)
+        .foregroundStyle(tone.ink)
+        .lineLimit(1)
         .frame(maxWidth: .infinity)
         .frame(height: rowHeight)
-        .background(keyShape(inverted: inverted))
+        .background { keyFace(tone) }
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(label)
@@ -399,7 +446,7 @@ public struct InputCard: View {
   private func key(
     glyph: String,
     label: String,
-    inverted: Bool = false,
+    tone: KeyTone = .normal,
     width: CGFloat? = nil,
     fan: KeyFan? = nil,
     action: @escaping () -> Void
@@ -409,11 +456,11 @@ public struct InputCard: View {
       action()
     } label: {
       Image(systemName: glyph)
-        .font(.system(size: glyphSize, weight: .heavy))
-        .foregroundStyle(inverted ? FieldPalette.panelBackground : FieldPalette.textMain)
+        .font(.system(size: glyphSize, weight: .semibold))
+        .foregroundStyle(tone.ink)
         .frame(maxWidth: width == nil ? .infinity : nil)
         .frame(width: width, height: rowHeight)
-        .background(keyShape(inverted: inverted))
+        .background { keyFace(tone) }
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(label)
@@ -425,7 +472,7 @@ public struct InputCard: View {
   ///
   /// The fan closes first so the act cannot land twice, then the chord goes —
   /// `tapChord`, which spends an armed latch without adding to a chord that
-  /// already names its own modifiers. META is the one item that arms instead of
+  /// already names its own modifiers. Meta is the one item that arms instead of
   /// sending.
   private func pick(_ item: KeyFan.Item) {
     model.closeFan()
@@ -434,34 +481,98 @@ public struct InputCard: View {
     case .meta:
       model.armMeta()
       // IOS-5e: an arm is an arm. The burst changes what the next key means and
-      // its only sign is ESC wearing META, which a reader elsewhere cannot see.
+      // its only sign is Esc wearing Meta, which a reader elsewhere cannot see.
       InputAnnouncement.post(InputAnnouncement.metaArmed)
     }
     InputHaptics.chord()
   }
   // --- end IOS-5b -----------------------------------------------------------
 
-  /// One shape for every key on the card: the `FieldChip` recipe, at whatever
-  /// height the reader's text size asks for.
-  @ViewBuilder
-  private func keyShape(inverted: Bool) -> some View {
-    if inverted {
-      RoundedRectangle(cornerRadius: Self.cornerRadius)
-        .fill(FieldPalette.textMain)
-    } else {
-      RoundedRectangle(cornerRadius: Self.cornerRadius)
-        .fill(FieldPalette.panelBackground.opacity(0.8))
-        .overlay(
-          RoundedRectangle(cornerRadius: Self.cornerRadius)
-            .strokeBorder(FieldPalette.panelBorder, lineWidth: 1)
-        )
+  /// One recipe for every key on the card, at whatever height the reader's text
+  /// size asks for: the canvas's `.key`, and its four state variants.
+  private func keyFace(_ tone: KeyTone) -> some View {
+    ChromeMaterial.key(
+      fill: tone.fill, hairline: tone.hairline, hairlineWidth: tone.hairlineWidth)
+  }
+}
+
+/// A key's state, as the canvas names them: `.key`, `.key.nav`, `.key.armed`,
+/// `.key.locked`, `.key.on`.
+///
+/// A state carries a FILL rather than an inversion. The godview card inverted
+/// (`textMain` under `panelBackground`) because contrast is how that language
+/// says attention; the chrome family says it with material — a brighter cap,
+/// its border, and the ink that cap needs — which is what lets the rail read as
+/// nine physical keys in both themes rather than as nine swatches.
+enum KeyTone {
+  case normal
+  case nav
+  case armed
+  case locked
+  case on
+
+  var fill: Color {
+    switch self {
+    case .normal: return ChromePalette.keyFill
+    case .nav: return ChromePalette.keyFillNav
+    case .armed: return ChromePalette.keyArmedFill
+    case .locked: return ChromePalette.keyLockedFill
+    case .on: return ChromePalette.keyOnFill
+    }
+  }
+
+  var ink: Color {
+    switch self {
+    case .normal: return ChromePalette.keyInk
+    case .nav: return ChromePalette.keyInkNav
+    case .armed, .locked: return ChromePalette.keyArmedInk
+    case .on: return ChromePalette.keyOnInk
+    }
+  }
+
+  var hairline: Color? {
+    switch self {
+    case .normal: return ChromePalette.keyHairline
+    case .nav: return ChromePalette.keyHairlineNav
+    case .armed, .locked: return ChromePalette.keyArmedBorder
+    case .on: return nil
+    }
+  }
+
+  /// §2.3: a heavier weight exists only as meaning. 1.5 pt is the selection
+  /// weight, and a latched modifier is the card's one selection.
+  var hairlineWidth: CGFloat {
+    switch self {
+    case .armed, .locked: return 1.5
+    default: return 0.5
     }
   }
 }
 
-/// Press feedback without SwiftUI's default button highlight, which tints and
-/// would put a hue on a monochrome key.
+/// The canvas's `.key.pressed`: a veil over whatever the key already is, rather
+/// than SwiftUI's default button highlight, which tints.
+///
+/// It is a fill and not an opacity because that is what the canvas draws, and
+/// because dimming a translucent key on glass makes the terminal behind it
+/// brighter — the one direction a press must never read as.
 struct KeyPressStyle: ButtonStyle {
+  var radius: CGFloat = ChromeRadius.key
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .overlay {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+          .fill(ChromePalette.keyPressedFill)
+          .opacity(configuration.isPressed ? 1 : 0)
+      }
+      .animation(FieldMotion.ease(0.08), value: configuration.isPressed)
+  }
+}
+
+/// The press feedback for the round controls, which are 28 pt circles inside
+/// 44 pt targets: a veil the shape of the target would be a rectangle lighting
+/// up around a circle, so these dim instead.
+struct ChromePressStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .opacity(configuration.isPressed ? 0.55 : 1)

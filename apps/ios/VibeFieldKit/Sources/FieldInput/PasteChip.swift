@@ -14,33 +14,37 @@ import UIKit
 /// the permanent button the chip replaced.
 ///
 /// **What we give up for that, honestly.** The label is the system's, in the
-/// system font, localized — it does not speak `FieldType.mono` like every
-/// other chip on this row, and the API offers no way to make it. What the
-/// configuration does allow is the shape and the ink: `panelBackground` on
-/// `textMain` at the chips row's own 6 pt radius, so it is the right chip in
-/// the wrong typeface rather than a stranger. The design's "preview of the
-/// first line" is absent for the same reason the alert is: a preview means
+/// system font, localized — and IOS-5v is the release where that stopped being
+/// a compromise: the rest of the row is SF now too, so the system's own label is
+/// the right typeface rather than the wrong one. What the configuration allows
+/// is the shape and the ink, and both are the canvas's `.chip.paste`: capsule
+/// corners at the chips row's own 36 pt, the pill's fill, the row's ink. The
+/// gradient, the blur and the hairline it cannot take are approximated by a
+/// solid fill and a border drawn over it by `ChipsRow`. The design's "preview of
+/// the first line" is absent for the same reason the alert is: a preview means
 /// reading the contents before the user has asked to paste them.
 struct PasteChip: UIViewRepresentable {
   /// Delivered on the main actor once the provider has loaded.
   let onText: (String) -> Void
 
-  /// The chips row's height, as a FLOOR rather than a pin — the row grows to
-  /// whatever the control needs (see `sizeThatFits`), and `ChipsRow` follows.
-  static let height: CGFloat = 32
+  /// The chips row's height (`.chip`, 36 pt), as a FLOOR rather than a pin —
+  /// the row grows to whatever the control needs (see `sizeThatFits`), and
+  /// `ChipsRow` follows.
+  static let height: CGFloat = ChipsRow.height
   /// A guard against a zero intrinsic width before the control has laid out:
   /// a chip with no width is a chip nobody can hit.
-  private static let minimumWidth: CGFloat = 84
+  private static let minimumWidth: CGFloat = 92
 
   func makeCoordinator() -> Coordinator { Coordinator() }
 
   func makeUIView(context: Context) -> UIPasteControl {
     let configuration = UIPasteControl.Configuration()
     configuration.displayMode = .iconAndLabel
-    configuration.cornerStyle = .fixed
-    configuration.cornerRadius = 6
-    configuration.baseBackgroundColor = UIColor(FieldPalette.panelBackground)
-    configuration.baseForegroundColor = UIColor(FieldPalette.textMain)
+    // A pill, like every other chip on the row (DESIGN.md §4: "pills/buttons —
+    // fully round").
+    configuration.cornerStyle = .capsule
+    configuration.baseBackgroundColor = UIColor(ChromePalette.pasteChipFill)
+    configuration.baseForegroundColor = UIColor(ChromePalette.ink)
     let control = UIPasteControl(configuration: configuration)
     // `target` is a WEAK reference on UIPasteControl, so the receiver has to
     // be owned by something that outlives the view — the coordinator is that

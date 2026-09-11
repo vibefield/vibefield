@@ -7,10 +7,10 @@ import SwiftUI
 /// immediately left of send, send the one inverted-solid control — and the
 /// phone card's row 1 is that foot verbatim. This is its third control.
 ///
-/// **What a tap means.** It toggles listening, and while it listens the key
-/// wears the card's one attention signal: inversion, breathing on the field's
+/// **What a tap means.** It toggles listening, and while it listens the circle
+/// goes from `.circle.quiet` to `.circle.prominent` and breathes on the field's
 /// own slow period. Nothing about it is a recording indicator — the system's
-/// own is on the screen above — it is the state of one key on one card.
+/// own is on the screen above — it is the state of one control on one card.
 ///
 /// **Draft only, on purpose.** The design gives Live's strip the same mic, but
 /// dictation LANDS IN THE DRAFT and Live has no draft on screen. A mic there
@@ -35,22 +35,15 @@ struct DictationKey: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   // --- end IOS-5e -----------------------------------------------------------
 
-  /// The card's key chrome, restated rather than reached for.
-  ///
-  /// `InputCard.keyShape` is private to the card and `KeyFanView` already
-  /// restates the same recipe one size down, so this follows the module's own
-  /// habit. Folding all three onto one shape is a tidy-up for whoever
-  /// integrates 5c, 5d and this branch — doing it here would edit the two
-  /// files those branches are also editing, for no pixel.
-  private static let cornerRadius: CGFloat = 6
-  /// How far the key's opacity falls at the bottom of a breath. Far enough to
+  /// How far the control's opacity falls at the bottom of a breath. Far enough to
   /// read as alive across the room, near enough that a screenshot caught at
   /// any point in the cycle still shows an inverted key.
   private static let breathFloor: Double = 0.62
 
   private var listening: Bool { session.state.isListening }
-  /// The composer row's height — the mic is square in it, like the `+`.
+  /// The composer row's `.target`, and the `.circle` centred in it.
   private var side: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
+  private var circleSide: CGFloat { InputCardMetrics.circleDiameter(for: dynamicTypeSize) }
 
   var body: some View {
     Button {
@@ -67,23 +60,26 @@ struct DictationKey: View {
     } label: {
       Image(systemName: "mic")
         .font(
-          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .heavy)
+          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .semibold)
         )
-        .foregroundStyle(listening ? FieldPalette.panelBackground : FieldPalette.textMain)
+        .foregroundStyle(
+          listening ? ChromePalette.circleProminentInk : ChromePalette.circleQuietInk
+        )
+        .frame(width: circleSide, height: circleSide)
+        .background { circleShape }
         .frame(width: side, height: side)
-        .background(keyShape)
         // --- IOS-5e ---------------------------------------------------------
-        // Under Reduce Motion the key does not breathe. It still INVERTS while
-        // it listens, which is the state itself and not the decoration — what
-        // goes is the slow pulse, which is a forever-repeating animation on
-        // screen and the exact shape the setting exists to stop. The state is
-        // not lost with it: the fill says listening, the label says
+        // Under Reduce Motion the control does not breathe. It still turns
+        // PROMINENT while it listens, which is the state itself and not the
+        // decoration — what goes is the slow pulse, which is a forever-repeating
+        // animation on screen and the exact shape the setting exists to stop.
+        // The state is not lost with it: the fill says listening, the label says
         // "Dictating, tap to stop", and IOS-5e's announcements say the rest.
         .opacity(!reduceMotion && listening && breathing ? Self.breathFloor : 1)
         .animation(breath, value: breathing)
         // --- end IOS-5e -----------------------------------------------------
     }
-    .buttonStyle(KeyPressStyle())
+    .buttonStyle(ChromePressStyle())
     .accessibilityLabel(listening ? "Dictating, tap to stop" : "Dictate into the draft")
     .overlay(alignment: .topTrailing) { notice }
     // One curve for everything the state changes: the key's fill crossing to
@@ -124,24 +120,16 @@ struct DictationKey: View {
   private var notice: some View {
     if let line = session.state.notice {
       Text(line)
-        // IOS-5e: this line is a sentence rather than a marking — the one time
-        // this key speaks prose — so it rides the label step like the rest of
-        // the card's copy.
-        .font(FieldType.mono(InputCardMetrics.labelSize(for: dynamicTypeSize)))
-        .foregroundStyle(FieldPalette.textMuted)
+        // IOS-5e: this line is a sentence, so it is set as one — the sheet
+        // body's step, on the floating surface the menus use.
+        .font(ChromeType.sans(InputCardMetrics.labelSize(for: dynamicTypeSize)))
+        .foregroundStyle(ChromePalette.ink)
         .multilineTextAlignment(.trailing)
         .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: 230, alignment: .trailing)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-          RoundedRectangle(cornerRadius: Self.cornerRadius)
-            .fill(FieldPalette.panelBackground)
-            .overlay(
-              RoundedRectangle(cornerRadius: Self.cornerRadius)
-                .strokeBorder(FieldPalette.panelBorder, lineWidth: 1)
-            )
-        )
+        .frame(maxWidth: 240, alignment: .trailing)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background { ChromeMaterial.floating(radius: ChromeRadius.well) }
         // The overlay's top guide moved to its own bottom: the line sits
         // wholly above the key, clear of the composer it belongs to.
         .alignmentGuide(.top) { $0[.bottom] + 8 }
@@ -164,18 +152,14 @@ struct DictationKey: View {
       : FieldMotion.ease(0.12)
   }
 
+  /// `.circle.quiet` at rest, `.circle.prominent` while it listens.
   @ViewBuilder
-  private var keyShape: some View {
+  private var circleShape: some View {
     if listening {
-      RoundedRectangle(cornerRadius: Self.cornerRadius)
-        .fill(FieldPalette.textMain)
+      ChromeMaterial.circle(fill: ChromePalette.circleProminentFill, hairline: nil)
     } else {
-      RoundedRectangle(cornerRadius: Self.cornerRadius)
-        .fill(FieldPalette.panelBackground.opacity(0.8))
-        .overlay(
-          RoundedRectangle(cornerRadius: Self.cornerRadius)
-            .strokeBorder(FieldPalette.panelBorder, lineWidth: 1)
-        )
+      ChromeMaterial.circle(
+        fill: ChromePalette.circleQuietFill, hairline: ChromePalette.circleHairline)
     }
   }
 }

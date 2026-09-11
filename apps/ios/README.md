@@ -19,12 +19,12 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (synthetic IDs, the GhostteaApp convention; objectVersion 60 since Xcode touched it); no product code |
 | `App/` | `@main` + assets + privacy manifest, nothing else |
 | `VibeFieldKit/` | the real code, one SPM package, four targets |
-| `VibeFieldKit/Sources/FieldDesign` | godview monochrome tokens (palette light+dark, mono type ramp, motion constants, grid/scanlines/vignette) |
+| `VibeFieldKit/Sources/FieldDesign` | two token sets and one motion table: the **godview** monochrome tokens (`FieldPalette`, `FieldType` — palette light+dark, mono type ramp, grid/scanlines/vignette), scoped to the swarm field and the terminal surface by DESIGN.md §1.1, and the **chrome** tokens (`ChromeType`, `ChromePalette`, `ChromeMaterial`, `ChromeControls`) every other surface wears — SF type, the glass card recipe, the radii and the two pill buttons |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
 | `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface — plus (IOS-3c) the per-host mirror-write key store |
-| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a…5e): a composer row over a rail of nine terminal keys in two modes — a local draft sent as one bracketed paste, or the terminal itself holding the keyboard — with one sticky Ctrl reaching through both, the long-press fans, the reply and paste chips, the closed row, a mic that dictates into the draft and never onto the wire, the `+` doors (scan, snippets, clipboard history) and the `⋯` keypad's three pages, every one of them sized for the reader's text size and spoken to a screen reader; its own target on purpose (K-D1) because a keyboard is state machines all the way down and the IOS-3 review found every serious bug living in the one module with no test target, and it takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product |
+| `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a…5e): a composer row over a rail of nine terminal keys in two modes — a local draft sent as one bracketed paste, or the terminal itself holding the keyboard — with one sticky Ctrl reaching through both, the long-press fans, the reply and paste chips, the closed row, a mic that dictates into the draft and never onto the wire, the `+` doors (scan, snippets, clipboard history) and the `⋯` keypad's three pages, every one of them sized for the reader's text size and spoken to a screen reader; its own target on purpose (K-D1) because a keyboard is state machines all the way down and the IOS-3 review found every serious bug living in the one module with no test target, and it takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product. Since IOS-5v it wears DESIGN.md's **chrome family** as the KeyboardLab canvas draws it — SF type in sentence case, a glass card with a hairline over the sheet's own glass, 44 pt keys at radius 9, round pills — while the swarm field and the terminal surface keep the godview instrument palette that §1.1 scopes to them |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 **Write keys (IOS-3c).** The mirror-write capability a desktop grants this
@@ -94,14 +94,14 @@ reach states no `simctl` touch can:
 | `-vf-write-key=<secret>` | swaps the Keychain for an in-memory write-key store whose **wildcard** answers for any host, so `-vf-auto-attach` can type against a serving desktop with no finger on the glass; it also seeds one explicit demo host (`studio`) so the settings sheet's WRITE KEYS section has a row to render. A launch argument is visible to `ps` — a DEBUG smoke aid, never a way to carry a real secret onto a phone |
 | `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; every argument below rides on top of it |
 | `-vf-demo-input-live` | the strip instead of the composer — the terminal holding the keyboard, the mode key lit. The word "Live" is this spec's name for the mode and never the screen's |
-| `-vf-demo-input-draft` | a filled two-line draft under a LOCKED Ctrl: the send key inverted, the dot on CTRL, the card grown by one line |
-| `-vf-demo-input-closed` | the card with the keyboard down: one row, the chips (if any) beside `KEYBOARD`. It is the resting state of a card nobody has typed into, and a screenshot cannot tap its way out of the keyboard to reach it |
-| `-vf-demo-input-chips` | stamps one fixture Claude permission's reply chips onto the card — `1 YES` · `2 YES, DON'T ASK` · `3 NO` · `ESC`, in the waiting tier's inversion — so the contextual row above the composer can be looked at. The chips and the acts they emit are the shipping code; the permission they answer is invented, because no bubble the phone can attach to carries an agent facet yet (see below) |
+| `-vf-demo-input-draft` | a filled two-line draft under a LOCKED Ctrl: Send gone prominent, the dot on the lit `Ctrl` cap, the card grown by one line |
+| `-vf-demo-input-closed` | the card with the keyboard down: one row, the chips (if any) beside a glass circle wearing the keyboard glyph. It is the resting state of a card nobody has typed into, and a screenshot cannot tap its way out of the keyboard to reach it |
+| `-vf-demo-input-chips` | stamps one fixture Claude permission's reply chips onto the card — `1 Yes` · `2 Yes, don't ask` · `3 No` · `Esc`, as glass pills with the keystroke in its own circle — so the contextual row above the composer can be looked at. The chips and the acts they emit are the shipping code; the permission they answer is invented, because no bubble the phone can attach to carries an agent facet yet (see below) |
 | `-vf-demo-input-fan` | opens the CTRL long-press fan three seconds in — the ten chords in two rows, anchored above the key. The only way to a fan without a finger, and the fan is the whole of IOS-5b that a screenshot can show |
 | `-vf-demo-input-meta` | holds ESC in its armed META state by re-arming the burst once a second. The burst is a 3 s window BY DESIGN and a screenshot run is slower than that, so the fixture keeps re-arming rather than pretending the window is longer; the state in the picture is the real one |
-| `-vf-demo-input-dictating` | forces the mic key's LISTENING look — inverted, breathing unless Reduce Motion is on — and seeds the draft through the same `appendDictation` a real partial would use. Listening otherwise wants two permission alerts answered by a finger and a voice to speak into a simulator, so this is the only way to a picture of the state; it opens no audio session and asks Speech for nothing. Our own pixels, never a claim that anything was heard |
+| `-vf-demo-input-dictating` | forces the mic's listening look — the prominent circle, breathing unless Reduce Motion is on — and seeds the draft through the same `appendDictation` a real partial would use. Listening otherwise wants two permission alerts answered by a finger and a voice to speak into a simulator, so this is the only way to a picture of the state; it opens no audio session and asks Speech for nothing. Our own pixels, never a claim that anything was heard |
 | `-vf-demo-input-keypad[=symbols\|=combos]` | brings the `⋯` keypad up three seconds in — on the **Keys** page, or on `=symbols` / `=combos`. The keypad REPLACES the system keyboard, so it is reachable only by tapping `⋯`, and a screenshot has no finger. It waits because the card has to be on screen first: a keypad needs a responder to rise under. Add `-vf-demo-input-live` to see the same keypad riding the hidden responder (K-D5) with the terminal holding the mode |
-| `-vf-demo-input-plus` | opens the `+` menu — SCAN TEXT · SNIPPETS · CLIPBOARD HISTORY, with the glyph rotated 45° to `×` (and not rotated under Reduce Motion). The attach items the design also lists are ABSENT rather than greyed out (K-D6, below) |
+| `-vf-demo-input-plus` | opens the `+` menu — Scan text · Snippets · Clipboard history, with the glyph rotated 45° to `×` (and not rotated under Reduce Motion). The attach items the design also lists are ABSENT rather than greyed out (K-D6, below) |
 | `-vf-demo-input-snippets` | opens the Snippets sheet holding ONE fixture snippet (`STATUS` · `git status --short`, sends Enter) in a scratch `UserDefaults` suite that is wiped at launch — a fixture must never write into, or read out of, what a real user saved |
 | `-vf-demo-input-history` | opens the Clipboard History sheet on two fixture entries in the same scratch suite. The real ring is fed only by pastes made THROUGH this card; nothing in the app ever reads the pasteboard's contents on its own |
 | `-vf-demo-input-scan` | opens the Scan Text cover. On every simulator this is the honest-missing face — `DataScannerViewController.isSupported` is false without a camera — which is precisely the state worth looking at, since it is the one a screenshot run can ever reach |
@@ -154,12 +154,12 @@ release — because in that mode the attachment asks the card what the next key
 carries and shapes the keyboard's own event with it, so `^C` means the same
 thing whichever responder is holding the keys. Every rail key but the mode
 toggle opens a fan under a 0.35 s press: ten chords under CTRL, each arrow's far
-end, ⇧Tab under TAB, and the Meta burst under ESC, which wears an inverted META
-while it is armed. Above the composer is the one row of context — reply chips
+end, ⇧Tab under `Tab`, and the Meta burst under `Esc`, which says `Meta` on a lit
+cap while it is armed. Above the composer is the one row of context — reply chips
 derived from the agent feed's own pending permissions, and the paste chip built
 on the system paste control so there is no "allow paste" alert, with five lines
 or more held back for a review that says what SEND will do — and with the
-keyboard down the whole card collapses to that row beside KEYBOARD. The
+keyboard down the whole card collapses to that row beside one glass circle. The
 composer's other two controls are the mic, which dictates into the DRAFT and
 never onto the wire (a misheard word would already be a command down there;
 recognition stays on the device where the device supports it, the audio is
@@ -168,9 +168,8 @@ Scan Text, Snippets and Clipboard History; `⋯` at the end of the rail replaces
 the system keyboard with our own keypad of three pages — Keys, Symbols, Combos —
 and `abc` gives the letters back. All of it answers the reader as well as the
 terminal: at accessibility text sizes the rail and the composer step from 44 pt
-to 52 pt and every label from mono 9 to 11 and no further (`InputCardMetrics`, a
-pure function with its own tests — a keyboard's markings are instrument
-markings, not prose); Reduce Motion stops the `+` glyph turning, the mic
+to 52 pt and every key label from 13 to 15 and no further (`InputCardMetrics`, a
+pure function with its own tests — a key's face is a key's face, not prose); Reduce Motion stops the `+` glyph turning, the mic
 breathing and the fan scaling out of its key, leaving the cross-fades that carry
 no movement; VoiceOver hears "Control armed" / "Control locked" / "Control
 released", "Meta armed for the next key", "Typing into terminal" / "Drafting"
@@ -183,7 +182,14 @@ eleven transitions carry a haptic each, the table written out at the top of
 in the middle of the screen rather than keys under a thumb. 331 headless tests.
 
 Honest-missing (each says so on screen where it shows): **the keyboard track is
-built and none of it has been witnessed on a device.** Typing is the gate that
+built and none of it has been witnessed on a device.** IOS-5v re-skinned every
+surface of it into the chrome family and changed no behaviour, so every device
+gate below is still open and still says the same thing; what the simulator
+witnessed of the re-skin is our own pixels in both themes, which is all a
+screenshot can ever witness. **The rest of the phone's chrome has not moved
+yet** — the session card's header, the settings sheet and the mesh sheet still
+speak godview, which is right for the terminal deck they sit on and a decision
+nobody has made for the others. Typing is the gate that
 proves the whole of it — type into a desktop's session and watch it land — and
 it wants a phone, a tailnet and a serving desktop, so it is a device run that no
 simulator can stand in for; the same run is what would prove IOS-5b's encodings

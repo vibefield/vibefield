@@ -32,7 +32,11 @@ public struct ScanTextCover: View {
 
   public var body: some View {
     ZStack {
-      FieldPalette.monitorBackground.ignoresSafeArea()
+      // Black, in both themes and on purpose: this is a viewfinder, and the one
+      // ground a camera image belongs on is the one that adds nothing to it.
+      // On a simulator there is no image and the same ground carries the
+      // honest-missing line instead.
+      Color.black.ignoresSafeArea()
       if scannerReady {
         DataScannerView(onText: onText)
           .ignoresSafeArea()
@@ -52,15 +56,15 @@ public struct ScanTextCover: View {
   private var unsupported: some View {
     VStack(spacing: 10) {
       Image(systemName: "text.viewfinder")
-        .font(.system(size: 22, weight: .heavy))
-        .foregroundStyle(FieldPalette.textMuted)
-      Text("text scanning needs a camera on this device")
-        .font(FieldType.mono(11))
-        .foregroundStyle(FieldPalette.textMain)
+        .font(.system(size: 26, weight: .regular))
+        .foregroundStyle(ChromePalette.inkTertiary)
+      Text("Text scanning needs a camera on this device")
+        .font(ChromeType.sans(ChromeType.sheetTitleSize, .semibold))
+        .foregroundStyle(ChromePalette.ink)
         .multilineTextAlignment(.center)
-      Text("nothing was captured")
-        .font(FieldType.mono(9))
-        .foregroundStyle(FieldPalette.textFaint)
+      Text("Nothing was captured")
+        .font(ChromeType.sans(ChromeType.sheetBodySize))
+        .foregroundStyle(ChromePalette.inkTertiary)
     }
     .padding(.horizontal, 40)
   }
@@ -68,44 +72,27 @@ public struct ScanTextCover: View {
   private var chrome: some View {
     VStack {
       HStack {
-        Text("SCAN TEXT")
-          .font(FieldType.mono(9, .heavy))
-          .tracking(FieldType.tracking(0.18, of: 9))
-          .foregroundStyle(FieldPalette.textMain)
-          .padding(.horizontal, 10)
-          .padding(.vertical, 7)
-          .background(
-            RoundedRectangle(cornerRadius: 6)
-              .fill(FieldPalette.panelBackground.opacity(0.8)))
+        Text("Scan text")
+          .font(ChromeType.sans(ChromeType.stripSize, .semibold))
+          .foregroundStyle(ChromePalette.ink)
+          .padding(.horizontal, 16)
+          .frame(height: 36)
+          .background { Capsule().fill(ChromePalette.keyFill) }
         Spacer(minLength: 0)
         Button(action: onClose) {
-          Text("CLOSE")
-            .font(FieldType.mono(9, .heavy))
-            .tracking(FieldType.tracking(0.12, of: 9))
-            .foregroundStyle(FieldPalette.textMain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-              RoundedRectangle(cornerRadius: 6)
-                .fill(FieldPalette.panelBackground.opacity(0.8))
-            )
-            .overlay(
-              RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+          Text("Close")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ChromePillStyle(.secondary))
         .accessibilityLabel("Close the scanner")
       }
       Spacer(minLength: 0)
       if scannerReady {
-        Text("tap a line of text to take it")
-          .font(FieldType.mono(9))
-          .foregroundStyle(FieldPalette.textMain)
-          .padding(.horizontal, 12)
-          .padding(.vertical, 8)
-          .background(
-            RoundedRectangle(cornerRadius: 6)
-              .fill(FieldPalette.panelBackground.opacity(0.8)))
+        Text("Tap a line of text to take it")
+          .font(ChromeType.sans(ChromeType.sheetBodySize))
+          .foregroundStyle(ChromePalette.ink)
+          .padding(.horizontal, 16)
+          .frame(height: 36)
+          .background { Capsule().fill(ChromePalette.keyFill) }
       }
     }
     .padding(16)

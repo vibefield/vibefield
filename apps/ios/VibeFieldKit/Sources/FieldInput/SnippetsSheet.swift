@@ -52,28 +52,22 @@ public struct SnippetsSheet: View {
   }
 
   private var header: some View {
-    HStack(alignment: .firstTextBaseline) {
-      Text("SNIPPETS")
-        .font(FieldType.mono(9, .heavy))
-        .tracking(FieldType.tracking(0.18, of: 9))
-        .foregroundStyle(FieldPalette.textMuted)
+    HStack(alignment: .center) {
+      VStack(alignment: .leading, spacing: 2) {
+        ChromeEyebrow("Snippets")
+        Text("Saved commands")
+          .font(ChromeType.sans(ChromeType.sheetTitleSize, .semibold))
+          .foregroundStyle(ChromePalette.ink)
+      }
       Spacer(minLength: 0)
       if editing == nil {
         Button {
           isNew = true
           editing = Snippet(title: "", text: "", sendsEnter: false)
         } label: {
-          Text("NEW")
-            .font(FieldType.mono(9, .heavy))
-            .tracking(FieldType.tracking(0.12, of: 9))
-            .foregroundStyle(FieldPalette.textMain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .overlay(
-              RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+          Text("New")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ChromePillStyle(.secondary))
         .accessibilityLabel("New snippet")
       }
     }
@@ -81,9 +75,9 @@ public struct SnippetsSheet: View {
   }
 
   private var empty: some View {
-    Text("no snippets yet — NEW makes one")
-      .font(FieldType.mono(11))
-      .foregroundStyle(FieldPalette.textMuted)
+    Text("No snippets yet — New makes one")
+      .font(ChromeType.sans(ChromeType.sheetBodySize))
+      .foregroundStyle(ChromePalette.inkTertiary)
       .padding(.horizontal, 22)
       .padding(.top, 18)
   }
@@ -101,8 +95,8 @@ public struct SnippetsSheet: View {
         }
         .buttonStyle(.plain)
         .listRowBackground(Color.clear)
-        .listRowSeparatorTint(FieldPalette.panelBorder)
-        .listRowInsets(EdgeInsets(top: 10, leading: 22, bottom: 10, trailing: 22))
+        .listRowSeparatorTint(ChromePalette.separator)
+        .listRowInsets(EdgeInsets(top: 8, leading: 22, bottom: 8, trailing: 22))
       }
       .onDelete { offsets in store.delete(atOffsets: offsets) }
     }
@@ -111,28 +105,30 @@ public struct SnippetsSheet: View {
     .padding(.top, 8)
   }
 
+  /// `.srow` — the command in mono, because it is one, over its name in SF.
   private func row(_ snippet: Snippet) -> some View {
-    HStack(alignment: .top, spacing: 10) {
+    HStack(alignment: .center, spacing: 10) {
       VStack(alignment: .leading, spacing: 3) {
         Text(snippet.title.isEmpty ? snippet.firstLine : snippet.title)
-          .font(FieldType.mono(11, .medium))
-          .foregroundStyle(FieldPalette.textMain)
+          .font(ChromeType.sans(ChromeType.rowSummarySize))
+          .foregroundStyle(ChromePalette.inkTertiary)
           .lineLimit(1)
         Text(snippet.firstLine)
-          .font(FieldType.mono(9))
-          .foregroundStyle(FieldPalette.textMuted)
+          .font(ChromeType.mono(ChromeType.rowCommandSize, .semibold))
+          .foregroundStyle(ChromePalette.ink)
           .lineLimit(1)
       }
       Spacer(minLength: 0)
       // The one mark that changes what a tap DOES, so it is on the row rather
       // than inside the snippet.
       if snippet.sendsEnter {
-        Text("\u{23CE}")
-          .font(FieldType.mono(11, .heavy))
-          .foregroundStyle(FieldPalette.textMuted)
+        Image(systemName: "return")
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(ChromePalette.inkTertiary)
           .accessibilityLabel("sends Enter")
       }
     }
+    .frame(minHeight: 44)
     .contentShape(Rectangle())
   }
 }
@@ -160,50 +156,63 @@ struct SnippetEditor: View {
       // The title's own traits are off for the same reason the composer's are:
       // this is a name for a command, and a capitalized `git` is a different
       // word.
-      TextField("", text: $title, prompt: Text("title").foregroundStyle(FieldPalette.textFaint))
-        .font(FieldType.mono(13))
-        .foregroundStyle(FieldPalette.textMain)
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-        .padding(.horizontal, 10)
-        .frame(height: 40)
-        .background(fieldShape)
-        .accessibilityLabel("Snippet title")
+      TextField(
+        "", text: $title,
+        prompt: Text("Title").foregroundStyle(ChromePalette.placeholder)
+      )
+      .font(ChromeType.sans(ChromeType.fieldSize))
+      .foregroundStyle(ChromePalette.ink)
+      .tint(ChromePalette.ink)
+      .textInputAutocapitalization(.never)
+      .autocorrectionDisabled()
+      .padding(.horizontal, 12)
+      .frame(height: 48)
+      .background { ChromeMaterial.well() }
+      .accessibilityLabel("Snippet title")
 
       SnippetTextView(text: $text)
-        .frame(height: 110)
-        .background(fieldShape)
+        .frame(height: 120)
+        .background { ChromeMaterial.well() }
         .accessibilityLabel("Snippet text")
 
       HStack(spacing: 10) {
         // A chip rather than a `Toggle`: a switch is the one control in this
         // app that says on/off with a colour, and attention here is contrast.
+        // A small pill toggle rather than a `Toggle`: a switch is the one
+        // control in this app that says on/off with a colour, and the chrome
+        // family says it with material.
         Button {
           sendsEnter.toggle()
         } label: {
-          Text("\u{23CE} SENDS ENTER")
-            .font(FieldType.mono(9, .heavy))
-            .tracking(FieldType.tracking(0.08, of: 9))
-            .foregroundStyle(sendsEnter ? FieldPalette.panelBackground : FieldPalette.textMuted)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-              RoundedRectangle(cornerRadius: 6)
-                .fill(
-                  sendsEnter
-                    ? AnyShapeStyle(FieldPalette.textMain)
-                    : AnyShapeStyle(FieldPalette.panelBackground.opacity(0.8)))
-            )
-            .overlay(
-              RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(
-                  sendsEnter ? Color.clear : FieldPalette.panelBorder, lineWidth: 1))
+          HStack(spacing: 6) {
+            Image(systemName: "return")
+              .font(.system(size: 12, weight: .semibold))
+            Text("Sends Enter")
+          }
+          .font(ChromeType.sans(ChromeType.rowSummarySize, .semibold))
+          .foregroundStyle(sendsEnter ? ChromePalette.keyOnInk : ChromePalette.inkTertiary)
+          .padding(.horizontal, 14)
+          .frame(height: 36)
+          .background {
+            if sendsEnter {
+              Capsule().fill(ChromePalette.keyOnFill)
+            } else {
+              Capsule()
+                .fill(ChromePalette.keyFill)
+                .overlay { Capsule().strokeBorder(ChromePalette.keyHairline, lineWidth: 0.5) }
+            }
+          }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(sendsEnter ? "Sends Enter, on" : "Sends Enter, off")
         .accessibilityAddTraits(sendsEnter ? [.isSelected] : [])
 
         Spacer(minLength: 0)
+
+        Button(action: onCancel) {
+          Text("Cancel")
+        }
+        .buttonStyle(ChromePillStyle(.secondary))
 
         Button {
           onSave(
@@ -213,43 +222,17 @@ struct SnippetEditor: View {
               text: text,
               sendsEnter: sendsEnter))
         } label: {
-          Text("SAVE")
-            .font(FieldType.mono(9, .heavy))
-            .tracking(FieldType.tracking(0.12, of: 9))
-            .foregroundStyle(FieldPalette.panelBackground)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 6).fill(FieldPalette.textMain))
+          Text("Save")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ChromePillStyle(.primary))
         // Never disabled: an empty snippet simply is not saved, and a greyed
-        // SAVE would explain nothing about why.
+        // Save would explain nothing about why.
         .disabled(false)
-
-        Button(action: onCancel) {
-          Text("CANCEL")
-            .font(FieldType.mono(9, .heavy))
-            .tracking(FieldType.tracking(0.12, of: 9))
-            .foregroundStyle(FieldPalette.textMain)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .overlay(
-              RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
       }
     }
     .padding(.horizontal, 22)
   }
 
-  private var fieldShape: some View {
-    RoundedRectangle(cornerRadius: 6)
-      .fill(FieldPalette.panelBackground.opacity(0.8))
-      .overlay(
-        RoundedRectangle(cornerRadius: 6)
-          .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
-  }
 }
 
 /// The snippet body, on the composer's own text view.
@@ -276,16 +259,16 @@ struct SnippetTextView: UIViewRepresentable {
     view.inputAccessoryView = nil
     view.backgroundColor = .clear
     view.isScrollEnabled = true
-    view.placeholder = "the command or prompt"
+    view.placeholder = "The command or prompt"
     view.text = text
     return view
   }
 
   func updateUIView(_ view: InputTextView, context: Context) {
     context.coordinator.text = $text
-    view.textColor = UIColor(FieldPalette.textMain)
-    view.tintColor = UIColor(FieldPalette.textMain)
-    view.placeholderColor = UIColor(FieldPalette.textFaint)
+    view.textColor = UIColor(ChromePalette.ink)
+    view.tintColor = UIColor(ChromePalette.ink)
+    view.placeholderColor = UIColor(ChromePalette.placeholder)
     if view.text != text {
       view.text = text
       view.refreshPlaceholder()

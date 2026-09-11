@@ -46,9 +46,10 @@ final class KeypadInputView: UIInputView {
         height: InputCardMetrics.keypadHeight(accessibility: isAccessibilitySize)),
       inputViewStyle: .keyboard)
     allowsSelfSizing = true
-    // The input view's own material is the ground, the way a system keyboard's
-    // keys sit on its blur — so the SwiftUI layer paints nothing behind the
-    // chips.
+    // IOS-5v: the keypad paints its OWN ground now (`ChromePalette.keypadGround`
+    // — the system keyboard's grays), because what replaces a keyboard should
+    // sit where the keyboard sat. The carrier stays clear so there is one
+    // ground and not two.
     host.view.backgroundColor = .clear
     host.view.translatesAutoresizingMaskIntoConstraints = false
     addSubview(host.view)

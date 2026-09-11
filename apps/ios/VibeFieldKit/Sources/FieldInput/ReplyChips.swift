@@ -11,15 +11,29 @@ import FieldTerminal
 /// can be matched against what is on screen now.
 public struct ReplyChip: Identifiable, Equatable, Sendable {
   public let id: String
+  /// The number the agent's own TUI printed beside this answer, when it printed
+  /// one. IOS-5v gave it its own field because the canvas draws it in its own
+  /// circle on the chip (`.chip .n`, mono 12 bold) rather than running it into
+  /// the label: the number is the KEYSTROKE and the label is the meaning, and a
+  /// chip that says both says which is which.
+  public let number: String?
   public let label: String
   /// What the tap MEANS. The chip does not know there is a terminal, in the
   /// same way the rest of this module does not.
   public let act: InputAct
 
-  public init(id: String, label: String, act: InputAct) {
+  public init(id: String, number: String? = nil, label: String, act: InputAct) {
     self.id = id
+    self.number = number
     self.label = label
     self.act = act
+  }
+
+  /// The whole chip as one sentence, for a reader who cannot see that the
+  /// number is set in a circle of its own.
+  public var spokenLabel: String {
+    guard let number else { return label }
+    return "\(number), \(label)"
   }
 }
 
@@ -54,14 +68,18 @@ public func replyChips(
   guard !permissions.isEmpty else { return [] }
   switch provider {
   case .claude:
+    // The copy is the canvas's, and the canvas's is Claude's own TUI shortened
+    // to a chip: sentence case (DESIGN.md §9), the number in its own circle.
     return [
-      ReplyChip(id: "claude-yes", label: "1 YES", act: .sendDraft("1")),
-      ReplyChip(id: "claude-yes-always", label: "2 YES, DON'T ASK", act: .sendDraft("2")),
-      ReplyChip(id: "claude-no", label: "3 NO", act: .sendDraft("3")),
+      ReplyChip(id: "claude-yes", number: "1", label: "Yes", act: .sendDraft("1")),
+      ReplyChip(
+        id: "claude-yes-always", number: "2", label: "Yes, don't ask", act: .sendDraft("2")),
+      ReplyChip(id: "claude-no", number: "3", label: "No", act: .sendDraft("3")),
       // Not an answer — the interrupt. It is on the row because a dialog you
       // did not expect is most often one you want gone, and Esc is what the
-      // design gives that gesture (§2's chip row: 1 / 2 / 3 / Esc).
-      ReplyChip(id: "claude-esc", label: "ESC", act: .keystroke(TerminalKeystroke(.escape))),
+      // design gives that gesture (§2's chip row: 1 / 2 / 3 / Esc). It carries no
+      // number because the TUI printed none: it is the way out, not a choice.
+      ReplyChip(id: "claude-esc", label: "Esc", act: .keystroke(TerminalKeystroke(.escape))),
     ]
   case .codex, .grok, .acp:
     // Absent, not disabled. See the structured transport above.

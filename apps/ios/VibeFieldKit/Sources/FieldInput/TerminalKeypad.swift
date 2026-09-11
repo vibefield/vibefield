@@ -11,10 +11,12 @@ import SwiftUI
 /// Keys and Combos are always key EVENTS, and Symbols is text in Draft and
 /// input in Live. `abc` gives the letters back.
 ///
-/// It carries the card's voice, not the keyboard's: mono labels, chip-shaped
-/// keys, inversion for anything that is ON. The ground stays clear so the
-/// input view's own material reads through, the way a system keyboard's keys
-/// sit on its blur.
+/// **IOS-5v — it reads as a keyboard, because it is one.** The canvas gives the
+/// keypad the system keyboard's own ground (`#1F1F21` dark, `#D1D3D9` light)
+/// rather than the card's glass, and its keys the two fills a system keyboard
+/// uses: a bright cap for the letters-and-arrows half, a darker one for the
+/// named keys. That is the whole argument for the choice — what replaces the
+/// keyboard should sit where the keyboard sat.
 struct TerminalKeypad: View {
   let model: InputCardModel
   // --- IOS-5e ---------------------------------------------------------------
@@ -23,24 +25,28 @@ struct TerminalKeypad: View {
   // --- end IOS-5e -----------------------------------------------------------
 
   /// The whole keypad's height at the base text step, close enough to a system
-  /// keyboard that the card does not jump when the two swap. The accessibility
-  /// step is `InputCardMetrics.keypadHeight`, which the input view carrying
-  /// this asks for in UIKit terms.
-  static let height: CGFloat = 260
+  /// keyboard that the card does not jump when the two swap — the canvas's own
+  /// keyboard is 291 pt on a 402 pt phone. The accessibility step is
+  /// `InputCardMetrics.keypadHeight`, which the input view carrying this asks
+  /// for in UIKit terms.
+  static let height: CGFloat = 284
 
-  private static let gap: CGFloat = 5
+  /// `.kb.keypad` — `gap: 6`, `padding: 8 6 0`.
+  private static let gap: CGFloat = 6
   private static let padding: CGFloat = 6
+  private static let topPadding: CGFloat = 8
 
   private var keyHeight: CGFloat { InputCardMetrics.keypadKeyHeight(for: dynamicTypeSize) }
+  /// `.kb.keypad .key.special` — 13, the same step as a rail key's label.
   private var labelSize: CGFloat { InputCardMetrics.labelSize(for: dynamicTypeSize) }
   private var glyphSize: CGFloat { InputCardMetrics.glyphSize(for: dynamicTypeSize) }
-  /// A symbol's face IS the character, so it is set larger than a label at both
-  /// steps — `|` at 9 pt is a hairline nobody can aim at.
-  private var symbolSize: CGFloat { InputCardMetrics.actionGlyphSize(for: dynamicTypeSize) + 2 }
-  /// The two pieces of prose on the keypad: a pack's heading, and the line that
-  /// says where a symbol goes. One step under a key's label, which is what
-  /// keeps them reading as annotation rather than as keys.
-  private var noteSize: CGFloat { labelSize - 1 }
+  /// `.kb.keypad .key` — 15. A symbol's face IS the character, so it is set
+  /// larger than a named key's word: `|` at 13 pt is a hairline nobody can aim
+  /// at.
+  private var symbolSize: CGFloat { InputCardMetrics.keypadKeySize(for: dynamicTypeSize) }
+  /// The two pieces of prose on the keypad: a pack's heading, which is an
+  /// eyebrow (§3), and the line that says where a symbol goes.
+  private var noteSize: CGFloat { ChromeType.eyebrowSize }
 
   var body: some View {
     VStack(spacing: Self.gap) {
@@ -57,19 +63,49 @@ struct TerminalKeypad: View {
         .animation(reduceMotion ? nil : FieldMotion.ease(0.14), value: model.keypadPage)
       // --- end IOS-5e ---------------------------------------------------------
     }
-    .padding(Self.padding)
+    .padding(.horizontal, Self.padding)
+    .padding(.top, Self.topPadding)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    // `.kb.keypad` — the system keyboard's own ground, so the swap reads as a
+    // keyboard changing its keys rather than as a panel arriving.
+    .background(ChromePalette.keypadGround)
   }
 
   // MARK: - The page picker
 
-  /// `KEYS · SYMBOLS · COMBOS` and the way out.
+  /// `Keys · Symbols · Combos` in a segmented track, and the way out.
   ///
-  /// The selected page inverts rather than tinting — the same rule every key
-  /// on this card follows, because attention in this app is contrast and never
-  /// hue. `abc` sits at the right, where a keyboard's own return key lives.
+  /// The canvas draws the page picker as one `.seg` rather than three keys: the
+  /// pages are a choice among three, which is exactly what a segmented control
+  /// says and what three separate caps do not. `abc` sits at the right, where a
+  /// keyboard's own return key lives.
   private var header: some View {
     HStack(spacing: Self.gap) {
+      segmentedTrack
+      Button {
+        model.setKeypad(false)
+        // IOS-5e: the letters are coming back, which is a change to what the
+        // whole bottom of the screen is.
+        InputAnnouncement.post(InputAnnouncement.keypad(false))
+      } label: {
+        Text("abc")
+          .font(ChromeType.sans(labelSize + 1, .semibold, rounded: true))
+          .foregroundStyle(ChromePalette.keypadKeyInk)
+          .frame(width: dynamicTypeSize.isAccessibilitySize ? 72 : 64, height: headerHeight)
+          .background {
+            ChromeMaterial.key(
+              radius: ChromeRadius.keypadKey, fill: ChromePalette.keypadSpecialFill,
+              hairline: ChromePalette.keypadKeyHairline)
+          }
+      }
+      .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
+      .accessibilityLabel("Letters")
+    }
+  }
+
+  /// `.seg` — a 32 pt track at radius 10 with 3 pt of padding, its thumb at 8.
+  private var segmentedTrack: some View {
+    HStack(spacing: 4) {
       ForEach(KeypadPage.allCases, id: \.rawValue) { candidate in
         Button {
           // IOS-5e: `.selectionChanged` and only on an actual change — the
@@ -81,36 +117,31 @@ struct TerminalKeypad: View {
           InputHaptics.page()
         } label: {
           Text(candidate.title)
-            .font(FieldType.mono(labelSize, .heavy))
-            .tracking(FieldType.tracking(0.08, of: labelSize))
+            .font(ChromeType.sans(ChromeType.segmentSize, .semibold))
             .foregroundStyle(
               model.keypadPage == candidate
-                ? FieldPalette.panelBackground : FieldPalette.textMain
+                ? ChromePalette.segSelectedInk : ChromePalette.segInk
             )
             .lineLimit(1)
             .frame(maxWidth: .infinity)
-            .frame(height: headerHeight)
-            .background(keyShape(inverted: model.keypadPage == candidate))
+            .frame(height: headerHeight - 6)
+            .background {
+              if model.keypadPage == candidate {
+                RoundedRectangle(cornerRadius: ChromeRadius.segmentThumb, style: .continuous)
+                  .fill(ChromePalette.segSelected)
+              }
+            }
         }
-        .buttonStyle(KeyPressStyle())
+        .buttonStyle(KeyPressStyle(radius: ChromeRadius.segmentThumb))
         .accessibilityLabel("\(candidate.title) page")
         .accessibilityAddTraits(model.keypadPage == candidate ? [.isSelected] : [])
       }
-
-      Button {
-        model.setKeypad(false)
-        // IOS-5e: the letters are coming back, which is a change to what the
-        // whole bottom of the screen is.
-        InputAnnouncement.post(InputAnnouncement.keypad(false))
-      } label: {
-        Text("abc")
-          .font(FieldType.mono(labelSize + 2, .heavy))
-          .foregroundStyle(FieldPalette.textMain)
-          .frame(width: 52, height: headerHeight)
-          .background(keyShape(inverted: false))
-      }
-      .buttonStyle(KeyPressStyle())
-      .accessibilityLabel("Letters")
+    }
+    .padding(3)
+    .frame(height: headerHeight)
+    .background {
+      RoundedRectangle(cornerRadius: ChromeRadius.segment, style: .continuous)
+        .fill(ChromePalette.segTrack)
     }
   }
 
@@ -139,22 +170,22 @@ struct TerminalKeypad: View {
   private var keysPage: some View {
     VStack(spacing: Self.gap) {
       HStack(spacing: Self.gap) {
-        keyLabel("ESC", spoken: "Escape") { model.tapKey(.escape) }
-        keyLabel("TAB", spoken: "Tab") { model.tapKey(.tab) }
+        keyLabel("Esc", spoken: "Escape") { model.tapKey(.escape) }
+        keyLabel("Tab", spoken: "Tab") { model.tapKey(.tab) }
         keyGlyph("return", spoken: "Enter") { model.tapKey(.enter) }
         keyGlyph("delete.left", spoken: "Backspace") { model.tapKey(.backspace) }
       }
       HStack(spacing: Self.gap) {
-        keyLabel("HOME", spoken: "Home") { model.tapKey(.home) }
-        keyLabel("END", spoken: "End") { model.tapKey(.end) }
-        keyLabel("PGUP", spoken: "Page up") { model.tapKey(.pageUp) }
-        keyLabel("PGDN", spoken: "Page down") { model.tapKey(.pageDown) }
+        keyLabel("Home", spoken: "Home") { model.tapKey(.home) }
+        keyLabel("End", spoken: "End") { model.tapKey(.end) }
+        keyLabel("PgUp", spoken: "Page up") { model.tapKey(.pageUp) }
+        keyLabel("PgDn", spoken: "Page down") { model.tapKey(.pageDown) }
       }
       HStack(spacing: Self.gap) {
-        keyGlyph("arrow.left", spoken: "Left arrow") { model.tapKey(.arrowLeft) }
-        keyGlyph("arrow.down", spoken: "Down arrow") { model.tapKey(.arrowDown) }
-        keyGlyph("arrow.up", spoken: "Up arrow") { model.tapKey(.arrowUp) }
-        keyGlyph("arrow.right", spoken: "Right arrow") { model.tapKey(.arrowRight) }
+        keyGlyph("arrow.left", spoken: "Left arrow", special: false) { model.tapKey(.arrowLeft) }
+        keyGlyph("arrow.down", spoken: "Down arrow", special: false) { model.tapKey(.arrowDown) }
+        keyGlyph("arrow.up", spoken: "Up arrow", special: false) { model.tapKey(.arrowUp) }
+        keyGlyph("arrow.right", spoken: "Right arrow", special: false) { model.tapKey(.arrowRight) }
       }
       functionRow
       latchRow
@@ -171,13 +202,12 @@ struct TerminalKeypad: View {
             model.tapKey(.function(number))
           } label: {
             Text("F\(number)")
-              .font(FieldType.mono(labelSize, .heavy))
-              .tracking(FieldType.tracking(0.08, of: labelSize))
-              .foregroundStyle(FieldPalette.textMain)
-              .frame(width: 44, height: keyHeight)
-              .background(keyShape(inverted: false))
+              .font(ChromeType.sans(labelSize, .semibold, rounded: true))
+              .foregroundStyle(ChromePalette.keypadKeyInk)
+              .frame(width: 46, height: keyHeight)
+              .background { keyFace(.special) }
           }
-          .buttonStyle(KeyPressStyle())
+          .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
           .accessibilityLabel("F\(number)")
         }
       }
@@ -188,9 +218,9 @@ struct TerminalKeypad: View {
 
   /// The two sticky modifiers, side by side.
   ///
-  /// CTRL is the card's own latch — the same one the rail holds, so arming it
+  /// Ctrl is the card's own latch — the same one the rail holds, so arming it
   /// here and typing on the system keyboard after `abc` still gives a control
-  /// byte. ALT is the design's "explicit Alt latch lives on the keypad's Keys
+  /// byte. Alt is the design's "explicit Alt latch lives on the keypad's Keys
   /// page" (decision 4) and it is drawn AS a latch, but under it is IOS-5b's
   /// Meta burst: one key, then gone. That is honest rather than convenient —
   /// `.option` on the phone is a burst the kit encodes, and a second sticky
@@ -210,25 +240,25 @@ struct TerminalKeypad: View {
         // if the state were two things, and it is one.
         InputAnnouncement.post(InputAnnouncement.latch(model.latch.phase))
       } label: {
-        Text("CTRL")
-          .font(FieldType.mono(labelSize, .heavy))
-          .tracking(FieldType.tracking(0.08, of: labelSize))
+        Text("Ctrl")
+          .font(ChromeType.sans(labelSize, .semibold, rounded: true))
           .foregroundStyle(
-            model.latch.phase == .off ? FieldPalette.textMain : FieldPalette.panelBackground
+            model.latch.phase == .off
+              ? ChromePalette.keypadKeyInk : ChromePalette.keypadArmedInk
           )
           .frame(maxWidth: .infinity)
           .frame(height: keyHeight)
-          .background(keyShape(inverted: model.latch.phase != .off))
+          .background { keyFace(model.latch.phase == .off ? .special : .armed) }
           .overlay(alignment: .topTrailing) {
             if model.latch.phase == .locked {
               Circle()
-                .fill(FieldPalette.panelBackground)
-                .frame(width: 4, height: 4)
-                .padding(4)
+                .fill(ChromePalette.keypadArmedInk)
+                .frame(width: 5, height: 5)
+                .padding(5)
             }
           }
       }
-      .buttonStyle(KeyPressStyle())
+      .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
       .accessibilityLabel(model.latch.accessibilityLabel)
       .accessibilityHint(model.latch.accessibilityHint)
 
@@ -239,17 +269,16 @@ struct TerminalKeypad: View {
         // burst is what it actually arms, so the sentence names the burst.
         InputAnnouncement.post(InputAnnouncement.metaArmed)
       } label: {
-        Text("ALT")
-          .font(FieldType.mono(labelSize, .heavy))
-          .tracking(FieldType.tracking(0.08, of: labelSize))
+        Text("Alt")
+          .font(ChromeType.sans(labelSize, .semibold, rounded: true))
           .foregroundStyle(
-            model.metaArmed ? FieldPalette.panelBackground : FieldPalette.textMain
+            model.metaArmed ? ChromePalette.keypadArmedInk : ChromePalette.keypadKeyInk
           )
           .frame(maxWidth: .infinity)
           .frame(height: keyHeight)
-          .background(keyShape(inverted: model.metaArmed))
+          .background { keyFace(model.metaArmed ? .armed : .special) }
       }
-      .buttonStyle(KeyPressStyle())
+      .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
       .accessibilityLabel(model.metaArmed ? "Alt armed for the next key" : "Alt")
     }
   }
@@ -277,13 +306,13 @@ struct TerminalKeypad: View {
               model.typeSymbol(character)
             } label: {
               Text(String(character))
-                .font(FieldType.mono(symbolSize, .medium))
-                .foregroundStyle(FieldPalette.textMain)
+                .font(ChromeType.sans(symbolSize, .regular))
+                .foregroundStyle(ChromePalette.keypadKeyInk)
                 .frame(maxWidth: .infinity)
                 .frame(height: keyHeight)
-                .background(keyShape(inverted: false))
+                .background { keyFace(.plain) }
             }
-            .buttonStyle(KeyPressStyle())
+            .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
             .accessibilityLabel(Self.spoken(character))
           }
         }
@@ -293,10 +322,10 @@ struct TerminalKeypad: View {
       // on the rail behind the keypad.
       Text(
         model.mode == .draft
-          ? "symbols go into the draft" : "symbols go straight to the terminal"
+          ? "Symbols go into the draft" : "Symbols go straight to the terminal"
       )
-      .font(FieldType.mono(noteSize))
-      .foregroundStyle(FieldPalette.textFaint)
+      .font(ChromeType.sans(noteSize, .medium))
+      .foregroundStyle(ChromePalette.inkTertiary)
       .padding(.top, 2)
     }
   }
@@ -328,10 +357,14 @@ struct TerminalKeypad: View {
       VStack(alignment: .leading, spacing: 10) {
         ForEach(ComboCatalog.packs) { pack in
           VStack(alignment: .leading, spacing: Self.gap) {
+            // §3's eyebrow: 11 medium uppercase, tracking 0.06 em, 60%. A
+            // pack's name is a section label, which is the one place in this
+            // app that is not sentence case.
             Text(pack.title)
-              .font(FieldType.mono(noteSize, .heavy))
-              .tracking(FieldType.tracking(0.18, of: noteSize))
-              .foregroundStyle(FieldPalette.textMuted)
+              .font(ChromeType.sans(noteSize, .medium))
+              .textCase(.uppercase)
+              .tracking(ChromeType.tracking(ChromeType.eyebrowTracking, of: noteSize))
+              .foregroundStyle(ChromePalette.segInk)
             comboGrid(pack.combos)
           }
         }
@@ -355,23 +388,27 @@ struct TerminalKeypad: View {
               model.sendCombo(combo)
               InputHaptics.chord()
             } label: {
-              VStack(spacing: 1) {
+              // `.ck` — mono 14 semibold over a 10 medium subtitle at 55%. The
+              // sequence is data; the gloss under it is prose.
+              VStack(spacing: 3) {
                 Text(combo.label)
-                  .font(FieldType.mono(labelSize, .heavy))
-                  .tracking(FieldType.tracking(0.08, of: labelSize))
-                  .foregroundStyle(FieldPalette.textMain)
+                  .font(ChromeType.mono(labelSize + 1, .semibold))
+                  .foregroundStyle(ChromePalette.keypadKeyInk)
                 Text(combo.subtitle)
-                  .font(FieldType.mono(InputCardMetrics.subtitleSize(for: dynamicTypeSize)))
-                  .foregroundStyle(FieldPalette.textMuted)
+                  .font(
+                    ChromeType.sans(
+                      InputCardMetrics.comboSubtitleSize(for: dynamicTypeSize), .medium)
+                  )
+                  .foregroundStyle(ChromePalette.inkTertiary)
                   .lineLimit(1)
                   .minimumScaleFactor(0.8)
               }
               .padding(.horizontal, 4)
               .frame(maxWidth: .infinity)
               .frame(height: keyHeight)
-              .background(keyShape(inverted: false))
+              .background { keyFace(.special) }
             }
-            .buttonStyle(KeyPressStyle())
+            .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
             .accessibilityLabel(combo.accessibilityLabel)
           }
           // A short last row keeps the grid rather than stretching its keys.
@@ -392,47 +429,56 @@ struct TerminalKeypad: View {
   ) -> some View {
     Button(action: action) {
       Text(text)
-        .font(FieldType.mono(labelSize, .heavy))
-        .tracking(FieldType.tracking(0.08, of: labelSize))
-        .foregroundStyle(FieldPalette.textMain)
+        .font(ChromeType.sans(labelSize, .semibold, rounded: true))
+        .foregroundStyle(ChromePalette.keypadKeyInk)
+        .lineLimit(1)
         .frame(maxWidth: .infinity)
         .frame(height: keyHeight)
-        .background(keyShape(inverted: false))
+        .background { keyFace(.special) }
     }
-    .buttonStyle(KeyPressStyle())
+    .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
     .accessibilityLabel(spoken)
   }
 
   private func keyGlyph(
-    _ glyph: String, spoken: String, action: @escaping () -> Void
+    _ glyph: String, spoken: String, special: Bool = true, action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
       Image(systemName: glyph)
-        .font(.system(size: glyphSize, weight: .heavy))
-        .foregroundStyle(FieldPalette.textMain)
+        .font(.system(size: glyphSize, weight: .regular))
+        .foregroundStyle(ChromePalette.keypadKeyInk)
         .frame(maxWidth: .infinity)
         .frame(height: keyHeight)
-        .background(keyShape(inverted: false))
+        .background { keyFace(special ? .special : .plain) }
     }
-    .buttonStyle(KeyPressStyle())
+    .buttonStyle(KeyPressStyle(radius: ChromeRadius.keypadKey))
     .accessibilityLabel(spoken)
   }
 
-  /// The card's own key recipe, one size down. Kept here rather than reached
-  /// for across files because `InputCard`'s is private on purpose: the shape
-  /// is the design's, and two copies of six lines is cheaper than a shared
-  /// abstraction over a rounded rectangle.
-  @ViewBuilder
-  private func keyShape(inverted: Bool) -> some View {
-    if inverted {
-      RoundedRectangle(cornerRadius: 6).fill(FieldPalette.textMain)
-    } else {
-      RoundedRectangle(cornerRadius: 6)
-        .fill(FieldPalette.panelBackground.opacity(0.8))
-        .overlay(
-          RoundedRectangle(cornerRadius: 6)
-            .strokeBorder(FieldPalette.panelBorder, lineWidth: 1)
-        )
+  /// A keypad key's three faces (`.kb.keypad .key`, `.special`, `.armed`) — the
+  /// two fills a system keyboard uses plus the latched one. Radius 7, which is
+  /// the canvas's and a shade tighter than the rail's 9.
+  private func keyFace(_ face: KeypadKeyFace) -> some View {
+    ChromeMaterial.key(
+      radius: ChromeRadius.keypadKey, fill: face.fill,
+      hairline: ChromePalette.keypadKeyHairline)
+  }
+}
+
+/// `.kb.keypad .key` and its two variants.
+enum KeypadKeyFace {
+  /// The bright half of a system keyboard: arrows and symbols.
+  case plain
+  /// The darker half: the named keys, the function row, the combos.
+  case special
+  /// A latch that is on.
+  case armed
+
+  var fill: Color {
+    switch self {
+    case .plain: return ChromePalette.keypadKeyFill
+    case .special: return ChromePalette.keypadSpecialFill
+    case .armed: return ChromePalette.keypadArmedFill
     }
   }
 }

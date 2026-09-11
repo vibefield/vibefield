@@ -1,3 +1,4 @@
+import FieldDesign
 import SwiftUI
 import Testing
 
@@ -10,6 +11,10 @@ import Testing
 /// reader who asked for it, and no screenshot at the default size can show
 /// that. So the whole step is a pure function and this suite calls it at every
 /// size the system has.
+///
+/// IOS-5v moved the FLOOR of every one of these to the KeyboardLab canvas's own
+/// values — the card wears DESIGN.md's chrome family now — and left the step
+/// itself exactly where it was: one step, at `isAccessibilitySize`, 44 → 52.
 @Suite("the card's metrics")
 struct InputCardMetricsTests {
 
@@ -45,15 +50,15 @@ struct InputCardMetricsTests {
     #expect(heights == [44, 52])
     let labels = Set(
       (Self.ordinary + Self.accessibility).map { InputCardMetrics.labelSize(for: $0) })
-    #expect(labels == [9, 11])
+    #expect(labels == [13, 15])
   }
 
-  /// Instrument markings, not prose. Eleven is the ceiling the design's own
-  /// grid can carry — `CTRL` at 13 pt with its tracking is wider than a ninth
-  /// of a phone, and the equal-key rail is what the rule protects.
-  @Test("a key's label never passes 11 pt", arguments: ordinary + accessibility)
+  /// Key faces, not prose. Fifteen is the ceiling the design's own grid can
+  /// carry — `Ctrl` at 17 pt is wider than a ninth of a phone, and the
+  /// equal-key rail is what the rule protects.
+  @Test("a key's label never passes 15 pt", arguments: ordinary + accessibility)
   func labelCeiling(_ size: DynamicTypeSize) {
-    #expect(InputCardMetrics.labelSize(for: size) <= 11)
+    #expect(InputCardMetrics.labelSize(for: size) <= 15)
   }
 
   /// Every size on the card moves together or not at all. A row that grew while
@@ -76,18 +81,57 @@ struct InputCardMetricsTests {
         > InputCardMetrics.composerTextSize(for: .large))
     #expect(
       InputCardMetrics.subtitleSize(for: size) > InputCardMetrics.subtitleSize(for: .large))
+    #expect(
+      InputCardMetrics.comboSubtitleSize(for: size)
+        > InputCardMetrics.comboSubtitleSize(for: .large))
+    #expect(
+      InputCardMetrics.circleDiameter(for: size)
+        > InputCardMetrics.circleDiameter(for: .large))
+    #expect(InputCardMetrics.stripSize(for: size) > InputCardMetrics.stripSize(for: .large))
+    #expect(
+      InputCardMetrics.chipLabelSize(for: size) > InputCardMetrics.chipLabelSize(for: .large))
+    #expect(
+      InputCardMetrics.menuItemSize(for: size) > InputCardMetrics.menuItemSize(for: .large))
+    #expect(
+      InputCardMetrics.keypadKeySize(for: size) > InputCardMetrics.keypadKeySize(for: .large))
   }
 
   /// The proportions the card is read by, at both steps: a chip is context and
-  /// stays shorter than a key; a fan key stands under the rail's; a keypad key
-  /// is under the fan's, because there are five rows of them.
+  /// stays shorter than a key; a fan key is a key and stands exactly as tall as
+  /// the rail's; a keypad key is under both, because the Keys page is five rows
+  /// of them plus a picker.
   @Test("the card's own ranking holds at both steps", arguments: [false, true])
   func ranking(_ accessibility: Bool) {
     let size: DynamicTypeSize = accessibility ? .accessibility3 : .large
     let row = InputCardMetrics.rowHeight(for: size)
     #expect(InputCardMetrics.chipHeight(for: size) < row)
-    #expect(InputCardMetrics.fanKeyHeight(for: size) < row)
+    #expect(InputCardMetrics.fanKeyHeight(for: size) == row)
     #expect(InputCardMetrics.keypadKeyHeight(for: size) < InputCardMetrics.fanKeyHeight(for: size))
+    // A circle is drawn INSIDE a 44 pt target and must never fill it: the air
+    // around it is what makes the composer row read as three controls rather
+    // than as three more keys.
+    #expect(InputCardMetrics.circleDiameter(for: size) < row)
+  }
+
+  /// IOS-5v: the canvas's own base sizes, pinned against the shared geometry
+  /// tokens so a change to either has to be a change to both.
+  ///
+  /// These are the numbers a reader can check against the artboard: the card is
+  /// `.glass.card` at 26, a key is `.key` at 44 pt and radius 9, a chip is a
+  /// 36 pt `.chip` pill, a `.circle` is 28 inside a 44 pt `.target`.
+  @Test("the base sizes are the canvas's")
+  func canvasBaseSizes() {
+    #expect(InputCardMetrics.rowHeight(for: .large) == 44)
+    #expect(InputCardMetrics.chipHeight(for: .large) == 36)
+    #expect(InputCardMetrics.circleDiameter(for: .large) == 28)
+    #expect(InputCardMetrics.labelSize(for: .large) == 13)
+    #expect(InputCardMetrics.composerTextSize(for: .large) == 17)
+    #expect(ChromeRadius.card == 26)
+    #expect(ChromeRadius.key == 9)
+    #expect(ChromeRadius.keypadKey == 7)
+    // A 36 pt pill IS radius 18 — the chip token and the chip height are one
+    // fact said twice, and this is where they are held together.
+    #expect(ChromeRadius.chip == InputCardMetrics.chipHeight(for: .large) / 2)
   }
 
   /// The UIKit door, which the keypad's `UIInputView` uses because it has a

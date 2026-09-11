@@ -16,11 +16,11 @@ import SwiftUI
 ///
 /// **Why a popover and not a system `Menu`.** The design asks for the glyph to
 /// rotate to `×` while the menu is open, and SwiftUI's `Menu` publishes no
-/// open state to rotate from. A popover also keeps the three items in
-/// `FieldType.mono` on our own glass, where a `UIMenu` would put the second
-/// borrowed system surface on this card after the paste control. It is the
-/// same presentation the long-press fans use, for the same reasons and with
-/// the same keyboard bookkeeping.
+/// open state to rotate from. A popover also lets the menu be the canvas's own
+/// `.menu` — a `#3A3A3E` surface at radius 18 with 44 pt rows — where a
+/// `UIMenu` would put the second borrowed system surface on this card after the
+/// paste control. It is the same presentation the long-press fans use, for the
+/// same reasons and with the same keyboard bookkeeping.
 struct PlusMenu: View {
   let model: InputCardModel
   // --- IOS-5e ---------------------------------------------------------------
@@ -28,8 +28,9 @@ struct PlusMenu: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   // --- end IOS-5e -----------------------------------------------------------
 
-  /// The composer row's own height — the `+` is square in it.
+  /// The composer row's own `.target`, and the `.circle` centred in it.
   private var side: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
+  private var circleSide: CGFloat { InputCardMetrics.circleDiameter(for: dynamicTypeSize) }
 
   var body: some View {
     Button {
@@ -40,9 +41,9 @@ struct PlusMenu: View {
     } label: {
       Image(systemName: "plus")
         .font(
-          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .heavy)
+          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .semibold)
         )
-        .foregroundStyle(FieldPalette.textMain)
+        .foregroundStyle(ChromePalette.ink)
         // --- IOS-5e ---------------------------------------------------------
         // The design turns this glyph 45° into a `×` while the menu is open.
         // Under Reduce Motion it does not turn: the rotation is decoration —
@@ -53,17 +54,17 @@ struct PlusMenu: View {
         .rotationEffect(.degrees(!reduceMotion && model.plusMenuOpen ? 45 : 0))
         .animation(reduceMotion ? nil : FieldMotion.ease(0.18), value: model.plusMenuOpen)
         // --- end IOS-5e -----------------------------------------------------
+        .frame(width: circleSide, height: circleSide)
+        // `.circle`, and `.circle.open` while the menu is up — the fill brightens
+        // with the glyph's turn, so the state survives Reduce Motion.
+        .background {
+          ChromeMaterial.circle(
+            fill: model.plusMenuOpen ? ChromePalette.circleOpenFill : ChromePalette.circleFill,
+            hairline: ChromePalette.circleHairline)
+        }
         .frame(width: side, height: side)
-        .background(
-          RoundedRectangle(cornerRadius: 6)
-            .fill(FieldPalette.panelBackground.opacity(0.8))
-            .overlay(
-              RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(FieldPalette.panelBorder, lineWidth: 1)
-            )
-        )
     }
-    .buttonStyle(KeyPressStyle())
+    .buttonStyle(ChromePressStyle())
     .accessibilityLabel("More")
     .popover(
       isPresented: Binding(
@@ -85,50 +86,52 @@ struct PlusMenuList: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      row("SCAN TEXT", glyph: "text.viewfinder", surface: .scanText)
+      row("Scan text", glyph: "text.viewfinder", surface: .scanText)
       divider
-      row("SNIPPETS", glyph: "text.append", surface: .snippets)
+      row("Snippets", glyph: "text.append", surface: .snippets)
       divider
-      row("CLIPBOARD HISTORY", glyph: "list.clipboard", surface: .clipboardHistory)
+      row("Clipboard history", glyph: "list.clipboard", surface: .clipboardHistory)
     }
-    .padding(.vertical, 4)
-    // IOS-5e: `CLIPBOARD HISTORY` at mono 11 with its tracking is wider than
-    // 226 pt, and a menu row that truncates its own verb is a menu you have to
-    // guess at. The popover is free to be wider — it is drawn over the
-    // terminal, not inside the card.
-    .frame(width: dynamicTypeSize.isAccessibilitySize ? 268 : 226)
-    .background(FieldPalette.panelBackground)
+    // `.menu` — `padding: 4` around 44 pt rows.
+    .padding(4)
+    // The canvas's 252, and wider at accessibility sizes: `Clipboard history`
+    // at 20 pt is wider than that, and a menu row that truncates its own verb
+    // is a menu you have to guess at. The popover is free to be wider — it is
+    // drawn over the terminal, not inside the card.
+    .frame(width: dynamicTypeSize.isAccessibilitySize ? 296 : 252)
+    .background { ChromeMaterial.floating(radius: ChromeRadius.menu) }
   }
 
+  /// `.mi + .mi` — a hairline between two items, full-bleed like the canvas's.
   private var divider: some View {
     Rectangle()
-      .fill(FieldPalette.panelBorder)
-      .frame(height: 1)
-      .padding(.leading, 38)
+      .fill(ChromePalette.menuSeparator)
+      .frame(height: 0.5)
   }
 
+  /// `.mi` — the word at the left, its glyph at the right, 44 pt tall. The
+  /// canvas puts the symbol on the trailing edge, which is where iOS puts a
+  /// menu's own; the word is what the eye lands on first either way.
   private func row(_ title: String, glyph: String, surface: CardSurface) -> some View {
     Button {
       model.requestSurface(surface)
     } label: {
       HStack(spacing: 10) {
-        Image(systemName: glyph)
-          .font(.system(size: InputCardMetrics.glyphSize(for: dynamicTypeSize), weight: .medium))
-          .frame(width: 18)
         Text(title)
-          .font(FieldType.mono(InputCardMetrics.labelSize(for: dynamicTypeSize), .heavy))
-          .tracking(
-            FieldType.tracking(0.08, of: InputCardMetrics.labelSize(for: dynamicTypeSize))
-          )
+          .font(ChromeType.sans(InputCardMetrics.menuItemSize(for: dynamicTypeSize)))
+          .foregroundStyle(ChromePalette.ink)
           .lineLimit(1)
         Spacer(minLength: 0)
+        Image(systemName: glyph)
+          .font(.system(size: ChromeType.menuGlyphSize, weight: .regular))
+          .foregroundStyle(ChromePalette.ink.opacity(0.85))
+          .frame(width: ChromeType.menuGlyphSize)
       }
-      .foregroundStyle(FieldPalette.textMain)
-      .padding(.horizontal, 12)
-      .frame(height: dynamicTypeSize.isAccessibilitySize ? 50 : 42)
+      .padding(.horizontal, 14)
+      .frame(height: InputCardMetrics.rowHeight(for: dynamicTypeSize))
       .contentShape(Rectangle())
     }
-    .buttonStyle(KeyPressStyle())
-    .accessibilityLabel(title.capitalized)
+    .buttonStyle(KeyPressStyle(radius: 14))
+    .accessibilityLabel(title)
   }
 }
