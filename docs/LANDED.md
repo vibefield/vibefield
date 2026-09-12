@@ -4865,3 +4865,38 @@ has run AS the crate (nothing here links Win32) — the box round is SNAP-4, spe
 `docs/WINDOWS_PORT_STATUS.md`. The consumer (the still onto the canvas) is SNAP-3; the
 global chord SNAP-1; the fabric method under `surface.capture` SNAP-2. The `work/` lint red
 is James's to clear (delete the scratch file or exclude `work/` in `biome.jsonc`).
+
+## AR-0 — the three-repo workbench (2026-09-12)
+
+**AR-0 the sibling workbench** (`ba717474` — puppeteer and rosetta enter as pinned sibling
+checkouts; `draft/thinking-ar-sibling-workbench.md` §7 is the landing record, the triad design
+is `draft/thinking-ar-agent-plane.md` §17). The AR track's first landing, and the pivot's first
+code: chopsticks and spaghetti (retired by James 2026-09-04) leave the manifests; **puppeteer**
+(the agent runtime) and **rosetta** (agent history) arrive as SIBLING CHECKOUTS pinned by revision
+in `siblings.lock.json`, the truffle-era machinery of `cb652e0a` revived for two siblings with
+`scripts/siblings.mjs` as the one reader (preflight, `check:deps`, the Nx cache stamp, the dev
+runner and the shell's Vite config all go through it; `pnpm siblings` · `siblings:pin` ·
+`siblings:build`). What is real: the fenced `link:` block (five puppeteer packages + the rosetta
+client; consumers ask `*`; puppeteer-react deliberately NOT linked — its react peer would be a
+second physical React, and `check:deps` now searches the linked directories too), walls
+R20–R22, preflight's family rule and three proven negative controls, the Nx stamp (A/B/A cache
+witness), sibling-mode `server.fs.allow` (200 / 403 / watcher-change witness), the runner's
+esbuild context following a linked source (1.3 s rebuild, control touch silent), and fieldd's
+**RosettadSupervisor** — one index daemon per user root at the new `LAYOUT.INDEX_DB`, configured
+by `FIELDD_ROSETTAD_BIN`, projected into `FielddHealth.rosettad`, eight kill-matrix rows against
+a scripted daemon speaking the real `--json` contract plus an opt-in row against the real
+binary (protocol 20, announce file, clean SIGINT). Upstream first (W-D9): puppeteer
+`0a9eb8f` adopts `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (486 sites, widened
+at the declarations), rosetta `6119826` makes `@rosetta/protocol` a resolvable package clean
+under them; both are the pinned revisions.
+
+**Owed, stated plainly.** Nothing in the product imports a puppeteer package yet — the gate
+meets puppeteer's 538 files at AR-2's first import, which S0 exists to make green. CI's clone
+step needs a `SIBLINGS_TOKEN` read PAT (both repos are private) and stays red-honest until James
+creates it; puppeteer is cloned but not installed in CI until its ghosttea override block is
+gone upstream (PU-6). rosetta's CI runs no Node at all (RO-7). Two of James's in-progress
+files carry one strict-flag site each (`adapter-kimi/src/services/account-usage.ts:322`,
+`builtin-providers/src/providers.ts:501` into his grok options) — his to take, absent from the
+pinned revision. The pre-existing imposter conformance red (`2791f4f`'s resume precheck, not
+this pass) is likewise his. The Windows box round: rosettad has no Windows archive and builds
+from source there. `pnpm lint` is still red on `work/` (SNAP-0's note stands).

@@ -135,13 +135,20 @@ NF kill matrix), docs sync across the mesh (C6), and the plugin/settings/logging
 rails are in. **The missing half is the agents themselves** — the AR track, running over the
 landed native floor, watched from the GT deck.
 
-AR's zero was re-verified against the tree on 2026-08-07, not taken from this file: there is no
-`agents.ts` in `packages/contracts/src`; `@vibecook/chopsticks-*` is pinned in
-`pnpm-workspace.yaml` but is a dependency of **no package**; and the only agent surface that
-exists is `MockAgentField` behind the Godview monitor's explicit MOCK label. Every dependency
-AR named is landed and waiting — the NF floor, the GT deck, C7 spawn-through upstream — and the
-seam it plugs into is one module wide. Everything else in this file is scaffolding built to
-receive it.
+AR is IN FLIGHT since 2026-09-12 (AR-0). The runtime is **puppeteer** and agent history is
+**rosetta** — James retired chopsticks and spaghetti on 2026-09-04 — and neither is published,
+so this tree consumes them as pinned SIBLING CHECKOUTS (`siblings.lock.json`, `pnpm siblings`,
+the fenced `link:` block in `pnpm-workspace.yaml`; CLAUDE.md §Machine setup). What AR-0 landed:
+the pin machinery revived from the truffle era, walls R20–R22, the Nx sibling stamp, the
+renderer's sibling-mode `fs.allow`, and fieldd's **rosettad supervisor** (one index daemon per
+user root, `FIELDD_ROSETTAD_BIN`, projected into `FielddHealth.rosettad`, kill matrix in
+`packages/fieldd/test/rosettad-supervisor.test.ts` + an opt-in live row). What is still true:
+there is no `agents.ts` in `packages/contracts/src`, **no source imports a puppeteer package
+yet**, and the only agent surface is `MockAgentField` behind the Godview monitor's explicit MOCK
+label. Every dependency AR named is landed and waiting — the NF floor, the GT deck, C7
+spawn-through (now puppeteer's `prepareInvocation`) — and the seam it plugs into is one module
+wide. The design is `draft/thinking-ar-agent-plane.md` (the triad, §17 delta 2026-09-12); the
+workbench is `draft/thinking-ar-sibling-workbench.md`.
 
 The artifact serving foundation, global catalog, and desktop runtime are now real but are not
 yet the whole product: AH-1 owns durable Proxy/Folder serving; AH-2 owns the bounded validated
@@ -173,7 +180,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | LSF — live surfaces foundation | **LANDED 2026-08-15/16** (`9a8ee9b1`…`90b54219`; spec RATIFIED v0.9) — browser OSR + SCK/Simulator producers, ticketed transport, renderer WebGPU store, Swift capture helper, labs + 20-min soaks all green on macOS; **ledgered LATE 2026-08-28** (entry §LSF — the second recurrence of the 2026-08-07 drift class) | `specs/live-surfaces-foundation.md` (LSF-D1…D16) | consumed by DT below; **DEFERRED (2026-08-28, James):** the §18 Windows rows (LSF-3/3C/6) and the LSF-4 signed-helper artifact (rides EDP/WP10) |
 | DT — dev tool pack | **IN FLIGHT — DT-0 RATIFIED 2026-08-28 (James, same day as the draft); REORDERED FIRST among the production packs** (mind map's MM-D1…D14 gate unchanged, order at source in `thinking-prod-dogfood-packs.md`); DT-D1…D12 in force and DT-D10's deltas FOLDED (PF2 amendment · 03·A §5.5 supersession · sharedTexture EL8 pin-note · roster rows · `ctx.pool`/P8-D4 closure notes) — browser widget into `vibefield.browser` + mac-only `vibefield.devtools` (Simulator · window capture) | `thinking-devtools-pack.md` (DT-D1…D12) · `specs/live-surfaces-foundation.md` | **DT-1 COMPLETE + DT-2a LANDED (2026-08-28 evening: 1a `b35f3132` vocabulary · 1c `501bb978` main authority+reuseKey · 1b `5d35b0b0` fieldd policy door · 2a `0e3b6056` renderer pool — two slices by Opus worktree builders, reviewed; ledger §DT-1+DT-2a incl. the owner.pluginId token-model gap)**; **DT-2 COMPLETE same evening** (2b `1aef94ec` present door + view layer · 2b-2 `d8440045` catalog section + ctx.pool door, builder-built · 2b-3 `7f48ce0e` plugin eligibility + compliance; ledger §DT-2 incl. the surface.close custody debt carried to DT-3's top); **DT-3 COMPLETE — for real this time. The 08-29 00:06 completion was FALSIFIED by the first live run (James: "not working at all"); §DT-3e ledgers the three defects — plugin-lease mints structurally impossible `d9a0e103` · no surface scopes on the window token (same commit) · the tray sandbox-mount holding a hidden live browser `8886f1d6` — and the new witness `pnpm smoke:browser-widget` `d5735150`: real daemons + renderer, screenshots per rung, typed input round-tripping through a real page, URL-bar steering; two exit-0 runs (one entirely on the CPU fallback, GPU disabled); batch gate exit 0 at load ~190**; **DT-3f LANDED same evening (James's second live report: the page didn't fill the card) — the logical viewport follows demand end to end (`175d40a5`: demand grows `logicalViewport` · element box = layout ask, pre-DPR pre-zoom · largest-area fold · producer born-at/actuates/reports the current layout · inset-pinned canvas breaks the element←frame←demand aspect lock) + the smoke measures fill/layout and survives the loaded host (`322f20dd`: non-4:3 spawn, geometry rung, input-free `/size` relayout rung, GL-death relaunch, churn heal, grading controls); full ladder exit 0 incl. two cards at two viewports; ledger §DT-3f**; owed: James's both-themes eyeball (now with a filling page) · `pnpm smoke:canvas` census witness; next: DT-4 devtools pack (pickers over `surface.sources`, mac-only manifest — its rig now exists) → DT-5 control lane |
 | SNAP — screenshot tool | **SNAP-0 LANDED 2026-09-09 `46c0c190`** — the `research/screenshot2` prototype (a WeChat-style native screenshot: capture-then-freeze, window snap, loupe, five marks, Enter copies the still) ported as a SHELL-plane tool under SNAP-D1…D9: contracts `screenshot.ts` (v1 line protocol, typed error codes, the shell result, IPC channel) + 7 fixtures parsed by zod, the Swift harness and the Rust crate · `@vibefield/screenshot` (Node-only, wall R19; 30 tests against a scripted fake helper that is a real child process) · `apps/desktop/native/macos/screenshot-helper` (Swift; `field-screenshot-helper.app`, ad-hoc signed `com.jamesyong.vibefield.screenshot-helper`, Liquid Glass by dynamic lookup) · `apps/desktop/native/windows/screenshot-helper` (Rust; its OWN cargo workspace, cross-checked from the mac) · `window.vibefield.screenshot.capture()` + `FieldHost.screenshotCapture?` + View ▸ Take Screenshot carrying ⌃⌘A / Alt+A as an APPLICATION accelerator · stager/builder inventory, optional entries, never boot-fatal | `thinking-screenshot-tool.md` (SNAP-D1…D9) · the helpers' READMEs · `docs/WINDOWS_PORT_STATUS.md` §SNAP-4 | **owed NOW: James's first ⌃⌘A in `pnpm dev`** — the overlay (freeze · snap · loupe · marks · clipboard · the ready/ok/cancel lines) was NOT exercised live at SNAP-0 because `--once` covers the developer's display; only `--capture-test`, the harness and the door were. Next: SNAP-1 the global chord behind a preference → SNAP-2 `shell.screenshot.capture` under `surface.capture` → SNAP-3 the consumer (the still onto the canvas — artifact vs a shell scheme, decided at the slice) → SNAP-4 the Windows box round + WP10's inside-out signing of the nested bundle |
-| AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
+| AR — agent runtime | **IN FLIGHT** — AR-0 the sibling workbench landed 2026-09-12 (puppeteer + rosetta as pinned sibling checkouts; walls R20–R22; the rosettad supervisor + kill matrix); the other half of the P0 exit | `thinking-ar-agent-plane.md` (triad design, §17) · `thinking-ar-sibling-workbench.md` · design-04 (D33 proposed retired / D37 / D38) | puppeteer-in-fieldd over the NF seam (D2 stands); next: AR-1 contracts (`agent.*`/`index.*` namespaces + fixtures) → AR-2 `createBuiltinAgentRuntime({ host })` in fieldd, the first import that puts puppeteer's 538 files in the gate; the monitor's mock module is the seam |
 
 ## In flight now
 
@@ -1153,7 +1160,7 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
 ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-06; preflight
-pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata **0.13.0** (via ICE;
+pins the cargo rows and all four npm rows) · **puppeteer + rosetta = SIBLING CHECKOUTS pinned by SHA in `siblings.lock.json`** (AR-0, 2026-09-12; `pnpm siblings` prints the state, `pnpm siblings:pin` is the upgrade event; chopsticks 0.1.4 retired with the pivot) · strata **0.13.0** (via ICE;
 the lockfile holds one physical strata/Loro graph) ·
 `@vibecook/ice` **0.11.0** (registry pin; **bumped 2026-08-25 — build-selected magnet grid,
 Dot default plus device-local Dot/Needle tuning and the full 11-field Studio contract**, with the runtime classic/magnet preference

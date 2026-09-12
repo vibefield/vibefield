@@ -15,7 +15,7 @@
 
 | IDs | Defined in | Status notes |
 |---|---|---|
-| D1–D4 | predesign-05 §2 | pass-05 seeds (spaghetti worker · chopsticks-in-fieldd · doc-host measure-first · one contracts package); all carried into the design docs |
+| D1–D4 | predesign-05 §2 | pass-05 seeds (spaghetti worker · chopsticks-in-fieldd · doc-host measure-first · one contracts package); all carried into the design docs. **PIVOT 2026-09-04 (James): chopsticks → puppeteer, spaghetti → rosetta.** D2 STANDS as "the agent runtime lives in fieldd" (puppeteer-in-fieldd, `thinking-ar-agent-plane.md` §3); D1's worker becomes rosettad, a fieldd-supervised child per user root (AR-0 landed the supervisor 2026-09-12). The design docs still spell the old names until the fold-back runs (32 corpus files, named in the triad doc) |
 | D5–D10 | design-02 §6 (D5 designed §2.5) | in force; D5 implemented by C6, D6 by NF-3, D9/D10 by the shell/supervisor |
 | D11–D16 | design-03-widget-sdk (appendix 03·A) §10 | in force within design-03's architecture; **D11 SUPERSEDED** (Track D landed the GL shelf — plugin spec §28) · **D13's grace-pool is a deferred-return** (GT spec: only if AR-era cycling needs it) |
 | D17–D29 | design-03 §11 | in force; **D27 = v0.2 amendment** (dual loopback WS; the v0.1 MessagePort row is deleted) · D28 v0.2 · **D29 amended by D29′** |
