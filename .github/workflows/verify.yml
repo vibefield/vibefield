@@ -58,6 +58,8 @@ jobs:
             sha=$(jq -r ".siblings.${name}.sha" siblings.lock.json)
             path=$(jq -r ".siblings.${name}.path" siblings.lock.json)
             git clone --no-tags "https://x-access-token:${SIBLINGS_TOKEN}@github.com/vibefield/${name}.git" "$path"
+            # the token must not persist in the checkout's .git/config for the rest of the job
+            git -C "$path" remote set-url origin "https://github.com/vibefield/${name}.git"
             git -C "$path" checkout --detach "$sha"
             echo "${name} @ ${sha} → ${path}"
           done
@@ -102,8 +104,14 @@ jobs:
       # against the REAL binary is opt-in through FIELDD_ROSETTAD_BIN, and CI opts in.
       - name: Build rosettad from the rosetta sibling
         run: pnpm siblings:build
-      - name: Name the built rosettad for the live supervisor row
-        run: echo "FIELDD_ROSETTAD_BIN=$(node scripts/siblings.mjs bin)" >> "$GITHUB_ENV"
+      - name: Name the built rosettad for the live supervisor rows
+        # `set -e` + a separate assignment: a `bin` that fails (not built) fails THIS step,
+        # rather than exporting an empty value that would silently skip the live rows.
+        run: |
+          set -euo pipefail
+          bin=$(node scripts/siblings.mjs bin)
+          test -x "$bin"
+          echo "FIELDD_ROSETTAD_BIN=$bin" >> "$GITHUB_ENV"
 
       # THE gate, verbatim: preflight -> typecheck -> biome -> rustfmt/clippy -> TS+Rust tests -> gen freshness.
       - run: pnpm verify

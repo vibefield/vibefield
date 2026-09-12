@@ -90,6 +90,15 @@ export {
 } from "./presence-room";
 export { ProductApi } from "./product-api";
 export {
+  ROSETTAD_UNCONFIGURED,
+  type RosettadHealth,
+  type RosettadPhase,
+  type RosettadState,
+  RosettadSupervisor,
+  type RosettadSupervisorOptions,
+  rosettadHealthOf,
+} from "./rosettad-supervisor";
+export {
   type PreparedServiceCandidate,
   ServiceHost,
   type ServiceHostConfig,

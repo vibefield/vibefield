@@ -133,6 +133,16 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // AR-0 — the index daemon's escalation affordance (rosettad; the same
+  // posture as system.native.restart: local admin only). Answers the health
+  // projection — the daemon's origin never crosses this surface (EL7).
+  defineMethod({
+    surface: "product",
+    method: "system.index.restart",
+    scope: "native.admin",
+    idempotent: false,
+    locality: "local",
+  }),
 
   // LOG-L6 — append-only audit ingress for shell-owned actions. The scope is
   // absent from every federated/plugin preset, and fieldd additionally proves

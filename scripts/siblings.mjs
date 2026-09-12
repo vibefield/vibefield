@@ -257,6 +257,21 @@ function pin(root) {
     const moved = head !== entry.sha;
     entry.sha = head;
     console.log(`pinned ${name} @ ${head}${moved ? "" : " (unchanged)"}`);
+    // A pin CI cannot fetch is a pin only this machine can verify: the clone
+    // step checks out the SHA from the remote, so an unpushed commit turns the
+    // gate red there. Warn — pinning local work mid-development is legitimate,
+    // pushing it is the owed step.
+    let onRemote = "";
+    try {
+      onRemote = git(dir, ["branch", "-r", "--contains", head]);
+    } catch {
+      onRemote = "";
+    }
+    if (onRemote.length === 0) {
+      console.warn(
+        `siblings:pin WARN: ${name} @ ${head.slice(0, 12)} is on no remote branch — push it before relying on CI (the clone step fetches the pin from github.com/vibefield/${name})`,
+      );
+    }
   }
   writeFileSync(join(root, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`);
   return 0;
@@ -265,7 +280,16 @@ function pin(root) {
 function build(root) {
   const bin = rosettadBinary(root);
   if (bin === null) {
-    console.error("siblings:build FAIL: no cargo sibling in the lock (or cargo is not installed)");
+    console.error(`siblings:build FAIL: no cargo sibling in ${LOCK_FILE} (nothing to build)`);
+    return 1;
+  }
+  if (bin.path === null) {
+    // rosettadBinary answers {path:null} when `cargo metadata` fails in the
+    // checkout — cargo missing, or the checkout absent — so name that here
+    // rather than after a build that cannot have run.
+    console.error(
+      `siblings:build FAIL: cargo cannot resolve the target directory of ${bin.dir} — is cargo installed and the checkout present?`,
+    );
     return 1;
   }
   const lock = readLock(root);
@@ -281,10 +305,8 @@ function build(root) {
   // rustup picks the sibling's own rust-toolchain.toml from the cwd.
   const run = spawnSync("cargo", args, { cwd: bin.dir, stdio: "inherit" });
   if (run.status !== 0) return run.status ?? 1;
-  if (bin.path === null || !existsSync(bin.path)) {
-    console.error(
-      `siblings:build FAIL: cargo succeeded but ${bin.path ?? "(unknown path)"} does not exist`,
-    );
+  if (!existsSync(bin.path)) {
+    console.error(`siblings:build FAIL: cargo succeeded but ${bin.path} does not exist`);
     return 1;
   }
   console.log(`siblings:build: ${bin.path}`);

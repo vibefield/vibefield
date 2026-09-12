@@ -121,9 +121,12 @@ for (const { file, re, label } of PIN_EXPECTATIONS) {
   } catch {
     problems.push("sibling check could not read pnpm-workspace.yaml");
   }
+  // Keys and values may be bare, double- or single-quoted (pnpm rewrites the
+  // file in its own style when it edits overrides) — match all three.
+  const unquote = (s) => s.replace(/^(['"])(.*)\1$/, "$2");
   const family = [
-    ...yaml.matchAll(/^\s*"(@vibecook\/puppeteer-[a-z-]+|@rosetta\/[a-z-]+)":\s*(\S+)/gm),
-  ];
+    ...yaml.matchAll(/^\s*['"]?(@vibecook\/puppeteer-[a-z-]+|@rosetta\/[a-z-]+)['"]?:\s*(\S+)/gm),
+  ].map(([line, name, value]) => [line, name, unquote(value)]);
   if (lock === null) {
     // Registry mode: no link: row may exist without a lock behind it.
     for (const [, name, value] of family) {

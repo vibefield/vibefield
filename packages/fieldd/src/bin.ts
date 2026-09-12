@@ -33,7 +33,9 @@ async function main(): Promise<void> {
   // AR-0 — the agent-index daemon (rosettad) this fieldd supervises for its
   // user. Unset ⇒ nothing is spawned and health says "unconfigured" honestly;
   // the dev runner sets it when `pnpm siblings:build` has produced the binary.
-  const rosettadBin = process.env["FIELDD_ROSETTAD_BIN"];
+  // Empty means unset (a runner that resolved no binary exports ""): the
+  // honest "unconfigured", never a spawn of "" that fails as ENOENT.
+  const rosettadBin = process.env["FIELDD_ROSETTAD_BIN"] || undefined;
   const allowedOrigins = [
     "file://",
     ...(process.env["FIELDD_ALLOWED_ORIGINS"]?.split(",").filter(Boolean) ?? []),

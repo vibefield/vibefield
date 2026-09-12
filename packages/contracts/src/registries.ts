@@ -474,6 +474,11 @@ export const LAYOUT = {
    * search sidecars beside it. Per USER root (design: one rosettad per user). */
   INDEX_DIR: ["index"],
   INDEX_DB: ["index", "rosetta.db"],
+  /** fieldd's PRIVATE rosetta announce directory (`--announce-dir`): the
+   * daemon's `<pid>.json` lands here, never in rosetta's shared per-user
+   * directory (EL7 — the origin is the secret), and the next fieldd reads it
+   * to put down an orphan holding the projection lock. */
+  INDEX_DAEMONS_DIR: ["index", "daemons"],
   /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
    * a full tree of the segments above; these four live at the VibeField root
    * itself and are the only segments that never re-root. */

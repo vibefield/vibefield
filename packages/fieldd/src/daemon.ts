@@ -2,7 +2,9 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol";
+// the bare wire number (RO-4): the client entry is a DOM program, and fieldd
+// needs only the version its supervisor holds a spawned rosettad to
+import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
   AppPreferenceSetParams,
   ArtifactPublishParams,
@@ -117,8 +119,9 @@ import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import {
   ROSETTAD_UNCONFIGURED,
-  type RosettadState,
+  type RosettadHealth,
   RosettadSupervisor,
+  type RosettadSupervisorOptions,
 } from "./rosettad-supervisor";
 import {
   type PluginServiceLogRecord,
@@ -167,8 +170,11 @@ export interface FielddConfig {
    * no respawn authority, and the supervisor says so instead of guessing. */
   nativeSpawner?: () => number | undefined;
   /** AR-0 — the rosettad binary to supervise for this user's agent index
-   * (FIELDD_ROSETTAD_BIN). Absent = no index daemon; health says so. */
+   * (FIELDD_ROSETTAD_BIN). Absent or empty = no index daemon; health says so. */
   rosettadBin?: string;
+  /** AR-0 test seam: how the index daemon is spawned (the kill matrix's
+   * scripted rosettad); production spawns `rosettadBin` directly. */
+  rosettadSpawn?: RosettadSupervisorOptions["spawnProcess"];
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -231,10 +237,12 @@ export interface FielddHealth {
   nativeBuild: string | null;
   native: NativeHealth | null;
   /** AR-0 — fieldd's EXTERNAL judgment of the agent-index daemon (rosettad):
-   * unconfigured / starting / ready / restarting / failed / stopped, with the
-   * loopback origin while ready. The index doors (AR-1) answer UNAVAILABLE
-   * {service:"index", state} from the same phase. */
-  rosettad: RosettadState;
+   * unconfigured / starting / ready / restarting / failed / stopped and the
+   * reason. The PROJECTION only: the loopback origin stays inside fieldd
+   * (EL7 — rosettad is unauthenticated and this stream is scope-null). The
+   * index doors (AR-1) answer UNAVAILABLE {service:"index", state} from the
+   * same phase. */
+  rosettad: RosettadHealth;
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
   logging: LoggingHealthV1 | null;
@@ -394,12 +402,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // boot has committed (a boot rollback must never leave an index daemon
   // behind). The db lives under the user root at LAYOUT.INDEX_DB.
   const rosettad =
-    config.rosettadBin === undefined
+    config.rosettadBin === undefined || config.rosettadBin === ""
       ? null
       : new RosettadSupervisor({
           bin: config.rosettadBin,
           dbPath: join(config.dataDir, ...LAYOUT.INDEX_DB),
+          // fieldd's PRIVATE announce dir (EL7 — never rosetta's shared one);
+          // also where the next fieldd finds an orphan of this one
+          announceDir: join(config.dataDir, ...LAYOUT.INDEX_DAEMONS_DIR),
           expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+          ...(config.rosettadSpawn !== undefined ? { spawnProcess: config.rosettadSpawn } : {}),
           logger: logger.child({ component: "rosettad_supervisor" }),
         });
   // TC-D6(a), fieldd half — measure-and-surface (Node has no setrlimit).
@@ -724,7 +736,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       nativePid: supervisor.currentPid ?? null,
       nativeBuild: native.nativeBuild ?? null,
       native: latestHealth,
-      rosettad: rosettad?.state() ?? ROSETTAD_UNCONFIGURED,
+      rosettad: rosettad?.health() ?? ROSETTAD_UNCONFIGURED, // the projection, never state()
       docs: docs.health(),
       plugins: plugins.health(),
       logging: logging?.health() ?? null,
@@ -915,6 +927,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger.info("fieldd.native_supervisor.manual_restart", "system.native.restart received");
       await supervisor.requestRestart();
       return { state: supervisor.state, detail: supervisor.stateDetail };
+    });
+    // AR-0 — the index daemon's escalation affordance, the same shape: after
+    // rosettad's restart intensity trips to the permanent honest "failed", a
+    // human overrides on purpose (or bounces a live daemon after a rebuild).
+    // Answers the health PROJECTION — never the origin.
+    api.register("system.index.restart", async () => {
+      logger.info("fieldd.rosettad.manual_restart", "system.index.restart received");
+      if (rosettad === null) return { rosettad: ROSETTAD_UNCONFIGURED };
+      await rosettad.requestRestart();
+      return { rosettad: rosettad.health() };
     });
     api.register("system.capabilities", () => ({
       methods: METHODS.filter((m) => m.surface === "product").map((m) => m.method),
@@ -3065,6 +3087,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics?.dispose();
     await pluginUpdatesForCleanup?.dispose();
     native.close(); // rollback: release the mgmt client slot
+    // AR-0 — no index daemon outlives a failed boot. It is started only after
+    // `fieldd.lifecycle.ready`, so this never has a child to stop today; the
+    // guard is stated so a later start-before-ready cannot leave an orphan.
+    await rosettad?.stop();
     // The earliest supersession window, which the `stopForSupersession` listener
     // is not yet in scope to see: a takeover that lands while the services are
     // still being built kills the mgmt socket under whatever request is in

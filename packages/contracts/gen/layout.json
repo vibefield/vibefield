@@ -96,6 +96,10 @@
     "index",
     "rosetta.db"
   ],
+  "INDEX_DAEMONS_DIR": [
+    "index",
+    "daemons"
+  ],
   "USERS_DIR": [
     "users"
   ],

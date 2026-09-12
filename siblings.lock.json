@@ -3,7 +3,7 @@
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
-      "sha": "0a9eb8f10c0977a21e8deb6d2b8275f5d10070d2",
+      "sha": "1435c77e3c7a43af1d06fbd3e88ffd8af0ddbdce",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
@@ -14,7 +14,7 @@
     },
     "rosetta": {
       "path": "../rosetta",
-      "sha": "6119826f46c52d61e32d3cc1bd142e587bbf000d",
+      "sha": "f1e93164e09378307c9da56032e1813bee0ea498",
       "packages": {
         "@rosetta/protocol": "clients/ts"
       },
