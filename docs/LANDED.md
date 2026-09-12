@@ -5105,3 +5105,128 @@ staged asset for the spawn slice; `SIBLINGS_TOKEN`; the three upstream pins stil
 local branches; the dev-local snapshot of the draft docs (James's ritual); James's `work/` lint
 red; RO-8 before a purge can exist.
 
+
+## AR-3 — agent.spawn: the host over the floor, the fold, the persisted continuation, the mock deleted (2026-09-12)
+
+**AR-3 the runtime is lent the floor** (`6b5e1612`). puppeteer's `AgentHost` — spawn a terminal,
+write one semantic input to it — is `packages/fieldd/src/agent-host.ts` over
+`TerminalService.spawn`, a new birth beside `create`: the floor's AGENT cell (TC-S3's
+placement), `programKind: application`, keep-until-exit (NF-D3), the agent class's scrollback
+cap, and a CLEAN environment (EL7). The environment is composed in three layers and stripped
+last: VibeField's passthrough from the daemon's own env (PATH, SHELL, LANG/LC_*, TZ, TMPDIR,
+TERMINFO, SSH_AUTH_SOCK, the XDG roots the native-default layout is discovered under; win32's
+essentials, case-folded), puppeteer's own `buildAgentEnvironment` policy over it (TERM, colour,
+the login identity a native credential store keys on — and the one vendor variable it sets is
+puppeteer's, never spelled here: AR-L1 holds), the adapter's `spec.env` over both, then every
+`FIELD_*`/`FIELDD_*` key removed whoever asked for it. `automateTerminal` is the floor's epoch
+path (`TerminalService.automate` → paste-and-submit / paste / text / interrupt; a human-input
+conflict is `accepted: false` with the floor's reason). The host is late-bound: the runtime holds
+it from construction, the daemon binds the terminal service once it exists, and every spawn
+before that refuses `UNAVAILABLE {service:"agents", state:"no-terminal-host"}`.
+
+**The fold** (AR-D4/D5 as ruled). `AgentRuntimeService` subscribes to `runtime.onMonitorState`
+/ `onMonitorRemoved` / `onMonitorNotification`, reads each state through the contract's
+`AgentMonitorMirror` — the fields fieldd's logic needs, everything else carried verbatim; a shape
+drift logs once and the row reads `unknown` — joins it to the floor's inventory row for the cell
+tag, and projects ONE `AgentSessionSummary` per run (SessionSummary v2,
+`packages/contracts/src/agent-session.ts`: the native session id as the spine with puppeteer's
+own basis, the OPEN provider id and the adapter's label, `tier: managed`, the run identity, the
+terminal join, the workspace, the mirror, the one derived `status`, the observation level, the
+record's presence). `agent.list` answers it; `agent.subscribe` streams FULL frames, at most one
+per 16 ms tick per subscriber (the runtime's own coalescing set to the same tick — PF5). The
+golden is puppeteer's OWN monitor contract fixture, transcribed
+(`fixtures/agent-monitor-state.valid.json`), with `AGENT_MONITOR_SCHEMA_VERSION` pinned at 2: a
+generation bump upstream is a red gate here.
+
+**The doors.** `agent.providers` (what one can spawn as: every composed provider, whether an
+install resolved, whether its adapter resumes, its personas) · `agent.spawn` (provider, cwd,
+persona, title → `runtime.spawn`; the answer is the fold's row at birth AND the same routed
+create ticket `terminal.create` answers, so the pane that asked mounts the PTY with no second
+round trip — GT-1's point kept) · `agent.resume` (an EXITED session continued from its record: a
+new run, a new PTY, the vendor's own conversation; a live terminal is refused
+`PRECONDITION_FAILED {state:"terminal-alive"}` — re-attach is AR-4's) · `agents.profiles.login`
+(the persona login pane: `startProfileLogin` → the vendor's own interactive login in a PTY bound
+to the persona's root; when the pane ends — or after ten minutes — the identity is re-read from
+the provider's status surface and recorded on the persona). Births on `agent.spawn`, the fold on
+`agent.observe`, all local in v1 (the remote tier's rows reach the deck through the mesh's own
+roster); spawn and resume audited like a terminal birth (attempt-before-effect, the run id and
+the terminal id on the outcome), the login like a persona mutation. The window token gained
+`agent.spawn`/`agent.observe`/`agent.control` (the last minted now for AR-6, unused).
+
+**The record** (`LAYOUT.AGENT_SESSIONS_DIR` = `users/<fuid>/agents/sessions/<runtimeRunId>.json`,
+0600, the directory 0700, durable rename, an unreadable file set aside): puppeteer's opaque
+continuation beside the launch facts fieldd chose (provider, persona, cwd, title, the floor
+session id, the workspace), re-persisted when the adapter learns the native id, stamped at exit
+with the floor's outcome and code. Exits: the floor's `session-exited` on the cell's control
+connection (the terminal service now fans it out from every client it holds) →
+`runtime.handleProcessExit` → the record stamped, the row withdrawn; the inventory diff is the
+backstop, with a 1.5 s grace so the floor's own outcome wins — the first real-claude witness
+lost its exit facts to the backstop (`reason: unknown`), and the grace is the fix. A persona's
+delete now stops its sessions first (the floor's ladder) and removes its records.
+
+**The renderer.** The monitor's mock module is DELETED (`mock-agent-field.ts`, its test, its
+label, its `AgentKind` union — the last vendor enumeration in the renderer; the icon map keeps
+the glyphs it knows and draws an initial for the rest, RFC 004's "isolated optional artwork
+map"). The local half of the field is fieldd's fold through the deck's door: `MonitorDoor`
+(GT-D17's two verbs widened, deliberately, to six — observe · providers · spawn · mountLocal
+beside listHosts · attach), built where the fieldd client, the runtime and the workspace already
+are; the stage still holds none of them. `facet-types.ts` became type imports of the contract;
+the projection reads `AgentSessionSummary` (status from fieldd's one derived word, detail from
+the blockers or the latest assistant line, model and context window from the mirror); the deck
+publishes its panes' floor summaries so an unclaimed pane is a terminal row and a managed row
+carries its PTY's summary; a managed row's id is its floor session id, so the pane join and the
+placement survive the promotion, and its accent is by RUN, so it survives the pane. The chrome's
+chip counts managed agents and is absent at zero (quiet is the honesty); the fold's
+unavailability is said in fieldd's words; the header gained a provider select and SPAWN. Select
+MOUNTS a local row's PTY in the active pane (`terminal.sessions` → the workspace's own
+`mountSession`); create SPAWNS the chosen provider into it (`agent.spawn` → the pool adopts the
+create ticket exactly as its own births — `adoptCreatedTerminal` — and the workspace mounts the
+summary). The marker's `mockLabel`/`mockAgents` became `localClaim`/`localAgents`/`terminals`/
+`localState`; the desktop smoke asserts the fold is `live`, the chip matches the count, the
+stage never says "mock", and a local row's select answers through the door's local verb.
+
+**Witnessed.** Over the mock mgmt server: the providers door, the scope gates, a spawn with no
+floor refusing in the floor's own words with the audit saying failed and nothing recorded. Over
+the REAL field-native, with a SCRIPTED provider (an adapter that owns nothing but a recipe and
+asks the host for `/bin/sh -c 'env > "$SCRIPTED_ENV_OUT"; exec /bin/cat'`): the PTY on the agent
+cell; the environment read from INSIDE it — the adapter's token present, `TERM`/`HOME`/`PATH`/
+`USER` present, the adapter's own `FIELDD_SMUGGLED` absent, not one `FIELD_*`/`FIELDD_*` key,
+none of the daemon's; the row with its cell tag; the record 0600 under a 0700 directory; the
+routed ticket with its grants; `agent.subscribe`'s snapshot and its withdrawal frame; automation
+through the host accepted by the floor's epoch path; the audit; the exit withdrawing the row and
+stamping the record; the resume as a new run with `resume` reaching the adapter; the live-run
+refusal. The persona login pane with the scripted `claude`: the pane, its ticket, the identity
+(`loggedIn`, method, email, organization, plan) on the persona after it ended. And the REAL
+Claude Code 2.1.270 (`FIELDD_TEST_REAL_AGENT=1`): spawned into a PTY on the agent cell with the
+clean environment, `alive` with the native session id within seconds, `native-hooks` and `idle`
+after five, the record carrying the vendor's id, terminated cleanly — **the P0 witness at the
+daemon level: a real agent in a PTY on the floor with live status.** (In the deck: James's eye;
+the renderer half is witnessed by the mounted stage fixtures and the desktop smoke's rows.)
+
+**Found.** (1) `terminal.terminate` right after a birth answers `terminated: false` — the
+observed inventory still lags the spawn, so the session's cell is unknown and the ladder reads
+"already gone" — the GT-1 asymmetry on the terminate side; the witness holds five seconds first;
+TC's to fix, not AR's. (2) puppeteer's profile services resolve their executable from
+`PUPPETEER_<KIND>_BIN`/PATH at construction, not from the `executables` the launch path takes,
+so the machine record's active choice does not reach the login pane or `verify` (PU-10, a
+note). (3) The first draft inferred `sessionIdBasis: "observed"` from the mirror carrying a
+native id; puppeteer's own `nativeSession.basis` is the fact and is what rides now. (4)
+`behavior-conformance.test.ts` (plugin-playground) failed once in the full run at 5.9 s and
+passed alone — a loaded-host lottery, nothing of AR's touches it.
+
+**Gate:** `pnpm verify` verbatim still stops at `pnpm lint` on James's untracked
+`work/composer-directions.html` (the only lint findings; pre-existing); every other step run
+individually: preflight, `pnpm typecheck` (25 projects, after the fieldd test's type imports),
+biome clean over the batch, `cargo fmt --check`, clippy `-D warnings`, `pnpm test` (the
+lifetime fixture re-fed to the door — the two reds were the mock's absence; the conformance
+lottery above), `pnpm test:rust` (the layout vector with the new segment), `pnpm bundle:assert`,
+`pnpm gen:check` with the generated `layout.json`/`registries.rs` staged, `pnpm smoke:godview`
+exit 0 (the stage settled `live` with the deck's own pane as its one row, no chip at zero
+managed agents, the local-routing row answered "terminal is in the active pane"; the first run
+read the stage's FIRST frame — empty by construction now that the field arrives through the
+door — and the row waits for the field to settle since). **Still owed:** AR-4 (re-attach across a fieldd restart: the records are written
+for it; resume-when-idle); the ingested tier's rows in the fold (AR-8, with the History view); the
+Agents settings section (`agents.manage` on a window; the persona login pane has no UI yet — the
+door is live); `agent.control` (AR-6); `terminal.terminate`'s birth race (TC); PU-10 upstream;
+the dev-local snapshot of the draft docs (James's ritual); the DESIGN.md Godview citation
+(James's live edit); the upstream pins still unpushed; `SIBLINGS_TOKEN`.
