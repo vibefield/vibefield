@@ -6,6 +6,14 @@ import { join } from "node:path";
 // needs only the version its supervisor holds a spawned rosettad to
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
+  AgentsInstallsParams,
+  AgentsProfilesCreateParams,
+  AgentsProfilesDeleteParams,
+  AgentsProfilesListParams,
+  AgentsProfilesVerifyParams,
+  AgentsReleasesParams,
+  AgentsSetActiveParams,
+  AgentsUpdateParams,
   AppPreferenceSetParams,
   ArtifactPublishParams,
   ArtifactPublishV2Params,
@@ -84,6 +92,7 @@ import {
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { EnrollmentStore, IndexService } from "./agent-index";
+import { AgentRuntimeService } from "./agent-runtime";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
@@ -181,6 +190,15 @@ export interface FielddConfig {
   /** AR-1 test seam: the home rosettad's discovery scans (`--home`).
    * Production passes the OS user's own home, explicitly (topology R7). */
   rosettadHome?: string;
+  /** AR-2 — the VibeField ROOT above this user's root: the machine scope
+   * (`LAYOUT.MACHINE_DIR`, AR-D15) hangs off it. Absent = no machine scope
+   * (embedded and unit daemons): the distribution doors that would write it
+   * refuse honestly. bin.ts derives it from the layout (`rootAboveUserRoot`). */
+  vibefieldRoot?: string;
+  /** AR-2 test seams: the PATH the agent install inventory searches, and the
+   * fetch the release detectors use. Production: the process PATH, global fetch. */
+  agentSearchPath?: string;
+  agentFetch?: typeof fetch;
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -308,6 +326,9 @@ export interface FielddDaemon {
    * `index.enrollRuntime`. */
   enrollment: EnrollmentStore;
   index: IndexService;
+  /** AR-2 — the agent runtime (puppeteer) and the service behind the
+   * agents.* doors; tests read its runtime directly. */
+  agents: AgentRuntimeService;
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -440,6 +461,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     store: enrollment,
     expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
     logger: logger.child({ component: "index_service" }),
+  });
+  // AR-2 — the agent runtime (puppeteer's first import): one per fieldd, its
+  // registry and managed roots under THIS user's root, its update transcripts
+  // under the machine scope. Constructed here so the reconcile can subscribe
+  // to the index daemon's readiness before the daemon ever starts; touches no
+  // disk until a persona door is called (puppeteer's registry is lazy).
+  const agents = new AgentRuntimeService({
+    userRoot: config.dataDir,
+    vibefieldRoot: config.vibefieldRoot ?? null,
+    index,
+    supervisor: rosettad,
+    ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
+    ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
+    logger: logger.child({ component: "agent_runtime" }),
   });
   // TC-D6(a), fieldd half — measure-and-surface (Node has no setrlimit).
   const fdSoftLimit = readFdSoftLimit();
@@ -1000,6 +1035,120 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
         () => index.retire(parsed.data.runtimeId),
         (result) => ({ attrs: { changed: result.changed, phase: result.status.phase } }),
+      );
+    });
+    // AR-2 — the agent runtime doors (thinking-ar-data-topology.md §4;
+    // agent-runtime.ts). Personas ride agent.spawn (a persona is what one
+    // spawns as); distribution rides the local-only agents.manage. Every
+    // mutation is audited; the persona path enrolls through the index service
+    // and a persona's root never leaves fieldd.
+    api.register("agents.profiles.list", async (_ctx, params) => {
+      const parsed = AgentsProfilesListParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider? }", false);
+      return await agents.personas(parsed.data.provider);
+    });
+    api.register("agents.profiles.create", async (ctx, params) => {
+      const parsed = AgentsProfilesCreateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider, label }", false);
+      return await audit.required(
+        ctx,
+        {
+          // the id is minted inside the effect; the outcome record names it
+          action: "agents.profiles.create",
+          target: { kind: "agent-persona", id: "pending" },
+          attrs: { provider: parsed.data.provider, label: parsed.data.label },
+        },
+        () => agents.createPersona(parsed.data),
+        (result) => ({
+          outcome: "succeeded",
+          attrs: {
+            profileId: result.persona.profileId,
+            indexed: result.persona.runtimeId !== undefined,
+          },
+        }),
+      );
+    });
+    api.register("agents.profiles.delete", async (ctx, params) => {
+      const parsed = AgentsProfilesDeleteParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { profileId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profiles.delete",
+          target: { kind: "agent-persona", id: parsed.data.profileId },
+        },
+        () => agents.deletePersona(parsed.data.profileId),
+        (result) => ({ attrs: { deleted: result.deleted } }),
+      );
+    });
+    api.register("agents.profiles.verify", async (ctx, params) => {
+      const parsed = AgentsProfilesVerifyParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { profileId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profiles.verify",
+          target: { kind: "agent-persona", id: parsed.data.profileId },
+        },
+        () => agents.verifyPersona(parsed.data.profileId),
+        (result) => ({
+          attrs: {
+            ...(result.persona.identity !== undefined
+              ? { loggedIn: result.persona.identity.loggedIn }
+              : {}),
+            ...(result.failure !== undefined ? { failure: result.failure.status } : {}),
+          },
+        }),
+      );
+    });
+    api.register("agents.installs", async (_ctx, params) => {
+      const parsed = AgentsInstallsParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider? }", false);
+      return await agents.installs(parsed.data.provider);
+    });
+    api.register("agents.releases", async (_ctx, params) => {
+      const parsed = AgentsReleasesParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider?, network? }", false);
+      return await agents.releases(parsed.data);
+    });
+    api.register("agents.update", async (ctx, params) => {
+      const parsed = AgentsUpdateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.update",
+          target: { kind: "agent-provider", id: parsed.data.provider },
+        },
+        () => agents.update(parsed.data.provider),
+        (result) => ({
+          attrs: {
+            status: result.receipt.status,
+            ...(result.receipt.exitCode !== undefined ? { exitCode: result.receipt.exitCode } : {}),
+          },
+        }),
+      );
+    });
+    api.register("agents.setActive", async (ctx, params) => {
+      const parsed = AgentsSetActiveParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider, executable }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.set_active",
+          target: { kind: "agent-provider", id: parsed.data.provider },
+          attrs: { executable: parsed.data.executable },
+        },
+        () => agents.setActive(parsed.data),
+        (result) => ({ attrs: { changed: result.changed } }),
       );
     });
     api.register("system.capabilities", () => ({
@@ -2722,6 +2871,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           updateManager.dispose(),
           serviceHost?.stopAll() ?? Promise.resolve(),
           processes.stopAll(),
+          agents.dispose(),
           // the successor spawns its own rosettad over the SAME db — ours must
           // be gone first, and stop() resolves only after the real exit
           rosettad?.stop() ?? Promise.resolve(),
@@ -3088,6 +3238,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           runtimeDiagnostics.dispose();
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
+          await agents.dispose(); // AR-2 — the agent runtime (no sessions yet) before its index
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           detachHealthSources?.();
           endpoints.dispose();
@@ -3158,6 +3309,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       rosettad,
       enrollment,
       index,
+      agents,
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;
@@ -3171,6 +3323,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AR-0 — no index daemon outlives a failed boot. It is started only after
     // `fieldd.lifecycle.ready`, so this never has a child to stop today; the
     // guard is stated so a later start-before-ready cannot leave an orphan.
+    await agents.dispose();
     await rosettad?.stop();
     // The earliest supersession window, which the `stopForSupersession` listener
     // is not yet in scope to see: a takeover that lands while the services are

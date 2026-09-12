@@ -30,6 +30,7 @@ export {
   publishUsersFile,
   readLayoutStamp,
   readUsersFile,
+  rootAboveUserRoot,
   setLastAttached,
   userRootFor,
   usersFilePath,

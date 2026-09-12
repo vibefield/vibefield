@@ -1,0 +1,24 @@
+{
+  "releases": [
+    {
+      "provider": "claude",
+      "channel": "stable",
+      "version": "2.1.270",
+      "url": "https://downloads.claude.ai/claude-code-releases/stable",
+      "fetchedAt": "2026-09-12T18:00:02.000Z",
+      "source": { "kind": "text", "id": "vendor-stable" }
+    },
+    {
+      "provider": "claude",
+      "status": "unavailable",
+      "message": "release detector github-latest could not be read",
+      "retryable": true
+    },
+    {
+      "provider": "pi",
+      "status": "unsupported",
+      "message": "agent provider does not expose distribution: pi",
+      "retryable": false
+    }
+  ]
+}

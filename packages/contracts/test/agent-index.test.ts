@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   AgentKind,
+  AgentsProfilesVerifyResult,
+  AgentsReleasesParams,
+  AgentsReleasesResult,
+  AgentsSetActiveResult,
   INDEX_PHASES,
   IndexEnrollmentRecord,
   IndexPhase,
@@ -197,5 +201,53 @@ describe("IndexPhase — the tolerant fold", () => {
       runtimes: [],
     });
     expect(status.phase).toBe("unknown");
+  });
+});
+
+describe("the agents.* door shapes (AR-2)", () => {
+  it("verify answers the persona with the adapter's honest failure beside it, or with the identity persisted", () => {
+    const persona = {
+      profileId: "9a3d1c2e-6b8f-4c1d-9e0a-2f3b4c5d6e7f",
+      provider: "pi",
+      label: "Research",
+      kind: "managed",
+      createdAt: "2026-09-12T17:58:00.000Z",
+    };
+    expect(
+      AgentsProfilesVerifyResult.safeParse({
+        persona,
+        failure: { status: "unsupported", message: "no identity document", retryable: false },
+      }).success,
+    ).toBe(true);
+    expect(AgentsProfilesVerifyResult.safeParse({ persona }).success).toBe(true);
+    expect(
+      AgentsProfilesVerifyResult.safeParse({
+        persona,
+        failure: { status: "gone", message: "?", retryable: false },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("releases is a union of facts and honest failures; setActive answers the rewritten choice", () => {
+    expect(
+      AgentsReleasesResult.parse({
+        releases: [
+          {
+            provider: "claude",
+            channel: "stable",
+            version: "2.2.0",
+            fetchedAt: "2026-09-12T18:00:00.000Z",
+            source: { kind: "text", id: "vendor-stable" },
+          },
+          { provider: "claude", status: "unavailable", message: "offline", retryable: true },
+        ],
+      }).releases,
+    ).toHaveLength(2);
+    expect(AgentsSetActiveResult.parse({ changed: true, installs: [] })).toEqual({
+      changed: true,
+      installs: [],
+    });
+    expect(AgentsReleasesParams.parse({}).network).toBeUndefined();
+    expect(AgentsReleasesParams.safeParse({ provider: "Claude Code" }).success).toBe(false);
   });
 });

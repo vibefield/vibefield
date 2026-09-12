@@ -1,0 +1,13 @@
+#!/bin/sh
+# AR-2 test fixture: an executable the claude adapter classifies as Claude Code
+# from its version banner (the vendor's `--version` grammar, `x.y.z (Claude
+# Code)`), placed on a PRIVATE search path so the install inventory finds it
+# and nothing of the developer's. `update` is the vendor's own updater as the
+# adapter's recipe invokes it for a standalone binary: it exits 0 and changes
+# nothing, so a re-inspection reads the same version — "already-current".
+case "$1" in
+  --version) echo "2.1.0 (Claude Code)" ;;
+  update) echo "fake claude: nothing to update" ;;
+  *) : ;;
+esac
+exit 0

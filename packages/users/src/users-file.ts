@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { userInfo } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   LAYOUT,
   LAYOUT_VERSION,
@@ -66,6 +66,19 @@ export function layoutStampPath(rootReal: string): string {
 
 export function userRootFor(rootReal: string, record: Pick<UserRecord, "fuid">): string {
   return join(rootReal, ...LAYOUT.USERS_DIR, String(record.fuid));
+}
+
+/** The inverse of `userRootFor`: the VibeField root a user root sits under,
+ * or undefined when the path is not shaped `<root>/users/<fuid>` (an injected
+ * or embedded root that has no `users/` above it — then there is no machine
+ * scope to speak of, and callers say so rather than guess one). AR-2: fieldd's
+ * standalone entry derives the machine scope (`LAYOUT.MACHINE_DIR`) from the
+ * user root it was handed, with this and nothing else. */
+export function rootAboveUserRoot(userRoot: string): string | undefined {
+  const parent = dirname(userRoot);
+  if (basename(parent) !== LAYOUT.USERS_DIR[0]) return undefined;
+  const root = dirname(parent);
+  return root === parent ? undefined : root;
 }
 
 export function defaultUserName(): string {

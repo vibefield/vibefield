@@ -310,6 +310,8 @@ export class IndexService {
   private readonly logger: Logger;
   private readonly fetchFn: typeof fetch;
   private readonly timeoutMs: number;
+  /** the roll call as a join table, per daemon generation (see kindsByLayoutRoot) */
+  private rollCall: { pid: number | null; kinds: ReadonlyMap<string, string> } | null = null;
 
   constructor(private readonly opts: IndexServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -390,8 +392,78 @@ export class IndexService {
   /** Enroll a managed root — the persona path (AR-2 calls it with puppeteer's
    * `observationRoot(profile)`, never `dataRoot`). */
   async enrollRuntime(spec: EnrollRuntimeSpec): Promise<IndexMutationResult> {
-    const changed = this.opts.store.enrollRuntime(spec);
+    return await this.enrollRuntimes([spec]);
+  }
+
+  /** Enroll several managed roots and settle ONCE (the boot reconcile: every
+   * persona the record does not name yet, one publish, one bounce). A spec the
+   * store refuses (a vanished or nested root) is logged and skipped — the
+   * others still land; the record never carries what the daemon refuses. */
+  async enrollRuntimes(specs: readonly EnrollRuntimeSpec[]): Promise<IndexMutationResult> {
+    let changed = false;
+    for (const spec of specs) {
+      try {
+        changed = this.opts.store.enrollRuntime(spec) || changed;
+      } catch (error) {
+        this.logger.warn("fieldd.index.enroll_refused", "Managed root not enrolled", {
+          kind: spec.kind,
+          ...(spec.profileId !== undefined ? { profileId: spec.profileId } : {}),
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     return await this.settle(changed);
+  }
+
+  /** Retire a managed root the RECORD names — the persona path's other half
+   * (AR-D19: watch off, rows kept, the persona still named). Needs no daemon:
+   * the record is the truth and the next start reads it. */
+  async retireEnrolled(spec: { kind: string; dataRoot: string }): Promise<IndexMutationResult> {
+    const changed = this.opts.store.retireRuntime({ kind: spec.kind, data_root: spec.dataRoot });
+    return await this.settle(changed);
+  }
+
+  /** The record as it stands (a copy) — what a reconcile compares personas
+   * against. Internal to fieldd: it carries the managed roots' paths. */
+  record(): IndexEnrollmentRecord {
+    return this.opts.store.snapshot();
+  }
+
+  /** The roll call as a JOIN TABLE: rosetta's kind for each layout root in its
+   * `~/…` spelling. A persona's provider maps to a kind through it — puppeteer
+   * names the provider's native layout root (PU-7's observation root of the
+   * native-default profile), folded to the same spelling — so neither sibling's
+   * registry is ever enumerated here (design-01 §1: the registries are theirs,
+   * read at the seam). Cached per daemon generation. EMPTY while the daemon is
+   * not ready or does not answer: a caller degrades to "not indexed yet" and
+   * the next ready re-applies (topology R4), rather than failing the persona. */
+  async kindsByLayoutRoot(): Promise<ReadonlyMap<string, string>> {
+    const health = this.opts.supervisor?.health() ?? ROSETTAD_UNCONFIGURED;
+    if (health.phase !== "ready") return new Map();
+    if (this.rollCall !== null && this.rollCall.pid === health.pid) return this.rollCall.kinds;
+    try {
+      const census = await this.get<DiscoveriesResponse>("/api/discoveries");
+      const kinds = new Map(census.discoveries.map((row) => [row.data_root, row.kind]));
+      this.rollCall = { pid: health.pid, kinds };
+      return kinds;
+    } catch {
+      return new Map();
+    }
+  }
+
+  /** The daemon's runtime ids keyed by root — an enrolled row by its absolute
+   * root (what fieldd enrolled), a discovered one by its `~` form. EMPTY while
+   * the daemon is not ready or does not answer (a persona then simply carries
+   * no `runtimeId`). */
+  async runtimeIdsByRoot(): Promise<ReadonlyMap<string, string>> {
+    const health = this.opts.supervisor?.health() ?? ROSETTAD_UNCONFIGURED;
+    if (health.phase !== "ready") return new Map();
+    try {
+      const { runtimes } = await this.get<RuntimesResponse>("/api/runtimes");
+      return new Map(runtimes.map((row) => [row.data_root, row.id]));
+    } catch {
+      return new Map();
+    }
   }
 
   /** Publish the record and, when it changed, bounce the daemon so it reads

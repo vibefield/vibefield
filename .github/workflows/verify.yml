@@ -38,13 +38,9 @@ jobs:
       # Fresh detached checkouts are clean and at the pin, so preflight's revision + dirty
       # checks both pass. No shallow clone: a pin may sit behind the branch tip.
       #
-      # NOT done here yet: `pnpm install` inside ../puppeteer. Nothing in this tree imports a
-      # puppeteer package until AR-1 lands (the link rows exist for the workbench, the
-      # walls admit them, no source reaches through), so the linked packages' own
-      # dependencies are not needed to typecheck or test. When the first import lands,
-      # puppeteer's install becomes part of this job — and it is blocked until puppeteer's
-      # temporary ghosttea `link:../electron-ghostty` override block is gone upstream
-      # (thinking-ar-agent-plane.md, ask PU-6): a clean room has no electron-ghostty.
+      # puppeteer's own install happens below, AFTER this tree's (it needs pnpm from the
+      # packageManager field): since AR-2 fieldd imports puppeteer, so the linked packages'
+      # own dependencies must exist under ../puppeteer/node_modules.
       - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
         env:
           SIBLINGS_TOKEN: ${{ secrets.SIBLINGS_TOKEN }}
@@ -98,6 +94,20 @@ jobs:
             ../rosetta -> target
 
       - run: pnpm install --frozen-lockfile
+
+      # AR-2 — the puppeteer sibling's OWN dependencies (zod 4, the ACP SDK, node-pty for the
+      # adapters), for exactly the packages fieldd's graph reaches: a FILTERED, frozen install.
+      # The godview app — the only consumer of puppeteer's temporary ghosttea
+      # `link:../electron-ghostty` override block (thinking-ar-agent-plane.md, ask PU-6) — is
+      # never selected, so a clean room without ../electron-ghostty installs. Witnessed
+      # 2026-09-12 in a fresh clone at the pin with no sibling beside it: 19 of 24 projects,
+      # exit 0. PU-6 upstream would let a plain install work too; it is no longer a gate.
+      - name: Install the puppeteer sibling's packages (filtered, frozen)
+        run: |
+          pnpm --dir ../puppeteer install --frozen-lockfile \
+            --filter "@vibecook/puppeteer-builtin-providers..." \
+            --filter "@vibecook/puppeteer-record" \
+            --filter "@vibecook/puppeteer-monitor"
 
       # rosettad from the pinned sibling (rustup picks its rust-toolchain.toml). The fieldd
       # supervisor's kill matrix runs against a scripted daemon in every gate; the one row

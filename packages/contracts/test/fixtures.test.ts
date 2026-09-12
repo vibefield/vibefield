@@ -6,6 +6,10 @@ import type { ZodTypeAny } from "zod";
 import {
   AgentDistributionRecord,
   AgentPersona,
+  AgentsInstallsResult,
+  AgentsProfilesVerifyResult,
+  AgentsReleasesResult,
+  AgentsUpdateResult,
   IndexDiscovery,
   IndexEnrollmentRecord,
   IndexStatus,
@@ -144,6 +148,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "index-status": IndexStatus,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
+  "agents-installs": AgentsInstallsResult,
+  "agents-releases": AgentsReleasesResult,
+  "agents-update": AgentsUpdateResult,
+  "agents-profiles-verify": AgentsProfilesVerifyResult,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

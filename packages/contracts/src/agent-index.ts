@@ -345,6 +345,47 @@ export type AgentsProfilesDeleteParams = z.infer<typeof AgentsProfilesDeletePara
 export const AgentsProfilesVerifyParams = z.object({ profileId: AgentProfileId }).passthrough();
 export type AgentsProfilesVerifyParams = z.infer<typeof AgentsProfilesVerifyParams>;
 
+export const AgentsProfilesListParams = z
+  .object({ provider: AgentProviderId.optional() })
+  .passthrough();
+export type AgentsProfilesListParams = z.infer<typeof AgentsProfilesListParams>;
+
+/** puppeteer `ProfileFailure`, mirrored: what an adapter could not do for a
+ * persona, as data (a `verify` that cannot read an identity is an answer,
+ * never an exception). `not-found` and `invalid` requests are refused at the
+ * door instead (NOT_FOUND / PRECONDITION_FAILED). */
+export const AgentProfileFailure = z
+  .object({
+    status: z.enum(["unsupported", "unavailable", "not-found", "invalid"]),
+    message: z.string().min(1),
+    retryable: z.boolean(),
+  })
+  .passthrough();
+export type AgentProfileFailure = z.infer<typeof AgentProfileFailure>;
+
+/** `agents.profiles.create` — the persona as registered. `runtimeId` rides
+ * once the daemon LISTS the enrolled root: fieldd enrolls it in the record
+ * when the daemon is ready and the provider's layout root is on the roll
+ * call, bounces the daemon, and the daemon's runtime rows can trail its ready
+ * line by a moment — so an absent id here means "not listed yet", and the list
+ * door carries it as soon as the projection does. A persona the index could
+ * not take now is enrolled at the next daemon ready (topology R4). */
+export const AgentsProfilesCreateResult = z.object({ persona: AgentPersona }).passthrough();
+export type AgentsProfilesCreateResult = z.infer<typeof AgentsProfilesCreateResult>;
+
+/** `agents.profiles.delete` — AR-D19: the runtime is retired (rows kept), the
+ * profile unregistered, the managed root deleted with its credentials. */
+export const AgentsProfilesDeleteResult = z.object({ deleted: z.boolean() }).passthrough();
+export type AgentsProfilesDeleteResult = z.infer<typeof AgentsProfilesDeleteResult>;
+
+/** `agents.profiles.verify` — the persona with the identity the provider's own
+ * status surface reported (persisted), or the persona unchanged beside the
+ * adapter's honest failure to learn one. */
+export const AgentsProfilesVerifyResult = z
+  .object({ persona: AgentPersona, failure: AgentProfileFailure.optional() })
+  .passthrough();
+export type AgentsProfilesVerifyResult = z.infer<typeof AgentsProfilesVerifyResult>;
+
 /** One classified install (puppeteer `InstalledAgent`, mirrored — every
  * field native evidence) plus VibeField's one choice: whether it is the
  * ACTIVE executable new spawns use (AR-D16, `machine/agents/distribution.json`). */
@@ -363,6 +404,14 @@ export const AgentInstall = z
   })
   .passthrough();
 export type AgentInstall = z.infer<typeof AgentInstall>;
+
+/** `agents.installs` — every provider's classified installs (a fresh
+ * inspection: the vendor's own version command runs per candidate), or one
+ * provider's. */
+export const AgentsInstallsParams = z
+  .object({ provider: AgentProviderId.optional() })
+  .passthrough();
+export type AgentsInstallsParams = z.infer<typeof AgentsInstallsParams>;
 
 export const AgentsInstallsResult = z.object({ installs: z.array(AgentInstall) }).passthrough();
 export type AgentsInstallsResult = z.infer<typeof AgentsInstallsResult>;
@@ -391,6 +440,14 @@ export const AgentReleaseFailure = z
   })
   .passthrough();
 export type AgentReleaseFailure = z.infer<typeof AgentReleaseFailure>;
+
+/** `agents.releases` — the agent's own oracle always; the declared network
+ * detectors only when THIS call says so or the provider's recorded preference
+ * does (AR-D22: release checks are attended acts; the default reaches nothing). */
+export const AgentsReleasesParams = z
+  .object({ provider: AgentProviderId.optional(), network: z.boolean().optional() })
+  .passthrough();
+export type AgentsReleasesParams = z.infer<typeof AgentsReleasesParams>;
 
 export const AgentsReleasesResult = z
   .object({ releases: z.array(z.union([AgentRelease, AgentReleaseFailure])) })
@@ -421,6 +478,15 @@ export const AgentsSetActiveParams = z
   .object({ provider: AgentProviderId, executable: z.string().min(1) })
   .passthrough();
 export type AgentsSetActiveParams = z.infer<typeof AgentsSetActiveParams>;
+
+/** `agents.setActive` — the record rewritten (false = it already said so) and
+ * the provider's installs with `active` as the record now reads. The choice
+ * reaches spawns from the next fieldd boot (the runtime binds its launch
+ * executable at construction; AR-3 may move it to per-spawn). */
+export const AgentsSetActiveResult = z
+  .object({ changed: z.boolean(), installs: z.array(AgentInstall) })
+  .passthrough();
+export type AgentsSetActiveResult = z.infer<typeof AgentsSetActiveResult>;
 
 // ── the distribution record (`machine/agents/distribution.json`, AR-D15/D16) ──
 //

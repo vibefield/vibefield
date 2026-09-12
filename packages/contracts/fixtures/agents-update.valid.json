@@ -1,0 +1,10 @@
+{
+  "receipt": {
+    "provider": "claude",
+    "status": "already-current",
+    "startedAt": "2026-09-12T18:05:00.000Z",
+    "finishedAt": "2026-09-12T18:05:03.000Z",
+    "exitCode": 0,
+    "message": "already at 2.1.263"
+  }
+}

@@ -8,6 +8,13 @@ export {
   type IndexServiceOptions,
 } from "./agent-index";
 export {
+  AgentRuntimeService,
+  type AgentRuntimeServiceOptions,
+  createProfileStore,
+  DistributionRecordStore,
+  noTerminalHost,
+} from "./agent-runtime";
+export {
   type ArtifactServeBridge,
   ArtifactService,
   type ArtifactServiceOptions,

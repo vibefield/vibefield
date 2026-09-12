@@ -1,0 +1,31 @@
+{
+  "installs": [
+    {
+      "provider": "claude",
+      "executable": "/Users/kim/.local/bin/claude",
+      "realPath": "/Users/kim/.local/share/claude/versions/2.1.263",
+      "version": "2.1.263",
+      "method": "native-installer",
+      "location": "/Users/kim/.local/share/claude/versions/2.1.263",
+      "autoUpdate": "enabled",
+      "channel": "stable",
+      "active": true,
+      "origin": "path",
+      "detectedAt": "2026-09-12T18:00:00.000Z",
+      "warnings": []
+    },
+    {
+      "provider": "claude",
+      "executable": "/opt/homebrew/bin/claude",
+      "realPath": "/opt/homebrew/Caskroom/claude-code/2.1.200/claude",
+      "version": "2.1.200",
+      "method": "brew",
+      "packageName": "claude-code",
+      "autoUpdate": "unknown",
+      "active": false,
+      "origin": "brew",
+      "detectedAt": "2026-09-12T18:00:00.000Z",
+      "warnings": ["`/opt/homebrew/bin/claude --version` took 4s"]
+    }
+  ]
+}

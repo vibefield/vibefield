@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
-import { ensureUsersRoot } from "@vibefield/users";
+import { ensureUsersRoot, rootAboveUserRoot } from "@vibefield/users";
 import { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, splitPathList } from "./boot-env";
 import { bootstrap } from "./daemon";
 
@@ -18,12 +18,19 @@ async function main(): Promise<void> {
   const explicitUserRoot = process.env["FIELDD_USER_ROOT"];
   let userId = process.env["FIELDD_USER_ID"];
   let dataDir: string;
+  // AR-2 — the machine scope hangs off the VibeField ROOT. A supervised fieldd
+  // is handed its USER root only, so the root comes from the layout it sits in
+  // (`<root>/users/<fuid>`, users spec UA-1); an injected root of any other
+  // shape has no machine scope, and the distribution doors say so.
+  let vibefieldRoot: string | undefined;
   if (explicitUserRoot !== undefined) {
     dataDir = explicitUserRoot;
+    vibefieldRoot = rootAboveUserRoot(explicitUserRoot);
   } else {
     const ensured = await ensureUsersRoot(process.env["FIELDD_DATA_DIR"] ?? defaultDataRoot());
     dataDir = ensured.userRoot;
     userId ??= ensured.user.userId;
+    vibefieldRoot = ensured.rootReal;
   }
   const portEnv = process.env["FIELDD_CONTROL_PORT"];
   // the data lane binds the registered port by default (the daemon's own default
@@ -109,6 +116,7 @@ async function main(): Promise<void> {
 
   const daemon = await bootstrap({
     dataDir,
+    ...(vibefieldRoot !== undefined ? { vibefieldRoot } : {}),
     logRoot,
     // UA-D12 — ephemeral by default; env pins a port only when a harness
     // explicitly asks. product.json records the ACTUAL bound ports either way.
