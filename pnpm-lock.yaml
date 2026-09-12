@@ -47,15 +47,12 @@ overrides:
   '@vibecook/ghosttea-electron': 0.11.1
   '@vibecook/ghosttea-react': 0.11.1
   '@vibecook/ghosttea-protocol': 0.11.1
-  '@vibecook/chopsticks-adapter-acp': 0.1.4
-  '@vibecook/chopsticks-adapter-claude': 0.1.4
-  '@vibecook/chopsticks-adapter-codex': 0.1.4
-  '@vibecook/chopsticks-adapter-grok': 0.1.4
-  '@vibecook/chopsticks-core': 0.1.4
-  '@vibecook/chopsticks-record': 0.1.4
-  '@vibecook/chopsticks-runtime': 0.1.4
-  '@vibecook/chopsticks-testing': 0.1.4
-  '@vibecook/chopsticks-workspaces': 0.1.4
+  '@vibecook/puppeteer-runtime': link:../puppeteer/packages/runtime
+  '@vibecook/puppeteer-builtin-providers': link:../puppeteer/packages/builtin-providers
+  '@vibecook/puppeteer-core': link:../puppeteer/packages/core
+  '@vibecook/puppeteer-record': link:../puppeteer/packages/record
+  '@vibecook/puppeteer-monitor': link:../puppeteer/packages/monitor
+  '@rosetta/protocol': link:../rosetta/clients/ts
 
 importers:
 
@@ -391,6 +388,9 @@ importers:
       '@react-three/fiber':
         specifier: ^9.6.1
         version: 9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@rosetta/protocol':
+        specifier: link:../../../rosetta/clients/ts
+        version: link:../../../rosetta/clients/ts
       '@vibecook/ghosttea-protocol':
         specifier: 0.11.1
         version: 0.11.1
@@ -400,6 +400,12 @@ importers:
       '@vibecook/ice':
         specifier: 0.11.0
         version: 0.11.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@vibecook/puppeteer-core':
+        specifier: link:../../../puppeteer/packages/core
+        version: link:../../../puppeteer/packages/core
+      '@vibecook/puppeteer-monitor':
+        specifier: link:../../../puppeteer/packages/monitor
+        version: link:../../../puppeteer/packages/monitor
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -476,9 +482,24 @@ importers:
 
   packages/fieldd:
     dependencies:
+      '@rosetta/protocol':
+        specifier: link:../../../rosetta/clients/ts
+        version: link:../../../rosetta/clients/ts
       '@vibecook/ghosttea-client':
         specifier: 0.11.1
         version: 0.11.1
+      '@vibecook/puppeteer-builtin-providers':
+        specifier: link:../../../puppeteer/packages/builtin-providers
+        version: link:../../../puppeteer/packages/builtin-providers
+      '@vibecook/puppeteer-core':
+        specifier: link:../../../puppeteer/packages/core
+        version: link:../../../puppeteer/packages/core
+      '@vibecook/puppeteer-record':
+        specifier: link:../../../puppeteer/packages/record
+        version: link:../../../puppeteer/packages/record
+      '@vibecook/puppeteer-runtime':
+        specifier: link:../../../puppeteer/packages/runtime
+        version: link:../../../puppeteer/packages/runtime
       '@vibefield/audit':
         specifier: workspace:*
         version: link:../audit

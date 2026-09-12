@@ -13,7 +13,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@rosetta/protocol": "*",
     "@vibecook/ghosttea-client": "*",
+    "@vibecook/puppeteer-builtin-providers": "*",
+    "@vibecook/puppeteer-core": "*",
+    "@vibecook/puppeteer-record": "*",
+    "@vibecook/puppeteer-runtime": "*",
     "@vibefield/audit": "workspace:*",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/fieldd-client": "workspace:*",

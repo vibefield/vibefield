@@ -89,6 +89,13 @@
     "exports",
     ".staging"
   ],
+  "INDEX_DIR": [
+    "index"
+  ],
+  "INDEX_DB": [
+    "index",
+    "rosetta.db"
+  ],
   "USERS_DIR": [
     "users"
   ],

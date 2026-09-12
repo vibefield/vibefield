@@ -86,6 +86,21 @@ pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
 > ones, `apps/ios/VibeFieldKit/Package.resolved` for the Swift side. Read the number there
 > before citing one; an EL8 pin stated from memory is how lockstep quietly breaks.
 
+**AR-0 sibling mode (2026-09-12):** the agent runtime is **puppeteer** and agent history is
+**rosetta** (chopsticks and spaghetti retired 2026-09-04). Neither is published, so this repo
+consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta`, pinned by revision in
+`siblings.lock.json`: puppeteer's packages and rosetta's TypeScript client enter as `link:` rows in
+the fenced block of `pnpm-workspace.yaml` (packages ask for `"*"`; only directly imported packages
+are rows; adapters never — walls R20–R22), and `rosettad` is built from the rosetta checkout by
+`pnpm siblings:build` (cargo's own target dir, the SSD) and reaches fieldd as `FIELDD_ROSETTAD_BIN`.
+`pnpm preflight` fails on a missing checkout or a revision ≠ the pin and warns on a dirty tree;
+`pnpm siblings` prints the state; `pnpm siblings:pin` is the deliberate upgrade event (EL8).
+`scripts/siblings.mjs` is the ONE reader of the lock (preflight, `check:deps`, the Nx cache stamp
+and the dev runner all go through it). Sibling *sources* reach the fieldd and renderer builds
+through esbuild's and Vite's own input tracking, never through the runner's watchers, so the
+"never watches sibling trees" law below stands. Exit (W-D8) is a version edit: replace each
+`link:` row with an exact version and delete the lock entry.
+
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version).
 

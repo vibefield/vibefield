@@ -34,6 +34,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readLock, siblingDir } from "./siblings.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TRACKED = ["loro-crdt", "@vibecook/ice", "@vibecook/strata-ecs", "react", "react-dom"];
@@ -57,6 +58,17 @@ function members() {
       if (d.isDirectory() && existsSync(join(parent, d.name, "package.json"))) {
         out.push(join(parent, d.name));
       }
+    }
+  }
+  // AR-0 sibling mode: a `link:` package resolves its OWN dependencies from
+  // the sibling checkout's node_modules, never from this tree's — exactly the
+  // "direct sibling link duplicating React" case above. The linked package
+  // directories are search roots too, so the law covers the seam a link opens.
+  const lock = readLock(ROOT);
+  for (const entry of Object.values(lock?.siblings ?? {})) {
+    for (const packageDir of Object.values(entry.packages ?? {})) {
+      const dir = join(siblingDir(ROOT, entry), packageDir);
+      if (existsSync(join(dir, "package.json"))) out.push(dir);
     }
   }
   return out;

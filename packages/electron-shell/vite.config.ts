@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
+import { readLock, siblingDir } from "../../scripts/siblings.mjs";
 import {
   hostSingletons,
   isExpectedSingletonWarning,
@@ -10,6 +11,17 @@ import {
 } from "./src/vite/host-singletons";
 
 const rendererRoot = join(import.meta.dirname, "src", "renderer-host");
+const repoRoot = join(import.meta.dirname, "..", "..");
+
+// AR-0 sibling mode: Vite serves files only under the workspace root by default
+// and answers a `link:` package outside it with a 403. The linked sibling
+// checkouts (siblings.lock.json, the one reader) join the allow list — and
+// ONLY when the lock names them, so registry mode (W-D8) ships this config
+// unchanged. Sibling sources then reach the renderer through Vite's own module
+// graph (watched, HMR'd), never through the dev runner's watchers.
+const siblingRoots = Object.values(readLock(repoRoot)?.siblings ?? {}).map((entry) =>
+  siblingDir(repoRoot, entry),
+);
 const mainEntry = join(rendererRoot, "index.html");
 const designSystemEntry = join(rendererRoot, "design-system.html");
 
@@ -152,5 +164,11 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  server: { port: mode === "design" ? 5174 : 5173, strictPort: true },
+  server: {
+    port: mode === "design" ? 5174 : 5173,
+    strictPort: true,
+    ...(siblingRoots.length > 0
+      ? { fs: { allow: [searchForWorkspaceRoot(repoRoot), ...siblingRoots] } }
+      : {}),
+  },
 }));

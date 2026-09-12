@@ -21,6 +21,8 @@
   "TERMINAL_FRAME_SOCKET": ["native", "run", "termframe.sock"],
   "CRASH_DIR": ["crash"],
   "EXPORTS_STAGING_DIR": ["exports", ".staging"],
+  "INDEX_DIR": ["index"],
+  "INDEX_DB": ["index", "rosetta.db"],
   "USERS_DIR": ["users"],
   "USERS_FILE": ["users.json"],
   "USERS_LOCK": ["users.json.lock"],

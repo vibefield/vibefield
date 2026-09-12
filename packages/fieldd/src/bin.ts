@@ -30,6 +30,10 @@ async function main(): Promise<void> {
   // is ephemeral, for test isolation) — FIELDD_DATA_PORT overrides, 0 = ephemeral.
   const dataPortEnv = process.env["FIELDD_DATA_PORT"];
   const nativeBin = process.env["FIELDD_NATIVE_BIN"];
+  // AR-0 — the agent-index daemon (rosettad) this fieldd supervises for its
+  // user. Unset ⇒ nothing is spawned and health says "unconfigured" honestly;
+  // the dev runner sets it when `pnpm siblings:build` has produced the binary.
+  const rosettadBin = process.env["FIELDD_ROSETTAD_BIN"];
   const allowedOrigins = [
     "file://",
     ...(process.env["FIELDD_ALLOWED_ORIGINS"]?.split(",").filter(Boolean) ?? []),
@@ -113,6 +117,7 @@ async function main(): Promise<void> {
     serviceHarnessPath,
     ...(nativePid !== undefined ? { nativePid } : {}),
     ...(spawnNative !== undefined ? { nativeSpawner: spawnNative } : {}),
+    ...(rosettadBin !== undefined ? { rosettadBin } : {}),
     ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),
     ...(userId !== undefined ? { userId } : {}),
     onFatal: (reason) => {

@@ -1,8 +1,28 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import { rosettadBinary } from "../../../scripts/siblings.mjs";
 import { buildChildEnv } from "./env.mjs";
 import { terminateChild } from "./processes.mjs";
 import { readDevProduct, stopVerifiedDevProduct } from "./product.mjs";
+
+/** The launching shell's explicit choice wins; otherwise the sibling lock's
+ * rosettad, when `pnpm siblings:build` has produced it. Read once per runner
+ * process — the answer cannot change under a running dev session without a
+ * rebuild, and the cargo metadata call behind it is not free on a restart. */
+let rosettadBinMemo;
+function defaultResolveRosettadBin() {
+  if (rosettadBinMemo !== undefined) return rosettadBinMemo;
+  const explicit = process.env["FIELDD_ROSETTAD_BIN"];
+  if (explicit !== undefined && explicit !== "") {
+    rosettadBinMemo = explicit;
+    return rosettadBinMemo;
+  }
+  const built = rosettadBinary();
+  rosettadBinMemo =
+    built?.path !== null && built?.path !== undefined && existsSync(built.path) ? built.path : null;
+  return rosettadBinMemo;
+}
 
 export function createElectronStack({
   paths,
@@ -14,6 +34,7 @@ export function createElectronStack({
   onUnexpectedExit,
   electronExecutable = createRequire(import.meta.url)("electron"),
   spawnProcess = spawn,
+  resolveRosettadBin = defaultResolveRosettadBin,
   readProduct = readDevProduct,
   stopProduct = stopVerifiedDevProduct,
   terminate = terminateChild,
@@ -29,6 +50,7 @@ export function createElectronStack({
   async function start(runtime) {
     if (child !== null) throw new Error("Electron is already running");
     const { buildId, daemonBuildId } = runtime;
+    const rosettadBin = resolveRosettadBin();
     const env = buildChildEnv(process.env, {
       set: {
         VITE_DEV_SERVER_URL: viteUrl,
@@ -45,6 +67,11 @@ export function createElectronStack({
         FIELDD_DATA_PORT: "0",
         FIELDD_BIN: runtime.fielddOutput,
         FIELDD_NATIVE_BIN: runtime.nativeOutput,
+        // AR-0 — the agent-index daemon fieldd supervises, built from the
+        // rosetta sibling (`pnpm siblings:build`). Only set when the binary is
+        // on disk: an unset variable is fieldd's honest "unconfigured", a path
+        // to nothing would be a spawn failure dressed as configuration.
+        ...(rosettadBin !== null ? { FIELDD_ROSETTAD_BIN: rosettadBin } : {}),
         FIELD_LOG_DIR: paths.logRoot,
       },
       // This flag is set only by Electron main for its fieldd child. Inheriting

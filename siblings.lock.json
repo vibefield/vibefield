@@ -1,0 +1,27 @@
+{
+  "//": "AR-0 sibling mode — machine-coupled checkouts pinned by revision. puppeteer (the agent runtime) and rosetta (agent history) are unpublished, so their packages enter as link: rows in pnpm-workspace.yaml and rosettad is built from source. `pnpm preflight` verifies presence, revision, dirtiness (warn), and that the overrides block agrees with this file; `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift). EXIT (W-D8): replace each link: row with an exact version and delete its entry here.",
+  "siblings": {
+    "puppeteer": {
+      "path": "../puppeteer",
+      "sha": "0a9eb8f10c0977a21e8deb6d2b8275f5d10070d2",
+      "packages": {
+        "@vibecook/puppeteer-runtime": "packages/runtime",
+        "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
+        "@vibecook/puppeteer-core": "packages/core",
+        "@vibecook/puppeteer-record": "packages/record",
+        "@vibecook/puppeteer-monitor": "packages/monitor"
+      }
+    },
+    "rosetta": {
+      "path": "../rosetta",
+      "sha": "6119826f46c52d61e32d3cc1bd142e587bbf000d",
+      "packages": {
+        "@rosetta/protocol": "clients/ts"
+      },
+      "cargo": {
+        "crate": "rosettad",
+        "profile": "release"
+      }
+    }
+  }
+}

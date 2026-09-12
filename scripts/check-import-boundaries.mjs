@@ -436,6 +436,63 @@ const RULES = [
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/screenshot/src"),
     importTest: (s) => importsModule(s, "electron"),
   },
+  {
+    id: "R20",
+    // AR-0 (2026-09-12): the agent runtime is puppeteer, consumed IN fieldd (D2)
+    // through four packages — the runtime, its composition root
+    // (builtin-providers, the door to every official adapter), the core
+    // contracts, and record. AR-L1 "VibeField knows no vendor": an adapter
+    // import is a product branching on a provider, and native-observation is
+    // the adapters' private half. Tests may reach further (puppeteer-testing);
+    // production may not.
+    enforce: true,
+    description:
+      "fieldd imports puppeteer only through its runtime door (runtime · builtin-providers · core · record) + @rosetta/protocol — never an adapter or native-observation",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src"),
+    importTest: (s) =>
+      s.startsWith("@vibecook/puppeteer-") &&
+      !PUPPETEER_FIELDD_DOOR.some((m) => importsModule(s, m)),
+  },
+  {
+    id: "R21",
+    // The renderer sees the AGENT VIEW (core types, the monitor state model,
+    // the react bindings) and never the runtime: spawning, providers, and
+    // recording are fieldd's (D2/A4). puppeteer-react is admitted by the wall
+    // ahead of its link: row — the row waits on the react-peer answer in
+    // pnpm-workspace.yaml's sibling block.
+    enforce: true,
+    description:
+      "field-app imports puppeteer only through its view door (core · monitor · react) + @rosetta/protocol — never runtime, providers, record, an adapter, or native-observation",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/field-app/src"),
+    importTest: (s) =>
+      s.startsWith("@vibecook/puppeteer-") &&
+      !PUPPETEER_FIELD_APP_DOOR.some((m) => importsModule(s, m)),
+  },
+  {
+    id: "R22",
+    // Everyone else: contracts stays dependency-free, plugins see only the SDK
+    // (R10), Electron main carries no product logic (A4), and the spine
+    // libraries never learn what an agent is. Both sibling families together.
+    enforce: true,
+    description:
+      "no puppeteer or rosetta import outside packages/fieldd and packages/field-app (D2: the runtime lives in fieldd; A4/R10 elsewhere)",
+    applies: (p) => SOURCE_EXT.test(p) && !underAny(p, ["packages/fieldd", "packages/field-app"]),
+    importTest: (s) => s.startsWith("@vibecook/puppeteer-") || s.startsWith("@rosetta/"),
+  },
+];
+
+// AR-0 walls (R20/R21): the packages each plane may import — the SAME sets the
+// sibling block in pnpm-workspace.yaml and packages/*/package.json declare.
+const PUPPETEER_FIELDD_DOOR = [
+  "@vibecook/puppeteer-runtime",
+  "@vibecook/puppeteer-builtin-providers",
+  "@vibecook/puppeteer-core",
+  "@vibecook/puppeteer-record",
+];
+const PUPPETEER_FIELD_APP_DOOR = [
+  "@vibecook/puppeteer-core",
+  "@vibecook/puppeteer-monitor",
+  "@vibecook/puppeteer-react",
 ];
 
 // Enforce map (spec §8.3 slice 2): --enforce gates ONLY on enforce-true rules.
@@ -769,6 +826,29 @@ function runSelfTest() {
       file: "packages/screenshot/src/uses-electron.ts",
       body: 'import { clipboard } from "electron";\n',
     },
+    // AR-0 walls. R20: an adapter import in fieldd is a product branching on a
+    // provider (AR-L1). R21: the renderer never touches the runtime. R22: the
+    // sibling families exist for the two agent planes only.
+    {
+      id: "R20",
+      file: "packages/fieldd/src/uses-adapter.ts",
+      body: 'import { claude } from "@vibecook/puppeteer-adapter-claude";\nimport { obs } from "@vibecook/puppeteer-native-observation";\n',
+    },
+    {
+      id: "R21",
+      file: "packages/field-app/src/uses-runtime.ts",
+      body: 'import { createAgentRuntime } from "@vibecook/puppeteer-runtime";\n',
+    },
+    {
+      id: "R22",
+      file: "packages/contracts/src/uses-puppeteer.ts",
+      body: 'import type { AgentEvent } from "@vibecook/puppeteer-core";\n',
+    },
+    {
+      id: "R22",
+      file: "packages/electron-shell/src/main/uses-rosetta.ts",
+      body: 'import { RosettaClient } from "@rosetta/protocol";\n',
+    },
   ];
   const cleans = [
     // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
@@ -891,6 +971,16 @@ function runSelfTest() {
       file: "packages/screenshot/src/clean-spawn.ts",
       body: 'import { spawn } from "node:child_process";\nimport { ScreenshotHelperEvent } from "@vibefield/contracts";\nexport const s = spawn;\nexport const e = ScreenshotHelperEvent;\n',
     },
+    // AR-0 doors: fieldd through the runtime door, the renderer through the view
+    // door, both with the rosetta client — clean under R20/R21/R22.
+    {
+      file: "packages/fieldd/src/clean-runtime-door.ts",
+      body: 'import { createBuiltinAgentRuntime } from "@vibecook/puppeteer-builtin-providers";\nimport type { AgentRuntime } from "@vibecook/puppeteer-runtime";\nimport { PROTOCOL_VERSION } from "@rosetta/protocol";\nexport const r = createBuiltinAgentRuntime;\nexport type R = AgentRuntime;\nexport const v = PROTOCOL_VERSION;\n',
+    },
+    {
+      file: "packages/field-app/src/clean-view-door.ts",
+      body: 'import type { AgentMonitorState } from "@vibecook/puppeteer-core";\nimport { createMonitorStore } from "@vibecook/puppeteer-monitor";\nimport type { SessionRow } from "@rosetta/protocol";\nexport type S = AgentMonitorState;\nexport const m = createMonitorStore;\nexport type Row = SessionRow;\n',
+    },
   ];
 
   const tmp = mkdtempSync(join(tmpdir(), "vf-import-walls-"));
@@ -954,6 +1044,11 @@ function runSelfTest() {
     for (const id of ["R16", "R17"]) {
       const gated = found.some((v) => v.id === id && ENFORCE_BY_ID.get(v.id) === true);
       console.log(`  ${gated ? "PASS" : "FAIL"}  ${id} detected and GATED (LOG-L6)`);
+      if (!gated) ok = false;
+    }
+    for (const id of ["R20", "R21", "R22"]) {
+      const gated = found.some((v) => v.id === id && ENFORCE_BY_ID.get(v.id) === true);
+      console.log(`  ${gated ? "PASS" : "FAIL"}  ${id} detected and GATED (AR-0)`);
       if (!gated) ok = false;
     }
   } finally {

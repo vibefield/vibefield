@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol";
 import {
   AppPreferenceSetParams,
   ArtifactPublishParams,
@@ -115,6 +116,11 @@ import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import {
+  ROSETTAD_UNCONFIGURED,
+  type RosettadState,
+  RosettadSupervisor,
+} from "./rosettad-supervisor";
+import {
   type PluginServiceLogRecord,
   ServiceHost,
   type ServiceHostCensus,
@@ -160,6 +166,9 @@ export interface FielddConfig {
    * the supervisor can respawn a dead floor. Absent = adopted/external floor:
    * no respawn authority, and the supervisor says so instead of guessing. */
   nativeSpawner?: () => number | undefined;
+  /** AR-0 — the rosettad binary to supervise for this user's agent index
+   * (FIELDD_ROSETTAD_BIN). Absent = no index daemon; health says so. */
+  rosettadBin?: string;
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -221,6 +230,11 @@ export interface FielddHealth {
    * tell, and never a claim that the build is unknowable. */
   nativeBuild: string | null;
   native: NativeHealth | null;
+  /** AR-0 — fieldd's EXTERNAL judgment of the agent-index daemon (rosettad):
+   * unconfigured / starting / ready / restarting / failed / stopped, with the
+   * loopback origin while ready. The index doors (AR-1) answer UNAVAILABLE
+   * {service:"index", state} from the same phase. */
+  rosettad: RosettadState;
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
   logging: LoggingHealthV1 | null;
@@ -272,6 +286,9 @@ export interface FielddDaemon {
   /** TC-D1/TC-D2 — floor supervision (tests drive requestRestart directly;
    * the product path is system.native.restart). */
   nativeSupervisor: NativeSupervisor;
+  /** AR-0 — the index daemon's supervisor; null when no binary was configured.
+   * Tests drive start/stop/requestRestart directly. */
+  rosettad: RosettadSupervisor | null;
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -372,6 +389,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ...(config.nativePid !== undefined ? { nativePid: config.nativePid } : {}),
     logger: logger.child({ component: "native_supervisor" }),
   });
+  // AR-0 — one rosettad per user root, fieldd-lifetime (AR-D6 v1). Constructed
+  // here so health can project it from the first snapshot; STARTED only once
+  // boot has committed (a boot rollback must never leave an index daemon
+  // behind). The db lives under the user root at LAYOUT.INDEX_DB.
+  const rosettad =
+    config.rosettadBin === undefined
+      ? null
+      : new RosettadSupervisor({
+          bin: config.rosettadBin,
+          dbPath: join(config.dataDir, ...LAYOUT.INDEX_DB),
+          expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+          logger: logger.child({ component: "rosettad_supervisor" }),
+        });
   // TC-D6(a), fieldd half — measure-and-surface (Node has no setrlimit).
   const fdSoftLimit = readFdSoftLimit();
   if (fdSoftLimit !== null && fdSoftLimit < 1024) {
@@ -694,6 +724,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       nativePid: supervisor.currentPid ?? null,
       nativeBuild: native.nativeBuild ?? null,
       native: latestHealth,
+      rosettad: rosettad?.state() ?? ROSETTAD_UNCONFIGURED,
       docs: docs.health(),
       plugins: plugins.health(),
       logging: logging?.health() ?? null,
@@ -744,11 +775,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     native.on("reconnecting", emitHealth);
     native.on("connected", emitHealth);
     supervisor.on("transition", emitHealth);
+    rosettad?.on("transition", emitHealth);
     detachHealthSources = () => {
       audit.off("health", emitHealth);
       native.off("reconnecting", emitHealth);
       native.off("connected", emitHealth);
       supervisor.off("transition", emitHealth);
+      rosettad?.off("transition", emitHealth);
       mesh.off("reconciled", emitHealth);
       mesh.off("serves-changed", emitHealth);
       plugins.off("changed", emitHealth);
@@ -2603,6 +2636,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           updateManager.dispose(),
           serviceHost?.stopAll() ?? Promise.resolve(),
           processes.stopAll(),
+          // the successor spawns its own rosettad over the SAME db — ours must
+          // be gone first, and stop() resolves only after the real exit
+          rosettad?.stop() ?? Promise.resolve(),
         ]);
         runtimeDiagnostics.dispose();
         detachHealthSources?.();
@@ -2937,6 +2973,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     );
 
     logger.info("fieldd.lifecycle.ready", "fieldd is ready", { controlPort, dataPort });
+    // AR-0 — boot has committed: the index daemon starts now, in the
+    // background. Readiness is a health transition, never a boot gate: a
+    // missing or broken rosettad degrades the index, not the daemon.
+    void rosettad?.start();
     let stopPromise: Promise<void> | null = null;
     const stop = (): Promise<void> => {
       stopPromise ??= (async () => {
@@ -2947,6 +2987,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           runtimeDiagnostics.dispose();
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
+          await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           detachHealthSources?.();
           endpoints.dispose();
           mcp.dispose();
@@ -3013,6 +3054,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       health,
       nativeHealth: () => latestHealth,
       nativeSupervisor: supervisor,
+      rosettad,
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;

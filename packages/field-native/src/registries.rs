@@ -160,6 +160,8 @@ pub mod layout {
     pub const TERMINAL_FRAME_SOCKET: &[&str] = &["native", "run", "termframe.sock"];
     pub const CRASH_DIR: &[&str] = &["crash"];
     pub const EXPORTS_STAGING_DIR: &[&str] = &["exports", ".staging"];
+    pub const INDEX_DIR: &[&str] = &["index"];
+    pub const INDEX_DB: &[&str] = &["index", "rosetta.db"];
     pub const USERS_DIR: &[&str] = &["users"];
     pub const USERS_FILE: &[&str] = &["users.json"];
     pub const USERS_LOCK: &[&str] = &["users.json.lock"];
@@ -188,6 +190,8 @@ pub mod layout {
         ("TERMINAL_FRAME_SOCKET", TERMINAL_FRAME_SOCKET),
         ("CRASH_DIR", CRASH_DIR),
         ("EXPORTS_STAGING_DIR", EXPORTS_STAGING_DIR),
+        ("INDEX_DIR", INDEX_DIR),
+        ("INDEX_DB", INDEX_DB),
         ("USERS_DIR", USERS_DIR),
         ("USERS_FILE", USERS_FILE),
         ("USERS_LOCK", USERS_LOCK),

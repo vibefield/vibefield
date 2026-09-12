@@ -2,16 +2,25 @@
 // Environment preflight: tool versions + the import-boundary walls. Hard-fails
 // on missing pieces, warns on version drift. Run: `pnpm preflight`.
 //
-// The sibling-checkout machinery (SIBLINGS map, siblings.lock.json, `pnpm
-// siblings:pin`) retired on 2026-07-28: truffle-core became an exact crates-io
-// pin (version in the root Cargo.toml) when the T1 petition window closed,
-// exactly as @vibecook/ice
-// left on 2026-07-25 for npm. The repo builds standalone. If a new petition
-// window reopens the ../p008/truffle [patch.crates-io], restore the machinery
-// from git history — a path patch without a SHA pin makes verify unreplayable.
+// AR-0 sibling mode (2026-09-12): puppeteer and rosetta are consumed as SIBLING
+// CHECKOUTS pinned by revision in siblings.lock.json (the truffle-era machinery
+// of cb652e0a, retired 7fcdfd2c when truffle graduated to a registry pin, revived
+// for two siblings). scripts/siblings.mjs is the one reader of that lock; this
+// file verifies what it says against the checkouts and against the overrides
+// block. A path dependency without a SHA pin makes verify unreplayable.
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  LOCK_FILE,
+  linkRow,
+  newestSourceMtime,
+  readLock,
+  rosettadBinary,
+  siblingDir,
+  siblingDirty,
+  siblingHead,
+} from "./siblings.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const problems = [];
@@ -94,26 +103,100 @@ for (const { file, re, label } of PIN_EXPECTATIONS) {
     problems.push(`EL8 pin check could not read ${file}`);
   }
 }
-// chopsticks: every override in the family must carry ONE version, and that
-// version is the pinned one — a drifted SUBSET (runtime bumped, adapters not)
-// is the failure mode a per-line table would miss.
+// --- AR-0 sibling mode: siblings.lock.json vs the checkouts and the overrides ---
+// Two siblings, two kinds of consumption. Every lock package must have a `link:`
+// row pointing INTO the pinned checkout, and the family rule says all-or-nothing:
+// every @vibecook/puppeteer-* or @rosetta/* override is either a lock-backed
+// link: row or (registry mode, W-D8) an exact version — a mixed family is the
+// drift class a per-line table would miss. Revision drift FAILS with the
+// sync-or-repin choice spelled out; a dirty tree only WARNs (co-developing the
+// sibling is the normal state — the pin is about the base revision). The
+// rosettad binary is a WARN when absent: fieldd reports the agent index
+// UNAVAILABLE honestly until `pnpm siblings:build` runs.
 {
-  const CHOPSTICKS_PIN = "0.1.4";
+  const lock = readLock(root);
+  let yaml = "";
   try {
-    const text = readFileSync(resolve(root, "pnpm-workspace.yaml"), "utf8");
-    const family = [...text.matchAll(/"@vibecook\/(chopsticks-[a-z-]+)":\s*(\S+)/g)];
-    if (family.length === 0) {
-      problems.push("EL8 pin missing: no @vibecook/chopsticks-* overrides in pnpm-workspace.yaml");
-    }
-    for (const [, name, version] of family) {
-      if (version !== CHOPSTICKS_PIN) {
+    yaml = readFileSync(resolve(root, "pnpm-workspace.yaml"), "utf8");
+  } catch {
+    problems.push("sibling check could not read pnpm-workspace.yaml");
+  }
+  const family = [
+    ...yaml.matchAll(/^\s*"(@vibecook\/puppeteer-[a-z-]+|@rosetta\/[a-z-]+)":\s*(\S+)/gm),
+  ];
+  if (lock === null) {
+    // Registry mode: no link: row may exist without a lock behind it.
+    for (const [, name, value] of family) {
+      if (value.startsWith("link:")) {
         problems.push(
-          `EL8 pin drift: @vibecook/${name} pinned ${version}, expected ${CHOPSTICKS_PIN}`,
+          `${name} is a link: override but ${LOCK_FILE} is absent — a path dependency needs a pin (pnpm siblings:pin after declaring the sibling)`,
         );
       }
     }
-  } catch {
-    problems.push("EL8 pin check could not read pnpm-workspace.yaml");
+  } else {
+    const lockPackages = new Map();
+    for (const [name, entry] of Object.entries(lock.siblings)) {
+      const dir = siblingDir(root, entry);
+      for (const [pkg, packageDir] of Object.entries(entry.packages ?? {})) {
+        lockPackages.set(pkg, linkRow(entry, packageDir));
+      }
+      if (!existsSync(dir)) {
+        problems.push(
+          `${name} checkout missing at ${dir} — clone it beside this repo and check out ${entry.sha.slice(0, 12)} (${LOCK_FILE})`,
+        );
+        continue;
+      }
+      const head = siblingHead(dir);
+      if (head === null) {
+        warnings.push(`${name}: not a git checkout at ${dir} — revision pin unverifiable`);
+      } else if (head !== entry.sha) {
+        problems.push(
+          `${name} is at ${head.slice(0, 12)} but ${LOCK_FILE} pins ${entry.sha.slice(0, 12)} — ` +
+            "sync the sibling to the pin, or accept the new revision deliberately: `pnpm siblings:pin` (EL8)",
+        );
+      }
+      if (siblingDirty(dir) === true) {
+        warnings.push(`${name} working tree is dirty — verify runs against unpinned edits`);
+      }
+    }
+    for (const [pkg, expected] of lockPackages) {
+      const row = family.find(([, name]) => name === pkg);
+      if (row === undefined) {
+        problems.push(
+          `sibling mode: ${pkg} is in ${LOCK_FILE} but has no override row in pnpm-workspace.yaml (expected ${expected})`,
+        );
+      } else if (row[2] !== expected) {
+        problems.push(
+          `sibling mode: ${pkg} override reads ${row[2]} but ${LOCK_FILE} expects ${expected}`,
+        );
+      }
+    }
+    for (const [, name, value] of family) {
+      if (!lockPackages.has(name)) {
+        problems.push(
+          `sibling family rule: ${name} (${value}) is not in ${LOCK_FILE} — the family is ALL lock-backed link: rows or ALL exact versions, never mixed`,
+        );
+      }
+    }
+    const bin = rosettadBinary(root);
+    if (bin !== null) {
+      if (bin.path === null) {
+        warnings.push(
+          `${bin.name}: cargo cannot resolve its target directory — rosettad path unknown`,
+        );
+      } else if (!existsSync(bin.path)) {
+        warnings.push(
+          `${bin.name}: rosettad is not built (${bin.path}) — run \`pnpm siblings:build\`; fieldd reports the agent index UNAVAILABLE until then`,
+        );
+      } else {
+        const newest = newestSourceMtime(bin.dir);
+        if (newest !== null && statSync(bin.path).mtimeMs < newest) {
+          warnings.push(
+            `${bin.name}: a Rust source is newer than the built rosettad — run \`pnpm siblings:build\` (a no-op when cargo agrees it is fresh)`,
+          );
+        }
+      }
+    }
   }
 }
 
