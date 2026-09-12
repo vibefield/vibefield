@@ -299,6 +299,16 @@ export const SCOPES = [
   "surface.attach",
   "surface.browser",
   "surface.capture",
+  // AR-1 (thinking-ar-data-topology.md §7, AR-D15…D22) — the agent-index and
+  // agent-distribution management doors. `index.manage` mutates THIS user's
+  // consent record: which discovered agent roots rosettad may read, which
+  // runtimes are retired (`index.enroll`/`index.retire`; reads stay on
+  // `index.read`). `agents.manage` mutates the MACHINE-scope distribution
+  // record — the active executable per provider, updates — the native.admin
+  // posture. Both are local-only forever: consent is an act of the person at
+  // this device; neither enters TAILNET_SCOPES or any plugin eligibility table.
+  "index.manage",
+  "agents.manage",
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 
@@ -479,14 +489,56 @@ export const LAYOUT = {
    * directory (EL7 — the origin is the secret), and the next fieldd reads it
    * to put down an orphan holding the projection lock. */
   INDEX_DAEMONS_DIR: ["index", "daemons"],
+  /** AR-1 (AR-D17) — this user's consent record and persona ↔ runtime map:
+   * which discovered kinds rosettad may read, which managed roots it is
+   * handed, which runtimes are retired. VibeField's truth, written by fieldd
+   * BEFORE every rosettad spawn — and the same file is the daemon's
+   * `--enroll` input (rosetta ignores the keys only VibeField reads). */
+  INDEX_ENROLLMENT_FILE: ["index", "enrollment.json"],
+  /** AR-1 (AR-D18/D20) — this user's personas: puppeteer's profile registry
+   * (`ProfileRegistrySnapshot`, through fieldd's injected store) and the
+   * managed roots beneath it (`roots/<provider>/<uuid>/`, 0700 — the agent's
+   * own data folder, bound at spawn through the provider's root variable). A
+   * root under here is managed ⇒ enrolled by construction, never discovered. */
+  AGENTS_DIR: ["agents"],
+  AGENT_PROFILES_FILE: ["agents", "profiles.json"],
+  AGENT_ROOTS_DIR: ["agents", "roots"],
   /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
    * a full tree of the segments above; these four live at the VibeField root
-   * itself and are the only segments that never re-root. */
+   * itself and, with the `machine/` set below, are the only segments that
+   * never re-root (LAYOUT_ROOT_LEVEL is that set, as data). */
   USERS_DIR: ["users"],
   USERS_FILE: ["users.json"],
   USERS_LOCK: ["users.json.lock"],
   LAYOUT_STAMP: ["layout.json"],
+  /** AR-1 (AR-D15/D16) — the MACHINE scope: the one named exception to
+   * UA-D1's "all product state under the user". Exactly agent distribution:
+   * installs are OS-user-global by nature, and VibeField owns nothing there
+   * but a choice (the active executable per provider) and a preference
+   * (channel, network opt-in) — `distribution.json`, root-locked, published
+   * atomically by the attached user's fieldd — plus puppeteer's opaque update
+   * transcripts under `updates/`. Nothing else enters `machine/` without a
+   * new decision. */
+  MACHINE_DIR: ["machine"],
+  MACHINE_AGENTS_DIR: ["machine", "agents"],
+  MACHINE_DISTRIBUTION_FILE: ["machine", "agents", "distribution.json"],
+  MACHINE_UPDATES_DIR: ["machine", "agents", "updates"],
 } as const;
+
+/** The segments that live at the VibeField ROOT and never re-root under
+ * `users/<fuid>/` (UA-1's four + AR-D15's machine scope) — as data, so the
+ * flat-v1 migration's manifest and every "is this root-level?" question read
+ * one list instead of respelling it. */
+export const LAYOUT_ROOT_LEVEL = [
+  "USERS_DIR",
+  "USERS_FILE",
+  "USERS_LOCK",
+  "LAYOUT_STAMP",
+  "MACHINE_DIR",
+  "MACHINE_AGENTS_DIR",
+  "MACHINE_DISTRIBUTION_FILE",
+  "MACHINE_UPDATES_DIR",
+] as const satisfies readonly (keyof typeof LAYOUT)[];
 
 /** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): these channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw

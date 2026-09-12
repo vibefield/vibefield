@@ -1,0 +1,201 @@
+import { describe, expect, it } from "vitest";
+import {
+  AgentKind,
+  INDEX_PHASES,
+  IndexEnrollmentRecord,
+  IndexPhase,
+  IndexStatus,
+} from "../src/agent-index";
+import { METHODS } from "../src/methods";
+import { PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
+import { LAYOUT, LAYOUT_ROOT_LEVEL, SCOPES, TAILNET_SCOPES } from "../src/registries";
+
+// AR-1 — the agent-index and agent-runtime doors (thinking-ar-data-topology.md
+// §7, AR-D15…D22). The registry rows are pinned the way plugins.update's are:
+// widening is a deliberate edit against this file, never drift.
+
+describe("index.* and agents.* registry rows (AR-1)", () => {
+  const rows = (prefix: string) =>
+    METHODS.filter((m) => m.method.startsWith(prefix)).map((m) => ({
+      method: m.method,
+      scope: m.scope,
+      idempotent: m.idempotent,
+      locality: m.locality,
+    }));
+
+  it("index.*: reads on index.read, mutations on the local-only index.manage", () => {
+    expect(rows("index.")).toEqual([
+      { method: "index.discoveries", scope: "index.read", idempotent: true, locality: "local" },
+      { method: "index.status", scope: "index.read", idempotent: true, locality: "local" },
+      { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
+      { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
+    ]);
+  });
+
+  it("agents.*: distribution on the local-only agents.manage, personas on agent.spawn", () => {
+    expect(rows("agents.")).toEqual([
+      { method: "agents.installs", scope: "agents.manage", idempotent: true, locality: "local" },
+      { method: "agents.releases", scope: "agents.manage", idempotent: true, locality: "local" },
+      { method: "agents.update", scope: "agents.manage", idempotent: false, locality: "local" },
+      { method: "agents.setActive", scope: "agents.manage", idempotent: true, locality: "local" },
+      { method: "agents.profiles.list", scope: "agent.spawn", idempotent: true, locality: "local" },
+      {
+        method: "agents.profiles.create",
+        scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+      },
+      {
+        method: "agents.profiles.delete",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+      },
+      {
+        method: "agents.profiles.verify",
+        scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+      },
+    ]);
+  });
+
+  it("none of the rows federates or admits a guest", () => {
+    for (const m of METHODS.filter(
+      (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),
+    )) {
+      expect(m.locality, m.method).toBe("local");
+      expect(m.guestOk ?? false, m.method).toBe(false);
+      expect(m.subscription ?? false, m.method).toBe(false);
+    }
+  });
+
+  it("the two new scopes exist, never enter the tailnet preset, and are never plugin-eligible", () => {
+    for (const scope of ["index.manage", "agents.manage"] as const) {
+      expect(SCOPES).toContain(scope);
+      expect(TAILNET_SCOPES).not.toContain(scope);
+      expect(PLUGIN_CAPABILITY_ELIGIBILITY[scope]).toBeUndefined();
+    }
+  });
+});
+
+describe("LAYOUT — the topology's segments (AR-D15…D18)", () => {
+  it("the user-scope additions hang off their owners", () => {
+    expect(LAYOUT.INDEX_ENROLLMENT_FILE.slice(0, -1)).toEqual([...LAYOUT.INDEX_DIR]);
+    expect(LAYOUT.INDEX_ENROLLMENT_FILE.at(-1)).toBe("enrollment.json");
+    expect(LAYOUT.AGENT_PROFILES_FILE.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
+    expect(LAYOUT.AGENT_ROOTS_DIR.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
+  });
+
+  it("the machine scope is exactly distribution, and it never re-roots", () => {
+    expect(LAYOUT.MACHINE_AGENTS_DIR.slice(0, -1)).toEqual([...LAYOUT.MACHINE_DIR]);
+    expect(LAYOUT.MACHINE_DISTRIBUTION_FILE.slice(0, -1)).toEqual([...LAYOUT.MACHINE_AGENTS_DIR]);
+    expect(LAYOUT.MACHINE_UPDATES_DIR.slice(0, -1)).toEqual([...LAYOUT.MACHINE_AGENTS_DIR]);
+    const machine = Object.entries(LAYOUT)
+      .filter(([, segs]) => segs[0] === LAYOUT.MACHINE_DIR[0])
+      .map(([name]) => name);
+    expect(machine.sort()).toEqual(
+      [
+        "MACHINE_DIR",
+        "MACHINE_AGENTS_DIR",
+        "MACHINE_DISTRIBUTION_FILE",
+        "MACHINE_UPDATES_DIR",
+      ].sort(),
+    );
+    for (const name of machine) expect([...LAYOUT_ROOT_LEVEL] as string[]).toContain(name);
+  });
+
+  it("LAYOUT_ROOT_LEVEL is the whole never-re-root set: UA-1's four plus the machine set, and nothing under a user shares a first segment with it", () => {
+    expect([...LAYOUT_ROOT_LEVEL].sort()).toEqual(
+      [
+        "USERS_DIR",
+        "USERS_FILE",
+        "USERS_LOCK",
+        "LAYOUT_STAMP",
+        "MACHINE_DIR",
+        "MACHINE_AGENTS_DIR",
+        "MACHINE_DISTRIBUTION_FILE",
+        "MACHINE_UPDATES_DIR",
+      ].sort(),
+    );
+    const rootFirsts = new Set<string>(LAYOUT_ROOT_LEVEL.map((name) => LAYOUT[name][0] as string));
+    for (const [name, segs] of Object.entries(LAYOUT)) {
+      if (([...LAYOUT_ROOT_LEVEL] as string[]).includes(name)) continue;
+      expect(rootFirsts.has(segs[0] as string), `${name} re-roots but shares ${segs[0]}`).toBe(
+        false,
+      );
+    }
+  });
+});
+
+describe("the enrollment record — rosettad's --enroll input and VibeField's truth (AR-D17)", () => {
+  // The exact JSON rosetta's own real-binary bench writes for the daemon
+  // (crates/rosettad/tests/enrolled_serve.rs `write_enrollment`): what the
+  // daemon reads, this package must parse.
+  const rosettaBench = {
+    format: 1,
+    enabled_kinds: ["claude-code"],
+    runtimes: [
+      {
+        kind: "claude-code",
+        data_root: "/tmp/bench/users/u1/agents/roots/claude-code/9a3d",
+        label: "Kim",
+      },
+    ],
+  };
+
+  it("parses rosetta's bench file verbatim and keeps VibeField's keys beside it", () => {
+    expect(IndexEnrollmentRecord.parse(rosettaBench)).toEqual(rosettaBench);
+    const ours = {
+      ...rosettaBench,
+      runtimes: [{ ...rosettaBench.runtimes[0], profile_id: "claude:9a3d" }],
+      retired: [],
+      updated_at: "2026-09-12T17:05:00.000Z",
+    };
+    expect(IndexEnrollmentRecord.parse(ours)).toEqual(ours);
+  });
+
+  it("refuses what the daemon refuses before binding: the wrong format, a `~` or relative root, a bad kind", () => {
+    expect(IndexEnrollmentRecord.safeParse({ ...rosettaBench, format: 2 }).success).toBe(false);
+    for (const data_root of ["~/.claude", "users/1/agents/roots/claude-code/9a3d", "", "~"]) {
+      expect(
+        IndexEnrollmentRecord.safeParse({
+          ...rosettaBench,
+          runtimes: [{ kind: "claude-code", data_root }],
+        }).success,
+        data_root,
+      ).toBe(false);
+    }
+    expect(
+      IndexEnrollmentRecord.safeParse({ ...rosettaBench, enabled_kinds: ["Claude"] }).success,
+    ).toBe(false);
+    expect(AgentKind.safeParse("kimi-code").success).toBe(true);
+    expect(AgentKind.safeParse("claude_code").success).toBe(false);
+  });
+
+  it("a Windows drive root is absolute too", () => {
+    expect(
+      IndexEnrollmentRecord.safeParse({
+        ...rosettaBench,
+        runtimes: [
+          { kind: "codex", data_root: "C:\\VibeField\\users\\1\\agents\\roots\\codex\\1" },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("IndexPhase — the tolerant fold", () => {
+  it("names the supervisor's phases and rosetta's IngestPhase, and reads an unheard-of phase as unknown", () => {
+    expect(INDEX_PHASES).toContain("awaiting_consent");
+    expect(INDEX_PHASES).toContain("failed");
+    expect(IndexPhase.parse("hyperspace")).toBe("unknown");
+    const status = IndexStatus.parse({
+      phase: "hyperspace",
+      rosettad: { phase: "ready", detail: null, pid: 1, protocolVersion: 20 },
+      enrollment: { enabledKinds: [], runtimes: [], retired: [], updatedAt: null },
+      runtimes: [],
+    });
+    expect(status.phase).toBe("unknown");
+  });
+});

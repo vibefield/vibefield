@@ -15,7 +15,16 @@
 // The supervisor never sees this file's name — it spawns whatever `bin` it was
 // given, so the test passes `process.execPath` with this script as `bin` via
 // the spawnProcess seam.
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+//
+// AR-1: it also reads `--enroll FILE` the way rosetta's enroll.rs does — once,
+// before binding; a missing file, the wrong format, or a runtime whose
+// data_root is not an existing directory is a refusal (stderr + exit 2) — and
+// serves the three routes the index doors read: `/api/discoveries` (a roll
+// call of two kinds, claude-code installed and codex not), `/api/runtimes`
+// (the consented discovered runtime plus one row per enrolled root, labelled,
+// `provenance: "enrolled"`), and a `/api/status` whose `daemon.ingest.phase`
+// is `awaiting_consent` while nothing is consented and `live` otherwise.
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 
@@ -27,30 +36,177 @@ const flag = (name) => {
 const mode = process.env.FAKE_ROSETTAD_MODE ?? "ok";
 const announceDir = args.includes("--announce") ? flag("--announce-dir") : undefined;
 const db = flag("--db");
+const enrollPath = flag("--enroll");
 const protocol = Number(process.env.FAKE_ROSETTAD_PROTOCOL ?? "20");
 
 if (mode === "crash-on-start") {
   process.stderr.write("fake rosettad: refusing to start (scripted)\n");
   process.exit(2);
 }
+
+// --enroll: rosetta's refusals, mirrored (a refused file never binds)
+const INSTALLED = new Set(["claude-code"]);
+const KNOWN = new Set(["claude-code", "codex", "copilot", "pi", "opencode", "kimi-code", "grok"]);
+let enrollment = { format: 1, enabled_kinds: [], runtimes: [] };
+if (enrollPath !== undefined) {
+  let text;
+  try {
+    text = readFileSync(enrollPath, "utf8");
+  } catch (error) {
+    process.stderr.write(`reading --enroll ${enrollPath}: ${error.message}\n`);
+    process.exit(2);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    process.stderr.write(`--enroll ${enrollPath}: not a valid enrollment file: ${error.message}\n`);
+    process.exit(2);
+  }
+  if (parsed.format !== 1) {
+    process.stderr.write(
+      `--enroll ${enrollPath}: unsupported enrollment format ${parsed.format}\n`,
+    );
+    process.exit(2);
+  }
+  const runtimes = Array.isArray(parsed.runtimes) ? parsed.runtimes : [];
+  runtimes.forEach((spec, i) => {
+    const entry = (message) =>
+      `--enroll ${enrollPath}: runtime #${i + 1} (kind ${JSON.stringify(spec.kind)}, data_root ${JSON.stringify(spec.data_root)}): ${message}\n`;
+    if (!KNOWN.has(spec.kind)) {
+      process.stderr.write(entry("unknown agent kind"));
+      process.exit(2);
+    }
+    if (typeof spec.data_root !== "string" || !spec.data_root.startsWith("/")) {
+      process.stderr.write(entry("data_root must be an absolute path (`~` forms are refused)"));
+      process.exit(2);
+    }
+    if (!existsSync(spec.data_root) || !statSync(spec.data_root).isDirectory()) {
+      process.stderr.write(entry("data_root is not a directory"));
+      process.exit(2);
+    }
+  });
+  enrollment = {
+    format: 1,
+    enabled_kinds: Array.isArray(parsed.enabled_kinds) ? parsed.enabled_kinds : [],
+    runtimes,
+  };
+}
+const consentedKinds = enrollment.enabled_kinds.filter((k) => INSTALLED.has(k));
+const enrolledRows = enrollment.runtimes.map((spec, i) => ({
+  id: `rt-${spec.kind}-enrolled-${i + 1}`,
+  kind: spec.kind,
+  data_root: spec.data_root,
+  enabled: true,
+  account: null,
+  config: null,
+  skills: null,
+  versions_seen: null,
+  discovered_at: 1,
+  ...(spec.label !== undefined ? { label: spec.label } : {}),
+  provenance: "enrolled",
+}));
+const discoveredRows = consentedKinds.map((kind) => ({
+  id: `rt-${kind}-native`,
+  kind,
+  data_root: `~/.${kind === "claude-code" ? "claude" : kind}`,
+  enabled: true,
+  account: null,
+  config: null,
+  skills: null,
+  versions_seen: null,
+  discovered_at: 1,
+}));
+const phase = consentedKinds.length + enrolledRows.length === 0 ? "awaiting_consent" : "live";
+const backfill = (row) => ({
+  kind: row.kind,
+  runtime_id: row.id,
+  label: row.label ?? null,
+  state: "done",
+  files_total: 3,
+  bytes_total: 300,
+  files_skimmed: 3,
+  bytes_streamed: 300,
+  sessions_total: 1,
+  records: 7,
+});
+const live = (row) => ({
+  kind: row.kind,
+  runtime_id: row.id,
+  label: row.label ?? null,
+  ticks: 1,
+  events: 2,
+  polls: 3,
+  rescans: 0,
+  admissions: 0,
+  live_rows: 4,
+  last_activity_ms: 1_700_000_000_000,
+});
+const json = (res, body) => {
+  res.setHeader("x-rosetta-protocol-version", String(protocol));
+  res.setHeader("content-type", "application/json");
+  res.end(JSON.stringify(body));
+};
+
 if (mode === "silent") {
   setInterval(() => {}, 1_000);
 } else {
   // a real loopback HTTP listener, so the origin is a port the OS actually
   // gave us and the status probe answers like the real server
+  const startedAt = Date.now();
   const server = createServer((req, res) => {
+    const rows = [...discoveredRows, ...enrolledRows];
     if (req.url === "/api/status") {
-      res.setHeader("x-rosetta-protocol-version", String(protocol));
-      res.setHeader("content-type", "application/json");
-      res.end(
-        JSON.stringify({
-          protocol_version: protocol,
-          schema_version: 1,
-          canonical_ready: true,
-          search: "ready",
-          daemon: null,
-        }),
-      );
+      json(res, {
+        protocol_version: protocol,
+        schema_version: 1,
+        canonical_ready: true,
+        search: "ready",
+        daemon: {
+          started_at: startedAt,
+          uptime_ms: Date.now() - startedAt,
+          runtimes: rows.map(live),
+          hub: {
+            subscribers: 0,
+            rings: 0,
+            session_mutations: 0,
+            meta_events: 0,
+            resyncs: 0,
+            rings_evicted: 0,
+            overflow_rewarms: 0,
+          },
+          ingest: { phase, runtimes: rows.map(backfill), projects: [] },
+        },
+      });
+      return;
+    }
+    if (req.url === "/api/discoveries") {
+      json(res, {
+        discoveries: [
+          {
+            kind: "claude-code",
+            data_root: "~/.claude",
+            installed: true,
+            files: 3,
+            bytes: 300,
+            newest_modified_ms: 1_700_000_000_000,
+            enabled: consentedKinds.includes("claude-code"),
+          },
+          {
+            kind: "codex",
+            data_root: "~/.codex",
+            installed: false,
+            files: 0,
+            bytes: 0,
+            newest_modified_ms: 0,
+            enabled: false,
+          },
+        ],
+      });
+      return;
+    }
+    if (req.url === "/api/runtimes") {
+      json(res, { runtimes: rows });
       return;
     }
     res.statusCode = 404;
@@ -83,6 +239,9 @@ if (mode === "silent") {
       ...(announce !== null ? { announce } : {}),
     };
     process.stdout.write(`${JSON.stringify(ready)}\n`);
+    if (phase === "awaiting_consent") {
+      process.stdout.write("no enrolled agents — choose in the app (or pass --all-agents)\n");
+    }
     const cleanup = () => {
       if (announce !== null) rmSync(announce, { force: true });
     };

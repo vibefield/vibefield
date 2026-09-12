@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "enabled_kinds": [],
+  "runtimes": [
+    {
+      "kind": "pi",
+      "data_root": "/tmp/vf/users/2/agents/roots/pi/0c1e",
+      "label": "Scout",
+      "profile_id": "pi:0c1e",
+      "future_hint": "a newer writer's field — a version-skewed reader keeps it"
+    }
+  ],
+  "future_section": { "keep": true }
+}

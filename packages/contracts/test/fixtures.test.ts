@@ -4,6 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
 import {
+  AgentDistributionRecord,
+  AgentPersona,
+  IndexDiscovery,
+  IndexEnrollmentRecord,
+  IndexStatus,
+} from "../src/agent-index";
+import {
   ArtifactCatalogSlice,
   ArtifactPublishV2Params,
   ArtifactStatus,
@@ -128,6 +135,15 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // Swift harness and the Rust crate parse these same files.
   "screenshot-helper-event": ScreenshotHelperEvent,
   "screenshot-capture-result": ScreenshotCaptureResult,
+  // AR-1 — the enrollment record is rosettad's `--enroll` input as well as
+  // VibeField's truth; the valid fixture is the exact shape rosetta's own
+  // integration bench writes (crates/rosettad/tests/enrolled_serve.rs) plus
+  // the keys only VibeField reads.
+  "index-enrollment": IndexEnrollmentRecord,
+  "index-discovery": IndexDiscovery,
+  "index-status": IndexStatus,
+  "agent-persona": AgentPersona,
+  "agent-distribution": AgentDistributionRecord,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

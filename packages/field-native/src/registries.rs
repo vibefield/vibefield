@@ -163,10 +163,18 @@ pub mod layout {
     pub const INDEX_DIR: &[&str] = &["index"];
     pub const INDEX_DB: &[&str] = &["index", "rosetta.db"];
     pub const INDEX_DAEMONS_DIR: &[&str] = &["index", "daemons"];
+    pub const INDEX_ENROLLMENT_FILE: &[&str] = &["index", "enrollment.json"];
+    pub const AGENTS_DIR: &[&str] = &["agents"];
+    pub const AGENT_PROFILES_FILE: &[&str] = &["agents", "profiles.json"];
+    pub const AGENT_ROOTS_DIR: &[&str] = &["agents", "roots"];
     pub const USERS_DIR: &[&str] = &["users"];
     pub const USERS_FILE: &[&str] = &["users.json"];
     pub const USERS_LOCK: &[&str] = &["users.json.lock"];
     pub const LAYOUT_STAMP: &[&str] = &["layout.json"];
+    pub const MACHINE_DIR: &[&str] = &["machine"];
+    pub const MACHINE_AGENTS_DIR: &[&str] = &["machine", "agents"];
+    pub const MACHINE_DISTRIBUTION_FILE: &[&str] = &["machine", "agents", "distribution.json"];
+    pub const MACHINE_UPDATES_DIR: &[&str] = &["machine", "agents", "updates"];
     /// Every entry, for the cross-language fixture test.
     pub const ALL: &[(&str, &[&str])] = &[
         ("FIELDD_RUN_DIR", FIELDD_RUN_DIR),
@@ -194,9 +202,17 @@ pub mod layout {
         ("INDEX_DIR", INDEX_DIR),
         ("INDEX_DB", INDEX_DB),
         ("INDEX_DAEMONS_DIR", INDEX_DAEMONS_DIR),
+        ("INDEX_ENROLLMENT_FILE", INDEX_ENROLLMENT_FILE),
+        ("AGENTS_DIR", AGENTS_DIR),
+        ("AGENT_PROFILES_FILE", AGENT_PROFILES_FILE),
+        ("AGENT_ROOTS_DIR", AGENT_ROOTS_DIR),
         ("USERS_DIR", USERS_DIR),
         ("USERS_FILE", USERS_FILE),
         ("USERS_LOCK", USERS_LOCK),
         ("LAYOUT_STAMP", LAYOUT_STAMP),
+        ("MACHINE_DIR", MACHINE_DIR),
+        ("MACHINE_AGENTS_DIR", MACHINE_AGENTS_DIR),
+        ("MACHINE_DISTRIBUTION_FILE", MACHINE_DISTRIBUTION_FILE),
+        ("MACHINE_UPDATES_DIR", MACHINE_UPDATES_DIR),
     ];
 }

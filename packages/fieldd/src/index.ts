@@ -1,6 +1,13 @@
 // @vibefield/fieldd — the product-plane daemon (design-02 §3).
 
 export {
+  EnrollmentStore,
+  type EnrollmentStoreOptions,
+  type EnrollRuntimeSpec,
+  IndexService,
+  type IndexServiceOptions,
+} from "./agent-index";
+export {
   type ArtifactServeBridge,
   ArtifactService,
   type ArtifactServiceOptions,

@@ -143,10 +143,16 @@ export interface RosettadSupervisorOptions {
    * this user root (LAYOUT.INDEX_DAEMONS_DIR), never rosetta's platform
    * default. Required — it is how the next fieldd finds an orphan (header). */
   announceDir: string;
-  /** rosettad `--home DIR` — the home its discovery scans. Absent = the
-   * process's own home (v1: personas are puppeteer profiles, AR-D11; the
-   * per-persona home waits on RO-2). */
+  /** rosettad `--home DIR` — the home its discovery scans: the OS user's own
+   * home, always (thinking-ar-data-topology.md R7 — a persona is never a
+   * home; its root is ENROLLED through the file below). Absent = the
+   * process's own home. */
   home?: string | undefined;
+  /** rosettad `--enroll FILE` (AR-1, RO-2): this user's enrollment record
+   * (LAYOUT.INDEX_ENROLLMENT_FILE) — consent for discovered kinds and the
+   * managed roots, read by the daemon once at start. fieldd's EnrollmentStore
+   * publishes it before every launch; the supervisor only names it. */
+  enrollFile?: string | undefined;
   /** test seam — a fake daemon script */
   spawnProcess?: typeof nodeSpawn;
   /** test seam; production uses ROSETTAD_SUPERVISION */
@@ -553,6 +559,7 @@ export class RosettadSupervisor extends EventEmitter {
       "--announce-dir",
       this.opts.announceDir,
       ...(this.opts.home !== undefined ? ["--home", this.opts.home] : []),
+      ...(this.opts.enrollFile !== undefined ? ["--enroll", this.opts.enrollFile] : []),
     ];
     let proc: ChildProcess;
     try {

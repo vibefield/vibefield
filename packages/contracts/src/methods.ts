@@ -1129,4 +1129,117 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // ── index.* (AR-1 — thinking-ar-data-topology.md §7; shapes in agent-index.ts) ──
+  // The agent index is rosetta, one daemon per user, supervised by fieldd.
+  // Reads ride `index.read`: the roll call's census (`discoveries`) and the
+  // folded status (`status` — the phase, the daemon projection, the record,
+  // every runtime). Mutations ride the NEW local-only `index.manage`: `enroll`
+  // declares the complete consented set of discovered kinds, `retire` stops
+  // watching one runtime (rows kept, AR-D19); both rewrite THIS user's
+  // enrollment record, are audited, and restart the daemon when the record
+  // changed (RO-2's start-time scoping). locality "local": consent is an act
+  // of the person at this device — the doors never federate, and a discovered
+  // root is the OS user's own home. Every answer is a projection: the daemon's
+  // loopback origin never crosses this surface (EL7), and an enrolled root's
+  // path stays inside fieldd (the persona is named by profile id).
+  defineMethod({
+    surface: "product",
+    method: "index.discoveries",
+    scope: "index.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.status",
+    scope: "index.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.enroll",
+    scope: "index.manage",
+    idempotent: true, // declarative: the same set twice writes and restarts nothing
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.retire",
+    scope: "index.manage",
+    idempotent: true, // retiring a retired runtime is a no-op
+    locality: "local",
+  }),
+  // ── agents.* (AR-1 — the contract; handlers land with puppeteer's first
+  // import at AR-2, until when the dispatcher answers NOT_FOUND for them) ──
+  // Distribution is MACHINE scope (AR-D15/D16): the installs puppeteer
+  // classifies, the release facts it can learn, the vendor's own updater run
+  // under the root lock, and the one choice VibeField owns — which executable
+  // new spawns use. All four ride the NEW local-only `agents.manage`, the
+  // native.admin posture: an update is an attended act (AR-D22), and even the
+  // reads name executable paths on this machine.
+  defineMethod({
+    surface: "product",
+    method: "agents.installs",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.releases",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.update",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.setActive",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  // Personas are per USER-on-device (AR-D20): puppeteer profiles whose roots
+  // are the agent data folders, enrolled in this user's index by construction
+  // (AR-D18). Decided with AR-1 (the topology left it open): they ride
+  // `agent.spawn` — a persona is what one spawns AS, creating one is a
+  // spawn-class act (its login runs in a pane), and no third scope was
+  // warranted. locality "local": roots and credentials never roam, and a
+  // create/verify needs a pane on THIS device — so although `agent.spawn` sits
+  // in TAILNET_SCOPES, these rows do not federate.
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.list",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.create",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.delete",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.verify",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
 ];

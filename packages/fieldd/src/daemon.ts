@@ -20,6 +20,8 @@ import {
   type DocOpenResult,
   DocRenameParams,
   DocSetSyncIntentParams,
+  IndexEnrollParams,
+  IndexRetireParams,
   KvDeleteParams,
   KvGetParams,
   KvListParams,
@@ -81,6 +83,7 @@ import {
   pluginLogProvenance,
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
+import { EnrollmentStore, IndexService } from "./agent-index";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
@@ -175,6 +178,9 @@ export interface FielddConfig {
   /** AR-0 test seam: how the index daemon is spawned (the kill matrix's
    * scripted rosettad); production spawns `rosettadBin` directly. */
   rosettadSpawn?: RosettadSupervisorOptions["spawnProcess"];
+  /** AR-1 test seam: the home rosettad's discovery scans (`--home`).
+   * Production passes the OS user's own home, explicitly (topology R7). */
+  rosettadHome?: string;
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -297,6 +303,11 @@ export interface FielddDaemon {
   /** AR-0 — the index daemon's supervisor; null when no binary was configured.
    * Tests drive start/stop/requestRestart directly. */
   rosettad: RosettadSupervisor | null;
+  /** AR-1 — this user's enrollment record (consent + persona ↔ runtime) and
+   * the service behind the index.* doors. AR-2's persona path enrolls through
+   * `index.enrollRuntime`. */
+  enrollment: EnrollmentStore;
+  index: IndexService;
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -401,6 +412,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // here so health can project it from the first snapshot; STARTED only once
   // boot has committed (a boot rollback must never leave an index daemon
   // behind). The db lives under the user root at LAYOUT.INDEX_DB.
+  // AR-1 — the enrollment record (AR-D17): loaded now, published before the
+  // daemon's first launch, rewritten by the index.* doors. It exists whether
+  // or not a daemon is configured — it is this user's consent, not a cache.
+  const enrollment = new EnrollmentStore({
+    path: join(config.dataDir, ...LAYOUT.INDEX_ENROLLMENT_FILE),
+    logger: logger.child({ component: "index_enrollment" }),
+  });
   const rosettad =
     config.rosettadBin === undefined || config.rosettadBin === ""
       ? null
@@ -411,9 +429,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // also where the next fieldd finds an orphan of this one
           announceDir: join(config.dataDir, ...LAYOUT.INDEX_DAEMONS_DIR),
           expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+          // the OS user's own home, explicitly (topology R7: never a persona root)
+          home: config.rosettadHome ?? homedir(),
+          enrollFile: enrollment.path(),
           ...(config.rosettadSpawn !== undefined ? { spawnProcess: config.rosettadSpawn } : {}),
           logger: logger.child({ component: "rosettad_supervisor" }),
         });
+  const index = new IndexService({
+    supervisor: rosettad,
+    store: enrollment,
+    expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+    logger: logger.child({ component: "index_service" }),
+  });
   // TC-D6(a), fieldd half — measure-and-surface (Node has no setrlimit).
   const fdSoftLimit = readFdSoftLimit();
   if (fdSoftLimit !== null && fdSoftLimit < 1024) {
@@ -937,6 +964,43 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (rosettad === null) return { rosettad: ROSETTAD_UNCONFIGURED };
       await rosettad.requestRestart();
       return { rosettad: rosettad.health() };
+    });
+    // AR-1 — the index doors (thinking-ar-data-topology.md §4 flows). Reads
+    // fold the daemon's answers with the record; every answer is a projection
+    // (no origin, no enrolled root's path). Mutations rewrite THIS user's
+    // record, are audited (consent is an act of the person at this device),
+    // and bounce the daemon when the record changed.
+    api.register("index.status", () => index.status());
+    api.register("index.discoveries", () => index.discoveries());
+    api.register("index.enroll", async (ctx, params) => {
+      const parsed = IndexEnrollParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { kinds: string[] }", false);
+      const kinds = [...new Set(parsed.data.kinds)].sort();
+      return await audit.required(
+        ctx,
+        {
+          action: "index.enroll",
+          target: { kind: "index", id: "enrollment" },
+          attrs: { kinds, kindCount: kinds.length },
+        },
+        () => index.enroll(kinds),
+        (result) => ({ attrs: { changed: result.changed, phase: result.status.phase } }),
+      );
+    });
+    api.register("index.retire", async (ctx, params) => {
+      const parsed = IndexRetireParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "index.retire",
+          target: { kind: "index-runtime", id: parsed.data.runtimeId },
+        },
+        () => index.retire(parsed.data.runtimeId),
+        (result) => ({ attrs: { changed: result.changed, phase: result.status.phase } }),
+      );
     });
     api.register("system.capabilities", () => ({
       methods: METHODS.filter((m) => m.surface === "product").map((m) => m.method),
@@ -2998,6 +3062,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AR-0 — boot has committed: the index daemon starts now, in the
     // background. Readiness is a health transition, never a boot gate: a
     // missing or broken rosettad degrades the index, not the daemon.
+    if (rosettad !== null) {
+      // AR-1 — the record is on disk before the daemon can read it: `--enroll`
+      // names it, and a missing file is a refused start. A publish failure is
+      // logged and the launch still happens — the daemon's own refusal then
+      // names the cause in the health detail, honestly.
+      try {
+        enrollment.publish();
+      } catch (error) {
+        logger.error(
+          "fieldd.index.enrollment_publish_failed",
+          "Enrollment record could not be written before the index daemon launch",
+          error,
+        );
+      }
+    }
     void rosettad?.start();
     let stopPromise: Promise<void> | null = null;
     const stop = (): Promise<void> => {
@@ -3077,6 +3156,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       nativeHealth: () => latestHealth,
       nativeSupervisor: supervisor,
       rosettad,
+      enrollment,
+      index,
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;

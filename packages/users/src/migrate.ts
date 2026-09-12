@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LAYOUT } from "@vibefield/contracts";
+import { LAYOUT, LAYOUT_ROOT_LEVEL } from "@vibefield/contracts";
 import { durableRename } from "@vibefield/logging";
 import { UsersError } from "./errors";
 import { type UsersLockDeps, withUsersLock } from "./lock";
@@ -19,15 +19,14 @@ import {
 // from any crash point: each entry is either moved or not, and detection
 // re-fires until the stamp exists.
 
-const NON_V1_TOPS = new Set<string>([
-  LAYOUT.USERS_DIR[0],
-  LAYOUT.USERS_FILE[0],
-  LAYOUT.USERS_LOCK[0],
-  LAYOUT.LAYOUT_STAMP[0],
-]);
+/** The root-level entries that never re-root, read from the registry's own
+ * list (UA-1's four + AR-D15's `machine/` scope) — a v1 root predates
+ * `machine/`, but the manifest must never carry a later root-level entry
+ * under `users/1/` should one ever sit beside a flat tree. */
+const NON_V1_TOPS = new Set<string>(LAYOUT_ROOT_LEVEL.map((name) => LAYOUT[name][0] as string));
 
 /** The migration's manifest IS the layout registry: the distinct first
- * segments, minus the four root-level entries that never re-root. */
+ * segments, minus the root-level entries that never re-root. */
 export function v1TopEntries(): string[] {
   const tops = new Set<string>();
   for (const segments of Object.values(LAYOUT)) {
