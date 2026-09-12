@@ -153,10 +153,13 @@ workbench is `draft/thinking-ar-sibling-workbench.md`. **The data topology is RA
 with consent by construction (a root under `users/<fuid>/` is enrolled, never discovered; the OS
 user's `~/.claude` is discovered by every user and consented per user), a machine-scope
 `<root>/machine/` for agent distribution (the one UA-D1 exception), and personas as puppeteer
-profiles whose roots are the agent data folders. Two upstream prerequisites gate the first
-ingested persona: **RO-2** (rosetta's consent is one-shot per daemon start and by kind — it needs
-a mutable enrollment set taking absolute roots) and **PU-7** (an adapter-owned observation root —
-pi and OpenCode's history roots are not their profile roots).
+profiles whose roots are the agent data folders. The two upstream prerequisites for the first
+ingested persona LANDED the same day and are pinned: **RO-2**'s start-time half (rosetta
+`3f7ac0f` — `rosettad serve --enroll FILE`, many runtimes per kind, consent by construction,
+ledger directory per runtime; live mutation stays a rosetta open decision, fieldd restarts the
+daemon on change) and **PU-7** (puppeteer `719d98d` — `ProfileService.observationRoot`, Pi's
+managed binding moved one level in, RFC 006 addendum). What is still true: fieldd passes no
+`--enroll` yet and no persona exists — that is AR-1's contracts and enrollment record.
 
 The artifact serving foundation, global catalog, and desktop runtime are now real but are not
 yet the whole product: AH-1 owns durable Proxy/Folder serving; AH-2 owns the bounded validated

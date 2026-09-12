@@ -4945,3 +4945,10 @@ branches — `siblings:pin` now says so); PU-6 (puppeteer's clean-room install) 
 first import; the pre-existing imposter conformance red (James's); the Windows box round; the
 dev-local snapshot of the two draft docs (James's ritual). The `rust-cache` `../rosetta ->
 target` row stays unverified until the first green CI run.
+
+*Pins moved again the same day (`b6bbaa25`): rosetta `3f7ac0f` (RO-2's start-time half —
+`serve --enroll FILE`, many runtimes per kind, consent by construction, a ledger directory per
+runtime with an identity stamp, wire additive at protocol 20) and puppeteer `719d98d` (PU-7 —
+`ProfileService.observationRoot` on all nine adapters, Pi's managed binding one level in, RFC 006
+addendum). Both were the prerequisites the ratified data topology (`thinking-ar-data-topology.md`,
+AR-D15…D22) named before a persona can be ingested; VibeField consumes neither until AR-1.*
