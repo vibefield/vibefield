@@ -1159,8 +1159,12 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 ## Upstream / sibling pins (the EL8 watch)
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
-ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-06; preflight
-pins the cargo rows and all four npm rows) · **puppeteer + rosetta = SIBLING CHECKOUTS pinned by SHA in `siblings.lock.json`** (AR-0, 2026-09-12; `pnpm siblings` prints the state, `pnpm siblings:pin` is the upgrade event; chopsticks 0.1.4 retired with the pivot) · strata **0.13.0** (via ICE;
+ghosttea `=0.11.1` + **`ghosttea-truffle =0.11.1`** on the cargo and npm planes (the lockstep
+bump `85f7d769`; preflight pins the cargo rows and all four npm rows) while
+`apps/ios/VibeFieldKit/Package.resolved` sits at **`0.10.1`** — NOT one version on all planes
+(*errata 2026-09-12, the AR-0 review: this line had said `=0.9.2` "on all planes" since GT-4
+2026-08-06 and trailed the manifests twice over; the manifests are the authority, read the
+number there*) · **puppeteer + rosetta = SIBLING CHECKOUTS pinned by SHA in `siblings.lock.json`** (AR-0, 2026-09-12; `pnpm siblings` prints the state, `pnpm siblings:pin` is the upgrade event; chopsticks 0.1.4 retired with the pivot) · strata **0.13.0** (via ICE;
 the lockfile holds one physical strata/Loro graph) ·
 `@vibecook/ice` **0.11.0** (registry pin; **bumped 2026-08-25 — build-selected magnet grid,
 Dot default plus device-local Dot/Needle tuning and the full 11-field Studio contract**, with the runtime classic/magnet preference

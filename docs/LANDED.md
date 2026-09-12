@@ -4885,7 +4885,10 @@ esbuild context following a linked source (1.3 s rebuild, control touch silent),
 **RosettadSupervisor** — one index daemon per user root at the new `LAYOUT.INDEX_DB`, configured
 by `FIELDD_ROSETTAD_BIN`, projected into `FielddHealth.rosettad`, eight kill-matrix rows against
 a scripted daemon speaking the real `--json` contract plus an opt-in row against the real
-binary (protocol 20, announce file, clean SIGINT). Upstream first (W-D9): puppeteer
+binary (protocol 20, announce file, clean SIGINT). *Errata 2026-09-12 (the AR-0 review): six
+of the eight rows drove the scripted daemon — one was the bogus-binary row, one the frozen
+projection's unit row; and the projection this entry names carried the daemon's origin to every
+product client, which the review-fix entry below removes.* Upstream first (W-D9): puppeteer
 `0a9eb8f` adopts `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (486 sites, widened
 at the declarations), rosetta `6119826` makes `@rosetta/protocol` a resolvable package clean
 under them; both are the pinned revisions.
@@ -4900,3 +4903,45 @@ files carry one strict-flag site each (`adapter-kimi/src/services/account-usage.
 pinned revision. The pre-existing imposter conformance red (`2791f4f`'s resume precheck, not
 this pass) is likewise his. The Windows box round: rosettad has no Windows archive and builds
 from source there. `pnpm lint` is still red on `work/` (SNAP-0's note stands).
+
+## AR-0r — the workbench review's fixes (2026-09-12)
+
+**AR-0r the review fixes** (`ac065747` — one critical, three high, and the medium/low rows
+of the AR-0 review closed the same day; the re-pin rides in the same commit). The critical:
+`FielddHealth.rosettad` had carried the index daemon's loopback ORIGIN and announce path to
+every authenticated product client (`system.health.subscribe` is scope-null, the renderer
+subscribes) while the supervisor's header claimed the opposite — and rosettad has no auth
+(RO-1), so the origin is the secret (EL7). Now `RosettadHealth` (phase · detail · pid ·
+protocolVersion) is the projection every client sees and `RosettadState` (+origin, +announce)
+stays inside fieldd for the AR-1 doors; witnessed through a minted renderer window token (the
+serialized health carries neither the origin, its port, nor the announce directory). The
+highs: a SIGKILLed fieldd's rosettad held rosetta's EXCLUSIVE projection lock, so the
+successor's child died on it, tripped the intensity and sat in a permanent "failed" — rosettad
+now announces into a fieldd-PRIVATE directory (`LAYOUT.INDEX_DAEMONS_DIR`, never rosetta's
+shared per-user dir: the EL7 beacon is gone with it) and every launch runs an ORPHAN PASS
+first (stale file → removed; live pid answering `/api/status` with the rosetta header on its
+announced loopback origin → put down before the new generation; live pid that does not answer
+→ left alone, rosetta's own announce.rs rule), witnessed against the scripted daemon and the
+REAL binary (the lock control: a second rosettad exits naming the owner); `system.index.restart`
+(native.admin) is the door out, resets the window, bounces a live daemon without charging the
+intensity window (RESTART_MAX 1 witness) and answers the projection; an empty
+`FIELDD_ROSETTAD_BIN` is unconfigured, never a spawn of "" (bin.ts, the daemon, CI's env
+capture). The rest: stderr rides the failure detail and every pre-ready line is logged; utf8 on
+both streams; an unanswered SIGKILL is bounded; preflight's family regex takes pnpm's quotes;
+the CI PAT is scrubbed from the sibling clones; `siblings:pin` warns on an unpushed pin;
+`siblings:build` names a missing cargo first; the Nx sibling stamp is a `siblings` named input
+on fieldd and field-app only (A/B/A witness: contracts a hit across a sibling change, fieldd a
+miss then a hit); fieldd imports `@rosetta/protocol/protocol-version` (RO-4). Upstream:
+rosetta `f1e9316` (the `./protocol-version` export, the ordered-cache invariant throws, a
+`protocol-ts` CI job — RO-7 CLOSED) and puppeteer `1435c77` (the mixed-interface sweep of
+23 interfaces, `AgentEnvironmentRequest` and kimi's prompt options widened, the wrong
+comments gone, runtime.ts's spreads reverted, jsonrpc's siblings converted, James's two
+one-word widenings taken — his HEAD typechecks again). Tests: 11 scripted + 3 real-binary
+supervisor rows, 6 daemon-level rows; the whole fieldd suite 690 green; `pnpm verify` verbatim
+green except `pnpm lint` on James's untracked `work/` (SNAP-0's note stands).
+
+**Still owed:** `SIBLINGS_TOKEN` (James); pushing the two upstream pins (both on local
+branches — `siblings:pin` now says so); PU-6 (puppeteer's clean-room install) before AR-2's
+first import; the pre-existing imposter conformance red (James's); the Windows box round; the
+dev-local snapshot of the two draft docs (James's ritual). The `rust-cache` `../rosetta ->
+target` row stays unverified until the first green CI run.
