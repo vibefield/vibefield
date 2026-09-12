@@ -1,33 +1,35 @@
 import type { SessionActivity } from "@vibecook/ghosttea-protocol";
-import type { AgentKind, AgentSessionInfo, AgentStateMessage } from "./facet-types";
+import type { AgentSessionSummary } from "./facet-types";
 import { folderName } from "./folder-name";
 
 /**
- * What a session is doing, derived ONLY from reduced runtime state — never from
- * terminal text (the reference's ADR-003/-005, and our own grain: EL2 keeps
- * meaning on control surfaces and bytes on data planes, so a monitor that read
- * a screen to decide what an agent was doing would be reading the wrong plane).
- * How a status is then DRAWN is each view's own business.
+ * What a session is doing, derived ONLY from the fold's row — fieldd's one
+ * derived `status` (AR-D4: derived once, in fieldd, from puppeteer's reduced
+ * monitor projection) — never from terminal text (the reference's ADR-003/-005,
+ * and our own grain: EL2 keeps meaning on control surfaces and bytes on data
+ * planes, so a monitor that read a screen to decide what an agent was doing
+ * would be reading the wrong plane). How a status is then DRAWN is each view's
+ * own business.
  */
 export type AgentVisualStatus = "idle" | "working" | "waiting";
 
-const terminalLifecycles = new Set(["exited", "failed"]);
-
-export function classifyAgentStatus(message?: AgentStateMessage): AgentVisualStatus | undefined {
-  if (!message) return "working";
-  const { state } = message;
-  if (terminalLifecycles.has(state.lifecycle)) return undefined;
-  if (state.permissions.length > 0) return "waiting";
-  if (
-    state.lifecycle !== "ready" ||
-    state.activeTurn ||
-    state.activeReasoning ||
-    state.tools.length > 0 ||
-    state.tasks.length > 0
-  ) {
-    return "working";
+/**
+ * The fold's four words onto the views' three. `blocked` is the reference's
+ * `waiting` (the agent is asking for something); `unknown` — no monitor
+ * evidence yet — reads as working with the detail "starting", as a session
+ * that has not spoken did in the reference. A run puppeteer reports as not
+ * alive is dropped: an exited agent is not a row.
+ */
+export function classifyAgentStatus(summary: AgentSessionSummary): AgentVisualStatus | undefined {
+  if (summary.monitor?.alive === false) return undefined;
+  switch (summary.status) {
+    case "blocked":
+      return "waiting";
+    case "idle":
+      return "idle";
+    default:
+      return "working";
   }
-  return "idle";
 }
 
 export function classifyTerminalStatus(
@@ -36,38 +38,38 @@ export function classifyTerminalStatus(
   return activity?.kind === "foreground-job" ? "working" : "idle";
 }
 
-export function projectLabel(info: AgentSessionInfo, currentCwd?: string): string {
+/** The project a row belongs to: the agent's current directory when the
+ * monitor observed one, else the workspace's, folded to its last component;
+ * the provider's label when nothing names a directory. */
+export function projectLabel(summary: AgentSessionSummary): string {
   const path =
-    currentCwd || info.workspace.sourcePath || info.workspace.root || info.session.cwd || "";
-  return folderName(path, info.agent);
+    summary.monitor?.environment?.cwd ||
+    summary.workspace?.sourcePath ||
+    summary.workspace?.root ||
+    "";
+  return folderName(path, summary.label);
 }
 
-export function providerLabel(agent: AgentKind): string {
-  switch (agent) {
-    case "claude":
-      return "Claude";
-    case "codex":
-      return "Codex";
-    case "grok":
-      return "Grok";
-    case "acp":
-      return "ACP";
-  }
+/** The provider's own label, as the adapter authored it. Kept as a function so
+ * a call site reads the same as it did with the closed union — and so a row
+ * with an empty label (a tolerant-reader case) still says its id. */
+export function providerLabel(summary: Pick<AgentSessionSummary, "kind" | "label">): string {
+  return summary.label.trim() === "" ? summary.kind : summary.label;
 }
 
-export function agentDetail(
-  message: AgentStateMessage | undefined,
-  status: AgentVisualStatus,
-): string {
-  if (!message) return "starting";
+/** One line under the project: what the agent is waiting on when it is,
+ * else the latest assistant line when the monitor carried one, else the status. */
+export function agentDetail(summary: AgentSessionSummary, status: AgentVisualStatus): string {
+  const monitor = summary.monitor;
+  if (monitor === undefined) return "starting";
   if (status === "waiting") {
-    const permission = message.state.permissions[0];
-    return permission?.tool ? `permission · ${permission.tool}` : "permission required";
+    const blocker = monitor.blockers[0];
+    if (blocker === undefined) return "waiting";
+    const tool = (blocker as { tool?: unknown }).tool;
+    return typeof tool === "string" && tool !== "" ? `${blocker.kind} · ${tool}` : blocker.kind;
   }
-  const tool = message.state.tools[0];
-  if (tool) return tool.presentation?.title ?? tool.tool ?? "using tool";
-  if (message.state.activeReasoning) return "thinking";
-  if (message.state.activeTurn) return "responding";
+  const last = monitor.lastAssistantMessage as { text?: unknown } | undefined;
+  if (typeof last?.text === "string" && last.text.trim() !== "") return last.text.trim();
   return status;
 }
 
@@ -84,7 +86,7 @@ export function agentDetail(
  *
  * The hash itself is the reference's FNV-1a, unchanged, because the property
  * that matters is the one it already had: same id ⇒ same slot, forever, across
- * ticks and reloads and (at AR) across restarts.
+ * ticks and reloads and (since AR-3) across restarts.
  */
 export function agentAccentSlot(id: string, slots: number): number {
   let hash = 2166136261;

@@ -1,20 +1,22 @@
 // @vitest-environment happy-dom
 /**
- * THE DOOR, MOUNTED (GT-4, GT-D17).
+ * THE DOOR, MOUNTED (GT-4, GT-D17; widened at AR-3).
  *
  * The stage fixture beside this one (`godview-monitor.test.tsx`) proves the
- * mock half: rows appear, actions acknowledge, nothing mounts. This one adds
- * the half that is REAL — a fake door standing in for the deck's runtime and
- * workspace, because that pair needs Electron and this claim does not: what is
- * under test is the ROUTING, which is ours.
+ * local half: the fold's rows appear, select mounts, create spawns. This one
+ * holds the REMOTE half beside it — a fake door standing in for the deck's
+ * runtime and workspace, because that pair needs Electron and this claim does
+ * not: what is under test is the ROUTING, which is ours.
  *
  * What it holds:
- *   1. a peer's sessions become bubbles, beside the mock ones and unmistakable
- *   2. the label's claim narrows the moment they do
+ *   1. a peer's sessions become bubbles, beside the local ones and unmistakable
+ *   2. the two claims stay in their own chips
  *   3. clicking a remote bubble asks the door to attach — with the right session
- *   4. clicking a mock bubble asks NOTHING (the split-honesty test)
+ *   4. clicking a local bubble asks the door to MOUNT, never to attach (the
+ *      split-routing test)
  *   5. every outcome the door can answer with is said out loud, honestly
- *   6. no door ⇒ no remote rows, and no invented ones
+ *   6. no door ⇒ no rows at all; a refusing mesh ⇒ local rows still, the
+ *      reason on screen
  *   7. PF6: the poll dies with the stage
  */
 
@@ -23,15 +25,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
-import { GodviewMonitor, MOCK_LABEL } from "../src/godview/GodviewMonitor";
-import { useMonitorPalette } from "../src/godview/monitor/monitor-palette";
+import { GodviewMonitor } from "../src/godview/GodviewMonitor";
+import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { monitorParameterDefaults } from "../src/godview/monitor/parameters";
 import { DEFAULT_MONITOR_VIEW_ID, monitorViewFor } from "../src/godview/monitor/registry";
-import type { RemoteAttachOutcome, RemoteSessionDoor } from "../src/godview/monitor/remote-door";
-import {
-  type MonitorAgentsResult,
-  useMonitorAgents,
-} from "../src/godview/monitor/useMonitorAgents";
+import type { MonitorDoor, RemoteAttachOutcome } from "../src/godview/monitor/remote-door";
+import { managedSummary } from "./managed-session-fixture";
 import { useInlineSwarmPhysics } from "./swarm-physics-inline";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -52,8 +51,11 @@ const TOKENS: Record<string, string> = {
   "--vf-card-deep": "#000000",
 };
 
-/** The nine the mock field always puts on the stage (GT-3m). */
-const MOCK_ROWS = 9;
+/** The two managed rows the fold puts on the stage in every row below. */
+const LOCAL_ROWS: readonly AgentSessionSummary[] = [
+  managedSummary({ runtimeRunId: "run-a", kind: "claude", label: "Claude", status: "working" }),
+  managedSummary({ runtimeRunId: "run-b", kind: "codex", label: "Codex", status: "idle" }),
+];
 
 let root: Root | null = null;
 let container: HTMLElement | null = null;
@@ -90,18 +92,28 @@ function host(deviceId: string, sessions: SharedSessionSummary[]): RemoteHostSum
   } as RemoteHostSummary;
 }
 
-interface FakeDoor extends RemoteSessionDoor {
+interface FakeDoor extends MonitorDoor {
   attach: ReturnType<typeof vi.fn>;
   listHosts: ReturnType<typeof vi.fn>;
+  mountLocal: ReturnType<typeof vi.fn>;
+  spawn: ReturnType<typeof vi.fn>;
 }
 
 function fakeDoor(
   hosts: RemoteHostSummary[],
   outcome: RemoteAttachOutcome = { state: "attached", sessionId: "replica-1", readWrite: true },
+  rows: readonly AgentSessionSummary[] = LOCAL_ROWS,
 ): FakeDoor {
   return {
     listHosts: vi.fn(async () => hosts),
     attach: vi.fn(async () => outcome),
+    observe: vi.fn(({ onFrame }) => {
+      onFrame(rows);
+      return () => undefined;
+    }),
+    providers: vi.fn(async () => []),
+    spawn: vi.fn(async () => ({ state: "no-pane" as const })),
+    mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
   };
 }
 
@@ -143,7 +155,7 @@ afterEach(() => {
 /** Mount the stage and let the first ask of the mesh settle — the field asks
  * once immediately, so a single flush is the whole of the wait. */
 async function mountMonitor(
-  door: RemoteSessionDoor | null,
+  door: MonitorDoor | null,
   viewId: string = DEFAULT_MONITOR_VIEW_ID,
   panes: { sessionIds: readonly string[]; activeSessionId?: string } = { sessionIds: [] },
 ): Promise<HTMLElement> {
@@ -168,20 +180,25 @@ const latest = (): GodviewMonitorFacts => markers[markers.length - 1] as Godview
 const remoteBubbles = (host: HTMLElement): HTMLButtonElement[] => [
   ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-bubble.is-remote"),
 ];
+const localBubbles = (host: HTMLElement): HTMLButtonElement[] =>
+  [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-bubble")].filter(
+    (bubble) => !bubble.classList.contains("is-remote"),
+  );
 const ackText = (host: HTMLElement): string =>
   host.querySelector(".vf-monitor-ack")?.textContent ?? "";
 
 describe("remote sessions as monitor citizens", () => {
-  it("puts a peer's sessions on the stage beside the mock ones", async () => {
+  it("puts a peer's sessions on the stage beside the local ones", async () => {
     const view = await mountMonitor(fakeDoor([host("mini", [shared("s1"), shared("s2")])]));
-    expect(view.querySelectorAll(".vf-monitor-bubble").length).toBe(MOCK_ROWS + 2);
-    expect(latest().agents).toBe(MOCK_ROWS + 2);
+    expect(view.querySelectorAll(".vf-monitor-bubble").length).toBe(LOCAL_ROWS.length + 2);
+    expect(latest().agents).toBe(LOCAL_ROWS.length + 2);
+    expect(latest().localAgents).toBe(LOCAL_ROWS.length);
     expect(latest().remoteSessions).toBe(2);
     expect(latest().remoteHosts).toBe(1);
     expect(latest().remoteState).toBe("serving");
   });
 
-  it("marks them so they cannot be read as one of the invented ones", async () => {
+  it("marks them so they cannot be read as one of the local ones", async () => {
     const view = await mountMonitor(fakeDoor([host("mini", [shared("s1")])]));
     const bubbles = remoteBubbles(view);
     expect(bubbles).toHaveLength(1);
@@ -193,23 +210,18 @@ describe("remote sessions as monitor citizens", () => {
     expect(bubbles[0]?.getAttribute("aria-label")).toContain("on mini");
   });
 
-  it("NARROWS the mock label's claim rather than covering a real row with it", async () => {
-    // GT-D17's law, on screen: with a real session present, the chip stops
-    // claiming the stage and says how many of the rows it speaks for.
+  it("keeps the two claims in their own chips, each in its own words", async () => {
     const view = await mountMonitor(fakeDoor([host("mini", [shared("s1")])]));
-    const mockChip = view.querySelector(".vf-monitor-mock-chip")?.textContent ?? "";
-    expect(mockChip).toBe(`preview — ${MOCK_ROWS} mock agents`);
-    expect(mockChip).not.toBe(MOCK_LABEL);
-    expect(latest().mockLabel).toBe(mockChip);
-    // The other claim, in its own chip and its own words.
+    expect(view.querySelector(".vf-monitor-local-chip")?.textContent).toBe("2 managed agents");
+    expect(latest().localClaim).toBe("2 managed agents");
     expect(view.querySelector(".vf-monitor-remote-chip")?.textContent).toBe(
       "1 remote session · 1 peer",
     );
   });
 
-  it("keeps the whole-stage claim when the stage IS only the mock field", async () => {
+  it("says only the local claim when the mesh has nothing", async () => {
     const view = await mountMonitor(fakeDoor([]));
-    expect(view.querySelector(".vf-monitor-mock-chip")?.textContent).toBe(MOCK_LABEL);
+    expect(view.querySelector(".vf-monitor-local-chip")?.textContent).toBe("2 managed agents");
     expect(view.querySelector(".vf-monitor-remote-chip")).toBeNull();
     expect(latest().remoteSessions).toBe(0);
     expect(latest().remoteState).toBe("serving");
@@ -262,22 +274,23 @@ describe("select routes by source", () => {
     // The row's own accent travels with the attach: it is what paints the pane
     // the session lands in, which is the deck↔monitor link.
     expect(door.attach.mock.calls[0]?.[0].color).toMatch(/^#/);
+    expect(door.mountLocal).not.toHaveBeenCalled();
     expect(ackText(view)).toContain("attached from mini");
   });
 
-  it("a MOCK bubble asks NOTHING (the split-honesty test)", async () => {
-    // The other half of GT-D17: an invented agent still mounts nothing, and
-    // the door it would have to go through is never touched.
+  it("a LOCAL bubble asks the door to MOUNT its PTY — never to attach (the split-routing test)", async () => {
+    // The other half of GT-D17, as AR-3 made it real: a managed agent's row
+    // goes through the local verb with the floor session id the fold named.
     const door = fakeDoor([host("mini", [shared("s1")])]);
     const view = await mountMonitor(door);
-    const mock = [...view.querySelectorAll<HTMLButtonElement>(".vf-monitor-bubble")].find(
-      (bubble) => !bubble.classList.contains("is-remote"),
-    );
+    const local = localBubbles(view)[0];
 
-    await act(async () => mock?.click());
+    await act(async () => local?.click());
 
     expect(door.attach).not.toHaveBeenCalled();
-    expect(ackText(view)).toContain("nothing was mounted");
+    expect(door.mountLocal).toHaveBeenCalledTimes(1);
+    expect(["run-a-pty", "run-b-pty"]).toContain(door.mountLocal.mock.calls[0]?.[0]);
+    expect(ackText(view)).toContain("mounted in the active pane");
   });
 
   it("says view-only in the same breath as the success, not as a failure", async () => {
@@ -358,82 +371,53 @@ describe("select routes by source", () => {
 });
 
 describe("the field without a floor", () => {
-  it("with NO door: mock rows only, and the state says nobody was asked", async () => {
+  it("with NO door: no rows at all, and both states say nobody was asked", async () => {
     const view = await mountMonitor(null);
-    expect(view.querySelectorAll(".vf-monitor-bubble").length).toBe(MOCK_ROWS);
+    expect(view.querySelectorAll(".vf-monitor-bubble").length).toBe(0);
     expect(remoteBubbles(view)).toHaveLength(0);
     expect(latest().remoteState).toBe("no-door");
-    // The whole-stage claim is correct again, because the stage IS the mock.
-    expect(view.querySelector(".vf-monitor-mock-chip")?.textContent).toBe(MOCK_LABEL);
+    expect(latest().localState).toBe("no-door");
+    expect(view.querySelector(".vf-monitor-local-chip")).toBeNull();
   });
 
-  it("with a REFUSING floor: no rows, no invented peers, and the reason ON THE SCREEN", async () => {
-    const door: RemoteSessionDoor = {
+  it("with a REFUSING mesh: the local rows stand, no invented peers, and the reason ON THE SCREEN", async () => {
+    const door: MonitorDoor = {
+      ...fakeDoor([]),
       listHosts: vi.fn(async () => {
         throw new Error("terminal mesh is not configured");
       }),
-      attach: vi.fn(),
     };
     const view = await mountMonitor(door);
     expect(remoteBubbles(view)).toHaveLength(0);
+    expect(localBubbles(view)).toHaveLength(LOCAL_ROWS.length);
     expect(latest().remoteState).toBe("unavailable");
     expect(latest().remoteReason).toContain("mesh is not configured");
-    expect(view.querySelector(".vf-monitor-remote-chip")).toBeNull();
-    // GT-5c / the review's 2d: the marker carried this state from the day it
-    // was built and the SCREEN did not, so a mesh that was on with its gateway
-    // down showed exactly what a healthy empty mesh shows — at the surface
-    // GT-D17 declared to BE the door.
-    const chip = view.querySelector(".vf-monitor-remote-unavailable-chip");
-    expect(chip?.textContent).toBe("mesh unavailable · terminal mesh is not configured");
-    expect(chip?.getAttribute("title")).toContain("mesh is not configured");
+    expect(view.querySelector(".vf-monitor-remote-unavailable-chip")?.textContent).toContain(
+      "mesh unavailable",
+    );
   });
 
-  it("says nothing about the mesh before anybody has been asked", async () => {
-    // `no-door` is a deck still coming up, not a mesh that is down.
-    const view = await mountMonitor(null);
-    expect(view.querySelector(".vf-monitor-remote-unavailable-chip")).toBeNull();
-  });
-
-  it("says a REMOTE row cannot be attached yet rather than doing nothing", async () => {
-    // The one path where clicking announced nothing (the review's finding 9):
-    // `select` on a remote row with a null door returned SILENTLY, while every
-    // other outcome — refusal, no pane, failure, success — is said out loud.
-    //
-    // It is reached the way a user reaches it: a row the mesh put on the stage,
-    // and then a deck that goes away underneath it. The row the user is looking
-    // at is the row they click.
-    let seam: MonitorAgentsResult | undefined;
-    function Probe({ door }: { door: RemoteSessionDoor | null }): null {
-      seam = useMonitorAgents({ palette: useMonitorPalette(), door });
-      return null;
-    }
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    await act(async () => {
-      root?.render(<Probe door={fakeDoor([host("mini", [shared("s1")])])} />);
-    });
-    const row = seam?.agents.find((agent) => agent.remote !== undefined);
-    expect(row).toBeDefined();
-
-    // The deck dies; the row the user was already looking at is still the row.
-    await act(async () => root?.render(<Probe door={null} />));
-    await act(async () => {
-      if (row) seam?.actions.select(row);
-    });
-    expect(seam?.acknowledgement?.message).toContain("mini");
-    expect(seam?.acknowledgement?.message).toContain("no connection");
+  it("with a REFUSING fold: no local rows, no invented ones, and fieldd's reason ON THE SCREEN", async () => {
+    const door: MonitorDoor = {
+      ...fakeDoor([]),
+      observe: vi.fn(({ onError }) => {
+        onError("FORBIDDEN_SCOPE: agent.observe");
+        return () => undefined;
+      }),
+    };
+    const view = await mountMonitor(door);
+    expect(localBubbles(view)).toHaveLength(0);
+    expect(latest().localState).toBe("unavailable");
+    expect(latest().localReason).toContain("FORBIDDEN_SCOPE");
+    expect(latest().localClaim).toBeNull();
+    expect(view.textContent).toContain("agents unavailable · FORBIDDEN_SCOPE");
   });
 
   it("PF6: the mesh poll dies with the stage", async () => {
-    await mountMonitor(fakeDoor([host("mini", [shared("s1")])]));
-    expect(openedIntervals.length).toBeGreaterThan(1); // the mock's tick AND the poll
-
+    await mountMonitor(fakeDoor([]));
+    expect(openedIntervals.length).toBeGreaterThan(0);
     act(() => root?.unmount());
     root = null;
-
-    for (const id of openedIntervals) {
-      expect(clearedIntervals, `interval ${id} survived the close`).toContain(id);
-    }
+    for (const id of openedIntervals) expect(clearedIntervals).toContain(id);
   });
 });

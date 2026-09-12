@@ -1,0 +1,178 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import {
+  AGENT_MONITOR_SCHEMA_VERSION,
+  AgentMonitorMirror,
+  AgentSessionRecord,
+  AgentSessionSummary,
+  AgentSpawnParams,
+  AgentSpawnResult,
+  AgentStatus,
+  AgentTier,
+} from "../src/agent-session";
+import { METHODS } from "../src/methods";
+import { LAYOUT, LAYOUT_ROOT_LEVEL, SCOPES, TAILNET_SCOPES } from "../src/registries";
+
+// AR-3 — the managed-session doors and SessionSummary v2 (thinking-ar-agent-
+// plane.md §5/§7; AR-D4/AR-D5 as ruled 2026-09-12). The rows are pinned the
+// way AR-1's are; the monitor golden is puppeteer's own fixture.
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+const fixture = (name: string): unknown =>
+  JSON.parse(readFileSync(join(FIXTURES, name), "utf8")) as unknown;
+
+describe("agent.* registry rows (AR-3)", () => {
+  const rows = (prefix: string) =>
+    METHODS.filter((m) => m.method.startsWith(prefix)).map((m) => ({
+      method: m.method,
+      scope: m.scope,
+      idempotent: m.idempotent,
+      locality: m.locality,
+      subscription: m.subscription ?? false,
+    }));
+
+  it("births on agent.spawn, reads on agent.observe, one subscription; all local in v1", () => {
+    expect(rows("agent.")).toEqual([
+      {
+        method: "agent.providers",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+        subscription: false,
+      },
+      {
+        method: "agent.spawn",
+        scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+        subscription: false,
+      },
+      {
+        method: "agent.resume",
+        scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+        subscription: false,
+      },
+      {
+        method: "agent.list",
+        scope: "agent.observe",
+        idempotent: true,
+        locality: "local",
+        subscription: false,
+      },
+      {
+        method: "agent.subscribe",
+        scope: "agent.observe",
+        idempotent: true,
+        locality: "local",
+        subscription: true,
+      },
+    ]);
+  });
+
+  it("the persona login pane is a spawn-class act on this device", () => {
+    const login = METHODS.find((m) => m.method === "agents.profiles.login");
+    expect(login).toMatchObject({ scope: "agent.spawn", idempotent: false, locality: "local" });
+  });
+
+  it("the three agent.* scopes exist and federate; the doors themselves do not yet", () => {
+    for (const scope of ["agent.spawn", "agent.observe", "agent.control"] as const) {
+      expect(SCOPES).toContain(scope);
+      expect(TAILNET_SCOPES).toContain(scope);
+    }
+  });
+});
+
+describe("LAYOUT (AR-3)", () => {
+  it("the session records live under this user's agents/ tree, re-rooted with it", () => {
+    expect(LAYOUT.AGENT_SESSIONS_DIR).toEqual(["agents", "sessions"]);
+    expect(LAYOUT.AGENT_SESSIONS_DIR.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
+    expect(LAYOUT_ROOT_LEVEL).not.toContain("AGENT_SESSIONS_DIR");
+  });
+});
+
+describe("the monitor mirror (AR-D4) against puppeteer's own fixture", () => {
+  const golden = fixture("agent-monitor-state.valid.json") as Record<string, unknown>;
+
+  it("is pinned to the schema generation the pinned puppeteer emits", () => {
+    expect(AGENT_MONITOR_SCHEMA_VERSION).toBe(2);
+    expect(golden["schemaVersion"]).toBe(AGENT_MONITOR_SCHEMA_VERSION);
+  });
+
+  it("reads the fields fieldd's logic needs and carries every other field through verbatim", () => {
+    const parsed = AgentMonitorMirror.parse(golden);
+    expect(parsed.status).toBe("blocked");
+    expect(parsed.alive).toBe(true);
+    expect(parsed.blockers[0]).toMatchObject({ id: "question-1", kind: "question" });
+    expect(parsed.context?.usedPercent).toBe(20);
+    expect(parsed.model?.displayName).toBe("Model Card V2");
+    expect(parsed.environment?.git).toBeNull();
+    expect(parsed.session?.nativeSessionId).toBe("native-1");
+    expect(parsed.freshness?.level).toBe("native-hooks");
+    // passthrough: the generation-2 collections a view may want ride along
+    expect(parsed).toHaveProperty("subagents");
+    expect(parsed).toHaveProperty("workflows");
+    expect(parsed).toHaveProperty("team");
+    expect(parsed).toHaveProperty("modes");
+    expect(JSON.parse(JSON.stringify(parsed))).toEqual(golden);
+  });
+
+  it("keeps the headline status OPEN — a fourth upstream value parses and folds later", () => {
+    expect(AgentMonitorMirror.safeParse({ ...golden, status: "paused" }).success).toBe(true);
+    expect(AgentStatus.safeParse("paused").success).toBe(false);
+  });
+
+  it("refuses a state without liveness — the one field the fold cannot invent", () => {
+    const { alive: _alive, ...withoutAlive } = golden;
+    expect(AgentMonitorMirror.safeParse(withoutAlive).success).toBe(false);
+  });
+});
+
+describe("SessionSummary v2 and the doors", () => {
+  it("a managed row: the native id is the spine, the tier is one of three, status derived once", () => {
+    const summary = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect(summary.sessionId).toBe("native-1");
+    expect(summary.tier).toBe("managed");
+    expect(summary.terminal?.hosted).toBe("local");
+    expect(summary.terminal?.runtimeSessionId).toBe("sess-01J8Z3K9");
+    expect(AgentTier.options).toEqual(["managed", "ingested", "remote"]);
+    expect(AgentStatus.options).toEqual(["idle", "working", "blocked", "unknown"]);
+  });
+
+  it("kind is an OPEN provider id — no vendor is enumerated here (AR-L1)", () => {
+    const summary = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect(AgentSessionSummary.safeParse({ ...summary, kind: "some-new-agent" }).success).toBe(
+      true,
+    );
+    expect(AgentSessionSummary.safeParse({ ...summary, kind: "" }).success).toBe(false);
+  });
+
+  it("the spawn answer carries the fold's row AND the routed terminal ticket the pane mounts", () => {
+    const spawn = AgentSpawnResult.parse(fixture("agent-spawn.valid.json"));
+    expect(spawn.session.monitor?.schemaVersion).toBe(AGENT_MONITOR_SCHEMA_VERSION);
+    expect(spawn.terminal.sessionId).toBe(spawn.session.terminal?.runtimeSessionId);
+    expect(spawn.terminal).toHaveProperty("attachGrant");
+    expect(spawn.terminal).toHaveProperty("transportGrant");
+  });
+
+  it("spawn params: provider required, the rest optional; a persona is named by id only", () => {
+    expect(AgentSpawnParams.safeParse({ provider: "claude" }).success).toBe(true);
+    expect(
+      AgentSpawnParams.safeParse({ provider: "claude", profileId: "claude:abc", cwd: "/repo" })
+        .success,
+    ).toBe(true);
+    expect(AgentSpawnParams.safeParse({}).success).toBe(false);
+  });
+
+  it("the persisted record: an opaque continuation beside the launch facts, stamped at exit", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    expect(record.format).toBe(1);
+    expect(record.continuation.nativeSessionId).toBe("native-1");
+    expect(record.exited?.reason).toBe("completed");
+    // never a transcript, never a path to one
+    expect(JSON.stringify(record)).not.toContain("transcript");
+  });
+});

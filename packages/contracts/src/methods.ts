@@ -1242,4 +1242,59 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // The persona login pane (AR-3): the vendor's own interactive login in a
+  // PTY on THIS device, bound to the persona's root; the persona is verified
+  // from native evidence when that terminal ends. Spawn-class, like create.
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.login",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  // ── agent.* (AR-3 — managed sessions: spawn, resume, the fold) ──
+  // A managed session is born in a PTY on this device's floor with a clean
+  // allow-listed environment (EL7) and observed/controlled by puppeteer inside
+  // fieldd; the fold projects one SessionSummary v2 row per run. Reads ride
+  // `agent.observe`, births `agent.spawn` (design-01 §7). locality "local"
+  // for all five in v1: a spawn needs THIS device's floor, and the remote
+  // tier's rows reach the deck through the mesh's own roster today — the
+  // `device?` federation of `agent.list`/`agent.subscribe` (D35) is a later
+  // widening of the locality column, not a new door.
+  defineMethod({
+    surface: "product",
+    method: "agent.providers",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agent.spawn",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agent.resume",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agent.list",
+    scope: "agent.observe",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agent.subscribe",
+    scope: "agent.observe",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
 ];

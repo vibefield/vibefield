@@ -599,7 +599,11 @@
   pointer-events: none;
 }
 
-.vf-monitor-mock-chip {
+/* The local claim (AR-3): how many managed agents fieldd's fold reports on
+   this device. It stands where GT-D13's mock label stood and inherits its
+   instrument type; the muted ramp is kept — a count is a fact, not a state,
+   and §2.5's hues stay for states. */
+.vf-monitor-local-chip {
   padding: 0;
   border: 0;
   border-radius: 0;

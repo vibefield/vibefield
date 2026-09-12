@@ -1,30 +1,32 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { ComponentType } from "react";
 import type { AgentVisualStatus } from "./agent-status";
-import type {
-  AgentKind,
-  AgentSessionInfo,
-  AgentStateMessage,
-  ContextWindowRuntimeState,
-} from "./facet-types";
+import type { AgentSessionSummary, AgentTier, ContextWindowRuntimeState } from "./facet-types";
 import type { MonitorPalette } from "./monitor-palette";
 import type { MonitorParameterGroup, MonitorParameters } from "./parameters";
 
-/** The agent half of a monitored session; absent while a terminal holds no agent. */
+/** The agent half of a monitored session; absent while a terminal holds no
+ * agent. Since AR-3 it is a projection of the fold's row — the few facts a
+ * view names, plus the row itself for a view that wants the rest. */
 export interface MonitorAgentFacet {
-  kind: AgentKind;
+  /** puppeteer's provider id, open (AR-L1) */
+  kind: string;
+  /** the adapter's own label for the provider */
   provider: string;
+  tier: AgentTier;
+  runtimeRunId: string;
+  profileId?: string;
   model?: string;
   branch?: string;
   contextWindow?: ContextWindowRuntimeState;
-  /** The underlying projections, for a view that wants tools, permissions, or diagnostics. */
-  info: AgentSessionInfo;
-  state?: AgentStateMessage;
+  /** The fold's row, verbatim, for a view that wants blockers, usage or the
+   * monitor projection. */
+  summary: AgentSessionSummary;
 }
 
 /** Colors of the panes showing a session — the deck↔monitor link. Absent until
- * something mounts the session. GT-3m ported it unfed (the mock mounts
- * nothing); GT-4 populates it for the first time, from the panes a remote
+ * something mounts the session. GT-3m ported it unfed (the mock mounted
+ * nothing); GT-4 populated it for the first time, from the panes a remote
  * attach actually landed in. */
 export interface PaneAttachment {
   primary: string;
@@ -85,11 +87,14 @@ export interface MonitorRemoteFacet {
  * `agent?.model` instead of re-deriving which kind of thing it is holding.
  */
 export interface MonitorAgent {
-  /** Stable when a terminal is promoted to an agent, so view-local placement survives it. */
+  /** Stable when a terminal is promoted to an agent, so view-local placement
+   * survives it: a managed row's id is its floor session id, the same id the
+   * pane showing it carries. */
   id: string;
   /**
    * The LOCAL floor session this row stands for — absent for a peer's session,
-   * which has none here until it is attached (GT-D17).
+   * which has none here until it is attached (GT-D17), and for a managed row
+   * whose PTY the deck does not hold a summary of.
    *
    * Optional rather than synthesized, and that is the honest half: a
    * `SessionSummary` has an executable, a handle, a pid and a persistence
@@ -120,10 +125,11 @@ export interface MonitorAgent {
 
 export interface MonitorActions {
   /** Mount this session in the active pane — REAL for a remote row since GT-4,
-   * still an acknowledgement for a mock one until AR. The view calls the same
-   * verb either way; which it was is the source's business, not the view's. */
+   * and for a local one since AR-3. The view calls the same verb either way;
+   * which it was is the source's business, not the view's. */
   select(agent: MonitorAgent): void;
-  /** Open a terminal; spatial views pass where the gesture happened. */
+  /** Spawn an agent (the chrome's chosen provider) into the active pane;
+   * spatial views pass where the gesture happened. */
   createAt(position?: { x: number; y: number }): void | Promise<void>;
 }
 
@@ -145,8 +151,9 @@ export interface AgentMonitorProps {
  * A view is a PURE FUNCTION of these props. It never reaches the runtime, the
  * workspace, fieldd, or a terminal — which is what keeps it structurally unable
  * to break the invariant that semantics never come from terminal text (the
- * reference's ADR-003), and what makes GT-D13's swap a one-module change: at
- * GT-3m every view here is fed by `MockAgentField` and cannot tell.
+ * reference's ADR-003), and what made GT-D13's swap a one-module change: at
+ * GT-3m every view here was fed by a mock field and could not tell; since AR-3
+ * it is fed by fieldd's fold, and still cannot.
  */
 export interface AgentMonitorView {
   readonly id: string;

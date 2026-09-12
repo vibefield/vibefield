@@ -23,8 +23,8 @@ import type {
 } from "@vibecook/ghosttea-protocol";
 import { describe, expect, it } from "vitest";
 import {
-  MOCK_LABEL,
-  mockClaim,
+  localClaim,
+  localUnavailableClaim,
   remoteClaim,
   remoteUnavailableClaim,
 } from "../src/godview/GodviewMonitor";
@@ -173,7 +173,7 @@ describe("a peer's session as a monitor row", () => {
   });
 });
 
-describe("the composition (mock + remote, one array)", () => {
+describe("the composition (local + remote, one array)", () => {
   function localTerminal(id: string, createdAtMs = 0): { session: SessionSummary } {
     return {
       session: { id, exited: false, createdAtMs, cwd: "/project/vibe-field" } as SessionSummary,
@@ -182,7 +182,7 @@ describe("the composition (mock + remote, one array)", () => {
 
   it("merges both sources and keeps every row distinguishable by its facet", () => {
     const agents = assembleMonitorAgents({
-      agents: [],
+      managed: [],
       terminals: [localTerminal("local-1")],
       remotes: [{ row: { host: { deviceId: "mini", deviceName: "mini" }, session: shared("s1") } }],
       accents: ACCENTS,
@@ -198,7 +198,7 @@ describe("the composition (mock + remote, one array)", () => {
     // The state this ships in until GT-4's native half lands, and the one the
     // honest-states law is about: nothing invented to fill the space.
     const agents = assembleMonitorAgents({
-      agents: [],
+      managed: [],
       terminals: [localTerminal("local-1")],
       remotes: [],
       accents: ACCENTS,
@@ -213,7 +213,7 @@ describe("the composition (mock + remote, one array)", () => {
     // pane fact, which is what keeps it a state and not a memory.
     const row = { host: { deviceId: "mini", deviceName: "mini" }, session: shared("s1") };
     const unlinked = assembleMonitorAgents({
-      agents: [],
+      managed: [],
       terminals: [],
       remotes: [{ row }],
       accents: ACCENTS,
@@ -221,7 +221,7 @@ describe("the composition (mock + remote, one array)", () => {
     expect(unlinked[0]?.attachment).toBeUndefined();
 
     const linked = assembleMonitorAgents({
-      agents: [],
+      managed: [],
       terminals: [],
       remotes: [{ row, localSessionId: "replica-9", paneColor: "#a3" }],
       accents: ACCENTS,
@@ -234,10 +234,11 @@ describe("the composition (mock + remote, one array)", () => {
   });
 
   it("keeps the preview's selection separate from a real mount", () => {
-    // GT-D17's split, reaching the projection: an invented agent is mounted
-    // nowhere, so "the user pointed at it" is all the mock may claim.
+    // GT-D17's split, reaching the projection: a row the user pointed at that
+    // no pane is showing yet is highlighted, and that is all the pointing may
+    // claim.
     const agents = assembleMonitorAgents({
-      agents: [],
+      managed: [],
       terminals: [localTerminal("local-1")],
       remotes: [{ row: { host: { deviceId: "mini", deviceName: "mini" }, session: shared("s1") } }],
       accents: ACCENTS,
@@ -325,23 +326,41 @@ describe("the field's honest states", () => {
   });
 });
 
-describe("the labels, scoped per source (GT-D17)", () => {
+describe("the labels, scoped per source (GT-D17, AR-3)", () => {
   function counts(overrides: Partial<MonitorSourceCounts> = {}): MonitorSourceCounts {
-    return { mock: 9, remote: 0, hosts: 0, remoteState: "serving", ...overrides };
+    return {
+      local: 0,
+      terminals: 1,
+      remote: 0,
+      hosts: 0,
+      localState: "live",
+      remoteState: "serving",
+      ...overrides,
+    };
   }
 
-  it("claims the stage while the stage IS the mock field", () => {
-    expect(mockClaim(counts())).toBe(MOCK_LABEL);
+  it("says nothing about local agents while there are none, and counts them when there are", () => {
+    // Quiet is the honesty when there are no facts (DESIGN.md's sync law): an
+    // unclaimed pane is not an agent, and nothing invented stands in for one.
+    expect(localClaim(counts())).toBeNull();
+    expect(localClaim(counts({ local: 1 }))).toBe("1 managed agent");
+    expect(localClaim(counts({ local: 3 }))).toBe("3 managed agents");
     expect(remoteClaim(counts())).toBeNull();
   });
 
-  it("NARROWS to a count the moment a real session stands beside it", () => {
-    // The law this slice is about: a real remote session must never sit under
-    // a label calling it invented.
-    const withRemotes = counts({ remote: 2, hosts: 1 });
-    expect(mockClaim(withRemotes)).toBe("preview — 9 mock agents");
-    expect(mockClaim(withRemotes)).not.toBe(MOCK_LABEL);
-    expect(remoteClaim(withRemotes)).toBe("2 remote sessions · 1 peer");
+  it("keeps the two claims in their own chips when both sources contribute", () => {
+    const both = counts({ local: 2, remote: 2, hosts: 1 });
+    expect(localClaim(both)).toBe("2 managed agents");
+    expect(remoteClaim(both)).toBe("2 remote sessions · 1 peer");
+  });
+
+  it("SAYS UNAVAILABLE for the fold, with fieldd's reason, and nothing while nobody asked", () => {
+    const down = counts({ localState: "unavailable", localReason: "FORBIDDEN_SCOPE" });
+    expect(localClaim(down)).toBeNull();
+    expect(localUnavailableClaim(down)).toBe("agents unavailable · FORBIDDEN_SCOPE");
+    expect(localUnavailableClaim(counts({ localState: "unavailable" }))).toBe("agents unavailable");
+    expect(localUnavailableClaim(counts({ localState: "no-door" }))).toBeNull();
+    expect(localUnavailableClaim(counts())).toBeNull();
   });
 
   it("says one of a thing in the singular", () => {

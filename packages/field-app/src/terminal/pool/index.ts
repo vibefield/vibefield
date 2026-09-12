@@ -19,6 +19,7 @@ export type {
 } from "./session-grants";
 export { isSessionUnavailable } from "./session-grants";
 export {
+  adoptCreatedTerminal,
   bindTerminalSessionView,
   type CreatedTerminalSession,
   configureTerminalPool,

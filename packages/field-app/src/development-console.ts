@@ -131,16 +131,26 @@ export interface GodviewMonitorFacts {
   /** Rows the stage is showing, and how many of them an agent has claimed. */
   agents: number;
   agentBacked: number;
-  /** GT-D13's law, as a fact a harness can hold: the words on the stage saying
-   * these agents are invented. Absent from this line would mean absent from the
-   * screen — which is the failure it exists to catch.
-   *
-   * Since GT-D17 the sentence NARROWS when real rows join it (it starts naming
-   * how many of the rows are invented), so a harness asserts what it means —
-   * that the claim is present and scoped — rather than one fixed string. */
-  mockLabel: string;
-  /** The split, counted (GT-D17): how many rows each source put on the stage. */
-  mockAgents: number;
+  /** AR-3: the local half of the field is fieldd's fold, and the chip counts
+   * what the daemon reports — null when there are no managed agents (quiet is
+   * the honesty when there are no facts). GT-D13's mock label, which this
+   * replaced, said the rows were invented; nothing on the stage is invented
+   * any more, and a harness that finds the word "mock" here has found a
+   * regression. */
+  localClaim: string | null;
+  /** The split, counted (GT-D17, AR-3): how many rows each source put on the
+   * stage — managed agents from the fold, the deck's unclaimed panes, the
+   * mesh's sessions. */
+  localAgents: number;
+  terminals: number;
+  /**
+   * The local field's honest state: `no-door` (no deck, so nobody asked
+   * fieldd), `live` (the fold answered — zero rows then means nothing is
+   * running here), `unavailable` (the subscription failed; `localReason`
+   * carries fieldd's own words).
+   */
+  localState: string;
+  localReason?: string;
   remoteSessions: number;
   /** Online peers behind those remote rows. */
   remoteHosts: number;

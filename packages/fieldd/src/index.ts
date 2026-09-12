@@ -1,6 +1,15 @@
 // @vibefield/fieldd — the product-plane daemon (design-02 §3).
 
 export {
+  AGENT_ENV_PASSTHROUGH,
+  type AgentEnvironmentRequest,
+  agentEnvironment,
+  type BornTerminal,
+  createTerminalAgentHost,
+  type TerminalAgentHost,
+  type TerminalAgentHostOptions,
+} from "./agent-host";
+export {
   EnrollmentStore,
   type EnrollmentStoreOptions,
   type EnrollRuntimeSpec,
@@ -14,6 +23,14 @@ export {
   DistributionRecordStore,
   noTerminalHost,
 } from "./agent-runtime";
+export {
+  foldStatus,
+  mirrorOf,
+  recordForRun,
+  SessionRecordStore,
+  type SummarizeInput,
+  summarizeManaged,
+} from "./agent-sessions";
 export {
   type ArtifactServeBridge,
   ArtifactService,

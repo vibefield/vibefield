@@ -61,6 +61,13 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: false,
         locality: "local",
       },
+      // AR-3 — the persona login pane
+      {
+        method: "agents.profiles.login",
+        scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+      },
     ]);
   });
 

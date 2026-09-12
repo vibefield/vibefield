@@ -792,6 +792,34 @@ export async function createTerminalSession(
 }
 
 /**
+ * Take a birth SOMEONE ELSE asked fieldd for (AR-3: `agent.spawn`'s answer
+ * carries the same `TerminalCreateOpenResult` that `terminal.create` does)
+ * into this window's pool exactly as `createTerminalSession` would have: the
+ * placement recorded, the routed ticket primed for its first activation, the
+ * exact birth summary registered so the workspace can mount it before the
+ * observed inventory catches up. The pool still decides nothing about
+ * spawning; the consumer that asked holds the consent gate.
+ */
+export function adoptCreatedTerminal(raw: unknown): {
+  sessionId: string;
+  session: SessionSummary;
+} {
+  const read = readCreateTicket(raw, Date.now());
+  placements.record(read.placement);
+  grantsLanded = true;
+  rejoinHint = [...new Set([...rejoinHint, read.sessionId])];
+  const target = ensureRuntime();
+  routedHost?.primeTicket(read.sessionId, read.routedTicket);
+  createdSummaries.set(read.sessionId, read.session);
+  target.registerSession(read.session);
+  phase = "open";
+  fault = null;
+  spentReason = null;
+  publish();
+  return { sessionId: read.sessionId, session: read.session };
+}
+
+/**
  * Open a DORMANT pool's transport on one of these sessions.
  *
  * The lighter half of `retryTerminalPool`: a dormant pool has no transport to

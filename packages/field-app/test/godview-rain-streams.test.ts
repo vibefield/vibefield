@@ -55,8 +55,10 @@ describe("rainDataString", () => {
           provider: "Claude",
           model: "Opus",
           branch: "main",
+          tier: "managed",
+          runtimeRunId: "run-1",
           contextWindow: { usedPercent: 42 } as never,
-          info: {} as never,
+          summary: {} as never,
         },
       }),
     );

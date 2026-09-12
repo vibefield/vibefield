@@ -2,9 +2,11 @@ import { existsSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { isAbsolute } from "node:path";
 import {
+  type AutomationInputResult,
   GhostteaAutomationClient,
   GhostteaConfigDocumentConflictError,
   GhostteaRequestError,
+  type SessionExitedEvent,
 } from "@vibecook/ghosttea-client";
 import {
   CELL_SUPERVISION,
@@ -67,6 +69,26 @@ export interface TerminalLink {
   readonly terminalRoutes?: TerminalRouteSnapshot | undefined;
   on(event: "terminal-endpoints", fn: () => void): unknown;
 }
+
+/** AR-3 — what an agent's PTY is born with: puppeteer's `TerminalSpec`
+ * (command, argv, cwd, geometry) and the COMPLETE environment the agent host
+ * composed. Nothing here is a vendor's: the recipe is the adapter's, the
+ * allow-list is `agent-host.ts`'s, the floor gets exactly `variables`. */
+export interface AgentTerminalSpec {
+  command: string;
+  args: readonly string[];
+  cwd: string;
+  variables: Record<string, string>;
+  cols?: number | undefined;
+  rows?: number | undefined;
+}
+
+/** AR-3 — puppeteer's `TerminalAutomationOperation`, spelled here so the
+ * service depends on no agent package. */
+export type AgentTerminalAutomation =
+  | { kind: "paste"; text: string; submit: boolean }
+  | { kind: "text"; text: string }
+  | { kind: "interrupt" };
 
 export interface TerminalServiceOptions {
   link: TerminalLink;
@@ -175,6 +197,14 @@ export class TerminalService {
   /** TP-S1 — the TPv3 grant issuer: generation ledgers in memory, MACs over
    * the route row's per-cell-boot key (terminal-grants.ts). */
   private readonly minter = new TerminalGrantMinter();
+  /** AR-3 — the floor's `session-exited` news, fanned out from every cell
+   * control connection fieldd holds (the agent host turns it into puppeteer's
+   * `handleProcessExit`; a login pane's end verifies its persona). Only cells
+   * fieldd has dialed report here — the inventory diff is the backstop. */
+  private readonly exitListeners = new Set<(event: SessionExitedEvent) => void>();
+  /** AR-3 — every applied inventory, for consumers that diff it (the managed-
+   * session backstop: a PTY that left the inventory has exited). */
+  private readonly inventoryListeners = new Set<(terminals: readonly TerminalInfo[]) => void>();
 
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -278,6 +308,17 @@ export class TerminalService {
           // consumer tell an inventory apart from a LATER floor's, and their
           // presence is also the flag that `list`/`get` are answerable at all.
           this.lastObservation = { bootId: parsed.data.bootId, generation: parsed.data.generation };
+          for (const listener of [...this.inventoryListeners]) {
+            try {
+              listener(this.terminals);
+            } catch (error) {
+              this.logger.warn(
+                "fieldd.terminal.inventory_listener_failed",
+                "An inventory listener threw",
+                { error: errorMessage(error) },
+              );
+            }
+          }
         } else {
           this.logger.debug(
             "fieldd.terminal.observed_unparsed",
@@ -538,21 +579,117 @@ export class TerminalService {
     const explicit = params.shell !== undefined;
     const executable = params.shell ?? this.defaultShell();
     const scrollbackBytes = classScrollbackBytes(params.workloadClass);
+    return await this.birth(cell, client, executable, {
+      executable,
+      args: explicit ? [] : ["-l"],
+      cwd: params.cwd ?? homedir(),
+      environment: { mode: "inherit" },
+      cols: SPAWN_COLS,
+      rows: SPAWN_ROWS,
+      persistence: normalizePersistence(params.persistence),
+      programKind: explicit ? "auto" : "interactive-shell",
+      ownerId: OWNER_ID,
+      // spread, not `undefined`: an undeclared class must not put the KEY on
+      // the wire either (exactOptionalPropertyTypes agrees)
+      ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
+    });
+  }
+
+  /** AR-3 — an AGENT's PTY (design-01 §5.1 `agent.spawn`; EL7): born on the
+   * agent class's cell with a CLEAN environment — exactly the variables the
+   * caller allow-listed, never the daemon's own (`agent-host.ts` composes the
+   * list; the floor's prefix strip stands beneath it) — as an application
+   * (activity detection knows it owns its foreground), keep-until-exit (NF-D3:
+   * the daemon-lifetime promise), the agent class's scrollback cap. The same
+   * cap, cell, classification and answer as `create`. */
+  async spawn(spec: AgentTerminalSpec): Promise<{
+    sessionId: string;
+    session: TerminalRuntimeSession;
+    cellBootId?: string | undefined;
+  }> {
+    if (this.observation() !== undefined && this.terminals.length >= TERMINAL_SESSION_CAP) {
+      throw new RpcCallError(
+        "RESOURCE_EXHAUSTED",
+        `the terminal session cap is reached (${TERMINAL_SESSION_CAP}); terminate sessions before spawning more`,
+        false,
+        { service: "terminal", state: "session_cap" },
+      );
+    }
+    if (isAbsolute(spec.command) && !existsSync(spec.command))
+      throw new RpcCallError("NOT_FOUND", `agent executable not found: ${spec.command}`, false);
+    const cell = await this.awaitClassCell("agent");
+    const client = await this.connectedClient(cell);
+    const scrollbackBytes = classScrollbackBytes("agent");
+    return await this.birth(cell, client, spec.command, {
+      executable: spec.command,
+      args: [...spec.args],
+      cwd: spec.cwd,
+      environment: { mode: "clean", variables: { ...spec.variables } },
+      cols: spec.cols ?? SPAWN_COLS,
+      rows: spec.rows ?? SPAWN_ROWS,
+      persistence: "keep-until-exit",
+      programKind: "application",
+      ownerId: OWNER_ID,
+      ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
+    });
+  }
+
+  /** AR-3 — puppeteer's `automateTerminal` over the floor: one semantic input
+   * operation, ordered by the service against accepted human input (the epoch
+   * path; a conflict is `accepted: false` with the floor's reason, never a
+   * silent drop). Dialed at the session's OWN cell, like terminate. */
+  async automate(
+    sessionId: string,
+    operation: AgentTerminalAutomation,
+  ): Promise<{ accepted: boolean; reason?: string | undefined }> {
+    const client = await this.connectedClient(await this.sessionCellForOp(sessionId));
+    let result: AutomationInputResult;
     try {
-      const summary = await client.createSession({
-        executable,
-        args: explicit ? [] : ["-l"],
-        cwd: params.cwd ?? homedir(),
-        environment: { mode: "inherit" },
-        cols: SPAWN_COLS,
-        rows: SPAWN_ROWS,
-        persistence: normalizePersistence(params.persistence),
-        programKind: explicit ? "auto" : "interactive-shell",
-        ownerId: OWNER_ID,
-        // spread, not `undefined`: an undeclared class must not put the KEY on
-        // the wire either (exactOptionalPropertyTypes agrees)
-        ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
-      });
+      result =
+        operation.kind === "paste"
+          ? operation.submit
+            ? await client.pasteAndSubmit(sessionId, operation.text)
+            : await client.paste(sessionId, operation.text)
+          : operation.kind === "text"
+            ? await client.sendText(sessionId, operation.text)
+            : await client.interrupt(sessionId);
+    } catch (error) {
+      if (!client.connected) throw this.unavailable("the terminal floor died mid-automate", error);
+      if (isRequestTimeout(error)) throw this.unresponsive("automate", error);
+      if (isUnknownSession(error)) return { accepted: false, reason: "unknown-session" };
+      throw new RpcCallError("INTERNAL", `automate failed: ${errorMessage(error)}`, true);
+    }
+    return result.accepted
+      ? { accepted: true }
+      : { accepted: false, reason: result.reason ?? "human-input-conflict" };
+  }
+
+  /** AR-3 — the floor's `session-exited` facts (see `openClient`). */
+  onSessionExited(listener: (event: SessionExitedEvent) => void): () => void {
+    this.exitListeners.add(listener);
+    return () => this.exitListeners.delete(listener);
+  }
+
+  /** AR-3 — every applied inventory, in order. */
+  onInventory(listener: (terminals: readonly TerminalInfo[]) => void): () => void {
+    this.inventoryListeners.add(listener);
+    return () => this.inventoryListeners.delete(listener);
+  }
+
+  /** The one birth: ask the cell's client, answer the session it made or
+   * classify the refusal (create's body since NF-3, shared with spawn). */
+  private async birth(
+    cell: CellTarget,
+    client: GhostteaAutomationClient,
+    executable: string,
+    options: Parameters<GhostteaAutomationClient["createSession"]>[0],
+  ): Promise<{
+    sessionId: string;
+    session: TerminalRuntimeSession;
+    cellBootId?: string | undefined;
+  }> {
+    try {
+      const summary = await client.createSession(options);
       // The cell that took it, for the daemon's nested mint. The legacy key
       // names no cell — there is no row to name — and the mirror answers there.
       return {
@@ -1088,6 +1225,22 @@ export class TerminalService {
     // a dead socket drops the cached client so the next call redials
     client.on("close", () => {
       if (this.clients.get(key)?.client === client) this.clients.delete(key);
+    });
+    // AR-3 — the floor's exit facts, as it states them (completed / crashed /
+    // requested termination), for whoever births sessions through this
+    // service. The client is per cell, so a session's exit arrives on the
+    // connection to the cell that held it.
+    client.on("session-exited", (event: SessionExitedEvent) => {
+      for (const listener of [...this.exitListeners]) {
+        try {
+          listener(event);
+        } catch (error) {
+          this.logger.warn("fieldd.terminal.exit_listener_failed", "An exit listener threw", {
+            sessionId: event.sessionId,
+            error: errorMessage(error),
+          });
+        }
+      }
     });
     // The client emits connection-error/transport-error (never "error" — the
     // review measured it): the only diagnostic explaining WHY a control

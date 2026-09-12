@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * PF6 at the COMPOSITION level (GT-3m).
+ * PF6 at the COMPOSITION level (GT-3m, re-fed at AR-3).
  *
  * The stage's own fixture proves that unmounting disposes; this proves that
  * CLOSING is what unmounts it. Those are different claims, and only the second
@@ -8,8 +8,11 @@
  * overlay kept the stage mounted while hidden the way it deliberately keeps the
  * deck mounted.
  *
- * The deck is stubbed to nothing — it is the neighbour here, not the subject,
- * and its own mount behaviour has a fixture of its own (godview-deck.test.tsx).
+ * The deck is stubbed to a component that hands the overlay a fake DOOR and
+ * renders nothing — it is the neighbour here, not the subject, and its own
+ * mount behaviour has a fixture of its own (godview-deck.test.tsx). The door is
+ * what gives the stage something to dispose: the mesh poll's interval and the
+ * fold's subscription, both of which must die with the stage.
  */
 
 import { act } from "react";
@@ -17,10 +20,54 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
+import { managedSummary } from "./managed-session-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("../src/godview/GodviewDeck", () => ({ GodviewDeck: () => null }));
+const doorFacts = vi.hoisted(() => ({
+  observeCalls: 0,
+  observeDisposals: 0,
+  rows: [] as unknown[],
+}));
+
+vi.mock("../src/godview/GodviewDeck", async () => {
+  const { useEffect } = await import("react");
+  const door = {
+    listHosts: async () => [],
+    attach: async () => ({ state: "no-pane" as const }),
+    observe: ({ onFrame }: { onFrame: (rows: unknown[]) => void }) => {
+      doorFacts.observeCalls += 1;
+      onFrame(doorFacts.rows);
+      return () => {
+        doorFacts.observeDisposals += 1;
+      };
+    },
+    providers: async () => [],
+    spawn: async () => ({ state: "no-pane" as const }),
+    mountLocal: async () => ({ state: "no-pane" as const }),
+  };
+  return {
+    GodviewDeck: (props: { onRemoteDoor?: (door: unknown) => void }) => {
+      useEffect(() => {
+        props.onRemoteDoor?.(door);
+        return () => props.onRemoteDoor?.(null);
+        // the deck hands the door over once, on mount
+        // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only by design
+      }, []);
+      return null;
+    },
+  };
+});
+
+/** The overlay renders its deck branch only when the window's terminal pool is
+ * configured (`terminalPoolConfigured`); this fixture has no pool, so the
+ * predicate is answered for it — the mocked deck above is what the branch
+ * mounts, and the door it hands over is the subject. The prewarm stays the
+ * real module's no-op against the answerless client below. */
+vi.mock("../src/terminal/pool", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/terminal/pool")>()),
+  terminalPoolConfigured: () => true,
+}));
 
 /** GT-3p: the overlay itself now reaches fieldd — it schedules the transport
  * prewarm (GT-D14) at idle, above the `everOpened` gate, because warming after
@@ -43,6 +90,9 @@ let clearedIntervals: number[] = [];
 beforeEach(() => {
   openedIntervals = [];
   clearedIntervals = [];
+  doorFacts.observeCalls = 0;
+  doorFacts.observeDisposals = 0;
+  doorFacts.rows = [managedSummary({ runtimeRunId: "run-1", kind: "claude", label: "Claude" })];
   localStorage.clear();
   resetGodviewOpenForTest();
   setHost({
@@ -104,42 +154,47 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
     // below it can be either — a user who never presses ⇧⇧ runs no monitor.
     expect(host.querySelector(".vf-godview")).toBeNull();
     expect(openedIntervals, "a closed Godview started a timer").toHaveLength(0);
+    expect(doorFacts.observeCalls, "a closed Godview subscribed to the fold").toBe(0);
   });
 
-  it("mounts the stage on open and REMOVES it on close, clearing its timers", () => {
+  it("mounts the stage on open and REMOVES it on close, clearing its timers and its subscription", () => {
     const host = mountOverlay();
 
     act(() => publishOpen?.({ open: true }));
     expect(stage(host), "the stage never mounted").not.toBeNull();
-    expect(host.querySelector(".vf-monitor-mock-chip")?.textContent).toContain("mock");
+    // the fold reached the chrome: one managed agent, said in words
+    expect(host.querySelector(".vf-monitor-local-chip")?.textContent).toBe("1 managed agent");
+    expect(doorFacts.observeCalls).toBe(1);
     const started = [...openedIntervals];
-    expect(started.length).toBeGreaterThan(0);
+    expect(started.length, "the mesh poll never started").toBeGreaterThan(0);
 
     act(() => publishOpen?.({ open: false }));
 
     // THE PF6 CLAIM, at the level it actually matters. The overlay stays in the
     // tree — the deck below is expensive to build and instant to reveal, so it
-    // is kept and silenced — but the monitor is GONE, not hidden, and every
-    // interval it opened went with it.
+    // is kept and silenced — but the monitor is GONE, not hidden: every
+    // interval it opened went with it, and so did the fold subscription.
     expect(host.querySelector(".vf-godview"), "the overlay unmounted too").not.toBeNull();
     expect(stage(host), "the stage survived the close").toBeNull();
     for (const id of started) {
       expect(clearedIntervals, `interval ${id} outlived the close`).toContain(id);
     }
+    expect(doorFacts.observeDisposals, "the fold subscription outlived the close").toBe(1);
   });
 
-  it("comes back on reopen, from the mock's own first frame", () => {
-    // The cost of the strict treatment, stated rather than hidden: a reopened
-    // stage restarts the timeline at tick 0. That is acceptable precisely
-    // because the source is deterministic — the same seed replays the same
-    // opening frame — and it is why the deck, whose layout is NOT reproducible,
+  it("comes back on reopen, from the fold's current frame", () => {
+    // A reopened stage subscribes afresh and gets the daemon's current frame —
+    // state transfer, never edges — so nothing is replayed and nothing is
+    // remembered across the close. That is why the stage may be unmounted
+    // strictly while the deck, whose layout is NOT reproducible from a frame,
     // gets the other treatment.
     const host = mountOverlay();
     act(() => publishOpen?.({ open: true }));
     act(() => publishOpen?.({ open: false }));
     act(() => publishOpen?.({ open: true }));
     expect(stage(host)).not.toBeNull();
-    expect(host.querySelector(".vf-monitor-mock-chip")).not.toBeNull();
+    expect(doorFacts.observeCalls).toBe(2);
+    expect(host.querySelector(".vf-monitor-local-chip")?.textContent).toBe("1 managed agent");
   });
 
   it("keeps the chosen view across a close, because the choice lives above the stage", () => {

@@ -1,4 +1,3 @@
-import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { describe, expect, it } from "vitest";
 import {
   agentAccentSlot,
@@ -8,63 +7,35 @@ import {
   projectLabel,
   providerLabel,
 } from "../src/godview/monitor/agent-status";
-import type { AgentSessionInfo, AgentStateMessage } from "../src/godview/monitor/facet-types";
 import { folderName } from "../src/godview/monitor/folder-name";
 import { ACCENT_SLOTS } from "../src/godview/monitor/monitor-palette";
+import { managedSummary } from "./managed-session-fixture";
 
-// The reference app's `agent-status.test.ts`, ported. The classifier is the
-// module the whole monitor rests on — everything a view draws is downstream of
-// "what is this session doing", and that answer has to come from reduced runtime
-// state rather than from anything a terminal printed (ADR-003, our EL2 grain).
-
-function state(overrides: Partial<AgentStateMessage["state"]> = {}): AgentStateMessage {
-  return {
-    runtimeSessionId: "session-1",
-    observationLevel: "structured",
-    state: {
-      lifecycle: "ready",
-      tools: [],
-      permissions: [],
-      subagents: [],
-      tasks: [],
-      environment: {},
-      counters: { toolsCompleted: 0, toolsFailed: 0, unknownEvents: 0 },
-      lastSequence: 0,
-      diagnostics: [],
-      ...overrides,
-    },
-  };
-}
-
-const info = {
-  agent: "codex",
-  sessionId: "native-1",
-  runtimeSessionId: "session-1",
-  workspace: { mode: "direct", root: "/project/vibe-field", sourcePath: "/project/vibe-field" },
-  session: { exited: false } as SessionSummary,
-} as AgentSessionInfo;
+// The reference app's `agent-status.test.ts`, ported at GT-3m and re-fed at
+// AR-3. The classifier is the module the whole monitor rests on — everything a
+// view draws is downstream of "what is this session doing", and since AR-3 that
+// answer is fieldd's ONE derived status (AR-D4) rather than anything a
+// terminal printed (ADR-003, our EL2 grain).
 
 describe("Godview agent status", () => {
-  it("maps ready, active, and permission states to the three statuses", () => {
-    expect(classifyAgentStatus(state())).toBe("idle");
+  it("maps the fold's idle, working and blocked onto the three statuses", () => {
+    expect(classifyAgentStatus(managedSummary({ status: "idle" }))).toBe("idle");
+    expect(classifyAgentStatus(managedSummary({ status: "working" }))).toBe("working");
     expect(
-      classifyAgentStatus(state({ lifecycle: "running", activeTurn: { startedAt: "now" } })),
-    ).toBe("working");
-    expect(classifyAgentStatus(state({ permissions: [{ requestId: "approval" }] }))).toBe(
-      "waiting",
-    );
+      classifyAgentStatus(managedSummary({ status: "blocked", blocker: { kind: "permission" } })),
+    ).toBe("waiting");
   });
 
-  it("drops sessions that reached a terminal lifecycle", () => {
-    expect(classifyAgentStatus(state({ lifecycle: "failed" }))).toBeUndefined();
-    expect(classifyAgentStatus(state({ lifecycle: "exited" }))).toBeUndefined();
+  it("drops a run puppeteer reports as no longer alive", () => {
+    expect(classifyAgentStatus(managedSummary({ alive: false }))).toBeUndefined();
   });
 
-  it("treats a missing state as starting rather than as absent", () => {
+  it("treats a run with no monitor state yet as starting rather than as absent", () => {
     // A session we have heard of but have no state for is REAL and is doing
     // something; showing nothing would be the dishonest reading.
-    expect(classifyAgentStatus(undefined)).toBe("working");
-    expect(agentDetail(undefined, "working")).toBe("starting");
+    const starting = managedSummary({ status: "unknown", monitor: false });
+    expect(classifyAgentStatus(starting)).toBe("working");
+    expect(agentDetail(starting, "working")).toBe("starting");
   });
 
   it("uses foreground activity for unassigned terminals, and unknown falls to idle", () => {
@@ -74,27 +45,41 @@ describe("Godview agent status", () => {
     expect(classifyTerminalStatus(undefined)).toBe("idle");
   });
 
-  it("labels a session from its workspace and its provider from its kind", () => {
-    expect(projectLabel(info)).toBe("vibe-field");
-    expect(projectLabel(info, "/project/vibe-field/packages/field-app")).toBe("field-app");
-    expect(providerLabel("codex")).toBe("Codex");
-    expect(providerLabel("acp")).toBe("ACP");
+  it("labels a session from where the agent is, else its workspace; the provider from its own label", () => {
+    expect(projectLabel(managedSummary({ cwd: "/project/vibe-field" }))).toBe("vibe-field");
+    const moved = managedSummary({ cwd: "/project/vibe-field" });
+    moved.monitor = {
+      ...moved.monitor!,
+      environment: { cwd: "/project/vibe-field/packages/field-app", worktrees: [] },
+    };
+    expect(projectLabel(moved)).toBe("field-app");
+    expect(providerLabel(managedSummary({ kind: "codex", label: "Codex" }))).toBe("Codex");
+    // an OPEN id: a provider this renderer never heard of is labeled by its
+    // adapter, and by its id when the label is empty (the tolerant reader)
+    expect(providerLabel(managedSummary({ kind: "some-new-agent", label: "Some New Agent" }))).toBe(
+      "Some New Agent",
+    );
+    expect(providerLabel({ kind: "some-new-agent", label: "" })).toBe("some-new-agent");
   });
 
   it("describes what an agent is doing without reading the terminal", () => {
-    expect(agentDetail(state({ permissions: [{ requestId: "a", tool: "Bash" }] }), "waiting")).toBe(
-      "permission · Bash",
-    );
     expect(
       agentDetail(
-        state({ tools: [{ toolCallId: "t", tool: "Read", state: "running" }] }),
+        managedSummary({ status: "blocked", blocker: { kind: "permission", tool: "Bash" } }),
+        "waiting",
+      ),
+    ).toBe("permission · Bash");
+    expect(
+      agentDetail(managedSummary({ status: "blocked", blocker: { kind: "question" } }), "waiting"),
+    ).toBe("question");
+    expect(
+      agentDetail(
+        managedSummary({ status: "working", lastAssistantText: "Reading the tests" }),
         "working",
       ),
-    ).toBe("Read");
-    expect(agentDetail(state({ activeReasoning: { startedAt: "now" } }), "working")).toBe(
-      "thinking",
-    );
-    expect(agentDetail(state({ activeTurn: { startedAt: "now" } }), "working")).toBe("responding");
+    ).toBe("Reading the tests");
+    expect(agentDetail(managedSummary({ status: "working" }), "working")).toBe("working");
+    expect(agentDetail(managedSummary({ status: "idle" }), "idle")).toBe("idle");
   });
 
   it("assigns a stable per-session accent SLOT, in range", () => {
@@ -108,17 +93,16 @@ describe("Godview agent status", () => {
     expect(agentAccentSlot("session-1", ACCENT_SLOTS)).not.toBe(
       agentAccentSlot("session-2", ACCENT_SLOTS),
     );
-    for (const id of ["a", "bb", "ccc", "session-9", ""]) {
+    for (const id of ["a", "session-1", "remote:mini:s1", "run-42"]) {
       const slot = agentAccentSlot(id, ACCENT_SLOTS);
       expect(slot).toBeGreaterThanOrEqual(0);
       expect(slot).toBeLessThan(ACCENT_SLOTS);
     }
   });
 
-  it("takes the last path component, and falls back when there is none", () => {
-    expect(folderName("/a/b/c", "x")).toBe("c");
-    expect(folderName("/a/b/c/", "x")).toBe("c");
-    expect(folderName(undefined, "claude")).toBe("claude");
-    expect(folderName("", "claude")).toBe("claude");
+  it("folds a path to its last component and falls back to the given name", () => {
+    expect(folderName("/Users/dev/Projects/vibe-field", "x")).toBe("vibe-field");
+    expect(folderName("", "codex")).toBe("codex");
+    expect(folderName(undefined, "terminal")).toBe("terminal");
   });
 });

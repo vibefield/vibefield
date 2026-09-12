@@ -1,8 +1,15 @@
+import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { assembleMonitorAgents, type MonitorRemoteRecord } from "./agents";
-import { MOCK_TICK_MS, mockFieldAt } from "./mock-agent-field";
+import {
+  assembleMonitorAgents,
+  type MonitorManagedRecord,
+  type MonitorRemoteRecord,
+  type MonitorTerminalRecord,
+} from "./agents";
+import type { AgentProviderSummary } from "./facet-types";
+import { type LocalFieldState, useLocalAgentField } from "./local-agent-field";
 import type { MonitorPalette } from "./monitor-palette";
-import { type RemoteSessionDoor, remoteRowId } from "./remote-door";
+import { type MonitorDoor, remoteRowId } from "./remote-door";
 import { useRemoteSessionField } from "./remote-session-field";
 import type { MonitorActions, MonitorAgent } from "./types";
 
@@ -10,38 +17,36 @@ import type { MonitorActions, MonitorAgent } from "./types";
  * THE SEAM. The single subscription to everything a monitor view renders, and
  * the only module in this subsystem that knows where agents come from.
  *
- * It is now a COMPOSITION (GT-D17). Two sources answer here and are merged into
- * one `MonitorAgent[]`:
+ * It is a COMPOSITION (GT-D17), and since AR-3 both halves are real:
  *
- *   · `MockAgentField` — invented, labeled, and structurally unable to mount
- *     anything. AR replaces exactly this one module and deletes its label.
+ *   · `LocalAgentField` — fieldd's fold (`agent.subscribe`): every managed
+ *     session on this device, one row per run, with puppeteer's monitor
+ *     projection riding verbatim. It replaced `MockAgentField`, and the
+ *     label that said the rows were invented went with it.
  *   · `RemoteSessionField` — REAL sessions on real peers, read from the mesh
  *     through the deck's own control connection, and mountable for real.
  *
- * The honesty split lives with the split sources: a mock row acknowledges and
- * mounts nothing, a remote row attaches the active pane, and neither is allowed
- * to look like the other (the stage's labels, and the views' own treatment).
+ * Beside them, the deck's own panes: a pane no agent has claimed is an
+ * unclaimed terminal row, the deck's fact and the deck's summary.
  *
- * In the reference app this hook subscribes to the chopsticks runtime over
- * Electron IPC (`onAgentSession` / `onAgentState` / `onAgentRemoved` /
- * `onWorkspaceFinal`, reconciled against a `listAgentSessions` snapshot). The
- * mock still stands in for that half; the remote half is already the real
- * thing. That is GT-D13's claim, unchanged: the views cannot tell.
+ * Every verb goes through the DOOR the deck built (`MonitorDoor`): a local
+ * row's select mounts its PTY in the active pane, a remote row's select
+ * attaches the peer's session there, and create spawns the chrome's chosen
+ * provider into it. The views still see actions; the source sees promises.
  *
- * PF6: the intervals are created on mount and cleared on unmount, and the stage
- * that owns this hook is mounted ONLY while the overlay is open. A closed
- * Godview therefore holds no monitor timer at all — not a paused one, and no
- * poll against the mesh either.
+ * PF6: the subscription and the poll are opened on mount and closed on
+ * unmount, and the stage that owns this hook is mounted ONLY while the overlay
+ * is open. A closed Godview therefore holds no monitor subscription at all.
  */
 
 export interface UseMonitorAgentsOptions {
   /** §2.6's accents, live from the tokens. The projection needs them to assign
    * each session its stable relationship color. */
   palette: MonitorPalette;
-  /** The deck's two verbs (GT-D17). Null before a deck exists — this host has
-   * no terminal bridge, or the overlay has not built one yet — and the remote
-   * half of the field is then empty, honestly and without placeholders. */
-  door?: RemoteSessionDoor | null;
+  /** The deck's verbs (GT-D17, AR-3). Null before a deck exists — this host has
+   * no terminal bridge, or the overlay has not built one yet — and both halves
+   * of the field are then empty, honestly and without placeholders. */
+  door?: MonitorDoor | null;
   /** The sessions the deck's panes are showing, and the one the user is in.
    * Facts, published by the deck; the monitor reads them and drives nothing. */
   panes?: MonitorPaneFacts;
@@ -50,6 +55,10 @@ export interface UseMonitorAgentsOptions {
 export interface MonitorPaneFacts {
   sessionIds: readonly string[];
   activeSessionId?: string;
+  /** The floor summaries of those panes' sessions (ghosttea's, as the deck
+   * holds them): what makes an unclaimed pane a terminal row, and what lets
+   * a managed row carry its PTY's summary. */
+  sessions?: readonly SessionSummary[];
 }
 
 export interface MonitorAgentsResult {
@@ -58,17 +67,30 @@ export interface MonitorAgentsResult {
   /** How many rows each source contributed, so the stage can scope its claims
    * to the right ones (GT-D17) rather than labeling the whole field. */
   sources: MonitorSourceCounts;
-  /** What the mock has acknowledged, for the stage to say out loud. Cleared by
+  /** What the chrome can spawn as, and which of them is chosen. */
+  providers: readonly AgentProviderSummary[];
+  selectedProviderId: string | null;
+  selectProvider(id: string): void;
+  /** Spawn the chosen provider into the active pane — the chrome's own verb;
+   * `createAt` is the same act from a view's gesture. */
+  spawn(): Promise<void>;
+  /** What the last verb answered, for the stage to say out loud. Cleared by
    * the stage; carried here because the actions are what produce it. */
   acknowledgement: MonitorAcknowledgement | null;
   clearAcknowledgement(): void;
 }
 
 export interface MonitorSourceCounts {
-  mock: number;
+  /** Managed sessions the fold contributed. */
+  local: number;
+  /** The deck's panes no agent has claimed. */
+  terminals: number;
   remote: number;
   /** Online peers behind the remote rows. */
   hosts: number;
+  /** The local field's honest state — `unavailable` carries fieldd's own reason. */
+  localState: LocalFieldState;
+  localReason?: string;
   /** The remote field's honest state — `unavailable` carries the floor's own
    * reason, which is the ordinary answer from a floor serving no mesh. */
   remoteState: "no-door" | "serving" | "unavailable";
@@ -94,44 +116,57 @@ export function useMonitorAgents({
   door = null,
   panes = NO_PANES,
 }: UseMonitorAgentsOptions): MonitorAgentsResult {
-  const [tick, setTick] = useState(0);
-  /** Which row the user last pointed at. It is REAL state and it is honest:
-   * "selected" here means selected in the preview, and the mock says so. */
+  /** Which row the user last pointed at — a preview highlight for a row no
+   * pane is showing yet. Cleared when the row lands in a pane. */
   const [selectedId, setSelectedId] = useState<string>();
   const [acknowledgement, setAcknowledgement] = useState<MonitorAcknowledgement | null>(null);
   /** Row id → the replica it was attached as. Kept per ROW rather than per
    * session because the row is what survives a refresh of the mesh. */
   const [links, setLinks] = useState<ReadonlyMap<string, RemoteLink>>(() => new Map());
+  const [providers, setProviders] = useState<readonly AgentProviderSummary[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setTick((current) => current + 1), MOCK_TICK_MS);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const snapshot = useMemo(() => mockFieldAt(tick), [tick]);
+  const localField = useLocalAgentField({ door });
   const remoteField = useRemoteSessionField({ door });
 
-  /** GT-3p: the tick's own damage gate.
-   *
-   * `mockFieldAt` is pure, so a tick that changed nothing anybody renders still
-   * produces a NEW object every 1.5s — and a new object re-runs the projection
-   * and re-renders every view beneath it. Most ticks move one agent's context
-   * percentage by a fraction and nothing else; the swarm cannot show that, and
-   * the stage chrome has nothing to do with it at all.
-   *
-   * The comparison is over the projection's INPUTS as JSON. That is honest
-   * about what it can catch — it is a structural equality, not a semantic one —
-   * and it is cheap at this size (nine records, twice a second). Holding the
-   * previous snapshot in a ref and returning it unchanged means the `useMemo`
-   * below sees the same reference and does not recompute, which is the entire
-   * saving: React's own bailout does the rest. */
-  const stableSnapshot = useRef(snapshot);
+  // What one can spawn as, asked once per door. A door that cannot answer
+  // leaves the list empty and the spawn control says so; nothing is invented.
+  useEffect(() => {
+    if (door === null) {
+      setProviders([]);
+      return;
+    }
+    let alive = true;
+    void door
+      .providers()
+      .then((list) => {
+        if (!alive) return;
+        setProviders(list);
+        setSelectedProviderId((current) => {
+          if (current !== null && list.some((p) => p.id === current)) return current;
+          return list.find((p) => p.available)?.id ?? list[0]?.id ?? null;
+        });
+      })
+      .catch(() => {
+        if (alive) setProviders([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [door]);
+
+  /** GT-3p's damage gate, kept: the projection's INPUTS as JSON. A frame
+   * that changed nothing anybody renders still arrives as a new object; the
+   * comparison holds the previous rows and returns them unchanged so the memo
+   * below sees the same reference. Cheap at this size. */
+  const stableRows = useRef(localField.rows);
   const stableKey = useRef("");
-  const key = JSON.stringify(snapshot);
+  const key = JSON.stringify(localField.rows);
   if (key !== stableKey.current) {
     stableKey.current = key;
-    stableSnapshot.current = snapshot;
+    stableRows.current = localField.rows;
   }
+  const localRows = stableRows.current;
 
   /** The deck publishes a fresh array whenever anything about its panes moves,
    * and the projection below must not recompute on identity alone. The joined
@@ -142,6 +177,18 @@ export function useMonitorAgents({
     () => new Set(paneSessionKey === "" ? [] : paneSessionKey.split("\0")),
     [paneSessionKey],
   );
+  const paneSessions = panes.sessions;
+  const paneSummaryKey = JSON.stringify(
+    (paneSessions ?? []).map((s) => [s.id, s.exited, s.cwd, s.title, s.activity?.kind]),
+  );
+  const sessions = useMemo(() => {
+    const map = new Map<string, SessionSummary>();
+    for (const session of paneSessions ?? []) map.set(session.id, session);
+    return map;
+    // keyed by the facts a row draws, not by array identity (the deck
+    // republishes at ghosttea's cadence)
+    // biome-ignore lint/correctness/useExhaustiveDependencies: paneSummaryKey stands in for paneSessions
+  }, [paneSummaryKey]);
 
   /** A pane link is only true while a pane is actually showing the replica: the
    * user can close that pane, and a bubble still drawn as linked would be the
@@ -156,18 +203,31 @@ export function useMonitorAgents({
     [remoteField.rows, links, paneSessionIds],
   );
 
-  const settled = stableSnapshot.current;
+  const managed = useMemo<readonly MonitorManagedRecord[]>(
+    () => localRows.map((summary) => ({ summary })),
+    [localRows],
+  );
+  /** The deck's panes, as terminal rows: the projection drops the ones a
+   * managed row claims. A pane whose session exited stays out (a dead pane is
+   * the deck's face to draw, not a row). */
+  const terminals = useMemo<readonly MonitorTerminalRecord[]>(
+    () =>
+      [...sessions.values()].filter((session) => !session.exited).map((session) => ({ session })),
+    [sessions],
+  );
+
   const agents = useMemo(
     () =>
       assembleMonitorAgents({
-        agents: settled.agents,
-        terminals: settled.terminals,
+        managed,
+        terminals,
         remotes,
         accents: palette.accents,
+        sessions,
         ...(panes.activeSessionId !== undefined ? { activeSessionId: panes.activeSessionId } : {}),
         ...(selectedId !== undefined ? { previewSelectedId: selectedId } : {}),
       }),
-    [palette.accents, selectedId, settled, remotes, panes.activeSessionId],
+    [palette.accents, selectedId, managed, terminals, remotes, sessions, panes.activeSessionId],
   );
 
   const announce = useCallback((message: string): void => {
@@ -234,13 +294,42 @@ export function useMonitorAgents({
     [announce, door],
   );
 
-  // MOCK ACTIONS (GT-D13), unchanged: they acknowledge VISIBLY and mount
-  // NOTHING. No session is created, no pane is touched, and the deck beside
-  // this stage never hears about the gesture — a preview that could spawn a
-  // real shell would be a preview in name only.
-  //
-  // AR wires the local half the same way GT-4 just wired the remote one: this
-  // source is replaced, and `select` keeps its meaning.
+  /**
+   * A LOCAL row's select (AR-3): a managed agent's PTY, or an unclaimed
+   * terminal, mounted in the pane the user is in. A row already showing there
+   * is acknowledged rather than re-mounted; a row whose PTY the fold no longer
+   * names (hosted: none) has nothing to mount and says so.
+   */
+  const mountLocal = useCallback(
+    async (agent: MonitorAgent): Promise<void> => {
+      const sessionId = agent.session?.id ?? agent.agent?.summary.terminal?.runtimeSessionId;
+      if (sessionId === undefined) {
+        announce(`${agent.project} has no terminal here to mount`);
+        return;
+      }
+      if (agent.active && panes.activeSessionId === sessionId) {
+        announce(`${agent.project} is in the active pane`);
+        return;
+      }
+      if (door === null) {
+        announce(`${agent.project} cannot be mounted yet — the deck has no connection`);
+        return;
+      }
+      const outcome = await door.mountLocal(sessionId);
+      if (outcome.state === "no-pane") {
+        announce("no pane to mount into — open one in the deck first");
+        return;
+      }
+      if (outcome.state === "failed") {
+        announce(`${agent.project} could not be mounted — ${outcome.reason}`);
+        return;
+      }
+      setSelectedId(undefined);
+      announce(`${agent.project} mounted in the active pane`);
+    },
+    [announce, door, panes.activeSessionId],
+  );
+
   const select = useCallback(
     (agent: MonitorAgent): void => {
       if (agent.remote !== undefined) {
@@ -248,30 +337,70 @@ export function useMonitorAgents({
         return;
       }
       setSelectedId(agent.id);
-      announce(`${agent.project} selected — preview only, nothing was mounted`);
+      void mountLocal(agent);
     },
-    [announce, attachRemote],
+    [attachRemote, mountLocal],
   );
 
-  const createAt = useCallback((): void => {
-    announce("create is not wired in the preview — the real one arrives with AR");
-  }, [announce]);
+  /** The birth (AR-3): the chrome's chosen provider, into the active pane. */
+  const spawn = useCallback(async (): Promise<void> => {
+    if (door === null) {
+      announce("no agent can be spawned yet — the deck has no connection");
+      return;
+    }
+    const provider = providers.find((p) => p.id === selectedProviderId);
+    if (provider === undefined) {
+      announce("no agent provider is available on this device");
+      return;
+    }
+    if (!provider.available) {
+      announce(`${provider.label} is not installed on this device`);
+      return;
+    }
+    const outcome = await door.spawn({ provider: provider.id });
+    if (outcome.state === "no-pane") {
+      announce("no pane to spawn into — open one in the deck first");
+      return;
+    }
+    if (outcome.state === "failed") {
+      announce(`${provider.label} could not be spawned — ${outcome.reason}`);
+      return;
+    }
+    announce(`${outcome.label} spawned in the active pane`);
+  }, [announce, door, providers, selectedProviderId]);
+
+  const createAt = useCallback((): Promise<void> => spawn(), [spawn]);
 
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
+  const selectProvider = useCallback((id: string) => setSelectedProviderId(id), []);
   const actions = useMemo<MonitorActions>(() => ({ select, createAt }), [createAt, select]);
   const sources = useMemo<MonitorSourceCounts>(
     () => ({
-      // Counted off the ASSEMBLED rows rather than the mock's records: the
-      // projection drops an exited agent, and a label claiming nine invented
-      // rows over eight drawn ones would be its own small dishonesty.
-      mock: agents.filter((agent) => agent.remote === undefined).length,
+      // Counted off the ASSEMBLED rows rather than the field's records: the
+      // projection drops an exited run, and a claim of N agents over N-1 drawn
+      // ones would be its own small dishonesty.
+      local: agents.filter((agent) => agent.agent !== undefined).length,
+      terminals: agents.filter((agent) => agent.agent === undefined && agent.remote === undefined)
+        .length,
       remote: remotes.length,
       hosts: remoteField.hosts,
+      localState: localField.state,
+      ...(localField.reason !== undefined ? { localReason: localField.reason } : {}),
       remoteState: remoteField.state,
       ...(remoteField.reason !== undefined ? { remoteReason: remoteField.reason } : {}),
     }),
-    [agents, remotes, remoteField],
+    [agents, remotes, remoteField, localField],
   );
 
-  return { agents, actions, sources, acknowledgement, clearAcknowledgement };
+  return {
+    agents,
+    actions,
+    sources,
+    providers,
+    selectedProviderId,
+    selectProvider,
+    spawn,
+    acknowledgement,
+    clearAcknowledgement,
+  };
 }

@@ -4,6 +4,7 @@
 export const CONTRACTS_VERSION = "0.1.0";
 
 export * from "./agent-index";
+export * from "./agent-session";
 export * from "./artifacts";
 export * from "./devices";
 export * from "./doclane";

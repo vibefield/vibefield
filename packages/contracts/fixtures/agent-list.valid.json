@@ -1,0 +1,205 @@
+{
+  "sessions": [
+    {
+      "sessionId": "native-1",
+      "sessionIdBasis": "observed",
+      "kind": "claude",
+      "label": "Claude",
+      "device": "dev-3c4d",
+      "tier": "managed",
+      "runtimeRunId": "run-1",
+      "runtimeEpoch": 2,
+      "profileId": "claude:native-default",
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "sess-01J8Z3K9",
+        "cellBootId": "cb-7f3a9c1e-2026",
+        "workloadClass": "agent"
+      },
+      "workspace": {
+        "mode": "direct",
+        "root": "/repo",
+        "sourcePath": "/repo",
+        "branch": "main"
+      },
+      "status": "blocked",
+      "observationLevel": "native-hooks",
+      "createdAt": "2026-08-16T11:00:00.000Z",
+      "stateChangedAt": "2026-08-16T12:00:00.000Z",
+      "lastActivityAt": "2026-08-16T12:00:00.000Z",
+      "title": "vibe-field",
+      "continuation": {
+        "persisted": true,
+        "resumable": false
+      },
+      "monitor": {
+        "schemaVersion": 2,
+        "runtimeEpoch": 2,
+        "revision": 9,
+        "runtimeRunId": "run-1",
+        "status": "blocked",
+        "statusSince": "2026-08-16T12:00:00.000Z",
+        "blockers": [
+          {
+            "id": "question-1",
+            "kind": "question",
+            "since": "2026-08-16T12:00:00.000Z",
+            "questions": [
+              {
+                "prompt": "Choose a database",
+                "options": [
+                  {
+                    "label": "SQLite"
+                  },
+                  {
+                    "label": "Postgres",
+                    "description": "Shared server"
+                  }
+                ],
+                "allowFreeForm": true
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "cumulativeTokens": 12345,
+          "burnRatePerMin": 321,
+          "burnRateWindowMs": 60000,
+          "burnRateBoundary": "mixed",
+          "samples": [
+            {
+              "at": "2026-08-16T11:59:45.000Z",
+              "cumulativeTokens": 12000
+            }
+          ],
+          "asOf": "2026-08-16T12:00:00.000Z"
+        },
+        "context": {
+          "usedTokens": 40000,
+          "capacityTokens": 200000,
+          "usedPercent": 20,
+          "percentageSource": "provider",
+          "asOf": "2026-08-16T12:00:00.000Z"
+        },
+        "model": {
+          "id": "model-card-v2",
+          "displayName": "Model Card V2",
+          "configured": {
+            "id": "model-alias-v1",
+            "displayName": "Model Alias V1"
+          },
+          "intent": "observed",
+          "asOf": "2026-08-16T12:00:00.000Z"
+        },
+        "effort": {
+          "value": "future-ultra",
+          "configured": "high",
+          "asOf": "2026-08-16T12:00:00.000Z"
+        },
+        "modes": {
+          "execution": "native-tui",
+          "providerSession": {
+            "raw": "future-auto",
+            "normalized": "auto",
+            "configured": {
+              "raw": "manual"
+            },
+            "intent": "observed"
+          },
+          "providerPermission": {
+            "raw": "accept-edits",
+            "configured": {
+              "raw": "manual"
+            },
+            "intent": "observed"
+          },
+          "asOf": "2026-08-16T12:00:00.000Z"
+        },
+        "subagents": [
+          {
+            "id": "child-1",
+            "actorRunKey": "actor-child-1",
+            "active": true,
+            "cumulativeTokens": 300,
+            "modelId": "model-card-v2",
+            "modelIntent": "observed",
+            "effort": "high",
+            "effortIntent": "observed"
+          }
+        ],
+        "team": {
+          "id": "team-1",
+          "teammates": [
+            {
+              "id": "member-1",
+              "actorRunKey": "actor-child-1",
+              "runtimeRunId": "run-2",
+              "idle": false,
+              "activity": "Reviewing changes",
+              "cumulativeTokens": 300,
+              "burnRatePerMin": 25,
+              "contextPercent": 40,
+              "modelId": "model-card-v2",
+              "modelIntent": "observed",
+              "effort": "high",
+              "effortIntent": "observed",
+              "activityProvisional": true
+            }
+          ],
+          "provisional": true
+        },
+        "workflows": [
+          {
+            "id": "workflow-1",
+            "active": true,
+            "actorRunKeys": [
+              "actor-child-1"
+            ],
+            "artifactRefs": [
+              {
+                "artifactId": "artifact-1",
+                "family": "workflow-definition",
+                "mediaType": "text/markdown",
+                "availability": "readable"
+              }
+            ]
+          }
+        ],
+        "omitted": {
+          "questionOptions": 2
+        },
+        "compaction": {
+          "active": false,
+          "count": 1,
+          "lastAt": "2026-08-16T11:30:00.000Z"
+        },
+        "environment": {
+          "cwd": "/repo",
+          "git": null,
+          "worktrees": [
+            "/repo-worktree"
+          ]
+        },
+        "session": {
+          "nativeSessionId": "native-1",
+          "startedAt": "2026-08-16T11:00:00.000Z"
+        },
+        "freshness": {
+          "lastEvidenceAt": "2026-08-16T12:00:00.000Z",
+          "level": "native-hooks",
+          "families": {
+            "usage": {
+              "support": "supported",
+              "asOf": "2026-08-16T12:00:00.000Z"
+            },
+            "workflow": {
+              "support": "degraded",
+              "asOf": "2026-08-16T11:59:00.000Z"
+            }
+          }
+        },
+        "alive": true
+      }
+    }
+  ]
+}

@@ -342,6 +342,12 @@ async function mint(
     // one ("ambiguous bindings"); the pool door in field-app is the spine
     // code that mediates plugin access, gating per-plugin grants before any
     // mint reaches this token.
+    // AR-3: the Godview monitor is spine code and the deck spawns agents into
+    // its own panes — agent.spawn (births, personas, the login pane),
+    // agent.observe (the fold), agent.control (reserved for AR-6's approvals
+    // and prompts, minted now so the scope set is the slice's, not a drip).
+    // agents.manage (the machine-scope distribution record, native.admin
+    // posture) is deliberately NOT here until the Agents settings section.
     scopes: [
       "doc.read",
       "doc.write",
@@ -355,6 +361,9 @@ async function mint(
       "surface.attach",
       "surface.browser",
       "surface.capture",
+      "agent.spawn",
+      "agent.observe",
+      "agent.control",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

@@ -167,6 +167,7 @@ pub mod layout {
     pub const AGENTS_DIR: &[&str] = &["agents"];
     pub const AGENT_PROFILES_FILE: &[&str] = &["agents", "profiles.json"];
     pub const AGENT_ROOTS_DIR: &[&str] = &["agents", "roots"];
+    pub const AGENT_SESSIONS_DIR: &[&str] = &["agents", "sessions"];
     pub const USERS_DIR: &[&str] = &["users"];
     pub const USERS_FILE: &[&str] = &["users.json"];
     pub const USERS_LOCK: &[&str] = &["users.json.lock"];
@@ -206,6 +207,7 @@ pub mod layout {
         ("AGENTS_DIR", AGENTS_DIR),
         ("AGENT_PROFILES_FILE", AGENT_PROFILES_FILE),
         ("AGENT_ROOTS_DIR", AGENT_ROOTS_DIR),
+        ("AGENT_SESSIONS_DIR", AGENT_SESSIONS_DIR),
         ("USERS_DIR", USERS_DIR),
         ("USERS_FILE", USERS_FILE),
         ("USERS_LOCK", USERS_LOCK),

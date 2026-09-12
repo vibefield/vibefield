@@ -15,6 +15,15 @@ import {
   IndexStatus,
 } from "../src/agent-index";
 import {
+  AgentListResult,
+  AgentMonitorMirror,
+  AgentProvidersResult,
+  AgentSessionRecord,
+  AgentSessionSummary,
+  AgentSpawnResult,
+  AgentsProfilesLoginResult,
+} from "../src/agent-session";
+import {
   ArtifactCatalogSlice,
   ArtifactPublishV2Params,
   ArtifactStatus,
@@ -152,6 +161,17 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agents-releases": AgentsReleasesResult,
   "agents-update": AgentsUpdateResult,
   "agents-profiles-verify": AgentsProfilesVerifyResult,
+  // AR-3 — the managed-session doors. `agent-monitor-state` is puppeteer's
+  // OWN monitor contract fixture (packages/core/src/monitor/types.test.ts at
+  // the pinned revision), transcribed: the mirror must read it and carry the
+  // rest through — a wire change upstream is a red gate here (AR-D4, §12).
+  "agent-monitor-state": AgentMonitorMirror,
+  "agent-session-summary": AgentSessionSummary,
+  "agent-session-record": AgentSessionRecord,
+  "agent-spawn": AgentSpawnResult,
+  "agent-list": AgentListResult,
+  "agent-providers": AgentProvidersResult,
+  "agents-profiles-login": AgentsProfilesLoginResult,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

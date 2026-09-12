@@ -8,14 +8,16 @@ import {
   projectLabel,
   providerLabel,
 } from "./agent-status";
-import type { AgentSessionInfo, AgentStateMessage } from "./facet-types";
+import type { AgentSessionSummary } from "./facet-types";
 import { folderName } from "./folder-name";
 import { type RemoteSessionRow, remoteRowId } from "./remote-door";
 import type { MonitorAgent, PaneAttachment } from "./types";
 
-export interface MonitorAgentRecord {
-  info: AgentSessionInfo;
-  state?: AgentStateMessage;
+/** A managed session as fieldd's fold reports it (AR-3), and the floor
+ * summary of its PTY when the deck holds one (a pane is showing it). */
+export interface MonitorManagedRecord {
+  summary: AgentSessionSummary;
+  session?: SessionSummary;
 }
 
 /** A terminal the user opened that no agent has claimed. */
@@ -36,7 +38,8 @@ export interface MonitorRemoteRecord {
 }
 
 export interface AssembleMonitorAgentsInput {
-  agents: readonly MonitorAgentRecord[];
+  /** The fold's rows (AR-3). */
+  managed: readonly MonitorManagedRecord[];
   terminals: readonly MonitorTerminalRecord[];
   /** The mesh's half of the field. Empty is the honest answer with no floor
    * serving — there are no placeholder peers and no invented hosts. */
@@ -53,10 +56,9 @@ export interface AssembleMonitorAgentsInput {
   /**
    * The row the preview is highlighting, by row id.
    *
-   * Separate from `activeSessionId` because it is a weaker claim, and the split
-   * is GT-D17's honesty split reaching the projection: a mock agent is mounted
-   * in no pane anywhere, so "active" can never be true of it — what IS true is
-   * that the user pointed at it, and the mock says only that.
+   * Separate from `activeSessionId` because it is a weaker claim: a row the
+   * user pointed at that no pane is showing yet (a managed session whose PTY
+   * has not been mounted here, a peer's session before its attach).
    */
   previewSelectedId?: string;
 }
@@ -65,44 +67,77 @@ function accentFor(id: string, accents: readonly string[]): string {
   return accents.length === 0 ? "" : (accents[agentAccentSlot(id, accents.length)] as string);
 }
 
+/** The record with the deck's summary of its PTY joined in, when a pane holds
+ * one: `sessions` is keyed by the floor's session id, which the fold names as
+ * the row's `terminal.runtimeSessionId`. */
+function withPaneSummary(
+  record: MonitorManagedRecord,
+  sessions: ReadonlyMap<string, SessionSummary> | undefined,
+): MonitorManagedRecord {
+  if (record.session !== undefined) return record;
+  const id = record.summary.terminal?.runtimeSessionId;
+  const session = id === undefined ? undefined : sessions?.get(id);
+  return session === undefined ? record : { ...record, session };
+}
+
+/** A managed row's monitor id: the floor session id when the fold names one
+ * (the id the pane showing it carries — the deck↔monitor join), else the run. */
+export function managedRowId(summary: AgentSessionSummary): string {
+  return summary.terminal?.runtimeSessionId ?? summary.runtimeRunId;
+}
+
 /** Undefined for a session that has stopped being worth showing at all. */
-export function monitorAgentFromSession(
-  record: MonitorAgentRecord,
+export function monitorAgentFromManaged(
+  record: MonitorManagedRecord,
   accents: readonly string[],
 ): MonitorAgent | undefined {
-  const { info, state } = record;
-  if (info.session.exited) return undefined;
-  const status = classifyAgentStatus(state);
+  const { summary, session } = record;
+  if (session?.exited) return undefined;
+  const status = classifyAgentStatus(summary);
   if (!status) return undefined;
-  const environment = state?.state.environment;
-  const currentCwd = environment?.currentCwd?.value;
-  const model = environment?.model?.value;
-  const git = environment?.git?.value;
+  const monitor = summary.monitor;
+  const observedCwd = monitor?.environment?.cwd;
   // The presence of the OBSERVATION decides, not the truthiness of the branch:
   // a git value of null authoritatively means "not in a repo", which is an
   // answer, and falling through to the workspace's branch would overwrite it.
-  const branch = environment?.git ? (git?.branch ?? undefined) : info.workspace.branch;
-  const cwd =
-    currentCwd || info.workspace.sourcePath || info.workspace.root || info.session.cwd || undefined;
-  const contextWindow = state?.state.contextWindow;
+  const git = monitor?.environment?.git;
+  const branch = git !== undefined ? (git?.branch ?? undefined) : summary.workspace?.branch;
+  const cwd = observedCwd || summary.workspace?.sourcePath || summary.workspace?.root || undefined;
+  const model = monitor?.model;
+  const context = monitor?.context;
+  const id = managedRowId(summary);
   return {
-    id: info.session.id,
-    session: info.session,
-    createdAtMs: info.session.createdAtMs,
+    id,
+    ...(session !== undefined ? { session } : {}),
+    createdAtMs: session?.createdAtMs ?? Date.parse(summary.createdAt),
     status,
-    project: projectLabel(info, currentCwd),
-    detail: agentDetail(state, status),
-    color: accentFor(info.runtimeSessionId, accents),
+    project: projectLabel(summary),
+    detail: agentDetail(summary, status),
+    // accent by the RUN, which survives the pane: the same run keeps its
+    // color whichever pane shows it, and across a fieldd restart (AR-4)
+    color: accentFor(summary.runtimeRunId, accents),
     active: false,
     ...(cwd ? { cwd } : {}),
     agent: {
-      kind: info.agent,
-      provider: providerLabel(info.agent),
+      kind: summary.kind,
+      provider: providerLabel(summary),
+      tier: summary.tier,
+      runtimeRunId: summary.runtimeRunId,
+      ...(summary.profileId !== undefined ? { profileId: summary.profileId } : {}),
       ...(model ? { model: model.displayName || model.id } : {}),
       ...(branch ? { branch } : {}),
-      ...(contextWindow ? { contextWindow } : {}),
-      info,
-      ...(state ? { state } : {}),
+      ...(context
+        ? {
+            contextWindow: {
+              usedTokens: context.usedTokens,
+              capacityTokens: context.capacityTokens,
+              usedPercent: context.usedPercent,
+              ...(model ? { modelId: model.id } : {}),
+              updatedAt: summary.stateChangedAt,
+            },
+          }
+        : {}),
+      summary,
     },
   };
 }
@@ -178,17 +213,19 @@ export function monitorAgentFromRemote(
 }
 
 /**
- * The one projection every view consumes: agents first in launch order, then
- * the terminals no agent has claimed, then the mesh's own (GT-D17). Pure, so
- * the seam is testable without a renderer.
+ * The one projection every view consumes: managed agents first in launch order,
+ * then the terminals no agent has claimed, then the mesh's own (GT-D17). Pure,
+ * so the seam is testable without a renderer.
  *
  * The remotes come LAST and as their own segment because the order on this
  * stage is a claim about locality — a peer's session is a guest, and the list
  * view's own ordering rules run over the result anyway.
  */
 export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readonly MonitorAgent[] {
-  const agents = input.agents
-    .map((record) => monitorAgentFromSession(record, input.accents))
+  const agents = input.managed
+    .map((record) =>
+      monitorAgentFromManaged(withPaneSummary(record, input.sessions), input.accents),
+    )
     .filter((agent): agent is MonitorAgent => agent !== undefined)
     .sort((left, right) => left.createdAtMs - right.createdAtMs);
   const claimed = new Set(agents.map((agent) => agent.id));

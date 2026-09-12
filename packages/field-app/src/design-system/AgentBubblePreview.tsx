@@ -2,8 +2,7 @@ import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { type CSSProperties, type ReactElement, useMemo, useRef, useState } from "react";
 import type { GodviewTheme } from "../godview/GodviewTuningPanel";
 import type { AgentVisualStatus } from "../godview/monitor/agent-status";
-import { providerLabel } from "../godview/monitor/agent-status";
-import type { AgentKind } from "../godview/monitor/facet-types";
+import type { AgentSessionSummary } from "../godview/monitor/facet-types";
 import { useMonitorPalette } from "../godview/monitor/monitor-palette";
 import type { MonitorAgent, PaneAttachment } from "../godview/monitor/types";
 import {
@@ -22,7 +21,9 @@ interface AgentFixtureOptions {
   project: string;
   status: AgentVisualStatus;
   color: string;
-  kind?: AgentKind;
+  /** puppeteer's provider id (open); the catalog's fixtures name the ones
+   * the icon map knows, which is a fixture's business and never the product's */
+  kind?: string;
   model?: string;
   branch?: string;
   contextPercent?: number;
@@ -31,8 +32,18 @@ interface AgentFixtureOptions {
   detail?: string;
 }
 
+/** The catalog's own labels for the providers its fixtures name — fixture
+ * data, like the projects and models beside it (DESIGN.md §9: real-shaped). */
+const FIXTURE_LABELS: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  grok: "Grok",
+  acp: "ACP",
+};
+
 function agentFixture(options: AgentFixtureOptions): MonitorAgent {
   const kind = options.kind ?? "claude";
+  const label = FIXTURE_LABELS[kind] ?? kind;
   const session = {
     id: options.id,
     exited: false,
@@ -45,7 +56,7 @@ function agentFixture(options: AgentFixtureOptions): MonitorAgent {
           usedTokens: options.contextPercent * 2_000,
           capacityTokens: 200_000,
           usedPercent: options.contextPercent,
-          modelId: options.model ?? providerLabel(kind),
+          modelId: options.model ?? label,
           updatedAt: "2026-08-05T00:00:00.000Z",
         };
 
@@ -61,17 +72,32 @@ function agentFixture(options: AgentFixtureOptions): MonitorAgent {
     ...(options.attachment ? { attachment: options.attachment } : {}),
     agent: {
       kind,
-      provider: providerLabel(kind),
+      provider: label,
+      tier: "managed",
+      runtimeRunId: `run-${options.id}`,
       ...(options.model ? { model: options.model } : {}),
       ...(options.branch ? { branch: options.branch } : {}),
       ...(contextWindow ? { contextWindow } : {}),
-      info: {
-        agent: kind,
+      summary: {
         sessionId: options.id,
-        runtimeSessionId: `runtime-${options.id}`,
+        kind,
+        label,
+        device: "catalog",
+        tier: "managed",
+        runtimeRunId: `run-${options.id}`,
+        runtimeEpoch: 1,
+        terminal: { hosted: "local", runtimeSessionId: options.id },
         workspace: { mode: "direct", root: `/Projects/${options.project}` },
-        session,
-      },
+        status:
+          options.status === "waiting"
+            ? "blocked"
+            : options.status === "working"
+              ? "working"
+              : "idle",
+        observationLevel: "structured",
+        createdAt: "2026-08-05T00:00:00.000Z",
+        stateChangedAt: "2026-08-05T00:00:00.000Z",
+      } satisfies AgentSessionSummary,
     },
   };
 }

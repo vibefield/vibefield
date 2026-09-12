@@ -1,0 +1,25 @@
+{
+  "sessionId": "native-1",
+  "sessionIdBasis": "observed",
+  "kind": "claude",
+  "label": "Claude",
+  "device": "dev-3c4d",
+  "tier": "managed",
+  "runtimeRunId": "run-1",
+  "runtimeEpoch": 2,
+  "profileId": "claude:native-default",
+  "terminal": {
+    "hosted": "local",
+    "runtimeSessionId": "sess-01J8Z3K9",
+    "cellBootId": "cb-7f3a9c1e-2026",
+    "workloadClass": "agent"
+  },
+  "workspace": { "mode": "direct", "root": "/repo", "sourcePath": "/repo", "branch": "main" },
+  "status": "blocked",
+  "observationLevel": "native-hooks",
+  "createdAt": "2026-08-16T11:00:00.000Z",
+  "stateChangedAt": "2026-08-16T12:00:00.000Z",
+  "lastActivityAt": "2026-08-16T12:00:00.000Z",
+  "title": "vibe-field",
+  "continuation": { "persisted": true, "resumable": false }
+}

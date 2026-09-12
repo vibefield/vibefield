@@ -1,0 +1,113 @@
+import type { AgentSessionSummary, AgentStatus } from "@vibefield/contracts";
+
+/**
+ * A managed session's row as fieldd's fold reports it (SessionSummary v2,
+ * AR-3) — test-local, real-shaped (DESIGN.md §9), and honest about what a row
+ * carries: the provider's OPEN id and label, the run identity, the floor
+ * session the pane join reads, and puppeteer's monitor projection under
+ * `monitor` only when the fixture asks for one.
+ */
+export interface ManagedSummaryOptions {
+  runtimeRunId?: string;
+  /** the floor session id (`terminal.runtimeSessionId`); null = no terminal */
+  terminalSessionId?: string | null;
+  kind?: string;
+  label?: string;
+  status?: AgentStatus;
+  alive?: boolean;
+  cwd?: string;
+  branch?: string | null | undefined;
+  /** absent = no git observation at all; null = observed "not a repo" */
+  gitObserved?: boolean;
+  model?: { id: string; displayName?: string };
+  contextPercent?: number;
+  blocker?: { kind: string; tool?: string };
+  lastAssistantText?: string;
+  createdAt?: string;
+  profileId?: string;
+  /** omit the monitor projection entirely (a run before its first state) */
+  monitor?: false;
+}
+
+export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessionSummary {
+  const runtimeRunId = options.runtimeRunId ?? "run-1";
+  const terminalSessionId =
+    options.terminalSessionId === undefined ? `${runtimeRunId}-pty` : options.terminalSessionId;
+  const status = options.status ?? "idle";
+  const createdAt = options.createdAt ?? "2026-09-12T10:00:00.000Z";
+  const cwd = options.cwd ?? "/project/vibe-field";
+  const monitor =
+    options.monitor === false
+      ? undefined
+      : {
+          schemaVersion: 2,
+          runtimeEpoch: 1,
+          revision: 3,
+          runtimeRunId,
+          status: status === "unknown" ? "idle" : status,
+          statusSince: createdAt,
+          blockers:
+            options.blocker === undefined
+              ? []
+              : [
+                  {
+                    id: "blocker-1",
+                    kind: options.blocker.kind,
+                    since: createdAt,
+                    ...(options.blocker.tool !== undefined ? { tool: options.blocker.tool } : {}),
+                  },
+                ],
+          ...(options.lastAssistantText !== undefined
+            ? { lastAssistantMessage: { text: options.lastAssistantText } }
+            : {}),
+          ...(options.model !== undefined ? { model: options.model } : {}),
+          ...(options.contextPercent !== undefined
+            ? {
+                context: {
+                  usedTokens: options.contextPercent * 2_000,
+                  capacityTokens: 200_000,
+                  usedPercent: options.contextPercent,
+                },
+              }
+            : {}),
+          environment: {
+            cwd,
+            ...(options.gitObserved === true
+              ? { git: options.branch === null ? null : { branch: options.branch } }
+              : {}),
+            worktrees: [],
+          },
+          session: { nativeSessionId: `${runtimeRunId}-native` },
+          freshness: { lastEvidenceAt: createdAt, level: "native-hooks" },
+          alive: options.alive ?? true,
+        };
+  return {
+    sessionId: `${runtimeRunId}-native`,
+    sessionIdBasis: "observed",
+    kind: options.kind ?? "codex",
+    label: options.label ?? (options.kind === undefined ? "Codex" : options.kind),
+    device: "this-device",
+    tier: "managed",
+    runtimeRunId,
+    runtimeEpoch: 1,
+    ...(options.profileId !== undefined ? { profileId: options.profileId } : {}),
+    terminal:
+      terminalSessionId === null
+        ? { hosted: "none" }
+        : { hosted: "local", runtimeSessionId: terminalSessionId, workloadClass: "agent" },
+    workspace: {
+      mode: "direct",
+      root: cwd,
+      sourcePath: cwd,
+      ...(typeof options.branch === "string" && options.gitObserved !== true
+        ? { branch: options.branch }
+        : {}),
+    },
+    ...(monitor !== undefined ? { monitor } : {}),
+    status,
+    observationLevel: "native-hooks",
+    createdAt,
+    stateChangedAt: createdAt,
+    continuation: { persisted: true, resumable: false },
+  };
+}

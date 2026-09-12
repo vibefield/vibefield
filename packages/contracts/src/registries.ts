@@ -503,6 +503,12 @@ export const LAYOUT = {
   AGENTS_DIR: ["agents"],
   AGENT_PROFILES_FILE: ["agents", "profiles.json"],
   AGENT_ROOTS_DIR: ["agents", "roots"],
+  /** AR-3 — this user's managed-session records: one `<runtimeRunId>.json`
+   * (0600) per session fieldd spawned, holding puppeteer's opaque continuation
+   * beside the launch facts (provider, persona, cwd, workspace) and the exit,
+   * once there is one. What `agent.resume` reads and what AR-4's re-attach
+   * will read; never a transcript (rosetta's) and never a credential. */
+  AGENT_SESSIONS_DIR: ["agents", "sessions"],
   /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
    * a full tree of the segments above; these four live at the VibeField root
    * itself and, with the `machine/` set below, are the only segments that

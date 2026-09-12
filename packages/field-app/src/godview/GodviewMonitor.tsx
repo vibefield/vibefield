@@ -7,7 +7,7 @@ import { MONITOR_CHROME_ATTRIBUTE, MONITOR_STAGE_CLASS } from "./monitor/chrome"
 import { useMonitorPalette } from "./monitor/monitor-palette";
 import type { MonitorParameters } from "./monitor/parameters";
 import { MONITOR_VIEWS } from "./monitor/registry";
-import type { RemoteSessionDoor } from "./monitor/remote-door";
+import type { MonitorDoor } from "./monitor/remote-door";
 import type { AgentMonitorView } from "./monitor/types";
 import {
   type MonitorPaneFacts,
@@ -16,26 +16,35 @@ import {
 } from "./monitor/useMonitorAgents";
 import { currentSwarmPhysicsMode } from "./views/swarm/swarm-physics-driver";
 
-export const MOCK_LABEL = "preview — mock agents";
 const ACKNOWLEDGEMENT_MS = 2_600;
 
 /**
- * THE HONESTY SPLIT, in words (GT-D17).
+ * THE LOCAL CLAIM (AR-3), where the mock's label used to stand.
  *
- * With only the mock field on the stage, the label claims the stage — which was
- * true at GT-3m and is the sentence the smoke has asserted since. The moment a
- * real remote session stands beside those invented agents, the same sentence
- * becomes a lie about the real one, so the claim NARROWS to a count: these N
- * are the invented ones. A real session must never sit under a label calling it
- * invented, and an invented agent must never look real.
+ * GT-D13's law was that invented rows say so on screen. There are no invented
+ * rows any more: the local half of the field is fieldd's fold, and the chip
+ * counts what the daemon reports — managed agents on this device — or says
+ * nothing when there are none (DESIGN.md's sync law: quiet is the honesty when
+ * there are no facts, never a vacuous "no agents"). The one sentence that must
+ * never be quiet is the degraded one below.
  */
-export function mockClaim(sources: MonitorSourceCounts): string {
-  return sources.remote === 0 ? MOCK_LABEL : `preview — ${sources.mock} mock agents`;
+export function localClaim(sources: MonitorSourceCounts): string | null {
+  if (sources.localState !== "live" || sources.local === 0) return null;
+  return `${sources.local} managed agent${sources.local === 1 ? "" : "s"}`;
 }
 
-/** The other half of the split: the real rows, counted with their peers. No
- * chip at all when there are none — DESIGN.md's sync law, that quiet is the
- * honesty when there are no facts, rather than a vacuous "no peers". */
+/** The honest-states law for the local half: a fold that could not be read
+ * is UNAVAILABLE with fieldd's reason, never a blank stage that looks idle. */
+export function localUnavailableClaim(sources: MonitorSourceCounts): string | null {
+  if (sources.localState !== "unavailable") return null;
+  return sources.localReason === undefined || sources.localReason === ""
+    ? "agents unavailable"
+    : `agents unavailable · ${sources.localReason}`;
+}
+
+/** The real rows, counted with their peers. No chip at all when there are
+ * none — DESIGN.md's sync law, that quiet is the honesty when there are no
+ * facts, rather than a vacuous "no peers". */
 export function remoteClaim(sources: MonitorSourceCounts): string | null {
   if (sources.remote === 0) return null;
   const sessions = `${sources.remote} remote session${sources.remote === 1 ? "" : "s"}`;
@@ -73,10 +82,10 @@ export interface GodviewMonitorProps {
   theme?: GodviewTheme;
   notice?: string | null;
   tuningOpen?: boolean;
-  /** The deck's two verbs (GT-D17), or null while there is no deck. The stage
-   * passes it to the source and never calls it — a view is still a pure
+  /** The deck's verbs (GT-D17, AR-3), or null while there is no deck. The
+   * stage passes it to the source and never calls it — a view is still a pure
    * function of its props, and this component is not a view. */
-  door?: RemoteSessionDoor | null;
+  door?: MonitorDoor | null;
   /** The deck's pane facts, read-only. */
   panes?: MonitorPaneFacts;
   onSelectView?: (viewId: string) => void;
@@ -97,7 +106,17 @@ export function GodviewMonitor({
   onThemeChange,
 }: GodviewMonitorProps): ReactElement {
   const palette = useMonitorPalette();
-  const { agents, actions, sources, acknowledgement, clearAcknowledgement } = useMonitorAgents({
+  const {
+    agents,
+    actions,
+    sources,
+    providers,
+    selectedProviderId,
+    selectProvider,
+    spawn,
+    acknowledgement,
+    clearAcknowledgement,
+  } = useMonitorAgents({
     palette,
     door,
     ...(panes ? { panes } : {}),
@@ -137,8 +156,11 @@ export function GodviewMonitor({
       viewId: view.id,
       agents: agents.length,
       agentBacked: agents.filter((agent) => agent.agent !== undefined).length,
-      mockLabel: mockClaim(sources),
-      mockAgents: sources.mock,
+      localClaim: localClaim(sources),
+      localAgents: sources.local,
+      terminals: sources.terminals,
+      localState: sources.localState,
+      ...(sources.localReason !== undefined ? { localReason: sources.localReason } : {}),
       remoteSessions: sources.remote,
       remoteHosts: sources.hosts,
       remoteState: sources.remoteState,
@@ -172,6 +194,7 @@ export function GodviewMonitor({
   }, [selectNextStatus]);
 
   const MonitorView = view.Component;
+  const selectedProvider = providers.find((p) => p.id === selectedProviderId);
 
   return (
     <>
@@ -210,6 +233,41 @@ export function GodviewMonitor({
               <kbd>⌘3</kbd>
             </button>
           </nav>
+          {/* THE BIRTH (AR-3): the provider list is fieldd's answer, the
+              spawn lands in the active pane. Nothing here is a vendor's: the
+              names are the adapters' own labels, and an uninstalled provider
+              is listed and said to be so rather than hidden. */}
+          <nav className="vf-godview-status-controls" aria-label="Spawn an agent">
+            <select
+              className="vf-godview-view-switch"
+              aria-label="Agent provider"
+              value={selectedProviderId ?? ""}
+              disabled={providers.length === 0}
+              onChange={(event) => selectProvider(event.currentTarget.value)}
+            >
+              {providers.length === 0 ? <option value="">no providers</option> : null}
+              {providers.map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.available ? provider.label : `${provider.label} (not installed)`}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="vf-godview-spawn"
+              disabled={door === null || selectedProvider === undefined}
+              title={
+                selectedProvider === undefined
+                  ? "no agent provider is available on this device"
+                  : selectedProvider.available
+                    ? `spawn ${selectedProvider.label} in the active pane`
+                    : `${selectedProvider.label} is not installed on this device`
+              }
+              onClick={() => void spawn()}
+            >
+              SPAWN
+            </button>
+          </nav>
           <button
             className={`vf-godview-tweak-toggle${tuningOpen ? " is-open" : ""}`}
             type="button"
@@ -241,14 +299,22 @@ export function GodviewMonitor({
         ref={stageRef}
         className={MONITOR_STAGE_CLASS}
         aria-label={
-          sources.remote === 0
-            ? "Agent monitor — mock preview"
-            : "Agent monitor — mock preview and remote sessions"
+          sources.remote === 0 ? "Agent monitor" : "Agent monitor — local and remote sessions"
         }
       >
         <MonitorView agents={agents} parameters={parameters} actions={actions} palette={palette} />
         <div ref={chromeRef} className="vf-monitor-chrome" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
-          <span className="vf-monitor-mock-chip">{mockClaim(sources)}</span>
+          {localClaim(sources) !== null ? (
+            <span className="vf-monitor-local-chip">{localClaim(sources)}</span>
+          ) : null}
+          {localUnavailableClaim(sources) !== null ? (
+            <span
+              className="vf-monitor-remote-unavailable-chip"
+              title={sources.localReason ?? "the agent fold could not be read"}
+            >
+              {localUnavailableClaim(sources)}
+            </span>
+          ) : null}
           {remoteClaim(sources) !== null ? (
             <span className="vf-monitor-remote-chip">{remoteClaim(sources)}</span>
           ) : null}

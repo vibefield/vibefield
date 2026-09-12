@@ -115,6 +115,10 @@
     "agents",
     "roots"
   ],
+  "AGENT_SESSIONS_DIR": [
+    "agents",
+    "sessions"
+  ],
   "USERS_DIR": [
     "users"
   ],

@@ -3,9 +3,9 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AgentKind, AgentSessionInfo } from "../src/godview/monitor/facet-types";
 import type { MonitorAgent } from "../src/godview/monitor/types";
 import { AgentBubbleView, agentBubblePresentation } from "../src/godview/views/swarm/AgentBubble";
+import { managedSummary } from "./managed-session-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -31,7 +31,7 @@ function terminal(status: "idle" | "working"): MonitorAgent {
   };
 }
 
-function agent(status: "idle" | "working" | "waiting", kind: AgentKind = "codex"): MonitorAgent {
+function agent(status: "idle" | "working" | "waiting", kind = "codex"): MonitorAgent {
   return {
     id: `agent-${status}`,
     createdAtMs: 0,
@@ -43,6 +43,8 @@ function agent(status: "idle" | "working" | "waiting", kind: AgentKind = "codex"
     agent: {
       kind,
       provider: "Codex",
+      tier: "managed",
+      runtimeRunId: `run-${status}`,
       model: "GPT-5.6 Codex",
       branch: "swarm-audit",
       contextWindow: {
@@ -51,7 +53,7 @@ function agent(status: "idle" | "working" | "waiting", kind: AgentKind = "codex"
         usedPercent: 42.8,
         updatedAt: "2026-08-05T00:00:00.000Z",
       },
-      info: {} as AgentSessionInfo,
+      summary: managedSummary({ kind, runtimeRunId: `run-${status}` }),
     },
   };
 }

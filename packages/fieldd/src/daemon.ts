@@ -6,10 +6,13 @@ import { join } from "node:path";
 // needs only the version its supervisor holds a spawned rosettad to
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
+  AgentResumeParams,
+  AgentSpawnParams,
   AgentsInstallsParams,
   AgentsProfilesCreateParams,
   AgentsProfilesDeleteParams,
   AgentsProfilesListParams,
+  AgentsProfilesLoginParams,
   AgentsProfilesVerifyParams,
   AgentsReleasesParams,
   AgentsSetActiveParams,
@@ -92,7 +95,7 @@ import {
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { EnrollmentStore, IndexService } from "./agent-index";
-import { AgentRuntimeService } from "./agent-runtime";
+import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
@@ -199,6 +202,9 @@ export interface FielddConfig {
    * fetch the release detectors use. Production: the process PATH, global fetch. */
   agentSearchPath?: string;
   agentFetch?: typeof fetch;
+  /** AR-3 test seam: compose providers beside (or instead of) puppeteer's
+   * built-ins — a scripted adapter that spawns through the real host. */
+  agentProviders?: AgentRuntimeServiceOptions["providers"];
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -467,11 +473,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // under the machine scope. Constructed here so the reconcile can subscribe
   // to the index daemon's readiness before the daemon ever starts; touches no
   // disk until a persona door is called (puppeteer's registry is lazy).
+  // AR-3 — the host is the floor (agent-host.ts over TerminalService), which
+  // is built later in this boot; the runtime holds the host object from
+  // construction, so the service is late-bound to the terminals through a
+  // getter and refuses typed until they exist. The device id likewise: the
+  // device service is constructed after the api.
+  let terminalsRef: TerminalService | null = null;
+  let devicesForAgents: DeviceService | null = null;
   const agents = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
     index,
     supervisor: rosettad,
+    terminals: () => terminalsRef,
+    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
     ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
     logger: logger.child({ component: "agent_runtime" }),
@@ -884,6 +900,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
+    // AR-3 — lend the floor to the agent runtime, and feed the fold: the
+    // floor's exit facts become puppeteer's `handleProcessExit` (or verify a
+    // login pane's persona), every inventory joins the rows to their cells
+    // and backstops an exit the cell's connection never reported.
+    terminalsRef = terminals;
+    terminals.onSessionExited((event) => void agents.handleTerminalExit(event));
+    terminals.onInventory((rows) => agents.handleInventory(rows));
 
     // T1 §1 — the tailnet door's node-id correlation. DeviceService is built
     // AFTER ProductApi, so this is a let-ref, not a closure over the const:
@@ -1149,6 +1172,82 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
         () => agents.setActive(parsed.data),
         (result) => ({ attrs: { changed: result.changed } }),
+      );
+    });
+    // AR-3 — managed sessions (agent-runtime.ts, the fold). A spawn and a
+    // resume are audited like a terminal birth (attempt-before-effect; the
+    // run id and the terminal id ride the outcome); the login pane like a
+    // persona mutation. The reads are the fold, unaudited like terminal.list.
+    api.register("agent.providers", async () => await agents.providers());
+    api.register("agent.spawn", async (ctx, params) => {
+      const parsed = AgentSpawnParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { provider, cwd?, profileId?, title? }",
+          false,
+        );
+      return await audit.required(
+        ctx,
+        {
+          action: "agent.session.spawn",
+          target: { kind: "agent-session", id: "pending" },
+          attrs: {
+            provider: parsed.data.provider,
+            ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
+            ...(parsed.data.profileId !== undefined ? { profileId: parsed.data.profileId } : {}),
+            ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+          },
+        },
+        () => agents.spawn(parsed.data, ctx.principal),
+        (result) => ({
+          outcome: "succeeded",
+          attrs: {
+            runtimeRunId: result.session.runtimeRunId,
+            sessionId: result.terminal.sessionId,
+          },
+        }),
+      );
+    });
+    api.register("agent.resume", async (ctx, params) => {
+      const parsed = AgentResumeParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeRunId, cwd? }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agent.session.resume",
+          target: { kind: "agent-session", id: parsed.data.runtimeRunId },
+          attrs: { ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}) },
+        },
+        () => agents.resume(parsed.data, ctx.principal),
+        (result) => ({
+          outcome: "succeeded",
+          attrs: {
+            runtimeRunId: result.session.runtimeRunId,
+            sessionId: result.terminal.sessionId,
+          },
+        }),
+      );
+    });
+    api.register("agent.list", () => agents.list());
+    api.registerSubscription("agent.subscribe", (_ctx, _params, emit) => {
+      const dispose = agents.subscribe((rows) => emit(rows));
+      return { snapshot: agents.list(), dispose };
+    });
+    api.register("agents.profiles.login", async (ctx, params) => {
+      const parsed = AgentsProfilesLoginParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { profileId, cwd? }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profiles.login",
+          target: { kind: "agent-persona", id: parsed.data.profileId },
+          attrs: { ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}) },
+        },
+        () => agents.login(parsed.data, ctx.principal),
+        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.terminal.sessionId } }),
       );
     });
     api.register("system.capabilities", () => ({
@@ -1435,6 +1534,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return { serve: "product", ...(url !== undefined ? { url } : {}) };
       },
     });
+    devicesForAgents = devices;
     devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
     // NF-3: the terminalHost capability follows the hello — republish when the
     // floor appears or a new native boot rotates the endpoints.

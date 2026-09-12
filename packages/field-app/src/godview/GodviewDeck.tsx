@@ -5,6 +5,7 @@ import {
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
+import { AgentListResult, AgentProvidersResult, AgentSpawnResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,6 +16,7 @@ import {
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import {
+  adoptCreatedTerminal,
   createTerminalSession,
   openDormantTransport,
   refreshTerminalRoster,
@@ -41,7 +43,7 @@ import {
 import { godviewTerminalEffects, godviewTerminalTheme } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
-import type { RemoteSessionDoor } from "./monitor/remote-door";
+import type { MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
 import { useDeckZoom, ZoomActivePane } from "./ZoomActivePane";
@@ -154,7 +156,7 @@ export interface GodviewDeckProps {
    * is; the runtime itself never leaves this file, and no view ever sees
    * either. Null while there is nothing to open (no transport yet).
    */
-  onRemoteDoor?: (door: RemoteSessionDoor | null) => void;
+  onRemoteDoor?: (door: MonitorDoor | null) => void;
   /** The deck's pane facts, for a monitor that must say which of its rows are
    * actually showing somewhere. Read-only in both directions of meaning: the
    * monitor never drives panes with them. */
@@ -744,7 +746,7 @@ export function GodviewDeck({
   // at call time (ghosttea republishes it on every pane change, and a door
   // rebuilt that often would restart the monitor's poll for no reason), while a
   // new runtime is a new control connection and genuinely a different door.
-  const door = useMemo<RemoteSessionDoor | null>(() => {
+  const door = useMemo<MonitorDoor | null>(() => {
     if (runtime === null) return null;
     return {
       // `enableRemoteSessions={false}` below turns off upstream's palette and
@@ -807,8 +809,102 @@ export function GodviewDeck({
           };
         }
       },
+      // ── AR-3: the local half — fieldd's fold, and the births into this deck ──
+      observe: ({ onFrame, onError }) => {
+        let cancelled = false;
+        let unsubscribe: (() => void) | null = null;
+        const deliver = (payload: unknown): void => {
+          // the tolerant reader: an unreadable frame is a reason, never a blank
+          const parsed = AgentListResult.safeParse(payload);
+          if (parsed.success) onFrame(parsed.data.sessions);
+          else
+            onError(
+              `agent.subscribe answered an unreadable frame: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+            );
+        };
+        void fieldd
+          .subscribe("agent.subscribe", {}, (payload) => {
+            if (!cancelled) deliver(payload);
+          })
+          .then((subscription) => {
+            if (cancelled) {
+              subscription.unsubscribe();
+              return;
+            }
+            unsubscribe = subscription.unsubscribe;
+            deliver(subscription.snapshot);
+          })
+          .catch((cause: unknown) => {
+            if (!cancelled) onError(cause instanceof Error ? cause.message : String(cause));
+          });
+        return () => {
+          cancelled = true;
+          unsubscribe?.();
+        };
+      },
+      providers: async () =>
+        AgentProvidersResult.parse(await fieldd.request("agent.providers", {})).providers,
+      spawn: async (request) => {
+        // Born INTO the pane the user is in (GT-D17's law for attach, kept for
+        // births): with no pane there is nowhere to put the agent, and it is
+        // said before anything is spawned.
+        const active = workspaceRef.current?.activeSession;
+        if (active === undefined) return { state: "no-pane" };
+        const cwd = paneCwd({ cwd: active.cwd }, readDeviceHost()) ?? shell?.home;
+        try {
+          const answered = AgentSpawnResult.parse(
+            await fieldd.request("agent.spawn", {
+              provider: request.provider,
+              ...(request.profileId !== undefined ? { profileId: request.profileId } : {}),
+              ...(cwd !== undefined ? { cwd } : {}),
+            }),
+          );
+          // The spawn's answer is the SAME create ticket a shell birth gets:
+          // the pool adopts it (placement, primed ticket, exact summary) and
+          // the workspace mounts the summary — no second round trip, no wait
+          // on the observed inventory (GT-1).
+          const born = adoptCreatedTerminal(answered.terminal);
+          const context = workspaceRef.current;
+          if (context === undefined || context.activePaneId === undefined) {
+            // The pane went away while fieldd was answering. The agent is
+            // running and the fold shows it; a select mounts it later.
+            return { state: "no-pane" };
+          }
+          context.mountSession(born.session);
+          return {
+            state: "spawned",
+            sessionId: born.sessionId,
+            runtimeRunId: answered.session.runtimeRunId,
+            label: answered.session.label,
+          };
+        } catch (cause) {
+          return {
+            state: "failed",
+            reason: cause instanceof Error ? cause.message : String(cause),
+          };
+        }
+      },
+      mountLocal: async (sessionId) => {
+        const context = workspaceRef.current;
+        if (context === undefined || context.activePaneId === undefined)
+          return { state: "no-pane" };
+        try {
+          // The floor is the one authority both halves read (the pool's own
+          // join for a birth, asked here for a session that already exists).
+          const summary = await terminalSessionSummary(sessionId);
+          if (summary === null)
+            return { state: "failed", reason: "the floor does not list this session" };
+          context.mountSession(summary);
+          return { state: "mounted", sessionId };
+        } catch (cause) {
+          return {
+            state: "failed",
+            reason: cause instanceof Error ? cause.message : String(cause),
+          };
+        }
+      },
     };
-  }, [runtime]);
+  }, [runtime, fieldd, shell]);
 
   useEffect(() => {
     onRemoteDoor?.(door);
@@ -867,7 +963,13 @@ export function GodviewDeck({
     for (const sessionId of remoteDevices.current.keys()) {
       if (!sessionIds.includes(sessionId)) remoteDevices.current.delete(sessionId);
     }
-    onPanes?.({ sessionIds, ...(activeSessionId !== undefined ? { activeSessionId } : {}) });
+    onPanes?.({
+      sessionIds,
+      ...(activeSessionId !== undefined ? { activeSessionId } : {}),
+      // the floor summaries the panes hold (AR-3): an unclaimed pane is a
+      // terminal row on the stage, a managed row carries its PTY's summary
+      sessions: (workspace?.panes ?? []).map((pane) => pane.session),
+    });
   }, [paneSessionIds, workspace, onPanes]);
 
   /** The pane's face, plus the monitor link (GT-D17).
