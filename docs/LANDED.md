@@ -4952,3 +4952,58 @@ runtime with an identity stamp, wire additive at protocol 20) and puppeteer `719
 `ProfileService.observationRoot` on all nine adapters, Pi's managed binding one level in, RFC 006
 addendum). Both were the prerequisites the ratified data topology (`thinking-ar-data-topology.md`,
 AR-D15…D22) named before a persona can be ingested; VibeField consumes neither until AR-1.*
+
+## AR-1 — the index doors and the enrollment record (2026-09-12)
+
+**AR-1 the contracts and the record** (`c7fe5fda`; the pin moved to rosetta `af6f0d7` in the
+same commit). The ratified topology's first slice in code. Contracts: the `index.*` rows
+(`discoveries`/`status` on `index.read`; `enroll`/`retire` on the NEW local-only `index.manage`)
+and the `agents.*` rows (`installs`/`releases`/`update`/`setActive` on the NEW local-only
+`agents.manage`; `profiles.list/create/delete/verify` on `agent.spawn` — decided here: a persona is
+what one spawns as, no third scope), every row `locality: "local"`, neither new scope in
+`TAILNET_SCOPES` or the plugin eligibility table; the LAYOUT segments the topology names
+(`index/enrollment.json`, `agents/`, `agents/profiles.json`, `agents/roots/`, and the never-re-root
+`machine/`, `machine/agents/`, `machine/agents/distribution.json`, `machine/agents/updates/`) with
+`LAYOUT_ROOT_LEVEL` as the never-re-root set AS DATA (the users migration's manifest reads it
+instead of respelling four names); `agent-index.ts` — the enrollment record (rosetta's format 1
+verbatim plus the VibeField-only `retired[]`/`updated_at`; `AbsoluteDataRoot` refuses what the daemon
+refuses), the index projections (`IndexDiscovery`, `IndexStatus`, `IndexRuntimeStatus`, the
+tolerant `IndexPhase`), and the `agents.*` shapes mirrored from puppeteer's own schemas
+(`AgentPersona` without `dataRoot`, `AgentInstall`, `AgentRelease`, `AgentUpdateReceipt`,
+`AgentDistributionRecord`); six fixtures, the enrollment one parsing rosetta's bench file
+verbatim. fieldd: `EnrollmentStore` — loaded at boot, published atomically (0600, temp + rename)
+BEFORE every rosettad spawn and after every change, validating what the daemon validates (an
+absolute existing directory, no duplicate or nested root), retiring a vanished root at publish
+instead of handing it over, setting an unreadable record aside for a human; `IndexService` — the
+four doors, every answer a projection (the origin is read from `RosettadState` inside `get()` and
+nowhere else; an enrolled root's path never leaves fieldd — `profileId` names the persona), reads
+UNAVAILABLE `{service:"index", state}` while the daemon is not ready, mutations audited
+(`index.enroll`, `index.retire`) and bouncing the daemon through `requestRestart` only when the
+record changed; `enrollRuntime` is AR-2's persona path (`observationRoot(profile)`, never
+`dataRoot`). The supervisor gained `--enroll` and passes `--home` as the OS home explicitly
+(topology R7). Tests: 9 scripted rows (the record before the first launch; the projections through
+a window token holding `index.read`; enroll rewrites + audits + bounces and the same set again
+changes nothing; retire of a discovered kind and of an enrolled root — rows stay, the persona
+stays named; the store's refusals; the down-daemon UNAVAILABLE; the unreadable record; the
+no-daemon record) and 3 rows against the REAL rosettad with an EMPTY home (the roll call
+uninstalled and unconsented; an enrolled empty root live from the first start, labelled,
+retired with its rows public; revocation seeded with rosetta's ground-truth claude-code fixture).
+The fieldd suite 699 green (the 6 real-binary rows opt-in, all green at the moved pin); contracts 378; users 37; the Rust layout vector pinned.
+
+**Found on the way, fixed upstream — RO-2c (rosetta `af6f0d7`).** rosetta's `serve` computed
+consent as a UNION (the projection's persisted `enabled` flags ∪ the manifest ∪ the CLI ∪ the
+file's `enabled_kinds` ∪ the enrolled ids), so a kind the record no longer named stayed
+consented from its persisted flag: the file could ADD consent but never REVOKE it, and AR-D17's
+"rosetta's `enabled` is a cache re-applied on every ready" was only half true. Now, with a file
+present, the file is authoritative for discovered kinds, the projection's flags are re-derived at
+start (an omitted kind reads `enabled: false` in the census and the runtimes, rows public), and
+un-consenting mid-backfill never traps the daemon. The revocation row above is the VibeField-level
+witness. Gate: `pnpm verify` verbatim green except `pnpm lint` on James's untracked `work/`
+(SNAP-0's note stands); the remaining steps run individually after it.
+
+**Still owed:** AR-2 (the first puppeteer import — PU-6's clean-room install gates CI — the
+injected profile store and roots, the `agents.*` handlers, the persona path); the consent UI
+(design-03 §4.3, AR-3/4) — today the doors are reachable from the shell and any window token
+minted with `index.read`/`index.manage`, and no window asks for them yet; `SIBLINGS_TOKEN`; the
+three upstream pins are still on UNPUSHED local branches; the dev-local snapshot of the draft docs
+(James's ritual); RO-8 (retire/forget upstream) before a purge can exist.
