@@ -5007,3 +5007,101 @@ injected profile store and roots, the `agents.*` handlers, the persona path); th
 minted with `index.read`/`index.manage`, and no window asks for them yet; `SIBLINGS_TOKEN`; the
 three upstream pins are still on UNPUSHED local branches; the dev-local snapshot of the draft docs
 (James's ritual); RO-8 (retire/forget upstream) before a purge can exist.
+
+## AR-2 — puppeteer in fieldd: the runtime, the persona path, the machine scope (2026-09-12)
+
+**AR-2 the first import** (`f9f04763`). One agent runtime per fieldd, built from puppeteer's
+built-in providers with everything puppeteer would otherwise keep under `~/.puppeteer` injected
+from THIS user's root (PU-8: fieldd owns every byte, puppeteer every schema) — the profile
+registry at `LAYOUT.AGENT_PROFILES_FILE` (fieldd's store: 0600, temp + durable rename, an
+unreadable file set aside for a human and the registry started empty rather than overwritten),
+managed roots under `LAYOUT.AGENT_ROOTS_DIR` (puppeteer allocates `<provider>/<uuid>` 0700),
+update transcripts under `LAYOUT.MACHINE_UPDATES_DIR`. `packages/fieldd/src/agent-runtime.ts`
+is the service; the daemon constructs it beside the index service (no disk is touched until a
+persona door is called — puppeteer's registry is lazy) and disposes it before the index daemon
+on every stop path. The eight `agents.*` doors are live: `profiles.list/create/delete/verify` on
+`agent.spawn`, `installs/releases/update/setActive` on the local-only `agents.manage`; every
+mutation audited (`agents.profiles.create` names the minted id in its outcome, like
+`terminal.session.create`). Contracts gained the doors' params and results (`AgentProfileFailure`
+is data: an adapter's honest failure to read an identity rides beside the persona) and four
+fixtures. `@vibefield/users` gained `rootAboveUserRoot`, the inverse of `userRootFor`: bin.ts
+derives the VibeField ROOT — the machine scope — from the user root the supervisor hands it, and a
+root of any other shape has no machine scope (the two writing doors then refuse
+`UNAVAILABLE {service:"agents", state:"no-machine-scope"}`, installs and releases still answer).
+
+**The persona path as built** (topology §4, AR-D18/D19). Create: puppeteer allocates the
+immutable root and registers the profile; fieldd then enrolls the OBSERVATION root — PU-7's
+`observationRoot(profile)`, never `dataRoot` (claude's is the profile root; pi's is the profile
+root with the agent dir bound one level inside, created if absent) — in the enrollment record
+under the KIND rosetta's roll call joins it to, and the daemon bounces. **The kind join is data
+at the seam, not a table:** puppeteer names the provider's native layout root (the native-default
+profile's observation root), fieldd folds it to rosetta's `~/…` spelling, and the census
+(`/api/discoveries`, cached per daemon generation) names the kind for that spelling; neither
+sibling's registry is enumerated in VibeField. A provider whose layout root is not on the roll
+call (pi, on the scripted daemon) is created and not indexed — `runtimeId` absent, a logged
+reason — and **every daemon ready re-applies the record to the personas (R4 as built):** a
+persona registered while the index was down, or before this fieldd existed, is enrolled at the
+next ready, one publish and one bounce, and the ready after that finds nothing to do. Delete =
+unregister → retire (`retired[]`, rows kept, the label and profile id still named) → delete the
+root with its credentials; the registry goes FIRST because the retire's bounce wakes the
+reconcile, which must find no persona to re-enroll (the first draft lost exactly that race and
+recreated the root it was deleting; a reconcile also skips a persona mid-deletion). Verify
+persists what the provider's own status surface said; a native-default persona is never deleted
+through this door (its kind retires through `index.retire`).
+
+**The machine scope as built** (AR-D15/D16/D22, R2/R6). `machine/agents/distribution.json` is
+read tolerantly by anyone and rewritten by one writer at a time under the users root lock —
+held for the read-modify-write only, never across the vendor's updater (minutes; the lock is
+every fieldd's on this device and its deadline is short by law) — then published atomically
+(0600, the machine directory 0700). `agents.installs` is a FRESH inspection (the vendor's version
+command runs per candidate) with the record's active choice folded over puppeteer's own;
+`agents.setActive` validates the executable against the provider's installs, records it, and
+the choice reaches spawns from the next boot (the runtime binds `executables` at construction,
+composed through `createBuiltinProviders` + `createAgentRuntime` because
+`createBuiltinAgentRuntime` does not thread that option — stated at the door's contract; AR-3
+may move it to per-spawn); `agents.update` runs the vendor's own updater (an opaque 0600
+transcript under the machine scope) and records the full receipt, projecting the contract's
+fields; `agents.releases` asks the agent's own oracle always and the declared network detectors
+only when the call or the provider's recorded preference says so. **The runtime's terminal host
+refuses, typed:** agent PTYs are born by `agent.spawn` over the native floor with a clean
+allow-listed environment and the persona login pane rides the same path (AR-3) — never a
+shell-door spawn with an inherited environment (EL7).
+
+**CI.** fieldd importing puppeteer means puppeteer's own dependencies (zod 4, the ACP SDK,
+node-pty for the adapters) must exist under `../puppeteer/node_modules`. `verify.yml` now runs a
+FILTERED frozen install of exactly the packages fieldd's graph reaches
+(`--filter "@vibecook/puppeteer-builtin-providers..."` + record + monitor); the godview app —
+the only consumer of puppeteer's temporary ghosttea `link:../electron-ghostty` overrides — is
+never selected, so a clean room needs no electron-ghostty. Witnessed 2026-09-12 in a fresh clone
+at the pin with no sibling beside it: 19 of 24 projects, exit 0. PU-6 upstream is a nicety now,
+not a gate; `SIBLINGS_TOKEN` still is.
+
+**Witnesses.** `packages/fieldd/test/agent-runtime.test.ts`: 10 rows against the scripted
+rosettad and a scripted `claude` on a PRIVATE search path (`test/fixtures/fake-claude` — the
+claude adapter classifies it from its version banner; its `update` is the vendor's own updater as
+the recipe invokes it) — the native-default personas listed without a path and behind
+`agent.spawn`; create (root 0700, registry 0600, the record's runtime under `claude-code`, the
+daemon bounced, the `runtimeId` on the persona, the audit naming the minted id); a provider off
+the roll call created but not indexed, verify's honest `unsupported`, the typed refusals; delete
+(retired, unregistered, the root gone, the record naming the label); a registry planted BEFORE
+boot enrolled at the first ready and untouched by the next; installs behind `agents.manage`;
+setActive (the record 0600 under the root, `machine/` never under a user, idempotent, NOT_FOUND
+for an unknown executable); the no-machine-scope refusals; update (the transcript 0600, the
+receipt recorded, `transcriptPath` never projected); releases (silent without network; the
+vendor's stable line a release and unreachable detectors honest failures with it; an unknown
+provider an `unsupported` row). And 1 row against the REAL rosettad with an EMPTY home: a claude
+and a pi persona enrolled under `claude-code`/`pi` — pi at the profile root, its agent dir inside
+(PU-7) — live and watched with no path projected, then deleted: retired with their names kept,
+nothing watched. Found on the way: the real daemon's runtime rows trail its ready line by a
+moment, so a persona's `runtimeId` can be absent in the create answer and present on the next
+list; the contract says so. Puppeteer's 383 source files now sit in fieldd's typecheck program
+and its esbuild bundle (`bin.cjs` 4.1 MB). Gate: `pnpm verify` verbatim (the real rosettad opted in) — preflight (dirty-sibling warnings only), check:deps, icons and the 25 typechecks green; stops at `pnpm lint` on James's untracked work/composer-directions.html (all 4 errors there — SNAP-0's standing note). The steps after it, individually: `cargo fmt --check`, `pnpm lint:rust`, `pnpm test:rust` (21 test binaries), `pnpm bundle:assert` (the shell bundle unchanged; fieldd's own bin.cjs is 4.1 MB now), `pnpm gen:check` green; `pnpm test`: 24 projects green, fieldd red on two plugin-service-host timing files (service-drain-deadline, service-lease-fence) that pass alone and passed in the full fieldd run minutes earlier — host-load lotteries, not the diff; fieldd 719 rows green in all (715 + the 4 real-binary rows, 3 skipped).
+
+**Still owed:** AR-3 (`agent.spawn`, the AgentHost over field-native, the persona login pane,
+the fold, the mock module's deletion — the P0 exit witness); the Agents settings section (no
+window asks for `agents.manage`/`agent.spawn` yet); the hermes adapter's gateway host resolves a
+python script beside its module by `import.meta.url`, which the cjs bundle defines away — a
+staged asset for the spawn slice; `SIBLINGS_TOKEN`; the three upstream pins still on UNPUSHED
+local branches; the dev-local snapshot of the draft docs (James's ritual); James's `work/` lint
+red; RO-8 before a purge can exist.
+
