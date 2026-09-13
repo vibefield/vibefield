@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::fs;
+use std::io::Write as _;
 use std::path::Path;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -21,30 +22,46 @@ pub const WINDOW_SECS: i64 = 300;
 /// Load the 0600 pairing secret, creating it on first boot (fieldd waits/retries).
 pub fn load_or_create_secret(path: &Path) -> Result<[u8; 32]> {
     if path.exists() {
-        let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
-        let bytes = hex::decode(raw.trim()).context("pairing file is not hex")?;
-        let arr: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("pairing secret must be 32 bytes"))?;
-        Ok(arr)
-    } else {
-        let mut secret = [0u8; 32];
-        rand::fill(&mut secret);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(path, hex::encode(secret))?;
-        // 0600 is the unix boundary. WIN-D4: on windows the profile's inherited
-        // ACLs carry the other-user boundary and an explicit DACL is recorded
-        // hardening — on every OS the same-uid adversary is held out by the
-        // token discipline, never by the file mode.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-        }
-        Ok(secret)
+        return read_secret(path);
     }
+    let mut secret = [0u8; 32];
+    rand::fill(&mut secret);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    // 0600 AT BIRTH, and never through a link. `fs::write` + `set_permissions`
+    // left the secret world-readable for one syscall and followed a symlink
+    // planted at the path; `create_private` opens with O_EXCL and the mode
+    // (MF-2f, the same fix at the mirror-write capability in `config.rs`).
+    // WIN-D4 unchanged: on windows the profile's inherited ACLs carry the
+    // other-user boundary, and on every OS the same-uid adversary is held out
+    // by the token discipline rather than by the file mode.
+    let mut file = match crate::secret_file::create_private(path) {
+        Ok(file) => file,
+        // Another boot created it between the check above and this create —
+        // fieldd's own retry loop makes that reachable. Its secret is the one
+        // on disk and both planes must agree on it, so read it back.
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            return read_secret(path);
+        }
+        Err(error) => {
+            return Err(anyhow::Error::new(error))
+                .with_context(|| format!("create {}", path.display()))
+        }
+    };
+    file.write_all(hex::encode(secret).as_bytes())
+        .with_context(|| format!("write {}", path.display()))?;
+    file.sync_all()
+        .with_context(|| format!("sync {}", path.display()))?;
+    Ok(secret)
+}
+
+fn read_secret(path: &Path) -> Result<[u8; 32]> {
+    let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    let bytes = hex::decode(raw.trim()).context("pairing file is not hex")?;
+    bytes
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("pairing secret must be 32 bytes"))
 }
 
 fn mac_message(boot_id: &str, ts: i64) -> Vec<u8> {

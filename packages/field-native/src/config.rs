@@ -402,7 +402,7 @@ fn load_or_mint_mirror_write(path: &Path) -> Result<String> {
             // restore from a backup, an editor's rewrite) is tightened rather
             // than trusted: the same-uid adversary is EL7's, but another
             // account on the box is not one we hand a capability to.
-            harden(path)?;
+            crate::secret_file::harden(path)?;
             return Ok(existing);
         }
         // An empty file is a truncated write, never a capability: minting over
@@ -432,31 +432,41 @@ fn load_or_mint_mirror_write(path: &Path) -> Result<String> {
                 .with_context(|| format!("chmod 0700 {}", parent.display()))?;
         }
     }
-    std::fs::write(path, &capability).with_context(|| format!("write {}", path.display()))?;
-    harden(path)?;
-    Ok(capability)
-}
-
-/// 0600 on unix. WIN-D4, as at the pairing file: windows has no mode bits to
-/// set, the profile's inherited ACLs carry the other-account boundary, and the
-/// same-uid adversary is held out by token discipline on every OS.
-fn harden(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let current = std::fs::metadata(path)
-            .with_context(|| format!("stat {}", path.display()))?
-            .permissions()
-            .mode()
-            & 0o777;
-        if current != 0o600 {
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-                .with_context(|| format!("chmod 0600 {}", path.display()))?;
-        }
+    // An empty file from a truncated write is REMOVED before the mint rather
+    // than written over: `create_private` refuses an existing path on purpose
+    // (that refusal is what stops a planted symlink), so the stale inode has to
+    // go first. Nothing is lost — the file held no capability, which is why we
+    // are here.
+    if path.exists() {
+        std::fs::remove_file(path)
+            .with_context(|| format!("remove the empty {}", path.display()))?;
     }
-    #[cfg(not(unix))]
-    let _ = path;
-    Ok(())
+    let mut file = match crate::secret_file::create_private(path) {
+        Ok(file) => file,
+        // Another boot of this floor won the race between the check above and
+        // this create. Its capability is as good as ours and it is the one on
+        // disk, so read it back rather than fight for the path.
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let raw = std::fs::read_to_string(path)
+                .with_context(|| format!("read {}", path.display()))?;
+            let existing = raw.trim().to_owned();
+            if !existing.is_empty() {
+                crate::secret_file::harden(path)?;
+                return Ok(existing);
+            }
+            anyhow::bail!("{} was recreated empty under us", path.display())
+        }
+        Err(error) => {
+            return Err(anyhow::Error::new(error))
+                .with_context(|| format!("create {}", path.display()))
+        }
+    };
+    use std::io::Write as _;
+    file.write_all(capability.as_bytes())
+        .with_context(|| format!("write {}", path.display()))?;
+    file.sync_all()
+        .with_context(|| format!("sync {}", path.display()))?;
+    Ok(capability)
 }
 
 /// `HOME` is a unix fact — Windows has `USERPROFILE`. One resolver so no

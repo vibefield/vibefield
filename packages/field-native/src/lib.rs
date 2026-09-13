@@ -18,6 +18,9 @@ pub mod registries;
 pub mod resource_pressure;
 /// TC-D6(a) — the descriptor-limit raise every boot owes itself.
 pub mod rlimit;
+/// EL7 — how a secret is created on disk (0600 at birth, never following a
+/// link); the pairing secret and the mirror-write capability both use it.
+pub mod secret_file;
 pub mod services;
 pub mod state;
 /// TP-S3a — the cell-side T1 door layer (terminal-pipeline-v3 §5.1/§8, TP-D26):
