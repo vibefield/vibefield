@@ -17,7 +17,7 @@ import SwiftUI
 /// say.
 struct FieldBubbleView: View {
   let bubble: FieldBubble
-  let visual: AgentBubbleVisual
+  let status: AgentVisualStatus
   let diameter: CGFloat
 
   let onDragBegan: (CGPoint) -> Void
@@ -34,7 +34,6 @@ struct FieldBubbleView: View {
     FieldPalette.agentColor(hue: agentIdentityHue(bubble.identityKey))
   }
 
-  private var status: AgentVisualStatus { visual.status }
   /// Already folded by the projection — the view never re-derives a truth the
   /// pure function owns.
   private var detail: String { bubble.detail }
@@ -45,7 +44,7 @@ struct FieldBubbleView: View {
 
       contextFill
 
-      if visual.isIgnited {
+      if isIgnited {
         IgnitionView(color: identityColor, diameter: diameter)
       }
 
@@ -60,7 +59,7 @@ struct FieldBubbleView: View {
     .modifier(SpawnPopModifier(enabled: !reduceMotion, hasSpawned: $hasSpawned))
     .gesture(interaction)
     .onAppear { startPulse() }
-    .onChange(of: visual.appearance) { startPulse() }
+    .onChange(of: status) { startPulse() }
     .accessibilityElement(children: .ignore)
     .accessibilityAddTraits(.isButton)
     .accessibilityLabel(accessibilityText)
@@ -99,14 +98,14 @@ struct FieldBubbleView: View {
       .frame(width: 58, height: 58)
       .foregroundStyle(tierText)
       .opacity(glyphOpacity)
-      .scaleEffect(visual.isIgnited && pulsing && !reduceMotion ? 1.08 : glyphRestScale)
+      .scaleEffect(isIgnited && pulsing && !reduceMotion ? 1.08 : glyphRestScale)
       .offset(y: -diameter * 0.08)
       .allowsHitTesting(false)
   }
 
   private var copyStack: some View {
     VStack(spacing: 0) {
-      if visual.appearance != .idle, let branch = bubble.agent?.branch {
+      if status != .idle, let branch = bubble.agent?.branch {
         HStack(spacing: 4) {
           Circle()
             .fill(FieldPalette.branchGreen)
@@ -175,54 +174,56 @@ struct FieldBubbleView: View {
 
   @State private var isDragging = false
 
-  // MARK: - Tier styling
+  // MARK: - Tier styling (the July tiers, kept only until IOS-6c draws the field on Metal)
+
+  private var isIgnited: Bool { status == .working }
 
   private var tierBackground: Color {
-    switch visual.appearance {
+    switch status {
     case .idle: FieldPalette.idleBackground
     case .working: FieldPalette.workingBackground
-    case .waiting: FieldPalette.waitingBackground
+    case .blocked: FieldPalette.blockedBackground
     }
   }
 
   private var tierText: Color {
-    switch visual.appearance {
+    switch status {
     case .idle: FieldPalette.idleText
     case .working: FieldPalette.workingText
-    case .waiting: FieldPalette.waitingText
+    case .blocked: FieldPalette.blockedText
     }
   }
 
   private var tierBorder: Color {
-    switch visual.appearance {
+    switch status {
     case .idle: .clear
     case .working: FieldPalette.workingBorder
-    case .waiting: FieldPalette.waitingBorder
+    case .blocked: FieldPalette.blockedBorder
     }
   }
 
   private var tierShadowRest: FieldShadow {
-    visual.appearance == .waiting ? .waitingRest : .workingRest
+    status == .blocked ? .blockedRest : .workingRest
   }
 
   private var tierShadowPeak: FieldShadow {
-    visual.appearance == .waiting ? .waitingPeak : .workingPeak
+    status == .blocked ? .blockedPeak : .workingPeak
   }
 
   private var glyphOpacity: Double {
-    switch visual.appearance {
+    switch status {
     case .idle: 0.055
-    case .working, .waiting: 0.12
+    case .working, .blocked: 0.12
     }
   }
 
-  private var glyphRestScale: CGFloat { visual.isIgnited ? 0.92 : 1 }
+  private var glyphRestScale: CGFloat { isIgnited ? 0.92 : 1 }
 
   private var projectSize: CGFloat {
-    switch visual.appearance {
+    switch status {
     case .idle: 11
     case .working: 14
-    case .waiting: 18
+    case .blocked: 18
     }
   }
 
@@ -257,9 +258,9 @@ struct FieldBubbleView: View {
   /// 1.5 s. Idle bubbles rest flat.
   private func startPulse() {
     pulsing = false
-    guard !reduceMotion, visual.appearance != .idle else { return }
-    let period = visual.appearance == .waiting
-      ? FieldMotion.waitingPeriod : FieldMotion.breathePeriod
+    guard !reduceMotion, status != .idle else { return }
+    let period = status == .blocked
+      ? FieldMotion.blockedPeriod : FieldMotion.breathePeriod
     withAnimation(.easeInOut(duration: period / 2).repeatForever(autoreverses: true)) {
       pulsing = true
     }

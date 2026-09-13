@@ -325,7 +325,7 @@ struct SessionCardView<Terminal: View>: View {
         .foregroundStyle(FieldPalette.textMuted)
         .multilineTextAlignment(.center)
         .lineSpacing(3)
-      if bubble.status == .waiting {
+      if bubble.status == .blocked {
         Text("waiting on a permission — approve at the desktop")
           .font(FieldType.mono(9))
           .foregroundStyle(FieldPalette.textMain)

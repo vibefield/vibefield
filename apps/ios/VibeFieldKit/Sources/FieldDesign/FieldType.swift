@@ -30,9 +30,9 @@ public enum FieldMotion {
   /// The context-fill rise (420 ms house curve).
   public static let contextFill: Animation = ease(0.42)
 
-  /// Shadow-pulse periods: working breathes slow, waiting pulses urgent.
+  /// Shadow-pulse periods: working breathes slow, blocked pulses urgent.
   public static let breathePeriod: Double = 3.0
-  public static let waitingPeriod: Double = 1.5
+  public static let blockedPeriod: Double = 1.5
 
   /// Spawn pop keyframes (desktop `animateSpawn`, 720 ms).
   public static let spawnDuration: Double = 0.72

@@ -85,7 +85,7 @@ public struct SwarmFieldView<Chrome: View>: View {
         model.world.setBounds(SIMD2(Double(proxy.size.width), Double(proxy.size.height)))
         syncAgents()
         driver.onTick = { [model] timestamp in
-          model.world.step(now: timestamp)
+          model.world.advance(now: timestamp)
         }
         if isActive { driver.start() }
       }
@@ -105,31 +105,32 @@ public struct SwarmFieldView<Chrome: View>: View {
 
   private struct Ranked: Identifiable {
     let bubble: FieldBubble
-    let visual: AgentBubbleVisual
     let radius: Double
     var id: String { bubble.id }
   }
 
   /// The projection already decided who is on the field and what they are
-  /// doing; this only decides how big and how high they sit.
+  /// doing; this only decides how big and how high they sit. The size is RFC
+  /// 005's: the status's radius, a working body grown by its share of the
+  /// working sessions' tokens.
   private var rankedAgents: [Ranked] {
-    bubbles
+    let shares = workingShares(bubbles)
+    return bubbles
       .map { bubble in
-        let visual = bubbleVisual(for: bubble.status)
-        return Ranked(
+        Ranked(
           bubble: bubble,
-          visual: visual,
-          radius: bubbleRadius(for: visual.appearance, parameters: parameters))
+          radius: bodyRadius(
+            status: bubble.status, share: shares[bubble.id] ?? 0, parameters: parameters))
       }
-      // Attention rises: idle under working under waiting (desktop z 3/4/5).
-      .sorted { zRank($0.visual.appearance) < zRank($1.visual.appearance) }
+      // Attention rises: idle under working under blocked (the reference's draw order).
+      .sorted { zRank($0.bubble.status) < zRank($1.bubble.status) }
   }
 
-  private func zRank(_ appearance: AgentBubbleAppearance) -> Int {
-    switch appearance {
+  private func zRank(_ status: AgentVisualStatus) -> Int {
+    switch status {
     case .idle: 0
     case .working: 1
-    case .waiting: 2
+    case .blocked: 2
     }
   }
 
@@ -141,7 +142,7 @@ public struct SwarmFieldView<Chrome: View>: View {
       if let state = model.world.state(of: SwarmBodyID(ranked.bubble.id)) {
         FieldBubbleView(
           bubble: ranked.bubble,
-          visual: ranked.visual,
+          status: ranked.bubble.status,
           diameter: state.visualRadius * 2,
           onDragBegan: { point in
             model.world.beginDrag(

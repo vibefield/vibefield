@@ -56,16 +56,16 @@ private func row(
     #expect(classifyTerminalStatus("") == .idle)
   }
 
-  /// A terminal has no permissions, so it can never wear the loud tier — for
+  /// A terminal has no agent to ask anything, so it can never be blocked — for
   /// ANY activity kind, including one that spells the word.
-  @Test func aTerminalNeverReachesTheWaitingTier() {
+  @Test func aTerminalNeverReachesTheBlockedTier() {
     let kinds: [String?] = [
       nil, "", "foreground-job", "background-job", "idle", "shell", "waiting", "permission",
       "unknown-future-kind",
     ]
     for kind in kinds {
-      #expect(classifyTerminalStatus(kind) != .waiting)
-      #expect(fieldBubble(from: row(activityKind: kind)).status != .waiting)
+      #expect(classifyTerminalStatus(kind) != .blocked)
+      #expect(fieldBubble(from: row(activityKind: kind)).status != .blocked)
     }
   }
 }
@@ -179,13 +179,13 @@ private func row(
   /// card's reply chips are derived from the feed and never from the terminal
   /// frame — the phone cannot read one.
   @Test func facetCarriesWhatTheAgentIsWaitingOn() {
-    let waiting = AgentRuntimeState(permissions: [AgentPermission(tool: "Bash")])
-    #expect(fieldBubble(from: snapshot(state: waiting))?.agent?.permissions == [
+    let blocked = AgentRuntimeState(permissions: [AgentPermission(tool: "Bash")])
+    #expect(fieldBubble(from: snapshot(state: blocked))?.agent?.permissions == [
       AgentPermission(tool: "Bash")
     ])
     // The tier and the chips agree by construction: the same fact makes the
     // bubble loud and gives the card something to answer with.
-    #expect(fieldBubble(from: snapshot(state: waiting))?.status == .waiting)
+    #expect(fieldBubble(from: snapshot(state: blocked))?.status == .blocked)
   }
 
   /// Not waiting is not "waiting on nothing we can name": an agent with no

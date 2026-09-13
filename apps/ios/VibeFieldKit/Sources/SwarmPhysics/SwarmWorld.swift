@@ -9,7 +9,12 @@ public struct SwarmBodyID: Hashable, Sendable {
 /// A read-only view of one body for rendering.
 public struct SwarmBodyState: Equatable, Sendable {
   public let id: SwarmBodyID
+  /// The newest solved position.
   public let position: SIMD2<Double>
+  /// The one before it — the two ends of the blend the renderer draws between
+  /// (GT-D15.2), so the field looks the same whether the physics steps at 15Hz
+  /// or 120. A new body's first blend is a no-op: from where it is to where it is.
+  public let previousPosition: SIMD2<Double>
   public let visualRadius: Double
   public let isDragged: Bool
 }
@@ -23,7 +28,11 @@ public struct SwarmBodyState: Equatable, Sendable {
 /// obstacles for floating chrome, a soft positional drag constraint with
 /// grab-point invariance, and instant collision-radius growth so a status
 /// change physically shoves neighbors (the ripple). Same constants, same
-/// millisecond units, so the desktop's tuned feel carries over.
+/// millisecond units, so the desktop's tuned feel carries over. Since IOS-6b
+/// it steps on the reference's fixed-timestep schedule (`physics/world.ts`):
+/// `advance(now:)` banks real time and solves whole steps at `physicsHz`,
+/// dropping a backlog rather than spiralling, and every body carries its last
+/// two solved positions for the renderer's blend.
 ///
 /// Not thread-safe by design: step it from exactly one isolation context
 /// (the display-link driver in the app, the test body in tests).
@@ -31,7 +40,12 @@ public final class SwarmWorld {
   private final class Body {
     let id: SwarmBodyID
     var position: SIMD2<Double>
+    /// The Verlet previous: what velocity is read from.
     var previous: SIMD2<Double>
+    /// The last SOLVED position, for the render blend; contacts and the walls
+    /// move `position` after integration without touching `previous`, so this
+    /// is a third value and not an alias of either.
+    var solvedPrevious: SIMD2<Double>
     var force: SIMD2<Double> = .zero
     var visualRadius: Double
     var targetVisualRadius: Double
@@ -43,6 +57,7 @@ public final class SwarmWorld {
       self.id = id
       self.position = position
       self.previous = position
+      self.solvedPrevious = position
       self.visualRadius = visualRadius
       self.targetVisualRadius = visualRadius
     }
@@ -62,7 +77,11 @@ public final class SwarmWorld {
   private var indexByID: [SwarmBodyID: Int] = [:]
   private var rng: AnyRandomSource
   private var previousDeltaMS: Double = SwarmConstants.baseDeltaMS
-  private var lastStepTime: TimeInterval?
+  private var accumulator: Double = 0
+  private var previousTime: TimeInterval?
+  /// Bumped whenever MEMBERSHIP changes: the renderer's cue that any table it
+  /// keeps by body is stale. A radius change is not membership.
+  public private(set) var generation: Int = 0
 
   public struct ObstacleRect: Equatable, Sendable {
     public var origin: SIMD2<Double>
@@ -88,7 +107,8 @@ public final class SwarmWorld {
   public var states: [SwarmBodyState] {
     bodies.map {
       SwarmBodyState(
-        id: $0.id, position: $0.position, visualRadius: $0.visualRadius, isDragged: $0.isDragged)
+        id: $0.id, position: $0.position, previousPosition: $0.solvedPrevious,
+        visualRadius: $0.visualRadius, isDragged: $0.isDragged)
     }
   }
 
@@ -96,8 +116,8 @@ public final class SwarmWorld {
     guard let index = indexByID[id] else { return nil }
     let body = bodies[index]
     return SwarmBodyState(
-      id: body.id, position: body.position, visualRadius: body.visualRadius,
-      isDragged: body.isDragged)
+      id: body.id, position: body.position, previousPosition: body.solvedPrevious,
+      visualRadius: body.visualRadius, isDragged: body.isDragged)
   }
 
   public func contains(_ id: SwarmBodyID) -> Bool { indexByID[id] != nil }
@@ -119,12 +139,53 @@ public final class SwarmWorld {
     let body = Body(id: id, position: position, visualRadius: visualRadius)
     indexByID[id] = bodies.count
     bodies.append(body)
+    generation += 1
   }
 
   public func remove(id: SwarmBodyID) {
     guard let index = indexByID[id] else { return }
     bodies.remove(at: index)
     reindex()
+    generation += 1
+  }
+
+  /// An agent as the physics knows it: an identity, a size to grow toward,
+  /// and optionally where the gesture that created it happened.
+  public struct AgentSpec: Equatable, Sendable {
+    public var id: SwarmBodyID
+    public var visualRadius: Double
+    public var spawnPosition: SIMD2<Double>?
+    public init(id: SwarmBodyID, visualRadius: Double, spawnPosition: SIMD2<Double>? = nil) {
+      self.id = id
+      self.visualRadius = visualRadius
+      self.spawnPosition = spawnPosition
+    }
+  }
+
+  /// Bring the body set in line with the agents the stage is showing. Returns
+  /// whether MEMBERSHIP changed — the receiver's cue that whatever it keeps by
+  /// body is stale. A radius change is not membership: the state carries the
+  /// radius, so nothing above needs telling.
+  @discardableResult
+  public func syncAgents(_ specs: [AgentSpec]) -> Bool {
+    let before = generation
+    let wanted = Set(specs.map(\.id))
+    for state in states where !wanted.contains(state.id) { remove(id: state.id) }
+    for spec in specs {
+      upsert(id: spec.id, visualRadius: spec.visualRadius, spawnPosition: spec.spawnPosition)
+    }
+    return generation != before
+  }
+
+  /// Which body is under a point, or nil. The LAST match in order wins,
+  /// because that is the one drawn on top when the renderer keeps the world's
+  /// order; a renderer with its own order does its own test.
+  public func queryPoint(_ point: SIMD2<Double>) -> SwarmBodyID? {
+    var hit: SwarmBodyID?
+    for body in bodies where length(point - body.position) <= body.collisionRadius {
+      hit = body.id
+    }
+    return hit
   }
 
   public func setBounds(_ next: SIMD2<Double>) {
@@ -173,14 +234,42 @@ public final class SwarmWorld {
 
   // MARK: - Stepping
 
-  /// Steps using a wall-clock timestamp, clamping the delta exactly like the
-  /// desktop render loop (8.33…33.3 ms).
-  public func step(now: TimeInterval) {
-    defer { lastStepTime = now }
-    guard let last = lastStepTime else { return }
-    let deltaMS = min(
-      SwarmConstants.maxDeltaMS, max(SwarmConstants.minDeltaMS, (now - last) * 1000))
-    step(deltaMS: deltaMS)
+  /// Seed the clock without solving anything. The first pump has no previous
+  /// timestamp to subtract from, and inventing one would either drop that
+  /// interval or bank a huge one; the host seeds this the moment it builds the
+  /// world, so the first real pump measures from birth.
+  public func seed(now: TimeInterval) {
+    previousTime = now
+  }
+
+  /// Advance real time (seconds) and solve whatever whole steps it bought.
+  /// Returns the number solved, which is the caller's cue that there is a new
+  /// state worth drawing — a pump that solved nothing has nothing new to say.
+  @discardableResult
+  public func advance(now: TimeInterval) -> Int {
+    guard let last = previousTime else {
+      previousTime = now
+      return 0
+    }
+    let stepMs = parameters.stepMs
+    // Real elapsed time, clamped. The clamp is a guard against stalls, not a
+    // smoothing pass: within a normal pump the full delta goes in.
+    accumulator += min(SwarmConstants.maxFrameMS, max(0, (now - last) * 1000))
+    previousTime = now
+    var steps = 0
+    // A display link hands over seconds and the step is milliseconds; the
+    // conversion leaves a boundary one ulp short every few pumps, so a step
+    // that is due within a microsecond is due.
+    let due = stepMs - 1e-6
+    while accumulator >= due && steps < SwarmConstants.maxStepsPerFrame {
+      step(deltaMS: stepMs)
+      accumulator -= stepMs
+      steps += 1
+    }
+    // Behind after the step cap: drop the debt. Banking it guarantees the next
+    // pump is late too.
+    if steps == SwarmConstants.maxStepsPerFrame && accumulator > stepMs { accumulator = 0 }
+    return steps
   }
 
   /// Steps by an explicit delta in milliseconds (the testable entry point).
@@ -188,6 +277,8 @@ public final class SwarmWorld {
     let center = bounds / 2
 
     for body in bodies {
+      // The state this step starts from is the previous end of the blend.
+      body.solvedPrevious = body.position
       // Instant collision-radius change; neighbors get shoved next contacts.
       if abs(body.targetVisualRadius - body.visualRadius) > 0.5 {
         body.visualRadius = body.targetVisualRadius
@@ -209,8 +300,10 @@ public final class SwarmWorld {
   /// Matter.js `Body.update`: velocity-Verlet with time-corrected air
   /// friction. `frictionAir` bleeds velocity per 16.67 ms baseline frame.
   private func integrate(deltaMS: Double) {
+    // The ceiling is the same inequality as the rate's floor, clamped here so
+    // a second caller of the parameters cannot walk into negative friction.
     let frictionFactor = max(
-      0, 1 - parameters.frictionAir * (deltaMS / SwarmConstants.baseDeltaMS))
+      0, 1 - parameters.effectiveFrictionAir * (deltaMS / SwarmConstants.baseDeltaMS))
     let correction = deltaMS / previousDeltaMS
     let deltaSquared = deltaMS * deltaMS
     for body in bodies {

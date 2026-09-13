@@ -25,9 +25,12 @@ public enum FieldPalette {
   public static let workingBackground = dynamic(light: 0x222222, dark: 0xEEEEEE)
   public static let workingText = dynamic(light: 0xFFFFFF, dark: 0x111111)
   public static let workingBorder = dynamic(light: 0x111111, dark: 0xFFFFFF)
-  public static let waitingBackground = dynamic(light: 0x000000, dark: 0xFFFFFF)
-  public static let waitingText = dynamic(light: 0xFFFFFF, dark: 0x000000)
-  public static let waitingBorder = dynamic(light: 0x000000, dark: 0xFFFFFF)
+  // The blocked pair is the reference's `--blocked-bg` / `--blocked-text`
+  // (`--vf-card-deep` / the panel in light, the text-main / card-deep in dark):
+  // the same full-contrast inversion the July waiting tier wore.
+  public static let blockedBackground = dynamic(light: 0x000000, dark: 0xFFFFFF)
+  public static let blockedText = dynamic(light: 0xFFFFFF, dark: 0x000000)
+  public static let blockedBorder = dynamic(light: 0x000000, dark: 0xFFFFFF)
 
   // The terminal card surface (the desktop terminal deck's paper)
   public static let terminalBackground = dynamic(light: 0xECE8DC, dark: 0x282C34)
@@ -39,8 +42,12 @@ public enum FieldPalette {
   public static let vignette = dynamic(
     light: 0x000000, lightAlpha: 0.15, dark: 0x000000, darkAlpha: 0.75)
 
-  /// The one non-identity hue in the system: the branch-presence dot.
+  /// The branch-presence dot (`--vf-godview-rain-green`).
   public static let branchGreen = Color(red: 0x4A / 255.0, green: 0xDE / 255.0, blue: 0x80 / 255.0)
+  /// §2.5's orange: the blocked reply's dot, the hot figure, the blocker kind.
+  public static let orange = Color(red: 0xFF / 255.0, green: 0x9F / 255.0, blue: 0x0A / 255.0)
+  /// §2.5's select blue: the unread reply's dot.
+  public static let selectBlue = Color(red: 0x4A / 255.0, green: 0x90 / 255.0, blue: 0xD9 / 255.0)
 
   /// An agent's identity color: the desktop's `hsl(hue 62% 44%)` converted to
   /// HSB exactly (L 0.44, S 0.62 → V ≈ 0.713, S ≈ 0.765).
@@ -65,7 +72,7 @@ public enum FieldPalette {
 }
 
 /// A shadow recipe (CSS `drop-shadow(x y blur color)` translated; SwiftUI's
-/// radius is close to half a CSS blur). Working and waiting bubbles pulse
+/// radius is close to half a CSS blur). Working and blocked bubbles pulse
 /// between rest and peak — in dark mode the "shadow" is a white glow, exactly
 /// like the desktop.
 public struct FieldShadow: Sendable {
@@ -83,9 +90,9 @@ public struct FieldShadow: Sendable {
     color: FieldPalette.dynamicShadow(lightAlpha: 0.18, darkAlpha: 0.12), radius: 5, y: 8)
   public static let workingPeak = FieldShadow(
     color: FieldPalette.dynamicShadow(lightAlpha: 0.34, darkAlpha: 0.30), radius: 9, y: 12)
-  public static let waitingRest = FieldShadow(
+  public static let blockedRest = FieldShadow(
     color: FieldPalette.dynamicShadow(lightAlpha: 0.24, darkAlpha: 0.16), radius: 7, y: 9)
-  public static let waitingPeak = FieldShadow(
+  public static let blockedPeak = FieldShadow(
     color: FieldPalette.dynamicShadow(lightAlpha: 0.40, darkAlpha: 0.25), radius: 12, y: 17)
 }
 
