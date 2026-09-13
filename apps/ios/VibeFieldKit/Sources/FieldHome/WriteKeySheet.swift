@@ -18,6 +18,13 @@ struct WriteKeySheet: View {
   private let hasKey: Bool
   private let onSave: (String) -> Void
   private let onRemove: () -> Void
+  /// IOS-4d — ask the desktop itself, instead of pasting. `nil` when there is
+  /// no door to that desktop: a button that cannot reach anything is the dead
+  /// control D-i6 forbids, and the paste path is still right there.
+  private let onAskDesktop: (() -> Void)?
+  /// What the desktop said last time it was asked, if it has been. A refusal
+  /// is a sentence a person can act on, not an alert to dismiss.
+  private let grantNote: String?
 
   @State private var secret = ""
 
@@ -25,12 +32,16 @@ struct WriteKeySheet: View {
     host: MirrorWriteHost,
     hasKey: Bool,
     onSave: @escaping (String) -> Void,
-    onRemove: @escaping () -> Void
+    onRemove: @escaping () -> Void,
+    onAskDesktop: (() -> Void)? = nil,
+    grantNote: String? = nil
   ) {
     self.host = host
     self.hasKey = hasKey
     self.onSave = onSave
     self.onRemove = onRemove
+    self.onAskDesktop = onAskDesktop
+    self.grantNote = grantNote
   }
 
   var body: some View {
@@ -59,6 +70,14 @@ struct WriteKeySheet: View {
 
       acts
         .padding(.top, 16)
+
+      if let grantNote {
+        Text(grantNote)
+          .font(ChromeType.sans(ChromeType.sheetBodySize))
+          .foregroundStyle(ChromePalette.inkTertiary)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.top, 12)
+      }
 
       Spacer(minLength: 0)
     }
@@ -103,6 +122,15 @@ struct WriteKeySheet: View {
         Text("Save")
       }
       .buttonStyle(ChromePillStyle(.primary))
+
+      if let onAskDesktop {
+        // IOS-4d — the door instead of the clipboard. Offered only when there
+        // IS a door: a desktop this phone cannot reach has nothing to ask.
+        Button(action: onAskDesktop) {
+          Text("Get it from studio")
+        }
+        .buttonStyle(ChromePillStyle(.secondary))
+      }
 
       if hasKey {
         // Only when there is something to remove. A Remove that is always

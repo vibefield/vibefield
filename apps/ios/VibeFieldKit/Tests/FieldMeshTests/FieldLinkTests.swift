@@ -656,13 +656,27 @@ private func publishBoard(_ mesh: MeshRehearsal, _ value: JSONValue, version: In
     #expect(grant.deviceId == "dev-studio")
     #expect(link.hasAskedForGrant(on: "dev-studio"))
 
-    // ONCE. A refusal is audited on the desktop, and a phone that asked again
-    // on every reconnect would fill a person's grants ledger with its own
-    // impatience. The second ask never reaches the wire.
+    // ONCE, automatically. A refusal is audited on the desktop, and a phone
+    // that asked again on every reconnect would fill a person's grants ledger
+    // with its own impatience. The second ask never reaches the wire.
     let again = await link.requestMirrorWriteGrant(on: "dev-studio")
     #expect(again == .alreadyAsked)
     let asks = await door.latest?.methods.filter { $0 == "terminal.mirrorWriteGrant" }.count
     #expect(asks == 1)
+
+    // But a PERSON pressing "get it from studio" goes through: "do not retry"
+    // is a rule about the phone's impatience, and somebody asking again is not
+    // the phone retrying — they have usually just changed something on the
+    // desktop and want to see whether it took.
+    let deliberate = await link.requestMirrorWriteGrant(on: "dev-studio", asker: .deliberate)
+    guard case .granted = deliberate else {
+      Issue.record("a deliberate ask must reach the door, got \(deliberate)")
+      return
+    }
+    let afterButton = await door.latest?.methods.filter {
+      $0 == "terminal.mirrorWriteGrant"
+    }.count
+    #expect(afterButton == 2)
   }
 
   /// A guest peer is refused by the door's own preset. That is a sentence for

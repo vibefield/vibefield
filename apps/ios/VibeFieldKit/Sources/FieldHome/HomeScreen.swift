@@ -620,7 +620,9 @@ public struct HomeScreen: View {
         host: host,
         hasKey: writeKeyHosts.contains { $0.deviceID == host.deviceID },
         onSave: { secret in saveWriteKey(secret, for: host) },
-        onRemove: { removeWriteKey(host) }
+        onRemove: { removeWriteKey(host) },
+        onAskDesktop: askDesktopAction(for: host),
+        grantNote: grantNotes[host.deviceID]
       )
       .presentationDetents([.fraction(0.42), .medium])
       .presentationDragIndicator(.visible)
@@ -1005,8 +1007,24 @@ public struct HomeScreen: View {
     }
   }
 
-  private func requestWriteGrant(from link: FieldLink, deviceID: String, name: String) async {
-    let outcome = await link.requestMirrorWriteGrant(on: deviceID)
+  /// The sheet's "get it from studio", or nil when there is no door to ask.
+  /// A button that cannot reach anything is the dead control D-i6 forbids, and
+  /// the paste field beside it still works.
+  private func askDesktopAction(for host: MirrorWriteHost) -> (() -> Void)? {
+    guard let link, link.client(for: host.deviceID) != nil else { return nil }
+    return {
+      Task {
+        await requestWriteGrant(
+          from: link, deviceID: host.deviceID, name: host.deviceName, asker: .deliberate)
+      }
+    }
+  }
+
+  private func requestWriteGrant(
+    from link: FieldLink, deviceID: String, name: String,
+    asker: FieldLink.GrantAsker = .automatic
+  ) async {
+    let outcome = await link.requestMirrorWriteGrant(on: deviceID, asker: asker)
     switch outcome {
     case .granted(let grant):
       // The one place the capability is written, and it goes exactly where a
@@ -1016,13 +1034,15 @@ public struct HomeScreen: View {
         try writeKeys.set(
           grant.capability, for: MirrorWriteHost(deviceID: deviceID, deviceName: name))
         refreshWriteKeys()
+        grantNotes[deviceID] = outcome.note
       } catch {
         writeKeyNote = "could not store \(name)'s key — \(MeshModel.shortReason(error))"
       }
     case .refused, .notMinted:
       // Honest and quiet: both are ordinary states of somebody else's desktop,
       // and the sheet says the words when a person goes looking. Nothing here
-      // retries.
+      // retries — but a person pressing the button may ask again, which is
+      // what `asker` is for.
       grantNotes[deviceID] = outcome.note
     case .noDoor, .alreadyAsked:
       break

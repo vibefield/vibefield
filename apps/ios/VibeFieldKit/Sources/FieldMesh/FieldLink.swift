@@ -236,20 +236,34 @@ public final class FieldLink {
     }
   }
 
-  /// Ask a desktop for this device's mirror-write capability (G4) — ONCE.
+  /// Who is asking, which is what decides whether the latch applies.
+  public enum GrantAsker: Sendable, Equatable {
+    /// The app, on its own, because a desktop went ready. Asks ONCE per
+    /// connection.
+    case automatic
+    /// A person pressed a button. The latch does not apply: "do not retry" is
+    /// a rule about the PHONE's impatience, and somebody asking again is not
+    /// the phone retrying — they have usually just changed something on the
+    /// desktop and want to see whether it took.
+    case deliberate
+  }
+
+  /// Ask a desktop for this device's mirror-write capability (G4).
   ///
   /// The once-ness lives here rather than at the caller because it is the rule
   /// that matters: a refusal is audited on the desktop, and a phone that
   /// retried on every reconnect would fill a person's grants ledger with its
-  /// own impatience. The latch clears when the door is closed and rebuilt,
-  /// which is the only event that could change the answer.
+  /// own impatience. The latch clears when the door is closed and rebuilt, and
+  /// a DELIBERATE ask goes straight through it.
   ///
   /// The capability is RETURNED and never stored here: where a secret lives is
   /// the composition layer's business (`MirrorWriteStore`, one Keychain item
   /// per host), and FieldMesh has no business knowing what a terminal is.
-  public func requestMirrorWriteGrant(on deviceId: String) async -> MirrorWriteGrant {
+  public func requestMirrorWriteGrant(
+    on deviceId: String, asker: GrantAsker = .automatic
+  ) async -> MirrorWriteGrant {
     guard let client = clients[deviceId] else { return .noDoor }
-    guard !askedForGrant.contains(deviceId) else { return .alreadyAsked }
+    if asker == .automatic, askedForGrant.contains(deviceId) { return .alreadyAsked }
     askedForGrant.insert(deviceId)
     do {
       let grant = try await client.call(
