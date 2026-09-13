@@ -59,6 +59,10 @@ struct SessionCardView<Terminal: View>: View {
   /// word, which is the honest way to say it while the words are busy.
   let cooled: Bool
   let onAttach: () -> Void
+  /// IOS-4c — why this agent's card has no terminal, in the host's words
+  /// (`AgentTerminalFace.note`). nil where the ordinary invitation already
+  /// says it, or where there is nothing honest to say.
+  var terminalReason: String?
   /// The act that fixes "no write key for this host" (IOS-3c), when there is
   /// one to offer. `nil` means not offered and draws nothing — this card never
   /// renders a control it cannot honour (D-i6). It is a callback rather than a
@@ -309,8 +313,15 @@ struct SessionCardView<Terminal: View>: View {
     }
   }
 
-  /// An agent's card, before fieldd's agent tracks exist: the terminal it is
-  /// running in is not something the mesh has offered us.
+  /// An agent's card with no terminal under it, and WHY — which since IOS-4c
+  /// is a real question with four answers rather than one standing apology.
+  ///
+  /// The reason comes from the host as `terminalReason`, decided by
+  /// `agentTerminalFace` against the hosts store. The old copy here said "this
+  /// agent is a preview", which was true while the feed was the mock and
+  /// became a lie the moment the daemon's board arrived: an agent that IS real
+  /// and whose desktop is simply not publishing its terminals deserves to be
+  /// told that, by name.
   private func agentTerminalAbsence(_ bubble: FieldBubble) -> some View {
     VStack(spacing: 10) {
       Text("TERMINAL")
@@ -320,7 +331,7 @@ struct SessionCardView<Terminal: View>: View {
       Text("not connected")
         .font(FieldType.mono(12, .medium))
         .foregroundStyle(FieldPalette.textMain)
-      Text("this agent is a preview — a real one arrives with the daemon's\nagent feed")
+      Text(terminalReason ?? "no terminal has been offered for this session")
         .font(FieldType.mono(9))
         .foregroundStyle(FieldPalette.textMuted)
         .multilineTextAlignment(.center)

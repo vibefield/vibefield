@@ -38,11 +38,13 @@ public struct AgentFieldProjection: Sendable, Equatable {
 }
 
 /// A whole board.
-public func projectAgentField(rows: [AgentFieldRow]) -> AgentFieldProjection {
+public func projectAgentField(
+  rows: [AgentFieldRow], device: String? = nil
+) -> AgentFieldProjection {
   var agents: [AgentSnapshot] = []
   var ended = 0
   for row in rows {
-    guard let snapshot = agentSnapshot(from: row) else {
+    guard let snapshot = agentSnapshot(from: row, device: device) else {
       ended += 1
       continue
     }
@@ -60,7 +62,7 @@ public func projectAgentField(rows: [AgentFieldRow]) -> AgentFieldProjection {
 /// provider without a mark wears its LETTER (`AgentIcon.tsx`) — and the Metal
 /// renderer here had transcribed that fallback all along. The only thing
 /// standing between an unfamiliar agent and the field was a closed enum.
-public func agentSnapshot(from row: AgentFieldRow) -> AgentSnapshot? {
+public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> AgentSnapshot? {
   let provider = AgentProvider(rawValue: row.kind)
 
   // MF-1e settled what these two fields mean: `alive` answers "is this agent
@@ -139,7 +141,17 @@ public func agentSnapshot(from row: AgentFieldRow) -> AgentSnapshot? {
     provider: provider,
     project: folderName(row.cwd, fallback: row.label),
     state: state,
-    createdAt: parseWireDate(row.createdAt) ?? .now)
+    createdAt: parseWireDate(row.createdAt) ?? .now,
+    // G3's join. The DEVICE is the publisher's — the slice's key, or the
+    // desktop whose door answered — and not the row's own `device` field:
+    // this id has to be the one a product client and the devices store are
+    // filed under, and only the caller knows which desktop it heard this from.
+    // The row's own word is the fallback for a caller that did not say.
+    join: AgentJoin(
+      deviceID: device ?? row.device,
+      hosted: row.terminal?.hosted ?? "none",
+      runtimeSessionID: row.terminal?.runtimeSessionId,
+      pending: row.pending != nil))
 }
 
 /// Every live board the phone can hear, folded into one field.
@@ -158,7 +170,7 @@ public func projectAgentSlices(
   // a dictionary rehashed would respawn every body.
   for slice in slices.sorted(by: { $0.deviceId < $1.deviceId }) {
     guard !slice.isExpired(at: now) else { continue }
-    let projected = projectAgentField(rows: slice.rows)
+    let projected = projectAgentField(rows: slice.rows, device: slice.deviceId)
     agents.append(contentsOf: projected.agents)
     ended += projected.ended
   }

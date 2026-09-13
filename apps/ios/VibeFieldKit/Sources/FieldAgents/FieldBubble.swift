@@ -37,6 +37,9 @@ public struct AgentFacet: Sendable, Equatable {
   public var usage: UsageHistory?
   public let statusSince: Date?
   public let lastEvidenceAt: Date?
+  /// G3's join: where this run's terminal is, and on whose desktop. nil for a
+  /// feed that has no desktop behind it.
+  public let join: AgentJoin?
 
   public init(
     provider: AgentProvider,
@@ -50,7 +53,8 @@ public struct AgentFacet: Sendable, Equatable {
     monitorUsage: AgentUsage? = nil,
     usage: UsageHistory? = nil,
     statusSince: Date? = nil,
-    lastEvidenceAt: Date? = nil
+    lastEvidenceAt: Date? = nil,
+    join: AgentJoin? = nil
   ) {
     self.provider = provider
     self.modelName = modelName
@@ -64,6 +68,7 @@ public struct AgentFacet: Sendable, Equatable {
     self.usage = usage
     self.statusSince = statusSince
     self.lastEvidenceAt = lastEvidenceAt
+    self.join = join
   }
 }
 
@@ -191,7 +196,12 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
       lastMessage: state?.lastAssistantMessage,
       monitorUsage: state?.usage,
       statusSince: state?.statusSince,
-      lastEvidenceAt: state?.lastEvidenceAt),
+      lastEvidenceAt: state?.lastEvidenceAt,
+      join: snapshot.join),
+    // NEVER both facets. "Exactly one facet is non-nil" is what tells the
+    // renderer to draw a body rather than a hollow, so an agent whose PTY is
+    // published does NOT become a remote bubble — the card resolves the join
+    // itself (`agentTerminalFace`).
     remote: nil)
 }
 

@@ -76,6 +76,9 @@ public struct HomeScreen: View {
   /// non-failure it also carries: a key saved while an attach was already in
   /// flight, which cannot be re-presented until the next one.
   @State private var writeKeyNote: String?
+  /// IOS-4d — what each desktop said when asked for a write key, for the
+  /// surfaces that ask about it later. A refusal is a sentence, not an alert.
+  @State private var grantNotes: [String: String] = [:]
   #if DEBUG
     @State private var demoRemoteActive = false
     /// `-vf-swarm-lab[=section[:page]]`: the design lab over the field (IOS-6c, D-i15).
@@ -519,6 +522,17 @@ public struct HomeScreen: View {
     .onChange(of: mesh.state) { _, state in
       syncDiscovery(meshIsUp: state == .up, phase: scenePhase)
     }
+    // IOS-4d — a desktop that has just finished hello is the moment to ask it
+    // for this device's write key, and the only moment: `collectWriteGrants`
+    // asks once per desktop per connection and skips every host we already
+    // hold a key for.
+    //
+    // The value is a NAMED property rather than `link?.desktops ?? []` inline:
+    // this body sits at the type-checker's budget, and an optional chain with
+    // a coalesce inside the modifier chain is what tips it over.
+    .onChange(of: linkDesktops) { _, _ in
+      collectWriteGrants()
+    }
     .onChange(of: scenePhase) { _, phase in
       // The phase is passed rather than re-read: inside this closure the
       // environment's own value is the one thing we should not have to guess
@@ -727,6 +741,7 @@ public struct HomeScreen: View {
       statusActions: attachmentActions,
       cooled: attachment?.banner?.coolsTerminal ?? false,
       onAttach: { if let bubble { beginAttachment(to: bubble) } },
+      terminalReason: cardTerminalFace.note,
       onEnterKey: writeKeyEntry(for: bubble)
     ) {
       liveTerminal(title: bubble?.project)
@@ -966,6 +981,81 @@ public struct HomeScreen: View {
   /// most load-bearing truth wins: a failure explains itself, a live view-only
   /// session says why it cannot type, and nothing here invents a reason the
   /// terminal did not give.
+  // MARK: - IOS-4d: the write key, granted rather than pasted
+
+  /// Ask every ready desktop we hold no key for — once each.
+  ///
+  /// The "once" lives in `FieldLink`, which refuses a second ask on the same
+  /// connection: a refusal is AUDITED on the desktop, and a phone that asked
+  /// again on every reconnect would fill a person's grants ledger with its own
+  /// impatience. This side only decides WHO to ask, and only ever asks for a
+  /// desktop whose Keychain slot is empty — a pasted key is a key, and a phone
+  /// that already has one has no business asking for another.
+  /// The link's desktops, named so the modifier chain stays cheap to
+  /// type-check. See the `.onChange` that reads it.
+  private var linkDesktops: [FieldDesktop] { link?.desktops ?? [] }
+
+  private func collectWriteGrants() {
+    guard let link else { return }
+    for desktop in link.desktops where desktop.state == .ready {
+      let deviceID = desktop.deviceId
+      guard writeKeys.capability(for: deviceID) == nil else { continue }
+      guard !link.hasAskedForGrant(on: deviceID) else { continue }
+      Task { await requestWriteGrant(from: link, deviceID: deviceID, name: desktop.name) }
+    }
+  }
+
+  private func requestWriteGrant(from link: FieldLink, deviceID: String, name: String) async {
+    let outcome = await link.requestMirrorWriteGrant(on: deviceID)
+    switch outcome {
+    case .granted(let grant):
+      // The one place the capability is written, and it goes exactly where a
+      // pasted one goes: one Keychain item per host. It is never rendered —
+      // not here, not in the note, not in a log.
+      do {
+        try writeKeys.set(
+          grant.capability, for: MirrorWriteHost(deviceID: deviceID, deviceName: name))
+        refreshWriteKeys()
+      } catch {
+        writeKeyNote = "could not store \(name)'s key — \(MeshModel.shortReason(error))"
+      }
+    case .refused, .notMinted:
+      // Honest and quiet: both are ordinary states of somebody else's desktop,
+      // and the sheet says the words when a person goes looking. Nothing here
+      // retries.
+      grantNotes[deviceID] = outcome.note
+    case .noDoor, .alreadyAsked:
+      break
+    }
+  }
+
+  // MARK: - IOS-4c: the agent card's terminal
+
+  /// G3's join for the card's subject, resolved against the hosts store the
+  /// phone already polls. `.noJoin` for a remote bubble or the scripted fleet
+  /// — neither has an agent row behind it.
+  private var cardTerminalFace: AgentTerminalFace {
+    guard let join = cardBubble?.agent?.join else { return .noJoin }
+    return agentTerminalFace(join: join, hosts: remoteField.snapshot.rows)
+  }
+
+  /// The one act an ended run has: RESUME, over that desktop's door. The new
+  /// run is NOT put on the field here — the board is the fold's to publish,
+  /// and the next slice or delta shows it.
+  private func resumeAction(_ join: AgentJoin?, runtimeRunId: String?) -> CardAction? {
+    guard cardTerminalFace.offersResume, let join, let runtimeRunId, let link else { return nil }
+    return CardAction(id: "resume", label: "RESUME") {
+      Task {
+        do {
+          _ = try await link.resume(runtimeRunId: runtimeRunId, on: join.deviceID)
+          attachRefusal = "resumed — the desktop's next board carries the new run"
+        } catch {
+          attachRefusal = "resume refused — \(MeshModel.shortReason(error))"
+        }
+      }
+    }
+  }
+
   private var attachmentNote: String? {
     // A copy is the most recent thing the user did, and it is transient —
     // it says so and then gets out of the way.
@@ -975,6 +1065,10 @@ public struct HomeScreen: View {
     if let writeKeyNote { return writeKeyNote }
     if let attachRefusal { return attachRefusal }
     if let renderFailure { return "the renderer refused this frame — \(renderFailure)" }
+    // IOS-4c — what the FEED says about this run's terminal, when there is no
+    // attachment to speak for itself. It ranks under the transient notes and
+    // above nothing, because an unattached agent card has no other news.
+    if attachment == nil, let face = cardTerminalFace.note { return face }
     guard let attachment else { return nil }
     // Upstream's banner outranks our phase words wherever it exists: it names
     // the device ("studio is offline") where the phase can only name the
@@ -1026,6 +1120,10 @@ public struct HomeScreen: View {
     // act is worth offering. The card still knows nothing about a store.
     if attachedViewOnlyForWantOfKey, let enter = writeKeyEntry(for: cardBubble) {
       actions.append(CardAction(id: "enter-key", label: "ENTER KEY", run: enter))
+    }
+    // IOS-4c — an ended run's one act.
+    if let resume = resumeAction(cardBubble?.agent?.join, runtimeRunId: cardBubble?.id) {
+      actions.append(resume)
     }
     return actions
   }
@@ -1084,7 +1182,24 @@ public struct HomeScreen: View {
   }
 
   private func beginAttachment(to bubble: FieldBubble) {
+    // IOS-4c — an AGENT bubble attaches to its own run's PTY, found through
+    // G3's join. It is the same act and the same code below: a managed
+    // agent's terminal is one of the floor's advertised sessions, and the only
+    // thing that made it special was not knowing which one.
+    if bubble.remote == nil, let address = cardTerminalFace.address,
+      cardTerminalFace.offersAttach
+    {
+      beginAttachment(
+        deviceID: address.deviceID, deviceName: address.deviceName,
+        sessionID: address.sessionID)
+      return
+    }
     guard let remote = bubble.remote, remote.attachable else { return }
+    beginAttachment(
+      deviceID: remote.deviceID, deviceName: remote.deviceName, sessionID: remote.sessionID)
+  }
+
+  private func beginAttachment(deviceID: String, deviceName: String, sessionID: String) {
     // One attachment at a time, latched BEFORE the await — see `attaching`.
     guard attachment == nil, !attaching else { return }
     attaching = true
@@ -1104,9 +1219,9 @@ public struct HomeScreen: View {
       let attachment = TerminalAttachment(
         directory: directory,
         appearance: appearance,
-        accessToken: writeKeys.capability(for: remote.deviceID))
+        accessToken: writeKeys.capability(for: deviceID))
       self.attachment = attachment
-      attachedDeviceID = remote.deviceID
+      attachedDeviceID = deviceID
       // --- IOS-5a ---
       installInputSink(on: attachment)
       // --- end IOS-5a ---
@@ -1116,8 +1231,8 @@ public struct HomeScreen: View {
       // The device NAME rides along so the banner can say "studio is offline"
       // rather than naming a ULID at the user.
       attachment.attach(
-        deviceID: remote.deviceID, sessionID: remote.sessionID, cols: 80, rows: 24,
-        deviceName: remote.deviceName)
+        deviceID: deviceID, sessionID: sessionID, cols: 80, rows: 24,
+        deviceName: deviceName)
     }
   }
 

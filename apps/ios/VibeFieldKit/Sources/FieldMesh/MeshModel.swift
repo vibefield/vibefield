@@ -190,7 +190,10 @@ public final class MeshModel {
     }
   }
 
-  nonisolated static func shortReason(_ error: Error) -> String {
+  /// One length of bad news for the whole app: the mesh leg, the store reader
+  /// and the product client all render an error through this, so a screen
+  /// never shows two shapes of the same kind of failure.
+  public nonisolated static func shortReason(_ error: Error) -> String {
     let text = String(describing: error)
     return text.count > 120 ? String(text.prefix(117)) + "…" : text
   }

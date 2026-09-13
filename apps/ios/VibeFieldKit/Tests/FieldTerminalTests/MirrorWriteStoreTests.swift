@@ -126,3 +126,54 @@ struct MirrorWriteStoreTests {
         == "01J8ZQ4M7N2KP5R3…")
   }
 }
+
+/// IOS-4d — the granted key takes exactly the path a pasted one takes, and is
+/// no more visible for having arrived over a door.
+///
+/// The grant's own type redacts its capability (`TerminalMirrorWriteGrant`'s
+/// `description`, pinned in FieldProductTests). This is the other half: once
+/// the capability is IN the store, nothing the store renders carries it either
+/// — not the host list the settings sheet draws, not a host's description, and
+/// not the error of a store that refused. A secret that survives its type's
+/// redaction only to be printed by the thing it was handed to is not redacted.
+@Suite struct GrantedWriteKeyRedactionTests {
+  private static let secret = "mw_EXAMPLE_not_a_real_capability_0000"
+
+  @Test func aStoredCapabilityIsNeverRenderedByTheStore() throws {
+    let store = InMemoryMirrorWriteStore()
+    let host = MirrorWriteHost(deviceID: "dev-studio", deviceName: "studio")
+    try store.set(Self.secret, for: host)
+
+    // It went in, and it comes back exactly once — at the attach.
+    #expect(store.capability(for: "dev-studio") == Self.secret)
+
+    // And nothing the settings sheet can reach renders it.
+    let hosts = store.hosts()
+    #expect(hosts.count == 1)
+    #expect(!String(describing: hosts).contains("mw_EXAMPLE"))
+    #expect(!String(describing: host).contains("mw_EXAMPLE"))
+    #expect(String(describing: hosts).contains("studio"))
+  }
+
+  /// A store that refuses says why, and the reason is about the KEYCHAIN and
+  /// never about the key.
+  @Test func aRefusedWriteNeverEchoesTheCapability() {
+    // -25293 is `errSecAuthFailed`, spelled as its number so this test needs
+    // no Security import to say what it is about.
+    let error = MirrorWriteStoreError(status: -25293)
+    #expect(!error.description.contains("mw_EXAMPLE"))
+    #expect(!error.description.isEmpty)
+  }
+
+  /// Replacing a granted key with a pasted one (or the other way) is an
+  /// upsert, not a second item: one host, one key, whichever door it came in
+  /// through.
+  @Test func aGrantAndAPasteShareOneSlotPerHost() throws {
+    let store = InMemoryMirrorWriteStore()
+    let host = MirrorWriteHost(deviceID: "dev-studio", deviceName: "studio")
+    try store.set(Self.secret, for: host)
+    try store.set("pasted-by-hand", for: host)
+    #expect(store.hosts().count == 1)
+    #expect(store.capability(for: "dev-studio") == "pasted-by-hand")
+  }
+}

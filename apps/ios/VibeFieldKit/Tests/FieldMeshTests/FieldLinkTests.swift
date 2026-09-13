@@ -140,6 +140,20 @@ private func frame(id: Int64, _ result: JSONValue) -> String {
   return String(data: (try? value.encoded()) ?? Data(), encoding: .utf8) ?? ""
 }
 
+private func failureFrame(
+  id: Int64, kind: String, message: String, retryable: Bool = false, details: JSONValue? = nil
+) -> String {
+  var data: [String: JSONValue] = ["kind": .string(kind), "retryable": .bool(retryable)]
+  if let details { data["details"] = details }
+  let value = JSONValue.object([
+    "jsonrpc": .string("2.0"), "id": .int(id),
+    "error": .object([
+      "code": .int(-32000), "message": .string(message), "data": .object(data),
+    ]),
+  ])
+  return String(data: (try? value.encoded()) ?? Data(), encoding: .utf8) ?? ""
+}
+
 private func event(method: String, subId: String, payload: JSONValue) -> String {
   let value = JSONValue.object([
     "jsonrpc": .string("2.0"), "method": .string(method),
@@ -571,5 +585,174 @@ private func publishBoard(_ mesh: MeshRehearsal, _ value: JSONValue, version: In
       deviceId: "b", name: "laptop", platform: "darwin", state: .connecting,
       feed: FieldFeedSource.none)
     #expect(MeshDisplay.linkLabel(desktops: [ready, dialing]) == nil)
+  }
+}
+
+// MARK: - IOS-4c/4d: the acts over the door
+
+@MainActor
+@Suite struct FieldLinkActTests {
+  /// RESUME goes to the desktop that owns the run, and the answer is handed
+  /// back whole. The new run is NOT put on the field here: the board is the
+  /// fold's to publish, and a row invented on the phone would be a body the
+  /// desktop has not agreed exists.
+  @Test func resumeCallsTheDoorAndDoesNotInventARow() async throws {
+    let (link, mesh, door) = try await standingLink(script: { method, id, params in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.resume":
+        #expect(params["runtimeRunId"]?.stringValue == "run-exited")
+        return [frame(id: id, .object(["runtimeRunId": .string("run-new")]))]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    await publishDevice(mesh, url: "ws://studio.tail.ts.net/t/secret")
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+
+    let answer = try await link.resume(runtimeRunId: "run-exited", on: "dev-studio")
+    #expect(answer["runtimeRunId"]?.stringValue == "run-new")
+    #expect(link.agents.isEmpty)
+    #expect(await door.latest?.methods.contains("agent.resume") == true)
+  }
+
+  @Test func resumingADesktopWithNoDoorIsAnHonestRefusal() async throws {
+    let (link, mesh, _) = try await standingLink()
+    defer { link.stop() }
+    await publishDevice(mesh, url: nil)
+    try await waitUntil("the desktop") { !link.desktops.isEmpty }
+
+    await #expect(throws: FieldProductError.self) {
+      _ = try await link.resume(runtimeRunId: "run-1", on: "dev-studio")
+    }
+  }
+
+  /// G4: the capability arrives over the door instead of being pasted.
+  @Test func theGrantIsAskedForOnceAndCarriesTheCapability() async throws {
+    let granted = JSONValue.object([
+      "capability": .string("mw_EXAMPLE_not_a_real_capability_0000"),
+      "deviceId": .string("dev-studio"),
+      "issuedAt": .int(1_789_671_899_000),
+    ])
+    let (link, mesh, door) = try await standingLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "terminal.mirrorWriteGrant": return [frame(id: id, granted)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    await publishDevice(mesh, url: "ws://studio.tail.ts.net/t/secret")
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+
+    let outcome = await link.requestMirrorWriteGrant(on: "dev-studio")
+    guard case .granted(let grant) = outcome else {
+      Issue.record("expected a grant, got \(outcome)")
+      return
+    }
+    #expect(grant.capability == "mw_EXAMPLE_not_a_real_capability_0000")
+    #expect(grant.deviceId == "dev-studio")
+    #expect(link.hasAskedForGrant(on: "dev-studio"))
+
+    // ONCE. A refusal is audited on the desktop, and a phone that asked again
+    // on every reconnect would fill a person's grants ledger with its own
+    // impatience. The second ask never reaches the wire.
+    let again = await link.requestMirrorWriteGrant(on: "dev-studio")
+    #expect(again == .alreadyAsked)
+    let asks = await door.latest?.methods.filter { $0 == "terminal.mirrorWriteGrant" }.count
+    #expect(asks == 1)
+  }
+
+  /// A guest peer is refused by the door's own preset. That is a sentence for
+  /// the sheet, never a loop.
+  @Test func aRefusedGrantIsASentenceAndNotARetry() async throws {
+    let (link, mesh, door) = try await standingLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      default:
+        return [
+          failureFrame(
+            id: id, kind: "FORBIDDEN_SCOPE", message: "terminal.attach")
+        ]
+      }
+    })
+    defer { link.stop() }
+
+    await publishDevice(mesh, url: "ws://studio.tail.ts.net/t/secret")
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+
+    let outcome = await link.requestMirrorWriteGrant(on: "dev-studio")
+    #expect(outcome == .refused("terminal.attach"))
+    #expect(outcome.note == "this desktop refused: terminal.attach")
+
+    let again = await link.requestMirrorWriteGrant(on: "dev-studio")
+    #expect(again == .alreadyAsked)
+    let asks = await door.latest?.methods.filter { $0 == "terminal.mirrorWriteGrant" }.count
+    #expect(asks == 1)
+  }
+
+  /// A desktop whose terminal mesh is off mints no key. Nothing is wrong —
+  /// there is simply nothing to grant — and the paste path stands.
+  @Test func aDesktopThatMintsNoKeySaysSoAndKeepsThePastePath() async throws {
+    let (link, mesh, _) = try await standingLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      default:
+        return [
+          failureFrame(
+            id: id, kind: "UNAVAILABLE", message: "no mirror-write capability",
+            retryable: false,
+            details: .object([
+              "service": .string("terminal"), "state": .string("no-mirror-write"),
+            ]))
+        ]
+      }
+    })
+    defer { link.stop() }
+
+    await publishDevice(mesh, url: "ws://studio.tail.ts.net/t/secret")
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+
+    let outcome = await link.requestMirrorWriteGrant(on: "dev-studio")
+    #expect(outcome == .notMinted)
+    #expect(outcome.note.contains("FIELD_NATIVE_TERMINAL_MESH"))
+    #expect(outcome.note.contains("paste one instead"))
+  }
+
+  @Test func askingADesktopWithNoDoorSaysThatRatherThanFailing() async throws {
+    let (link, mesh, _) = try await standingLink()
+    defer { link.stop() }
+    await publishDevice(mesh, url: nil)
+    try await waitUntil("the desktop") { !link.desktops.isEmpty }
+
+    #expect(await link.requestMirrorWriteGrant(on: "dev-studio") == .noDoor)
+    #expect(!link.hasAskedForGrant(on: "dev-studio"))
+  }
+
+  /// The outcome never renders the secret. `FieldLink.MirrorWriteGrant` is
+  /// Equatable, so a failing `#expect` prints one — and a grant's own
+  /// description redacts it.
+  @Test func noOutcomeEverPrintsTheCapability() async throws {
+    let granted = JSONValue.object([
+      "capability": .string("mw_EXAMPLE_not_a_real_capability_0000"),
+      "deviceId": .string("dev-studio"), "issuedAt": .int(1_789_671_899_000),
+    ])
+    let (link, mesh, _) = try await standingLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "terminal.mirrorWriteGrant": return [frame(id: id, granted)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    await publishDevice(mesh, url: "ws://studio.tail.ts.net/t/secret")
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+
+    let outcome = await link.requestMirrorWriteGrant(on: "dev-studio")
+    #expect(!outcome.note.contains("mw_EXAMPLE"))
+    #expect(!String(describing: outcome).contains("mw_EXAMPLE"))
   }
 }

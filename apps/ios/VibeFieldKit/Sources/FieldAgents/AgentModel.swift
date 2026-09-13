@@ -229,6 +229,41 @@ public struct AgentRuntimeState: Sendable, Equatable, Codable {
   }
 }
 
+/// Where a run's terminal is, and whose desktop it is on (G3's join).
+///
+/// It rides the snapshot rather than being looked up at the card because it is
+/// a FACT THE FEED GAVE US: the fold's own `terminal` field plus the device
+/// whose board carried the row. A card that re-derived it would be guessing at
+/// something the wire already said.
+public struct AgentJoin: Sendable, Equatable, Codable {
+  /// The MESH device id of the desktop this row came from — the devices
+  /// store's key, which is also the key a product client is filed under.
+  public var deviceID: String
+  /// `local` · `remote` · `none`, the wire's own word. `none` is an exited run
+  /// (or one whose PTY is gone), and it is the only value that means there is
+  /// nothing to attach to.
+  public var hosted: String
+  /// The floor's session id — the handle `terminal.v1.hosts` advertises and
+  /// the one an attach takes. Absent for a run with no terminal.
+  public var runtimeSessionID: String?
+  /// AR-4: the run is live and unobserved, resuming at its next idle. Its PTY
+  /// EXISTS, so it can still be attached to; what it cannot be is resumed
+  /// twice.
+  public var pending: Bool
+
+  public init(
+    deviceID: String, hosted: String, runtimeSessionID: String? = nil, pending: Bool = false
+  ) {
+    self.deviceID = deviceID
+    self.hosted = hosted
+    self.runtimeSessionID = runtimeSessionID
+    self.pending = pending
+  }
+
+  /// Whether the run has a terminal at all, by the wire's word.
+  public var hasTerminal: Bool { hosted != "none" && runtimeSessionID != nil }
+}
+
 /// One agent session as the field sees it.
 public struct AgentSnapshot: Identifiable, Sendable, Equatable {
   /// The session id — the identity spine (EL7); stable across state churn.
@@ -242,6 +277,10 @@ public struct AgentSnapshot: Identifiable, Sendable, Equatable {
   /// nil = spawned but not yet reporting — renders as working, "starting".
   public var state: AgentRuntimeState?
   public let createdAt: Date
+  /// G3's join, when the feed gave one. nil for the scripted fleet, which has
+  /// no desktop and no PTY — and that absence is exactly why its cards offer
+  /// no attach.
+  public var join: AgentJoin?
 
   public init(
     id: String,
@@ -249,7 +288,8 @@ public struct AgentSnapshot: Identifiable, Sendable, Equatable {
     provider: AgentProvider,
     project: String,
     state: AgentRuntimeState? = nil,
-    createdAt: Date = .now
+    createdAt: Date = .now,
+    join: AgentJoin? = nil
   ) {
     self.id = id
     self.runtimeSessionID = runtimeSessionID
@@ -257,5 +297,6 @@ public struct AgentSnapshot: Identifiable, Sendable, Equatable {
     self.project = project
     self.state = state
     self.createdAt = createdAt
+    self.join = join
   }
 }
