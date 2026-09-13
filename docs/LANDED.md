@@ -5615,3 +5615,169 @@ rosetta `e8d907a`); PU-12; `deletePersona` under a live run; the Agents settings
 DESIGN.md Godview citation (James's live edit); `SIBLINGS_TOKEN`; the dev-local snapshot (the
 AR-5 plan `thinking-ar-views-port.md` joins the draft docs awaiting it). Next: **AR-5** proper —
 PU-5a the views package upstream, in parallel with the fieldd halves of AR-5d/AR-5e (the plan's §7).
+
+## AR-5 — the views port: the Godview monitor's views become `@vibecook/puppeteer-views`, behind two injected ports (2026-09-13)
+
+**What landed** (`fe6b3d0a`; this docs commit after it). The plan (`draft/thinking-ar-views-port.md`,
+Status flipped, §11 as built) ran as leaned on the slate AR5-D1…D7 — James: "go ahead". Upstream
+first, then the consumer:
+
+**PU-5a upstream — puppeteer `main`, six commits, all fast-forwards from the `feat/views-package`
+worktree (the pin moved `d2b0600` → `5389449`; rosetta stays `e8d907a`; both UNPUSHED — James
+pushes):** `f33da93` the package (`packages/views`, 0.1.8 — `monitor/*` incl. the registry, the
+parameter system, the palette, the unread and usage ledgers; `colour/*` the project tint and the
+pane colours; the marks atlas; `bar/InstrumentBar` with `leading`/`trailing` slots and
+`BarControl`; `usage/UsageColumn` over `AccountUsagePort`; `find/FindSheet` over `HistoryPort`;
+the swarm on WebGPU with its physics behind `SwarmPhysicsDriverContext` and VibeField's worker
+host, frame, protocol and inline driver moved in under `physics/`; list; rain; the lab and its
+fixtures exported; `styles/views.css` the one sheet a host imports; `MonitorAgent` generalized —
+`session?`, `createdAtMs`, `remote?`, `tier?`, the facet's `provider: {id,label}` and optional
+`monitor`; Core's `AccountUsageEntry/Batch` schemas; the runtime's `createAccountUsageMonitor`
+service; puppeteer's own Godview re-based on the package, its lab bundling the package's; the
+layout gate mapping the package) · `b9a0ce9` (a facet may precede its first monitor state; the
+swarm names its renderer on its section — `data-swarm-renderer` starting|webgpu|unavailable; the
+lab fixtures exported) · `77f24fd` (`useMonitorPalette(root?)` / `readMonitorPalette(root?)` read
+the Godview root they are given — a page with two roots needs it) · `33d8369` (the 31 physics
+tests come across with the physics, `physics/{world,host}.test.ts`; the package had zero tests
+over the moved modules) · `8af9df9` (the find sheet gives focus back on close; every body's
+button carries `data-agent-bubble-source`) · `5389449` (a peer's session says its host — the name
+FIRST, the write policy in both directions, in all three views; `monitor/remote-write.ts` ported
+and exported). Gates upstream at `5389449`: views typecheck + **17 files, 131 tests**; the Godview
+app **32 files, 198 tests**; the root typecheck; the layout gate `clean (22 packages, 2 apps)`.
+
+**AR-5a — the fence, the lock, the walls.** `pnpm-workspace.yaml` gains the seventh `link:` row
+(`@vibecook/puppeteer-views`) and the fence comment records the dedupe answer: React is a PEER of
+the package, so `scripts/check-single-copy.mjs` compares a sibling `link:` root's react/react-dom
+by VERSION against this tree's and never counts them as a second copy (an uninstalled sibling is
+still a problem); `packages/field-app/vitest.config.ts` dedupes react; the R21 door admits the
+package; `siblings.lock.json`'s package list names it (`pnpm siblings:pin` writes it); CI's
+filtered install widens to `--filter "@vibecook/puppeteer-views..."`; the witness
+`godview-views-package-react.test.tsx` renders `listMonitorView.Component` under this tree's
+React. The lockfile moved by four lines.
+
+**AR-5b/5c — the renderer on the package.** `GodviewMonitor` is the package's `InstrumentBar`
+(the notice in `leading`; in `trailing` VibeField's provider `<select>`, SPAWN, and the FIND and
+SYSTEM CONTROL `BarControl`s), the `FindSheet` on ⌘F over the door's history port, and the stage
+under `SwarmPhysicsProvider factory={createSwarmPhysicsDriver}` — the ONLY swarm files left under
+`views/swarm/` are the worker driver (watchdog, inline fallback, the mode word) and the worker,
+both importing `@vibecook/puppeteer-views/physics`; beside the stage `.vf-monitor-chrome` holds
+the package's usage column and `.vf-monitor-claims` VibeField's chips. The row is the package's
+`MonitorAgent` with VibeField's facet extension (`kind`, `tier`, `runtimeRunId`, `profileId?`,
+`monitor?`, `summary`); `monitor/agents.ts` re-assembled over `colours` + `projectSeqs` — the
+per-agent colour is the PROJECT's (record §02, D3): `monitor/project-ledger.ts` deals each project
+key (workspace root, else source path, else the observed cwd) a sequence, kept in
+`localStorage` (`vf-godview-projects-v1`), `projectTint(seq, palette.tint)` turns it into a hue;
+terminals and remote rows wear the ramp; the eight §2.6 accent slots, `agentAccentSlot`, the
+palette module, `AgentIcon`, `chrome.ts`, `parameters.ts` and `registry.ts` are DELETED. Pane
+colours come from the package's `dealPaneColours` over the deck's `paneIds` (the deck now
+publishes `paneIds` + `activePaneId`); attachments are keyed by session id. The usage ledger is
+folded in the hook (`reconcileUsage` on a 30 s step, seeded and saved through
+`monitor/usage-history-cache.ts`, `vf-godview-usage-history-v1`, D7) from the mirror's
+passthrough usage rebuilt into Core's shape (`coreUsage`); unread through `reconcileUnread`. The
+status word is Core's — `blocked`, where GT-3m said `waiting`; `godview.css` lost the header,
+list, rain and responsive rules and gained `--blocked-*` aliases, `--tint-l/--tint-c` (light
+0.6/0.15, dark 0.74/0.15), the bar select and the claims strip; the manifest imports the
+package's sheet. `monitor-tuning.ts` keys a view's parameters by `viewId[:parametersRevision]`.
+The marker gained `swarmRenderer` (read off `[data-swarm-renderer]` by a MutationObserver),
+`usageTiles` (counted off the chrome slot; -1 unmounted) and `findSheet` (open|closed).
+
+**AR-5d — `agents.usage` + `agents.usage.subscribe` (the builder's half).** Contracts
+`agent-usage.ts` (`AgentAccountUsageEntry` — provider, label, profile, a tolerant `state`
+available|rate-limited|unauthenticated|unsupported|unavailable|unknown, metrics, credits, the
+provider's own message, retryable/retryAt, stale, fetchedAt, scope, source — and the batch) with
+two fixtures; fieldd `agent-usage.ts` (`AccountUsageService` over the runtime's
+`createAccountUsageMonitor`, `refreshProfiles` on `runtime.onProfilesChanged`, the
+`FielddConfig.agentUsage` seam) and the two rows under `agent.observe`, local. **Polling is
+DEMAND-DRIVEN — only while a subscriber exists** — because the reference's Claude adapter puts the
+OAuth token on the wire to `api.anthropic.com` and no daemon boot in the test graph may do that
+on its own. Renderer side, `usagePortOver(client)` rebuilds the flattened row into Core's
+two-part entry (provider + result; `refresh.pollIntervalMs` is `NaN`, documented as not a
+reading) and delivers the subscription's snapshot then frames, dropping an unreadable frame.
+
+**AR-5e — `index.sessions` + `index.search` (the builder's half; AR-8's first brick).**
+Contracts `IndexSessionsParams/Result` (camelCase rows), `IndexSearchParams {q,
+nativeSessionIds?, afterMs?, limit?, prefix?, kind?}`, `IndexSearchResult {answered, state
+{readiness incl. "unknown", canonicalReady?, progress?, detail?}, hits, clipped}`,
+`IndexStatus.search?` (reachable, capabilities, readiness) with three fixtures incl. rosetta's
+own protocol-20 answer; fieldd `IndexService.sessions()`/`search()` — chunks of 64, the two-call
+keystroke, a bounded root walk, `answered: false` when the index is not ready (never "no
+matches"), `index.sessions` UNAVAILABLE before the daemon is ready — on `index.read`, local; the
+fake rosettad grows `/api/search` + `/api/sessions/{id}`; the window token gains `index.read`.
+Renderer side, `historyPortOver(client)` maps the three doors onto the sheet's `HistoryPort`
+(a `null` protocol version stays absent; a rejected `index.sessions` PROPAGATES so the sheet
+keeps its last facts; a rejected search is `answered: false`).
+
+**The catalog (UI_SYSTEM's two rules).** `SwarmBodiesPreview` mounts the SHIPPING swarm over the
+package's own lab fixtures — every drawn state — inside a Godview root of its own (theme, motion
+and replay controls; selection answered as a deck would; the palette read from ITS root, which is
+what `77f24fd` is for); `AgentBubblePreview` and its 637 lines of replica-adjacent chrome are
+gone; the boundary test's rows follow; the ambient-animation audit now reads the overlay's sheets
+through the package's export and its `@import`s and asserts ZERO keyframes — GT-3p's ignition
+loops, shadow cross-fades and James's tuned shadow numbers retired with the DOM bubble (the swarm's
+motion is the shader's, gated by the same switches).
+
+**Tests moved, deleted, written.** Deleted with their subjects: `godview-agent-bubble`,
+`godview-swarm-loop`, `godview-rain-streams`, `godview-swarm-physics`, `godview-swarm-protocol`
+(the last two are the 31 upstream now), `godview-monitor-parameters` (its registry and parameter
+describes live upstream; `godview-stage-parameters.test.ts` keeps the stage-height split and
+tests the tuning key). Re-expressed by two builders: the fold suite (`monitor-agents` 17,
+`monitor-status` 9, `local-field` 5, `remote-field` 26) and the stage suite (`monitor` 15,
+`remote-door` 17, `monitor-lifetime`, the bar instead of a `<select>`). New: `project-ledger` 12,
+`usage-history-cache` 7, `monitor-doors` 24 (both adapters over a fake door and the contracts
+fixtures), `stage-parameters`, the React witness. **field-app: 86 files, 723 tests** (the two
+remote-row claims — the host eyebrow, the write policy both ways — were `it.skip` until
+`5389449` drew the facet, then un-skipped and green). fieldd: `agent-index-search` 14 (13
+scripted + 1 real rosettad), `agent-usage` 10 scripted + 1 real (`FIELDD_TEST_REAL_AGENT=1`,
+11/11); contracts: `agent-usage`, `agent-index-search`, the fixtures suite.
+
+**The smoke (`pnpm smoke:godview`, exit 0, `"ok":true`), the AR-5 rows verbatim:**
+`"monitorView":"swarm","monitorAgents":1,"swarmPhysics":"worker"` ·
+`"swarmRenderer":"unavailable"` with the WEBGPU line read off the stage (headless Electron on
+this Mac paints on `canvas2d` and hands the overlay no WebGPU — the honest line is the row, not
+the pixels; §6.7 as planned) · `"usageTiles":0,"usageColumnMounted":true` · `"findSheet":"open"`
+→ `"findSheetAfterEscape":"closed"` on a synthetic ⌘F and Escape ·
+`"focusAroundFind":"hasFocus=true active=TEXTAREA.terminal-input → hasFocus=true
+active=TEXTAREA.terminal-input"` · `"paneTypeableAfterFind":true` ·
+`"localBubbleClicked":"jamesyong, unassigned terminal, idle"` on
+`.vf-monitor-swarm-list button:not([data-agent-bubble-source="remote"])` ·
+`"localAck":"jamesyong mounted in the active pane"`. Five runs to get there, each red a finding:
+run 1 died on `.vf-monitor-bubble` (the DOM bubble is gone — the click lands on the body's
+button now); run 2 typed into nothing after ⌘F/Escape — **the package's find sheet took focus and
+kept it on close** (`8af9df9`); runs 3 and 4 delivered the pane's next line IN PART after the
+focus returned (an empty `$0`, then an answer file that never appeared while its marker did) —
+the pane's routed activation reopens on focus and a harness typing at 3 ms a key lands in that
+window, so the row now proves the pane is TYPEABLE again by retyping a marker line until it
+lands; run 5 green.
+
+**Found and fixed upstream on the way (four of the six commits):** the find sheet's focus; the
+remote facet drawn by no view (the stage builder's finding — the host eyebrow and GT-5c's
+writability word had lost their only surface; a peer's row drew exactly like a local terminal);
+the palette reading the document's first Godview root on a two-root page; the bodies' buttons
+naming no source. **Recorded deltas, placed at their sources:** GT-D16's erratum (the renderer
+paints on MAIN behind a physics DRIVER port; `adoptCanvas` stays unused; the roadmap's and the
+triad doc's "mounted into the worker's `adoptCanvas` socket" was the expectation restated), the
+triad §16 phrase, GT-D13's "IMPORTED, not ported", the spec's §8 line, design-04 §8.1, DECISIONS
+(D13/D14 as built, the AR5 slate indexed), the PU-5 petition LANDED, the plan's Status.
+
+**Gate:** `pnpm verify` verbatim exits 1 at `pnpm lint` — biome `Checked 1294 files … Found 8
+errors`, all eight in James's untracked `work/composer-directions.html` (the AR-5-0 class;
+preflight OK with the two dirty-sibling warnings, check:deps, icons:check and typecheck ran green
+inside it). The stages after lint, in the gate's order, each run alone: `cargo fmt --check` exit
+0 · `pnpm lint:rust` exit 0 · `pnpm bundle:assert` exit 0 · `pnpm test` exit 1 with ONE red in
+field-app — `godview-remote-door.test.tsx › with NO door … expected 'serving' to be 'no-door'`,
+the file the repo already knows samples too early under load (`godview-remote-door-samples-too-
+early`); alone it is 17/17 twice in a row; every other project green (fieldd 79 files + 1
+skipped, electron-shell 69, contracts 24) · `pnpm test:rust` exit 101 on
+`logging::tests::queue_and_ring_stay_bounded_and_reserve_high_severity_capacity`'s 4 s flush
+deadline (the row with no headroom, `native-logging-deadline-has-no-headroom`; the run overlapped
+the upstream re-check on this loaded host) — re-run alone: exit 0, `241 passed; 0 failed; 6 ignored` over 21 result lines (AR-5-0's numbers exactly) · `gen:check`'s Rust half
+(`gen:rust` + the diff over `packages/contracts/gen`, `contracts.rs`, `registries.rs`) exit 0; the
+docs half is not run here because `gen:docs` rewrites James's STAGED `docs/plugin-authoring/*`.
+
+**Still owed:** DESIGN.md §1.1's Godview citation + the §2.6/§2.7 sentences (James's live edit;
+the text is the plan's §9) · the `adoptCanvas` phase 2, on a measured main-thread cost of the
+swarm's frame, not a date · PU-12 and `deletePersona` under a live run · the Agents settings
+section · `SIBLINGS_TOKEN` and the pushes (puppeteer `5389449`, rosetta `e8d907a`) · the dev-local
+snapshot (the plan doc, the errata, the petition row, the triad rows — all in `draft/`) · the
+six-lens review of this slice, as AR-4b was of AR-3/AR-4. Next: **AR-6** approvals + prompts
+(Godview's send box PANE-ONLY).
