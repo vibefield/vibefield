@@ -5914,3 +5914,453 @@ divergences from the real daemon (prefix, clamp, the 400s, child hiding) · ⌘F
 (the Windows port) and is swallowed on the catalog page · the swarm's physics mode is not on
 the section (`data-swarm-physics`) · `updatedAt ?? 0` in the history adapter (the package's
 facts want a number) · the `unknown` metric count (131 vs 126) is a note, not a defect.
+
+## IOS-3c — the write key has a home: the phone can be granted writes
+
+**LANDED 2026-09-09, `9b07fc61`** (+ `997baf8a`, the workspace pin record). Built by a
+briefed agent in a worktree, reviewed and integrated by the orchestrator on the `ios/keyboard`
+branch; James merges. The gate the IOS-3 entry named as unmet: `72929d8` claimed 3c and shipped
+the lifecycle without the capability — the access token rode every attach and every re-dial,
+but nothing ever assigned it, so the phone attached VIEW-ONLY for the life of the process and
+`HomeScreen.swift` said so in as many words. It now has a home, and the input card
+(`thinking-ios-keyboard.md` §8, K-D2) has its first real user.
+
+**What landed.** `FieldTerminal/MirrorWriteStore.swift`: `MirrorWriteHost` (device id + the
+NAME, stored beside the secret so a host that is offline today can still be named in a list of
+keys), `MirrorWriteStoring`, `KeychainMirrorWriteStore` — one generic-password item per host,
+service `com.jamesyong.vibefield.ios.mirror-write`, account = device id,
+`AfterFirstUnlockThisDeviceOnly` (the terminal re-presents its token from a foreground resume)
+and `kSecAttrSynchronizable = false` (a grant to ONE device must not ride iCloud Keychain to
+every device the user owns); `hosts()` asks for attributes and never data, because the one way
+to keep a secret off the screen is not to fetch it — and `InMemoryMirrorWriteStore`, the fake
+and the DEBUG seed, whose `wildcard` answers for hosts it never listed and is deliberately not
+a host. The card's invitation gains ENTER KEY exactly where the copy blames THIS device
+(`FieldHomeModel.keyEntryOffered`, pinned: never on a read-only session, never over "you can
+type here"); a live attachment that is view-only for want of a key gets the same act as a
+status chip; `WriteKeySheet` takes a key and never reads one back (REMOVE appears only when a
+key is held; an empty SAVE is a no-op, not a greyed-out control — D-i6); the settings sheet
+gains WRITE KEYS, hosts and one act, absence in words. `HomeScreen`: `mirrorWriteCapability`
+is gone — the token is read PER HOST at `beginAttachment`, and a key saved under an open
+view-only attachment re-attaches with it (detach awaited first, so the `attaching` latch's
+invariant holds). DEBUG `-vf-write-key=<secret>` / `-vf-open-write-key` compile out of Release.
+
+**Tests 149 green (was 135):** `MirrorWriteStoreTests` (10) on the fake, `write key entry` (4).
+The Keychain store is not tested headless and says why: a package test host's keychain is not
+the product's. **Witnessed** in the simulator, both themes: ENTER KEY under the invitation, "you
+can type here" with a key, the sheet, the section. **NOT witnessed, and it is the slice's real
+gate:** typing into a serving desktop — a phone, a tailnet and a mesh, none of which a
+simulator can stand in for. James's device run. Found on the way: the Xcode workspace's
+`Package.resolved` had recorded ghosttea 0.9.3 since `cec95a84` while the manifest and the
+kit's own resolved file said 0.10.1 — every build re-resolved on the fly, so only the record
+was wrong; `997baf8a` moves it.
+
+## IOS-5a — the card and the rail: the keyboard design lands in the field, Draft mode
+
+**LANDED 2026-09-09, `639bd60f`, merged onto `ios/keyboard` at `b5692752`** (with IOS-3c,
+`9b07fc61`). The finalized KeyboardLab design ("Composer + Rail", `research/mobile-terminal/
+KeyboardLab/DESIGN-PROPOSALS.md`, decisions §11) meets the real seam per `thinking-ios-keyboard.md`
+§2–§3 and §8: re-skinned into D-i2's godview mono, carried by the session sheet's own liquid glass,
+each key a `FieldChip`-shaped 44 pt key, attention as inversion and never hue, and the copy rule
+kept — the word "Live" never reaches the screen; the mode is a terminal glyph and the strip says
+"Typing into terminal". Built by a briefed agent in a worktree in parallel with IOS-3c; the
+orchestrator reviewed, merged (three files, all keep-both) and gated the merged tree.
+
+**What landed.** `FieldTerminal/TerminalKeystroke.swift` — `TerminalKey` / `TerminalModifiers` /
+`TerminalKeystroke`, the public vocabulary the card composes in, and the module-internal encoder to
+the kit's hardware-key event: the named usages and the `|`/`~` rows COPIED from the kit's own
+accessory table so our rail and the row we switched off cannot drift, the rest of the US layout
+derived from the HID table, unencodable characters `nil` rather than a wrong byte.
+`TerminalAttachment` grows `press(_:)`, `sendDraft(_:)` (paste, then Enter; empty is Enter alone;
+never trimmed) and `typeText(_:)`, all through `ensureControlForTyping()`. `TerminalSurface` grows
+`showsKitAccessoryRow` (default **false** — K-D3: the kit's fifteen-key row is off because ours
+replaces it), `wantsFocus` (the Live half of two-modes/two-first-responders) and
+`keyboardAppearance`; responder changes ride the next main turn, because a keyboard raised inside
+a SwiftUI update pass resizes the view's own ancestors mid-pass. The new target **`FieldInput`**
+(K-D1) holds `InputCardModel` (two modes, the draft, the sticky-Ctrl `LatchState` as a pure value,
+one `InputAct` sink), `ComposerField` (a `UIViewRepresentable` carrying the kit's trait set —
+no autocorrect, no smart punctuation, no predictive bar — 1→5 lines, single-character
+interception while latched) and `InputCard` (the composer row over eight rail keys); it takes
+`FieldTerminal` for the vocabulary only and names no Ghosttea product, so "the card composes a
+terminal without knowing how one works" is a fact the manifest enforces. `FieldHomeModel.
+inputCardFace` (K-D2): the card is on screen for exactly one state — a live attachment this device
+may type into; every other state renders nothing (D-i6). `HomeScreen`: one `@State`, one
+`.safeAreaInset` on the session card, the sink installed at attach and cleared on close.
+
+**Findings on the way, recorded at source.** Newlines are exempt from latch interception (no key
+on this layout produces one; a latched Return is IOS-5b's Live path). The composer's text inset
+had to live inside the text view — set from outside it left the placeholder half a character left
+of the caret, caught in the simulator. The send path is the HOST's decision: the kit's paste op
+rides the wire as `paste`, the host answers it through `session.paste` → `encode_paste` → the vt
+shim's `eg_terminal_encode_paste`, which reads the terminal's own bracketed-paste mode and hands
+it to `ghostty_paste_encode` — so a draft is bracketed exactly when the far program has DECSET
+2004 on, which is why Send is a paste and not a run of keystrokes.
+
+**Absent, not inert (D-i6):** the design's `+` menu and `⋯` keypad are IOS-5d; the mic needs the
+Speech framework and its usage strings; the latch in Live mode, the long-press fans and haptics
+are IOS-5b. **Tests 182 green** (135 → 168 on the branch; 182 merged with 3c):
+`TerminalKeystrokeTests` (10), `LatchStateTests` (6), `InputActTests` (14), `InputCardFaceTests`
+(3). **Witnessed** in the simulator, both themes: the card above the keyboard, both rows 44 pt,
+equal-width keys, no predictive bar, Send quiet then inverted, CTRL inverted with its lock dot,
+the strip with its Enter. **Device-gated:** the kit's row actually gone, `git status` sent from
+Draft, Esc/Tab/arrows landing in a shell, a three-line draft arriving in zsh as one block.
+
+## IOS-5b — the latch reaches the terminal: Live mode's Ctrl, the long-press fans, the Meta burst
+
+**LANDED 2026-09-09, `e6617827`** (fast-forwarded onto `ios/keyboard`). Built by a briefed agent in
+a worktree in parallel with IOS-5c; the orchestrator reviewed and integrated. K-D3 stops being a
+plan: **one latch, ours, meaning the same thing whichever responder holds the keyboard.**
+
+**What landed.** `FieldTerminal/SoftwareInputLatch.swift` — the shaping as a pure function: a
+single-character commit under modifiers becomes that keystroke, Enter and deleteBackward their
+named keys, a multi-character commit / paste / already-shaped key event `nil` (forwarded
+untouched); it reproduces the shape of the kit's own accessory latch, read at the pinned 0.10.1
+checkout, because the kit's is internal, single-shot and blind to our rail.
+`TerminalAttachment.softwareInputLatch` — a public CONSUMING closure the host installs at attach
+and clears in `closeCard` (the sink holds the attachment and this holds the card: a retain cycle
+only that clear breaks); `handleSoftwareInput` consults it once per event, never for a paste, and
+presses the shaped keystroke instead of forwarding; the old body became a private
+`deliverSoftwareInput` that `sendDraft`/`typeText` use, because the card already spent its latch
+at the tap and a second consumption would put Ctrl on the Enter that ends a draft. With no latch
+installed the path is byte-for-byte the old one. `InputCardModel`: `takeLatchForTerminal` (the
+Live half), `tapChord` (a fan key names its own modifiers — `^C`, never `^^C`; the latch is spent,
+a locked one stays locked; the Meta burst rides along since a chord is a keystroke), `metaArmed`
+with `armMeta`/`metaExpired` on the arm's 3 s discipline, `showFan`/`closeFan`.
+`FieldInput/KeyPopover.swift` — the fan as a value (catalog + rows) and its presentation: CTRL
+fans to the design's ten chords in two rows with one-word subtitles, ← → ↑ ↓ to HOME END PGUP
+PGDN, TAB to ⇧TAB, ESC to META. `Haptics.swift` — light to arm, medium to lock, soft to release,
+rigid for a chord, called from the VIEW (the model has no UIKit in it on purpose).
+
+**Decisions named at source.** The fan is a `.popover` with compact adaptation and its keys are
+TAPPED, not slid onto: the card lives in a `safeAreaInset`, so a fan must stand outside the card's
+bounds, and slide-and-release wants it drawn inside them. Long press is 0.35 s, shorter than the
+field's 520 ms hold-to-create, which makes an agent and wants deliberation. A long press ends in
+a touch-up, so every rail key's action checks `openFan` first. Closing a fan gives the keyboard
+back only if the composer had it. A multi-character commit spends the arm and passes through: an
+IME composition has no single key to name. Alt has no rail slot (design decision 4): Esc-then-x
+already is Alt-x for readline/emacs/zsh, and the burst exists for tmux, which wants the escape
+and the key as one.
+
+**Tests 182 → 208 green:** `SoftwareInputLatchTests` (9), `InputActTests` +12, `KeyFanTests` (5).
+**Witnessed** in the simulator, both themes: the fan anchored above CTRL with its arrow, META
+inverted on ESC, the strip in Live with the mode key lit. **Device-gated, and it is the slice's
+real gate:** Ctrl-R then text; Ctrl-X Ctrl-S through a lock; vim Esc `:q!`; ⇧Tab; a Meta-arrow
+tmux binding; whether the popover takes the keyboard in Live; every haptic.
+
+## IOS-5c — the card answers for the agent: reply chips from the feed, the paste chip, the closed row
+
+**LANDED 2026-09-09, `7d3aba75`, merged onto `ios/keyboard` at `f7a2f52e`** (one README conflict;
+the code merged clean against IOS-5b because both lanes kept their hunks delimited). Built by a
+briefed agent in a worktree in parallel with IOS-5b; the orchestrator reviewed, merged and gated
+the merged tree. The design's contextual row lands under **K-D4: chips read the FEED, never the
+frame.** A frame reaches this phone as TRF1 bytes only the Metal renderer can decode, so the
+design's regex-over-the-last-rows detection (decision 3) is not merely unnecessary here, it is
+impossible — and the feed is the better source anyway, being the same fact that made the bubble
+loud.
+
+**What landed.** `FieldAgents`: `AgentFacet.permissions`, carried by `fieldBubble(from:)` — only
+an AGENT bubble has any, which is exactly why the chips are fixture-only today. `FieldInput/
+ReplyChips.swift`: a pure `replyChips(provider:permissions:)` — Claude gets `1 YES · 2 YES, DON'T
+ASK · 3 NO · ESC`, TYPED through the attachment because its TUI owns the dialog; codex/grok/acp
+get nothing, their approval being a structured resolve over a product API that does not exist
+(`thinking-ar` §7), and a chip with nowhere to send is the dead control D-i6 forbids — the card's
+"approve at the desktop" line stays. `InputCardModel`: `chips` + `tapChip`'s stale rule (matched
+by id, because the host re-derives the row on every bubble change), `acceptPaste` (the draft
+appends on its own line; the terminal sends outright under five lines and reviews at five or
+more), `InputAct.paste`, `keyboardOwner` over `fieldFocused` and a new `terminalFocused`,
+`requestKeyboard`/`dismissKeyboard`. Views: `ChipsRow` (the waiting tier's inversion, so the
+bubble that raised the card and the chip agree), `PasteChip` on a `UIPasteControl` (no "allow
+paste" alert), `PasteboardWatcher` (`changeCount` and `hasStrings`, never the contents),
+`PasteReviewSheet`, `ClosedRow` (chips beside `KEYBOARD` whenever the keyboard is down).
+`FieldTerminal`: `TerminalAttachment.pasteText` (a block with no Enter behind it);
+`TerminalSurface.onFocusChange` reports what the responder call ACHIEVED rather than what it
+asked for, plus a `focusEpoch` so `KEYBOARD` can re-ask at an unchanged intent.
+
+**Findings, recorded at source.** A squashed `UIPasteControl` stops drawing itself — pinned to
+the row's 32 pt it rendered as a bare accent rectangle with no icon and no label, both themes; it
+sizes itself now and the row follows. Its label stays the system's, in the system font — the one
+thing on this card that does not speak `FieldType.mono`, and the API offers no way to change it;
+the trade is the design's own (§4): the chip exists so paste costs no permanent button, and an
+alert per use would cost more than the button did. The design's "preview of the first line" is
+out for the same reason — a preview means reading the pasteboard before being asked to.
+Interactive dismissal is a swipe on the rail: there is no scroll view on this sheet, and a drag
+on the terminal is a selection. The fixture's chips had to move INSIDE the derivation — stamped
+beside it they were wiped by the next honest re-derivation, a remote bubble having no agent
+facet.
+
+**Absent, not inert (D-i6):** the design's password-prompt chip (decision 8) is not buildable on
+the phone at all — it wants the last row's text. **Fixture-only, and it is a fact about the feed,
+not the chips:** the bubbles this phone can attach to are remote terminals; the real feed is AR
+via IOS-4. **Tests 243 green on the merged tree** (182 → 217 on the branch). **Witnessed** in
+the simulator, both themes: the chips row over the composer, the paste chip, the closed row, the
+review sheet. **Device-gated:** a real permission from a real agent feed, and a chip tapped
+against it.
+
+## IOS-5d (mic rider) — the mic lands in the draft: on-device dictation, never straight into the terminal
+
+**LANDED 2026-09-09, `bac6561d`, merged onto `ios/keyboard` at `63ba79d3`** (one README
+conflict; the Swift merged clean against IOS-5c). The composer row's third control, deferred from
+IOS-5a because it needs the Speech framework and usage strings; built by a briefed agent in a
+worktree in parallel with IOS-5d proper. `Dictation.swift` — `DictationSession`, a `@MainActor
+@Observable` over `SFSpeechRecognizer` + `AVAudioEngine`: `start()` asks for speech and then the
+microphone (two grants, two sentences — a phone that will not transcribe is a different problem
+from one that will not listen), installs the tap and streams partials; `stop()` commits exactly
+the text on screen. Recognition pinned to the device wherever `supportsOnDeviceRecognition`
+allows; audio streamed buffer by buffer, stored nowhere; no transcript logged. `DictationKey.swift`
+— the 44 pt key between the field and Send in the card's chip shape, inverted and breathing on
+`FieldMotion.breathePeriod` while it listens. `InputCardModel` gains `appendDictation` /
+`replaceDictationTail` / `commitDictation` (the dictated span is character offsets that prove
+themselves against the draft on every use, so Send, an edit or `reset()` need no clause of their
+own). Two `INFOPLIST_KEY_*` usage strings, both configurations; `PrivacyInfo.xcprivacy`
+deliberately UNCHANGED — mic and speech are not required-reason APIs and nothing leaves the device
+by default; the server fallback is disclosed in the usage string itself.
+
+**Decisions named at source.** Dictation lands in the DRAFT and never on the wire (a misheard word
+that went straight to the terminal would already be a command). The mic is ABSENT from Live's
+strip, where the design draws one: Live has no draft on screen, so a mic there would fill a field
+nobody can see or type into the terminal, the one thing this control refuses to do (D-i6). The
+honest line for a refused grant or an absent recognizer stands ABOVE the row for three seconds
+rather than growing the card — the terminal's grid follows the card's height through `onGridSize
+→ setViewport`, and a reflow to say one sentence is the wrong trade. `duckOthers` is a courtesy
+not allowed to cost the mic. **Tests 261 green on the merged tree** (`DictationTests`, 18 — pure
+string rules, no Speech in tests). **Witnessed** in the simulator under `-vf-demo-input-dictating`,
+both themes. **Device-gated:** the two permission prompts, a real transcript, partial-then-refine
+against live recognition, whether recognition stayed on the device, the zero-channel refusal.
+
+## IOS-5d — the card grows its doors: the `+` menu (scan · snippets · history) and the `⋯` keypad
+
+**LANDED 2026-09-09, `3e46ab07`, merged onto `ios/keyboard` at `59e80ba1`** (two files
+conflicted — the README and one doc comment in `InputCard.swift` where the `+` lane and the mic
+rider had each described the row without the other; the rest merged clean, including the
+project's Info keys). Built by a briefed agent in a worktree in parallel with the mic rider; the
+orchestrator reviewed, merged and gated the merged tree. The design's last two pieces of the card,
+and both land with their absences named rather than greyed out.
+
+**`+`, at the left of the composer row.** A 44 pt key whose glyph rotates to `×` while its menu is
+open, over three items: SCAN TEXT, SNIPPETS, CLIPBOARD HISTORY. A `.popover`, not a system `Menu`
+(`Menu` publishes no open state to rotate from, and a `UIMenu` would be the second borrowed system
+surface on this card after the paste control). **Scan Text** (`ScanText.swift`): VisionKit's
+`DataScannerViewController` in a full-screen cover, tap-to-take, inserting through 5c's
+`acceptPaste`; on a device with no scanner — every simulator — the item is still THERE and the
+cover says "text scanning needs a camera on this device". **Snippets** (`SnippetStore.swift`,
+`SnippetsSheet.swift`): `UserDefaults` under `vf.input.snippets`, an inline editor on the
+composer's own `InputTextView` (so a snippet cannot be smart-quoted at the moment it is written),
+the `⏎` mark for "sends Enter"; nothing seeded — a shipped alias is the app guessing at
+somebody's shell. **Clipboard History** (`ClipboardHistory.swift`, `ClipboardHistorySheet.swift`):
+the last twenty strings pasted THROUGH this card, de-duplicated against the ring, fed by
+`acceptPaste` and by nothing else — never by reading `UIPasteboard.general.string`, which is the
+alert the paste chip exists to avoid.
+
+**`⋯`, the rail's ninth key.** It REPLACES the system keyboard rather than stacking on it, so the
+card never moves: Draft swaps the composer field's own `inputView`; **Live rides a hidden
+`UIKeyInput` responder (K-D5)** — ghosttea's Metal view is `final` and exposes no input view —
+and `abc` gives the keyboard back through `requestKeyboard`'s nonce. Three pages: Keys (named
+keys, far ends, arrows, a scrolling F1–F12, the Ctrl/Alt latches), Symbols (thirty punctuation
+keys in three rows of ten — fifteen across a phone is 21 pt, and the design's own floor is the
+33 pt of an iOS letter key), Combos (`ComboCatalog`: emacs · tmux · readline · screen as ORDERED
+keystroke sequences — `^B c` is a control chord and then a plain `c`, because `^B ^C` interrupts
+instead of making a window). `keyboardOwner` gains `.keypad`: the keypad up is the keyboard up in
+both modes, which keeps the card from folding to its closed row under it.
+
+**Absent, not inert (D-i6).** Photo, Take Photo and Choose File ship as nothing at all (K-D6): a
+phone-to-host file wants a mesh verb VibeField has not minted, EL2 keeping bytes off the control
+plane. "Record" is not built. While the keypad is up in Live a paired hardware keyboard types into
+nothing — the cost of the hidden responder; the one-line `customInputView` petition K-D5 batches
+into the next pin bump is the fix. **Judgment calls recorded at source:** a combo SPENDS an armed
+latch without applying it (a script has no single key for a modifier to ride); a snippet inserted
+into the draft is not recorded in the history (it is already saved under `+`); `PendingPaste` grew
+a `commit`, so the review sheet can say "it goes in as one block AND RUNS" over a snippet that
+sends Enter rather than 5c's "nothing runs until you press Enter", which would have been the one
+lie on this card. **Tests 315 green on the merged tree** (243 → 297 on the branch: the
+snippet and history stores round-tripped against a real `UserDefaults` suite, because the encoder
+and the key are the half of persistence that breaks). **Witnessed** in the simulator, both themes:
+the `+` and its rotated `×` with three items, the nine-key rail, the keypad on all three pages in
+both modes, the Snippets and Clipboard History sheets, the scanner's honest line.
+**Device-gated:** `|` and `~` from Symbols reaching a shell, `^B c` opening a tmux window, a
+snippet with Enter running and one without not running, Scan Text on a camera.
+
+## IOS-5e — the card at every size and to every reader: Dynamic Type, Reduce Motion, VoiceOver, the sweep
+
+**LANDED 2026-09-09, `1f923a30`** (fast-forwarded onto `ios/keyboard`). The last slice of the
+keyboard track; nothing here restructures what 5a–5d built. `InputCardMetrics` is the Dynamic
+Type rule as pure functions: one step at `isAccessibilitySize` and no ramp — the rail and
+composer 44 → 52 pt (the design's own "rail is 52"), every label mono 9 → 11 heavy and never
+further (a keyboard's markings are instrument markings: a scaled mono 9 at `accessibility5` is
+27 pt and nine of those fit no phone), the fan's keys 40 → 48, the keypad's 38 → 46 in a frame
+260 → 312, the chips 32 → 40, the draft's prose 13 → 15; pinned at every size the system has.
+Reduce Motion: the `+` does not turn, the mic does not breathe, the fan fades its content in with
+its presentation animation off, the keypad's page change becomes a cut; the cross-fades stay.
+VoiceOver: `InputAnnouncement` holds the words and the views post them (announcements are
+presentation, like the haptics) — "Control armed / locked / released", "Meta armed for the next
+key", "Typing into terminal" / "Drafting", "Terminal keys" / "System keyboard"; the rail is a
+container, the chips row is "Replies for the waiting agent", CTRL's hint names what the NEXT tap
+does, Send says what it sends. The haptic table completed and written whole at the top of
+`Haptics.swift`.
+
+**What the sweep found, and fixed — three real defects, none of this slice's own.** A long
+single-line draft made the composer demand its intrinsic width and the whole card overflowed
+both screen edges (`+` and Send clipped, the rail's ends with them): `ComposerField` now answers
+the layout proposal instead of asking, and measures its height against that proposal. The
+keypad's `UIInputView` read its text size from a trait collection it did not yet have,
+committed 260 pt and then grew 52 pt upward over the rail: the size is handed in from SwiftUI.
+The paste-review sheet was still constructed on IOS-5d's default commit, so a snippet marked
+"sends Enter" read "nothing runs until you press Enter" over text that SEND then ran.
+
+**The sweep:** 36 iPhone screenshots (18 states × 2 themes), 8 at accessibility XXXL, 4 on a
+13-inch iPad, a landscape witness on the phone (`simctl` cannot rotate; `-vf-demo-landscape`
+asks the window scene — honoured on iPhone, refused on iPad, recorded rather than hidden); the
+720 pt width cap witnessed centring the card on an 874 pt landscape phone. **Tests 315 → 331,
+green on iOS 26.1 and 26.5.** The README's "real vs honest-missing" paragraphs rewritten whole as
+the track's final state.
+
+## IOS-5 — the keyboard track lands: the input card, complete to its design, on `ios/keyboard`
+
+**Track complete on the branch 2026-09-09 (`9b07fc61` … `1f923a30`, 19 commits, 57 files); NOT on
+main — James merges.** One session, one orchestrator, six briefed Opus builders in worktrees
+(3c ∥ 5a, then 5b ∥ 5c, then 5d ∥ the mic rider, then 5e), every slice gated on its own branch
+and again on the merged tree, every merge conflict read rather than trusted. The design
+(`research/mobile-terminal/KeyboardLab/DESIGN-PROPOSALS.md`, final 2026-09-09) is on the phone
+whole, in the godview voice: the write key's Keychain home (3c), the composer and the rail with
+the sticky Ctrl (5a), the latch reaching the terminal's own keyboard with the fans and the Meta
+burst (5b), reply chips from the feed, the paste chip and the closed row (5c), the mic in the
+draft, the `+` menu and the `⋯` keypad (5d), and the card at every size and to every reader (5e).
+Tests 135 → 331. **K-D1…K-D7 were adopted provisionally to build against and await James's ruling**
+(`thinking-ios-keyboard.md` §8.1) — the ones that bind a future: K-D5 (the keypad in Live rides a
+hidden responder; the `customInputView` petition batches into the next pin bump), K-D6 (`+` ships
+without Photo / Take Photo / Choose File until a phone→host file verb exists).
+
+**What no simulator could witness, and what this entry therefore does NOT claim:** typing into a
+serving desktop with a key entered on the phone; Esc, Tab and the arrows landing in a shell; a
+three-line draft arriving in zsh as one bracketed block; Ctrl-R then text, Ctrl-X Ctrl-S through
+a lock, vim's `Esc :q!`, ⇧Tab, a Meta-arrow tmux binding; `|` and `~` from Symbols; `^B c`
+opening a tmux window; a snippet with Enter running and one without not; Scan Text on a camera;
+the two dictation prompts and a real transcript; a chip tapped against a real permission (the
+agent feed is IOS-4/AR's); every haptic. Each is named at its slice above. **They are James's
+device run** — a phone on the tailnet, a desktop serving with `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`
+set, the key entered through ENTER KEY. Found on the way and fixed at source: the workspace's
+`Package.resolved` had recorded ghosttea 0.9.3 since `cec95a84` while the manifest said 0.10.1.
+
+## IOS-5v — the card speaks VibeField: the canvas's chrome on the phone, godview kept for the field and the terminal
+
+**LANDED 2026-09-11, `62387ead`** (fast-forwarded onto `ios/keyboard`). James, on seeing the
+built card in the simulator: *"i dont like this design, the bubble swarm view and terminal does
+has their own style, but they are a small part of our app, our app itself should follow
+vibefield style, and i think the design in our live artifact is close to what we wanted"* —
+and, asked about scope, "focus on the keyboard first". The mono re-skin was the orchestrator's
+decision (K-D7, now REVERSED at source in `thinking-ios-keyboard.md` §8.1), not the design's.
+DESIGN.md §1.1 had already said it: the godview instrument palette is "the deliberate
+control-room exception", scoped to the agent stage and the terminal deck. So the swarm field and
+the terminal surface keep `FieldType`/`FieldPalette` untouched, and the input card and its sheets
+become the chrome family — §1's second surface family, §2's opacity ramp and hairlines, §3's SF,
+§4's radii and round pills, §5's ambient shadows — as the KeyboardLab canvas draws it. D-i2 is
+scoped accordingly in `thinking-ios-app.md` §4. **Visual only:** no behaviour, state machine,
+act, fixture or launch argument changed; the two copy changes that reached data are sentence
+case (§9) — the reply chips' labels with the keystroke as its own numbered circle, and the
+keypad's page and pack names.
+
+**The token set** (`FieldDesign`, four files, every value carrying the DESIGN.md section and the
+canvas class it came from): `ChromeType` (SF at the canvas's steps; the key label is the one
+place `ui-rounded` is used; mono is for DATA only — command text and a key's name in a fan or a
+combo), `ChromePalette` (every token a light/dark pair: dark transcribed from the canvas, light
+DERIVED by DESIGN.md — white chrome material, black/5–8 hairlines, the opacity ramp in black,
+every inversion swapped whole — and matched by eye in both themes), `ChromeMaterial` +
+`ChromeRadius` + `ChromeShadow` (the glass card, key cap, circle, floating surface and well;
+card 26 · key 9 · keypad key 7 · chip 18 · pop 14 · menu 18 · well 12 · pill round),
+`ChromeControls` (§3's eyebrow and §4's round pill in two weights). Re-skinned, every file:
+`InputCard`, `ComposerField`, `ChipsRow`/`ReplyChips`, `ClosedRow`, `PasteChip`, `KeyPopover`,
+`PlusMenu`, `DictationKey`, `TerminalKeypad`, `SnippetsSheet`, `ClipboardHistorySheet`,
+`PasteReviewSheet`, `ScanText`, and FieldHome's `WriteKeySheet`. `FieldType`/`FieldPalette` no
+longer appear anywhere in `FieldInput` — grepped, and the grep is the test. `InputCardMetrics`
+keeps its one accessibility step and moves only its floor to the canvas (labels 13 → 15, the
+field 17 → 20, chips 36 → 44, keypad keys 42 → 50); one test added pinning the base sizes to
+`ChromeRadius`.
+
+**Judgment calls, recorded at source.** The glass gradient is a dark scrim in dark mode where
+the canvas's is white — a CSS backdrop-blur changes only sharpness while `.ultraThinMaterial`
+adds vibrancy, so the canvas's white on top gave a milky panel (witnessed); set by measuring both
+renders. The chips ship as plain glass with no `--vf-orange` tint: the row exists only while an
+agent waits, so the tint would say the same thing twice and spend the one colour that means
+something. Send with an empty draft is `.circle.quiet` (the canvas's own Main artboard), not
+`.dim` — that faint reads disabled, which it is not. The strip carries no right-hand hint: the
+canvas defines one in CSS and uses it in no artboard. `UIPasteControl` ignores a translucent
+fill (witnessed), so that one chip gets a solid at the pill's resolved value with our hairline
+over it. **Tests 331 → 332 green; 36 screenshots across 18 states in both themes read beside
+the artboard renders.** Still James's: the rest of the phone's chrome (the session card's
+header and affordances, the settings sheet, the mesh sheet) is godview mono today and waits on
+his scoping; every device gate from the IOS-5 entry is unchanged by a re-skin.
+
+## IOS-6a/6b — the field's model and physics catch up with RFC 005: the body model, the ledgers, the fixed step
+
+**LANDED 2026-09-13, `2ac90328` on `ios/swarm`** (branched from `ios/keyboard` `a3b8a7ec`; James
+merges). The plan is `draft/thinking-ios-swarm.md` (D-i11…D-i17, §4's slices). Two slices in one
+commit because `SwarmParameters` is the seam both need: the locked defaults (idle 50 · working
+60→80 by the session's share of the working sessions' tokens · blocked 50 · 30 Hz · fill 0.72 ·
+the light's 34/0.8/0) retire the July radii the old classifier read. **6a:** `AgentVisualStatus`
+is core's `idle · working · blocked` (the July off-by-one `bubbleVisual`/`AgentBubbleAppearance`
+gone; a question or a failure blocks like a permission); `AgentRuntimeState` grows a SUBSET of
+puppeteer's monitor mirror, names kept (`usage` + samples, `effort` + intent, `lastAssistantMessage`,
+`blockers`, `statusSince`, `lastEvidenceAt`) so IOS-4's binding is a mapping; `SwarmBodyModel` =
+the reference's `bubble-model.ts` transcribed whole (the five drawn states, the copy lines at the
+reference's sizes, the figures, the ring, the flood/hollow/comet, the watermark, the accessibility
+copy, the peer's host line said both ways per puppeteer `5389449`); `TextLayout`, `BurnBars`,
+`UsageLedger` (30 s × 20, the hold rule, the grace, the spread, export/seed), `UnreadLedger`,
+`ProjectTint` (OKLCH along the golden ratio with the withheld band and the gamut clamp — goldens
+generated from the TypeScript under Node 26), `ProjectLedger` + `PaneColourLedger`, `SwarmColor`;
+`FieldBubble` carries the row facts and `FieldAssembly` folds the ledgers per projection, dealing
+the phone's ONE pane (the card, D-i12) and every project a colour (D-i13); the mock fleet burns
+along the lab's four shapes, wears an effort, replies, asks, fails, and stamps the clocks.
+**6b:** `SwarmWorld.advance(now:)` — the reference's accumulator (floor 15 Hz, air-friction ceiling
+0.2, both clamped at every entry, the 100 ms stall cap, five steps a pump), every state's last two
+solved positions for the blend, `syncAgents` reporting membership, `queryPoint`. **Tests:** FieldAgents
+25 → 89 and SwarmPhysics 11 → 24, the reference's suites transcribed (values unchanged); the whole
+kit 408 green; the app shell builds.
+
+## IOS-6c — the swarm on Metal: the reference's renderer transcribed, and the lab that shows it
+
+**LANDED 2026-09-13, `0ba7a6a8` on `ios/swarm`.** A new target `FieldSwarm` (D-i11): the six
+shaders transcribed from the reference's WGSL line for line and shipped as RESOURCES that compile
+at first use (D-i14 as built — one source, no twins, no plugin; 1,073 ms for the five on the
+simulator, whose compiler is not a phone's), `SwarmRenderer` (the same five pipelines in painter's
+order, the same 40/44/16-float layouts and flag bits, one upload a frame, three buffer sets in
+flight), the glyph atlas (CoreText at the screen's scale into an `r8` shelf-packed texture; the
+folder, dot and bar from CoreGraphics paths into the same atlas), the mark atlas (the reference's
+`marks.png` byte for byte, its twenty-tile table), `SwarmTheme` (resolved from `FieldPalette` per
+scheme, never a second transcription), `SwarmStage` (`AgentSwarm.tsx` without React: the blend
+between the last two solved states, the radius spring at ω 16, the four-segment arrival curve, draw
+order, hit testing, drag / tap-and-nudge / hold-to-create, VoiceOver focus → the focus ring),
+`SwarmMetalView`, the SwiftUI `SwarmField`, and the design lab behind `-vf-swarm-lab[=section[:page]]`
+(D-i15): the reference's fixture stages on the production renderer, paged six a surface after one
+surface for the whole grid crossed the 8,192-pixel texture limit at 3×. **Two defects the gate
+caught:** `vertex` is a reserved word in Metal and the transcription used it as a parameter name
+(the compile witness), and the atlas's `sprite` shadowed its own `size` with the sprite's, putting
+every mark's UV off the texture (the first screenshots — no dot, bar or folder anywhere).
+**Witnessed:** `FieldSwarmTests` 16 rows (the mark table, the theme's pairs both schemes, the packed
+flags per state incl. the light only on the open card's body, the flood's ink, the frame's hold,
+the graph band, the arrival curve, the spring's landing and snap, draw order and hit test, the hold
+timer, and the five shaders compiling and the atlas measuring on the simulator's device); the lab
+screenshotted on the iPhone 17 Pro (26.5) simulator, both themes, every page.
+
+## IOS-6d — the field goes live: the home screen mounts the swarm on Metal, the July views retire
+
+**LANDED 2026-09-13, `360cf8c9` on `ios/swarm`.** `HomeScreen` mounts `SwarmField` over rows
+dressed by `FieldAssembly`, folded on every change of the feed, the card's subject and the colour
+scheme (the project ledger cached per device); the July field (`SwarmFieldView`, `FieldBubbleView`,
+`IgnitionView`, `DisplayLinkDriver`, the grid canvas) and the tokens only it read are deleted, not
+kept in parallel. The README is rewritten for the port. **Witnessed:** the whole kit 424 green;
+the live field screenshotted both themes over the mock fleet, with the peers' hollows
+(`-vf-demo-remote`) and with the card open (`-vf-auto-open-card` — the subject's body lit in the
+pane's colour). **Owed to a device (the README says so on screen):** the shader compile at first
+use, the feel of 30 Hz physics under a 120 Hz blend (`physicsHz` is a parameter), the type at 7 pt
+on a real panel. **Not in this track, recorded as deltas:** no panes beyond the open card
+(D-i12), no hover (the title is the VoiceOver label and the card's header), the project colour
+dealt per device until a fieldd door carries the sequence (D-i13).
+
+## IOS-6 — the swarm on Metal lands: the phone's field is RFC 005's, on `ios/swarm`
+
+**2026-09-13.** Four slices (`2ac90328` · `0ba7a6a8` · `360cf8c9`), the phone's port of the design
+pass the desktop consumed at AR-5, built as a TRANSCRIPTION of puppeteer `packages/views`'s swarm
+(design locked 2026-09-09; the 2026-09-12 pane-colour revision; the host line of `5389449`) rather
+than an import: every constant, every branch of the body model, every line of the six shaders
+carried across and pinned by the reference's own tests. D-i11…D-i17 are adopted provisionally —
+James rules; DECISIONS rows follow. **The base branch is James's call** (§6 of the plan): `ios/swarm`
+is cut from `ios/keyboard`, so it lands on main after the keyboard track does, or as one merge with
+it. **The record:** `draft/thinking-ios-swarm.md` §9 is the landing log.

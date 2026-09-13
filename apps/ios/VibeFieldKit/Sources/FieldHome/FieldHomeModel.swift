@@ -1,3 +1,4 @@
+import FieldTerminal
 import SwiftUI
 
 /// Everything on the home screen that is a DECISION rather than a layout, kept
@@ -81,6 +82,31 @@ enum FieldHomeModel {
     return (listed || attached) ? .session : .ended
   }
 
+  // MARK: - The input card
+
+  /// Whether the input card is on the screen at all (K-D2).
+  ///
+  /// It is shown for exactly one state: a LIVE attachment the host has granted
+  /// writes to. Every other state renders no card — not a greyed-out one.
+  /// A rail of keys that cannot reach a terminal is the disabled-affordance
+  /// shape D-i6 exists to forbid: the honest line ("view only — this device
+  /// has no write key for this host") already says why, and a dead keyboard
+  /// under it would say it a second time and worse.
+  ///
+  /// `acceptsInput` alone would very nearly do — the attachment composes it
+  /// from the live phase and the grant — but the phase is asked for again
+  /// here so this stays a total function of what the card can see, and so a
+  /// suspended session cannot keep a keyboard up on a stale `true`.
+  enum InputCardFace: Equatable {
+    case hidden
+    case shown
+  }
+
+  static func inputCardFace(phase: TerminalPhase, acceptsInput: Bool) -> InputCardFace {
+    guard phase == .live, acceptsInput else { return .hidden }
+    return .shown
+  }
+
   // MARK: - Writes
 
   /// Why this device cannot type, in the order the reasons are actually known.
@@ -109,5 +135,21 @@ enum FieldHomeModel {
     return hasWriteKey
       ? "you can type here"
       : "view only — this device has no write key for this host"
+  }
+
+  /// Whether to offer the act that FIXES the sentence above (IOS-3c).
+  ///
+  /// Both halves are refusals of a control that would do nothing (D-i6: an
+  /// absence is a state in words, never a dead affordance). A session nobody
+  /// shares for writing cannot be typed into with any key, so entering one
+  /// would be theatre; a device that already holds a key has nothing to enter,
+  /// and the copy beside it already says "you can type here". Only the middle
+  /// case — the host shares writes and this phone has no key — is an act.
+  ///
+  /// Deliberately NOT a function of the attachment: the offer stands before
+  /// the tap as well as after it, which is the whole point of the invitation
+  /// line saying the truth early.
+  static func keyEntryOffered(sessionSharesWrites: Bool, hasWriteKey: Bool) -> Bool {
+    sessionSharesWrites && !hasWriteKey
   }
 }

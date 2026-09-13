@@ -3,7 +3,9 @@ import Foundation
 /// The union model the swarm renders — D-i7, the desktop's GT-4b shape adopted
 /// rather than re-invented: ONE visual model, projected by pure functions from
 /// either source, so the field has one stage and the views never branch on
-/// where a bubble came from.
+/// where a bubble came from. Since IOS-6a it is also the reference's
+/// `MonitorAgent` row: the project's colour, the pane it is worked in, the
+/// unread mark and the stale flag ride the row, dressed by `FieldAssembly`.
 
 /// What an agent bubble knows that a terminal cannot.
 public struct AgentFacet: Sendable, Equatable {
@@ -11,17 +13,57 @@ public struct AgentFacet: Sendable, Equatable {
   public let modelName: String?
   public let branch: String?
   public let contextUsedPercent: Double?
+  /// What this agent is waiting on right now (IOS-5c, K-D4).
+  ///
+  /// It rides the FACET rather than being fetched from a snapshot at the card,
+  /// because the chips that answer a permission read the FEED and never the
+  /// terminal's frame: this phone has no text access to a frame (they arrive
+  /// as TRF1 bytes that only the Metal view can read), so an approval the user
+  /// can tap is only ever something the agent stream said. Empty is the honest
+  /// default — an agent that is not waiting has nothing to answer, and a
+  /// terminal bubble has no agent facet at all.
+  public let permissions: [AgentPermission]
+  /// Why the agent is blocked, when it is: the copy names it when there is no
+  /// reply to show.
+  public let blockerKind: AgentBlockerKind?
+  public let effort: AgentEffort?
+  /// The root agent's latest reply; the body shows its first line.
+  public let lastMessage: String?
+  /// Core's usage, verbatim — the ledger's INPUT, never drawn.
+  public let monitorUsage: AgentUsage?
+  /// The UI's own account of the tokens (`UsageLedger`): the held total and
+  /// the burn per step. The body reads this, never `monitorUsage`. Filled at
+  /// assembly.
+  public var usage: UsageHistory?
+  public let statusSince: Date?
+  public let lastEvidenceAt: Date?
 
   public init(
     provider: AgentProvider,
     modelName: String? = nil,
     branch: String? = nil,
-    contextUsedPercent: Double? = nil
+    contextUsedPercent: Double? = nil,
+    permissions: [AgentPermission] = [],
+    blockerKind: AgentBlockerKind? = nil,
+    effort: AgentEffort? = nil,
+    lastMessage: String? = nil,
+    monitorUsage: AgentUsage? = nil,
+    usage: UsageHistory? = nil,
+    statusSince: Date? = nil,
+    lastEvidenceAt: Date? = nil
   ) {
     self.provider = provider
     self.modelName = modelName
     self.branch = branch
     self.contextUsedPercent = contextUsedPercent
+    self.permissions = permissions
+    self.blockerKind = blockerKind
+    self.effort = effort
+    self.lastMessage = lastMessage
+    self.monitorUsage = monitorUsage
+    self.usage = usage
+    self.statusSince = statusSince
+    self.lastEvidenceAt = lastEvidenceAt
   }
 }
 
@@ -32,6 +74,7 @@ public struct RemoteFacet: Sendable, Equatable {
   /// The session's id on the PEER — there is no local session until attach.
   public let sessionID: String
   public let attachable: Bool
+  /// Whether the HOST permits writes at all; who gets them is decided at attach.
   public let readWrite: Bool
   public let cwdLabel: String?
 
@@ -52,9 +95,17 @@ public struct RemoteFacet: Sendable, Equatable {
   }
 }
 
+/// The pane a session is worked in, and its colour (record §02, revised
+/// 2026-09-12: a pane owns its colour). The phone has one pane — the card
+/// (D-i12) — so a bubble carries this exactly while its card is open.
+public struct PaneLink: Sendable, Equatable {
+  public var color: SwarmColor
+  public init(color: SwarmColor) { self.color = color }
+}
+
 /// One citizen of the field. Exactly one facet is non-nil: a bubble is an
-/// agent's or a peer's, and the absent facet is what tells the chrome not to
-/// draw a vendor glyph on something that has no vendor.
+/// agent's or a peer's, and the absent facet is what tells the model to draw a
+/// hollow rather than a body.
 public struct FieldBubble: Identifiable, Sendable, Equatable {
   public let id: String
   /// The headline.
@@ -62,13 +113,23 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   /// The one-line truth under it.
   public let detail: String
   public let status: AgentVisualStatus
-  /// What `agentIdentityHue()` hashes for the accent. Split from `id` because
-  /// the two sources key their color differently and both reasons are findings
-  /// (see the projections below).
+  /// What the card header's hue still hashes (D-i16). Split from `id` because
+  /// the two sources key it differently and both reasons are findings.
   public let identityKey: String
   public let createdAt: Date
   public let agent: AgentFacet?
   public let remote: RemoteFacet?
+  /// The project's colour (record §02): the tag before the name, the flood,
+  /// the centre light. nil is the ramp — a bare terminal belongs to no
+  /// project, and an agent whose project has not been dealt yet wears it too.
+  public var color: SwarmColor?
+  /// Evidence recency is presentation metadata, never a fourth status.
+  public var stale: Bool
+  /// Worked in the pane the user has in front of them: the open card's subject.
+  public var active: Bool
+  public var pane: PaneLink?
+  /// Finished something while another session had the card (`UnreadLedger`).
+  public var unread: Bool
 
   public init(
     id: String,
@@ -78,7 +139,12 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     identityKey: String,
     createdAt: Date,
     agent: AgentFacet? = nil,
-    remote: RemoteFacet? = nil
+    remote: RemoteFacet? = nil,
+    color: SwarmColor? = nil,
+    stale: Bool = false,
+    active: Bool = false,
+    pane: PaneLink? = nil,
+    unread: Bool = false
   ) {
     self.id = id
     self.project = project
@@ -88,6 +154,11 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     self.createdAt = createdAt
     self.agent = agent
     self.remote = remote
+    self.color = color
+    self.stale = stale
+    self.active = active
+    self.pane = pane
+    self.unread = unread
   }
 }
 
@@ -102,7 +173,7 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
     project: snapshot.project,
     detail: agentDetail(state, status: status),
     status: status,
-    // Agents keep hashing the RUNTIME alias, as the desktop does: it is the
+    // Agents keep hashing the RUNTIME alias, as the desktop did: it is the
     // handle that survives a session's state churn.
     identityKey: snapshot.runtimeSessionID,
     createdAt: snapshot.createdAt,
@@ -110,7 +181,17 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
       provider: snapshot.provider,
       modelName: state?.modelName,
       branch: state?.branch,
-      contextUsedPercent: state?.contextUsedPercent),
+      contextUsedPercent: state?.contextUsedPercent,
+      // The card's chips are derived from this and nothing else. `?? []` is
+      // not a default standing in for missing news: a snapshot with no state
+      // has not reported yet, and "not reported" is not "waiting".
+      permissions: state?.permissions ?? [],
+      blockerKind: status == .blocked ? agentBlockerKind(state) : nil,
+      effort: state?.effort,
+      lastMessage: state?.lastAssistantMessage,
+      monitorUsage: state?.usage,
+      statusSince: state?.statusSince,
+      lastEvidenceAt: state?.lastEvidenceAt),
     remote: nil)
 }
 
@@ -138,8 +219,8 @@ public func fieldBubble(from row: RemoteSessionRow) -> FieldBubble {
     // exactly the confusion GT-3's finding warned of.
     detail: label.map { "\(host.deviceName) · \($0)" } ?? host.deviceName,
     status: classifyTerminalStatus(session.activityKind),
-    // Accent by the QUALIFIED id, so the same session id on two peers is two
-    // colors and one peer's session keeps its color across refreshes.
+    // The card header's hue keys by the QUALIFIED id, so the same session id
+    // on two peers is two colours (D-i16 keeps the hue there, not on the field).
     identityKey: id,
     createdAt: Date(timeIntervalSince1970: Double(session.createdAtMs) / 1000),
     agent: nil,
@@ -150,4 +231,82 @@ public func fieldBubble(from row: RemoteSessionRow) -> FieldBubble {
       attachable: session.attachable,
       readWrite: session.readWrite,
       cwdLabel: label))
+}
+
+// MARK: - The field's ledgers (the desktop's `assembleMonitorAgents` + its folds)
+
+/// Everything the field decides ABOUT the rows rather than from them, folded
+/// once per projection: the project colours (D-i13), the one pane's colour
+/// (D-i12), the usage ledger, the unread marks, the stale flags. A plain
+/// value the home screen keeps and folds; every rule inside is a pure
+/// function with its own tests.
+public struct FieldAssembly: Sendable {
+  public var projects: ProjectLedger
+  public var panes: PaneColourLedger
+  public var usage: UsageLedger
+  public var unread: UnreadLedger
+  /// The theme's tint; the home screen swaps it with the colour scheme.
+  public var tint: ProjectTint
+
+  /// The reference's freshness policy: evidence older than this dims the body.
+  public static let staleAfterMs: Double = 30_000
+  /// The phone's one pane.
+  public static let cardPaneID = "card"
+
+  public init(
+    tint: ProjectTint,
+    projects: ProjectLedger = .empty,
+    panes: PaneColourLedger = .empty,
+    usage: UsageLedger = .empty,
+    unread: UnreadLedger = .empty
+  ) {
+    self.tint = tint
+    self.projects = projects
+    self.panes = panes
+    self.usage = usage
+    self.unread = unread
+  }
+
+  /// The colour the card wears as the phone's pane, dealt on first use.
+  public var paneColor: SwarmColor {
+    let seq = panes.seqByID[Self.cardPaneID] ?? 0
+    return .pane(seq, tint)
+  }
+
+  /// Fold one projection and dress its rows.
+  public mutating func fold(
+    _ bubbles: [FieldBubble], cardSubjectID: String?, nowMs: Double
+  ) -> [FieldBubble] {
+    projects = projects.dealing(bubbles.filter { $0.agent != nil }.map(\.project))
+    panes = panes.dealing([Self.cardPaneID])
+    usage = usage.reconciling(
+      bubbles.map { UsageReading(id: $0.id, usage: $0.agent?.monitorUsage) }, nowMs: nowMs)
+    unread = unread.reconciling(
+      bubbles.map { bubble in
+        UnreadCandidate(
+          id: bubble.id,
+          status: bubble.status,
+          active: bubble.id == cardSubjectID,
+          hasAgent: bubble.agent != nil,
+          statusSinceMs: bubble.agent?.statusSince.map { $0.timeIntervalSince1970 * 1000 })
+      }, nowMs: nowMs)
+    let pane = PaneLink(color: paneColor)
+    return bubbles.map { bubble in
+      var dressed = bubble
+      if var facet = bubble.agent {
+        facet.usage = usage.history(of: bubble.id)
+        dressed = FieldBubble(
+          id: bubble.id, project: bubble.project, detail: bubble.detail, status: bubble.status,
+          identityKey: bubble.identityKey, createdAt: bubble.createdAt, agent: facet, remote: bubble.remote)
+        dressed.color = projects.seqByKey[bubble.project].map { SwarmColor.project($0, tint) }
+        if let evidence = facet.lastEvidenceAt {
+          dressed.stale = nowMs - evidence.timeIntervalSince1970 * 1000 > Self.staleAfterMs
+        }
+      }
+      dressed.unread = unread.unreadIDs.contains(bubble.id)
+      dressed.active = bubble.id == cardSubjectID
+      dressed.pane = dressed.active ? pane : nil
+      return dressed
+    }
+  }
 }

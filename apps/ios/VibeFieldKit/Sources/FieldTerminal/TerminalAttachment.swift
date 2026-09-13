@@ -65,6 +65,19 @@ public final class TerminalAttachment {
   /// appearance, so it starts with nothing to disagree about.
   public private(set) var appearanceFailure: String?
 
+  // --- IOS-5b ---------------------------------------------------------------
+  /// The input card's sticky Ctrl, reaching the terminal's OWN keyboard.
+  ///
+  /// Installed by the host at attach and cleared when the card closes — and it
+  /// must be cleared, because the card's sink already holds this attachment and
+  /// this closure holds the card: the pair is a retain cycle that only
+  /// `closeCard` breaks. Absent (the default) leaves `handleSoftwareInput` on
+  /// exactly its pre-5b path.
+  ///
+  /// Consuming by contract: see `latchedKeystroke(for:)`.
+  @ObservationIgnored public var softwareInputLatch: (() -> TerminalModifiers)?
+  // --- end IOS-5b -----------------------------------------------------------
+
   @ObservationIgnored private let directory: GhostteaTrufflePeerDirectory
   /// The client half of the host's mirror-write secret, riding on the
   /// lifecycle init and re-presented on every re-dial. `nil` ⇒ the host will
@@ -298,8 +311,47 @@ public final class TerminalAttachment {
   }
 
   /// The Metal view's software keyboard events, converted exactly as the
-  /// reference converts them.
+  /// reference converts them — after the card's latch has had its say.
   public func handleSoftwareInput(_ event: GhostteaSoftwareInputEvent) {
+    // --- IOS-5b: Live mode's latch ------------------------------------------
+    // The keyboard's own events pass the card's sticky Ctrl on the way in. With
+    // no latch installed this is one nil check and the behavior below is
+    // unchanged, which is what keeps the demo fixture and every existing test
+    // on the original path.
+    if let stroke = latchedKeystroke(for: event) {
+      press(stroke)
+      return
+    }
+    // --- end IOS-5b ---------------------------------------------------------
+    deliverSoftwareInput(event)
+  }
+
+  // --- IOS-5b ---------------------------------------------------------------
+  /// Ask the card what the next key carries, and shape the event with it.
+  ///
+  /// The closure is CONSUMING: calling it spends an armed latch (a locked one
+  /// survives, which is the point of locking), so it is called exactly once per
+  /// event and never for a paste — a block of text is not the key an arm was
+  /// meant for, and asking would spend the arm on it.
+  ///
+  /// A multi-character commit spends the arm and then passes through untouched:
+  /// an IME composition has no single key to name. Peeking first would avoid
+  /// that, but at the cost of two closures and a latch that can be read without
+  /// being spent, which is a sharper edge than one lost arm on a composition
+  /// nobody types under Ctrl.
+  private func latchedKeystroke(for event: GhostteaSoftwareInputEvent) -> TerminalKeystroke? {
+    guard let softwareInputLatch else { return nil }
+    if case .paste = event { return nil }
+    return SoftwareInputLatch.keystroke(for: event, modifiers: softwareInputLatch())
+  }
+
+  /// The original conversion, unlatched — what `sendDraft` and `typeText` use.
+  ///
+  /// The card's own verbs must NOT re-enter the latch: the model already spent
+  /// it when the user tapped the key (`tapKey`, `interceptCharacter`), and a
+  /// second consumption here would put Ctrl on the Enter that follows a Send.
+  /// The latch belongs to the keyboard's door, not to ours.
+  private func deliverSoftwareInput(_ event: GhostteaSoftwareInputEvent) {
     ensureControlForTyping()
     switch event {
     case .text(let text): forward(.text(text))
@@ -315,6 +367,7 @@ public final class TerminalAttachment {
     case .key(let key): _ = handleHardwareKey(key)
     }
   }
+  // --- end IOS-5b -----------------------------------------------------------
 
   /// Deliberately not gated on read-write or phase: the lifecycle rejects
   /// what it must and says so on the event stream, and a silent local drop
@@ -365,6 +418,61 @@ public final class TerminalAttachment {
     guard rows != 0, acceptsInput else { return }
     forward(.scroll(Int64(rows)))
   }
+
+  // MARK: - The input card's verbs (IOS-5a)
+
+  /// One rail key. A stroke this layout cannot encode is a no-op and says
+  /// nothing: the rail only offers keys it can send, so an unencodable one is
+  /// a programming error rather than news for the user, and a status line that
+  /// blamed the terminal for it would be a lie about who refused.
+  public func press(_ stroke: TerminalKeystroke) {
+    guard let event = stroke.ghostteaEvent() else { return }
+    _ = handleHardwareKey(event)
+  }
+
+  /// Send the composer's draft: a paste, then Enter.
+  ///
+  /// The paste op is what makes a three-line draft arrive as ONE input rather
+  /// than three commands — the host encodes it through its own terminal model,
+  /// which wraps it in the bracketed-paste sequences exactly when the program
+  /// on the far end has enabled them (DECSET 2004) and otherwise writes the
+  /// text with newlines normalized. Sending the text as keystrokes could not
+  /// do that: bracketing is the host terminal's decision, not ours.
+  ///
+  /// An empty draft is Enter alone, which is the whole point of a Send that is
+  /// never disabled (D-i6): with nothing to say, the act is still "run it".
+  /// The draft is NOT trimmed — a draft of spaces is a draft the user typed.
+  public func sendDraft(_ text: String) {
+    // IOS-5b: `deliverSoftwareInput` rather than `handleSoftwareInput` — the
+    // card spent its own latch when Send was tapped, and this Enter is the
+    // draft's terminator, not a key the user is holding Ctrl for.
+    if !text.isEmpty { deliverSoftwareInput(.paste(text)) }
+    deliverSoftwareInput(.enter)
+  }
+
+  /// Literal text with no Enter behind it — the keypad's symbol keys and the
+  /// chips that type an answer without committing it.
+  public func typeText(_ text: String) {
+    guard !text.isEmpty else { return }
+    // Unlatched for the same reason as `sendDraft`: this text is the card's,
+    // already shaped by whatever the model decided.
+    deliverSoftwareInput(.text(text))
+  }
+
+  // --- IOS-5c
+  /// One block of text as a paste, with NO Enter behind it — the paste chip's
+  /// verb.
+  ///
+  /// `sendDraft` is this op followed by a commit; this one deliberately stops
+  /// short. A pasted block lands in whatever line editor is running and waits
+  /// for the user to finish it, which is the whole reason pasting into a live
+  /// shell is survivable — and it rides `.paste` rather than `.text` so the
+  /// host brackets it when the far program has DECSET 2004 on.
+  public func pasteText(_ text: String) {
+    guard !text.isEmpty else { return }
+    handleSoftwareInput(.paste(text))
+  }
+  // --- end IOS-5c
 
   // MARK: - Lifecycle nudges
 

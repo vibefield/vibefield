@@ -19,6 +19,8 @@ let package = Package(
     .library(name: "FieldAgents", targets: ["FieldAgents"]),
     .library(name: "FieldMesh", targets: ["FieldMesh"]),
     .library(name: "FieldTerminal", targets: ["FieldTerminal"]),
+    .library(name: "FieldInput", targets: ["FieldInput"]),
+    .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
   ],
   dependencies: [
@@ -80,11 +82,35 @@ let package = Package(
         .product(name: "GhostteaAppearance", package: "ghosttea"),
       ]
     ),
-    // The home screen: swarm field rendering, bubble chrome, session card.
+    // The input card (IOS-5a): the composer, the rail, the latch — K-D1's own
+    // target rather than more of FieldHome. The IOS-3 review's finding was that
+    // every serious bug it found lived in the one module with no test target,
+    // and a keyboard is state machines all the way down (a latch, two modes,
+    // two first responders). It takes FieldTerminal for the KEYSTROKE
+    // VOCABULARY ONLY and lists no Ghosttea product, which is what makes
+    // "the card composes a terminal without knowing how one works" a fact the
+    // manifest enforces rather than a habit.
+    .target(name: "FieldInput", dependencies: ["FieldDesign", "FieldAgents", "FieldTerminal"]),
+    // The swarm on Metal (IOS-6c, D-i11): the renderer — a transcription of
+    // the reference's WebGPU swarm (puppeteer `packages/views`, RFC 005) —
+    // its glyph and mark atlases, the stage that drives it from the physics,
+    // the SwiftUI face the home screen mounts, and the design lab behind
+    // `-vf-swarm-lab`. The six shaders ride as resources and compile at first
+    // use (D-i14); the mark atlas is the reference's own png, byte for byte.
+    // Takes FieldAgents for the body model and SwarmPhysics for the world and
+    // names no Ghosttea product: the field knows nothing of terminals.
+    .target(
+      name: "FieldSwarm",
+      dependencies: ["FieldDesign", "SwarmPhysics", "FieldAgents"],
+      resources: [.copy("Shaders"), .copy("Resources/marks.png")],
+      linkerSettings: [.linkedFramework("Metal"), .linkedFramework("MetalKit")]
+    ),
+    // The home screen: the field's composition, bubble chrome, session card.
     .target(
       name: "FieldHome",
       dependencies: [
-        "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal",
+        "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
+        "FieldSwarm",
       ],
       resources: [.process("Resources")]
     ),
@@ -92,6 +118,8 @@ let package = Package(
     .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
     .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),
     .testTarget(name: "FieldTerminalTests", dependencies: ["FieldTerminal"]),
+    .testTarget(name: "FieldInputTests", dependencies: ["FieldInput"]),
+    .testTarget(name: "FieldSwarmTests", dependencies: ["FieldSwarm"]),
     // The home screen's DECISIONS, which is all of it that is testable without
     // a simulator — and, until this target existed, all of it that was
     // untested: the integrator carried three state-machine bugs (the parked

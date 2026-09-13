@@ -1,3 +1,4 @@
+import FieldTerminal
 import SwiftUI
 import Testing
 
@@ -209,6 +210,91 @@ struct WriteCopyTests {
       #expect(
         FieldHomeModel.viewOnlyReason(sessionSharesWrites: shared, hasWriteKey: false)
           .hasPrefix("view only"))
+    }
+  }
+}
+
+// MARK: - Entering a key
+
+/// The act that answers the sentence the suite above pins. Until IOS-3c there
+/// was nothing to offer, so "view only — this device has no write key for this
+/// host" was a dead end on screen: true, and with no way out of it.
+@Suite("write key entry")
+struct KeyEntryTests {
+  /// THE case the act exists for: the host shares writes, this phone holds no
+  /// key, so the missing thing is one the user can supply.
+  @Test("a writable session with no key offers entry")
+  func writableWithoutKeyOffers() {
+    #expect(FieldHomeModel.keyEntryOffered(sessionSharesWrites: true, hasWriteKey: false))
+  }
+
+  /// A key changes nothing about a session nobody shares for writing, so
+  /// offering to enter one would be a control that cannot do what it says.
+  @Test("a read-only session offers nothing")
+  func readOnlySessionOffersNothing() {
+    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: false, hasWriteKey: false))
+    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: false, hasWriteKey: true))
+  }
+
+  /// A device that already holds one has nothing to enter — the copy beside it
+  /// says "you can type here", and an ENTER KEY under that sentence would read
+  /// as a repair for something that is not broken.
+  @Test("a device that holds a key is not asked for one")
+  func heldKeyOffersNothing() {
+    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: true, hasWriteKey: true))
+  }
+
+  /// The invariant that ties the act to the copy: entry is offered exactly
+  /// when the invitation blames THIS device, and never when it blames the
+  /// session or promises typing.
+  @Test("entry is offered exactly where the copy names a missing key")
+  func offerAgreesWithCopy() {
+    for shared in [true, false] {
+      for held in [true, false] {
+        let copy = FieldHomeModel.writeInvitation(
+          sessionSharesWrites: shared, hasWriteKey: held)
+        let offered = FieldHomeModel.keyEntryOffered(
+          sessionSharesWrites: shared, hasWriteKey: held)
+        #expect(offered == (copy == "view only — this device has no write key for this host"))
+      }
+    }
+  }
+}
+
+// MARK: - The input card's face
+
+/// K-D2, pinned: the card exists for exactly one state. Every other phase
+/// renders nothing rather than a keyboard that cannot reach a terminal — the
+/// disabled-affordance shape D-i6 forbids.
+@Suite("the input card's face")
+struct InputCardFaceTests {
+  @Test("a live session this device may type into shows the card")
+  func liveAndWritable() {
+    #expect(FieldHomeModel.inputCardFace(phase: .live, acceptsInput: true) == .shown)
+  }
+
+  /// The honest view-only line already says why. A rail under it would be a
+  /// promise the next tap breaks.
+  @Test("a live view-only session shows no card")
+  func liveViewOnly() {
+    #expect(FieldHomeModel.inputCardFace(phase: .live, acceptsInput: false) == .hidden)
+  }
+
+  /// `acceptsInput` is composed upstream and can outlive the phase that made
+  /// it true by one observation; the phase is asked for too so a suspended
+  /// session cannot hold a keyboard up on a stale grant.
+  @Test("no other phase shows a card, whatever the grant says")
+  func everyOtherPhaseHides() {
+    let phases: [TerminalPhase] = [
+      .idle,
+      .connecting,
+      .suspended("paused in the background"),
+      .ended("the host closed it"),
+      .failed("the mesh is not up on this device"),
+    ]
+    for phase in phases {
+      #expect(FieldHomeModel.inputCardFace(phase: phase, acceptsInput: true) == .hidden)
+      #expect(FieldHomeModel.inputCardFace(phase: phase, acceptsInput: false) == .hidden)
     }
   }
 }

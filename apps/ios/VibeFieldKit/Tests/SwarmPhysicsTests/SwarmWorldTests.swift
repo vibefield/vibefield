@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import SwarmPhysics
@@ -156,5 +157,208 @@ private func settle(_ world: SwarmWorld, frames: Int) {
       #expect(state.position.y >= radius - 0.75)
       #expect(state.position.y <= 320 - radius + 0.75)
     }
+  }
+}
+
+// MARK: - The reference's `physics/world.test.ts`, transcribed (IOS-6b)
+
+/// The reference's arena: 800 × 400, two bodies of 50, a seeded generator.
+private func arena(
+  physicsHz: Double = 30, gravityPull: Double = 0.0002, frictionAir: Double = 0.2,
+  agents: [SwarmWorld.AgentSpec] = [
+    SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 50),
+    SwarmWorld.AgentSpec(id: SwarmBodyID("b"), visualRadius: 50),
+  ]
+) -> SwarmWorld {
+  let world = SwarmWorld(
+    bounds: SIMD2(800, 400),
+    parameters: SwarmParameters(gravityPull: gravityPull, frictionAir: frictionAir, physicsHz: physicsHz),
+    rng: SplitMix64(seed: 7))
+  world.syncAgents(agents)
+  return world
+}
+
+/// Drive `frames` pumps of `deltaMs` each, from a seeded clock.
+private func drive(_ world: SwarmWorld, frames: Int, deltaMs: Double) -> Int {
+  var now: TimeInterval = 0
+  world.seed(now: now)
+  var steps = 0
+  for _ in 0..<frames {
+    now += deltaMs / 1000
+    steps += world.advance(now: now)
+  }
+  return steps
+}
+
+/// Let an already-seeded world run on for `frames` frames at 30Hz.
+private func settlePumps(_ world: SwarmWorld, frames: Int) {
+  var now: TimeInterval = 0
+  for _ in 0..<frames {
+    now += 1.0 / 30
+    world.advance(now: now)
+  }
+}
+
+private func position(_ world: SwarmWorld, _ id: String) -> SIMD2<Double> {
+  world.state(of: SwarmBodyID(id))!.position
+}
+
+@Suite struct FixedTimestepTests {
+  @Test func stepsAtPhysicsHzRatherThanOncePerPump() {
+    // Twelve pumps × 10ms = 120ms of real time. At 25Hz that is three steps,
+    // not twelve — the decoupling, stated as a number.
+    #expect(drive(arena(physicsHz: 25), frames: 12, deltaMs: 10) == 3)
+  }
+
+  @Test func tracksTheRateTheSameWallClockAt50HzSolvesTwiceAsOften() {
+    #expect(drive(arena(physicsHz: 50), frames: 12, deltaMs: 10) == 6)
+  }
+
+  @Test func capsCatchUpAfterAStallInsteadOfSpirallingThroughTheBacklog() {
+    // A two-second stall — a backgrounded app. Unbounded this would be 120
+    // steps in one pump and every pump after it late.
+    #expect(drive(arena(physicsHz: 60), frames: 1, deltaMs: 2_000) <= 5)
+  }
+
+  @Test func solvesNothingOnItsVeryFirstPumpBecauseItHasNothingToMeasureFrom() {
+    let world = arena(physicsHz: 25)
+    #expect(world.advance(now: 1.0) == 0)
+    #expect(world.advance(now: 1.04) == 1)
+  }
+
+  @Test func clampsARateBelowTheFloorAndLeavesOneAboveItAlone() {
+    let world = arena(physicsHz: 4)
+    #expect(abs(world.parameters.stepMs - 1000 / SwarmConstants.physicsHzFloor) < 1e-6)
+    world.parameters.physicsHz = 1
+    #expect(abs(world.parameters.stepMs - 1000 / SwarmConstants.physicsHzFloor) < 1e-6)
+    world.parameters.physicsHz = 120
+    #expect(abs(world.parameters.stepMs - 1000 / 120) < 1e-6)
+  }
+
+  @Test func keepsAirFrictionPositiveAtTheFloorWhichIsWhyTheFloorIsThere() {
+    let baseDelta = 1000.0 / 60
+    let worst = SwarmConstants.frictionAirCeiling
+    let floorStepMs = 1000 / SwarmConstants.physicsHzFloor
+    #expect(1 - worst * (floorStepMs / baseDelta) > 0)
+    // One notch below the floor and the same sum is already negative.
+    let belowStepMs = 1000 / (SwarmConstants.physicsHzFloor - 5)
+    #expect(1 - worst * (belowStepMs / baseDelta) < 0)
+  }
+
+  @Test func putsTheSameFieldInTheSamePlaceTwiceFromTheSameSeedAndActuallyMoved() {
+    let first = arena()
+    let second = arena()
+    let before = first.states.map(\.position)
+    _ = drive(first, frames: 60, deltaMs: 1000 / 60)
+    _ = drive(second, frames: 60, deltaMs: 1000 / 60)
+    #expect(first.states.map(\.position) == second.states.map(\.position))
+    #expect(first.states.map(\.position) != before)
+  }
+
+  @Test func carriesTheLastTwoSolvedPositionsForTheBlend() {
+    let world = arena()
+    // A new body has no history: its first blend is a no-op.
+    for state in world.states { #expect(state.previousPosition == state.position) }
+    world.seed(now: 0)
+    // The second body: off centre, so the pull moves it in one step (the
+    // first sits at the centre and has nothing to move toward).
+    let before = position(world, "b")
+    #expect(world.advance(now: 1.0 / 30) == 1)
+    let state = world.state(of: SwarmBodyID("b"))!
+    #expect(state.previousPosition == before)
+    #expect(state.position != before)
+  }
+}
+
+@Suite struct DragSpringTests {
+  @Test func addsOnGrabFollowsThePointerAndReleasesOnDrop() {
+    let world = arena(gravityPull: 0)
+    world.seed(now: 0)
+    #expect(world.state(of: SwarmBodyID("a"))?.isDragged == false)
+    let start = position(world, "a")
+    world.beginDrag(id: SwarmBodyID("a"), at: start)
+    #expect(world.state(of: SwarmBodyID("a"))?.isDragged == true)
+    world.updateDrag(id: SwarmBodyID("a"), to: start + SIMD2(200, 0))
+    settlePumps(world, frames: 30)
+    #expect(position(world, "a").x > start.x + 50)
+    world.endDrag(id: SwarmBodyID("a"))
+    #expect(world.state(of: SwarmBodyID("a"))?.isDragged == false)
+  }
+
+  @Test func exemptsAHeldBubbleFromThePullToCentreSoItStaysWhereItIsPut() {
+    let world = arena(gravityPull: 0.004)
+    world.seed(now: 0)
+    let grabbed = SIMD2(700.0, 350.0)
+    world.beginDrag(id: SwarmBodyID("a"), at: position(world, "a"))
+    world.updateDrag(id: SwarmBodyID("a"), to: grabbed)
+    settlePumps(world, frames: 90)
+    let held = position(world, "a")
+    #expect(abs(held.x - grabbed.x) < 5)
+    #expect(abs(held.y - grabbed.y) < 5)
+  }
+
+  @Test func dropsTheSpringWhenTheAgentLeavesMidDrag() {
+    let world = arena()
+    world.beginDrag(id: SwarmBodyID("a"), at: SIMD2(100, 100))
+    #expect(world.state(of: SwarmBodyID("a"))?.isDragged == true)
+    world.syncAgents([SwarmWorld.AgentSpec(id: SwarmBodyID("b"), visualRadius: 50)])
+    #expect(world.state(of: SwarmBodyID("a")) == nil)
+    #expect(world.states.map(\.id) == [SwarmBodyID("b")])
+  }
+}
+
+@Suite struct MembershipTests {
+  @Test func reportsAChangeForArrivalsAndDeparturesAndNotForAResize() {
+    let world = arena()
+    let generation = world.generation
+    #expect(
+      world.syncAgents([
+        SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 70),
+        SwarmWorld.AgentSpec(id: SwarmBodyID("b"), visualRadius: 50),
+      ]) == false)
+    #expect(world.generation == generation)
+    #expect(world.syncAgents([SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 70)]))
+    #expect(world.generation > generation)
+    #expect(world.states.map(\.id) == [SwarmBodyID("a")])
+    #expect(
+      world.syncAgents([
+        SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 70),
+        SwarmWorld.AgentSpec(id: SwarmBodyID("c"), visualRadius: 40),
+      ]))
+    #expect(world.states.map(\.id) == [SwarmBodyID("a"), SwarmBodyID("c")])
+  }
+
+  @Test func growsABodyTowardItsNewRadiusInsideAStepRatherThanSnapping() {
+    let world = arena(gravityPull: 0, agents: [SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 40)])
+    #expect(world.state(of: SwarmBodyID("a"))?.visualRadius == 40)
+    world.syncAgents([SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 70)])
+    #expect(world.state(of: SwarmBodyID("a"))?.visualRadius == 40)
+    _ = drive(world, frames: 1, deltaMs: 1000 / 30)
+    #expect(world.state(of: SwarmBodyID("a"))?.visualRadius == 70)
+  }
+
+  @Test func placesASpawnHintWhereTheGestureHappenedClampedIntoTheArena() {
+    let world = arena(agents: [
+      SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 50, spawnPosition: SIMD2(640, 300))
+    ])
+    #expect(position(world, "a") == SIMD2(640, 300))
+    let clamped = arena(agents: [
+      SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 50, spawnPosition: SIMD2(2000, -50))
+    ])
+    #expect(position(clamped, "a") == SIMD2<Double>(800 - 54, 54))
+  }
+
+  @Test func namesTheBubbleUnderAPointAndNothingUnderAnEmptyOne() {
+    let world = arena(
+      gravityPull: 0,
+      agents: [
+        SwarmWorld.AgentSpec(id: SwarmBodyID("a"), visualRadius: 40, spawnPosition: SIMD2(120, 120)),
+        SwarmWorld.AgentSpec(id: SwarmBodyID("b"), visualRadius: 40, spawnPosition: SIMD2(400, 300)),
+      ])
+    #expect(world.queryPoint(SIMD2(120, 120)) == SwarmBodyID("a"))
+    #expect(world.queryPoint(SIMD2(400, 300)) == SwarmBodyID("b"))
+    #expect(world.queryPoint(SIMD2(700, 60)) == nil)
+    // Just outside the drawn edge plus its collision gap.
+    #expect(world.queryPoint(SIMD2(120 + 46, 120)) == nil)
   }
 }

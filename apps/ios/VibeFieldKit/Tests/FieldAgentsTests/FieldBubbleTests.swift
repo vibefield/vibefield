@@ -56,16 +56,16 @@ private func row(
     #expect(classifyTerminalStatus("") == .idle)
   }
 
-  /// A terminal has no permissions, so it can never wear the loud tier — for
+  /// A terminal has no agent to ask anything, so it can never be blocked — for
   /// ANY activity kind, including one that spells the word.
-  @Test func aTerminalNeverReachesTheWaitingTier() {
+  @Test func aTerminalNeverReachesTheBlockedTier() {
     let kinds: [String?] = [
       nil, "", "foreground-job", "background-job", "idle", "shell", "waiting", "permission",
       "unknown-future-kind",
     ]
     for kind in kinds {
-      #expect(classifyTerminalStatus(kind) != .waiting)
-      #expect(fieldBubble(from: row(activityKind: kind)).status != .waiting)
+      #expect(classifyTerminalStatus(kind) != .blocked)
+      #expect(fieldBubble(from: row(activityKind: kind)).status != .blocked)
     }
   }
 }
@@ -110,6 +110,13 @@ private func row(
           attachable: false,
           readWrite: true,
           cwdLabel: "/Users/james/Projects/vibe-field"))
+  }
+
+  /// K-D4's other half. A terminal has no agent facet, so it has no
+  /// permissions and can raise no chips — which is every remote session on the
+  /// field today. The chips wait for the agent feed to reach the phone.
+  @Test func aTerminalBubbleHasNoPermissionsToAnswer() {
+    #expect(fieldBubble(from: row()).agent == nil)
   }
 
   @Test func createdAtComesFromThePeersMilliseconds() {
@@ -166,6 +173,27 @@ private func row(
           provider: .codex, modelName: "o5", branch: "ios-bootstrap", contextUsedPercent: 41))
     // A session that has not reported yet has a provider and nothing else.
     #expect(fieldBubble(from: snapshot(state: nil))?.agent == AgentFacet(provider: .codex))
+  }
+
+  /// IOS-5c, K-D4: what the agent is WAITING ON rides the facet, because the
+  /// card's reply chips are derived from the feed and never from the terminal
+  /// frame — the phone cannot read one.
+  @Test func facetCarriesWhatTheAgentIsWaitingOn() {
+    let blocked = AgentRuntimeState(permissions: [AgentPermission(tool: "Bash")])
+    #expect(fieldBubble(from: snapshot(state: blocked))?.agent?.permissions == [
+      AgentPermission(tool: "Bash")
+    ])
+    // The tier and the chips agree by construction: the same fact makes the
+    // bubble loud and gives the card something to answer with.
+    #expect(fieldBubble(from: snapshot(state: blocked))?.status == .blocked)
+  }
+
+  /// Not waiting is not "waiting on nothing we can name": an agent with no
+  /// pending permission carries an EMPTY list, and a snapshot that has not
+  /// reported at all carries the same — neither raises a chip.
+  @Test func anAgentThatIsNotWaitingCarriesNoPermissions() {
+    #expect(fieldBubble(from: snapshot(state: AgentRuntimeState()))?.agent?.permissions == [])
+    #expect(fieldBubble(from: snapshot(state: nil))?.agent?.permissions == [])
   }
 
   @Test func aTerminatedSessionLeavesTheField() {

@@ -17,6 +17,30 @@ public struct TerminalSurface: UIViewRepresentable {
   let visible: Bool
   let configuration: GhostteaTerminalPresentationConfig
   let controlsGridSize: Bool
+  /// The kit ships its own fifteen-key accessory row above the keyboard and
+  /// defaults it ON. IOS-5a switches it off (K-D3): the input card's rail
+  /// replaces it, and two rows of terminal keys stacked on each other would be
+  /// two latches disagreeing about who armed Ctrl.
+  let showsKitAccessoryRow: Bool
+  /// Whether the Metal view should hold the keyboard. Live mode is exactly
+  /// this: the terminal IS the `UITextInput`, so making it first responder is
+  /// the whole of "typing goes straight through".
+  let wantsFocus: Bool
+  // --- IOS-5c
+  /// A nonce the host bumps to ask for focus AGAIN at the same `wantsFocus`.
+  /// The keyboard can go down without this view being told (an interactive
+  /// dismissal resigns it), and a second request that carries no new value
+  /// would otherwise be skipped by the guard below — which is right for every
+  /// other caller and wrong for the KEYBOARD chip.
+  let focusEpoch: Int
+  /// What the responder calls above actually achieved. The card derives who
+  /// owns the keyboard from this rather than from the mode, so a
+  /// `becomeFirstResponder` that did not take is visible instead of assumed.
+  let onFocusChange: (Bool) -> Void
+  // --- end IOS-5c
+  /// The kit defaults `.dark`; the card is in both themes, so the host passes
+  /// the scheme rather than letting a light-mode keyboard arrive black.
+  let keyboardAppearance: UIKeyboardAppearance
   let accessibilityTitle: String
   let accessibilityConnectionState: String
   let onGridSize: (GhostteaTerminalGridSize) -> Void
@@ -35,6 +59,11 @@ public struct TerminalSurface: UIViewRepresentable {
     visible: Bool,
     configuration: GhostteaTerminalPresentationConfig,
     controlsGridSize: Bool = true,
+    showsKitAccessoryRow: Bool = false,
+    wantsFocus: Bool = false,
+    focusEpoch: Int = 0,
+    onFocusChange: @escaping (Bool) -> Void = { _ in },
+    keyboardAppearance: UIKeyboardAppearance = .default,
     accessibilityTitle: String = "Remote terminal",
     accessibilityConnectionState: String = "Attached over the mesh",
     onGridSize: @escaping (GhostteaTerminalGridSize) -> Void = { _ in },
@@ -52,6 +81,11 @@ public struct TerminalSurface: UIViewRepresentable {
     self.visible = visible
     self.configuration = configuration
     self.controlsGridSize = controlsGridSize
+    self.showsKitAccessoryRow = showsKitAccessoryRow
+    self.wantsFocus = wantsFocus
+    self.focusEpoch = focusEpoch
+    self.onFocusChange = onFocusChange
+    self.keyboardAppearance = keyboardAppearance
     self.accessibilityTitle = accessibilityTitle
     self.accessibilityConnectionState = accessibilityConnectionState
     self.onGridSize = onGridSize
@@ -74,6 +108,13 @@ public struct TerminalSurface: UIViewRepresentable {
     /// only when its revision changed. Our revisions digest the renderer
     /// values, so this is exactly "reapply when the presentation changed".
     var appliedConfigurationRevision: String?
+    /// The last focus intent this surface acted on, so a responder change is
+    /// made once per FLIP rather than on every SwiftUI update — asking a view
+    /// that already holds the keyboard to become first responder again is how
+    /// a keyboard learns to flicker.
+    var appliedFocus: Bool?
+    /// IOS-5c's re-ask nonce, remembered beside the intent it qualifies.
+    var appliedFocusEpoch: Int = 0
   }
 
   public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -103,6 +144,7 @@ public struct TerminalSurface: UIViewRepresentable {
     guard let view = context.coordinator.metalView else { return }
     configure(view)
     view.setTerminalVisible(visible)
+    applyFocus(view, coordinator: context.coordinator)
     if context.coordinator.appliedConfigurationRevision != configuration.revision {
       view.applyConfiguration(configuration)
       context.coordinator.appliedConfigurationRevision = configuration.revision
@@ -127,7 +169,37 @@ public struct TerminalSurface: UIViewRepresentable {
     coordinator.metalView = nil
   }
 
+  /// Responder changes are made on the NEXT main turn, never inside the
+  /// SwiftUI update pass: `becomeFirstResponder` raises the keyboard, which
+  /// resizes this view's own ancestors, and UIKit is right to complain about a
+  /// layout provoked from inside a layout.
+  private func applyFocus(_ view: GhostteaTerminalMetalView, coordinator: Coordinator) {
+    // --- IOS-5c: the epoch joins the guard, so an unchanged intent can still
+    // be re-asked; the outcome is reported either way.
+    guard coordinator.appliedFocus != wantsFocus || coordinator.appliedFocusEpoch != focusEpoch
+    else { return }
+    coordinator.appliedFocusEpoch = focusEpoch
+    // --- end IOS-5c
+    coordinator.appliedFocus = wantsFocus
+    let wanted = wantsFocus
+    let report = onFocusChange
+    Task { @MainActor in
+      if wanted {
+        if view.canBecomeFirstResponder, !view.isFirstResponder {
+          _ = view.becomeFirstResponder()
+        }
+      } else if view.isFirstResponder {
+        _ = view.resignFirstResponder()
+      }
+      // The RESULT, not the request: a view that cannot become first responder
+      // says so here, and the card's closed row is that answer rendered.
+      report(view.isFirstResponder)
+    }
+  }
+
   private func configure(_ view: GhostteaTerminalMetalView) {
+    view.showsTerminalAccessoryRow = showsKitAccessoryRow
+    view.keyboardAppearance = keyboardAppearance
     view.onGridSizeChange = controlsGridSize ? onGridSize : nil
     view.onNeedsFullRefresh = onNeedsFullRefresh
     view.onHardwareKeyEvent = onHardwareInput

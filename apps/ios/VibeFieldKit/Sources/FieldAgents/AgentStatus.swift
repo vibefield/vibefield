@@ -1,35 +1,23 @@
 import Foundation
 import SwarmPhysics
 
-/// The three statuses the field ranks by (desktop `AgentVisualStatus`).
+/// The three statuses the field draws by — core's word since RFC 005
+/// (`idle · working · blocked`); the July `waiting` was the same state under
+/// a local name and retired with the views port on both surfaces.
 public enum AgentVisualStatus: String, Sendable {
   case idle
   case working
-  case waiting
+  case blocked
 }
 
-/// The styling tier a bubble wears. The desktop maps status → appearance
-/// deliberately off-by-one: an idle agent still wears the calm `working`
-/// tier, an actively working agent is *ignited* (working tier + particles),
-/// and only permission-waiting agents get the biggest, loudest tier.
-public enum AgentBubbleAppearance: String, Sendable {
-  case idle
-  case working
-  case waiting
-}
-
-public struct AgentBubbleVisual: Sendable, Equatable {
-  public let status: AgentVisualStatus
-  public let appearance: AgentBubbleAppearance
-  public let isIgnited: Bool
-}
-
-/// Desktop `classifyAgentStatus`, ported clause for clause.
-/// nil return = the session has terminated and leaves the field.
+/// The July classifier, ported clause for clause, with the reference's
+/// blockers joined to the permission list: a permission, a question or a
+/// failure each block. nil return = the session has terminated and leaves the
+/// field.
 public func classifyAgentStatus(_ state: AgentRuntimeState?) -> AgentVisualStatus? {
   guard let state else { return .working }
   if state.lifecycle == .exited || state.lifecycle == .failed { return nil }
-  if !state.permissions.isEmpty { return .waiting }
+  if !state.permissions.isEmpty || !state.blockers.isEmpty { return .blocked }
   if state.lifecycle != .ready || state.activeTurn || state.activeReasoning
     || !state.toolRuns.isEmpty || state.taskCount > 0
   {
@@ -38,32 +26,39 @@ public func classifyAgentStatus(_ state: AgentRuntimeState?) -> AgentVisualStatu
   return .idle
 }
 
-/// Desktop `agentBubbleVisualState` + `appearanceForVisualState`, fused.
-public func bubbleVisual(for status: AgentVisualStatus) -> AgentBubbleVisual {
+/// The first blocker's kind: a permission outranks the rest, as the monitor
+/// lists it first.
+public func agentBlockerKind(_ state: AgentRuntimeState?) -> AgentBlockerKind? {
+  guard let state else { return nil }
+  if !state.permissions.isEmpty { return .permission }
+  return state.blockers.first?.kind
+}
+
+/// The radius a body takes: the status's, and for a working body its place
+/// among the working sessions by tokens — from the working size for the least
+/// to the largest size for the most (RFC 005's drawn states).
+public func bodyRadius(status: AgentVisualStatus, share: Double, parameters: SwarmParameters) -> Double {
   switch status {
-  case .idle: AgentBubbleVisual(status: status, appearance: .working, isIgnited: false)
-  case .working: AgentBubbleVisual(status: status, appearance: .working, isIgnited: true)
-  case .waiting: AgentBubbleVisual(status: status, appearance: .waiting, isIgnited: false)
+  case .idle: return parameters.radiusIdle
+  case .blocked: return parameters.radiusBlocked
+  case .working:
+    let clamped = max(0, min(1, share))
+    return parameters.radiusWorking + (parameters.radiusWorkingMax - parameters.radiusWorking) * clamped
   }
 }
 
-/// Desktop `radiusForStatus` keyed by the appearance tier.
-public func bubbleRadius(for appearance: AgentBubbleAppearance, parameters: SwarmParameters)
-  -> Double
-{
-  switch appearance {
-  case .idle: parameters.radiusIdle
-  case .working: parameters.radiusWorking
-  case .waiting: parameters.radiusWaiting
-  }
-}
-
-/// Desktop `agentDetail`: the one-line truth under the project name.
+/// The one-line truth under the project name: what the agent is waiting on
+/// when it is, else what it is doing, else the status.
 public func agentDetail(_ state: AgentRuntimeState?, status: AgentVisualStatus) -> String {
   guard let state else { return "starting" }
-  if status == .waiting {
+  if status == .blocked {
     if let tool = state.permissions.first?.tool { return "permission · \(tool)" }
-    return "permission required"
+    if !state.permissions.isEmpty { return "permission required" }
+    switch state.blockers.first?.kind {
+    case .question: return "question"
+    case .failure: return "failed"
+    case .permission, nil: return "blocked"
+    }
   }
   if let tool = state.toolRuns.first { return tool.title ?? "using tool" }
   if state.activeReasoning { return "thinking" }
@@ -74,11 +69,11 @@ public func agentDetail(_ state: AgentRuntimeState?, status: AgentVisualStatus) 
 /// Desktop `classifyTerminalStatus`: a peer reports terminal activity, not
 /// agent state, and `foreground-job` is the only kind that means work.
 ///
-/// It can never return `.waiting`. That tier is agent-permission language —
-/// something is asking the user to allow something — and a terminal has no
-/// permissions to ask about, so a remote bubble is calm or ignited and never
-/// the loud tier. The desktop says this in its return type
-/// (`Exclude<AgentVisualStatus, "waiting">`); Swift can only say it here.
+/// It can never return `.blocked`. That word means an agent is asking the user
+/// for something, and a terminal has no agent to ask, so a remote bubble is a
+/// hollow at rest or a hollow with a comet and never the lit body. The desktop
+/// says this in its return type (`Exclude<AgentVisualStatus, "blocked">`);
+/// Swift can only say it here.
 public func classifyTerminalStatus(_ activityKind: String?) -> AgentVisualStatus {
   activityKind == "foreground-job" ? .working : .idle
 }
@@ -100,11 +95,11 @@ public func folderName(_ path: String?, fallback: String) -> String {
   return component.isEmpty ? fallback : String(component)
 }
 
-/// Desktop `agentColor`, exactly: FNV-1a over UTF-16 code units in signed
-/// 32-bit arithmetic (`Math.imul` semantics), `abs(hash) % 360` as the hue.
-/// JS quirk preserved: the seed is only truncated to Int32 by the first
-/// bitwise op, so an empty id hashes from the raw 2166136261.
-/// Cross-language goldens generated from the JS original pin this port.
+/// The July identity hue (desktop `agentColor`, FNV-1a over UTF-16 code units
+/// in signed 32-bit arithmetic, `abs(hash) % 360`). The FIELD no longer reads
+/// it — record §02 deals a project's colour instead (D-i16) — and it stays
+/// only for the card header until that chrome is re-skinned; it goes, with its
+/// goldens, with its last reader.
 public func agentIdentityHue(_ id: String) -> Int {
   guard !id.isEmpty else { return Int(UInt32(2_166_136_261) % 360) }
   var hash = Int32(bitPattern: 2_166_136_261)
