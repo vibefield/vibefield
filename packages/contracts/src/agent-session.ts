@@ -221,18 +221,28 @@ export const AgentSessionRecord = z
       .optional(),
     /** AR-4 — what the last fieldd boot did with a live terminal: attached at
      * the next epoch, failed (the reason), unsupported by the adapter, or
-     * resumed into a new run (`replaced` names the PTY it took the place of). */
+     * resumed into a new run — `replacedBy` names the successor run (AR-4b;
+     * `replaced`, the old PTY, was the first spelling and is kept readable). */
     reattach: z
       .object({
         state: z.enum(["attached", "failed", "unsupported", "resumed"]),
         at: z.string(),
         reason: z.string().optional(),
         replaced: z.string().optional(),
+        replacedBy: z.string().optional(),
       })
       .passthrough()
       .optional(),
     /** AR-4 — the floor session this run replaced at a resume-when-idle */
     replaced: z.string().optional(),
+    /** AR-4b — the record's HMAC-SHA256 (hex) over its canonical JSON without
+     * this field, keyed by `LAYOUT.AGENT_SESSIONS_KEY_FILE`. fieldd's own acts
+     * trust only records that verify; a record without one, or with a wrong
+     * one, is set aside (EL7: the record is a control input to a terminate). */
+    signature: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
     exited: z

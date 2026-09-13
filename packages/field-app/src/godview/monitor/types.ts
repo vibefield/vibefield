@@ -87,9 +87,18 @@ export interface MonitorRemoteFacet {
  * `agent?.model` instead of re-deriving which kind of thing it is holding.
  */
 export interface MonitorAgent {
-  /** Stable when a terminal is promoted to an agent, so view-local placement
-   * survives it: a managed row's id is its floor session id, the same id the
-   * pane showing it carries. */
+  /**
+   * The row's identity to a view — what a bubble, a physics body and the
+   * preview highlight are keyed by, so view-local placement survives a change
+   * in what the row is DOING.
+   *
+   * A managed row's is its run (`runtimeRunId`, see `managedRowId`), which
+   * outlives the PTY under it and the fieldd epoch it was born in; a terminal's
+   * is its floor session id; a peer's is the device-qualified remote id.
+   *
+   * It is not a join key. The pane link is `session?.id` — or, for a row whose
+   * PTY the deck holds no summary of, the fold's own `terminal.runtimeSessionId`.
+   */
   id: string;
   /**
    * The LOCAL floor session this row stands for — absent for a peer's session,

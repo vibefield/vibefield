@@ -46,7 +46,9 @@ describe("monitor agent assembly", () => {
       managed: [managed("run-b", "terminal-b", {}, 20), managed("run-a", "terminal-a", {}, 10)],
       terminals: [{ session: session("terminal-c") }],
     });
-    expect(assembled.map((agent) => agent.id)).toEqual(["terminal-a", "terminal-b", "terminal-c"]);
+    // Two id spaces on one stage, deliberately: a managed row is its RUN, an
+    // unclaimed terminal is its floor session.
+    expect(assembled.map((agent) => agent.id)).toEqual(["run-a", "run-b", "terminal-c"]);
     expect(assembled.map((agent) => Boolean(agent.agent))).toEqual([true, true, false]);
   });
 
@@ -57,10 +59,14 @@ describe("monitor agent assembly", () => {
       terminals: [{ session: session("terminal-a") }],
     });
     expect(assembled).toHaveLength(1);
-    // The same body, so a view's placement survives the promotion: the row's
-    // id IS the floor session id the pane carries.
-    expect(assembled[0]?.id).toBe("terminal-a");
-    expect(managedRowId(managedSummary({ terminalSessionId: "terminal-a" }))).toBe("terminal-a");
+    // The row that survives is the RUN's. The floor session it claimed is not
+    // its id but its JOIN — and the join is what dropped the placeholder, so
+    // the two ids have to be read from different places to pass this.
+    expect(assembled[0]?.id).toBe("run-a");
+    expect(assembled[0]?.session?.id).toBe("terminal-a");
+    expect(
+      managedRowId(managedSummary({ runtimeRunId: "run-a", terminalSessionId: "terminal-a" })),
+    ).toBe("run-a");
     expect(assembled[0]?.agent?.kind).toBe("codex");
     expect(assembled[0]?.agent?.provider).toBe("Codex");
     expect(assembled[0]?.agent?.tier).toBe("managed");
@@ -128,9 +134,12 @@ describe("monitor agent assembly", () => {
       ],
       terminals: [{ session: session("terminal-c") }],
     });
-    expect(nextMonitorAgentForStatus(assembled, "waiting", undefined)?.id).toBe("terminal-a");
-    expect(nextMonitorAgentForStatus(assembled, "waiting", "terminal-a")?.id).toBe("terminal-b");
-    expect(nextMonitorAgentForStatus(assembled, "waiting", "terminal-b")?.id).toBe("terminal-a");
+    // The cursor is a SESSION id (what the deck's active pane carries) and the
+    // answer is a ROW — the two id spaces meeting, which is the whole reason
+    // the cycle compares `session?.id` and not `id`.
+    expect(nextMonitorAgentForStatus(assembled, "waiting", undefined)?.id).toBe("run-a");
+    expect(nextMonitorAgentForStatus(assembled, "waiting", "terminal-a")?.id).toBe("run-b");
+    expect(nextMonitorAgentForStatus(assembled, "waiting", "terminal-b")?.id).toBe("run-a");
     // The idle terminal is visible to views but is not an agent to navigate to.
     expect(nextMonitorAgentForStatus(assembled, "idle", undefined)).toBeUndefined();
     expect(monitorAgentCounts(assembled)).toEqual({ idle: 0, working: 0, waiting: 2 });
@@ -220,8 +229,8 @@ describe("monitor agent assembly", () => {
     );
     expect(reattached).toMatchObject({ status: "idle", detail: "done" });
     expect(reattached?.agent?.summary.continuation?.reattached).toBe(true);
-    // resumed into a new PTY: the row's id is the NEW floor session, and the
-    // old one rides along for the pane hand-over
+    // resumed into a new PTY: the row's id is still the RUN, the new floor
+    // session is the join, and the old one rides along for the pane hand-over
     const resumed = monitorAgentFromManaged(
       {
         summary: managedSummary({
@@ -232,7 +241,66 @@ describe("monitor agent assembly", () => {
       },
       ACCENTS,
     );
-    expect(resumed?.id).toBe("pty-2");
+    expect(resumed?.id).toBe("run-2");
+    expect(resumed?.agent?.summary.terminal?.runtimeSessionId).toBe("pty-2");
     expect(resumed?.agent?.summary.terminal?.replaced).toBe("pty-1");
+  });
+
+  it("AR-4: a pending row whose mirror says the run is gone is not a row at all", () => {
+    // ORDER, not truth: both branches are right about what they test, and the
+    // one that has to be asked first is the FACT — "puppeteer says this run is
+    // not alive" — because pending is a reading of a row still presumed to
+    // exist. Asked second, it answered for a dead run and the stage drew it as
+    // a live idle agent, which is the loudest lie this classifier can tell.
+    const gone = monitorAgentFromManaged(
+      { summary: managedSummary({ pending: "the adapter cannot attach", alive: false }) },
+      ACCENTS,
+    );
+    expect(gone).toBeUndefined();
+    // …and a pending row the mirror does not contradict is still AR-4's honest
+    // idle row, with the reason in words
+    const waiting = monitorAgentFromManaged(
+      { summary: managedSummary({ pending: "the adapter cannot attach", alive: true }) },
+      ACCENTS,
+    );
+    expect(waiting).toMatchObject({ status: "idle", detail: "unobserved · resumes when idle" });
+  });
+
+  it("AR-4: a run keeps its row id and its accent through the PTY swap, so the swarm keeps the bubble", () => {
+    // The finding this rule exists for: keyed by the floor session, a
+    // resume-when-idle made run-a a DIFFERENT row, and the swarm — which keys
+    // its elements AND its physics bodies by `agent.id` — destroyed the bubble
+    // and respawned a stranger in its place. The run is what the user is
+    // watching; the PTY under it is an implementation detail of being watched.
+    const before = assembleMonitorAgents({
+      accents: ACCENTS,
+      managed: [managed("run-a", "pty-1")],
+      terminals: [],
+    });
+    const after = assembleMonitorAgents({
+      accents: ACCENTS,
+      managed: [managed("run-a", "pty-2", { replaced: "pty-1" })],
+      terminals: [],
+    });
+    expect(before[0]?.id).toBe("run-a");
+    expect(after[0]?.id).toBe(before[0]?.id);
+    expect(after[0]?.color).toBe(before[0]?.color);
+    // …and the join moved, which is the half that SHOULD change
+    expect(before[0]?.session?.id).toBe("pty-1");
+    expect(after[0]?.session?.id).toBe("pty-2");
+  });
+
+  it("AR-4: the PTY a resumed run replaced is not a phantom unclaimed terminal", () => {
+    // The pane is still showing the old PTY until the hand-over lands, so the
+    // deck still reports it as a session — and the fold no longer names it as
+    // anybody's `runtimeSessionId`. Left to the claimed-set alone it came back
+    // as a terminal row: a bubble for a shell nobody opened, for exactly as
+    // long as the remount took. The row that replaced it speaks for it.
+    const assembled = assembleMonitorAgents({
+      accents: ACCENTS,
+      managed: [managed("run-a", "pty-2", { replaced: "pty-1" })],
+      terminals: [{ session: session("pty-1") }, { session: session("pty-9") }],
+    });
+    expect(assembled.map((agent) => agent.id)).toEqual(["run-a", "pty-9"]);
   });
 });

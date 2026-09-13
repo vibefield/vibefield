@@ -230,13 +230,26 @@
   letter-spacing: 0.08em;
 }
 
-.vf-godview-status-controls button:hover,
-.vf-godview-view-switch:hover,
+.vf-godview-status-controls button:not(:disabled):hover,
+.vf-godview-view-switch:not(:disabled):hover,
 .vf-godview-tweak-toggle:hover,
 .vf-godview-tweak-toggle.is-open {
   border-color: var(--control-hover-border);
   color: var(--text-main);
   background: var(--control-hover-bg);
+}
+
+/* A control that cannot act says so. The muted ramp at DESIGN.md §8's
+   `disabled:opacity-40` ("when there is nothing to reach"), which is also what
+   the kill sheet's actions already wear — one treatment for the whole idea.
+   SPAWN with no door and the provider list with no providers were both taking
+   `disabled` with no face at all, and lighting up under the pointer while
+   refusing the click: chrome promising a power it does not have. The hover
+   above is guarded rather than overridden here, so the promise is never made. */
+.vf-godview-status-controls button:disabled,
+.vf-godview-view-switch:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 
 .vf-godview-view-switch:focus-visible,

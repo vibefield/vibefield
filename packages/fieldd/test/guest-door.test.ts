@@ -37,6 +37,10 @@ async function boot(getLinkedLogin?: () => string | null): Promise<number> {
   // a real scope:null handler, echoing its CallerContext — lets a self
   // principal be seen SUCCEEDING and carries the minted principal back out
   api.register("system.health", (ctx) => ({ principal: ctx.principal }));
+  // the same echo on a FEDERATING method (D36, enforced at AR-4b): a peer
+  // principal is refused every local-only method before its scopes are even
+  // read, so a peer is probed through a door that federates
+  api.register("device.list", (ctx) => ({ principal: ctx.principal }));
   return api.listen();
 }
 
@@ -148,7 +152,7 @@ describe("UA-4 — the self/guest door", () => {
 
     wire.send(hello(1, "peer-fieldd", { deviceId: "01COLLEAGUEDEVICEAAAAAAAAA" }));
     expect(result(await wire.next())["grantedScopes"]).toEqual([]);
-    wire.send(call(2, "system.health"));
+    wire.send(call(2, "device.list"));
     expect(errKind(await wire.next())).toBe("FORBIDDEN_SCOPE");
   });
 
@@ -158,11 +162,14 @@ describe("UA-4 — the self/guest door", () => {
 
     wire.send(hello(1, "peer-fieldd", { deviceId: "01MYOTHERDEVICEAAAAAAAAAAA" }));
     expect(result(await wire.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
-    wire.send(call(2, "system.health"));
+    wire.send(call(2, "device.list"));
     expect(result(await wire.next())["principal"]).toEqual({
       kind: "peer-fieldd",
       deviceId: "01MYOTHERDEVICEAAAAAAAAAAA",
     });
+    // …and the local-only door is closed to it whatever the preset grants (D36)
+    wire.send(call(3, "system.health"));
+    expect(errKind(await wire.next())).toBe("FORBIDDEN_SCOPE");
   });
 
   it("the local token door never meets the comparison", async () => {

@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { type RemoteSessionDoor, type RemoteSessionRow, remoteSessionRows } from "./remote-door";
 
 /**
- * THE REAL SOURCE (GT-D17), beside `MockAgentField` behind the same seam.
+ * THE MESH'S HALF of the field (GT-D17), beside the local one.
  *
- * `MockAgentField` invents a field; this one asks the mesh for one. Both answer
- * in records the projection turns into `MonitorAgent[]`, and `useMonitorAgents`
- * composes them — which is the whole shape of the honesty split: two sources,
- * two claims, one stage.
+ * `local-agent-field.ts` asks fieldd's fold what is running HERE; this one asks
+ * the mesh what is running on the peers. Both answer in records the projection
+ * turns into `MonitorAgent[]`, and `useMonitorAgents` composes them — which is
+ * the whole shape of the split: two sources, two claims, one stage. It stood
+ * beside `MockAgentField` until AR-3 put the fold behind that seam and deleted
+ * the invented field; nothing here ever invented anything.
  *
  * The transport is the DECK'S: `door.listHosts()` is `runtime.listRemoteHosts()`
  * over the control channel the panes already ride (EL2 — this is control, and

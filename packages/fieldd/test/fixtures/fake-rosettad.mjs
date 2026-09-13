@@ -28,8 +28,20 @@
 // AR-4: `/api/sessions?native_session_id=a,b` — the rows fieldd's
 // resume-when-idle reads (`SessionRow[]`, filtered by native id), scripted by
 // FAKE_ROSETTAD_SESSIONS: a JSON file re-read on every request, so a test can
-// move a session's `activity.last_at` while the daemon polls.
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+// move a session's `activity.last_at` while the daemon polls. When
+// FAKE_ROSETTAD_REQUEST_LOG names a file, one line is appended there per
+// `/api/sessions` request: a window in which the fold did NOT change is only
+// evidence if the poller actually ASKED during it, and this is the counter a
+// test reads to say so.
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 
@@ -215,6 +227,14 @@ if (mode === "silent") {
       return;
     }
     if (req.url !== undefined && req.url.startsWith("/api/sessions?")) {
+      const log = process.env.FAKE_ROSETTAD_REQUEST_LOG;
+      if (log !== undefined) {
+        try {
+          appendFileSync(log, `${Date.now()} ${req.url}\n`);
+        } catch {
+          // a counter that cannot be written is not worth failing a request over
+        }
+      }
       const url = new URL(req.url, "http://127.0.0.1");
       const wanted = (url.searchParams.get("native_session_id") ?? "")
         .split(",")

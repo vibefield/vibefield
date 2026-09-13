@@ -52,7 +52,6 @@ vi.mock("../src/godview/GodviewDeck", async () => {
         props.onRemoteDoor?.(door);
         return () => props.onRemoteDoor?.(null);
         // the deck hands the door over once, on mount
-        // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only by design
       }, []);
       return null;
     },
@@ -134,22 +133,37 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mountOverlay(): HTMLElement {
+/**
+ * Both of these are `await act(async …)` rather than the synchronous form,
+ * and the reason is the door: opening the stage asks it for providers and for
+ * the mesh, and both answers land in a microtask AFTER a synchronous act has
+ * closed. React said so six times per run ("not wrapped in act"), and a warning
+ * that is always there is a warning nobody reads — the next real one would have
+ * arrived into a page of noise. The async form lets the tree settle first, so
+ * every assertion below is made against a stage that has finished arriving.
+ */
+async function mountOverlay(): Promise<HTMLElement> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  act(() => {
+  await act(async () => {
     root?.render(<GodviewOverlay />);
   });
   return container;
+}
+
+async function setOpen(open: boolean): Promise<void> {
+  await act(async () => {
+    publishOpen?.({ open });
+  });
 }
 
 const stage = (host: HTMLElement): Element | null =>
   host.querySelector(".vf-godview-monitor-stage");
 
 describe("the monitor's lifetime inside the overlay (PF6)", () => {
-  it("does not exist until the Godview has been opened once", () => {
-    const host = mountOverlay();
+  it("does not exist until the Godview has been opened once", async () => {
+    const host = await mountOverlay();
     // The overlay itself is not in the tree before a first open, so nothing
     // below it can be either — a user who never presses ⇧⇧ runs no monitor.
     expect(host.querySelector(".vf-godview")).toBeNull();
@@ -157,10 +171,10 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
     expect(doorFacts.observeCalls, "a closed Godview subscribed to the fold").toBe(0);
   });
 
-  it("mounts the stage on open and REMOVES it on close, clearing its timers and its subscription", () => {
-    const host = mountOverlay();
+  it("mounts the stage on open and REMOVES it on close, clearing its timers and its subscription", async () => {
+    const host = await mountOverlay();
 
-    act(() => publishOpen?.({ open: true }));
+    await setOpen(true);
     expect(stage(host), "the stage never mounted").not.toBeNull();
     // the fold reached the chrome: one managed agent, said in words
     expect(host.querySelector(".vf-monitor-local-chip")?.textContent).toBe("1 managed agent");
@@ -168,7 +182,7 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
     const started = [...openedIntervals];
     expect(started.length, "the mesh poll never started").toBeGreaterThan(0);
 
-    act(() => publishOpen?.({ open: false }));
+    await setOpen(false);
 
     // THE PF6 CLAIM, at the level it actually matters. The overlay stays in the
     // tree — the deck below is expensive to build and instant to reveal, so it
@@ -182,36 +196,36 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
     expect(doorFacts.observeDisposals, "the fold subscription outlived the close").toBe(1);
   });
 
-  it("comes back on reopen, from the fold's current frame", () => {
+  it("comes back on reopen, from the fold's current frame", async () => {
     // A reopened stage subscribes afresh and gets the daemon's current frame —
     // state transfer, never edges — so nothing is replayed and nothing is
     // remembered across the close. That is why the stage may be unmounted
     // strictly while the deck, whose layout is NOT reproducible from a frame,
     // gets the other treatment.
-    const host = mountOverlay();
-    act(() => publishOpen?.({ open: true }));
-    act(() => publishOpen?.({ open: false }));
-    act(() => publishOpen?.({ open: true }));
+    const host = await mountOverlay();
+    await setOpen(true);
+    await setOpen(false);
+    await setOpen(true);
     expect(stage(host)).not.toBeNull();
     expect(doorFacts.observeCalls).toBe(2);
     expect(host.querySelector(".vf-monitor-local-chip")?.textContent).toBe("1 managed agent");
   });
 
-  it("keeps the chosen view across a close, because the choice lives above the stage", () => {
-    const host = mountOverlay();
-    act(() => publishOpen?.({ open: true }));
+  it("keeps the chosen view across a close, because the choice lives above the stage", async () => {
+    const host = await mountOverlay();
+    await setOpen(true);
     const switcher = host.querySelector<HTMLSelectElement>(".vf-godview-view-switch");
     expect(switcher?.value).toBe("swarm");
 
-    act(() => {
+    await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
       setter?.call(switcher, "list");
       switcher?.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(host.querySelector(".vf-monitor-list")).not.toBeNull();
 
-    act(() => publishOpen?.({ open: false }));
-    act(() => publishOpen?.({ open: true }));
+    await setOpen(false);
+    await setOpen(true);
 
     // The reason `useMonitorTuning` lives in the overlay and not in the stage:
     // state inside a component that unmounts on every close is state that

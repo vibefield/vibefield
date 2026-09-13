@@ -27,8 +27,14 @@ export interface ManagedSummaryOptions {
   profileId?: string;
   /** omit the monitor projection entirely (a run before its first state) */
   monitor?: false;
-  /** AR-4 — a PENDING row: a live PTY fieldd could not re-attach to, with
-   * fieldd's reason; the row is then unobserved (no monitor, status unknown) */
+  /**
+   * AR-4 — a PENDING row: a live PTY fieldd could not re-attach to, with
+   * fieldd's reason; the row is then unobserved (no monitor, status unknown).
+   *
+   * Unless `alive` is asked for explicitly, which builds the one row this
+   * fixture otherwise cannot: pending AND carrying a monitor mirror from before
+   * — the shape that decides whether the classifier's drop is asked first.
+   */
   pending?: string;
   /** AR-4 — this run was re-attached across a fieldd restart */
   reattached?: boolean;
@@ -44,7 +50,7 @@ export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessio
   const createdAt = options.createdAt ?? "2026-09-12T10:00:00.000Z";
   const cwd = options.cwd ?? "/project/vibe-field";
   const monitor =
-    options.monitor === false || options.pending !== undefined
+    options.monitor === false || (options.pending !== undefined && options.alive === undefined)
       ? undefined
       : {
           schemaVersion: 2,

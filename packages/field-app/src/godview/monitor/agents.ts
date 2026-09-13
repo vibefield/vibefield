@@ -80,10 +80,29 @@ function withPaneSummary(
   return session === undefined ? record : { ...record, session };
 }
 
-/** A managed row's monitor id: the floor session id when the fold names one
- * (the id the pane showing it carries — the deck↔monitor join), else the run. */
+/**
+ * A managed row's monitor id: the RUN.
+ *
+ * `runtimeRunId` is the one identity a run keeps through everything that can
+ * happen to it — a resume-when-idle that swaps the PTY under it (AR-4), an exit
+ * that leaves it hosting none, a fieldd restart that gives it a new epoch. The
+ * floor session id is none of those: it is the PTY, and a row keyed by it
+ * became a DIFFERENT row the moment the run was resumed — which the swarm reads
+ * as the bubble dying and a stranger being born (it keys its elements and its
+ * physics bodies by `agent.id`) and the chrome reads as a preview highlight
+ * pointing at nothing.
+ *
+ * The pane join is a SEPARATE field and stays one: `agent.session?.id`, and the
+ * fold's own `terminal.runtimeSessionId`, are what the deck↔monitor join and
+ * the active-pane comparison read. Nothing joins on this id.
+ *
+ * The one case it does not survive is the other direction — a bare terminal the
+ * fold later claims changes id from its session to its run — and that is the
+ * cheaper loss: a promotion happens to a row once, a resume happens every time
+ * an agent is woken.
+ */
 export function managedRowId(summary: AgentSessionSummary): string {
-  return summary.terminal?.runtimeSessionId ?? summary.runtimeRunId;
+  return summary.runtimeRunId;
 }
 
 /** Undefined for a session that has stopped being worth showing at all. */
@@ -113,8 +132,10 @@ export function monitorAgentFromManaged(
     status,
     project: projectLabel(summary),
     detail: agentDetail(summary, status),
-    // accent by the RUN, which survives the pane: the same run keeps its
-    // color whichever pane shows it, and across a fieldd restart (AR-4)
+    // accent by the RUN — the same value as `id` since the row id became the
+    // run, and still spelled out because the PROPERTY belongs to the run and
+    // not to whatever the id happens to be: the same run keeps its color
+    // whichever pane shows it, and across a fieldd restart (AR-4)
     color: accentFor(summary.runtimeRunId, accents),
     active: false,
     ...(cwd ? { cwd } : {}),
@@ -228,7 +249,18 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
     )
     .filter((agent): agent is MonitorAgent => agent !== undefined)
     .sort((left, right) => left.createdAtMs - right.createdAtMs);
-  const claimed = new Set(agents.map((agent) => agent.id));
+  // The PTYs the fold has spoken for, by the id the FLOOR knows them by — not
+  // by the rows' ids, which are runs (`managedRowId`). Two ids per row, and the
+  // second is the AR-4 one: a resumed run names the PTY it took the place of,
+  // and the pane is still showing that PTY until the hand-over lands. Without
+  // it the old session comes back as a phantom unclaimed terminal — a bubble
+  // for a shell nobody opened, in the gap between the resume and the remount.
+  const claimed = new Set<string>();
+  for (const agent of agents) {
+    const terminal = agent.agent?.summary.terminal;
+    if (terminal?.runtimeSessionId !== undefined) claimed.add(terminal.runtimeSessionId);
+    if (terminal?.replaced !== undefined) claimed.add(terminal.replaced);
+  }
   const terminals = input.terminals
     .filter((terminal) => !claimed.has(terminal.session.id))
     .map((terminal) =>

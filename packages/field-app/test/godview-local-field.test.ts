@@ -42,10 +42,19 @@ describe("the local field's honest states", () => {
 });
 
 describe("a managed row's identity", () => {
-  it("is the floor session id the fold names — the id the pane showing it carries", () => {
+  it("is the RUN, whatever PTY it is in and whether it is in one at all", () => {
+    // The identity rule, stated as the three cases that used to give three
+    // different answers: a run in a PTY, the same run resumed into another one
+    // (AR-4), and a run hosting none. The row is the same row through all of
+    // them, because the RUN is what the user is watching.
     expect(
       managedRowId(managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" })),
-    ).toBe("pty-a");
+    ).toBe("run-a");
+    expect(
+      managedRowId(
+        managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-b", replaced: "pty-a" }),
+      ),
+    ).toBe("run-a");
     expect(managedRowId(managedSummary({ runtimeRunId: "run-a", terminalSessionId: null }))).toBe(
       "run-a",
     );

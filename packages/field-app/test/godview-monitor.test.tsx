@@ -103,16 +103,26 @@ interface FakeDoor extends MonitorDoor {
   mountLocal: ReturnType<typeof vi.fn>;
   spawn: ReturnType<typeof vi.fn>;
   attach: ReturnType<typeof vi.fn>;
+  /** Send the subscriber another frame. The fold pushes whole fields at its own
+   * cadence and re-sends them for reasons that are none of the stage's
+   * business, so a test that only ever delivers one frame cannot see what the
+   * stage does with the second — which is where the once-guards live. */
+  push(rows: readonly AgentSessionSummary[]): void;
 }
 
 function fakeDoor(rows: readonly AgentSessionSummary[] = ROWS): FakeDoor {
+  let publish: ((rows: readonly AgentSessionSummary[]) => void) | null = null;
   return {
     listHosts: vi.fn(async () => []),
     attach: vi.fn(async () => ({ state: "attached" as const, sessionId: "r", readWrite: true })),
     observe: vi.fn(({ onFrame }) => {
+      publish = onFrame;
       onFrame(rows);
-      return () => undefined;
+      return () => {
+        publish = null;
+      };
     }),
+    push: (next) => publish?.(next),
     providers: vi.fn(async () => PROVIDERS),
     spawn: vi.fn(async () => ({
       state: "spawned" as const,
@@ -297,24 +307,51 @@ describe("the monitor stage", () => {
     // shows the old one (`run-codex-pty`, in PANES): the monitor asks the
     // door to put the new PTY in that pane — with `replacing`, so the deck
     // targets the pane rather than the active one — and only once
-    const door = fakeDoor([
-      managedSummary({
-        runtimeRunId: "run-codex",
-        terminalSessionId: "run-codex-pty-2",
-        replaced: "run-codex-pty",
-        cwd: "/project/voyager",
-      }),
-    ]);
-    const host = await mountMonitor("list", door);
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    const resumed = managedSummary({
+      runtimeRunId: "run-codex",
+      terminalSessionId: "run-codex-pty-2",
+      replaced: "run-codex-pty",
+      cwd: "/project/voyager",
     });
+    const door = fakeDoor([resumed]);
+    const host = await mountMonitor("list", door);
+    const settle = async (): Promise<void> => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    };
+    await settle();
     expect(door.mountLocal).toHaveBeenCalledTimes(1);
     expect(door.mountLocal.mock.calls[0]).toEqual([
       "run-codex-pty-2",
       { replacing: "run-codex-pty" },
     ]);
     expect(ackText(host)).toContain("resumed in its pane");
+
+    // ONCE, and this is where that word is actually earned. The pane facts do
+    // not move in this fixture — the deck still reports the OLD PTY — so every
+    // later frame still satisfies the condition that triggered the hand-over,
+    // and only the guard stops it happening again. The identical frame is the
+    // republish case (the fold re-sends its whole field at its own cadence);
+    // the second carries a real change, which gets past the damage gate and
+    // leaves the guard alone to do the work.
+    await act(async () => door.push([resumed]));
+    await settle();
+    await act(async () =>
+      door.push([
+        managedSummary({
+          runtimeRunId: "run-codex",
+          terminalSessionId: "run-codex-pty-2",
+          replaced: "run-codex-pty",
+          cwd: "/project/jabali",
+        }),
+      ]),
+    );
+    await settle();
+    // the frame REACHED the stage — without this the assertion below would
+    // pass for a door nobody was listening to
+    expect(host.textContent).toContain("jabali");
+    expect(door.mountLocal).toHaveBeenCalledTimes(1);
   });
 
   it("an agent already in the active pane is acknowledged, not re-mounted", async () => {

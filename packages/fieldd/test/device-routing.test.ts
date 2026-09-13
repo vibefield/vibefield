@@ -157,6 +157,56 @@ describe("the device? routing hook (C5/D35)", () => {
     expect(forwarder).not.toHaveBeenCalled();
   });
 
+  it("D36 (AR-4b): a method declared LOCAL is never forwarded to a peer, whatever the device says", async () => {
+    // `system.health` is local (its scope is null, so the scope gate is not
+    // what stops it): a foreign device on it is refused before the forwarder,
+    // and the refusal names the locality rather than a missing scope.
+    const forwarder = vi.fn(async () => ({ never: true }));
+    const { a, port } = await api(forwarder);
+    a.register("system.health", () => ({ ok: true }));
+    const ws = await dial(port, "/");
+    await call(ws, 1, "system.hello", hello({ credential: "good-token" }));
+    const res = (await call(ws, 2, "system.health", { device: "dev-b" })) as {
+      error: { data: { kind: string; details: Record<string, unknown> } };
+    };
+    expect(res.error.data.kind).toBe("PRECONDITION_FAILED");
+    expect(res.error.data.details).toMatchObject({ method: "system.health", locality: "local" });
+    expect(forwarder).not.toHaveBeenCalled();
+    // device = self still serves a local method locally
+    const self = (await call(ws, 3, "system.health", { device: OWN_ID })) as {
+      result: { ok: boolean };
+    };
+    expect(self.result.ok).toBe(true);
+  });
+
+  it("D36 (AR-4b): a peer-fieldd principal cannot call a LOCAL method at all, whatever the tailnet preset grants", async () => {
+    // the tailnet preset grants every TAILNET_SCOPE, and `agent.spawn` is one
+    // of them — the locality column, not the scope, is what keeps a peer from
+    // spawning an agent (or resuming one, which terminates a PTY) here
+    const { a, port } = await api();
+    a.register("system.health", () => ({ ok: true }));
+    let spawned = 0;
+    a.register("agent.spawn", () => {
+      spawned += 1;
+      return {};
+    });
+    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": "me@jamesyong42.com" });
+    await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
+    const health = (await call(ws, 2, "system.health", {})) as {
+      error: { data: { kind: string; details: Record<string, unknown> } };
+    };
+    expect(health.error.data.kind).toBe("FORBIDDEN_SCOPE");
+    expect(health.error.data.details).toMatchObject({ method: "system.health", locality: "local" });
+    const spawn = (await call(ws, 3, "agent.spawn", { provider: "scripted" })) as {
+      error: { data: { kind: string } };
+    };
+    expect(spawn.error.data.kind).toBe("FORBIDDEN_SCOPE");
+    expect(spawned).toBe(0);
+    // a federating method is still the peer's to call
+    const probe = (await call(ws, 4, "device.list", {})) as { result: { principal: unknown } };
+    expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-peer-a" });
+  });
+
   it("device on a subscription refuses honestly while the sub half is UN-armed", async () => {
     // C6-5 ships the proxy, but an api armed without a subForwarder (a partial
     // bootstrap) must refuse rather than half-work.

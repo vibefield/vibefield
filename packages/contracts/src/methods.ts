@@ -1275,6 +1275,19 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // Scope exception, stated (2026-09-13, AR-4b): `agent.resume` rides
+  // `agent.spawn` although it now TERMINATES a live PTY — the pending run's —
+  // before resuming it, while `terminal.terminate` itself asks for
+  // `terminal.attach` (the posture comment on the terminal rows above).
+  // Accepted, because the PTY it ends is always the RECORD'S OWN: the door's
+  // params name a RUN (`AgentResumeParams` = runtimeRunId, cwd?), never a
+  // terminal id, and fieldd resolves the PTY through the record it wrote when
+  // it spawned that run — a record this boot re-adopts only when the floor
+  // still lists that very id. So the act is "resume my session", which is
+  // spawn-class; it is not a terminate of an arbitrary terminal, and a caller
+  // holding only `agent.spawn` reaches no PTY it did not already own. The
+  // named upgrade, if agent cells ever adopt a PTY the record did not mint: a
+  // resume that replaces a PTY asks for `terminal.attach` as well.
   defineMethod({
     surface: "product",
     method: "agent.resume",

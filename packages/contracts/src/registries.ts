@@ -514,6 +514,12 @@ export const LAYOUT = {
    * the claim a run is restored against when fieldd re-attaches after a
    * restart. Never written by VibeField; puppeteer owns every byte. */
   AGENT_RUNS_DIR: ["agents", "runs"],
+  /** AR-4b — the key the session records are signed with (HMAC-SHA256, 32
+   * random bytes, 0600, minted once per user root): fieldd's own acts on a
+   * session (the re-attach at boot, a resume-when-idle) trust only records
+   * it wrote itself — a same-uid file dropped into `agents/sessions/` is set
+   * aside, never acted on (EL7). */
+  AGENT_SESSIONS_KEY_FILE: ["agents", "sessions.key"],
   /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
    * a full tree of the segments above; these four live at the VibeField root
    * itself and, with the `machine/` set below, are the only segments that

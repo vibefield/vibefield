@@ -21,11 +21,16 @@ export type AgentVisualStatus = "idle" | "working" | "waiting";
  * alive is dropped: an exited agent is not a row.
  */
 export function classifyAgentStatus(summary: AgentSessionSummary): AgentVisualStatus | undefined {
+  // The drop comes FIRST, and the order is the whole rule: "this run is not
+  // alive" is a fact about the run, while every branch below is a reading of
+  // what it is doing. Asked second, the pending branch answered for a row whose
+  // mirror said the run was gone, and the stage drew a dead agent as a live
+  // idle one — the loudest kind of dishonesty this classifier can commit.
+  if (summary.monitor?.alive === false) return undefined;
   // AR-4 — a PENDING row: a live PTY nothing observes, waiting to be resumed
   // at its next idle. Idle is the honest word for it — no evidence says
   // otherwise, and "working" would be a claim the fold did not make.
   if (summary.continuation?.pending !== undefined) return "idle";
-  if (summary.monitor?.alive === false) return undefined;
   switch (summary.status) {
     case "blocked":
       return "waiting";

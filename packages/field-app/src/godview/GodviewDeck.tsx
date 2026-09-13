@@ -43,7 +43,7 @@ import {
 import { godviewTerminalEffects, godviewTerminalTheme } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
-import type { MonitorDoor } from "./monitor/remote-door";
+import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
 import { useDeckZoom, ZoomActivePane } from "./ZoomActivePane";
@@ -131,6 +131,18 @@ function ContextProbe({
   return null;
 }
 
+/** Poll a predicate across event-loop turns until it holds or `ms` elapse —
+ * the workspace commits its state in effects, so a mount or an activation is
+ * observable only a turn later. Returns whether it held. */
+async function settled(predicate: () => boolean, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (!predicate()) {
+    if (Date.now() >= deadline) return false;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  return true;
+}
+
 export interface GodviewDeckProps {
   /** PF6: false silences every pane. The deck stays MOUNTED — that is what
    * makes reopening instant and the layout survive — and ghosttea turns the
@@ -209,6 +221,8 @@ export function GodviewDeck({
    * publishes a fresh one on every pane change — so an attach reads the current
    * one at call time instead of closing over whichever existed at build time. */
   const workspaceRef = useRef<GhostteaWorkspaceContext>(undefined);
+  /** AR-4b — the door's mounts, one at a time (see `mountLocal`). */
+  const mountQueue = useRef<Promise<unknown>>(Promise.resolve());
   /** The deck's own wrapper — the element pane zoom writes its phase onto. It
    * has to be the deck's rather than the stage's: the stage is shared with the
    * monitor and the tuning panel, and a zoom is about the panes. */
@@ -884,49 +898,91 @@ export function GodviewDeck({
           };
         }
       },
-      mountLocal: async (sessionId, options) => {
+      mountLocal: (sessionId, options) => {
+        // Mounts are SERIALIZED (AR-4b): two replacements landing in one fold
+        // frame would otherwise race each other for the single active-pane
+        // slot the workspace mounts into, and the second's activation would
+        // capture the first's mount.
+        const run = mountQueue.current.then(() => mountLocalNow(sessionId, options));
+        mountQueue.current = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return run;
+      },
+    };
+    async function mountLocalNow(
+      sessionId: string,
+      options: LocalMountOptions | undefined,
+    ): Promise<LocalMountOutcome> {
+      if (workspaceRef.current?.activePaneId === undefined) return { state: "no-pane" };
+      try {
+        // The floor is the one authority both halves read (the pool's own
+        // join for a birth, asked here for a session that already exists).
+        const summary = await terminalSessionSummary(sessionId);
+        if (summary === null)
+          return { state: "failed", reason: "the floor does not list this session" };
+        // Re-read AFTER the round trip: the panes and the active one are
+        // whatever the user made them while the floor was answering.
         let context = workspaceRef.current;
         if (context === undefined || context.activePaneId === undefined)
           return { state: "no-pane" };
-        try {
-          // The floor is the one authority both halves read (the pool's own
-          // join for a birth, asked here for a session that already exists).
-          const summary = await terminalSessionSummary(sessionId);
-          if (summary === null)
-            return { state: "failed", reason: "the floor does not list this session" };
-          // AR-4 — a replacement lands in the pane showing the PTY it took the
-          // place of: that pane is activated, the mount waits for the workspace
-          // to commit the activation (the active pane is a ref the workspace
-          // syncs after render, and `mountSession` reads that ref), and the
-          // pane the user was in is given back afterwards.
-          const replacing = options?.replacing;
-          const target =
-            replacing === undefined
-              ? undefined
-              : context.panes.find((pane) => pane.session.id === replacing);
-          const previous = context.activeSession?.id;
-          if (target !== undefined) {
-            context.activateSession(target.session.id);
-            const deadline = Date.now() + 500;
-            while (Date.now() < deadline && workspaceRef.current?.activePaneId !== target.id) {
-              await new Promise<void>((resolve) => setTimeout(resolve, 0));
-            }
-            await new Promise<void>((resolve) => setTimeout(resolve, 0));
-            context = workspaceRef.current ?? context;
-          }
+        const replacing = options?.replacing;
+        if (replacing === undefined) {
           context.mountSession(summary);
-          if (target !== undefined && previous !== undefined && previous !== target.session.id) {
-            context.activateSession(previous);
-          }
-          return { state: "mounted", sessionId };
-        } catch (cause) {
-          return {
-            state: "failed",
-            reason: cause instanceof Error ? cause.message : String(cause),
-          };
+          return (await settled(() => paneShows(sessionId), 500))
+            ? { state: "mounted", sessionId }
+            : { state: "failed", reason: "the workspace did not take the mount" };
         }
-      },
-    };
+        // AR-4 — a replacement lands in the pane showing the PTY it took the
+        // place of, and ONLY there (AR-4b): that pane is activated, the mount
+        // waits for the workspace to commit the activation (the active pane is
+        // a ref the workspace syncs after render, and `mountSession` reads
+        // that ref) and refuses if it never does — a pane that closed under
+        // the wait must not hand its replacement to whichever pane the user is
+        // in. The user's own pane is given back afterwards.
+        const target = context.panes.find((pane) => pane.session.id === replacing);
+        if (target === undefined)
+          return { state: "failed", reason: "no pane shows the replaced terminal any more" };
+        const previous = context.activeSession?.id;
+        if (context.activePaneId !== target.id) {
+          context.activateSession(target.session.id);
+          const committed = await settled(
+            () => workspaceRef.current?.activePaneId === target.id,
+            500,
+          );
+          context = workspaceRef.current ?? context;
+          if (!committed || context.activePaneId !== target.id) {
+            if (previous !== undefined) context.activateSession(previous);
+            return {
+              state: "failed",
+              reason: "the pane showing the replaced terminal could not be activated",
+            };
+          }
+        }
+        context.mountSession(summary);
+        const took = await settled(() => paneShows(sessionId), 500);
+        const after = workspaceRef.current ?? context;
+        if (
+          previous !== undefined &&
+          previous !== replacing &&
+          after.panes.some((pane) => pane.session.id === previous)
+        ) {
+          after.activateSession(previous);
+        }
+        return took
+          ? { state: "mounted", sessionId }
+          : { state: "failed", reason: "the workspace did not take the mount" };
+      } catch (cause) {
+        return {
+          state: "failed",
+          reason: cause instanceof Error ? cause.message : String(cause),
+        };
+      }
+    }
+    function paneShows(sessionId: string): boolean {
+      return workspaceRef.current?.panes.some((pane) => pane.session.id === sessionId) === true;
+    }
   }, [runtime, fieldd, shell]);
 
   useEffect(() => {
@@ -973,7 +1029,20 @@ export function GodviewDeck({
   useEffect(() => {
     const sessionIds = paneSessionIds;
     const activeSessionId = workspace?.activeSession?.id;
-    const key = `${sessionIds.join("\0")}${activeSessionId ?? ""}`;
+    const sessions = (workspace?.panes ?? []).map((pane) => pane.session);
+    // The gate keys on every fact the monitor DRAWS from these (AR-4b): the
+    // ids and the active pane, and per pane the summary's exited/activity/
+    // title/cwd — the deck republishes the summaries as the floor moves them,
+    // and a gate keyed on ids alone froze them at the last pane change (an
+    // exited pane stayed a live row; a terminal's activity never moved).
+    const key = [
+      sessionIds.join("\u0000"),
+      activeSessionId ?? "",
+      ...sessions.map(
+        (session) =>
+          `${session.id}:${session.exited ? 1 : 0}:${session.activity?.kind ?? ""}:${session.title ?? ""}:${session.cwd ?? ""}`,
+      ),
+    ].join("\u0001");
     if (key === lastPaneFacts.current) return;
     lastPaneFacts.current = key;
     // A color belongs to a pane, so it leaves with one. Pruned HERE rather than
@@ -991,7 +1060,7 @@ export function GodviewDeck({
       ...(activeSessionId !== undefined ? { activeSessionId } : {}),
       // the floor summaries the panes hold (AR-3): an unclaimed pane is a
       // terminal row on the stage, a managed row carries its PTY's summary
-      sessions: (workspace?.panes ?? []).map((pane) => pane.session),
+      sessions,
     });
   }, [paneSessionIds, workspace, onPanes]);
 

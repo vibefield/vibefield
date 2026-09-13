@@ -1240,6 +1240,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: {
             runtimeRunId: result.session.runtimeRunId,
             sessionId: result.terminal.sessionId,
+            // AR-4b — a resume of a PENDING run replaced its live PTY: the
+            // caller's entry says so (the daemon's own idle resume is the one
+            // ledgered as the system actor)
+            ...(result.session.terminal?.replaced !== undefined
+              ? { how: "manual", replaced: result.session.terminal.replaced }
+              : {}),
           },
         }),
       );

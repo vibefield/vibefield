@@ -7,7 +7,6 @@ import type {
   RuntimeIngestStatus,
   RuntimeRow,
   RuntimesResponse,
-  SessionsResponse,
   StatusResponse,
 } from "@rosetta/protocol";
 import {
@@ -21,6 +20,7 @@ import {
   type IndexPhase,
   IndexPhase as IndexPhaseSchema,
   type IndexRuntimeStatus,
+  IndexSessionsResponse,
   type IndexStatus,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -313,11 +313,22 @@ export interface IndexSessionFacts {
   /** rosetta's canonical session id */
   id: string;
   nativeSessionId: string;
-  /** timestamped conversation evidence; null until rosetta has read some */
+  /** Timestamped conversation evidence; null until rosetta has read some —
+   * and null when what it read is nonsense (bounds that contradict each
+   * other). Epoch ms, always FINITE (the schema refuses a body whose stamps
+   * are not), but NOT necessarily in the past: rosetta derives these from the
+   * provider's own records, so a skewed clock can date a message in the
+   * FUTURE. A caller must not read a future stamp as idle — `now - lastAt`
+   * goes NEGATIVE there, younger than any threshold; test `lastAt <= now`
+   * explicitly rather than trusting the subtraction's sign. */
   activity: { firstAt: number; lastAt: number } | null;
   /** rosetta's ingest state for the session's source (open vocabulary) */
   streamState: string;
 }
+
+/** The `/api/sessions` envelope's OWN keys, read off the schema so the two
+ * can never drift apart: everything else at that level is unknown-field news. */
+const SESSIONS_BODY_KEYS = Object.keys(IndexSessionsResponse.shape);
 
 export class IndexService {
   private readonly logger: Logger;
@@ -325,6 +336,8 @@ export class IndexService {
   private readonly timeoutMs: number;
   /** the roll call as a join table, per daemon generation (see kindsByLayoutRoot) */
   private rollCall: { pid: number | null; kinds: ReadonlyMap<string, string> } | null = null;
+  /** the tolerant reader's logging half: `<shape>.<key>` said once, ever */
+  private readonly seenUnknownFields = new Set<string>();
 
   constructor(private readonly opts: IndexServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -557,30 +570,72 @@ export class IndexService {
    * conversation last moved. Read by resume-when-idle, which resumes a
    * pending run only on this evidence — never on the absence of it. The
    * canonical row is preferred when the native id resolves to a thread
-   * (`root_session_id == id`); undefined when the index has never read it. */
+   * (`root_session_id == id`); undefined when the index has never read it.
+   *
+   * The one read on this service whose body is PARSED rather than cast: the
+   * answer ends in a TERMINATE (resume-when-idle replaces the pending run's
+   * PTY), and a cast is a shape TypeScript merely believes. A body the reader
+   * cannot vouch for is UNAVAILABLE {state:"malformed"} — an honest degraded
+   * state that reads as "not idle", never a silent `undefined`. */
   async sessionByNativeId(nativeSessionId: string): Promise<IndexSessionFacts | undefined> {
     this.requireReady();
-    const body = await this.get<SessionsResponse>(
-      `/api/sessions?native_session_id=${encodeURIComponent(nativeSessionId)}&limit=50`,
-    );
-    const rows = body.sessions.filter((row) => row.native_session_id === nativeSessionId);
+    // the id is ONE query value here (encoded) and is matched AGAIN below,
+    // because the server reads the parameter as a comma-separated selector
+    // list: an id that carries a comma must never widen the answer to a
+    // session this run is not about.
+    const path = `/api/sessions?native_session_id=${encodeURIComponent(nativeSessionId)}&limit=50`;
+    const body = await this.getBody(path);
+    const parsed = IndexSessionsResponse.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      this.logger.warn(
+        "fieldd.index.sessions_malformed",
+        "The index answered session rows fieldd cannot read",
+        { issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}` },
+      );
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the agent index answered malformed session rows",
+        true,
+        {
+          service: "index",
+          state: "malformed",
+        },
+      );
+    }
+    this.noteUnknownFields("sessions", body, SESSIONS_BODY_KEYS);
+    const rows = parsed.data.sessions.filter((row) => row.native_session_id === nativeSessionId);
     const row = rows.find((candidate) => candidate.root_session_id === candidate.id) ?? rows[0];
     if (row === undefined) return undefined;
+    // bounds that contradict each other are NOT evidence: a reader that
+    // believed them would be deciding a terminate on nonsense.
+    const bounds = row.activity;
+    const activity =
+      bounds !== null && bounds.first_at <= bounds.last_at
+        ? { firstAt: bounds.first_at, lastAt: bounds.last_at }
+        : null;
+    if (bounds !== null && activity === null) {
+      this.logger.debug(
+        "fieldd.index.activity_nonsense",
+        "A session's activity bounds contradict each other; read as no evidence",
+        { session: row.id },
+      );
+    }
     return {
       id: row.id,
       nativeSessionId: row.native_session_id,
-      activity:
-        row.activity === null
-          ? null
-          : { firstAt: row.activity.first_at, lastAt: row.activity.last_at },
+      activity,
       streamState: row.stream_state,
     };
   }
 
   /** One GET against the daemon's loopback origin — read from the supervisor's
    * STATE here and nowhere else, never handed on. A protocol header that is
-   * not ours is the wrong binary (INCOMPATIBLE, not retryable). */
-  private async get<T>(path: string): Promise<T> {
+   * not ours is the wrong binary (INCOMPATIBLE, not retryable); a body that is
+   * not JSON at all is an honest UNAVAILABLE {state:"malformed"}, never a raw
+   * SyntaxError out of a door. The body comes back UNPARSED — what to make of
+   * it is the caller's (`get` casts; `sessionByNativeId` parses). */
+  private async getBody(path: string): Promise<unknown> {
     const state = this.opts.supervisor?.state();
     const origin = state?.origin ?? null;
     if (origin === null) {
@@ -625,7 +680,48 @@ export class IndexService {
         },
       );
     }
-    return (await response.json()) as T;
+    try {
+      return (await response.json()) as unknown;
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.index.unreadable_body",
+        "The index answered a body that is not JSON",
+        { path, error: error instanceof Error ? error.message : String(error) },
+      );
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        `the agent index answered an unreadable body on ${path}`,
+        true,
+        { service: "index", state: "malformed" },
+      );
+    }
+  }
+
+  /** The reads that are CAST, not parsed: the status, the roll call, the
+   * runtime rows. Nothing destructive hangs off them — a shape that drifts
+   * degrades a projection, and `index.status` is where that shows. The session
+   * rows do NOT come through here (AR-4 review; see `sessionByNativeId`). */
+  private async get<T>(path: string): Promise<T> {
+    return (await this.getBody(path)) as T;
+  }
+
+  /** The tolerant reader's logging half at this seam: keys this build has
+   * never heard of, said ONCE per shape and key, at debug. Cheap by
+   * construction — a Set, and only the ENVELOPE's keys: rosetta's rows are
+   * deliberately wider than fieldd's reading of them, so a column fieldd does
+   * not read is not drift, and naming it every poll would be noise. */
+  private noteUnknownFields(shape: string, body: unknown, known: readonly string[]): void {
+    if (typeof body !== "object" || body === null) return;
+    const fresh = Object.keys(body).filter(
+      (key) => !known.includes(key) && !this.seenUnknownFields.has(`${shape}.${key}`),
+    );
+    if (fresh.length === 0) return;
+    for (const key of fresh) this.seenUnknownFields.add(`${shape}.${key}`);
+    this.logger.debug(
+      "fieldd.index.unknown_fields",
+      "The index answered fields this build does not read",
+      { shape, keys: fresh },
+    );
   }
 }
 

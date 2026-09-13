@@ -301,6 +301,56 @@ export const IndexMutationResult = z
   .passthrough();
 export type IndexMutationResult = z.infer<typeof IndexMutationResult>;
 
+// ── rosetta's session rows, as fieldd READS them (AR-4) ──
+//
+// The one INBOUND rosetta shape VibeField parses instead of casting. It is the
+// evidence resume-when-idle decides on, and that act TERMINATES a live PTY
+// before it resumes the run — so the columns fieldd joins on are strict here,
+// and the tolerant reader's other half is `.passthrough()` at every level:
+// rosetta's own `SessionRow` is far wider than this reading, and a column it
+// adds must never make a session unreadable.
+//
+// Timestamps are epoch ms and must be FINITE — `JSON.parse("1e999")` is
+// `Infinity`, and an infinite `last_at` answers every idle question the same
+// way forever. Nothing here is a projection: these are rosetta's own keys,
+// snake_case, the way the enrollment record above spells its side.
+
+/** rosetta `SessionActivity`, mirrored: the bounds of recorded CONVERSATION
+ * activity (descendants included) — never ingestion progress or file dates.
+ * Order is NOT enforced here: bounds that contradict each other (`first_at`
+ * after `last_at`) are nonsense a reader folds to "no evidence", not a body to
+ * refuse — the rest of the row is still a usable identity. */
+export const IndexSessionActivity = z
+  .object({ first_at: z.number().finite(), last_at: z.number().finite() })
+  .passthrough();
+export type IndexSessionActivity = z.infer<typeof IndexSessionActivity>;
+
+/** rosetta `SessionRow`, NARROWED to the columns fieldd joins on. An absent
+ * `activity` reads as null — the same safe answer as an explicit null (no
+ * evidence is never idle), so a serializer that ever skips the field cannot
+ * make every pending run unresumable. */
+export const IndexSessionRow = z
+  .object({
+    /** rosetta's canonical session id */
+    id: z.string().min(1),
+    /** the provider-native id every repo joins on (fieldd's continuation) */
+    native_session_id: z.string(),
+    /** `== id` for a top-level session; a subagent's row rolls up to its root */
+    root_session_id: z.string(),
+    activity: IndexSessionActivity.nullable().default(null),
+    /** rosetta `StreamState` (`pending` | `streaming` | `indexed` today) —
+     * open vocabulary: a state this build never heard of is carried, not
+     * refused */
+    stream_state: z.string(),
+  })
+  .passthrough();
+export type IndexSessionRow = z.infer<typeof IndexSessionRow>;
+
+/** rosetta `SessionsResponse` — the body of `/api/sessions`, the one rosetta
+ * read fieldd parses. */
+export const IndexSessionsResponse = z.object({ sessions: z.array(IndexSessionRow) }).passthrough();
+export type IndexSessionsResponse = z.infer<typeof IndexSessionsResponse>;
+
 // ── agents.* (the distribution and persona doors; handlers land at AR-2 with
 // puppeteer's first import — these rows are the contract they will satisfy) ──
 

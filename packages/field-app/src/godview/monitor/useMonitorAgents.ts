@@ -7,7 +7,7 @@ import {
   type MonitorRemoteRecord,
   type MonitorTerminalRecord,
 } from "./agents";
-import type { AgentProviderSummary } from "./facet-types";
+import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
 import { type LocalFieldState, useLocalAgentField } from "./local-agent-field";
 import type { MonitorPalette } from "./monitor-palette";
 import { type MonitorDoor, remoteRowId } from "./remote-door";
@@ -112,6 +112,69 @@ interface RemoteLink {
 
 const NO_PANES: MonitorPaneFacts = { sessionIds: [] };
 
+/** AR-4b — how many times a replacement's hand-over is retried before the
+ * row is left as it is and the last reason stands. */
+const REMOUNT_ATTEMPTS = 3;
+
+/** The damage gate's key: the facts the projection DRAWS from a row, per row
+ * — the run and its epoch, the one derived status and when it changed, the
+ * observation level, the terminal join (and the PTY it replaced), the
+ * continuation's pending state, and from the mirror exactly what a view
+ * reads (the headline, the blockers, the last assistant line, the model, the
+ * context window, the cwd and branch, liveness) plus the mirror's own
+ * revision. Cheap where `JSON.stringify` of the whole fold was not — the
+ * mirror carries the subagent, workflow and team collections verbatim — at
+ * one frame per 16 ms while an agent is active. */
+function rowsKey(rows: readonly AgentSessionSummary[]): string {
+  return rows
+    .map((row) => {
+      const monitor = row.monitor;
+      const last = monitor?.lastAssistantMessage as { text?: unknown } | undefined;
+      return [
+        row.runtimeRunId,
+        row.runtimeEpoch,
+        row.sessionId,
+        row.kind,
+        row.label,
+        row.profileId ?? "",
+        row.status,
+        row.stateChangedAt,
+        row.lastActivityAt ?? "",
+        row.observationLevel,
+        row.createdAt,
+        row.title ?? "",
+        row.terminal?.hosted ?? "",
+        row.terminal?.runtimeSessionId ?? "",
+        row.terminal?.replaced ?? "",
+        row.terminal?.cellBootId ?? "",
+        row.workspace?.sourcePath ?? "",
+        row.workspace?.root ?? "",
+        row.workspace?.branch ?? "",
+        row.continuation?.pending ?? "",
+        row.continuation?.reattached ? 1 : 0,
+        monitor === undefined ? "-" : "m",
+        monitor?.revision ?? "",
+        monitor?.status ?? "",
+        monitor?.alive === undefined ? "" : monitor.alive ? 1 : 0,
+        monitor?.environment?.cwd ?? "",
+        monitor?.environment?.git === undefined ? "?" : (monitor.environment.git?.branch ?? "null"),
+        monitor?.model?.id ?? "",
+        monitor?.model?.displayName ?? "",
+        monitor?.context?.usedPercent ?? "",
+        monitor?.context?.usedTokens ?? "",
+        monitor?.context?.capacityTokens ?? "",
+        typeof last?.text === "string" ? last.text : "",
+        (monitor?.blockers ?? [])
+          .map(
+            (blocker) =>
+              `${blocker.id}:${blocker.kind}:${String((blocker as { tool?: unknown }).tool ?? "")}`,
+          )
+          .join(","),
+      ].join("\u0001");
+    })
+    .join("\u0002");
+}
+
 export function useMonitorAgents({
   palette,
   door = null,
@@ -162,7 +225,7 @@ export function useMonitorAgents({
    * below sees the same reference. Cheap at this size. */
   const stableRows = useRef(localField.rows);
   const stableKey = useRef("");
-  const key = JSON.stringify(localField.rows);
+  const key = rowsKey(localField.rows);
   if (key !== stableKey.current) {
     stableKey.current = key;
     stableRows.current = localField.rows;
@@ -242,23 +305,46 @@ export function useMonitorAgents({
    * shows is not this hook's business: the row is enough.
    */
   const remounted = useRef(new Set<string>());
+  const remounting = useRef(new Set<string>());
+  const remountAttempts = useRef(new Map<string, number>());
   useEffect(() => {
     if (door === null) return;
     for (const row of localRows) {
       const next = row.terminal?.runtimeSessionId;
       const old = row.terminal?.replaced;
       if (next === undefined || old === undefined) continue;
-      const key = `${old}\0${next}`;
-      if (remounted.current.has(key) || !paneSessionIds.has(old) || paneSessionIds.has(next))
-        continue;
-      remounted.current.add(key);
-      void door.mountLocal(next, { replacing: old }).then((outcome) => {
-        if (outcome.state === "mounted") announce(`${projectLabel(row)} resumed in its pane`);
-        else if (outcome.state === "failed")
+      const key = `${old}\u0000${next}`;
+      if (remounted.current.has(key) || remounting.current.has(key)) continue;
+      if (!paneSessionIds.has(old) || paneSessionIds.has(next)) continue;
+      // A key is recorded only when the mount LANDED (AR-4b): a failure — the
+      // floor not listing a just-born PTY yet, the pane closing under the
+      // wait — is retried on the next frame or pane change, a bounded number
+      // of times, and every outcome is said out loud.
+      const attempt = (remountAttempts.current.get(key) ?? 0) + 1;
+      remountAttempts.current.set(key, attempt);
+      remounting.current.add(key);
+      void door.mountLocal(next, { replacing: old }).then(
+        (outcome) => {
+          remounting.current.delete(key);
+          if (outcome.state === "mounted") {
+            remounted.current.add(key);
+            announce(`${projectLabel(row)} resumed in its pane`);
+            return;
+          }
+          const last = attempt >= REMOUNT_ATTEMPTS;
+          if (last) remounted.current.add(key);
+          if (outcome.state === "no-pane") {
+            announce(`${projectLabel(row)} resumed, but no pane was open to hand it to`);
+            return;
+          }
           announce(
-            `${projectLabel(row)} resumed, but its pane could not be handed the new terminal — ${outcome.reason}`,
+            `${projectLabel(row)} resumed, but its pane could not be handed the new terminal — ${outcome.reason}${last ? "" : "; trying again"}`,
           );
-      });
+        },
+        () => {
+          remounting.current.delete(key);
+        },
+      );
     }
   }, [door, localRows, paneSessionIds, announce]);
 

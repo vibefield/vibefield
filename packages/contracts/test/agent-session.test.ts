@@ -230,4 +230,23 @@ describe("LAYOUT (AR-4)", () => {
     expect(LAYOUT.AGENT_RUNS_DIR.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
     expect(LAYOUT_ROOT_LEVEL).not.toContain("AGENT_RUNS_DIR");
   });
+
+  it("AR-4b: the signing key sits beside the records, under the same tree", () => {
+    expect(LAYOUT.AGENT_SESSIONS_KEY_FILE).toEqual(["agents", "sessions.key"]);
+    expect(LAYOUT.AGENT_SESSIONS_KEY_FILE.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
+    expect(LAYOUT_ROOT_LEVEL).not.toContain("AGENT_SESSIONS_KEY_FILE");
+  });
+});
+
+describe("the record's tamper evidence (AR-4b)", () => {
+  it("carries a hex HMAC or nothing; a successor run is named by id", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    expect(record.signature).toMatch(/^[0-9a-f]{64}$/);
+    expect(AgentSessionRecord.safeParse({ ...record, signature: "not-hex" }).success).toBe(false);
+    const resumed = AgentSessionRecord.parse({
+      ...record,
+      reattach: { state: "resumed", at: record.createdAt, replacedBy: "run-next" },
+    });
+    expect(resumed.reattach?.replacedBy).toBe("run-next");
+  });
 });

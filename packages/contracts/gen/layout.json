@@ -123,6 +123,10 @@
     "agents",
     "runs"
   ],
+  "AGENT_SESSIONS_KEY_FILE": [
+    "agents",
+    "sessions.key"
+  ],
   "USERS_DIR": [
     "users"
   ],

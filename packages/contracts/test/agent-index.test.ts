@@ -8,6 +8,8 @@ import {
   INDEX_PHASES,
   IndexEnrollmentRecord,
   IndexPhase,
+  IndexSessionRow,
+  IndexSessionsResponse,
   IndexStatus,
 } from "../src/agent-index";
 import { METHODS } from "../src/methods";
@@ -208,6 +210,75 @@ describe("IndexPhase — the tolerant fold", () => {
       runtimes: [],
     });
     expect(status.phase).toBe("unknown");
+  });
+});
+
+describe("the session rows fieldd READS from rosetta (AR-4)", () => {
+  // Hand-written, deliberately fixture-free: the witness for this shape is
+  // rosetta's documented wire, and the row below is a FULL one — every column
+  // `SessionRow` carries, so the test also pins that a reading narrower than
+  // the wire stays a reading and never becomes a refusal. (fieldd's own suite
+  // parses the sibling's GENERATED type, where that package is on the graph.)
+  const row = {
+    id: "s1",
+    native_session_id: "nat-1",
+    runtime_id: "rt-1",
+    project_id: null,
+    cwd: null,
+    parent_session_id: null,
+    delegation: null,
+    root_session_id: "s1",
+    role: "main",
+    title: null,
+    summary: null,
+    started_at: 1_700_000_000_000,
+    updated_at: 1_700_000_100_000,
+    activity: { first_at: 1_700_000_000_000, last_at: 1_700_000_100_000 },
+    stream_state: "indexed",
+  };
+
+  it("parses a full rosetta row, keeps every column fieldd does not read, and carries an unheard-of stream_state", () => {
+    const parsed = IndexSessionsResponse.parse({ sessions: [row], cursor: "next-page" });
+    expect(parsed).toMatchObject({ cursor: "next-page" });
+    expect(parsed.sessions[0]).toMatchObject({ id: "s1", runtime_id: "rt-1", role: "main" });
+    expect(parsed.sessions[0]?.activity).toEqual({
+      first_at: 1_700_000_000_000,
+      last_at: 1_700_000_100_000,
+    });
+    expect(IndexSessionRow.parse({ ...row, stream_state: "hyperspace" }).stream_state).toBe(
+      "hyperspace",
+    );
+  });
+
+  it("refuses a stamp that is not finite: an infinite last_at would answer every idle question the same way forever", () => {
+    const infinite = JSON.parse('{"first_at":1,"last_at":1e999}') as Record<string, number>;
+    expect(Number.isFinite(infinite["last_at"])).toBe(false);
+    expect(IndexSessionRow.safeParse({ ...row, activity: infinite }).success).toBe(false);
+    expect(
+      IndexSessionRow.safeParse({ ...row, activity: { first_at: 1, last_at: Number.NaN } }).success,
+    ).toBe(false);
+  });
+
+  it("no evidence is a null activity, whether the field is null or absent — never a refusal", () => {
+    expect(IndexSessionRow.parse({ ...row, activity: null }).activity).toBeNull();
+    const { activity, ...withoutActivity } = row;
+    expect(activity.last_at).toBe(1_700_000_100_000);
+    expect(IndexSessionRow.parse(withoutActivity).activity).toBeNull();
+  });
+
+  it("bounds that contradict each other still parse: folding nonsense to 'no evidence' is the READER's job", () => {
+    expect(
+      IndexSessionRow.parse({ ...row, activity: { first_at: 2, last_at: 1 } }).activity,
+    ).toEqual({ first_at: 2, last_at: 1 });
+  });
+
+  it("refuses a row missing a column fieldd joins on, and an envelope that is not one", () => {
+    const { root_session_id, ...missingRoot } = row;
+    expect(root_session_id).toBe("s1");
+    expect(IndexSessionRow.safeParse(missingRoot).success).toBe(false);
+    expect(IndexSessionRow.safeParse({ ...row, id: "" }).success).toBe(false);
+    expect(IndexSessionsResponse.safeParse({}).success).toBe(false);
+    expect(IndexSessionsResponse.safeParse({ sessions: {} }).success).toBe(false);
   });
 });
 
