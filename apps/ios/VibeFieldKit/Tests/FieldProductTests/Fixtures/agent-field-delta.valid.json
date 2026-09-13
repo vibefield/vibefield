@@ -1,86 +1,76 @@
 {
-  "since": 41,
-  "revision": 42,
+  "since": 64,
+  "revision": 66,
   "upserts": [
     {
-      "runtimeRunId": "run-1",
-      "revision": 10,
+      "runtimeRunId": "run-blocked",
+      "revision": 65,
       "kind": "claude",
-      "label": "Claude",
+      "label": "Claude Code",
       "tier": "managed",
-      "device": "dev-3c4d",
-      "profileId": "claude:native-default",
+      "device": "dev-01HQ8ZK4M7",
       "status": "working",
-      "statusSince": "2026-09-13T12:02:04.000Z",
-      "stateChangedAt": "2026-09-13T12:02:04.000Z",
-      "createdAt": "2026-09-13T11:00:00.000Z",
-      "lastActivityAt": "2026-09-13T12:00:00.000Z",
+      "statusSince": "2026-09-13T18:45:03.000Z",
+      "stateChangedAt": "2026-09-13T18:45:03.000Z",
+      "createdAt": "2026-09-13T18:03:52.000Z",
       "alive": true,
       "blockers": [],
+      "lastActivityAt": "2026-09-13T18:45:03.000Z",
       "usage": {
-        "cumulativeTokens": 12345,
-        "burnRatePerMin": 321
+        "cumulativeTokens": 184320,
+        "burnRatePerMin": 1450
       },
       "context": {
-        "usedPercent": 20
+        "usedPercent": 38
       },
       "model": {
-        "id": "model-card-v2",
-        "displayName": "Model Card V2"
+        "id": "claude-opus-5",
+        "displayName": "Opus 5"
       },
       "effort": {
         "value": "high",
         "intent": "observed"
       },
       "project": {
-        "cwd": "/repo",
-        "branch": "main"
+        "cwd": "/Users/j/Projects/vibe-field",
+        "branch": "mf/fd1"
       },
       "terminal": {
         "hosted": "local",
-        "runtimeSessionId": "sess-01J8Z3K9",
-        "cellBootId": "cb-7f3a9c1e-2026",
+        "runtimeSessionId": "pty-a41f",
         "workloadClass": "agent"
       }
     },
     {
-      "runtimeRunId": "run-2",
-      "revision": 119,
+      "runtimeRunId": "run-idle",
+      "revision": 66,
       "kind": "claude",
-      "label": "Claude",
+      "label": "Claude Code",
       "tier": "managed",
-      "device": "dev-3c4d",
+      "device": "dev-01HQ8ZK4M7",
       "status": "working",
-      "statusSince": "2026-09-13T12:01:30.000Z",
-      "stateChangedAt": "2026-09-13T12:01:30.000Z",
-      "createdAt": "2026-09-13T10:12:00.000Z",
-      "lastActivityAt": "2026-09-13T12:01:58.000Z",
+      "statusSince": "2026-09-13T18:45:06.000Z",
+      "stateChangedAt": "2026-09-13T18:45:06.000Z",
+      "createdAt": "2026-09-13T18:29:41.000Z",
       "alive": true,
       "blockers": [],
-      "usage": {
-        "cumulativeTokens": 486100,
-        "burnRatePerMin": 5180
-      },
+      "lastActivityAt": "2026-09-13T18:45:06.000Z",
       "context": {
-        "usedPercent": 64
+        "usedPercent": 4
       },
       "model": {
-        "id": "model-card-v2"
-      },
-      "effort": {
-        "value": "high"
+        "id": "claude-sonnet-5",
+        "displayName": "Sonnet 5"
       },
       "project": {
-        "cwd": "/repo/apps/ios",
-        "branch": "mf/ios4"
+        "cwd": "/Users/j/Projects/vibe-field"
       },
       "terminal": {
         "hosted": "local",
-        "runtimeSessionId": "sess-01J8Z44M"
+        "runtimeSessionId": "pty-1c39",
+        "workloadClass": "agent"
       }
     }
   ],
-  "removed": [
-    "run-5"
-  ]
+  "removed": ["run-exited"]
 }

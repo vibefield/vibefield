@@ -1,114 +1,169 @@
 {
   "v": 1,
-  "deviceId": "dev-3c4d",
-  "publishedAt": 1757808000000,
-  "expiresAt": 1757808030000,
-  "revision": 41,
+  "deviceId": "dev-01HQ8ZK4M7",
+  "publishedAt": 1789671899000,
+  "expiresAt": 1789671929000,
+  "revision": 64,
   "rows": [
     {
-      "runtimeRunId": "run-1",
-      "revision": 9,
+      "runtimeRunId": "run-blocked",
+      "revision": 7,
       "kind": "claude",
-      "label": "Claude",
+      "label": "Claude Code",
       "tier": "managed",
-      "device": "dev-3c4d",
-      "profileId": "claude:native-default",
+      "device": "dev-01HQ8ZK4M7",
       "status": "blocked",
-      "statusSince": "2026-09-13T12:00:00.000Z",
-      "stateChangedAt": "2026-09-13T12:00:00.000Z",
-      "createdAt": "2026-09-13T11:00:00.000Z",
-      "lastActivityAt": "2026-09-13T12:00:00.000Z",
+      "statusSince": "2026-09-13T18:42:11.000Z",
+      "stateChangedAt": "2026-09-13T18:42:11.000Z",
+      "createdAt": "2026-09-13T18:03:52.000Z",
       "alive": true,
       "blockers": [
         {
-          "id": "permission-1",
+          "id": "perm-9f2c",
           "kind": "permission",
-          "since": "2026-09-13T12:00:00.000Z",
+          "since": "2026-09-13T18:42:11.000Z",
           "tool": "Bash"
         }
       ],
-      "usage": { "cumulativeTokens": 12345, "burnRatePerMin": 321 },
-      "context": { "usedPercent": 20 },
-      "model": { "id": "model-card-v2", "displayName": "Model Card V2" },
-      "effort": { "value": "high", "intent": "observed" },
-      "project": { "cwd": "/repo", "branch": "main" },
+      "lastActivityAt": "2026-09-13T18:42:11.000Z",
+      "usage": {
+        "cumulativeTokens": 184320,
+        "burnRatePerMin": 1450
+      },
+      "context": {
+        "usedPercent": 38
+      },
+      "model": {
+        "id": "claude-opus-5",
+        "displayName": "Opus 5"
+      },
+      "effort": {
+        "value": "high",
+        "intent": "observed"
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/vibe-field",
+        "branch": "mf/fd1"
+      },
       "terminal": {
         "hosted": "local",
-        "runtimeSessionId": "sess-01J8Z3K9",
-        "cellBootId": "cb-7f3a9c1e-2026",
+        "runtimeSessionId": "pty-a41f",
         "workloadClass": "agent"
       }
     },
     {
-      "runtimeRunId": "run-2",
-      "revision": 118,
-      "kind": "claude",
-      "label": "Claude",
-      "tier": "managed",
-      "device": "dev-3c4d",
-      "status": "working",
-      "statusSince": "2026-09-13T12:01:30.000Z",
-      "stateChangedAt": "2026-09-13T12:01:30.000Z",
-      "createdAt": "2026-09-13T10:12:00.000Z",
-      "lastActivityAt": "2026-09-13T12:01:58.000Z",
-      "alive": true,
-      "blockers": [],
-      "usage": { "cumulativeTokens": 480912, "burnRatePerMin": 5120 },
-      "context": { "usedPercent": 63 },
-      "model": { "id": "model-card-v2" },
-      "effort": { "value": "high" },
-      "project": { "cwd": "/repo/apps/ios", "branch": "mf/ios4" },
-      "terminal": { "hosted": "local", "runtimeSessionId": "sess-01J8Z44M" }
-    },
-    {
-      "runtimeRunId": "run-3",
-      "revision": 4,
+      "runtimeRunId": "run-working",
+      "revision": 41,
       "kind": "codex",
       "label": "Codex",
-      "tier": "ingested",
-      "device": "dev-3c4d",
-      "status": "idle",
-      "statusSince": "2026-09-13T11:40:00.000Z",
-      "stateChangedAt": "2026-09-13T11:40:00.000Z",
-      "createdAt": "2026-09-13T11:39:00.000Z",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-09-13T18:44:02.000Z",
+      "stateChangedAt": "2026-09-13T18:44:02.000Z",
+      "createdAt": "2026-09-13T17:58:20.000Z",
       "alive": true,
       "blockers": [],
-      "project": { "cwd": "/repo", "branch": null },
-      "terminal": { "hosted": "none" }
+      "lastActivityAt": "2026-09-13T18:44:59.000Z",
+      "profileId": "work",
+      "usage": {
+        "cumulativeTokens": 902140,
+        "burnRatePerMin": 5120
+      },
+      "context": {
+        "usedPercent": 72
+      },
+      "model": {
+        "id": "gpt-5-codex"
+      },
+      "effort": {
+        "value": "medium"
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/ice",
+        "branch": null
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-77b0",
+        "cellBootId": "cell-3",
+        "workloadClass": "agent"
+      }
     },
     {
-      "runtimeRunId": "run-4",
-      "revision": 2,
+      "runtimeRunId": "run-idle",
+      "revision": 3,
       "kind": "claude",
-      "label": "Claude",
+      "label": "Claude Code",
       "tier": "managed",
-      "device": "dev-3c4d",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-09-13T18:30:00.000Z",
+      "stateChangedAt": "2026-09-13T18:30:00.000Z",
+      "createdAt": "2026-09-13T18:29:41.000Z",
+      "alive": true,
+      "blockers": [],
+      "lastActivityAt": "2026-09-13T18:30:00.000Z",
+      "context": {
+        "usedPercent": 4
+      },
+      "model": {
+        "id": "claude-sonnet-5",
+        "displayName": "Sonnet 5"
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/vibe-field"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-1c39",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-pending",
+      "revision": 1,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
       "status": "unknown",
-      "statusSince": "2026-09-13T09:02:00.000Z",
-      "stateChangedAt": "2026-09-13T09:02:00.000Z",
-      "createdAt": "2026-09-13T08:55:00.000Z",
-      "alive": true,
-      "pending": "resume-when-idle",
-      "blockers": [],
-      "terminal": { "hosted": "local", "runtimeSessionId": "sess-01J8YYB1" }
-    },
-    {
-      "runtimeRunId": "run-5",
-      "revision": 77,
-      "kind": "claude",
-      "label": "Claude",
-      "tier": "managed",
-      "device": "dev-3c4d",
-      "status": "idle",
-      "statusSince": "2026-09-13T07:30:00.000Z",
-      "stateChangedAt": "2026-09-13T07:30:00.000Z",
-      "createdAt": "2026-09-13T06:00:00.000Z",
-      "lastActivityAt": "2026-09-13T07:29:40.000Z",
+      "statusSince": "2026-09-13T18:10:07.000Z",
+      "stateChangedAt": "2026-09-13T18:10:07.000Z",
+      "createdAt": "2026-09-13T11:22:05.000Z",
       "alive": false,
       "blockers": [],
-      "usage": { "cumulativeTokens": 91002 },
-      "project": { "cwd": "/repo" },
-      "terminal": { "hosted": "none" }
+      "pending": "resume-when-idle",
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-0b5e",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-exited",
+      "revision": 12,
+      "kind": "codex",
+      "label": "Codex",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-09-13T18:39:44.000Z",
+      "stateChangedAt": "2026-09-13T18:39:44.000Z",
+      "createdAt": "2026-09-13T16:41:12.000Z",
+      "alive": false,
+      "blockers": [],
+      "lastActivityAt": "2026-09-13T18:39:44.000Z",
+      "usage": {
+        "cumulativeTokens": 33110
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/vibe-field",
+        "branch": "main"
+      },
+      "terminal": {
+        "hosted": "none"
+      }
     }
   ]
 }

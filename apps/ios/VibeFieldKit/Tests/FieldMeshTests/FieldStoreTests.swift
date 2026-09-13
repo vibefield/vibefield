@@ -452,6 +452,12 @@ private let asleep = FieldStorePeer(id: "node-asleep", deviceId: "dev-asleep", o
   }
 
   /// The board, when it lands: `field.agents.v1` carries §10.1's slice.
+  ///
+  /// The payload here is deliberately MINIMAL and hand-built — what is under
+  /// test is the store carrying a board through, not the board's own shape.
+  /// The shape is pinned against the contracts' goldens in `FieldProductTests`,
+  /// which is where those files live; duplicating them into this bundle would
+  /// give one fixture two homes and one of them would go stale.
   @Test func anAgentFieldSliceReadsAsABoardWithItsExpiry() async throws {
     let (store, mesh) = try await standingStore(peers: [studio], storeId: "field.agents.v1")
     defer { store.unsubscribe() }

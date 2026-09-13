@@ -253,3 +253,71 @@ public struct AgentSubscribeParams: Sendable, Equatable {
     return .object(fields)
   }
 }
+
+// MARK: - The two doors §10.1 mints beside the field (G7, G4)
+
+/// `agent.interrupt`'s answer — the STOP verb's, pulled forward from AR-6 §3.
+///
+/// A refusal is a normal outcome and carries its reason: an exited or pending
+/// row cannot be interrupted, and the door says which. That is why this is a
+/// value and not a thrown error — "the agent would not stop, because it is
+/// waiting on a human" is something a card shows, not something it catches.
+public struct AgentInterruptResult: Sendable, Equatable, Decodable {
+  public let accepted: Bool
+  /// Present only on a refusal (the discriminated union's other arm).
+  public let reason: String?
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "AgentInterruptResult", value: json)
+    accepted = try object.requiredBool("accepted")
+    reason = object.string("reason")
+    unknownFields = object.unknownFields
+  }
+
+  public init(from decoder: any Decoder) throws {
+    try self.init(json: try JSONValue(from: decoder))
+  }
+}
+
+/// `terminal.mirrorWriteGrant`'s answer (G4): the mirror-write capability this
+/// device is granted, over the door instead of a pasted env var.
+///
+/// `capability` IS the secret. It leaves this struct exactly once — into
+/// `MirrorWriteStore`'s Keychain item — and it is deliberately kept out of
+/// `description`, out of any log line, and out of `unknownFields`. The
+/// `CustomStringConvertible` below is not decoration: a `print` of this value
+/// anywhere in a debug session would otherwise put a live write capability in a
+/// console, and the IOS-3c rule is that the secret is never displayed,
+/// exported, or logged.
+public struct TerminalMirrorWriteGrant: Sendable, Decodable, CustomStringConvertible {
+  public let capability: String
+  public let deviceId: String
+  public let issuedAt: Int64
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "TerminalMirrorWriteGrant", value: json)
+    capability = try object.requiredString("capability")
+    deviceId = try object.requiredString("deviceId")
+    issuedAt = try object.requiredInt("issuedAt")
+    unknownFields = object.unknownFields
+  }
+
+  public init(from decoder: any Decoder) throws {
+    try self.init(json: try JSONValue(from: decoder))
+  }
+
+  public var description: String {
+    "TerminalMirrorWriteGrant(deviceId: \(deviceId), issuedAt: \(issuedAt), capability: <redacted>)"
+  }
+}
+
+/// Equality that never compares the secret in a way a failure message could
+/// print. `Equatable` is synthesised nowhere near this type on purpose.
+extension TerminalMirrorWriteGrant: Equatable {
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.capability == rhs.capability && lhs.deviceId == rhs.deviceId
+      && lhs.issuedAt == rhs.issuedAt
+  }
+}
