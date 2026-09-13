@@ -36,6 +36,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
+import { MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS } from "../src/daemon";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { ProductApi } from "../src/product-api";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -491,5 +492,45 @@ describe("terminal.mirrorWriteGrant — agent-class principals", () => {
     const grant = (await rpc.call("terminal.mirrorWriteGrant", {})) as { capability: string };
     expect(grant.capability).toBe(CAPABILITY);
     expect(floor.mirrorWriteAsks).toBe(1);
+  });
+
+  it("refuses a caller CLAIMING an agent client kind, and ledgers that attempt too", async () => {
+    // §11.2 — clientKind is a hello claim and may only ever RESTRICT. A liar
+    // pays nothing for saying "renderer", which is why the principal half above
+    // is the wall; this half costs an HONEST agent integration (an MCP bridge
+    // dialing the local door with a terminal.attach token and saying what it is)
+    // exactly the key it should not be holding. It is also the only half of the
+    // mcp-agent refusal that is reachable from the wire today.
+    const { daemon, floor, dataDir } = await fieldd(CAPABILITY);
+    const grant = daemon.tokens.mint(["terminal.attach"], "an-agent-bridge");
+    const rpc = await open(daemon.controlPort);
+    await helloAs(rpc, grant.token, "mcp-agent");
+
+    const error: RpcErrorShape = await rpc.callErr("terminal.mirrorWriteGrant", {});
+    expect(error.data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(error.data?.details).toMatchObject({ clientKind: "mcp-agent" });
+    expect(floor.mirrorWriteAsks).toBe(0);
+
+    await daemon.stop();
+    const lines = grantLines(dataDir).filter(
+      (line) => line.action === "capability.mirror_write.grant",
+    );
+    expect(lines.map((line) => line.phase)).toEqual(["attempt", "outcome"]);
+    expect(lines.at(-1)).toMatchObject({ outcome: "failed", reasonCode: "FORBIDDEN_SCOPE" });
+  });
+
+  it("holds the refused PRINCIPAL kinds, including the one nothing mints yet", async () => {
+    // The door's other half cannot be driven from the wire: nothing in this
+    // repo constructs an `mcp-agent` PRINCIPAL (contracts declares the kind and
+    // audit-service maps it; there is no minting site), so a wire row for it
+    // would be a row about nothing. The set is what a test can hold — it fails
+    // the day the kind is quietly dropped — and the plugin row above is what
+    // proves the set is the thing the door actually consults.
+    expect([...MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS].sort()).toEqual(["mcp-agent", "plugin"]);
+    // and the principals that must keep reaching it: the desktop's own windows
+    // and a self peer on the phone
+    for (const served of ["local-token", "shell-main", "tailnet"] as const) {
+      expect(MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS.has(served), served).toBe(false);
+    }
   });
 });

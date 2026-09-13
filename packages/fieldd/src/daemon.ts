@@ -25,6 +25,7 @@ import {
   ArtifactRefreshPreviewParams,
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
+  type CallerContext,
   CONTRACTS_VERSION,
   DeviceGetParams,
   DocCreateParams,
@@ -362,6 +363,17 @@ export interface FielddDaemon {
 
 /** The daemon's own version, published in the device slice (package version). */
 const FIELDD_VERSION = "0.1.0";
+
+/** FD-2 (EL7) — the principal kinds `terminal.mirrorWriteGrant` refuses outright.
+ * Exported because it is the only half of that guard a test can hold: the door's
+ * other refusals are provable end to end (a plugin principal, a guest, a peer, a
+ * scopeless token), while an `mcp-agent` principal cannot be MINTED anywhere in
+ * this repo today — so a wire row for it would be a row about nothing. A test
+ * that pins this set fails the day the kind is quietly dropped from it, and the
+ * plugin row beside it proves the set is what the door actually consults. */
+export const MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS: ReadonlySet<
+  CallerContext["principal"]["kind"]
+> = new Set(["plugin", "mcp-agent"]);
 
 export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   const bootId = `fieldd-${randomBytes(8).toString("hex")}`;
@@ -1896,15 +1908,33 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // revocable only by rotating the floor's one capability. Attaching to
           // a PTY on this device and holding the key to every mirrored session
           // on the tailnet are different powers. Same-uid agents are the
-          // adversary, so both agent-class principals are refused here; the
-          // refusal is inside the audited effect on purpose, because an agent
-          // reaching for this key is exactly what the grants ledger is for.
-          if (ctx.principal.kind === "plugin" || ctx.principal.kind === "mcp-agent")
+          // adversary, so an agent-class principal is refused here; the refusal
+          // is inside the audited effect on purpose, because an agent reaching
+          // for this key is exactly what the grants ledger is for.
+          //
+          // TWO halves, because the two facts have different standing. The
+          // PRINCIPAL is transport-derived and unspoofable — that is the wall.
+          // The clientKind is a hello CLAIM and may only ever RESTRICT (§11.2,
+          // the shape `plugins.openRendererSession` uses below): a caller that
+          // says it is an agent is taken at its word, which costs a liar
+          // nothing and costs an honest MCP bridge exactly the key it should
+          // not be holding. Today the claim is the only reachable half —
+          // NOTHING in this repo mints an `mcp-agent` principal (the kind is
+          // declared in contracts and mapped by the audit service, and that is
+          // all), so the set below is what a test can hold until one exists.
+          if (
+            MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS.has(ctx.principal.kind) ||
+            ctx.clientKind === "mcp-agent"
+          )
             throw new RpcCallError(
               "FORBIDDEN_SCOPE",
               "terminal.mirrorWriteGrant is not available to plugin or agent principals",
               false,
-              { method: "terminal.mirrorWriteGrant", principal: ctx.principal.kind },
+              {
+                method: "terminal.mirrorWriteGrant",
+                principal: ctx.principal.kind,
+                ...(ctx.clientKind !== undefined ? { clientKind: ctx.clientKind } : {}),
+              },
             );
           const floor = await native.mirrorWriteCapability();
           if (!floor.configured || floor.capability === undefined)
