@@ -5136,7 +5136,14 @@ record's presence). `agent.list` answers it; `agent.subscribe` streams FULL fram
 per 16 ms tick per subscriber (the runtime's own coalescing set to the same tick — PF5). The
 golden is puppeteer's OWN monitor contract fixture, transcribed
 (`fixtures/agent-monitor-state.valid.json`), with `AGENT_MONITOR_SCHEMA_VERSION` pinned at 2: a
-generation bump upstream is a red gate here.
+generation bump upstream is a red gate here **(errata 2026-09-13, found by AR-4b's review: it was
+NOT one when this was written and was not one until AR-4b — nothing in the tree read puppeteer's
+constant, so a bump drifted silently and surfaced, if at all, as the runtime's
+`fieldd.agents.monitor_shape_drift` warn. `packages/fieldd/test/agent-monitor-pin.test.ts`
+(AR-4b, `8c0725a5`) asserts the contract's generation IS the PINNED puppeteer's and that the golden
+is of that generation, which makes the sentence true from that commit. Its limit, stated: a field
+RENAME without a generation bump is still only the runtime warn — the mirror is a passthrough by
+law, and nothing can gate a shape the upstream constant does not move)**.
 
 **The doors.** `agent.providers` (what one can spawn as: every composed provider, whether an
 install resolved, whether its adapter resumes, its personas) · `agent.spawn` (provider, cwd,
@@ -5175,7 +5182,12 @@ the projection reads `AgentSessionSummary` (status from fieldd's one derived wor
 the blockers or the latest assistant line, model and context window from the mirror); the deck
 publishes its panes' floor summaries so an unclaimed pane is a terminal row and a managed row
 carries its PTY's summary; a managed row's id is its floor session id, so the pane join and the
-placement survive the promotion, and its accent is by RUN, so it survives the pane. The chrome's
+placement survive the promotion, and its accent is by RUN, so it survives the pane **(errata
+2026-09-13 — the id half is REVERSED at AR-4b `8c0725a5`: a managed row's id is its RUN
+(`managedRowId` = `runtimeRunId`) and the pane join is the summary's own `agent.session?.id`. The
+ruling here made the row's identity the thing AR-4 taught to change: a resume-when-idle's PTY swap
+or an exit destroyed the row and took the swarm's bubble and the preview highlight with it. The
+accent-by-run half stands, and is now what the whole row does)**. The chrome's
 chip counts managed agents and is absent at zero (quiet is the honesty); the fold's
 unavailability is said in fieldd's words; the header gained a provider select and SPAWN. Select
 MOUNTS a local row's PTY in the active pane (`terminal.sessions` → the workspace's own
@@ -5188,7 +5200,10 @@ stage never says "mock", and a local row's select answers through the door's loc
 **Witnessed.** Over the mock mgmt server: the providers door, the scope gates, a spawn with no
 floor refusing in the floor's own words with the audit saying failed and nothing recorded. Over
 the REAL field-native, with a SCRIPTED provider (an adapter that owns nothing but a recipe and
-asks the host for `/bin/sh -c 'env > "$SCRIPTED_ENV_OUT"; exec /bin/cat'`): the PTY on the agent
+asks the host for `/bin/sh -c 'env > "$SCRIPTED_ENV_OUT"; exec /bin/cat'` — **errata 2026-09-13:
+the recipe quoted here is AR-3's; AR-4b's is `env > "$SCRIPTED_ENV_OUT.part" && mv "$SCRIPTED_ENV_OUT.part" "$SCRIPTED_ENV_OUT"; exec /bin/cat >>
+"$SCRIPTED_TYPED_OUT"`, because the automation witness now reads the typed bytes back out of
+`cat`'s own stdout rather than trusting the floor's `accepted`**): the PTY on the agent
 cell; the environment read from INSIDE it — the adapter's token present, `TERM`/`HOME`/`PATH`/
 `USER` present, the adapter's own `FIELDD_SMUGGLED` absent, not one `FIELD_*`/`FIELDD_*` key,
 none of the daemon's; the row with its cell tag; the record 0600 under a 0700 directory; the
@@ -5308,7 +5323,12 @@ the floor, the attached run refusing a resume, the ordinary exit after. WITHOUT 
 row as stated (`reattach: unsupported`, the audit's `ATTACH_UNSUPPORTED`), the PTY listed and
 unobserved; `agent.resume` replacing it — the old PTY gone before the new run was born, the
 adapter's `resume` = the native id, both records as stated, the fold holding the new run only,
-`how: manual` in the ledger. Resume-when-idle against the fake rosettad's new
+`how: manual` in the ledger **(errata 2026-09-13: it was in the ledger TWICE when this was
+written — the door's own caller-actor `agent.session.resume` entry and, under it, the daemon's
+system-actor entry with `how: manual`, one human act attributed to two actors. At AR-4b `8c0725a5`
+a manual resume is ledgered ONCE, at the caller's entry, whose outcome attrs carry `how: "manual"`
+and the PTY it `replaced`; the system actor now ledgers only what the daemon itself began,
+`how: "idle"`)**. Resume-when-idle against the fake rosettad's new
 `/api/sessions?native_session_id=` route (rows from a JSON file re-read per request): pending
 while the index served no row, pending while the row's activity was a second old, replaced by the
 daemon itself once the row said a minute still (`how: idle`, the system actor). A record whose
@@ -5325,7 +5345,14 @@ hook LOSES the process — 4 of 4 attempts without a hold (the second boot found
 stamped the record); with a 3 s hold the PTY survives every time (3 of 3). The driver's detaching
 dispose while the TUI is still starting — the bridge closed, the staged `--settings` file and
 hook forwarder removed (`cleanupClaudeSession`) — is the suspect; NOT isolated (PU-11, a note:
-worth a probe upstream before it becomes a rule here). (2) The observed inventory lists a
+worth a probe upstream before it becomes a rule here). **(errata 2026-09-13: the suspect was the
+cause, and it is fixed. AR-4b's upstream reviewer PROBED the detach on the real runtime — the
+staged settings file and the hook forwarders VANISH under the running TUI — and puppeteer
+`8402184` makes the runtime's detach RELEASE its bindings instead: the claude binding drains its
+bridge and KEEPS the process's files. The same deletion is why the hook rail exec'd a deleted
+script after every re-attach, not only why a fast stop lost the process. The 3 s hold is retired —
+AR-4b's witness stops one second after a POLL sees `native-hooks`, and the process survives.)**
+(2) The observed inventory lists a
 just-born PTY only after a beat, the terminate-side lag of AR-3 seen from the list side: the
 witnesses poll the listing rather than read it once. (3) A daemon act's audit outcome needs a
 CODE for `reasonCode` (`[A-Z][A-Z0-9_]*`) — the first draft put the state word there and the
@@ -5344,11 +5371,193 @@ passed, 6 ignored · `pnpm gen:check` clean · `pnpm smoke:godview` exit 0 first
 (`monitorLocalState: live`, the deck's own pane as its one row, canvas2d, cold open 286 ms) ·
 the fieldd agent-session suite 11/11 with `FIELDD_TEST_REAL_AGENT=1`. Measured on the working
 tree before the commit; `ba1a1eab` differs from it only by biome's reflow of five files (the four
-fixtures and the fieldd test). The runner's second pass found the one biome warning in
-`useMonitorAgents.ts` (a suppression with no effect) was AR-3's, not older debt; removed in the
-follow-up commit. **Still owed:** the
+fixtures and the fieldd test). **(Amended 2026-09-12:)** The runner's second pass found the one
+biome warning in `useMonitorAgents.ts` (a suppression with no effect) was AR-3's, not older debt;
+removed in the follow-up commit. **Still owed:** the
 Agents settings section (the persona login pane's UI; `agents.manage` on a window); AR-5 the
 views port; `agent.control` (AR-6); PU-11 above and PU-10; the ingested tier's rows (AR-8); the
 dev-local snapshot of the draft docs (James's ritual); the DESIGN.md Godview citation (James's
 live edit); the upstream pins still unpushed (puppeteer `d013fef`, rosetta `af6f0d7`);
 `SIBLINGS_TOKEN`.
+
+## AR-4b — the review's fixes: signed records, the agent cell, verdicts and fences, the locality column enforced, the release path upstream (2026-09-13)
+
+**AR-4b is what six reviewers found** (`8c0725a5`; puppeteer `8402184` upstream, pinned). AR-3 and
+AR-4 landed in one day and were read the next by six Opus agents at six lenses — the fieldd state
+machine, EL7, the contracts and this ledger's own claims, the renderer, the tests, and the
+upstream landing. Every blocker and major is fixed by hand here; the minors and the witnesses by
+agents. Nothing about AR-4's SHAPE changed: the re-attach is still the resting state, resume-when-
+idle still the fallback on rosetta's evidence. What changed is what that shape TRUSTS, and what it
+does when a step does not answer.
+
+**The security seam (EL7): a record fieldd did not write is not a record.** Every session record
+fieldd writes now carries a `signature` — HMAC-SHA256 over its canonical JSON (keys sorted at
+every level), keyed by a 32-byte secret minted once per user root at
+`LAYOUT.AGENT_SESSIONS_KEY_FILE` (`users/<fuid>/agents/sessions.key`, 0600, created with `wx` so a
+loser of the race never inherits the winner's key). A record with NO signature, with one that does
+not verify, or exposed to other users by its own mode is SET ASIDE at read with its own log event
+(`session_record_unsigned` / `_forged` / `_exposed`) and never acted on; temp files are private
+(`wx` + a random suffix) and owner-only modes are re-asserted after every write
+(`SessionRecordStore`, `packages/fieldd/src/agent-sessions.ts`). Why this is a MAJOR and not
+hygiene: same-uid agents are the adversary, and before it a file dropped into `agents/sessions/`
+was a boot-time instruction — it could make fieldd TERMINATE any live PTY (through the pending
+path's replacement) and launch the vendor with an attacker-chosen cwd and persona. The other half
+of the same seam is the cell: the re-attach acts only on PTYs whose inventory row sits on the
+AGENT cell (`cell.workloadClass === "agent"`); a record naming any other terminal is refused and
+logged (`reattach_refused_cell`), never held, and the replacement re-checks the cell before it
+terminates anything.
+
+**The state machine: verdicts, not hopes.** The durable CLAIM is the authority on the epoch — before
+attaching, fieldd reads it (`CreationRequestRegistry.lookup`, new upstream) and attaches at the
+claim's epoch (`epoch_resynced`), because upstream's `restoreSession` increments the epoch FIRST
+and can still fail after: a host that kept the record's epoch was refused on every boot after one
+such failure. A missing or terminal claim is held pending with that reason. The fold is updated
+INSIDE the audited act (`attachRecord`), so a ledger write that fails after the effect leaves
+nothing orphaned — before, a successful attach whose audit outcome was refused left a run live in
+puppeteer and invisible to fieldd. A record whose PTY the FIRST inventory lacks is held for the
+exit grace (`EXIT_GRACE_MS` 1.5 s, `awaitingBoot`) and attached if the PTY appears; only then is
+it stamped `unknown` — one frame is not a death, which is AR-3's own grace applied at the boot
+edge. The replacement's wait for the old PTY is now a VERDICT: `awaitGone` returns false at the
+5 s grace, a PTY that outlives it REFUSES the replacement (`PRECONDITION_FAILED
+{state: "terminal-alive"}`), the run stays pending and the poll re-arms — never two processes on
+one native session, which is the one thing a resume must never make; `terminal.terminate`
+answering `terminated: false` is read as already gone (AR-3's finding, from the other side). Every
+throw before the point of no return restores the pending entry (`resuming` reset, the poll
+re-armed) — before, one throw, the audit's own attempt append among them, wedged that row forever.
+A record already resumed into another run refuses a second resume (`PRECONDITION_FAILED
+{state: "replaced", replacedBy}`) and the old record now names both sides (`reattach {state:
+"resumed", replaced: <old PTY>, replacedBy: <new runtimeRunId>}`); a replacement whose resume
+FAILS stamps `exited.reason: "replace-failed"`, not `"replaced"` — a stamp that said a successor
+exists when none did. `dispose` fences replacements in flight (it waits up to
+`DISPOSE_REPLACEMENT_WAIT_MS`, 10 s) and a replacement refuses to start once the service is
+stopping; an `enter`/`hold` after a stop writes the record for the next boot but touches neither
+map. A persona's delete also terminates the live terminals its RECORDS name — a run mid-attach is
+in neither map — and the re-attach skips records of a persona mid-deletion. The idle poll BACKS
+OFF while the index cannot answer (×2 per unanswered poll, ceiling `RESUME_POLL_MAX_MS` 60 s), and
+a `last_at` that is not a finite time in the past is no evidence at all. A manual resume is
+ledgered ONCE, at the door's own caller-actor `agent.session.resume` entry whose outcome attrs
+carry `how: "manual"` and the PTY it `replaced` (`daemon.ts`); the SYSTEM actor now ledgers only
+what the daemon itself began (`how: "idle"`) — see AR-4's errata above.
+
+**The contracts.** `IndexService.sessionByNativeId` PARSES rosetta's body instead of casting it:
+`IndexSessionsResponse` / `IndexSessionRow` / `IndexSessionActivity`
+(`packages/contracts/src/agent-index.ts`) are passthrough at every level with finite stamps and
+`activity` null when absent, unknown envelope fields log once at debug — the tolerant reader's
+SECOND half, which this seam had skipped — a body it cannot vouch for answers `UNAVAILABLE
+{state: "malformed"}`, and nonsense bounds (`first_at > last_at`) fold to null. And D36's
+`locality` column is ENFORCED at last (`product-api.ts`): a method declared `local` is refused for
+a peer-fieldd principal (`FORBIDDEN_SCOPE`, naming the locality) and never forwarded to a foreign
+`device` (`PRECONDITION_FAILED`); `device` = self still serves locally. The column had no consumer
+from the day it was declared, so every method declared local federated in fact, and AR-3/AR-4
+declared the `agent.*` doors — a spawn, a resume that terminates a PTY — local into that gap. The
+gap is pre-existing; AR-4b closes it for all 131 local rows. `methods.ts` gained a dated scope
+exception on the `agent.resume` row: it rides `agent.spawn` although it now ends a live PTY,
+accepted because the door's params name a RUN, fieldd resolves the PTY through the record it wrote
+AND verified, and only agent-cell PTYs are ever re-adopted — with the named upgrade written down
+for the day an agent cell adopts a PTY the record did not mint.
+
+**The renderer.** The BLOCKER was the replacing mount: `mountLocal(id, {replacing})` fell through
+to whichever pane the user was in when the pane holding the replaced PTY could not be activated
+(it closed under the wait), which put a resumed stranger in front of the user and left the dead
+terminal where it was. It REFUSES now, mounting nothing; mounts are serialized through one queue
+so two replacements in a frame cannot race for the active-pane slot; the workspace context is
+re-read AFTER the floor round trip; `mounted` is answered only when the layout actually shows the
+session (a bounded `settled()` poll); and the user's previous pane is given back if it still
+exists. The deck's pane-facts gate now keys on every fact the monitor DRAWS — per pane the id,
+`exited`, the activity kind, the title and the cwd — an AR-3 defect: keyed on ids and the active
+pane alone, the summaries AR-3 added never republished, so an exited pane stayed a live row and a
+terminal's activity never moved. The remount effect records a replacement key only when the mount
+LANDED and retries a failure on the next frame or pane change up to `REMOUNT_ATTEMPTS` (3),
+announcing `no-pane`; the fold's damage gate keys on the drawn fields per row (`rowsKey`) rather
+than `JSON.stringify` of the whole fold, which carried puppeteer's subagent/workflow/team
+collections verbatim. A managed row's monitor id is now the RUN (`managedRowId` =
+`runtimeRunId`) so a resume-when-idle's PTY swap and an exit no longer destroy the swarm's bubble
+or the preview highlight, with the pane join kept as the floor session id — the reversal of AR-3's
+ruling, recorded there too. The replaced PTY is no longer drawn as a phantom unclaimed terminal
+row; a pending row whose mirror says not-alive is dropped (the alive drop precedes the pending
+reading); the spawn controls wear DESIGN.md §8's muted disabled treatment (opacity 0.4) instead of
+looking live; and `remote-session-field.ts`'s header no longer claims a mock module beside it.
+
+**Upstream** (puppeteer `8402184`, PU-1b, pinned in `siblings.lock.json`). The runtime's detach
+path RELEASES its bindings now — `AgentAdapterBinding.dispose({ release })` — and the claude
+binding drains its bridge (in-flight posts complete, `HookBridge.dispose({ drain })`) and KEEPS
+the staged settings file and the hook/status-line forwarders. That is PU-11's ROOT CAUSE, probed
+on the real runtime by the review's upstream reader: a plain dispose deleted those files under the
+running TUI, which is both why a stop within a second of the first hook lost the process and why
+the hook rail exec'd a deleted script after every re-attach. With it: `CreationRequestRegistry
+.lookup`; `attach` validates identity BEFORE it binds (a run already managed answers unbound; a
+missing or terminal claim and a stale epoch are refused naming the claim's epoch — all before the
+provider takes the port or a workspace is built); a bind that fails inside the restore no longer
+marks the LIVE process's claim terminal (`RestoreAgentSessionOptions.attaching`); a workspace the
+attach merely RESUMED is never destroyed; a `/clear` typed while no host listened is followed (the
+first authenticated hook under a new id with a transcript under the same root rotates the attached
+session, once); configured intent is not published for an attached process. RFC 003 carries its
+"Amended 2026-09-13 (PU-1b…)" and puppeteer's CLAUDE.md names the host's ingress record as the one
+exception to its bearer invariant.
+
+**Witnessed.** The REAL Claude Code re-attached across a fieldd restart with the stop issued right
+after its hooks arrived — a POLL for `native-hooks` plus one second, no blind 3 s hold — and its
+hooks flowed again at the re-bound bridge; the re-attached session then FOLLOWED an in-process
+`/clear` rotation, its native id changing under a row that kept its run. In the suites: the EL7
+witness asserts the PTY's key SET is a subset of the allow-list (a deny-list would pass a leak)
+with `VITEST` absent against a control that proves the harness has it; the scripted adapter reports
+a bound ingress pair and the record and the attach carry it; "the old PTY is gone BEFORE the new
+run is born" is a 5 ms poll against the new session's birth instant rather than an ordering
+assumed; audit assertions are STRUCTURED (attempt + outcome joined by `operationId`); the
+canonical-row preference is tested with a decoy subagent row placed FIRST in both directions;
+`activity: null` and index-down windows are rows of their own; the poller's requests are counted
+(`FAKE_ROSETTAD_REQUEST_LOG`); the teardown kills the native tree before removing the root; the
+real-claude rows assert `native-hooks`, the PTY alive at the SECOND boot, and
+`application-terminated`; and the automation witness reads the typed bytes back out of `cat`'s own
+stdout (the recipe grew `>> "$SCRIPTED_TYPED_OUT"` — see AR-3's errata). Three coverage rows
+answer the state machine's own edges: a PTY killed out of band withdraws the row and stamps the
+record; the index down under a pending run stays pending, and a stop under the armed poll RELEASES
+the PTY (a THIRD boot still lists it); and one record's trouble does not end the re-attach — a
+record naming a vanished provider is held pending while the good one attaches. The monitor pin is
+a test now (`packages/fieldd/test/agent-monitor-pin.test.ts`): the contract's
+`AGENT_MONITOR_SCHEMA_VERSION` must equal the PINNED puppeteer's own constant and the golden must
+be of that generation. In the renderer: the once-guard exercised by re-delivering frames through a
+`push` handle; a run keeping its row id and its accent through the PTY swap; the phantom row; the
+classifier order; the `act()` warnings gone; and a deck-level suite for the replacing mount
+(`packages/field-app/test/godview-deck.test.tsx`, five rows against a workspace probe that
+reproduces ghosttea's two properties — a mount lands in whatever pane is ACTIVE, and an activation
+is observable only a turn later) covering the pane a replacement belongs in, the refusal when no
+pane shows the replaced PTY, the refusal when that pane never takes focus, two replacements
+serialized, and the plain mount.
+
+**Found.** (1) The upstream probe turned PU-11 from a suspicion into a cause and a fix — recorded
+at AR-4's finding, at the petition, and above. (2) `deletePersona` under a LIVE run is still
+untested: the scripted provider has no profile service to delete a persona through, so the delete
+ladder's newest rung (terminating the terminals a RECORD names) is code without a witness. Said
+plainly rather than counted as covered. (3) PU-12, a note: `providerVersion` is not persisted on
+the session record, so a re-attached session's OTLP usage rail reads as unverified — the version
+the run was born under is not recoverable after a restart.
+
+**Gate:**
+**Gate** (a delegated Opus runner, verbatim, on the working tree before this commit — three
+files of the lead's were then biome-formatted, two HEAD tests moved onto federating probes and
+re-run green with the routing suite (28 tests), the scripted environment write made atomic and
+the agent-session suite re-run 12/12, and `pnpm lint` re-run): `pnpm verify` stops at
+`pnpm lint` — 4 errors, all in James's untracked `work/composer-directions.html` (42
+pre-existing warnings elsewhere) · preflight OK (2 dirty-sibling warnings) · check-single-copy
+ok · icons current · `pnpm typecheck` 25 projects · `cargo fmt --check` clean · clippy
+`-D warnings` clean · `pnpm bundle:assert` OK (initial 530.6 KB raw / 143.1 KB gz) ·
+`pnpm test`: 333 files passed, 3 failed — `guest-door` and `peer-link.e2e` (HEAD rows that
+probed federation through local-only doors; the new D36 gate refused them, deterministically —
+moved, as recorded above) and `agent-session`'s clean-environment row (green alone: a
+half-written environment file, since written atomically) · `pnpm test:rust` 241 passed, 6
+ignored · `pnpm gen:check`: the only diff was the two regenerated layout outputs, unstaged at
+the time and byte-identical before and after `pnpm gen` · `pnpm smoke:godview` exit 0 ·
+`pnpm smoke` exit 0 (native connected, five units) · the fieldd agent-session suite 14/14 with
+`FIELDD_TEST_REAL_AGENT=1` (51.8 s): the real Claude Code alive and `native-hooks` after five,
+re-attached at epoch 2 on the pinned port with the stop issued right after its hooks arrived,
+the hooks flowing again, terminated `application-terminated` 143 — with two lines worth an
+eye: the AR-3 row's terminate still reads `exited.reason: "unknown"` (the backstop won over the
+floor's exit facts on that row; intermittent, TC's), and the prompt receipt after the re-attach
+is `uncertain` while the hooks nonetheless arrive.
+
+**Still owed:** `deletePersona` under a live run (above); PU-12 upstream; the Agents settings
+section (the persona login pane's UI; `agents.manage` on a window); **AR-5** the views port;
+`agent.control` (AR-6); the ingested tier's rows (AR-8); the upstream pins still UNPUSHED
+(puppeteer `8402184`, rosetta `af6f0d7`); the dev-local snapshot of the draft docs (James's
+ritual); the DESIGN.md Godview citation (James's live edit); `SIBLINGS_TOKEN`.
