@@ -18,7 +18,7 @@ import {
   type UsageLedgerKey,
 } from "@vibecook/puppeteer-views";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { projectKey, projectLabel } from "./agent-status";
+import { blockerTool, projectKey, projectLabel } from "./agent-status";
 import {
   assembleMonitorAgents,
   type MonitorManagedRecord,
@@ -233,11 +233,12 @@ function rowsKey(rows: readonly AgentSessionSummary[]): string {
         monitor?.context?.usedTokens ?? "",
         monitor?.context?.capacityTokens ?? "",
         typeof last?.text === "string" ? last.text : "",
+        // The same nested read the detail line makes (`blockerTool`): keyed on
+        // the root field, this gate was blind to the one thing the row draws
+        // about a permission, so a blocker that changed only its tool never
+        // re-rendered the list (GT-6 review — the defect had two homes).
         (monitor?.blockers ?? [])
-          .map(
-            (blocker) =>
-              `${blocker.id}:${blocker.kind}:${String((blocker as { tool?: unknown }).tool ?? "")}`,
-          )
+          .map((blocker) => `${blocker.id}:${blocker.kind}:${blockerTool(blocker) ?? ""}`)
           .join(","),
       ].join("\u0001");
     })

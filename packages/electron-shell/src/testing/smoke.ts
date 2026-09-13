@@ -2954,6 +2954,15 @@ export async function runSmokeGodview(opts: {
     //     never a terminal title. The narrow tier is asserted ABSENT: the
     //     smoke's window is wide, and a frame that thought otherwise would be
     //     hiding the readout on every pane in the deck.
+    //
+    //     THE ABSENCE IS NOT SELF-PROVING, and its other half is deliberately
+    //     elsewhere (GT-6 review): only the views package writes
+    //     `data-vf-narrow`, so a rename upstream would leave this selector
+    //     matching nothing and this row green over a claim about nothing.
+    //     `field-app/test/godview-pane-frame-narrow.test.tsx` is the witness
+    //     that the name below is the name the package sets, and that the
+    //     package sets it by MEASURING the pane rather than by a fixture
+    //     asserting it.
     const paneFrame = (await win.webContents.executeJavaScript(
       `(() => {
          const deck = document.querySelector(".vf-godview-terminal-deck .vf-deck-zoom");

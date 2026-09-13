@@ -305,6 +305,13 @@ describe("UI system ownership boundaries", () => {
     expect(preview).toContain("paneFrameAgentFacts");
     expect(preview).not.toContain("<style");
     expect(preview).not.toMatch(/className="vf-pane-/);
+    // GT-6 review: the specimens mount the PORTAL, not only the markup half —
+    // a pane element, a real width, and the package's own observer deciding
+    // what that width means. The narrow tier is the case that bites: a fixture
+    // writing `data-vf-narrow` by hand shows a state nothing computed, and the
+    // smoke selects on that same attribute.
+    expect(preview).toMatch(/<PaneFrame\s/);
+    expect(preview).not.toContain('"data-vf-narrow"');
   });
 
   it("keeps the swarm's own styling in the views package, never in godview.css (AR-5)", () => {

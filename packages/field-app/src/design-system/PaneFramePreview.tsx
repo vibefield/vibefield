@@ -1,10 +1,11 @@
 import {
+  PaneFrame,
   PaneFrameChrome,
   type PaneFrameSession,
   type PaneFrameVerbs,
   paneFrameModel,
 } from "@vibecook/puppeteer-views";
-import type { CSSProperties, ReactElement } from "react";
+import { type CSSProperties, type ReactElement, useState } from "react";
 import { DEFAULT_DECK_APPEARANCE } from "../godview/deck-appearance";
 import { godviewTerminalTheme, terminalGround } from "../godview/deck-theme";
 import type { AgentSessionSummary } from "../godview/monitor/facet-types";
@@ -240,22 +241,22 @@ function PaneSpecimen({
   ground: { background: string; ink: string };
 }): ReactElement {
   const agent = specimen.row === undefined ? undefined : paneFrameAgentFacts(specimen.row);
-  const model = paneFrameModel({
-    session: specimen.session,
-    ...(agent ? { agent } : {}),
-    ...(specimen.remote !== undefined ? { remoteDevice: specimen.remote } : {}),
-    nowMs: NOW,
-  });
+  /** The pane element the frame is PORTALLED into, exactly as the deck hands
+   * ghosttea's over. Held in state rather than a ref so the portal mounts on
+   * the render after the element exists. */
+  const [pane, setPane] = useState<HTMLElement | null>(null);
   return (
     <figure className="vf-ds-pane-frame-figure">
       {/* The host's pane, standing in for ghosttea's: the class the frame's
           stylesheet scopes to, the colour the workspace sets, the ground the
-          terminal draws on. */}
+          terminal draws on, and a real WIDTH — the narrow specimen is 200px and
+          the package's own observer decides what that means, rather than this
+          fixture writing `data-vf-narrow` by hand and calling it a state. */}
       <div
+        ref={setPane}
         className="ghostty-pane is-active"
         data-pane-id={specimen.id}
         data-pane-accent=""
-        {...(specimen.narrow ? { "data-vf-narrow": "" } : {})}
         style={
           {
             position: "relative",
@@ -266,17 +267,38 @@ function PaneSpecimen({
           } as CSSProperties
         }
       >
-        <PaneFrameChrome
-          sessionId={specimen.session.id}
-          model={model}
-          {...(specimen.color !== undefined ? { color: specimen.color } : {})}
-          zoomed={specimen.zoomed === true}
-          stopping={specimen.stopping === true}
-          verbs={VERBS}
-          onStop={() => undefined}
-          onResume={() => undefined}
-          onZoom={() => undefined}
-        />
+        {specimen.stopping ? (
+          // The ONE specimen the portal cannot hold still: `stopping` is state
+          // inside `PaneFrame`, set by a press and cleared when the run leaves
+          // `working`, so the markup half is mounted with it forced. Same
+          // shipping component underneath — `PaneFrame` renders this.
+          <PaneFrameChrome
+            sessionId={specimen.session.id}
+            model={paneFrameModel({
+              session: specimen.session,
+              ...(agent ? { agent } : {}),
+              nowMs: NOW,
+            })}
+            {...(specimen.color !== undefined ? { color: specimen.color } : {})}
+            zoomed={specimen.zoomed === true}
+            stopping
+            verbs={VERBS}
+            onStop={() => undefined}
+            onResume={() => undefined}
+            onZoom={() => undefined}
+          />
+        ) : pane === null ? null : (
+          <PaneFrame
+            pane={pane}
+            session={specimen.session}
+            {...(agent ? { agent } : {})}
+            {...(specimen.remote !== undefined ? { remote: specimen.remote } : {})}
+            {...(specimen.color !== undefined ? { color: specimen.color } : {})}
+            zoomed={specimen.zoomed === true}
+            nowMs={NOW}
+            verbs={VERBS}
+          />
+        )}
       </div>
       <figcaption>{specimen.caption}</figcaption>
     </figure>

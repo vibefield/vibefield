@@ -21,7 +21,12 @@ export interface ManagedSummaryOptions {
   gitObserved?: boolean;
   model?: { id: string; displayName?: string };
   contextPercent?: number;
-  blocker?: { kind: string; tool?: string };
+  /** A pending interaction, built in CORE'S OWN SHAPE: a permission carries
+   * `permission: {requestId, tool?}` nested, never a root `tool` (puppeteer
+   * `core/src/monitor/types.ts:74–78`). The fixture used to invent the flat
+   * shape, which is why a renderer reading the root field passed its tests and
+   * said a bare "permission" on every real board (GT-6 review). */
+  blocker?: { kind: string; tool?: string; detail?: string };
   lastAssistantText?: string;
   createdAt?: string;
   profileId?: string;
@@ -67,7 +72,22 @@ export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessio
                     id: "blocker-1",
                     kind: options.blocker.kind,
                     since: createdAt,
-                    ...(options.blocker.tool !== undefined ? { tool: options.blocker.tool } : {}),
+                    ...(options.blocker.detail !== undefined
+                      ? { detail: options.blocker.detail }
+                      : {}),
+                    // Only a permission carries one, and Core nests it: the
+                    // tool rides under `permission`, beside the request id the
+                    // verdict door will answer with.
+                    ...(options.blocker.kind === "permission"
+                      ? {
+                          permission: {
+                            requestId: "req-1",
+                            ...(options.blocker.tool !== undefined
+                              ? { tool: options.blocker.tool }
+                              : {}),
+                          },
+                        }
+                      : {}),
                   },
                 ],
           ...(options.lastAssistantText !== undefined

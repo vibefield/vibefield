@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   agentDetail,
+  blockerTool,
   classifyAgentStatus,
   classifyTerminalStatus,
   projectKey,
@@ -8,6 +9,7 @@ import {
   providerLabel,
 } from "../src/godview/monitor/agent-status";
 import { folderName } from "../src/godview/monitor/folder-name";
+import { paneFrameAgentFacts } from "../src/godview/monitor/pane-frame-facts";
 import { managedSummary } from "./managed-session-fixture";
 
 // The reference app's `agent-status.test.ts`, ported at GT-3m, re-fed at AR-3
@@ -99,6 +101,46 @@ describe("Godview agent status", () => {
     const rootless = managedSummary({ monitor: false });
     delete rootless.workspace;
     expect(projectKey(rootless)).toBeUndefined();
+  });
+
+  it("reads a permission's tool where Core writes it — nested, not at the root (GT-6 review)", () => {
+    // THE DEFECT, and the reason it hid: Core nests the tool under
+    // `permission` (`core/src/monitor/types.ts:74–78`), the mirror carries that
+    // through verbatim, and this renderer read `blocker.tool` at the root. The
+    // fixture invented the root shape too, so the assertion below passed on
+    // data the fold has never sent while every real board said a bare
+    // "permission". The fixture now says what Core says, and this row is the
+    // witness that both readings agree with it.
+    const blocked = managedSummary({
+      status: "blocked",
+      blocker: { kind: "permission", tool: "Bash" },
+    });
+    const blocker = blocked.monitor?.blockers[0] as
+      | { tool?: unknown; permission?: { tool?: unknown } }
+      | undefined;
+    expect(blocker?.tool).toBeUndefined();
+    expect(blocker?.permission?.tool).toBe("Bash");
+    expect(agentDetail(blocked, "blocked")).toBe("permission · Bash");
+
+    // The documented fallback: a producer that ever flattens the field is still
+    // read, because the mirror is an open vocabulary — what must never happen
+    // again is accepting ONLY the shape nobody sends.
+    expect(blockerTool({ permission: { tool: "Edit" } })).toBe("Edit");
+    expect(blockerTool({ tool: "Edit" })).toBe("Edit");
+    expect(blockerTool({ permission: { tool: "Edit" }, tool: "Bash" })).toBe("Edit");
+    expect(blockerTool({ permission: { requestId: "req-1" } })).toBeUndefined();
+    expect(blockerTool({})).toBeUndefined();
+    expect(blockerTool({ tool: "" })).toBeUndefined();
+
+    // The deck's frame reads the same row and draws NO tool at all: the
+    // record's §07 frame has no field for one (name · mark · readout · meter ·
+    // verbs), so the only thing it takes from a blocked row is the status —
+    // which is exactly what it must keep taking once the tool is read
+    // correctly. Stated here rather than assumed, because "the frame reads the
+    // nested field too" would be a claim about code that draws no blocker.
+    const facts = paneFrameAgentFacts(blocked);
+    expect(facts?.status).toBe("blocked");
+    expect(Object.keys(facts ?? {})).not.toContain("tool");
   });
 
   it("describes what an agent is doing without reading the terminal", () => {

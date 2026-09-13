@@ -80,6 +80,32 @@ export function providerLabel(summary: Pick<AgentSessionSummary, "kind" | "label
   return summary.label.trim() === "" ? summary.kind : summary.label;
 }
 
+/**
+ * THE TOOL A PERMISSION IS ABOUT, at the depth the producer actually writes it.
+ *
+ * Core nests it: a permission blocker carries `permission: {requestId, tool?}`
+ * (`puppeteer/packages/core/src/monitor/types.ts:74–78`, written at
+ * `monitor/project.ts:218–270`), and the mirror rides that through verbatim.
+ * VibeField read `blocker.tool` at the ROOT — a field the fold has never sent —
+ * so every permission said a bare "permission" while the tool sat one level
+ * down. The fixture invented the root shape too, which is why no test caught it
+ * (GT-6 review, 2026-09-13).
+ *
+ * The root read stays as a FALLBACK rather than being deleted, and it is not a
+ * hypothetical: fieldd's own field projection for the phone FLATTENS this field
+ * (`contracts/src/agent-field.ts` — `AgentFieldBlocker.tool`, read from
+ * `permission.tool` and written at the root), so a renderer that one day draws
+ * a field row meets the flat shape for real. Accepting both costs one branch.
+ * What this must never do again is accept ONLY the shape nobody sends.
+ */
+export function blockerTool(blocker: Readonly<Record<string, unknown>>): string | undefined {
+  // Bracket access, and a record rather than a shape: a mirror blocker is a
+  // zod `.passthrough()` whose unknown keys are exactly where this field lives.
+  const nested = (blocker["permission"] as { tool?: unknown } | undefined)?.tool;
+  const tool = typeof nested === "string" ? nested : blocker["tool"];
+  return typeof tool === "string" && tool !== "" ? tool : undefined;
+}
+
 /** One line under the project: what the agent is waiting on when it is,
  * else the latest assistant line when the monitor carried one, else the status. */
 export function agentDetail(summary: AgentSessionSummary, status: AgentVisualStatus): string {
@@ -89,8 +115,8 @@ export function agentDetail(summary: AgentSessionSummary, status: AgentVisualSta
   if (status === "blocked") {
     const blocker = monitor.blockers[0];
     if (blocker === undefined) return "blocked";
-    const tool = (blocker as { tool?: unknown }).tool;
-    return typeof tool === "string" && tool !== "" ? `${blocker.kind} · ${tool}` : blocker.kind;
+    const tool = blockerTool(blocker);
+    return tool === undefined ? blocker.kind : `${blocker.kind} · ${tool}`;
   }
   const last = monitor.lastAssistantMessage as { text?: unknown } | undefined;
   if (typeof last?.text === "string" && last.text.trim() !== "") return last.text.trim();
