@@ -1,0 +1,556 @@
+import FieldProduct
+import Foundation
+import Testing
+
+@testable import FieldMesh
+
+/// A mesh made of two streams and a list of peers.
+///
+/// The doors are closures for exactly this reason: every rule the reader has —
+/// ask on start, ask a joiner once, take only newer versions, drop on clear,
+/// drop when a peer leaves, ignore what does not parse — is a rule about
+/// MESSAGES, and none of them wants Tailscale to be running.
+private actor MeshRehearsal {
+  struct Sent: Equatable {
+    let peerId: String
+    let namespace: String
+    let msgType: String
+    let payload: JSONValue
+  }
+
+  private(set) var sent: [Sent] = []
+  private var peers: [FieldStorePeer] = []
+  private var messages: AsyncStream<FieldStoreInbound>.Continuation?
+  private var peerEvents: AsyncStream<FieldStorePeerEvent>.Continuation?
+  private var unreachable: Set<String> = []
+
+  func set(peers: [FieldStorePeer]) { self.peers = peers }
+  func refuse(_ peerId: String) { unreachable.insert(peerId) }
+
+  var isListening: Bool { messages != nil && peerEvents != nil }
+
+  func requests(to peerId: String) -> Int {
+    sent.filter { $0.peerId == peerId && $0.msgType == "request" }.count
+  }
+
+  func deliver(_ inbound: FieldStoreInbound) { messages?.yield(inbound) }
+  func emit(_ event: FieldStorePeerEvent) { peerEvents?.yield(event) }
+
+  func doors() -> FieldStoreDoors {
+    FieldStoreDoors(
+      onlinePeers: { await self.onlinePeers() },
+      send: { peerId, namespace, msgType, payload in
+        try await self.record(
+          Sent(peerId: peerId, namespace: namespace, msgType: msgType, payload: payload))
+      },
+      messages: { _ in await self.messageStream() },
+      peerEvents: { await self.peerEventStream() })
+  }
+
+  private func onlinePeers() -> [FieldStorePeer] { peers.filter(\.online) }
+
+  private func record(_ entry: Sent) throws {
+    if unreachable.contains(entry.peerId) { throw FieldStoreError.peerGone(entry.peerId) }
+    sent.append(entry)
+  }
+
+  private func messageStream() -> AsyncStream<FieldStoreInbound> {
+    let (stream, continuation) = AsyncStream.makeStream(of: FieldStoreInbound.self)
+    messages = continuation
+    return stream
+  }
+
+  private func peerEventStream() -> AsyncStream<FieldStorePeerEvent> {
+    let (stream, continuation) = AsyncStream.makeStream(of: FieldStorePeerEvent.self)
+    peerEvents = continuation
+    return stream
+  }
+}
+
+// MARK: - The wire, as truffle writes it
+
+private func sliceFrame(
+  _ type: String, deviceId: String, version: Int64, updatedAt: Int64 = 1_757_808_000_000,
+  data: JSONValue
+) -> Data {
+  (try? JSONValue.object([
+    "type": .string(type),
+    "device_id": .string(deviceId),
+    "data": data,
+    "version": .int(version),
+    "updated_at": .int(updatedAt),
+  ]).encoded()) ?? Data()
+}
+
+private func clearFrame(deviceId: String) -> Data {
+  (try? JSONValue.object(["type": .string("clear"), "device_id": .string(deviceId)])
+    .encoded()) ?? Data()
+}
+
+private func inbound(
+  from peerId: String, deviceId: String?, msgType: String, payload: Data
+) -> FieldStoreInbound {
+  FieldStoreInbound(
+    fromPeerId: peerId, fromDeviceId: deviceId, msgType: msgType, payload: payload)
+}
+
+@MainActor
+private func waitUntil(
+  _ what: String, timeout: Duration = .seconds(5), _ condition: @MainActor () async -> Bool
+) async throws {
+  let deadline = ContinuousClock.now.advanced(by: timeout)
+  while ContinuousClock.now < deadline {
+    if await condition() { return }
+    try await Task.sleep(for: .milliseconds(2))
+  }
+  Issue.record("timed out waiting for \(what)")
+}
+
+/// A store reading `field.devices.v1`, with both peers listening.
+@MainActor
+private func standingStore(
+  peers: [FieldStorePeer], storeId: String = "field.devices.v1"
+) async throws -> (FieldStore, MeshRehearsal) {
+  let mesh = MeshRehearsal()
+  await mesh.set(peers: peers)
+  let store = FieldStore(doors: await mesh.doors())
+  store.subscribe(storeId)
+  try await waitUntil("both streams to be listening") { await mesh.isListening }
+  return (store, mesh)
+}
+
+private let studio = FieldStorePeer(id: "node-studio", deviceId: "dev-studio", online: true)
+private let laptop = FieldStorePeer(id: "node-laptop", deviceId: "dev-laptop", online: true)
+private let asleep = FieldStorePeer(id: "node-asleep", deviceId: "dev-asleep", online: false)
+
+@MainActor
+@Suite struct FieldStoreStartTests {
+  @Test func itAsksEveryOnlinePeerForItsSliceAndNobodyElse() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio, laptop, asleep])
+    defer { store.unsubscribe() }
+
+    try await waitUntil("two requests") { await mesh.sent.count == 2 }
+    let sent = await mesh.sent
+    #expect(sent.map(\.peerId).sorted() == ["node-laptop", "node-studio"])
+    #expect(sent.allSatisfy { $0.namespace == "ss:field.devices.v1" })
+    #expect(sent.allSatisfy { $0.msgType == "request" })
+    // The payload is serde's tagged shape, which is what the Rust reads.
+    #expect(sent.allSatisfy { $0.payload == .object(["type": .string("request")]) })
+    #expect(await mesh.requests(to: "node-asleep") == 0)
+  }
+
+  /// A peer that cannot be asked costs its own slice and nothing else — the
+  /// same rule `RemoteSessionField` holds about a host that refuses a listing.
+  @Test func aPeerThatCannotBeAskedIsNotedAndTheRestAreStillAsked() async throws {
+    let mesh = MeshRehearsal()
+    await mesh.set(peers: [studio, laptop])
+    await mesh.refuse("node-studio")
+    let store = FieldStore(doors: await mesh.doors())
+    defer { store.unsubscribe() }
+
+    store.subscribe("field.devices.v1")
+    try await waitUntil("the laptop to be asked") { await mesh.requests(to: "node-laptop") == 1 }
+    try await waitUntil("a note") { !store.notes.isEmpty }
+    #expect(store.notes.contains { $0.contains("node-studio") })
+  }
+
+  @Test func aJoiningPeerIsAskedOnceHoweverOftenTheNetmapTicks() async throws {
+    let (store, mesh) = try await standingStore(peers: [])
+    defer { store.unsubscribe() }
+
+    await mesh.emit(.upsert(studio))
+    try await waitUntil("the joiner to be asked") { await mesh.requests(to: "node-studio") == 1 }
+
+    // The same peer again — a netmap tick, not a join.
+    await mesh.emit(.upsert(studio))
+    await mesh.emit(.upsert(FieldStorePeer(id: "node-studio", deviceId: nil, online: true)))
+    try await Task.sleep(for: .milliseconds(60))
+    #expect(await mesh.requests(to: "node-studio") == 1)
+
+    // An offline upsert is not a joiner at all.
+    await mesh.emit(.upsert(asleep))
+    try await Task.sleep(for: .milliseconds(40))
+    #expect(await mesh.requests(to: "node-asleep") == 0)
+  }
+
+  @Test func aStoreNobodyIsReadingIsNotAStoreThatIsEmpty() async throws {
+    let mesh = MeshRehearsal()
+    let store = FieldStore(doors: await mesh.doors())
+    #expect(store.state == .closed)
+    #expect(store.storeId == nil)
+    store.subscribe("field.agents.v1")
+    #expect(store.state == .reading(storeId: "field.agents.v1"))
+    #expect(store.slices.isEmpty)
+    store.unsubscribe()
+    #expect(store.state == .closed)
+  }
+}
+
+@MainActor
+@Suite struct FieldStoreApplyTests {
+  @Test func aFullFromAPeerLandsAsThatPeersSlice() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame(
+          "full", deviceId: "dev-studio", version: 3,
+          data: .object(["name": .string("studio")]))))
+    try await waitUntil("the slice") { store.slices["dev-studio"] != nil }
+
+    let slice = try #require(store.slices["dev-studio"])
+    #expect(slice.version == 3)
+    #expect(slice.updatedAt == 1_757_808_000_000)
+    #expect(slice.data["name"]?.stringValue == "studio")
+    #expect(slice.sentBy == "dev-studio")
+  }
+
+  /// The store's whole conflict rule: per-device, monotonic, newer wins and
+  /// everything else is a replay.
+  @Test func onlyANewerVersionReplacesASlice() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+
+    for version in [5, 7] as [Int64] {
+      await mesh.deliver(
+        inbound(
+          from: "node-studio", deviceId: "dev-studio", msgType: "update",
+          payload: sliceFrame(
+            "update", deviceId: "dev-studio", version: version,
+            data: .object(["v": .int(version)]))))
+    }
+    try await waitUntil("v7") { store.slices["dev-studio"]?.version == 7 }
+
+    // A replay, and the same version again: both are refused, and said so.
+    for version in [6, 7] as [Int64] {
+      await mesh.deliver(
+        inbound(
+          from: "node-studio", deviceId: "dev-studio", msgType: "update",
+          payload: sliceFrame(
+            "update", deviceId: "dev-studio", version: version,
+            data: .object(["v": .int(version)]))))
+    }
+    try await waitUntil("two refusals") { store.notes.count == 2 }
+    #expect(store.slices["dev-studio"]?.version == 7)
+    #expect(store.slices["dev-studio"]?.data["v"] == .int(7))
+    #expect(store.notes.contains { $0.contains("v6") })
+    #expect(store.notes.contains { $0.contains("not newer than v7") })
+  }
+
+  @Test func slicesAreFiledPerDeviceAndDoNotCollide() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio, laptop])
+    defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 1, data: .object([:]))))
+    await mesh.deliver(
+      inbound(
+        from: "node-laptop", deviceId: "dev-laptop", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-laptop", version: 1, data: .object([:]))))
+    try await waitUntil("both slices") { store.slices.count == 2 }
+    #expect(store.slices.keys.sorted() == ["dev-laptop", "dev-studio"])
+  }
+
+  @Test func clearDropsASliceAndSaysWhy() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 1, data: .object([:]))))
+    try await waitUntil("the slice") { store.slices["dev-studio"] != nil }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "clear",
+        payload: clearFrame(deviceId: "dev-studio")))
+    try await waitUntil("the slice to go") { store.slices.isEmpty }
+    #expect(store.notes.contains { $0.contains("cleared") })
+  }
+
+  @Test func aPeerGoingOfflineTakesItsSliceWithIt() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio, laptop])
+    defer { store.unsubscribe() }
+
+    for (peer, device) in [("node-studio", "dev-studio"), ("node-laptop", "dev-laptop")] {
+      await mesh.deliver(
+        inbound(
+          from: peer, deviceId: device, msgType: "full",
+          payload: sliceFrame("full", deviceId: device, version: 1, data: .object([:]))))
+    }
+    try await waitUntil("both slices") { store.slices.count == 2 }
+
+    await mesh.emit(.left(studio))
+    try await waitUntil("the studio slice to go") { store.slices["dev-studio"] == nil }
+    #expect(store.slices["dev-laptop"] != nil)
+    #expect(store.notes.contains { $0.contains("the peer left") })
+  }
+
+  /// A peer on its way out may have shed its durable id already. The id it was
+  /// ASKED under stands in — otherwise a departure silently keeps a dead
+  /// desktop's board on the field.
+  @Test func aPeerThatLeavesWithoutItsDurableIdIsStillMatched() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+    try await waitUntil("the ask") { await mesh.requests(to: "node-studio") == 1 }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 1, data: .object([:]))))
+    try await waitUntil("the slice") { store.slices["dev-studio"] != nil }
+
+    await mesh.emit(.left(FieldStorePeer(id: "node-studio", deviceId: nil, online: false)))
+    try await waitUntil("the slice to go") { store.slices.isEmpty }
+  }
+
+  @Test func aMalformedMessageIsIgnoredWithAReasonAndNeverFatal() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+
+    for payload in [
+      Data("not json".utf8),
+      Data("[]".utf8),
+      (try? JSONValue.object(["type": .string("teleport")]).encoded()) ?? Data(),
+      // An update with no version is not an update — a slice with no place in
+      // the ordering cannot be filed.
+      (try? JSONValue.object([
+        "type": .string("update"), "device_id": .string("dev-studio"),
+        "data": .object([:]),
+      ]).encoded()) ?? Data(),
+    ] {
+      await mesh.deliver(
+        inbound(from: "node-studio", deviceId: "dev-studio", msgType: "update", payload: payload))
+    }
+    try await waitUntil("four reasons") { store.notes.count == 4 }
+    #expect(store.slices.isEmpty)
+    #expect(store.notes.allSatisfy { $0.contains("ignored") })
+    #expect(store.state == .reading(storeId: "field.devices.v1"))
+  }
+
+  /// The phone owns no slice, so a peer asking for one is heard and not
+  /// answered. Nothing is sent, and nothing is recorded as wrong.
+  @Test func aRequestFromAPeerIsHeardAndNotAnswered() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+    try await waitUntil("our own ask") { await mesh.sent.count == 1 }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "request",
+        payload: (try? StoreSyncMessage.requestPayload.encoded()) ?? Data()))
+    try await Task.sleep(for: .milliseconds(60))
+    #expect(await mesh.sent.count == 1)
+    #expect(store.notes.isEmpty)
+  }
+
+  /// truffle 0.7.12 only ever broadcasts a node's OWN slice, so the claimed and
+  /// the authenticated id agree. This reader has never watched a live mesh do
+  /// it, so a mismatch is COUNTED and applied rather than refused — a guard
+  /// written from a guess is how a phone silently reads nothing.
+  @Test func aSliceClaimingAnotherDevicesIdIsCountedRatherThanRefused() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "update",
+        payload: sliceFrame("update", deviceId: "dev-laptop", version: 1, data: .object([:]))))
+    try await waitUntil("the mismatch") { store.attributionMismatches == 1 }
+    #expect(store.slices["dev-laptop"] != nil)
+    #expect(store.notes.contains { $0.contains("claiming dev-laptop") })
+  }
+
+  /// A sender truffle has not yet identified cannot be compared to anything,
+  /// and "unknown" is not "wrong".
+  @Test func anUnidentifiedSenderIsNoMismatch() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: nil, msgType: "update",
+        payload: sliceFrame("update", deviceId: "dev-studio", version: 1, data: .object([:]))))
+    try await waitUntil("the slice") { store.slices["dev-studio"] != nil }
+    #expect(store.attributionMismatches == 0)
+    #expect(store.slices["dev-studio"]?.sentBy == nil)
+  }
+}
+
+@MainActor
+@Suite struct FieldStoreReadingTests {
+  /// `field.devices.v1` is the store this whole slice exists for: it is where
+  /// the phone learns a desktop's capability URL.
+  @Test func aDeviceSliceReadsAsTheDoorItCarries() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+
+    let deviceSlice = JSONValue.object([
+      "deviceId": .string("dev-studio"),
+      "name": .string("James MacBook Pro"),
+      "platform": .string("darwin"),
+      "headless": .bool(false),
+      "fielddVersion": .string("0.1.0"),
+      "contractsVersion": .string("0.1.0"),
+      "capabilities": .object([
+        "terminalHost": .bool(true), "docHost": .bool(true), "push": .bool(false),
+      ]),
+      "productEndpoint": .object([
+        "serve": .string("product"),
+        "url": .string("http://mac.tail1234.ts.net:443/t/3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM"),
+      ]),
+      "bootId": .string("fieldd-a1b2c3d4e5f60718"),
+      "publishedAt": .int(1_757_808_000_000),
+    ])
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 1, data: deviceSlice)))
+    try await waitUntil("the slice") { store.slices["dev-studio"] != nil }
+
+    let device = try #require(store.slices["dev-studio"]).decode(DeviceInfo.self)
+    #expect(device.name == "James MacBook Pro")
+    #expect(device.productURL?.path.hasPrefix("/t/") == true)
+
+    let all = store.decodeAll(DeviceInfo.self)
+    #expect(all.values.count == 1)
+    #expect(all.failed.isEmpty)
+  }
+
+  /// One desktop on a shape this build cannot read must not make the whole
+  /// roster look empty.
+  @Test func oneUnreadableSliceIsNamedAndTheRestStillRead() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio, laptop])
+    defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame(
+          "full", deviceId: "dev-studio", version: 1,
+          data: .object([
+            "deviceId": .string("dev-studio"), "name": .string("studio"),
+            "platform": .string("darwin"),
+          ]))))
+    await mesh.deliver(
+      inbound(
+        from: "node-laptop", deviceId: "dev-laptop", msgType: "full",
+        payload: sliceFrame(
+          "full", deviceId: "dev-laptop", version: 1,
+          data: .object(["somethingElse": .bool(true)]))))
+    try await waitUntil("both slices") { store.slices.count == 2 }
+
+    let all = store.decodeAll(DeviceInfo.self)
+    #expect(all.values.keys.sorted() == ["dev-studio"])
+    #expect(all.failed.count == 1)
+    #expect(all.failed[0].contains("dev-laptop"))
+  }
+
+  /// The board, when it lands: `field.agents.v1` carries §10.1's slice.
+  @Test func anAgentFieldSliceReadsAsABoardWithItsExpiry() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio], storeId: "field.agents.v1")
+    defer { store.unsubscribe() }
+
+    let board = JSONValue.object([
+      "v": .int(1),
+      "deviceId": .string("dev-studio"),
+      "publishedAt": .int(1_757_808_000_000),
+      "expiresAt": .int(1_757_808_030_000),
+      "revision": .int(7),
+      "rows": .array([
+        .object([
+          "runtimeRunId": .string("run-1"), "revision": .int(2),
+          "kind": .string("claude"), "label": .string("Claude"),
+          "tier": .string("managed"), "device": .string("dev-studio"),
+          "status": .string("blocked"),
+          "statusSince": .string("2026-09-13T12:00:00.000Z"),
+          "stateChangedAt": .string("2026-09-13T12:00:00.000Z"),
+          "createdAt": .string("2026-09-13T11:00:00.000Z"),
+          "alive": .bool(true),
+          "blockers": .array([
+            .object([
+              "id": .string("permission-1"), "kind": .string("permission"),
+              "since": .string("2026-09-13T12:00:00.000Z"), "tool": .string("Bash"),
+            ])
+          ]),
+        ])
+      ]),
+    ])
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "update",
+        payload: sliceFrame("update", deviceId: "dev-studio", version: 9, data: board)))
+    try await waitUntil("the board") { store.slices["dev-studio"] != nil }
+
+    let decoded = try #require(store.slices["dev-studio"]).decode(AgentFieldSlice.self)
+    #expect(decoded.revision == 7)
+    #expect(decoded.rows.count == 1)
+    #expect(decoded.rows[0].blockers.first?.tool == "Bash")
+    #expect(decoded.expiresAt - decoded.publishedAt == 30_000)
+  }
+}
+
+@MainActor
+@Suite struct FieldStoreLifecycleTests {
+  @Test func unsubscribingForgetsWhatItWasTold() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 1, data: .object([:]))))
+    try await waitUntil("the slice") { store.slices["dev-studio"] != nil }
+
+    store.unsubscribe()
+    #expect(store.slices.isEmpty)
+    #expect(store.state == .closed)
+
+    // And a message from the old stream lands on nobody.
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 2, data: .object([:]))))
+    try await Task.sleep(for: .milliseconds(60))
+    #expect(store.slices.isEmpty)
+  }
+
+  @Test func subscribingTwiceToTheSameStoreDoesNotAskTwice() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+    try await waitUntil("the first ask") { await mesh.sent.count == 1 }
+
+    store.subscribe("field.devices.v1")
+    try await Task.sleep(for: .milliseconds(60))
+    #expect(await mesh.sent.count == 1)
+  }
+
+  /// Slices are per-store; keeping the old ones would file one store's answers
+  /// under another's name.
+  @Test func movingToAnotherStoreStartsClean() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 1, data: .object([:]))))
+    try await waitUntil("the slice") { store.slices["dev-studio"] != nil }
+
+    store.subscribe("terminal.v1.hosts")
+    #expect(store.slices.isEmpty)
+    #expect(store.state == .reading(storeId: "terminal.v1.hosts"))
+    try await waitUntil("an ask on the new namespace") {
+      await mesh.sent.contains { $0.namespace == "ss:terminal.v1.hosts" }
+    }
+  }
+
+  @Test func theNamespaceIsTrufflesOwn() {
+    #expect(FieldStore.namespace(for: "field.agents.v1") == "ss:field.agents.v1")
+    #expect(FieldStore.namespace(for: "terminal.v1.hosts") == "ss:terminal.v1.hosts")
+  }
+}
