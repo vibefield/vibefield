@@ -3,11 +3,13 @@ import UIKit
 
 /// The godview monochrome language, made adaptive.
 ///
-/// Every value is lifted from the desktop godview stylesheet
-/// (`apps/godview/src/renderer/styles.css`), light and dark. The system is
-/// strict black-and-white: status is contrast (idle grey · working inverted ·
-/// waiting full-contrast), and the only hues on screen are each agent's
-/// identity color used as a whisper, plus one green for branch presence.
+/// Every value is DESIGN.md §2.7's instrument palette (the reference's
+/// `--vf-godview-*` tokens), light and dark, plus the reference's blocked pair
+/// and §2.5's two state colours. Status is contrast (idle grey · working
+/// inverted · blocked inverted and flooded by the project's colour); the
+/// hues on the field are the project's (record §02, dealt by `FieldAgents`),
+/// the branch dot's green, the blocked reply's orange and the unread reply's
+/// blue — never a colour that means nothing.
 public enum FieldPalette {
   // Ground & chrome
   public static let monitorBackground = dynamic(light: 0xF7F7F7, dark: 0x0A0A0A)
@@ -19,7 +21,7 @@ public enum FieldPalette {
   public static let gridLine = dynamic(
     light: 0x000000, lightAlpha: 0.022, dark: 0xFFFFFF, darkAlpha: 0.035)
 
-  // Bubble tiers — status as contrast, never hue
+  // Body tiers — status as contrast, never hue (the swarm's `SwarmTheme` reads these)
   public static let idleBackground = dynamic(light: 0xE5E5E5, dark: 0x2A2A2A)
   public static let idleText = dynamic(light: 0x666666, dark: 0xAAAAAA)
   public static let workingBackground = dynamic(light: 0x222222, dark: 0xEEEEEE)
@@ -30,7 +32,6 @@ public enum FieldPalette {
   // the same full-contrast inversion the July waiting tier wore.
   public static let blockedBackground = dynamic(light: 0x000000, dark: 0xFFFFFF)
   public static let blockedText = dynamic(light: 0xFFFFFF, dark: 0x000000)
-  public static let blockedBorder = dynamic(light: 0x000000, dark: 0xFFFFFF)
 
   // The terminal card surface (the desktop terminal deck's paper)
   public static let terminalBackground = dynamic(light: 0xECE8DC, dark: 0x282C34)
@@ -71,41 +72,10 @@ public enum FieldPalette {
   }
 }
 
-/// A shadow recipe (CSS `drop-shadow(x y blur color)` translated; SwiftUI's
-/// radius is close to half a CSS blur). Working and blocked bubbles pulse
-/// between rest and peak — in dark mode the "shadow" is a white glow, exactly
-/// like the desktop.
-public struct FieldShadow: Sendable {
-  public let color: Color
-  public let radius: CGFloat
-  public let y: CGFloat
-
-  public init(color: Color, radius: CGFloat, y: CGFloat) {
-    self.color = color
-    self.radius = radius
-    self.y = y
-  }
-
-  public static let workingRest = FieldShadow(
-    color: FieldPalette.dynamicShadow(lightAlpha: 0.18, darkAlpha: 0.12), radius: 5, y: 8)
-  public static let workingPeak = FieldShadow(
-    color: FieldPalette.dynamicShadow(lightAlpha: 0.34, darkAlpha: 0.30), radius: 9, y: 12)
-  public static let blockedRest = FieldShadow(
-    color: FieldPalette.dynamicShadow(lightAlpha: 0.24, darkAlpha: 0.16), radius: 7, y: 9)
-  public static let blockedPeak = FieldShadow(
-    color: FieldPalette.dynamicShadow(lightAlpha: 0.40, darkAlpha: 0.25), radius: 12, y: 17)
-}
-
-extension FieldPalette {
-  /// Light mode throws black shadows; dark mode throws white glows.
-  static func dynamicShadow(lightAlpha: CGFloat, darkAlpha: CGFloat) -> Color {
-    Color(
-      UIColor { traits in
-        traits.userInterfaceStyle == .dark
-          ? UIColor(rgb: 0xFFFFFF, alpha: darkAlpha) : UIColor(rgb: 0x000000, alpha: lightAlpha)
-      })
-  }
-}
+/// The swarm's shadows and lights are the renderer's since IOS-6c (RFC 005:
+/// the working body's drop shadow is a gaussian occupancy of the disc, black
+/// on a light ground and white on a dark one, breathing over three seconds);
+/// `SwarmTheme` carries those numbers beside the colours it resolves from here.
 
 extension UIColor {
   fileprivate convenience init(rgb: UInt32, alpha: CGFloat) {

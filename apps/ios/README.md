@@ -1,13 +1,15 @@
 # VibeField iOS
 
-The iPhone/iPad companion. The home screen is the **agent field**: every running
-agent a physical bubble (the Beats-Music-lineage swarm, ported from the desktop
-godview at `p008/chopsticks/apps/godview`), ranked by how much it needs you.
-Tapping a bubble raises its session card; the card's terminal area is the seam
-where the Ghosttea Metal surface attaches over Truffle.
+The iPhone/iPad companion. The home screen is the **agent field**: every
+session a physical body — the swarm of puppeteer's Godview (RFC 005, design
+locked 2026-09-09), drawn on one Metal surface by a transcription of its
+WebGPU renderer, ranked by what it is doing. Tapping a body raises its session
+card; the card's terminal area is the seam where the Ghosttea Metal surface
+attaches over Truffle.
 
 Design record: `draft/thinking-ios-app.md` (v1 shape, physics decision,
-aesthetic mapping, Ghosttea/Truffle integration plan, slice plan).
+aesthetic mapping, Ghosttea/Truffle integration plan, slice plan) and, for the
+field's port of the reference, `draft/thinking-ios-swarm.md` (IOS-6, D-i11…D-i17).
 The corpus laws that bind this surface: design-00 §3.1 (observe / approve /
 attach / artifacts — canvas editing is desktop-only), design-04 §8.6 (one fieldd
 connection, whole mesh through it), EL3/EL7 as ever.
@@ -18,14 +20,15 @@ connection, whole mesh through it), EL3/EL7 as ever.
 |---|---|
 | `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (synthetic IDs, the GhostteaApp convention; objectVersion 60 since Xcode touched it); no product code |
 | `App/` | `@main` + assets + privacy manifest, nothing else |
-| `VibeFieldKit/` | the real code, one SPM package, four targets |
+| `VibeFieldKit/` | the real code, one SPM package, eight targets |
 | `VibeFieldKit/Sources/FieldDesign` | two token sets and one motion table: the **godview** monochrome tokens (`FieldPalette`, `FieldType` — palette light+dark, mono type ramp, grid/scanlines/vignette), scoped to the swarm field and the terminal surface by DESIGN.md §1.1, and the **chrome** tokens (`ChromeType`, `ChromePalette`, `ChromeMaterial`, `ChromeControls`) every other surface wears — SF type, the glass card recipe, the radii and the two pill buttons |
-| `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
-| `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
+| `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested; since IOS-6b it steps on the reference's fixed schedule (`advance(now:)`: 30 Hz behind an accumulator, the 15 Hz floor and the 0.2 air-friction ceiling clamped at every entry, a stall cap, every body's last two solved positions for the renderer's blend) |
+| `VibeFieldKit/Sources/FieldAgents` | the agent model — since IOS-6a a SUBSET of puppeteer's monitor mirror, field names kept (usage samples, effort with its intent, the latest reply, the blockers, the clocks) — the status classifier (`idle · working · blocked`, core's word), the body model (`SwarmBodyModel`: the reference's `bubble-model.ts` transcribed — the five drawn states, the copy lines, the figures, the ring, the burn bars), the ledgers the field folds every projection (`UsageLedger`, `UnreadLedger`, `ProjectLedger` + `ProjectTint` — record §02's colours, goldens generated from the TypeScript), `FieldAssembly` (the fold), and the scripted mock fleet, which burns tokens along the reference lab's four shapes |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
 | `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface — plus (IOS-3c) the per-host mirror-write key store |
 | `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a…5e): a composer row over a rail of nine terminal keys in two modes — a local draft sent as one bracketed paste, or the terminal itself holding the keyboard — with one sticky Ctrl reaching through both, the long-press fans, the reply and paste chips, the closed row, a mic that dictates into the draft and never onto the wire, the `+` doors (scan, snippets, clipboard history) and the `⋯` keypad's three pages, every one of them sized for the reader's text size and spoken to a screen reader; its own target on purpose (K-D1) because a keyboard is state machines all the way down and the IOS-3 review found every serious bug living in the one module with no test target, and it takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product. Since IOS-5v it wears DESIGN.md's **chrome family** as the KeyboardLab canvas draws it — SF type in sentence case, a glass card with a hairline over the sheet's own glass, 44 pt keys at radius 9, round pills — while the swarm field and the terminal surface keep the godview instrument palette that §1.1 scopes to them |
-| `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
+| `VibeFieldKit/Sources/FieldSwarm` | the swarm on Metal (IOS-6c, D-i11): the six shaders transcribed from the reference's WGSL (they ride as resources and compile at first use, D-i14), `SwarmRenderer` (the same five pipelines in painter's order, the same buffer layouts, one upload a frame), the glyph atlas (CoreText at the screen's scale into an `r8` shelf-packed texture; the folder, dot and bar drawn from paths into it), the mark atlas (the reference's `marks.png` byte for byte), `SwarmTheme` (the colours resolved from `FieldPalette` per scheme), `SwarmStage` (the loop: the blend, the radius spring, the arrival curve, draw order, hit testing, drag / tap / hold, VoiceOver focus), `SwarmMetalView`, the SwiftUI `SwarmField` with its chrome slot and `.swarmObstacle()`, and the design lab behind `-vf-swarm-lab` (D-i15) |
+| `VibeFieldKit/Sources/FieldHome` | the home composition: the field mounted over the dressed rows, the session card, the chrome corners, hold-to-create — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
 **Write keys (IOS-3c).** The mirror-write capability a desktop grants this
 phone is the value of its `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`, kept in the
@@ -90,6 +93,7 @@ reach states no `simctl` touch can:
 | `-vf-auto-open-card` | opens a session card, preferring an attachable remote one |
 | `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole IOS-3 path with no finger on the glass; without a mesh it proves the honest-failure path instead |
 | `-vf-open-settings` | opens the terminal appearance sheet |
+| `-vf-swarm-lab[=section[:page]]` | covers the field with the **swarm design lab** (IOS-6c, D-i15): the reference's fixture stages — the 22 drawn states, the three weights of the pane light, the settled cluster, the mark contact sheet — on the production renderer, the pixels the field will paint. Bare, the whole lab scrolls; `=states:3`, `=light`, `=field` or `=marks` shows one page, because a screenshot run cannot scroll and every page is a gate. Six stages a surface: one surface for the whole grid crossed the 8192-pixel texture limit at 3× |
 | `-vf-open-write-key` | opens the WRITE KEY sheet on the demo host, the one surface a tap is otherwise the only way to reach |
 | `-vf-write-key=<secret>` | swaps the Keychain for an in-memory write-key store whose **wildcard** answers for any host, so `-vf-auto-attach` can type against a serving desktop with no finger on the glass; it also seeds one explicit demo host (`studio`) so the settings sheet's WRITE KEYS section has a row to render. A launch argument is visible to `ps` — a DEBUG smoke aid, never a way to carry a real secret onto a phone |
 | `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; every argument below rides on top of it |
@@ -126,10 +130,16 @@ checked tool is a deliberate future event, not an inheritance.
 
 ## What is real vs honest-missing (v0)
 
-Real: the full-screen bubble field (physics, tiers, ignition, drag, tap-nudge,
-hold-to-create, spawn pop, empty state), both themes, the session card with
-live status, the mock fleet driving the **same** snapshot shape and classifier
-the daemon feed will drive; since IOS-2 the mesh leg: `ghosttea` pinned
+Real: the full-screen field on Metal (IOS-6: RFC 005's five drawn states at
+the locked sizes — the hollow with its dashed rim and comet, the idle body with
+its ring and unread reply, the working body grown by its share of the tokens
+with the burn bars, the figures and the breathing mark, the blocked body
+flooded by its project's colour — the project colours dealt by record §02, the
+open card's body wearing the phone's one pane as a band and a light, the
+physics at 30 Hz blended to the display's rate, drag, tap-and-nudge,
+hold-to-create, the arrival curve, VoiceOver elements per body), both themes,
+the session card with live status, the mock fleet driving the **same**
+snapshot shape and classifier the daemon feed will drive; since IOS-2 the mesh leg: `ghosttea` pinned
 `exact: "0.9.3"` (truffle 0.7.12, lockstep with field-native), the in-process
 Tailscale runtime behind a deliberate CONNECT act, in-app login (Safari sheet),
 the online-peer roster, and the mesh chip the bubbles physically flow around
@@ -181,8 +191,20 @@ eleven transitions carry a haptic each, the table written out at the top of
 720 pt and centres, because nine equal keys across a 1024 pt inset are buttons
 in the middle of the screen rather than keys under a thumb. 331 headless tests.
 
-Honest-missing (each says so on screen where it shows): **the keyboard track is
-built and none of it has been witnessed on a device.** IOS-5v re-skinned every
+Honest-missing (each says so on screen where it shows): **the swarm on Metal
+has been witnessed on the simulator only** — the lab's every page in both
+themes and the live field over the mock — and three numbers are a device's to
+give: the five shaders' compile at first use (1,073 ms on the iPhone 17 Pro
+simulator, whose compiler is not a phone's; the `.metal`-in-target route is
+the move if a device shows it), the feel of 30 Hz physics under a 120 Hz blend
+(James's thumb; `physicsHz` is a parameter), and the type at 7 pt on a real
+panel. Two of the design's facts have no phone analogue and are recorded as
+deltas, not gaps: there are no panes beyond the open card (D-i12), and there
+is no hover, so the body's title is its VoiceOver label and the card's
+header. The project colour is dealt on this device (D-i13); the same project
+can wear a different hue here and on the desktop until a fieldd door carries
+the sequence. **The keyboard track is built and none of it has been witnessed
+on a device.** IOS-5v re-skinned every
 surface of it into the chrome family and changed no behaviour, so every device
 gate below is still open and still says the same thing; what the simulator
 witnessed of the re-skin is our own pixels in both themes, which is all a

@@ -106,16 +106,38 @@ public struct HomeScreen: View {
   public init() {}
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
-  private var bubbles: [FieldBubble] {
+  private var projected: [FieldBubble] {
     feed.agents.compactMap(fieldBubble(from:)) + remoteField.snapshot.rows.map(fieldBubble(from:))
   }
+
+  // --- IOS-6d: the field's ledgers ------------------------------------------
+  /// The rows the field draws: the projection dressed by `FieldAssembly` —
+  /// every project's colour, the open card's pane, the unread marks, the
+  /// stale flags, the usage ledger. Folded on every projection and every
+  /// change of the card's subject, never derived twice.
+  @State private var bubbles: [FieldBubble] = []
+  @State private var assembly = FieldAssembly(tint: .light)
+  /// The project ledger's cache (D-i13): a project keeps its colour across
+  /// launches on this device.
+  private let projectStore = UserDefaultsProjectLedgerStore()
+
+  private func refold() {
+    assembly.tint = colorScheme == .dark ? .dark : .light
+    let before = assembly.projects
+    bubbles = assembly.fold(
+      projected, cardSubjectID: selection?.id, nowMs: Date().timeIntervalSince1970 * 1000)
+    if assembly.projects != before { projectStore.save(assembly.projects) }
+  }
+  // --- end IOS-6d -----------------------------------------------------------
 
   /// The stage, kept out of `body` on purpose: with every sheet and lifecycle
   /// hook attached, one expression grew past what the type-checker will solve
   /// in reasonable time. Splitting it is the fix SwiftUI asks for.
   private var stage: some View {
     ZStack {
-      SwarmFieldView(
+      // The swarm on Metal (IOS-6c/6d): the reference's renderer over the
+      // dressed rows; the chrome slot's obstacles are the field's walls.
+      SwarmField(
         bubbles: bubbles,
         isActive: scenePhase == .active,
         onSelect: { bubble in openCard(on: bubble) },
@@ -132,6 +154,13 @@ public struct HomeScreen: View {
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
     .fullScreenCover(isPresented: swarmLabBinding) { SwarmLabView(focus: swarmLabFocusValue) }
+    // --- IOS-6d: every projection and every change of the card's subject
+    // folds the ledgers; the theme's tint moves the project colours with it.
+    // On the stage for the same reason as the cover above.
+    .onChange(of: projected) { refold() }
+    .onChange(of: selection?.id) { refold() }
+    .onChange(of: colorScheme) { refold() }
+    // --- end IOS-6d
   }
 
   @ViewBuilder
@@ -158,6 +187,8 @@ public struct HomeScreen: View {
     stage
       .background(FieldPalette.panelBackground.ignoresSafeArea())
     .onAppear {
+      assembly.projects = projectStore.load()
+      refold()
       feed.start()
       #if DEBUG
         // `-vf-write-key=<secret>` swaps the keychain for an in-memory store

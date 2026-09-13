@@ -1,5 +1,6 @@
 import CoreGraphics
 import FieldAgents
+import FieldDesign
 import Foundation
 import SwarmPhysics
 
@@ -10,9 +11,9 @@ import SwarmPhysics
 // hold-to-create timer). `SwarmBodyModel` owns what a body says; `SwarmWorld`
 // owns where it is; `SwarmRenderer` owns how it is painted.
 
-public let longPressDuration = 0.52
-public let longPressMoveTolerance = 8.0
-public let spawnDuration = 0.72
+public let longPressDuration = FieldMotion.longPressDuration
+public let longPressMoveTolerance = Double(FieldMotion.longPressMoveTolerance)
+public let spawnDuration = FieldMotion.spawnDuration
 /// Critically damped: about 90% of a size change lands within 300ms.
 let radiusSpringOmega = 16.0
 public let gridPitch = 24.0
