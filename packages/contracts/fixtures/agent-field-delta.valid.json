@@ -32,7 +32,7 @@
         "intent": "observed"
       },
       "project": {
-        "cwd": "/Users/j/Projects/vibe-field",
+        "name": "vibe-field",
         "branch": "mf/fd1"
       },
       "terminal": {
@@ -63,7 +63,7 @@
         "displayName": "Sonnet 5"
       },
       "project": {
-        "cwd": "/Users/j/Projects/vibe-field"
+        "name": "vibe-field"
       },
       "terminal": {
         "hosted": "local",

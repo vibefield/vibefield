@@ -11,6 +11,7 @@ import {
   createFieldSubscription,
   diffFieldRows,
   FieldProjection,
+  folderNameOf,
   projectFieldRow,
 } from "../src/agent-field";
 import { managedSummary as summary } from "./agent-field-summary";
@@ -137,22 +138,49 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     expect(projectFieldRow(summary({})).effort).toBeUndefined();
   });
 
-  it("takes the project from the monitor's environment, honestly about git", () => {
-    // nothing looked: no branch key at all, which is NOT the same as "none"
-    expect(projectFieldRow(summary({ cwd: "/repo" })).project).toEqual({ cwd: "/repo" });
+  it("names the FOLDER and never the path (EL7 B1), honestly about git", () => {
+    // The path carried the OS username and the shape of a person's disk to
+    // every tailnet node the app admits; a card only ever drew the basename.
+    expect(projectFieldRow(summary({ cwd: "/Users/james/Projects/repo" })).project).toEqual({
+      name: "repo",
+    });
+    expect(
+      JSON.stringify(projectFieldRow(summary({ cwd: "/Users/james/Projects/repo" }))),
+    ).not.toContain("james");
+
     expect(projectFieldRow(summary({ cwd: "/repo", git: { branch: "mf/fd1" } })).project).toEqual({
-      cwd: "/repo",
+      name: "repo",
       branch: "mf/fd1",
     });
     // looked, and this is not a repo — null is a fact a card can draw
     expect(projectFieldRow(summary({ cwd: "/repo", git: null })).project).toEqual({
-      cwd: "/repo",
+      name: "repo",
       branch: null,
     });
     // a repo with no branch (a detached head) is the same honest null
     expect(projectFieldRow(summary({ cwd: "/repo", git: { branch: null } })).project).toEqual({
-      cwd: "/repo",
+      name: "repo",
       branch: null,
+    });
+  });
+
+  it("folderNameOf: both platforms' separators, and nothing to name at a root", () => {
+    expect(folderNameOf("/Users/james/Projects/vibe-field")).toBe("vibe-field");
+    expect(folderNameOf("/Users/james/Projects/vibe-field/")).toBe("vibe-field");
+    expect(folderNameOf("/Users/james/Projects/vibe-field///")).toBe("vibe-field");
+    expect(folderNameOf("C:\\Users\\james\\Projects\\repo")).toBe("repo");
+    expect(folderNameOf("C:\\Users\\james\\Projects\\repo\\")).toBe("repo");
+    expect(folderNameOf("\\\\server\\share\\repo")).toBe("repo");
+    expect(folderNameOf("repo")).toBe("repo");
+    // a root, a drive root, an empty path and an absent one name nothing
+    expect(folderNameOf("/")).toBeUndefined();
+    expect(folderNameOf("\\")).toBeUndefined();
+    expect(folderNameOf("C:\\")).toBeUndefined();
+    expect(folderNameOf("")).toBeUndefined();
+    expect(folderNameOf(undefined)).toBeUndefined();
+    // and a run with a root cwd and a branch still carries the branch
+    expect(projectFieldRow(summary({ cwd: "/", git: { branch: "main" } })).project).toEqual({
+      branch: "main",
     });
   });
 

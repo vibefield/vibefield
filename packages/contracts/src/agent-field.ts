@@ -46,7 +46,7 @@ export type AgentFieldBlocker = z.infer<typeof AgentFieldBlocker>;
 
 /** The phone's row. Every field is a fact a swarm body can be drawn from:
  * identity, the status and its clocks, liveness, the blockers' shape, the
- * bars (usage, context), the model and effort labels, the project it sits in,
+ * bars (usage, context), the model and effort labels, the folder it works in,
  * and the terminal join. `revision` is fieldd's OWN per-row counter — it bumps
  * only when the PROJECTED row changes, never with the mirror's revision, so an
  * idle board sends nothing (§10.2). */
@@ -89,8 +89,16 @@ export const AgentFieldRow = z
       .passthrough()
       .optional(),
     effort: z.object({ value: z.string(), intent: z.string().optional() }).passthrough().optional(),
+    /** Where the run is working, as a NAME and never a path (EL7 B1, narrowed
+     * 2026-09-13). `name` is the folder's basename; the absolute path it came
+     * from carried the OS username and the shape of a person's disk, and this
+     * slice's audience is every tailnet node the app admits (see
+     * `devices.ts` — the store is the APP's peers, not one user's devices), so
+     * the path was a leak the row had no use for. A card draws the folder.
+     * `branch` is unchanged: absent = nothing looked, null = looked and there
+     * is no branch. */
     project: z
-      .object({ cwd: z.string().optional(), branch: z.string().nullable().optional() })
+      .object({ name: z.string().optional(), branch: z.string().nullable().optional() })
       .passthrough()
       .optional(),
     terminal: AgentSessionTerminal.optional(),

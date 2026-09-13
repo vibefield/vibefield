@@ -38,6 +38,25 @@ describe("MF-1 — the GOLDEN field row is content-free (§10.1)", () => {
     }
   });
 
+  it("EL7 B1 — the golden names FOLDERS, never paths", () => {
+    // The slice reaches every tailnet node the app admits, and an absolute cwd
+    // carried the OS username and the shape of a person's disk. A card draws
+    // the folder, so the folder is all the row carries.
+    for (const row of slice.rows) {
+      if (row.project === undefined) continue;
+      for (const key of Object.keys(row.project)) {
+        expect(["name", "branch"], `${row.runtimeRunId}'s project carries ${key}`).toContain(key);
+      }
+      const name = (row.project as { name?: unknown }).name;
+      if (name !== undefined) {
+        expect(typeof name).toBe("string");
+        expect(name as string, "a folder NAME has no separators").not.toMatch(/[/\\]/);
+      }
+    }
+    // and nothing anywhere in the slice reads like a path out of someone's home
+    expect(JSON.stringify(slice)).not.toMatch(/"\/Users\/|"\/home\/|"[A-Za-z]:\\\\/);
+  });
+
   it("keeps a whole five-row board inside the phone's frame budget (§5)", () => {
     // The §5 target: five working agents steady at < 2 KB/s. One frame of the
     // whole board is the worst case a subscriber sees, and it lands far inside

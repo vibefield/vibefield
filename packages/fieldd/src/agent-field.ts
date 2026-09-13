@@ -67,6 +67,24 @@ function projectBlocker(blocker: { id: string; kind: string; since: string }): A
   };
 }
 
+/** The folder a path ends in, as the field names it (EL7 B1): the last
+ * segment, with either platform's separators and any trailing ones trimmed.
+ * A root or an empty path has no folder to name, and neither does a bare
+ * Windows drive — the row then carries no `name` at all rather than a
+ * misleading one.
+ *
+ * The PATH never travels. It carried the OS username and the shape of a
+ * person's disk to every tailnet node the app admits, and a card only ever
+ * drew the basename. */
+export function folderNameOf(path: string | undefined): string | undefined {
+  if (path === undefined) return undefined;
+  const trimmed = path.replace(/[/\\]+$/, "");
+  if (trimmed === "") return undefined;
+  const last = trimmed.split(/[/\\]+/).pop();
+  if (last === undefined || last === "" || /^[A-Za-z]:$/.test(last)) return undefined;
+  return last;
+}
+
 /** The fold's row, projected. Pure: same summary in, same row out, so the
  * revision counter above it can trust JSON equality. */
 export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow {
@@ -78,7 +96,8 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
   const effortValue = stringAt(effortRaw, "value");
   const effortIntent = stringAt(effortRaw, "intent");
   const environment = monitor?.environment;
-  const cwd = environment?.cwd;
+  // EL7 B1 — the FOLDER, never the path
+  const name = folderNameOf(environment?.cwd);
   // Three states, and the difference between two of them is the point. `git`
   // ABSENT = nothing looked, so the row carries no `branch` key at all; `git`
   // NULL = looked and this is not a repo; `git.branch` null = a repo with no
@@ -90,9 +109,9 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
   const context = monitor?.context;
   const model = monitor?.model;
   const project =
-    cwd !== undefined || branch !== undefined
+    name !== undefined || branch !== undefined
       ? {
-          ...(cwd !== undefined ? { cwd } : {}),
+          ...(name !== undefined ? { name } : {}),
           ...(branch !== undefined ? { branch } : {}),
         }
       : undefined;
