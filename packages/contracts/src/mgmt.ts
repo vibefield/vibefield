@@ -168,6 +168,33 @@ export const NATIVE_SUPERVISION = {
  * (UnavailableDetails.state / UnitHealth.detail). */
 export const RESOURCE_PRESSURE_STATES = ["fd_pressure", "pty_exhausted"] as const;
 
+// ---- the mirror-write capability (MF-2a, GM-D5) ----
+
+/** `native.terminal.mirrorWriteCapability` — params. Empty by construction:
+ * mirror-write v1 is ONE capability per floor (GT-D7), so there is nothing to
+ * ask for. Per-device tokens (GT-D6) widen THIS shape when they land rather
+ * than adding a second verb. */
+export const NativeTerminalMirrorWriteCapabilityParams = z.object({}).passthrough();
+export type NativeTerminalMirrorWriteCapabilityParams = z.infer<
+  typeof NativeTerminalMirrorWriteCapabilityParams
+>;
+
+/** The floor's answer. `configured` is the honest face a health detail may
+ * carry (it is the same fact as `MeshPlan::offers_mirror_write`); `capability`
+ * is the secret itself and travels ONLY here — the mgmt channel is
+ * pairing-gated, single-client and local by construction (design-02 §2.7).
+ * Past this hop it must reach exactly one place, the product answer to
+ * `terminal.mirrorWriteGrant`: never a log, never a health detail, never an
+ * audit attribute (EL7). A floor serving its terminals over the mesh always
+ * answers `configured: true` — it mints one at boot when the env carries
+ * none. */
+export const NativeTerminalMirrorWriteCapabilityResult = z
+  .object({ configured: z.boolean(), capability: z.string().min(1).optional() })
+  .passthrough();
+export type NativeTerminalMirrorWriteCapabilityResult = z.infer<
+  typeof NativeTerminalMirrorWriteCapabilityResult
+>;
+
 // ---- mesh facade (P0 subset: peers / store / serve) ----
 
 /** The spoof-safe Tailscale-User-* triple, injected at the sidecar bridge. */

@@ -514,6 +514,15 @@ export const LAYOUT = {
   MESH_STATE_DIR: ["native", "mesh"],
   LINK_FILE: ["fieldd", "link.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
+  /** MF-2a (GM-D5) — the floor's mirror-write capability when nothing was
+   * exported: 32 random bytes as hex, 0600, minted once by a floor whose
+   * terminal mesh is on so that a SERVING floor always has one to grant
+   * (`terminal.mirrorWriteGrant`). Beside the pairing secret and not in the
+   * run dir, because it outlives a boot the way a user's configuration does;
+   * `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`, when set, still wins and nothing is
+   * written. Rotation is deleting this file and bouncing the pair — which
+   * revokes every phone at once (GT-D6 per-device tokens are the upgrade). */
+  TERMINAL_MIRROR_WRITE_FILE: ["native", "terminal-mirror-write.key"],
   MGMT_SOCKET: ["native", "run", SOCKETS.MGMT],
   MESHDATA_SOCKET: ["native", "run", SOCKETS.MESHDATA],
   TERMINAL_CONTROL_SOCKET: ["native", "run", SOCKETS.TERMINAL_CONTROL],

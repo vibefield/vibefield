@@ -268,6 +268,17 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: true,
   }),
+  // MF-2a (GM-D5) — the floor hands its mirror-write capability to its ONE
+  // paired management client so fieldd can grant it to a self peer over the
+  // tailnet door (`terminal.mirrorWriteGrant`). Idempotent: asking twice
+  // returns the same string, because the floor mints at most one.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.terminal.mirrorWriteCapability",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "mgmt",
     method: "native.diagnostics.query",

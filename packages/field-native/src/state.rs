@@ -141,6 +141,17 @@ pub struct DaemonState {
     /// legacy reading. `terminal_endpoints_now` folds the two for callers that
     /// only want dial coordinates.
     pub terminal_routes: watch::Receiver<TerminalRouteSnapshot>,
+    /// MF-2a (GM-D5) — the floor's mirror-write capability, resolved at boot
+    /// (the env's, or the one this floor minted). Held so the single paired
+    /// management client can be ANSWERED for it
+    /// (`native.terminal.mirrorWriteCapability`) and fieldd can grant it to a
+    /// self peer over the tailnet door, instead of a human typing the string
+    /// into a phone.
+    ///
+    /// Memory-only, exactly like `terminal`'s bearer token above: it reaches
+    /// the mgmt reply and nothing else — no log line, no health detail, no
+    /// audit attribute (EL7). `None` is the honest view-only floor.
+    pub terminal_mirror_write: Option<String>,
     /// Process-owned native diagnostic producer. Embedded unit tests omit it;
     /// the production main installs it before service composition.
     pub logging: Option<NativeLogging>,
@@ -160,6 +171,7 @@ impl DaemonState {
         mesh: MeshHandle,
         bridge: BridgeHandle,
         terminal_routes: watch::Receiver<TerminalRouteSnapshot>,
+        terminal_mirror_write: Option<String>,
         logging: Option<NativeLogging>,
     ) -> Arc<Self> {
         let (health_tx, _) = watch::channel(health);
@@ -175,6 +187,7 @@ impl DaemonState {
             bridge,
             terminal: OnceLock::new(),
             terminal_routes,
+            terminal_mirror_write,
             logging,
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),

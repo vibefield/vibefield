@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
 
 /// GT-4a's master switch, named once so the strip-list claim below can be
 /// asserted against the string this file actually reads.
@@ -45,6 +46,13 @@ pub struct NativeConfig {
     /// peer is view-only. Per-device scoped tokens are the named upgrade
     /// (design-00 §4.8).
     ///
+    /// MF-2a (GM-D5): a floor whose terminal mesh is ON always has one. The
+    /// env wins when it is set; otherwise `ensure_terminal_mirror_write` mints
+    /// one at boot and keeps it in `terminal-mirror-write.key`, so the phone
+    /// can be GRANTED the capability over the door instead of being handed a
+    /// string to type. A mesh-off floor stays `None`: nothing serves, so there
+    /// is nothing to gate.
+    ///
     /// EL7, twice over: it is `FIELD_`-prefixed, so it rides
     /// `registries::ENV_PREFIXES` into ghosttea's strip list and cannot reach an
     /// agent PTY even in inherit mode; and it is never logged — the log records
@@ -52,7 +60,9 @@ pub struct NativeConfig {
     /// rather than anything we compare here, because upstream owns the compare.
     ///
     /// That compare is constant-time in its CONTENTS and not in its length:
-    /// `TruffleTerminalConfig::access_for` (ghosttea-truffle 0.9.2 lib.rs:3962-3979)
+    /// `TruffleTerminalConfig::access_for` (re-read 2026-09-13 against the
+    /// CURRENT pin, ghosttea-truffle 0.11.1 lib.rs:3972-3989 — this line said
+    /// 0.9.2 lib.rs:3962-3979 until the pin moved; the code is unchanged)
     /// tests `expected.len() == supplied.len()` before reaching `subtle::ct_eq`,
     /// so a peer that may attach repeatedly can learn how long this string is —
     /// it cannot learn a byte of it. Length is the one fact the timing leaks, and
@@ -178,6 +188,47 @@ impl NativeConfig {
     /// 0600 — the D8 pairing secret, created by field-native on first boot.
     pub fn pairing_file(&self) -> PathBuf {
         self.join_layout(crate::registries::layout::PAIRING_FILE)
+    }
+
+    /// 0600 — MF-2a's minted mirror-write capability, beside the pairing
+    /// secret. In the native dir rather than the run dir for the reason the
+    /// Ghostty overlay below is: a boot creates the run dir's contents, and
+    /// this string must survive a boot (a phone that was granted it yesterday
+    /// still holds it today).
+    pub fn terminal_mirror_write_file(&self) -> PathBuf {
+        self.join_layout(crate::registries::layout::TERMINAL_MIRROR_WRITE_FILE)
+    }
+
+    /// MF-2a — make "a serving floor always has a capability" true.
+    ///
+    /// Called once at boot, BEFORE the units are built (the terminal unit
+    /// resolves its `MeshPlan` from this config), and idempotent after that:
+    /// the env value wins and nothing is written, a mesh-off floor mints
+    /// nothing, and a floor that has minted before reads the same string back.
+    ///
+    /// Never fatal. A floor that cannot write the file keeps serving
+    /// VIEW-ONLY and says so through the mesh face it already publishes —
+    /// refusing to boot over a key file would take the PTYs down with it,
+    /// which is precisely the two-planes law's inversion.
+    pub fn ensure_terminal_mirror_write(&mut self) {
+        if !self.terminal_mesh_enabled || self.terminal_mirror_write.is_some() {
+            return;
+        }
+        let path = self.terminal_mirror_write_file();
+        match load_or_mint_mirror_write(&path) {
+            Ok(capability) => self.terminal_mirror_write = Some(capability),
+            Err(error) => {
+                // The PATH is operational news; the capability never is.
+                tracing::warn!(
+                    event = "field_native.terminal.mirror_write_unavailable",
+                    component = "terminal",
+                    path = %path.display(),
+                    error = %format!("{error:#}"),
+                    "The floor could not mint or read its mirror-write capability; \
+                     remote viewers stay view-only until it can"
+                );
+            }
+        }
     }
 
     /// The app-owned Ghostty config overlay the terminal unit loads after the
@@ -328,6 +379,86 @@ impl NativeConfig {
     }
 }
 
+/// MF-2a — read the capability back, or mint one on first use.
+///
+/// HEX, and 32 random bytes of it: the pairing secret already spells a 32-byte
+/// secret this way (`pairing::load_or_create_secret`), and hex survives every
+/// shell, QR code and paste without an alphabet or padding question — the
+/// phone's own sheet trims whitespace and stores whatever is left
+/// (`WriteKeySheet.swift:124-126`), so a hex string reaches its Keychain
+/// unharmed. The value is opaque to everything downstream — upstream's
+/// `access_for` compares bytes — so a hand-written file holding some other
+/// string is honored as-is.
+///
+/// The file's CONTENTS are a secret; its path is not. Nothing here logs the
+/// string, and the two `with_context` messages below name the path only.
+fn load_or_mint_mirror_write(path: &Path) -> Result<String> {
+    if path.exists() {
+        let raw =
+            std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+        let existing = raw.trim().to_owned();
+        if !existing.is_empty() {
+            // A file this floor wrote with a looser mode (an older boot, a
+            // restore from a backup, an editor's rewrite) is tightened rather
+            // than trusted: the same-uid adversary is EL7's, but another
+            // account on the box is not one we hand a capability to.
+            harden(path)?;
+            return Ok(existing);
+        }
+        // An empty file is a truncated write, never a capability: minting over
+        // it beats wedging a floor that can never grant write again. The phone
+        // re-asks for a grant and gets the new one.
+        tracing::warn!(
+            event = "field_native.terminal.mirror_write_reminted",
+            component = "terminal",
+            path = %path.display(),
+            "The mirror-write capability file was empty; minting a fresh capability"
+        );
+    }
+    let mut bytes = [0u8; 32];
+    rand::fill(&mut bytes);
+    let capability = hex::encode(bytes);
+    if let Some(parent) = path.parent() {
+        let fresh = !parent.exists();
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+        // 0700 only on a directory this call created — the boot creates the
+        // native dir before this runs, and silently re-moding a directory the
+        // pairing secret and the Ghostty overlay also live in is not this
+        // function's decision to make.
+        #[cfg(unix)]
+        if fresh {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))
+                .with_context(|| format!("chmod 0700 {}", parent.display()))?;
+        }
+    }
+    std::fs::write(path, &capability).with_context(|| format!("write {}", path.display()))?;
+    harden(path)?;
+    Ok(capability)
+}
+
+/// 0600 on unix. WIN-D4, as at the pairing file: windows has no mode bits to
+/// set, the profile's inherited ACLs carry the other-account boundary, and the
+/// same-uid adversary is held out by token discipline on every OS.
+fn harden(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let current = std::fs::metadata(path)
+            .with_context(|| format!("stat {}", path.display()))?
+            .permissions()
+            .mode()
+            & 0o777;
+        if current != 0o600 {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+                .with_context(|| format!("chmod 0600 {}", path.display()))?;
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
 /// `HOME` is a unix fact — Windows has `USERPROFILE`. One resolver so no
 /// default below quietly lands on `"."` (a CWD-relative data root would carry
 /// the pairing secret and every endpoint to wherever the process was launched).
@@ -388,5 +519,161 @@ fn resolve_log_root() -> anyhow::Result<PathBuf> {
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join(".local/state"))
             .join("vibefield/logs"))
+    }
+}
+
+/// MF-2a — the mint, its idempotence, its refusals and its mode. Driven
+/// through `ensure_terminal_mirror_write` on constructed configs rather than
+/// `from_env`: the process environment is shared by every test in this binary,
+/// and the law under test ("the env wins") is a branch, not a variable.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn serving(dir: &std::path::Path) -> NativeConfig {
+        NativeConfig {
+            terminal_mesh_enabled: true,
+            ..NativeConfig::for_data_dir(dir.to_path_buf())
+        }
+    }
+
+    #[cfg(unix)]
+    fn mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).expect("stat").permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn a_serving_floor_mints_a_capability_once_and_reads_it_back() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut first = serving(dir.path());
+        first.ensure_terminal_mirror_write();
+        let minted = first
+            .terminal_mirror_write
+            .clone()
+            .expect("a serving floor always has a capability");
+        assert_eq!(minted.len(), 64, "32 random bytes as hex: {minted}");
+        assert!(
+            minted.chars().all(|c| c.is_ascii_hexdigit()),
+            "the minted capability must be hex: {minted}"
+        );
+
+        // The second boot is the same floor, not a rotation — a phone granted
+        // the capability yesterday must still be able to write today.
+        let mut second = serving(dir.path());
+        second.ensure_terminal_mirror_write();
+        assert_eq!(
+            second.terminal_mirror_write.as_deref(),
+            Some(minted.as_str())
+        );
+
+        // And the call is idempotent WITHIN a boot.
+        second.ensure_terminal_mirror_write();
+        assert_eq!(
+            second.terminal_mirror_write.as_deref(),
+            Some(minted.as_str())
+        );
+
+        let file = first.terminal_mirror_write_file();
+        assert_eq!(
+            std::fs::read_to_string(&file)
+                .expect("read the key file")
+                .trim(),
+            minted
+        );
+        assert_eq!(
+            file.file_name().and_then(|n| n.to_str()),
+            Some("terminal-mirror-write.key"),
+            "the name is LAYOUT's, never respelled here"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_minted_capability_file_is_0600() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut config = serving(dir.path());
+        config.ensure_terminal_mirror_write();
+        let file = config.terminal_mirror_write_file();
+        assert_eq!(mode(&file), 0o600, "the capability is a secret on disk");
+
+        // A file loosened underneath us is tightened on the way back in, not
+        // trusted: another ACCOUNT on the box is not a principal we grant.
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).expect("chmod");
+        let mut reboot = serving(dir.path());
+        reboot.ensure_terminal_mirror_write();
+        assert_eq!(mode(&file), 0o600, "a loose capability file is re-hardened");
+        assert_eq!(reboot.terminal_mirror_write, config.terminal_mirror_write);
+    }
+
+    #[test]
+    fn the_environment_wins_and_nothing_is_written() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut config = NativeConfig {
+            terminal_mirror_write: Some("  exported-by-hand  ".trim().to_owned()),
+            ..serving(dir.path())
+        };
+        config.ensure_terminal_mirror_write();
+        assert_eq!(
+            config.terminal_mirror_write.as_deref(),
+            Some("exported-by-hand")
+        );
+        assert!(
+            !config.terminal_mirror_write_file().exists(),
+            "an exported capability must leave no file behind — rotation stays the env's"
+        );
+    }
+
+    #[test]
+    fn a_mesh_off_floor_mints_nothing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut config = NativeConfig::for_data_dir(dir.path().to_path_buf());
+        assert!(!config.terminal_mesh_enabled);
+        config.ensure_terminal_mirror_write();
+        assert_eq!(
+            config.terminal_mirror_write, None,
+            "nothing serves, nothing is gated"
+        );
+        assert!(
+            !config.terminal_mirror_write_file().exists(),
+            "a floor that publishes nothing writes no capability"
+        );
+    }
+
+    #[test]
+    fn an_empty_capability_file_is_reminted_rather_than_honored() {
+        // A truncated write must not hand WRITE to a viewer that supplies the
+        // empty string, and must not wedge the floor either.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut config = serving(dir.path());
+        let file = config.terminal_mirror_write_file();
+        std::fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
+        std::fs::write(&file, "   \n").expect("write an empty capability");
+
+        config.ensure_terminal_mirror_write();
+        let minted = config
+            .terminal_mirror_write
+            .clone()
+            .expect("a fresh capability");
+        assert_eq!(minted.len(), 64);
+        assert_eq!(std::fs::read_to_string(&file).expect("read").trim(), minted);
+    }
+
+    #[test]
+    fn a_hand_written_capability_is_honored_verbatim() {
+        // The value is opaque downstream (upstream compares bytes), so an
+        // operator's own string in the file is the floor's capability.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut config = serving(dir.path());
+        let file = config.terminal_mirror_write_file();
+        std::fs::create_dir_all(file.parent().expect("parent")).expect("mkdir");
+        std::fs::write(&file, "a-capability-a-human-chose\n").expect("write");
+
+        config.ensure_terminal_mirror_write();
+        assert_eq!(
+            config.terminal_mirror_write.as_deref(),
+            Some("a-capability-a-human-chose")
+        );
     }
 }

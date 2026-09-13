@@ -92,7 +92,7 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
 /// been installed by main. Tests use `bootstrap` to avoid competing global
 /// subscribers inside one test process.
 pub async fn bootstrap_with_logging(
-    config: config::NativeConfig,
+    mut config: config::NativeConfig,
     boot_id: String,
     logging: Option<logging::NativeLogging>,
 ) -> Result<RunningDaemon> {
@@ -116,6 +116,14 @@ pub async fn bootstrap_with_logging(
 
     let pairing_file = config.pairing_file();
     let secret = pairing::load_or_create_secret(&pairing_file)?;
+
+    // MF-2a (GM-D5) — a floor that SERVES its terminals over the mesh always
+    // has a mirror-write capability, so the phone can be granted one instead of
+    // being handed a string to type. Here and not in `from_env` because it is a
+    // boot act (it writes a file, beside the pairing secret this line above
+    // just minted) and because the terminal unit reads the resolved value when
+    // `build_units` constructs it, two lines below.
+    config.ensure_terminal_mirror_write();
 
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
@@ -153,6 +161,10 @@ pub async fn bootstrap_with_logging(
         // and inventory lines below (the mgmt plane reads state; the unit
         // supervises cells; neither learns the other's job).
         terminal_handle.routes_rx(),
+        // The capability rides the state so the mgmt plane can answer for it
+        // without learning what a terminal mesh is (the wiring law the three
+        // lines above follow).
+        config.terminal_mirror_write.clone(),
         logging.clone(),
     );
 

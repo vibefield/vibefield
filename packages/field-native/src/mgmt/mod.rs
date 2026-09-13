@@ -289,6 +289,21 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
             "native.lifecycle.desired.set" => {
                 send(&tx, handle_desired_set(&state, conn_id, &params, id).await);
             }
+            "native.terminal.mirrorWriteCapability" => {
+                // MF-2a (GM-D5) — the floor is the only holder of the
+                // mirror-write capability, and this is the ONE hop that ever
+                // carries its value: to the single pairing-verified client on
+                // a local socket, which grants it to a self peer over the
+                // tailnet door (`terminal.mirrorWriteGrant`). `configured:
+                // false` is the honest view-only floor — the same fact
+                // `MeshPlan::offers_mirror_write` publishes as a face — and it
+                // is what fieldd turns into UNAVAILABLE {no-mirror-write}.
+                let result = match &state.terminal_mirror_write {
+                    Some(capability) => json!({"configured": true, "capability": capability}),
+                    None => json!({"configured": false}),
+                };
+                send(&tx, ok(id, result));
+            }
             "native.diagnostics.query" => {
                 send(&tx, diagnostics::query(&state, &params, id));
             }
