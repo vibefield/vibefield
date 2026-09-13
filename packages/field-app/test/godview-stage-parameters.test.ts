@@ -197,3 +197,16 @@ describe("a view's tunables are stored per view and per revision (AR-5)", () => 
     expect(tuning().view.id).toBe(DEFAULT_MONITOR_VIEW_ID);
   });
 });
+
+describe("the view registry's invariant (the deleted parameters test's claim, kept — AR-5b)", () => {
+  it("gives every package view a distinct id, a label and its own declared controls", () => {
+    // The registry is the package's now and no upstream test asserts this;
+    // the stage iterates it, so a duplicate id or a control-less view is a
+    // stage defect as much as a package one.
+    expect(new Set(MONITOR_VIEWS.map((view) => view.id)).size).toBe(MONITOR_VIEWS.length);
+    for (const view of MONITOR_VIEWS) {
+      expect(view.label, view.id).not.toBe("");
+      expect(view.parameterGroups.length, `${view.id} declares no controls`).toBeGreaterThan(0);
+    }
+  });
+});

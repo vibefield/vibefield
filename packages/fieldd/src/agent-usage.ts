@@ -289,7 +289,16 @@ export class AccountUsageService {
    * in the next answer or in a subscriber's next frame. */
   snapshot(): AgentAccountUsageBatch {
     if (this.latest !== null) return this.latest;
-    if (!this.disposed) void this.monitor.refresh().catch(() => undefined);
+    // One reading for a caller who asked — after the registry reconcile (the
+    // unkeyed-row hazard `beginPolling` names), never while a poll is already
+    // bringing one, and only once the daemon is ARMED: a call between the
+    // API's registration and `lifecycle.ready` gets the honest empty and
+    // spends no credentialed call the boot sequence meant to defer (AR-5b).
+    if (this.armed && !this.disposed && !this.polling) {
+      void this.refreshProfiles()
+        .then(() => this.monitor.refresh())
+        .catch(() => undefined);
+    }
     return { entries: [], generatedAt: this.now().toISOString() };
   }
 
@@ -311,8 +320,15 @@ export class AccountUsageService {
   private beginPolling(): void {
     if (this.polling || !this.armed || this.disposed) return;
     this.polling = true;
-    this.monitor.start();
-    void this.refreshProfiles();
+    // The reconcile FIRST, then the poll. `start()` takes a reading at once,
+    // and a reading over the unkeyed per-provider rows the reconcile then
+    // replaces made the first frame say every account had failed — and spent
+    // one extra credentialed call per provider (AR-5b, the review's probe).
+    // After the reconcile the start's own reading finds nothing due and
+    // costs nothing; a subscriber that left meanwhile starts no poll.
+    void this.refreshProfiles().then(() => {
+      if (this.polling && !this.disposed) this.monitor.start();
+    });
   }
 
   private endPolling(): void {

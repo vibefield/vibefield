@@ -14,6 +14,7 @@ import {
   IndexEnrollmentRecord,
   IndexSearchResponse,
   IndexSearchResult,
+  IndexSessionsResult,
   IndexStatus,
 } from "../src/agent-index";
 import {
@@ -163,6 +164,7 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // golden, digest cited in the file) and what `index.search` answers over it.
   "index-search": IndexSearchResponse,
   "index-search-result": IndexSearchResult,
+  "index-sessions": IndexSessionsResult,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

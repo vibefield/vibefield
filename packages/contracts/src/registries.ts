@@ -309,6 +309,18 @@ export const SCOPES = [
   // this device; neither enters TAILNET_SCOPES or any plugin eligibility table.
   "index.manage",
   "agents.manage",
+  // AR-5b (the review's EL7 lens) — two CONTENT reads, split off the census
+  // scopes the AR-5 doors first rode. `index.search` covers `index.sessions`
+  // + `index.search`: transcript search over every consented root — which a
+  // plugin that asked `index.read` to draw the roll call must never gain on
+  // an upgrade with no re-consent. `agent.usage` covers `agents.usage` + its
+  // subscription: the account's billing state, and a credentialed vendor call
+  // per reading — not what `agent.observe` (the fold) was consented for.
+  // Both are local-only forever (a person's transcripts and accounts are on
+  // the device in front of them) and in NO plugin eligibility table:
+  // `plugins.ts` names neither, and absence is the safe default there.
+  "index.search",
+  "agent.usage",
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 

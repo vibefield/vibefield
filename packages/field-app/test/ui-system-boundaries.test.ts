@@ -251,6 +251,18 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
+  it("gives the chrome slot its rule — the usage column stands in the stage's left edge (AR-5b)", () => {
+    // The review's blocker: the slot's class had a comment and no rule, so the
+    // column laid out in flow — below the clipped swarm, across the list. The
+    // rule is the reference host's; the claims strip starts at 72px beside it.
+    const godview = source("godview/godview.css");
+    const rule = godview.match(/^\.vf-monitor-chrome \{([^}]*)\}/m)?.[1] ?? "";
+    expect(rule).toContain("position: absolute");
+    expect(rule).toContain("left: 13px");
+    expect(rule).toContain("width: 46px");
+    expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*left: 72px/m);
+  });
+
   it("keeps the swarm's own styling in the views package, never in godview.css (AR-5)", () => {
     // The swarm, its bodies and its type are the package's (RFC 005, drawn by
     // WebGPU); what VibeField keeps beside the view is its physics THREAD — a

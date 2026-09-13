@@ -181,3 +181,21 @@ describe("the ledger between sessions", () => {
     expect(loadProjectLedger(KEY)).toEqual(EMPTY_PROJECT_LEDGER);
   });
 });
+
+describe("the cache's cap (AR-5b)", () => {
+  it("persists at most 256 keys — the newest dealt — and deals on past them", () => {
+    // A machine that has run agents in a thousand directories must not keep a
+    // thousand absolute paths in its renderer partition; the newest projects
+    // keep their colours, the oldest fall out of the cache and re-deal.
+    const keys = Array.from({ length: 300 }, (_, index) => `/Projects/p${index}`);
+    const dealt = dealProjectSeqs(EMPTY_PROJECT_LEDGER, keys);
+    saveProjectLedger("vf-test-cap", dealt);
+    const loaded = loadProjectLedger("vf-test-cap");
+    expect(loaded.seqByKey.size).toBe(256);
+    expect(loaded.seqByKey.get("/Projects/p299")).toBe(299);
+    expect(loaded.seqByKey.has("/Projects/p0")).toBe(false);
+    // `next` never rewinds: a project that fell out is dealt a NEW sequence
+    expect(loaded.next).toBe(300);
+    expect(dealProjectSeqs(loaded, ["/Projects/p0"]).seqByKey.get("/Projects/p0")).toBe(300);
+  });
+});

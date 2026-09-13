@@ -1,11 +1,11 @@
-import type {
-  AccountUsageBatch,
-  AccountUsageEntry,
-  AccountUsageFailure,
-  AccountUsageFetchResult,
-  AccountUsageMetric,
-  AccountUsageScope,
-  AccountUsageSource,
+import {
+  type AccountUsageBatch,
+  type AccountUsageEntry,
+  type AccountUsageFailure,
+  type AccountUsageFetchResult,
+  type AccountUsageMetric,
+  AccountUsageScopeSchema,
+  type AccountUsageSource,
 } from "@vibecook/puppeteer-core";
 import type {
   AccountUsagePort,
@@ -141,7 +141,9 @@ export function historyPortOver(client: DoorClient): HistoryPort {
           answered: result.answered,
           hits: result.hits.map((hit) => ({
             sessionId: hit.sessionId,
-            rootSessionId: hit.rootSessionId,
+            // absent when the daemon could not attribute the hit — never the
+            // hit's own id in its place (AR-5b)
+            ...(hit.rootSessionId !== undefined ? { rootSessionId: hit.rootSessionId } : {}),
             ...(hit.nativeSessionId !== undefined ? { nativeSessionId: hit.nativeSessionId } : {}),
             ...(hit.title !== undefined ? { title: hit.title } : {}),
             timelineId: hit.timelineId,
@@ -182,25 +184,40 @@ function toEntry(row: AgentAccountUsageEntry): AccountUsageEntry {
     // the cadence), and nothing in the column reads this. NaN says so.
     refresh: { pollIntervalMs: Number.NaN },
   };
+  // Core's failure union has no slot for `unknown` (a daemon that has not
+  // read yet, the contract's honest word); the column can draw only Core's
+  // shapes, so it is said as an unavailable reading that IS retryable — the
+  // next poll may answer — under its own sentence, never the bare word or
+  // a claimed refusal (AR-5b; a `pending` slot upstream is the real fix).
+  const unknown = row.state === "unknown";
   const failure = (): AccountUsageFailure => ({
     status:
       row.state === "unauthenticated" || row.state === "unsupported" ? row.state : "unavailable",
     provider: row.provider,
-    message: row.message ?? row.state,
-    retryable: row.retryable ?? false,
+    message: row.message ?? (unknown ? "no reading yet" : row.state),
+    retryable: row.retryable ?? unknown,
     ...(row.state === "rate-limited" ? { code: "rate-limited" as const } : {}),
     ...(row.retryAt !== undefined ? { retryAt: row.retryAt } : {}),
   });
-  const held = row.metrics.length > 0 && (row.state === "available" || row.stale === true);
+  // A reading is a reading with or without percentage meters: an account on
+  // credits alone (Codex, Grok) reports `available` with no metrics, and the
+  // column has its own honest line for that (NO LIMIT DATA) — gating on
+  // the meters drew it as a refusal captioned "available" and dropped the
+  // credits (AR-5b).
+  const held = row.state === "available" || row.stale === true;
+  const scope = AccountUsageScopeSchema.safeParse(row.scope);
   const result: AccountUsageFetchResult = held
     ? {
         status: "available",
         snapshot: {
           provider: row.provider,
           fetchedAt: row.fetchedAt,
-          scope: (row.scope ?? "unknown") as AccountUsageScope,
-          // the door carries the adapter's source when it named one; the
-          // column reads neither field, so an absent source stays unknown-ish
+          // the contract's scope word is open; Core's is a closed enum, and a
+          // word Core does not know is `unknown` rather than a typed lie
+          scope: scope.success ? scope.data : "unknown",
+          // fieldd names the source of every available reading (Core requires
+          // one); the fallback is for a row this reader cannot vouch for, and
+          // the column reads neither field
           source: (row.source ?? {
             kind: "native-protocol",
             stability: "experimental",

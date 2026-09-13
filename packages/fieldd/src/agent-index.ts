@@ -77,7 +77,21 @@ const SESSION_LIST_LIMIT = 1_000;
 /** the AR-4 single-id lookup's limit, unchanged: one native id, its children */
 const SESSION_FACTS_LIMIT = 50;
 const DEFAULT_SEARCH_LIMIT = 300;
-const MAX_ROOT_LOOKUPS_PER_SEARCH = 32;
+/** A search's attribution walk fetches session rows in flights this wide: a
+ * local daemon answers a row in milliseconds, and a flat sequential budget
+ * (32 lookups) dropped a fifth of a 40-agent board's matches (AR-5b). */
+const ROOT_LOOKUP_CONCURRENCY = 8;
+/** One deadline for the whole walk, so a slow daemon clips the answer
+ * rather than turning one keystroke into a minute of round trips. */
+const SEARCH_ATTRIBUTION_DEADLINE_MS = 8_000;
+
+/** A daemon path without its query string — the only form a log line or an
+ * error sentence may carry: `/api/search?q=…` holds the reader's own words
+ * (EL7: fieldd's log segments are readable by every same-uid agent). */
+function routeOf(path: string): string {
+  const at = path.indexOf("?");
+  return at === -1 ? path : path.slice(0, at);
+}
 /** rosetta 18 added `sessions=` (the scope) and `prefix=` (fragment widening) */
 const SESSION_SCOPE_PROTOCOL = 18;
 
@@ -777,22 +791,39 @@ export class IndexService {
 
     // the daemon stopped at its limit, so some sessions may be under-reported
     let clipped = parsed.data.hits.length >= limit;
+    // THE WALK IS THE ORDINARY PATH, not an edge: rosetta widens each named
+    // root to its delegated children, so hits arrive from sessions the
+    // question never named. Every distinct unknown session is resolved —
+    // concurrently, in bounded flights, under one deadline for the call —
+    // and a walk that stopped early clips the answer rather than dropping
+    // hits in silence (AR-5b, the review's probe: 40 hits in, 32 out).
+    const deadlineMs = Date.now() + SEARCH_ATTRIBUTION_DEADLINE_MS;
+    const unknownSessions = [...new Set(parsed.data.hits.map((hit) => hit.session_id))].filter(
+      (id) => !roots.has(id) && !known.has(id),
+    );
+    if (!(await this.resolveSessions(unknownSessions, known, deadlineMs))) clipped = true;
     const hits: IndexSearchHit[] = [];
-    const budget = { remaining: MAX_ROOT_LOOKUPS_PER_SEARCH };
     for (const hit of parsed.data.hits) {
-      let root = roots.get(hit.session_id);
-      if (root === undefined) {
-        // a hit inside a delegated child: walk it up to the root a reader
-        // navigates to, within the call's budget
-        root = await this.rootOf(hit.session_id, known, budget);
-        if (root === undefined) clipped = true;
-        // a scoped question never answers outside its scope
-        if (scoped && (root === undefined || !roots.has(root.id))) continue;
+      let rootId: string | undefined = roots.has(hit.session_id) ? hit.session_id : undefined;
+      if (rootId === undefined) {
+        // the child's own row names its root — a FACT even when the root's
+        // row was not fetched; a hit whose row is unknown carries no root at
+        // all, never its own id in the root's place (that made a subagent
+        // transcript read as top-level)
+        rootId = known.get(hit.session_id)?.root_session_id;
+        if (rootId === undefined) clipped = true;
+        // a scoped question never answers outside its scope — and an answer
+        // that dropped a hit for it says so, rather than reading as complete
+        if (scoped && (rootId === undefined || !roots.has(rootId))) {
+          clipped = true;
+          continue;
+        }
       }
+      const root = rootId === undefined ? undefined : (roots.get(rootId) ?? known.get(rootId));
       const at = hit.at;
       hits.push({
         sessionId: hit.session_id,
-        rootSessionId: root?.id ?? hit.session_id,
+        ...(rootId !== undefined ? { rootSessionId: rootId } : {}),
         ...(root !== undefined && root.native_session_id !== ""
           ? { nativeSessionId: root.native_session_id }
           : {}),
@@ -946,15 +977,31 @@ export class IndexService {
     return parsed.data.sessions;
   }
 
-  /** The root a hit's session rolls up to, within the call's budget. */
-  private async rootOf(
-    sessionId: string,
+  /** Resolve every listed session, then each one's root, in bounded
+   * concurrent flights until the call's deadline. The budget is the
+   * answer's own size (a row and a root per session); false means the walk
+   * stopped early and the answer is CLIPPED — under-attributed, never
+   * wrong. Two passes and no more: a row names its root and a root names
+   * itself, so there is nothing to cycle through. */
+  private async resolveSessions(
+    ids: readonly string[],
     known: Map<string, IndexSessionRow>,
-    budget: { remaining: number },
-  ): Promise<IndexSessionRow | undefined> {
-    const row = await this.sessionRow(sessionId, known, budget);
-    if (row === undefined || row.root_session_id === row.id) return row;
-    return await this.sessionRow(row.root_session_id, known, budget);
+    deadlineMs: number,
+  ): Promise<boolean> {
+    const budget = { remaining: ids.length * 2 };
+    const fetchAll = async (wanted: readonly string[]): Promise<boolean> => {
+      for (let start = 0; start < wanted.length; start += ROOT_LOOKUP_CONCURRENCY) {
+        if (Date.now() >= deadlineMs) return false;
+        const flight = wanted.slice(start, start + ROOT_LOOKUP_CONCURRENCY);
+        await Promise.all(flight.map((id) => this.sessionRow(id, known, budget)));
+      }
+      return true;
+    };
+    if (!(await fetchAll(ids))) return false;
+    const rootIds = [...new Set(ids.map((id) => known.get(id)?.root_session_id))].filter(
+      (id): id is string => id !== undefined && !known.has(id),
+    );
+    return await fetchAll(rootIds);
   }
 
   /** One session by canonical id, cached for the call and BOUNDED: an answer
@@ -1008,13 +1055,18 @@ export class IndexService {
       });
     } catch (error) {
       this.logger.warn("fieldd.index.unreachable", "Index daemon did not answer", {
-        path,
+        route: routeOf(path),
         error: error instanceof Error ? error.message : String(error),
       });
-      throw new RpcCallError("UNAVAILABLE", `the agent index did not answer ${path}`, true, {
-        service: "index",
-        state: "unreachable",
-      });
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        `the agent index did not answer ${routeOf(path)}`,
+        true,
+        {
+          service: "index",
+          state: "unreachable",
+        },
+      );
     }
     const version = response.headers.get("x-rosetta-protocol-version");
     if (version !== String(this.opts.expectedProtocolVersion)) {
@@ -1028,7 +1080,7 @@ export class IndexService {
     if (!response.ok) {
       throw new RpcCallError(
         "UNAVAILABLE",
-        `the agent index answered ${response.status} on ${path}`,
+        `the agent index answered ${response.status} on ${routeOf(path)}`,
         true,
         {
           service: "index",
@@ -1042,11 +1094,11 @@ export class IndexService {
       this.logger.warn(
         "fieldd.index.unreadable_body",
         "The index answered a body that is not JSON",
-        { path, error: error instanceof Error ? error.message : String(error) },
+        { route: routeOf(path), error: error instanceof Error ? error.message : String(error) },
       );
       throw new RpcCallError(
         "UNAVAILABLE",
-        `the agent index answered an unreadable body on ${path}`,
+        `the agent index answered an unreadable body on ${routeOf(path)}`,
         true,
         { service: "index", state: "malformed" },
       );

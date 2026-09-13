@@ -24,8 +24,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CONTRACTS_VERSION,
-  type IndexSearchResult,
-  type IndexSessionsResult,
+  IndexSearchResult,
+  IndexSessionsResult,
   type IndexStatus,
   SOCKETS,
 } from "@vibefield/contracts";
@@ -275,11 +275,12 @@ describe("index.sessions — the facts lane's lookup (AR-5e)", () => {
   it("asks ONE comma list for three native ids and answers a projection, in the caller's order", async () => {
     const world = await setup();
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["index.read"], "s1");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "s1");
     const before = world.asked().length;
-    const result = (await win.call("index.sessions", {
-      nativeSessionIds: ["nat-2", "nat-1", "nat-unknown"],
-    })) as IndexSessionsResult;
+    // parsed under the contract on the producer's side (EL9), not cast
+    const result = IndexSessionsResult.parse(
+      await win.call("index.sessions", { nativeSessionIds: ["nat-2", "nat-1", "nat-unknown"] }),
+    );
 
     const asked = world.asked().slice(before);
     expect(asked).toHaveLength(1);
@@ -305,7 +306,7 @@ describe("index.sessions — the facts lane's lookup (AR-5e)", () => {
   it("chunks an ask wider than 64 ids and merges the answers", async () => {
     const world = await setup();
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["index.read"], "s2");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "s2");
     const before = world.asked().length;
     const ids = [...Array.from({ length: 69 }, (_, i) => `nat-filler-${i}`), "nat-1"];
     const result = (await win.call("index.sessions", {
@@ -329,10 +330,14 @@ describe("index.sessions — the facts lane's lookup (AR-5e)", () => {
 
   it("an index that is not ready refuses the lookup — the honest phase, before the wire", async () => {
     const world = await setup({ mode: "silent" });
-    const win = await windowToken(world.daemon, ["index.read"], "s3");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "s3");
+    const before = world.asked().length;
     const error = await win.callErr("index.sessions", { nativeSessionIds: ["nat-1"] });
     expect(error.data?.kind).toBe("UNAVAILABLE");
     expect(error.data?.details).toMatchObject({ service: "index" });
+    // BEFORE the wire: the honest early refusal, not a late one dressed the
+    // same (deleting `requireReady` passed this row until it asked)
+    expect(world.asked().length).toBe(before);
   });
 });
 
@@ -340,12 +345,11 @@ describe("index.search — one question over the history (AR-5e)", () => {
   it("scopes to the live runs' canonical roots, forwards prefix, and joins each hit to its run", async () => {
     const world = await setup();
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["index.read"], "q1");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q1");
     const before = world.asked().length;
-    const result = (await win.call("index.search", {
-      q: "needle",
-      nativeSessionIds: ["nat-1", "nat-2"],
-    })) as IndexSearchResult;
+    const result = IndexSearchResult.parse(
+      await win.call("index.search", { q: "needle", nativeSessionIds: ["nat-1", "nat-2"] }),
+    );
 
     const search = searchesIn(world.asked().slice(before));
     expect(search).toHaveLength(1);
@@ -383,7 +387,7 @@ describe("index.search — one question over the history (AR-5e)", () => {
   it("kind and the other filters ride through as the caller asked them", async () => {
     const world = await setup();
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["index.read"], "q2");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q2");
     const before = world.asked().length;
     const result = (await win.call("index.search", {
       q: "needle",
@@ -414,7 +418,7 @@ describe("index.search — one question over the history (AR-5e)", () => {
       },
     });
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["index.read"], "q3");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q3");
     const result = (await win.call("index.search", {
       q: "needle",
       nativeSessionIds: ["nat-1"],
@@ -433,9 +437,31 @@ describe("index.search — one question over the history (AR-5e)", () => {
     });
   });
 
+  it("a scope the index has never read stays UNANSWERED while the projection is building (the readiness edge)", async () => {
+    // The row that pins `scopeUnknown`'s other branch: over a building index an
+    // unknown scope must not read as "no matches" (the mutation `answered = true`
+    // passed the ready-only row).
+    const world = await setup({
+      search: {
+        readiness: "building",
+        canonical_ready: false,
+        progress: { documents_done: 3, documents_total: 9 },
+        hits: HITS,
+      },
+    });
+    await ready(world.daemon);
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q9");
+    const result = IndexSearchResult.parse(
+      await win.call("index.search", { q: "needle", nativeSessionIds: ["nat-never"] }),
+    );
+    expect(result.answered).toBe(false);
+    expect(result.hits).toEqual([]);
+    expect(result.state.readiness).toBe("building");
+  });
+
   it("a daemon that is not ready is unanswered, not thrown — and nothing is asked", async () => {
     const world = await setup({ mode: "silent" });
-    const win = await windowToken(world.daemon, ["index.read"], "q4");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q4");
     const before = world.asked().length;
     const result = (await win.call("index.search", { q: "needle" })) as IndexSearchResult;
     expect(result).toMatchObject({ answered: false, hits: [], clipped: false });
@@ -450,7 +476,7 @@ describe("index.search — one question over the history (AR-5e)", () => {
   it("a scope the index has never read is answered-and-empty only once the index says it is ready", async () => {
     const world = await setup();
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["index.read"], "q5");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q5");
     const result = (await win.call("index.search", {
       q: "needle",
       nativeSessionIds: ["nat-never-indexed"],
@@ -468,7 +494,7 @@ describe("index.search — one question over the history (AR-5e)", () => {
       search: { hits: [{ session_id: "s1", kind: "user", at: 1, snippet: "[needle]" }] },
     });
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["index.read"], "q6");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q6");
     const error = await win.callErr("index.search", { q: "needle" });
     expect(error.data?.kind).toBe("UNAVAILABLE");
     expect(error.data?.details).toEqual({ service: "index", state: "malformed" });
@@ -478,7 +504,7 @@ describe("index.search — one question over the history (AR-5e)", () => {
     const world = await setup();
     await ready(world.daemon);
     const origin = world.daemon.rosettad?.state().origin as string;
-    const win = await windowToken(world.daemon, ["index.read"], "q7");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q7");
     const sessions = await win.call("index.sessions", { nativeSessionIds: ["nat-1"] });
     const search = await win.call("index.search", { q: "needle", nativeSessionIds: ["nat-1"] });
     const status = await win.call("index.status", {});
@@ -492,7 +518,7 @@ describe("index.search — one question over the history (AR-5e)", () => {
   it("refuses params the doors do not admit", async () => {
     const world = await setup();
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["index.read"], "q8");
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q8");
     expect((await win.callErr("index.search", { q: "" })).data?.kind).toBe("PRECONDITION_FAILED");
     // rosetta answers 400 for a kind it does not index; the door refuses first
     expect((await win.callErr("index.search", { q: "needle", kind: "tool_use" })).data?.kind).toBe(
@@ -505,13 +531,21 @@ describe("index.search — one question over the history (AR-5e)", () => {
 });
 
 describe("the doors' posture", () => {
-  it("both doors ride index.read: a window token without it is refused", async () => {
+  it("both doors ride index.search, their OWN scope: a token holding only the fold or the census is refused (AR-5b)", async () => {
+    // The census scope `index.read` draws the roll call and is plugin-eligible;
+    // transcript search over every consented root is a different consent, so a
+    // holder of index.read alone — or of the fold — gets nothing here.
     const world = await setup();
     await ready(world.daemon);
-    const win = await windowToken(world.daemon, ["agent.observe"], "p1");
-    for (const method of ["index.sessions", "index.search"]) {
-      const error = await win.callErr(method, { q: "needle", nativeSessionIds: ["nat-1"] });
-      expect(error.data?.kind, method).toBe("FORBIDDEN_SCOPE");
+    for (const [suffix, scopes] of [
+      ["p1", ["agent.observe"]],
+      ["p2", ["index.read"]],
+    ] as const) {
+      const win = await windowToken(world.daemon, [...scopes], suffix);
+      for (const method of ["index.sessions", "index.search"]) {
+        const error = await win.callErr(method, { q: "needle", nativeSessionIds: ["nat-1"] });
+        expect(error.data?.kind, `${method} with ${scopes.join()}`).toBe("FORBIDDEN_SCOPE");
+      }
     }
   });
 
@@ -569,7 +603,11 @@ describe("the doors' posture", () => {
         error: { data: { kind: string; details: Record<string, unknown> } };
       };
       expect(res.error.data.kind, method).toBe("FORBIDDEN_SCOPE");
-      expect(res.error.data.details).toMatchObject({ method, locality: "local" });
+      // AR-5b: the tailnet preset carries no content scope at all, so the scope
+      // wall fires before the locality wall for a peer; the locality column
+      // still stands behind it (the census reads on index.read exercise it),
+      // and the handler ran for neither door either way
+      expect(res.error.data.details).toMatchObject({ required: "index.search" });
     }
     expect(called).toBe(0);
   });
@@ -607,7 +645,11 @@ describe.skipIf(
       seedClaudeHome: GROUNDTRUTH,
     });
     await until(() => world.daemon.health().rosettad.phase === "ready", 30_000);
-    const win = await windowToken(world.daemon, ["index.read", "index.manage"], "real1");
+    const win = await windowToken(
+      world.daemon,
+      ["index.read", "index.search", "index.manage"],
+      "real1",
+    );
     await untilAsync(
       () =>
         world.daemon.index

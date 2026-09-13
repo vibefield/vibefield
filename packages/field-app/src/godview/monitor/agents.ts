@@ -315,15 +315,19 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
   });
 }
 
-/** Agent-backed only: the status shortcuts navigate agents, not bare terminals. */
+/** Agent-backed only: the status shortcuts navigate agents, not bare terminals.
+ * `currentId` is the current ROW's id (the run): a managed row with no pane
+ * has no session, and matching on a session id of undefined kept returning
+ * the same second row instead of cycling (AR-5b). */
 export function nextMonitorAgentForStatus(
   agents: readonly MonitorAgent[],
   status: AgentVisualStatus,
-  currentSessionId: string | undefined,
+  currentId: string | undefined,
 ): MonitorAgent | undefined {
   const matching = agents.filter((agent) => agent.agent && agent.status === status);
   if (matching.length === 0) return undefined;
-  const currentIndex = matching.findIndex((agent) => agent.session?.id === currentSessionId);
+  const currentIndex =
+    currentId === undefined ? -1 : matching.findIndex((agent) => agent.id === currentId);
   return matching[(currentIndex + 1) % matching.length];
 }
 

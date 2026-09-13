@@ -30,7 +30,7 @@ import type {
 } from "@vibecook/puppeteer-core";
 import type { AgentProvider } from "@vibecook/puppeteer-runtime";
 import {
-  type AgentAccountUsageBatch,
+  AgentAccountUsageBatch,
   type AgentAccountUsageEntry,
   CONTRACTS_VERSION,
   LAYOUT,
@@ -50,7 +50,9 @@ const USAGE_FILE = "FAKE_ACCOUNT_USAGE_FILE";
 /** Small on purpose: the poller must be observable inside a test's patience. */
 const REFRESH_MS = 60;
 const TICK_MS = 25;
-const OBSERVER = ["agent.observe"];
+/** The column's own scope (AR-5b): a reading is the account's billing state and
+ * a credentialed call, which the fold's scope was never consented for. */
+const OBSERVER = ["agent.usage"];
 
 let cleanup: Array<() => void | Promise<void>> = [];
 let roots: string[] = [];
@@ -313,16 +315,26 @@ describe("the account usage doors (AR-5d)", () => {
     expect(Date.parse(first.generatedAt)).toBeGreaterThan(0);
 
     const batch = await batchWhere(win, (b) => b.entries.length > 0);
+    // parsed under the contract on the PRODUCER's side too (EL9): the
+    // renderer's tests read the fixtures, this reads the daemon's own answer
+    AgentAccountUsageBatch.parse(batch);
     expect(batch.entries).toHaveLength(1);
     const entry = batch.entries[0] as AgentAccountUsageEntry;
     expect(entry.provider).toBe("scripted");
     expect(entry.label).toBe("Scripted");
     expect(entry.state).toBe("available");
     expect(entry.metrics.map((m) => m.label)).toEqual(["5H", "7D"]); // the adapter's order
-    expect(entry.metrics[0]).toMatchObject({
+    // EXACT, not a subset: the contract's metric is `.passthrough()`, so a key
+    // added inside `projectMetric` would cross to the renderer under a
+    // subset match with every test green (AR-5b, the tests lens)
+    expect(entry.metrics[0]).toEqual({
+      id: "five-hour",
+      label: "5H",
+      description: "Rolling five-hour window",
       kind: "window",
       usedPercent: 42,
       durationMinutes: 300,
+      resetsAt: "2026-09-13T14:00:00.000Z",
     });
     expect(entry.credits).toEqual({ balance: "$12.40", hasCredits: true });
     expect(entry.fetchedAt).toBe("2026-09-13T12:00:00.000Z"); // when the DATA was read
@@ -337,13 +349,20 @@ describe("the account usage doors (AR-5d)", () => {
     );
   }, 30_000);
 
-  it("the scope: the fold's reader may watch the quota, a spawner may not", async () => {
+  it("the scope: only agent.usage reads the quota — neither the fold's watcher nor a spawner (AR-5b)", async () => {
     const { daemon } = await setup();
-    const spawner = await window(daemon, ["agent.spawn"], "u2");
-    expect((await spawner.callErr("agents.usage", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
-    expect((await spawner.callErr("agents.usage.subscribe", {})).data?.kind).toBe(
-      "FORBIDDEN_SCOPE",
-    );
+    for (const [suffix, scopes] of [
+      ["u2", ["agent.spawn"]],
+      ["u2b", ["agent.observe"]],
+    ] as const) {
+      const holder = await window(daemon, [...scopes], suffix);
+      expect((await holder.callErr("agents.usage", {})).data?.kind, scopes.join()).toBe(
+        "FORBIDDEN_SCOPE",
+      );
+      expect((await holder.callErr("agents.usage.subscribe", {})).data?.kind, scopes.join()).toBe(
+        "FORBIDDEN_SCOPE",
+      );
+    }
     const observer = await window(daemon, OBSERVER, "u3");
     expect((await observer.call("agents.usage", {})) as AgentAccountUsageBatch).toBeDefined();
   }, 30_000);
@@ -398,6 +417,31 @@ describe("the account usage doors (AR-5d)", () => {
       (b) => b.entries[0]?.fetchedAt === "2026-09-13T12:34:56.000Z",
     );
     expect(pushed.entries[0]?.metrics[0]?.usedPercent).toBe(77);
+  }, 30_000);
+
+  it("the FIRST frame after a subscribe has one row per account, none failed, one reading each (AR-5b)", async () => {
+    // The reconcile runs before the poll's first reading: a reading taken over
+    // the unkeyed per-provider rows that the reconcile then replaced made the
+    // first frame say every account had failed, and spent one extra
+    // credentialed call per provider (the review's probe).
+    const { daemon, scripted, script } = await setup({ profiles: true });
+    const spawner = await window(daemon, ["agent.spawn"], "u8");
+    const created = (await spawner.call("agents.profiles.create", {
+      provider: "scripted",
+      label: "Work",
+    })) as { persona: { profileId: string } };
+    const profileId = created.persona.profileId;
+    script({ [profileId]: available("scripted", "2026-09-13T13:00:00.000Z", 9) });
+    const win = await window(daemon, OBSERVER, "u9");
+    await win.call("agents.usage.subscribe", {});
+    const first = await batchWhere(win, (b) => b.entries.length > 0, 20_000);
+    expect(first.entries.map((entry) => [entry.profileId, entry.state])).toEqual([
+      [profileId, "available"],
+    ]);
+    // exactly one reading, for the account — never one for an unkeyed row first
+    const fetches = scripted.fetches();
+    expect(fetches[profileId]).toBe(1);
+    expect(fetches["default"]).toBeUndefined();
   }, 30_000);
 
   it("a persona created mid-run becomes its own row on the next reading", async () => {
@@ -466,7 +510,9 @@ describe("the account usage doors (AR-5d)", () => {
     });
     const refused = (await peer.callErr("agents.usage", {})) as RpcErrorShape;
     expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
-    expect(refused.data?.details).toMatchObject({ method: "agents.usage", locality: "local" });
+    // AR-5b: the tailnet preset carries no agent.usage, so the scope wall fires
+    // before the locality wall for a peer; either way the quota never leaves
+    expect(refused.data?.details).toMatchObject({ required: "agent.usage" });
     const refusedSub = (await peer.callErr("agents.usage.subscribe", {})) as RpcErrorShape;
     expect(refusedSub.data?.kind).toBe("FORBIDDEN_SCOPE");
   }, 30_000);
@@ -591,6 +637,34 @@ describe("the reading's own rules (AR-5d)", () => {
     // and the field itself never reached the door's answer
     expect(JSON.stringify(service.snapshot())).not.toContain("enterprise-42");
     expect(service.snapshot().entries[0]?.state).toBe("available");
+  });
+
+  it("the poll outlives any ONE subscriber leaving; only the last to leave stops it (AR-5b)", async () => {
+    // The refcount, witnessed: an unconditional stop on any unsubscribe passed
+    // every row here (the tests lens's mutation), and the column would die the
+    // moment a second watcher left.
+    const runtime = fakeRuntime(1_000);
+    for (let i = 0; i < 400; i += 1) {
+      runtime.answers.push(available("scripted", "2026-09-13T12:00:00.000Z"));
+    }
+    const service = new AccountUsageService({
+      runtime,
+      poll: { refreshMs: 20, tickMs: 20 },
+    });
+    cleanup.push(() => service.stop());
+    service.start();
+    const first = service.subscribe(() => undefined);
+    const second = service.subscribe(() => undefined);
+    await until(() => runtime.asked > 0, 2_000);
+    first();
+    const askedWhenFirstLeft = runtime.asked;
+    // still polling for the watcher that stayed
+    await until(() => runtime.asked > askedWhenFirstLeft + 1, 2_000);
+    second();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const askedWhenLastLeft = runtime.asked;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(runtime.asked).toBe(askedWhenLastLeft);
   });
 
   it("nobody watching, nothing asked: the poll follows the subscribers", async () => {

@@ -133,7 +133,11 @@ describe("the history port over fieldd's index doors", () => {
   it("reads an answer with no search projection at all as UNREACHABLE, not as ready", async () => {
     // `search` is optional so a build from before AR-5e still parses; a missing
     // projection is a daemon that cannot answer the sheet, and it says so.
-    const { client } = requestingClient({ "index.status": fixture("index-status.valid.json") });
+    // the golden carries a search projection since AR-5b; this row is the
+    // build from before it, so the block is taken off
+    const before = { ...(fixture("index-status.valid.json") as Record<string, unknown>) };
+    delete before["search"];
+    const { client } = requestingClient({ "index.status": before });
     const status = await historyPortOver(client).status();
     expect(status.reachable).toBe(false);
     expect(status.protocolVersion).toBe(20);
@@ -433,6 +437,73 @@ describe("the usage port over fieldd's account-usage door", () => {
     const snapshot = stale?.result.status === "available" ? stale.result.snapshot : undefined;
     expect(snapshot?.fetchedAt).toBe("2026-09-13T12:00:00.000Z");
     expect(snapshot?.metrics).toHaveLength(2);
+  });
+
+  it("keeps a credits-only reading AVAILABLE, credits and all (AR-5b)", () => {
+    // An account on credits alone (Codex, Grok) reports available with no
+    // percentage meters; the column has its own line for that (NO LIMIT
+    // DATA). Gating on the meters drew it as a refusal captioned "available".
+    const batch = toAccountUsageBatch({
+      generatedAt: "2026-09-13T12:00:00.000Z",
+      entries: [
+        {
+          provider: "codex",
+          label: "Codex",
+          state: "available",
+          metrics: [],
+          credits: { balance: "$12.40", hasCredits: true },
+          fetchedAt: "2026-09-13T11:59:00.000Z",
+          scope: "api",
+          source: { kind: "native-protocol", stability: "experimental" },
+        },
+      ],
+    });
+    const result = batch.entries[0]?.result;
+    expect(result?.status).toBe("available");
+    if (result?.status !== "available") throw new Error("not available");
+    expect(result.snapshot.metrics).toEqual([]);
+    expect(result.snapshot.credits).toEqual({ balance: "$12.40", hasCredits: true });
+    expect(result.snapshot.scope).toBe("api");
+  });
+
+  it('says an UNKNOWN state as "no reading yet", retryable — never the bare word or a refusal (AR-5b)', () => {
+    const batch = toAccountUsageBatch({
+      generatedAt: "2026-09-13T12:00:00.000Z",
+      entries: [
+        {
+          provider: "claude",
+          label: "Claude",
+          state: "unknown",
+          metrics: [],
+          fetchedAt: "2026-09-13T11:59:00.000Z",
+        },
+      ],
+    });
+    const result = batch.entries[0]?.result;
+    expect(result?.status).toBe("unavailable");
+    if (result?.status !== "unavailable") throw new Error("not unavailable");
+    expect(result.message).toBe("no reading yet");
+    expect(result.retryable).toBe(true);
+    expect("code" in result).toBe(false);
+  });
+
+  it("folds a scope word Core does not know to `unknown` rather than a typed lie (AR-5b)", () => {
+    const batch = toAccountUsageBatch({
+      generatedAt: "2026-09-13T12:00:00.000Z",
+      entries: [
+        {
+          provider: "grok",
+          label: "Grok",
+          state: "available",
+          metrics: [{ id: "m", label: "M", kind: "window", usedPercent: 3 }],
+          fetchedAt: "2026-09-13T11:59:00.000Z",
+          scope: "enterprise-tenant",
+        },
+      ],
+    });
+    const result = batch.entries[0]?.result;
+    if (result?.status !== "available") throw new Error("not available");
+    expect(result.snapshot.scope).toBe("unknown");
   });
 
   it("reads an empty batch as an honest empty", () => {

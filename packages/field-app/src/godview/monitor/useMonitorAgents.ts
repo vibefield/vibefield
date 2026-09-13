@@ -413,14 +413,21 @@ export function useMonitorAgents({
   );
   useEffect(() => {
     let alive = true;
+    // A seed is MARKED when it lands, not when it is asked for: a cleanup
+    // that runs before the load answers (a double-invoked effect) unmarks
+    // what it asked, so the next run asks again rather than never (AR-5b).
+    const asked = new Set<string>();
     for (const key of usageKeys) {
       const seedKey = `${key.providerId} ${key.nativeSessionId}`;
       if (usageSeedsRef.current.has(seedKey)) continue;
       usageSeedsRef.current.add(seedKey);
+      asked.add(seedKey);
       void usageStore
         .load({ providerId: key.providerId, nativeSessionId: key.nativeSessionId })
         .then((record) => {
-          if (!alive || !record) return;
+          if (!alive) return;
+          asked.delete(seedKey);
+          if (!record) return;
           usageRef.current = seedUsage(usageRef.current, key.id, record, Date.now());
           setUsageSeed((seed) => seed + 1);
         })
@@ -428,6 +435,7 @@ export function useMonitorAgents({
     }
     return () => {
       alive = false;
+      for (const seedKey of asked) usageSeedsRef.current.delete(seedKey);
     };
   }, [usageKeys, usageStore]);
   useEffect(() => {

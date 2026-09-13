@@ -17,6 +17,11 @@ export interface ProjectLedger {
 
 export const EMPTY_PROJECT_LEDGER: ProjectLedger = { seqByKey: new Map(), next: 0 };
 
+/** The cache keeps this many project keys — the newest dealt — so a machine
+ * that has run agents in a thousand directories does not persist a thousand
+ * absolute paths (AR-5b; the usage cache is bounded the same way). */
+export const MAX_PROJECT_KEYS = 256;
+
 /** Deal every unseen key the next sequence, in the order given; known keys keep theirs. */
 export function dealProjectSeqs(previous: ProjectLedger, keys: readonly string[]): ProjectLedger {
   let next = previous.next;
@@ -63,7 +68,16 @@ export function loadProjectLedger(storageKey: string): ProjectLedger {
 
 export function saveProjectLedger(storageKey: string, ledger: ProjectLedger): void {
   try {
-    const stored: StoredLedger = { version: 1, next: ledger.next, seqs: [...ledger.seqByKey] };
+    // the newest dealt survive the cap: the sequence is first sight, and an
+    // old project's colour continuity is the least of what the cache holds
+    const kept = new Set(
+      [...ledger.seqByKey]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, MAX_PROJECT_KEYS)
+        .map(([key]) => key),
+    );
+    const seqs = [...ledger.seqByKey].filter(([key]) => kept.has(key));
+    const stored: StoredLedger = { version: 1, next: ledger.next, seqs };
     localStorage.setItem(storageKey, JSON.stringify(stored));
   } catch {
     // A disabled storage partition: the colours still hold for this session.

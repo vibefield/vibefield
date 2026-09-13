@@ -1,5 +1,12 @@
 {
   "phase": "live",
+  "search": {
+    "reachable": true,
+    "capabilities": { "sessionScope": true, "prefix": true },
+    "canonicalReady": true,
+    "readiness": "ready",
+    "progress": { "done": 90411, "total": 90411 }
+  },
   "rosettad": { "phase": "ready", "detail": null, "pid": 48112, "protocolVersion": 20 },
   "enrollment": {
     "enabledKinds": ["claude-code"],

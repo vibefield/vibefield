@@ -215,16 +215,27 @@ async function mountMonitor(
   return container;
 }
 
+/** Take the stage down between two mounts in ONE test. A tree left mounted
+ * keeps its 2 s mesh poll alive for the rest of the file and fires its marker
+ * into later tests' arrays — the gate's "with NO door" red under load, which
+ * the repo had filed as early sampling (AR-5b: the tests lens found the mount). */
+function unmountMonitor(): void {
+  act(() => root?.unmount());
+  container?.remove();
+  root = null;
+  container = null;
+}
+
 const latest = (): GodviewMonitorFacts => markers[markers.length - 1] as GodviewMonitorFacts;
 const rows = (host: HTMLElement): HTMLButtonElement[] => [
   ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row"),
 ];
 /**
- * A peer's rows, picked out by the ONE thing the package's list still says
- * about them: the detail line, which a remote row builds from its peer's name
- * (`agents.ts` — "the host is in the detail as well as in the facet"). The
- * chrome that used to mark them is gone with AR-5; the skipped rows at the end
- * of the first describe are where that is recorded.
+ * A peer's rows, picked out by the detail line, which a remote row builds from
+ * its peer's name (`agents.ts` — "the host is in the detail as well as in the
+ * facet"). The package's list draws the host chip again since `5389449`; the
+ * two rows at the end of the first describe assert on THAT, and this picker
+ * stays on the detail so it does not depend on what it is testing.
  */
 const remoteRows = (host: HTMLElement, deviceName: string): HTMLButtonElement[] =>
   rows(host).filter((row) =>
@@ -282,21 +293,18 @@ describe("remote sessions as monitor citizens", () => {
   });
 
   /**
-   * AR-5 REGRESSION, recorded rather than deleted.
+   * AR-5's one regression, recorded and then fixed upstream (`5389449`).
    *
    * Both rows below passed before the views moved into
-   * `@vibecook/puppeteer-views`. The package carries `MonitorRemoteFacet` on its
-   * own `MonitorAgent` (`monitor/types.ts`: `deviceName`, `hostWritable`,
-   * `attachable`) and NO view reads it — `grep -r remote` over the package's
-   * `views/` finds nothing. So the host eyebrow that made a peer's row
-   * unmistakable, and GT-5c's writability word, have no surface any more: a
-   * peer's session is drawn exactly like a local terminal except for a name
-   * buried in its detail line.
-   *
-   * That is upstream's fix to make (a host eyebrow and a `hostWritable` word in
-   * the list and the swarm's label), not this fixture's, so the claims stay here
-   * as the specification they always were. Delete the skips when the views draw
-   * the facet again.
+   * `@vibecook/puppeteer-views`, and for one commit no view read
+   * `MonitorRemoteFacet` (`deviceName`, `hostWritable`, `attachable`): the host
+   * eyebrow that made a peer's row unmistakable, and GT-5c's writability word,
+   * had no surface, and a peer's session drew exactly like a local terminal
+   * except for a name buried in its detail line. The rows were `it.skip` for
+   * that commit and are LIVE again: the package's list carries the host chip
+   * (`.vf-monitor-list-host`, the peer's name and the policy in both
+   * directions), the swarm's label leads with the peer, the rain's stream names
+   * it first. They are the specification they always were.
    */
   it("marks them so they cannot be read as one of the local ones", async () => {
     const view = await mountMonitor(fakeDoor([host("mini", [shared("s1")])]));
@@ -323,6 +331,7 @@ describe("remote sessions as monitor citizens", () => {
     );
     expect(refusingRow?.getAttribute("aria-label")).toContain("read-only host");
 
+    unmountMonitor();
     const permitting = await mountMonitor(
       fakeDoor([host("mini", [shared("s1", { readWrite: true })])]),
     );

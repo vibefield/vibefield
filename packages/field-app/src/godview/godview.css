@@ -447,6 +447,23 @@
    instrument's type, on a strip across the stage's top. Its own element since
    AR-5 — `.vf-monitor-chrome` is the package's usage column down the left
    edge — and both carry the chrome attribute the swarm steers around. */
+/* The chrome slot (the package's usage column) down the stage's left edge —
+   the reference host's own rule, and the reason the claims strip starts at
+   72px: a 46px column at 13px, then the chips. AR-5b: the rename that made
+   this class the slot deleted the strip's old rule under the same name and
+   wrote none for the slot, so the column laid out in flow — below the
+   clipped swarm, and across the whole width over the list, whose left
+   padding then pushed every row off the stage (the review's blocker). */
+.vf-monitor-chrome {
+  position: absolute;
+  z-index: 7;
+  top: 11px;
+  left: 13px;
+  width: 46px;
+  height: calc(100% - 17px);
+  color: var(--text-main);
+}
+
 .vf-monitor-claims {
   position: absolute;
   z-index: 7;

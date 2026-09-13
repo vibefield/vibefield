@@ -29,13 +29,15 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       locality: m.locality,
     }));
 
-  it("index.*: reads on index.read, mutations on the local-only index.manage", () => {
+  it("index.*: census reads on index.read, content reads on index.search, mutations on the local-only index.manage", () => {
     expect(rows("index.")).toEqual([
       { method: "index.discoveries", scope: "index.read", idempotent: true, locality: "local" },
       { method: "index.status", scope: "index.read", idempotent: true, locality: "local" },
       // AR-5e — the find sheet's doors, reads like the two above
-      { method: "index.sessions", scope: "index.read", idempotent: true, locality: "local" },
-      { method: "index.search", scope: "index.read", idempotent: true, locality: "local" },
+      // AR-5b: the sheet's CONTENT reads ride their own scope — a plugin holding
+      // index.read for the roll call must not gain transcript search on an upgrade
+      { method: "index.sessions", scope: "index.search", idempotent: true, locality: "local" },
+      { method: "index.search", scope: "index.search", idempotent: true, locality: "local" },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
     ]);
@@ -74,11 +76,12 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         locality: "local",
       },
       // AR-5d — account usage: a READ of the agent plane, so it rides
-      // `agent.observe` beside the fold rather than the persona scope
-      { method: "agents.usage", scope: "agent.observe", idempotent: true, locality: "local" },
+      // AR-5b: the account's billing state, a credentialed call per reading —
+      // its own scope, not the fold's
+      { method: "agents.usage", scope: "agent.usage", idempotent: true, locality: "local" },
       {
         method: "agents.usage.subscribe",
-        scope: "agent.observe",
+        scope: "agent.usage",
         idempotent: true,
         locality: "local",
       },

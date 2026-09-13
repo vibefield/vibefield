@@ -545,7 +545,10 @@ export type IndexSearchState = z.infer<typeof IndexSearchState>;
 export const IndexSearchHit = z
   .object({
     sessionId: z.string().min(1),
-    rootSessionId: z.string().min(1),
+    /** the root this row rolls up to — ABSENT when fieldd could not attribute
+     * it (the walk clipped, the index had no row); never the hit's own id in
+     * its place, which read a subagent transcript as top-level (AR-5b) */
+    rootSessionId: z.string().min(1).optional(),
     nativeSessionId: z.string().optional(),
     title: z.string().optional(),
     timelineId: z.string().min(1),

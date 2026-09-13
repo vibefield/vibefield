@@ -1156,24 +1156,28 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
-  // AR-5e — the find sheet's two questions, the same read scope: `sessions`
-  // is what the index knows about the live runs (by provider-native id) and
-  // `search` is one query over the transcript history, scoped by those runs.
-  // Both are projections: no origin, no enrolled root's path, and a daemon
-  // that cannot answer says so (`answered: false`) rather than answering
-  // "no matches". locality "local" like the rest of the family — the history
-  // a person can search is the one indexed on the device in front of them.
+  // AR-5e — the find sheet's two questions: `sessions` is what the index
+  // knows about the live runs (by provider-native id) and `search` is one
+  // query over the transcript history, scoped by those runs. Both are
+  // projections of CONTENT — no origin, no enrolled root's path (a session's
+  // own cwd does ride `index.sessions`, as the daemon reports it), and a
+  // daemon that cannot answer says so (`answered: false`) rather than
+  // answering "no matches". AR-5b: they ride `index.search`, their own scope,
+  // not the census scope `index.read` a plugin may hold for the roll call —
+  // a search over every consented transcript is a different consent.
+  // locality "local" like the rest of the family — the history a person can
+  // search is the one indexed on the device in front of them.
   defineMethod({
     surface: "product",
     method: "index.sessions",
-    scope: "index.read",
+    scope: "index.search",
     idempotent: true,
     locality: "local",
   }),
   defineMethod({
     surface: "product",
     method: "index.search",
-    scope: "index.read",
+    scope: "index.search",
     idempotent: true,
     locality: "local",
   }),
@@ -1275,23 +1279,26 @@ export const METHODS: MethodDef[] = [
   }),
   // Account usage (AR-5d — the usage column's feed): one reading per provider
   // and per registered account, polled by fieldd and pushed as full batches.
-  // It is a READ of the agent plane, so it rides `agent.observe` beside the
-  // fold rather than the persona scope — a viewer who may watch sessions may
-  // watch the quota those sessions spend; nothing here mutates. locality
-  // "local" like every other agents.* row (D36): a quota belongs to THIS
-  // device's accounts and its credentials never roam, so the column of a
-  // peer's usage would be a different door, not this one federated.
+  // It is a READ of the agent plane, but not the fold's: a reading is the
+  // account's billing state and costs a credentialed vendor call, which is a
+  // different consent from watching sessions. AR-5b: it rides `agent.usage`,
+  // its own scope (local-only, plugin-ineligible), not `agent.observe` —
+  // a plugin that asked to watch the fold must not also read quotas or make
+  // fieldd spend the user's token. Nothing here mutates. locality "local"
+  // like every other agents.* row (D36): a quota belongs to THIS device's
+  // accounts and its credentials never roam, so the column of a peer's usage
+  // would be a different door, not this one federated.
   defineMethod({
     surface: "product",
     method: "agents.usage",
-    scope: "agent.observe",
+    scope: "agent.usage",
     idempotent: true,
     locality: "local",
   }),
   defineMethod({
     surface: "product",
     method: "agents.usage.subscribe",
-    scope: "agent.observe",
+    scope: "agent.usage",
     idempotent: true,
     locality: "local",
     subscription: true,

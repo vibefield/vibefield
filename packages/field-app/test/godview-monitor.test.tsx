@@ -536,8 +536,11 @@ describe("the monitor stage", () => {
     expect(bar?.querySelector('select[aria-label="Agent provider"]')).not.toBeNull();
     expect(bar?.querySelector(".vf-godview-spawn")).not.toBeNull();
     expect(
-      bar?.querySelector('button[aria-controls="vf-find-sheet"]')?.getAttribute("aria-label"),
-    ).toBe("Find an agent by what was said");
+      bar?.querySelector('button[aria-label="Find an agent by what was said"]'),
+    ).not.toBeNull();
+    // AR-5b: `aria-controls` names an element that exists — the sheet returns
+    // null while closed, so the control names it only while it is open
+    expect(bar?.querySelector('button[aria-controls="vf-find-sheet"]')).toBeNull();
     expect(bar?.querySelector('button[aria-controls="vf-godview-tweak-panel"]')).not.toBeNull();
     // The bar owns the view marks and the theme switch, in that order.
     expect(viewButtons(host).map((button) => button.getAttribute("aria-label"))).toEqual([

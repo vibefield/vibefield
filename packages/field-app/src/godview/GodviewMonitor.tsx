@@ -14,7 +14,15 @@ import {
   useMonitorPalette,
   type MonitorAgent as ViewsMonitorAgent,
 } from "@vibecook/puppeteer-views";
-import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { emitGodviewMonitorMarker } from "../development-console";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
@@ -140,7 +148,16 @@ export function GodviewMonitor({
   onToggleTuning,
   onThemeChange,
 }: GodviewMonitorProps): ReactElement {
-  const palette = useMonitorPalette();
+  const stageRef = useRef<HTMLElement>(null);
+  // The palette reads THIS stage's Godview root, never the document's first:
+  // the catalog mounts two roots in two themes, and the order of its
+  // specimens must not decide which theme the bodies wear (AR-5b). The ref
+  // is filled in layout, before the palette's own effect reads it.
+  const godviewRootRef = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    godviewRootRef.current = stageRef.current?.closest(".vf-godview") ?? null;
+  }, []);
+  const palette = useMonitorPalette(godviewRootRef);
   const {
     agents,
     actions,
@@ -156,7 +173,6 @@ export function GodviewMonitor({
     door,
     ...(panes ? { panes } : {}),
   });
-  const stageRef = useRef<HTMLElement>(null);
   const chromeRef = useRef<HTMLDivElement>(null);
   const [findOpen, setFindOpen] = useState(false);
   /** What the swarm is painting with, read off its own element (AR-5). */
@@ -165,8 +181,9 @@ export function GodviewMonitor({
   const [usageTiles, setUsageTiles] = useState(-1);
   const counts = useMemo(() => monitorAgentCounts(agents), [agents]);
 
-  // Views that lay out in flow clear the chrome with these; the swarm instead
-  // reads the chrome's rect directly and steers bodies around it.
+  // Views that lay out in flow clear the chrome with this (the list's left
+  // padding reads it); the swarm instead reads the chrome's rect directly
+  // and steers bodies around it.
   useEffect(() => {
     const stage = stageRef.current;
     const chrome = chromeRef.current;
@@ -174,7 +191,6 @@ export function GodviewMonitor({
     const publish = (): void => {
       const rect = chrome.getBoundingClientRect();
       const stageRect = stage.getBoundingClientRect();
-      stage.style.setProperty("--vf-monitor-chrome-height", `${Math.round(rect.height)}px`);
       stage.style.setProperty(
         "--vf-monitor-chrome-right",
         `${Math.round(rect.right - stageRect.left)}px`,
@@ -255,10 +271,14 @@ export function GodviewMonitor({
     });
   }, [agents, view.id, sources, swarmRenderer, usageTiles, findOpen]);
 
+  const closeFind = useCallback((): void => setFindOpen(false), []);
+
   const selectNextStatus = useCallback(
     (status: AgentVisualStatus): void => {
-      const currentSessionId = agents.find((agent) => agent.active)?.session?.id;
-      const next = nextMonitorAgentForStatus(agents, status, currentSessionId);
+      // By ROW id: a managed row with no pane has no session, and a session
+      // id of undefined matched the first sessionless row instead of cycling.
+      const currentId = agents.find((agent) => agent.active)?.id;
+      const next = nextMonitorAgentForStatus(agents, status, currentId);
       if (next) actions.select(next);
     },
     [actions, agents],
@@ -345,7 +365,7 @@ export function GodviewMonitor({
               label="FIND"
               shortcut="⌘F"
               ariaLabel="Find an agent by what was said"
-              controls="vf-find-sheet"
+              {...(findOpen ? { controls: "vf-find-sheet" } : {})}
               on={findOpen}
               onClick={() => setFindOpen((current) => !current)}
             />
@@ -365,7 +385,7 @@ export function GodviewMonitor({
         open={findOpen}
         agents={agents}
         history={door?.history ?? NO_HISTORY}
-        onClose={() => setFindOpen(false)}
+        onClose={closeFind}
         onSelect={(agent: ViewsMonitorAgent) => {
           actions.select(agent as MonitorAgent);
           setFindOpen(false);

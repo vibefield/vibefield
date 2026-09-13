@@ -154,9 +154,12 @@ describe("monitor agent assembly", () => {
     // The cursor is a SESSION id (what the deck's active pane carries) and the
     // answer is a ROW — the two id spaces meeting, which is the whole reason
     // the cycle compares `session?.id` and not `id`.
+    // AR-5b: the cycle compares ROW ids — the current row is the one the deck
+    // marked active, and a managed row with no pane has no session at all, so
+    // matching on a session id of undefined kept answering the same row
     expect(nextMonitorAgentForStatus(assembled, "blocked", undefined)?.id).toBe("run-a");
-    expect(nextMonitorAgentForStatus(assembled, "blocked", "terminal-a")?.id).toBe("run-b");
-    expect(nextMonitorAgentForStatus(assembled, "blocked", "terminal-b")?.id).toBe("run-a");
+    expect(nextMonitorAgentForStatus(assembled, "blocked", "run-a")?.id).toBe("run-b");
+    expect(nextMonitorAgentForStatus(assembled, "blocked", "run-b")?.id).toBe("run-a");
     // The idle terminal is visible to views but is not an agent to navigate to.
     expect(nextMonitorAgentForStatus(assembled, "idle", undefined)).toBeUndefined();
     expect(monitorAgentCounts(assembled)).toEqual({ idle: 0, working: 0, blocked: 2 });

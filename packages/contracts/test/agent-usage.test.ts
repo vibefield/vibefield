@@ -21,7 +21,7 @@ const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8")) as unknown;
 
 describe("the agents.usage rows (AR-5d)", () => {
-  it("both doors read on agent.observe, stay local, and exactly one subscribes", () => {
+  it("both doors read on agent.usage — their own scope, not the fold's — stay local, and exactly one subscribes", () => {
     const rows = METHODS.filter((m) => m.method.startsWith("agents.usage")).map((m) => ({
       method: m.method,
       scope: m.scope,
@@ -32,14 +32,14 @@ describe("the agents.usage rows (AR-5d)", () => {
     expect(rows).toEqual([
       {
         method: "agents.usage",
-        scope: "agent.observe",
+        scope: "agent.usage",
         idempotent: true,
         locality: "local",
         subscription: false,
       },
       {
         method: "agents.usage.subscribe",
-        scope: "agent.observe",
+        scope: "agent.usage",
         idempotent: true,
         locality: "local",
         subscription: true,
