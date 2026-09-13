@@ -581,6 +581,48 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     expect(sub.snapshot.sessions).toEqual([]);
   });
 
+  it("MF-1 — one door, two projections: `full` is unchanged, `field` is the phone's board, a bad option is refused", async () => {
+    const { daemon } = await setup({ floor: "mock" });
+    const win = await window(daemon, DECK, "mf1");
+
+    // absent params: byte for byte what the desktop has always received
+    const full = (await win.call("agent.subscribe", {})) as {
+      subId: string;
+      snapshot: AgentListResult;
+    };
+    expect(full.snapshot).toEqual({ sessions: [] });
+    // and asking for it by name is the same answer
+    const named = (await win.call("agent.subscribe", { projection: "full" })) as {
+      snapshot: AgentListResult;
+    };
+    expect(named.snapshot).toEqual({ sessions: [] });
+
+    // the field projection answers a REVISIONED board, never a sessions array
+    const field = (await win.call("agent.subscribe", {
+      projection: "field",
+      minIntervalMs: 250,
+    })) as { subId: string; snapshot: { revision: number; rows: unknown[] } };
+    expect(field.snapshot).toEqual({ revision: 0, rows: [] });
+    expect(field.subId).not.toBe(full.subId);
+
+    // a tolerant reader still refuses an option it cannot honour, rather than
+    // silently serving a cadence nobody asked for
+    expect((await win.callErr("agent.subscribe", { projection: "mirror" })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect((await win.callErr("agent.subscribe", { minIntervalMs: 5 })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    // an unknown OPTION is not an error — it is the next version's field
+    expect(
+      (
+        (await win.call("agent.subscribe", { projection: "field", futureOption: 1 })) as {
+          snapshot: { revision: number };
+        }
+      ).snapshot.revision,
+    ).toBe(0);
+  });
+
   it("the scopes: births need agent.spawn, the fold needs agent.observe", async () => {
     const { daemon } = await setup({ floor: "mock" });
     const observer = await window(daemon, ["agent.observe"], "s1");

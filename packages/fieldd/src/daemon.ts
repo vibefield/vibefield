@@ -8,6 +8,7 @@ import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/
 import {
   AgentResumeParams,
   AgentSpawnParams,
+  AgentSubscribeParams,
   AgentsInstallsParams,
   AgentsProfilesCreateParams,
   AgentsProfilesDeleteParams,
@@ -96,6 +97,7 @@ import {
   pluginLogProvenance,
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
+import { createFieldSubscription } from "./agent-field";
 import { EnrollmentStore, IndexService } from "./agent-index";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
@@ -1294,9 +1296,38 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     });
     api.register("agent.list", () => agents.list());
-    api.registerSubscription("agent.subscribe", (_ctx, _params, emit) => {
-      const dispose = agents.subscribe((rows) => emit(rows));
-      return { snapshot: agents.list(), dispose };
+    // MF-1 (§5, §10.2) — one door, two projections. Absent params or
+    // `projection: "full"` is the subscription the desktop has always had,
+    // unchanged: whole `AgentListResult` frames at the fold's own 16 ms tick,
+    // which the renderer reads as whole `rows` arrays. `projection: "field"`
+    // answers the content-free board — a snapshot, then deltas at this
+    // subscriber's own trailing-edge floor — which is what a phone on the
+    // tailnet can afford.
+    api.registerSubscription("agent.subscribe", (_ctx, params, emit) => {
+      const parsed = AgentSubscribeParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'expected { projection?: "full" | "field", minIntervalMs?: number }',
+          false,
+        );
+      if (parsed.data.projection !== "field") {
+        const dispose = agents.subscribe((rows) => emit(rows));
+        return { snapshot: agents.list(), dispose };
+      }
+      const field = createFieldSubscription({
+        list: () => agents.list(),
+        subscribe: (fn) => agents.subscribe(fn),
+        emit: (delta) => emit(delta),
+        ...(parsed.data.minIntervalMs !== undefined
+          ? { minIntervalMs: parsed.data.minIntervalMs }
+          : {}),
+        onError: (error) =>
+          logger.warn("fieldd.agents.field_frame_failed", "A field subscriber's frame failed", {
+            error: error instanceof Error ? error.message : String(error),
+          }),
+      });
+      return { snapshot: field.snapshot, dispose: field.dispose };
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own
