@@ -117,6 +117,22 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     expect(pending.blockers).toEqual([]);
   });
 
+  it("a witnessed exit outranks the mirror and the pane (MF-1f)", () => {
+    // The run's process is over — fieldd watched it end — while the floor
+    // still lists the PTY so the deck can show the dead pane with its resume
+    // verb. The mirror may not have caught up (a reading in flight), and the
+    // terminal is still `local`; neither may be allowed to report a corpse as
+    // a working agent.
+    const stale = projectFieldRow(summary({ exited: true, alive: true, status: "working" }));
+    expect(stale.alive).toBe(false);
+    expect(stale.terminal?.hosted).toBe("local");
+    // and it is NOT pending — a different question, and a different verb
+    expect(stale.pending).toBeUndefined();
+    // after a restart nothing observed it at all, and the answer is the same
+    const restarted = projectFieldRow(summary({ exited: true, monitor: false }));
+    expect(restarted.alive).toBe(false);
+  });
+
   it("without a mirror, the floor's listing is the whole witness", () => {
     // the PTY is gone: no mirror, nothing hosted, nothing to claim
     const gone = projectFieldRow(

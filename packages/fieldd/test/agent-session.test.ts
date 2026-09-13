@@ -968,6 +968,129 @@ const rosettaRow = (nativeSessionId: string, stillForMs: number | null, child = 
   stream_state: "indexed",
 });
 
+describe("MF-1f — an exited run keeps its row while its pane is on the floor", () => {
+  /** The state under test, built honestly.
+   *
+   * MEASURED FIRST (probe, 2026-09-13): an agent's OWN PTY leaves the floor
+   * within 150 ms of its process exiting, because fieldd creates it with
+   * `persistence: "keep-until-exit"` (terminal-service.ts:630). So the "dead
+   * pane a person is still looking at" cannot be an agent PTY today; it is
+   * modelled here with a terminal the test owns, and the record is re-pointed
+   * at it through the SIGNING store (a hand-written record would not verify).
+   * What that models is exactly the world where agent panes are
+   * `keep-until-explicit-close` — see the report: the rule below is correct
+   * and unreachable until that policy is ruled.
+   */
+  async function exitedWithLivePane(): Promise<{
+    first: Box;
+    second: Box;
+    win: WsRpc;
+    runId: string;
+    paneId: string;
+  }> {
+    const first = await setup({ floor: "real" });
+    const win1 = await window(first.daemon, DECK, "f1");
+    const spawned = (await win1.call("agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+      title: "held open",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win1, runId);
+
+    // the pane that outlives the run
+    const pane = (await win1.call("terminal.create", { shell: "/bin/cat" })) as {
+      sessionId: string;
+    };
+    await untilListed(win1, pane.sessionId, true);
+
+    // the run ends for real — the floor's ladder, the record stamped
+    await win1.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(async () => {
+      const { sessions } = (await win1.call("agent.list", {})) as AgentListResult;
+      return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
+    }, 15_000);
+    const record = first.records.read(runId);
+    expect(record?.exited, "the close stamps the record").toBeDefined();
+    first.records.write({
+      ...record!,
+      terminalSessionId: pane.sessionId,
+      updatedAt: new Date().toISOString(),
+    });
+    await first.daemon.stop();
+
+    const second = await setup({ floor: "real", restartOf: first });
+    const win = await window(second.daemon, [...DECK, "agent.control"], "f2");
+    return { first, second, win, runId, paneId: pane.sessionId };
+  }
+
+  it("the restart re-lists it: exited, hosted, resumable — and it leaves when the pane does", async () => {
+    const { win, runId, paneId } = await exitedWithLivePane();
+
+    const row = await poll(async () => {
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      return sessions.find((r) => r.runtimeRunId === runId);
+    }, 20_000);
+    // the conversation stopped; the pane did not
+    expect(row.continuation).toMatchObject({ persisted: true, resumable: true, exited: true });
+    expect(row.continuation?.pending, "an exited row is not a pending one").toBeUndefined();
+    expect(row.terminal).toMatchObject({ hosted: "local", runtimeSessionId: paneId });
+    // nothing observed this run — a new fieldd never held its adapter
+    expect(row.status).toBe("unknown");
+    expect(row.observationLevel).toBe("none");
+    expect(row.title).toBe("held open");
+
+    // the field projection: not alive, and NOT pending — the two are different
+    // questions, and a reader that draws `pending` would offer the wrong verb
+    const field = (await win.call("agent.subscribe", { projection: "field" })) as {
+      snapshot: { rows: { runtimeRunId: string; alive: boolean; pending?: string }[] };
+    };
+    const fieldRow = field.snapshot.rows.find((r) => r.runtimeRunId === runId);
+    expect(fieldRow?.alive).toBe(false);
+    expect(fieldRow?.pending).toBeUndefined();
+
+    // the pane goes, and the row goes with it — the row's whole reason to
+    // exist was that a person could still see that terminal
+    await win.call("terminal.terminate", { sessionId: paneId });
+    await poll(async () => {
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
+    }, 20_000);
+  }, 200_000);
+
+  it("resume takes it — the successor replaces it, and one conversation keeps one row", async () => {
+    const { second, win, runId, paneId } = await exitedWithLivePane();
+    await poll(async () => {
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      return sessions.find((r) => r.runtimeRunId === runId);
+    }, 20_000);
+
+    // Before MF-1f this refused `terminal-alive`: the husk pane read as a
+    // running session, so the verb on the exited card could not be used.
+    const resumed = (await win.call("agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    const nextId = resumed.session.runtimeRunId;
+    expect(nextId).not.toBe(runId);
+
+    const rows = await poll(async () => {
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      return sessions.some((r) => r.runtimeRunId === nextId) ? sessions : undefined;
+    }, 20_000);
+    // ONE row for one native conversation (AR-4b): the successor, not both
+    expect(rows.filter((r) => r.sessionId === resumed.session.sessionId)).toHaveLength(1);
+    expect(rows.some((r) => r.runtimeRunId === runId)).toBe(false);
+    // the pane is untouched — the resume ends no terminal it did not mint
+    expect(await listed(win, paneId)).toBe(true);
+
+    // the record names its successor, so a SECOND resume is refused rather
+    // than making a second run on the same conversation
+    const record = second.records.read(runId);
+    expect(record?.reattach).toMatchObject({ state: "resumed", replacedBy: nextId });
+    const again = (await win.callErr("agent.resume", { runtimeRunId: runId })) as RpcErrorShape;
+    expect(again.data?.kind).toBe("PRECONDITION_FAILED");
+    expect((again.data?.details as { state?: string } | undefined)?.state).toBe("replaced");
+  }, 200_000);
+});
+
 describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
   it("interrupts a live run through the floor, is refused for an exited or unknown one, needs agent.control, and lands in the ledger", async () => {
     const { daemon, dataDir, envOut } = await setup({ floor: "real" });

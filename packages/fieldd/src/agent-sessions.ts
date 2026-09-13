@@ -422,6 +422,54 @@ function cellOf(
   };
 }
 
+/** MF-1f — a run whose PROCESS ended while its PTY is still on the floor, as
+ * a LATER BOOT finds it: the record is stamped with an exit, and this device's
+ * floor still lists the terminal it named. Nothing observed this run (a new
+ * fieldd never held its adapter), so the status is `unknown` and the level is
+ * `none` — what the row carries is the dead pane and the verb that ends it.
+ * Pure. The same run seen exit by THIS fieldd keeps its mirror instead and
+ * goes through `summarizeManaged` with `exited: true`. */
+export function summarizeExitedRecord(input: SummarizeExitedInput): AgentSessionSummary {
+  const { record } = input;
+  return {
+    sessionId: record.continuation.nativeSessionId,
+    sessionIdBasis: "recorded",
+    kind: record.provider,
+    label: input.label,
+    device: input.device,
+    tier: "managed",
+    runtimeRunId: record.runtimeRunId,
+    runtimeEpoch: record.runtimeEpoch,
+    ...(record.profileId !== undefined ? { profileId: record.profileId } : {}),
+    // the pane is the whole reason this row exists, so the join is exact
+    terminal: {
+      hosted: "local",
+      runtimeSessionId: input.terminalSessionId,
+      ...cellOf(input.terminal),
+    },
+    ...(record.workspace !== undefined ? { workspace: record.workspace } : {}),
+    status: "unknown",
+    observationLevel: "none",
+    createdAt: record.createdAt,
+    stateChangedAt: record.exited?.at ?? input.since,
+    ...(record.title !== undefined ? { title: record.title } : {}),
+    continuation: { persisted: true, resumable: true, exited: true },
+  };
+}
+
+export interface SummarizeExitedInput {
+  record: AgentSessionRecord;
+  /** the adapter's own label for the provider (the record keeps only the id) */
+  label: string;
+  device: string;
+  /** the floor session the record named, still listed by this device's floor */
+  terminalSessionId: string;
+  /** the floor's inventory row for it, when observed */
+  terminal: TerminalInfo | undefined;
+  /** when this boot found it */
+  since: string;
+}
+
 export interface SummarizePendingInput {
   record: AgentSessionRecord;
   /** the adapter's own label for the provider (the record keeps only the id) */

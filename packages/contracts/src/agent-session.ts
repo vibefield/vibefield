@@ -179,6 +179,14 @@ export const AgentSessionSummary = z
         reattached: z.boolean().optional(),
         pending: z.enum(["resume-when-idle"]).optional(),
         reason: z.string().optional(),
+        /** MF-1f — the record is STAMPED WITH AN EXIT: this run's process is
+         * over. The row still exists because the floor still lists its PTY
+         * (the deck is showing that dead pane, and the resume verb belongs on
+         * it), so `terminal.hosted` stays `local` and only this says the
+         * conversation stopped. It outranks a lagging mirror: fieldd
+         * WITNESSED the exit, while `monitor.alive` is a reading that may not
+         * have landed yet. */
+        exited: z.boolean().optional(),
       })
       .passthrough()
       .optional(),

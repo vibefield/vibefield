@@ -30,6 +30,8 @@ export interface SummaryOptions {
   terminal?: AgentSessionSummary["terminal"];
   /** no `terminal` key at all — an ingested row, or one the fold has no PTY for */
   noTerminal?: boolean;
+  /** MF-1f — the record is stamped with an exit while the pane is still hosted */
+  exited?: boolean;
 }
 
 export function managedSummary(options: SummaryOptions = {}): AgentSessionSummary {
@@ -126,6 +128,8 @@ export function managedSummary(options: SummaryOptions = {}): AgentSessionSummar
     continuation:
       options.pending !== undefined
         ? { persisted: true, resumable: true, pending: "resume-when-idle", reason: options.pending }
-        : { persisted: true, resumable: false },
+        : options.exited === true
+          ? { persisted: true, resumable: true, exited: true }
+          : { persisted: true, resumable: false },
   };
 }

@@ -83,6 +83,22 @@ describe("agent.* registry rows (AR-3)", () => {
     ]);
   });
 
+  it("MF-1f — a continuation can say the conversation STOPPED while the pane stands", () => {
+    // The row survives its process because the floor still lists the PTY, so
+    // `terminal.hosted` stays `local` and only this field says the run ended.
+    // Optional and additive: a fold that predates MF-1f simply never sets it.
+    const row = AgentSessionSummary.parse({
+      ...(fixture("agent-session-summary.valid.json") as Record<string, unknown>),
+      continuation: { persisted: true, resumable: true, exited: true },
+    });
+    expect(row.continuation).toEqual({ persisted: true, resumable: true, exited: true });
+    // and it is not the pending state — AR-4's row is alive and unobserved,
+    // this one is over and still on screen
+    expect(row.continuation?.pending).toBeUndefined();
+    const legacy = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect(legacy.continuation?.exited).toBeUndefined();
+  });
+
   it("the persona login pane is a spawn-class act on this device", () => {
     const login = METHODS.find((m) => m.method === "agents.profiles.login");
     expect(login).toMatchObject({ scope: "agent.spawn", idempotent: false, locality: "local" });

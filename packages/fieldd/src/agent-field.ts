@@ -113,14 +113,24 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     createdAt: summary.createdAt,
     ...(summary.lastActivityAt !== undefined ? { lastActivityAt: summary.lastActivityAt } : {}),
     // Liveness AS FIELDD KNOWS IT (ruled 2026-09-13), which is not the same as
-    // "observed". With a mirror, the mirror's own word. WITHOUT one — AR-4's
-    // pending row — the floor's listing is the witness: its PTY is on this
-    // device and fieldd will re-adopt or resume it, so the run is ALIVE and
-    // merely unobserved, and `pending` is what says nothing is driving it. The
-    // first draft answered `false` here and that was a defect: a reader draws
-    // `alive: false` as GONE, which would have dropped a live agent off a
-    // phone. `hosted: "none"` (or no terminal at all) is the honest false.
-    alive: monitor?.alive ?? (summary.terminal !== undefined && summary.terminal.hosted !== "none"),
+    // "observed", and not the same as "has a pane". Three readings, in order:
+    //
+    //  1. MF-1f — the record is stamped with an exit. fieldd WITNESSED the
+    //     process end, so the run is not alive however recently its mirror was
+    //     read; the row survives only because the floor still lists the PTY
+    //     (the deck's dead pane, with the resume verb on it).
+    //  2. a mirror exists — its own word.
+    //  3. no mirror — AR-4's pending row: its PTY is on this device and fieldd
+    //     will re-adopt or resume it, so the run is ALIVE and merely
+    //     unobserved, and `pending` is what says nothing is driving it. The
+    //     first draft answered `false` here and that was a defect: a reader
+    //     draws `alive: false` as GONE, which would drop a live agent off a
+    //     phone. `hosted: "none"` (or no terminal at all) is the honest false.
+    alive:
+      summary.continuation?.exited === true
+        ? false
+        : (monitor?.alive ??
+          (summary.terminal !== undefined && summary.terminal.hosted !== "none")),
     ...(summary.continuation?.pending !== undefined
       ? { pending: summary.continuation.pending }
       : {}),

@@ -83,6 +83,7 @@ import {
   mirrorOf,
   recordForRun,
   SessionRecordStore,
+  summarizeExitedRecord,
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
@@ -406,6 +407,33 @@ interface PendingEntry {
   failures: number;
 }
 
+/** MF-1f — a run whose PROCESS ended while its PTY is still on the floor.
+ *
+ * The deck is still showing that pane, and §07's resume verb belongs ON it —
+ * so the fold keeps the row instead of withdrawing it the instant the process
+ * dies. Before this, `closeRun` deleted the run outright and a pane holding a
+ * dead agent had NO fold row at all: the verb that would bring it back existed
+ * for the one beat between the exit and the withdrawal.
+ *
+ * Two provenances, one row. `entry` is present when THIS fieldd watched the
+ * run exit (it keeps the mirror's last state, so the card still shows what the
+ * agent had been doing); after a restart there is only the record, and the row
+ * says so with `status: unknown` / `observationLevel: none`. The row leaves
+ * when the floor stops listing the PTY (the pane was closed or killed) or when
+ * a resume supersedes the record — never on a timer. */
+interface ExitedEntry {
+  /** the run as this fieldd held it, when it saw the exit itself */
+  entry?: ManagedEntry | undefined;
+  record: AgentSessionRecord;
+  /** the floor session the record named — the pane the deck is showing */
+  terminalSessionId: string;
+  terminal?: TerminalInfo | undefined;
+  /** the withdrawal grace, armed when an inventory stops listing the PTY */
+  backstop?: NodeJS.Timeout | undefined;
+  /** when this daemon learned the run had ended */
+  since: string;
+}
+
 /** AR-4b — a record whose PTY the boot's first inventory did not list: held
  * for one grace, attached if the PTY appears (a cell that had not published
  * yet), stamped as an unknown exit if it does not. */
@@ -439,6 +467,8 @@ export class AgentRuntimeService {
    * (AR-4), and the terminal → run index over both */
   private readonly managed = new Map<string, ManagedEntry>();
   private readonly pending = new Map<string, PendingEntry>();
+  /** MF-1f — runs whose process ended while the floor still lists their PTY */
+  private readonly exited = new Map<string, ExitedEntry>();
   private readonly byTerminal = new Map<string, string>();
   /** the FIRST inventory of this boot is the re-attach; once */
   private reattachStarted = false;
@@ -659,7 +689,13 @@ export class AgentRuntimeService {
       return this.ticketed(entry, principal, terminals);
     }
     const live = this.managed.get(record.runtimeRunId);
+    // MF-1f — a STAMPED record means the process is over, so its PTY still
+    // being listed is a dead pane, not a running session. Before this, that
+    // husk made `resume` refuse `terminal-alive` and the exited row's own verb
+    // could not be used; the guard now asks whether the RUN is alive, which is
+    // what it always meant. A live or pending row is refused exactly as before.
     const terminalAlive =
+      record.exited === undefined &&
       record.terminalSessionId !== undefined &&
       terminals.observation() !== undefined &&
       terminals.get(record.terminalSessionId) !== undefined;
@@ -672,7 +708,28 @@ export class AgentRuntimeService {
       );
     }
     const entry = await this.resumeFromRecord(record, params.cwd, undefined);
+    // MF-1f — the record names its successor, and the exited row goes: two
+    // runs on one native conversation is the state AR-4b forbids, and without
+    // this mark a second `agent.resume` on the same record would have made
+    // exactly that (the `already resumed` guard above only ever saw the
+    // pending path's own stamp), while a later boot would re-list the dead
+    // pane beside the run that replaced it.
+    this.supersede(record, entry.info.runtimeRunId);
+    this.dropExited(record.runtimeRunId, "a resume continued the conversation");
     return this.ticketed(entry, principal, terminals);
+  }
+
+  /** Stamp a record as continued into a named successor (AR-4b's one-run law).
+   * Re-read first: the resume may have rewritten it. */
+  private supersede(record: AgentSessionRecord, replacedBy: string): void {
+    const current = this.records.read(record.runtimeRunId);
+    if (current === undefined) return;
+    const at = this.now().toISOString();
+    this.records.write({
+      ...current,
+      reattach: { state: "resumed", at: current.reattach?.at ?? at, replacedBy },
+      updatedAt: at,
+    });
   }
 
   /** AR-6-0 (MF-1 §10.2) — the stop verb: interrupt what a run is DOING without
@@ -785,6 +842,11 @@ export class AgentRuntimeService {
         createdAt: entry.record.createdAt,
         row: this.summarizePending(entry),
       })),
+      // MF-1f — a run whose process ended while its pane is still on the floor
+      ...[...this.exited.values()].map((exited) => ({
+        createdAt: exited.record.createdAt,
+        row: this.summarizeExited(exited),
+      })),
     ].sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
     return { sessions: rows.map((r) => r.row) };
   }
@@ -872,6 +934,27 @@ export class AgentRuntimeService {
           void this.closeRun(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });
         }, EXIT_GRACE_MS);
         entry.backstop.unref();
+      }
+    }
+    // MF-1f — an exited run's row lives exactly as long as its PANE. Listed:
+    // keep it (and follow the cell, so a card's join stays exact). Unlisted:
+    // the same grace the live rows get, because one reading that briefly
+    // lacked a PTY is not a closed pane — then the row goes.
+    for (const [runtimeRunId, exited] of this.exited) {
+      const row = rows.get(exited.terminalSessionId);
+      if (row !== undefined) {
+        if (exited.terminal?.cell?.cellBootId !== row.cell?.cellBootId) changed = true;
+        exited.terminal = row;
+        if (exited.backstop !== undefined) {
+          clearTimeout(exited.backstop);
+          exited.backstop = undefined;
+        }
+      } else if (exited.backstop === undefined) {
+        exited.backstop = setTimeout(() => {
+          exited.backstop = undefined;
+          if (this.dropExited(runtimeRunId, "the floor stopped listing the pane")) this.publish();
+        }, EXIT_GRACE_MS);
+        exited.backstop.unref();
       }
     }
     if (changed) this.publish();
@@ -1170,6 +1253,10 @@ export class AgentRuntimeService {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
       if (entry.poll !== undefined) clearTimeout(entry.poll);
     }
+    for (const exited of this.exited.values()) {
+      if (exited.backstop !== undefined) clearTimeout(exited.backstop);
+    }
+    this.exited.clear();
     if (this.awaitingSweep !== null) {
       clearTimeout(this.awaitingSweep);
       this.awaitingSweep = null;
@@ -1390,7 +1477,25 @@ export class AgentRuntimeService {
     }
     for (const record of records) {
       if (this.disposed) return;
-      if (record.exited !== undefined) continue;
+      // MF-1f — a record STAMPED WITH AN EXIT whose PTY this floor still lists
+      // is a dead pane the deck will show again after the restart, so the row
+      // comes back with it (unobserved: no fieldd held this run's adapter).
+      // A record already continued into a successor is NOT re-listed — the
+      // successor is the row, and its husk pane is nobody's session.
+      if (record.exited !== undefined) {
+        const id = record.terminalSessionId;
+        const row = id === undefined ? undefined : rows.get(id);
+        if (row !== undefined && id !== undefined && record.reattach?.state !== "resumed") {
+          this.exited.set(record.runtimeRunId, {
+            record,
+            terminalSessionId: id,
+            terminal: row,
+            since: this.now().toISOString(),
+          });
+          this.publish();
+        }
+        continue;
+      }
       if (this.managed.has(record.runtimeRunId) || this.pending.has(record.runtimeRunId)) continue;
       const terminalId = record.terminalSessionId;
       const row = terminalId === undefined ? undefined : rows.get(terminalId);
@@ -1973,6 +2078,75 @@ export class AgentRuntimeService {
     return this.opts.audit === undefined ? effect() : this.opts.audit(mutation, effect, describe);
   }
 
+  /** MF-1f — hold an exited run's row while its pane is still on the floor.
+   * Called at the exit this daemon watched; the restart path (`reattach`)
+   * builds the same row from the record alone. */
+  private holdExited(entry: ManagedEntry): void {
+    if (this.disposed) return;
+    const terminalSessionId = entry.info.terminalSessionId;
+    const terminals = this.opts.terminals?.() ?? null;
+    // The floor's OWN listing is the only evidence that the pane is there. No
+    // observation yet (the link is down, the inventory has not arrived) is not
+    // evidence of a pane, so the row is withdrawn as before.
+    const listed =
+      terminals !== null &&
+      terminals.observation() !== undefined &&
+      terminals.get(terminalSessionId) !== undefined;
+    if (!listed) return;
+    const record = this.records.read(entry.info.runtimeRunId);
+    if (record === undefined) return; // no record, nothing to resume — no row
+    this.exited.set(entry.info.runtimeRunId, {
+      entry,
+      record,
+      terminalSessionId,
+      terminal: entry.terminal,
+      since: this.now().toISOString(),
+    });
+  }
+
+  /** Withdraw an exited row and say why. Answers whether it was there. */
+  private dropExited(runtimeRunId: string, why: string): boolean {
+    const exited = this.exited.get(runtimeRunId);
+    if (exited === undefined) return false;
+    if (exited.backstop !== undefined) clearTimeout(exited.backstop);
+    this.exited.delete(runtimeRunId);
+    this.logger.info("fieldd.agents.exited_row_withdrawn", "An exited run's row left the fold", {
+      runtimeRunId,
+      sessionId: exited.terminalSessionId,
+      why,
+    });
+    return true;
+  }
+
+  private summarizeExited(exited: ExitedEntry): AgentSessionSummary {
+    // Seen by THIS daemon: the run keeps everything it had, with the pane
+    // still joined and the continuation saying the conversation stopped.
+    if (exited.entry !== undefined) {
+      return this.summarize(exited.entry, {
+        hosted: true,
+        terminal: exited.terminal ?? exited.entry.terminal,
+        record: { persisted: true, resumable: this.resumableNow(exited.record), exited: true },
+      });
+    }
+    return summarizeExitedRecord({
+      record: exited.record,
+      label:
+        this.runtime.providers().find((p) => p.id === exited.record.provider)?.label ??
+        exited.record.provider,
+      device: this.opts.deviceId?.() ?? "local",
+      terminalSessionId: exited.terminalSessionId,
+      terminal: exited.terminal,
+      since: exited.since,
+    });
+  }
+
+  /** Whether `agent.resume` would take this record right now: it exists and no
+   * successor has already continued its conversation (AR-4b's one-run law). */
+  private resumableNow(record: AgentSessionRecord): boolean {
+    const current = this.records.read(record.runtimeRunId) ?? record;
+    return current.reattach?.state !== "resumed";
+  }
+
   private summarizePending(entry: PendingEntry): AgentSessionSummary {
     return summarizePending({
       record: entry.record,
@@ -2089,6 +2263,10 @@ export class AgentRuntimeService {
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
+    // MF-1f — the process is over, but the PANE may not be: while the floor
+    // still lists this PTY the deck is showing it, so the row stays (carrying
+    // the mirror's last state and the resume verb) until the pane goes.
+    this.holdExited(entry);
     this.logger.info("fieldd.agents.session_exited", "Managed agent session exited", {
       runtimeRunId,
       provider: entry.info.provider.id,
@@ -2125,7 +2303,18 @@ export class AgentRuntimeService {
     });
   }
 
-  private summarize(entry: ManagedEntry): AgentSessionSummary {
+  /** MF-1f — `overrides` is how an EXITED-but-hosted row reuses this: the pane
+   * is still the floor's (`hosted`), and the continuation says the
+   * conversation stopped and can be continued. Everything else — the mirror's
+   * last state, the clocks, the title — is the run's own, unchanged. */
+  private summarize(
+    entry: ManagedEntry,
+    overrides?: {
+      hosted?: boolean;
+      terminal?: TerminalInfo | undefined;
+      record?: NonNullable<AgentSessionSummary["continuation"]>;
+    },
+  ): AgentSessionSummary {
     let observationLevel = "unknown";
     try {
       observationLevel = entry.agent.observationLevel;
@@ -2137,9 +2326,9 @@ export class AgentRuntimeService {
       monitor: entry.mirror,
       observationLevel,
       device: this.opts.deviceId?.() ?? "local",
-      terminal: entry.terminal,
-      hosted: !entry.exiting,
-      record: {
+      terminal: overrides?.terminal ?? entry.terminal,
+      hosted: overrides?.hosted ?? !entry.exiting,
+      record: overrides?.record ?? {
         persisted: true,
         resumable: false,
         ...(entry.reattached ? { reattached: true } : {}),
