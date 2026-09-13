@@ -6,6 +6,7 @@ import {
   isPipeEndpoint,
   MESH_CONTROL_LIMITS,
   NATIVE_SUPERVISION,
+  NativeTerminalMirrorWriteCapabilityResult,
   PingAck,
   TerminalEndpoints,
   type TerminalRouteCell,
@@ -701,6 +702,27 @@ export class NativeLink extends EventEmitter {
     const parsed = PingAck.safeParse(ack);
     if (!parsed.success)
       throw new RpcCallError("INTERNAL", "the ping ack was not a PingAck", false);
+    return parsed.data;
+  }
+
+  /** MF-2a (GM-D5) — the floor's mirror-write capability, for the ONE product
+   * door that grants it (`terminal.mirrorWriteGrant`). Parsed like the ping
+   * ack: a floor answering some other shape is an INTERNAL fault here, not a
+   * capability to pass on.
+   *
+   * The answer carries a secret, so it is returned and never logged — this
+   * method deliberately has no debug line, and callers must keep the value out
+   * of audit attrs and error details (EL7). `configured: false` is the honest
+   * view-only floor, and the caller turns it into UNAVAILABLE. */
+  async mirrorWriteCapability(): Promise<NativeTerminalMirrorWriteCapabilityResult> {
+    const answer = await this.rawRequest("native.terminal.mirrorWriteCapability", {});
+    const parsed = NativeTerminalMirrorWriteCapabilityResult.safeParse(answer);
+    if (!parsed.success)
+      throw new RpcCallError(
+        "INTERNAL",
+        "the floor's mirror-write answer was not a NativeTerminalMirrorWriteCapabilityResult",
+        false,
+      );
     return parsed.data;
   }
 

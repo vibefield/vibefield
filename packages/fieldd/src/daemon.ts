@@ -81,6 +81,7 @@ import {
   type TerminalCreateOpenResponse,
   TerminalCreateParams,
   type TerminalListResult,
+  type TerminalMirrorWriteGrantResult,
   TerminalRenewAttachParams,
   type TerminalRosterResult,
   type TerminalRuntimeSessionsResult,
@@ -1818,6 +1819,66 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (terminal.list stays the transport-facing inventory). Refuses before the
     // first observation exactly like list.
     api.register("terminal.roster", (): TerminalRosterResult => terminals.roster());
+    // FD-2 (GM-D5, §10.2) — the phone's write grant. Mirror-write v1 is ONE
+    // capability per floor, the floor is the only holder, and fieldd is its one
+    // paired management client — so this door is how a linked device comes by
+    // it: never a pasted env var, never a string typed into a sheet.
+    //
+    // Three walls hold with no line here, and three tests prove each fires
+    // rather than trusting the declaration: the registry's `terminal.attach`
+    // scope (a scopeless caller is refused; the scope is in TAILNET_SCOPES, so
+    // a self peer already has it), `guestOk` unset (UA-4's guest choke refuses
+    // a colleague's login BEFORE dispatch), and `locality: "local"` (D36
+    // refuses a peer-fieldd principal outright — a desktop does not borrow
+    // another desktop's write key).
+    //
+    // The ask lives INSIDE the audited effect on purpose: a grant that could
+    // not be served still leaves an attempt and a failed outcome in the grants
+    // ledger, which is the record a later question about "who asked for write
+    // on this floor" needs. The capability itself appears in the ANSWER and
+    // nowhere else — not in the attrs, not in the outcome, not in a log line
+    // (EL7); the ledger gets the floor's device id and the actor's principal.
+    api.register("terminal.mirrorWriteGrant", async (ctx) => {
+      const deviceId = devices.currentDeviceId();
+      return await audit.required(
+        ctx,
+        {
+          action: "capability.mirror_write.grant",
+          target: { kind: "capability", id: "terminal.mirror-write" },
+          attrs: { deviceId },
+        },
+        async (): Promise<TerminalMirrorWriteGrantResult> => {
+          // EL7's own wall, and the one the registry cannot state: the scope
+          // is renderer-eligible for PLUGINS
+          // (`PLUGIN_CAPABILITY_ELIGIBILITY["terminal.attach"]`), so a plugin
+          // that legitimately wants the terminal pool would otherwise be handed
+          // this device's tailnet WRITE credential — long-lived, exfiltratable,
+          // revocable only by rotating the floor's one capability. Attaching to
+          // a PTY on this device and holding the key to every mirrored session
+          // on the tailnet are different powers. Same-uid agents are the
+          // adversary, so both agent-class principals are refused here; the
+          // refusal is inside the audited effect on purpose, because an agent
+          // reaching for this key is exactly what the grants ledger is for.
+          if (ctx.principal.kind === "plugin" || ctx.principal.kind === "mcp-agent")
+            throw new RpcCallError(
+              "FORBIDDEN_SCOPE",
+              "terminal.mirrorWriteGrant is not available to plugin or agent principals",
+              false,
+              { method: "terminal.mirrorWriteGrant", principal: ctx.principal.kind },
+            );
+          const floor = await native.mirrorWriteCapability();
+          if (!floor.configured || floor.capability === undefined)
+            throw new RpcCallError(
+              "UNAVAILABLE",
+              "this device serves no mirror-write capability",
+              false,
+              { service: "terminal", state: "no-mirror-write" },
+            );
+          return { capability: floor.capability, deviceId, issuedAt: Date.now() };
+        },
+        (result) => ({ outcome: "succeeded", attrs: { deviceId: result.deviceId } }),
+      );
+    });
     // GT-D10's `terminal.connectTicket` RETIRED at TP-S3e with the bridge it
     // fed: the routed transport is per SESSION (openTicket/create); there is
     // no sessionless credential to mint.

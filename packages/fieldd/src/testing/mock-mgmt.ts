@@ -89,6 +89,14 @@ export class MockMgmtServer {
    * (an ObservedState); null falls through to the generic `{n:0}` handler,
    * which the fieldd side must read as "no inventory" (tolerant reader). */
   observedState: unknown = null;
+  /** MF-2a — the scripted mirror-write capability this floor holds. `null` =
+   * a floor with none (`{configured: false}`), which is what the grant door
+   * must turn into UNAVAILABLE {state: "no-mirror-write"}; a string is served
+   * as `{configured: true, capability}`. */
+  mirrorWriteCapability: string | null = null;
+  /** How many times the floor was ASKED for it — a door that leaked the
+   * capability into a cache, or asked twice per grant, shows up here. */
+  mirrorWriteAsks = 0;
   /** Schema-valid field-native ring used by LOG-L5 product projection tests. */
   diagnosticRecords: unknown[] = [];
   diagnosticLeases = new Map<string, unknown>();
@@ -232,6 +240,20 @@ export class MockMgmtServer {
           jsonrpc: "2.0",
           id: msg.id,
           result: { subId, snapshot: this.terminalRoutes },
+        })}\n`,
+      );
+      return;
+    }
+    if (msg.method === "native.terminal.mirrorWriteCapability") {
+      this.mirrorWriteAsks += 1;
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result:
+            this.mirrorWriteCapability === null
+              ? { configured: false }
+              : { configured: true, capability: this.mirrorWriteCapability },
         })}\n`,
       );
       return;
