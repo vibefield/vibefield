@@ -29,11 +29,16 @@ const STORE_OWNER_CHARS: usize = mesh_control_limits::OWNER_CHARS;
 const STORE_REMOTE_ORIGINS: usize = mesh_control_limits::REMOTE_ORIGINS;
 const ARTIFACT_SLICE_BYTES: usize = mesh_control_limits::ARTIFACT_SLICE_BYTES;
 const DEVICE_SLICE_BYTES: usize = mesh_control_limits::DEVICE_SLICE_BYTES;
+const AGENT_FIELD_SLICE_BYTES: usize = mesh_control_limits::AGENT_FIELD_SLICE_BYTES;
 
 fn store_slice_limit(store_id: &str) -> Option<usize> {
     match store_id {
         stores::ARTIFACTS => Some(ARTIFACT_SLICE_BYTES),
         stores::DEVICES => Some(DEVICE_SLICE_BYTES),
+        // MF-1 — the agent field's slice: content-free rows, so a device
+        // list-sized budget is already generous; the cap is what stops one
+        // peer amplifying every reader's board.
+        stores::AGENT_FIELD => Some(AGENT_FIELD_SLICE_BYTES),
         _ => None,
     }
 }

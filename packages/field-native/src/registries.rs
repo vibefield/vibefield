@@ -35,6 +35,7 @@ pub mod stores {
     pub const ARTIFACTS: &str = "field.artifacts.v1";
     pub const PUSH: &str = "field.push.v1";
     pub const DEVICES: &str = "field.devices.v1";
+    pub const AGENT_FIELD: &str = "field.agents.v1";
 }
 
 pub mod mesh_control_limits {
@@ -42,6 +43,7 @@ pub mod mesh_control_limits {
     pub const OWNER_CHARS: usize = 256;
     pub const ARTIFACT_SLICE_BYTES: usize = 262144;
     pub const DEVICE_SLICE_BYTES: usize = 65536;
+    pub const AGENT_FIELD_SLICE_BYTES: usize = 65536;
     pub const MGMT_FRAME_BYTES: usize = 83886080;
     pub const MGMT_QUEUED_BYTES: usize = 100663296;
     pub const MGMT_OUTBOX_MESSAGES: usize = 64;

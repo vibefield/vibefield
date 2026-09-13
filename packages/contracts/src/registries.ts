@@ -49,6 +49,12 @@ export const STORES = {
   ARTIFACTS: "field.artifacts.v1",
   PUSH: "field.push.v1",
   DEVICES: "field.devices.v1",
+  /** MF-1 (§10, D4's hybrid) — the content-free agent field, one slice per
+   * device: replication, catch-up on join and removal on leave, with no
+   * fieldd in a reader's path. The product API serves the SAME rows as
+   * `agent.subscribe {projection: "field"}` for a reader that prefers the
+   * door. */
+  AGENT_FIELD: "field.agents.v1",
 } as const;
 
 /** Cross-plane bounds for the opaque SyncedStore → native mgmt → fieldd path
@@ -59,6 +65,7 @@ export const MESH_CONTROL_LIMITS = {
   OWNER_CHARS: 256,
   ARTIFACT_SLICE_BYTES: 256 * 1024,
   DEVICE_SLICE_BYTES: 64 * 1024,
+  AGENT_FIELD_SLICE_BYTES: 64 * 1024,
   MGMT_FRAME_BYTES: 80 * 1024 * 1024,
   MGMT_QUEUED_BYTES: 96 * 1024 * 1024,
   MGMT_OUTBOX_MESSAGES: 64,
@@ -74,6 +81,28 @@ export const MESH_CONTROL_LIMITS = {
 export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
   AGENT: 2 * 1024 * 1024,
   INTERACTIVE: 10 * 1024 * 1024,
+} as const;
+
+/** MF-1 (§5, §10.1) — the field feed's cadences. ONE authority for fieldd's
+ * two publishers (the subscription's per-subscriber floor and the store's
+ * coalescer) and for every reader that ages a slice out.
+ *
+ * The floors are TRAILING-EDGE, like the fold's own 16 ms tick: a change is
+ * never dropped, only delayed to the next window. 250 ms is the phone's
+ * foreground number — the swarm's 30 Hz physics interpolates between states,
+ * so a status flood needs no faster feed, and an idle board costs NOTHING at
+ * any interval because an unchanged projection bumps no revision.
+ *
+ * The expiry pair is the store's honesty clause: a desktop that dies without
+ * clearing its slice leaves rows behind, so the publisher stamps
+ * `expiresAt = now + STORE_EXPIRY_MS` and refreshes it every
+ * STORE_HEARTBEAT_MS while it has rows. EXPIRY ≥ 3 × HEARTBEAT so two lost
+ * heartbeats do not blank a live desktop's field on a reader. */
+export const AGENT_FIELD = {
+  MIN_INTERVAL_MS: 250,
+  STORE_MIN_INTERVAL_MS: 250,
+  STORE_HEARTBEAT_MS: 10_000,
+  STORE_EXPIRY_MS: 30_000,
 } as const;
 
 /** TC-S2 — the floor's supervision budget for a `field-terminal-host` cell

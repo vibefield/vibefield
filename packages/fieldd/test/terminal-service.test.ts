@@ -661,6 +661,10 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.terminate": "terminal.attach",
       "terminal.renewAttach": "terminal.attach",
       "terminal.roster": "terminal.attach",
+      // MF-1/G4 — the phone's mirror-write grant rides the attach scope: it
+      // turns a mirror's viewer into its writer, which is the same power the
+      // scope already grants over this door.
+      "terminal.mirrorWriteGrant": "terminal.attach",
       "terminal.config.read": "settings.manage",
       "terminal.config.write": "settings.manage",
     };
@@ -686,10 +690,23 @@ describe("TerminalService (NF-3, mock native)", () => {
     const narrow = daemon.tokens.mint(["doc.read"], "narrow");
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, narrow.token);
+    // MF-1/G4 — DECLARED, not yet handled: the grant's fieldd side asks the
+    // floor for its mirror-write capability over a mgmt method that does not
+    // exist yet, so the row ships ahead of its door. That is visible here
+    // rather than hidden: an unimplemented registry row answers NOT_FOUND, and
+    // the scope gate is never reached (product-api dispatches by HANDLER, so
+    // "find def → check scope" only holds once a handler is registered — worth
+    // knowing before trusting a scope test over a door nobody wired).
+    const PENDING_DOOR = "terminal.mirrorWriteGrant";
     for (const def of declared) {
       // the scope check runs before params parsing, so `{}` reaches it from
       // every door (product-api.ts: find def → check scope → dispatch)
       const err = await rpc.callErr(def.method, {});
+      if (def.method === PENDING_DOOR) {
+        // when G4 lands this flips to FORBIDDEN_SCOPE and this branch must go
+        expect(err.data?.kind, `${def.method} is declared but unhandled`).toBe("NOT_FOUND");
+        continue;
+      }
       expect(err.data?.kind, def.method).toBe("FORBIDDEN_SCOPE");
       expect((err.data?.details as { required?: string } | undefined)?.required, def.method).toBe(
         EXPECTED_SCOPE[def.method],

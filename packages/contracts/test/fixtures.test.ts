@@ -4,6 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
 import {
+  AgentFieldDelta,
+  AgentFieldSlice,
+  AgentFieldSnapshot,
+  AgentInterruptResult,
+  TerminalMirrorWriteGrantResult,
+} from "../src/agent-field";
+import {
   AgentDistributionRecord,
   AgentPersona,
   AgentsInstallsResult,
@@ -185,6 +192,19 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // AR-5d — the usage column's feed: one batch with three states beside the
   // honest empty one the door answers before the first refresh.
   "agent-usage": AgentAccountUsageBatch,
+  // MF-1 (§10.1) — the field projection's three frames and its two new doors.
+  // The slice's five rows are the states a phone must draw without asking for
+  // anything else: blocked on a named tool, working with bars, idle, a PENDING
+  // row nothing observes (AR-4), and one whose PTY is gone. Content is
+  // deliberately absent from every one of them — no reply line, no blocker
+  // input, no title, no mirror.
+  "agent-field-snapshot": AgentFieldSnapshot,
+  "agent-field-delta": AgentFieldDelta,
+  "agent-field-slice": AgentFieldSlice,
+  // Both arms of the interrupt's union: the refusal carries the FLOOR's own
+  // word, never a sentence composed at the door.
+  "agent-interrupt": AgentInterruptResult,
+  "terminal-mirror-write-grant": TerminalMirrorWriteGrantResult,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

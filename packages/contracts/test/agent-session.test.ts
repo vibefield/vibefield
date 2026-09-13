@@ -33,7 +33,7 @@ describe("agent.* registry rows (AR-3)", () => {
       subscription: m.subscription ?? false,
     }));
 
-  it("births on agent.spawn, reads on agent.observe, one subscription; all local in v1", () => {
+  it("births on agent.spawn, reads on agent.observe, steers on agent.control; all local in v1", () => {
     expect(rows("agent.")).toEqual([
       {
         method: "agent.providers",
@@ -52,6 +52,16 @@ describe("agent.* registry rows (AR-3)", () => {
       {
         method: "agent.resume",
         scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+        subscription: false,
+      },
+      // AR-6-0 (MF-1) — the stop verb, and the first door on `agent.control`:
+      // it steers a run that already exists rather than watching the fold or
+      // creating a session.
+      {
+        method: "agent.interrupt",
+        scope: "agent.control",
         idempotent: false,
         locality: "local",
         subscription: false,

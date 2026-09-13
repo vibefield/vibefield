@@ -1,0 +1,76 @@
+{
+  "since": 64,
+  "revision": 66,
+  "upserts": [
+    {
+      "runtimeRunId": "run-blocked",
+      "revision": 65,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-09-13T18:45:03.000Z",
+      "stateChangedAt": "2026-09-13T18:45:03.000Z",
+      "createdAt": "2026-09-13T18:03:52.000Z",
+      "alive": true,
+      "blockers": [],
+      "lastActivityAt": "2026-09-13T18:45:03.000Z",
+      "usage": {
+        "cumulativeTokens": 184320,
+        "burnRatePerMin": 1450
+      },
+      "context": {
+        "usedPercent": 38
+      },
+      "model": {
+        "id": "claude-opus-5",
+        "displayName": "Opus 5"
+      },
+      "effort": {
+        "value": "high",
+        "intent": "observed"
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/vibe-field",
+        "branch": "mf/fd1"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-a41f",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-idle",
+      "revision": 66,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-09-13T18:45:06.000Z",
+      "stateChangedAt": "2026-09-13T18:45:06.000Z",
+      "createdAt": "2026-09-13T18:29:41.000Z",
+      "alive": true,
+      "blockers": [],
+      "lastActivityAt": "2026-09-13T18:45:06.000Z",
+      "context": {
+        "usedPercent": 4
+      },
+      "model": {
+        "id": "claude-sonnet-5",
+        "displayName": "Sonnet 5"
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/vibe-field"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-1c39",
+        "workloadClass": "agent"
+      }
+    }
+  ],
+  "removed": ["run-exited"]
+}

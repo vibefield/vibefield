@@ -1070,6 +1070,30 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // MF-1/G4 — the phone asks this desktop for the floor's mirror-write
+  // capability instead of a person pasting a secret into a phone. Scope is
+  // `terminal.attach`, deliberately: the capability turns a VIEWER of a mirror
+  // into a WRITER of it, which is the same power `terminal.attach` already
+  // grants over the door (attach + create + terminate, the posture stated on
+  // the rows above), so a new scope would be a distinction no caller could
+  // act on. locality "local": the capability is THIS floor's — a peer's
+  // mirror-write is that peer's door to hand out, never this one federated.
+  // Idempotent: D5 v1 is ONE secret per floor, so asking twice returns the
+  // same string and a retry is free (rotation revokes every holder at once;
+  // per-device tokens are the named upgrade, GT-D6).
+  //
+  // `guestOk` stays FALSE (the default, undeclared): a guest is a WhoIs-verified
+  // tailnet peer whose login does not match this user's link, and writing into
+  // this user's terminals is exactly what the empty guest preset exists to
+  // refuse. Self peers reach it because `terminal.attach` sits in
+  // TAILNET_SCOPES already.
+  defineMethod({
+    surface: "product",
+    method: "terminal.mirrorWriteGrant",
+    scope: "terminal.attach",
+    idempotent: true,
+    locality: "local",
+  }),
   // GT-3 rider — the `config.ghostty` surface. Scope is `settings.manage`, NOT
   // `terminal.attach`: attaching to a terminal and rewriting the configuration
   // every terminal on the device loads are different powers, and the second one
@@ -1346,6 +1370,23 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // AR-6-0 (MF-1 §10.2) — the stop verb: interrupt what a run is doing without
+  // ending it, the ⎋ a person at the keyboard would press. Scope is
+  // `agent.control`, the one scope in the AR-3 trio that has waited for a
+  // door: this neither observes the fold (`agent.observe`) nor births a
+  // session (`agent.spawn`) — it STEERS a run that already exists, which is
+  // what `agent.control` was consented for. NOT idempotent: a second interrupt
+  // is a second act on a run that may have moved on, never a replay of the
+  // first. locality "local" like the rest of agent.*: the params name a RUN,
+  // and fieldd reaches its PTY through the record it minted for it — a peer's
+  // run is stopped by ROUTING the call (D35), never by federating this one.
+  defineMethod({
+    surface: "product",
+    method: "agent.interrupt",
+    scope: "agent.control",
+    idempotent: false,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "agent.list",
@@ -1353,6 +1394,11 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // MF-1 — the row is unchanged; its PARAMS are now `AgentSubscribeParams`
+  // (agent-field.ts): absent or `{projection: "full"}` is today's subscription
+  // byte for byte, `{projection: "field"}` answers the content-free projection
+  // as a snapshot plus deltas at a per-subscriber floor. One door, one scope —
+  // a phone watching the field is watching the fold, at a phone's cadence.
   defineMethod({
     surface: "product",
     method: "agent.subscribe",

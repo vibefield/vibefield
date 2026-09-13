@@ -3,6 +3,7 @@ import { ARTIFACT_LIMITS } from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
 import { LOCALITIES, METHODS, SURFACES } from "../src/methods";
 import {
+  AGENT_FIELD,
   DESKTOP_APP_ID,
   DESKTOP_TRAY_GUID,
   HOST_SINGLETON_EXTERNALS,
@@ -12,6 +13,7 @@ import {
   PORTS,
   SCOPES,
   SOCKETS,
+  STORES,
   TAILNET_SCOPES,
 } from "../src/registries";
 
@@ -226,5 +228,48 @@ describe("logging registries (LOG-43/LOG-44)", () => {
     ]);
     expect(methods.map(({ scope }) => scope)).toEqual([null, null, "shell.dialog", "shell.open"]);
     expect(methods.every(({ locality }) => locality === "local")).toBe(true);
+  });
+});
+
+describe("MF-1 — the field's two new doors and its store (§10.1)", () => {
+  it("declares agent.interrupt as a control act on this device's own run", () => {
+    expect(METHODS.find((method) => method.method === "agent.interrupt")).toEqual({
+      surface: "product",
+      method: "agent.interrupt",
+      // the AR-3 trio's steering scope: not the fold's read, not a birth
+      scope: "agent.control",
+      // a second interrupt is a second act, never a replay of the first
+      idempotent: false,
+      locality: "local",
+    });
+    // and it is reachable from the phone: agent.control is in the tailnet preset
+    expect(TAILNET_SCOPES).toContain("agent.control");
+  });
+
+  it("declares terminal.mirrorWriteGrant on terminal.attach, and never for a guest", () => {
+    const grant = METHODS.find((method) => method.method === "terminal.mirrorWriteGrant");
+    expect(grant).toEqual({
+      surface: "product",
+      method: "terminal.mirrorWriteGrant",
+      scope: "terminal.attach",
+      idempotent: true,
+      locality: "local",
+    });
+    // G4: a self peer reaches it (terminal.attach is in the preset); a guest
+    // never does — guestOk is undeclared, and the guest preset is empty.
+    expect(grant?.guestOk ?? false).toBe(false);
+    expect(TAILNET_SCOPES).toContain("terminal.attach");
+  });
+
+  it("names the field store and bounds its slice like every other public store", () => {
+    expect(STORES.AGENT_FIELD).toBe("field.agents.v1");
+    expect(MESH_CONTROL_LIMITS.AGENT_FIELD_SLICE_BYTES).toBe(64 * 1024);
+  });
+
+  it("keeps the field's cadences trailing-edge and its expiry survivable", () => {
+    expect(AGENT_FIELD.MIN_INTERVAL_MS).toBe(250);
+    expect(AGENT_FIELD.STORE_MIN_INTERVAL_MS).toBe(250);
+    // two lost heartbeats must not blank a live desktop's field on a reader
+    expect(AGENT_FIELD.STORE_EXPIRY_MS).toBeGreaterThanOrEqual(AGENT_FIELD.STORE_HEARTBEAT_MS * 3);
   });
 });

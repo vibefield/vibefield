@@ -1,0 +1,165 @@
+{
+  "revision": 64,
+  "rows": [
+    {
+      "runtimeRunId": "run-blocked",
+      "revision": 7,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "blocked",
+      "statusSince": "2026-09-13T18:42:11.000Z",
+      "stateChangedAt": "2026-09-13T18:42:11.000Z",
+      "createdAt": "2026-09-13T18:03:52.000Z",
+      "alive": true,
+      "blockers": [
+        {
+          "id": "perm-9f2c",
+          "kind": "permission",
+          "since": "2026-09-13T18:42:11.000Z",
+          "tool": "Bash"
+        }
+      ],
+      "lastActivityAt": "2026-09-13T18:42:11.000Z",
+      "usage": {
+        "cumulativeTokens": 184320,
+        "burnRatePerMin": 1450
+      },
+      "context": {
+        "usedPercent": 38
+      },
+      "model": {
+        "id": "claude-opus-5",
+        "displayName": "Opus 5"
+      },
+      "effort": {
+        "value": "high",
+        "intent": "observed"
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/vibe-field",
+        "branch": "mf/fd1"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-a41f",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-working",
+      "revision": 41,
+      "kind": "codex",
+      "label": "Codex",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-09-13T18:44:02.000Z",
+      "stateChangedAt": "2026-09-13T18:44:02.000Z",
+      "createdAt": "2026-09-13T17:58:20.000Z",
+      "alive": true,
+      "blockers": [],
+      "lastActivityAt": "2026-09-13T18:44:59.000Z",
+      "profileId": "work",
+      "usage": {
+        "cumulativeTokens": 902140,
+        "burnRatePerMin": 5120
+      },
+      "context": {
+        "usedPercent": 72
+      },
+      "model": {
+        "id": "gpt-5-codex"
+      },
+      "effort": {
+        "value": "medium"
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/ice",
+        "branch": null
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-77b0",
+        "cellBootId": "cell-3",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-idle",
+      "revision": 3,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-09-13T18:30:00.000Z",
+      "stateChangedAt": "2026-09-13T18:30:00.000Z",
+      "createdAt": "2026-09-13T18:29:41.000Z",
+      "alive": true,
+      "blockers": [],
+      "lastActivityAt": "2026-09-13T18:30:00.000Z",
+      "context": {
+        "usedPercent": 4
+      },
+      "model": {
+        "id": "claude-sonnet-5",
+        "displayName": "Sonnet 5"
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/vibe-field"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-1c39",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-pending",
+      "revision": 1,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "unknown",
+      "statusSince": "2026-09-13T18:10:07.000Z",
+      "stateChangedAt": "2026-09-13T18:10:07.000Z",
+      "createdAt": "2026-09-13T11:22:05.000Z",
+      "alive": false,
+      "blockers": [],
+      "pending": "resume-when-idle",
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-0b5e",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-exited",
+      "revision": 12,
+      "kind": "codex",
+      "label": "Codex",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-09-13T18:39:44.000Z",
+      "stateChangedAt": "2026-09-13T18:39:44.000Z",
+      "createdAt": "2026-09-13T16:41:12.000Z",
+      "alive": false,
+      "blockers": [],
+      "lastActivityAt": "2026-09-13T18:39:44.000Z",
+      "usage": {
+        "cumulativeTokens": 33110
+      },
+      "project": {
+        "cwd": "/Users/j/Projects/vibe-field",
+        "branch": "main"
+      },
+      "terminal": {
+        "hosted": "none"
+      }
+    }
+  ]
+}
