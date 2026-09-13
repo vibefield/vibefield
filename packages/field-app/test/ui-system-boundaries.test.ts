@@ -282,7 +282,10 @@ describe("UI system ownership boundaries", () => {
     // deck's ground, the access chip's colours, and the exit face on
     // GHOSTTEA's own badge element.
     const godview = source("godview/godview.css");
-    expect(godview).not.toMatch(/\.vf-pane-/);
+    // A RULE, not a mention (the same carve-out its two neighbours make): the
+    // prose above these rules names the selectors to say who owns them, and a
+    // bare substring would forbid explaining the ownership it is enforcing.
+    expect(godview).not.toMatch(/\.vf-pane-[\w-]*[^\n{]*\{/);
     // The two the host used to draw for itself, now the package's: the line and
     // the glow on the selected pane, and the divider between two resting ones.
     // A RULE, not a mention: the prose above these lines names both selectors
@@ -296,7 +299,7 @@ describe("UI system ownership boundaries", () => {
       source("design-system/styles/scenes.css"),
       source("design-system/styles/tweaks.css"),
     ].join("\n");
-    expect(catalogCss).not.toMatch(/\.vf-pane-/);
+    expect(catalogCss).not.toMatch(/\.vf-pane-[\w-]*[^\n{]*\{/);
 
     // And the catalog's fixture is an ADAPTER: the shipping chrome over
     // fixture facts, with no markup and no stylesheet of its own.

@@ -175,11 +175,14 @@ type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSess
 let root: Root | null = null;
 let container: HTMLElement | null = null;
 let requests: Array<{ method: string; params: unknown }> = [];
+/** What `agent.interrupt` answers with — or, when it is an Error, throws. */
 let interruptAnswer: unknown = { accepted: true };
 let deckDoor: RemoteSessionDoor | null = null;
 /** What the fold's `observe` is currently answering with. */
 let foldRows: readonly AgentSessionSummary[] = [];
 let foldFrame: ((rows: readonly AgentSessionSummary[]) => void) | null = null;
+/** Every renderer log line the deck wrote, with its level. */
+let logged: Array<{ level: "info" | "error"; event: string; message: string }> = [];
 
 const fieldd = {
   request: (method: string, params?: unknown): Promise<unknown> => {
@@ -195,7 +198,11 @@ const fieldd = {
         ...routedTicket("born-1"),
       });
     }
-    if (method === "agent.interrupt") return Promise.resolve(interruptAnswer);
+    if (method === "agent.interrupt") {
+      return interruptAnswer instanceof Error
+        ? Promise.reject(interruptAnswer)
+        : Promise.resolve(interruptAnswer);
+    }
     if (method === "agent.resume") {
       const resumed = managedSummary({
         runtimeRunId: "run-2",
@@ -255,14 +262,19 @@ function foldDoor(): MonitorDoor {
 }
 
 function installHost(): void {
+  // RECORDED, not silenced: the difference between "fieldd refused this state"
+  // and "fieldd could not be reached" is a log level and an event name, and
+  // that difference is the whole of the GT-6 review's M1.
+  const record = (level: "info" | "error") => (event: string, message: string) =>
+    logged.push({ level, event, message });
   setRendererLogger({
     child: () =>
       ({
         trace: () => undefined,
         debug: () => undefined,
-        info: () => undefined,
+        info: record("info"),
         warn: () => undefined,
-        error: () => undefined,
+        error: record("error"),
         fatal: () => undefined,
       }) as unknown as RendererLogger,
   } as unknown as RendererLogger);
@@ -315,6 +327,7 @@ const verb = (frame: HTMLElement | null, kind: string): HTMLButtonElement | null
   frame?.querySelector<HTMLButtonElement>(`.vf-pane-verb.is-${kind}`) ?? null;
 
 beforeEach(() => {
+  logged = [];
   requests = [];
   deckDoor = null;
   foldRows = [];
@@ -419,6 +432,60 @@ describe("the deck's pane frames", () => {
     await settle();
     expect(requests.some((call) => call.method === "agent.interrupt")).toBe(true);
     expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(false);
+  });
+
+  it("reads a THROWN refusal as the state it is, not as a daemon it could not reach", async () => {
+    // fieldd refuses the two states a deck actually meets by THROWING: a run
+    // whose process has ended (`PRECONDITION_FAILED`, `details.state:
+    // "not-alive"`) and one it does not know (`NOT_FOUND`). Only the floor's
+    // own refusal comes back as `{accepted: false}`
+    // (`fieldd/src/agent-runtime.ts:755–789`). Before GT-6's review the catch
+    // logged "could not reach fieldd" at ERROR on a perfectly healthy daemon.
+    const rpc = Object.assign(
+      new Error(
+        "the session is not running under this daemon; interrupt is for a live, observed run",
+      ),
+      { name: "FielddRpcError", kind: "PRECONDITION_FAILED", details: { state: "not-alive" } },
+    );
+    interruptAnswer = rpc;
+    foldRows = [
+      managedSummary({ runtimeRunId: "run-44", terminalSessionId: "pty-1", status: "working" }),
+    ];
+    const host = await mountDeck();
+    await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
+    await settle();
+    expect(requests.filter((call) => call.method === "agent.interrupt")).toEqual([
+      { method: "agent.interrupt", params: { runtimeRunId: "run-44" } },
+    ]);
+    // Not delivered, and said as a refusal: the square goes solid again rather
+    // than blinking at a turn nobody is stopping.
+    expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(false);
+    // And said at the right level, in the daemon's own word for the state.
+    expect(logged.filter((line) => line.event === "renderer.godview.interrupt_failed")).toEqual([]);
+    expect(
+      logged.filter((line) => line.event === "renderer.godview.interrupt_refused"),
+    ).toHaveLength(1);
+    expect(logged.find((line) => line.event === "renderer.godview.interrupt_refused")?.level).toBe(
+      "info",
+    );
+  });
+
+  it("refuses a shape the contract does not admit, rather than reading a stray field", async () => {
+    // The answer is PARSED now (the contract row exists): a body with no
+    // discriminant is not a delivery, whatever else it carries.
+    interruptAnswer = { ok: true, accepted: "yes" };
+    // An unreadable ANSWER is a different fact from a refused state: the parse
+    // throws, nothing names a state, and the error path is the honest one.
+    foldRows = [
+      managedSummary({ runtimeRunId: "run-45", terminalSessionId: "pty-1", status: "working" }),
+    ];
+    const host = await mountDeck();
+    await act(async () => verb(frameFor(host, "pty-1"), "stop")?.click());
+    await settle();
+    expect(frameFor(host, "pty-1")?.classList.contains("is-stopping")).toBe(false);
+    expect(
+      logged.filter((line) => line.event === "renderer.godview.interrupt_failed"),
+    ).toHaveLength(1);
   });
 
   it("resumes an ended run and hands its pane the new terminal", async () => {

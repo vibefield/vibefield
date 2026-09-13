@@ -11,7 +11,12 @@ import {
   PaneFrame,
   type PaneFrameVerbs,
 } from "@vibecook/puppeteer-views";
-import { AgentListResult, AgentProvidersResult, AgentSpawnResult } from "@vibefield/contracts";
+import {
+  AgentInterruptResult,
+  AgentListResult,
+  AgentProvidersResult,
+  AgentSpawnResult,
+} from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type CSSProperties,
@@ -55,6 +60,7 @@ import {
   savedPaneSessionIds,
 } from "./deck-restore";
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
+import { zoomLayoutApplied } from "./deck-zoom";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
 import { historyPortOver, usagePortOver } from "./monitor/doors";
@@ -157,6 +163,27 @@ async function settled(predicate: () => boolean, ms: number): Promise<boolean> {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   return true;
+}
+
+/**
+ * A refusal fieldd expressed by THROWING, told apart from a daemon that could
+ * not be answered at all (GT-6 review).
+ *
+ * `agent.interrupt` refuses a run that has ended or one it does not know with
+ * an `RpcCallError` rather than with `{accepted: false}` — the union's second
+ * arm is reserved for the floor's own refusal — and the renderer sees that as a
+ * rejected promise carrying `kind` and `details`. Read structurally rather than
+ * with `instanceof`: the deck holds its client through a door, and a wrapper
+ * that re-threw a plain object would still be telling the truth about a state.
+ * Returns fieldd's own word for the state, so the log says `not-alive` rather
+ * than a sentence this file invented.
+ */
+function interruptRefusal(cause: unknown): string | undefined {
+  const error = cause as { kind?: unknown; details?: { state?: unknown } } | null;
+  const kind = error?.kind;
+  if (kind !== "PRECONDITION_FAILED" && kind !== "NOT_FOUND") return undefined;
+  const state = error?.details?.state;
+  return typeof state === "string" && state !== "" ? state : kind;
 }
 
 export interface GodviewDeckProps {
@@ -1067,11 +1094,19 @@ export function GodviewDeck({
   // package's stylesheet keys its pane rules on (the record's safe areas, the
   // active pane's radius, the line and the glow).
   const paneAgents = useDeckAgentFacts();
-  /** The runs the verbs are aimed with, read at CALL time: the verbs must stay
-   * referentially stable (a fresh object per fold frame would re-render every
-   * frame in the deck), and what they need is whatever the fold says NOW. */
+  /** The runs the verbs are aimed with, read at CALL time: the verbs object
+   * must stay referentially stable (`DeckFrames` hands it to every frame, and a
+   * fresh one per fold frame would re-render all of them), and what they need
+   * is whatever the fold says NOW.
+   *
+   * The zoom controller rides the same rule and for the same reason (GT-6
+   * review): `useDeckZoom` returns a fresh object every render, so naming it in
+   * the memo's dependencies rebuilt the verbs on every render and this ref
+   * bought nothing. */
   const paneRuns = useRef(paneAgents.runs);
   paneRuns.current = paneAgents.runs;
+  const deckZoom = useRef(zoom);
+  deckZoom.current = zoom;
 
   /** The pane colours, keyed as the package wants them (by PANE, record §02).
    * The deck records a colour per SESSION at the attach or mount that dealt it,
@@ -1113,22 +1148,32 @@ export function GodviewDeck({
       stop: async (sessionId) => {
         const runtimeRunId = runFor(sessionId);
         if (runtimeRunId === undefined) return { accepted: false };
+        const refused = (reason: string): { accepted: false } => {
+          log().info("renderer.godview.interrupt_refused", "fieldd would not stop this turn", {
+            runtimeRunId,
+            reason,
+          });
+          return { accepted: false };
+        };
         try {
-          // The tolerant reader, at a door whose contract row is landing
-          // beside this slice: an answer this cannot read is NOT a delivery.
-          const answer = (await fieldd.request("agent.interrupt", { runtimeRunId })) as {
-            accepted?: unknown;
-            reason?: unknown;
-          } | null;
-          const accepted = answer?.accepted === true;
-          if (!accepted) {
-            log().info("renderer.godview.interrupt_refused", "fieldd would not stop this turn", {
-              runtimeRunId,
-              ...(typeof answer?.reason === "string" ? { reason: answer.reason } : {}),
-            });
-          }
-          return { accepted };
+          // The contract exists, so it is PARSED (the resume verb below does
+          // the same): a shape this cannot read is not a delivery, and the
+          // discriminated union is what says which of the two answers it is.
+          const answer = AgentInterruptResult.parse(
+            await fieldd.request("agent.interrupt", { runtimeRunId }),
+          );
+          return answer.accepted ? { accepted: true } : refused(answer.reason);
         } catch (cause) {
+          // fieldd THROWS the two states a deck actually meets — a run that has
+          // ended (`PRECONDITION_FAILED`, `details.state: "not-alive"`) and one
+          // it does not know (`NOT_FOUND`) — and returns `{accepted: false}`
+          // only when the FLOOR refuses (`agent-runtime.ts:755–789`). Both
+          // throws are the door's own words about a state, so they take the
+          // refusal path; only a daemon that could not be reached is an error.
+          // Before this, a healthy daemon refusing a dead run logged "could not
+          // reach fieldd" (GT-6 review).
+          const state = interruptRefusal(cause);
+          if (state !== undefined) return refused(state);
           log().error(
             "renderer.godview.interrupt_failed",
             "the stop verb could not reach fieldd",
@@ -1178,12 +1223,12 @@ export function GodviewDeck({
       },
       zoom: (pane) => {
         const paneId = pane.dataset["paneId"];
-        if (paneId !== undefined) zoom.toggle(paneId);
+        if (paneId !== undefined) deckZoom.current.toggle(paneId);
       },
       // The chord `ZoomActivePane` claims from ghosttea, in the frame's words.
       zoomShortcut: getHost().platform === "darwin" ? "⌘⇧↵" : "⌃⇧↵",
     };
-  }, [fieldd, mountSummaryNow, zoom]);
+  }, [fieldd, mountSummaryNow]);
 
   /**
    * The host's frame: the package's, plus the one fact only this deck holds —
@@ -1205,12 +1250,25 @@ export function GodviewDeck({
   /** The pane the deck's own morph has zoomed. Passed explicitly because
    * ghosttea's `is-zoomed` class is NOT the truth here: upstream's zoom
    * remounts a pane and this deck refuses to (TP-D18), so the phase the
-   * controller is in is the only honest answer. */
-  const zoomedPaneId = zoom.state.phase === "idle" ? null : zoom.state.paneId;
+   * controller is in is the only honest answer.
+   *
+   * `zoomLayoutApplied` and not "any phase but idle" (GT-6 review): the
+   * controller is `entering` for the 240 ms the morph takes, and a frame that
+   * flipped to the restore glyph on the first frame of the gesture would be
+   * 240 ms ahead of the pane it names — and ahead of the deck's own chip, which
+   * reads the same helper. */
+  const zoomedPaneId = zoomLayoutApplied(zoom.state.phase) ? zoom.state.paneId : null;
 
-  /** The terminal's ground and ink, from the same projection the workspace is
-   * handed (record §07: the frame is mixed from the terminal's own ink, and the
-   * deck draws on the terminal's ground). */
+  /** The terminal's INK, from the same projection the workspace is handed
+   * (record §07: every figure the frame draws is mixed from the terminal's own
+   * ink, so a viewer who changes the palette moves the frame with it).
+   *
+   * The ground travels no further than this (GT-6 review): the record has the
+   * DECK tinted with it at 82%, and VibeField tints each pane instead
+   * (`DEFAULT_DECK_APPEARANCE.opacity`, premultiplied by ghosttea's renderer),
+   * so publishing `--vf-godview-terminal-bg` gave every reader in the tree a
+   * variable nothing read. It returns with the rule that needs it, if James
+   * rules the deck should carry the tint. */
   const ground = useMemo(() => terminalGround(terminalTheme), [terminalTheme]);
 
   // DEMAND (TP-L-E'), declared where the views are.
@@ -1443,12 +1501,7 @@ export function GodviewDeck({
         ref={zoomHostRef}
         className="vf-deck-zoom"
         data-zoom-phase="idle"
-        style={
-          {
-            "--vf-godview-terminal-bg": ground.background,
-            "--vf-godview-terminal-ink": ground.ink,
-          } as CSSProperties
-        }
+        style={{ "--vf-godview-terminal-ink": ground.ink } as CSSProperties}
       >
         {workspace?.activeSession !== undefined && (
           <KillActivePane session={workspace.activeSession} fieldd={fieldd} />

@@ -2541,6 +2541,51 @@ async function readMonitorAck(win: BrowserWindow): Promise<string> {
  *
  * Polled for `readMonitorAck`'s reason and `clickDeckButton`'s: a marker says
  * what the stage WAS when it published, and a chip can still be a render away. */
+interface PaneFrameFacts {
+  framed: boolean;
+  frames: number;
+  frameInPane: boolean;
+  name: string;
+  narrow: number;
+}
+
+/**
+ * The deck's pane frames, POLLED (GT-6 review).
+ *
+ * The frames are mounted by a mutation observer whose sync is a `setTimeout 0`,
+ * so they land a macrotask after the panes they portal into: a single read at
+ * the moment the deck reports its panes samples the instant before the chrome
+ * exists and calls it a missing frame. Same deadline-poll shape as the local
+ * chip above rather than `MarkerWatch.until`, because a frame publishes no
+ * marker — the DOM is the only thing that can be asked.
+ */
+async function readPaneFrameFacts(win: BrowserWindow, timeoutMs: number): Promise<PaneFrameFacts> {
+  const deadline = Date.now() + timeoutMs;
+  let seen: PaneFrameFacts = { framed: false, frames: 0, frameInPane: false, name: "", narrow: 0 };
+  while (Date.now() < deadline) {
+    seen = (await win.webContents.executeJavaScript(
+      `(() => {
+         const deck = document.querySelector(".vf-godview-terminal-deck .vf-deck-zoom");
+         const pane = document.querySelector(".vf-godview-terminal-deck .ghostty-pane.is-active")
+           ?? document.querySelector(".vf-godview-terminal-deck .ghostty-pane");
+         const frame = pane?.querySelector(".vf-pane-frame") ?? null;
+         return {
+           framed: deck?.classList.contains("vf-deck-framed") === true,
+           frames: document.querySelectorAll(".vf-godview-terminal-deck .vf-pane-frame").length,
+           frameInPane: frame !== null,
+           name: frame?.querySelector(".vf-pane-name")?.textContent ?? "",
+           narrow: document.querySelectorAll(".vf-godview-terminal-deck .ghostty-pane[data-vf-narrow]").length,
+         };
+       })()`,
+    )) as PaneFrameFacts;
+    // The badge is the last of the three to exist, so a named frame means the
+    // whole chrome is up; everything else is asserted on what this returns.
+    if (seen.framed && seen.frameInPane && seen.name !== "") return seen;
+    await sleep(200);
+  }
+  return seen;
+}
+
 async function readMonitorLocalChip(win: BrowserWindow, timeoutMs: number): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   let seen = "";
@@ -2963,21 +3008,7 @@ export async function runSmokeGodview(opts: {
     //     that the name below is the name the package sets, and that the
     //     package sets it by MEASURING the pane rather than by a fixture
     //     asserting it.
-    const paneFrame = (await win.webContents.executeJavaScript(
-      `(() => {
-         const deck = document.querySelector(".vf-godview-terminal-deck .vf-deck-zoom");
-         const pane = document.querySelector(".vf-godview-terminal-deck .ghostty-pane.is-active")
-           ?? document.querySelector(".vf-godview-terminal-deck .ghostty-pane");
-         const frame = pane?.querySelector(".vf-pane-frame") ?? null;
-         return {
-           framed: deck?.classList.contains("vf-deck-framed") === true,
-           frames: document.querySelectorAll(".vf-godview-terminal-deck .vf-pane-frame").length,
-           frameInPane: frame !== null,
-           name: frame?.querySelector(".vf-pane-name")?.textContent ?? "",
-           narrow: document.querySelectorAll(".vf-godview-terminal-deck .ghostty-pane[data-vf-narrow]").length,
-         };
-       })()`,
-    )) as { framed: boolean; frames: number; frameInPane: boolean; name: string; narrow: number };
+    const paneFrame = await readPaneFrameFacts(win, 10_000);
     verdict["paneFrame"] = paneFrame;
     if (!paneFrame.framed) {
       throw new Error(

@@ -26,7 +26,6 @@
   --tint-l: 0.6;
   --tint-c: 0.15;
   --terminal-bg: var(--vf-godview-light-terminal-bg);
-  --terminal-divider: var(--vf-godview-light-terminal-divider);
   --pane-access-text: rgba(20, 20, 20, 0.6);
   --pane-access-border: rgba(0, 0, 0, 0.12);
   --pane-access-bg: rgba(247, 247, 247, 0.8);
@@ -58,7 +57,6 @@
   --tint-l: 0.74;
   --tint-c: 0.15;
   --terminal-bg: var(--vf-godview-dark-terminal-bg);
-  --terminal-divider: var(--vf-godview-dark-terminal-divider);
   --pane-access-text: rgba(255, 255, 255, 0.62);
   --pane-access-border: rgba(255, 255, 255, 0.14);
   --pane-access-bg: rgba(22, 24, 29, 0.82);
@@ -119,14 +117,18 @@
   font: inherit;
 }
 
+/* The theme crossfade, minus the PANE (GT-6 review): the package's own
+   `.vf-deck-framed .ghostty-pane` transition has the same specificity and is
+   imported later, so this selector was a deletion-by-override — and it was
+   crossfading nothing anyway, since the pane is transparent and ghosttea paints
+   its ground on a canvas. Deleted rather than left to be quietly outranked. */
 .vf-godview-header,
 .vf-godview-monitor-stage,
 .vf-monitor-swarm,
 .vf-godview-terminal-deck,
 .vf-godview-terminal-deck .ghostty-window,
 .vf-godview-terminal-deck .ghosttea-workspace-body,
-.vf-godview-terminal-deck .terminal-host,
-.vf-godview-terminal-deck .ghostty-pane {
+.vf-godview-terminal-deck .terminal-host {
   transition:
     color 240ms ease,
     border-color 240ms ease,
