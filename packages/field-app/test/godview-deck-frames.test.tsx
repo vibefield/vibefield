@@ -15,7 +15,14 @@
  * provider the overlay mounts in production.
  */
 
-import { act, type ComponentType, type ReactElement, useMemo, useState } from "react";
+import {
+  act,
+  type ComponentType,
+  type CSSProperties,
+  type ReactElement,
+  useMemo,
+  useState,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
@@ -52,6 +59,9 @@ const workspace = {
   activePaneId: "",
   /** Every session the deck asked the workspace to show, in order. */
   mounts: [] as string[],
+  /** The live context's `mountSession`, so a test can land a birth the way
+   * ghosttea lands what `createSplitSession` answers. */
+  mount: (_summary: { id: string; cwd?: string | null }) => undefined as void,
 };
 
 /**
@@ -65,8 +75,10 @@ const workspace = {
  */
 function WorkspaceStub({
   sidebar: Sidebar,
+  decoratePane,
 }: {
   sidebar: ComponentType<{ workspace: unknown }>;
+  decoratePane?: (session: StubSession) => { color?: string; label?: string } | undefined;
 }): ReactElement {
   const [version, setVersion] = useState(0);
   const context = useMemo(
@@ -94,20 +106,35 @@ function WorkspaceStub({
     }),
     [version],
   );
+  workspace.mount = context.mountSession;
   return (
     <>
       <Sidebar workspace={context} />
       {/* `.ghostty-window` is the library's own wrapper, and the deck's zoom
           measures the gesture against it — so the stub renders it too. */}
       <div className="ghostty-window">
-        {workspace.panes.map((pane) => (
-          <div
-            key={pane.id}
-            className={`ghostty-pane${pane.id === workspace.activePaneId ? " is-active" : ""}`}
-            data-pane-id={pane.id}
-            data-pane-accent=""
-          />
-        ))}
+        {workspace.panes.map((pane) => {
+          // The accent layer is ghosttea's, and the library draws it only for a
+          // pane the host DEALT a colour — through this very prop. Hard-coding
+          // it on every stub pane was more generous than the library, and since
+          // PU-14b it is also a visible difference: the frame's line and glow
+          // take the project colour under `[data-pane-accent]` and the
+          // terminal's ink without it.
+          const face = decoratePane?.(pane.session);
+          return (
+            <div
+              key={pane.id}
+              className={`ghostty-pane${pane.id === workspace.activePaneId ? " is-active" : ""}`}
+              data-pane-id={pane.id}
+              {...(face?.color !== undefined ? { "data-pane-accent": "" } : {})}
+              style={
+                face?.color !== undefined
+                  ? ({ "--ghostty-pane-color": face.color } as CSSProperties)
+                  : undefined
+              }
+            />
+          );
+        })}
       </div>
     </>
   );
@@ -144,9 +171,21 @@ vi.mock("@vibecook/ghosttea-react/terminal-render.worker.js?worker", () => ({
 }));
 
 vi.mock("@vibecook/ghosttea-react/workspace", () => ({
-  GhostteaWorkspace: (props: Record<string, unknown>) => (
-    <WorkspaceStub sidebar={props["sidebar"] as ComponentType<{ workspace: unknown }>} />
-  ),
+  GhostteaWorkspace: (props: Record<string, unknown>) => {
+    // The props the deck hands the library, kept so a test can ask its birth
+    // doors the way the workspace asks them.
+    workspaceProps = props;
+    return (
+      <WorkspaceStub
+        sidebar={props["sidebar"] as ComponentType<{ workspace: unknown }>}
+        decoratePane={
+          props["decoratePane"] as (
+            session: StubSession,
+          ) => { color?: string; label?: string } | undefined
+        }
+      />
+    );
+  },
   GHOSTTY_COLOR_THEMES: [],
   isGhostteaShaderEffect: () => false,
   TERMINAL_THEMES: {
@@ -181,6 +220,8 @@ let deckDoor: RemoteSessionDoor | null = null;
 /** What the fold's `observe` is currently answering with. */
 let foldRows: readonly AgentSessionSummary[] = [];
 let foldFrame: ((rows: readonly AgentSessionSummary[]) => void) | null = null;
+/** The props the deck handed the workspace — its birth doors live there. */
+let workspaceProps: Record<string, unknown> = {};
 /** Every renderer log line the deck wrote, with its level. */
 let logged: Array<{ level: "info" | "error"; event: string; message: string }> = [];
 
@@ -194,7 +235,9 @@ const fieldd = {
     if (method === "terminal.create") {
       return Promise.resolve({
         sessionId: "born-1",
-        session: bornSummary("born-1"),
+        // A shell that has not drawn its first prompt has announced no OSC 7,
+        // so the floor reports no cwd — which is the case `fallbackCwd` is for.
+        session: bornSummary("born-1", { cwd: null }),
         ...routedTicket("born-1"),
       });
     }
@@ -327,6 +370,7 @@ const verb = (frame: HTMLElement | null, kind: string): HTMLButtonElement | null
   frame?.querySelector<HTMLButtonElement>(`.vf-pane-verb.is-${kind}`) ?? null;
 
 beforeEach(() => {
+  workspaceProps = {};
   logged = [];
   requests = [];
   deckDoor = null;
@@ -512,6 +556,31 @@ describe("the deck's pane frames", () => {
     // The new PTY lands in the pane the verb was pressed in (AR-4b's hand-over).
     expect(workspace.mounts).toEqual(["pty-resumed"]);
     expect(workspace.panes[0]?.session.id).toBe("pty-resumed");
+  });
+
+  it("names a fresh split by the folder the deck opened it in, not 'terminal' (PU-14b)", async () => {
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1", { cwd: "/home/tester/rosetta" }) },
+    ];
+    const host = await mountDeck();
+    const split = workspaceProps["createSplitSession"] as (
+      session: StubSession,
+    ) => Promise<{ id: string; cwd: string | null }>;
+    expect(typeof split).toBe("function");
+
+    // Ghosttea's own birth door, asked as the workspace asks it and mounted as
+    // the workspace mounts what comes back.
+    await act(async () => {
+      const born = await split(workspace.panes[0]?.session as StubSession);
+      expect(born.cwd).toBeNull();
+      workspace.mount(born);
+    });
+    await settle();
+
+    // The floor says nothing about this shell's folder — a shell before its
+    // first prompt has announced no OSC 7 — so the badge would read `terminal`
+    // if the deck did not remember the folder it asked for the split in.
+    expect(frameFor(host, "born-1")?.querySelector(".vf-pane-name")?.textContent).toBe("rosetta");
   });
 
   it("zooms through the deck's own morph, never ghosttea's remount", async () => {

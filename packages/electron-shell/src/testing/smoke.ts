@@ -3004,10 +3004,11 @@ export async function runSmokeGodview(opts: {
     //     elsewhere (GT-6 review): only the views package writes
     //     `data-vf-narrow`, so a rename upstream would leave this selector
     //     matching nothing and this row green over a claim about nothing.
-    //     `field-app/test/godview-pane-frame-narrow.test.tsx` is the witness
-    //     that the name below is the name the package sets, and that the
-    //     package sets it by MEASURING the pane rather than by a fixture
-    //     asserting it.
+    //     `field-app/test/godview-pane-frame-narrow.test.tsx` is the witness:
+    //     it asserts the package's own `PANE_NARROW_ATTRIBUTE` against the
+    //     literal below (this process cannot import a browser package to ask),
+    //     and that the package sets it by MEASURING the pane rather than by a
+    //     fixture asserting it.
     const paneFrame = await readPaneFrameFacts(win, 10_000);
     verdict["paneFrame"] = paneFrame;
     if (!paneFrame.framed) {

@@ -21,17 +21,21 @@
  * package's own rule decides what it means.
  */
 
-import { PaneFrame, type PaneFrameVerbs } from "@vibecook/puppeteer-views";
+import { PANE_NARROW_ATTRIBUTE, PaneFrame, type PaneFrameVerbs } from "@vibecook/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** The attribute the smoke's row 1c selects on, written out here so a rename
- * upstream reds THIS file rather than quietly emptying that row. The package
- * exports no constant for it at the pinned revision (puppeteer `aa34eb1`). */
-const NARROW_ATTRIBUTE = "data-vf-narrow";
+/** The package's own name for the attribute (exported since PU-14b), used
+ * everywhere below so an upstream rename moves these rows with it. */
+const NARROW_ATTRIBUTE = PANE_NARROW_ATTRIBUTE;
+/** And the literal the SMOKE selects on, in `electron-shell`'s harness, which
+ * cannot import a browser package to ask. This is the bridge: a rename upstream
+ * reds the row below instead of quietly emptying that selector and leaving the
+ * smoke green over a claim about nothing. */
+const SMOKE_NARROW_SELECTOR = "data-vf-narrow";
 /** The record's threshold, restated for the same reason. */
 const NARROW_WIDTH = 220;
 
@@ -117,6 +121,10 @@ afterEach(() => {
 });
 
 describe("the pane frame's narrow tier", () => {
+  it("is the attribute the smoke's row selects on", () => {
+    expect(PANE_NARROW_ATTRIBUTE).toBe(SMOKE_NARROW_SELECTOR);
+  });
+
   it("marks the pane the package's own way when it is measured under the threshold", () => {
     mountFrame();
     expect(pane?.hasAttribute(NARROW_ATTRIBUTE)).toBe(false);

@@ -6,6 +6,7 @@ import {
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
 import {
+  DECK_FRAMED_CLASS,
   type DeckFrameSlotProps,
   DeckFrames,
   PaneFrame,
@@ -282,6 +283,16 @@ export function GodviewDeck({
    * from a path (GT-5c, the 2026-08-06 erratum). It is read by `paneMeta`, so a
    * ref for the same reason `paneColors` is one. */
   const remoteDevices = useRef(new Map<string, string>());
+  /** Session id → the folder this deck BORN it in (PU-14b's `fallbackCwd`).
+   *
+   * A pane's badge is a folder name, and a freshly split shell has no cwd to
+   * take one from: the floor reports what OSC 7 announced, and a shell that has
+   * not drawn its first prompt has announced nothing — so the badge read
+   * `terminal` for the beat before the prompt landed. The deck is the one place
+   * that knows the answer, because the deck is what asked for the split. A ref
+   * for the same reason `paneColors` is one: it must not re-run the workspace's
+   * initialization, and the mount that follows a birth re-renders anyway. */
+  const bornCwd = useRef(new Map<string, string>());
   /** GT-3, the restore gate. `null` while the question is still being asked of
    * the floor; a question object while the user is being asked; `"go"` once the
    * deck may mount — with rehydration armed or not, per `rehydrate`. */
@@ -730,6 +741,9 @@ export function GodviewDeck({
         // pane a person types into is interactive by definition.
         workloadClass: "interactive",
       });
+      // The folder this pane was born in, remembered for its badge until the
+      // shell announces one of its own (PU-14b).
+      if (cwd !== undefined && cwd !== "") bornCwd.current.set(created.sessionId, cwd);
       // The join: fieldd answers an id, the workspace mounts a summary, and the
       // floor is the one authority both read.
       return terminalSessionSummary(created.sessionId);
@@ -1123,6 +1137,18 @@ export function GodviewDeck({
     return colours;
   }, [workspace]);
 
+  /** The birth folders, joined through the panes the workspace lays out — the
+   * badge's LAST fallback, after the agent's project and the session's own cwd
+   * (PU-14b). Same shape and same reason as the colours above. */
+  const frameFallbackCwds = useMemo(() => {
+    const folders = new Map<string, string>();
+    for (const pane of workspace?.panes ?? []) {
+      const folder = bornCwd.current.get(pane.session.id);
+      if (folder !== undefined) folders.set(pane.session.id, folder);
+    }
+    return folders;
+  }, [workspace]);
+
   /**
    * THE VERBS the deck lends the frame.
    *
@@ -1325,6 +1351,9 @@ export function GodviewDeck({
     for (const sessionId of remoteDevices.current.keys()) {
       if (!sessionIds.includes(sessionId)) remoteDevices.current.delete(sessionId);
     }
+    for (const sessionId of bornCwd.current.keys()) {
+      if (!sessionIds.includes(sessionId)) bornCwd.current.delete(sessionId);
+    }
     onPanes?.({
       sessionIds,
       ...(activeSessionId !== undefined ? { activeSessionId } : {}),
@@ -1499,7 +1528,13 @@ export function GodviewDeck({
           upstream's `.terminal-host` — `deck-zoom.css` says how.) */}
       <div
         ref={zoomHostRef}
-        className="vf-deck-zoom"
+        // `DeckFrames` marks this element too, from an effect — but an effect
+        // runs after the first paint, and the package's pane rules (the record's
+        // safe areas, the radius, the line) key on this class: without it in the
+        // static className the deck's first frame lays its panes out unframed
+        // and then reflows them. The mounter's own add is idempotent and it
+        // removes only what it added.
+        className={`vf-deck-zoom ${DECK_FRAMED_CLASS}`}
         data-zoom-phase="idle"
         style={{ "--vf-godview-terminal-ink": ground.ink } as CSSProperties}
       >
@@ -1575,6 +1610,7 @@ export function GodviewDeck({
           panes={workspace?.panes ?? []}
           agentsBySession={paneAgents.agents}
           paneColors={framePaneColors}
+          fallbackCwdBySession={frameFallbackCwds}
           verbs={frameVerbs}
           frame={Frame}
           zoomedPaneId={zoomedPaneId}

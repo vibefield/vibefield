@@ -256,7 +256,11 @@ function PaneSpecimen({
         ref={setPane}
         className="ghostty-pane is-active"
         data-pane-id={specimen.id}
-        data-pane-accent=""
+        // Ghosttea's accent layer exists only for a pane the host dealt a
+        // colour, and since PU-14b that is what decides whether the frame's
+        // line and glow are the project's or the terminal's ink — so the bare
+        // shell carries no accent here either.
+        {...(specimen.color !== undefined ? { "data-pane-accent": "" } : {})}
         style={
           {
             position: "relative",
