@@ -10,16 +10,17 @@ import Testing
 //
 // The field trio — `agent-field-snapshot.valid.json`,
 // `agent-field-delta.valid.json`, `agent-field-slice.valid.json` — and the two
-// door answers beside them are likewise copies, taken from `mf/fd1` at MF-1a
-// (`2f331dbb`, `packages/contracts/fixtures/`). They were hand-authored from
-// §10.1 for one commit while the contracts lane was still landing; these are
-// the real goldens and the hand-authored ones are gone.
+// door answers beside them are likewise copies from `mf/fd1`'s
+// `packages/contracts/fixtures/`, at MF-1e (`256f559b`) for the snapshot and
+// the slice and MF-1a (`3ce315bc`) for the delta.
 //
-// A note for whoever refreshes them next: the SHA relayed to this lane was
-// `8d23d257`, which is an ORPHAN — same subject, same fixture bytes, but not an
-// ancestor of `mf/fd1` and on no branch, so it was rewritten before it landed.
-// `2f331dbb` is the one that is actually reachable. Verified by diffing the
-// three files between the two commits: identical.
+// A note for whoever refreshes them next, because this lane has now been
+// burned twice by a SHA: the commit relayed here was `8d23d257`, an orphan;
+// its reachable twin was `2f331dbb`; and that one was itself rewritten to
+// `3ce315bc` when the lane rebased. Cite the commit that last TOUCHED the
+// file (`git log -1 -- <path>`) rather than the one a message names, and
+// re-diff the bytes rather than trusting that a subject line means the same
+// content. The bytes are what these tests are about.
 
 @Suite struct HelloAckTests {
   @Test func theGoldenAckReadsAsItself() throws {
@@ -222,32 +223,32 @@ import Testing
     #expect(working.branch == nil)
   }
 
-  /// AR-4's pending row. Worth pinning precisely, because the GOLDEN and the
-  /// prose disagree and the golden is the authority: §10.3 describes a pending
-  /// row as "live, unobserved", but the fixture ships `alive: false` beside
-  /// `pending: "resume-when-idle"`. This reader carries both fields verbatim
-  /// and derives nothing from either, so the disagreement is fieldd's to settle
-  /// and cannot become a wrong bubble here — but a feed that renders "alive"
-  /// must read `pending` first (see the note in the slice's report).
-  @Test func thePendingRowCarriesBothItsFactsVerbatim() throws {
+  /// AR-4's pending row, and the ruling it forced (MF-1e).
+  ///
+  /// The first cut of this golden shipped `alive: false` beside
+  /// `pending: "resume-when-idle"`, which contradicted §10.3's "live,
+  /// unobserved"; this lane reported the disagreement and the contracts lane
+  /// settled it the other way — `alive` answers "is this agent still there",
+  /// `pending` answers "is anyone at the wheel", and a run whose PTY the floor
+  /// still hosts is ALIVE. Pinned here because the two fields now mean
+  /// different things and a reader that collapsed them would be wrong again.
+  @Test func thePendingRowIsAliveAndUnobserved() throws {
     let snapshot = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.valid"))
     let pending = try #require(snapshot.rows.first { $0.pending != nil })
     #expect(pending.runtimeRunId == "run-pending")
     #expect(pending.pending == "resume-when-idle")
-    #expect(pending.alive == false)
+    #expect(pending.alive)
     #expect(pending.statusValue == .unknown)
     #expect(pending.terminal?.runtimeSessionId == "pty-0b5e")
   }
 
-  /// Two rows in the golden are not alive — the pending one and the exited one
-  /// — so "not alive" does not identify a row. The exited one is the one with
-  /// no terminal left.
-  @Test func theExitedRowHasNoTerminalAndIsNotTheOnlyDeadOne() throws {
+  /// The exited row is the one that is really gone: not alive, nothing
+  /// pending, and no terminal left.
+  @Test func theExitedRowIsTheOnlyDeadOne() throws {
     let snapshot = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.valid"))
-    #expect(snapshot.rows.filter { !$0.alive }.count == 2)
+    #expect(snapshot.rows.filter { !$0.alive }.map(\.runtimeRunId) == ["run-exited"])
 
     let exited = try #require(snapshot.rows.first { $0.runtimeRunId == "run-exited" })
-    #expect(!exited.alive)
     #expect(exited.pending == nil)
     #expect(exited.terminal?.hostedValue == AgentTerminalJoin.Hosted.none)
     #expect(exited.terminal?.runtimeSessionId == nil)

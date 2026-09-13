@@ -75,7 +75,13 @@ let package = Package(
         "FieldAgents",
         "FieldProduct",
         .product(name: "GhostteaTruffle", package: "ghosttea"),
-      ]
+      ],
+      // The contracts' golden board, byte for byte, so `-vf-demo-field-slice`
+      // draws the swarm over REAL-shaped rows through the real reader and the
+      // real fold. Only DEBUG code reads it (`FieldStoreDoors.goldenBoard`);
+      // resources are not conditional, so ~4 KB of inert JSON rides along in
+      // Release, which is the price of a screenshot gate with provenance.
+      resources: [.copy("Fixtures")]
     ),
     // The terminal leg (IOS-3): everything that knows Ghosttea's renderer
     // exists — appearance → presentation config, the attachment lifecycle,

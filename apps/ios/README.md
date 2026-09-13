@@ -89,6 +89,8 @@ reach states no `simctl` touch can:
 | Argument | What it drives |
 |---|---|
 | `-vf-auto-connect` | opens the mesh sheet and drives CONNECT — TailscaleKit start → control dial → the honest sign-in state |
+| `-vf-demo-fleet` | runs the SCRIPTED FLEET (`MockAgentField`). Since IOS-4b the mock is no longer the live path — the field's agents come from the daemon through `FieldLink` — so a screenshot that wants invented agents must ask for them. Implied by every `-vf-swarm-lab` page, which draws its own fixtures anyway |
+| `-vf-demo-field-slice` | mounts the field over the contracts' GOLDEN BOARD (`agent-field-slice.valid.json`, byte for byte from `packages/contracts/fixtures/`) through the **real** path: a fixture synced-store whose one `full` message is parsed by the real `AgentFieldSlice` reader and folded by the real projection. The five rows are the golden's — one blocked on `Bash`, one working, one idle, one pending, one exited — so the swarm can be photographed over real-shaped data in both themes with no desktop and no tailnet. It is a fixture STORE, not a demo path: nothing downstream of the store knows the difference, which is the whole point. `publishedAt`/`expiresAt` are rewritten to now, and only those, because a board minted in the past would be expired before it was read |
 | `-vf-demo-remote` | stands a FAKE peer up so remote-bubble rendering can be eyeballed without a desktop serving. A fixture for looking at our own pixels, never a claim that a mesh answered; the real source replaces it the moment the mesh is up |
 | `-vf-auto-open-card` | opens a session card, preferring an attachable remote one |
 | `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole IOS-3 path with no finger on the glass; without a mesh it proves the honest-failure path instead |
@@ -271,8 +273,21 @@ rest. Landscape and iPad are witnessed on the simulator through
 `-vf-demo-landscape`, because `xcrun simctl` cannot rotate a device and the
 alternative was not to look.
 
-Approvals render as facts, never as buttons, until the approvals track lands;
-the agent feed is still the mock until fieldd's `agent.*` exists (IOS-4).
+Approvals render as facts, never as buttons, until the approvals track lands.
+
+**The agent feed is the daemon's since IOS-4b.** `FieldLink` (in `FieldMesh`)
+is the join: the mesh node → `field.devices.v1`, which names every desktop and
+carries its `productEndpoint.url` → one `FieldProductClient` per desktop that
+has one, `system.hello` with no token (WhoIs is the grant) → the board, from
+`field.agents.v1` where the floor publishes it and over
+`agent.subscribe {projection: "field", minIntervalMs: 250}` where it does not.
+The two legs are §5's hybrid and the store wins where it has a live slice: it
+needs no connection, and a desktop that publishes it tells every phone at once.
+Rows past their slice's `expiresAt` stop drawing. `MockAgentField` has retired
+from the live path and runs only behind `-vf-demo-fleet` and the lab, because a
+preview that cannot be told from a daemon is the demo path the corpus forbids —
+so **a phone with no mesh now shows an empty field**, which is a real answer
+rather than a missing feature, and the mesh chip is what says why.
 
 **The chips are witnessed on the fixture only, and that is a fact about the feed
 rather than about the chips (IOS-5c).** A reply chip is derived from the card

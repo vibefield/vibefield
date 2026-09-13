@@ -193,6 +193,7 @@ public final class FieldStore {
   /// every netmap tick, and so a peer that LEFT can be matched to its slice by
   /// the durable id we last saw it wearing.
   @ObservationIgnored private var asked: [String: String?] = [:]
+  @ObservationIgnored private var paused = false
 
   public init(doors: FieldStoreDoors) {
     self.doors = doors
@@ -203,8 +204,9 @@ public final class FieldStore {
     return nil
   }
 
-  /// truffle's namespace for a store.
-  public static func namespace(for storeId: String) -> String { "ss:\(storeId)" }
+  /// truffle's namespace for a store. `nonisolated` because it is a pure
+  /// string: a caller should not need the main actor to spell one.
+  public nonisolated static func namespace(for storeId: String) -> String { "ss:\(storeId)" }
 
   /// Begin reading. Idempotent for the same store; reading a different one is
   /// an unsubscribe and a fresh start, because slices are per-store and keeping
@@ -236,6 +238,45 @@ public final class FieldStore {
     Task { await self.requestFromOnlinePeers(namespace: namespace, token: token) }
   }
 
+  /// Stop LISTENING, and keep what was heard.
+  ///
+  /// The phone in the background (§5): the door's subscription goes, and so do
+  /// this reader's streams — but the mesh NODE is left running and the slices
+  /// stand. They are not a claim that they are still true; `expiresAt` on the
+  /// board inside them already decides that, and a long enough background makes
+  /// every slice stale on its own. Forgetting them here instead would empty the
+  /// field on a two-second app switch, which is a worse lie than a board that
+  /// says how old it is.
+  public func pause() {
+    guard case .reading = state else { return }
+    generation &+= 1
+    messageTask?.cancel()
+    messageTask = nil
+    peerTask?.cancel()
+    peerTask = nil
+    asked.removeAll()
+    paused = true
+  }
+
+  /// Listening again, and asking afresh: every online peer is re-`request`ed,
+  /// so a board that changed while nobody was listening is replaced rather than
+  /// waited for.
+  public func resume() {
+    guard paused, case .reading(let storeId) = state else { return }
+    paused = false
+    let restored = slices
+    state = .closed
+    subscribe(storeId)
+    // `subscribe` starts clean; the slices heard before the pause are put back
+    // under it, each still carrying its own version, so the first newer update
+    // supersedes them by the ordinary rule.
+    for (deviceId, slice) in restored where slices[deviceId] == nil {
+      slices[deviceId] = slice
+    }
+  }
+
+  public var isPaused: Bool { paused }
+
   /// Stop reading, and forget. A store nobody is watching holds no answers: the
   /// next subscribe asks again and is told afresh, which is cheaper than
   /// rendering a board from a mesh that has moved on.
@@ -247,6 +288,7 @@ public final class FieldStore {
     peerTask = nil
     asked.removeAll()
     slices.removeAll()
+    paused = false
     state = .closed
   }
 

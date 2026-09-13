@@ -4,98 +4,8 @@ import Testing
 
 @testable import FieldMesh
 
-/// A mesh made of two streams and a list of peers.
-///
-/// The doors are closures for exactly this reason: every rule the reader has —
-/// ask on start, ask a joiner once, take only newer versions, drop on clear,
-/// drop when a peer leaves, ignore what does not parse — is a rule about
-/// MESSAGES, and none of them wants Tailscale to be running.
-private actor MeshRehearsal {
-  struct Sent: Equatable {
-    let peerId: String
-    let namespace: String
-    let msgType: String
-    let payload: JSONValue
-  }
-
-  private(set) var sent: [Sent] = []
-  private var peers: [FieldStorePeer] = []
-  private var messages: AsyncStream<FieldStoreInbound>.Continuation?
-  private var peerEvents: AsyncStream<FieldStorePeerEvent>.Continuation?
-  private var unreachable: Set<String> = []
-
-  func set(peers: [FieldStorePeer]) { self.peers = peers }
-  func refuse(_ peerId: String) { unreachable.insert(peerId) }
-
-  var isListening: Bool { messages != nil && peerEvents != nil }
-
-  func requests(to peerId: String) -> Int {
-    sent.filter { $0.peerId == peerId && $0.msgType == "request" }.count
-  }
-
-  func deliver(_ inbound: FieldStoreInbound) { messages?.yield(inbound) }
-  func emit(_ event: FieldStorePeerEvent) { peerEvents?.yield(event) }
-
-  func doors() -> FieldStoreDoors {
-    FieldStoreDoors(
-      onlinePeers: { await self.onlinePeers() },
-      send: { peerId, namespace, msgType, payload in
-        try await self.record(
-          Sent(peerId: peerId, namespace: namespace, msgType: msgType, payload: payload))
-      },
-      messages: { _ in await self.messageStream() },
-      peerEvents: { await self.peerEventStream() })
-  }
-
-  private func onlinePeers() -> [FieldStorePeer] { peers.filter(\.online) }
-
-  private func record(_ entry: Sent) throws {
-    if unreachable.contains(entry.peerId) { throw FieldStoreError.peerGone(entry.peerId) }
-    sent.append(entry)
-  }
-
-  private func messageStream() -> AsyncStream<FieldStoreInbound> {
-    let (stream, continuation) = AsyncStream.makeStream(of: FieldStoreInbound.self)
-    messages = continuation
-    return stream
-  }
-
-  private func peerEventStream() -> AsyncStream<FieldStorePeerEvent> {
-    let (stream, continuation) = AsyncStream.makeStream(of: FieldStorePeerEvent.self)
-    peerEvents = continuation
-    return stream
-  }
-}
-
-// MARK: - The wire, as truffle writes it
-
-private func sliceFrame(
-  _ type: String, deviceId: String, version: Int64, updatedAt: Int64 = 1_757_808_000_000,
-  data: JSONValue
-) -> Data {
-  (try? JSONValue.object([
-    "type": .string(type),
-    "device_id": .string(deviceId),
-    "data": data,
-    "version": .int(version),
-    "updated_at": .int(updatedAt),
-  ]).encoded()) ?? Data()
-}
-
-private func clearFrame(deviceId: String) -> Data {
-  (try? JSONValue.object(["type": .string("clear"), "device_id": .string(deviceId)])
-    .encoded()) ?? Data()
-}
-
-private func inbound(
-  from peerId: String, deviceId: String?, msgType: String, payload: Data
-) -> FieldStoreInbound {
-  FieldStoreInbound(
-    fromPeerId: peerId, fromDeviceId: deviceId, msgType: msgType, payload: payload)
-}
-
 @MainActor
-private func waitUntil(
+func waitUntil(
   _ what: String, timeout: Duration = .seconds(5), _ condition: @MainActor () async -> Bool
 ) async throws {
   let deadline = ContinuousClock.now.advanced(by: timeout)
@@ -118,10 +28,6 @@ private func standingStore(
   try await waitUntil("both streams to be listening") { await mesh.isListening }
   return (store, mesh)
 }
-
-private let studio = FieldStorePeer(id: "node-studio", deviceId: "dev-studio", online: true)
-private let laptop = FieldStorePeer(id: "node-laptop", deviceId: "dev-laptop", online: true)
-private let asleep = FieldStorePeer(id: "node-asleep", deviceId: "dev-asleep", online: false)
 
 @MainActor
 @Suite struct FieldStoreStartTests {

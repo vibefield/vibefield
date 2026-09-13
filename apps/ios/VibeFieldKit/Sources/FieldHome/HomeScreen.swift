@@ -21,6 +21,18 @@ public struct HomeScreen: View {
   @State private var feed = MockAgentField()
   @State private var mesh = MeshModel()
   @State private var remoteField = RemoteSessionField(source: nil)
+  /// IOS-4b — the live field: the devices store, the doors it names, and the
+  /// boards behind them. Built when the mesh comes up and void when it goes,
+  /// exactly like discovery's own door; nil means nobody has been asked, which
+  /// is not the same as a mesh that answered with no agents.
+  @State private var link: FieldLink?
+  #if DEBUG
+    /// Whether the scripted fleet is driving the field. Since IOS-4b the mock
+    /// is NOT the live path: it runs only behind the lab and the demo
+    /// arguments, because a preview that cannot be told from a daemon is the
+    /// demo path the corpus forbids.
+    @State private var mockActive = false
+  #endif
   @State private var selection: SessionSelection?
   /// The card's SUBJECT, remembered rather than looked up fresh every frame.
   /// A card is about the session it opened on, and the field's listing is only
@@ -106,8 +118,25 @@ public struct HomeScreen: View {
   public init() {}
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
+  ///
+  /// Since IOS-4b the agent half is the DAEMON's: `FieldLink` folds every
+  /// desktop's board — from `field.agents.v1` where the floor publishes it, and
+  /// over the door where it does not — into the same `AgentSnapshot` the mock
+  /// used to invent. An empty field with the mesh up is now a real answer
+  /// rather than a missing feature.
   private var projected: [FieldBubble] {
-    feed.agents.compactMap(fieldBubble(from:)) + remoteField.snapshot.rows.map(fieldBubble(from:))
+    liveAgents.compactMap(fieldBubble(from:)) + remoteField.snapshot.rows.map(fieldBubble(from:))
+  }
+
+  /// The agent rows, from whoever is entitled to give them.
+  private var liveAgents: [AgentSnapshot] {
+    #if DEBUG
+      // The lab and the demo arguments own the field while they are up: what
+      // they show is our own pixels, and a daemon arriving mid-screenshot
+      // would be the fixture lying about what it is.
+      if mockActive { return feed.agents }
+    #endif
+    return link?.agents ?? []
   }
 
   // --- IOS-6d: the field's ledgers ------------------------------------------
@@ -189,7 +218,6 @@ public struct HomeScreen: View {
     .onAppear {
       assembly.projects = projectStore.load()
       refold()
-      feed.start()
       #if DEBUG
         // `-vf-write-key=<secret>` swaps the keychain for an in-memory store
         // whose WILDCARD answers for any host, so `-vf-auto-attach` can type
@@ -225,6 +253,29 @@ public struct HomeScreen: View {
         // looking at OUR pixels, never a claim that a mesh answered: it
         // cannot run in Release, and the real source replaces it the moment
         // `mesh.state` reaches `.up`.
+        // The scripted fleet, now behind its own door. Every argument that
+        // shows the field's OWN pixels wants it; nothing else does.
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-fleet")
+          || ProcessInfo.processInfo.arguments.contains(where: {
+            $0.hasPrefix("-vf-swarm-lab")
+          })
+        {
+          mockActive = true
+          feed.start()
+        }
+        // `-vf-demo-field-slice`: the contracts' golden board through the REAL
+        // path. A fixture STORE — one peer, one `full`, the real
+        // `AgentFieldSlice` reader, the real fold — so the swarm can be
+        // photographed over real-shaped rows in both themes with no desktop
+        // and no tailnet. It is not a demo path: nothing downstream of the
+        // store knows the difference, which is the point.
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-field-slice"),
+          let doors = FieldStoreDoors.goldenBoard()
+        {
+          let fixture = FieldLink(storeDoors: doors)
+          fixture.start()
+          link = fixture
+        }
         if ProcessInfo.processInfo.arguments.contains("-vf-demo-remote") {
           demoRemoteActive = true
           remoteField = RemoteSessionField(source: DemoRemoteSource())
@@ -452,6 +503,10 @@ public struct HomeScreen: View {
     }
     .onDisappear {
       feed.stop()
+      // Parked with discovery, for the same reason: the door is still good if
+      // this view comes back, and a re-dial per appearance is a hello nobody
+      // asked for.
+      link?.pause()
       // Parked, not closed: the door is still good if this view comes back.
       remoteField.stop()
       discoveryPolling = false
@@ -469,6 +524,23 @@ public struct HomeScreen: View {
       // environment's own value is the one thing we should not have to guess
       // about, and guessing wrong is what stranded the poll before.
       syncDiscovery(meshIsUp: mesh.state == .up, phase: phase)
+      // IOS-4b / §5 — the field's own background rule, and the one place it
+      // lives. The door's subscription and the stores' streams go; the mesh
+      // node and the WebSocket stay, because a hello per app switch is the
+      // opposite of a budget.
+      //
+      // A DEVIATION, deliberate: the plan says "scenePhase != .active", and
+      // this parks only on a real `.background`. `.inactive` is transient on
+      // iOS — the app switcher's first frame, a notification shade — and
+      // discovery already learned that parking there flaps
+      // (`FieldHomeModel.discoveryAction`'s own comment). Tearing a
+      // subscription down and rebuilding it on every shade pull would spend
+      // exactly the bytes §5 is trying to save.
+      switch phase {
+      case .background: link?.pause()
+      case .active: link?.resume()
+      default: break
+      }
       switch phase {
       case .active:
         // Routes internally: suspended-by-app becomes a real resume, a live
@@ -589,6 +661,7 @@ public struct HomeScreen: View {
       // state: nobody has been asked, rather than a mesh that answered empty.
       remoteField.stop()
       remoteField = RemoteSessionField(source: nil)
+      closeLink()
       discoveryPolling = false
     case .resume:
       remoteField.start()
@@ -602,8 +675,38 @@ public struct HomeScreen: View {
         }
         remoteField = RemoteSessionField(source: TruffleSessionSource(directory: directory))
         remoteField.start()
+        openLink()
       }
     }
+  }
+
+  /// IOS-4b — the field's own door, opened beside discovery's and on the same
+  /// trigger. It reads the mesh NODE rather than Ghosttea's peer directory:
+  /// a synced store is truffle's own protocol, and `field.devices.v1` is where
+  /// a desktop's capability URL lives.
+  private func openLink() {
+    #if DEBUG
+      // A fixture link owns the field while it is up.
+      if link != nil, mockActive || demoRemoteActive { return }
+    #endif
+    guard link == nil else {
+      link?.resume()
+      return
+    }
+    Task {
+      guard let node = await mesh.node else { return }
+      let opened = FieldLink(storeDoors: .live(node: node))
+      opened.start()
+      link = opened
+    }
+  }
+
+  /// The runtime is gone, so the stores' streams and every door with it. A
+  /// link with no node is not a paused link — it is one whose mesh no longer
+  /// exists, and `MeshModel.connect()` builds a different one.
+  private func closeLink() {
+    link?.stop()
+    link = nil
   }
 
   // MARK: - Sheets

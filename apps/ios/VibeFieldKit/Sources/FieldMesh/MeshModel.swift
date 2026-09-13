@@ -1,6 +1,7 @@
 import Foundation
 import GhostteaTruffle
 import Observation
+import Truffle
 import UIKit
 
 /// One online peer, reduced to what the roster renders.
@@ -69,6 +70,17 @@ public final class MeshModel {
   /// the `.task` that composes the field.
   public var directory: GhostteaTrufflePeerDirectory? {
     get async { await runtime?.directory }
+  }
+
+  /// The running node itself, for the surfaces that speak the mesh's own
+  /// protocols rather than Ghosttea's (IOS-4b's synced-store reader).
+  ///
+  /// Same shape and same reason as `directory` above: `async` because the
+  /// runtime is an ACTOR, optional because "there is no runtime" is the only
+  /// thing the optionality means, and not observable because it is a door
+  /// rather than display state.
+  public var node: MeshNode? {
+    get async { await runtime?.node }
   }
 
   /// The user's deliberate act of joining the tailnet.
