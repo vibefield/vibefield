@@ -3,6 +3,9 @@
 
 export const CONTRACTS_VERSION = "0.1.0";
 
+export * from "./agent-index";
+export * from "./agent-session";
+export * from "./agent-usage";
 export * from "./artifacts";
 export * from "./devices";
 export * from "./doclane";
@@ -22,6 +25,7 @@ export * from "./plugin-runtime";
 export * from "./plugin-update";
 export * from "./plugins";
 export * from "./registries";
+export * from "./screenshot";
 export * from "./shell";
 export * from "./terminal";
 export * from "./terminal-pipeline";

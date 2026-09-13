@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { stateStages } from "@vibecook/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -129,7 +130,9 @@ describe("design system page", () => {
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");
     expect(container?.textContent).toContain("Field chrome playground");
     expect(container?.textContent).toContain("Godview stage");
-    expect(container?.textContent).toContain("Agent circle anatomy and complete state inventory");
+    expect(container?.textContent).toContain(
+      "Swarm bodies — every drawn state, on the package's own fixtures",
+    );
     expect(container?.textContent).toContain("The interface, accounted for");
   });
 
@@ -159,24 +162,21 @@ describe("design system page", () => {
     );
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
-    expect(container?.querySelectorAll("[data-agent-bubble-preview]")).toHaveLength(19);
+    // The swarm's bodies (AR-5): the views package's own fixtures on the
+    // SHIPPING view. A happy-dom window has no WebGPU, so the section says so
+    // — the same honest line the product draws — while every body stays
+    // reachable as a button, and the buttons between them name every drawn
+    // state the design record has.
+    const bodies = container?.querySelector<HTMLElement>("[data-swarm-bodies-catalog]");
+    expect(bodies?.querySelector(".vf-monitor-swarm")?.getAttribute("data-swarm-renderer")).toBe(
+      "unavailable",
+    );
+    expect(bodies?.textContent).toContain("WEBGPU UNAVAILABLE");
+    const bodyButtons = Array.from(bodies?.querySelectorAll(".vf-monitor-swarm-list button") ?? []);
+    expect(bodyButtons).toHaveLength(stateStages(0).length);
     expect(
-      container
-        ?.querySelector('[data-agent-bubble-preview="agent-ready"] [data-agent-bubble-status]')
-        ?.getAttribute("data-agent-bubble-visual"),
-    ).toBe("working");
-    expect(
-      container
-        ?.querySelector('[data-agent-bubble-preview="agent-working"] [data-agent-bubble-status]')
-        ?.getAttribute("data-agent-bubble-visual"),
-    ).toBe("ignited");
-    expect(
-      container
-        ?.querySelector(
-          '[data-agent-bubble-preview="remote-not-shared"] [data-agent-bubble-status]',
-        )
-        ?.getAttribute("data-agent-bubble-source"),
-    ).toBe("remote");
+      new Set(bodyButtons.map((body) => body.getAttribute("data-agent-bubble-visual"))),
+    ).toEqual(new Set(["terminal-empty", "terminal-running", "idle", "working", "blocked"]));
     expect(container?.querySelector(".vf-artifact-panel")).not.toBeNull();
     expect(container?.querySelector(".vf-command-palette")).not.toBeNull();
     expect(container?.querySelector(".vf-loading-veil")).not.toBeNull();
@@ -240,23 +240,25 @@ describe("design system page", () => {
     expect(frame("posture").textContent).toContain("This daemon is not reporting preferences");
   });
 
-  it("keeps the agent-circle state matrix live and inspectable", async () => {
-    const catalog = container?.querySelector<HTMLElement>("[data-agent-bubble-catalog]");
-    if (!catalog) throw new Error("Agent bubble catalog not found");
+  it("keeps the swarm's state matrix live and inspectable", async () => {
+    const catalog = container?.querySelector<HTMLElement>("[data-swarm-bodies-catalog]");
+    if (!catalog) throw new Error("Swarm bodies catalog not found");
 
-    expect(catalog.getAttribute("data-agent-bubble-theme")).toBe("light");
+    expect(catalog.getAttribute("data-swarm-bodies-theme")).toBe("light");
+    expect(catalog.classList.contains("theme-light")).toBe(true);
     await act(async () => button("DARK THEME").click());
-    expect(catalog.getAttribute("data-agent-bubble-theme")).toBe("dark");
+    expect(catalog.getAttribute("data-swarm-bodies-theme")).toBe("dark");
+    expect(catalog.classList.contains("theme-dark")).toBe(true);
 
     await act(async () => button("PAUSE MOTION").click());
     expect(catalog.getAttribute("data-godview-animations")).toBe("off");
     expect(button("REPLAY ARRIVALS").disabled).toBe(true);
 
-    const terminal = catalog.querySelector<HTMLButtonElement>(
-      '[data-agent-bubble-preview="terminal-idle"] .vf-monitor-bubble',
-    );
-    await act(async () => terminal?.click());
-    expect(terminal?.getAttribute("aria-current")).toBe("true");
-    expect(terminal?.classList.contains("is-active")).toBe(true);
+    // Selecting a body is the host's verb (`actions.select`); the catalog's
+    // adapter answers it the way a deck would, by making the row current.
+    const first = catalog.querySelector<HTMLButtonElement>(".vf-monitor-swarm-list button");
+    expect(first?.getAttribute("aria-current")).toBeNull();
+    await act(async () => first?.click());
+    expect(first?.getAttribute("aria-current")).toBe("true");
   });
 });

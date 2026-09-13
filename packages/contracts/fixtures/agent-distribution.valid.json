@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "providers": {
+    "claude": {
+      "activeExecutable": "/opt/homebrew/bin/claude",
+      "channel": "stable",
+      "network": false,
+      "lastCheckedAt": "2026-09-12T15:00:00.000Z",
+      "lastUpdate": {
+        "provider": "claude",
+        "status": "already-current",
+        "startedAt": "2026-09-12T15:00:00.000Z",
+        "finishedAt": "2026-09-12T15:00:04.000Z",
+        "exitCode": 0
+      }
+    },
+    "codex": { "network": true }
+  },
+  "updatedAt": "2026-09-12T15:00:04.000Z"
+}

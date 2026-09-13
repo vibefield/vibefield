@@ -4,6 +4,30 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
 import {
+  AgentDistributionRecord,
+  AgentPersona,
+  AgentsInstallsResult,
+  AgentsProfilesVerifyResult,
+  AgentsReleasesResult,
+  AgentsUpdateResult,
+  IndexDiscovery,
+  IndexEnrollmentRecord,
+  IndexSearchResponse,
+  IndexSearchResult,
+  IndexSessionsResult,
+  IndexStatus,
+} from "../src/agent-index";
+import {
+  AgentListResult,
+  AgentMonitorMirror,
+  AgentProvidersResult,
+  AgentSessionRecord,
+  AgentSessionSummary,
+  AgentSpawnResult,
+  AgentsProfilesLoginResult,
+} from "../src/agent-session";
+import { AgentAccountUsageBatch } from "../src/agent-usage";
+import {
   ArtifactCatalogSlice,
   ArtifactPublishV2Params,
   ArtifactStatus,
@@ -46,6 +70,7 @@ import {
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
+import { ScreenshotCaptureResult, ScreenshotHelperEvent } from "../src/screenshot";
 import { TerminalCreateParams } from "../src/terminal";
 import {
   AttachControlLeg,
@@ -123,6 +148,43 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "support-manifest": SupportBundleManifestV1,
   "terminal-routes": TerminalRouteSnapshot,
   "terminal-create-params": TerminalCreateParams,
+  // SNAP-D2 — the screenshot helper's stdout line and the shell's answer; the
+  // Swift harness and the Rust crate parse these same files.
+  "screenshot-helper-event": ScreenshotHelperEvent,
+  "screenshot-capture-result": ScreenshotCaptureResult,
+  // AR-1 — the enrollment record is rosettad's `--enroll` input as well as
+  // VibeField's truth; the valid fixture is the exact shape rosetta's own
+  // integration bench writes (crates/rosettad/tests/enrolled_serve.rs) plus
+  // the keys only VibeField reads.
+  "index-enrollment": IndexEnrollmentRecord,
+  "index-discovery": IndexDiscovery,
+  "index-status": IndexStatus,
+  // AR-5e — the find sheet's two sides of one seam: what rosetta answers on
+  // `/api/search` (transcribed from the reference's committed protocol-20
+  // golden, digest cited in the file) and what `index.search` answers over it.
+  "index-search": IndexSearchResponse,
+  "index-search-result": IndexSearchResult,
+  "index-sessions": IndexSessionsResult,
+  "agent-persona": AgentPersona,
+  "agent-distribution": AgentDistributionRecord,
+  "agents-installs": AgentsInstallsResult,
+  "agents-releases": AgentsReleasesResult,
+  "agents-update": AgentsUpdateResult,
+  "agents-profiles-verify": AgentsProfilesVerifyResult,
+  // AR-3 — the managed-session doors. `agent-monitor-state` is puppeteer's
+  // OWN monitor contract fixture (packages/core/src/monitor/types.test.ts at
+  // the pinned revision), transcribed: the mirror must read it and carry the
+  // rest through — a wire change upstream is a red gate here (AR-D4, §12).
+  "agent-monitor-state": AgentMonitorMirror,
+  "agent-session-summary": AgentSessionSummary,
+  "agent-session-record": AgentSessionRecord,
+  "agent-spawn": AgentSpawnResult,
+  "agent-list": AgentListResult,
+  "agent-providers": AgentProvidersResult,
+  "agents-profiles-login": AgentsProfilesLoginResult,
+  // AR-5d — the usage column's feed: one batch with three states beside the
+  // honest empty one the door answers before the first refresh.
+  "agent-usage": AgentAccountUsageBatch,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

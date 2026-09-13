@@ -139,18 +139,36 @@ overrides:
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
   "@vibecook/ghosttea-protocol": 0.11.1
-  # chopsticks graduated at 0.1.4 (2026-07-28, C7 spawn-through aboard). Consumed
-  # by the AR track; pinned at the same pin event. @vibecook/chopsticks-node is
-  # unpublished and deliberately absent.
-  "@vibecook/chopsticks-adapter-acp": 0.1.4
-  "@vibecook/chopsticks-adapter-claude": 0.1.4
-  "@vibecook/chopsticks-adapter-codex": 0.1.4
-  "@vibecook/chopsticks-adapter-grok": 0.1.4
-  "@vibecook/chopsticks-core": 0.1.4
-  "@vibecook/chopsticks-record": 0.1.4
-  "@vibecook/chopsticks-runtime": 0.1.4
-  "@vibecook/chopsticks-testing": 0.1.4
-  "@vibecook/chopsticks-workspaces": 0.1.4
+  # ---- SIBLING MODE (AR-0, 2026-09-12) --------------------------------------
+  # chopsticks and spaghetti retired on 2026-09-04 (James): the agent runtime is
+  # puppeteer, agent history is rosetta. Neither is published, so they enter as
+  # `link:` rows to SIBLING CHECKOUTS beside this repo, pinned by revision in
+  # siblings.lock.json — preflight verifies presence, revision, dirtiness (warn),
+  # and that this block agrees with the lock (scripts/siblings.mjs is the one
+  # reader). Only DIRECTLY imported packages are rows; transitive workspace:*
+  # edges resolve inside puppeteer's own tree. Adapters are never rows and never
+  # imports (AR-L1: VibeField knows no vendor; builtin-providers is the door —
+  # walls R20–R22). Consumers ask for "*". A link: cannot promise its react peer
+  # resolves to THIS tree's React by Node's resolution — it resolves the sibling's
+  # copy. The answer (AR-5a, 2026-09-13) is the bundler's: the renderer's Vite
+  # config and field-app's vitest config `dedupe` react/react-dom to this tree,
+  # check:deps asserts the sibling's react VERSION is ours, and a field-app test
+  # renders a package component with hooks (two Reacts throw there). That is
+  # what admitted @vibecook/puppeteer-views (the Godview views, PU-5); the
+  # puppeteer-react contract it extends stays transitive, never a row.
+  # EXIT (W-D8): replace each row with an exact version, delete the lock
+  # entries, drop electron-shell's sibling-mode `server.fs.allow` branch; the
+  # walls and preflight's family rule stay.
+  "@vibecook/puppeteer-runtime": link:../puppeteer/packages/runtime
+  "@vibecook/puppeteer-builtin-providers": link:../puppeteer/packages/builtin-providers
+  "@vibecook/puppeteer-core": link:../puppeteer/packages/core
+  "@vibecook/puppeteer-record": link:../puppeteer/packages/record
+  "@vibecook/puppeteer-monitor": link:../puppeteer/packages/monitor
+  "@vibecook/puppeteer-views": link:../puppeteer/packages/views
+  # rosetta's TypeScript client (types + the REST/WS client); rosettad itself is
+  # built from the same checkout by `pnpm siblings:build` and reaches fieldd as
+  # FIELDD_ROSETTAD_BIN, never through npm.
+  "@rosetta/protocol": link:../rosetta/clients/ts
 # Shared dependency versions, declared ONCE — packages reference "catalog:".
 catalog:
   "@tailwindcss/vite": ^4.0.0
@@ -169,15 +187,6 @@ minimumReleaseAgeExclude:
   - '@vibecook/ice@0.11.0'
   - '@vibecook/ghosttea-client@0.11.1'
   - '@vibecook/ghosttea-protocol@0.11.1'
-  - '@vibecook/chopsticks-adapter-acp@0.1.4'
-  - '@vibecook/chopsticks-adapter-claude@0.1.4'
-  - '@vibecook/chopsticks-adapter-codex@0.1.4'
-  - '@vibecook/chopsticks-adapter-grok@0.1.4'
-  - '@vibecook/chopsticks-core@0.1.4'
-  - '@vibecook/chopsticks-record@0.1.4'
-  - '@vibecook/chopsticks-runtime@0.1.4'
-  - '@vibecook/chopsticks-testing@0.1.4'
-  - '@vibecook/chopsticks-workspaces@0.1.4'
   - '@vibecook/ghosttea-electron@0.11.1'
   - '@vibecook/ghosttea-react@0.11.1'
   - '@vibecook/ghosttea-frame@0.11.1'

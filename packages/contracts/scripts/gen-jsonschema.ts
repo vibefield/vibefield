@@ -5,7 +5,10 @@
 // are TS-only — field-native exposes no plugin loader (plugin spec §4.2).
 // Live Surfaces v1 is likewise confined to Electron's local control/direct
 // lanes; field-native has no reader. Generating Rust for either would be dead
-// code the fixtures cannot exercise.
+// code the fixtures cannot exercise. The agent plane is absent for the same
+// reason (AR-1…AR-5: src/agent-index.ts, src/agent-session.ts,
+// src/agent-usage.ts) — every one of its seams is fieldd ↔ renderer or
+// fieldd ↔ a sibling daemon over JSON, and field-native reads none of it.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

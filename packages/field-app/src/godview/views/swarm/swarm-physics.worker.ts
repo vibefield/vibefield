@@ -1,11 +1,17 @@
-import { createSwarmPhysicsHost } from "./swarm-physics-host";
-import type { SwarmPhysicsCommand, SwarmPhysicsOutbound } from "./swarm-physics-protocol";
+import {
+  createSwarmPhysicsHost,
+  type SwarmPhysicsCommand,
+  type SwarmPhysicsOutbound,
+} from "@vibecook/puppeteer-views/physics";
 
 // THE SWARM'S PHYSICS THREAD (GT-3c, GT-D16).
 //
 // Thin on purpose: this file is a timer and a mailbox. Everything it does is in
-// `swarm-physics-host.ts`, which the inline driver runs too, so there is no
-// behaviour that exists only in the worker and therefore only in production.
+// the views package's `physics/host.ts` (AR-5: the physics moved upstream with
+// the swarm, and this thread is VibeField's — the package ships the host and
+// the inline driver, the consumer decides where they run), which the inline
+// driver runs too, so there is no behaviour that exists only in the worker and
+// therefore only in production.
 //
 // The worker is bundled the way this package already bundles one — the
 // `new Worker(new URL(...), { type: "module" })` form Vite resolves at build

@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
-import { AgentBubblePreview } from "../AgentBubblePreview";
 import { Section, Specimen } from "../catalog-ui";
 import { GodviewPreview } from "../GodviewPreview";
+import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 import { TerminalMirrorPreview } from "../TerminalMirrorPreview";
 import { TerminalSessionPickerPreview } from "../TerminalSessionPickerPreview";
 
@@ -12,17 +12,17 @@ export function GodviewSection(): ReactElement {
       index="11"
       eyebrow="Control room"
       title="A deliberate change of register"
-      description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The complete circle inventory below makes its state grammar explicit instead of leaving it buried in the physics view."
+      description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The swarm's bodies below are the views package's own fixtures drawn by the shipping renderer, so its state grammar is read as the pixels Godview paints."
     >
       <Specimen title="Godview stage" source="godview/GodviewStage.tsx" bleed>
         <GodviewPreview />
       </Specimen>
       <Specimen
-        title="Agent circle anatomy and complete state inventory"
-        source="godview/views/swarm/AgentBubble.tsx"
+        title="Swarm bodies — every drawn state, on the package's own fixtures"
+        source="@vibecook/puppeteer-views/views/swarm/AgentSwarm.tsx"
         bleed
       >
-        <AgentBubblePreview />
+        <SwarmBodiesPreview />
       </Specimen>
       <Specimen
         title="Terminal mirror — a session watched from the canvas"

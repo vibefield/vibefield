@@ -1,0 +1,25 @@
+{
+  "rows": [
+    {
+      "sessionId": "s_7c1e2f9a",
+      "nativeSessionId": "3b9d4c2e-6f18-4a7b-9c3d-2e1f0a8b7c6d",
+      "rootSessionId": "s_7c1e2f9a",
+      "title": "Port the swarm to WebGPU",
+      "summary": "Moved the swarm's physics behind a driver port.",
+      "cwd": "/Users/kim/Projects/vibe-field",
+      "updatedAt": 1789232460000,
+      "activity": {
+        "firstAt": 1789231000000,
+        "lastAt": 1789232460000
+      },
+      "streamState": "live"
+    },
+    {
+      "sessionId": "s_0a4b5c6d",
+      "nativeSessionId": "8e2f1a0b-9c7d-4e6f-8a1b-0c9d8e7f6a5b",
+      "rootSessionId": "s_0a4b5c6d",
+      "activity": null,
+      "streamState": "indexed"
+    }
+  ]
+}

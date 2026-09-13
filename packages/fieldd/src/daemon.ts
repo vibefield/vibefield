@@ -2,7 +2,21 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+// the bare wire number (RO-4): the client entry is a DOM program, and fieldd
+// needs only the version its supervisor holds a spawned rosettad to
+import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
+  AgentResumeParams,
+  AgentSpawnParams,
+  AgentsInstallsParams,
+  AgentsProfilesCreateParams,
+  AgentsProfilesDeleteParams,
+  AgentsProfilesListParams,
+  AgentsProfilesLoginParams,
+  AgentsProfilesVerifyParams,
+  AgentsReleasesParams,
+  AgentsSetActiveParams,
+  AgentsUpdateParams,
   AppPreferenceSetParams,
   ArtifactPublishParams,
   ArtifactPublishV2Params,
@@ -17,6 +31,10 @@ import {
   type DocOpenResult,
   DocRenameParams,
   DocSetSyncIntentParams,
+  IndexEnrollParams,
+  IndexRetireParams,
+  IndexSearchParams,
+  IndexSessionsParams,
   KvDeleteParams,
   KvGetParams,
   KvListParams,
@@ -78,6 +96,9 @@ import {
   pluginLogProvenance,
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
+import { EnrollmentStore, IndexService } from "./agent-index";
+import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
+import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
@@ -114,6 +135,12 @@ import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
+import {
+  ROSETTAD_UNCONFIGURED,
+  type RosettadHealth,
+  RosettadSupervisor,
+  type RosettadSupervisorOptions,
+} from "./rosettad-supervisor";
 import {
   type PluginServiceLogRecord,
   ServiceHost,
@@ -160,6 +187,33 @@ export interface FielddConfig {
    * the supervisor can respawn a dead floor. Absent = adopted/external floor:
    * no respawn authority, and the supervisor says so instead of guessing. */
   nativeSpawner?: () => number | undefined;
+  /** AR-0 — the rosettad binary to supervise for this user's agent index
+   * (FIELDD_ROSETTAD_BIN). Absent or empty = no index daemon; health says so. */
+  rosettadBin?: string;
+  /** AR-0 test seam: how the index daemon is spawned (the kill matrix's
+   * scripted rosettad); production spawns `rosettadBin` directly. */
+  rosettadSpawn?: RosettadSupervisorOptions["spawnProcess"];
+  /** AR-1 test seam: the home rosettad's discovery scans (`--home`).
+   * Production passes the OS user's own home, explicitly (topology R7). */
+  rosettadHome?: string;
+  /** AR-2 — the VibeField ROOT above this user's root: the machine scope
+   * (`LAYOUT.MACHINE_DIR`, AR-D15) hangs off it. Absent = no machine scope
+   * (embedded and unit daemons): the distribution doors that would write it
+   * refuse honestly. bin.ts derives it from the layout (`rootAboveUserRoot`). */
+  vibefieldRoot?: string;
+  /** AR-2 test seams: the PATH the agent install inventory searches, and the
+   * fetch the release detectors use. Production: the process PATH, global fetch. */
+  agentSearchPath?: string;
+  agentFetch?: typeof fetch;
+  /** AR-3 test seam: compose providers beside (or instead of) puppeteer's
+   * built-ins — a scripted adapter that spawns through the real host. */
+  agentProviders?: AgentRuntimeServiceOptions["providers"];
+  /** AR-4 test seam: resume-when-idle's thresholds (production: 30 s still,
+   * asked every 5 s). */
+  agentResumeWhenIdle?: AgentRuntimeServiceOptions["resumeWhenIdle"];
+  /** AR-5d test/product seam: the account-usage polling cadence. Unset ⇒ each
+   * adapter's own `refresh.pollIntervalMs` (the provider knows its quota). */
+  agentUsage?: AccountUsagePollOptions;
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -221,6 +275,13 @@ export interface FielddHealth {
    * tell, and never a claim that the build is unknowable. */
   nativeBuild: string | null;
   native: NativeHealth | null;
+  /** AR-0 — fieldd's EXTERNAL judgment of the agent-index daemon (rosettad):
+   * unconfigured / starting / ready / restarting / failed / stopped and the
+   * reason. The PROJECTION only: the loopback origin stays inside fieldd
+   * (EL7 — rosettad is unauthenticated and this stream is scope-null). The
+   * index doors (AR-1) answer UNAVAILABLE {service:"index", state} from the
+   * same phase. */
+  rosettad: RosettadHealth;
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
   logging: LoggingHealthV1 | null;
@@ -272,6 +333,20 @@ export interface FielddDaemon {
   /** TC-D1/TC-D2 — floor supervision (tests drive requestRestart directly;
    * the product path is system.native.restart). */
   nativeSupervisor: NativeSupervisor;
+  /** AR-0 — the index daemon's supervisor; null when no binary was configured.
+   * Tests drive start/stop/requestRestart directly. */
+  rosettad: RosettadSupervisor | null;
+  /** AR-1 — this user's enrollment record (consent + persona ↔ runtime) and
+   * the service behind the index.* doors. AR-2's persona path enrolls through
+   * `index.enrollRuntime`. */
+  enrollment: EnrollmentStore;
+  index: IndexService;
+  /** AR-2 — the agent runtime (puppeteer) and the service behind the
+   * agents.* doors; tests read its runtime directly. */
+  agents: AgentRuntimeService;
+  /** AR-5d — the account-usage reading behind `agents.usage(.subscribe)`;
+   * tests drive its refresh directly. */
+  agentUsage: AccountUsageService;
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -371,6 +446,79 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     },
     ...(config.nativePid !== undefined ? { nativePid: config.nativePid } : {}),
     logger: logger.child({ component: "native_supervisor" }),
+  });
+  // AR-0 — one rosettad per user root, fieldd-lifetime (AR-D6 v1). Constructed
+  // here so health can project it from the first snapshot; STARTED only once
+  // boot has committed (a boot rollback must never leave an index daemon
+  // behind). The db lives under the user root at LAYOUT.INDEX_DB.
+  // AR-1 — the enrollment record (AR-D17): loaded now, published before the
+  // daemon's first launch, rewritten by the index.* doors. It exists whether
+  // or not a daemon is configured — it is this user's consent, not a cache.
+  const enrollment = new EnrollmentStore({
+    path: join(config.dataDir, ...LAYOUT.INDEX_ENROLLMENT_FILE),
+    logger: logger.child({ component: "index_enrollment" }),
+  });
+  const rosettad =
+    config.rosettadBin === undefined || config.rosettadBin === ""
+      ? null
+      : new RosettadSupervisor({
+          bin: config.rosettadBin,
+          dbPath: join(config.dataDir, ...LAYOUT.INDEX_DB),
+          // fieldd's PRIVATE announce dir (EL7 — never rosetta's shared one);
+          // also where the next fieldd finds an orphan of this one
+          announceDir: join(config.dataDir, ...LAYOUT.INDEX_DAEMONS_DIR),
+          expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+          // the OS user's own home, explicitly (topology R7: never a persona root)
+          home: config.rosettadHome ?? homedir(),
+          enrollFile: enrollment.path(),
+          ...(config.rosettadSpawn !== undefined ? { spawnProcess: config.rosettadSpawn } : {}),
+          logger: logger.child({ component: "rosettad_supervisor" }),
+        });
+  const index = new IndexService({
+    supervisor: rosettad,
+    store: enrollment,
+    expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+    logger: logger.child({ component: "index_service" }),
+  });
+  // AR-2 — the agent runtime (puppeteer's first import): one per fieldd, its
+  // registry and managed roots under THIS user's root, its update transcripts
+  // under the machine scope. Constructed here so the reconcile can subscribe
+  // to the index daemon's readiness before the daemon ever starts; touches no
+  // disk until a persona door is called (puppeteer's registry is lazy).
+  // AR-3 — the host is the floor (agent-host.ts over TerminalService), which
+  // is built later in this boot; the runtime holds the host object from
+  // construction, so the service is late-bound to the terminals through a
+  // getter and refuses typed until they exist. The device id likewise: the
+  // device service is constructed after the api.
+  let terminalsRef: TerminalService | null = null;
+  let devicesForAgents: DeviceService | null = null;
+  const agents = new AgentRuntimeService({
+    userRoot: config.dataDir,
+    vibefieldRoot: config.vibefieldRoot ?? null,
+    index,
+    supervisor: rosettad,
+    terminals: () => terminalsRef,
+    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
+    ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
+    ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
+    ...(config.agentResumeWhenIdle !== undefined
+      ? { resumeWhenIdle: config.agentResumeWhenIdle }
+      : {}),
+    // AR-4 — the daemon's own acts on a session (the re-attach at boot, a
+    // resume-when-idle) are ledgered as the system actor
+    audit: (mutation, effect, describe) => audit.requiredSystem(mutation, effect, describe),
+    logger: logger.child({ component: "agent_runtime" }),
+  });
+  // AR-5d — account usage beside the runtime that owns the adapters: one
+  // reading per provider and per persona, polled on the adapter's cadence.
+  // Constructed here (not started) so a provider push and a persona change
+  // are already listened for; `start()` is after `fieldd.lifecycle.ready`,
+  // because a quota is never a boot gate.
+  const agentUsage = new AccountUsageService({
+    runtime: agents.runtime,
+    ...(config.agentUsage !== undefined ? { poll: config.agentUsage } : {}),
+    logger: logger.child({ component: "agent_usage" }),
   });
   // TC-D6(a), fieldd half — measure-and-surface (Node has no setrlimit).
   const fdSoftLimit = readFdSoftLimit();
@@ -694,6 +842,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       nativePid: supervisor.currentPid ?? null,
       nativeBuild: native.nativeBuild ?? null,
       native: latestHealth,
+      rosettad: rosettad?.health() ?? ROSETTAD_UNCONFIGURED, // the projection, never state()
       docs: docs.health(),
       plugins: plugins.health(),
       logging: logging?.health() ?? null,
@@ -744,11 +893,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     native.on("reconnecting", emitHealth);
     native.on("connected", emitHealth);
     supervisor.on("transition", emitHealth);
+    rosettad?.on("transition", emitHealth);
     detachHealthSources = () => {
       audit.off("health", emitHealth);
       native.off("reconnecting", emitHealth);
       native.off("connected", emitHealth);
       supervisor.off("transition", emitHealth);
+      rosettad?.off("transition", emitHealth);
       mesh.off("reconciled", emitHealth);
       mesh.off("serves-changed", emitHealth);
       plugins.off("changed", emitHealth);
@@ -777,6 +928,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
+    // AR-3 — lend the floor to the agent runtime, and feed the fold: the
+    // floor's exit facts become puppeteer's `handleProcessExit` (or verify a
+    // login pane's persona), every inventory joins the rows to their cells
+    // and backstops an exit the cell's connection never reported.
+    terminalsRef = terminals;
+    terminals.onSessionExited((event) => void agents.handleTerminalExit(event));
+    terminals.onInventory((rows) => agents.handleInventory(rows));
+    // AR-4 — the FIRST inventory is the re-attach, and ensureStarted may have
+    // applied it before the listener above existed: feed what the floor
+    // already said, so a boot onto a quiet floor re-attaches now and not at
+    // the floor's next change.
+    if (terminals.observation() !== undefined) agents.handleInventory(terminals.list());
 
     // T1 §1 — the tailnet door's node-id correlation. DeviceService is built
     // AFTER ProductApi, so this is a let-ref, not a closure over the const:
@@ -882,6 +1045,282 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger.info("fieldd.native_supervisor.manual_restart", "system.native.restart received");
       await supervisor.requestRestart();
       return { state: supervisor.state, detail: supervisor.stateDetail };
+    });
+    // AR-0 — the index daemon's escalation affordance, the same shape: after
+    // rosettad's restart intensity trips to the permanent honest "failed", a
+    // human overrides on purpose (or bounces a live daemon after a rebuild).
+    // Answers the health PROJECTION — never the origin.
+    api.register("system.index.restart", async () => {
+      logger.info("fieldd.rosettad.manual_restart", "system.index.restart received");
+      if (rosettad === null) return { rosettad: ROSETTAD_UNCONFIGURED };
+      await rosettad.requestRestart();
+      return { rosettad: rosettad.health() };
+    });
+    // AR-1 — the index doors (thinking-ar-data-topology.md §4 flows). Reads
+    // fold the daemon's answers with the record; every answer is a projection
+    // (no origin, no enrolled root's path). Mutations rewrite THIS user's
+    // record, are audited (consent is an act of the person at this device),
+    // and bounce the daemon when the record changed.
+    api.register("index.status", () => index.status());
+    api.register("index.discoveries", () => index.discoveries());
+    // AR-5e — the find sheet's two reads (thinking-ar-views-port.md §6.3).
+    // Projections like the two above: no origin, no enrolled root's path. A
+    // daemon that cannot answer a search says so in the answer's state rather
+    // than claiming the history holds no matches.
+    api.register("index.sessions", async (_ctx, params) => {
+      const parsed = IndexSessionsParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { nativeSessionIds: string[] } (1..256)",
+          false,
+        );
+      return await index.sessions(parsed.data.nativeSessionIds);
+    });
+    api.register("index.search", async (_ctx, params) => {
+      const parsed = IndexSearchParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { q, nativeSessionIds?, afterMs?, limit?, prefix?, kind? }",
+          false,
+        );
+      return await index.search(parsed.data);
+    });
+    api.register("index.enroll", async (ctx, params) => {
+      const parsed = IndexEnrollParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { kinds: string[] }", false);
+      const kinds = [...new Set(parsed.data.kinds)].sort();
+      return await audit.required(
+        ctx,
+        {
+          action: "index.enroll",
+          target: { kind: "index", id: "enrollment" },
+          attrs: { kinds, kindCount: kinds.length },
+        },
+        () => index.enroll(kinds),
+        (result) => ({ attrs: { changed: result.changed, phase: result.status.phase } }),
+      );
+    });
+    api.register("index.retire", async (ctx, params) => {
+      const parsed = IndexRetireParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "index.retire",
+          target: { kind: "index-runtime", id: parsed.data.runtimeId },
+        },
+        () => index.retire(parsed.data.runtimeId),
+        (result) => ({ attrs: { changed: result.changed, phase: result.status.phase } }),
+      );
+    });
+    // AR-2 — the agent runtime doors (thinking-ar-data-topology.md §4;
+    // agent-runtime.ts). Personas ride agent.spawn (a persona is what one
+    // spawns as); distribution rides the local-only agents.manage. Every
+    // mutation is audited; the persona path enrolls through the index service
+    // and a persona's root never leaves fieldd.
+    api.register("agents.profiles.list", async (_ctx, params) => {
+      const parsed = AgentsProfilesListParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider? }", false);
+      return await agents.personas(parsed.data.provider);
+    });
+    api.register("agents.profiles.create", async (ctx, params) => {
+      const parsed = AgentsProfilesCreateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider, label }", false);
+      return await audit.required(
+        ctx,
+        {
+          // the id is minted inside the effect; the outcome record names it
+          action: "agents.profiles.create",
+          target: { kind: "agent-persona", id: "pending" },
+          attrs: { provider: parsed.data.provider, label: parsed.data.label },
+        },
+        () => agents.createPersona(parsed.data),
+        (result) => ({
+          outcome: "succeeded",
+          attrs: {
+            profileId: result.persona.profileId,
+            indexed: result.persona.runtimeId !== undefined,
+          },
+        }),
+      );
+    });
+    api.register("agents.profiles.delete", async (ctx, params) => {
+      const parsed = AgentsProfilesDeleteParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { profileId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profiles.delete",
+          target: { kind: "agent-persona", id: parsed.data.profileId },
+        },
+        () => agents.deletePersona(parsed.data.profileId),
+        (result) => ({ attrs: { deleted: result.deleted } }),
+      );
+    });
+    api.register("agents.profiles.verify", async (ctx, params) => {
+      const parsed = AgentsProfilesVerifyParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { profileId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profiles.verify",
+          target: { kind: "agent-persona", id: parsed.data.profileId },
+        },
+        () => agents.verifyPersona(parsed.data.profileId),
+        (result) => ({
+          attrs: {
+            ...(result.persona.identity !== undefined
+              ? { loggedIn: result.persona.identity.loggedIn }
+              : {}),
+            ...(result.failure !== undefined ? { failure: result.failure.status } : {}),
+          },
+        }),
+      );
+    });
+    api.register("agents.installs", async (_ctx, params) => {
+      const parsed = AgentsInstallsParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider? }", false);
+      return await agents.installs(parsed.data.provider);
+    });
+    api.register("agents.releases", async (_ctx, params) => {
+      const parsed = AgentsReleasesParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider?, network? }", false);
+      return await agents.releases(parsed.data);
+    });
+    api.register("agents.update", async (ctx, params) => {
+      const parsed = AgentsUpdateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.update",
+          target: { kind: "agent-provider", id: parsed.data.provider },
+        },
+        () => agents.update(parsed.data.provider),
+        (result) => ({
+          attrs: {
+            status: result.receipt.status,
+            ...(result.receipt.exitCode !== undefined ? { exitCode: result.receipt.exitCode } : {}),
+          },
+        }),
+      );
+    });
+    api.register("agents.setActive", async (ctx, params) => {
+      const parsed = AgentsSetActiveParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider, executable }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.set_active",
+          target: { kind: "agent-provider", id: parsed.data.provider },
+          attrs: { executable: parsed.data.executable },
+        },
+        () => agents.setActive(parsed.data),
+        (result) => ({ attrs: { changed: result.changed } }),
+      );
+    });
+    // AR-3 — managed sessions (agent-runtime.ts, the fold). A spawn and a
+    // resume are audited like a terminal birth (attempt-before-effect; the
+    // run id and the terminal id ride the outcome); the login pane like a
+    // persona mutation. The reads are the fold, unaudited like terminal.list.
+    api.register("agent.providers", async () => await agents.providers());
+    api.register("agent.spawn", async (ctx, params) => {
+      const parsed = AgentSpawnParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { provider, cwd?, profileId?, title? }",
+          false,
+        );
+      return await audit.required(
+        ctx,
+        {
+          action: "agent.session.spawn",
+          target: { kind: "agent-session", id: "pending" },
+          attrs: {
+            provider: parsed.data.provider,
+            ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
+            ...(parsed.data.profileId !== undefined ? { profileId: parsed.data.profileId } : {}),
+            ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+          },
+        },
+        () => agents.spawn(parsed.data, ctx.principal),
+        (result) => ({
+          outcome: "succeeded",
+          attrs: {
+            runtimeRunId: result.session.runtimeRunId,
+            sessionId: result.terminal.sessionId,
+          },
+        }),
+      );
+    });
+    api.register("agent.resume", async (ctx, params) => {
+      const parsed = AgentResumeParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeRunId, cwd? }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agent.session.resume",
+          target: { kind: "agent-session", id: parsed.data.runtimeRunId },
+          attrs: { ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}) },
+        },
+        () => agents.resume(parsed.data, ctx.principal),
+        (result) => ({
+          outcome: "succeeded",
+          attrs: {
+            runtimeRunId: result.session.runtimeRunId,
+            sessionId: result.terminal.sessionId,
+            // AR-4b — a resume of a PENDING run replaced its live PTY: the
+            // caller's entry says so (the daemon's own idle resume is the one
+            // ledgered as the system actor)
+            ...(result.session.terminal?.replaced !== undefined
+              ? { how: "manual", replaced: result.session.terminal.replaced }
+              : {}),
+          },
+        }),
+      );
+    });
+    api.register("agent.list", () => agents.list());
+    api.registerSubscription("agent.subscribe", (_ctx, _params, emit) => {
+      const dispose = agents.subscribe((rows) => emit(rows));
+      return { snapshot: agents.list(), dispose };
+    });
+    // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
+    // PROJECTION and nothing else: percentages, labels, the provider's own
+    // sentence for a refusal (EL7). Before the first reading lands the answer
+    // is an honest empty batch, never a wait and never a throw.
+    api.register("agents.usage", () => agentUsage.snapshot());
+    api.registerSubscription("agents.usage.subscribe", (_ctx, _params, emit) => {
+      const dispose = agentUsage.subscribe((batch) => emit(batch));
+      return { snapshot: agentUsage.snapshot(), dispose };
+    });
+    api.register("agents.profiles.login", async (ctx, params) => {
+      const parsed = AgentsProfilesLoginParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { profileId, cwd? }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profiles.login",
+          target: { kind: "agent-persona", id: parsed.data.profileId },
+          attrs: { ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}) },
+        },
+        () => agents.login(parsed.data, ctx.principal),
+        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.terminal.sessionId } }),
+      );
     });
     api.register("system.capabilities", () => ({
       methods: METHODS.filter((m) => m.surface === "product").map((m) => m.method),
@@ -1167,6 +1606,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return { serve: "product", ...(url !== undefined ? { url } : {}) };
       },
     });
+    devicesForAgents = devices;
     devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
     // NF-3: the terminalHost capability follows the hello — republish when the
     // floor appears or a new native boot rotates the endpoints.
@@ -2603,6 +3043,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           updateManager.dispose(),
           serviceHost?.stopAll() ?? Promise.resolve(),
           processes.stopAll(),
+          Promise.resolve(agentUsage.stop()), // AR-5d — stop asking before the runtime goes
+          agents.dispose(),
+          // the successor spawns its own rosettad over the SAME db — ours must
+          // be gone first, and stop() resolves only after the real exit
+          rosettad?.stop() ?? Promise.resolve(),
         ]);
         runtimeDiagnostics.dispose();
         detachHealthSources?.();
@@ -2937,6 +3382,32 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     );
 
     logger.info("fieldd.lifecycle.ready", "fieldd is ready", { controlPort, dataPort });
+    // AR-5d — boot has committed: account usage may be read from here. The
+    // POLL itself is demand-driven (it runs while `agents.usage.subscribe` has
+    // a subscriber) because a reading spends an authenticated call on the
+    // person's own quota — see the note on `AccountUsageService.start`. A
+    // provider that cannot be read degrades its own row (an honest state with
+    // the adapter's sentence), never the daemon.
+    agentUsage.start();
+    // AR-0 — boot has committed: the index daemon starts now, in the
+    // background. Readiness is a health transition, never a boot gate: a
+    // missing or broken rosettad degrades the index, not the daemon.
+    if (rosettad !== null) {
+      // AR-1 — the record is on disk before the daemon can read it: `--enroll`
+      // names it, and a missing file is a refused start. A publish failure is
+      // logged and the launch still happens — the daemon's own refusal then
+      // names the cause in the health detail, honestly.
+      try {
+        enrollment.publish();
+      } catch (error) {
+        logger.error(
+          "fieldd.index.enrollment_publish_failed",
+          "Enrollment record could not be written before the index daemon launch",
+          error,
+        );
+      }
+    }
+    void rosettad?.start();
     let stopPromise: Promise<void> | null = null;
     const stop = (): Promise<void> => {
       stopPromise ??= (async () => {
@@ -2947,6 +3418,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           runtimeDiagnostics.dispose();
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
+          agentUsage.stop(); // AR-5d — the polling ends before the runtime it asks
+          await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
+          await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           detachHealthSources?.();
           endpoints.dispose();
           mcp.dispose();
@@ -3013,6 +3487,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       health,
       nativeHealth: () => latestHealth,
       nativeSupervisor: supervisor,
+      rosettad,
+      enrollment,
+      index,
+      agents,
+      agentUsage,
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;
@@ -3023,6 +3502,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics?.dispose();
     await pluginUpdatesForCleanup?.dispose();
     native.close(); // rollback: release the mgmt client slot
+    // AR-0 — no index daemon outlives a failed boot. It is started only after
+    // `fieldd.lifecycle.ready`, so this never has a child to stop today; the
+    // guard is stated so a later start-before-ready cannot leave an orphan.
+    agentUsage.stop(); // AR-5d — a failed boot leaves no poller and no listener
+    await agents.dispose();
+    await rosettad?.stop();
     // The earliest supersession window, which the `stopForSupersession` listener
     // is not yet in scope to see: a takeover that lands while the services are
     // still being built kills the mgmt socket under whatever request is in

@@ -1,0 +1,12 @@
+{
+  "//": "The other honest answer (AR-5e): the search projection is still being built, so the index had NO answer. `answered: false` with zero hits is not 'no matches' — a sheet keeps what it last showed. rosetta reports this state explicitly (SearchState::building) rather than serving an empty success.",
+  "answered": false,
+  "state": {
+    "readiness": "building",
+    "canonicalReady": false,
+    "progress": { "done": 1284, "total": 5912 },
+    "detail": "the index is still building its search projection"
+  },
+  "hits": [],
+  "clipped": false
+}

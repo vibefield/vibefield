@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "runtimeRunId": "run-1",
+  "runtimeEpoch": 2,
+  "provider": "claude",
+  "profileId": "claude:native-default",
+  "cwd": "/repo",
+  "title": "vibe-field",
+  "terminalSessionId": "sess-01J8Z3K9",
+  "continuation": {
+    "providerId": "claude",
+    "nativeSessionId": "native-1",
+    "implementation": "native",
+    "state": "{\"v\":1}"
+  },
+  "workspace": {
+    "mode": "direct",
+    "root": "/repo",
+    "sourcePath": "/repo",
+    "branch": "main"
+  },
+  "createdAt": "2026-08-16T11:00:00.000Z",
+  "updatedAt": "2026-08-16T12:30:00.000Z",
+  "exited": {
+    "at": "2026-08-16T12:30:00.000Z",
+    "exitCode": 0,
+    "signal": null,
+    "reason": "completed"
+  },
+  "creationRequestId": "req-01J8Z3K9",
+  "ingress": {
+    "port": 53210,
+    "token": "c0ffee-bearer"
+  },
+  "reattach": {
+    "state": "attached",
+    "at": "2026-08-16T12:10:00.000Z"
+  },
+  "signature": "0000000000000000000000000000000000000000000000000000000000000000"
+}

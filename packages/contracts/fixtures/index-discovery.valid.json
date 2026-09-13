@@ -1,0 +1,9 @@
+{
+  "kind": "claude-code",
+  "dataRoot": "~/.claude",
+  "installed": true,
+  "files": 1284,
+  "bytes": 73400320,
+  "newestModifiedMs": 1789232400000,
+  "consented": false
+}

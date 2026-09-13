@@ -187,21 +187,32 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
     expect(afterB.docs.map((doc) => doc.name)).toEqual(["b-doc"]);
   }, 30_000);
 
-  it("the REMOTE end enforces the peer preset: mintWindowToken is refused at B", async () => {
+  it("the REMOTE end enforces the peer preset: a federating method the preset lacks is refused at B — and a LOCAL method never leaves A (D36, AR-4b)", async () => {
     const { A } = await bootPair();
     const rpcA = await openRpc(A.controlPort);
-    await helloAs(rpcA, A.shellToken, "shell-main"); // all scopes, incl tokens.mint
+    await helloAs(rpcA, A.shellToken, "shell-main"); // all scopes
 
-    // A's LOCAL check passes (shell has tokens.mint); the call forwards to B,
-    // whose peer principal (TAILNET preset) lacks tokens.mint. This proves the
-    // REMOTE gate: the scope check precedes device routing, so B refuses before
-    // any re-route.
-    const err = await rpcA.callErr("system.mintWindowToken", {
+    // A local-only method (D36) is refused at A BEFORE any re-route, whatever
+    // A's own scopes say: it is this device's, and B would refuse it anyway.
+    const local = await rpcA.callErr("system.mintWindowToken", {
       device: "dev-b",
       scopes: [],
       label: "x",
     });
-    expect(err.data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(local.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(local.data?.details).toMatchObject({
+      method: "system.mintWindowToken",
+      locality: "local",
+    });
+    // A federating method whose scope the peer preset LACKS: A's local check
+    // passes (the shell holds settings.manage), the call forwards whole to B,
+    // whose peer principal (TAILNET preset) has no settings.manage. This proves
+    // the REMOTE gate: B's scope check precedes its own routing and execution.
+    const remote = await rpcA.callErr("storage.appPreferences.set", {
+      device: "dev-b",
+      preferences: {},
+    });
+    expect(remote.data?.kind).toBe("FORBIDDEN_SCOPE");
   }, 30_000);
 
   it("no endpoint → UNAVAILABLE {state:'offline'}", async () => {

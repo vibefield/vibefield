@@ -2,6 +2,7 @@ import {
   GodviewSetRequest,
   GodviewState as GodviewStateSchema,
   IPC_CHANNELS,
+  type ScreenshotCaptureResult,
   type UserRecord,
   UsersCreateParams,
   type UsersListSnapshot,
@@ -10,10 +11,11 @@ import {
 } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
-import { ipcMain } from "electron";
+import { ipcMain, type WebContents } from "electron";
 import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap";
 import type { GodviewRegistry } from "./godview";
 import { shellIdentity } from "./login-shell";
+import { createScreenshotDoor } from "./screenshot-door";
 import type { WindowRegistry } from "./window-policy";
 
 // The closed IPC surface, main side (ESR §6.2–6.3): handlers wiring pure policy
@@ -183,4 +185,34 @@ export function registerGodviewToggle(
     const request = GodviewSetRequest.parse(raw);
     return GodviewStateSchema.parse(godview.ensure(event.sender).set(request.open));
   });
+}
+
+/** The screenshot door (SNAP-D3). `capture` is the ONE capture main owns —
+ * the View menu's item calls the same function — so the page and the menu can
+ * never hold different ideas of whether a helper is live. Policy in
+ * screenshot-door.ts; this is the ipcMain wiring only. */
+export function registerScreenshotCapture(
+  registry: WindowRegistry,
+  capture: () => Promise<ScreenshotCaptureResult>,
+  logger?: Logger,
+): void {
+  const door = createScreenshotDoor<WebContents>({
+    owns: (sender) => registry.owns(sender),
+    capture,
+    onRefused: (sender) => {
+      logger?.warn(
+        "desktop.ipc.screenshot_refused",
+        "Electron refused a screenshot capture from an unregistered sender",
+        { webContentsId: sender.id },
+      );
+    },
+    onFinished: (result, sender) => {
+      logger?.info("desktop.ipc.screenshot_finished", "A renderer's screenshot capture finished", {
+        webContentsId: sender.id,
+        status: result.status,
+        ...(result.status === "error" ? { code: result.code } : {}),
+      });
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.screenshotCapture, (event, raw: unknown) => door(event.sender, raw));
 }

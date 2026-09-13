@@ -21,8 +21,22 @@
   "TERMINAL_FRAME_SOCKET": ["native", "run", "termframe.sock"],
   "CRASH_DIR": ["crash"],
   "EXPORTS_STAGING_DIR": ["exports", ".staging"],
+  "INDEX_DIR": ["index"],
+  "INDEX_DB": ["index", "rosetta.db"],
+  "INDEX_DAEMONS_DIR": ["index", "daemons"],
+  "INDEX_ENROLLMENT_FILE": ["index", "enrollment.json"],
+  "AGENTS_DIR": ["agents"],
+  "AGENT_PROFILES_FILE": ["agents", "profiles.json"],
+  "AGENT_ROOTS_DIR": ["agents", "roots"],
+  "AGENT_SESSIONS_DIR": ["agents", "sessions"],
+  "AGENT_RUNS_DIR": ["agents", "runs"],
+  "AGENT_SESSIONS_KEY_FILE": ["agents", "sessions.key"],
   "USERS_DIR": ["users"],
   "USERS_FILE": ["users.json"],
   "USERS_LOCK": ["users.json.lock"],
-  "LAYOUT_STAMP": ["layout.json"]
+  "LAYOUT_STAMP": ["layout.json"],
+  "MACHINE_DIR": ["machine"],
+  "MACHINE_AGENTS_DIR": ["machine", "agents"],
+  "MACHINE_DISTRIBUTION_FILE": ["machine", "agents", "distribution.json"],
+  "MACHINE_UPDATES_DIR": ["machine", "agents", "updates"]
 }

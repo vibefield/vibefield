@@ -133,6 +133,16 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // AR-0 — the index daemon's escalation affordance (rosettad; the same
+  // posture as system.native.restart: local admin only). Answers the health
+  // projection — the daemon's origin never crosses this surface (EL7).
+  defineMethod({
+    surface: "product",
+    method: "system.index.restart",
+    scope: "native.admin",
+    idempotent: false,
+    locality: "local",
+  }),
 
   // LOG-L6 — append-only audit ingress for shell-owned actions. The scope is
   // absent from every federated/plugin preset, and fieldd additionally proves
@@ -1118,5 +1128,237 @@ export const METHODS: MethodDef[] = [
     scope: "surface.attach",
     idempotent: true,
     locality: "local",
+  }),
+  // ── index.* (AR-1 — thinking-ar-data-topology.md §7; shapes in agent-index.ts) ──
+  // The agent index is rosetta, one daemon per user, supervised by fieldd.
+  // Reads ride `index.read`: the roll call's census (`discoveries`) and the
+  // folded status (`status` — the phase, the daemon projection, the record,
+  // every runtime). Mutations ride the NEW local-only `index.manage`: `enroll`
+  // declares the complete consented set of discovered kinds, `retire` stops
+  // watching one runtime (rows kept, AR-D19); both rewrite THIS user's
+  // enrollment record, are audited, and restart the daemon when the record
+  // changed (RO-2's start-time scoping). locality "local": consent is an act
+  // of the person at this device — the doors never federate, and a discovered
+  // root is the OS user's own home. Every answer is a projection: the daemon's
+  // loopback origin never crosses this surface (EL7), and an enrolled root's
+  // path stays inside fieldd (the persona is named by profile id).
+  defineMethod({
+    surface: "product",
+    method: "index.discoveries",
+    scope: "index.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.status",
+    scope: "index.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  // AR-5e — the find sheet's two questions: `sessions` is what the index
+  // knows about the live runs (by provider-native id) and `search` is one
+  // query over the transcript history, scoped by those runs. Both are
+  // projections of CONTENT — no origin, no enrolled root's path (a session's
+  // own cwd does ride `index.sessions`, as the daemon reports it), and a
+  // daemon that cannot answer says so (`answered: false`) rather than
+  // answering "no matches". AR-5b: they ride `index.search`, their own scope,
+  // not the census scope `index.read` a plugin may hold for the roll call —
+  // a search over every consented transcript is a different consent.
+  // locality "local" like the rest of the family — the history a person can
+  // search is the one indexed on the device in front of them.
+  defineMethod({
+    surface: "product",
+    method: "index.sessions",
+    scope: "index.search",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.search",
+    scope: "index.search",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.enroll",
+    scope: "index.manage",
+    idempotent: true, // declarative: the same set twice writes and restarts nothing
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.retire",
+    scope: "index.manage",
+    idempotent: true, // retiring a retired runtime is a no-op
+    locality: "local",
+  }),
+  // ── agents.* (AR-1 — the contract; handlers land with puppeteer's first
+  // import at AR-2, until when the dispatcher answers NOT_FOUND for them) ──
+  // Distribution is MACHINE scope (AR-D15/D16): the installs puppeteer
+  // classifies, the release facts it can learn, the vendor's own updater run
+  // under the root lock, and the one choice VibeField owns — which executable
+  // new spawns use. All four ride the NEW local-only `agents.manage`, the
+  // native.admin posture: an update is an attended act (AR-D22), and even the
+  // reads name executable paths on this machine.
+  defineMethod({
+    surface: "product",
+    method: "agents.installs",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.releases",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.update",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.setActive",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  // Personas are per USER-on-device (AR-D20): puppeteer profiles whose roots
+  // are the agent data folders, enrolled in this user's index by construction
+  // (AR-D18). Decided with AR-1 (the topology left it open): they ride
+  // `agent.spawn` — a persona is what one spawns AS, creating one is a
+  // spawn-class act (its login runs in a pane), and no third scope was
+  // warranted. locality "local": roots and credentials never roam, and a
+  // create/verify needs a pane on THIS device — so although `agent.spawn` sits
+  // in TAILNET_SCOPES, these rows do not federate.
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.list",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.create",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.delete",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.verify",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  // The persona login pane (AR-3): the vendor's own interactive login in a
+  // PTY on THIS device, bound to the persona's root; the persona is verified
+  // from native evidence when that terminal ends. Spawn-class, like create.
+  defineMethod({
+    surface: "product",
+    method: "agents.profiles.login",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  // Account usage (AR-5d — the usage column's feed): one reading per provider
+  // and per registered account, polled by fieldd and pushed as full batches.
+  // It is a READ of the agent plane, but not the fold's: a reading is the
+  // account's billing state and costs a credentialed vendor call, which is a
+  // different consent from watching sessions. AR-5b: it rides `agent.usage`,
+  // its own scope (local-only, plugin-ineligible), not `agent.observe` —
+  // a plugin that asked to watch the fold must not also read quotas or make
+  // fieldd spend the user's token. Nothing here mutates. locality "local"
+  // like every other agents.* row (D36): a quota belongs to THIS device's
+  // accounts and its credentials never roam, so the column of a peer's usage
+  // would be a different door, not this one federated.
+  defineMethod({
+    surface: "product",
+    method: "agents.usage",
+    scope: "agent.usage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.usage.subscribe",
+    scope: "agent.usage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  // ── agent.* (AR-3 — managed sessions: spawn, resume, the fold) ──
+  // A managed session is born in a PTY on this device's floor with a clean
+  // allow-listed environment (EL7) and observed/controlled by puppeteer inside
+  // fieldd; the fold projects one SessionSummary v2 row per run. Reads ride
+  // `agent.observe`, births `agent.spawn` (design-01 §7). locality "local"
+  // for all five in v1: a spawn needs THIS device's floor, and the remote
+  // tier's rows reach the deck through the mesh's own roster today — the
+  // `device?` federation of `agent.list`/`agent.subscribe` (D35) is a later
+  // widening of the locality column, not a new door.
+  defineMethod({
+    surface: "product",
+    method: "agent.providers",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agent.spawn",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  // Scope exception, stated (2026-09-13, AR-4b): `agent.resume` rides
+  // `agent.spawn` although it now TERMINATES a live PTY — the pending run's —
+  // before resuming it, while `terminal.terminate` itself asks for
+  // `terminal.attach` (the posture comment on the terminal rows above).
+  // Accepted, because the PTY it ends is always the RECORD'S OWN: the door's
+  // params name a RUN (`AgentResumeParams` = runtimeRunId, cwd?), never a
+  // terminal id, and fieldd resolves the PTY through the record it wrote when
+  // it spawned that run — a record this boot re-adopts only when the floor
+  // still lists that very id. So the act is "resume my session", which is
+  // spawn-class; it is not a terminate of an arbitrary terminal, and a caller
+  // holding only `agent.spawn` reaches no PTY it did not already own. The
+  // named upgrade, if agent cells ever adopt a PTY the record did not mint: a
+  // resume that replaces a PTY asks for `terminal.attach` as well.
+  defineMethod({
+    surface: "product",
+    method: "agent.resume",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agent.list",
+    scope: "agent.observe",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agent.subscribe",
+    scope: "agent.observe",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
   }),
 ];

@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 3,
+  "runtimeEpoch": 2,
+  "revision": 9,
+  "runtimeRunId": "run-1",
+  "status": "blocked",
+  "statusSince": "2026-08-16T12:00:00.000Z",
+  "blockers": [
+    {
+      "id": "question-1",
+      "kind": "question",
+      "since": "2026-08-16T12:00:00.000Z",
+      "questions": [
+        {
+          "prompt": "Choose a database",
+          "options": [
+            {
+              "label": "SQLite"
+            },
+            {
+              "label": "Postgres",
+              "description": "Shared server"
+            }
+          ],
+          "allowFreeForm": true
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "cumulativeTokens": 12345,
+    "burnRatePerMin": 321,
+    "burnRateWindowMs": 60000,
+    "burnRateBoundary": "mixed",
+    "samples": [
+      {
+        "at": "2026-08-16T11:59:45.000Z",
+        "cumulativeTokens": 12000
+      }
+    ],
+    "asOf": "2026-08-16T12:00:00.000Z"
+  },
+  "context": {
+    "usedTokens": 40000,
+    "capacityTokens": 200000,
+    "usedPercent": 20,
+    "percentageSource": "provider",
+    "asOf": "2026-08-16T12:00:00.000Z"
+  },
+  "model": {
+    "id": "model-card-v2",
+    "displayName": "Model Card V2",
+    "configured": {
+      "id": "model-alias-v1",
+      "displayName": "Model Alias V1"
+    },
+    "intent": "observed",
+    "asOf": "2026-08-16T12:00:00.000Z"
+  },
+  "effort": {
+    "value": "future-ultra",
+    "configured": "high",
+    "asOf": "2026-08-16T12:00:00.000Z"
+  },
+  "modes": {
+    "execution": "native-tui",
+    "providerSession": {
+      "raw": "future-auto",
+      "normalized": "auto",
+      "configured": {
+        "raw": "manual"
+      },
+      "intent": "observed"
+    },
+    "providerPermission": {
+      "raw": "accept-edits",
+      "configured": {
+        "raw": "manual"
+      },
+      "intent": "observed"
+    },
+    "asOf": "2026-08-16T12:00:00.000Z"
+  },
+  "subagentCount": 1,
+  "subagents": [
+    {
+      "id": "child-1",
+      "working": true,
+      "cumulativeTokens": 300,
+      "modelId": "model-card-v2",
+      "effort": "high"
+    }
+  ],
+  "omitted": {
+    "questionOptions": 2
+  },
+  "compaction": {
+    "active": false,
+    "count": 1,
+    "lastAt": "2026-08-16T11:30:00.000Z"
+  },
+  "environment": {
+    "cwd": "/repo",
+    "git": null,
+    "worktrees": [
+      "/repo-worktree"
+    ]
+  },
+  "session": {
+    "nativeSessionId": "native-1",
+    "startedAt": "2026-08-16T11:00:00.000Z"
+  },
+  "freshness": {
+    "lastEvidenceAt": "2026-08-16T12:00:00.000Z",
+    "level": "native-hooks",
+    "families": {
+      "usage": {
+        "support": "supported",
+        "asOf": "2026-08-16T12:00:00.000Z"
+      }
+    }
+  },
+  "alive": true
+}

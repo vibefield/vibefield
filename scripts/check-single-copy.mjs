@@ -34,6 +34,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readLock, siblingDir } from "./siblings.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TRACKED = ["loro-crdt", "@vibecook/ice", "@vibecook/strata-ecs", "react", "react-dom"];
@@ -57,6 +58,17 @@ function members() {
       if (d.isDirectory() && existsSync(join(parent, d.name, "package.json"))) {
         out.push(join(parent, d.name));
       }
+    }
+  }
+  // AR-0 sibling mode: a `link:` package resolves its OWN dependencies from
+  // the sibling checkout's node_modules, never from this tree's — exactly the
+  // "direct sibling link duplicating React" case above. The linked package
+  // directories are search roots too, so the law covers the seam a link opens.
+  const lock = readLock(ROOT);
+  for (const entry of Object.values(lock?.siblings ?? {})) {
+    for (const packageDir of Object.values(entry.packages ?? {})) {
+      const dir = join(siblingDir(ROOT, entry), packageDir);
+      if (existsSync(join(dir, "package.json"))) out.push(dir);
     }
   }
   return out;
@@ -84,9 +96,35 @@ for (const name of TRACKED) {
   }
 }
 
+/** The one-version-per-tree rule has an exception with its own law (AR-5a,
+ * 2026-09-13): a sibling `link:` package that declares react/react-dom as a
+ * PEER resolves the sibling checkout's copy by Node's rules, and no override
+ * here can change that — the renderer's Vite config and field-app's vitest
+ * config `dedupe` react/react-dom to this tree, so ONE React loads where code
+ * actually runs. What the dedupe cannot promise is that the sibling was
+ * installed against the same VERSION: a peer range satisfied by a different
+ * React, hidden by the dedupe, is hooks written against one React running
+ * under another. So a sibling-resolved react is compared by version with this
+ * tree's, never counted as a second copy; a mismatch, or an uninstalled
+ * sibling that cannot resolve its peer at all, is the failure. */
+const REACT_PEERS = new Set(["react", "react-dom"]);
+const siblingRoots = new Set(roots.filter((dir) => !dir.startsWith(ROOT)));
+
 for (const name of TRACKED) {
   const byPath = new Map(); // realpath -> { version, from[] }
+  const siblingVersions = new Map(); // dir -> version, react/react-dom from a link: root
   for (const dir of roots) {
+    if (REACT_PEERS.has(name) && siblingRoots.has(dir)) {
+      const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+      if (!Object.keys(manifest.peerDependencies ?? {}).includes(name)) continue;
+      const hit = resolveFrom(dir, name);
+      if (hit === null) {
+        problems.push(`${manifest.name} declares ${name} as a peer but cannot resolve it from ${dir} — run the sibling's install`);
+        continue;
+      }
+      siblingVersions.set(dir, JSON.parse(readFileSync(hit, "utf8")).version);
+      continue;
+    }
     const hit = resolveFrom(dir, name);
     if (hit === null) continue;
     let entry = byPath.get(hit);
@@ -107,7 +145,14 @@ for (const name of TRACKED) {
     continue;
   }
   const [{ version }] = [...byPath.values()];
-  report.push(`${name}@${version}`);
+  for (const [dir, theirs] of siblingVersions) {
+    if (theirs !== version) {
+      problems.push(
+        `${name}@${theirs} is what the sibling package at ${dir} resolves; this tree runs ${name}@${version} — the dedupe would run one under the other`,
+      );
+    }
+  }
+  report.push(`${name}@${version}${siblingVersions.size > 0 ? ` (+${siblingVersions.size} sibling link${siblingVersions.size === 1 ? "" : "s"} at the same version, deduped at bundle time)` : ""}`);
 }
 
 if (problems.length > 0) {

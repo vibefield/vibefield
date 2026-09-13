@@ -47,15 +47,13 @@ overrides:
   '@vibecook/ghosttea-electron': 0.11.1
   '@vibecook/ghosttea-react': 0.11.1
   '@vibecook/ghosttea-protocol': 0.11.1
-  '@vibecook/chopsticks-adapter-acp': 0.1.4
-  '@vibecook/chopsticks-adapter-claude': 0.1.4
-  '@vibecook/chopsticks-adapter-codex': 0.1.4
-  '@vibecook/chopsticks-adapter-grok': 0.1.4
-  '@vibecook/chopsticks-core': 0.1.4
-  '@vibecook/chopsticks-record': 0.1.4
-  '@vibecook/chopsticks-runtime': 0.1.4
-  '@vibecook/chopsticks-testing': 0.1.4
-  '@vibecook/chopsticks-workspaces': 0.1.4
+  '@vibecook/puppeteer-runtime': link:../puppeteer/packages/runtime
+  '@vibecook/puppeteer-builtin-providers': link:../puppeteer/packages/builtin-providers
+  '@vibecook/puppeteer-core': link:../puppeteer/packages/core
+  '@vibecook/puppeteer-record': link:../puppeteer/packages/record
+  '@vibecook/puppeteer-monitor': link:../puppeteer/packages/monitor
+  '@vibecook/puppeteer-views': link:../puppeteer/packages/views
+  '@rosetta/protocol': link:../rosetta/clients/ts
 
 importers:
 
@@ -333,6 +331,9 @@ importers:
       '@vibefield/logging':
         specifier: workspace:*
         version: link:../logging
+      '@vibefield/screenshot':
+        specifier: workspace:*
+        version: link:../screenshot
       '@vibefield/users':
         specifier: workspace:*
         version: link:../users
@@ -388,6 +389,9 @@ importers:
       '@react-three/fiber':
         specifier: ^9.6.1
         version: 9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@rosetta/protocol':
+        specifier: link:../../../rosetta/clients/ts
+        version: link:../../../rosetta/clients/ts
       '@vibecook/ghosttea-protocol':
         specifier: 0.11.1
         version: 0.11.1
@@ -397,6 +401,15 @@ importers:
       '@vibecook/ice':
         specifier: 0.11.0
         version: 0.11.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@vibecook/puppeteer-core':
+        specifier: link:../../../puppeteer/packages/core
+        version: link:../../../puppeteer/packages/core
+      '@vibecook/puppeteer-monitor':
+        specifier: link:../../../puppeteer/packages/monitor
+        version: link:../../../puppeteer/packages/monitor
+      '@vibecook/puppeteer-views':
+        specifier: link:../../../puppeteer/packages/views
+        version: link:../../../puppeteer/packages/views
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -473,9 +486,24 @@ importers:
 
   packages/fieldd:
     dependencies:
+      '@rosetta/protocol':
+        specifier: link:../../../rosetta/clients/ts
+        version: link:../../../rosetta/clients/ts
       '@vibecook/ghosttea-client':
         specifier: 0.11.1
         version: 0.11.1
+      '@vibecook/puppeteer-builtin-providers':
+        specifier: link:../../../puppeteer/packages/builtin-providers
+        version: link:../../../puppeteer/packages/builtin-providers
+      '@vibecook/puppeteer-core':
+        specifier: link:../../../puppeteer/packages/core
+        version: link:../../../puppeteer/packages/core
+      '@vibecook/puppeteer-record':
+        specifier: link:../../../puppeteer/packages/record
+        version: link:../../../puppeteer/packages/record
+      '@vibecook/puppeteer-runtime':
+        specifier: link:../../../puppeteer/packages/runtime
+        version: link:../../../puppeteer/packages/runtime
       '@vibefield/audit':
         specifier: workspace:*
         version: link:../audit
@@ -654,6 +682,22 @@ importers:
       react:
         specifier: 'catalog:'
         version: 19.2.7
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(supports-color@7.2.0)(tsx@4.23.1)(yaml@2.9.0)
+
+  packages/screenshot:
+    dependencies:
+      '@vibefield/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

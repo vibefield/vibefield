@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import { createElectronStack } from "../src/electron-stack.mjs";
 
-function setup({ studioOpen = true, studioPhysical = false } = {}) {
+function setup({ studioOpen = true, studioPhysical = false, rosettadBin = null } = {}) {
   const child = new EventEmitter();
   Object.assign(child, { pid: 1234, exitCode: null, signalCode: null, connected: true });
   const updates = [];
@@ -33,6 +33,9 @@ function setup({ studioOpen = true, studioPhysical = false } = {}) {
       exits.push(value);
     },
     electronExecutable: "/electron",
+    // AR-0: the sibling lock's rosettad, resolved outside the unit (the
+    // default reads siblings.lock.json and asks cargo — not a unit's business)
+    resolveRosettadBin: () => rosettadBin,
     spawnProcess(...args) {
       spawnArgs = args;
       child.send = (message, callback) => {
@@ -84,6 +87,13 @@ const runtime = {
   nativeOutput: "/repo/.vibefield/dev/runtime/dev-current/native/field-native",
 };
 
+test("hands fieldd the built rosettad when the sibling lock resolves one (AR-0)", async () => {
+  const fixture = setup({ rosettadBin: "/ssd/rust-target/rosetta/release/rosettad" });
+  await fixture.stack.start(runtime);
+  const [, , options] = fixture.getSpawnArgs();
+  assert.equal(options.env.FIELDD_ROSETTAD_BIN, "/ssd/rust-target/rosetta/release/rosettad");
+});
+
 test("starts Electron directly with isolated state and the daemon build identity", async () => {
   const fixture = setup();
   await fixture.stack.start(runtime);
@@ -103,6 +113,9 @@ test("starts Electron directly with isolated state and the daemon build identity
   assert.equal(options.env.FIELDD_NATIVE_BIN, runtime.nativeOutput);
   assert.equal(options.env.FIELDD_CONTROL_PORT, "0");
   assert.equal(options.env.FIELDD_DATA_PORT, "0");
+  // AR-0: no built rosettad ⇒ the variable is ABSENT (fieldd's honest
+  // "unconfigured"), never an empty string or a path to nothing
+  assert.equal("FIELDD_ROSETTAD_BIN" in options.env, false);
   assert.equal(options.env.VITE_DEV_SERVER_URL, "http://127.0.0.1:5174/");
   assert.equal(options.env.VIBEFIELD_STUDIO_OPEN, "1");
   assert.equal(options.env.VIBEFIELD_STUDIO_PHYSICAL, "0");

@@ -3,7 +3,46 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-08-18 — PRC-6c2b PREFLIGHT
+> stays in the design docs + specs. Last rewritten: **2026-09-13 — AR-5b LANDED `5bb79329`: the
+> review's fixes** (six lenses over AR-5 the day it landed — the usage column's missing rule
+> (it never painted), two CONTENT scopes split off the plugin-eligible census and fold scopes
+> the new doors rode, the reader's query kept out of fieldd's log, the attribution walk that
+> dropped a fifth of a board's matches and named a hit its own root, the usage poll's first
+> frame that said every account had failed, a credits-only reading drawn as a refusal, an
+> ORPHANED MOUNT behind the gate's "lottery" red; puppeteer `4d734c9` + `b0f08ec` upstream,
+> pinned; see LANDED §AR-5b); next **AR-6** approvals + prompts.
+> Previous rewrite, kept for continuity — **2026-09-13 — AR-5 LANDED `fe6b3d0a`: the
+> views port** (the Godview monitor's views are `@vibecook/puppeteer-views`, a pinned sibling
+> package cut from puppeteer's Godview at PU-5a — the swarm on WebGPU, list, rain, the
+> instrument bar, the usage column and the ⌘F find sheet, host-agnostic behind two injected
+> ports · VibeField keeps the fold, the door, its physics worker, its tokens and its chrome, and
+> adapts the ports over fieldd's new doors: `agents.usage` (+ its subscription, demand-driven
+> polling of puppeteer's account-usage monitor, moved upstream into the runtime) and
+> `index.sessions` / `index.search` (rosettad's search behind fieldd, AR-8's first brick) ·
+> project colours per the record's §02 replace the §2.6 accent slots · the DOM bubble and its
+> tuned shadows retired with the ambient keyframes · six upstream commits on James's main
+> (`f33da93` the package · `b9a0ce9` · `77f24fd` · `33d8369` · `8af9df9` · `5389449`), four of them
+> fixes this consumer's suites and smoke found; see LANDED §AR-5); next **AR-6** approvals +
+> prompts.
+> Previous rewrite, kept for continuity — **2026-09-13 — AR-4b LANDED `8c0725a5`:
+> the review's fixes** (six lenses over AR-3/AR-4 and the upstream landing; the re-attach's
+> shape is unchanged, what it TRUSTS is not — session records are signed and only agent-cell
+> PTYs are re-adopted · the claim is the authority on the epoch · every wait is a verdict and
+> every throw restores the pending row · D36's `locality` column is ENFORCED, a gap since it
+> was declared · the deck's replacing mount refuses rather than landing a stranger in the
+> user's pane · PU-1b upstream `8402184` releases bindings instead of deleting the process's
+> files — PU-11's cause, found and fixed; see LANDED §AR-4b); next **AR-5** the views port.
+> Previous rewrite, kept for continuity — **2026-09-12 — AR-4 LANDED `ba1a1eab`: a managed
+> session outlives fieldd** (the durable claim + the pinned ingress in every record, a
+> releasing stop, the re-attach at the next boot's first inventory, PENDING rows that
+> resume-when-idle replaces on rosetta's evidence; LANDED §AR-4).
+> Previous rewrite, kept for continuity — **2026-09-09 — SNAP-0 LANDED `46c0c190`:
+> the native screenshot tool is in the tree** (contracts `screenshot.ts` + fixtures parsed in
+> three languages · `@vibefield/screenshot` · the Swift helper bundle and its Rust twin as an
+> own-workspace crate · `window.vibefield.screenshot.capture()` + View ▸ Take Screenshot on
+> ⌃⌘A / Alt+A · optional in the stage, never boot-fatal); owed: James's first ⌃⌘A in
+> `pnpm dev` (the overlay itself was not exercised live) and the Windows box round (SNAP-4).
+> Previous rewrite, kept for continuity — **2026-08-18 — PRC-6c2b PREFLIGHT
 > GREEN · R3-0 CLOSED, the mind-map runway is clear (gating: MM-D1…D14 alone).** PRC-5a–d
 > established exact renderer identity, immutable signed-artifact slots, explicit candidate
 > authority, and stable renderer replacement. PRC-5e assembled the authenticated coordinator and
@@ -129,13 +168,110 @@ NF kill matrix), docs sync across the mesh (C6), and the plugin/settings/logging
 rails are in. **The missing half is the agents themselves** — the AR track, running over the
 landed native floor, watched from the GT deck.
 
-AR's zero was re-verified against the tree on 2026-08-07, not taken from this file: there is no
-`agents.ts` in `packages/contracts/src`; `@vibecook/chopsticks-*` is pinned in
-`pnpm-workspace.yaml` but is a dependency of **no package**; and the only agent surface that
-exists is `MockAgentField` behind the Godview monitor's explicit MOCK label. Every dependency
-AR named is landed and waiting — the NF floor, the GT deck, C7 spawn-through upstream — and the
-seam it plugs into is one module wide. Everything else in this file is scaffolding built to
-receive it.
+AR is IN FLIGHT since 2026-09-12 (AR-0). The runtime is **puppeteer** and agent history is
+**rosetta** — James retired chopsticks and spaghetti on 2026-09-04 — and neither is published,
+so this tree consumes them as pinned SIBLING CHECKOUTS (`siblings.lock.json`, `pnpm siblings`,
+the fenced `link:` block in `pnpm-workspace.yaml`; CLAUDE.md §Machine setup). What AR-0 landed:
+the pin machinery revived from the truffle era, walls R20–R22, the Nx sibling stamp, the
+renderer's sibling-mode `fs.allow`, and fieldd's **rosettad supervisor** (one index daemon per
+user root, `FIELDD_ROSETTAD_BIN`, projected into `FielddHealth.rosettad`, kill matrix in
+`packages/fieldd/test/rosettad-supervisor.test.ts` + an opt-in live row). What is still true:
+there is no `agents.ts` in `packages/contracts/src`, **no source imports a puppeteer package
+yet**, and the only agent surface is `MockAgentField` behind the Godview monitor's explicit MOCK
+label. Every dependency AR named is landed and waiting — the NF floor, the GT deck, C7
+spawn-through (now puppeteer's `prepareInvocation`) — and the seam it plugs into is one module
+wide. The design is `draft/thinking-ar-agent-plane.md` (the triad, §17 delta 2026-09-12); the
+workbench is `draft/thinking-ar-sibling-workbench.md`. **The data topology is RATIFIED
+2026-09-12** (`draft/thinking-ar-data-topology.md`, AR-D15…D22 in DECISIONS): per-user ingestion
+with consent by construction (a root under `users/<fuid>/` is enrolled, never discovered; the OS
+user's `~/.claude` is discovered by every user and consented per user), a machine-scope
+`<root>/machine/` for agent distribution (the one UA-D1 exception), and personas as puppeteer
+profiles whose roots are the agent data folders. The two upstream prerequisites for the first
+ingested persona LANDED the same day and are pinned: **RO-2**'s start-time half (rosetta
+`3f7ac0f` — `rosettad serve --enroll FILE`, many runtimes per kind, consent by construction,
+ledger directory per runtime; live mutation stays a rosetta open decision, fieldd restarts the
+daemon on change) and **PU-7** (puppeteer `719d98d` — `ProfileService.observationRoot`, Pi's
+managed binding moved one level in, RFC 006 addendum). **AR-1 LANDED 2026-09-12 (`c7fe5fda`):**
+the contracts (`index.*` and `agents.*` rows, the two local-only scopes `index.manage` and
+`agents.manage`, the `machine/` + `agents/` + `enrollment.json` LAYOUT segments with
+`LAYOUT_ROOT_LEVEL` as the never-re-root set, the enrollment record and the index projections in
+`agent-index.ts`, six fixtures) and fieldd's half of the topology: the enrollment record
+(`users/<fuid>/index/enrollment.json`, VibeField's truth AND rosettad's `--enroll` input) is
+published before every spawn, `--home` is the OS home explicitly, and the four `index.*` doors
+are live — `status`/`discoveries` as projections (no origin, no enrolled root's path),
+`enroll`/`retire` audited and bouncing the daemon only when the record changed. Witnessed
+against the scripted daemon (9 rows) and the REAL rosettad (3 rows: an empty home's roll call, an
+enrolled empty root live from the first start, and revocation). Upstream, the same day: **RO-2c**
+(rosetta `af6f0d7` — the file is AUTHORITATIVE for discovered-kind consent; before it the
+daemon unioned the projection's persisted flag in, so the record could add consent but never
+revoke it). **AR-2 LANDED 2026-09-12 (`f9f04763`):** puppeteer's first import — one agent runtime
+per fieldd from the built-in providers, everything it would keep under `~/.puppeteer` injected
+from this user's root (the registry at `agents/profiles.json`, managed roots under
+`agents/roots/`, update transcripts under `machine/agents/updates/`; PU-8), the eight `agents.*`
+doors live, and the persona path: `agents.profiles.create` allocates the root, registers the
+profile and enrolls its OBSERVATION root (PU-7) in the enrollment record under the kind the roll
+call joins — no table in VibeField: puppeteer names the provider's native layout root, rosetta's
+census names the kind for that spelling — bouncing the daemon; delete retires (rows kept),
+unregisters, deletes the root; every daemon ready re-applies the record to the personas (R4 as
+built). The machine scope is real: `machine/agents/distribution.json`, written under the root
+lock by `agents.setActive`/`agents.update`, read by `agents.installs`/`agents.releases`.
+Witnessed against the scripted daemon (10 rows, with a scripted `claude` on a private search
+path) and the REAL rosettad (a claude and a pi persona enrolled under `claude-code`/`pi`, live,
+then retired). CI installs puppeteer's packages with a filtered frozen install (a clean room
+needs no electron-ghostty; PU-6 no longer gates). What is still true: the active-executable
+choice reaches spawns from the next boot; no window asks for `agents.manage` (the Agents settings
+section is still owed after AR-4). **RULINGS 2026-09-12
+(James, the whole AR-D1…D14 and FV-D1…D8 slates — DECISIONS):** the track is scoped to rosetta +
+puppeteer, Godview and History (composing, characters, the Assistant view → their own track after
+AR); the ownership model is corrected — transcripts and live appends are rosetta's for every
+session; runtime observation and control exist only for sessions born in OUR panes and there they
+are GUARANTEED (managed · ingested · remote; the observed tier and the correlator door are gone);
+agents in other terminal apps are ingested with consent and controlled only by resuming them in
+one of our panes; a fieldd restart RE-ATTACHES (resume-when-idle the fallback), the shell restart
+has no gap; all four views are spine content; the History view has no send box and Godview's is
+pane-only. The build order was re-cut: AR-3 spawn + fold + persisted continuations → AR-4 stable
+ingress/re-attach → AR-5 the views port (AR-D13a, PU-5 with the injected history port) → AR-6
+approvals + prompts → AR-7 the mandatory shim gateway (PU-9) → AR-8 the History view (spine,
+behind RO-1, brought forward now). **AR-3 LANDED 2026-09-12 (`6b5e1612`):** the runtime is lent the
+floor — the AgentHost over `TerminalService.spawn` with a clean allow-listed environment, the fold
+(`agent.list`/`agent.subscribe`), the four doors, the continuation persisted per managed session,
+the monitor's mock module deleted; the REAL Claude Code alive and idle in a PTY on the agent cell
+(LANDED §AR-3). **AR-4 LANDED 2026-09-12 (`ba1a1eab`; PU-1 upstream `d013fef`, pinned):** stable
+ingress — the durable claim and the pinned ingress in every record, a releasing stop, the
+re-attach at the next boot's first inventory, PENDING rows that resume-when-idle replaces on
+rosetta's evidence or `agent.resume` replaces by hand; the REAL Claude Code back at epoch 2 on the
+pinned port with its hooks flowing (LANDED §AR-4). **AR-4b LANDED 2026-09-13 (`8c0725a5`; PU-1b
+upstream `8402184`, pinned):** the six reviewers' fixes — session records are SIGNED and only
+agent-cell PTYs are ever re-adopted (EL7: a dropped file could otherwise terminate a live PTY and
+choose the vendor's cwd), the claim is the authority on the epoch, every wait is a verdict and
+every throw restores the pending row, D36's `locality` column is ENFORCED for all 131 local rows
+(a gap since the column was declared), the deck's replacing mount refuses rather than landing a
+resumed stranger in the user's pane and a managed row's id became its RUN; upstream, a detach now
+RELEASES its bindings and keeps the process's staged files — PU-11's cause, probed and fixed
+(LANDED §AR-4b). Owed after it: `deletePersona` under a live run is untested; PU-12
+(`providerVersion` unpersisted, so a re-attached session's usage rail is unverified). **AR-5-0
+(2026-09-13, `f6b2accc`):** the pins moved to James's follow-ups (puppeteer `d2b0600`, rosetta
+`e8d907a`) and every AR suite was re-witnessed at them — the first slice of the AR-5 plan
+(`draft/thinking-ar-views-port.md`; LANDED §AR-5-0). **AR-5 LANDED 2026-09-13 (`fe6b3d0a`; PU-5a
+upstream `f33da93` the package · `b9a0ce9` · `77f24fd` · `33d8369` · `8af9df9` · `5389449`, pinned):** the
+views port — the monitor's views are `@vibecook/puppeteer-views` (the swarm on WebGPU with its
+physics behind a DRIVER port that VibeField's worker fills, the list, the rain, the instrument
+bar with VibeField's tools in its slots, the usage column, the ⌘F find sheet), the two ports
+adapted in the renderer over fieldd's new doors (`agents.usage` + `.subscribe` over puppeteer's
+account-usage monitor, now a runtime service; `index.sessions` + `index.search` over rosettad's
+search), project colours per record §02, the catalog mounting the shipping swarm over the
+package's own fixtures; found and fixed upstream on the way: the find sheet kept focus on close,
+no view drew a peer's name or its host's write policy, the palette read the wrong root on a
+two-root page, the swarm's bodies had no source attribute for a harness (LANDED §AR-5). Owed
+after it: the `adoptCanvas` phase-2 condition is a measurement, not a date; DESIGN.md's Godview
+citation is still James's edit; PU-12 and `deletePersona` under a live run as before. **AR-5b
+LANDED 2026-09-13 (`5bb79329`; puppeteer `4d734c9` + `b0f08ec`, pinned):** the six reviewers'
+fixes — the chrome slot's rule, the `index.search` and `agent.usage` scopes, the query scrubbed
+from the log, the walk in flights under a deadline with no fabricated root, the reconcile
+before the first reading, the credits-only and `unknown` readings, the orphaned mount, and
+upstream the column following its port, an optional hit root, a React-free physics subpath,
+`@webgpu/types` as a dependency (LANDED §AR-5b; the owed list there names what the review
+found and this slice did not take: the swarm loop's missing test above all — PU-13).
 
 The artifact serving foundation, global catalog, and desktop runtime are now real but are not
 yet the whole product: AH-1 owns durable Proxy/Folder serving; AH-2 owns the bounded validated
@@ -159,16 +295,38 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4, with peers authenticated by tailnet WhoIs | `specs/native-floor.md` | per-device tokens (GT-D6) whenever the token work is wanted — NOT gated upstream (the v3 claim was retracted) |
 | IOS — companion | **IN FLIGHT** — IOS-0/2/2f + IOS-EL8, and **IOS-3a…3e + the 3r review landed** 2026-08-05/06 (peer terminals are bubbles; the card attaches; appearance + upstream's reconnect banner) | `thinking-ios-app.md` §10 · `research/ios-app-design.md` | **IOS-3c's capability/Keychain leg never landed — the phone attaches VIEW-ONLY.** That, plus the live-device run, is what remains of the attach story; artifact catalog/open = AH-5 |
-| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** + **GT-5a…d the code review's fixes** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | the deck's own ladder is done. James's SDF/WebGPU swarm renderer plugs into the worker's `adoptCanvas` socket in his own session; AR replaces the monitor's one mock module; smoke row 13b unskips when a peer can be staged in the harness |
+| GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** + **GT-5a…d the code review's fixes** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | the deck's own ladder is done. **The swarm on WebGPU and the other views ARRIVED at AR-5 (2026-09-13, `fe6b3d0a`)** as `@vibecook/puppeteer-views` (AR-D13a; puppeteer's Godview is the reference, ours the product — AR-D14); *erratum 2026-09-13: the 09-12 phrase "mounted into the worker's `adoptCanvas` socket" was GT-D16's expectation restated — as built the package's renderer paints on MAIN behind a physics DRIVER port and the socket stays unused; the spec's GT-D16 carries the correction*; the monitor's one mock module was DELETED at AR-3 (the local field is fieldd's fold through the deck's door); smoke row 13b unskips when a peer can be staged in the harness |
 | UI — design system | **LANDED** 2026-08-05/06; **Studio architecture landed 2026-08-26** — tokens → primitives → production compositions → a catalog that mounts shipping views → one real product + isolated Studio under the active dev host, with explicit ephemeral live appearance and ownership enforced by test | `DESIGN.md` (authority) · **`docs/UI_SYSTEM.md`** (where it lives in code) | the catalog's own acceptance is an eyeball (light/dark · keyboard focus · reduced motion · narrow); the browser-only catalog remains available without live-product authority |
 | UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | WIN — Windows port | **IN FLIGHT** — WIN-0…4 landed `5ffd30b`/`85cce04`/`f982d27` (2026-08-11; ratified 2026-08-10, James: "follow your plan"): gate + dev loop portable, the endpoint law in two languages (WIN-D1), the native plane on named pipes with a real stderr floor, the pair's probe/env/spawn doors, the stop VERB (WIN-D5; WIN-D3 resolved by construction) — all proven on the box (WORKSTATION4090) · **WIN-6 terminal hosting landed `03cc648`** (WIN-D2 adopted 2026-08-11: hosting in GA — the ConPTY kill matrix, two-plane adoption, and frame-plane I/O all on the box; the case-variant env-strip gap booked upstream as G13) · **WIN-5 the app BOOTS on Windows** (`51aa3ab`) — `pnpm smoke` green headless over ssh: shell + pipe-joined daemon pair + renderer + a live godview terminal, all on the box · **WIN-7 opened** (`edd5882`) — the mesh finds its `.exe` sidecar on Windows | `draft/thinking-windows-port.md` (plan; spec graduates with the track) | box gates green (Rust workspace incl. terminal_unit 14/14 · terminal_mesh 7/7 · mesh unit 3/3; fieldd terminal-seam 3/3 · terminal-kill-matrix 6/6 · the full fieldd suite 454/2-skip (the 2 = the tracked concurrent-edit doc-sync pair) · fieldd-client 12/12 · field-app 417; `pnpm smoke` boots headless over ssh); next: WIN-5 VISUAL polish (WIN-D9 chrome, tray `.ico`, glyphs — needs a Studio eyeball), WIN-7 live mesh witness (needs a tailnet auth key), WIN-8 packaging + the EL8 pin delta (electron-builder vs EDP-39) |
 | LSF — live surfaces foundation | **LANDED 2026-08-15/16** (`9a8ee9b1`…`90b54219`; spec RATIFIED v0.9) — browser OSR + SCK/Simulator producers, ticketed transport, renderer WebGPU store, Swift capture helper, labs + 20-min soaks all green on macOS; **ledgered LATE 2026-08-28** (entry §LSF — the second recurrence of the 2026-08-07 drift class) | `specs/live-surfaces-foundation.md` (LSF-D1…D16) | consumed by DT below; **DEFERRED (2026-08-28, James):** the §18 Windows rows (LSF-3/3C/6) and the LSF-4 signed-helper artifact (rides EDP/WP10) |
 | DT — dev tool pack | **IN FLIGHT — DT-0 RATIFIED 2026-08-28 (James, same day as the draft); REORDERED FIRST among the production packs** (mind map's MM-D1…D14 gate unchanged, order at source in `thinking-prod-dogfood-packs.md`); DT-D1…D12 in force and DT-D10's deltas FOLDED (PF2 amendment · 03·A §5.5 supersession · sharedTexture EL8 pin-note · roster rows · `ctx.pool`/P8-D4 closure notes) — browser widget into `vibefield.browser` + mac-only `vibefield.devtools` (Simulator · window capture) | `thinking-devtools-pack.md` (DT-D1…D12) · `specs/live-surfaces-foundation.md` | **DT-1 COMPLETE + DT-2a LANDED (2026-08-28 evening: 1a `b35f3132` vocabulary · 1c `501bb978` main authority+reuseKey · 1b `5d35b0b0` fieldd policy door · 2a `0e3b6056` renderer pool — two slices by Opus worktree builders, reviewed; ledger §DT-1+DT-2a incl. the owner.pluginId token-model gap)**; **DT-2 COMPLETE same evening** (2b `1aef94ec` present door + view layer · 2b-2 `d8440045` catalog section + ctx.pool door, builder-built · 2b-3 `7f48ce0e` plugin eligibility + compliance; ledger §DT-2 incl. the surface.close custody debt carried to DT-3's top); **DT-3 COMPLETE — for real this time. The 08-29 00:06 completion was FALSIFIED by the first live run (James: "not working at all"); §DT-3e ledgers the three defects — plugin-lease mints structurally impossible `d9a0e103` · no surface scopes on the window token (same commit) · the tray sandbox-mount holding a hidden live browser `8886f1d6` — and the new witness `pnpm smoke:browser-widget` `d5735150`: real daemons + renderer, screenshots per rung, typed input round-tripping through a real page, URL-bar steering; two exit-0 runs (one entirely on the CPU fallback, GPU disabled); batch gate exit 0 at load ~190**; **DT-3f LANDED same evening (James's second live report: the page didn't fill the card) — the logical viewport follows demand end to end (`175d40a5`: demand grows `logicalViewport` · element box = layout ask, pre-DPR pre-zoom · largest-area fold · producer born-at/actuates/reports the current layout · inset-pinned canvas breaks the element←frame←demand aspect lock) + the smoke measures fill/layout and survives the loaded host (`322f20dd`: non-4:3 spawn, geometry rung, input-free `/size` relayout rung, GL-death relaunch, churn heal, grading controls); full ladder exit 0 incl. two cards at two viewports; ledger §DT-3f**; owed: James's both-themes eyeball (now with a filling page) · `pnpm smoke:canvas` census witness; next: DT-4 devtools pack (pickers over `surface.sources`, mac-only manifest — its rig now exists) → DT-5 control lane |
-| AR — agent runtime | **NOT STARTED** — the other half of the P0 exit | design-04 (D33/D37/D38) · predesign-04 | chopsticks-in-fieldd over the NF seam; consumes petition C7 (implemented upstream); correlator = fieldd-side ancestor walk (NF resolution) |
+| SNAP — screenshot tool | **SNAP-0 LANDED 2026-09-09 `46c0c190`** — the `research/screenshot2` prototype (a WeChat-style native screenshot: capture-then-freeze, window snap, loupe, five marks, Enter copies the still) ported as a SHELL-plane tool under SNAP-D1…D9: contracts `screenshot.ts` (v1 line protocol, typed error codes, the shell result, IPC channel) + 7 fixtures parsed by zod, the Swift harness and the Rust crate · `@vibefield/screenshot` (Node-only, wall R19; 30 tests against a scripted fake helper that is a real child process) · `apps/desktop/native/macos/screenshot-helper` (Swift; `field-screenshot-helper.app`, ad-hoc signed `com.jamesyong.vibefield.screenshot-helper`, Liquid Glass by dynamic lookup) · `apps/desktop/native/windows/screenshot-helper` (Rust; its OWN cargo workspace, cross-checked from the mac) · `window.vibefield.screenshot.capture()` + `FieldHost.screenshotCapture?` + View ▸ Take Screenshot carrying ⌃⌘A / Alt+A as an APPLICATION accelerator · stager/builder inventory, optional entries, never boot-fatal | `thinking-screenshot-tool.md` (SNAP-D1…D9) · the helpers' READMEs · `docs/WINDOWS_PORT_STATUS.md` §SNAP-4 | **owed NOW: James's first ⌃⌘A in `pnpm dev`** — the overlay (freeze · snap · loupe · marks · clipboard · the ready/ok/cancel lines) was NOT exercised live at SNAP-0 because `--once` covers the developer's display; only `--capture-test`, the harness and the door were. Next: SNAP-1 the global chord behind a preference → SNAP-2 `shell.screenshot.capture` under `surface.capture` → SNAP-3 the consumer (the still onto the canvas — artifact vs a shell scheme, decided at the slice) → SNAP-4 the Windows box round + WP10's inside-out signing of the nested bundle |
+| AR — agent runtime | **IN FLIGHT** — AR-0 the sibling workbench landed 2026-09-12 (puppeteer + rosetta as pinned sibling checkouts; walls R20–R22; the rosettad supervisor + kill matrix) · **AR-1 LANDED 2026-09-12 `c7fe5fda`** (the `index.*`/`agents.*` contracts, the two local-only scopes, the topology's LAYOUT segments, the enrollment record published before every spawn + `--enroll`, the four `index.*` doors live and witnessed against the real daemon; RO-2c upstream — the file is authoritative) · **AR-2 LANDED 2026-09-12 `f9f04763`** (puppeteer's first import: the runtime in fieldd with the injected registry/roots/transcripts, the eight `agents.*` doors, the persona path enrolling observation roots under joined kinds, the machine-scope record under the root lock, CI's filtered puppeteer install; witnessed against the scripted and the real daemon); the other half of the P0 exit | `thinking-ar-agent-plane.md` (triad design, §17) · `thinking-ar-data-topology.md` (RATIFIED; the record, the doors) · `thinking-ar-sibling-workbench.md` · design-04 (D33 proposed retired / D37 / D38) | puppeteer-in-fieldd over the NF seam (D2 stands); **slates RATIFIED 2026-09-12 (AR-D1…D14 amended, FV-D1…D8; DECISIONS)** — scope: rosetta + puppeteer, Godview + History; **AR-3 LANDED 2026-09-12 `6b5e1612`** (the host over the floor, the fold, the four doors, the persisted continuation, the mock deleted — LANDED §AR-3) · **AR-4 LANDED 2026-09-12 `ba1a1eab`** (stable ingress: the durable claim + pinned ingress, the re-attach at the next boot, pending rows and resume-when-idle; PU-1 upstream `d013fef` — LANDED §AR-4) · **AR-4b LANDED 2026-09-13 `8c0725a5`** (the six reviewers' fixes: signed records + the agent-cell rule, the claim as the epoch's authority, verdicts and fences, D36's locality column enforced, the replacing mount's refusal and the row id by RUN; PU-1b upstream `8402184` — the release path, PU-11's cause — LANDED §AR-4b) · **AR-5-0 2026-09-13 `f6b2accc`** (the pins moved to James's puppeteer `d2b0600` + rosetta `e8d907a`, every AR suite re-witnessed at them incl. the real claude and real rosettad rows, one long-socket-path test root fixed — LANDED §AR-5-0; the AR-5 plan is `thinking-ar-views-port.md`, its slate AR5-D1…D7 unruled); **AR-5 LANDED 2026-09-13 `fe6b3d0a`** (the views port: `@vibecook/puppeteer-views` pinned at `5389449` with the swarm on WebGPU, list, rain, the bar, the usage column and the find sheet behind two injected ports; fieldd's `agents.usage`/`.subscribe` and `index.sessions`/`index.search` doors; project colours; the catalog on the shipping swarm; four upstream fixes found by this consumer — LANDED §AR-5) · **AR-5b LANDED 2026-09-13 `5bb79329`** (the six reviewers' fixes: one blocker — the usage column had no rule — eleven majors across scopes, the walk, the poll's first frame and the adapters, the orphaned mount behind the gate's red; puppeteer `4d734c9` + `b0f08ec` — LANDED §AR-5b); next: **AR-6** approvals + prompts (pane-only send box) · **AR-7** the mandatory shim gateway (PU-9) · **AR-8** the History view as spine content behind RO-1 (RO-1 asked now, in parallel); the Agents settings section is still owed (the login pane's door is live, no UI), as are `deletePersona` under a live run (untested — the scripted provider has no profile service) and PU-12 |
+| CO — composing, characters, the Assistant view | **DEFERRED 2026-09-12 (James)** — its own track after AR: multi-agent composing (four-views §6 group chat, FV-D4's grouping, FV-D5's observed sends), agent characters (FV-D3 home, FV-D8 in the fold), the Assistant view (four-views §5, undesigned) | `thinking-four-views.md` §5–§6, §9 | opens when AR's P0 exit is witnessed; nothing in AR waits on it |
 
 ## In flight now
+
+**SNAP — the screenshot tool. SNAP-0 LANDED 2026-09-09 (`46c0c190`): the tool is in the
+tree; the overlay's live witness is James's.** The prototype James built in
+`research/screenshot2` on 2026-08-18 (its own Electron host, "Deskline") is now a VibeField
+tool the app can call: main spawns `field-screenshot-helper --once`, reads ONE JSON line
+(`ready` lifts a 20 s pre-overlay timer; `ok` names a PNG on disk that is also on the
+clipboard; `cancel`; a typed `error`), and answers the page or the menu with the contract's
+`ScreenshotCaptureResult`. What is proven: the contract in three languages (the same seven
+fixtures parsed by zod, Swift and Rust), the host library against a scripted helper (30
+tests: one live helper, the deadline, every honest ending, dispose, the still ring), the
+door (registered sender, request checked, answer validated before it crosses), the menu
+model (the chord claimed once, the item present-but-disabled with no helper), the macOS
+build + harness + a real `--capture-test` on this Mac (3456×2234 @2×), the Windows crate's
+format/check/clippy from the mac. What is NOT proven: the macOS overlay itself — an agent
+must not put a full-screen overlay on James's display, so his first ⌃⌘A in `pnpm dev` is
+the witness — and the Windows crate as itself (SNAP-4, `docs/WINDOWS_PORT_STATUS.md`). The
+consumer (the still onto the canvas) is SNAP-3 and deliberately unbuilt: EL2 leaves an
+artifact or a shell scheme, chosen at the slice. `pnpm verify` is red at `pnpm lint` on
+James's untracked `work/composer-directions.html` alone (the same state `0bef361b`
+recorded); every other stage ran green.
 
 **TP — the terminal pipeline (custody through pixels). RATIFIED 2026-08-22 — the S3 LADDER IS COMPLETE THROUGH TP-S3f (2026-08-23): fully routed, bridge gone, session events landed round-trip through petition G24 in one day.**
 The spec is ratified in full (James, 2026-08-22: **TP-D1 = T1**, **TP-D26 = C′**, **mark 21 = (a)**,
@@ -1125,8 +1283,12 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 ## Upstream / sibling pins (the EL8 watch)
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
-ghosttea `=0.9.2` + **`ghosttea-truffle =0.9.2`** on all planes (GT-4, 2026-08-06; preflight
-pins the cargo rows and all four npm rows) · chopsticks 0.1.4 · strata **0.13.0** (via ICE;
+ghosttea `=0.11.1` + **`ghosttea-truffle =0.11.1`** on the cargo and npm planes (the lockstep
+bump `85f7d769`; preflight pins the cargo rows and all four npm rows) while
+`apps/ios/VibeFieldKit/Package.resolved` sits at **`0.10.1`** — NOT one version on all planes
+(*errata 2026-09-12, the AR-0 review: this line had said `=0.9.2` "on all planes" since GT-4
+2026-08-06 and trailed the manifests twice over; the manifests are the authority, read the
+number there*) · **puppeteer + rosetta = SIBLING CHECKOUTS pinned by SHA in `siblings.lock.json`** (AR-0, 2026-09-12; `pnpm siblings` prints the state, `pnpm siblings:pin` is the upgrade event; chopsticks 0.1.4 retired with the pivot; **puppeteer `b0f08ec` / rosetta `e8d907a` since AR-5b, 2026-09-13 (AR-5 pinned `5389449`) — the lock's package list gained `@vibecook/puppeteer-views`, the seventh `link:` row, whose React peers are checked by VERSION against this tree's copy, never counted as a second copy**) · strata **0.13.0** (via ICE;
 the lockfile holds one physical strata/Loro graph) ·
 `@vibecook/ice` **0.11.0** (registry pin; **bumped 2026-08-25 — build-selected magnet grid,
 Dot default plus device-local Dot/Needle tuning and the full 11-field Studio contract**, with the runtime classic/magnet preference

@@ -1,0 +1,6 @@
+{
+  "v": 1,
+  "status": "error",
+  "code": "permission-denied",
+  "message": "Screen Recording permission is required"
+}

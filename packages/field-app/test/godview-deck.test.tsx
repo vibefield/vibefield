@@ -17,12 +17,12 @@
  * loop driven by event ORDER.
  */
 
-import { act, type ComponentType } from "react";
+import { act, type ComponentType, type ReactElement, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewDeckFacts } from "../src/development-console";
 import type { FieldHost } from "../src/host";
-import { getHost, setHost } from "../src/host";
+import { setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
 
@@ -969,5 +969,315 @@ describe("the one-runtime law (GT-3p, GT-D14)", () => {
     await mountDeck();
     expect(runtimes.length).toBe(1);
     expect(terminalPoolSnapshot().warm, "nothing was inherited").toBe(false);
+  });
+});
+
+/** A pane in the probe workspace below. */
+interface ProbePane {
+  id: string;
+  session: { id: string; cols: number; rows: number };
+}
+
+/**
+ * The workspace the door actually talks to, with a memory of the order it was
+ * driven in (AR-4b).
+ *
+ * ghosttea's context is the collaborator here, and the fixture reproduces the
+ * two properties the replacing mount is built around: `mountSession` lands in
+ * whatever pane is ACTIVE at the moment it is called, and an activation is
+ * observable only a turn later, through the ref the deck re-reads rather than
+ * through the object it was handed. A probe whose mount chose its own pane
+ * could not fail the way production did — a resumed agent landing in whichever
+ * pane the user happened to be sitting in.
+ */
+function workspaceProbe(initial: {
+  panes: readonly ProbePane[];
+  activePaneId: string;
+  /** false = a pane that never takes focus, so the activation never commits */
+  activatable?: boolean;
+}) {
+  let panes: readonly ProbePane[] = [...initial.panes];
+  let activePaneId: string | undefined = initial.activePaneId;
+  let version = 0;
+  const listeners = new Set<() => void>();
+  /** every verb the door drove, in order: `activate:<session>` · `mount:<session>` */
+  const log: string[] = [];
+  const changed = (): void => {
+    version += 1;
+    for (const listener of listeners) listener();
+  };
+  return {
+    log,
+    get panes(): readonly ProbePane[] {
+      return panes;
+    },
+    get activePaneId(): string | undefined {
+      return activePaneId;
+    },
+    /** the pane showing this session, if one is */
+    paneOf(sessionId: string): string | undefined {
+      return panes.find((pane) => pane.session.id === sessionId)?.id;
+    },
+    /** what this pane is showing */
+    showing(paneId: string): string | undefined {
+      return panes.find((pane) => pane.id === paneId)?.session.id;
+    },
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    getVersion(): number {
+      return version;
+    },
+    mountSession(session: { id: string }): void {
+      log.push(`mount:${session.id}`);
+      panes = panes.map((pane) =>
+        pane.id === activePaneId ? { ...pane, session: { ...pane.session, id: session.id } } : pane,
+      );
+      changed();
+    },
+    activateSession(sessionId: string): void {
+      log.push(`activate:${sessionId}`);
+      if (initial.activatable === false) return;
+      const pane = panes.find((candidate) => candidate.session.id === sessionId);
+      if (pane === undefined) return;
+      activePaneId = pane.id;
+      changed();
+    },
+  };
+}
+
+type WorkspaceProbe = ReturnType<typeof workspaceProbe>;
+
+/** The probe rendered THROUGH the deck's own sidebar slot — the only seam an
+ * embedder gets, and where the door reads its context from. */
+function ProbeSidebar({
+  store,
+  Sidebar,
+}: {
+  store: WorkspaceProbe;
+  Sidebar: ComponentType<{ workspace: unknown }>;
+}): ReactElement {
+  useSyncExternalStore(store.subscribe, store.getVersion);
+  return (
+    <Sidebar
+      workspace={{
+        activePaneId: store.activePaneId,
+        activeSession: store.panes.find((pane) => pane.id === store.activePaneId)?.session,
+        panes: store.panes,
+        sessions: [],
+        mountSession: store.mountSession,
+        activateSession: store.activateSession,
+      }}
+    />
+  );
+}
+
+/** The deck, its door, and a workspace that answers — the three things a mount
+ * needs. Returns the door and the teardown for the probe's own root. */
+async function mountDeckWithDoor(
+  store: WorkspaceProbe,
+): Promise<{ door: RemoteSessionDoor; dispose: () => Promise<void> }> {
+  const captured: { door: RemoteSessionDoor | null } = { door: null };
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <GodviewDeck
+        active
+        theme="light"
+        onRemoteDoor={(next) => {
+          captured.door = next;
+        }}
+      />,
+    );
+  });
+  await settle();
+
+  const Sidebar = workspaceMounts[0]?.["sidebar"] as ComponentType<{ workspace: unknown }>;
+  const probe = document.createElement("div");
+  document.body.appendChild(probe);
+  const probeRoot = createRoot(probe);
+  await act(async () => {
+    probeRoot.render(<ProbeSidebar store={store} Sidebar={Sidebar} />);
+  });
+  await settle();
+
+  const door = captured.door;
+  if (door === null) throw new Error("the deck never handed a door over");
+  return {
+    door,
+    dispose: async () => {
+      await act(async () => probeRoot.unmount());
+      probe.remove();
+    },
+  };
+}
+
+describe("the door's local mount, and the pane a replacement belongs in (AR-4 · AR-4b)", () => {
+  it("lands a replacement in the pane that held the replaced PTY, and gives the user their pane back", async () => {
+    // THE POINT OF `replacing`. The user is in pane-1; the resumed run's old
+    // PTY is in pane-2. A mount that took the active pane would put a stranger
+    // in front of the user and leave the dead terminal where it was.
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "old-pty", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-1",
+    });
+    floor = [...floor, { sessionId: "new-pty" }];
+    const { door, dispose } = await mountDeckWithDoor(store);
+
+    const outcome = await act(async () => door.mountLocal("new-pty", { replacing: "old-pty" }));
+
+    expect(outcome).toEqual({ state: "mounted", sessionId: "new-pty" });
+    expect(store.showing("pane-2"), "the replacement missed the pane it belonged in").toBe(
+      "new-pty",
+    );
+    expect(store.showing("pane-1"), "the user's pane was taken").toBe("user-pty");
+    // …and the user is back where they were: the hand-over borrowed the focus,
+    // it did not keep it.
+    expect(store.activePaneId).toBe("pane-1");
+    expect(store.log).toEqual(["activate:old-pty", "mount:new-pty", "activate:user-pty"]);
+
+    await dispose();
+  });
+
+  it("refuses when no pane shows the replaced PTY, and mounts nothing", async () => {
+    // The row the fold cannot know about: the user closed that pane while the
+    // resume was in flight. There is no pane to hand the new terminal to, and
+    // the active one is NOT a substitute.
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    floor = [...floor, { sessionId: "new-pty" }];
+    const { door, dispose } = await mountDeckWithDoor(store);
+
+    const outcome = await act(async () => door.mountLocal("new-pty", { replacing: "gone-pty" }));
+
+    expect(outcome).toEqual({
+      state: "failed",
+      reason: "no pane shows the replaced terminal any more",
+    });
+    expect(store.log, "something was mounted anyway").toEqual([]);
+    expect(store.showing("pane-1")).toBe("user-pty");
+
+    await dispose();
+  });
+
+  it("refuses when the pane holding the replaced PTY never takes focus, and still mounts nothing", async () => {
+    // The second refusal, and the one with teeth: the pane EXISTS, so the door
+    // gets past the lookup, but the workspace never commits the activation. The
+    // mount must not fall through into whichever pane the user is in — which is
+    // exactly what an unchecked `activateSession` would have done.
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "old-pty", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-1",
+      activatable: false,
+    });
+    floor = [...floor, { sessionId: "new-pty" }];
+    const { door, dispose } = await mountDeckWithDoor(store);
+
+    const outcome = await act(async () => door.mountLocal("new-pty", { replacing: "old-pty" }));
+
+    expect(outcome).toEqual({
+      state: "failed",
+      reason: "the pane showing the replaced terminal could not be activated",
+    });
+    expect(store.log.filter((entry) => entry.startsWith("mount:"))).toEqual([]);
+    expect(store.showing("pane-1"), "the replacement fell into the user's pane").toBe("user-pty");
+    expect(store.showing("pane-2")).toBe("old-pty");
+    // the user's own pane is handed back even on the refusal
+    expect(store.log.at(-1)).toBe("activate:user-pty");
+
+    await dispose();
+  });
+
+  it("serializes two replacements: the second activation waits for the first mount (AR-4b)", async () => {
+    // One fold frame can carry two resumed runs. Unserialized, the second
+    // activation lands between the first's activation and its mount — and the
+    // first replacement is then mounted into the SECOND's pane, because
+    // `mountSession` writes wherever the focus has got to.
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "old-a", cols: 100, rows: 30 } },
+        { id: "pane-3", session: { id: "old-b", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-1",
+    });
+    floor = [...floor, { sessionId: "new-a" }, { sessionId: "new-b" }];
+    const { door, dispose } = await mountDeckWithDoor(store);
+
+    // BOTH issued before either has done anything — the setup the ordering
+    // assertion below is about. Awaiting the first here would prove nothing:
+    // the test would be doing the serializing.
+    const first = door.mountLocal("new-a", { replacing: "old-a" });
+    const second = door.mountLocal("new-b", { replacing: "old-b" });
+    expect(store.log, "the door did work before it was awaited").toEqual([]);
+    const outcomes = await act(async () => Promise.all([first, second]));
+
+    expect(outcomes).toEqual([
+      { state: "mounted", sessionId: "new-a" },
+      { state: "mounted", sessionId: "new-b" },
+    ]);
+    // each replacement in its OWN pane — the property serialization protects
+    expect(store.showing("pane-2")).toBe("new-a");
+    expect(store.showing("pane-3")).toBe("new-b");
+    expect(store.showing("pane-1")).toBe("user-pty");
+    // …and the order says why: nothing of the second's happened until the
+    // first's mount had landed.
+    expect(store.log.indexOf("activate:old-b")).toBeGreaterThan(store.log.indexOf("mount:new-a"));
+    expect(store.log).toEqual([
+      "activate:old-a",
+      "mount:new-a",
+      "activate:user-pty",
+      "activate:old-b",
+      "mount:new-b",
+      "activate:user-pty",
+    ]);
+
+    await dispose();
+  });
+
+  it("mounts a plain session into the active pane, and refuses one the floor does not list", async () => {
+    // The other half of the door, and the control for the row below it: the
+    // same call with a session the floor HAS lands in the active pane, which is
+    // what makes the refusal a statement about the floor's answer rather than
+    // about a runtime that was never there.
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "other-pty", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-1",
+    });
+    floor = [...floor, { sessionId: "listed-pty" }];
+    const { door, dispose } = await mountDeckWithDoor(store);
+
+    expect(await act(async () => door.mountLocal("listed-pty"))).toEqual({
+      state: "mounted",
+      sessionId: "listed-pty",
+    });
+    expect(store.showing("pane-1")).toBe("listed-pty");
+    expect(store.showing("pane-2")).toBe("other-pty");
+
+    expect(await act(async () => door.mountLocal("never-born"))).toEqual({
+      state: "failed",
+      reason: "the floor does not list this session",
+    });
+    // the refusal is silent in the workspace: no pane changed hands
+    expect(store.log.filter((entry) => entry === "mount:never-born")).toEqual([]);
+    expect(store.showing("pane-1")).toBe("listed-pty");
+
+    await dispose();
   });
 });

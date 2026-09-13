@@ -716,6 +716,29 @@ export class ProductApi extends EventEmitter {
         return;
       }
     }
+    // D36 (enforced 2026-09-13, AR-4b): the registry's `locality` column is
+    // read here, not only declared. A `local` method is THIS device's: it is
+    // never served for a peer (a peer-fieldd principal calling it is refused
+    // outright, whatever scopes the tailnet preset grants) and never forwarded
+    // to one (a foreign `device` on it is refused before the forwarder). The
+    // gap this closes: every method declared local federated in fact, and the
+    // agent doors — a spawn, a resume that terminates a PTY — were the first
+    // declared local into it.
+    if (def.locality === "local" && state.ctx?.principal.kind === "peer-fieldd") {
+      reply(
+        this.err(
+          id,
+          "FORBIDDEN_SCOPE",
+          `${method} is local to its device; it does not federate`,
+          false,
+          {
+            method,
+            locality: def.locality,
+          },
+        ),
+      );
+      return;
+    }
     try {
       // C5/D35 — the `device?` convention: route AFTER the local scope check
       // (above), BEFORE execution. Own id strips and serves locally; a foreign
@@ -723,6 +746,22 @@ export class ProductApi extends EventEmitter {
       // federated proxy — same wire shape as a local subscription (subId +
       // <base>.delta/.snapshot frames), the payloads being the PEER's.
       const device = (params as { device?: unknown } | null | undefined)?.device;
+      if (
+        typeof device === "string" &&
+        def.locality === "local" &&
+        device !== this.ownDeviceId?.()
+      ) {
+        reply(
+          this.err(
+            id,
+            "PRECONDITION_FAILED",
+            `${method} is local to its device and rejects device routing`,
+            false,
+            { method, locality: def.locality },
+          ),
+        );
+        return;
+      }
       if (typeof device === "string" && SOURCE_LOCAL_ARTIFACT_METHODS.has(method)) {
         reply(
           this.err(

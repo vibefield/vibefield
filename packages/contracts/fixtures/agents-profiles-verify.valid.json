@@ -1,0 +1,14 @@
+{
+  "persona": {
+    "profileId": "9a3d1c2e-6b8f-4c1d-9e0a-2f3b4c5d6e7f",
+    "provider": "pi",
+    "label": "Research",
+    "kind": "managed",
+    "createdAt": "2026-09-12T17:58:00.000Z"
+  },
+  "failure": {
+    "status": "unsupported",
+    "message": "Pi exposes no credential-free identity document for 9a3d1c2e-6b8f-4c1d-9e0a-2f3b4c5d6e7f",
+    "retryable": false
+  }
+}

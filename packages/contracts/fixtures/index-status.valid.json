@@ -1,0 +1,61 @@
+{
+  "phase": "live",
+  "search": {
+    "reachable": true,
+    "capabilities": { "sessionScope": true, "prefix": true },
+    "canonicalReady": true,
+    "readiness": "ready",
+    "progress": { "done": 90411, "total": 90411 }
+  },
+  "rosettad": { "phase": "ready", "detail": null, "pid": 48112, "protocolVersion": 20 },
+  "enrollment": {
+    "enabledKinds": ["claude-code"],
+    "runtimes": [{ "kind": "claude-code", "label": "Kim", "profileId": "claude:9a3d" }],
+    "retired": [
+      {
+        "kind": "codex",
+        "label": "Reviewer",
+        "profileId": "codex:17bf",
+        "retiredAt": "2026-09-12T17:00:00.000Z"
+      }
+    ],
+    "updatedAt": "2026-09-12T17:05:00.000Z"
+  },
+  "runtimes": [
+    {
+      "runtimeId": "rt_5f0c9a2e1b7d4c3a",
+      "kind": "claude-code",
+      "provenance": "discovered",
+      "dataRoot": "~/.claude",
+      "watched": true,
+      "backfill": {
+        "state": "done",
+        "filesTotal": 1284,
+        "bytesTotal": 73400320,
+        "filesSkimmed": 1284,
+        "bytesStreamed": 73400320,
+        "sessionsTotal": 212,
+        "records": 90411
+      },
+      "live": { "events": 14, "liveRows": 31, "lastActivityMs": 1789232460000 }
+    },
+    {
+      "runtimeId": "rt_0b7e2c4d9a1f3e58",
+      "kind": "claude-code",
+      "provenance": "enrolled",
+      "label": "Kim",
+      "profileId": "claude:9a3d",
+      "watched": true,
+      "backfill": {
+        "state": "done",
+        "filesTotal": 0,
+        "bytesTotal": 0,
+        "filesSkimmed": 0,
+        "bytesStreamed": 0,
+        "sessionsTotal": 0,
+        "records": 0
+      },
+      "live": { "events": 0, "liveRows": 0, "lastActivityMs": null }
+    }
+  ]
+}

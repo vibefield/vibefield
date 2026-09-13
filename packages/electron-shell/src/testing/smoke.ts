@@ -1826,9 +1826,15 @@ interface MonitorFacts {
   viewId: string;
   agents: number;
   agentBacked: number;
-  mockLabel: string;
-  /** GT-4: the split, counted — how many rows each source contributed. */
-  mockAgents: number;
+  /** AR-3: the local chip's sentence, null with no managed agents. */
+  localClaim: string | null;
+  /** The split, counted — how many rows each source contributed. */
+  localAgents: number;
+  terminals: number;
+  /** `no-door` · `live` · `unavailable`; `live` is what makes an empty fold
+   * distinguishable from a fold nobody asked. */
+  localState: string;
+  localReason?: string;
   remoteSessions: number;
   remoteHosts: number;
   /** `no-door` · `serving` · `unavailable`; the second is what makes an empty
@@ -1836,6 +1842,12 @@ interface MonitorFacts {
   remoteState: string;
   remoteReason?: string;
   swarmPhysics: string;
+  /** AR-5: `webgpu` · `unavailable` · `starting`; `none` off the swarm view. */
+  swarmRenderer: string;
+  /** AR-5: the usage column's tiles; -1 while no column is mounted. */
+  usageTiles: number;
+  /** AR-5: `open` · `closed`. */
+  findSheet: string;
 }
 
 /** A running tail of one marker channel, armed BEFORE the load so a fast page
@@ -2517,7 +2529,7 @@ async function readMonitorAck(win: BrowserWindow): Promise<string> {
   )) as string;
 }
 
-/** GT-D13's disclosure, as a person can read it: the words in the mock chip
+/** AR-3's claim, as a person can read it: the words in the local chip
  * ELEMENT, and whether it is actually on screen.
  *
  * The stage's own marker carries the same sentence, but it carries the pure
@@ -2529,13 +2541,13 @@ async function readMonitorAck(win: BrowserWindow): Promise<string> {
  *
  * Polled for `readMonitorAck`'s reason and `clickDeckButton`'s: a marker says
  * what the stage WAS when it published, and a chip can still be a render away. */
-async function readMonitorMockChip(win: BrowserWindow, timeoutMs: number): Promise<string> {
+async function readMonitorLocalChip(win: BrowserWindow, timeoutMs: number): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   let seen = "";
   while (Date.now() < deadline) {
     seen = (await win.webContents.executeJavaScript(
       `(() => {
-        const chip = document.querySelector(".vf-monitor-mock-chip");
+        const chip = document.querySelector(".vf-monitor-local-chip");
         if (!chip) return "";
         const box = chip.getBoundingClientRect();
         // On screen at a readable size, or it is not a disclosure. A zero-box
@@ -2802,7 +2814,7 @@ export async function runSmokeGodview(opts: {
     }
 
     // 1b. THE MONITOR ROW (GT-3m). The stage above the deck, on the registry's
-    //     default view, with the mock field on it and WEARING ITS LABEL.
+    //     default view, with the fold's rows and the deck's panes on it.
     //
     //     The label is the assertion that earns this row. Everything the monitor
     //     draws is invented, and GT-D13 makes saying so a law rather than a
@@ -2810,7 +2822,20 @@ export async function runSmokeGodview(opts: {
     //     would for a pane that lied about its shell. The other two facts are
     //     structure, not pixels: which view mounted, and that it has rows. What
     //     it LOOKS like is James's eye, as with the glass.
-    const monitor = JSON.parse(await monitorLine) as MonitorFacts;
+    const firstMonitor = JSON.parse(await monitorLine) as MonitorFacts;
+    // AR-3: the stage's FIRST frame is empty by construction — the door, the
+    // fold's snapshot and the deck's pane facts all arrive after the mount —
+    // so this row waits for the field to settle: the fold live, and the deck's
+    // own pane on the stage as a row. What used to be the mock's tick-0 frame
+    // is now an honest empty field for a few frames, and asserting rows on it
+    // would be asserting on the wrong instant.
+    const monitor = await monitorWatch
+      .until(
+        (facts) => facts.localState === "live" && facts.agents > 0,
+        "the monitor's field to settle (fold live, the deck's pane on the stage)",
+        20_000,
+      )
+      .catch(() => monitorWatch.current() ?? firstMonitor);
     verdict["monitorView"] = monitor.viewId;
     verdict["monitorAgents"] = monitor.agents;
     verdict["swarmPhysics"] = monitor.swarmPhysics;
@@ -2820,32 +2845,43 @@ export async function runSmokeGodview(opts: {
     if (!(monitor.agents > 0)) {
       throw new Error("the monitor stage mounted with no agents on it");
     }
-    // The disclosure is read OFF THE SCREEN, not off the marker.
-    //
-    // The marker's `mockLabel` is the pure function's return value, and the law
-    // GT-D13 states is about what a person can read — so a chip deleted from
-    // the DOM, or moved off-screen, or rendered empty, left the marker saying
-    // the right sentence while the stage said nothing at all. `readMonitorAck`
-    // already had this right for the acknowledgement; this is the same reading
-    // for the label beside it, and the marker becomes the corroboration rather
-    // than the evidence.
-    const mockChip = await readMonitorMockChip(win, 20_000);
-    verdict["monitorMockChip"] = mockChip;
-    verdict["monitorMockLabel"] = monitor.mockLabel;
-    if (!mockChip.includes("mock")) {
+    // AR-3: the local half of the field is fieldd's fold, and it must be
+    // READABLE — `unavailable` here is the honest-states law firing (the window
+    // token lacks agent.observe, the daemon refused) and a red row, never a
+    // quiet empty stage. `live` with zero managed agents is the ordinary state
+    // of a fresh smoke: the rows on the stage are the deck's own panes.
+    verdict["monitorLocalState"] = monitor.localState;
+    verdict["monitorLocalAgents"] = monitor.localAgents;
+    verdict["monitorTerminals"] = monitor.terminals;
+    if (monitor.localState !== "live") {
       throw new Error(
-        `the monitor is showing ${monitor.agents} invented agents without saying so on screen (chip: ${JSON.stringify(mockChip)}, marker said: ${JSON.stringify(monitor.mockLabel)})`,
+        `the monitor's local field is ${JSON.stringify(monitor.localState)} (${monitor.localReason ?? "no reason"}) — fieldd's fold could not be read`,
       );
     }
-    // GT-4: the label's claim must also be SCOPED once real rows join it —
-    // "these are mock" over a real remote session is the lie GT-D17 forbids.
-    // With no peer serving there is nothing to scope and the whole-stage
-    // sentence is correct, which is why this row reads the counts and not a
-    // fixed string.
-    if (monitor.remoteSessions > 0 && !/\d/.test(mockChip)) {
+    // The claim is read OFF THE SCREEN, not off the marker: a chip deleted
+    // from the DOM, or moved off-screen, or rendered empty, would leave the
+    // marker saying the right sentence while the stage said nothing at all.
+    // With no managed agents the chip is ABSENT, and that is the law too —
+    // quiet is the honesty when there are no facts.
+    const localChip = await readMonitorLocalChip(win, 2_000);
+    verdict["monitorLocalChip"] = localChip;
+    verdict["monitorLocalClaim"] = monitor.localClaim;
+    if (monitor.localAgents > 0 && !localChip.includes("managed")) {
       throw new Error(
-        `${monitor.remoteSessions} real remote session(s) are sitting under an unscoped mock label: ${JSON.stringify(mockChip)}`,
+        `the monitor is showing ${monitor.localAgents} managed agents without saying so on screen (chip: ${JSON.stringify(localChip)}, marker said: ${JSON.stringify(monitor.localClaim)})`,
       );
+    }
+    if (monitor.localAgents === 0 && localChip !== "") {
+      throw new Error(
+        `the monitor claims agents it does not have (chip: ${JSON.stringify(localChip)})`,
+      );
+    }
+    // GT-D13's mock is GONE (AR-3): the word must be absent from the stage.
+    const stageText = (await win.webContents.executeJavaScript(
+      `(document.querySelector(".vf-godview-monitor-stage")?.textContent ?? "").toLowerCase()`,
+    )) as string;
+    if (stageText.includes("mock")) {
+      throw new Error('the monitor stage still says "mock" — the invented field is back');
     }
     // GT-3c: the substrate, pinned. The swarm's physics has an honest fallback
     // for a renderer that cannot start a worker (a fixture under happy-dom is
@@ -2857,6 +2893,106 @@ export async function runSmokeGodview(opts: {
         `the swarm is simulating "${monitor.swarmPhysics}", not in its worker — GT-D16's whole point is that this runs off the main thread`,
       );
     }
+    // AR-5: what the swarm PAINTED with. WebGPU is a fact of this host's GPU,
+    // not of the slice, so both answers are accepted — but the unavailable one
+    // must be SAID on the stage (the honest-states law), and a stage still
+    // "starting" after the field settled is a renderer that never answered.
+    const painted = await monitorWatch
+      .until(
+        (facts) => facts.swarmRenderer === "webgpu" || facts.swarmRenderer === "unavailable",
+        "the swarm's renderer to answer (webgpu or the honest unavailable line)",
+        10_000,
+      )
+      .catch(() => monitorWatch.current() ?? monitor);
+    verdict["swarmRenderer"] = painted.swarmRenderer;
+    if (painted.swarmRenderer !== "webgpu" && painted.swarmRenderer !== "unavailable") {
+      throw new Error(
+        `the swarm's renderer never answered — the marker says ${JSON.stringify(painted.swarmRenderer)}`,
+      );
+    }
+    if (painted.swarmRenderer === "unavailable") {
+      const said = (await win.webContents.executeJavaScript(
+        `(document.querySelector(".vf-monitor-swarm [data-swarm-renderer='unavailable']")?.textContent ?? "").toUpperCase()`,
+      )) as string;
+      if (!said.includes("WEBGPU")) {
+        throw new Error("the swarm has no WebGPU here and the stage does not say so");
+      }
+    }
+    // AR-5: the usage column is MOUNTED in the stage's chrome slot and the
+    // marker counts its tiles. The count is reported, not judged: a fresh
+    // daemon's batch is whatever accounts its providers know, and zero of
+    // them is an honest answer. What is asserted is that the column exists —
+    // a slot that rendered nothing would leave the marker at -1.
+    const usageFacts = await monitorWatch
+      .until(
+        (facts) => facts.usageTiles >= 0,
+        "the usage column to mount in the chrome slot",
+        10_000,
+      )
+      .catch(() => monitorWatch.current() ?? painted);
+    verdict["usageTiles"] = usageFacts.usageTiles;
+    const usageColumnMounted = (await win.webContents.executeJavaScript(
+      `document.querySelector(".vf-godview-monitor-stage .vf-usage-column") !== null`,
+    )) as boolean;
+    verdict["usageColumnMounted"] = usageColumnMounted;
+    if (!usageColumnMounted || usageFacts.usageTiles < 0) {
+      throw new Error(
+        `the usage column is not on the stage (marker: ${usageFacts.usageTiles} tiles, DOM: ${usageColumnMounted})`,
+      );
+    }
+    // AR-5 (D6): ⌘F summons the find sheet over the stage, Escape dismisses it.
+    // The chord is pressed the way the zoom chord is — into Chromium's input
+    // pipeline, never OS injection — and both edges are read off the marker,
+    // with the sheet's own element checked while it says open. Focus is read
+    // before and after: the sheet takes it on open, and a sheet that kept it
+    // on close would leave the user's cursor nowhere — which the very next
+    // row (typing into the pane) would then fail on for the wrong reason.
+    const focusBeforeFind = await focusReport(win);
+    pressChord(win, "f");
+    const findOpened = await monitorWatch.until(
+      (facts) => facts.findSheet === "open",
+      "the find sheet to open on ⌘F",
+      10_000,
+    );
+    verdict["findSheet"] = findOpened.findSheet;
+    const findSheetMounted = (await win.webContents.executeJavaScript(
+      `document.querySelector("#vf-find-sheet") !== null`,
+    )) as boolean;
+    if (!findSheetMounted) {
+      throw new Error("the marker says the find sheet is open and the DOM has no sheet");
+    }
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+    const findClosed = await monitorWatch.until(
+      (facts) => facts.findSheet === "closed",
+      "the find sheet to close on Escape",
+      10_000,
+    );
+    verdict["findSheetAfterEscape"] = findClosed.findSheet;
+    const focusAfterFind = await focusReport(win);
+    verdict["focusAroundFind"] = `${focusBeforeFind} → ${focusAfterFind}`;
+    if (focusAfterFind !== focusBeforeFind) {
+      throw new Error(
+        `the find sheet did not give focus back (before ⌘F: ${focusBeforeFind}; after Escape: ${focusAfterFind})`,
+      );
+    }
+    // Focus is necessary, not sufficient. The pane's input is a routed
+    // activation that reopens when focus returns, and a line typed into that
+    // window is delivered in PART — the head suppressed, the tail run. Seen
+    // twice before this row existed: an empty `$0` answer, then an answer
+    // file that never appeared while its marker did. So the row also proves
+    // the pane is typeable again, with the helper that retypes a whole line
+    // until its marker lands — the wait a person never notices at a keyboard
+    // and a harness typing at 3 ms a key has to make explicit.
+    const typeableMarker = `godview-${Math.random().toString(36).slice(2, 10)}`;
+    const typeablePath = join(scratch, "after-find.marker");
+    await typeLineUntilMarker(
+      win,
+      `echo ${typeableMarker} > ${typeablePath}`,
+      typeablePath,
+      typeableMarker,
+    );
+    verdict["paneTypeableAfterFind"] = true;
 
     // The pane is a FLOOR session, not a renderer's idea of one.
     const afterOpen = await untilFloor(
@@ -3739,50 +3875,52 @@ export async function runSmokeGodview(opts: {
     // active pane is showing, and every row above asserts about the sessions
     // this deck was holding. Nothing below them asserts anything.
     //
-    // 13a. THE SPLIT-HONESTY ROW, and it runs on every machine: a mock agent
-    //      still mounts NOTHING. The monitor now has a real door beside it, so
-    //      "the stage holds no runtime" stopped being the structural guarantee
-    //      it was at GT-3m — this row is what replaces that guarantee with a
-    //      measurement.
+    // 13a. THE LOCAL-ROUTING ROW (AR-3 — GT-4's split-honesty row, re-fed):
+    //      a LOCAL bubble is one of the deck's own panes (no managed agent runs
+    //      in a smoke), and selecting it goes through the door's local verb —
+    //      mount in the active pane. The pane it names IS the active pane, so
+    //      the stage acknowledges that in words and the deck does not move.
     //
     //      The claim is asserted two ways, and NEITHER is "the pane ids did not
-    //      change" — the first draft of this row said that and failed twice on
-    //      a truth about the deck rather than about the click: the pane whose
-    //      session row 10 killed rehydrates into a fresh shell some seconds
-    //      after the recovery above reports, and the id it replaces is exactly
-    //      `killedSession`. What holds regardless:
+    //      change" — the first draft of GT-4's row said that and failed twice
+    //      on a truth about the deck rather than about the click: the pane
+    //      whose session row 10 killed rehydrates into a fresh shell some
+    //      seconds after the recovery above reports, and the id it replaces is
+    //      exactly `killedSession`. What holds regardless:
     //
     //        · the pane COUNT is unchanged (a mount that split would raise it)
     //        · every pane holds a session THE FLOOR KNOWS
-    //
-    //      The second is the one that means what this row is about. The mock's
-    //      sessions are inventions — they exist in a seeded generator and
-    //      nowhere else — so an invented row reaching a pane could only ever
-    //      put an id there that `terminal.list` has never heard of, and the
-    //      rehydrated shell (a real floor session) passes it untouched.
-    const beforeMockClick = await deckSettled(deck, 2_000, 60_000);
-    const mockClicked = await clickMonitorBubble(win, ".vf-monitor-bubble:not(.is-remote)");
-    verdict["mockBubbleClicked"] = mockClicked;
+    const beforeLocalClick = await deckSettled(deck, 2_000, 60_000);
+    // AR-5: the swarm's bodies are drawn on a canvas; each has a button in
+    // the swarm's list (the package's reachability rule), which is what a
+    // click lands on here. `data-agent-bubble-source` names the row's kind.
+    const localClicked = await clickMonitorBubble(
+      win,
+      '.vf-monitor-swarm-list button:not([data-agent-bubble-source="remote"])',
+    );
+    verdict["localBubbleClicked"] = localClicked;
     // Quiescence, not a stopwatch. The BEFORE of this comparison already waits
     // for the deck to stop moving and for exactly the right reason (the pane
     // the kill row ended rehydrates seconds later, on the machine's schedule
     // and not ours) — so an AFTER read off a fixed 1.5s sleep was sampling
-    // into the same window the BEFORE was written to avoid. If a mock click
-    // DID mount something, the deck moves and this waits for it to finish
+    // into the same window the BEFORE was written to avoid. If a local click
+    // DID mount something new, the deck moves and this waits for it to finish
     // moving; the assertions below then read a settled deck either way.
-    const afterMockClick = await deckSettled(deck, 1_500, 45_000);
-    const mockAck = await readMonitorAck(win);
-    verdict["mockAck"] = mockAck;
-    // The words a person would have read. GT-D13 makes the acknowledgement the
-    // mock's whole answer, so a silent mock is as wrong as a mounting one.
-    if (!mockAck.includes("nothing was mounted")) {
+    const afterLocalClick = await deckSettled(deck, 1_500, 45_000);
+    const localAck = await readMonitorAck(win);
+    verdict["localAck"] = localAck;
+    // The words a person would have read: the row is the active pane's own
+    // session, so the stage says it is there — or, if the click landed on
+    // another pane's session, that it was mounted. Either is the door's local
+    // verb answering; silence is the failure.
+    if (!localAck.includes("active pane")) {
       throw new Error(
-        `the preview acknowledged a mock selection without saying nothing was mounted: ${JSON.stringify(mockAck)}`,
+        `selecting a local row did not answer through the door's local verb: ${JSON.stringify(localAck)}`,
       );
     }
-    if (afterMockClick.panes !== beforeMockClick.panes) {
+    if (afterLocalClick.panes !== beforeLocalClick.panes) {
       throw new Error(
-        `clicking an invented agent changed the deck's shape (${beforeMockClick.panes} → ${afterMockClick.panes} panes)`,
+        `selecting a local row changed the deck's shape (${beforeLocalClick.panes} → ${afterLocalClick.panes} panes)`,
       );
     }
     // The killed session is excluded EXPLICITLY, for a different reason than
@@ -3791,18 +3929,18 @@ export async function runSmokeGodview(opts: {
     // exited face follows a deliberate local kill — row 10 says so in its
     // verdict) while the floor lists that id `exited`. The liveness check
     // below demands `exited !== true`, so that id is carved out. Everything
-    // else — and above all anything a mock click could have invented — must
+    // else — and above all anything a local click could have invented — must
     // be floor-known and alive.
-    const paneSessions = afterMockClick.sessionIds.filter((id) => id !== killTarget);
+    const paneSessions = afterLocalClick.sessionIds.filter((id) => id !== killTarget);
     await untilFloor(
       opts.handle,
       (terminals) =>
         paneSessions.every((id) => terminals.some((t) => t.sessionId === id && t.exited !== true)),
-      `list every session the deck's panes hold after a mock click (${JSON.stringify(paneSessions)}) — an invented agent that mounted would put an id here the floor never created`,
+      `list every session the deck's panes hold after a local click (${JSON.stringify(paneSessions)}) — a row that mounted would put an id here the floor never created`,
       20_000,
     );
-    verdict["mockMountsNothing"] = true;
-    verdict["mockPaneSessions"] = paneSessions.length;
+    verdict["localRoutingHeld"] = true;
+    verdict["localPaneSessions"] = paneSessions.length;
 
     // 13b. THE DOOR ROW. A peer's session is a bubble in the swarm, and
     //      CLICKING it attaches the active pane to it — no palette anywhere in
@@ -3826,7 +3964,10 @@ export async function runSmokeGodview(opts: {
       verdict["remotePeer"] = "available";
       const beforeAttach = deck.current();
       if (beforeAttach === null) throw new Error("the deck said nothing before the attach");
-      const attachedLabel = await clickMonitorBubble(win, ".vf-monitor-bubble.is-remote");
+      const attachedLabel = await clickMonitorBubble(
+        win,
+        '.vf-monitor-swarm-list button[data-agent-bubble-source="remote"]',
+      );
       verdict["remoteBubbleClicked"] = attachedLabel;
       const attached = await deck.until(
         (facts) =>

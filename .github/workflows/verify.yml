@@ -1,10 +1,12 @@
 # THE gate (CLAUDE.md "Commands"): `pnpm verify`, run VERBATIM. macOS runner so CI
 # mirrors the dev machine (darwin) exactly — the desktop/Electron tests and the
 # @vibecook/truffle-sidecar-darwin-* bits are native; green here must mean green there.
-# The repo builds standalone since 2026-07-28: truffle-core is an exact crates-io pin
-# (`=` version in the root Cargo.toml), so the sibling-checkout clone step retired with the T1 petition
-# window — the same graduation @vibecook/ice made on 2026-07-25 (exact npm pin 0.2.0).
-# EL8 still holds: both pins move only as deliberate upgrade events.
+# AR-0 SIBLING MODE (2026-09-12): this repo consumes TWO sibling checkouts again —
+# ../puppeteer (the agent runtime; its packages are `link:` rows) and ../rosetta (agent
+# history; its TS client is a `link:` row and `rosettad` is built from its source) — both
+# pinned by revision in siblings.lock.json. EL8: the pins move only as deliberate upgrade
+# events, and preflight hard-fails when a checkout does not match the lock. The clone step
+# below is the truffle-era step (retired 7fcdfd2c) revived for two PRIVATE repos.
 name: verify
 
 on:
@@ -26,6 +28,37 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      # The sibling checkouts, at the EXACT pinned SHAs, in the relative locations the
+      # lock names (preflight resolves ../puppeteer and ../rosetta from siblings.lock.json).
+      # Both repos are private under the same org, so a plain clone needs a read token:
+      # SIBLINGS_TOKEN is a fine-grained PAT with Contents:read on vibefield/puppeteer and
+      # vibefield/rosetta. Missing token ⇒ this step FAILS with the reason, never a silent
+      # skip — a verify that ran without the siblings would be a verify of a different tree.
+      # Fresh detached checkouts are clean and at the pin, so preflight's revision + dirty
+      # checks both pass. No shallow clone: a pin may sit behind the branch tip.
+      #
+      # puppeteer's own install happens below, AFTER this tree's (it needs pnpm from the
+      # packageManager field): since AR-2 fieldd imports puppeteer, so the linked packages'
+      # own dependencies must exist under ../puppeteer/node_modules.
+      - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
+        env:
+          SIBLINGS_TOKEN: ${{ secrets.SIBLINGS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SIBLINGS_TOKEN:-}" ]; then
+            echo "::error::SIBLINGS_TOKEN is not set — sibling mode needs a read token for vibefield/puppeteer and vibefield/rosetta (repo Settings → Secrets)"
+            exit 1
+          fi
+          for name in puppeteer rosetta; do
+            sha=$(jq -r ".siblings.${name}.sha" siblings.lock.json)
+            path=$(jq -r ".siblings.${name}.path" siblings.lock.json)
+            git clone --no-tags "https://x-access-token:${SIBLINGS_TOKEN}@github.com/vibefield/${name}.git" "$path"
+            # the token must not persist in the checkout's .git/config for the rest of the job
+            git -C "$path" remote set-url origin "https://github.com/vibefield/${name}.git"
+            git -C "$path" checkout --detach "$sha"
+            echo "${name} @ ${sha} → ${path}"
+          done
 
       # pnpm pinned from the packageManager field (pnpm@11.13.1); node from .nvmrc.
       - uses: pnpm/action-setup@v4
@@ -50,13 +83,46 @@ jobs:
       - if: steps.typify.outputs.cache-hit != 'true'
         run: cargo install cargo-typify --version 0.7.0 --locked
 
-      # Registry/git/target cache for the Rust build (field-native + truffle-core source).
+      # Registry/git/target cache for the Rust builds: field-native (+ truffle-core source)
+      # here, and the rosetta sibling's rosettad (its own workspace, its own target dir).
       # cache-bin off: the typify binary is owned by the dedicated cache step above.
       - uses: Swatinem/rust-cache@v2
         with:
           cache-bin: "false"
+          workspaces: |
+            . -> target
+            ../rosetta -> target
 
       - run: pnpm install --frozen-lockfile
+
+      # AR-2 — the puppeteer sibling's OWN dependencies (zod 4, the ACP SDK, node-pty for the
+      # adapters), for exactly the packages fieldd's graph reaches: a FILTERED, frozen install.
+      # The godview app — the only consumer of puppeteer's temporary ghosttea
+      # `link:../electron-ghostty` override block (thinking-ar-agent-plane.md, ask PU-6) — is
+      # never selected, so a clean room without ../electron-ghostty installs. Witnessed
+      # 2026-09-12 in a fresh clone at the pin with no sibling beside it: 19 of 24 projects,
+      # exit 0. PU-6 upstream would let a plain install work too; it is no longer a gate.
+      - name: Install the puppeteer sibling's packages (filtered, frozen)
+        run: |
+          pnpm --dir ../puppeteer install --frozen-lockfile \
+            --filter "@vibecook/puppeteer-builtin-providers..." \
+            --filter "@vibecook/puppeteer-record" \
+            --filter "@vibecook/puppeteer-monitor" \
+            --filter "@vibecook/puppeteer-views..."
+
+      # rosettad from the pinned sibling (rustup picks its rust-toolchain.toml). The fieldd
+      # supervisor's kill matrix runs against a scripted daemon in every gate; the one row
+      # against the REAL binary is opt-in through FIELDD_ROSETTAD_BIN, and CI opts in.
+      - name: Build rosettad from the rosetta sibling
+        run: pnpm siblings:build
+      - name: Name the built rosettad for the live supervisor rows
+        # `set -e` + a separate assignment: a `bin` that fails (not built) fails THIS step,
+        # rather than exporting an empty value that would silently skip the live rows.
+        run: |
+          set -euo pipefail
+          bin=$(node scripts/siblings.mjs bin)
+          test -x "$bin"
+          echo "FIELDD_ROSETTAD_BIN=$bin" >> "$GITHUB_ENV"
 
       # THE gate, verbatim: preflight -> typecheck -> biome -> rustfmt/clippy -> TS+Rust tests -> gen freshness.
       - run: pnpm verify

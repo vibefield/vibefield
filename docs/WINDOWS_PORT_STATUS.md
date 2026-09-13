@@ -267,6 +267,34 @@ tarball protocol — the box clone is still not a git checkout). Results, in gat
   `git archive`, or `COPYFILE_DISABLE=1 tar …`, or delete `._*` after extraction. (vf-probe still
   carries such twins from earlier rounds; harmless there, but don't copy them into a live tree.)
 
+## SNAP-4 — the Windows screenshot helper is owed a box round (added 2026-09-09)
+
+SNAP-0 ported the `research/screenshot2` prototype's Rust helper to
+`apps/desktop/native/windows/screenshot-helper/` — its OWN cargo workspace root (SNAP-D7; the
+root `Cargo.toml` excludes it), so the mac `cargo test --workspace` never sees it. What the mac
+CAN witness and did: `cargo fmt --check`, `cargo check --target x86_64-pc-windows-msvc`, and
+`cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings` (the build script skips
+the winres manifest embedding when the HOST is not Windows, which is what makes the cross-check
+possible). What only this box can witness, in gate order:
+
+- `cargo test` inside the crate — the protocol/geometry/annotate unit tests, including
+  `contract_fixtures_decode` over `packages/contracts/fixtures/screenshot-helper-event.*.json`
+  (the same files zod and the Swift harness parse — EL9 in three languages);
+- `cargo clippy --all-targets -- -D warnings` natively;
+- `pnpm --filter @vibefield/desktop build:screenshot-helper` (copies the release exe to
+  `apps/desktop/build/native/windows/`), then `verify:screenshot-helper` (a real
+  `--capture-test`: a PNG per monitor, one `ok` line) — over RDP the capture chain lands on GDI,
+  which is fine for the witness but says nothing about WGC on the console;
+- `field-screenshot-helper.exe --overlay-smoke` / `--overlay-smoke cancel` / `--overlay-smoke snap`
+  (the CI overlay: auto-confirm a 200×120 rect, cancel, snap to the frontmost window) — on the
+  physical console, not RDP, and only with James's display handed over: it is a full-screen
+  overlay.
+
+The stager already carries the win32 entry (`bin/field-screenshot-helper.exe`, optional) and the
+shell resolves `apps/desktop/build/native/windows/field-screenshot-helper.exe` in development.
+Expect the usual 3–5 rounds; grep the crate for `/tmp`, `is_absolute` and unix-isms first — it
+has none today because it never ran anywhere but Windows.
+
 ## Handoff to a Windows agent — what James must do
 
 1. **Push `main`** so the Windows clone has the ~15 WIN commits + this doc (they are all unpushed).

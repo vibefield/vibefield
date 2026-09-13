@@ -1,0 +1,24 @@
+#!/bin/sh
+# AR-2 test fixture: an executable the claude adapter classifies as Claude Code
+# from its version banner (the vendor's `--version` grammar, `x.y.z (Claude
+# Code)`), placed on a PRIVATE search path so the install inventory finds it
+# and nothing of the developer's. `update` is the vendor's own updater as the
+# adapter's recipe invokes it for a standalone binary: it exits 0 and changes
+# nothing, so a re-inspection reads the same version — "already-current".
+# AR-3: `auth login` is the interactive login the persona login pane runs (it
+# returns at once, so the pane ends and the persona is verified); `auth status
+# --json` is the identity surface the adapter reads afterwards (the documented
+# `loggedIn` boolean and the fields beside it, as probed on Claude Code 2.1).
+case "$1" in
+  --version) echo "2.1.0 (Claude Code)" ;;
+  update) echo "fake claude: nothing to update" ;;
+  auth)
+    case "$2" in
+      login) echo "fake claude: logged in" ;;
+      status) echo '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"persona@example.test","orgName":"Example Org","subscriptionType":"max"}' ;;
+      *) : ;;
+    esac
+    ;;
+  *) : ;;
+esac
+exit 0

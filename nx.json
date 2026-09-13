@@ -16,6 +16,12 @@
         "runtime": "pnpm --version"
       }
     ],
+    "siblings": [
+      "{workspaceRoot}/siblings.lock.json",
+      {
+        "runtime": "node scripts/siblings.mjs stamp"
+      }
+    ],
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": [
       "default",

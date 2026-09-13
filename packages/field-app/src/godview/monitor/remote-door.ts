@@ -1,29 +1,101 @@
 import type { RemoteHostSummary, SharedSessionSummary } from "@vibecook/ghosttea-protocol";
+import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
+import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
 
 /**
- * THE DOOR (GT-D17). The whole of what the monitor may reach outside itself.
+ * THE DOOR (GT-D17, widened at AR-3). The whole of what the monitor may reach
+ * outside itself.
  *
  * GT-D13 says a view is a pure function of `{agents, parameters, actions}` and
- * never touches the runtime, the workspace, or a terminal. GT-D17 then asks the
- * monitor to do two things that live entirely on the other side of that line:
- * list the mesh's sessions, and mount one in the active pane. This interface is
- * how both happen without moving the line — it is BUILT in `GodviewDeck`, where
- * the runtime and the workspace are already in scope, and only the two verbs
- * travel. The views still see actions; the source still sees a promise.
+ * never touches the runtime, the workspace, fieldd, or a terminal. GT-D17 then
+ * asked the monitor to do two things that live entirely on the other side of
+ * that line: list the mesh's sessions, and mount one in the active pane. AR-3
+ * asks four more of the same shape — read fieldd's fold, list what one can
+ * spawn as, spawn an agent into the active pane, mount a local session there.
+ * This interface is how all of it happens without moving the line — it is
+ * BUILT in `GodviewDeck`, where the runtime, the workspace and the fieldd
+ * client are already in scope, and only the verbs travel. The views still see
+ * actions; the source still sees promises.
  *
- * Two verbs and no nouns is the point. Nothing here hands out a runtime, a
+ * Verbs and no nouns is the point. Nothing here hands out a runtime, a
  * workspace context, a session object, or a client — so no view can grow a
  * second session authority (GT-D10) by reaching one field further than it
- * should. If a third verb is ever needed it is a deliberate widening of this
- * file, which is exactly the review this deserves.
+ * should. Widening this file is deliberate each time, and reviewed as such:
+ * AR-3 is the second widening, and it is the one GT-D17 named as coming.
  */
-export interface RemoteSessionDoor {
+export interface MonitorDoor {
   /** The mesh as the floor currently sees it. Rejects when the floor cannot be
    * asked at all — which the field renders as UNAVAILABLE, never as emptiness. */
   listHosts(): Promise<readonly RemoteHostSummary[]>;
   /** Open the peer's session and mount it in the ACTIVE pane. */
   attach(request: RemoteAttachRequest): Promise<RemoteAttachOutcome>;
+  /**
+   * AR-3 — fieldd's fold (`agent.subscribe`): a snapshot, then full frames.
+   * Returns the dispose. `onFrame` receives every frame the daemon sends
+   * (state transfer, never edges); `onError` the reason the subscription could
+   * not be opened or was lost — the field renders that as UNAVAILABLE.
+   */
+  observe(listener: LocalFieldListener): () => void;
+  /** AR-3 — what one can spawn as on this device (`agent.providers`). */
+  providers(): Promise<readonly AgentProviderSummary[]>;
+  /** AR-3 — spawn an agent in a PTY on the floor and mount it in the ACTIVE
+   * pane (`agent.spawn`, then the create ticket the answer carries). */
+  spawn(request: LocalSpawnRequest): Promise<LocalSpawnOutcome>;
+  /** AR-3 — mount a LOCAL floor session (a managed agent's PTY, an unclaimed
+   * terminal) in the ACTIVE pane. AR-4 — with `replacing`, in the pane that
+   * is showing the PTY the session took the place of. */
+  mountLocal(sessionId: string, options?: LocalMountOptions): Promise<LocalMountOutcome>;
+  /** AR-5 — the transcript history the find sheet asks (`index.status` /
+   * `index.sessions` / `index.search`), adapted to the views' port. The views
+   * never dial rosettad (AR-D14): the daemon's origin stays in fieldd. */
+  history: HistoryPort;
+  /** AR-5 — the account-usage readings the usage column draws
+   * (`agents.usage` + its subscription), adapted to the views' port. */
+  usage: AccountUsagePort;
 }
+
+/** AR-4 — a mount that takes a PTY's place: the run was resumed into a new
+ * PTY (the fold's row names the old one under `terminal.replaced`), and the
+ * pane that holds the old one is handed the new one rather than the active
+ * pane. Ignored when no pane shows `replacing`. */
+export interface LocalMountOptions {
+  replacing?: string;
+}
+
+/** The name GT-4 gave the two-verb door; kept for the call sites that only
+ * ever asked it about the mesh. */
+export type RemoteSessionDoor = MonitorDoor;
+
+export interface LocalFieldListener {
+  onFrame(rows: readonly AgentSessionSummary[]): void;
+  onError(reason: string): void;
+}
+
+export interface LocalSpawnRequest {
+  /** puppeteer's provider id, from the chrome's own list */
+  provider: string;
+  /** a persona (`agents.profiles.*`); absent = the provider's native default */
+  profileId?: string;
+}
+
+/**
+ * What a spawn actually did, in the vocabulary the stage says out loud.
+ *
+ * `no-pane` is a real outcome and not an error: the agent is born INTO the pane
+ * the user is in (GT-D17's law for attach, kept for births), so a deck with
+ * every pane closed has nowhere to put one and is told so before anything is
+ * spawned. `failed` carries fieldd's own words — a floor with no agent cell, a
+ * provider with no install, the session cap.
+ */
+export type LocalSpawnOutcome =
+  | { state: "spawned"; sessionId: string; runtimeRunId: string; label: string }
+  | { state: "no-pane" }
+  | { state: "failed"; reason: string };
+
+export type LocalMountOutcome =
+  | { state: "mounted"; sessionId: string }
+  | { state: "no-pane" }
+  | { state: "failed"; reason: string };
 
 export interface RemoteAttachRequest {
   deviceId: string;

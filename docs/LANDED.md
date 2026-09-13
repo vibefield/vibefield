@@ -4760,6 +4760,1161 @@ first gate run re-ran green 3× in isolation — the known suite-concurrency cla
 **Still James's:** the dev-mode eyeball on real hardware GL, where none of the smoke's
 lotteries exist.
 
+## SNAP-0 — the screenshot helper comes home: one line protocol, two native helpers, one door
+
+2026-09-09, `46c0c190`. James: "port this tool prototype properly into our vibefield project
+as a tool our electron app can use in the future, follow our coding convention and quality
+here, plan and land it solid." The prototype is `research/screenshot2` ("Deskline", three
+commits on 2026-08-18): a WeChat-style native screenshot — every display captured BEFORE any
+overlay exists, then a borderless overlay per display above the screensaver level with window
+snap, a 21× loupe, eight handles and five marks; Enter copies PNG(+TIFF/DIB) and prints one
+JSON line. Swift/AppKit on macOS (ScreenCaptureKit stills, `swiftc` from the CLT, ad-hoc
+signed `.app` because TCC keys on the bundle), Rust/Win32 on Windows (WGC → DXGI → GDI,
+PerMonitorV2, a Direct2D/GDI overlay), and a thin Electron host. The design record is
+`draft/thinking-screenshot-tool.md` (SNAP-D1…D9; DECISIONS carries the row).
+
+**Where it landed, and why there (SNAP-D1).** A screenshot helper lives for ONE capture and
+must outlive nothing — neither product truth nor native floor — so it is a shell-plane tool
+on the SCK helper's rails: the contract in `packages/contracts/src/screenshot.ts` (TS-only,
+not in the Rust gen bundle), the host in `@vibefield/screenshot` (Node-only spine library;
+wall **R19** added and self-tested), the helpers under `apps/desktop/native/{macos,windows}/
+screenshot-helper` with build/test/verify scripts beside the SCK helper's, the composition in
+the shell. Both helpers' Cargo/Swift sources are the prototype's with the changes §6 of the
+thinking doc lists — identity, the v1 protocol, no `--hide-pid`, the glass lookup.
+
+**The protocol (SNAP-D2)** gained two things the prototype's host had to guess: `v: 1` on
+every line and a typed error `code` (`permission-denied` · `capture-failed` · `no-displays` ·
+`write-failed`) beside `message`. Seven fixtures under `contracts/fixtures/screenshot-*.json`
+are parsed by zod (`test/screenshot.test.ts` + the fixtures sweep), by the Swift harness
+(`VF_CONTRACT_FIXTURES`, six files decoded, refuses to pass on fewer) and by the Rust crate's
+`contract_fixtures_decode` (five parents up from the crate — the brief said four, the builder
+measured five). Stdout is protocol only; both `--standalone` banners moved to stderr.
+
+**The host (`ScreenshotTool`).** One live helper at most, the slot reserved synchronously so
+`busy` never lies; the 20 s pre-overlay timer `ready` lifts; a strict bounded line reader
+(64 KiB) that poisons itself on the first refused line and kills the helper; typed answers
+for every other ending (`helper-missing` without spawning · `helper-spawn-failed` ·
+`helper-timeout` · `helper-exited` with the last stderr line · `helper-protocol` · `busy` ·
+`disposed`); an exit-grace kill for a helper that lingers after its answer (a lingering
+overlay would make every later capture busy); dispose kills a live helper; the last twelve
+stills stay on disk, the oldest unlinked (SNAP-D4). 30 tests drive it with a scripted fake
+helper that is a REAL node child process (real pipes, exit codes, signals) plus an
+executable shell-script fixture on the default spawn + exec-bit path.
+
+**The doors (SNAP-D3).** `registerScreenshotCapture` wires a pure `createScreenshotDoor`
+(registered sender only · request checked at the seam · the answer validated BEFORE it
+crosses — a tool returning a refused shape throws on main's side); the preload exposes
+`window.vibefield.screenshot.capture()` validated both ways; `FieldHost.screenshotCapture?`
+mirrors it for the consumer that does not exist yet. The View menu gains **Take Screenshot**
+carrying the prototype's chord — `Control+Command+A` / `Alt+A` — as an APPLICATION
+accelerator (a global chord is stolen from every other app and wants a preference first:
+SNAP-1); the item is present-but-disabled where no helper resolves (SNAP-D5), and the menu
+path shows the one dialog main owes: a macOS Screen Recording refusal names the setting.
+`DesktopResources.screenshotHelperPath` resolves the bundle's inner executable (dev:
+`apps/desktop/build/native/macos/…`; packaged: flat under `bin/`), the `.exe` on Windows,
+null elsewhere — deliberately NOT boot-fatal, unlike the SCK helper: a screenshot is a
+peripheral, and an absent helper is an honest `helper-missing` at capture time.
+
+**Packaging.** The stager's `dir` entries learn `exec` (the bundle's inner binary keeps
+0755); the `.app` (darwin) and `.exe` (win32) are OPTIONAL entries with a `produce` line;
+electron-builder's `binaries:` gains the nested executable for WP10's inside-out signing;
+`package:stage` builds the helper; `apps/desktop` gains `build:` / `test:` /
+`verify:screenshot-helper`. The Windows crate is its OWN cargo workspace root (SNAP-D7; the
+root manifest excludes it) and its `build.rs` skips the winres manifest when the HOST is not
+Windows — the measured reason the prototype's cross-target check died (`rc.exe` absent) —
+so `cargo check --target x86_64-pc-windows-msvc` and cross-target clippy are witnesses from
+any host.
+
+**Evidence.** Two Opus builders ported the helpers in parallel against complete briefs;
+every claim below was re-run by the orchestrator, not quoted. macOS: build exit 0 (arm64,
+`codesign` identifier `com.jamesyong.vibefield.screenshot-helper`, ad-hoc), harness ALL
+PASSED with 6 fixtures decoded, live `--capture-test` on this Mac `ok` 3456×2234 @2× (10.8 MB
+PNG, magic checked, then removed — the verifier now cleans the per-display stills it
+graded), identity grep empty, the SNAP-D8 lookup probed standalone (the class resolves, all
+three KVC keys read back), the verifier negative-controlled (width 99999 · `v: 2` · a
+non-PNG all fail). Windows: `cargo fmt --check`, the cross-target check and cross-target
+clippy at `-D warnings` exit 0; identity grep empty; `cargo metadata` names the crate as
+its own workspace root; the real `protocol.rs` compiled as a standalone lib at the same
+depth passes its 7 tests with an empty-fixtures negative control. The gate: `pnpm verify`
+ran VERBATIM and is RED at `pnpm lint` — 4 biome errors, all in James's untracked
+`work/composer-directions.html`, the same state `0bef361b` recorded; preflight, check:deps,
+icons:check and typecheck (25 projects) green inside it; run separately on the same tree,
+`cargo fmt --check` · `pnpm lint:rust` · `pnpm bundle:assert` · `pnpm test:rust` ·
+`pnpm gen:check` exit 0 and `pnpm test` (25 projects) red on ONE row — field-app
+doc-manager "restart honors vf-last-doc" at its 5 s timeout while swiftc and a live capture
+ran beside it — green 2× in isolation (7/7). Walls `--enforce` clean including R19;
+electron-shell 679/679 (+2 skipped) on its own; contracts 361/361.
+
+**Findings.** (1) Eight of the prototype's thirteen `Theme` members had zero readers — the
+chrome is the glass material with AppKit semantic colors; the five the overlay READS are
+DESIGN.md's (`--vf-select` ring, `--vf-red` marks, the dark backdrop dim, white handles, the
+1.5px ring weight); the eight were removed rather than left as a claim the overlay did not
+keep, and the helper README says exactly what is worn. (2) The prototype's capture-test
+could emit an `ok` with an empty path, which the contract refuses — it answers
+`write-failed` now. (3) `JSONEncoder` escapes `/` as `\/`: valid, parses, byte-differs from
+the Windows line. (4) Unknown helper flags fall through to the overlay path in both helpers
+(prototype behaviour, kept; the host passes only `--once`). (5) The Windows helper's
+`permission-denied` is now a real outcome — `request_capture_access` reports the OS
+capability status instead of only logging it.
+
+**Owed, stated plainly.** The macOS OVERLAY was not exercised live: `--once` is a
+full-screen overlay on the developer's display and no agent may put one there — James's
+first ⌃⌘A in `pnpm dev` is the witness (the port changed no overlay code beyond the glass
+lookup; the prototype ran it from its own host on 2026-08-18). No test in the Windows crate
+has run AS the crate (nothing here links Win32) — the box round is SNAP-4, spelled out in
+`docs/WINDOWS_PORT_STATUS.md`. The consumer (the still onto the canvas) is SNAP-3; the
+global chord SNAP-1; the fabric method under `surface.capture` SNAP-2. The `work/` lint red
+is James's to clear (delete the scratch file or exclude `work/` in `biome.jsonc`).
+
+## AR-0 — the three-repo workbench (2026-09-12)
+
+**AR-0 the sibling workbench** (`ba717474` — puppeteer and rosetta enter as pinned sibling
+checkouts; `draft/thinking-ar-sibling-workbench.md` §7 is the landing record, the triad design
+is `draft/thinking-ar-agent-plane.md` §17). The AR track's first landing, and the pivot's first
+code: chopsticks and spaghetti (retired by James 2026-09-04) leave the manifests; **puppeteer**
+(the agent runtime) and **rosetta** (agent history) arrive as SIBLING CHECKOUTS pinned by revision
+in `siblings.lock.json`, the truffle-era machinery of `cb652e0a` revived for two siblings with
+`scripts/siblings.mjs` as the one reader (preflight, `check:deps`, the Nx cache stamp, the dev
+runner and the shell's Vite config all go through it; `pnpm siblings` · `siblings:pin` ·
+`siblings:build`). What is real: the fenced `link:` block (five puppeteer packages + the rosetta
+client; consumers ask `*`; puppeteer-react deliberately NOT linked — its react peer would be a
+second physical React, and `check:deps` now searches the linked directories too), walls
+R20–R22, preflight's family rule and three proven negative controls, the Nx stamp (A/B/A cache
+witness), sibling-mode `server.fs.allow` (200 / 403 / watcher-change witness), the runner's
+esbuild context following a linked source (1.3 s rebuild, control touch silent), and fieldd's
+**RosettadSupervisor** — one index daemon per user root at the new `LAYOUT.INDEX_DB`, configured
+by `FIELDD_ROSETTAD_BIN`, projected into `FielddHealth.rosettad`, eight kill-matrix rows against
+a scripted daemon speaking the real `--json` contract plus an opt-in row against the real
+binary (protocol 20, announce file, clean SIGINT). *Errata 2026-09-12 (the AR-0 review): six
+of the eight rows drove the scripted daemon — one was the bogus-binary row, one the frozen
+projection's unit row; and the projection this entry names carried the daemon's origin to every
+product client, which the review-fix entry below removes.* Upstream first (W-D9): puppeteer
+`0a9eb8f` adopts `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (486 sites, widened
+at the declarations), rosetta `6119826` makes `@rosetta/protocol` a resolvable package clean
+under them; both are the pinned revisions.
+
+**Owed, stated plainly.** Nothing in the product imports a puppeteer package yet — the gate
+meets puppeteer's 538 files at AR-2's first import, which S0 exists to make green. CI's clone
+step needs a `SIBLINGS_TOKEN` read PAT (both repos are private) and stays red-honest until James
+creates it; puppeteer is cloned but not installed in CI until its ghosttea override block is
+gone upstream (PU-6). rosetta's CI runs no Node at all (RO-7). Two of James's in-progress
+files carry one strict-flag site each (`adapter-kimi/src/services/account-usage.ts:322`,
+`builtin-providers/src/providers.ts:501` into his grok options) — his to take, absent from the
+pinned revision. The pre-existing imposter conformance red (`2791f4f`'s resume precheck, not
+this pass) is likewise his. The Windows box round: rosettad has no Windows archive and builds
+from source there. `pnpm lint` is still red on `work/` (SNAP-0's note stands).
+
+## AR-0r — the workbench review's fixes (2026-09-12)
+
+**AR-0r the review fixes** (`ac065747` — one critical, three high, and the medium/low rows
+of the AR-0 review closed the same day; the re-pin rides in the same commit). The critical:
+`FielddHealth.rosettad` had carried the index daemon's loopback ORIGIN and announce path to
+every authenticated product client (`system.health.subscribe` is scope-null, the renderer
+subscribes) while the supervisor's header claimed the opposite — and rosettad has no auth
+(RO-1), so the origin is the secret (EL7). Now `RosettadHealth` (phase · detail · pid ·
+protocolVersion) is the projection every client sees and `RosettadState` (+origin, +announce)
+stays inside fieldd for the AR-1 doors; witnessed through a minted renderer window token (the
+serialized health carries neither the origin, its port, nor the announce directory). The
+highs: a SIGKILLed fieldd's rosettad held rosetta's EXCLUSIVE projection lock, so the
+successor's child died on it, tripped the intensity and sat in a permanent "failed" — rosettad
+now announces into a fieldd-PRIVATE directory (`LAYOUT.INDEX_DAEMONS_DIR`, never rosetta's
+shared per-user dir: the EL7 beacon is gone with it) and every launch runs an ORPHAN PASS
+first (stale file → removed; live pid answering `/api/status` with the rosetta header on its
+announced loopback origin → put down before the new generation; live pid that does not answer
+→ left alone, rosetta's own announce.rs rule), witnessed against the scripted daemon and the
+REAL binary (the lock control: a second rosettad exits naming the owner); `system.index.restart`
+(native.admin) is the door out, resets the window, bounces a live daemon without charging the
+intensity window (RESTART_MAX 1 witness) and answers the projection; an empty
+`FIELDD_ROSETTAD_BIN` is unconfigured, never a spawn of "" (bin.ts, the daemon, CI's env
+capture). The rest: stderr rides the failure detail and every pre-ready line is logged; utf8 on
+both streams; an unanswered SIGKILL is bounded; preflight's family regex takes pnpm's quotes;
+the CI PAT is scrubbed from the sibling clones; `siblings:pin` warns on an unpushed pin;
+`siblings:build` names a missing cargo first; the Nx sibling stamp is a `siblings` named input
+on fieldd and field-app only (A/B/A witness: contracts a hit across a sibling change, fieldd a
+miss then a hit); fieldd imports `@rosetta/protocol/protocol-version` (RO-4). Upstream:
+rosetta `f1e9316` (the `./protocol-version` export, the ordered-cache invariant throws, a
+`protocol-ts` CI job — RO-7 CLOSED) and puppeteer `1435c77` (the mixed-interface sweep of
+23 interfaces, `AgentEnvironmentRequest` and kimi's prompt options widened, the wrong
+comments gone, runtime.ts's spreads reverted, jsonrpc's siblings converted, James's two
+one-word widenings taken — his HEAD typechecks again). Tests: 11 scripted + 3 real-binary
+supervisor rows, 6 daemon-level rows; the whole fieldd suite 690 green; `pnpm verify` verbatim
+green except `pnpm lint` on James's untracked `work/` (SNAP-0's note stands).
+
+**Still owed:** `SIBLINGS_TOKEN` (James); pushing the two upstream pins (both on local
+branches — `siblings:pin` now says so); PU-6 (puppeteer's clean-room install) before AR-2's
+first import; the pre-existing imposter conformance red (James's); the Windows box round; the
+dev-local snapshot of the two draft docs (James's ritual). The `rust-cache` `../rosetta ->
+target` row stays unverified until the first green CI run.
+
+*Pins moved again the same day (`b6bbaa25`): rosetta `3f7ac0f` (RO-2's start-time half —
+`serve --enroll FILE`, many runtimes per kind, consent by construction, a ledger directory per
+runtime with an identity stamp, wire additive at protocol 20) and puppeteer `719d98d` (PU-7 —
+`ProfileService.observationRoot` on all nine adapters, Pi's managed binding one level in, RFC 006
+addendum). Both were the prerequisites the ratified data topology (`thinking-ar-data-topology.md`,
+AR-D15…D22) named before a persona can be ingested; VibeField consumes neither until AR-1.*
+
+## AR-1 — the index doors and the enrollment record (2026-09-12)
+
+**AR-1 the contracts and the record** (`c7fe5fda`; the pin moved to rosetta `af6f0d7` in the
+same commit). The ratified topology's first slice in code. Contracts: the `index.*` rows
+(`discoveries`/`status` on `index.read`; `enroll`/`retire` on the NEW local-only `index.manage`)
+and the `agents.*` rows (`installs`/`releases`/`update`/`setActive` on the NEW local-only
+`agents.manage`; `profiles.list/create/delete/verify` on `agent.spawn` — decided here: a persona is
+what one spawns as, no third scope), every row `locality: "local"`, neither new scope in
+`TAILNET_SCOPES` or the plugin eligibility table; the LAYOUT segments the topology names
+(`index/enrollment.json`, `agents/`, `agents/profiles.json`, `agents/roots/`, and the never-re-root
+`machine/`, `machine/agents/`, `machine/agents/distribution.json`, `machine/agents/updates/`) with
+`LAYOUT_ROOT_LEVEL` as the never-re-root set AS DATA (the users migration's manifest reads it
+instead of respelling four names); `agent-index.ts` — the enrollment record (rosetta's format 1
+verbatim plus the VibeField-only `retired[]`/`updated_at`; `AbsoluteDataRoot` refuses what the daemon
+refuses), the index projections (`IndexDiscovery`, `IndexStatus`, `IndexRuntimeStatus`, the
+tolerant `IndexPhase`), and the `agents.*` shapes mirrored from puppeteer's own schemas
+(`AgentPersona` without `dataRoot`, `AgentInstall`, `AgentRelease`, `AgentUpdateReceipt`,
+`AgentDistributionRecord`); six fixtures, the enrollment one parsing rosetta's bench file
+verbatim. fieldd: `EnrollmentStore` — loaded at boot, published atomically (0600, temp + rename)
+BEFORE every rosettad spawn and after every change, validating what the daemon validates (an
+absolute existing directory, no duplicate or nested root), retiring a vanished root at publish
+instead of handing it over, setting an unreadable record aside for a human; `IndexService` — the
+four doors, every answer a projection (the origin is read from `RosettadState` inside `get()` and
+nowhere else; an enrolled root's path never leaves fieldd — `profileId` names the persona), reads
+UNAVAILABLE `{service:"index", state}` while the daemon is not ready, mutations audited
+(`index.enroll`, `index.retire`) and bouncing the daemon through `requestRestart` only when the
+record changed; `enrollRuntime` is AR-2's persona path (`observationRoot(profile)`, never
+`dataRoot`). The supervisor gained `--enroll` and passes `--home` as the OS home explicitly
+(topology R7). Tests: 9 scripted rows (the record before the first launch; the projections through
+a window token holding `index.read`; enroll rewrites + audits + bounces and the same set again
+changes nothing; retire of a discovered kind and of an enrolled root — rows stay, the persona
+stays named; the store's refusals; the down-daemon UNAVAILABLE; the unreadable record; the
+no-daemon record) and 3 rows against the REAL rosettad with an EMPTY home (the roll call
+uninstalled and unconsented; an enrolled empty root live from the first start, labelled,
+retired with its rows public; revocation seeded with rosetta's ground-truth claude-code fixture).
+The fieldd suite 699 green (the 6 real-binary rows opt-in, all green at the moved pin); contracts 378; users 37; the Rust layout vector pinned.
+
+**Found on the way, fixed upstream — RO-2c (rosetta `af6f0d7`).** rosetta's `serve` computed
+consent as a UNION (the projection's persisted `enabled` flags ∪ the manifest ∪ the CLI ∪ the
+file's `enabled_kinds` ∪ the enrolled ids), so a kind the record no longer named stayed
+consented from its persisted flag: the file could ADD consent but never REVOKE it, and AR-D17's
+"rosetta's `enabled` is a cache re-applied on every ready" was only half true. Now, with a file
+present, the file is authoritative for discovered kinds, the projection's flags are re-derived at
+start (an omitted kind reads `enabled: false` in the census and the runtimes, rows public), and
+un-consenting mid-backfill never traps the daemon. The revocation row above is the VibeField-level
+witness. Gate: `pnpm verify` verbatim green except `pnpm lint` on James's untracked `work/`
+(SNAP-0's note stands); the remaining steps run individually after it.
+
+**Still owed:** AR-2 (the first puppeteer import — PU-6's clean-room install gates CI — the
+injected profile store and roots, the `agents.*` handlers, the persona path); the consent UI
+(design-03 §4.3, AR-3/4) — today the doors are reachable from the shell and any window token
+minted with `index.read`/`index.manage`, and no window asks for them yet; `SIBLINGS_TOKEN`; the
+three upstream pins are still on UNPUSHED local branches; the dev-local snapshot of the draft docs
+(James's ritual); RO-8 (retire/forget upstream) before a purge can exist.
+
+## AR-2 — puppeteer in fieldd: the runtime, the persona path, the machine scope (2026-09-12)
+
+**AR-2 the first import** (`f9f04763`). One agent runtime per fieldd, built from puppeteer's
+built-in providers with everything puppeteer would otherwise keep under `~/.puppeteer` injected
+from THIS user's root (PU-8: fieldd owns every byte, puppeteer every schema) — the profile
+registry at `LAYOUT.AGENT_PROFILES_FILE` (fieldd's store: 0600, temp + durable rename, an
+unreadable file set aside for a human and the registry started empty rather than overwritten),
+managed roots under `LAYOUT.AGENT_ROOTS_DIR` (puppeteer allocates `<provider>/<uuid>` 0700),
+update transcripts under `LAYOUT.MACHINE_UPDATES_DIR`. `packages/fieldd/src/agent-runtime.ts`
+is the service; the daemon constructs it beside the index service (no disk is touched until a
+persona door is called — puppeteer's registry is lazy) and disposes it before the index daemon
+on every stop path. The eight `agents.*` doors are live: `profiles.list/create/delete/verify` on
+`agent.spawn`, `installs/releases/update/setActive` on the local-only `agents.manage`; every
+mutation audited (`agents.profiles.create` names the minted id in its outcome, like
+`terminal.session.create`). Contracts gained the doors' params and results (`AgentProfileFailure`
+is data: an adapter's honest failure to read an identity rides beside the persona) and four
+fixtures. `@vibefield/users` gained `rootAboveUserRoot`, the inverse of `userRootFor`: bin.ts
+derives the VibeField ROOT — the machine scope — from the user root the supervisor hands it, and a
+root of any other shape has no machine scope (the two writing doors then refuse
+`UNAVAILABLE {service:"agents", state:"no-machine-scope"}`, installs and releases still answer).
+
+**The persona path as built** (topology §4, AR-D18/D19). Create: puppeteer allocates the
+immutable root and registers the profile; fieldd then enrolls the OBSERVATION root — PU-7's
+`observationRoot(profile)`, never `dataRoot` (claude's is the profile root; pi's is the profile
+root with the agent dir bound one level inside, created if absent) — in the enrollment record
+under the KIND rosetta's roll call joins it to, and the daemon bounces. **The kind join is data
+at the seam, not a table:** puppeteer names the provider's native layout root (the native-default
+profile's observation root), fieldd folds it to rosetta's `~/…` spelling, and the census
+(`/api/discoveries`, cached per daemon generation) names the kind for that spelling; neither
+sibling's registry is enumerated in VibeField. A provider whose layout root is not on the roll
+call (pi, on the scripted daemon) is created and not indexed — `runtimeId` absent, a logged
+reason — and **every daemon ready re-applies the record to the personas (R4 as built):** a
+persona registered while the index was down, or before this fieldd existed, is enrolled at the
+next ready, one publish and one bounce, and the ready after that finds nothing to do. Delete =
+unregister → retire (`retired[]`, rows kept, the label and profile id still named) → delete the
+root with its credentials; the registry goes FIRST because the retire's bounce wakes the
+reconcile, which must find no persona to re-enroll (the first draft lost exactly that race and
+recreated the root it was deleting; a reconcile also skips a persona mid-deletion). Verify
+persists what the provider's own status surface said; a native-default persona is never deleted
+through this door (its kind retires through `index.retire`).
+
+**The machine scope as built** (AR-D15/D16/D22, R2/R6). `machine/agents/distribution.json` is
+read tolerantly by anyone and rewritten by one writer at a time under the users root lock —
+held for the read-modify-write only, never across the vendor's updater (minutes; the lock is
+every fieldd's on this device and its deadline is short by law) — then published atomically
+(0600, the machine directory 0700). `agents.installs` is a FRESH inspection (the vendor's version
+command runs per candidate) with the record's active choice folded over puppeteer's own;
+`agents.setActive` validates the executable against the provider's installs, records it, and
+the choice reaches spawns from the next boot (the runtime binds `executables` at construction,
+composed through `createBuiltinProviders` + `createAgentRuntime` because
+`createBuiltinAgentRuntime` does not thread that option — stated at the door's contract; AR-3
+may move it to per-spawn); `agents.update` runs the vendor's own updater (an opaque 0600
+transcript under the machine scope) and records the full receipt, projecting the contract's
+fields; `agents.releases` asks the agent's own oracle always and the declared network detectors
+only when the call or the provider's recorded preference says so. **The runtime's terminal host
+refuses, typed:** agent PTYs are born by `agent.spawn` over the native floor with a clean
+allow-listed environment and the persona login pane rides the same path (AR-3) — never a
+shell-door spawn with an inherited environment (EL7).
+
+**CI.** fieldd importing puppeteer means puppeteer's own dependencies (zod 4, the ACP SDK,
+node-pty for the adapters) must exist under `../puppeteer/node_modules`. `verify.yml` now runs a
+FILTERED frozen install of exactly the packages fieldd's graph reaches
+(`--filter "@vibecook/puppeteer-builtin-providers..."` + record + monitor); the godview app —
+the only consumer of puppeteer's temporary ghosttea `link:../electron-ghostty` overrides — is
+never selected, so a clean room needs no electron-ghostty. Witnessed 2026-09-12 in a fresh clone
+at the pin with no sibling beside it: 19 of 24 projects, exit 0. PU-6 upstream is a nicety now,
+not a gate; `SIBLINGS_TOKEN` still is.
+
+**Witnesses.** `packages/fieldd/test/agent-runtime.test.ts`: 10 rows against the scripted
+rosettad and a scripted `claude` on a PRIVATE search path (`test/fixtures/fake-claude` — the
+claude adapter classifies it from its version banner; its `update` is the vendor's own updater as
+the recipe invokes it) — the native-default personas listed without a path and behind
+`agent.spawn`; create (root 0700, registry 0600, the record's runtime under `claude-code`, the
+daemon bounced, the `runtimeId` on the persona, the audit naming the minted id); a provider off
+the roll call created but not indexed, verify's honest `unsupported`, the typed refusals; delete
+(retired, unregistered, the root gone, the record naming the label); a registry planted BEFORE
+boot enrolled at the first ready and untouched by the next; installs behind `agents.manage`;
+setActive (the record 0600 under the root, `machine/` never under a user, idempotent, NOT_FOUND
+for an unknown executable); the no-machine-scope refusals; update (the transcript 0600, the
+receipt recorded, `transcriptPath` never projected); releases (silent without network; the
+vendor's stable line a release and unreachable detectors honest failures with it; an unknown
+provider an `unsupported` row). And 1 row against the REAL rosettad with an EMPTY home: a claude
+and a pi persona enrolled under `claude-code`/`pi` — pi at the profile root, its agent dir inside
+(PU-7) — live and watched with no path projected, then deleted: retired with their names kept,
+nothing watched. Found on the way: the real daemon's runtime rows trail its ready line by a
+moment, so a persona's `runtimeId` can be absent in the create answer and present on the next
+list; the contract says so. Puppeteer's 383 source files now sit in fieldd's typecheck program
+and its esbuild bundle (`bin.cjs` 4.1 MB). Gate: `pnpm verify` verbatim (the real rosettad opted in) — preflight (dirty-sibling warnings only), check:deps, icons and the 25 typechecks green; stops at `pnpm lint` on James's untracked work/composer-directions.html (all 4 errors there — SNAP-0's standing note). The steps after it, individually: `cargo fmt --check`, `pnpm lint:rust`, `pnpm test:rust` (21 test binaries), `pnpm bundle:assert` (the shell bundle unchanged; fieldd's own bin.cjs is 4.1 MB now), `pnpm gen:check` green; `pnpm test`: 24 projects green, fieldd red on two plugin-service-host timing files (service-drain-deadline, service-lease-fence) that pass alone and passed in the full fieldd run minutes earlier — host-load lotteries, not the diff; fieldd 719 rows green in all (715 + the 4 real-binary rows, 3 skipped).
+
+**Still owed:** AR-3 (`agent.spawn`, the AgentHost over field-native, the persona login pane,
+the fold, the mock module's deletion — the P0 exit witness); the Agents settings section (no
+window asks for `agents.manage`/`agent.spawn` yet); the hermes adapter's gateway host resolves a
+python script beside its module by `import.meta.url`, which the cjs bundle defines away — a
+staged asset for the spawn slice; `SIBLINGS_TOKEN`; the three upstream pins still on UNPUSHED
+local branches; the dev-local snapshot of the draft docs (James's ritual); James's `work/` lint
+red; RO-8 before a purge can exist.
+
+
+## AR-3 — agent.spawn: the host over the floor, the fold, the persisted continuation, the mock deleted (2026-09-12)
+
+**AR-3 the runtime is lent the floor** (`6b5e1612`). puppeteer's `AgentHost` — spawn a terminal,
+write one semantic input to it — is `packages/fieldd/src/agent-host.ts` over
+`TerminalService.spawn`, a new birth beside `create`: the floor's AGENT cell (TC-S3's
+placement), `programKind: application`, keep-until-exit (NF-D3), the agent class's scrollback
+cap, and a CLEAN environment (EL7). The environment is composed in three layers and stripped
+last: VibeField's passthrough from the daemon's own env (PATH, SHELL, LANG/LC_*, TZ, TMPDIR,
+TERMINFO, SSH_AUTH_SOCK, the XDG roots the native-default layout is discovered under; win32's
+essentials, case-folded), puppeteer's own `buildAgentEnvironment` policy over it (TERM, colour,
+the login identity a native credential store keys on — and the one vendor variable it sets is
+puppeteer's, never spelled here: AR-L1 holds), the adapter's `spec.env` over both, then every
+`FIELD_*`/`FIELDD_*` key removed whoever asked for it. `automateTerminal` is the floor's epoch
+path (`TerminalService.automate` → paste-and-submit / paste / text / interrupt; a human-input
+conflict is `accepted: false` with the floor's reason). The host is late-bound: the runtime holds
+it from construction, the daemon binds the terminal service once it exists, and every spawn
+before that refuses `UNAVAILABLE {service:"agents", state:"no-terminal-host"}`.
+
+**The fold** (AR-D4/D5 as ruled). `AgentRuntimeService` subscribes to `runtime.onMonitorState`
+/ `onMonitorRemoved` / `onMonitorNotification`, reads each state through the contract's
+`AgentMonitorMirror` — the fields fieldd's logic needs, everything else carried verbatim; a shape
+drift logs once and the row reads `unknown` — joins it to the floor's inventory row for the cell
+tag, and projects ONE `AgentSessionSummary` per run (SessionSummary v2,
+`packages/contracts/src/agent-session.ts`: the native session id as the spine with puppeteer's
+own basis, the OPEN provider id and the adapter's label, `tier: managed`, the run identity, the
+terminal join, the workspace, the mirror, the one derived `status`, the observation level, the
+record's presence). `agent.list` answers it; `agent.subscribe` streams FULL frames, at most one
+per 16 ms tick per subscriber (the runtime's own coalescing set to the same tick — PF5). The
+golden is puppeteer's OWN monitor contract fixture, transcribed
+(`fixtures/agent-monitor-state.valid.json`), with `AGENT_MONITOR_SCHEMA_VERSION` pinned at 2: a
+generation bump upstream is a red gate here **(errata 2026-09-13, found by AR-4b's review: it was
+NOT one when this was written and was not one until AR-4b — nothing in the tree read puppeteer's
+constant, so a bump drifted silently and surfaced, if at all, as the runtime's
+`fieldd.agents.monitor_shape_drift` warn. `packages/fieldd/test/agent-monitor-pin.test.ts`
+(AR-4b, `8c0725a5`) asserts the contract's generation IS the PINNED puppeteer's and that the golden
+is of that generation, which makes the sentence true from that commit. Its limit, stated: a field
+RENAME without a generation bump is still only the runtime warn — the mirror is a passthrough by
+law, and nothing can gate a shape the upstream constant does not move)**.
+
+**The doors.** `agent.providers` (what one can spawn as: every composed provider, whether an
+install resolved, whether its adapter resumes, its personas) · `agent.spawn` (provider, cwd,
+persona, title → `runtime.spawn`; the answer is the fold's row at birth AND the same routed
+create ticket `terminal.create` answers, so the pane that asked mounts the PTY with no second
+round trip — GT-1's point kept) · `agent.resume` (an EXITED session continued from its record: a
+new run, a new PTY, the vendor's own conversation; a live terminal is refused
+`PRECONDITION_FAILED {state:"terminal-alive"}` — re-attach is AR-4's) · `agents.profiles.login`
+(the persona login pane: `startProfileLogin` → the vendor's own interactive login in a PTY bound
+to the persona's root; when the pane ends — or after ten minutes — the identity is re-read from
+the provider's status surface and recorded on the persona). Births on `agent.spawn`, the fold on
+`agent.observe`, all local in v1 (the remote tier's rows reach the deck through the mesh's own
+roster); spawn and resume audited like a terminal birth (attempt-before-effect, the run id and
+the terminal id on the outcome), the login like a persona mutation. The window token gained
+`agent.spawn`/`agent.observe`/`agent.control` (the last minted now for AR-6, unused).
+
+**The record** (`LAYOUT.AGENT_SESSIONS_DIR` = `users/<fuid>/agents/sessions/<runtimeRunId>.json`,
+0600, the directory 0700, durable rename, an unreadable file set aside): puppeteer's opaque
+continuation beside the launch facts fieldd chose (provider, persona, cwd, title, the floor
+session id, the workspace), re-persisted when the adapter learns the native id, stamped at exit
+with the floor's outcome and code. Exits: the floor's `session-exited` on the cell's control
+connection (the terminal service now fans it out from every client it holds) →
+`runtime.handleProcessExit` → the record stamped, the row withdrawn; the inventory diff is the
+backstop, with a 1.5 s grace so the floor's own outcome wins — the first real-claude witness
+lost its exit facts to the backstop (`reason: unknown`), and the grace is the fix. A persona's
+delete now stops its sessions first (the floor's ladder) and removes its records.
+
+**The renderer.** The monitor's mock module is DELETED (`mock-agent-field.ts`, its test, its
+label, its `AgentKind` union — the last vendor enumeration in the renderer; the icon map keeps
+the glyphs it knows and draws an initial for the rest, RFC 004's "isolated optional artwork
+map"). The local half of the field is fieldd's fold through the deck's door: `MonitorDoor`
+(GT-D17's two verbs widened, deliberately, to six — observe · providers · spawn · mountLocal
+beside listHosts · attach), built where the fieldd client, the runtime and the workspace already
+are; the stage still holds none of them. `facet-types.ts` became type imports of the contract;
+the projection reads `AgentSessionSummary` (status from fieldd's one derived word, detail from
+the blockers or the latest assistant line, model and context window from the mirror); the deck
+publishes its panes' floor summaries so an unclaimed pane is a terminal row and a managed row
+carries its PTY's summary; a managed row's id is its floor session id, so the pane join and the
+placement survive the promotion, and its accent is by RUN, so it survives the pane **(errata
+2026-09-13 — the id half is REVERSED at AR-4b `8c0725a5`: a managed row's id is its RUN
+(`managedRowId` = `runtimeRunId`) and the pane join is the summary's own `agent.session?.id`. The
+ruling here made the row's identity the thing AR-4 taught to change: a resume-when-idle's PTY swap
+or an exit destroyed the row and took the swarm's bubble and the preview highlight with it. The
+accent-by-run half stands, and is now what the whole row does)**. The chrome's
+chip counts managed agents and is absent at zero (quiet is the honesty); the fold's
+unavailability is said in fieldd's words; the header gained a provider select and SPAWN. Select
+MOUNTS a local row's PTY in the active pane (`terminal.sessions` → the workspace's own
+`mountSession`); create SPAWNS the chosen provider into it (`agent.spawn` → the pool adopts the
+create ticket exactly as its own births — `adoptCreatedTerminal` — and the workspace mounts the
+summary). The marker's `mockLabel`/`mockAgents` became `localClaim`/`localAgents`/`terminals`/
+`localState`; the desktop smoke asserts the fold is `live`, the chip matches the count, the
+stage never says "mock", and a local row's select answers through the door's local verb.
+
+**Witnessed.** Over the mock mgmt server: the providers door, the scope gates, a spawn with no
+floor refusing in the floor's own words with the audit saying failed and nothing recorded. Over
+the REAL field-native, with a SCRIPTED provider (an adapter that owns nothing but a recipe and
+asks the host for `/bin/sh -c 'env > "$SCRIPTED_ENV_OUT"; exec /bin/cat'` — **errata 2026-09-13:
+the recipe quoted here is AR-3's; AR-4b's is `env > "$SCRIPTED_ENV_OUT.part" && mv "$SCRIPTED_ENV_OUT.part" "$SCRIPTED_ENV_OUT"; exec /bin/cat >>
+"$SCRIPTED_TYPED_OUT"`, because the automation witness now reads the typed bytes back out of
+`cat`'s own stdout rather than trusting the floor's `accepted`**): the PTY on the agent
+cell; the environment read from INSIDE it — the adapter's token present, `TERM`/`HOME`/`PATH`/
+`USER` present, the adapter's own `FIELDD_SMUGGLED` absent, not one `FIELD_*`/`FIELDD_*` key,
+none of the daemon's; the row with its cell tag; the record 0600 under a 0700 directory; the
+routed ticket with its grants; `agent.subscribe`'s snapshot and its withdrawal frame; automation
+through the host accepted by the floor's epoch path; the audit; the exit withdrawing the row and
+stamping the record; the resume as a new run with `resume` reaching the adapter; the live-run
+refusal. The persona login pane with the scripted `claude`: the pane, its ticket, the identity
+(`loggedIn`, method, email, organization, plan) on the persona after it ended. And the REAL
+Claude Code 2.1.270 (`FIELDD_TEST_REAL_AGENT=1`): spawned into a PTY on the agent cell with the
+clean environment, `alive` with the native session id within seconds, `native-hooks` and `idle`
+after five, the record carrying the vendor's id, terminated cleanly — **the P0 witness at the
+daemon level: a real agent in a PTY on the floor with live status.** (In the deck: James's eye;
+the renderer half is witnessed by the mounted stage fixtures and the desktop smoke's rows.)
+
+**Found.** (1) `terminal.terminate` right after a birth answers `terminated: false` — the
+observed inventory still lags the spawn, so the session's cell is unknown and the ladder reads
+"already gone" — the GT-1 asymmetry on the terminate side; the witness holds five seconds first;
+TC's to fix, not AR's. (2) puppeteer's profile services resolve their executable from
+`PUPPETEER_<KIND>_BIN`/PATH at construction, not from the `executables` the launch path takes,
+so the machine record's active choice does not reach the login pane or `verify` (PU-10, a
+note). (3) The first draft inferred `sessionIdBasis: "observed"` from the mirror carrying a
+native id; puppeteer's own `nativeSession.basis` is the fact and is what rides now. (4)
+`behavior-conformance.test.ts` (plugin-playground) failed once in the full run at 5.9 s and
+passed alone — a loaded-host lottery, nothing of AR's touches it.
+
+**Gate:** `pnpm verify` verbatim still stops at `pnpm lint` on James's untracked
+`work/composer-directions.html` (the only lint findings; pre-existing); every other step run
+individually: preflight, `pnpm typecheck` (25 projects, after the fieldd test's type imports),
+biome clean over the batch **(errata 2026-09-12, found at AR-4's gate: the batch did not include
+the four fixture JSONs `agent-list`/`agent-monitor-state`/`agent-spawn`/
+`agents-profiles-login.valid.json`, which `biome check .` wanted reflowed — main's lint was red
+from `6b5e1612` until AR-4 formatted them)**, `cargo fmt --check`, clippy `-D warnings`, `pnpm test` (the
+lifetime fixture re-fed to the door — the two reds were the mock's absence; the conformance
+lottery above), `pnpm test:rust` (the layout vector with the new segment), `pnpm bundle:assert`,
+`pnpm gen:check` with the generated `layout.json`/`registries.rs` staged, `pnpm smoke:godview`
+exit 0 (the stage settled `live` with the deck's own pane as its one row, no chip at zero
+managed agents, the local-routing row answered "terminal is in the active pane"; the first run
+read the stage's FIRST frame — empty by construction now that the field arrives through the
+door — and the row waits for the field to settle since). **Still owed:** AR-4 (re-attach across a fieldd restart: the records are written
+for it; resume-when-idle); the ingested tier's rows in the fold (AR-8, with the History view); the
+Agents settings section (`agents.manage` on a window; the persona login pane has no UI yet — the
+door is live); `agent.control` (AR-6); `terminal.terminate`'s birth race (TC); PU-10 upstream;
+the dev-local snapshot of the draft docs (James's ritual); the DESIGN.md Godview citation
+(James's live edit); the upstream pins still unpushed; `SIBLINGS_TOKEN`.
+
+## AR-4 — stable ingress: a managed session outlives fieldd — re-attach at the next epoch, resume-when-idle the fallback (2026-09-12)
+
+**AR-4 the run survives the daemon** (`ba1a1eab`; AR-D6 as ruled, PU-1 upstream landed the same
+day — puppeteer `d013fef`, pinned). Every birth now names a creation request — puppeteer's
+durable claim, in fieldd's custody under `LAYOUT.AGENT_RUNS_DIR` = `users/<fuid>/agents/runs/`
+(claims + the installation key, puppeteer's own schema and modes: PU-8 again) — and gives the
+adapter a say over the session's loopback ingress (`ingress.onBound`): the bound `{port, token}`
+the adapter reports BEFORE the process launches rides in the session record (0600) beside the
+claim id, and the record keeps `runtimeEpoch` current. A graceful stop RELEASES the runs rather
+than closing them — `runtime.dispose({detach: true})`: no exit dispatched, no record stamped, the
+claims kept, the adapter's listeners closed — because the PTYs are the floor's and outlive fieldd
+(EL1). The next boot's FIRST inventory is the re-attach: every un-exited record whose PTY the
+floor still lists goes through `runtime.attach` (`expectedRuntimeEpoch` = the record's; the
+provider's own `attachSession` — for claude the bridge re-bound to the pinned port and token, the
+transcript located; `restoreSession` at the next epoch) and re-enters the fold — the same run id,
+epoch + 1, the same PTY, the row saying `continuation.reattached`, the record `reattach:
+{state: attached}`. The daemon feeds the agents service the inventory `ensureStarted` already
+applied (the listener is wired after it), so a boot onto a quiet floor re-attaches now and not at
+the floor's next change.
+
+**Pending, and resume-when-idle.** A provider that cannot attach (`ATTACH_UNSUPPORTED`), an
+attach that fails, or a record from before AR-4 (no claim to restore against) leaves the run in
+the fold as a PENDING row: `tier: managed`, `status: unknown`, `observationLevel: none`,
+`sessionIdBasis: recorded`, the terminal local and alive, `continuation: {persisted, resumable,
+pending: "resume-when-idle", reason}` — a live PTY nothing observes, said plainly. Resume-when-
+idle polls the index every 5 s through a new `IndexService.sessionByNativeId` (rosetta's
+`/api/sessions?native_session_id=`; the canonical row preferred) and replaces the run only on
+EVIDENCE: rosetta knows the session and its `activity.last_at` is 30 s or more in the past. No
+evidence is not idle — a session the index has never read (an unenrolled root, a provider it does
+not index) stays pending until a person resumes it, and an index that is down answers nothing.
+The replacement: the old PTY terminated and gone from the inventory before the new run is born
+(two processes on one native session is the one thing a resume must never make), the old record
+stamped (`exited: {reason: "replaced"}`, `reattach: {state: "resumed", replaced}`), the
+continuation resumed into a new run whose row names the PTY it replaced (`terminal.replaced`;
+the new record's `replaced`). `agent.resume` on a pending run is the same replacement by hand
+(`how: manual`); a live ATTACHED run still refuses `PRECONDITION_FAILED {state: "terminal-alive"}`.
+A record whose PTY did NOT survive (the floor restarted too, or the process ended while no fieldd
+was there) is stamped as an unknown exit at the boot and resumes from the door like any other.
+The daemon's own acts are in the ledger as the SYSTEM actor (`AuditService.requiredSystem`):
+`agent.session.reattach` (outcome succeeded with the new epoch, or failed with
+`ATTACH_UNSUPPORTED`/`ATTACH_FAILED` and the words) and `agent.session.resume` (`how: idle`).
+A persona's delete stops its pending sessions too. The fold's exit paths cover the pending rows
+(the floor's `session-exited`, the inventory backstop with the same grace).
+
+**The renderer.** A pending row reads `idle` with the detail "unobserved · resumes when idle"
+(no evidence says otherwise; "working" would be a claim the fold did not make); a re-attached
+row is an ordinary row. A row that names a replaced PTY the deck is showing hands that pane the
+new one through the door, once per replacement — `MonitorDoor.mountLocal(id, {replacing})`, the
+deck activating the pane that held the old PTY, waiting for the workspace to commit the
+activation (the active pane is a ref the workspace syncs after render), mounting, and giving the
+user's own pane back — so a resume-when-idle never leaves a pane on a dead PTY. The one
+widening of the door is the option, not a verb.
+
+**Contracts.** `AgentSessionRecord` += `creationRequestId`, `ingress {port, token}`, `reattach
+{state: attached|failed|unsupported|resumed, at, reason?, replaced?}`, `replaced`;
+`AgentSessionSummary.continuation` += `reattached`, `pending`, `reason`; `AgentSessionTerminal`
++= `replaced`; `LAYOUT.AGENT_RUNS_DIR ["agents","runs"]` (gen'd into `registries.rs` and the
+layout vector). A record written before AR-4 still parses. Upstream (PU-1, `d013fef`):
+`HostIngress {port?, token?, onBound?}`/`BoundIngress` on the host seam, `ingress` on
+create/resume/attach, `AgentProvider.attachSession`, `AgentRuntime.attach` (provider attach →
+workspace → `restoreSession`; `ATTACH_UNSUPPORTED`/`ATTACH_FAILED`), `dispose({detach})`, the
+claude driver's `attachClaudeTuiSession` (the bridge pinned, the transcript armed lazily at the
+first subscriber, an existing transcript a silent baseline), RFC 003 "Stable ingress".
+
+**Witnessed** (`packages/fieldd/test/agent-session.test.ts`, the REAL field-native, two fieldd
+boots on one root with the floor running throughout). The scripted adapter WITH
+`attachSession`: the claim registry 0700 with its `claims/`; a stop that stamps nothing; the
+second boot's row re-attached at epoch 2 on the same PTY with the same native id and title, the
+adapter handed exactly that terminal and session, the record at epoch 2 with `reattach:
+attached`, the ledger's system-actor entry, automation through the re-attached run confirmed by
+the floor, the attached run refusing a resume, the ordinary exit after. WITHOUT it: the pending
+row as stated (`reattach: unsupported`, the audit's `ATTACH_UNSUPPORTED`), the PTY listed and
+unobserved; `agent.resume` replacing it — the old PTY gone before the new run was born, the
+adapter's `resume` = the native id, both records as stated, the fold holding the new run only,
+`how: manual` in the ledger **(errata 2026-09-13: it was in the ledger TWICE when this was
+written — the door's own caller-actor `agent.session.resume` entry and, under it, the daemon's
+system-actor entry with `how: manual`, one human act attributed to two actors. At AR-4b `8c0725a5`
+a manual resume is ledgered ONCE, at the caller's entry, whose outcome attrs carry `how: "manual"`
+and the PTY it `replaced`; the system actor now ledgers only what the daemon itself began,
+`how: "idle"`)**. Resume-when-idle against the fake rosettad's new
+`/api/sessions?native_session_id=` route (rows from a JSON file re-read per request): pending
+while the index served no row, pending while the row's activity was a second old, replaced by the
+daemon itself once the row said a minute still (`how: idle`, the system actor). A record whose
+PTY is gone: stamped `unknown` at the boot, no attach attempted, resumed from the door. And the
+REAL Claude Code 2.1.270 (`FIELDD_TEST_REAL_AGENT=1`): the record carrying the bound ingress and
+the claim; re-attached across the restart at epoch 2 on the pinned port; a prompt through the
+re-attached run reaching the vendor's hooks at the re-bound bridge (`native-hooks`, the id
+`observed`); terminated cleanly (`application-terminated`, 143). The renderer's rows: the
+pending reading, the re-attached row, the resumed row's id, and the mounted stage handing a pane
+the new PTY through the door exactly once.
+
+**Found.** (1) A fieldd stop issued within about a second of the real claude's first observed
+hook LOSES the process — 4 of 4 attempts without a hold (the second boot found the PTY gone and
+stamped the record); with a 3 s hold the PTY survives every time (3 of 3). The driver's detaching
+dispose while the TUI is still starting — the bridge closed, the staged `--settings` file and
+hook forwarder removed (`cleanupClaudeSession`) — is the suspect; NOT isolated (PU-11, a note:
+worth a probe upstream before it becomes a rule here). **(errata 2026-09-13: the suspect was the
+cause, and it is fixed. AR-4b's upstream reviewer PROBED the detach on the real runtime — the
+staged settings file and the hook forwarders VANISH under the running TUI — and puppeteer
+`8402184` makes the runtime's detach RELEASE its bindings instead: the claude binding drains its
+bridge and KEEPS the process's files. The same deletion is why the hook rail exec'd a deleted
+script after every re-attach, not only why a fast stop lost the process. The 3 s hold is retired —
+AR-4b's witness stops one second after a POLL sees `native-hooks`, and the process survives.)**
+(2) The observed inventory lists a
+just-born PTY only after a beat, the terminate-side lag of AR-3 seen from the list side: the
+witnesses poll the listing rather than read it once. (3) A daemon act's audit outcome needs a
+CODE for `reasonCode` (`[A-Z][A-Z0-9_]*`) — the first draft put the state word there and the
+ledger refused the outcome after the effect had run; one record's trouble no longer ends the
+re-attach for the others.
+
+**Gate** (run by a delegated Opus agent, verbatim): `pnpm verify` stops at `pnpm lint` — 4
+errors, all in James's untracked `work/composer-directions.html` (45 pre-existing warnings
+elsewhere; the FOUR AR-3 fixture JSONs biome wanted reflowed are formatted with this slice — see
+the AR-3 errata) · preflight OK (2 dirty-sibling warnings) · check-single-copy ok · icons
+current · `pnpm typecheck` 25 projects · `cargo fmt --check` clean · clippy `-D warnings` clean ·
+`pnpm bundle:assert` OK (initial 530.2 KB raw / 143.0 KB gz) · `pnpm test`: 333 files passed,
+1 failed — `service-drain-deadline.test.ts` (PRC-2's 80–175 ms window; ServiceHost, nothing of
+AR's) red in the full graph and green alone, the loaded-host lottery · `pnpm test:rust` 241
+passed, 6 ignored · `pnpm gen:check` clean · `pnpm smoke:godview` exit 0 first attempt
+(`monitorLocalState: live`, the deck's own pane as its one row, canvas2d, cold open 286 ms) ·
+the fieldd agent-session suite 11/11 with `FIELDD_TEST_REAL_AGENT=1`. Measured on the working
+tree before the commit; `ba1a1eab` differs from it only by biome's reflow of five files (the four
+fixtures and the fieldd test). **(Amended 2026-09-12:)** The runner's second pass found the one
+biome warning in `useMonitorAgents.ts` (a suppression with no effect) was AR-3's, not older debt;
+removed in the follow-up commit. **Still owed:** the
+Agents settings section (the persona login pane's UI; `agents.manage` on a window); AR-5 the
+views port; `agent.control` (AR-6); PU-11 above and PU-10; the ingested tier's rows (AR-8); the
+dev-local snapshot of the draft docs (James's ritual); the DESIGN.md Godview citation (James's
+live edit); the upstream pins still unpushed (puppeteer `d013fef`, rosetta `af6f0d7`);
+`SIBLINGS_TOKEN`.
+
+## AR-4b — the review's fixes: signed records, the agent cell, verdicts and fences, the locality column enforced, the release path upstream (2026-09-13)
+
+**AR-4b is what six reviewers found** (`8c0725a5`; puppeteer `8402184` upstream, pinned). AR-3 and
+AR-4 landed in one day and were read the next by six Opus agents at six lenses — the fieldd state
+machine, EL7, the contracts and this ledger's own claims, the renderer, the tests, and the
+upstream landing. Every blocker and major is fixed by hand here; the minors and the witnesses by
+agents. Nothing about AR-4's SHAPE changed: the re-attach is still the resting state, resume-when-
+idle still the fallback on rosetta's evidence. What changed is what that shape TRUSTS, and what it
+does when a step does not answer.
+
+**The security seam (EL7): a record fieldd did not write is not a record.** Every session record
+fieldd writes now carries a `signature` — HMAC-SHA256 over its canonical JSON (keys sorted at
+every level), keyed by a 32-byte secret minted once per user root at
+`LAYOUT.AGENT_SESSIONS_KEY_FILE` (`users/<fuid>/agents/sessions.key`, 0600, created with `wx` so a
+loser of the race never inherits the winner's key). A record with NO signature, with one that does
+not verify, or exposed to other users by its own mode is SET ASIDE at read with its own log event
+(`session_record_unsigned` / `_forged` / `_exposed`) and never acted on; temp files are private
+(`wx` + a random suffix) and owner-only modes are re-asserted after every write
+(`SessionRecordStore`, `packages/fieldd/src/agent-sessions.ts`). Why this is a MAJOR and not
+hygiene: same-uid agents are the adversary, and before it a file dropped into `agents/sessions/`
+was a boot-time instruction — it could make fieldd TERMINATE any live PTY (through the pending
+path's replacement) and launch the vendor with an attacker-chosen cwd and persona. The other half
+of the same seam is the cell: the re-attach acts only on PTYs whose inventory row sits on the
+AGENT cell (`cell.workloadClass === "agent"`); a record naming any other terminal is refused and
+logged (`reattach_refused_cell`), never held, and the replacement re-checks the cell before it
+terminates anything.
+
+**The state machine: verdicts, not hopes.** The durable CLAIM is the authority on the epoch — before
+attaching, fieldd reads it (`CreationRequestRegistry.lookup`, new upstream) and attaches at the
+claim's epoch (`epoch_resynced`), because upstream's `restoreSession` increments the epoch FIRST
+and can still fail after: a host that kept the record's epoch was refused on every boot after one
+such failure. A missing or terminal claim is held pending with that reason. The fold is updated
+INSIDE the audited act (`attachRecord`), so a ledger write that fails after the effect leaves
+nothing orphaned — before, a successful attach whose audit outcome was refused left a run live in
+puppeteer and invisible to fieldd. A record whose PTY the FIRST inventory lacks is held for the
+exit grace (`EXIT_GRACE_MS` 1.5 s, `awaitingBoot`) and attached if the PTY appears; only then is
+it stamped `unknown` — one frame is not a death, which is AR-3's own grace applied at the boot
+edge. The replacement's wait for the old PTY is now a VERDICT: `awaitGone` returns false at the
+5 s grace, a PTY that outlives it REFUSES the replacement (`PRECONDITION_FAILED
+{state: "terminal-alive"}`), the run stays pending and the poll re-arms — never two processes on
+one native session, which is the one thing a resume must never make; `terminal.terminate`
+answering `terminated: false` is read as already gone (AR-3's finding, from the other side). Every
+throw before the point of no return restores the pending entry (`resuming` reset, the poll
+re-armed) — before, one throw, the audit's own attempt append among them, wedged that row forever.
+A record already resumed into another run refuses a second resume (`PRECONDITION_FAILED
+{state: "replaced", replacedBy}`) and the old record now names both sides (`reattach {state:
+"resumed", replaced: <old PTY>, replacedBy: <new runtimeRunId>}`); a replacement whose resume
+FAILS stamps `exited.reason: "replace-failed"`, not `"replaced"` — a stamp that said a successor
+exists when none did. `dispose` fences replacements in flight (it waits up to
+`DISPOSE_REPLACEMENT_WAIT_MS`, 10 s) and a replacement refuses to start once the service is
+stopping; an `enter`/`hold` after a stop writes the record for the next boot but touches neither
+map. A persona's delete also terminates the live terminals its RECORDS name — a run mid-attach is
+in neither map — and the re-attach skips records of a persona mid-deletion. The idle poll BACKS
+OFF while the index cannot answer (×2 per unanswered poll, ceiling `RESUME_POLL_MAX_MS` 60 s), and
+a `last_at` that is not a finite time in the past is no evidence at all. A manual resume is
+ledgered ONCE, at the door's own caller-actor `agent.session.resume` entry whose outcome attrs
+carry `how: "manual"` and the PTY it `replaced` (`daemon.ts`); the SYSTEM actor now ledgers only
+what the daemon itself began (`how: "idle"`) — see AR-4's errata above.
+
+**The contracts.** `IndexService.sessionByNativeId` PARSES rosetta's body instead of casting it:
+`IndexSessionsResponse` / `IndexSessionRow` / `IndexSessionActivity`
+(`packages/contracts/src/agent-index.ts`) are passthrough at every level with finite stamps and
+`activity` null when absent, unknown envelope fields log once at debug — the tolerant reader's
+SECOND half, which this seam had skipped — a body it cannot vouch for answers `UNAVAILABLE
+{state: "malformed"}`, and nonsense bounds (`first_at > last_at`) fold to null. And D36's
+`locality` column is ENFORCED at last (`product-api.ts`): a method declared `local` is refused for
+a peer-fieldd principal (`FORBIDDEN_SCOPE`, naming the locality) and never forwarded to a foreign
+`device` (`PRECONDITION_FAILED`); `device` = self still serves locally. The column had no consumer
+from the day it was declared, so every method declared local federated in fact, and AR-3/AR-4
+declared the `agent.*` doors — a spawn, a resume that terminates a PTY — local into that gap. The
+gap is pre-existing; AR-4b closes it for all 131 local rows. `methods.ts` gained a dated scope
+exception on the `agent.resume` row: it rides `agent.spawn` although it now ends a live PTY,
+accepted because the door's params name a RUN, fieldd resolves the PTY through the record it wrote
+AND verified, and only agent-cell PTYs are ever re-adopted — with the named upgrade written down
+for the day an agent cell adopts a PTY the record did not mint.
+
+**The renderer.** The BLOCKER was the replacing mount: `mountLocal(id, {replacing})` fell through
+to whichever pane the user was in when the pane holding the replaced PTY could not be activated
+(it closed under the wait), which put a resumed stranger in front of the user and left the dead
+terminal where it was. It REFUSES now, mounting nothing; mounts are serialized through one queue
+so two replacements in a frame cannot race for the active-pane slot; the workspace context is
+re-read AFTER the floor round trip; `mounted` is answered only when the layout actually shows the
+session (a bounded `settled()` poll); and the user's previous pane is given back if it still
+exists. The deck's pane-facts gate now keys on every fact the monitor DRAWS — per pane the id,
+`exited`, the activity kind, the title and the cwd — an AR-3 defect: keyed on ids and the active
+pane alone, the summaries AR-3 added never republished, so an exited pane stayed a live row and a
+terminal's activity never moved. The remount effect records a replacement key only when the mount
+LANDED and retries a failure on the next frame or pane change up to `REMOUNT_ATTEMPTS` (3),
+announcing `no-pane`; the fold's damage gate keys on the drawn fields per row (`rowsKey`) rather
+than `JSON.stringify` of the whole fold, which carried puppeteer's subagent/workflow/team
+collections verbatim. A managed row's monitor id is now the RUN (`managedRowId` =
+`runtimeRunId`) so a resume-when-idle's PTY swap and an exit no longer destroy the swarm's bubble
+or the preview highlight, with the pane join kept as the floor session id — the reversal of AR-3's
+ruling, recorded there too. The replaced PTY is no longer drawn as a phantom unclaimed terminal
+row; a pending row whose mirror says not-alive is dropped (the alive drop precedes the pending
+reading); the spawn controls wear DESIGN.md §8's muted disabled treatment (opacity 0.4) instead of
+looking live; and `remote-session-field.ts`'s header no longer claims a mock module beside it.
+
+**Upstream** (puppeteer `8402184`, PU-1b, pinned in `siblings.lock.json`). The runtime's detach
+path RELEASES its bindings now — `AgentAdapterBinding.dispose({ release })` — and the claude
+binding drains its bridge (in-flight posts complete, `HookBridge.dispose({ drain })`) and KEEPS
+the staged settings file and the hook/status-line forwarders. That is PU-11's ROOT CAUSE, probed
+on the real runtime by the review's upstream reader: a plain dispose deleted those files under the
+running TUI, which is both why a stop within a second of the first hook lost the process and why
+the hook rail exec'd a deleted script after every re-attach. With it: `CreationRequestRegistry
+.lookup`; `attach` validates identity BEFORE it binds (a run already managed answers unbound; a
+missing or terminal claim and a stale epoch are refused naming the claim's epoch — all before the
+provider takes the port or a workspace is built); a bind that fails inside the restore no longer
+marks the LIVE process's claim terminal (`RestoreAgentSessionOptions.attaching`); a workspace the
+attach merely RESUMED is never destroyed; a `/clear` typed while no host listened is followed (the
+first authenticated hook under a new id with a transcript under the same root rotates the attached
+session, once); configured intent is not published for an attached process. RFC 003 carries its
+"Amended 2026-09-13 (PU-1b…)" and puppeteer's CLAUDE.md names the host's ingress record as the one
+exception to its bearer invariant.
+
+**Witnessed.** The REAL Claude Code re-attached across a fieldd restart with the stop issued right
+after its hooks arrived — a POLL for `native-hooks` plus one second, no blind 3 s hold — and its
+hooks flowed again at the re-bound bridge; the re-attached session then FOLLOWED an in-process
+`/clear` rotation, its native id changing under a row that kept its run. In the suites: the EL7
+witness asserts the PTY's key SET is a subset of the allow-list (a deny-list would pass a leak)
+with `VITEST` absent against a control that proves the harness has it; the scripted adapter reports
+a bound ingress pair and the record and the attach carry it; "the old PTY is gone BEFORE the new
+run is born" is a 5 ms poll against the new session's birth instant rather than an ordering
+assumed; audit assertions are STRUCTURED (attempt + outcome joined by `operationId`); the
+canonical-row preference is tested with a decoy subagent row placed FIRST in both directions;
+`activity: null` and index-down windows are rows of their own; the poller's requests are counted
+(`FAKE_ROSETTAD_REQUEST_LOG`); the teardown kills the native tree before removing the root; the
+real-claude rows assert `native-hooks`, the PTY alive at the SECOND boot, and
+`application-terminated`; and the automation witness reads the typed bytes back out of `cat`'s own
+stdout (the recipe grew `>> "$SCRIPTED_TYPED_OUT"` — see AR-3's errata). Three coverage rows
+answer the state machine's own edges: a PTY killed out of band withdraws the row and stamps the
+record; the index down under a pending run stays pending, and a stop under the armed poll RELEASES
+the PTY (a THIRD boot still lists it); and one record's trouble does not end the re-attach — a
+record naming a vanished provider is held pending while the good one attaches. The monitor pin is
+a test now (`packages/fieldd/test/agent-monitor-pin.test.ts`): the contract's
+`AGENT_MONITOR_SCHEMA_VERSION` must equal the PINNED puppeteer's own constant and the golden must
+be of that generation. In the renderer: the once-guard exercised by re-delivering frames through a
+`push` handle; a run keeping its row id and its accent through the PTY swap; the phantom row; the
+classifier order; the `act()` warnings gone; and a deck-level suite for the replacing mount
+(`packages/field-app/test/godview-deck.test.tsx`, five rows against a workspace probe that
+reproduces ghosttea's two properties — a mount lands in whatever pane is ACTIVE, and an activation
+is observable only a turn later) covering the pane a replacement belongs in, the refusal when no
+pane shows the replaced PTY, the refusal when that pane never takes focus, two replacements
+serialized, and the plain mount.
+
+**Found.** (1) The upstream probe turned PU-11 from a suspicion into a cause and a fix — recorded
+at AR-4's finding, at the petition, and above. (2) `deletePersona` under a LIVE run is still
+untested: the scripted provider has no profile service to delete a persona through, so the delete
+ladder's newest rung (terminating the terminals a RECORD names) is code without a witness. Said
+plainly rather than counted as covered. (3) PU-12, a note: `providerVersion` is not persisted on
+the session record, so a re-attached session's OTLP usage rail reads as unverified — the version
+the run was born under is not recoverable after a restart.
+
+**Gate:**
+**Gate** (a delegated Opus runner, verbatim, on the working tree before this commit — three
+files of the lead's were then biome-formatted, two HEAD tests moved onto federating probes and
+re-run green with the routing suite (28 tests), the scripted environment write made atomic and
+the agent-session suite re-run 12/12, and `pnpm lint` re-run): `pnpm verify` stops at
+`pnpm lint` — 4 errors, all in James's untracked `work/composer-directions.html` (42
+pre-existing warnings elsewhere) · preflight OK (2 dirty-sibling warnings) · check-single-copy
+ok · icons current · `pnpm typecheck` 25 projects · `cargo fmt --check` clean · clippy
+`-D warnings` clean · `pnpm bundle:assert` OK (initial 530.6 KB raw / 143.1 KB gz) ·
+`pnpm test`: 333 files passed, 3 failed — `guest-door` and `peer-link.e2e` (HEAD rows that
+probed federation through local-only doors; the new D36 gate refused them, deterministically —
+moved, as recorded above) and `agent-session`'s clean-environment row (green alone: a
+half-written environment file, since written atomically) · `pnpm test:rust` 241 passed, 6
+ignored · `pnpm gen:check`: the only diff was the two regenerated layout outputs, unstaged at
+the time and byte-identical before and after `pnpm gen` · `pnpm smoke:godview` exit 0 ·
+`pnpm smoke` exit 0 (native connected, five units) · the fieldd agent-session suite 14/14 with
+`FIELDD_TEST_REAL_AGENT=1` (51.8 s): the real Claude Code alive and `native-hooks` after five,
+re-attached at epoch 2 on the pinned port with the stop issued right after its hooks arrived,
+the hooks flowing again, terminated `application-terminated` 143 — with two lines worth an
+eye: the AR-3 row's terminate still reads `exited.reason: "unknown"` (the backstop won over the
+floor's exit facts on that row; intermittent, TC's), and the prompt receipt after the re-attach
+is `uncertain` while the hooks nonetheless arrive.
+
+**Still owed:** `deletePersona` under a live run (above); PU-12 upstream; the Agents settings
+section (the persona login pane's UI; `agents.manage` on a window); **AR-5** the views port;
+`agent.control` (AR-6); the ingested tier's rows (AR-8); the upstream pins still UNPUSHED
+(puppeteer `8402184`, rosetta `af6f0d7`); the dev-local snapshot of the draft docs (James's
+ritual); the DESIGN.md Godview citation (James's live edit); `SIBLINGS_TOKEN`.
+
+## AR-5-0 — the pins move: puppeteer `d2b0600`, rosetta `e8d907a`; every AR suite re-witnessed (2026-09-13)
+
+**A pin move, ledgered as the EL8 event it is** (`f6b2accc`; this docs commit after it).
+Between AR-4b's landing and the AR-5 plan, James landed `d2b0600` on puppeteer ("make session
+reattachment safe and restore verification" — on top of PU-1b: `runtime.attach` answers a run it
+already manages ONLY when the request names the same identity at the claim's next epoch — same
+provider, creation request, terminal, native id, refs — and refuses anything else
+`RUNTIME_RUN_CONFLICT`, as it refuses a terminal that already holds a session; every refusal after
+the bind disposes with `{release: true}`; an in-flight attach is awaited by `dispose`; a failed
+bind while attaching drops only the provisional run and releases the claim lease; the
+prepared-launch path forwards `ingress` and `reportBound` sits inside the try so a failing
+`onBound` releases the listeners; plus the org rename to `vibefield/puppeteer`, `.nvmrc`
+22.18.0, `packageManager: pnpm@10.34.5`) and `e8d907a` on rosetta ("clear validation failures
+before main integration" — the claude-code adapter's skim-admission fields, the pipeline live
+test, bench, fmt). `pnpm siblings` showed both HEADs ≠ pin and `pnpm preflight` FAILED, so the
+AR-5 plan's first slice is this one: `pnpm siblings:pin` (both pins are on no remote branch —
+James pushes), `pnpm siblings:build` (1 m 27 s, incremental, cargo's own target on the SSD),
+fieldd typechecked against the new sources (clean), and every suite AR-1…AR-4b left behind
+re-run at the new pins.
+
+**Witnessed, all at the new pins on the rebuilt rosettad:** `agent-session` 12 scripted rows + the
+2 REAL claude rows (`FIELDD_TEST_REAL_AGENT=1`: alive + `native-hooks`, re-attached at epoch 2
+with the hooks flowing again; 14/14 in 42 s) · `agent-runtime` 10 scripted + 1 real-rosettad
+row · `rosettad-daemon` 6 scripted + 3 real rows · `rosettad-supervisor` 11 scripted + 3 real
+rows · `agent-index-sessions` 13 · `agent-monitor-pin` 1. **Nothing in the upstream rewrite moved
+a fieldd row:** fieldd's `attachRecord` already attaches at the CLAIM's epoch and holds pending
+on any refusal, and `RUNTIME_RUN_CONFLICT` folds into the same `ATTACH_FAILED` reason as every
+other refusal.
+
+**One defect surfaced — ours, not upstream's.** The R4 reconcile row in
+`packages/fieldd/test/agent-runtime.test.ts` built its root as `vf-agents-pre-<pid>-<timestamp>`
+under `tmpdir()`, and under macOS's default `/var/folders/…/T/` the mock mgmt socket at
+`<root>/users/1/native/run/mgmt.sock` came to 112 bytes — past the 104-byte `sun_path` limit —
+so `MockMgmtServer.start` failed `listen EINVAL` on every run whose shell had not exported a short
+`TMPDIR` (the class the smokes already know; every other row uses `mkdtempSync`'s 16-character
+name and sits at 95 bytes). Fixed to `mkdtempSync(join(tmpdir(), "vf-pre-"))`; the file is 10/10
+under the default `TMPDIR` now. A row that passes only under an exported `TMPDIR=/tmp` is a row
+the gate can pass without exercising — worth a look at every fieldd fixture that plants a unix
+socket under a named temp root.
+
+**Facts for the CI clone step (`SIBLINGS_TOKEN`, still James's):** puppeteer now declares
+`packageManager: pnpm@10.34.5`, and pnpm's version management follows it under
+`--dir ../puppeteer` (verified locally: `pnpm --dir ../puppeteer --version` prints 10.34.5 from an
+11.13.1 shell), so the filtered install will fetch that pnpm; its `.nvmrc` says 22.18.0 while ours
+says 26 (`engines.node >=22.18.0` — no conflict for a `link:` consumer).
+
+**Gate:** `pnpm verify` verbatim (detached, logged) exits 1 at `pnpm lint`: all 12 biome diagnostics are in James's untracked `work/composer-directions.html` (the SNAP-0/AR-1 state); preflight (2 dirty-tree warnings), check:deps, icons:check and typecheck ran green inside it; biome over the tracked tree exits 0 (30 warnings, 15 infos, no errors); the six stages after lint run individually in the gate's order, each exit 0 — `cargo fmt --check` · `pnpm lint:rust` · `pnpm bundle:assert` · `pnpm test` (all 25 projects green: fieldd 77 files, 737 passed + 12 skipped; the two large renderer/shell suites 725 and 679 + 2 skipped) · `pnpm test:rust` (241 passed, 0 failed, 6 ignored over 21 result lines) · `pnpm gen:check`.
+
+**Still owed:** unchanged from AR-4b, minus the pin move: the pushes (now puppeteer `d2b0600`,
+rosetta `e8d907a`); PU-12; `deletePersona` under a live run; the Agents settings section; the
+DESIGN.md Godview citation (James's live edit); `SIBLINGS_TOKEN`; the dev-local snapshot (the
+AR-5 plan `thinking-ar-views-port.md` joins the draft docs awaiting it). Next: **AR-5** proper —
+PU-5a the views package upstream, in parallel with the fieldd halves of AR-5d/AR-5e (the plan's §7).
+
+## AR-5 — the views port: the Godview monitor's views become `@vibecook/puppeteer-views`, behind two injected ports (2026-09-13)
+
+**What landed** (`fe6b3d0a`; this docs commit after it). The plan (`draft/thinking-ar-views-port.md`,
+Status flipped, §11 as built) ran as leaned on the slate AR5-D1…D7 — James: "go ahead". Upstream
+first, then the consumer:
+
+**PU-5a upstream — puppeteer `main`, six commits, all fast-forwards from the `feat/views-package`
+worktree (the pin moved `d2b0600` → `5389449`; rosetta stays `e8d907a`; both UNPUSHED — James
+pushes):** `f33da93` the package (`packages/views`, 0.1.8 — `monitor/*` incl. the registry, the
+parameter system, the palette, the unread and usage ledgers; `colour/*` the project tint and the
+pane colours; the marks atlas; `bar/InstrumentBar` with `leading`/`trailing` slots and
+`BarControl`; `usage/UsageColumn` over `AccountUsagePort`; `find/FindSheet` over `HistoryPort`;
+the swarm on WebGPU with its physics behind `SwarmPhysicsDriverContext` and VibeField's worker
+host, frame, protocol and inline driver moved in under `physics/`; list; rain; the lab and its
+fixtures exported; `styles/views.css` the one sheet a host imports; `MonitorAgent` generalized —
+`session?`, `createdAtMs`, `remote?`, `tier?`, the facet's `provider: {id,label}` and optional
+`monitor`; Core's `AccountUsageEntry/Batch` schemas; the runtime's `createAccountUsageMonitor`
+service; puppeteer's own Godview re-based on the package, its lab bundling the package's; the
+layout gate mapping the package) · `b9a0ce9` (a facet may precede its first monitor state; the
+swarm names its renderer on its section — `data-swarm-renderer` starting|webgpu|unavailable; the
+lab fixtures exported) · `77f24fd` (`useMonitorPalette(root?)` / `readMonitorPalette(root?)` read
+the Godview root they are given — a page with two roots needs it) · `33d8369` (the 31 physics
+tests come across with the physics, `physics/{world,host}.test.ts`; the package had zero tests
+over the moved modules) · `8af9df9` (the find sheet gives focus back on close; every body's
+button carries `data-agent-bubble-source`) · `5389449` (a peer's session says its host — the name
+FIRST, the write policy in both directions, in all three views; `monitor/remote-write.ts` ported
+and exported). Gates upstream at `5389449`: views typecheck + **17 files, 131 tests**; the Godview
+app **32 files, 198 tests**; the root typecheck; the layout gate `clean (22 packages, 2 apps)`.
+
+**AR-5a — the fence, the lock, the walls.** `pnpm-workspace.yaml` gains the seventh `link:` row
+(`@vibecook/puppeteer-views`) and the fence comment records the dedupe answer: React is a PEER of
+the package, so `scripts/check-single-copy.mjs` compares a sibling `link:` root's react/react-dom
+by VERSION against this tree's and never counts them as a second copy (an uninstalled sibling is
+still a problem); `packages/field-app/vitest.config.ts` dedupes react; the R21 door admits the
+package; `siblings.lock.json`'s package list names it (`pnpm siblings:pin` writes it); CI's
+filtered install widens to `--filter "@vibecook/puppeteer-views..."`; the witness
+`godview-views-package-react.test.tsx` renders `listMonitorView.Component` under this tree's
+React. The lockfile moved by four lines.
+
+**AR-5b/5c — the renderer on the package.** `GodviewMonitor` is the package's `InstrumentBar`
+(the notice in `leading`; in `trailing` VibeField's provider `<select>`, SPAWN, and the FIND and
+SYSTEM CONTROL `BarControl`s), the `FindSheet` on ⌘F over the door's history port, and the stage
+under `SwarmPhysicsProvider factory={createSwarmPhysicsDriver}` — the ONLY swarm files left under
+`views/swarm/` are the worker driver (watchdog, inline fallback, the mode word) and the worker,
+both importing `@vibecook/puppeteer-views/physics`; beside the stage `.vf-monitor-chrome` holds
+the package's usage column and `.vf-monitor-claims` VibeField's chips. The row is the package's
+`MonitorAgent` with VibeField's facet extension (`kind`, `tier`, `runtimeRunId`, `profileId?`,
+`monitor?`, `summary`); `monitor/agents.ts` re-assembled over `colours` + `projectSeqs` — the
+per-agent colour is the PROJECT's (record §02, D3): `monitor/project-ledger.ts` deals each project
+key (workspace root, else source path, else the observed cwd) a sequence, kept in
+`localStorage` (`vf-godview-projects-v1`), `projectTint(seq, palette.tint)` turns it into a hue;
+terminals and remote rows wear the ramp; the eight §2.6 accent slots, `agentAccentSlot`, the
+palette module, `AgentIcon`, `chrome.ts`, `parameters.ts` and `registry.ts` are DELETED. Pane
+colours come from the package's `dealPaneColours` over the deck's `paneIds` (the deck now
+publishes `paneIds` + `activePaneId`); attachments are keyed by session id. The usage ledger is
+folded in the hook (`reconcileUsage` on a 30 s step, seeded and saved through
+`monitor/usage-history-cache.ts`, `vf-godview-usage-history-v1`, D7) from the mirror's
+passthrough usage rebuilt into Core's shape (`coreUsage`); unread through `reconcileUnread`. The
+status word is Core's — `blocked`, where GT-3m said `waiting`; `godview.css` lost the header,
+list, rain and responsive rules and gained `--blocked-*` aliases, `--tint-l/--tint-c` (light
+0.6/0.15, dark 0.74/0.15), the bar select and the claims strip; the manifest imports the
+package's sheet. `monitor-tuning.ts` keys a view's parameters by `viewId[:parametersRevision]`.
+The marker gained `swarmRenderer` (read off `[data-swarm-renderer]` by a MutationObserver),
+`usageTiles` (counted off the chrome slot; -1 unmounted) and `findSheet` (open|closed).
+
+**AR-5d — `agents.usage` + `agents.usage.subscribe` (the builder's half).** Contracts
+`agent-usage.ts` (`AgentAccountUsageEntry` — provider, label, profile, a tolerant `state`
+available|rate-limited|unauthenticated|unsupported|unavailable|unknown, metrics, credits, the
+provider's own message, retryable/retryAt, stale, fetchedAt, scope, source — and the batch) with
+two fixtures; fieldd `agent-usage.ts` (`AccountUsageService` over the runtime's
+`createAccountUsageMonitor`, `refreshProfiles` on `runtime.onProfilesChanged`, the
+`FielddConfig.agentUsage` seam) and the two rows under `agent.observe`, local. **Polling is
+DEMAND-DRIVEN — only while a subscriber exists** — because the reference's Claude adapter puts the
+OAuth token on the wire to `api.anthropic.com` and no daemon boot in the test graph may do that
+on its own. Renderer side, `usagePortOver(client)` rebuilds the flattened row into Core's
+two-part entry (provider + result; `refresh.pollIntervalMs` is `NaN`, documented as not a
+reading) and delivers the subscription's snapshot then frames, dropping an unreadable frame.
+
+**AR-5e — `index.sessions` + `index.search` (the builder's half; AR-8's first brick).**
+Contracts `IndexSessionsParams/Result` (camelCase rows), `IndexSearchParams {q,
+nativeSessionIds?, afterMs?, limit?, prefix?, kind?}`, `IndexSearchResult {answered, state
+{readiness incl. "unknown", canonicalReady?, progress?, detail?}, hits, clipped}`,
+`IndexStatus.search?` (reachable, capabilities, readiness) with three fixtures incl. rosetta's
+own protocol-20 answer; fieldd `IndexService.sessions()`/`search()` — chunks of 64, the two-call
+keystroke, a bounded root walk, `answered: false` when the index is not ready (never "no
+matches"), `index.sessions` UNAVAILABLE before the daemon is ready — on `index.read`, local; the
+fake rosettad grows `/api/search` + `/api/sessions/{id}`; the window token gains `index.read`.
+Renderer side, `historyPortOver(client)` maps the three doors onto the sheet's `HistoryPort`
+(a `null` protocol version stays absent; a rejected `index.sessions` PROPAGATES so the sheet
+keeps its last facts; a rejected search is `answered: false`).
+
+**The catalog (UI_SYSTEM's two rules).** `SwarmBodiesPreview` mounts the SHIPPING swarm over the
+package's own lab fixtures — every drawn state — inside a Godview root of its own (theme, motion
+and replay controls; selection answered as a deck would; the palette read from ITS root, which is
+what `77f24fd` is for); `AgentBubblePreview` and its 637 lines of replica-adjacent chrome are
+gone; the boundary test's rows follow; the ambient-animation audit now reads the overlay's sheets
+through the package's export and its `@import`s and asserts ZERO keyframes — GT-3p's ignition
+loops, shadow cross-fades and James's tuned shadow numbers retired with the DOM bubble (the swarm's
+motion is the shader's, gated by the same switches).
+
+**Tests moved, deleted, written.** Deleted with their subjects: `godview-agent-bubble`,
+`godview-swarm-loop`, `godview-rain-streams`, `godview-swarm-physics`, `godview-swarm-protocol`
+(the last two are the 31 upstream now), `godview-monitor-parameters` (its registry and parameter
+describes live upstream; `godview-stage-parameters.test.ts` keeps the stage-height split and
+tests the tuning key). Re-expressed by two builders: the fold suite (`monitor-agents` 17,
+`monitor-status` 9, `local-field` 5, `remote-field` 26) and the stage suite (`monitor` 15,
+`remote-door` 17, `monitor-lifetime`, the bar instead of a `<select>`). New: `project-ledger` 12,
+`usage-history-cache` 7, `monitor-doors` 24 (both adapters over a fake door and the contracts
+fixtures), `stage-parameters`, the React witness. **field-app: 86 files, 723 tests** (the two
+remote-row claims — the host eyebrow, the write policy both ways — were `it.skip` until
+`5389449` drew the facet, then un-skipped and green). fieldd: `agent-index-search` 14 (13
+scripted + 1 real rosettad), `agent-usage` 10 scripted + 1 real (`FIELDD_TEST_REAL_AGENT=1`,
+11/11); contracts: `agent-usage`, `agent-index-search`, the fixtures suite.
+
+**The smoke (`pnpm smoke:godview`, exit 0, `"ok":true`), the AR-5 rows verbatim:**
+`"monitorView":"swarm","monitorAgents":1,"swarmPhysics":"worker"` ·
+`"swarmRenderer":"unavailable"` with the WEBGPU line read off the stage (headless Electron on
+this Mac paints on `canvas2d` and hands the overlay no WebGPU — the honest line is the row, not
+the pixels; §6.7 as planned) · `"usageTiles":0,"usageColumnMounted":true` · `"findSheet":"open"`
+→ `"findSheetAfterEscape":"closed"` on a synthetic ⌘F and Escape ·
+`"focusAroundFind":"hasFocus=true active=TEXTAREA.terminal-input → hasFocus=true
+active=TEXTAREA.terminal-input"` · `"paneTypeableAfterFind":true` ·
+`"localBubbleClicked":"jamesyong, unassigned terminal, idle"` on
+`.vf-monitor-swarm-list button:not([data-agent-bubble-source="remote"])` ·
+`"localAck":"jamesyong mounted in the active pane"`. Five runs to get there, each red a finding:
+run 1 died on `.vf-monitor-bubble` (the DOM bubble is gone — the click lands on the body's
+button now); run 2 typed into nothing after ⌘F/Escape — **the package's find sheet took focus and
+kept it on close** (`8af9df9`); runs 3 and 4 delivered the pane's next line IN PART after the
+focus returned (an empty `$0`, then an answer file that never appeared while its marker did) —
+the pane's routed activation reopens on focus and a harness typing at 3 ms a key lands in that
+window, so the row now proves the pane is TYPEABLE again by retyping a marker line until it
+lands; run 5 green.
+
+**Found and fixed upstream on the way (four of the six commits):** the find sheet's focus; the
+remote facet drawn by no view (the stage builder's finding — the host eyebrow and GT-5c's
+writability word had lost their only surface; a peer's row drew exactly like a local terminal);
+the palette reading the document's first Godview root on a two-root page; the bodies' buttons
+naming no source. **Recorded deltas, placed at their sources:** GT-D16's erratum (the renderer
+paints on MAIN behind a physics DRIVER port; `adoptCanvas` stays unused; the roadmap's and the
+triad doc's "mounted into the worker's `adoptCanvas` socket" was the expectation restated), the
+triad §16 phrase, GT-D13's "IMPORTED, not ported", the spec's §8 line, design-04 §8.1, DECISIONS
+(D13/D14 as built, the AR5 slate indexed), the PU-5 petition LANDED, the plan's Status.
+
+**Gate:** `pnpm verify` verbatim exits 1 at `pnpm lint` — biome `Checked 1294 files … Found 8
+errors`, all eight in James's untracked `work/composer-directions.html` (the AR-5-0 class;
+preflight OK with the two dirty-sibling warnings, check:deps, icons:check and typecheck ran green
+inside it). The stages after lint, in the gate's order, each run alone: `cargo fmt --check` exit
+0 · `pnpm lint:rust` exit 0 · `pnpm bundle:assert` exit 0 · `pnpm test` exit 1 with ONE red in
+field-app — `godview-remote-door.test.tsx › with NO door … expected 'serving' to be 'no-door'`,
+the file the repo already knows samples too early under load (`godview-remote-door-samples-too-
+early`); alone it is 17/17 twice in a row; every other project green (fieldd 79 files + 1
+skipped, electron-shell 69, contracts 24) · `pnpm test:rust` exit 101 on
+`logging::tests::queue_and_ring_stay_bounded_and_reserve_high_severity_capacity`'s 4 s flush
+deadline (the row with no headroom, `native-logging-deadline-has-no-headroom`; the run overlapped
+the upstream re-check on this loaded host) — re-run alone: exit 0, `241 passed; 0 failed; 6 ignored` over 21 result lines (AR-5-0's numbers exactly) · `gen:check`'s Rust half
+(`gen:rust` + the diff over `packages/contracts/gen`, `contracts.rs`, `registries.rs`) exit 0; the
+docs half is not run here because `gen:docs` rewrites James's STAGED `docs/plugin-authoring/*`.
+
+**Still owed:** DESIGN.md §1.1's Godview citation + the §2.6/§2.7 sentences (James's live edit;
+the text is the plan's §9) · the `adoptCanvas` phase 2, on a measured main-thread cost of the
+swarm's frame, not a date · PU-12 and `deletePersona` under a live run · the Agents settings
+section · `SIBLINGS_TOKEN` and the pushes (puppeteer `5389449`, rosetta `e8d907a`) · the dev-local
+snapshot (the plan doc, the errata, the petition row, the triad rows — all in `draft/`) · the
+six-lens review of this slice, as AR-4b was of AR-3/AR-4. Next: **AR-6** approvals + prompts
+(Godview's send box PANE-ONLY).
+
+## AR-5b — the review's fixes: two content scopes, the walk that drops nothing, the column that paints, a peer's row that says its host (2026-09-13)
+
+**AR-5b is what six reviewers found** (`5bb79329`; puppeteer `4d734c9` + `b0f08ec` upstream, pinned).
+AR-5 landed and was read the same day by six Opus agents at six lenses — the renderer, EL7,
+the contracts and this ledger's own claims, fieldd, the tests, the upstream landing. One
+blocker, eleven majors, some thirty minors; every blocker and major is fixed here, the minors
+that were cheap with them, the rest named under "owed". Nothing about AR-5's SHAPE changed:
+the views are the package's, the ports are injected, the fold and the door are ours. What
+changed is what the doors may be asked for by whom, what the walk answers, and one CSS rule.
+
+**The blocker (the renderer lens): the usage column never painted.** `.vf-monitor-chrome` had a
+comment and no rule — the AR-5 rename that made the class the chrome slot deleted the claims
+strip's old rule under the same name and wrote none for the slot. On the swarm (the default
+view) the column laid out in flow BELOW the clipped stage; on the list it became a full-width
+block whose `--vf-monitor-chrome-right` pushed every row off the stage. The smoke could not see
+it (`usageTiles` counted the DOM, not the paint). The reference host's rule is ported
+(`position:absolute; top:11px; left:13px; width:46px; height:calc(100% - 17px)`) — which is why
+the claims strip always started at 72px — and the boundary test scans for it.
+
+**EL7 (the security lens): two CONTENT scopes.** `index.sessions` + `index.search` rode
+`index.read`, the census scope a plugin may hold to draw the roll call and that
+`PLUGIN_CAPABILITY_ELIGIBILITY` admits for renderer and service entries alike — so a plugin
+consented for the roll call would have gained transcript search over every consented root on an
+upgrade with no re-consent. `agents.usage` rode `agent.observe` the same way: the account's
+billing state and a credentialed vendor call per reading, for anyone consented to watch the
+fold. Two scopes in the registry now — `index.search` and `agent.usage` — local-only forever,
+absent from the tailnet preset and from every eligibility table (James's staged `plugins.ts`
+names neither, and absence is the safe default there; the file was not touched). The window
+token holds both; the contracts rows, the fieldd door tests (tokens, posture rows, and the D36
+rows, which now meet the SCOPE wall first since the tailnet preset carries neither scope) and the
+registry tests follow. Also EL7: the reader's own search query rode into fieldd's persisted log
+segments and out through an RPC error on the malformed leg (`/api/search?q=…` in `getBody`'s
+log lines and messages) — `routeOf(path)` strips the query string before either; the contract's
+"never the query" holds. A one-shot `agents.usage` before `lifecycle.ready` spent a credentialed
+call the boot meant to defer — `snapshot()` answers the honest empty until armed.
+
+**fieldd (the daemon lens, three probe-witnessed majors).** The attribution walk is the ORDINARY
+path, not an edge: rosetta widens each named root to its delegated children, so hits arrive from
+sessions the question never named — and a flat budget of 32 sequential lookups dropped a fifth
+of a 40-agent board's matches (the reviewer's probe: 40 hits in, 32 out). Every distinct
+unknown session is resolved now, concurrently in flights of eight under one 8 s deadline, up to
+the answer's own size; a walk that stops early CLIPS the answer. An unresolved hit claimed to BE
+its own root (`rootSessionId: root?.id ?? hit.session_id` — a subagent transcript read as
+top-level; 24 of 40 hits in the unscoped probe): `IndexSearchHit.rootSessionId` is optional in
+the contract, the package's `HistorySearchHit` likewise (`4d734c9`), and the child's own row
+names its root as a fact even when the root's row was not fetched. A scoped hit dropped as out of
+scope marks the answer clipped. The usage poll's first frame reported every account FAILED and
+spent one extra credentialed call per provider: `beginPolling` ran `monitor.start()` (an
+immediate reading over the unkeyed per-provider rows) BEFORE `refreshProfiles()` replaced those
+rows — the reconcile runs first now, and the start's own reading finds nothing due. Rows: three
+over the service with a stub daemon (`agent-index-walk.test.ts`: 40/40 scoped, no hit its own
+root unscoped, 80 lookups in flights; a daemon that cannot answer the walk clips and carries NO
+root), the first frame (one row per account, `available`, one reading, no unkeyed call), the
+refcount (only the last subscriber to leave stops the poll — the tests lens's mutation showed an
+unconditional stop passed every row), the readiness edge over an unknown scope while the
+projection is building (`answered: false`, never "no matches"), the ready refusal that asks
+nothing, parse-through under the contract on the producer's side, and the metric asserted
+EXACTLY (a `toMatchObject` on a `.passthrough()` shape let a new key cross with everything
+green).
+
+**The contracts lens.** A credits-only `available` reading (Codex, Grok: no percentage meters)
+was drawn as a refusal captioned "available" with its credits dropped — the adapter gated on
+the meters; it gates on the state now and the column's own NO LIMIT DATA line draws it. The
+contract's `unknown` state (a daemon that has not read yet) was folded to a bare `unavailable`
+that claimed a refusal — it is said as "no reading yet", retryable, under no code (Core's
+failure union has no slot for it; a `pending` slot upstream is the real fix, owed). The open
+scope word is read through Core's enum (`unknown` for a word it does not know, never a typed
+lie). Two wire shapes shipped no fixture — `index-sessions.valid.json` exists and
+`index-status.valid.json` carries the `search` block the sheet reads; both are in the prefix
+map. The generator's "deliberately absent" comment names the agent plane.
+
+**The renderer lens, beyond the blocker.** The usage column subscribed to the port it was born
+with (`[]` deps upstream) — a door that arrives after the first mount left it on a no-op port
+for the session; it follows `port` now (`4d734c9`). The stage's palette read the document's
+first Godview root; it reads ITS root through a ref filled in layout. The digit chords cycled
+by session id — a managed row with no pane has no session, so `undefined` matched the first
+sessionless row and ⌘2 kept answering the same row; the cycle compares row ids. The FIND
+control named a sheet that returns `null` while closed (`aria-controls` only while open); the
+sheet's `onClose` is stable; the dead `--vf-monitor-chrome-height` write is gone; the project
+ledger's cache is capped at 256 keys (the newest dealt); a usage seed is marked when it lands,
+so a double-invoked effect asks again rather than never.
+
+**The tests lens.** The gate's "lottery" red was misdiagnosed: `godview-remote-door`'s "with NO
+door" row read `'serving'` from an ORPHANED MOUNT — one row mounted twice and the helper replaced
+the root without unmounting the first tree, whose 2 s mesh poll kept firing markers into later
+rows' arrays under load. `unmountMonitor()` between the two mounts; the repo memory that filed
+it as early sampling is corrected. The two remote-row claims' "skipped" comments said to delete
+them once the facet was drawn — they are live and pass; the comments say so. The deleted
+parameters test's registry invariant (distinct ids, labels, controls) is kept in
+`godview-stage-parameters.test.ts`. Three of AR-5's four upstream fixes shipped with no upstream
+test (the package has no DOM environment): the bodies' source attribute has one now, statically
+(`AgentSwarm.test.tsx`); the find sheet's focus return and the palette's root remain witnessed
+only by this consumer's smoke and catalog — owed upstream with a DOM environment.
+
+**Upstream (`4d734c9`, `b0f08ec`; views 18 files / 133 tests, the root typecheck, the layout
+gate).** Beside the port and the root: the `./physics` subpath no longer re-exports the React
+context (a host imports that subpath inside its physics WORKER; the provider stays on the main
+entry — `b0f08ec`, after the first cut took it off both); `@webgpu/types` is a dependency
+(the emitted declarations name `GPUDevice` and kin, and tsc drops the reference directive from
+the `.d.ts` — a consumer typechecking against `dist` names it in its own `types`, which the
+entry's header says; this consumer compiles the source); `sideEffects` names the lab entry
+(its module runs `main()` on import); the palette diffs before it publishes (a host class
+toggle on `<html>` re-rendered every consumer and dropped the swarm's colour cache); the DOM
+damage gate's dead fields left the frame.
+
+**Errata for §AR-5, placed here at the claim's source (the ledger is the source):**
+· "six commits" — the pin move `d2b0600` → `5389449` was NINE commits: beside the six, James's
+own `a94b5f4` (the runtime's conversation-snapshot API removed), `e32b56b` (core's artifacts
+service and `state.subagents` removed — the schema-3 change this entry already carried) and
+`2de78ee` (docs); no fieldd, renderer or contracts reader of the removed APIs exists, so the pin
+carried them silently — an EL8 entry names what it carries, and now does.
+· "Polling is DEMAND-DRIVEN — only while a subscriber exists" — the recurring poll is; a one-shot
+`agents.usage` takes exactly the one reading it was asked for (and since AR-5b only once armed,
+after the registry reconcile). The boot claim stands.
+· "the file the repo already knows samples too early" — it did not; see the tests lens above.
+· "views 17 files / 131 tests" — the runner's count, which stands; a static count of `it(` sites
+is 126 (rows generated in loops make the difference).
+
+**Gate:** `pnpm verify` verbatim exits 1 at `pnpm lint` — biome `Checked 1296 files … Found 8 errors`, all eight in James's untracked `work/composer-directions.html` (the AR-5-0 class; preflight OK with the two dirty-sibling warnings, check:deps, icons:check and typecheck ran green inside it). The stages after lint, in the gate's order, each alone and each GREEN this time: `cargo fmt --check` exit 0 · `pnpm lint:rust` exit 0 · `pnpm bundle:assert` exit 0 · `pnpm test` exit 0 — every project green in ONE pass (field-app 86 files, 729 tests; fieldd 766 passed + 14 skipped, the opt-in real rows; electron-shell 679 + 2 skipped; contracts 160), the orphaned mount's red gone with its cause · `pnpm test:rust` exit 0, `241 passed; 0 failed; 6 ignored` over 21 result lines · `gen:check`'s Rust half (`gen:rust` + the diff over `packages/contracts/gen`, `contracts.rs`, `registries.rs`) exit 0; the docs half is not run because `gen:docs` rewrites James's staged `docs/plugin-authoring/*`.
+
+**Owed, named by the review and not taken here:** the swarm's render loop (interpolation, the
+rAF pump) has no test in either repo — the plan's §6.6 "loop rewritten against an injected fake
+`SwarmRenderer`" needs a renderer seam the package does not have (an upstream ask, PU-13) · a
+`pending` slot in Core's account-usage failure union · a DOM environment upstream for the find
+sheet's focus return and the palette's root · `index.status`'s `detail` carries rosettad's raw
+stderr tail to the renderer (project a reason word) · one deadline per `index.search` across
+its legs, and `progress` on the index's UNAVAILABLE refusals · a WS heartbeat behind the
+demand-driven poll (a wedged renderer holds the subscription) · the fake rosettad's four
+divergences from the real daemon (prefix, clamp, the 400s, child hiding) · ⌘F is meta-only
+(the Windows port) and is swallowed on the catalog page · the swarm's physics mode is not on
+the section (`data-swarm-physics`) · `updatedAt ?? 0` in the history adapter (the package's
+facts want a number) · the `unknown` metric count (131 vs 126) is a note, not a defect.
+
 ## IOS-3c — the write key has a home: the phone can be granted writes
 
 **LANDED 2026-09-09, `9b07fc61`** (+ `997baf8a`, the workspace pin record). Built by a

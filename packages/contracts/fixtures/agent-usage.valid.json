@@ -1,0 +1,65 @@
+{
+  "entries": [
+    {
+      "provider": "claude",
+      "label": "Claude",
+      "profileId": "claude:native-default",
+      "profileLabel": "Default",
+      "state": "available",
+      "metrics": [
+        {
+          "id": "five-hour",
+          "label": "5H",
+          "description": "Rolling five-hour window",
+          "kind": "window",
+          "usedPercent": 42.5,
+          "durationMinutes": 300,
+          "startsAt": "2026-09-13T09:00:00.000Z",
+          "resetsAt": "2026-09-13T14:00:00.000Z"
+        },
+        {
+          "id": "seven-day",
+          "label": "7D",
+          "kind": "window",
+          "usedPercent": 103.2,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-17T00:00:00.000Z"
+        }
+      ],
+      "credits": {
+        "balance": "$12.40",
+        "hasCredits": true,
+        "unlimited": false,
+        "resetCreditsAvailable": 2
+      },
+      "fetchedAt": "2026-09-13T12:00:00.000Z",
+      "scope": "subscription",
+      "source": {
+        "kind": "native-protocol",
+        "stability": "experimental"
+      }
+    },
+    {
+      "provider": "claude",
+      "label": "Claude",
+      "profileId": "claude:work",
+      "profileLabel": "Work",
+      "state": "rate-limited",
+      "metrics": [],
+      "message": "Claude account usage is rate limited; retry after the window resets",
+      "retryable": true,
+      "retryAt": "2026-09-13T12:30:00.000Z",
+      "fetchedAt": "2026-09-13T12:00:01.000Z"
+    },
+    {
+      "provider": "codex",
+      "label": "Codex",
+      "state": "unauthenticated",
+      "metrics": [],
+      "message": "no account is signed in for Codex",
+      "retryable": false,
+      "fetchedAt": "2026-09-13T12:00:01.000Z"
+    }
+  ],
+  "generatedAt": "2026-09-13T12:00:01.000Z"
+}

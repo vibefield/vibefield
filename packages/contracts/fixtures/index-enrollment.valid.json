@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "enabled_kinds": ["claude-code"],
+  "runtimes": [
+    {
+      "kind": "claude-code",
+      "data_root": "/Users/kim/Library/Application Support/VibeField/users/1/agents/roots/claude/9a3d",
+      "label": "Kim",
+      "profile_id": "claude:9a3d"
+    }
+  ],
+  "retired": [
+    {
+      "kind": "codex",
+      "data_root": "/Users/kim/Library/Application Support/VibeField/users/1/agents/roots/codex/17bf",
+      "label": "Reviewer",
+      "profile_id": "codex:17bf",
+      "retired_at": "2026-09-12T17:00:00.000Z"
+    }
+  ],
+  "updated_at": "2026-09-12T17:05:00.000Z"
+}

@@ -14,8 +14,7 @@
 @import "./panels/settings.css";
 @import "./godview/godview.css";
 @import "./godview/deck-zoom.css";
-@import "./godview/views/swarm/swarm.css";
-@import "./godview/views/swarm/agent-bubble.css";
+@import "@vibecook/puppeteer-views/styles/views.css";
 @custom-variant dark (&:where(.dark, .dark *));
 /* Three hops from packages/field-app/src → repo root. Shared host primitives
    sit behind a workspace symlink, so auto-detection cannot see them. */

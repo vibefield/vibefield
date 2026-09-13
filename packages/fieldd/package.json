@@ -3,6 +3,15 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "nx": {
+    "namedInputs": {
+      "default": [
+        "{projectRoot}/**/*",
+        "sharedGlobals",
+        "siblings"
+      ]
+    }
+  },
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing/mock-mgmt.ts"
@@ -13,7 +22,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@rosetta/protocol": "*",
     "@vibecook/ghosttea-client": "*",
+    "@vibecook/puppeteer-builtin-providers": "*",
+    "@vibecook/puppeteer-core": "*",
+    "@vibecook/puppeteer-record": "*",
+    "@vibecook/puppeteer-runtime": "*",
     "@vibefield/audit": "workspace:*",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/fieldd-client": "workspace:*",

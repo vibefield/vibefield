@@ -96,6 +96,7 @@ export function mountProductHost(
       usersList: () => window.vibefield.usersList(),
       usersCreate: (params) => window.vibefield.usersCreate(params),
       usersSwitch: (params) => window.vibefield.usersSwitch(params),
+      screenshotCapture: () => window.vibefield.screenshot.capture(),
       onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
       completeClose: (result) => window.vibefield.completeClose(result),
       onShellCommand: (handler) => window.vibefield.onShellCommand(handler),

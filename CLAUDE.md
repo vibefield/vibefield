@@ -45,8 +45,10 @@ in the split.
 - **Wire truth:** `contracts` — the zero-dep root of the graph, imported from every
   environment (renderer, workers, Node daemons; Rust side generated). Keep it dependency-free.
 - **Node-only spine libraries**, consumed by the Node hosts (fieldd, Electron main), never by
-  browser-compatible code: `logging` + `audit` (LOG track), `users` (UA track).
-- **Daemon plane:** `fieldd` · `field-native` (the sole Cargo workspace member) ·
+  browser-compatible code: `logging` + `audit` (LOG track), `users` (UA track), `screenshot`
+  (SNAP track — the host side of the native screenshot helper; wall R19 keeps Electron out).
+- **Daemon plane:** `fieldd` · `field-native` (the sole Cargo workspace member — the Windows
+  screenshot helper crate under `apps/desktop/native` is its OWN workspace root, SNAP-D7) ·
   `fieldd-supervisor` (a library inside Electron main, never its own process) ·
   `fieldd-client` (the renderer/worker client).
 - **Renderer plane:** `field-app` — the browser-compatible product (`@vibefield/fieldd` is a
@@ -84,6 +86,21 @@ pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
 > ones, `apps/ios/VibeFieldKit/Package.resolved` for the Swift side. Read the number there
 > before citing one; an EL8 pin stated from memory is how lockstep quietly breaks.
 
+**AR-0 sibling mode (2026-09-12):** the agent runtime is **puppeteer** and agent history is
+**rosetta** (chopsticks and spaghetti retired 2026-09-04). Neither is published, so this repo
+consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta`, pinned by revision in
+`siblings.lock.json`: puppeteer's packages and rosetta's TypeScript client enter as `link:` rows in
+the fenced block of `pnpm-workspace.yaml` (packages ask for `"*"`; only directly imported packages
+are rows; adapters never — walls R20–R22), and `rosettad` is built from the rosetta checkout by
+`pnpm siblings:build` (cargo's own target dir, the SSD) and reaches fieldd as `FIELDD_ROSETTAD_BIN`.
+`pnpm preflight` fails on a missing checkout or a revision ≠ the pin and warns on a dirty tree;
+`pnpm siblings` prints the state; `pnpm siblings:pin` is the deliberate upgrade event (EL8).
+`scripts/siblings.mjs` is the ONE reader of the lock (preflight, `check:deps`, the Nx cache stamp
+and the dev runner all go through it). Sibling *sources* reach the fieldd and renderer builds
+through esbuild's and Vite's own input tracking, never through the runner's watchers, so the
+"never watches sibling trees" law below stands. Exit (W-D8) is a version edit: replace each
+`link:` row with an exact version and delete the lock entry.
+
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version).
 
@@ -103,6 +120,12 @@ Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install ca
 - `pnpm smoke:studio` — opt-in physical Electron gate for Studio/product session and preload
   isolation, real UI edit/apply, product reload replay, Studio-close restoration, and fieldd.
 - `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` — headless desktop smoke checks
+- `pnpm --filter @vibefield/desktop build:screenshot-helper` / `test:screenshot-helper` /
+  `verify:screenshot-helper` — the native screenshot helper (Swift on macOS, Rust on Windows;
+  `apps/desktop/native/*/screenshot-helper`). Outside `pnpm verify` like the SCK helper and the
+  iOS app: `verify:screenshot-helper` is the live witness (a real `--capture-test`, no overlay),
+  the Windows crate's gates are in its README (SNAP-D7). Never run the helper's `--once` on a
+  developer's live display from an agent — it is a full-screen overlay.
 - `pnpm build` / `pnpm typecheck` / `pnpm test` — Nx task graph with conservative local caching;
   use `pnpm exec nx graph` or `pnpm exec nx affected -t <target>` to inspect/select work
 - `pnpm verify` — THE gate; run before every commit: preflight → typecheck → biome →

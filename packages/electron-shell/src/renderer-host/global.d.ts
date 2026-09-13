@@ -1,6 +1,7 @@
 import type {
   DesktopShellState,
   GodviewState,
+  ScreenshotCaptureResult,
   ShellCommand,
   ShellPlatform,
   WindowConnection,
@@ -84,6 +85,12 @@ declare global {
       godview: {
         set(open?: boolean): Promise<GodviewState>;
         onState(handler: (state: GodviewState) => void): () => void;
+      };
+      /** SNAP-D3 — the native screenshot helper through main; the answer is
+       * the contract's own result (still on disk + clipboard, cancel, or a
+       * typed error). */
+      screenshot: {
+        capture(): Promise<ScreenshotCaptureResult>;
       };
       diagnostics: {
         query(query: DiagnosticLogQueryV1): Promise<DiagnosticLogSnapshotV1>;

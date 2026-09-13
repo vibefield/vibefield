@@ -53,6 +53,12 @@ export interface DesktopResources {
     readonly helperPath: string;
     readonly adapterPath: string;
   } | null;
+  /** SNAP-D5 — the native screenshot helper's executable (inside its bundle on
+   * macOS, a bare .exe on Windows), or null on a platform with no helper.
+   * Deliberately NOT asserted by `assertPackagedResources`, unlike the SCK
+   * helper: a screenshot is a peripheral, so an absent helper is an honest
+   * `helper-missing` at capture time — never a refusal to boot. */
+  readonly screenshotHelperPath: string | null;
   /** plugin discovery roots — absolute, never derived by the daemon itself */
   readonly pluginRoots: {
     readonly bundled: readonly string[];
@@ -102,6 +108,18 @@ function trayLayout(dir: string): Readonly<Record<TrayImageKind, TrayImageSet>> 
 
 const exe = (name: string, platform: string): string =>
   platform === "win32" ? `${name}.exe` : name;
+
+/** The screenshot helper is a BUNDLE on macOS — TCC and LaunchServices key on
+ * the bundle, so the executable lives inside it — and a bare .exe on Windows.
+ * `dir` is wherever the platform keeps it: the per-platform build directory in
+ * development, the flat `bin/` when packaged. */
+function screenshotHelperPath(dir: string, platform: string): string | null {
+  if (platform === "darwin") {
+    return join(dir, "field-screenshot-helper.app", "Contents", "MacOS", "field-screenshot-helper");
+  }
+  if (platform === "win32") return join(dir, "field-screenshot-helper.exe");
+  return null;
+}
 
 export function resolveDevelopmentRepoRoot(appPath: string, injected?: string): string {
   if (injected === undefined) return resolve(appPath, "..", "..");
@@ -159,6 +177,17 @@ export function resolveDevelopmentResources(opts: {
             ),
           }
         : null,
+    screenshotHelperPath: screenshotHelperPath(
+      join(
+        opts.repoRoot,
+        "apps",
+        "desktop",
+        "build",
+        "native",
+        platform === "darwin" ? "macos" : "windows",
+      ),
+      platform,
+    ),
     pluginRoots: {
       bundled: [join(opts.repoRoot, "plugins")],
       devLinked: [join(opts.repoRoot, "examples", "plugins")],
@@ -202,6 +231,7 @@ export function resolvePackagedResources(opts: {
             adapterPath: join(bin, "live-surface-adapter.node"),
           }
         : null,
+    screenshotHelperPath: screenshotHelperPath(bin, platform),
     pluginRoots: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],
       devLinked: [],

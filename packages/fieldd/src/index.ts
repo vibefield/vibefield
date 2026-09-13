@@ -1,6 +1,44 @@
 // @vibefield/fieldd — the product-plane daemon (design-02 §3).
 
 export {
+  AGENT_ENV_PASSTHROUGH,
+  type AgentEnvironmentRequest,
+  agentEnvironment,
+  type BornTerminal,
+  createTerminalAgentHost,
+  type TerminalAgentHost,
+  type TerminalAgentHostOptions,
+} from "./agent-host";
+export {
+  EnrollmentStore,
+  type EnrollmentStoreOptions,
+  type EnrollRuntimeSpec,
+  IndexService,
+  type IndexServiceOptions,
+} from "./agent-index";
+export {
+  AgentRuntimeService,
+  type AgentRuntimeServiceOptions,
+  createProfileStore,
+  DistributionRecordStore,
+  noTerminalHost,
+} from "./agent-runtime";
+export {
+  foldStatus,
+  mirrorOf,
+  recordForRun,
+  SessionRecordStore,
+  type SummarizeInput,
+  summarizeManaged,
+} from "./agent-sessions";
+export {
+  type AccountUsagePollOptions,
+  type AccountUsageRuntime,
+  AccountUsageService,
+  type AccountUsageServiceOptions,
+  projectEntry,
+} from "./agent-usage";
+export {
   type ArtifactServeBridge,
   ArtifactService,
   type ArtifactServiceOptions,
@@ -89,6 +127,15 @@ export {
   type PresenceRoomRouterOptions,
 } from "./presence-room";
 export { ProductApi } from "./product-api";
+export {
+  ROSETTAD_UNCONFIGURED,
+  type RosettadHealth,
+  type RosettadPhase,
+  type RosettadState,
+  RosettadSupervisor,
+  type RosettadSupervisorOptions,
+  rosettadHealthOf,
+} from "./rosettad-supervisor";
 export {
   type PreparedServiceCandidate,
   ServiceHost,
