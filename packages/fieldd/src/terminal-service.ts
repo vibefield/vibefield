@@ -1403,9 +1403,21 @@ function errorMessage(error: unknown): string {
 /** The service's own "that session doesn't exist" refusal — the ONLY error
  * that actually means already-gone (verified against the pinned floor; the
  * review's finding was exactly that timeouts and closed connections were being
- * read as this). */
+ * read as this).
+ *
+ * TWO phrasings, because the floor has two (ghosttea 0.11.1, re-read
+ * 2026-09-13): `terminate` and `create` bail "unknown session"
+ * (`service.rs:3124,3284`), while everything that resolves the session out of
+ * the registry first — `GetAutomationState` (:3218), `AutomationInput` (:3234)
+ * and `SetPersistence` (:3257) — says "unknown or remote session". The narrow
+ * pattern therefore never matched the AUTOMATION path at all: `automate`'s
+ * typed `{accepted:false, reason:"unknown-session"}` was unreachable and the
+ * phone's stop button answered INTERNAL, retryable, on the benign race where a
+ * session has left (or has not been cell-tagged yet). The floor's own Rust
+ * classifier reads both spellings as one meaning — "the registry row is gone"
+ * (`mgmt/mod.rs` classify_prune_error) — and so does this. */
 function isUnknownSession(error: unknown): boolean {
-  return /unknown session/i.test(errorMessage(error));
+  return /unknown (?:or remote )?session/i.test(errorMessage(error));
 }
 
 /** The floor's OWN spawn refusal, anchored (GT-5b). The message is byte-

@@ -156,6 +156,10 @@ async function startFakeFloor(
     stall?: readonly string[];
     createError?: string;
     createErrorMeta?: { stage?: string; code?: string; osError?: number };
+    /** MF-2c — what the automation arms answer instead of a result. The floor
+     * resolves the session out of its registry FIRST, so both automation
+     * messages fail with the same words when it is gone. */
+    automationError?: string;
     protocolMinor?: number;
   } = {},
 ): Promise<{
@@ -233,6 +237,25 @@ async function startFakeFloor(
           if (opts.createError !== undefined)
             reply({ type: "error", message: opts.createError, ...opts.createErrorMeta });
           else reply({ type: "session-created", session: fakeSession(createdSessionId) });
+        } else if (
+          (msg.type === "get-automation-state" || msg.type === "automation-input") &&
+          opts.automationError !== undefined
+        ) {
+          reply({ type: "error", message: opts.automationError });
+        } else if (msg.type === "get-automation-state") {
+          reply({ type: "automation-state", sessionId: msg.sessionId, humanInputEpoch: 1 });
+        } else if (msg.type === "automation-input") {
+          // `reason` must be present and null: the protocol validator rejects
+          // an absent one and the CLIENT destroys the socket over an invalid
+          // event, which reads as "the floor died" rather than as a bad fake.
+          reply({
+            type: "automation-input-result",
+            sessionId: msg.sessionId,
+            accepted: true,
+            humanInputEpoch: 1,
+            inputSequence: 1,
+            reason: null,
+          });
         } else if (msg.type === "list-sessions") {
           reply({ type: "sessions", sessions: [fakeSession(createdSessionId)] });
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
@@ -642,6 +665,54 @@ describe("TerminalService (NF-3, mock native)", () => {
       r.action.startsWith("terminal."),
     );
     expect(records, "a retired door writes no mint records").toEqual([]);
+  });
+
+  it("reads the floor's OWN already-gone words as the typed refusal, in both spellings", async () => {
+    // MF-2c — the automation path's refusal was UNREACHABLE. The floor resolves
+    // the session out of its registry before it steers anything, and that arm
+    // says "unknown or remote session" (ghosttea 0.11.1 service.rs:3218 for the
+    // epoch read, :3234 for the input itself) while `terminate` says "unknown
+    // session" (:3124). fieldd matched only the second, so a stop aimed at a
+    // session that had just left answered INTERNAL, retryable — the phone's
+    // stop button on the benign race. Both spellings are fed here, from the
+    // floor side of a real socket, so an upstream rewording reds this row
+    // rather than silently restoring the INTERNAL.
+    for (const message of ["unknown or remote session", "unknown session"]) {
+      const floor = await startFakeFloor({ automationError: message });
+      const service = new TerminalService({
+        link: {
+          subscribe: async () => ({ snapshot: {} }),
+          terminalEndpoints: floor.endpoints,
+          on: () => undefined,
+        },
+      });
+      cleanup.push(() => service.dispose());
+      // interrupt is the phone's stop button; paste and text share the helper,
+      // so one of each proves the classifier and not one call site
+      expect(await service.automate("gone-session", { kind: "interrupt" }), message).toEqual({
+        accepted: false,
+        reason: "unknown-session",
+      });
+      expect(await service.automate("gone-session", { kind: "text", text: "y" }), message).toEqual({
+        accepted: false,
+        reason: "unknown-session",
+      });
+    }
+  });
+
+  it("still steers a session the floor DOES hold (the control)", async () => {
+    const floor = await startFakeFloor();
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        terminalEndpoints: floor.endpoints,
+        on: () => undefined,
+      },
+    });
+    cleanup.push(() => service.dispose());
+    expect(await service.automate(floor.createdSessionId, { kind: "interrupt" })).toEqual({
+      accepted: true,
+    });
   });
 
   it("gates every terminal.* method on its declared scope", async () => {
