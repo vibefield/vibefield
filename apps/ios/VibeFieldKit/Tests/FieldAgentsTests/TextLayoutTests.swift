@@ -5,7 +5,7 @@ import Testing
 // The reference's `text-layout.test.ts`, transcribed.
 
 /// A monospace stand-in: every character is 0.6 em wide, plus the letter spacing.
-private let measure: TextMeasure = { text, style in
+private func measure(_ text: String, _ style: TextStyle) -> Double {
   let count = Double(text.count)
   return count * style.size * 0.6 + count * style.letterSpacing * style.size
 }

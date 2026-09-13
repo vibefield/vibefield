@@ -1,5 +1,6 @@
 import FieldAgents
 import FieldDesign
+import FieldSwarm
 import SwiftUI
 
 /// One session — an agent's or a peer's terminal — rendered as a living

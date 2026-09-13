@@ -37,7 +37,7 @@ public enum TextTransform: Equatable, Hashable, Sendable {
 }
 
 /// Advance width of `text` in points, letter spacing included.
-public typealias TextMeasure = @Sendable (String, TextStyle) -> Double
+public typealias TextMeasure = (String, TextStyle) -> Double
 
 public enum CopyTone: Equatable, Sendable {
   case ink
@@ -123,12 +123,27 @@ public struct PlacedLine: Equatable, Sendable {
   /// Centre of the line box relative to the body centre, down positive.
   public var y: Double
   public var height: Double
+
+  public init(line: CopyLine, text: String, width: Double, textWidth: Double, y: Double, height: Double) {
+    self.line = line
+    self.text = text
+    self.width = width
+    self.textWidth = textWidth
+    self.y = y
+    self.height = height
+  }
 }
 
 public struct CopyLayout: Equatable, Sendable {
   public var lines: [PlacedLine]
   public var top: Double
   public var bottom: Double
+
+  public init(lines: [PlacedLine], top: Double, bottom: Double) {
+    self.lines = lines
+    self.top = top
+    self.bottom = bottom
+  }
 }
 
 private let ellipsis = "…"

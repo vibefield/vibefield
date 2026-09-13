@@ -1,5 +1,6 @@
 import FieldAgents
 import FieldDesign
+import FieldSwarm
 import SwarmPhysics
 import SwiftUI
 

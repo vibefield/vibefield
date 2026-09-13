@@ -2,6 +2,7 @@ import FieldAgents
 import FieldDesign
 import FieldInput
 import FieldMesh
+import FieldSwarm
 import FieldTerminal
 import SwiftUI
 import UIKit
@@ -65,6 +66,9 @@ public struct HomeScreen: View {
   @State private var writeKeyNote: String?
   #if DEBUG
     @State private var demoRemoteActive = false
+    /// `-vf-swarm-lab[=section[:page]]`: the design lab over the field (IOS-6c, D-i15).
+    @State private var swarmLabOpen = false
+    @State private var swarmLabFocus: LabFocus?
   #endif
   // --- IOS-5a: the input card ---------------------------------------------
   /// The card above the keyboard: the draft, the latch, the mode. It is state
@@ -125,6 +129,9 @@ public struct HomeScreen: View {
       VignetteOverlay()
         .ignoresSafeArea()
     }
+    // The lab covers the stage (IOS-6c); presented here rather than on the
+    // body's chain, which is already at the type-checker's limit.
+    .fullScreenCover(isPresented: swarmLabBinding) { SwarmLabView(focus: swarmLabFocusValue) }
   }
 
   @ViewBuilder
@@ -211,6 +218,15 @@ public struct HomeScreen: View {
         if ProcessInfo.processInfo.arguments.contains("-vf-open-settings") {
           settingsSheetOpen = true
         }
+        // --- IOS-6c: the swarm design lab — the reference's fixture stages on
+        // this phone's renderer, the screenshot gate for every pixel slice.
+        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-swarm-lab") }) {
+          // `-vf-swarm-lab=states:3` opens one page so a screenshot run,
+          // which cannot scroll, reaches every stage.
+          swarmLabFocus = LabFocus(argument: String(argument.dropFirst("-vf-swarm-lab".count).drop(while: { $0 == "=" })))
+          swarmLabOpen = true
+        }
+        // --- end IOS-6c
         // The key sheet is otherwise reachable only by a finger on ENTER KEY,
         // and a headless run has none — so its pixels could never be looked
         // at. Same fixture host as `-vf-demo-remote`, and the same disclaimer:
@@ -1093,6 +1109,24 @@ public struct HomeScreen: View {
 
   private struct SessionSelection: Identifiable {
     let id: String
+  }
+
+  /// The lab's door exists only in DEBUG; in Release the binding is constant
+  /// false and the cover never presents.
+  private var swarmLabBinding: Binding<Bool> {
+    #if DEBUG
+      return $swarmLabOpen
+    #else
+      return .constant(false)
+    #endif
+  }
+
+  private var swarmLabFocusValue: LabFocus? {
+    #if DEBUG
+      return swarmLabFocus
+    #else
+      return nil
+    #endif
   }
 
   #if DEBUG
