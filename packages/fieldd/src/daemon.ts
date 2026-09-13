@@ -98,6 +98,7 @@ import {
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { createFieldSubscription } from "./agent-field";
+import { AgentFieldPublisher } from "./agent-field-publisher";
 import { EnrollmentStore, IndexService } from "./agent-index";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
@@ -1639,6 +1640,35 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     devicesForAgents = devices;
     devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
+
+    // -- MF-1 (§10.2, D4's hybrid): the agent field's store carrier --
+    // The same content-free rows `agent.subscribe {projection: "field"}`
+    // serves, published into `field.agents.v1` so a phone joining the tailnet
+    // reads every desktop's board from the mesh with no fieldd in its path.
+    //
+    // THE GATE, stated honestly. §10.2 asks for "the floor's terminal mesh is
+    // SERVING". That fact does not exist on this plane: the floor reports its
+    // terminal-mesh state only as prose inside a unit `detail` string
+    // (field-native/src/services/terminal.rs — `publishing terminal.v1.hosts`
+    // / `off — {reason}`), the mgmt hello carries `terminal` + `terminalRoutes`
+    // and no mesh flag, and fieldd subscribes to no observed-unit stream that
+    // would carry the prose anyway. So the gate is the best STRUCTURED truth
+    // fieldd holds: this device's product serve is active, which is precisely
+    // the door a phone would dial and the URL DeviceService already advertises
+    // in `field.devices.v1`. It is a NEIGHBOURING consent, not the same one —
+    // a floor can serve terminals with the product serve down, and vice versa
+    // — and it is one call site to change the day the floor's hello grows a
+    // typed `terminalMesh` fact.
+    const agentField = new AgentFieldPublisher({
+      mesh,
+      deviceId: () => devices.currentDeviceId(),
+      list: () => agents.list(),
+      subscribe: (emit) => agents.subscribe(emit),
+      serving: () => mesh.serves().some((s) => s.name === "product" && s.status === "active"),
+      logger: logger.child({ component: "agents.field" }),
+    });
+    mesh.on("serves-changed", () => agentField.notifyServingChanged());
+    agentField.start();
     // NF-3: the terminalHost capability follows the hello — republish when the
     // floor appears or a new native boot rotates the endpoints.
     native.on("terminal-endpoints", () => void devices.sync());
@@ -3090,6 +3120,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         const artifactDrain = artifacts.dispose();
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
+        // MF-1 — withdraw this device's field before the mesh goes: a reader
+        // should lose us now, not in thirty seconds on the expiry clock
+        await agentField.dispose();
         devices.dispose();
         terminals.dispose();
         services.dispose();
@@ -3465,6 +3498,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           const artifactDrain = artifacts.dispose();
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
+          await agentField.dispose(); // MF-1 — the field is withdrawn, not left to expire
           devices.dispose();
           // The fatal and rollback ladders always dropped the terminal control
           // client; this one did not, so a cleanly stopping fieldd left its
