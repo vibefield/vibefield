@@ -5781,3 +5781,136 @@ section · `SIBLINGS_TOKEN` and the pushes (puppeteer `5389449`, rosetta `e8d907
 snapshot (the plan doc, the errata, the petition row, the triad rows — all in `draft/`) · the
 six-lens review of this slice, as AR-4b was of AR-3/AR-4. Next: **AR-6** approvals + prompts
 (Godview's send box PANE-ONLY).
+
+## AR-5b — the review's fixes: two content scopes, the walk that drops nothing, the column that paints, a peer's row that says its host (2026-09-13)
+
+**AR-5b is what six reviewers found** (`5bb79329`; puppeteer `4d734c9` + `b0f08ec` upstream, pinned).
+AR-5 landed and was read the same day by six Opus agents at six lenses — the renderer, EL7,
+the contracts and this ledger's own claims, fieldd, the tests, the upstream landing. One
+blocker, eleven majors, some thirty minors; every blocker and major is fixed here, the minors
+that were cheap with them, the rest named under "owed". Nothing about AR-5's SHAPE changed:
+the views are the package's, the ports are injected, the fold and the door are ours. What
+changed is what the doors may be asked for by whom, what the walk answers, and one CSS rule.
+
+**The blocker (the renderer lens): the usage column never painted.** `.vf-monitor-chrome` had a
+comment and no rule — the AR-5 rename that made the class the chrome slot deleted the claims
+strip's old rule under the same name and wrote none for the slot. On the swarm (the default
+view) the column laid out in flow BELOW the clipped stage; on the list it became a full-width
+block whose `--vf-monitor-chrome-right` pushed every row off the stage. The smoke could not see
+it (`usageTiles` counted the DOM, not the paint). The reference host's rule is ported
+(`position:absolute; top:11px; left:13px; width:46px; height:calc(100% - 17px)`) — which is why
+the claims strip always started at 72px — and the boundary test scans for it.
+
+**EL7 (the security lens): two CONTENT scopes.** `index.sessions` + `index.search` rode
+`index.read`, the census scope a plugin may hold to draw the roll call and that
+`PLUGIN_CAPABILITY_ELIGIBILITY` admits for renderer and service entries alike — so a plugin
+consented for the roll call would have gained transcript search over every consented root on an
+upgrade with no re-consent. `agents.usage` rode `agent.observe` the same way: the account's
+billing state and a credentialed vendor call per reading, for anyone consented to watch the
+fold. Two scopes in the registry now — `index.search` and `agent.usage` — local-only forever,
+absent from the tailnet preset and from every eligibility table (James's staged `plugins.ts`
+names neither, and absence is the safe default there; the file was not touched). The window
+token holds both; the contracts rows, the fieldd door tests (tokens, posture rows, and the D36
+rows, which now meet the SCOPE wall first since the tailnet preset carries neither scope) and the
+registry tests follow. Also EL7: the reader's own search query rode into fieldd's persisted log
+segments and out through an RPC error on the malformed leg (`/api/search?q=…` in `getBody`'s
+log lines and messages) — `routeOf(path)` strips the query string before either; the contract's
+"never the query" holds. A one-shot `agents.usage` before `lifecycle.ready` spent a credentialed
+call the boot meant to defer — `snapshot()` answers the honest empty until armed.
+
+**fieldd (the daemon lens, three probe-witnessed majors).** The attribution walk is the ORDINARY
+path, not an edge: rosetta widens each named root to its delegated children, so hits arrive from
+sessions the question never named — and a flat budget of 32 sequential lookups dropped a fifth
+of a 40-agent board's matches (the reviewer's probe: 40 hits in, 32 out). Every distinct
+unknown session is resolved now, concurrently in flights of eight under one 8 s deadline, up to
+the answer's own size; a walk that stops early CLIPS the answer. An unresolved hit claimed to BE
+its own root (`rootSessionId: root?.id ?? hit.session_id` — a subagent transcript read as
+top-level; 24 of 40 hits in the unscoped probe): `IndexSearchHit.rootSessionId` is optional in
+the contract, the package's `HistorySearchHit` likewise (`4d734c9`), and the child's own row
+names its root as a fact even when the root's row was not fetched. A scoped hit dropped as out of
+scope marks the answer clipped. The usage poll's first frame reported every account FAILED and
+spent one extra credentialed call per provider: `beginPolling` ran `monitor.start()` (an
+immediate reading over the unkeyed per-provider rows) BEFORE `refreshProfiles()` replaced those
+rows — the reconcile runs first now, and the start's own reading finds nothing due. Rows: three
+over the service with a stub daemon (`agent-index-walk.test.ts`: 40/40 scoped, no hit its own
+root unscoped, 80 lookups in flights; a daemon that cannot answer the walk clips and carries NO
+root), the first frame (one row per account, `available`, one reading, no unkeyed call), the
+refcount (only the last subscriber to leave stops the poll — the tests lens's mutation showed an
+unconditional stop passed every row), the readiness edge over an unknown scope while the
+projection is building (`answered: false`, never "no matches"), the ready refusal that asks
+nothing, parse-through under the contract on the producer's side, and the metric asserted
+EXACTLY (a `toMatchObject` on a `.passthrough()` shape let a new key cross with everything
+green).
+
+**The contracts lens.** A credits-only `available` reading (Codex, Grok: no percentage meters)
+was drawn as a refusal captioned "available" with its credits dropped — the adapter gated on
+the meters; it gates on the state now and the column's own NO LIMIT DATA line draws it. The
+contract's `unknown` state (a daemon that has not read yet) was folded to a bare `unavailable`
+that claimed a refusal — it is said as "no reading yet", retryable, under no code (Core's
+failure union has no slot for it; a `pending` slot upstream is the real fix, owed). The open
+scope word is read through Core's enum (`unknown` for a word it does not know, never a typed
+lie). Two wire shapes shipped no fixture — `index-sessions.valid.json` exists and
+`index-status.valid.json` carries the `search` block the sheet reads; both are in the prefix
+map. The generator's "deliberately absent" comment names the agent plane.
+
+**The renderer lens, beyond the blocker.** The usage column subscribed to the port it was born
+with (`[]` deps upstream) — a door that arrives after the first mount left it on a no-op port
+for the session; it follows `port` now (`4d734c9`). The stage's palette read the document's
+first Godview root; it reads ITS root through a ref filled in layout. The digit chords cycled
+by session id — a managed row with no pane has no session, so `undefined` matched the first
+sessionless row and ⌘2 kept answering the same row; the cycle compares row ids. The FIND
+control named a sheet that returns `null` while closed (`aria-controls` only while open); the
+sheet's `onClose` is stable; the dead `--vf-monitor-chrome-height` write is gone; the project
+ledger's cache is capped at 256 keys (the newest dealt); a usage seed is marked when it lands,
+so a double-invoked effect asks again rather than never.
+
+**The tests lens.** The gate's "lottery" red was misdiagnosed: `godview-remote-door`'s "with NO
+door" row read `'serving'` from an ORPHANED MOUNT — one row mounted twice and the helper replaced
+the root without unmounting the first tree, whose 2 s mesh poll kept firing markers into later
+rows' arrays under load. `unmountMonitor()` between the two mounts; the repo memory that filed
+it as early sampling is corrected. The two remote-row claims' "skipped" comments said to delete
+them once the facet was drawn — they are live and pass; the comments say so. The deleted
+parameters test's registry invariant (distinct ids, labels, controls) is kept in
+`godview-stage-parameters.test.ts`. Three of AR-5's four upstream fixes shipped with no upstream
+test (the package has no DOM environment): the bodies' source attribute has one now, statically
+(`AgentSwarm.test.tsx`); the find sheet's focus return and the palette's root remain witnessed
+only by this consumer's smoke and catalog — owed upstream with a DOM environment.
+
+**Upstream (`4d734c9`, `b0f08ec`; views 18 files / 133 tests, the root typecheck, the layout
+gate).** Beside the port and the root: the `./physics` subpath no longer re-exports the React
+context (a host imports that subpath inside its physics WORKER; the provider stays on the main
+entry — `b0f08ec`, after the first cut took it off both); `@webgpu/types` is a dependency
+(the emitted declarations name `GPUDevice` and kin, and tsc drops the reference directive from
+the `.d.ts` — a consumer typechecking against `dist` names it in its own `types`, which the
+entry's header says; this consumer compiles the source); `sideEffects` names the lab entry
+(its module runs `main()` on import); the palette diffs before it publishes (a host class
+toggle on `<html>` re-rendered every consumer and dropped the swarm's colour cache); the DOM
+damage gate's dead fields left the frame.
+
+**Errata for §AR-5, placed here at the claim's source (the ledger is the source):**
+· "six commits" — the pin move `d2b0600` → `5389449` was NINE commits: beside the six, James's
+own `a94b5f4` (the runtime's conversation-snapshot API removed), `e32b56b` (core's artifacts
+service and `state.subagents` removed — the schema-3 change this entry already carried) and
+`2de78ee` (docs); no fieldd, renderer or contracts reader of the removed APIs exists, so the pin
+carried them silently — an EL8 entry names what it carries, and now does.
+· "Polling is DEMAND-DRIVEN — only while a subscriber exists" — the recurring poll is; a one-shot
+`agents.usage` takes exactly the one reading it was asked for (and since AR-5b only once armed,
+after the registry reconcile). The boot claim stands.
+· "the file the repo already knows samples too early" — it did not; see the tests lens above.
+· "views 17 files / 131 tests" — the runner's count, which stands; a static count of `it(` sites
+is 126 (rows generated in loops make the difference).
+
+**Gate:** `pnpm verify` verbatim exits 1 at `pnpm lint` — biome `Checked 1296 files … Found 8 errors`, all eight in James's untracked `work/composer-directions.html` (the AR-5-0 class; preflight OK with the two dirty-sibling warnings, check:deps, icons:check and typecheck ran green inside it). The stages after lint, in the gate's order, each alone and each GREEN this time: `cargo fmt --check` exit 0 · `pnpm lint:rust` exit 0 · `pnpm bundle:assert` exit 0 · `pnpm test` exit 0 — every project green in ONE pass (field-app 86 files, 729 tests; fieldd 766 passed + 14 skipped, the opt-in real rows; electron-shell 679 + 2 skipped; contracts 160), the orphaned mount's red gone with its cause · `pnpm test:rust` exit 0, `241 passed; 0 failed; 6 ignored` over 21 result lines · `gen:check`'s Rust half (`gen:rust` + the diff over `packages/contracts/gen`, `contracts.rs`, `registries.rs`) exit 0; the docs half is not run because `gen:docs` rewrites James's staged `docs/plugin-authoring/*`.
+
+**Owed, named by the review and not taken here:** the swarm's render loop (interpolation, the
+rAF pump) has no test in either repo — the plan's §6.6 "loop rewritten against an injected fake
+`SwarmRenderer`" needs a renderer seam the package does not have (an upstream ask, PU-13) · a
+`pending` slot in Core's account-usage failure union · a DOM environment upstream for the find
+sheet's focus return and the palette's root · `index.status`'s `detail` carries rosettad's raw
+stderr tail to the renderer (project a reason word) · one deadline per `index.search` across
+its legs, and `progress` on the index's UNAVAILABLE refusals · a WS heartbeat behind the
+demand-driven poll (a wedged renderer holds the subscription) · the fake rosettad's four
+divergences from the real daemon (prefix, clamp, the 400s, child hiding) · ⌘F is meta-only
+(the Windows port) and is swallowed on the catalog page · the swarm's physics mode is not on
+the section (`data-swarm-physics`) · `updatedAt ?? 0` in the history adapter (the package's
+facts want a number) · the `unknown` metric count (131 vs 126) is a note, not a defect.
