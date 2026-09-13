@@ -18,11 +18,11 @@ connection, whole mesh through it), EL3/EL7 as ever.
 |---|---|
 | `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (synthetic IDs, the GhostteaApp convention; objectVersion 60 since Xcode touched it); no product code |
 | `App/` | `@main` + assets + privacy manifest, nothing else |
-| `VibeFieldKit/` | the real code, one SPM package, four targets |
+| `VibeFieldKit/` | the real code, one SPM package, six library targets |
 | `VibeFieldKit/Sources/FieldDesign` | godview monochrome tokens (palette light+dark, mono type ramp, motion constants, grid/scanlines/vignette) |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested |
 | `VibeFieldKit/Sources/FieldAgents` | chopsticks-shaped agent model, the ported status classifier, FNV identity hue (cross-language goldens), the scripted mock fleet |
-| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.9.3), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
+| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime via `ghosttea` (exact 0.10.1), login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery |
 | `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface |
 | `VibeFieldKit/Sources/FieldHome` | the field: bubbles, ignition, hold-to-create, session card, chrome-slot obstacles, home composition — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
@@ -85,6 +85,16 @@ Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
 precedent; a Team ID is public material).
 
+For installation and updates on an iPhone away from the Mac, follow
+[the TestFlight setup](TESTFLIGHT.md). The release helper builds a signed
+device archive and uploads it using Xcode's existing Apple account:
+
+```sh
+# From the repository root. Build 1 is already uploaded; use a fresh number.
+bash apps/ios/scripts/testflight.sh archive 2
+bash apps/ios/scripts/testflight.sh upload 2
+```
+
 This app is deliberately **outside `pnpm verify`** (the gate must not require
 Xcode); the commands above are its gate until an iOS lane exists in CI.
 No Swift formatter is configured — neither Ghosttea nor Truffle carries one;
@@ -97,7 +107,7 @@ Real: the full-screen bubble field (physics, tiers, ignition, drag, tap-nudge,
 hold-to-create, spawn pop, empty state), both themes, the session card with
 live status, the mock fleet driving the **same** snapshot shape and classifier
 the daemon feed will drive; since IOS-2 the mesh leg: `ghosttea` pinned
-`exact: "0.9.3"` (truffle 0.7.12, lockstep with field-native), the in-process
+`exact: "0.10.1"` (truffle 0.7.12, lockstep with field-native), the in-process
 Tailscale runtime behind a deliberate CONNECT act, in-app login (Safari sheet),
 the online-peer roster, and the mesh chip the bubbles physically flow around
 (`.swarmObstacle()` — the desktop obstacle pattern); and since IOS-3 the
