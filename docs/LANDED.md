@@ -5217,7 +5217,10 @@ passed alone — a loaded-host lottery, nothing of AR's touches it.
 **Gate:** `pnpm verify` verbatim still stops at `pnpm lint` on James's untracked
 `work/composer-directions.html` (the only lint findings; pre-existing); every other step run
 individually: preflight, `pnpm typecheck` (25 projects, after the fieldd test's type imports),
-biome clean over the batch, `cargo fmt --check`, clippy `-D warnings`, `pnpm test` (the
+biome clean over the batch **(errata 2026-09-12, found at AR-4's gate: the batch did not include
+the four fixture JSONs `agent-list`/`agent-monitor-state`/`agent-spawn`/
+`agents-profiles-login.valid.json`, which `biome check .` wanted reflowed — main's lint was red
+from `6b5e1612` until AR-4 formatted them)**, `cargo fmt --check`, clippy `-D warnings`, `pnpm test` (the
 lifetime fixture re-fed to the door — the two reds were the mock's absence; the conformance
 lottery above), `pnpm test:rust` (the layout vector with the new segment), `pnpm bundle:assert`,
 `pnpm gen:check` with the generated `layout.json`/`registries.rs` staged, `pnpm smoke:godview`
@@ -5230,3 +5233,118 @@ Agents settings section (`agents.manage` on a window; the persona login pane has
 door is live); `agent.control` (AR-6); `terminal.terminate`'s birth race (TC); PU-10 upstream;
 the dev-local snapshot of the draft docs (James's ritual); the DESIGN.md Godview citation
 (James's live edit); the upstream pins still unpushed; `SIBLINGS_TOKEN`.
+
+## AR-4 — stable ingress: a managed session outlives fieldd — re-attach at the next epoch, resume-when-idle the fallback (2026-09-12)
+
+**AR-4 the run survives the daemon** (`ba1a1eab`; AR-D6 as ruled, PU-1 upstream landed the same
+day — puppeteer `d013fef`, pinned). Every birth now names a creation request — puppeteer's
+durable claim, in fieldd's custody under `LAYOUT.AGENT_RUNS_DIR` = `users/<fuid>/agents/runs/`
+(claims + the installation key, puppeteer's own schema and modes: PU-8 again) — and gives the
+adapter a say over the session's loopback ingress (`ingress.onBound`): the bound `{port, token}`
+the adapter reports BEFORE the process launches rides in the session record (0600) beside the
+claim id, and the record keeps `runtimeEpoch` current. A graceful stop RELEASES the runs rather
+than closing them — `runtime.dispose({detach: true})`: no exit dispatched, no record stamped, the
+claims kept, the adapter's listeners closed — because the PTYs are the floor's and outlive fieldd
+(EL1). The next boot's FIRST inventory is the re-attach: every un-exited record whose PTY the
+floor still lists goes through `runtime.attach` (`expectedRuntimeEpoch` = the record's; the
+provider's own `attachSession` — for claude the bridge re-bound to the pinned port and token, the
+transcript located; `restoreSession` at the next epoch) and re-enters the fold — the same run id,
+epoch + 1, the same PTY, the row saying `continuation.reattached`, the record `reattach:
+{state: attached}`. The daemon feeds the agents service the inventory `ensureStarted` already
+applied (the listener is wired after it), so a boot onto a quiet floor re-attaches now and not at
+the floor's next change.
+
+**Pending, and resume-when-idle.** A provider that cannot attach (`ATTACH_UNSUPPORTED`), an
+attach that fails, or a record from before AR-4 (no claim to restore against) leaves the run in
+the fold as a PENDING row: `tier: managed`, `status: unknown`, `observationLevel: none`,
+`sessionIdBasis: recorded`, the terminal local and alive, `continuation: {persisted, resumable,
+pending: "resume-when-idle", reason}` — a live PTY nothing observes, said plainly. Resume-when-
+idle polls the index every 5 s through a new `IndexService.sessionByNativeId` (rosetta's
+`/api/sessions?native_session_id=`; the canonical row preferred) and replaces the run only on
+EVIDENCE: rosetta knows the session and its `activity.last_at` is 30 s or more in the past. No
+evidence is not idle — a session the index has never read (an unenrolled root, a provider it does
+not index) stays pending until a person resumes it, and an index that is down answers nothing.
+The replacement: the old PTY terminated and gone from the inventory before the new run is born
+(two processes on one native session is the one thing a resume must never make), the old record
+stamped (`exited: {reason: "replaced"}`, `reattach: {state: "resumed", replaced}`), the
+continuation resumed into a new run whose row names the PTY it replaced (`terminal.replaced`;
+the new record's `replaced`). `agent.resume` on a pending run is the same replacement by hand
+(`how: manual`); a live ATTACHED run still refuses `PRECONDITION_FAILED {state: "terminal-alive"}`.
+A record whose PTY did NOT survive (the floor restarted too, or the process ended while no fieldd
+was there) is stamped as an unknown exit at the boot and resumes from the door like any other.
+The daemon's own acts are in the ledger as the SYSTEM actor (`AuditService.requiredSystem`):
+`agent.session.reattach` (outcome succeeded with the new epoch, or failed with
+`ATTACH_UNSUPPORTED`/`ATTACH_FAILED` and the words) and `agent.session.resume` (`how: idle`).
+A persona's delete stops its pending sessions too. The fold's exit paths cover the pending rows
+(the floor's `session-exited`, the inventory backstop with the same grace).
+
+**The renderer.** A pending row reads `idle` with the detail "unobserved · resumes when idle"
+(no evidence says otherwise; "working" would be a claim the fold did not make); a re-attached
+row is an ordinary row. A row that names a replaced PTY the deck is showing hands that pane the
+new one through the door, once per replacement — `MonitorDoor.mountLocal(id, {replacing})`, the
+deck activating the pane that held the old PTY, waiting for the workspace to commit the
+activation (the active pane is a ref the workspace syncs after render), mounting, and giving the
+user's own pane back — so a resume-when-idle never leaves a pane on a dead PTY. The one
+widening of the door is the option, not a verb.
+
+**Contracts.** `AgentSessionRecord` += `creationRequestId`, `ingress {port, token}`, `reattach
+{state: attached|failed|unsupported|resumed, at, reason?, replaced?}`, `replaced`;
+`AgentSessionSummary.continuation` += `reattached`, `pending`, `reason`; `AgentSessionTerminal`
++= `replaced`; `LAYOUT.AGENT_RUNS_DIR ["agents","runs"]` (gen'd into `registries.rs` and the
+layout vector). A record written before AR-4 still parses. Upstream (PU-1, `d013fef`):
+`HostIngress {port?, token?, onBound?}`/`BoundIngress` on the host seam, `ingress` on
+create/resume/attach, `AgentProvider.attachSession`, `AgentRuntime.attach` (provider attach →
+workspace → `restoreSession`; `ATTACH_UNSUPPORTED`/`ATTACH_FAILED`), `dispose({detach})`, the
+claude driver's `attachClaudeTuiSession` (the bridge pinned, the transcript armed lazily at the
+first subscriber, an existing transcript a silent baseline), RFC 003 "Stable ingress".
+
+**Witnessed** (`packages/fieldd/test/agent-session.test.ts`, the REAL field-native, two fieldd
+boots on one root with the floor running throughout). The scripted adapter WITH
+`attachSession`: the claim registry 0700 with its `claims/`; a stop that stamps nothing; the
+second boot's row re-attached at epoch 2 on the same PTY with the same native id and title, the
+adapter handed exactly that terminal and session, the record at epoch 2 with `reattach:
+attached`, the ledger's system-actor entry, automation through the re-attached run confirmed by
+the floor, the attached run refusing a resume, the ordinary exit after. WITHOUT it: the pending
+row as stated (`reattach: unsupported`, the audit's `ATTACH_UNSUPPORTED`), the PTY listed and
+unobserved; `agent.resume` replacing it — the old PTY gone before the new run was born, the
+adapter's `resume` = the native id, both records as stated, the fold holding the new run only,
+`how: manual` in the ledger. Resume-when-idle against the fake rosettad's new
+`/api/sessions?native_session_id=` route (rows from a JSON file re-read per request): pending
+while the index served no row, pending while the row's activity was a second old, replaced by the
+daemon itself once the row said a minute still (`how: idle`, the system actor). A record whose
+PTY is gone: stamped `unknown` at the boot, no attach attempted, resumed from the door. And the
+REAL Claude Code 2.1.270 (`FIELDD_TEST_REAL_AGENT=1`): the record carrying the bound ingress and
+the claim; re-attached across the restart at epoch 2 on the pinned port; a prompt through the
+re-attached run reaching the vendor's hooks at the re-bound bridge (`native-hooks`, the id
+`observed`); terminated cleanly (`application-terminated`, 143). The renderer's rows: the
+pending reading, the re-attached row, the resumed row's id, and the mounted stage handing a pane
+the new PTY through the door exactly once.
+
+**Found.** (1) A fieldd stop issued within about a second of the real claude's first observed
+hook LOSES the process — 4 of 4 attempts without a hold (the second boot found the PTY gone and
+stamped the record); with a 3 s hold the PTY survives every time (3 of 3). The driver's detaching
+dispose while the TUI is still starting — the bridge closed, the staged `--settings` file and
+hook forwarder removed (`cleanupClaudeSession`) — is the suspect; NOT isolated (PU-11, a note:
+worth a probe upstream before it becomes a rule here). (2) The observed inventory lists a
+just-born PTY only after a beat, the terminate-side lag of AR-3 seen from the list side: the
+witnesses poll the listing rather than read it once. (3) A daemon act's audit outcome needs a
+CODE for `reasonCode` (`[A-Z][A-Z0-9_]*`) — the first draft put the state word there and the
+ledger refused the outcome after the effect had run; one record's trouble no longer ends the
+re-attach for the others.
+
+**Gate** (run by a delegated Opus agent, verbatim): `pnpm verify` stops at `pnpm lint` — 4
+errors, all in James's untracked `work/composer-directions.html` (45 pre-existing warnings
+elsewhere; the FOUR AR-3 fixture JSONs biome wanted reflowed are formatted with this slice — see
+the AR-3 errata) · preflight OK (2 dirty-sibling warnings) · check-single-copy ok · icons
+current · `pnpm typecheck` 25 projects · `cargo fmt --check` clean · clippy `-D warnings` clean ·
+`pnpm bundle:assert` OK (initial 530.2 KB raw / 143.0 KB gz) · `pnpm test`: 333 files passed,
+1 failed — `service-drain-deadline.test.ts` (PRC-2's 80–175 ms window; ServiceHost, nothing of
+AR's) red in the full graph and green alone, the loaded-host lottery · `pnpm test:rust` 241
+passed, 6 ignored · `pnpm gen:check` clean · `pnpm smoke:godview` exit 0 first attempt
+(`monitorLocalState: live`, the deck's own pane as its one row, canvas2d, cold open 286 ms) ·
+the fieldd agent-session suite 11/11 with `FIELDD_TEST_REAL_AGENT=1`. **Still owed:** the
+Agents settings section (the persona login pane's UI; `agents.manage` on a window); AR-5 the
+views port; `agent.control` (AR-6); PU-11 above and PU-10; the ingested tier's rows (AR-8); the
+dev-local snapshot of the draft docs (James's ritual); the DESIGN.md Godview citation (James's
+live edit); the upstream pins still unpushed (puppeteer `d013fef`, rosetta `af6f0d7`);
+`SIBLINGS_TOKEN`.
