@@ -102,9 +102,7 @@
   "environment": {
     "cwd": "/repo",
     "git": null,
-    "worktrees": [
-      "/repo-worktree"
-    ]
+    "worktrees": ["/repo-worktree"]
   },
   "session": {
     "nativeSessionId": "native-1",

@@ -119,7 +119,9 @@ for (const name of TRACKED) {
       if (!Object.keys(manifest.peerDependencies ?? {}).includes(name)) continue;
       const hit = resolveFrom(dir, name);
       if (hit === null) {
-        problems.push(`${manifest.name} declares ${name} as a peer but cannot resolve it from ${dir} — run the sibling's install`);
+        problems.push(
+          `${manifest.name} declares ${name} as a peer but cannot resolve it from ${dir} — run the sibling's install`,
+        );
         continue;
       }
       siblingVersions.set(dir, JSON.parse(readFileSync(hit, "utf8")).version);
@@ -152,7 +154,9 @@ for (const name of TRACKED) {
       );
     }
   }
-  report.push(`${name}@${version}${siblingVersions.size > 0 ? ` (+${siblingVersions.size} sibling link${siblingVersions.size === 1 ? "" : "s"} at the same version, deduped at bundle time)` : ""}`);
+  report.push(
+    `${name}@${version}${siblingVersions.size > 0 ? ` (+${siblingVersions.size} sibling link${siblingVersions.size === 1 ? "" : "s"} at the same version, deduped at bundle time)` : ""}`,
+  );
 }
 
 if (problems.length > 0) {
