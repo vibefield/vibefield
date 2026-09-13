@@ -483,6 +483,10 @@ export class AgentRuntimeService {
   private readonly pollMs: number;
   /** login panes awaiting their exit, by the floor's session id */
   private readonly logins = new Map<string, { profileId: string; timer: NodeJS.Timeout }>();
+  /** MF-1g — every login pane this daemon opened, until its PTY is reaped.
+   * The agent class is `keep-until-explicit-close` now, so a login pane's
+   * husk needs an explicit end where the old class gave it one for free. */
+  private readonly loginPanes = new Set<string>();
   private readonly subscribers = new Set<(rows: AgentListResult) => void>();
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
@@ -707,7 +711,13 @@ export class AgentRuntimeService {
         { runtimeRunId: record.runtimeRunId, state: "terminal-alive" },
       );
     }
-    const entry = await this.resumeFromRecord(record, params.cwd, undefined);
+    // MF-1g — the husk this resume replaces, if there is one. Naming it here
+    // puts `terminal.replaced` on the SUCCESSOR's row, which is AR-4's
+    // hand-over shape and exactly what the deck's resume verb reads
+    // (`GodviewDeck.tsx`: the answer's ticket lands in the pane the verb was
+    // pressed in, replacing the exited one).
+    const husk = this.exited.get(record.runtimeRunId)?.terminalSessionId;
+    const entry = await this.resumeFromRecord(record, params.cwd, husk);
     // MF-1f — the record names its successor, and the exited row goes: two
     // runs on one native conversation is the state AR-4b forbids, and without
     // this mark a second `agent.resume` on the same record would have made
@@ -716,7 +726,50 @@ export class AgentRuntimeService {
     // pane beside the run that replaced it.
     this.supersede(record, entry.info.runtimeRunId);
     this.dropExited(record.runtimeRunId, "a resume continued the conversation");
-    return this.ticketed(entry, principal, terminals);
+    // The ticket FIRST: the successor exists and is answerable before anything
+    // is destroyed, so a birth that failed above leaves the dead pane and its
+    // final screen exactly where they were.
+    const answer = this.ticketed(entry, principal, terminals);
+    // MF-1g — then the husk goes. Ordered like AR-4b's own replacement (the
+    // pending path terminates the old PTY before its door answers, and the
+    // deck's hand-over is built for precisely that), so nothing lingers once
+    // the pane has been handed over. The id is the RECORD's own PTY, never one
+    // a caller named — the `agent.resume` scope argument, unchanged.
+    if (husk !== undefined) await this.reapHusk(husk, terminals);
+    return answer;
+  }
+
+  /** MF-1g — close a login pane's husk. Login panes have no resume verb and
+   * nothing comes back for them, so their end is the floor's ladder. */
+  private async reapLoginPane(sessionId: string): Promise<void> {
+    if (!this.loginPanes.delete(sessionId)) return;
+    const terminals = this.opts.terminals?.() ?? null;
+    if (terminals === null) return;
+    await this.reapHusk(sessionId, terminals);
+  }
+
+  /** MF-1g — end a pane whose run is over and whose successor now holds it.
+   * A husk the floor has already forgotten is not an error: the pane is gone,
+   * which is the state this was asking for. */
+  private async reapHusk(sessionId: string, terminals: TerminalService): Promise<void> {
+    try {
+      const { terminated } = await terminals.terminate(sessionId);
+      this.logger.info("fieldd.agents.husk_reaped", "An exited agent pane was closed", {
+        sessionId,
+        terminated,
+      });
+    } catch (error) {
+      // the floor is gone, or the cell that held it is: the husk dies with
+      // whichever of them went, and no caller waits on that
+      this.logger.warn(
+        "fieldd.agents.husk_reap_failed",
+        "An exited agent pane could not be closed",
+        {
+          sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
   }
 
   /** Stamp a record as continued into a named successor (AR-4b's one-run law).
@@ -820,6 +873,7 @@ export class AgentRuntimeService {
     );
     timer.unref();
     this.logins.set(result.runtimeSessionId, { profileId: params.profileId, timer });
+    this.loginPanes.add(result.runtimeSessionId);
     this.logger.info("fieldd.agents.login_started", "Persona login pane opened", {
       profileId: params.profileId,
       provider: profile.provider,
@@ -863,6 +917,13 @@ export class AgentRuntimeService {
   async handleTerminalExit(event: SessionExitedEvent): Promise<void> {
     if (this.logins.has(event.sessionId)) {
       await this.finishLogin(event.sessionId, "exited");
+      return;
+    }
+    // MF-1g — a login pane whose wait TIMED OUT and which has now ended: the
+    // login was abandoned long ago, so nothing is listening, and under
+    // `keep-until-explicit-close` its husk would otherwise stand forever.
+    if (this.loginPanes.has(event.sessionId)) {
+      await this.reapLoginPane(event.sessionId);
       return;
     }
     const runtimeRunId = this.byTerminal.get(event.sessionId);
@@ -1257,6 +1318,9 @@ export class AgentRuntimeService {
       if (exited.backstop !== undefined) clearTimeout(exited.backstop);
     }
     this.exited.clear();
+    // the login panes are the floor's from here: a stop RELEASES panes, it
+    // does not kill them (AR-4 — the PTYs outlive us)
+    this.loginPanes.clear();
     if (this.awaitingSweep !== null) {
       clearTimeout(this.awaitingSweep);
       this.awaitingSweep = null;
@@ -2283,6 +2347,13 @@ export class AgentRuntimeService {
     this.logins.delete(sessionId);
     clearTimeout(login.timer);
     this.terminalHost?.forget(sessionId);
+    // MF-1g — the pane the vendor's login ran in. On an EXIT it is a husk and
+    // is closed here, because MF-1g's `keep-until-explicit-close` stopped the
+    // floor from doing it: the resume verb belongs to agent runs, and nothing
+    // would ever come back for this one. On a TIMEOUT the pane is still LIVE
+    // and the person may still be typing into it, so it is left exactly as
+    // before — `reapAbandonedLoginPane` takes it when it does end.
+    if (how === "exited") await this.reapLoginPane(sessionId);
     if (this.disposed) return;
     let outcome: string;
     try {

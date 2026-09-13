@@ -968,80 +968,56 @@ const rosettaRow = (nativeSessionId: string, stillForMs: number | null, child = 
   stream_state: "indexed",
 });
 
-describe("MF-1f — an exited run keeps its row while its pane is on the floor", () => {
-  /** The state under test, built honestly.
+describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its row", () => {
+  /** A real managed run, really ended, with its pane still on the floor.
    *
-   * MEASURED FIRST (probe, 2026-09-13): an agent's OWN PTY leaves the floor
-   * within 150 ms of its process exiting, because fieldd creates it with
-   * `persistence: "keep-until-exit"` (terminal-service.ts:630). So the "dead
-   * pane a person is still looking at" cannot be an agent PTY today; it is
-   * modelled here with a terminal the test owns, and the record is re-pointed
-   * at it through the SIGNING store (a hand-written record would not verify).
-   * What that models is exactly the world where agent panes are
-   * `keep-until-explicit-close` — see the report: the rule below is correct
-   * and unreachable until that policy is ruled.
+   * This is the product's own path since MF-1g: agent terminals are created
+   * `keep-until-explicit-close` (terminal-service.ts), so an agent that
+   * finishes leaves a PANE — its final screen and its exit facts — instead of
+   * a hole. Under the old `keep-until-exit` class the floor dropped the
+   * session within 150 ms of the process ending (measured at MF-1f), and this
+   * state could not be reached at all.
    */
-  async function exitedWithLivePane(): Promise<{
-    first: Box;
-    second: Box;
-    win: WsRpc;
-    runId: string;
-    paneId: string;
-  }> {
-    const first = await setup({ floor: "real" });
-    const win1 = await window(first.daemon, DECK, "f1");
-    const spawned = (await win1.call("agent.spawn", {
+  async function endedRun(box: Box, win: WsRpc): Promise<{ runId: string; paneId: string }> {
+    const spawned = (await win.call("agent.spawn", {
       provider: "scripted",
-      cwd: first.envOut,
+      cwd: box.envOut,
       title: "held open",
     })) as AgentSpawnResult;
     const runId = spawned.session.runtimeRunId;
-    await joinedRow(win1, runId);
-
-    // the pane that outlives the run
-    const pane = (await win1.call("terminal.create", { shell: "/bin/cat" })) as {
-      sessionId: string;
-    };
-    await untilListed(win1, pane.sessionId, true);
-
-    // the run ends for real — the floor's ladder, the record stamped
-    await win1.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await joinedRow(win, runId);
+    // the scripted PTY's `cat` dies of the floor's own interrupt
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
     await poll(async () => {
-      const { sessions } = (await win1.call("agent.list", {})) as AgentListResult;
-      return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      const row = sessions.find((r) => r.runtimeRunId === runId);
+      return row?.continuation?.exited === true ? row : undefined;
     }, 15_000);
-    const record = first.records.read(runId);
-    expect(record?.exited, "the close stamps the record").toBeDefined();
-    first.records.write({
-      ...record!,
-      terminalSessionId: pane.sessionId,
-      updatedAt: new Date().toISOString(),
-    });
-    await first.daemon.stop();
-
-    const second = await setup({ floor: "real", restartOf: first });
-    const win = await window(second.daemon, [...DECK, "agent.control"], "f2");
-    return { first, second, win, runId, paneId: pane.sessionId };
+    return { runId, paneId: spawned.terminal.sessionId };
   }
 
-  it("the restart re-lists it: exited, hosted, resumable — and it leaves when the pane does", async () => {
-    const { win, runId, paneId } = await exitedWithLivePane();
+  it("the pane stays and the row with it — exited, hosted, resumable — until the pane is closed", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "g1");
+    const { runId, paneId } = await endedRun(box, win);
 
-    const row = await poll(async () => {
-      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-      return sessions.find((r) => r.runtimeRunId === runId);
-    }, 20_000);
-    // the conversation stopped; the pane did not
-    expect(row.continuation).toMatchObject({ persisted: true, resumable: true, exited: true });
-    expect(row.continuation?.pending, "an exited row is not a pending one").toBeUndefined();
-    expect(row.terminal).toMatchObject({ hosted: "local", runtimeSessionId: paneId });
-    // nothing observed this run — a new fieldd never held its adapter
-    expect(row.status).toBe("unknown");
-    expect(row.observationLevel).toBe("none");
-    expect(row.title).toBe("held open");
+    // not a race with the exit: two seconds later the pane is still the
+    // floor's, which is the whole ruling
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    expect(await listed(win, paneId)).toBe(true);
 
-    // the field projection: not alive, and NOT pending — the two are different
-    // questions, and a reader that draws `pending` would offer the wrong verb
+    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+    const row = sessions.find((r) => r.runtimeRunId === runId);
+    expect(row?.continuation).toMatchObject({ persisted: true, resumable: true, exited: true });
+    expect(row?.continuation?.pending, "an exited row is not a pending one").toBeUndefined();
+    expect(row?.terminal).toMatchObject({ hosted: "local", runtimeSessionId: paneId });
+    expect(row?.title).toBe("held open");
+    // the mirror is kept, and it is the run's LAST state — the card still
+    // shows what the agent had been doing when it stopped
+    expect(row?.monitor?.runtimeRunId).toBe(runId);
+
+    // the field projection: not alive, and NOT pending — different questions,
+    // different verbs, and a phone that drew `pending` would offer the wrong one
     const field = (await win.call("agent.subscribe", { projection: "field" })) as {
       snapshot: { rows: { runtimeRunId: string; alive: boolean; pending?: string }[] };
     };
@@ -1049,27 +1025,56 @@ describe("MF-1f — an exited run keeps its row while its pane is on the floor",
     expect(fieldRow?.alive).toBe(false);
     expect(fieldRow?.pending).toBeUndefined();
 
-    // the pane goes, and the row goes with it — the row's whole reason to
-    // exist was that a person could still see that terminal
+    // closing the pane is what ends it — the row's whole reason to exist was
+    // that a person could still see that terminal
     await win.call("terminal.terminate", { sessionId: paneId });
     await poll(async () => {
-      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-      return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
+      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+      return rows.some((r) => r.runtimeRunId === runId) ? undefined : true;
     }, 20_000);
+    expect(await listed(win, paneId)).toBe(false);
   }, 200_000);
 
-  it("resume takes it — the successor replaces it, and one conversation keeps one row", async () => {
-    const { second, win, runId, paneId } = await exitedWithLivePane();
-    await poll(async () => {
+  it("a restart finds the dead pane and re-lists the row from the record alone", async () => {
+    const first = await setup({ floor: "real" });
+    const win1 = await window(first.daemon, [...DECK, "agent.control"], "g2a");
+    const { runId, paneId } = await endedRun(first, win1);
+    await first.daemon.stop();
+
+    const second = await setup({ floor: "real", restartOf: first });
+    const win = await window(second.daemon, [...DECK, "agent.control"], "g2b");
+    const row = await poll(async () => {
       const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
       return sessions.find((r) => r.runtimeRunId === runId);
     }, 20_000);
+    expect(row.continuation).toMatchObject({ persisted: true, resumable: true, exited: true });
+    expect(row.terminal).toMatchObject({ hosted: "local", runtimeSessionId: paneId });
+    // NOTHING observed this run — a new fieldd never held its adapter — and
+    // the row says so rather than inventing a status
+    expect(row.status).toBe("unknown");
+    expect(row.observationLevel).toBe("none");
+    expect(row.sessionIdBasis).toBe("recorded");
+    expect(row.monitor).toBeUndefined();
+    expect(await listed(win, paneId)).toBe(true);
+  }, 200_000);
 
-    // Before MF-1f this refused `terminal-alive`: the husk pane read as a
-    // running session, so the verb on the exited card could not be used.
+  it("resume hands the pane over: the successor is born, the husk is reaped, one conversation keeps one row", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "g3");
+    const { runId, paneId } = await endedRun(box, win);
+
+    // Before MF-1f this refused `terminal-alive`: the husk read as a running
+    // session, so the verb on the exited card could not be used at all.
     const resumed = (await win.call("agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
     const nextId = resumed.session.runtimeRunId;
     expect(nextId).not.toBe(runId);
+    // AR-4's hand-over shape, which is what the deck's resume verb reads: the
+    // successor's row NAMES the pane it replaces (GodviewDeck mounts the new
+    // ticket into the pane the verb was pressed in)
+    expect(resumed.session.terminal).toMatchObject({ hosted: "local", replaced: paneId });
+
+    // MF-1g — and the husk goes, once the successor holds the pane
+    await poll(async () => ((await listed(win, paneId)) ? undefined : true), 20_000);
 
     const rows = await poll(async () => {
       const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
@@ -1078,12 +1083,14 @@ describe("MF-1f — an exited run keeps its row while its pane is on the floor",
     // ONE row for one native conversation (AR-4b): the successor, not both
     expect(rows.filter((r) => r.sessionId === resumed.session.sessionId)).toHaveLength(1);
     expect(rows.some((r) => r.runtimeRunId === runId)).toBe(false);
-    // the pane is untouched — the resume ends no terminal it did not mint
-    expect(await listed(win, paneId)).toBe(true);
+    // the successor is alive and its OWN pane is not the one that was reaped
+    const next = rows.find((r) => r.runtimeRunId === nextId);
+    expect(next?.terminal?.runtimeSessionId).not.toBe(paneId);
+    expect(await listed(win, next?.terminal?.runtimeSessionId ?? "")).toBe(true);
 
     // the record names its successor, so a SECOND resume is refused rather
-    // than making a second run on the same conversation
-    const record = second.records.read(runId);
+    // than making a second run on one conversation
+    const record = box.records.read(runId);
     expect(record?.reattach).toMatchObject({ state: "resumed", replacedBy: nextId });
     const again = (await win.callErr("agent.resume", { runtimeRunId: runId })) as RpcErrorShape;
     expect(again.data?.kind).toBe("PRECONDITION_FAILED");
@@ -1132,9 +1139,12 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // reached a process is the exit below.
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
 
+    // MF-1g — the row does not leave: the agent is over, its PANE is not, and
+    // the card keeps the resume verb over its final screen.
     await poll(async () => {
       const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
-      return rows.some((r) => r.runtimeRunId === runId) ? undefined : true;
+      const row = rows.find((r) => r.runtimeRunId === runId);
+      return row?.continuation?.exited === true ? row : undefined;
     }, 15_000);
     const exited = await poll(async () => {
       const record = readRecord(dataDir, runId);
@@ -1148,6 +1158,14 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     })) as RpcErrorShape;
     expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
     expect((refused.data?.details as { state?: string } | undefined)?.state).toBe("not-alive");
+
+    // and closing the pane is what finally withdraws the row (MF-1g: the
+    // explicit reap where the old persistence class had an implicit one)
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(async () => {
+      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+      return rows.some((r) => r.runtimeRunId === runId) ? undefined : true;
+    }, 15_000);
 
     // ── the ledger: this device's own act, on the run, with its outcome ──
     // (the attempt is written BEFORE the effect, so the refusals above are in
@@ -1168,7 +1186,9 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     );
     expect(missed.outcome.outcome).toBe("failed");
     expect(missed.outcome.reasonCode).toBe("NOT_FOUND");
-  });
+    // (a real floor, two spawns' worth of ladders and an explicit reap: this
+    // row outgrew the 5 s default the day MF-1g gave it a pane to close)
+  }, 120_000);
 });
 
 describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
@@ -1594,13 +1614,18 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(pid, "the floor's inventory row carries no pid to kill").toBeTypeOf("number");
     process.kill(pid as number, "SIGKILL");
 
-    // the row leaves the fold — by the floor's exit facts if they arrive, by
-    // the inventory backstop (EXIT_GRACE_MS) if they do not; either is the
-    // honest answer, and the record's reason says which got there first
+    // MF-1g — the run ends and its PANE does not. Before the class flip this
+    // row LEFT the fold here; now a crash leaves what a person needs to read
+    // it: the final screen, the exit facts, and the resume verb on the card.
+    // The exit still arrives by the floor's own facts or by the inventory
+    // backstop (EXIT_GRACE_MS), and the record's reason says which got there
+    // first.
     await poll(async () => {
       const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
-      return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
+      const row = sessions.find((r) => r.runtimeRunId === runId);
+      return row?.continuation?.exited === true ? row : undefined;
     }, 15_000);
+    expect(await listed(win, ptyId), "MF-1g: the pane outlives the process").toBe(true);
     const stamped = await poll(async () => {
       const r = readRecord(box.dataDir, runId);
       return r.exited !== undefined ? r : undefined;
@@ -1614,9 +1639,17 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
       "service-terminated",
       "unknown",
     ]).toContain(stamped.exited?.reason);
-    expect(await listed(win, ptyId)).toBe(false);
     // and puppeteer has let the run go with it
     expect(box.daemon.agents.runtime.agent(ptyId)).toBeUndefined();
+
+    // closing the pane is what withdraws the row — the reap the old
+    // persistence class did implicitly, now an act someone takes
+    await win.call("terminal.terminate", { sessionId: ptyId });
+    await poll(async () => {
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
+    }, 15_000);
+    expect(await listed(win, ptyId)).toBe(false);
   }, 120_000);
 
   it("the index down under a pending run: it stays pending with no replacement and nothing unhandled — and a stop under that armed poll still RELEASES the PTY rather than ending it", async () => {

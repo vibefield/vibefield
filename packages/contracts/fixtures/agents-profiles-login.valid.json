@@ -94,7 +94,7 @@
       "requestedTermination": null,
       "exitOutcome": null,
       "ownerId": null,
-      "persistence": "keep-until-exit",
+      "persistence": "keep-until-explicit-close",
       "activity": {
         "kind": "unknown",
         "source": "unsupported",

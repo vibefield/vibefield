@@ -599,9 +599,22 @@ export class TerminalService {
    * agent class's cell with a CLEAN environment — exactly the variables the
    * caller allow-listed, never the daemon's own (`agent-host.ts` composes the
    * list; the floor's prefix strip stands beneath it) — as an application
-   * (activity detection knows it owns its foreground), keep-until-exit (NF-D3:
-   * the daemon-lifetime promise), the agent class's scrollback cap. The same
-   * cap, cell, classification and answer as `create`. */
+   * (activity detection knows it owns its foreground), the agent class's
+   * scrollback cap. The same cap, cell, classification and answer as `create`.
+   *
+   * MF-1g (ruled 2026-09-13) — the class is `keep-until-explicit-close`, not
+   * `keep-until-exit`. An agent that finishes leaves a PANE, not a hole: its
+   * final screen and its exit facts stay on the floor so the deck can show
+   * them with §07's resume verb on the card, which is what puppeteer's own
+   * Godview does. Under the old class the floor dropped the session within
+   * 150 ms of the process ending (MEASURED at MF-1f), and the fold's exited
+   * row had nothing to be hosted by.
+   *
+   * What bounds it is unchanged: the AGENT scrollback cap still caps the bytes
+   * retained, and the husk is reaped at both ends — `agent.resume` terminates
+   * it once the successor holds the pane (agent-runtime.ts), and closing or
+   * killing the pane is `terminal.terminate` exactly as before. NF-D3's
+   * daemon-lifetime ceiling is untouched: nothing here outlives the floor. */
   async spawn(spec: AgentTerminalSpec): Promise<{
     sessionId: string;
     session: TerminalRuntimeSession;
@@ -627,7 +640,7 @@ export class TerminalService {
       environment: { mode: "clean", variables: { ...spec.variables } },
       cols: spec.cols ?? SPAWN_COLS,
       rows: spec.rows ?? SPAWN_ROWS,
-      persistence: "keep-until-exit",
+      persistence: "keep-until-explicit-close",
       programKind: "application",
       ownerId: OWNER_ID,
       ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
