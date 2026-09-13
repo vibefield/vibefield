@@ -358,7 +358,12 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
   });
 
   it("every daemon ready re-applies the record to the personas (R4): a persona registered before this fieldd existed is enrolled at the first ready, and the ready after that changes nothing", async () => {
-    const root = join(tmpdir(), `vf-agents-pre-${process.pid}-${Date.now()}`);
+    // A SHORT root, like every other row's (AR-5-0): the mock mgmt socket lives
+    // at `<root>/users/1/native/run/mgmt.sock`, and under macOS's default
+    // `/var/folders/…/T/` a pid-and-timestamp name pushed that path past the
+    // 104-byte `sun_path` limit — `listen EINVAL` on every run whose TMPDIR was
+    // not already short.
+    const root = mkdtempSync(join(tmpdir(), "vf-pre-"));
     // the pre-existing registry names a managed root under the roots directory
     const preRoot = join(
       root,
