@@ -364,16 +364,44 @@ export interface FielddDaemon {
 /** The daemon's own version, published in the device slice (package version). */
 const FIELDD_VERSION = "0.1.0";
 
-/** FD-2 (EL7) — the principal kinds `terminal.mirrorWriteGrant` refuses outright.
- * Exported because it is the only half of that guard a test can hold: the door's
- * other refusals are provable end to end (a plugin principal, a guest, a peer, a
- * scopeless token), while an `mcp-agent` principal cannot be MINTED anywhere in
- * this repo today — so a wire row for it would be a row about nothing. A test
- * that pins this set fails the day the kind is quietly dropped from it, and the
- * plugin row beside it proves the set is what the door actually consults. */
-export const MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS: ReadonlySet<
-  CallerContext["principal"]["kind"]
-> = new Set(["plugin", "mcp-agent"]);
+/** FD-2 (EL7) — who `terminal.mirrorWriteGrant` refuses, as a rule rather than a
+ * line inside a closure. `null` = this caller may be granted; otherwise the
+ * words that travel in the refusal's details.
+ *
+ * Exported because the door's OTHER refusals are all provable end to end (a
+ * guest, a peer-fieldd, a scopeless token, a plugin principal, an agent's own
+ * hello claim) while two of these are not: nothing in this repo MINTS an
+ * `mcp-agent` principal, and a tailnet principal's `self` flag depends on a
+ * stored login that a unit daemon has no tailnet to acquire. A rule can be
+ * driven with a synthetic CallerContext the way `surface-service` is; the wire
+ * rows beside it prove the door consults this rule and not a copy of it.
+ *
+ * The three clauses, and why each is here:
+ * - a PLUGIN or an `mcp-agent` principal: `terminal.attach` is renderer-eligible
+ *   for plugins, and attaching to a PTY on this device is not the power to hold
+ *   the tailnet's write credential. Transport-derived, so this is the wall.
+ * - a caller CLAIMING an agent client kind: a claim may only ever RESTRICT
+ *   (§11.2). It stops nothing that lies and costs an honest agent integration
+ *   exactly the key it should not be holding.
+ * - a tailnet principal that is not SELF: `self` is UA-4's stored-login verdict,
+ *   and it is ABSENT — never false — on a desktop with no login linked yet
+ *   (`product-api.ts`: no stored login ⇒ the pre-capture status quo, which still
+ *   grants the whole TAILNET_SCOPES preset, `terminal.attach` included). GM-D5's
+ *   "a self peer is one of James's own devices by construction" holds only once
+ *   a login IS stored; until then any WhoIs-verified peer on the tailnet reaches
+ *   this door, and handing it the floor's write key is the one refusal that
+ *   cannot wait for the link. */
+export function mirrorWriteGrantRefusal(
+  ctx: CallerContext,
+): { principal: string; reason: string } | null {
+  const principal = ctx.principal.kind;
+  if (principal === "plugin" || principal === "mcp-agent")
+    return { principal, reason: "agent-principal" };
+  if (ctx.clientKind === "mcp-agent") return { principal, reason: "agent-claim" };
+  if (ctx.principal.kind === "tailnet" && ctx.principal.self !== true)
+    return { principal, reason: "unlinked" };
+  return null;
+}
 
 export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   const bootId = `fieldd-${randomBytes(8).toString("hex")}`;
@@ -1900,39 +1928,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: { deviceId },
         },
         async (): Promise<TerminalMirrorWriteGrantResult> => {
-          // EL7's own wall, and the one the registry cannot state: the scope
-          // is renderer-eligible for PLUGINS
-          // (`PLUGIN_CAPABILITY_ELIGIBILITY["terminal.attach"]`), so a plugin
-          // that legitimately wants the terminal pool would otherwise be handed
-          // this device's tailnet WRITE credential — long-lived, exfiltratable,
-          // revocable only by rotating the floor's one capability. Attaching to
-          // a PTY on this device and holding the key to every mirrored session
-          // on the tailnet are different powers. Same-uid agents are the
-          // adversary, so an agent-class principal is refused here; the refusal
-          // is inside the audited effect on purpose, because an agent reaching
-          // for this key is exactly what the grants ledger is for.
-          //
-          // TWO halves, because the two facts have different standing. The
-          // PRINCIPAL is transport-derived and unspoofable — that is the wall.
-          // The clientKind is a hello CLAIM and may only ever RESTRICT (§11.2,
-          // the shape `plugins.openRendererSession` uses below): a caller that
-          // says it is an agent is taken at its word, which costs a liar
-          // nothing and costs an honest MCP bridge exactly the key it should
-          // not be holding. Today the claim is the only reachable half —
-          // NOTHING in this repo mints an `mcp-agent` principal (the kind is
-          // declared in contracts and mapped by the audit service, and that is
-          // all), so the set below is what a test can hold until one exists.
-          if (
-            MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS.has(ctx.principal.kind) ||
-            ctx.clientKind === "mcp-agent"
-          )
+          // EL7's own wall, and the one the registry cannot state: the scope is
+          // renderer-eligible for PLUGINS and the tailnet preset reaches this
+          // door before a login is linked. The rule and its reasons live on
+          // `mirrorWriteGrantRefusal` above, where a test can drive them; the
+          // refusal happens INSIDE the audited effect on purpose, because a
+          // caller reaching for this key is exactly what the grants ledger is
+          // for.
+          const refusal = mirrorWriteGrantRefusal(ctx);
+          if (refusal !== null)
             throw new RpcCallError(
               "FORBIDDEN_SCOPE",
-              "terminal.mirrorWriteGrant is not available to plugin or agent principals",
+              `terminal.mirrorWriteGrant is not available to this caller: ${refusal.reason}`,
               false,
               {
                 method: "terminal.mirrorWriteGrant",
-                principal: ctx.principal.kind,
+                ...refusal,
                 ...(ctx.clientKind !== undefined ? { clientKind: ctx.clientKind } : {}),
               },
             );

@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type CallerContext,
   CONTRACTS_VERSION,
   LAYOUT,
   type Scope,
@@ -36,7 +37,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS } from "../src/daemon";
+import { mirrorWriteGrantRefusal } from "../src/daemon";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { ProductApi } from "../src/product-api";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -280,6 +281,22 @@ async function open(port: number): Promise<WsRpc> {
   return new WsRpc(ws);
 }
 
+/** A synthetic CallerContext, the shape surface-service.test.ts uses: the
+ * principal is the only fact these rows are about. */
+function ctx(principal: CallerContext["principal"]): CallerContext {
+  return { principal, transport: "ws-loopback", receivedAt: Date.now() };
+}
+
+/** A WhoIs-verified tailnet peer. `self` is UA-4's stored-login verdict and is
+ * ABSENT — never false — on a desktop with no login linked yet. */
+function tailnet(extra: { self?: true } = {}): CallerContext {
+  return {
+    principal: { kind: "tailnet", login: OWNER, ...extra },
+    transport: "ws-tailnet",
+    receivedAt: Date.now(),
+  };
+}
+
 /** Every regular file under `dir`, read as text. Binary files decode to
  * nonsense rather than throwing, which is fine: a 64-char ASCII canary either
  * appears verbatim or it does not. */
@@ -519,18 +536,50 @@ describe("terminal.mirrorWriteGrant — agent-class principals", () => {
     expect(lines.at(-1)).toMatchObject({ outcome: "failed", reasonCode: "FORBIDDEN_SCOPE" });
   });
 
-  it("holds the refused PRINCIPAL kinds, including the one nothing mints yet", async () => {
-    // The door's other half cannot be driven from the wire: nothing in this
-    // repo constructs an `mcp-agent` PRINCIPAL (contracts declares the kind and
-    // audit-service maps it; there is no minting site), so a wire row for it
-    // would be a row about nothing. The set is what a test can hold — it fails
-    // the day the kind is quietly dropped — and the plugin row above is what
-    // proves the set is the thing the door actually consults.
-    expect([...MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS].sort()).toEqual(["mcp-agent", "plugin"]);
-    // and the principals that must keep reaching it: the desktop's own windows
-    // and a self peer on the phone
-    for (const served of ["local-token", "shell-main", "tailnet"] as const) {
-      expect(MIRROR_WRITE_GRANT_REFUSED_PRINCIPALS.has(served), served).toBe(false);
-    }
+  it("refuses an UNLINKED tailnet peer holding the whole preset (self is absent, never false)", async () => {
+    // The hole this closes: with no login stored, `product-api` still mints a
+    // `tailnet` principal and grants the full TAILNET_SCOPES preset —
+    // `terminal.attach` included — so ANY WhoIs-verified peer on the tailnet
+    // reached this door on a desktop nobody had linked yet. UA-4 leaves `self`
+    // ABSENT (never false) in that era, which is exactly the shape asserted
+    // here. Driven as a rule because a unit daemon has no tailnet to acquire a
+    // stored login from; the wire rows below prove the door consults the rule.
+    expect(mirrorWriteGrantRefusal(tailnet())).toEqual({
+      principal: "tailnet",
+      reason: "unlinked",
+    });
+    expect(mirrorWriteGrantRefusal(tailnet({ self: true }))).toBeNull();
+  });
+
+  it("is the rule the door consults, for every principal it can be handed", async () => {
+    // Nothing in this repo MINTS an `mcp-agent` principal (contracts declares
+    // the kind, audit-service maps it, and that is all), and a `self` verdict
+    // needs a stored login — so these are driven with synthetic contexts, the
+    // way surface-service.test.ts drives its own policy. The two WIRE rows in
+    // this block are what keep the rule from being a decoration: the door
+    // really calls it.
+    expect(mirrorWriteGrantRefusal(ctx({ kind: "plugin", id: "p", scopes: [] }))).toEqual({
+      principal: "plugin",
+      reason: "agent-principal",
+    });
+    expect(
+      mirrorWriteGrantRefusal(ctx({ kind: "mcp-agent", sessionId: "mcp-1", scopes: [] })),
+    ).toEqual({ principal: "mcp-agent", reason: "agent-principal" });
+    expect(
+      mirrorWriteGrantRefusal({
+        ...ctx({ kind: "local-token", tokenId: "tk", scopes: [] }),
+        clientKind: "mcp-agent",
+      }),
+    ).toEqual({ principal: "local-token", reason: "agent-claim" });
+
+    // and the three that must keep reaching it: the desktop's own shell and
+    // windows, and the phone as a linked self peer
+    expect(
+      mirrorWriteGrantRefusal(ctx({ kind: "shell-main", tokenId: "tk", scopes: [] })),
+    ).toBeNull();
+    expect(
+      mirrorWriteGrantRefusal(ctx({ kind: "local-token", tokenId: "tk", scopes: [] })),
+    ).toBeNull();
+    expect(mirrorWriteGrantRefusal(tailnet({ self: true }))).toBeNull();
   });
 });
