@@ -14,12 +14,17 @@ const slice = AgentFieldSlice.parse(
   JSON.parse(readFileSync(join(FIXTURES, "agent-field-slice.valid.json"), "utf8")),
 );
 
-describe("MF-1 — the field row is content-free (§10.1)", () => {
-  it("carries no content key in any golden row", () => {
-    // The absence is the WHOLE point of the projection, so it is pinned on the
-    // golden rather than left to a reviewer's eye. Passthrough means a row
-    // COULD carry these (the tolerant reader never drops what it does not
-    // know); what must never happen is fieldd putting them there.
+describe("MF-1 — the GOLDEN field row is content-free (§10.1)", () => {
+  it("the golden carries no content key in any row", () => {
+    // FIXTURE SANITY, and only that: this file is hand-authored, so what it
+    // proves is that the goldens the phone decodes describe a content-free
+    // row — never that fieldd produces one. The producer's own wall is an
+    // ALLOWLIST derived from `AgentFieldRow.shape`
+    // (`packages/fieldd/test/agent-field.test.ts`), and a row there asserts
+    // this golden and that producer speak the same vocabulary, so the two
+    // cannot drift apart in silence. Passthrough means a row COULD carry
+    // these (the tolerant reader never drops what it does not know); what
+    // must never happen is fieldd putting them there.
     const forbidden = ["lastAssistantMessage", "monitor", "title", "workspace"];
     for (const row of slice.rows) {
       for (const key of forbidden) {

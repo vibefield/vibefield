@@ -97,6 +97,8 @@ export class MockMgmtServer {
   /** How many times the floor was ASKED for it — a door that leaked the
    * capability into a cache, or asked twice per grant, shows up here. */
   mirrorWriteAsks = 0;
+  /** MF-1 — the agent-field slices written into `field.agents.v1`, in order. */
+  readonly agentFieldWrites: unknown[] = [];
   /** Schema-valid field-native ring used by LOG-L5 product projection tests. */
   diagnosticRecords: unknown[] = [];
   diagnosticLeases = new Map<string, unknown>();
@@ -506,6 +508,10 @@ export class MockMgmtServer {
         this.storeFor(storeId).set(this.meshDeviceId, p["data"]);
         if (storeId === STORES.DEVICES) this.storeWrites.push(p["data"]);
         if (storeId === STORES.ARTIFACTS) this.artifactStoreWrites.push(p["data"]);
+        // MF-1 — every agent-field slice this daemon published, in order: the
+        // witness that the DAEMON wired its publisher (the publisher's own
+        // suite builds one by hand and can say nothing about the wiring).
+        if (storeId === STORES.AGENT_FIELD) this.agentFieldWrites.push(p["data"]);
         reply({ result: { storeId, version: ++this.storeVersion } });
         return;
       }

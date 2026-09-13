@@ -51,6 +51,7 @@ import type {
   AttachProviderSessionOptions,
 } from "@vibecook/puppeteer-runtime";
 import {
+  AgentFieldRow,
   type AgentListResult,
   type AgentProvidersResult,
   AgentSessionRecord,
@@ -392,6 +393,10 @@ async function window(daemon: FielddDaemon, scopes: string[], suffix: string): P
 }
 
 const DECK = ["agent.spawn", "agent.observe", "terminal.attach", "index.read"];
+
+/** MF-1 — the field row's vocabulary, read from the CONTRACT so a leak in the
+ * projection cannot pass through this door unnoticed. */
+const FIELD_ROW_KEYS = Object.keys(AgentFieldRow.shape);
 
 async function poll<T>(fn: () => Promise<T | undefined>, ms: number): Promise<T> {
   const deadline = Date.now() + ms;
@@ -966,6 +971,67 @@ const rosettaRow = (nativeSessionId: string, stillForMs: number | null, child = 
       ? null
       : { first_at: Date.now() - stillForMs - 60_000, last_at: Date.now() - stillForMs },
   stream_state: "indexed",
+});
+
+describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
+  it("answers the live board, then ONE delta frame carrying the change, and no content ever", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, [...DECK, "agent.control"], "fw1");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+
+    // the SNAPSHOT is the live board, not an empty one
+    const sub = (await win.call("agent.subscribe", {
+      projection: "field",
+      minIntervalMs: 250,
+    })) as { subId: string; snapshot: { revision: number; rows: Record<string, unknown>[] } };
+    const row = sub.snapshot.rows.find((r) => r["runtimeRunId"] === runId);
+    expect(row, "the field snapshot did not carry the run").toBeDefined();
+    expect(sub.snapshot.revision).toBeGreaterThan(0);
+    expect(row).toMatchObject({ kind: "scripted", alive: true });
+    // the allowlist, ON THE WIRE: a leak in the projection reaches a phone
+    // through exactly this frame
+    for (const key of Object.keys(row ?? {})) expect(FIELD_ROW_KEYS).toContain(key);
+
+    const frames = () =>
+      win.notifications.filter(
+        // the product API names a subscription's frames `<base>.delta`, where
+        // the base drops `.subscribe` (product-api.ts) — `agent.delta` here
+        (n) => n.method === "agent.delta" && n.params.subId === sub.subId,
+      );
+    expect(frames(), "a still board sent a frame").toEqual([]);
+
+    // the run's state moves: the scripted PTY's `cat` dies of the interrupt
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+
+    const delta = await poll(async () => {
+      const [first] = frames();
+      return first === undefined
+        ? undefined
+        : (first.params.payload as {
+            since: number;
+            revision: number;
+            upserts: Record<string, unknown>[];
+            removed: string[];
+          });
+    }, 20_000);
+    // it applies ON TOP of what the snapshot left this client at
+    expect(delta.since).toBe(sub.snapshot.revision);
+    expect(delta.revision).toBeGreaterThan(delta.since);
+    const upsert = delta.upserts.find((r) => r["runtimeRunId"] === runId);
+    expect(upsert, "the delta did not carry the run that changed").toBeDefined();
+    expect(upsert).toMatchObject({ alive: false });
+    for (const key of Object.keys(upsert ?? {})) expect(FIELD_ROW_KEYS).toContain(key);
+    // ONE frame for one change: the per-subscriber floor coalesces, and a
+    // still board that follows sends nothing more
+    const after = frames().length;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(frames().length, "a still board kept sending frames").toBe(after);
+  }, 200_000);
 });
 
 describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its row", () => {

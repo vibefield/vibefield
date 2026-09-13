@@ -1,4 +1,11 @@
-import type { AgentListResult, AgentSessionSummary } from "@vibefield/contracts";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  AgentFieldRow,
+  type AgentListResult,
+  type AgentSessionSummary,
+} from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFieldSubscription,
@@ -14,7 +21,75 @@ import { managedSummary as summary } from "./agent-field-summary";
 
 const board = (...sessions: AgentSessionSummary[]): AgentListResult => ({ sessions });
 
+/** THE ALLOWLIST. The contract names the field row's vocabulary, so the
+ * contract is where this test reads it — a denylist of content names could
+ * only ever refuse the leaks someone thought of, and `AgentFieldRow` is
+ * `.passthrough()`, so one stray property in `projectFieldRow` would ride to
+ * every phone unnoticed. */
+const CONTRACT_KEYS = Object.keys(AgentFieldRow.shape).sort();
+/** what the producer emits: the contract's keys, minus the counter the
+ * projection itself does not stamp */
+const PRODUCED_KEYS = CONTRACT_KEYS.filter((key) => key !== "revision");
+
+/** A fold row carrying EVERY fact the projection can read and every piece of
+ * content it must refuse. */
+const maximalSummary = (): AgentSessionSummary => ({
+  ...summary({
+    status: "blocked",
+    permissionTool: "Bash",
+    alive: true,
+    // pending + alive is the one summary that carries both the mirror and the
+    // AR-4 pending fact, so the row can show every optional at once
+    pending: "the adapter would not attach",
+    cumulativeTokens: 900,
+    contextPercent: 41,
+    effort: { value: "high", intent: "observed" },
+    git: { branch: "main" },
+    lastAssistantText: "a reply that must never travel",
+    title: "a title that must never travel",
+  }),
+  profileId: "work",
+  lastActivityAt: "2026-09-13T10:06:00.000Z",
+});
+
 describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
+  it("emits EXACTLY the keys the contract names — an allowlist, not a denylist", () => {
+    // Over a summary that carries every content field there is, the produced
+    // row's key set is the contract's own. A new property in `projectFieldRow`
+    // — however innocently named — fails here, which is the only check that
+    // scales: the row is `.passthrough()`, so nothing downstream would stop it.
+    expect(Object.keys(projectFieldRow(maximalSummary())).sort()).toEqual(PRODUCED_KEYS);
+    // and a sparse row is a SUBSET of the same vocabulary, never a superset
+    for (const row of [
+      projectFieldRow(summary({ monitor: false })),
+      projectFieldRow(summary({})),
+    ]) {
+      for (const key of Object.keys(row)) expect(PRODUCED_KEYS).toContain(key);
+    }
+  });
+
+  it("speaks the same vocabulary as the golden the phone decodes", () => {
+    // The contracts suite asserts the GOLDEN carries no content; this asserts
+    // the PRODUCER and that golden cannot drift apart — a fixture nobody
+    // produces is a fixture that can quietly stop describing the product.
+    const fixture = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "..",
+      "contracts",
+      "fixtures",
+      "agent-field-slice.valid.json",
+    );
+    const golden = JSON.parse(readFileSync(fixture, "utf8")) as {
+      rows: Array<Record<string, unknown>>;
+    };
+    const goldenKeys = [...new Set(golden.rows.flatMap((row) => Object.keys(row)))].sort();
+    // the golden exercises every field the contract names — no more, no less
+    expect(goldenKeys).toEqual(CONTRACT_KEYS);
+    // and every key this producer can emit is one that golden shows
+    expect(PRODUCED_KEYS.filter((key) => !goldenKeys.includes(key))).toEqual([]);
+  });
+
   it("carries no content, whatever the fold's row holds", () => {
     const row = projectFieldRow(
       summary({
