@@ -65,18 +65,25 @@ public func projectAgentField(
 public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> AgentSnapshot? {
   let provider = AgentProvider(rawValue: row.kind)
 
-  // MF-1e settled what these two fields mean: `alive` answers "is this agent
-  // still there", `pending` answers "is anyone at the wheel". A run whose PTY
-  // the floor still hosts is ALIVE even while fieldd is not observing it, so
-  // today's goldens ship `alive: true` beside `pending: "resume-when-idle"`.
+  // WHAT KEEPS A ROW ON THE FIELD, in the wire's own three facts.
   //
-  // The `|| parked` is kept anyway, and deliberately: the FIRST cut of that
-  // golden spelled it `alive: false`, this lane reported the contradiction,
-  // and a producer somewhere may still be on the old reading. Dropping a
-  // parked row would take a live agent off the field, which is the one
-  // mistake here that a person would notice and could not explain.
+  // MF-1e settled the first two: `alive` answers "is this agent still there",
+  // `pending` answers "is anyone at the wheel". A run whose PTY the floor
+  // hosts is ALIVE even while fieldd is not observing it, so today's goldens
+  // ship `alive: true` beside `pending: "resume-when-idle"`. The `|| parked`
+  // is kept anyway for a producer still on the first cut's spelling.
+  //
+  // MF-1f added the third and it is the one that bites: an EXITED run keeps
+  // its row while the floor still lists its PTY — `alive: false`, no
+  // `pending`, `terminal.hosted` still `local` with the same session id — so
+  // that §07's "resume after an exit" has a row to live on. Reading `alive`
+  // alone would drop exactly the row that change went to the trouble of
+  // keeping, and the pane would vanish from under a card that was reading it.
+  //
+  // A run leaves when it is dead AND has no pane. That is the only exit.
   let parked = row.pending != nil
-  guard row.alive || parked else { return nil }
+  let pane = row.terminal?.hosted != "none" && row.terminal?.runtimeSessionId != nil
+  guard row.alive || parked || pane else { return nil }
 
   var permissions: [AgentPermission] = []
   var blockers: [AgentBlocker] = []
@@ -151,7 +158,10 @@ public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> Age
       deviceID: device ?? row.device,
       hosted: row.terminal?.hosted ?? "none",
       runtimeSessionID: row.terminal?.runtimeSessionId,
-      pending: row.pending != nil))
+      pending: parked,
+      // MF-1f's row: the process ended and the pane is still on the floor. A
+      // PENDING row is not this — it is live and merely unobserved.
+      exited: !row.alive && !parked))
 }
 
 /// Every live board the phone can hear, folded into one field.

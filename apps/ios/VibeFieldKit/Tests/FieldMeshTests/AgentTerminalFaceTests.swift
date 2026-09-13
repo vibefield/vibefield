@@ -22,9 +22,11 @@ private func hostRow(
 
 private func join(
   device: String = "dev-studio", hosted: String = "local", session: String? = "pty-a41f",
-  pending: Bool = false
+  pending: Bool = false, exited: Bool = false
 ) -> AgentJoin {
-  AgentJoin(deviceID: device, hosted: hosted, runtimeSessionID: session, pending: pending)
+  AgentJoin(
+    deviceID: device, hosted: hosted, runtimeSessionID: session, pending: pending,
+    exited: exited)
 }
 
 @Suite struct AgentTerminalFaceTests {
@@ -120,6 +122,31 @@ private func join(
     #expect(!face.offersAttach)
   }
 
+  /// MF-1f's row: the process ended and the floor STILL lists its PTY. Both
+  /// acts are real — read what it printed, or continue it — and this is the
+  /// face §07's "resume after an exit" was asking for.
+  @Test func anExitedRunWithItsPaneStillOnTheFloorOffersBothActs() {
+    let face = agentTerminalFace(join: join(exited: true), hosts: [hostRow()])
+    guard case .exitedWithPane(let address) = face else {
+      Issue.record("expected the exited-with-pane face, got \(face)")
+      return
+    }
+    #expect(address.sessionID == "pty-a41f")
+    #expect(face.offersAttach)
+    #expect(face.offersResume)
+    #expect(face.note == "this run has ended — its terminal is still open to read")
+  }
+
+  /// And when the pane goes too, the same run falls back to the face with one
+  /// act: there is nothing left to read.
+  @Test func anExitedRunWhosePaneWentOffersOnlyResume() {
+    let face = agentTerminalFace(
+      join: join(hosted: "none", session: nil, exited: true), hosts: [hostRow()])
+    #expect(face == .exited)
+    #expect(!face.offersAttach)
+    #expect(face.offersResume)
+  }
+
   /// The scripted fleet has no desktop and no PTY, and its cards say nothing
   /// about terminals rather than offering one.
   @Test func noJoinOffersNothingAndClaimsNothing() {
@@ -171,6 +198,50 @@ private func join(
   @Test func withoutAPublisherTheRowsOwnDeviceStands() throws {
     let snapshot = try #require(agentSnapshot(from: fieldRow()))
     #expect(snapshot.join?.deviceID == "dev-fieldd")
+  }
+
+  /// MF-1f: an exited run KEEPS its row while the floor lists its PTY. Reading
+  /// `alive` alone would drop exactly the row that change went to the trouble
+  /// of keeping — the pane would vanish from under a card reading it.
+  @Test func anExitedRunWithAPaneStaysOnTheField() throws {
+    let row = try AgentFieldRow(
+      json: .object([
+        "runtimeRunId": .string("run-exited"), "revision": .int(9),
+        "kind": .string("claude"), "label": .string("Claude Code"),
+        "tier": .string("managed"), "device": .string("dev-fieldd"),
+        "status": .string("idle"),
+        "statusSince": .string("2026-09-13T18:42:11.000Z"),
+        "stateChangedAt": .string("2026-09-13T18:42:11.000Z"),
+        "createdAt": .string("2026-09-13T18:03:52.000Z"),
+        "alive": .bool(false), "blockers": .array([]),
+        "terminal": .object([
+          "hosted": .string("local"), "runtimeSessionId": .string("pty-a41f"),
+        ]),
+      ]))
+    let snapshot = try #require(agentSnapshot(from: row, device: "dev-mesh"))
+    #expect(snapshot.join?.exited == true)
+    #expect(snapshot.join?.pending == false)
+    #expect(snapshot.join?.runtimeSessionID == "pty-a41f")
+    // And it draws — a row that did not would take the pane off the field.
+    #expect(fieldBubble(from: snapshot) != nil)
+  }
+
+  /// A run that is dead AND has no pane is the only row that leaves.
+  @Test func aDeadRunWithNoPaneIsTheOnlyOneThatLeaves() throws {
+    #expect(try agentSnapshot(from: fieldRow(hosted: "none", session: nil)) != nil)
+    let gone = try AgentFieldRow(
+      json: .object([
+        "runtimeRunId": .string("run-gone"), "revision": .int(1),
+        "kind": .string("claude"), "label": .string("Claude Code"),
+        "tier": .string("managed"), "device": .string("dev-fieldd"),
+        "status": .string("idle"),
+        "statusSince": .string("2026-09-13T18:42:11.000Z"),
+        "stateChangedAt": .string("2026-09-13T18:42:11.000Z"),
+        "createdAt": .string("2026-09-13T18:03:52.000Z"),
+        "alive": .bool(false), "blockers": .array([]),
+        "terminal": .object(["hosted": .string("none")]),
+      ]))
+    #expect(agentSnapshot(from: gone) == nil)
   }
 
   @Test func aRowWithNoTerminalJoinsAsNone() throws {

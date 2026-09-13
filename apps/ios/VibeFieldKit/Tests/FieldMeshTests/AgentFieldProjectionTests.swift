@@ -176,9 +176,18 @@ private func blocker(kind: String) -> JSONValue {
     #expect(snapshot != nil)
   }
 
-  /// And a run that really has ended leaves, which is what the field is for.
-  @Test func anEndedRunLeavesTheField() throws {
-    #expect(try agentSnapshot(from: row(id: "r", alive: false)) == nil)
+  /// A run leaves when it is dead AND has no pane — which since MF-1f is the
+  /// only exit. A dead run whose PTY the floor still lists KEEPS its row, so
+  /// §07's "resume after an exit" has something to live on and the pane stays
+  /// readable.
+  @Test func onlyADeadRunWithNoPaneLeavesTheField() throws {
+    #expect(try agentSnapshot(from: row(id: "r", alive: false, terminal: nil)) == nil)
+    #expect(
+      try agentSnapshot(
+        from: row(id: "r", alive: false, terminal: .object(["hosted": .string("none")]))) == nil)
+    // The pane is still on the floor: the row stays, and says it exited.
+    let kept = try #require(agentSnapshot(from: row(id: "r", alive: false)))
+    #expect(kept.join?.exited == true)
   }
 
   @Test func theHeadlineIsTheProjectFolderAndTheFallbackIsTheLabel() throws {
@@ -284,8 +293,11 @@ private func blocker(kind: String) -> JSONValue {
   }
 
   @Test func endedRunsAreCountedSoAnEmptyBoardAndAGraveyardReadDifferently() throws {
+    let gone = JSONValue.object(["hosted": .string("none")])
     let projection = try projectAgentField(rows: [
-      try row(id: "a"), try row(id: "b", alive: false), try row(id: "c", alive: false),
+      try row(id: "a"),
+      try row(id: "b", alive: false, terminal: gone),
+      try row(id: "c", alive: false, terminal: gone),
     ])
     #expect(projection.agents.map(\.id) == ["a"])
     #expect(projection.ended == 2)

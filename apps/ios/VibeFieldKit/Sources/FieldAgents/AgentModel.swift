@@ -250,14 +250,20 @@ public struct AgentJoin: Sendable, Equatable, Codable {
   /// EXISTS, so it can still be attached to; what it cannot be is resumed
   /// twice.
   public var pending: Bool
+  /// MF-1f: the run's process has ENDED, and its row is still here because the
+  /// floor still lists its PTY. `terminal.hosted` stays `local` with the same
+  /// session id, so the pane can still be read — and RESUME is the verb.
+  public var exited: Bool
 
   public init(
-    deviceID: String, hosted: String, runtimeSessionID: String? = nil, pending: Bool = false
+    deviceID: String, hosted: String, runtimeSessionID: String? = nil, pending: Bool = false,
+    exited: Bool = false
   ) {
     self.deviceID = deviceID
     self.hosted = hosted
     self.runtimeSessionID = runtimeSessionID
     self.pending = pending
+    self.exited = exited
   }
 
   /// Whether the run has a terminal at all, by the wire's word.

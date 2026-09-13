@@ -23,9 +23,14 @@ public enum AgentTerminalFace: Sendable, Equatable {
   /// not a thing to offer.
   case unobserved(AgentTerminalAddress)
 
-  /// The run has ended: `hosted: "none"`, no PTY to open. RESUME is the act,
-  /// and it goes over the door.
+  /// The run has ended and its pane is gone with it: `hosted: "none"`, nothing
+  /// to open. RESUME is the only act, and it goes over the door.
   case exited
+
+  /// MF-1f's row: the process ended and the floor STILL lists its PTY. Both
+  /// acts are real — attach to read what it printed, resume to continue it —
+  /// and this is the face §07's "resume after an exit" was asking for.
+  case exitedWithPane(AgentTerminalAddress)
 
   /// The desktop is on the mesh and advertising no terminal for this run. Not
   /// a failure and not a dead button: the floor's terminal mesh is off, and
@@ -90,6 +95,7 @@ public func agentTerminalFace(
     sessionID: row.session.sessionID,
     attachable: row.session.attachable,
     readWrite: row.session.readWrite)
+  if join.exited { return .exitedWithPane(address) }
   return join.pending ? .unobserved(address) : .attach(address)
 }
 
@@ -121,6 +127,8 @@ extension AgentTerminalFace {
       return "live, unobserved — this run resumes when it next goes idle"
     case .exited:
       return "this run has ended — its terminal is gone"
+    case .exitedWithPane:
+      return "this run has ended — its terminal is still open to read"
     case .notPublished(let deviceName):
       let who = deviceName ?? "that desktop"
       return
@@ -134,21 +142,26 @@ extension AgentTerminalFace {
   /// Whether the card may offer ATTACH. A pending run's PTY is real, so it may.
   public var offersAttach: Bool {
     switch self {
-    case .attach(let address), .unobserved(let address): return address.attachable
+    case .attach(let address), .unobserved(let address), .exitedWithPane(let address):
+      return address.attachable
     case .exited, .notPublished, .noJoin: return false
     }
   }
 
-  /// Whether the card may offer RESUME — only an ENDED run, and never a
-  /// pending one, which has not ended and would be resumed twice.
+  /// Whether the card may offer RESUME. Both ENDED faces do — with a pane to
+  /// read or without one — and a pending run never does: it has not ended, and
+  /// resuming it twice is not a thing to offer.
   public var offersResume: Bool {
-    if case .exited = self { return true }
-    return false
+    switch self {
+    case .exited, .exitedWithPane: return true
+    case .attach, .unobserved, .notPublished, .noJoin: return false
+    }
   }
 
   public var address: AgentTerminalAddress? {
     switch self {
-    case .attach(let address), .unobserved(let address): return address
+    case .attach(let address), .unobserved(let address), .exitedWithPane(let address):
+      return address
     case .exited, .notPublished, .noJoin: return nil
     }
   }
