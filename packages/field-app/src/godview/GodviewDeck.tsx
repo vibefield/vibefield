@@ -43,6 +43,7 @@ import {
 import { godviewTerminalEffects, godviewTerminalTheme } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
+import { historyPortOver, usagePortOver } from "./monitor/doors";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
@@ -762,12 +763,25 @@ export function GodviewDeck({
   // new runtime is a new control connection and genuinely a different door.
   const door = useMemo<MonitorDoor | null>(() => {
     if (runtime === null) return null;
+    const doorClient = {
+      request: (method: string, params: Record<string, unknown>) => fieldd.request(method, params),
+      subscribe: (
+        method: string,
+        params: Record<string, unknown>,
+        onFrame: (payload: unknown) => void,
+      ) => fieldd.subscribe(method, params, onFrame),
+    };
     return {
       // `enableRemoteSessions={false}` below turns off upstream's palette and
       // its ⌘⇧O binding — it does NOT gate these calls, which live on the
       // runtime and speak to the floor's control connection directly. That is
       // exactly what GT-D7's amendment asked for: their door closed, ours open.
       listHosts: () => runtime.listRemoteHosts(),
+      // AR-5 — the find sheet's daemon questions and the usage column's feed,
+      // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
+      // The views never dial rosettad; the daemon's origin stays in fieldd.
+      history: historyPortOver(doorClient),
+      usage: usagePortOver(doorClient),
       attach: async (request) => {
         const active = workspaceRef.current?.activeSession;
         if (active === undefined) return { state: "no-pane" };
@@ -1030,6 +1044,10 @@ export function GodviewDeck({
     const sessionIds = paneSessionIds;
     const activeSessionId = workspace?.activeSession?.id;
     const sessions = (workspace?.panes ?? []).map((pane) => pane.session);
+    // AR-5: the panes themselves, for the attachments the views draw (record §02:
+    // a pane owns a colour; the session wears it while mounted there)
+    const paneIds = (workspace?.panes ?? []).map((pane) => pane.id);
+    const activePaneId = workspace?.activePaneId;
     // The gate keys on every fact the monitor DRAWS from these (AR-4b): the
     // ids and the active pane, and per pane the summary's exited/activity/
     // title/cwd — the deck republishes the summaries as the floor moves them,
@@ -1038,6 +1056,8 @@ export function GodviewDeck({
     const key = [
       sessionIds.join("\u0000"),
       activeSessionId ?? "",
+      paneIds.join("\u0000"),
+      activePaneId ?? "",
       ...sessions.map(
         (session) =>
           `${session.id}:${session.exited ? 1 : 0}:${session.activity?.kind ?? ""}:${session.title ?? ""}:${session.cwd ?? ""}`,
@@ -1058,6 +1078,8 @@ export function GodviewDeck({
     onPanes?.({
       sessionIds,
       ...(activeSessionId !== undefined ? { activeSessionId } : {}),
+      paneIds,
+      ...(activePaneId !== undefined ? { activePaneId } : {}),
       // the floor summaries the panes hold (AR-3): an unclaimed pane is a
       // terminal row on the stage, a managed row carries its PTY's summary
       sessions,

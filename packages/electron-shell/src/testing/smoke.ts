@@ -1842,6 +1842,12 @@ interface MonitorFacts {
   remoteState: string;
   remoteReason?: string;
   swarmPhysics: string;
+  /** AR-5: `webgpu` · `unavailable` · `starting`; `none` off the swarm view. */
+  swarmRenderer: string;
+  /** AR-5: the usage column's tiles; -1 while no column is mounted. */
+  usageTiles: number;
+  /** AR-5: `open` · `closed`. */
+  findSheet: string;
 }
 
 /** A running tail of one marker channel, armed BEFORE the load so a fast page
@@ -2887,6 +2893,106 @@ export async function runSmokeGodview(opts: {
         `the swarm is simulating "${monitor.swarmPhysics}", not in its worker — GT-D16's whole point is that this runs off the main thread`,
       );
     }
+    // AR-5: what the swarm PAINTED with. WebGPU is a fact of this host's GPU,
+    // not of the slice, so both answers are accepted — but the unavailable one
+    // must be SAID on the stage (the honest-states law), and a stage still
+    // "starting" after the field settled is a renderer that never answered.
+    const painted = await monitorWatch
+      .until(
+        (facts) => facts.swarmRenderer === "webgpu" || facts.swarmRenderer === "unavailable",
+        "the swarm's renderer to answer (webgpu or the honest unavailable line)",
+        10_000,
+      )
+      .catch(() => monitorWatch.current() ?? monitor);
+    verdict["swarmRenderer"] = painted.swarmRenderer;
+    if (painted.swarmRenderer !== "webgpu" && painted.swarmRenderer !== "unavailable") {
+      throw new Error(
+        `the swarm's renderer never answered — the marker says ${JSON.stringify(painted.swarmRenderer)}`,
+      );
+    }
+    if (painted.swarmRenderer === "unavailable") {
+      const said = (await win.webContents.executeJavaScript(
+        `(document.querySelector(".vf-monitor-swarm [data-swarm-renderer='unavailable']")?.textContent ?? "").toUpperCase()`,
+      )) as string;
+      if (!said.includes("WEBGPU")) {
+        throw new Error("the swarm has no WebGPU here and the stage does not say so");
+      }
+    }
+    // AR-5: the usage column is MOUNTED in the stage's chrome slot and the
+    // marker counts its tiles. The count is reported, not judged: a fresh
+    // daemon's batch is whatever accounts its providers know, and zero of
+    // them is an honest answer. What is asserted is that the column exists —
+    // a slot that rendered nothing would leave the marker at -1.
+    const usageFacts = await monitorWatch
+      .until(
+        (facts) => facts.usageTiles >= 0,
+        "the usage column to mount in the chrome slot",
+        10_000,
+      )
+      .catch(() => monitorWatch.current() ?? painted);
+    verdict["usageTiles"] = usageFacts.usageTiles;
+    const usageColumnMounted = (await win.webContents.executeJavaScript(
+      `document.querySelector(".vf-godview-monitor-stage .vf-usage-column") !== null`,
+    )) as boolean;
+    verdict["usageColumnMounted"] = usageColumnMounted;
+    if (!usageColumnMounted || usageFacts.usageTiles < 0) {
+      throw new Error(
+        `the usage column is not on the stage (marker: ${usageFacts.usageTiles} tiles, DOM: ${usageColumnMounted})`,
+      );
+    }
+    // AR-5 (D6): ⌘F summons the find sheet over the stage, Escape dismisses it.
+    // The chord is pressed the way the zoom chord is — into Chromium's input
+    // pipeline, never OS injection — and both edges are read off the marker,
+    // with the sheet's own element checked while it says open. Focus is read
+    // before and after: the sheet takes it on open, and a sheet that kept it
+    // on close would leave the user's cursor nowhere — which the very next
+    // row (typing into the pane) would then fail on for the wrong reason.
+    const focusBeforeFind = await focusReport(win);
+    pressChord(win, "f");
+    const findOpened = await monitorWatch.until(
+      (facts) => facts.findSheet === "open",
+      "the find sheet to open on ⌘F",
+      10_000,
+    );
+    verdict["findSheet"] = findOpened.findSheet;
+    const findSheetMounted = (await win.webContents.executeJavaScript(
+      `document.querySelector("#vf-find-sheet") !== null`,
+    )) as boolean;
+    if (!findSheetMounted) {
+      throw new Error("the marker says the find sheet is open and the DOM has no sheet");
+    }
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+    const findClosed = await monitorWatch.until(
+      (facts) => facts.findSheet === "closed",
+      "the find sheet to close on Escape",
+      10_000,
+    );
+    verdict["findSheetAfterEscape"] = findClosed.findSheet;
+    const focusAfterFind = await focusReport(win);
+    verdict["focusAroundFind"] = `${focusBeforeFind} → ${focusAfterFind}`;
+    if (focusAfterFind !== focusBeforeFind) {
+      throw new Error(
+        `the find sheet did not give focus back (before ⌘F: ${focusBeforeFind}; after Escape: ${focusAfterFind})`,
+      );
+    }
+    // Focus is necessary, not sufficient. The pane's input is a routed
+    // activation that reopens when focus returns, and a line typed into that
+    // window is delivered in PART — the head suppressed, the tail run. Seen
+    // twice before this row existed: an empty `$0` answer, then an answer
+    // file that never appeared while its marker did. So the row also proves
+    // the pane is typeable again, with the helper that retypes a whole line
+    // until its marker lands — the wait a person never notices at a keyboard
+    // and a harness typing at 3 ms a key has to make explicit.
+    const typeableMarker = `godview-${Math.random().toString(36).slice(2, 10)}`;
+    const typeablePath = join(scratch, "after-find.marker");
+    await typeLineUntilMarker(
+      win,
+      `echo ${typeableMarker} > ${typeablePath}`,
+      typeablePath,
+      typeableMarker,
+    );
+    verdict["paneTypeableAfterFind"] = true;
 
     // The pane is a FLOOR session, not a renderer's idea of one.
     const afterOpen = await untilFloor(
@@ -3785,7 +3891,13 @@ export async function runSmokeGodview(opts: {
     //        · the pane COUNT is unchanged (a mount that split would raise it)
     //        · every pane holds a session THE FLOOR KNOWS
     const beforeLocalClick = await deckSettled(deck, 2_000, 60_000);
-    const localClicked = await clickMonitorBubble(win, ".vf-monitor-bubble:not(.is-remote)");
+    // AR-5: the swarm's bodies are drawn on a canvas; each has a button in
+    // the swarm's list (the package's reachability rule), which is what a
+    // click lands on here. `data-agent-bubble-source` names the row's kind.
+    const localClicked = await clickMonitorBubble(
+      win,
+      '.vf-monitor-swarm-list button:not([data-agent-bubble-source="remote"])',
+    );
     verdict["localBubbleClicked"] = localClicked;
     // Quiescence, not a stopwatch. The BEFORE of this comparison already waits
     // for the deck to stop moving and for exactly the right reason (the pane
@@ -3852,7 +3964,10 @@ export async function runSmokeGodview(opts: {
       verdict["remotePeer"] = "available";
       const beforeAttach = deck.current();
       if (beforeAttach === null) throw new Error("the deck said nothing before the attach");
-      const attachedLabel = await clickMonitorBubble(win, ".vf-monitor-bubble.is-remote");
+      const attachedLabel = await clickMonitorBubble(
+        win,
+        '.vf-monitor-swarm-list button[data-agent-bubble-source="remote"]',
+      );
       verdict["remoteBubbleClicked"] = attachedLabel;
       const attached = await deck.until(
         (facts) =>

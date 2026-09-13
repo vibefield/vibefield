@@ -1,11 +1,11 @@
 import { GHOSTTY_COLOR_THEMES } from "@vibecook/ghosttea-react/workspace";
+import type { MonitorParameterDefinition } from "@vibecook/puppeteer-views";
 import { CARD_BG } from "@vibefield/design-kit";
 import { type CSSProperties, type ReactElement, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { type DeckAppearance, deckThemeNameForMode, setDeckAppearance } from "./deck-appearance";
 import { GodviewPerfReadout } from "./GodviewPerfReadout";
 import type { MonitorTuningSection } from "./monitor/monitor-tuning";
-import type { MonitorParameterDefinition } from "./monitor/parameters";
 
 // TEMPORARY: the live measuring instrument requested for the Godview visual
 // pass. The controls remain memory-only except terminal appearance and monitor

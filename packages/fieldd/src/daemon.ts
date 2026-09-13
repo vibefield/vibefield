@@ -33,6 +33,8 @@ import {
   DocSetSyncIntentParams,
   IndexEnrollParams,
   IndexRetireParams,
+  IndexSearchParams,
+  IndexSessionsParams,
   KvDeleteParams,
   KvGetParams,
   KvListParams,
@@ -96,6 +98,7 @@ import {
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { EnrollmentStore, IndexService } from "./agent-index";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
+import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
@@ -208,6 +211,9 @@ export interface FielddConfig {
   /** AR-4 test seam: resume-when-idle's thresholds (production: 30 s still,
    * asked every 5 s). */
   agentResumeWhenIdle?: AgentRuntimeServiceOptions["resumeWhenIdle"];
+  /** AR-5d test/product seam: the account-usage polling cadence. Unset ⇒ each
+   * adapter's own `refresh.pollIntervalMs` (the provider knows its quota). */
+  agentUsage?: AccountUsagePollOptions;
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -338,6 +344,9 @@ export interface FielddDaemon {
   /** AR-2 — the agent runtime (puppeteer) and the service behind the
    * agents.* doors; tests read its runtime directly. */
   agents: AgentRuntimeService;
+  /** AR-5d — the account-usage reading behind `agents.usage(.subscribe)`;
+   * tests drive its refresh directly. */
+  agentUsage: AccountUsageService;
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -500,6 +509,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // resume-when-idle) are ledgered as the system actor
     audit: (mutation, effect, describe) => audit.requiredSystem(mutation, effect, describe),
     logger: logger.child({ component: "agent_runtime" }),
+  });
+  // AR-5d — account usage beside the runtime that owns the adapters: one
+  // reading per provider and per persona, polled on the adapter's cadence.
+  // Constructed here (not started) so a provider push and a persona change
+  // are already listened for; `start()` is after `fieldd.lifecycle.ready`,
+  // because a quota is never a boot gate.
+  const agentUsage = new AccountUsageService({
+    runtime: agents.runtime,
+    ...(config.agentUsage !== undefined ? { poll: config.agentUsage } : {}),
+    logger: logger.child({ component: "agent_usage" }),
   });
   // TC-D6(a), fieldd half — measure-and-surface (Node has no setrlimit).
   const fdSoftLimit = readFdSoftLimit();
@@ -1044,6 +1063,30 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // and bounce the daemon when the record changed.
     api.register("index.status", () => index.status());
     api.register("index.discoveries", () => index.discoveries());
+    // AR-5e — the find sheet's two reads (thinking-ar-views-port.md §6.3).
+    // Projections like the two above: no origin, no enrolled root's path. A
+    // daemon that cannot answer a search says so in the answer's state rather
+    // than claiming the history holds no matches.
+    api.register("index.sessions", async (_ctx, params) => {
+      const parsed = IndexSessionsParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { nativeSessionIds: string[] } (1..256)",
+          false,
+        );
+      return await index.sessions(parsed.data.nativeSessionIds);
+    });
+    api.register("index.search", async (_ctx, params) => {
+      const parsed = IndexSearchParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { q, nativeSessionIds?, afterMs?, limit?, prefix?, kind? }",
+          false,
+        );
+      return await index.search(parsed.data);
+    });
     api.register("index.enroll", async (ctx, params) => {
       const parsed = IndexEnrollParams.safeParse(params);
       if (!parsed.success)
@@ -1254,6 +1297,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.registerSubscription("agent.subscribe", (_ctx, _params, emit) => {
       const dispose = agents.subscribe((rows) => emit(rows));
       return { snapshot: agents.list(), dispose };
+    });
+    // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
+    // PROJECTION and nothing else: percentages, labels, the provider's own
+    // sentence for a refusal (EL7). Before the first reading lands the answer
+    // is an honest empty batch, never a wait and never a throw.
+    api.register("agents.usage", () => agentUsage.snapshot());
+    api.registerSubscription("agents.usage.subscribe", (_ctx, _params, emit) => {
+      const dispose = agentUsage.subscribe((batch) => emit(batch));
+      return { snapshot: agentUsage.snapshot(), dispose };
     });
     api.register("agents.profiles.login", async (ctx, params) => {
       const parsed = AgentsProfilesLoginParams.safeParse(params);
@@ -2991,6 +3043,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           updateManager.dispose(),
           serviceHost?.stopAll() ?? Promise.resolve(),
           processes.stopAll(),
+          Promise.resolve(agentUsage.stop()), // AR-5d — stop asking before the runtime goes
           agents.dispose(),
           // the successor spawns its own rosettad over the SAME db — ours must
           // be gone first, and stop() resolves only after the real exit
@@ -3329,6 +3382,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     );
 
     logger.info("fieldd.lifecycle.ready", "fieldd is ready", { controlPort, dataPort });
+    // AR-5d — boot has committed: account usage may be read from here. The
+    // POLL itself is demand-driven (it runs while `agents.usage.subscribe` has
+    // a subscriber) because a reading spends an authenticated call on the
+    // person's own quota — see the note on `AccountUsageService.start`. A
+    // provider that cannot be read degrades its own row (an honest state with
+    // the adapter's sentence), never the daemon.
+    agentUsage.start();
     // AR-0 — boot has committed: the index daemon starts now, in the
     // background. Readiness is a health transition, never a boot gate: a
     // missing or broken rosettad degrades the index, not the daemon.
@@ -3358,6 +3418,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           runtimeDiagnostics.dispose();
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
+          agentUsage.stop(); // AR-5d — the polling ends before the runtime it asks
           await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           detachHealthSources?.();
@@ -3430,6 +3491,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       enrollment,
       index,
       agents,
+      agentUsage,
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;
@@ -3443,6 +3505,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AR-0 — no index daemon outlives a failed boot. It is started only after
     // `fieldd.lifecycle.ready`, so this never has a child to stop today; the
     // guard is stated so a later start-before-ready cannot leave an orphan.
+    agentUsage.stop(); // AR-5d — a failed boot leaves no poller and no listener
     await agents.dispose();
     await rosettad?.stop();
     // The earliest supersession window, which the `stopForSupersession` listener

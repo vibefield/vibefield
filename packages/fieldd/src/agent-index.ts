@@ -20,7 +20,20 @@ import {
   type IndexPhase,
   IndexPhase as IndexPhaseSchema,
   type IndexRuntimeStatus,
+  type IndexSearchCapabilities,
+  type IndexSearchHealth,
+  type IndexSearchHit,
+  type IndexSearchParams,
+  type IndexSearchReadiness,
+  IndexSearchReadiness as IndexSearchReadinessSchema,
+  IndexSearchResponse,
+  type IndexSearchResult,
+  type IndexSearchState,
+  type IndexSession,
+  IndexSessionResponse,
+  type IndexSessionRow,
   IndexSessionsResponse,
+  type IndexSessionsResult,
   type IndexStatus,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -53,6 +66,20 @@ import { ROSETTAD_UNCONFIGURED, type RosettadSupervisor } from "./rosettad-super
 // profile id; where fieldd keeps its root is fieldd's business).
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 3_000;
+
+// AR-5e — the find sheet's two questions. The numbers are the reference
+// client's (puppeteer `apps/godview/src/main/history-search.ts`), which is the
+// client these doors replace for VibeField: one ask per 64 native ids, the
+// list's own limit well above a chunk, 300 hits a keystroke, and a hard
+// ceiling on the per-hit root lookups a stranger-heavy answer can provoke.
+const SESSION_LOOKUP_CHUNK = 64;
+const SESSION_LIST_LIMIT = 1_000;
+/** the AR-4 single-id lookup's limit, unchanged: one native id, its children */
+const SESSION_FACTS_LIMIT = 50;
+const DEFAULT_SEARCH_LIMIT = 300;
+const MAX_ROOT_LOOKUPS_PER_SEARCH = 32;
+/** rosetta 18 added `sessions=` (the scope) and `prefix=` (fragment widening) */
+const SESSION_SCOPE_PROTOCOL = 18;
 
 export interface EnrollmentStoreOptions {
   /** the record's absolute path (LAYOUT.INDEX_ENROLLMENT_FILE under the user root) */
@@ -329,6 +356,8 @@ export interface IndexSessionFacts {
 /** The `/api/sessions` envelope's OWN keys, read off the schema so the two
  * can never drift apart: everything else at that level is unknown-field news. */
 const SESSIONS_BODY_KEYS = Object.keys(IndexSessionsResponse.shape);
+/** the same, for `/api/search` (AR-5e) */
+const SEARCH_BODY_KEYS = Object.keys(IndexSearchResponse.shape);
 
 export class IndexService {
   private readonly logger: Logger;
@@ -351,7 +380,19 @@ export class IndexService {
     const health = this.opts.supervisor?.health() ?? ROSETTAD_UNCONFIGURED;
     const enrollment = this.opts.store.summary();
     if (health.phase !== "ready") {
-      return { phase: foldPhase(health.phase), rosettad: { ...health }, enrollment, runtimes: [] };
+      return {
+        phase: foldPhase(health.phase),
+        rosettad: { ...health },
+        enrollment,
+        runtimes: [],
+        // AR-5e — the find sheet's foot is honest before the daemon is: not
+        // reachable, and the reason is the phase itself
+        search: {
+          reachable: false,
+          capabilities: this.searchCapabilities(),
+          detail: `the agent index is ${health.phase}`,
+        },
+      };
     }
     const [status, runtimes] = await Promise.all([
       this.get<StatusResponse>("/api/status"),
@@ -370,6 +411,9 @@ export class IndexService {
       runtimes: runtimes.runtimes.map((row) =>
         this.projectRuntime(row, backfills.get(row.id), lives.get(row.id)),
       ),
+      // AR-5e — folded from the SAME `/api/status` read; the search
+      // projection's readiness is its own question, never the ingest phase
+      search: this.foldSearchHealth(status),
     };
   }
 
@@ -583,28 +627,8 @@ export class IndexService {
     // because the server reads the parameter as a comma-separated selector
     // list: an id that carries a comma must never widen the answer to a
     // session this run is not about.
-    const path = `/api/sessions?native_session_id=${encodeURIComponent(nativeSessionId)}&limit=50`;
-    const body = await this.getBody(path);
-    const parsed = IndexSessionsResponse.safeParse(body);
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      this.logger.warn(
-        "fieldd.index.sessions_malformed",
-        "The index answered session rows fieldd cannot read",
-        { issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}` },
-      );
-      throw new RpcCallError(
-        "UNAVAILABLE",
-        "the agent index answered malformed session rows",
-        true,
-        {
-          service: "index",
-          state: "malformed",
-        },
-      );
-    }
-    this.noteUnknownFields("sessions", body, SESSIONS_BODY_KEYS);
-    const rows = parsed.data.sessions.filter((row) => row.native_session_id === nativeSessionId);
+    const sessions = await this.fetchSessionRows([nativeSessionId], SESSION_FACTS_LIMIT);
+    const rows = sessions.filter((row) => row.native_session_id === nativeSessionId);
     const row = rows.find((candidate) => candidate.root_session_id === candidate.id) ?? rows[0];
     if (row === undefined) return undefined;
     // bounds that contradict each other are NOT evidence: a reader that
@@ -627,6 +651,338 @@ export class IndexService {
       activity,
       streamState: row.stream_state,
     };
+  }
+
+  // ── AR-5e — the find sheet's two doors ─────────────────────────────────
+  //
+  // One keystroke is TWO asks, the way the reference client asks them: the
+  // facts lookup resolves the live runs' CANONICAL ids, and the search is
+  // scoped by those (rosetta widens each to its subagent tree, so a hit inside
+  // a delegated child still answers for the root the reader navigates to).
+  // Both answer projections; the daemon's origin stays inside fieldd (EL7).
+
+  /** `index.sessions` — what the index knows about these live runs, by the
+   * provider-native id every repo joins on. The ask is CHUNKED (the server
+   * reads `native_session_id` as a comma-separated selector list, and a
+   * keystroke can name every agent on the board) and the answers merged into
+   * one set of rows, in the caller's order. A native id the index has never
+   * read is simply ABSENT: a placeholder row would read as "known and empty",
+   * and the sheet would offer a session rosetta cannot open. */
+  async sessions(nativeSessionIds: readonly string[]): Promise<IndexSessionsResult> {
+    this.requireReady();
+    const wanted = [...new Set(nativeSessionIds)].filter((id) => id !== "");
+    if (wanted.length === 0) return { rows: [] };
+    const byNative = await this.rowsByNativeId(wanted);
+    return {
+      rows: wanted.flatMap((id) => {
+        const row = byNative.get(id);
+        return row === undefined ? [] : [projectSession(row)];
+      }),
+    };
+  }
+
+  /** `index.search` — one question over the transcript history, scoped to the
+   * live runs a reader can jump to.
+   *
+   * A daemon that cannot answer is `answered: false` with the reason in its
+   * state — NEVER an empty success: "no matches" is a claim about the history,
+   * and a building projection, an unreachable daemon or a readiness this build
+   * does not know have made no such claim (rosetta's own rule, and the reason
+   * its `SearchState` exists). The one thing that still refuses is a body
+   * fieldd cannot vouch for: that is UNAVAILABLE {state:"malformed"}, the same
+   * answer `sessionByNativeId` gives. */
+  async search(params: IndexSearchParams): Promise<IndexSearchResult> {
+    const health = this.opts.supervisor?.health() ?? ROSETTAD_UNCONFIGURED;
+    if (health.phase !== "ready") {
+      return unansweredSearch({
+        readiness: "unknown",
+        detail: `the agent index is ${health.phase}`,
+      });
+    }
+    const capabilities = this.searchCapabilities();
+    if (!capabilities.sessionScope) {
+      // Unreachable against a pinned pair: `getBody` refuses any protocol but
+      // the one fieldd speaks, so a daemon without the session scope never
+      // gets this far. Kept because the capability is projected and must not
+      // be decoration — if the pin ever moved below 18, the honest answer is
+      // that this build cannot ask the question, not a silently unscoped
+      // search across every session the index holds.
+      return unansweredSearch({
+        readiness: "unknown",
+        detail: `the agent index speaks protocol ${this.opts.expectedProtocolVersion}, which has no session scope`,
+      });
+    }
+
+    const scope = [...new Set(params.nativeSessionIds ?? [])].filter((id) => id !== "");
+    const scoped = scope.length > 0;
+    /** every row this call has seen, by canonical id (the facts lookup's rows
+     * and any root a hit made us resolve) — the call's own cache */
+    const known = new Map<string, IndexSessionRow>();
+    /** the roots the question is scoped to, by canonical id */
+    const roots = new Map<string, IndexSessionRow>();
+    if (scoped) {
+      let byNative: Map<string, IndexSessionRow>;
+      try {
+        byNative = await this.rowsByNativeId(scope);
+      } catch (error) {
+        return this.searchFailure(error);
+      }
+      for (const row of byNative.values()) known.set(row.id, row);
+      for (const row of byNative.values()) {
+        const root = row.root_session_id === row.id ? row : (known.get(row.root_session_id) ?? row);
+        roots.set(root.id, root);
+      }
+      if (roots.size === 0) return await this.scopeUnknown();
+    }
+
+    const limit = params.limit ?? DEFAULT_SEARCH_LIMIT;
+    const query = new URLSearchParams({ q: params.q });
+    if (scoped) query.set("sessions", [...roots.keys()].join(","));
+    query.set("prefix", String(params.prefix ?? true));
+    query.set("limit", String(limit));
+    if (params.afterMs !== undefined) query.set("after_ts", String(params.afterMs));
+    if (params.kind !== undefined) query.set("kind", params.kind);
+
+    let body: unknown;
+    try {
+      body = await this.getBody(`/api/search?${query.toString()}`);
+    } catch (error) {
+      return this.searchFailure(error);
+    }
+    const parsed = IndexSearchResponse.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      this.logger.warn(
+        "fieldd.index.search_malformed",
+        "The index answered search hits fieldd cannot read",
+        { issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}` },
+      );
+      throw new RpcCallError("UNAVAILABLE", "the agent index answered a malformed search", true, {
+        service: "index",
+        state: "malformed",
+      });
+    }
+    this.noteUnknownFields("search", body, SEARCH_BODY_KEYS);
+    const progress = foldSearchProgress(parsed.data.state.progress);
+    const state: IndexSearchState = {
+      readiness: IndexSearchReadinessSchema.parse(parsed.data.state.readiness),
+      ...(progress !== undefined ? { progress } : {}),
+    };
+    if (!answersSearch(state.readiness)) {
+      return unansweredSearch({
+        ...state,
+        detail: `the index's search projection is ${state.readiness}`,
+      });
+    }
+
+    // the daemon stopped at its limit, so some sessions may be under-reported
+    let clipped = parsed.data.hits.length >= limit;
+    const hits: IndexSearchHit[] = [];
+    const budget = { remaining: MAX_ROOT_LOOKUPS_PER_SEARCH };
+    for (const hit of parsed.data.hits) {
+      let root = roots.get(hit.session_id);
+      if (root === undefined) {
+        // a hit inside a delegated child: walk it up to the root a reader
+        // navigates to, within the call's budget
+        root = await this.rootOf(hit.session_id, known, budget);
+        if (root === undefined) clipped = true;
+        // a scoped question never answers outside its scope
+        if (scoped && (root === undefined || !roots.has(root.id))) continue;
+      }
+      const at = hit.at;
+      hits.push({
+        sessionId: hit.session_id,
+        rootSessionId: root?.id ?? hit.session_id,
+        ...(root !== undefined && root.native_session_id !== ""
+          ? { nativeSessionId: root.native_session_id }
+          : {}),
+        ...(root?.title ? { title: root.title } : {}),
+        timelineId: hit.timeline_id,
+        kind: hit.kind,
+        ...(typeof at === "number" ? { at } : {}),
+        snippet: hit.snippet,
+      });
+    }
+    return { answered: true, state, hits, clipped };
+  }
+
+  /** A scoped question whose live runs the index has never read. A session
+   * list carries no readiness, so an empty scope is not yet an answer: ask
+   * the daemon, and only a serveable canonical projection whose search
+   * readiness answers turns "I know none of these" into an honest
+   * answered-and-empty. Anything else stays unanswered and the sheet keeps
+   * what it last showed. */
+  private async scopeUnknown(): Promise<IndexSearchResult> {
+    let health: IndexSearchHealth;
+    try {
+      health = this.foldSearchHealth(await this.get<StatusResponse>("/api/status"));
+    } catch (error) {
+      return this.searchFailure(error);
+    }
+    const answered = health.canonicalReady === true && answersSearch(health.readiness);
+    const state: IndexSearchState = {
+      readiness: health.readiness ?? "unknown",
+      ...(health.canonicalReady !== undefined ? { canonicalReady: health.canonicalReady } : {}),
+      ...(health.progress !== undefined ? { progress: health.progress } : {}),
+      detail: answered
+        ? "none of these sessions are in the history index yet"
+        : "the index has not read these sessions yet",
+    };
+    return { answered, state, hits: [], clipped: false };
+  }
+
+  /** A failed leg of a search. A daemon that could not answer is an honest
+   * `answered: false`; a body fieldd cannot vouch for is not an answer at all
+   * and stays a refusal (as does anything that is not a call failure). The
+   * sentence is derived from the STATE, never from the failed URL: a detail
+   * built out of the path would carry the reader's own query into a foot, and
+   * the origin must never leave fieldd at all (EL7). */
+  private searchFailure(error: unknown): IndexSearchResult {
+    if (!(error instanceof RpcCallError)) throw error;
+    const details = error.details;
+    const state =
+      typeof details === "object" && details !== null && "state" in details
+        ? String((details as { state: unknown }).state)
+        : "unreachable";
+    if (state === "malformed") throw error;
+    const detail =
+      state === "unreachable"
+        ? "the agent index did not answer"
+        : state === "error"
+          ? "the agent index refused the question"
+          : state === "incompatible"
+            ? "the agent index speaks a protocol this build does not"
+            : `the agent index is ${state}`;
+    return unansweredSearch({ readiness: "unknown", detail });
+  }
+
+  /** What this pinned pair can do. Not a negotiation: `getBody` refuses any
+   * protocol but the one fieldd speaks, so these are facts about the version
+   * in the manifest. */
+  private searchCapabilities(): IndexSearchCapabilities {
+    const speaks = this.opts.expectedProtocolVersion >= SESSION_SCOPE_PROTOCOL;
+    return { sessionScope: speaks, prefix: speaks };
+  }
+
+  /** The find sheet's foot, folded from a `/api/status` body. Read
+   * TOLERANTLY: this body is cast rather than parsed (nothing destructive
+   * hangs off it), so a field that is not what the generated type promises
+   * degrades the foot instead of throwing — an unheard-of readiness folds to
+   * `unknown`, which does not answer. */
+  private foldSearchHealth(status: StatusResponse): IndexSearchHealth {
+    const search: unknown = (status as { search?: unknown }).search;
+    const readiness = IndexSearchReadinessSchema.parse(
+      typeof search === "object" && search !== null
+        ? (search as { readiness?: unknown }).readiness
+        : undefined,
+    );
+    const progress = foldSearchProgress(
+      typeof search === "object" && search !== null
+        ? (search as { progress?: unknown }).progress
+        : undefined,
+    );
+    const canonicalReady: unknown = (status as { canonical_ready?: unknown }).canonical_ready;
+    return {
+      reachable: true,
+      capabilities: this.searchCapabilities(),
+      ...(typeof canonicalReady === "boolean" ? { canonicalReady } : {}),
+      readiness,
+      ...(progress !== undefined ? { progress } : {}),
+    };
+  }
+
+  /** The rows for a set of native ids, chunked and merged. */
+  private async rowsByNativeId(
+    nativeSessionIds: readonly string[],
+  ): Promise<Map<string, IndexSessionRow>> {
+    const wanted = new Set(nativeSessionIds);
+    const found = new Map<string, IndexSessionRow>();
+    for (let start = 0; start < nativeSessionIds.length; start += SESSION_LOOKUP_CHUNK) {
+      const chunk = nativeSessionIds.slice(start, start + SESSION_LOOKUP_CHUNK);
+      for (const row of await this.fetchSessionRows(chunk, SESSION_LIST_LIMIT)) {
+        // the server reads the parameter as a SELECTOR LIST, so a row is only
+        // this ask's if its native id is one the ask actually named
+        if (!wanted.has(row.native_session_id)) continue;
+        const held = found.get(row.native_session_id);
+        // a native id can name a delegated child as well as its root; the row
+        // a reader navigates to wins (the rule `sessionByNativeId` decides on)
+        const better =
+          held === undefined ||
+          (held.root_session_id !== held.id && row.root_session_id === row.id);
+        if (better) found.set(row.native_session_id, row);
+      }
+    }
+    return found;
+  }
+
+  /** `/api/sessions?native_session_id=…` — PARSED, never cast: these rows are
+   * the evidence a terminate rides on (AR-4) and the identity a sheet joins
+   * on, and a body the reader cannot vouch for is an honest UNAVAILABLE. */
+  private async fetchSessionRows(
+    nativeSessionIds: readonly string[],
+    limit: number,
+  ): Promise<IndexSessionRow[]> {
+    const selector = encodeURIComponent(nativeSessionIds.join(","));
+    const body = await this.getBody(`/api/sessions?native_session_id=${selector}&limit=${limit}`);
+    const parsed = IndexSessionsResponse.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      this.logger.warn(
+        "fieldd.index.sessions_malformed",
+        "The index answered session rows fieldd cannot read",
+        { issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}` },
+      );
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the agent index answered malformed session rows",
+        true,
+        {
+          service: "index",
+          state: "malformed",
+        },
+      );
+    }
+    this.noteUnknownFields("sessions", body, SESSIONS_BODY_KEYS);
+    return parsed.data.sessions;
+  }
+
+  /** The root a hit's session rolls up to, within the call's budget. */
+  private async rootOf(
+    sessionId: string,
+    known: Map<string, IndexSessionRow>,
+    budget: { remaining: number },
+  ): Promise<IndexSessionRow | undefined> {
+    const row = await this.sessionRow(sessionId, known, budget);
+    if (row === undefined || row.root_session_id === row.id) return row;
+    return await this.sessionRow(row.root_session_id, known, budget);
+  }
+
+  /** One session by canonical id, cached for the call and BOUNDED: an answer
+   * full of strangers must not turn one keystroke into hundreds of round
+   * trips. Unresolvable is an ANSWER here — the hit rides without a join key
+   * and the result says it was clipped — never a refusal: the search itself
+   * answered, and this leg only decorates it. */
+  private async sessionRow(
+    sessionId: string,
+    known: Map<string, IndexSessionRow>,
+    budget: { remaining: number },
+  ): Promise<IndexSessionRow | undefined> {
+    const held = known.get(sessionId);
+    if (held !== undefined) return held;
+    if (budget.remaining <= 0) return undefined;
+    budget.remaining -= 1;
+    let body: unknown;
+    try {
+      body = await this.getBody(`/api/sessions/${encodeURIComponent(sessionId)}`);
+    } catch {
+      // a session the index does not hold answers 404; either way this hit
+      // simply carries no root
+      return undefined;
+    }
+    const parsed = IndexSessionResponse.safeParse(body);
+    if (!parsed.success || parsed.data.session.id !== sessionId) return undefined;
+    known.set(parsed.data.session.id, parsed.data.session);
+    return parsed.data.session;
   }
 
   /** One GET against the daemon's loopback origin — read from the supervisor's
@@ -736,4 +1092,51 @@ function isEnrolledRow(row: RuntimeRow): boolean {
  * (the contract's tolerant reader). */
 function foldPhase(phase: string): IndexPhase {
   return IndexPhaseSchema.parse(phase);
+}
+
+// ── AR-5e's folds ────────────────────────────────────────────────────────
+
+/** A search readiness that may carry hits: ready, or behind but consistent.
+ * Everything else — building, stale, failed, a word this build has never
+ * heard of — is a daemon with NO answer, never an empty one. */
+function answersSearch(readiness: IndexSearchReadiness | undefined): boolean {
+  return readiness === "ready" || readiness === "catching-up";
+}
+
+function unansweredSearch(state: IndexSearchState): IndexSearchResult {
+  return { answered: false, state, hits: [], clipped: false };
+}
+
+/** rosetta's build progress, narrowed to the two counters a foot shows. Both
+ * must be finite numbers or there is no progress to show. */
+function foldSearchProgress(value: unknown): { done: number; total: number } | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const done = (value as { documents_done?: unknown }).documents_done;
+  const total = (value as { documents_total?: unknown }).documents_total;
+  if (typeof done !== "number" || !Number.isFinite(done)) return undefined;
+  if (typeof total !== "number" || !Number.isFinite(total)) return undefined;
+  return { done, total };
+}
+
+/** rosetta's session row → the door's answer (AR-5e). The evidence is folded
+ * exactly as `sessionByNativeId` folds it — bounds that contradict each other
+ * are not evidence — and a display column rosetta sent as null is simply
+ * absent rather than an empty string a sheet would draw. */
+function projectSession(row: IndexSessionRow): IndexSession {
+  const bounds = row.activity;
+  const activity =
+    bounds !== null && bounds !== undefined && bounds.first_at <= bounds.last_at
+      ? { firstAt: bounds.first_at, lastAt: bounds.last_at }
+      : null;
+  return {
+    sessionId: row.id,
+    nativeSessionId: row.native_session_id,
+    rootSessionId: row.root_session_id,
+    ...(row.title ? { title: row.title } : {}),
+    ...(row.summary ? { summary: row.summary } : {}),
+    ...(row.cwd ? { cwd: row.cwd } : {}),
+    ...(typeof row.updated_at === "number" ? { updatedAt: row.updated_at } : {}),
+    activity,
+    streamState: row.stream_state,
+  };
 }

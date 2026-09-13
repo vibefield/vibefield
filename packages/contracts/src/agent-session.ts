@@ -26,8 +26,13 @@ import { TerminalCreateOpenResult } from "./terminal-pipeline";
 /** puppeteer's `AGENT_MONITOR_SCHEMA_VERSION` at the pinned revision
  * (`packages/core/src/monitor/types.ts`). A bump upstream is a deliberate
  * event here: the mirror is re-read against the new shape, the golden
- * regenerated, this constant moved — never a silent drift. */
-export const AGENT_MONITOR_SCHEMA_VERSION = 2;
+ * regenerated, this constant moved — never a silent drift. Moved 2 → 3 at
+ * AR-5 (puppeteer `e32b56b`, 2026-09-13: artifacts, teams and workflows left
+ * the state, `subagents[]` shrank to identity, work, usage, and
+ * `subagentCount` arrived; the mirror reads none of those, so the fields
+ * fieldd names are unchanged and the golden is puppeteer's own fixture
+ * transcribed at that revision). */
+export const AGENT_MONITOR_SCHEMA_VERSION = 3;
 
 /** The three tiers as ruled (2026-09-12; design-04 §8.4 amended). */
 export const AgentTier = z.enum(["managed", "ingested", "remote"]);

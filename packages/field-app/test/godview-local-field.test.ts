@@ -9,7 +9,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { managedRowId, monitorAgentFromManaged } from "../src/godview/monitor/agents";
+import {
+  type MonitorColours,
+  managedRowId,
+  monitorAgentFromManaged,
+} from "../src/godview/monitor/agents";
 import {
   EMPTY_LOCAL_FIELD,
   localFieldAfterFailure,
@@ -17,7 +21,10 @@ import {
 } from "../src/godview/monitor/local-agent-field";
 import { managedSummary } from "./managed-session-fixture";
 
-const ACCENTS = ["#a1", "#a2", "#a3"] as const;
+/** The theme's tokens and an empty ledger: this file is about identity, not
+ * colour, so every row here wears the ramp (record §02, AR-5). */
+const COLOURS: MonitorColours = { tint: { l: 0.6, c: 0.15 }, neutral: "oklch(0.5 0 0)" };
+const PURE = { colours: COLOURS, projectSeqs: new Map<string, number>() } as const;
 
 describe("the local field's honest states", () => {
   it("starts with nobody asked — which is not the same as an empty fold", () => {
@@ -62,7 +69,7 @@ describe("a managed row's identity", () => {
 
   it("carries the fold's row verbatim on the facet, and the tier as ruled", () => {
     const summary = managedSummary({ runtimeRunId: "run-a", profileId: "codex:abc" });
-    const agent = monitorAgentFromManaged({ summary }, ACCENTS);
+    const agent = monitorAgentFromManaged({ summary }, PURE);
     expect(agent?.agent?.summary).toBe(summary);
     expect(agent?.agent?.tier).toBe("managed");
     expect(agent?.agent?.runtimeRunId).toBe("run-a");
@@ -70,7 +77,7 @@ describe("a managed row's identity", () => {
     // a row without a terminal here has no session and no pane join
     const homeless = monitorAgentFromManaged(
       { summary: managedSummary({ terminalSessionId: null }) },
-      ACCENTS,
+      PURE,
     );
     expect(homeless?.session).toBeUndefined();
   });

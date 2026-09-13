@@ -462,7 +462,7 @@ const RULES = [
     // pnpm-workspace.yaml's sibling block.
     enforce: true,
     description:
-      "field-app imports puppeteer only through its view door (core · monitor · react) + @rosetta/protocol — never runtime, providers, record, an adapter, or native-observation",
+      "field-app imports puppeteer only through its view door (core · monitor · react · views) + @rosetta/protocol — never runtime, providers, record, an adapter, or native-observation",
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/field-app/src"),
     importTest: (s) =>
       s.startsWith("@vibecook/puppeteer-") &&
@@ -493,6 +493,9 @@ const PUPPETEER_FIELD_APP_DOOR = [
   "@vibecook/puppeteer-core",
   "@vibecook/puppeteer-monitor",
   "@vibecook/puppeteer-react",
+  // AR-5 (2026-09-13): the Godview views as a package (PU-5) — the swarm on
+  // WebGPU, list, rain, the bar, the usage column, the find sheet, behind ports.
+  "@vibecook/puppeteer-views",
 ];
 
 // Enforce map (spec §8.3 slice 2): --enforce gates ONLY on enforce-true rules.

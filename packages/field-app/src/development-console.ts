@@ -174,6 +174,16 @@ export interface GodviewMonitorFacts {
    * swarm view, which turns a silent regression into a failed row.
    */
   swarmPhysics: string;
+  /** AR-5: what the swarm is painting with — `webgpu`, `unavailable` (the
+   * honest line on the stage), or `starting` before the device answered; `none`
+   * when the swarm is not the mounted view. */
+  swarmRenderer: string;
+  /** AR-5: the tiles the usage column is showing (one per account the door
+   * reported, whatever its state); `-1` while no column is mounted. A count,
+   * not a judgement: an empty batch is the ordinary answer of a fresh daemon. */
+  usageTiles: number;
+  /** AR-5: `open` · `closed` — the find sheet, the chord's witness. */
+  findSheet: string;
 }
 
 export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {

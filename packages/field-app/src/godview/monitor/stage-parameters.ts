@@ -1,4 +1,4 @@
-import type { MonitorParameterGroup } from "./parameters";
+import type { MonitorParameterGroup } from "@vibecook/puppeteer-views";
 
 /**
  * Stage-level tunables — the monitor's share of the overlay, which belongs to no

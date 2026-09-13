@@ -1,3 +1,4 @@
+import { monitorParameterDefaults, monitorViewFor } from "@vibecook/puppeteer-views";
 import { type CSSProperties, type ReactElement, useMemo, useState } from "react";
 import { useDeckAppearance } from "../godview/deck-appearance";
 import { GodviewMonitor } from "../godview/GodviewMonitor";
@@ -9,12 +10,13 @@ import {
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "../godview/GodviewTuningPanel";
-import { monitorParameterDefaults } from "../godview/monitor/parameters";
-import { monitorViewFor } from "../godview/monitor/registry";
 
 /** Runtime-free composition of the production Godview shell and monitor. The
  * terminal bridge is deliberately absent and therefore renders the same honest
- * unavailable deck the live overlay uses on a browser-only host. */
+ * unavailable deck the live overlay uses on a browser-only host. The views and
+ * their registry are the puppeteer views package's since AR-5; the list view
+ * opens because it draws without WebGPU, which a catalog host may lack (the
+ * swarm's bodies have their own page, on the shipping view). */
 export function GodviewPreview(): ReactElement {
   const [viewId, setViewId] = useState("list");
   const [theme, setTheme] = useState<GodviewTheme>("light");

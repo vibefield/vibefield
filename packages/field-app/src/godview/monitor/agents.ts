@@ -1,17 +1,28 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
+  type AgentMonitorState,
+  classifyMonitorRecency,
+  type MonitorContextState,
+} from "@vibecook/puppeteer-core";
+import {
+  type PaneAttachment,
+  type ProjectTint,
+  projectTint,
+  type UsageHistory,
+} from "@vibecook/puppeteer-views";
+import {
   type AgentVisualStatus,
-  agentAccentSlot,
   agentDetail,
   classifyAgentStatus,
   classifyTerminalStatus,
+  projectKey,
   projectLabel,
   providerLabel,
 } from "./agent-status";
 import type { AgentSessionSummary } from "./facet-types";
 import { folderName } from "./folder-name";
 import { type RemoteSessionRow, remoteRowId } from "./remote-door";
-import type { MonitorAgent, PaneAttachment } from "./types";
+import type { MonitorAgent } from "./types";
 
 /** A managed session as fieldd's fold reports it (AR-3), and the floor
  * summary of its PTY when the deck holds one (a pane is showing it). */
@@ -32,9 +43,12 @@ export interface MonitorRemoteRecord {
   row: RemoteSessionRow;
   /** The local replica's id, when this row is currently showing in a pane. */
   localSessionId?: string;
-  /** The pane's color, when it is. Populated from the attach that put it there,
-   * which is what makes `PaneAttachment` mean "a pane is showing this". */
-  paneColor?: string;
+}
+
+/** The theme's tint for project colours and the ramp for rows with no project (record §02). */
+export interface MonitorColours {
+  tint: ProjectTint;
+  neutral: string;
 }
 
 export interface AssembleMonitorAgentsInput {
@@ -44,12 +58,18 @@ export interface AssembleMonitorAgentsInput {
   /** The mesh's half of the field. Empty is the honest answer with no floor
    * serving — there are no placeholder peers and no invented hosts. */
   remotes?: readonly MonitorRemoteRecord[];
-  /** §2.6's accents, already resolved from the live tokens. Passed IN rather
-   * than read here so this whole module stays a pure function — the reference's
-   * property, kept, and the reason its tests need no renderer. */
-  accents: readonly string[];
+  /** The live tokens' tint and ramp, passed IN rather than read here so this
+   * whole module stays a pure function — the reference's property, kept, and
+   * the reason its tests need no renderer. */
+  colours: MonitorColours;
+  /** Project key → the sequence it was dealt (`project-ledger.ts`); a project
+   * with no sequence yet, or a row with no project, wears the ramp. */
+  projectSeqs: ReadonlyMap<string, number>;
+  /** The UI's usage ledger, by row id (`usage-ledger` in the package). */
+  usage?: ReadonlyMap<string, UsageHistory>;
   /** Live summaries, so a terminal placeholder reflects current activity rather than launch state. */
   sessions?: ReadonlyMap<string, SessionSummary>;
+  /** The panes showing each session, by session id — the deck's facts (record §02). */
   attachments?: ReadonlyMap<string, PaneAttachment>;
   /** The session showing in the pane the user is working in — the DECK's fact. */
   activeSessionId?: string;
@@ -61,10 +81,7 @@ export interface AssembleMonitorAgentsInput {
    * has not been mounted here, a peer's session before its attach).
    */
   previewSelectedId?: string;
-}
-
-function accentFor(id: string, accents: readonly string[]): string {
-  return accents.length === 0 ? "" : (accents[agentAccentSlot(id, accents.length)] as string);
+  nowMs?: number;
 }
 
 /** The record with the deck's summary of its PTY joined in, when a pane holds
@@ -88,33 +105,43 @@ function withPaneSummary(
  * that leaves it hosting none, a fieldd restart that gives it a new epoch. The
  * floor session id is none of those: it is the PTY, and a row keyed by it
  * became a DIFFERENT row the moment the run was resumed — which the swarm reads
- * as the bubble dying and a stranger being born (it keys its elements and its
- * physics bodies by `agent.id`) and the chrome reads as a preview highlight
- * pointing at nothing.
+ * as the bubble dying and a stranger being born (it keys its physics bodies by
+ * `agent.id`) and the chrome reads as a preview highlight pointing at nothing.
  *
  * The pane join is a SEPARATE field and stays one: `agent.session?.id`, and the
  * fold's own `terminal.runtimeSessionId`, are what the deck↔monitor join and
  * the active-pane comparison read. Nothing joins on this id.
- *
- * The one case it does not survive is the other direction — a bare terminal the
- * fold later claims changes id from its session to its run — and that is the
- * cheaper loss: a promotion happens to a row once, a resume happens every time
- * an agent is woken.
  */
 export function managedRowId(summary: AgentSessionSummary): string {
   return summary.runtimeRunId;
 }
 
+/** The project's dealt tint, or the ramp for a row that has no project or
+ * whose project has not been dealt yet (record §02, D3). */
+function projectColour(
+  summary: AgentSessionSummary,
+  colours: MonitorColours,
+  projectSeqs: ReadonlyMap<string, number>,
+): string {
+  const key = projectKey(summary);
+  const seq = key === undefined ? undefined : projectSeqs.get(key);
+  return seq === undefined ? colours.neutral : projectTint(seq, colours.tint);
+}
+
 /** Undefined for a session that has stopped being worth showing at all. */
 export function monitorAgentFromManaged(
   record: MonitorManagedRecord,
-  accents: readonly string[],
+  input: Pick<AssembleMonitorAgentsInput, "colours" | "projectSeqs" | "nowMs">,
+  usage?: UsageHistory,
 ): MonitorAgent | undefined {
   const { summary, session } = record;
   if (session?.exited) return undefined;
   const status = classifyAgentStatus(summary);
   if (!status) return undefined;
-  const monitor = summary.monitor;
+  // The mirror is Core's projection carried verbatim (the passthrough, pinned
+  // against Core's generation by `agent-monitor-pin.test.ts`); the views read
+  // it as Core's type, and this is the one seam that says so.
+  const monitor = summary.monitor as AgentMonitorState | undefined;
   const observedCwd = monitor?.environment?.cwd;
   // The presence of the OBSERVATION decides, not the truthiness of the branch:
   // a git value of null authoritatively means "not in a repo", which is an
@@ -123,49 +150,47 @@ export function monitorAgentFromManaged(
   const branch = git !== undefined ? (git?.branch ?? undefined) : summary.workspace?.branch;
   const cwd = observedCwd || summary.workspace?.sourcePath || summary.workspace?.root || undefined;
   const model = monitor?.model;
-  const context = monitor?.context;
+  const context = monitor?.context as MonitorContextState | undefined;
+  const recency = classifyMonitorRecency(
+    monitor?.freshness?.lastEvidenceAt,
+    input.nowMs ?? Number.NaN,
+  ).recency;
   const id = managedRowId(summary);
   return {
     id,
     ...(session !== undefined ? { session } : {}),
     createdAtMs: session?.createdAtMs ?? Date.parse(summary.createdAt),
+    tier: summary.tier,
     status,
     project: projectLabel(summary),
     detail: agentDetail(summary, status),
-    // accent by the RUN — the same value as `id` since the row id became the
-    // run, and still spelled out because the PROPERTY belongs to the run and
-    // not to whatever the id happens to be: the same run keeps its color
-    // whichever pane shows it, and across a fieldd restart (AR-4)
-    color: accentFor(summary.runtimeRunId, accents),
+    color: projectColour(summary, input.colours, input.projectSeqs),
+    ...(recency === "stale" ? { stale: true } : {}),
     active: false,
     ...(cwd ? { cwd } : {}),
     agent: {
+      provider: { id: summary.kind, label: providerLabel(summary) },
       kind: summary.kind,
-      provider: providerLabel(summary),
       tier: summary.tier,
       runtimeRunId: summary.runtimeRunId,
       ...(summary.profileId !== undefined ? { profileId: summary.profileId } : {}),
       ...(model ? { model: model.displayName || model.id } : {}),
       ...(branch ? { branch } : {}),
-      ...(context
-        ? {
-            contextWindow: {
-              usedTokens: context.usedTokens,
-              capacityTokens: context.capacityTokens,
-              usedPercent: context.usedPercent,
-              ...(model ? { modelId: model.id } : {}),
-              updatedAt: summary.stateChangedAt,
-            },
-          }
-        : {}),
+      ...(context ? { contextWindow: context } : {}),
+      ...(monitor ? { monitor } : {}),
+      ...(usage ? { usage } : {}),
+      recency,
+      // the fold's native id (the find sheet's join key), whatever its basis
+      nativeSessionId: summary.sessionId,
       summary,
     },
   };
 }
 
+/** A terminal no agent has claimed belongs to no project, so it wears the ramp. */
 export function monitorAgentFromTerminal(
   record: MonitorTerminalRecord,
-  accents: readonly string[],
+  colours: MonitorColours,
 ): MonitorAgent {
   const { session, cwd, spawnHint } = record;
   const path = cwd ?? session.cwd ?? undefined;
@@ -176,7 +201,7 @@ export function monitorAgentFromTerminal(
     status: classifyTerminalStatus(session.activity),
     project: folderName(path, "terminal"),
     detail: path || "Unassigned terminal",
-    color: accentFor(session.id, accents),
+    color: colours.neutral,
     active: false,
     ...(path ? { cwd: path } : {}),
     ...(spawnHint ? { spawnHint } : {}),
@@ -190,33 +215,31 @@ export function monitorAgentFromTerminal(
  * NOT report are absent rather than guessed: there is no `session` (no local
  * session exists until this row is attached) and no `cwd` (the peer's path is a
  * label, kept under `remote.cwdLabel` where nothing will try to spawn in it).
+ * It belongs to no project this device has dealt a colour, so it wears the ramp.
  *
  * The status classifier is the unclaimed terminal's, deliberately: a peer sends
  * terminal activity, not agent state, so a remote row can be working or idle
- * and never `waiting` — that word means an agent is asking for something, and
+ * and never `blocked` — that word means an agent is asking for something, and
  * no agent has spoken here.
  */
 export function monitorAgentFromRemote(
   record: MonitorRemoteRecord,
-  accents: readonly string[],
+  colours: MonitorColours,
 ): MonitorAgent {
   const { host, session } = record.row;
   const id = remoteRowId(host.deviceId, session.sessionId);
   return {
     id,
     createdAtMs: session.createdAtMs,
+    tier: "remote",
     status: classifyTerminalStatus(session.activity),
     project: folderName(session.cwdLabel, session.title || "remote"),
     // The host is in the detail as well as in the facet, because the detail is
     // what the swarm puts in a tooltip and the list prints as its own column: a
     // path with no machine attached to it is exactly the confusion GT-3's
-    // finding warned of. (The rain does NOT read this — it builds its column
-    // from `rainDataString`, which until GT-5c read `project` alone and drew a
-    // peer's session as a local terminal. Fixed there, not by widening this.)
+    // finding warned of.
     detail: session.cwdLabel ? `${host.deviceName} · ${session.cwdLabel}` : host.deviceName,
-    // Accent by the QUALIFIED id, so the same session id on two peers is two
-    // colors and one peer's session keeps its color across refreshes.
-    color: accentFor(id, accents),
+    color: colours.neutral,
     active: false,
     remote: {
       deviceId: host.deviceId,
@@ -245,7 +268,11 @@ export function monitorAgentFromRemote(
 export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readonly MonitorAgent[] {
   const agents = input.managed
     .map((record) =>
-      monitorAgentFromManaged(withPaneSummary(record, input.sessions), input.accents),
+      monitorAgentFromManaged(
+        withPaneSummary(record, input.sessions),
+        input,
+        input.usage?.get(managedRowId(record.summary)),
+      ),
     )
     .filter((agent): agent is MonitorAgent => agent !== undefined)
     .sort((left, right) => left.createdAtMs - right.createdAtMs);
@@ -266,25 +293,20 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
     .map((terminal) =>
       monitorAgentFromTerminal(
         { ...terminal, session: input.sessions?.get(terminal.session.id) ?? terminal.session },
-        input.accents,
+        input.colours,
       ),
     );
-  const remotes = (input.remotes ?? []).map((record) => {
-    const agent = monitorAgentFromRemote(record, input.accents);
-    // A remote row's pane link comes from the attach that made it, not from the
-    // `attachments` map (which is keyed by local session ids the projection
-    // cannot know a peer's row by). `paneColor` present IS the pane fact:
-    // the source only carries it while a pane is actually showing the replica.
-    if (record.paneColor === undefined) return agent;
-    return { ...agent, attachment: { primary: record.paneColor, mirrors: [] } };
-  });
+  const remotes = (input.remotes ?? []).map((record) =>
+    monitorAgentFromRemote(record, input.colours),
+  );
 
   return [...agents, ...terminals, ...remotes].map((agent) => {
-    const attachment = agent.session ? input.attachments?.get(agent.session.id) : undefined;
-    // A remote row is "active" when the pane the user is in shows ITS replica —
-    // the same question as for a local row, asked of the id that exists.
-    const activeId = agent.session?.id ?? agent.remote?.localSessionId;
-    const mounted = activeId !== undefined && input.activeSessionId === activeId;
+    // A pane shows a LOCAL session: the row's own, or, for a peer's row, the
+    // replica the attach put there. The same question, asked of the id that
+    // exists.
+    const localId = agent.session?.id ?? agent.remote?.localSessionId;
+    const attachment = localId === undefined ? undefined : input.attachments?.get(localId);
+    const mounted = localId !== undefined && input.activeSessionId === localId;
     return {
       ...agent,
       active: mounted || input.previewSelectedId === agent.id,
@@ -308,7 +330,7 @@ export function nextMonitorAgentForStatus(
 export function monitorAgentCounts(
   agents: readonly MonitorAgent[],
 ): Record<AgentVisualStatus, number> {
-  const counts: Record<AgentVisualStatus, number> = { idle: 0, working: 0, waiting: 0 };
+  const counts: Record<AgentVisualStatus, number> = { idle: 0, working: 0, blocked: 0 };
   for (const agent of agents) {
     if (agent.agent) counts[agent.status] += 1;
   }

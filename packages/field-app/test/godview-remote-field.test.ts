@@ -30,6 +30,7 @@ import {
 } from "../src/godview/GodviewMonitor";
 import {
   assembleMonitorAgents,
+  type MonitorColours,
   type MonitorRemoteRecord,
   monitorAgentFromRemote,
 } from "../src/godview/monitor/agents";
@@ -42,7 +43,10 @@ import {
 } from "../src/godview/monitor/remote-session-field";
 import type { MonitorSourceCounts } from "../src/godview/monitor/useMonitorAgents";
 
-const ACCENTS = ["#a1", "#a2", "#a3", "#a4", "#a5", "#a6", "#a7", "#a8"] as const;
+/** The theme's tokens (AR-5). A peer's session belongs to no project this
+ * device has dealt a colour, so every row in this file wears the ramp. */
+const COLOURS: MonitorColours = { tint: { l: 0.6, c: 0.15 }, neutral: "oklch(0.5 0 0)" };
+const PURE = { colours: COLOURS, projectSeqs: new Map<string, number>() } as const;
 
 /** A session with something in the foreground. The wire type carries five more
  * fields (source, confidence, two process groups, a timestamp) that only the
@@ -128,7 +132,7 @@ describe("a peer's session as a monitor row", () => {
   };
 
   it("carries the host identity and reads its status from the peer's activity", () => {
-    const agent = monitorAgentFromRemote(record, ACCENTS);
+    const agent = monitorAgentFromRemote(record, COLOURS);
     expect(agent.remote?.deviceName).toBe("mini");
     expect(agent.remote?.remoteSessionId).toBe("s1");
     expect(agent.id).toBe("remote:mini:s1");
@@ -137,13 +141,13 @@ describe("a peer's session as a monitor row", () => {
     expect(
       monitorAgentFromRemote(
         { row: { ...record.row, session: shared("s1", { activity: busy }) } },
-        ACCENTS,
+        COLOURS,
       ).status,
     ).toBe("working");
   });
 
   it("has NO local session and NO cwd — the two things a peer never gave us", () => {
-    const agent = monitorAgentFromRemote(record, ACCENTS);
+    const agent = monitorAgentFromRemote(record, COLOURS);
     // The honesty of the whole slice in two assertions. A synthesized
     // `SessionSummary` would carry an executable, a pid and a persistence
     // class the peer never reported; a `cwd` would be a peer's path in the
@@ -161,15 +165,15 @@ describe("a peer's session as a monitor row", () => {
     // which of the two it is.
     const agent = monitorAgentFromRemote(
       { row: { ...record.row, session: shared("s1", { readWrite: false }) } },
-      ACCENTS,
+      COLOURS,
     );
     expect(agent.remote?.hostWritable).toBe(false);
     expect(agent.status).toBe("idle");
-    expect(monitorAgentFromRemote(record, ACCENTS).remote?.hostWritable).toBe(true);
+    expect(monitorAgentFromRemote(record, COLOURS).remote?.hostWritable).toBe(true);
   });
 
   it("never claims an agent facet — a peer sends terminal facts, not semantics", () => {
-    expect(monitorAgentFromRemote(record, ACCENTS).agent).toBeUndefined();
+    expect(monitorAgentFromRemote(record, COLOURS).agent).toBeUndefined();
   });
 });
 
@@ -185,7 +189,7 @@ describe("the composition (local + remote, one array)", () => {
       managed: [],
       terminals: [localTerminal("local-1")],
       remotes: [{ row: { host: { deviceId: "mini", deviceName: "mini" }, session: shared("s1") } }],
-      accents: ACCENTS,
+      ...PURE,
     });
     expect(agents.map((agent) => agent.id)).toEqual(["local-1", "remote:mini:s1"]);
     expect(agents[0]?.remote).toBeUndefined();
@@ -201,7 +205,7 @@ describe("the composition (local + remote, one array)", () => {
       managed: [],
       terminals: [localTerminal("local-1")],
       remotes: [],
-      accents: ACCENTS,
+      ...PURE,
     });
     expect(agents).toHaveLength(1);
     expect(agents.every((agent) => agent.remote === undefined)).toBe(true);
@@ -216,21 +220,30 @@ describe("the composition (local + remote, one array)", () => {
       managed: [],
       terminals: [],
       remotes: [{ row }],
-      accents: ACCENTS,
+      ...PURE,
     });
     expect(unlinked[0]?.attachment).toBeUndefined();
 
+    // AR-5: a peer's row carries no pane colour of its own any more. Its pane
+    // link is `localSessionId` — the replica the attach put here — and the
+    // attachment is looked up in the deck's own map by that id, exactly as it
+    // is for every local row. One join, one place it comes from.
+    const attachment = { primaryPaneId: "pane-3", paneIds: ["pane-3"], color: "#a3" };
     const linked = assembleMonitorAgents({
       managed: [],
       terminals: [],
-      remotes: [{ row, localSessionId: "replica-9", paneColor: "#a3" }],
-      accents: ACCENTS,
+      remotes: [{ row, localSessionId: "replica-9" }],
+      ...PURE,
+      attachments: new Map([["replica-9", attachment]]),
       activeSessionId: "replica-9",
     });
-    expect(linked[0]?.attachment).toEqual({ primary: "#a3", mirrors: [] });
+    expect(linked[0]?.attachment).toEqual(attachment);
     // …and the row is "active" because the pane the user is in shows ITS
     // replica — the same question asked of the id that exists.
     expect(linked[0]?.active).toBe(true);
+    // The row's own colour is untouched by the pane's: a peer's session
+    // belongs to no project here, so it wears the ramp (record §02).
+    expect(linked[0]?.color).toBe(COLOURS.neutral);
   });
 
   it("keeps the preview's selection separate from a real mount", () => {
@@ -241,7 +254,7 @@ describe("the composition (local + remote, one array)", () => {
       managed: [],
       terminals: [localTerminal("local-1")],
       remotes: [{ row: { host: { deviceId: "mini", deviceName: "mini" }, session: shared("s1") } }],
-      accents: ACCENTS,
+      ...PURE,
       previewSelectedId: "local-1",
     });
     expect(agents[0]?.active).toBe(true);

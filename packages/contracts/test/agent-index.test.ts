@@ -33,6 +33,9 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
     expect(rows("index.")).toEqual([
       { method: "index.discoveries", scope: "index.read", idempotent: true, locality: "local" },
       { method: "index.status", scope: "index.read", idempotent: true, locality: "local" },
+      // AR-5e — the find sheet's doors, reads like the two above
+      { method: "index.sessions", scope: "index.read", idempotent: true, locality: "local" },
+      { method: "index.search", scope: "index.read", idempotent: true, locality: "local" },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
     ]);
@@ -70,16 +73,27 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: false,
         locality: "local",
       },
+      // AR-5d — account usage: a READ of the agent plane, so it rides
+      // `agent.observe` beside the fold rather than the persona scope
+      { method: "agents.usage", scope: "agent.observe", idempotent: true, locality: "local" },
+      {
+        method: "agents.usage.subscribe",
+        scope: "agent.observe",
+        idempotent: true,
+        locality: "local",
+      },
     ]);
   });
 
-  it("none of the rows federates or admits a guest", () => {
+  it("none of the rows federates or admits a guest; only the usage feed subscribes", () => {
     for (const m of METHODS.filter(
       (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),
     )) {
       expect(m.locality, m.method).toBe("local");
       expect(m.guestOk ?? false, m.method).toBe(false);
-      expect(m.subscription ?? false, m.method).toBe(false);
+      // AR-5d widened this family by exactly one subscription (the usage
+      // column's feed); every other row stays a one-shot call.
+      expect(m.subscription ?? false, m.method).toBe(m.method === "agents.usage.subscribe");
     }
   });
 

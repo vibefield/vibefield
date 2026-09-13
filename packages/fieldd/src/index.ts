@@ -32,6 +32,13 @@ export {
   summarizeManaged,
 } from "./agent-sessions";
 export {
+  type AccountUsagePollOptions,
+  type AccountUsageRuntime,
+  AccountUsageService,
+  type AccountUsageServiceOptions,
+  projectEntry,
+} from "./agent-usage";
+export {
   type ArtifactServeBridge,
   ArtifactService,
   type ArtifactServiceOptions,

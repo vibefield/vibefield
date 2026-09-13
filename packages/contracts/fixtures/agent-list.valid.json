@@ -33,7 +33,7 @@
         "resumable": false
       },
       "monitor": {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "runtimeEpoch": 2,
         "revision": 9,
         "runtimeRunId": "run-1",
@@ -118,49 +118,10 @@
         "subagents": [
           {
             "id": "child-1",
-            "actorRunKey": "actor-child-1",
-            "active": true,
-            "cumulativeTokens": 300,
+            "working": true,
             "modelId": "model-card-v2",
-            "modelIntent": "observed",
             "effort": "high",
-            "effortIntent": "observed"
-          }
-        ],
-        "team": {
-          "id": "team-1",
-          "teammates": [
-            {
-              "id": "member-1",
-              "actorRunKey": "actor-child-1",
-              "runtimeRunId": "run-2",
-              "idle": false,
-              "activity": "Reviewing changes",
-              "cumulativeTokens": 300,
-              "burnRatePerMin": 25,
-              "contextPercent": 40,
-              "modelId": "model-card-v2",
-              "modelIntent": "observed",
-              "effort": "high",
-              "effortIntent": "observed",
-              "activityProvisional": true
-            }
-          ],
-          "provisional": true
-        },
-        "workflows": [
-          {
-            "id": "workflow-1",
-            "active": true,
-            "actorRunKeys": ["actor-child-1"],
-            "artifactRefs": [
-              {
-                "artifactId": "artifact-1",
-                "family": "workflow-definition",
-                "mediaType": "text/markdown",
-                "availability": "readable"
-              }
-            ]
+            "cumulativeTokens": 300
           }
         ],
         "omitted": {
@@ -174,7 +135,9 @@
         "environment": {
           "cwd": "/repo",
           "git": null,
-          "worktrees": ["/repo-worktree"]
+          "worktrees": [
+            "/repo-worktree"
+          ]
         },
         "session": {
           "nativeSessionId": "native-1",
@@ -194,7 +157,8 @@
             }
           }
         },
-        "alive": true
+        "alive": true,
+        "subagentCount": 1
       }
     }
   ]

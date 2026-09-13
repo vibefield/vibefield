@@ -1,29 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
-  agentAccentSlot,
   agentDetail,
   classifyAgentStatus,
   classifyTerminalStatus,
+  projectKey,
   projectLabel,
   providerLabel,
 } from "../src/godview/monitor/agent-status";
 import { folderName } from "../src/godview/monitor/folder-name";
-import { ACCENT_SLOTS } from "../src/godview/monitor/monitor-palette";
 import { managedSummary } from "./managed-session-fixture";
 
-// The reference app's `agent-status.test.ts`, ported at GT-3m and re-fed at
-// AR-3. The classifier is the module the whole monitor rests on — everything a
-// view draws is downstream of "what is this session doing", and since AR-3 that
-// answer is fieldd's ONE derived status (AR-D4) rather than anything a
-// terminal printed (ADR-003, our EL2 grain).
+// The reference app's `agent-status.test.ts`, ported at GT-3m, re-fed at AR-3
+// and re-worded at AR-5. The classifier is the module the whole monitor rests
+// on — everything a view draws is downstream of "what is this session doing",
+// and since AR-3 that answer is fieldd's ONE derived status (AR-D4) rather
+// than anything a terminal printed (ADR-003, our EL2 grain). The WORD is
+// Core's since AR-5 (`idle` · `working` · `blocked`); GT-3m's `waiting` was
+// the same state under a local name and retired with the views port.
 
 describe("Godview agent status", () => {
-  it("maps the fold's idle, working and blocked onto the three statuses", () => {
+  it("maps the fold's idle, working and blocked onto Core's three words", () => {
     expect(classifyAgentStatus(managedSummary({ status: "idle" }))).toBe("idle");
     expect(classifyAgentStatus(managedSummary({ status: "working" }))).toBe("working");
     expect(
       classifyAgentStatus(managedSummary({ status: "blocked", blocker: { kind: "permission" } })),
-    ).toBe("waiting");
+    ).toBe("blocked");
   });
 
   it("drops a run puppeteer reports as no longer alive", () => {
@@ -36,6 +37,19 @@ describe("Godview agent status", () => {
     const starting = managedSummary({ status: "unknown", monitor: false });
     expect(classifyAgentStatus(starting)).toBe("working");
     expect(agentDetail(starting, "working")).toBe("starting");
+  });
+
+  it("AR-4: a pending row is idle, and the drop is asked FIRST", () => {
+    // The order is the rule: "this run is not alive" is a fact about the run,
+    // and pending is a reading of a row still presumed to exist. Asked second,
+    // pending answered for a dead run and the stage drew it as a live agent.
+    expect(classifyAgentStatus(managedSummary({ pending: "cannot attach" }))).toBe("idle");
+    expect(
+      classifyAgentStatus(managedSummary({ pending: "cannot attach", alive: false })),
+    ).toBeUndefined();
+    expect(agentDetail(managedSummary({ pending: "cannot attach" }), "idle")).toBe(
+      "unobserved · resumes when idle",
+    );
   });
 
   it("uses foreground activity for unassigned terminals, and unknown falls to idle", () => {
@@ -62,15 +76,40 @@ describe("Godview agent status", () => {
     expect(providerLabel({ kind: "some-new-agent", label: "" })).toBe("some-new-agent");
   });
 
+  it("keys a project by its workspace ROOT, so a worktree shares the repository's colour", () => {
+    // Record §02/D3, and the reason the key and the label are two functions: a
+    // run in a subdirectory is LABELLED by where it is, and COLOURED by the
+    // repository it belongs to. Keying on the observed cwd would have dealt a
+    // second sequence — a second hue — for the same project.
+    const moved = managedSummary({ cwd: "/project/vibe-field" });
+    moved.monitor = {
+      ...moved.monitor!,
+      environment: { cwd: "/project/vibe-field/packages/field-app", worktrees: [] },
+    };
+    expect(projectKey(moved)).toBe("/project/vibe-field");
+    expect(projectLabel(moved)).toBe("field-app");
+
+    // With no workspace at all the observed directory is the best key there is…
+    const observed = managedSummary({ cwd: "/project/truffle" });
+    delete observed.workspace;
+    expect(projectKey(observed)).toBe("/project/truffle");
+
+    // …and a row that names no directory belongs to no project, which is the
+    // ramp rather than a sequence dealt to the empty string.
+    const rootless = managedSummary({ monitor: false });
+    delete rootless.workspace;
+    expect(projectKey(rootless)).toBeUndefined();
+  });
+
   it("describes what an agent is doing without reading the terminal", () => {
     expect(
       agentDetail(
         managedSummary({ status: "blocked", blocker: { kind: "permission", tool: "Bash" } }),
-        "waiting",
+        "blocked",
       ),
     ).toBe("permission · Bash");
     expect(
-      agentDetail(managedSummary({ status: "blocked", blocker: { kind: "question" } }), "waiting"),
+      agentDetail(managedSummary({ status: "blocked", blocker: { kind: "question" } }), "blocked"),
     ).toBe("question");
     expect(
       agentDetail(
@@ -80,24 +119,6 @@ describe("Godview agent status", () => {
     ).toBe("Reading the tests");
     expect(agentDetail(managedSummary({ status: "working" }), "working")).toBe("working");
     expect(agentDetail(managedSummary({ status: "idle" }), "idle")).toBe("idle");
-  });
-
-  it("assigns a stable per-session accent SLOT, in range", () => {
-    // The property the reference's color hash had, kept: same id ⇒ same slot,
-    // forever. What changed is the codomain — a curated §2.6 set instead of a
-    // free hue wheel, so a relationship color can never wander onto a hue §2.5
-    // has already given a meaning.
-    expect(agentAccentSlot("session-1", ACCENT_SLOTS)).toBe(
-      agentAccentSlot("session-1", ACCENT_SLOTS),
-    );
-    expect(agentAccentSlot("session-1", ACCENT_SLOTS)).not.toBe(
-      agentAccentSlot("session-2", ACCENT_SLOTS),
-    );
-    for (const id of ["a", "session-1", "remote:mini:s1", "run-42"]) {
-      const slot = agentAccentSlot(id, ACCENT_SLOTS);
-      expect(slot).toBeGreaterThanOrEqual(0);
-      expect(slot).toBeLessThan(ACCENT_SLOTS);
-    }
   });
 
   it("folds a path to its last component and falls back to the given name", () => {

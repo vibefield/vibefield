@@ -348,6 +348,10 @@ async function mint(
     // and prompts, minted now so the scope set is the slice's, not a drip).
     // agents.manage (the machine-scope distribution record, native.admin
     // posture) is deliberately NOT here until the Agents settings section.
+    // AR-5e: index.read is the find sheet's scope — the status foot, the
+    // sessions the live runs join to, and the search itself. The READ half
+    // only; index.manage (consent — the roll call's checkboxes) stays out
+    // with agents.manage until the Agents settings section.
     scopes: [
       "doc.read",
       "doc.write",
@@ -364,6 +368,7 @@ async function mint(
       "agent.spawn",
       "agent.observe",
       "agent.control",
+      "index.read",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

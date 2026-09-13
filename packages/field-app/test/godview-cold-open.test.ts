@@ -12,6 +12,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -140,120 +141,70 @@ function keyframeBlocks(css: string): Array<{ name: string; body: string }> {
   return blocks;
 }
 
+/**
+ * A stylesheet and everything it `@import`s by relative path, in load order —
+ * the way the renderer's bundler flattens it. A bare specifier (tailwind, the
+ * design kit's tokens) is another sheet's audit and is left alone.
+ */
+function importedSheets(entry: string): string[] {
+  const seen = new Set<string>();
+  const sheets: string[] = [];
+  const visit = (file: string): void => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const css = readFileSync(file, "utf8");
+    sheets.push(css);
+    for (const match of css.matchAll(/@import\s+['"]([^'"]+)['"]/g)) {
+      const target = match[1] as string;
+      if (target.startsWith(".")) visit(join(dirname(file), target));
+    }
+  };
+  visit(entry);
+  return sheets;
+}
+
 describe("the ambient-animation audit (GT-D15.1)", () => {
   const godviewRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "godview");
-  const bubbleCss = readFileSync(join(godviewRoot, "views", "swarm", "agent-bubble.css"), "utf8");
+  // The views package's sheet, resolved through the very export the app's
+  // manifest imports (`@vibecook/puppeteer-views/styles/views.css`), so the
+  // audit reads what the overlay loads rather than a path it remembers.
+  const packageSheet = createRequire(import.meta.url).resolve(
+    "@vibecook/puppeteer-views/styles/views.css",
+  );
+  const packageSheets = importedSheets(packageSheet);
   const css = [
     readFileSync(join(godviewRoot, "godview.css"), "utf8"),
-    readFileSync(join(godviewRoot, "views", "swarm", "swarm.css"), "utf8"),
-    bubbleCss,
+    readFileSync(join(godviewRoot, "deck-zoom.css"), "utf8"),
+    ...packageSheets,
   ].join("\n");
 
-  it("finds keyframes to audit at all", () => {
-    // Guards the whole check against a moved file or a broken parser: a
-    // stylesheet that yields no blocks would pass every assertion below while
-    // asserting nothing.
-    expect(keyframeBlocks(css).length).toBeGreaterThanOrEqual(5);
+  it("reads the package's sheet through the manifest's export, and follows its imports", () => {
+    // Guards the audit against a moved file: the bundle must resolve and must
+    // pull the swarm's own sheet in, or every assertion below would pass over
+    // a stylesheet that is not the one the overlay wears.
+    expect(packageSheets.length).toBeGreaterThanOrEqual(6);
+    expect(css).toContain(".vf-monitor-swarm");
   });
 
-  it("animates filter in NO keyframe, anywhere in the app's stylesheet", () => {
-    // The law with no carve-outs. `filter` may be SET — the shadow layers and
-    // the ignition glow are pre-blurred, and that is the whole technique — but
-    // never interpolated by a keyframe, because a blur that changes is a blur
-    // recomputed on every frame it is alive.
+  it("runs NO keyframe loop in the DOM — the ambient motion left with the bodies (AR-5)", () => {
+    // GT-3p's ignition loops and shadow cross-fades were the DOM bubble's.
+    // Since AR-5 the bodies are drawn by the views package's WebGPU renderer
+    // (RFC 005) and their motion is the shader's, gated by the same
+    // reduced-motion and animations switches. A keyframe that reappears here
+    // is ambient DOM work on every frame the overlay is open — the cost
+    // GT-D15.1 measured — and is argued back in by name, not by accident.
+    expect(keyframeBlocks(css).map((block) => block.name)).toEqual([]);
+  });
+
+  it("animates filter in NO keyframe, anywhere in the overlay's stylesheets", () => {
+    // The law with no carve-outs, kept for the day a keyframe is argued back
+    // in: `filter` may be SET — a pre-blurred layer is the whole technique —
+    // but never interpolated, because a blur that changes is a blur recomputed
+    // on every frame it is alive.
     const offenders = keyframeBlocks(css)
       .filter((block) => /(^|[;{\s])(-webkit-)?(backdrop-)?filter\s*:/.test(block.body))
       .map((block) => block.name);
 
     expect(offenders).toEqual([]);
-  });
-
-  /** James's tuned drop-shadows, as they read before GT-3p rebuilt them as
-   * layers. They are the REFERENCE, not history: a rebuild is only allowed to
-   * change the mechanism, so every number below must still be derivable from
-   * the stylesheet. Offset survives as a `translateY`, radius as a blur at HALF
-   * its value (`drop-shadow()`'s third length is 2σ, `blur()` takes σ), and
-   * alpha as a factor pre-multiplied by the bubble's fill opacity. */
-  const TUNED = [
-    { layer: "working-shadow-rest", theme: "light", dy: 8, radius: 10, alpha: 0.18 },
-    { layer: "working-shadow-peak", theme: "light", dy: 12, radius: 17, alpha: 0.34 },
-    { layer: "waiting-shadow-rest", theme: "light", dy: 9, radius: 13, alpha: 0.24 },
-    { layer: "waiting-shadow-peak", theme: "light", dy: 17, radius: 24, alpha: 0.4 },
-    { layer: "working-shadow-rest", theme: "dark", dy: 8, radius: 12, alpha: 0.12 },
-    { layer: "working-shadow-peak", theme: "dark", dy: 12, radius: 20, alpha: 0.3 },
-    { layer: "waiting-shadow-rest", theme: "dark", dy: 9, radius: 13, alpha: 0.16 },
-    { layer: "waiting-shadow-peak", theme: "dark", dy: 17, radius: 24, alpha: 0.25 },
-  ] as const;
-
-  /** Whitespace-insensitive, including inside parentheses: these declarations
-   * are long enough that the formatter wraps some of them and not others, and
-   * an assertion about NUMBERS should not also be an assertion about where
-   * biome chose to break a line. */
-  function flatten(source: string): string {
-    return source.replace(/\s+/g, " ").replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
-  }
-
-  it("carries James's shadow numbers through the rebuild, both themes", () => {
-    const themeBlock = (theme: string): string => {
-      const start = bubbleCss.indexOf(`.vf-godview.theme-${theme} {`);
-      expect(start, `the ${theme} theme block should exist`).toBeGreaterThan(-1);
-      return flatten(bubbleCss.slice(start, bubbleCss.indexOf("\n}", start)));
-    };
-
-    for (const { layer, theme, radius, alpha } of TUNED) {
-      const block = themeBlock(theme);
-      // The blur is the radius halved — the one arithmetic step in the port,
-      // and the one a careless edit would silently get wrong.
-      expect(block, `${theme}/${layer} blur`).toContain(
-        `--vf-monitor-bubble-${layer}-blur: ${radius / 2}px;`,
-      );
-      // The alpha rides a `calc` against the live fill-opacity knob rather than
-      // a frozen number, which is how the shadow keeps tracking the lab's
-      // bubble-fill slider exactly as a real drop-shadow did.
-      expect(block, `${theme}/${layer} alpha`).toContain(
-        `--vf-monitor-bubble-${layer}-fill: rgb(${theme === "light" ? "0 0 0" : "255 255 255"} / ` +
-          `calc(${alpha} * var(--vf-monitor-bubble-fill-opacity, 72%)));`,
-      );
-    }
-  });
-
-  it("offsets each shadow layer by the drop-shadow's own dy", () => {
-    for (const state of ["working", "waiting"] as const) {
-      for (const [slot, pseudo] of [
-        ["rest", "::before"],
-        ["peak", "::after"],
-      ] as const) {
-        const selector = `.vf-monitor-bubble-positioner.is-${state}${pseudo} {`;
-        // The LAST occurrence: the same selector also ends the grouped rule
-        // that gives all four layers their shared box, and that rule carries no
-        // offset. The standalone rules follow it.
-        const start = bubbleCss.lastIndexOf(selector);
-        expect(start, `${selector} should exist`).toBeGreaterThan(-1);
-        const rule = bubbleCss.slice(start, bubbleCss.indexOf("\n}", start));
-        const expected = TUNED.find(
-          (entry) => entry.layer === `${state}-shadow-${slot}` && entry.theme === "light",
-        );
-        expect(rule, `${state} ${slot} offset`).toContain(`translateY(${expected?.dy}px)`);
-      }
-    }
-  });
-
-  it("keeps the loops that run forever on opacity and transform alone", () => {
-    // The ambient set: three ignition loops on every working bubble, and the
-    // two shadow cross-fades that replaced the breathe and wait drop-shadows.
-    // Named individually so a rename cannot quietly empty this check.
-    for (const name of [
-      "vf-godview-agent-ignition-core",
-      "vf-godview-agent-ignition-particle",
-      "vf-godview-agent-ignition-glyph",
-      "vf-godview-agent-shadow-rest",
-      "vf-godview-agent-shadow-peak",
-    ]) {
-      const block = keyframeBlocks(css).find((entry) => entry.name === name);
-      expect(block, `${name} should exist`).toBeTruthy();
-      for (const property of (block?.body ?? "").matchAll(/([a-z-]+)\s*:/g)) {
-        expect(["opacity", "transform"]).toContain(property[1]);
-      }
-    }
   });
 });

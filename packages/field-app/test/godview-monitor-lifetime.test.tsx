@@ -32,6 +32,8 @@ const doorFacts = vi.hoisted(() => ({
 
 vi.mock("../src/godview/GodviewDeck", async () => {
   const { useEffect } = await import("react");
+  const checkedAt = "2026-09-13T00:00:00.000Z";
+  const status = { reachable: false, detail: "no index in this fixture", checkedAt };
   const door = {
     listHosts: async () => [],
     attach: async () => ({ state: "no-pane" as const }),
@@ -45,6 +47,18 @@ vi.mock("../src/godview/GodviewDeck", async () => {
     providers: async () => [],
     spawn: async () => ({ state: "no-pane" as const }),
     mountLocal: async () => ({ state: "no-pane" as const }),
+    // AR-5's two ports. The real deck builds them over its fieldd client
+    // (`monitor/doors.ts`); here they answer honestly and reach nothing, which
+    // is what a door with no daemon behind it should do.
+    history: {
+      status: async () => status,
+      facts: async () => [],
+      search: async () => ({ status, answered: false, hits: [], clipped: false }),
+    },
+    usage: {
+      snapshot: async () => ({ refreshedAt: checkedAt, entries: [] }),
+      subscribe: () => () => undefined,
+    },
   };
   return {
     GodviewDeck: (props: { onRemoteDoor?: (door: unknown) => void }) => {
@@ -161,6 +175,25 @@ async function setOpen(open: boolean): Promise<void> {
 const stage = (host: HTMLElement): Element | null =>
   host.querySelector(".vf-godview-monitor-stage");
 
+/**
+ * Which view the bar is wearing (AR-5).
+ *
+ * The `<select>` this used to read is gone: the stage's header is the package's
+ * instrument bar, and a view is chosen with a mark that reports itself pressed.
+ * The claim is unchanged — the choice survives a close — and it is still read
+ * off the screen rather than out of storage, which is the point of making it.
+ */
+const viewMark = (host: HTMLElement, label: string): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>(
+    `[role="group"][aria-label="Monitor view"] button[aria-label="${label} view"]`,
+  );
+const pressedView = (host: HTMLElement): string | undefined =>
+  [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '[role="group"][aria-label="Monitor view"] button[aria-pressed="true"]',
+    ),
+  ][0]?.getAttribute("aria-label") ?? undefined;
+
 describe("the monitor's lifetime inside the overlay (PF6)", () => {
   it("does not exist until the Godview has been opened once", async () => {
     const host = await mountOverlay();
@@ -214,14 +247,9 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
   it("keeps the chosen view across a close, because the choice lives above the stage", async () => {
     const host = await mountOverlay();
     await setOpen(true);
-    const switcher = host.querySelector<HTMLSelectElement>(".vf-godview-view-switch");
-    expect(switcher?.value).toBe("swarm");
+    expect(pressedView(host)).toBe("SWARM view");
 
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
-      setter?.call(switcher, "list");
-      switcher?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await act(async () => viewMark(host, "LIST")?.click());
     expect(host.querySelector(".vf-monitor-list")).not.toBeNull();
 
     await setOpen(false);
@@ -230,7 +258,7 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
     // The reason `useMonitorTuning` lives in the overlay and not in the stage:
     // state inside a component that unmounts on every close is state that
     // resets on every close.
-    expect(host.querySelector<HTMLSelectElement>(".vf-godview-view-switch")?.value).toBe("list");
+    expect(pressedView(host)).toBe("LIST view");
     expect(host.querySelector(".vf-monitor-list")).not.toBeNull();
   });
 });

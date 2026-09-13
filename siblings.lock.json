@@ -3,13 +3,14 @@
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
-      "sha": "d2b060042253eea3f033efb10ed65a499e346427",
+      "sha": "5389449e5f021b8ceb20beec6e89be113612a182",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
         "@vibecook/puppeteer-core": "packages/core",
         "@vibecook/puppeteer-record": "packages/record",
-        "@vibecook/puppeteer-monitor": "packages/monitor"
+        "@vibecook/puppeteer-monitor": "packages/monitor",
+        "@vibecook/puppeteer-views": "packages/views"
       }
     },
     "rosetta": {

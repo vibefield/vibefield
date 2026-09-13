@@ -12,6 +12,8 @@ import {
   AgentsUpdateResult,
   IndexDiscovery,
   IndexEnrollmentRecord,
+  IndexSearchResponse,
+  IndexSearchResult,
   IndexStatus,
 } from "../src/agent-index";
 import {
@@ -23,6 +25,7 @@ import {
   AgentSpawnResult,
   AgentsProfilesLoginResult,
 } from "../src/agent-session";
+import { AgentAccountUsageBatch } from "../src/agent-usage";
 import {
   ArtifactCatalogSlice,
   ArtifactPublishV2Params,
@@ -155,6 +158,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "index-enrollment": IndexEnrollmentRecord,
   "index-discovery": IndexDiscovery,
   "index-status": IndexStatus,
+  // AR-5e — the find sheet's two sides of one seam: what rosetta answers on
+  // `/api/search` (transcribed from the reference's committed protocol-20
+  // golden, digest cited in the file) and what `index.search` answers over it.
+  "index-search": IndexSearchResponse,
+  "index-search-result": IndexSearchResult,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
@@ -172,6 +180,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-list": AgentListResult,
   "agent-providers": AgentProvidersResult,
   "agents-profiles-login": AgentsProfilesLoginResult,
+  // AR-5d — the usage column's feed: one batch with three states beside the
+  // honest empty one the door answers before the first refresh.
+  "agent-usage": AgentAccountUsageBatch,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

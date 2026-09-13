@@ -19,9 +19,12 @@
   --working-bg: var(--vf-godview-light-working-bg);
   --working-text: var(--vf-godview-light-working-text);
   --working-border: var(--vf-godview-light-working-border);
-  --waiting-bg: var(--vf-card-deep);
-  --waiting-text: var(--vf-godview-light-panel-bg);
-  --waiting-border: var(--vf-card-deep);
+  --blocked-bg: var(--vf-card-deep);
+  --blocked-text: var(--vf-godview-light-panel-bg);
+  --blocked-border: var(--vf-card-deep);
+  /* record §02: the theme's lightness and chroma for every project tint (AR-5, D3) */
+  --tint-l: 0.6;
+  --tint-c: 0.15;
   --terminal-bg: var(--vf-godview-light-terminal-bg);
   --terminal-divider: var(--vf-godview-light-terminal-divider);
   --pane-access-text: rgba(20, 20, 20, 0.6);
@@ -48,9 +51,12 @@
   --working-bg: var(--vf-godview-dark-working-bg);
   --working-text: var(--vf-godview-dark-working-text);
   --working-border: var(--vf-godview-dark-working-border);
-  --waiting-bg: var(--vf-godview-dark-text-main);
-  --waiting-text: var(--vf-card-deep);
-  --waiting-border: var(--vf-godview-dark-text-main);
+  --blocked-bg: var(--vf-godview-dark-text-main);
+  --blocked-text: var(--vf-card-deep);
+  --blocked-border: var(--vf-godview-dark-text-main);
+  /* record §02: the theme's lightness and chroma for every project tint (AR-5, D3) */
+  --tint-l: 0.74;
+  --tint-c: 0.15;
   --terminal-bg: var(--vf-godview-dark-terminal-bg);
   --terminal-divider: var(--vf-godview-dark-terminal-divider);
   --pane-access-text: rgba(255, 255, 255, 0.62);
@@ -127,202 +133,40 @@
     background-color 240ms ease;
 }
 
-.vf-godview-header {
-  position: relative;
-  z-index: 20;
-  height: 40px;
-  flex: 0 0 40px;
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto minmax(160px, 1fr);
-  align-items: center;
-  padding: 0 15px;
-  border-bottom: 1px solid var(--panel-border);
-  background: var(--panel-bg);
-}
-
-.vf-godview-header-status {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vf-godview-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  color: var(--text-main);
-  letter-spacing: 0.12em;
-  white-space: nowrap;
-}
-
-.vf-godview-title span {
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.vf-godview-title small {
-  color: var(--text-muted);
-  font-size: 8px;
-  font-weight: 700;
-}
-
-.vf-godview-header-actions,
-.vf-godview-status-controls {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.vf-godview-header-actions {
-  gap: 8px;
-}
-
-.vf-godview-status-controls {
-  gap: 6px;
-}
-
-.vf-godview-status-controls button,
-.vf-godview-view-switch,
-.vf-godview-tweak-toggle {
+/* VibeField's own bar tools (AR-5): the provider select beside the SPAWN and
+   TUNE controls, wearing the bar's recipe (22px, 5px radius, the panel
+   material). A control that cannot act says so: the muted ramp at DESIGN.md
+   §8's `disabled:opacity-40`, the same treatment the kill sheet's actions wear. */
+.vf-godview-bar-select {
+  height: 22px;
+  max-width: 160px;
+  padding: 0 4px;
   border: 1px solid var(--panel-border);
+  border-radius: 5px;
   color: var(--text-muted);
   background: transparent;
+  font-size: 9px;
   font-weight: 700;
+  letter-spacing: 0.04em;
   cursor: pointer;
   transition: 120ms ease;
 }
 
-.vf-godview-status-controls button {
-  min-width: 0;
-  padding: 3px 7px;
-  border-radius: 5px;
-  font-size: 9px;
-  letter-spacing: 0.04em;
-}
-
-.vf-godview-status-controls kbd {
-  margin-left: 5px;
-  color: var(--text-faint);
-  font-size: 8px;
-  font-weight: 400;
-}
-
-.vf-godview-view-switch {
-  height: 22px;
-  padding: 0 4px;
-  border-radius: 5px;
-  font-size: 9px;
-  letter-spacing: 0.04em;
-}
-
-.vf-godview-tweak-toggle {
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 6px;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.vf-godview-status-controls button:not(:disabled):hover,
-.vf-godview-view-switch:not(:disabled):hover,
-.vf-godview-tweak-toggle:hover,
-.vf-godview-tweak-toggle.is-open {
+.vf-godview-bar-select:not(:disabled):hover {
   border-color: var(--control-hover-border);
   color: var(--text-main);
   background: var(--control-hover-bg);
 }
 
-/* A control that cannot act says so. The muted ramp at DESIGN.md §8's
-   `disabled:opacity-40` ("when there is nothing to reach"), which is also what
-   the kill sheet's actions already wear — one treatment for the whole idea.
-   SPAWN with no door and the provider list with no providers were both taking
-   `disabled` with no face at all, and lighting up under the pointer while
-   refusing the click: chrome promising a power it does not have. The hover
-   above is guarded rather than overridden here, so the promise is never made. */
-.vf-godview-status-controls button:disabled,
-.vf-godview-view-switch:disabled {
+.vf-godview-bar-select:disabled,
+.vf-godview-bar-control:disabled {
   cursor: default;
   opacity: 0.4;
 }
 
-.vf-godview-view-switch:focus-visible,
-.vf-godview-tweak-toggle:focus-visible,
-.vf-godview-status-controls button:focus-visible {
+.vf-godview-bar-select:focus-visible {
   outline: 1px solid var(--text-main);
   outline-offset: 2px;
-}
-
-.vf-godview-theme-switch {
-  height: 22px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 5px;
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 9px;
-  cursor: pointer;
-  transition:
-    color 160ms ease,
-    border-color 160ms ease,
-    background-color 160ms ease;
-}
-
-.vf-godview-theme-switch:hover {
-  border-color: var(--control-hover-border);
-  color: var(--text-main);
-  background: var(--control-hover-bg);
-}
-
-.vf-godview-theme-switch:focus-visible {
-  outline: 1px solid var(--text-main);
-  outline-offset: 2px;
-}
-
-.vf-godview-theme-switch > span:first-child,
-.vf-godview-theme-switch > span:last-child {
-  line-height: 1;
-  opacity: 0.38;
-  transition: opacity 160ms ease;
-}
-
-.vf-godview-theme-switch[aria-checked="false"] > span:first-child,
-.vf-godview-theme-switch[aria-checked="true"] > span:last-child {
-  opacity: 1;
-}
-
-.vf-godview-theme-switch-track {
-  position: relative;
-  width: 22px;
-  height: 12px;
-  flex: 0 0 22px;
-  border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  background: var(--control-hover-bg);
-}
-
-.vf-godview-theme-switch-track i {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-main);
-  transition: transform 180ms ease;
-}
-
-.vf-godview-theme-switch[aria-checked="true"] .vf-godview-theme-switch-track i {
-  transform: translateX(10px);
 }
 
 /* The temporary live panel now wears the exact reference TweakPanel shell. */
@@ -599,12 +443,16 @@
   background: transparent;
 }
 
-.vf-monitor-chrome {
+/* The claims (AR-3, GT-D17): what the fold and the mesh report, in the
+   instrument's type, on a strip across the stage's top. Its own element since
+   AR-5 — `.vf-monitor-chrome` is the package's usage column down the left
+   edge — and both carry the chrome attribute the swarm steers around. */
+.vf-monitor-claims {
   position: absolute;
   z-index: 7;
   top: 11px;
-  left: 13px;
-  width: min(300px, calc(100% - 26px));
+  left: 72px;
+  width: min(300px, calc(100% - 96px));
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -703,390 +551,6 @@
 .vf-monitor-empty small {
   color: var(--text-faint);
   font-size: 9px;
-}
-
-/* List view — the same exact non-spatial reading as the reference. */
-.vf-monitor-list {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding-top: calc(var(--vf-monitor-chrome-height, 0px) + 18px);
-  color: var(--text-main);
-}
-
-.vf-monitor-list-toolbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 13px 6px;
-  color: var(--text-faint);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
-
-.vf-monitor-list-new {
-  padding: 3px 7px;
-  border: 1px solid var(--panel-border);
-  border-radius: 5px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: 120ms ease;
-}
-
-.vf-monitor-list-new:hover {
-  border-color: var(--control-hover-border);
-  color: var(--text-main);
-  background: var(--control-hover-bg);
-}
-
-.vf-monitor-list-rows {
-  flex: 1 1 auto;
-  margin: 0;
-  padding: 0 13px 13px;
-  overflow-y: auto;
-  list-style: none;
-}
-
-.vf-monitor-list-row {
-  width: 100%;
-  min-height: var(--vf-monitor-row-height, 38px);
-  display: grid;
-  grid-template-columns:
-    10px var(--vf-monitor-project-width, 150px) minmax(0, 0.9fr)
-    minmax(0, 1.4fr) 44px;
-  align-items: center;
-  gap: 10px;
-  padding: 0 9px;
-  border: 1px solid transparent;
-  border-left: 3px solid transparent;
-  border-radius: 6px;
-  color: inherit;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: 120ms ease;
-}
-
-.vf-monitor-list-row:hover {
-  border-color: var(--control-hover-border);
-  background: var(--control-hover-bg);
-}
-
-.vf-monitor-list-row.is-linked {
-  border-left-color: var(--agent-color);
-}
-
-.vf-monitor-list-row.is-active {
-  border-color: var(--agent-color);
-  background: var(--control-hover-bg);
-  outline: none;
-}
-
-.vf-monitor-list-row:focus-visible {
-  outline: 2px solid var(--agent-color);
-  outline-offset: -2px;
-}
-
-.vf-monitor-list-status {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--agent-color);
-}
-
-.vf-monitor-list-row.is-idle .vf-monitor-list-status {
-  opacity: 0.4;
-}
-
-.vf-monitor-list-row.is-waiting .vf-monitor-list-status {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-color) 30%, transparent);
-}
-
-.vf-monitor-list-project {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.vf-monitor-list-project strong {
-  overflow: hidden;
-  color: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vf-monitor-list-project small,
-.vf-monitor-list-agent,
-.vf-monitor-list-detail,
-.vf-monitor-list-context,
-.vf-monitor-list-terminal {
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vf-monitor-list-agent {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.vf-monitor-list-agent i {
-  display: flex;
-  color: inherit;
-  font-size: 11px;
-}
-
-.vf-monitor-list-terminal {
-  color: var(--text-faint);
-  font-style: italic;
-}
-
-/* The list's host chip, in the row's accent — the same distinction the swarm's
-   bubble border draws, where a list can carry it. */
-.vf-monitor-list-host {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 5px;
-  overflow: hidden;
-  color: var(--agent-color);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.vf-monitor-list-host em {
-  color: var(--text-faint);
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.vf-monitor-list-context {
-  color: var(--text-faint);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.vf-monitor-list > .vf-monitor-empty {
-  position: static;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: var(--text-faint);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-}
-
-/* Rain view deliberately paints black in both themes. */
-.vf-monitor-rain {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  background: var(--vf-card-deep);
-}
-
-.vf-monitor-rain canvas {
-  position: absolute;
-  inset: 0;
-  display: block;
-}
-
-.vf-monitor-rain-surface {
-  position: absolute;
-  inset: 0;
-  cursor: crosshair;
-}
-
-.vf-monitor-rain-tooltip {
-  position: absolute;
-  z-index: 8;
-  width: 224px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 9px 11px;
-  border: 1px solid rgba(0, 255, 0, 0.55);
-  border-radius: 4px;
-  color: var(--vf-godview-rain-green);
-  background: rgba(0, 10, 0, 0.95);
-  box-shadow: 0 0 20px rgba(0, 255, 0, 0.25);
-  font-family: "Courier New", Courier, monospace;
-  font-size: 10px;
-  pointer-events: none;
-}
-
-.vf-monitor-rain-tooltip.is-waiting {
-  border-color: rgba(234, 179, 8, 0.65);
-  color: var(--vf-godview-rain-waiting);
-  box-shadow: 0 0 20px rgba(234, 179, 8, 0.25);
-}
-
-.vf-monitor-rain-tooltip.is-idle {
-  border-color: rgba(148, 163, 184, 0.55);
-  color: var(--vf-godview-rain-idle);
-  box-shadow: none;
-}
-
-.vf-monitor-rain-tooltip-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 0;
-  padding-bottom: 4px;
-  border-bottom: 1px solid currentcolor;
-}
-
-.vf-monitor-rain-tooltip-head strong {
-  overflow: hidden;
-  color: var(--vf-godview-dark-text-main);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vf-monitor-rain-tooltip-head span {
-  flex: 0 0 auto;
-  color: inherit;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.vf-monitor-rain-tooltip dl {
-  margin: 0;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 2px 6px;
-}
-
-.vf-monitor-rain-tooltip dt {
-  color: inherit;
-  font: inherit;
-  opacity: 0.6;
-}
-
-.vf-monitor-rain-tooltip dd {
-  margin: 0;
-  overflow: hidden;
-  color: inherit;
-  font-size: inherit;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vf-monitor-rain-context {
-  margin: 2px 0 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: inherit;
-  font-size: inherit;
-}
-
-.vf-monitor-rain-context-track {
-  flex: 1 1 auto;
-  height: 4px;
-  overflow: hidden;
-  border: 1px solid currentcolor;
-  border-radius: 2px;
-  background: transparent;
-}
-
-.vf-monitor-rain-context-track i {
-  display: block;
-  height: 100%;
-  border-radius: 0;
-  background: currentcolor;
-}
-
-.vf-monitor-rain-agents {
-  position: absolute;
-  z-index: 9;
-  top: 0;
-  left: 0;
-  width: auto;
-  height: auto;
-  margin: 0;
-  padding: 0;
-  overflow: visible;
-  clip-path: none;
-  list-style: none;
-  white-space: normal;
-}
-
-.vf-monitor-rain-agents button {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  border: 0;
-  padding: 0;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.vf-monitor-rain-agents button:focus-visible {
-  position: static;
-  width: auto;
-  height: auto;
-  padding: 4px 8px;
-  border: 1px solid var(--vf-godview-rain-green-focus);
-  border-radius: 4px;
-  clip-path: none;
-  color: var(--vf-godview-rain-green);
-  background: rgba(0, 10, 0, 0.95);
-  font-family: "Courier New", Courier, monospace;
-  font-size: 10px;
-}
-
-.vf-monitor-rain > .vf-monitor-empty {
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: rgba(74, 222, 128, 0.65);
-  font-family: "Courier New", Courier, monospace;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-}
-
-.vf-godview-terminal-deck {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  /* Ghosttea draws the terminal tint with renderer-native alpha. An opaque
-     CSS deck here hid both that alpha and the stage glass below it. */
-  background: transparent;
 }
 
 /* A live WebGPU canvas may be promoted above ordinary DOM overlays on macOS.
@@ -1295,37 +759,6 @@
   transition:
     background 240ms ease,
     opacity 120ms ease;
-}
-
-@media (max-width: 840px) {
-  .vf-godview-status-controls kbd,
-  .vf-godview-title small {
-    display: none;
-  }
-
-  .vf-godview-status-controls button {
-    padding-inline: 5px;
-    font-size: 8px;
-  }
-
-  .vf-godview-tweak-toggle {
-    padding-inline: 5px;
-  }
-}
-
-@media (max-width: 680px) {
-  .vf-godview-header {
-    grid-template-columns: auto 1fr;
-  }
-
-  .vf-godview-header-status,
-  .vf-godview-status-controls {
-    display: none;
-  }
-
-  .vf-godview-title {
-    justify-self: start;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

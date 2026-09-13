@@ -1,4 +1,5 @@
 import type { RemoteHostSummary, SharedSessionSummary } from "@vibecook/ghosttea-protocol";
+import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
 import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
 
 /**
@@ -44,6 +45,13 @@ export interface MonitorDoor {
    * terminal) in the ACTIVE pane. AR-4 — with `replacing`, in the pane that
    * is showing the PTY the session took the place of. */
   mountLocal(sessionId: string, options?: LocalMountOptions): Promise<LocalMountOutcome>;
+  /** AR-5 — the transcript history the find sheet asks (`index.status` /
+   * `index.sessions` / `index.search`), adapted to the views' port. The views
+   * never dial rosettad (AR-D14): the daemon's origin stays in fieldd. */
+  history: HistoryPort;
+  /** AR-5 — the account-usage readings the usage column draws
+   * (`agents.usage` + its subscription), adapted to the views' port. */
+  usage: AccountUsagePort;
 }
 
 /** AR-4 — a mount that takes a PTY's place: the run was resumed into a new

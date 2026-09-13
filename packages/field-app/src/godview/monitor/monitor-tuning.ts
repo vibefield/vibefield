@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  type AgentMonitorView,
   loadMonitorParameters,
   type MonitorParameterGroup,
   type MonitorParameters,
   monitorParameterDefaults,
+  monitorViewFor,
   normalizeMonitorParameters,
   saveMonitorParameters,
-} from "./parameters";
-import { monitorViewFor } from "./registry";
+} from "@vibecook/puppeteer-views";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { STAGE_HEIGHT_KEY, STAGE_PARAMETER_GROUPS } from "./stage-parameters";
-import type { AgentMonitorView } from "./types";
 
 // The monitor's chosen view and its tunables — state that lives ABOVE the stage.
 //
@@ -29,8 +29,12 @@ import type { AgentMonitorView } from "./types";
 const VIEW_STORAGE_KEY = "vf-godview-monitor-view-v1";
 const STAGE_STORAGE_KEY = "vf-godview-monitor-stage-v1";
 
-function viewParametersKey(viewId: string): string {
-  return `vf-godview-monitor-parameters-v1:${viewId}`;
+/** A view whose defaults were re-decided stores its tunables under the
+ * revision (AR-5: the reference's `parametersRevision`, the 2026-09-09 lock),
+ * so every installation lands on the new defaults instead of keeping what an
+ * older design had saved; later tunes persist as before. */
+function viewParametersKey(view: AgentMonitorView): string {
+  return `vf-godview-monitor-parameters-v1:${view.id}${view.parametersRevision ? `:${view.parametersRevision}` : ""}`;
 }
 
 function storedViewId(): string {
@@ -59,7 +63,7 @@ export function useMonitorTuning(): MonitorTuning {
   const [viewId, setViewId] = useState(storedViewId);
   const view = monitorViewFor(viewId);
   const [parametersByView, setParametersByView] = useState<Record<string, MonitorParameters>>(
-    () => ({ [view.id]: loadMonitorParameters(viewParametersKey(view.id), view.parameterGroups) }),
+    () => ({ [view.id]: loadMonitorParameters(viewParametersKey(view), view.parameterGroups) }),
   );
   const [stageParameters, setStageParameters] = useState<MonitorParameters>(() =>
     loadMonitorParameters(STAGE_STORAGE_KEY, STAGE_PARAMETER_GROUPS),
@@ -82,7 +86,7 @@ export function useMonitorTuning(): MonitorTuning {
   }, [viewId]);
 
   useEffect(() => {
-    saveMonitorParameters(viewParametersKey(view.id), parameters);
+    saveMonitorParameters(viewParametersKey(view), parameters);
   }, [parameters, view]);
   useEffect(() => saveMonitorParameters(STAGE_STORAGE_KEY, stageParameters), [stageParameters]);
 
@@ -93,7 +97,7 @@ export function useMonitorTuning(): MonitorTuning {
         ? current
         : {
             ...current,
-            [next.id]: loadMonitorParameters(viewParametersKey(next.id), next.parameterGroups),
+            [next.id]: loadMonitorParameters(viewParametersKey(next), next.parameterGroups),
           },
     );
     setViewId(next.id);

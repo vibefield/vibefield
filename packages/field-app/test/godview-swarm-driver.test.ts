@@ -10,18 +10,18 @@
  *
  * The worker now posts `ready` from its module scope and the driver watches for
  * it. What is exercised here is the watchdog and the replay, with a stub Worker
- * standing in for the real one — happy-dom defines none.
+ * standing in for the real one — happy-dom defines none. Since AR-5 the wire
+ * and the host are the views package's (`@vibecook/puppeteer-views/physics`);
+ * the thread, the watchdog and the fallback are still VibeField's, and this
+ * is their test.
  */
 
+import type { SwarmPhysicsCommand, SwarmPhysicsEvent } from "@vibecook/puppeteer-views/physics";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSwarmPhysicsDriver,
   currentSwarmPhysicsMode,
 } from "../src/godview/views/swarm/swarm-physics-driver";
-import type {
-  SwarmPhysicsCommand,
-  SwarmPhysicsEvent,
-} from "../src/godview/views/swarm/swarm-physics-protocol";
 
 const INIT: SwarmPhysicsCommand = {
   type: "init",

@@ -107,7 +107,8 @@ jobs:
           pnpm --dir ../puppeteer install --frozen-lockfile \
             --filter "@vibecook/puppeteer-builtin-providers..." \
             --filter "@vibecook/puppeteer-record" \
-            --filter "@vibecook/puppeteer-monitor"
+            --filter "@vibecook/puppeteer-monitor" \
+            --filter "@vibecook/puppeteer-views..."
 
       # rosettad from the pinned sibling (rustup picks its rust-toolchain.toml). The fieldd
       # supervisor's kill matrix runs against a scripted daemon in every gate; the one row

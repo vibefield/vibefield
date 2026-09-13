@@ -27,8 +27,10 @@ describe("UI system ownership boundaries", () => {
     expect(appManifest).toContain('@import "./panels/settings.css";');
     expect(appManifest).toContain('@import "./godview/godview.css";');
     expect(appManifest).toContain('@import "./godview/deck-zoom.css";');
-    expect(appManifest).toContain('@import "./godview/views/swarm/swarm.css";');
-    expect(appManifest).toContain('@import "./godview/views/swarm/agent-bubble.css";');
+    // AR-5: the monitor's views ship in the puppeteer views package, and their
+    // stylesheet enters through the manifest like any other — one row, the
+    // package's own bundle, never a copy of its rules.
+    expect(appManifest).toContain('@import "@vibecook/puppeteer-views/styles/views.css";');
 
     const catalogManifest = source("design-system/design-system.css");
     expect(catalogManifest).toContain('@import "./styles/catalog-shell.css";');
@@ -142,12 +144,12 @@ describe("UI system ownership boundaries", () => {
   it("mounts production views instead of the retired catalog replicas", () => {
     const page = catalogPageSources();
     const onboarding = source("design-system/OnboardingPreview.tsx");
-    const agentBubbles = source("design-system/AgentBubblePreview.tsx");
+    const swarmBodies = source("design-system/SwarmBodiesPreview.tsx");
     const groundWorkbench = source("design-system/CanvasGroundWorkbench.tsx");
     const groundPreview = source("design-system/InfiniteCanvasGroundPreview.tsx");
     const mirror = source("design-system/TerminalMirrorPreview.tsx");
     const picker = source("design-system/TerminalSessionPickerPreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${agentBubbles}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}`;
+    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -169,8 +171,8 @@ describe("UI system ownership boundaries", () => {
       "OnboardingWelcomeBackPaneView",
       "OnboardingWelcomePaneView",
       "WizardShellView",
-      "AgentBubblePreview",
-      "AgentBubbleView",
+      "SwarmBodiesPreview",
+      "swarmMonitorView",
       "CanvasGroundWorkbench",
       "InfiniteCanvasGroundPreview",
       "InfiniteCanvasGround",
@@ -220,8 +222,7 @@ describe("UI system ownership boundaries", () => {
       "hud/LoadingVeil.tsx",
       "hud/WidgetTray.tsx",
       "boot/onboarding/wizard-ui.tsx",
-      "godview/views/swarm/AgentBubble.tsx",
-      "godview/views/swarm/AgentSwarm.tsx",
+      "godview/GodviewMonitor.tsx",
       "plugin-host/faces.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
@@ -243,8 +244,6 @@ describe("UI system ownership boundaries", () => {
       "hud/ZoomPill.css",
       "panels/settings.css",
       "godview/deck-zoom.css",
-      "godview/views/swarm/agent-bubble.css",
-      "godview/views/swarm/swarm.css",
       "terminal/mirror/mirror.css",
       "terminal/widget/mirror-widget.css",
     ]) {
@@ -252,13 +251,16 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
-  it("keeps swarm field and circle styling beside their production views", () => {
+  it("keeps the swarm's own styling in the views package, never in godview.css (AR-5)", () => {
+    // The swarm, its bodies and its type are the package's (RFC 005, drawn by
+    // WebGPU); what VibeField keeps beside the view is its physics THREAD — a
+    // timer and a mailbox — and the driver that owns it. No swarm stylesheet
+    // is colocated here any more, and godview.css owns none of the swarm's
+    // selectors: a rule for a body drawn upstream would be a replica.
     const godview = source("godview/godview.css");
     expect(godview).not.toMatch(/^\.vf-monitor-bubble/m);
     expect(godview).not.toMatch(/^\.vf-monitor-swarm(?:\s|\{)/m);
-    expect(source("godview/views/swarm/agent-bubble.css")).toContain(
-      ".vf-monitor-bubble.is-waiting",
-    );
-    expect(source("godview/views/swarm/swarm.css")).toContain(".vf-monitor-swarm-grid");
+    const swarmDir = readdirSync(join(PACKAGE_ROOT, "src", "godview", "views", "swarm")).sort();
+    expect(swarmDir).toEqual(["swarm-physics-driver.ts", "swarm-physics.worker.ts"]);
   });
 });

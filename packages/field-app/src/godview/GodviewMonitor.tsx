@@ -1,20 +1,34 @@
-import { type ReactElement, useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  type AccountUsagePort,
+  type AgentVisualStatus,
+  BarControl,
+  FindSheet,
+  type HistoryPort,
+  InstrumentBar,
+  MONITOR_CHROME_ATTRIBUTE,
+  MONITOR_STAGE_CLASS,
+  MONITOR_VIEWS,
+  type MonitorParameters,
+  SwarmPhysicsProvider,
+  UsageColumn,
+  useMonitorPalette,
+  type MonitorAgent as ViewsMonitorAgent,
+} from "@vibecook/puppeteer-views";
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { emitGodviewMonitorMarker } from "../development-console";
 import type { GodviewTheme } from "./GodviewTuningPanel";
-import type { AgentVisualStatus } from "./monitor/agent-status";
 import { monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
-import { MONITOR_CHROME_ATTRIBUTE, MONITOR_STAGE_CLASS } from "./monitor/chrome";
-import { useMonitorPalette } from "./monitor/monitor-palette";
-import type { MonitorParameters } from "./monitor/parameters";
-import { MONITOR_VIEWS } from "./monitor/registry";
 import type { MonitorDoor } from "./monitor/remote-door";
-import type { AgentMonitorView } from "./monitor/types";
+import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
 import {
   type MonitorPaneFacts,
   type MonitorSourceCounts,
   useMonitorAgents,
 } from "./monitor/useMonitorAgents";
-import { currentSwarmPhysicsMode } from "./views/swarm/swarm-physics-driver";
+import {
+  createSwarmPhysicsDriver,
+  currentSwarmPhysicsMode,
+} from "./views/swarm/swarm-physics-driver";
 
 const ACKNOWLEDGEMENT_MS = 2_600;
 
@@ -76,6 +90,27 @@ export function remoteUnavailableClaim(sources: MonitorSourceCounts): string | n
     : `mesh unavailable · ${sources.remoteReason}`;
 }
 
+/** With no deck there is no daemon to ask: the sheet says HISTORY OFF, the
+ * column stays empty, and neither invents an answer. */
+const NO_HISTORY: HistoryPort = {
+  status: async () => ({
+    reachable: false,
+    detail: "no deck",
+    checkedAt: new Date().toISOString(),
+  }),
+  facts: async () => [],
+  search: async () => ({
+    status: { reachable: false, detail: "no deck", checkedAt: new Date().toISOString() },
+    answered: false,
+    hits: [],
+    clipped: false,
+  }),
+};
+const NO_USAGE: AccountUsagePort = {
+  snapshot: async () => ({ refreshedAt: new Date().toISOString(), entries: [] }),
+  subscribe: () => () => undefined,
+};
+
 export interface GodviewMonitorProps {
   view: AgentMonitorView;
   parameters: MonitorParameters;
@@ -123,22 +158,70 @@ export function GodviewMonitor({
   });
   const stageRef = useRef<HTMLElement>(null);
   const chromeRef = useRef<HTMLDivElement>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  /** What the swarm is painting with, read off its own element (AR-5). */
+  const [swarmRenderer, setSwarmRenderer] = useState("none");
+  /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */
+  const [usageTiles, setUsageTiles] = useState(-1);
   const counts = useMemo(() => monitorAgentCounts(agents), [agents]);
 
-  // The source chrome is a top-left strip. Flow views clear its HEIGHT while
-  // the physics view reads the element itself as an obstacle.
+  // Views that lay out in flow clear the chrome with these; the swarm instead
+  // reads the chrome's rect directly and steers bodies around it.
   useEffect(() => {
     const stage = stageRef.current;
     const chrome = chromeRef.current;
     if (!stage || !chrome || typeof ResizeObserver === "undefined") return;
-    const publish = (): void =>
+    const publish = (): void => {
+      const rect = chrome.getBoundingClientRect();
+      const stageRect = stage.getBoundingClientRect();
+      stage.style.setProperty("--vf-monitor-chrome-height", `${Math.round(rect.height)}px`);
       stage.style.setProperty(
-        "--vf-monitor-chrome-height",
-        `${Math.round(chrome.getBoundingClientRect().height)}px`,
+        "--vf-monitor-chrome-right",
+        `${Math.round(rect.right - stageRect.left)}px`,
       );
+    };
     const observer = new ResizeObserver(publish);
     observer.observe(chrome);
     publish();
+    return () => observer.disconnect();
+  }, []);
+
+  // The swarm says what painted on its section (`data-swarm-renderer`); the
+  // marker repeats it. Observed rather than read once, because the device
+  // answers after the mount.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof MutationObserver === "undefined") return;
+    const read = (): void => {
+      const painted = stage
+        .querySelector("[data-swarm-renderer]")
+        ?.getAttribute("data-swarm-renderer");
+      setSwarmRenderer(painted ?? "none");
+    };
+    const observer = new MutationObserver(read);
+    observer.observe(stage, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-swarm-renderer"],
+    });
+    read();
+    return () => observer.disconnect();
+  }, [view.id]);
+
+  // The usage column's tiles, counted off the chrome slot the same way: the
+  // column is the package's, its batch arrives on the door's schedule, and a
+  // harness wants the count as a fact rather than a screenshot.
+  useEffect(() => {
+    const chrome = chromeRef.current;
+    if (!chrome || typeof MutationObserver === "undefined") return;
+    const read = (): void => {
+      const column = chrome.querySelector(".vf-usage-column");
+      setUsageTiles(column ? column.querySelectorAll(".vf-usage-tile").length : -1);
+    };
+    const observer = new MutationObserver(read);
+    observer.observe(chrome, { subtree: true, childList: true });
+    read();
     return () => observer.disconnect();
   }, []);
 
@@ -166,8 +249,11 @@ export function GodviewMonitor({
       remoteState: sources.remoteState,
       ...(sources.remoteReason !== undefined ? { remoteReason: sources.remoteReason } : {}),
       swarmPhysics: currentSwarmPhysicsMode(),
+      swarmRenderer,
+      usageTiles,
+      findSheet: findOpen ? "open" : "closed",
     });
-  }, [agents, view.id, sources]);
+  }, [agents, view.id, sources, swarmRenderer, usageTiles, findOpen]);
 
   const selectNextStatus = useCallback(
     (status: AgentVisualStatus): void => {
@@ -181,7 +267,14 @@ export function GodviewMonitor({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-      const status = ({ Digit1: "waiting", Digit2: "working", Digit3: "idle" } as const)[
+      // ⌘F summons Find (AR-5, D6): the sheet over the stage, the reference's chord.
+      if (event.code === "KeyF") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setFindOpen((current) => !current);
+        return;
+      }
+      const status = ({ Digit1: "blocked", Digit2: "working", Digit3: "idle" } as const)[
         event.code as "Digit1" | "Digit2" | "Digit3"
       ];
       if (!status) return;
@@ -198,48 +291,28 @@ export function GodviewMonitor({
 
   return (
     <>
-      <header className="vf-godview-header">
-        <div className="vf-godview-header-status" aria-live="polite">
-          {notice ?? ""}
-        </div>
-        <div className="vf-godview-title">
-          <span>GODVIEW</span>
-          <small>AGENT TOPOLOGY</small>
-        </div>
-        <div className="vf-godview-header-actions">
-          <select
-            className="vf-godview-view-switch"
-            aria-label="Monitor view"
-            value={view.id}
-            onChange={(event) => onSelectView?.(event.currentTarget.value)}
-          >
-            {MONITOR_VIEWS.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.label}
-              </option>
-            ))}
-          </select>
-          <nav className="vf-godview-status-controls" aria-label="Agent status shortcuts">
-            <button type="button" onClick={() => selectNextStatus("waiting")}>
-              WAIT {counts.waiting}
-              <kbd>⌘1</kbd>
-            </button>
-            <button type="button" onClick={() => selectNextStatus("working")}>
-              WORK {counts.working}
-              <kbd>⌘2</kbd>
-            </button>
-            <button type="button" onClick={() => selectNextStatus("idle")}>
-              IDLE {counts.idle}
-              <kbd>⌘3</kbd>
-            </button>
-          </nav>
-          {/* THE BIRTH (AR-3): the provider list is fieldd's answer, the
-              spawn lands in the active pane. Nothing here is a vendor's: the
-              names are the adapters' own labels, and an uninstalled provider
-              is listed and said to be so rather than hidden. */}
-          <nav className="vf-godview-status-controls" aria-label="Spawn an agent">
+      {/* THE INSTRUMENT BAR (record §04), the package's recipe: counters left,
+          the view marks and the theme switch right, and in the trailing slot
+          VibeField's own tools — the birth (AR-3: the provider list is fieldd's
+          answer, the spawn lands in the active pane; an uninstalled provider is
+          listed and said to be so rather than hidden) and the surface lab. */}
+      <InstrumentBar
+        counts={counts}
+        onSelectStatus={selectNextStatus}
+        views={MONITOR_VIEWS}
+        viewId={view.id}
+        onSelectView={(viewId) => onSelectView?.(viewId)}
+        theme={theme}
+        onThemeChange={(next) => onThemeChange?.(next)}
+        leading={
+          <span className="vf-godview-header-notice" aria-live="polite">
+            {notice ?? ""}
+          </span>
+        }
+        trailing={
+          <>
             <select
-              className="vf-godview-view-switch"
+              className="vf-godview-bar-select"
               aria-label="Agent provider"
               value={selectedProviderId ?? ""}
               disabled={providers.length === 0}
@@ -254,7 +327,7 @@ export function GodviewMonitor({
             </select>
             <button
               type="button"
-              className="vf-godview-spawn"
+              className="vf-godview-bar-control vf-godview-spawn"
               disabled={door === null || selectedProvider === undefined}
               title={
                 selectedProvider === undefined
@@ -267,33 +340,37 @@ export function GodviewMonitor({
             >
               SPAWN
             </button>
-          </nav>
-          <button
-            className={`vf-godview-tweak-toggle${tuningOpen ? " is-open" : ""}`}
-            type="button"
-            aria-controls="vf-godview-tweak-panel"
-            aria-expanded={tuningOpen}
-            onClick={onToggleTuning}
-          >
-            TUNE
-          </button>
-          <button
-            className="vf-godview-theme-switch"
-            type="button"
-            role="switch"
-            aria-checked={theme === "dark"}
-            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
-            title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
-            onClick={() => onThemeChange?.(theme === "light" ? "dark" : "light")}
-          >
-            <span aria-hidden="true">☼</span>
-            <span className="vf-godview-theme-switch-track" aria-hidden="true">
-              <i />
-            </span>
-            <span aria-hidden="true">◐</span>
-          </button>
-        </div>
-      </header>
+            <BarControl
+              mark="find"
+              label="FIND"
+              shortcut="⌘F"
+              ariaLabel="Find an agent by what was said"
+              controls="vf-find-sheet"
+              on={findOpen}
+              onClick={() => setFindOpen((current) => !current)}
+            />
+            <BarControl
+              mark="tune"
+              label="SYSTEM CONTROL"
+              ariaLabel="System control"
+              controls="vf-godview-tweak-panel"
+              on={tuningOpen}
+              onClick={() => onToggleTuning?.()}
+            />
+          </>
+        }
+      />
+
+      <FindSheet
+        open={findOpen}
+        agents={agents}
+        history={door?.history ?? NO_HISTORY}
+        onClose={() => setFindOpen(false)}
+        onSelect={(agent: ViewsMonitorAgent) => {
+          actions.select(agent as MonitorAgent);
+          setFindOpen(false);
+        }}
+      />
 
       <section
         ref={stageRef}
@@ -302,8 +379,23 @@ export function GodviewMonitor({
           sources.remote === 0 ? "Agent monitor" : "Agent monitor — local and remote sessions"
         }
       >
-        <MonitorView agents={agents} parameters={parameters} actions={actions} palette={palette} />
+        {/* The swarm's physics lives in OUR worker (GT-D16); the package's view
+            is handed the driver through its context and never learns which. */}
+        <SwarmPhysicsProvider factory={createSwarmPhysicsDriver}>
+          <MonitorView
+            agents={agents}
+            parameters={parameters}
+            actions={actions}
+            palette={palette}
+          />
+        </SwarmPhysicsProvider>
+        {/* The chrome slot: the usage column down the stage's left edge (record
+            §05), the package's own; the swarm steers around it. */}
         <div ref={chromeRef} className="vf-monitor-chrome" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
+          <UsageColumn port={door?.usage ?? NO_USAGE} />
+        </div>
+        {/* The claims: VibeField's, on their own strip — also solid to the swarm. */}
+        <div className="vf-monitor-claims" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
           {localClaim(sources) !== null ? (
             <span className="vf-monitor-local-chip">{localClaim(sources)}</span>
           ) : null}

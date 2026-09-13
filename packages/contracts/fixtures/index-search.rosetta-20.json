@@ -1,0 +1,19 @@
+{
+  "//": "rosetta's /api/search body at protocol 20, transcribed VERBATIM (the `//` note apart) from the reference's committed golden: puppeteer apps/godview/src/main/fixtures/rosetta-protocol-20.json, sha256 54d9e8dbbf424af5918e08e86670b19f8fee2ac3c7ffb722b15f34e8cf8c459f, key `search_response` — which itself cites rosetta crates/protocol/tests/golden/wire.json at revision feb1f4cad42ba259a983b4a9b6e7591fe6955e19, sha256 c1d8a62c5e6e00ed180fd1ed0a95cf2d52c226e05bbe65b681fb73f6628abad3. Re-verified key for key against the same golden at THIS repo's pinned rosetta revision e8d907ab28995939449181524315b72c79adab28 (siblings.lock.json): the shape is unchanged. `score` and the projection identity ride through untouched — fieldd reads neither.",
+  "state": {
+    "progress": null,
+    "projection_epoch": "epoch-1",
+    "readiness": "catching-up",
+    "revision": 42
+  },
+  "hits": [
+    {
+      "at": 1,
+      "kind": "user",
+      "score": -1.5,
+      "session_id": "s1",
+      "snippet": "[needle] in a haystack",
+      "timeline_id": "t1"
+    }
+  ]
+}

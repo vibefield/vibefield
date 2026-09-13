@@ -52,6 +52,7 @@ overrides:
   '@vibecook/puppeteer-core': link:../puppeteer/packages/core
   '@vibecook/puppeteer-record': link:../puppeteer/packages/record
   '@vibecook/puppeteer-monitor': link:../puppeteer/packages/monitor
+  '@vibecook/puppeteer-views': link:../puppeteer/packages/views
   '@rosetta/protocol': link:../rosetta/clients/ts
 
 importers:
@@ -406,6 +407,9 @@ importers:
       '@vibecook/puppeteer-monitor':
         specifier: link:../../../puppeteer/packages/monitor
         version: link:../../../puppeteer/packages/monitor
+      '@vibecook/puppeteer-views':
+        specifier: link:../../../puppeteer/packages/views
+        version: link:../../../puppeteer/packages/views
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts

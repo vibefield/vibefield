@@ -1,18 +1,80 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
+import type { MonitorUsageState } from "@vibecook/puppeteer-core";
+import {
+  dealPaneColours,
+  EMPTY_PANE_COLOUR_LEDGER,
+  EMPTY_UNREAD_LEDGER,
+  EMPTY_USAGE_LEDGER,
+  exportUsage,
+  type MonitorPalette,
+  type PaneAttachment,
+  paneColours,
+  reconcileUnread,
+  reconcileUsage,
+  seedUsage,
+  type UnreadLedger,
+  USAGE_STEP_MS,
+  type UsageLedger,
+  type UsageLedgerKey,
+} from "@vibecook/puppeteer-views";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { projectLabel } from "./agent-status";
+import { projectKey, projectLabel } from "./agent-status";
 import {
   assembleMonitorAgents,
   type MonitorManagedRecord,
   type MonitorRemoteRecord,
   type MonitorTerminalRecord,
+  managedRowId,
 } from "./agents";
 import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
 import { type LocalFieldState, useLocalAgentField } from "./local-agent-field";
-import type { MonitorPalette } from "./monitor-palette";
+import {
+  dealProjectSeqs,
+  loadProjectLedger,
+  type ProjectLedger,
+  saveProjectLedger,
+} from "./project-ledger";
 import { type MonitorDoor, remoteRowId } from "./remote-door";
 import { useRemoteSessionField } from "./remote-session-field";
 import type { MonitorActions, MonitorAgent } from "./types";
+import { createUsageHistoryCache } from "./usage-history-cache";
+
+/**
+ * Core's usage state, rebuilt from the mirror's row. The projection rides
+ * the door verbatim (AR-D4), so every aggregate Core wrote is there under
+ * its own name, past the two fields the contract spells; the sample ring is
+ * read when it came through and empty when it did not — the ledger reads
+ * the aggregates first and the last sample only as a fallback.
+ */
+function coreUsage(usage: Readonly<Record<string, unknown>>): MonitorUsageState {
+  const num = (key: string): number | undefined => {
+    const value = usage[key];
+    return typeof value === "number" ? value : undefined;
+  };
+  const ring = usage.samples;
+  const samples = Array.isArray(ring)
+    ? ring.filter(
+        (sample): sample is MonitorUsageState["samples"][number] =>
+          typeof sample === "object" &&
+          sample !== null &&
+          typeof (sample as { cumulativeTokens?: unknown }).cumulativeTokens === "number",
+      )
+    : [];
+  return {
+    samples,
+    cumulativeTokens: num("cumulativeTokens"),
+    inputTokens: num("inputTokens"),
+    outputTokens: num("outputTokens"),
+    cacheReadTokens: num("cacheReadTokens"),
+    cacheCreationTokens: num("cacheCreationTokens"),
+    reasoningTokens: num("reasoningTokens"),
+    burnRatePerMin: num("burnRatePerMin"),
+  };
+}
+
+/** Where the renderer keeps what it dealt and what it counted (D3, D7): cache. */
+const PROJECT_LEDGER_KEY = "vf-godview-projects-v1";
+const USAGE_CACHE_KEY = "vf-godview-usage-history-v1";
 
 /**
  * THE SEAM. The single subscription to everything a monitor view renders, and
@@ -56,6 +118,10 @@ export interface UseMonitorAgentsOptions {
 export interface MonitorPaneFacts {
   sessionIds: readonly string[];
   activeSessionId?: string;
+  /** The panes themselves, parallel to `sessionIds` (AR-5): a pane owns a
+   * colour, and the session wears it while mounted there (record §02). */
+  paneIds?: readonly string[];
+  activePaneId?: string;
   /** The floor summaries of those panes' sessions (ghosttea's, as the deck
    * holds them): what makes an unclaimed pane a terminal row, and what lets
    * a managed row carry its PTY's summary. */
@@ -253,6 +319,130 @@ export function useMonitorAgents({
     // republishes at ghosttea's cadence): paneSummaryKey stands in for paneSessions
   }, [paneSummaryKey]);
 
+  /**
+   * AR-5 — the panes' colours (record §02): dealt as panes open, on the wheel
+   * parallel to the projects', retired with the pane; the session in a pane
+   * wears it while mounted there, as the band and, in the selected pane, the
+   * light. The ledger lives for the stage's life, and the attachments the
+   * views draw are built from it and the deck's pane facts.
+   */
+  const paneLedgerRef = useRef(EMPTY_PANE_COLOUR_LEDGER);
+  const paneIdsKey = (panes.paneIds ?? []).join("\0");
+  const attachments = useMemo(() => {
+    const paneIds = paneIdsKey === "" ? [] : paneIdsKey.split("\0");
+    paneLedgerRef.current = dealPaneColours(paneLedgerRef.current, paneIds);
+    const colours = paneColours(paneLedgerRef.current, palette.tint);
+    const bySession = new Map<string, string[]>();
+    paneIds.forEach((paneId, index) => {
+      const sessionId = panes.sessionIds[index];
+      if (sessionId === undefined) return;
+      const list = bySession.get(sessionId) ?? [];
+      list.push(paneId);
+      bySession.set(sessionId, list);
+    });
+    const result = new Map<string, PaneAttachment>();
+    for (const [sessionId, ids] of bySession) {
+      const activeIndex = panes.activePaneId === undefined ? -1 : ids.indexOf(panes.activePaneId);
+      const primaryPaneId = ids[activeIndex >= 0 ? activeIndex : 0] as string;
+      const color = colours.get(primaryPaneId);
+      result.set(sessionId, {
+        primaryPaneId,
+        paneIds: [primaryPaneId, ...ids.filter((id) => id !== primaryPaneId)],
+        ...(color ? { color } : {}),
+      });
+    }
+    return result;
+    // keyed by the facts, not by the array the deck republishes
+  }, [paneIdsKey, paneSessionKey, panes.activePaneId, palette.tint]);
+
+  /**
+   * AR-5 — the projects' colours (record §02, D3): every managed row's project
+   * is dealt a sequence the first time it is seen, persisted per device, and
+   * the theme's tint turns it into a hue in `agents.ts`. Dealt here, above the
+   * projection, so the projection stays pure.
+   */
+  const [projectLedger, setProjectLedger] = useState<ProjectLedger>(() =>
+    loadProjectLedger(PROJECT_LEDGER_KEY),
+  );
+  const projectKeysKey = localRows.map((row) => projectKey(row) ?? "").join("\0");
+  useEffect(() => {
+    const keys = localRows.map(projectKey).filter((key): key is string => key !== undefined);
+    const next = dealProjectSeqs(projectLedger, keys);
+    if (next === projectLedger) return;
+    saveProjectLedger(PROJECT_LEDGER_KEY, next);
+    setProjectLedger(next);
+    // the keys are the dependency; localRows rides along under its own key
+  }, [projectKeysKey, projectLedger]);
+
+  /**
+   * AR-5 — the UI's own account of each agent's tokens (the package's ledger,
+   * D7 for its cache): one series per run, the held total and the burn per
+   * step, folded from the mirror's `usage` at every step boundary and every
+   * frame. The views read this and never Core's moving estimate. Seeded from
+   * the cache once per conversation, saved at every step and when the page
+   * goes away.
+   */
+  const usageRef = useRef<UsageLedger>(EMPTY_USAGE_LEDGER);
+  const [usageStep, setUsageStep] = useState(0);
+  const usageSeedsRef = useRef(new Set<string>());
+  const [usageSeed, setUsageSeed] = useState(0);
+  const usageStore = useMemo(() => createUsageHistoryCache(USAGE_CACHE_KEY), []);
+  useEffect(() => {
+    let interval: number | undefined;
+    // Aligned to the step boundaries, so every agent's bars shift together.
+    const timeout = window.setTimeout(
+      () => {
+        setUsageStep((step) => step + 1);
+        interval = window.setInterval(() => setUsageStep((step) => step + 1), USAGE_STEP_MS);
+      },
+      USAGE_STEP_MS - (Date.now() % USAGE_STEP_MS),
+    );
+    return () => {
+      window.clearTimeout(timeout);
+      if (interval !== undefined) window.clearInterval(interval);
+    };
+  }, []);
+  const usageKeys = useMemo<UsageLedgerKey[]>(
+    () =>
+      localRows.flatMap((row) =>
+        row.monitor === undefined
+          ? []
+          : [{ id: managedRowId(row), providerId: row.kind, nativeSessionId: row.sessionId }],
+      ),
+    [localRows],
+  );
+  useEffect(() => {
+    let alive = true;
+    for (const key of usageKeys) {
+      const seedKey = `${key.providerId} ${key.nativeSessionId}`;
+      if (usageSeedsRef.current.has(seedKey)) continue;
+      usageSeedsRef.current.add(seedKey);
+      void usageStore
+        .load({ providerId: key.providerId, nativeSessionId: key.nativeSessionId })
+        .then((record) => {
+          if (!alive || !record) return;
+          usageRef.current = seedUsage(usageRef.current, key.id, record, Date.now());
+          setUsageSeed((seed) => seed + 1);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      alive = false;
+    };
+  }, [usageKeys, usageStore]);
+  useEffect(() => {
+    const save = (): void => {
+      const records = exportUsage(usageRef.current, usageKeys, Date.now());
+      if (records.length > 0) void usageStore.save(records).catch(() => undefined);
+    };
+    save();
+    window.addEventListener("pagehide", save);
+    return () => window.removeEventListener("pagehide", save);
+  }, [usageKeys, usageStep, usageStore]);
+
+  /** Unread is a fold over successive projections (the package's ledger). */
+  const unreadRef = useRef<UnreadLedger>(EMPTY_UNREAD_LEDGER);
+
   /** A pane link is only true while a pane is actually showing the replica: the
    * user can close that pane, and a bubble still drawn as linked would be the
    * monitor remembering an event instead of reporting a state. */
@@ -261,7 +451,7 @@ export function useMonitorAgents({
       remoteField.rows.map((row) => {
         const link = links.get(remoteRowId(row.host.deviceId, row.session.sessionId));
         if (link === undefined || !paneSessionIds.has(link.localSessionId)) return { row };
-        return { row, localSessionId: link.localSessionId, paneColor: link.color };
+        return { row, localSessionId: link.localSessionId };
       }),
     [remoteField.rows, links, paneSessionIds],
   );
@@ -279,19 +469,67 @@ export function useMonitorAgents({
     [sessions],
   );
 
-  const agents = useMemo(
-    () =>
-      assembleMonitorAgents({
-        managed,
-        terminals,
-        remotes,
-        accents: palette.accents,
-        sessions,
-        ...(panes.activeSessionId !== undefined ? { activeSessionId: panes.activeSessionId } : {}),
-        ...(selectedId !== undefined ? { previewSelectedId: selectedId } : {}),
+  const agents = useMemo(() => {
+    const nowMs = Date.now();
+    // The usage ledger is folded before assembly so every view reads the held
+    // total and the stepped burn, never Core's moving estimate. `usageStep` is
+    // its clock; the fold itself reads the wall clock.
+    const usage = reconcileUsage(
+      usageRef.current,
+      localRows.map((row) => ({
+        id: managedRowId(row),
+        ...(row.monitor?.usage ? { usage: coreUsage(row.monitor.usage) } : {}),
+      })),
+      nowMs,
+    );
+    usageRef.current = usage;
+    const assembled = assembleMonitorAgents({
+      managed,
+      terminals,
+      remotes,
+      colours: { tint: palette.tint, neutral: palette.neutral },
+      projectSeqs: projectLedger.seqByKey,
+      usage: usage.histories,
+      sessions,
+      attachments,
+      nowMs,
+      ...(panes.activeSessionId !== undefined ? { activeSessionId: panes.activeSessionId } : {}),
+      ...(selectedId !== undefined ? { previewSelectedId: selectedId } : {}),
+    });
+    const ledger = reconcileUnread(
+      unreadRef.current,
+      assembled.map((agent) => {
+        const statusSince = agent.agent?.monitor?.statusSince;
+        const statusSinceMs = statusSince === undefined ? Number.NaN : Date.parse(statusSince);
+        return {
+          id: agent.id,
+          status: agent.status,
+          active: agent.active,
+          hasAgent: agent.agent !== undefined,
+          ...(Number.isFinite(statusSinceMs) ? { statusSinceMs } : {}),
+        };
       }),
-    [palette.accents, selectedId, managed, terminals, remotes, sessions, panes.activeSessionId],
-  );
+      nowMs,
+    );
+    unreadRef.current = ledger;
+    return assembled.map((agent) =>
+      ledger.unreadIds.has(agent.id) ? { ...agent, unread: true } : agent,
+    );
+  }, [
+    palette.tint,
+    palette.neutral,
+    projectLedger,
+    selectedId,
+    localRows,
+    managed,
+    terminals,
+    remotes,
+    sessions,
+    attachments,
+    panes.activeSessionId,
+    usageStep,
+    usageSeed,
+  ]);
 
   const announce = useCallback((message: string): void => {
     setAcknowledgement((current) => ({ nonce: (current?.nonce ?? 0) + 1, message }));

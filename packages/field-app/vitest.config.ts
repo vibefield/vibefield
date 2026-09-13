@@ -7,6 +7,10 @@ import { defineConfig } from "vitest/config";
 // panel test imports.
 export default defineConfig({
   esbuild: { jsx: "automatic", jsxImportSource: "react" },
+  // The sibling `link:` rows (puppeteer's views) resolve their own react by
+  // Node's rules; dedupe is what makes the tests load ONE React, exactly as
+  // the renderer's Vite config does for the bundle (AR-5a).
+  resolve: { dedupe: ["react", "react-dom"] },
   test: {
     environment: "happy-dom",
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],

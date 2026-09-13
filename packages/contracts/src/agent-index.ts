@@ -267,15 +267,64 @@ export const IndexEnrollmentSummary = z
   .passthrough();
 export type IndexEnrollmentSummary = z.infer<typeof IndexEnrollmentSummary>;
 
+/** rosetta's `SearchState.readiness` (`SearchReadiness`, mirrored) plus the
+ * tolerant reader's own answer (AR-5e). Readiness is SEPARATE from canonical
+ * readiness and a non-ready state is never a successful empty search — so a
+ * readiness this build has never heard of folds to `unknown`, which does not
+ * answer, rather than being believed as "ready with no matches". */
+export const INDEX_SEARCH_READINESS = [
+  "ready",
+  "building",
+  "catching-up",
+  "stale",
+  "failed",
+  "unknown",
+] as const;
+export const IndexSearchReadiness = z.enum(INDEX_SEARCH_READINESS).catch("unknown");
+export type IndexSearchReadiness = (typeof INDEX_SEARCH_READINESS)[number];
+
+/** What this daemon generation can do, derived from the protocol fieldd
+ * speaks to it (18 added the session scope and prefix widening; fieldd
+ * refuses any other version at the wire, so these are facts about the pinned
+ * pair, not a negotiation). */
+export const IndexSearchCapabilities = z
+  .object({ sessionScope: z.boolean(), prefix: z.boolean() })
+  .passthrough();
+export type IndexSearchCapabilities = z.infer<typeof IndexSearchCapabilities>;
+
+/** The find sheet's foot (AR-5e): whether the index answered at all, what it
+ * can do, and how ready its search projection is. It rides `index.status`
+ * because the `/api/status` read it is folded from is one fieldd already
+ * makes — and the protocol version stays where AR-1 put it
+ * (`IndexStatus.rosettad.protocolVersion`) rather than being said twice. */
+export const IndexSearchHealth = z
+  .object({
+    /** the daemon answered this read (false while it is not ready) */
+    reachable: z.boolean(),
+    capabilities: IndexSearchCapabilities,
+    canonicalReady: z.boolean().optional(),
+    readiness: IndexSearchReadiness.optional(),
+    progress: z
+      .object({ done: z.number().finite(), total: z.number().finite() })
+      .passthrough()
+      .optional(),
+    /** one sentence for the foot — never the daemon's origin (EL7) */
+    detail: z.string().optional(),
+  })
+  .passthrough();
+export type IndexSearchHealth = z.infer<typeof IndexSearchHealth>;
+
 /** `index.status` — the whole honest picture in one read: the folded phase,
- * the daemon projection, the record, and every runtime the daemon lists
- * (empty until the daemon is ready). */
+ * the daemon projection, the record, every runtime the daemon lists (empty
+ * until the daemon is ready), and the search projection's own readiness.
+ * `search` is optional so an answer from a build before AR-5e still parses. */
 export const IndexStatus = z
   .object({
     phase: IndexPhase,
     rosettad: IndexDaemonHealth,
     enrollment: IndexEnrollmentSummary,
     runtimes: z.array(IndexRuntimeStatus),
+    search: IndexSearchHealth.optional(),
   })
   .passthrough();
 export type IndexStatus = z.infer<typeof IndexStatus>;
@@ -342,6 +391,16 @@ export const IndexSessionRow = z
      * open vocabulary: a state this build never heard of is carried, not
      * refused */
     stream_state: z.string(),
+    // AR-5e — the columns the find sheet's facts lane DISPLAYS. Every one is
+    // nullish: rosetta sends them as `T | null`, they decide nothing (no
+    // terminate rides on a title), and a serializer that drops one must never
+    // cost a reader the identity columns above. `updated_at` is SOURCE
+    // freshness, not conversation activity — `activity` is the evidence.
+    parent_session_id: z.string().nullish(),
+    title: z.string().nullish(),
+    summary: z.string().nullish(),
+    cwd: z.string().nullish(),
+    updated_at: z.number().finite().nullish(),
   })
   .passthrough();
 export type IndexSessionRow = z.infer<typeof IndexSessionRow>;
@@ -350,6 +409,169 @@ export type IndexSessionRow = z.infer<typeof IndexSessionRow>;
  * read fieldd parses. */
 export const IndexSessionsResponse = z.object({ sessions: z.array(IndexSessionRow) }).passthrough();
 export type IndexSessionsResponse = z.infer<typeof IndexSessionsResponse>;
+
+/** rosetta `SessionResponse` — the body of `/api/sessions/<id>`, read only to
+ * walk a hit's session UP to the root a reader navigates to (AR-5e). */
+export const IndexSessionResponse = z.object({ session: IndexSessionRow }).passthrough();
+export type IndexSessionResponse = z.infer<typeof IndexSessionResponse>;
+
+/** rosetta `SearchBuildProgress`, narrowed: the two counters a foot shows. */
+export const IndexSearchProgressRow = z
+  .object({ documents_done: z.number().finite(), documents_total: z.number().finite() })
+  .passthrough();
+export type IndexSearchProgressRow = z.infer<typeof IndexSearchProgressRow>;
+
+/** rosetta `SearchState` as fieldd READS it. `readiness` stays an open string
+ * here and is folded by `IndexSearchReadiness` in the projection: refusing the
+ * body over a word this build does not know would turn a degraded index into
+ * an error, when the honest answer is "it did not answer". */
+export const IndexSearchWireState = z
+  .object({ readiness: z.string(), progress: IndexSearchProgressRow.nullish() })
+  .passthrough();
+export type IndexSearchWireState = z.infer<typeof IndexSearchWireState>;
+
+/** rosetta `SearchHit`, NARROWED to what the sheet draws. `at` is the matched
+ * row's stamp when the source reported one (never coerced to epoch zero), so
+ * it is nullable AND must be finite — an infinite stamp would sort a hit past
+ * the end of time. `score` rides through untouched (it is diagnostic and has
+ * no cross-backend meaning). */
+export const IndexSearchHitRow = z
+  .object({
+    timeline_id: z.string().min(1),
+    session_id: z.string().min(1),
+    kind: z.string(),
+    at: z.number().finite().nullish(),
+    snippet: z.string(),
+  })
+  .passthrough();
+export type IndexSearchHitRow = z.infer<typeof IndexSearchHitRow>;
+
+/** rosetta `SearchResponse` — the body of `/api/search`, parsed (not cast):
+ * the sheet's whole answer rides on it and a shape fieldd cannot vouch for is
+ * an honest UNAVAILABLE, never a silent "no matches". */
+export const IndexSearchResponse = z
+  .object({ state: IndexSearchWireState, hits: z.array(IndexSearchHitRow) })
+  .passthrough();
+export type IndexSearchResponse = z.infer<typeof IndexSearchResponse>;
+
+// ── index.sessions / index.search (AR-5e — the history port's doors; the find
+// sheet's two questions, and AR-8's first brick) ──
+//
+// The renderer asks in VibeField's vocabulary (camelCase, provider-native ids)
+// and fieldd answers PROJECTIONS, exactly as `index.discoveries` and
+// `index.status` do: rosetta's snake_case rows above are what fieldd READS,
+// never what a door hands on. The two doors are one keystroke: the facts
+// lookup resolves the live runs' canonical ids, and the search is scoped by
+// them (rosetta widens each to its subagent tree, so a hit inside a delegated
+// child still answers for the root the reader navigates to).
+
+/** `index.sessions` — what the index knows about these live runs, by the
+ * provider-native id every repo joins on. 256 is rosetta's own ceiling for a
+ * selector list; fieldd chunks the ask and merges the answers. */
+export const IndexSessionsParams = z
+  .object({ nativeSessionIds: z.array(z.string().min(1).max(256)).min(1).max(256) })
+  .passthrough();
+export type IndexSessionsParams = z.infer<typeof IndexSessionsParams>;
+
+/** One session as the door answers it. `activity` is AR-4's evidence already
+ * folded (bounds that contradict each other are no evidence); `updatedAt` is
+ * SOURCE freshness, not conversation activity, and is absent when rosetta
+ * reported none. A row the index has never read is simply absent from the
+ * answer — never a placeholder that would read as "known and empty". */
+export const IndexSession = z
+  .object({
+    /** rosetta's canonical session id */
+    sessionId: z.string().min(1),
+    nativeSessionId: z.string(),
+    /** `== sessionId` for a top-level session; a subagent rolls up to its root */
+    rootSessionId: z.string(),
+    title: z.string().optional(),
+    summary: z.string().optional(),
+    cwd: z.string().optional(),
+    updatedAt: z.number().finite().optional(),
+    activity: z
+      .object({ firstAt: z.number().finite(), lastAt: z.number().finite() })
+      .passthrough()
+      .nullable(),
+    /** rosetta's ingest state for the session's source (open vocabulary) */
+    streamState: z.string(),
+  })
+  .passthrough();
+export type IndexSession = z.infer<typeof IndexSession>;
+
+export const IndexSessionsResult = z.object({ rows: z.array(IndexSession) }).passthrough();
+export type IndexSessionsResult = z.infer<typeof IndexSessionsResult>;
+
+/** `index.search` — one question over the transcript history. `q` is plain
+ * text (no backend query syntax); `nativeSessionIds` scopes it to the live
+ * runs a reader can jump to (absent = everything the index knows); `kind`
+ * picks one side of the conversation — rosetta indexes prompts and replies
+ * today and answers 400 for any other kind, so the door admits only those two
+ * rather than passing a refusal on. */
+export const IndexSearchParams = z
+  .object({
+    q: z.string().min(1).max(512),
+    nativeSessionIds: z.array(z.string().min(1).max(256)).max(256).optional(),
+    /** epoch ms; only rows at or after it */
+    afterMs: z.number().int().finite().nonnegative().optional(),
+    limit: z.number().int().min(1).max(1000).optional(),
+    /** widen word fragments to the tokens they begin (on by default) */
+    prefix: z.boolean().optional(),
+    kind: z.enum(["user", "agent"]).optional(),
+  })
+  .passthrough();
+export type IndexSearchParams = z.infer<typeof IndexSearchParams>;
+
+/** The projection of rosetta's `SearchState`: why an answer is the answer it
+ * is. `detail` is one sentence for the sheet's foot — never the daemon's
+ * origin (EL7) and never the query. */
+export const IndexSearchState = z
+  .object({
+    readiness: IndexSearchReadiness,
+    /** the canonical projection is serveable (rosetta's `canonical_ready`) */
+    canonicalReady: z.boolean().optional(),
+    progress: z
+      .object({ done: z.number().finite(), total: z.number().finite() })
+      .passthrough()
+      .optional(),
+    detail: z.string().optional(),
+  })
+  .passthrough();
+export type IndexSearchState = z.infer<typeof IndexSearchState>;
+
+/** One matched row, attributed to the root a reader navigates to. The join
+ * key to a live run is `nativeSessionId` — absent when fieldd could not reach
+ * the hit's root (the answer says so rather than guessing an attribution). */
+export const IndexSearchHit = z
+  .object({
+    sessionId: z.string().min(1),
+    rootSessionId: z.string().min(1),
+    nativeSessionId: z.string().optional(),
+    title: z.string().optional(),
+    timelineId: z.string().min(1),
+    /** `user` or `agent` today; anything else is shown as itself */
+    kind: z.string(),
+    at: z.number().finite().optional(),
+    /** matches marked with `[` and `]`, the way rosetta marks them */
+    snippet: z.string(),
+  })
+  .passthrough();
+export type IndexSearchHit = z.infer<typeof IndexSearchHit>;
+
+/** `index.search`'s answer. `answered: false` is the honest "the index had no
+ * answer" — a building projection, an unreachable daemon, a readiness this
+ * build does not know — and a sheet keeps what it last showed rather than
+ * saying "no matches". `clipped` means the daemon stopped at its limit (or a
+ * hit's root could not be resolved), so some sessions may be under-reported. */
+export const IndexSearchResult = z
+  .object({
+    answered: z.boolean(),
+    state: IndexSearchState,
+    hits: z.array(IndexSearchHit),
+    clipped: z.boolean(),
+  })
+  .passthrough();
+export type IndexSearchResult = z.infer<typeof IndexSearchResult>;
 
 // ── agents.* (the distribution and persona doors; handlers land at AR-2 with
 // puppeteer's first import — these rows are the contract they will satisfy) ──

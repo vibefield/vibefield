@@ -53,7 +53,7 @@ export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessio
     options.monitor === false || (options.pending !== undefined && options.alive === undefined)
       ? undefined
       : {
-          schemaVersion: 2,
+          schemaVersion: 3,
           runtimeEpoch: 1,
           revision: 3,
           runtimeRunId,

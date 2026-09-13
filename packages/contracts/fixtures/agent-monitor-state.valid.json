@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "runtimeEpoch": 2,
   "revision": 9,
   "runtimeRunId": "run-1",
@@ -14,8 +14,13 @@
         {
           "prompt": "Choose a database",
           "options": [
-            { "label": "SQLite" },
-            { "label": "Postgres", "description": "Shared server" }
+            {
+              "label": "SQLite"
+            },
+            {
+              "label": "Postgres",
+              "description": "Shared server"
+            }
           ],
           "allowFreeForm": true
         }
@@ -27,7 +32,12 @@
     "burnRatePerMin": 321,
     "burnRateWindowMs": 60000,
     "burnRateBoundary": "mixed",
-    "samples": [{ "at": "2026-08-16T11:59:45.000Z", "cumulativeTokens": 12000 }],
+    "samples": [
+      {
+        "at": "2026-08-16T11:59:45.000Z",
+        "cumulativeTokens": 12000
+      }
+    ],
     "asOf": "2026-08-16T12:00:00.000Z"
   },
   "context": {
@@ -40,84 +50,74 @@
   "model": {
     "id": "model-card-v2",
     "displayName": "Model Card V2",
-    "configured": { "id": "model-alias-v1", "displayName": "Model Alias V1" },
+    "configured": {
+      "id": "model-alias-v1",
+      "displayName": "Model Alias V1"
+    },
     "intent": "observed",
     "asOf": "2026-08-16T12:00:00.000Z"
   },
-  "effort": { "value": "future-ultra", "configured": "high", "asOf": "2026-08-16T12:00:00.000Z" },
+  "effort": {
+    "value": "future-ultra",
+    "configured": "high",
+    "asOf": "2026-08-16T12:00:00.000Z"
+  },
   "modes": {
     "execution": "native-tui",
     "providerSession": {
       "raw": "future-auto",
       "normalized": "auto",
-      "configured": { "raw": "manual" },
+      "configured": {
+        "raw": "manual"
+      },
       "intent": "observed"
     },
     "providerPermission": {
       "raw": "accept-edits",
-      "configured": { "raw": "manual" },
+      "configured": {
+        "raw": "manual"
+      },
       "intent": "observed"
     },
     "asOf": "2026-08-16T12:00:00.000Z"
   },
+  "subagentCount": 1,
   "subagents": [
     {
       "id": "child-1",
-      "actorRunKey": "actor-child-1",
-      "active": true,
+      "working": true,
       "cumulativeTokens": 300,
       "modelId": "model-card-v2",
-      "modelIntent": "observed",
-      "effort": "high",
-      "effortIntent": "observed"
+      "effort": "high"
     }
   ],
-  "team": {
-    "id": "team-1",
-    "teammates": [
-      {
-        "id": "member-1",
-        "actorRunKey": "actor-child-1",
-        "runtimeRunId": "run-2",
-        "idle": false,
-        "activity": "Reviewing changes",
-        "cumulativeTokens": 300,
-        "burnRatePerMin": 25,
-        "contextPercent": 40,
-        "modelId": "model-card-v2",
-        "modelIntent": "observed",
-        "effort": "high",
-        "effortIntent": "observed",
-        "activityProvisional": true
-      }
-    ],
-    "provisional": true
+  "omitted": {
+    "questionOptions": 2
   },
-  "workflows": [
-    {
-      "id": "workflow-1",
-      "active": true,
-      "actorRunKeys": ["actor-child-1"],
-      "artifactRefs": [
-        {
-          "artifactId": "artifact-1",
-          "family": "workflow-definition",
-          "mediaType": "text/markdown",
-          "availability": "readable"
-        }
-      ]
-    }
-  ],
-  "omitted": { "questionOptions": 2 },
-  "compaction": { "active": false, "count": 1, "lastAt": "2026-08-16T11:30:00.000Z" },
-  "environment": { "cwd": "/repo", "git": null, "worktrees": ["/repo-worktree"] },
-  "session": { "nativeSessionId": "native-1", "startedAt": "2026-08-16T11:00:00.000Z" },
+  "compaction": {
+    "active": false,
+    "count": 1,
+    "lastAt": "2026-08-16T11:30:00.000Z"
+  },
+  "environment": {
+    "cwd": "/repo",
+    "git": null,
+    "worktrees": [
+      "/repo-worktree"
+    ]
+  },
+  "session": {
+    "nativeSessionId": "native-1",
+    "startedAt": "2026-08-16T11:00:00.000Z"
+  },
   "freshness": {
     "lastEvidenceAt": "2026-08-16T12:00:00.000Z",
     "level": "native-hooks",
     "families": {
-      "usage": { "support": "supported", "asOf": "2026-08-16T12:00:00.000Z" },
-      "workflow": { "support": "degraded", "asOf": "2026-08-16T11:59:00.000Z" }
+      "usage": {
+        "support": "supported",
+        "asOf": "2026-08-16T12:00:00.000Z"
+      }
     }
   },
   "alive": true

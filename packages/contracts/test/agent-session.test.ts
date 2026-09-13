@@ -98,7 +98,7 @@ describe("the monitor mirror (AR-D4) against puppeteer's own fixture", () => {
   const golden = fixture("agent-monitor-state.valid.json") as Record<string, unknown>;
 
   it("is pinned to the schema generation the pinned puppeteer emits", () => {
-    expect(AGENT_MONITOR_SCHEMA_VERSION).toBe(2);
+    expect(AGENT_MONITOR_SCHEMA_VERSION).toBe(3);
     expect(golden["schemaVersion"]).toBe(AGENT_MONITOR_SCHEMA_VERSION);
   });
 
@@ -112,11 +112,13 @@ describe("the monitor mirror (AR-D4) against puppeteer's own fixture", () => {
     expect(parsed.environment?.git).toBeNull();
     expect(parsed.session?.nativeSessionId).toBe("native-1");
     expect(parsed.freshness?.level).toBe("native-hooks");
-    // passthrough: the generation-2 collections a view may want ride along
+    // passthrough: the generation-3 collections a view may want ride along
+    // (teams, workflows and artifacts left the state at generation 3)
     expect(parsed).toHaveProperty("subagents");
-    expect(parsed).toHaveProperty("workflows");
-    expect(parsed).toHaveProperty("team");
+    expect(parsed).toHaveProperty("subagentCount");
+    expect(parsed).toHaveProperty("compaction");
     expect(parsed).toHaveProperty("modes");
+    expect(parsed).not.toHaveProperty("team");
     expect(JSON.parse(JSON.stringify(parsed))).toEqual(golden);
   });
 

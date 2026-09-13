@@ -30,9 +30,30 @@
 // FAKE_ROSETTAD_SESSIONS: a JSON file re-read on every request, so a test can
 // move a session's `activity.last_at` while the daemon polls. When
 // FAKE_ROSETTAD_REQUEST_LOG names a file, one line is appended there per
-// `/api/sessions` request: a window in which the fold did NOT change is only
-// evidence if the poller actually ASKED during it, and this is the counter a
-// test reads to say so.
+// READ request: a window in which the fold did NOT change is only evidence if
+// the poller actually ASKED during it, and this is the counter a test reads to
+// say so — and for AR-5e it is also how a test asserts the exact query string
+// fieldd sent (the scope, `prefix`, `kind`, `limit`).
+//
+// AR-5e: `/api/search` and `/api/sessions/<id>` — the find sheet's seam,
+// scripted by FAKE_ROSETTAD_SEARCH, a JSON file re-read per request like the
+// sessions one:
+//
+//   {
+//     "readiness": "ready",            // rosetta SearchReadiness; default ready
+//     "canonical_ready": true,          // the /api/status flag; default true
+//     "progress": { "documents_done": 1, "documents_total": 2 },   // optional
+//     "hits": [ { "timeline_id", "session_id", "kind", "at", "snippet" } ]
+//   }
+//
+// The route answers the way the real server does: `sessions=` scopes (a hit
+// whose session is not named is not answered), `q` matches case-insensitively
+// inside the snippet, `kind` and `after_ts` filter, `limit` truncates (which
+// is how a test makes fieldd's `clipped` true), and a readiness that is not
+// `ready`/`catching-up` WITHHOLDS every hit — rosetta returns the state
+// explicitly rather than serving an empty success, and fieldd must answer
+// `answered: false` over it. A hit is passed through as written, so a
+// deliberately malformed one reaches fieldd's parser.
 import {
   appendFileSync,
   existsSync,
@@ -165,6 +186,41 @@ const json = (res, body) => {
   res.end(JSON.stringify(body));
 };
 
+/** a JSON file re-read per request (undefined when unset or unreadable) */
+const scripted = (name, fallback) => {
+  const file = process.env[name];
+  if (file === undefined || !existsSync(file)) return fallback;
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return fallback;
+  }
+};
+const sessionRows = () => {
+  const rows = scripted("FAKE_ROSETTAD_SESSIONS", []);
+  return Array.isArray(rows) ? rows : [];
+};
+/** AR-5e — the scripted search answer, with the real server's defaults */
+const searchScript = () => {
+  const script = scripted("FAKE_ROSETTAD_SEARCH", {});
+  const source = script !== null && typeof script === "object" ? script : {};
+  return {
+    readiness: typeof source.readiness === "string" ? source.readiness : "ready",
+    canonicalReady: source.canonical_ready !== false,
+    progress: source.progress ?? null,
+    hits: Array.isArray(source.hits) ? source.hits : [],
+  };
+};
+const logRequest = (url) => {
+  const log = process.env.FAKE_ROSETTAD_REQUEST_LOG;
+  if (log === undefined) return;
+  try {
+    appendFileSync(log, `${Date.now()} ${url}\n`);
+  } catch {
+    // a counter that cannot be written is not worth failing a request over
+  }
+};
+
 if (mode === "silent") {
   setInterval(() => {}, 1_000);
 } else {
@@ -174,11 +230,19 @@ if (mode === "silent") {
   const server = createServer((req, res) => {
     const rows = [...discoveredRows, ...enrolledRows];
     if (req.url === "/api/status") {
+      const search = searchScript();
       json(res, {
         protocol_version: protocol,
         schema_version: 1,
-        canonical_ready: true,
-        search: "ready",
+        canonical_ready: search.canonicalReady,
+        // AR-5e — the REAL `SearchState` shape (it used to be the string
+        // "ready" here, which no client's reader could fold)
+        search: {
+          readiness: search.readiness,
+          progress: search.progress,
+          projection_epoch: "epoch-1",
+          revision: 42,
+        },
         daemon: {
           started_at: startedAt,
           uptime_ms: Date.now() - startedAt,
@@ -227,32 +291,85 @@ if (mode === "silent") {
       return;
     }
     if (req.url !== undefined && req.url.startsWith("/api/sessions?")) {
-      const log = process.env.FAKE_ROSETTAD_REQUEST_LOG;
-      if (log !== undefined) {
-        try {
-          appendFileSync(log, `${Date.now()} ${req.url}\n`);
-        } catch {
-          // a counter that cannot be written is not worth failing a request over
-        }
-      }
+      logRequest(req.url);
       const url = new URL(req.url, "http://127.0.0.1");
       const wanted = (url.searchParams.get("native_session_id") ?? "")
         .split(",")
         .filter((id) => id !== "");
-      let sessions = [];
-      const file = process.env.FAKE_ROSETTAD_SESSIONS;
-      if (file !== undefined && existsSync(file)) {
-        try {
-          sessions = JSON.parse(readFileSync(file, "utf8"));
-        } catch {
-          sessions = [];
-        }
+      const limit = Number(url.searchParams.get("limit") ?? "100");
+      const sessions = sessionRows().filter(
+        (row) => wanted.length === 0 || wanted.includes(row.native_session_id),
+      );
+      json(res, { sessions: Number.isFinite(limit) ? sessions.slice(0, limit) : sessions });
+      return;
+    }
+    // AR-5e — one session by canonical id: how a hit inside a delegated child
+    // is walked up to the root a reader navigates to. An id the index does not
+    // hold is a 404, exactly as the real server answers it.
+    if (req.url !== undefined && req.url.startsWith("/api/sessions/")) {
+      logRequest(req.url);
+      const id = decodeURIComponent(req.url.slice("/api/sessions/".length).split("?")[0]);
+      const row = sessionRows().find((candidate) => candidate.id === id);
+      if (row === undefined) {
+        res.statusCode = 404;
+        res.setHeader("x-rosetta-protocol-version", String(protocol));
+        res.end(JSON.stringify({ error: { message: `no session ${id}` } }));
+        return;
       }
-      json(res, {
-        sessions: sessions.filter(
-          (row) => wanted.length === 0 || wanted.includes(row.native_session_id),
-        ),
+      json(res, { session: row });
+      return;
+    }
+    // AR-5e — the find sheet's question
+    if (req.url !== undefined && req.url.startsWith("/api/search")) {
+      logRequest(req.url);
+      const url = new URL(req.url, "http://127.0.0.1");
+      const script = searchScript();
+      const answers = script.readiness === "ready" || script.readiness === "catching-up";
+      const state = {
+        readiness: script.readiness,
+        progress: script.progress,
+        projection_epoch: "epoch-1",
+        revision: 42,
+      };
+      if (!answers) {
+        // rosetta reports the state explicitly; it never serves an empty success
+        json(res, { state, hits: [] });
+        return;
+      }
+      // `sessions=` names ROOTS; the real server widens each to every session
+      // that rolls up to it before the backend sees the scope, so a hit inside
+      // a delegated child answers for the root the reader named
+      const named = (url.searchParams.get("sessions") ?? "").split(",").filter((id) => id !== "");
+      const scope =
+        named.length === 0
+          ? named
+          : [
+              ...new Set([
+                ...named,
+                ...sessionRows()
+                  .filter((row) => named.includes(row.root_session_id))
+                  .map((row) => row.id),
+              ]),
+            ];
+      const q = (url.searchParams.get("q") ?? "").toLowerCase();
+      const kind = url.searchParams.get("kind");
+      const afterTs = url.searchParams.get("after_ts");
+      const limit = Number(url.searchParams.get("limit") ?? "300");
+      const hits = script.hits.filter((hit) => {
+        if (scope.length > 0 && !scope.includes(hit.session_id)) return false;
+        if (
+          q !== "" &&
+          !String(hit.snippet ?? "")
+            .toLowerCase()
+            .includes(q)
+        )
+          return false;
+        if (kind !== null && hit.kind !== kind) return false;
+        if (afterTs !== null && Number(hit.at ?? 0) < Number(afterTs)) return false;
+        return true;
       });
+      // truncation is how a test makes fieldd's `clipped` true
+      json(res, { state, hits: Number.isFinite(limit) ? hits.slice(0, limit) : hits });
       return;
     }
     res.statusCode = 404;

@@ -1,6 +1,9 @@
-import type { SessionActivity } from "@vibecook/ghosttea-protocol";
+import type { AgentVisualStatus } from "@vibecook/puppeteer-views";
 import type { AgentSessionSummary } from "./facet-types";
 import { folderName } from "./folder-name";
+
+export type { AgentVisualStatus } from "@vibecook/puppeteer-views";
+export { classifyTerminalStatus } from "@vibecook/puppeteer-views";
 
 /**
  * What a session is doing, derived ONLY from the fold's row — fieldd's one
@@ -9,16 +12,14 @@ import { folderName } from "./folder-name";
  * and our own grain: EL2 keeps meaning on control surfaces and bytes on data
  * planes, so a monitor that read a screen to decide what an agent was doing
  * would be reading the wrong plane). How a status is then DRAWN is each view's
- * own business.
- */
-export type AgentVisualStatus = "idle" | "working" | "waiting";
-
-/**
- * The fold's four words onto the views' three. `blocked` is the reference's
- * `waiting` (the agent is asking for something); `unknown` — no monitor
- * evidence yet — reads as working with the detail "starting", as a session
- * that has not spoken did in the reference. A run puppeteer reports as not
- * alive is dropped: an exited agent is not a row.
+ * own business. The word is Core's since AR-5 (`idle` · `working` · `blocked`);
+ * GT-3m's `waiting` was the same state under a local name, retired with the
+ * views port.
+ *
+ * The fold's four words onto the views' three: `unknown` — no monitor evidence
+ * yet — reads as working with the detail "starting", as a session that has
+ * not spoken did in the reference. A run puppeteer reports as not alive is
+ * dropped: an exited agent is not a row.
  */
 export function classifyAgentStatus(summary: AgentSessionSummary): AgentVisualStatus | undefined {
   // The drop comes FIRST, and the order is the whole rule: "this run is not
@@ -33,7 +34,7 @@ export function classifyAgentStatus(summary: AgentSessionSummary): AgentVisualSt
   if (summary.continuation?.pending !== undefined) return "idle";
   switch (summary.status) {
     case "blocked":
-      return "waiting";
+      return "blocked";
     case "idle":
       return "idle";
     default:
@@ -41,22 +42,33 @@ export function classifyAgentStatus(summary: AgentSessionSummary): AgentVisualSt
   }
 }
 
-export function classifyTerminalStatus(
-  activity: Pick<SessionActivity, "kind"> | undefined,
-): Exclude<AgentVisualStatus, "waiting"> {
-  return activity?.kind === "foreground-job" ? "working" : "idle";
+/** The path the project is named from, before folding. */
+function projectPath(summary: AgentSessionSummary): string {
+  return (
+    summary.monitor?.environment?.cwd ||
+    summary.workspace?.sourcePath ||
+    summary.workspace?.root ||
+    ""
+  );
 }
 
 /** The project a row belongs to: the agent's current directory when the
  * monitor observed one, else the workspace's, folded to its last component;
  * the provider's label when nothing names a directory. */
 export function projectLabel(summary: AgentSessionSummary): string {
-  const path =
-    summary.monitor?.environment?.cwd ||
-    summary.workspace?.sourcePath ||
-    summary.workspace?.root ||
-    "";
-  return folderName(path, summary.label);
+  return folderName(projectPath(summary), summary.label);
+}
+
+/**
+ * The key a project's colour is dealt by (record §02, D3): the workspace's
+ * root when there is one — a worktree or a copy is the same project as the
+ * repository it was cut from, and `root` is where puppeteer names that — else
+ * the observed directory, else nothing (no project: the row wears the ramp).
+ */
+export function projectKey(summary: AgentSessionSummary): string | undefined {
+  const key =
+    summary.workspace?.root || summary.workspace?.sourcePath || summary.monitor?.environment?.cwd;
+  return key ? key : undefined;
 }
 
 /** The provider's own label, as the adapter authored it. Kept as a function so
@@ -72,37 +84,13 @@ export function agentDetail(summary: AgentSessionSummary, status: AgentVisualSta
   if (summary.continuation?.pending === "resume-when-idle") return "unobserved · resumes when idle";
   const monitor = summary.monitor;
   if (monitor === undefined) return "starting";
-  if (status === "waiting") {
+  if (status === "blocked") {
     const blocker = monitor.blockers[0];
-    if (blocker === undefined) return "waiting";
+    if (blocker === undefined) return "blocked";
     const tool = (blocker as { tool?: unknown }).tool;
     return typeof tool === "string" && tool !== "" ? `${blocker.kind} · ${tool}` : blocker.kind;
   }
   const last = monitor.lastAssistantMessage as { text?: unknown } | undefined;
   if (typeof last?.text === "string" && last.text.trim() !== "") return last.text.trim();
   return status;
-}
-
-/**
- * The stable per-session relationship color, as an INDEX into DESIGN.md §2.6's
- * organizational accents rather than a color.
- *
- * The reference hashes an id into `hsl(… 62% 44%)`, which is a fine trick and
- * the wrong one here: §2.6 is a CURATED set, and the whole point of an
- * organizational accent is that it groups and labels without ever signalling
- * state — which a free hue wheel cannot promise, since it can always land on
- * something a viewer reads as green-means-working. So the hash chooses a SLOT;
- * `monitor-palette.ts` resolves that slot from the live `--vf-accent-*` tokens.
- *
- * The hash itself is the reference's FNV-1a, unchanged, because the property
- * that matters is the one it already had: same id ⇒ same slot, forever, across
- * ticks and reloads and (since AR-3) across restarts.
- */
-export function agentAccentSlot(id: string, slots: number): number {
-  let hash = 2166136261;
-  for (let index = 0; index < id.length; index += 1) {
-    hash ^= id.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return Math.abs(hash) % slots;
 }
