@@ -205,6 +205,9 @@ export interface FielddConfig {
   /** AR-3 test seam: compose providers beside (or instead of) puppeteer's
    * built-ins — a scripted adapter that spawns through the real host. */
   agentProviders?: AgentRuntimeServiceOptions["providers"];
+  /** AR-4 test seam: resume-when-idle's thresholds (production: 30 s still,
+   * asked every 5 s). */
+  agentResumeWhenIdle?: AgentRuntimeServiceOptions["resumeWhenIdle"];
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -490,6 +493,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
     ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
+    ...(config.agentResumeWhenIdle !== undefined
+      ? { resumeWhenIdle: config.agentResumeWhenIdle }
+      : {}),
+    // AR-4 — the daemon's own acts on a session (the re-attach at boot, a
+    // resume-when-idle) are ledgered as the system actor
+    audit: (mutation, effect, describe) => audit.requiredSystem(mutation, effect, describe),
     logger: logger.child({ component: "agent_runtime" }),
   });
   // TC-D6(a), fieldd half — measure-and-surface (Node has no setrlimit).
@@ -907,6 +916,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     terminalsRef = terminals;
     terminals.onSessionExited((event) => void agents.handleTerminalExit(event));
     terminals.onInventory((rows) => agents.handleInventory(rows));
+    // AR-4 — the FIRST inventory is the re-attach, and ensureStarted may have
+    // applied it before the listener above existed: feed what the floor
+    // already said, so a boot onto a quiet floor re-attaches now and not at
+    // the floor's next change.
+    if (terminals.observation() !== undefined) agents.handleInventory(terminals.list());
 
     // T1 §1 — the tailnet door's node-id correlation. DeviceService is built
     // AFTER ProductApi, so this is a let-ref, not a closure over the const:
@@ -3338,7 +3352,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           runtimeDiagnostics.dispose();
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
-          await agents.dispose(); // AR-2 — the agent runtime (no sessions yet) before its index
+          await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           detachHealthSources?.();
           endpoints.dispose();

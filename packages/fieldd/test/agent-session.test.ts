@@ -10,6 +10,13 @@
 // onboarding. The last block runs the REAL claude when FIELDD_TEST_REAL_AGENT
 // names it — the P0 witness at the daemon level: a real agent in a PTY on the
 // floor with live status.
+//
+// AR-4 (stable ingress): the restart rows boot a SECOND fieldd on the first
+// one's root with field-native still running — a graceful stop RELEASES the
+// runs, and the next boot's first inventory re-attaches (the scripted
+// provider with `attachSession`), holds PENDING (without), and resumes a
+// pending run by hand (`agent.resume`) or by itself once the fake rosettad's
+// session rows say the conversation has been still (resume-when-idle).
 import { type ChildProcess, spawn } from "node:child_process";
 import {
   copyFileSync,
@@ -29,7 +36,11 @@ import type {
   PromptReceipt,
   PromptSubmission,
 } from "@vibecook/puppeteer-core";
-import type { AgentProvider, AgentProviderSessionOptions } from "@vibecook/puppeteer-runtime";
+import type {
+  AgentProvider,
+  AgentProviderSessionOptions,
+  AttachProviderSessionOptions,
+} from "@vibecook/puppeteer-runtime";
 import {
   type AgentListResult,
   type AgentProvidersResult,
@@ -53,11 +64,11 @@ const BIN = nativeBinPath(ROOT);
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const FAKE_ROSETTAD = join(FIXTURES, "fake-rosettad.mjs");
 const FAKE_CLAUDE = join(FIXTURES, "fake-claude");
-const fakeSpawner = (mode: string): typeof spawn =>
+const fakeSpawner = (mode: string, extra: Record<string, string> = {}): typeof spawn =>
   ((_bin: string, args: readonly string[], options: object) =>
     spawn(process.execPath, [FAKE_ROSETTAD, ...args], {
       ...options,
-      env: { ...process.env, FAKE_ROSETTAD_MODE: mode },
+      env: { ...process.env, FAKE_ROSETTAD_MODE: mode, ...extra },
     })) as unknown as typeof spawn;
 
 const rendererParticipant = (suffix: string) => ({
@@ -91,7 +102,44 @@ interface ScriptedSession {
   resume: string | undefined;
   host: AgentHost;
 }
-function scriptedProvider(envOut: string, sessions: ScriptedSession[]): AgentProvider {
+/** AR-4 — what the scripted adapter was asked to attach to. */
+interface ScriptedAttach {
+  runtimeSessionId: string;
+  sessionId: string;
+  ingress: AttachProviderSessionOptions["ingress"];
+}
+function scriptedBinding(
+  host: AgentHost,
+  runtimeSessionId: string,
+  sessionId: string,
+): AgentAdapterBinding {
+  return {
+    sessionId,
+    runtimeSessionId,
+    observationLevel: () => "terminal-only",
+    events: { onCandidate: () => () => undefined },
+    services: {
+      prompt: {
+        async submit(submission: PromptSubmission): Promise<PromptReceipt> {
+          const result = await host.automateTerminal(runtimeSessionId, {
+            kind: "paste",
+            text: submission.text,
+            submit: submission.mode !== "paste-only",
+          });
+          return result.accepted
+            ? { status: "confirmed" }
+            : { status: "rejected", reason: result.reason };
+        },
+      },
+    },
+    async dispose() {},
+  };
+}
+function scriptedProvider(
+  envOut: string,
+  sessions: ScriptedSession[],
+  attach: { records: ScriptedAttach[] } | undefined,
+): AgentProvider {
   let counter = 0;
   return {
     descriptor: { id: "scripted", label: "Scripted" },
@@ -111,28 +159,22 @@ function scriptedProvider(envOut: string, sessions: ScriptedSession[]): AgentPro
       });
       const sessionId = options.resume ?? `scripted-native-${n}`;
       sessions.push({ runtimeSessionId, sessionId, resume: options.resume, host: options.host });
-      return {
-        sessionId,
-        runtimeSessionId,
-        observationLevel: () => "terminal-only",
-        events: { onCandidate: () => () => undefined },
-        services: {
-          prompt: {
-            async submit(submission: PromptSubmission): Promise<PromptReceipt> {
-              const result = await options.host.automateTerminal(runtimeSessionId, {
-                kind: "paste",
-                text: submission.text,
-                submit: submission.mode !== "paste-only",
-              });
-              return result.accepted
-                ? { status: "confirmed" }
-                : { status: "rejected", reason: result.reason };
-            },
-          },
-        },
-        async dispose() {},
-      };
+      return scriptedBinding(options.host, runtimeSessionId, sessionId);
     },
+    // AR-4 — an adapter that can re-attach to its running process: it records
+    // what it was handed and binds the same terminal and native session
+    ...(attach === undefined
+      ? {}
+      : {
+          async attachSession(options: AttachProviderSessionOptions): Promise<AgentAdapterBinding> {
+            attach.records.push({
+              runtimeSessionId: options.runtimeSessionId,
+              sessionId: options.sessionId,
+              ingress: options.ingress,
+            });
+            return scriptedBinding(options.host, options.runtimeSessionId, options.sessionId);
+          },
+        }),
   };
 }
 
@@ -143,22 +185,43 @@ interface Box {
   envOut: string;
   daemon: FielddDaemon;
   sessions: ScriptedSession[];
+  /** AR-4 — the scripted adapter's attach log (empty when it cannot attach) */
+  attached: ScriptedAttach[];
+  /** AR-4 — the file the fake rosettad serves session rows from */
+  sessionsFile: string;
+}
+
+interface SetupConfig {
+  floor: "mock" | "real";
+  realAgent?: boolean;
+  /** AR-4 — give the scripted provider an `attachSession` */
+  attach?: boolean;
+  /** AR-4 — boot a SECOND fieldd on this box's root, its field-native still
+   * running and its records on disk: the restart */
+  restartOf?: Box;
+  resumeWhenIdle?: { afterMs: number; pollMs: number };
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
-async function setup(config: { floor: "mock" | "real"; realAgent?: boolean }): Promise<Box> {
-  const root = shortTmpRoot("vf-ar3-");
-  cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+async function setup(config: SetupConfig): Promise<Box> {
+  const restart = config.restartOf;
+  const root = restart?.root ?? shortTmpRoot("vf-ar3-");
+  if (restart === undefined) cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   const dataDir = join(root, ...LAYOUT.USERS_DIR, "1");
-  mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   const bin = join(root, "bin");
-  mkdirSync(bin);
-  copyFileSync(FAKE_CLAUDE, join(bin, "claude"));
   const envOut = join(root, "env-out");
-  mkdirSync(envOut);
   const home = join(dataDir, "home");
-  mkdirSync(home, { recursive: true });
-  if (config.floor === "mock") {
+  const sessionsFile = join(root, "rosetta-sessions.json");
+  if (restart === undefined) {
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    mkdirSync(bin);
+    copyFileSync(FAKE_CLAUDE, join(bin, "claude"));
+    mkdirSync(envOut);
+    mkdirSync(home, { recursive: true });
+  }
+  if (restart !== undefined) {
+    // the floor is the one already running; only fieldd is reborn
+  } else if (config.floor === "mock") {
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
     const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     await mock.start();
@@ -187,22 +250,27 @@ async function setup(config: { floor: "mock" | "real"; realAgent?: boolean }): P
     if (previous === undefined) delete process.env["PUPPETEER_CLAUDE_BIN"];
     else process.env["PUPPETEER_CLAUDE_BIN"] = previous;
   });
-  const sessions: ScriptedSession[] = [];
+  const sessions: ScriptedSession[] = restart?.sessions ?? [];
+  const attached: ScriptedAttach[] = restart?.attached ?? [];
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
     dataPort: 0,
     rosettadBin: "/stand-in/rosettad",
-    rosettadSpawn: fakeSpawner("ok"),
+    rosettadSpawn: fakeSpawner("ok", { FAKE_ROSETTAD_SESSIONS: sessionsFile }),
     rosettadHome: home,
     vibefieldRoot: root,
     agentSearchPath: bin,
-    agentProviders: (builtin) => [...builtin, scriptedProvider(envOut, sessions)],
+    agentProviders: (builtin) => [
+      ...builtin,
+      scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined),
+    ],
+    ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
     // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget
     ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
-  return { root, dataDir, bin, envOut, daemon, sessions };
+  return { root, dataDir, bin, envOut, daemon, sessions, attached, sessionsFile };
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -515,6 +583,290 @@ describe("managed sessions over the REAL floor (field-native)", () => {
   }, 60_000);
 });
 
+/** The fold's row for a run, once the inventory has joined it to its cell. */
+async function joinedRow(
+  win: WsRpc,
+  runtimeRunId: string,
+): Promise<AgentListResult["sessions"][number]> {
+  return await poll(async () => {
+    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+    const row = sessions.find((r) => r.runtimeRunId === runtimeRunId);
+    return row?.terminal?.cellBootId !== undefined ? row : undefined;
+  }, 15_000);
+}
+
+const listed = async (win: WsRpc, sessionId: string): Promise<boolean> => {
+  const { terminals } = (await win.call("terminal.list", {})) as { terminals: TerminalInfo[] };
+  return terminals.some((t) => t.sessionId === sessionId);
+};
+/** the inventory trails a birth and an exit by a beat (TC): wait for the listing to say `expected` */
+const untilListed = (win: WsRpc, sessionId: string, expected: boolean): Promise<true> =>
+  poll(async () => ((await listed(win, sessionId)) === expected ? true : undefined), 10_000);
+
+/** rosetta's row for a native session whose conversation last moved `stillForMs` ago. */
+const rosettaRow = (nativeSessionId: string, stillForMs: number) => ({
+  id: `rs-${nativeSessionId}`,
+  native_session_id: nativeSessionId,
+  runtime_id: "rt-scripted",
+  project_id: null,
+  cwd: null,
+  parent_session_id: null,
+  delegation: null,
+  root_session_id: `rs-${nativeSessionId}`,
+  role: "primary",
+  title: null,
+  summary: null,
+  started_at: Date.now() - stillForMs - 60_000,
+  updated_at: Date.now(),
+  activity: { first_at: Date.now() - stillForMs - 60_000, last_at: Date.now() - stillForMs },
+  stream_state: "indexed",
+});
+
+describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
+  it("re-attach across a restart: a graceful stop RELEASES the run (no exit, the PTY alive); the next boot attaches it at the next epoch, the same PTY, automation working; the attached run still refuses a resume; its exit is the ordinary one", async () => {
+    const first = await setup({ floor: "real", attach: true });
+    const win1 = await window(first.daemon, DECK, "ra1");
+    const spawned = (await win1.call("agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+      title: "survivor",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    const nativeId = spawned.session.sessionId;
+    // the durable identity the next boot restores against, and puppeteer's
+    // claim registry under this user's agents/ tree
+    const record = readRecord(first.dataDir, runId);
+    expect(record.creationRequestId).toBeTruthy();
+    expect(record.runtimeEpoch).toBe(1);
+    expect(record.reattach).toBeUndefined();
+    expect(mode(join(first.dataDir, ...LAYOUT.AGENT_RUNS_DIR))).toBe(0o700);
+    expect(existsSync(join(first.dataDir, ...LAYOUT.AGENT_RUNS_DIR, "claims"))).toBe(true);
+    await joinedRow(win1, runId);
+
+    // ── the restart: the stop releases; nothing is stamped, the PTY lives ──
+    await first.daemon.stop();
+    expect(readRecord(first.dataDir, runId).exited).toBeUndefined();
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    const win2 = await window(second.daemon, DECK, "ra2");
+    expect(await listed(win2, ptyId)).toBe(true);
+    const row = await poll(async () => {
+      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+      const found = sessions.find((r) => r.runtimeRunId === runId);
+      return found?.continuation?.reattached === true ? found : undefined;
+    }, 20_000);
+    expect(row.runtimeEpoch).toBe(2);
+    expect(row.sessionId).toBe(nativeId);
+    expect(row.title).toBe("survivor");
+    expect(row.terminal).toMatchObject({ hosted: "local", runtimeSessionId: ptyId });
+    expect(row.continuation).toEqual({ persisted: true, resumable: false, reattached: true });
+    expect(row.status).not.toBe(undefined);
+    // the adapter was handed exactly the terminal and the native session
+    expect(first.attached).toHaveLength(1);
+    expect(first.attached[0]).toMatchObject({ runtimeSessionId: ptyId, sessionId: nativeId });
+    expect(first.attached[0]?.ingress).toBeUndefined();
+    // the record: the new epoch, what the boot did
+    const after = readRecord(first.dataDir, runId);
+    expect(after.runtimeEpoch).toBe(2);
+    expect(after.reattach).toMatchObject({ state: "attached" });
+    expect(after.exited).toBeUndefined();
+    // the daemon's own act, in the ledger as the system actor
+    const audit = auditText(first.dataDir);
+    expect(audit).toContain('"action":"agent.session.reattach"');
+    expect(audit).toMatch(/"actor":\{"kind":"system"/);
+    // automation through the re-attached run: the floor's epoch path, again
+    const agent = second.daemon.agents.runtime.agent(ptyId);
+    expect(agent).toBeDefined();
+    expect((await agent!.submitPrompt({ text: "still-here" })).status).toBe("confirmed");
+    // attached and alive: a resume is refused, as before
+    const refused = await win2.callErr("agent.resume", { runtimeRunId: runId });
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(JSON.stringify(refused)).toContain("terminal-alive");
+
+    // ── the exit, on the second daemon: the ordinary path ──
+    await win2.call("terminal.terminate", { sessionId: ptyId });
+    await poll(async () => {
+      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+      return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
+    }, 15_000);
+    expect(readRecord(first.dataDir, runId).exited).toBeDefined();
+  }, 150_000);
+
+  it("a provider that cannot attach: the run is held PENDING across the restart (live, unobserved, resumable), and agent.resume replaces its PTY by hand — the new row names the PTY it replaced", async () => {
+    const first = await setup({ floor: "real" });
+    const win1 = await window(first.daemon, DECK, "pe1");
+    const spawned = (await win1.call("agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+      title: "held",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    const nativeId = spawned.session.sessionId;
+    await joinedRow(win1, runId);
+    await first.daemon.stop();
+
+    const second = await setup({ floor: "real", restartOf: first });
+    const win2 = await window(second.daemon, DECK, "pe2");
+    const pending = await poll(async () => {
+      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+      const found = sessions.find((r) => r.runtimeRunId === runId);
+      return found?.continuation?.pending !== undefined ? found : undefined;
+    }, 20_000);
+    expect(pending).toMatchObject({
+      status: "unknown",
+      observationLevel: "none",
+      sessionIdBasis: "recorded",
+      sessionId: nativeId,
+      title: "held",
+    });
+    expect(pending.terminal).toMatchObject({ hosted: "local", runtimeSessionId: ptyId });
+    expect(pending.continuation).toMatchObject({
+      persisted: true,
+      resumable: true,
+      pending: "resume-when-idle",
+    });
+    expect(pending.continuation?.reason).toContain("cannot attach");
+    expect(pending.monitor).toBeUndefined();
+    expect(readRecord(first.dataDir, runId).reattach).toMatchObject({ state: "unsupported" });
+    expect(auditText(first.dataDir)).toContain('"reasonCode":"ATTACH_UNSUPPORTED"');
+    // the PTY is alive, listed by the floor, and nothing observes it
+    expect(await listed(win2, ptyId)).toBe(true);
+    expect(second.daemon.agents.runtime.agent(ptyId)).toBeUndefined();
+
+    // ── the replacement by hand ──
+    const resumed = (await win2.call("agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(resumed.session.runtimeRunId).not.toBe(runId);
+    expect(resumed.session.sessionId).toBe(nativeId);
+    expect(resumed.session.title).toBe("held");
+    expect(resumed.terminal.sessionId).not.toBe(ptyId);
+    expect(resumed.session.terminal).toMatchObject({
+      hosted: "local",
+      runtimeSessionId: resumed.terminal.sessionId,
+      replaced: ptyId,
+    });
+    expect(resumed.session.continuation).toEqual({ persisted: true, resumable: false });
+    expect(first.sessions).toHaveLength(2);
+    expect(first.sessions[1]?.resume).toBe(nativeId);
+    // the old PTY is gone before the new run was born; the records say what happened
+    await untilListed(win2, ptyId, false);
+    const old = readRecord(first.dataDir, runId);
+    expect(old.exited?.reason).toBe("replaced");
+    expect(old.reattach).toMatchObject({ state: "resumed", replaced: ptyId });
+    const fresh = readRecord(first.dataDir, resumed.session.runtimeRunId);
+    expect(fresh.replaced).toBe(ptyId);
+    expect(fresh.exited).toBeUndefined();
+    expect(fresh.creationRequestId).toBeTruthy();
+    // the fold: one row, the new run
+    const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+    expect(sessions.map((r) => r.runtimeRunId)).toEqual([resumed.session.runtimeRunId]);
+    const audit = auditText(first.dataDir);
+    expect(audit).toContain('"action":"agent.session.resume"');
+    expect(audit).toContain('"how":"manual"');
+    await win2.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 150_000);
+
+  it("resume-when-idle: a pending run stays pending while the index knows nothing of it, and is resumed by the daemon itself once the index says its conversation has been still", async () => {
+    const first = await setup({ floor: "real" });
+    const win1 = await window(first.daemon, DECK, "ri1");
+    const spawned = (await win1.call("agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    const nativeId = spawned.session.sessionId;
+    await joinedRow(win1, runId);
+    await first.daemon.stop();
+
+    // the fake index serves NO rows yet: no evidence, no resume
+    const second = await setup({
+      floor: "real",
+      restartOf: first,
+      resumeWhenIdle: { afterMs: 30_000, pollMs: 200 },
+    });
+    const win2 = await window(second.daemon, DECK, "ri2");
+    await poll(async () => {
+      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+      return sessions.find((r) => r.runtimeRunId === runId)?.continuation?.pending !== undefined
+        ? true
+        : undefined;
+    }, 20_000);
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    const still = ((await win2.call("agent.list", {})) as AgentListResult).sessions;
+    expect(still.map((r) => r.runtimeRunId)).toEqual([runId]);
+    expect(still[0]?.continuation?.pending).toBe("resume-when-idle");
+    expect(await listed(win2, ptyId)).toBe(true);
+
+    // a row moved a second ago is NOT idle; one still for a minute is
+    writeFileSync(first.sessionsFile, JSON.stringify([rosettaRow(nativeId, 1_000)]));
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(
+      ((await win2.call("agent.list", {})) as AgentListResult).sessions[0]?.continuation?.pending,
+    ).toBe("resume-when-idle");
+    writeFileSync(first.sessionsFile, JSON.stringify([rosettaRow(nativeId, 60_000)]));
+    const replaced = await poll(async () => {
+      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+      return sessions.find((r) => r.terminal?.replaced === ptyId);
+    }, 30_000);
+    expect(replaced.runtimeRunId).not.toBe(runId);
+    expect(replaced.sessionId).toBe(nativeId);
+    expect(replaced.continuation?.pending).toBeUndefined();
+    expect(first.sessions.at(-1)?.resume).toBe(nativeId);
+    await untilListed(win2, ptyId, false);
+    await untilListed(win2, replaced.terminal?.runtimeSessionId ?? "", true);
+    const old = readRecord(first.dataDir, runId);
+    expect(old.exited?.reason).toBe("replaced");
+    expect(old.reattach).toMatchObject({ state: "resumed", replaced: ptyId });
+    const audit = auditText(first.dataDir);
+    expect(audit).toContain('"how":"idle"');
+    expect(audit).toMatch(/"actor":\{"kind":"system"/);
+    // the fold holds the new run only
+    const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+    expect(sessions.map((r) => r.runtimeRunId)).toEqual([replaced.runtimeRunId]);
+    await win2.call("terminal.terminate", { sessionId: replaced.terminal?.runtimeSessionId ?? "" });
+  }, 150_000);
+
+  it("a record whose PTY did NOT survive is stamped at the next boot as an unknown exit, and resumes from the door like any other", async () => {
+    const first = await setup({ floor: "real", attach: true });
+    const win1 = await window(first.daemon, DECK, "go1");
+    const spawned = (await win1.call("agent.spawn", {
+      provider: "scripted",
+      cwd: first.envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const ptyId = spawned.terminal.sessionId;
+    await joinedRow(win1, runId);
+    await first.daemon.stop();
+    // the process ended while no fieldd was there to see it: the record is
+    // un-stamped and names a PTY the floor no longer lists (staged by pointing
+    // the record at a session the floor never had — the same fact)
+    const path = join(first.dataDir, ...LAYOUT.AGENT_SESSIONS_DIR, `${runId}.json`);
+    const record = readRecord(first.dataDir, runId);
+    writeFileSync(
+      path,
+      JSON.stringify({ ...record, terminalSessionId: "sess-that-never-was" }, null, 2),
+    );
+    const second = await setup({ floor: "real", attach: true, restartOf: first });
+    const win2 = await window(second.daemon, DECK, "go2");
+    const stamped = await poll(async () => {
+      const r = readRecord(first.dataDir, runId);
+      return r.exited !== undefined ? r : undefined;
+    }, 20_000);
+    expect(stamped.exited?.reason).toBe("unknown");
+    expect(stamped.reattach).toBeUndefined();
+    expect(first.attached).toHaveLength(0);
+    expect(((await win2.call("agent.list", {})) as AgentListResult).sessions).toEqual([]);
+    // …and it resumes from the door
+    const resumed = (await win2.call("agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    expect(resumed.session.sessionId).toBe(spawned.session.sessionId);
+    expect(resumed.session.terminal?.replaced).toBeUndefined();
+    await win2.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+    // the orphaned PTY of the first run is still the floor's; end it too
+    await win2.call("terminal.terminate", { sessionId: ptyId }).catch(() => undefined);
+  }, 150_000);
+});
+
 const REAL_AGENT = process.env["FIELDD_TEST_REAL_AGENT"] === "1";
 
 describe.skipIf(!REAL_AGENT)(
@@ -584,5 +936,108 @@ describe.skipIf(!REAL_AGENT)(
       expect(still, "the real agent left its PTY within seconds of starting").toBeDefined();
       expect(term.terminated).toBe(true);
     }, 150_000);
+
+    it("AR-4 — the REAL claude re-attached across a fieldd restart: the bridge re-bound to the pinned ingress, the run at its next epoch, the hooks flowing again after a prompt", async () => {
+      const first = await setup({ floor: "real", realAgent: true });
+      const win1 = await window(first.daemon, DECK, "real2");
+      const cwd = join(first.root, "work");
+      mkdirSync(cwd);
+      const spawned = (await win1.call("agent.spawn", {
+        provider: "claude",
+        cwd,
+      })) as AgentSpawnResult;
+      const runId = spawned.session.runtimeRunId;
+      const ptyId = spawned.terminal.sessionId;
+      const live = await poll(async () => {
+        const { sessions } = (await win1.call("agent.list", {})) as AgentListResult;
+        const row = sessions.find((r) => r.runtimeRunId === runId);
+        return row?.monitor?.alive === true && row.sessionIdBasis === "observed" ? row : undefined;
+      }, 60_000);
+      const before = readRecord(first.dataDir, runId);
+      console.log(
+        `REAL_AGENT_INGRESS ${JSON.stringify({ port: before.ingress?.port, hasToken: before.ingress?.token !== undefined, creationRequestId: before.creationRequestId !== undefined })}`,
+      );
+      expect(before.ingress?.port).toBeGreaterThan(0);
+      expect(before.creationRequestId).toBeTruthy();
+      // let the vendor TUI finish starting (the AR-3 row's hold): the hooks
+      // reached us, the process is settling
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      console.log(
+        `REAL_AGENT_BEFORE_STOP ${JSON.stringify({ listed: await listed(win1, ptyId) })}`,
+      );
+
+      await first.daemon.stop();
+      expect(readRecord(first.dataDir, runId).exited).toBeUndefined();
+      const second = await setup({ floor: "real", realAgent: true, restartOf: first });
+      const win2 = await window(second.daemon, DECK, "real3");
+      const ptyAlive = await listed(win2, ptyId);
+      const fate = await poll(async () => {
+        const r = readRecord(first.dataDir, runId);
+        return r.reattach !== undefined || r.exited !== undefined ? r : undefined;
+      }, 30_000).catch(() => readRecord(first.dataDir, runId));
+      console.log(
+        `REAL_AGENT_SECOND_BOOT ${JSON.stringify({
+          ptyAlive,
+          reattach: fate.reattach,
+          exited: fate.exited,
+          rows: ((await win2.call("agent.list", {})) as AgentListResult).sessions.map((r) => ({
+            runtimeRunId: r.runtimeRunId,
+            continuation: r.continuation,
+          })),
+        })}`,
+      );
+      const row = await poll(async () => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        return found?.continuation?.reattached === true ? found : undefined;
+      }, 30_000);
+      console.log(
+        `REAL_AGENT_REATTACHED ${JSON.stringify({
+          runtimeEpoch: row.runtimeEpoch,
+          status: row.status,
+          observationLevel: row.observationLevel,
+          level: row.monitor?.freshness?.level,
+          alive: row.monitor?.alive,
+          sessionId: row.sessionId,
+        })}`,
+      );
+      expect(row.runtimeEpoch).toBe(2);
+      expect(row.sessionId).toBe(live.sessionId);
+      expect(row.terminal?.runtimeSessionId).toBe(ptyId);
+      // a prompt through the re-attached run: the vendor's hooks reach the
+      // re-bound bridge, and the monitor moves on native evidence again
+      const agent = second.daemon.agents.runtime.agent(ptyId);
+      expect(agent).toBeDefined();
+      const receipt = await agent!.submitPrompt({ text: "/clear" });
+      console.log(`REAL_AGENT_PROMPT ${JSON.stringify(receipt)}`);
+      const hooked = await poll(async () => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        const found = sessions.find((r) => r.runtimeRunId === runId);
+        return found?.monitor?.alive === true && found.monitor.freshness?.level === "native-hooks"
+          ? found
+          : undefined;
+      }, 60_000);
+      console.log(
+        `REAL_AGENT_HOOKED ${JSON.stringify({
+          status: hooked.status,
+          observationLevel: hooked.observationLevel,
+          level: hooked.monitor?.freshness?.level,
+          sessionId: hooked.sessionId,
+          basis: hooked.sessionIdBasis,
+        })}`,
+      );
+      const after = readRecord(first.dataDir, runId);
+      expect(after.reattach).toMatchObject({ state: "attached" });
+      expect(after.runtimeEpoch).toBe(2);
+      const term = (await win2.call("terminal.terminate", { sessionId: ptyId })) as {
+        terminated: boolean;
+      };
+      console.log(`REAL_AGENT_TERMINATE ${JSON.stringify(term)}`);
+      await poll(async () => {
+        const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+        return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
+      }, 30_000);
+      console.log(`REAL_AGENT_EXIT ${JSON.stringify(readRecord(first.dataDir, runId).exited)}`);
+    }, 300_000);
   },
 );

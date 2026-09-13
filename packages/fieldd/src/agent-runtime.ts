@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -18,6 +19,8 @@ import type {
   AgentInstallation,
   AgentMonitorState,
   AgentProfile,
+  BoundIngress,
+  HostIngress,
   ProfileFailure,
   UpdateReceipt,
 } from "@vibecook/puppeteer-core";
@@ -29,7 +32,9 @@ import {
   type AgentSessionFailure,
   type AgentSessionInfo,
   type AgentWorkspaceRequest,
+  type CreateAgentSessionResult,
   createAgentRuntime,
+  createFileCreationRequestRegistry,
   type ProfileStore,
   parseProfileRegistrySnapshot,
   type SpawnAgentResult,
@@ -45,6 +50,7 @@ import {
   type AgentProfileFailure,
   type AgentProvidersResult,
   type AgentResumeParams,
+  type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
   type AgentSpawnResult,
@@ -75,7 +81,9 @@ import {
   recordForRun,
   SessionRecordStore,
   summarizeManaged,
+  summarizePending,
 } from "./agent-sessions";
+import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { GrantPrincipal } from "./terminal-grants";
@@ -118,6 +126,24 @@ import type { TerminalService } from "./terminal-service";
 // exited session resumes from the record (`agent.resume`) and AR-4 can
 // re-attach across a fieldd restart. The floor's `session-exited` is
 // puppeteer's `handleProcessExit`; the inventory diff is the backstop.
+//
+// STABLE INGRESS (AR-4; PU-1 upstream as landed 2026-09-12; AR-D6 as
+// amended): a managed session OUTLIVES fieldd. Every birth names a creation
+// request (puppeteer's durable claim under `agents/runs/`) and gives the
+// adapter a say over its loopback ingress, whose bound port and bearer the
+// record keeps; a graceful stop RELEASES the runs (`dispose({detach})` — no
+// exit dispatched, the claims kept) and the next boot's FIRST inventory is
+// the re-attach: every un-exited record whose PTY the floor still lists is
+// attached at its next epoch through the provider's own `attachSession`
+// (the bridge re-bound to the pinned port, the transcript located). A
+// provider that cannot attach — or a record from before AR-4 — leaves the
+// run in the fold as a PENDING row (live, unobserved, resumable) that
+// resume-when-idle replaces: once the index says the conversation has been
+// still long enough, the old PTY is terminated and the continuation resumed
+// into a new run in a new PTY, the row naming the PTY it replaced so the
+// deck can hand the pane over. `agent.resume` on a pending run is the same
+// replacement by hand. A record whose PTY did NOT survive is stamped as an
+// unknown exit and resumes from the door like any other.
 //
 // What the doors never carry: a persona's root (a client names a persona by
 // id; where fieldd keeps its root is fieldd's business), the daemon's origin
@@ -269,6 +295,24 @@ const PUBLISH_TICK_MS = 16;
 const EXIT_GRACE_MS = 1_500;
 /** A login pane left open indefinitely still gets one verification. */
 const LOGIN_TIMEOUT_MS = 10 * 60_000;
+/** AR-4 — resume-when-idle. A pending run (a live PTY this boot could not
+ * re-attach to) is resumed into a new run once the index says its
+ * conversation has been still for `RESUME_IDLE_AFTER_MS`, asked every
+ * `RESUME_POLL_MS`; the PTY it replaces is given `REPLACE_GRACE_MS` to leave
+ * the inventory before the new run is born — two processes on one native
+ * session is the one thing a resume must never make. */
+const RESUME_IDLE_AFTER_MS = 30_000;
+const RESUME_POLL_MS = 5_000;
+const REPLACE_GRACE_MS = 5_000;
+
+/** The audit ledger's system-actor entry (`AuditService.requiredSystem`):
+ * the daemon's own acts — a re-attach at boot, a resume-when-idle — are
+ * mutations of a session a person will want to find in the ledger. */
+export type SystemAudit = <T>(
+  mutation: AuditMutation,
+  effect: () => Promise<T>,
+  describeOutcome?: (value: T) => AuditMutationOutcome,
+) => Promise<T>;
 
 export interface AgentRuntimeServiceOptions {
   /** this user's root (`FielddConfig.dataDir`): the registry, the managed roots and the session records live under it */
@@ -296,6 +340,11 @@ export interface AgentRuntimeServiceOptions {
   searchPath?: string;
   /** test seam: the fetch release detectors use (default: global fetch) */
   fetchFn?: typeof fetch;
+  /** AR-4 — the ledger's system-actor entry for the daemon's own acts;
+   * absent = the acts are logged, not audited (unit seams) */
+  audit?: SystemAudit;
+  /** AR-4 test seam: the resume-when-idle thresholds (defaults above) */
+  resumeWhenIdle?: { afterMs?: number; pollMs?: number };
   now?: () => Date;
   logger?: Logger;
 }
@@ -320,6 +369,30 @@ interface ManagedEntry {
   /** the backstop's pending close, while the floor's own exit is awaited */
   backstop?: NodeJS.Timeout | undefined;
   exiting: boolean;
+  /** AR-4 — the durable identity and the ingress the run was launched with */
+  creationRequestId?: string | undefined;
+  ingress?: BoundIngress | undefined;
+  /** AR-4 — this run was re-attached across a fieldd restart */
+  reattached: boolean;
+  /** AR-4 — the floor session this run replaced at a resume-when-idle */
+  replaced?: string | undefined;
+}
+
+/** AR-4 — a run whose PTY outlived a fieldd that could NOT re-attach to it:
+ * held in the fold as a pending row (live, unobserved) until its
+ * conversation goes idle or a person resumes it. */
+interface PendingEntry {
+  record: AgentSessionRecord;
+  /** why this boot could not re-attach (the adapter's or the runtime's words) */
+  reason: string;
+  since: string;
+  terminal?: TerminalInfo | undefined;
+  seenInInventory: boolean;
+  backstop?: NodeJS.Timeout | undefined;
+  /** the next idle check */
+  poll?: NodeJS.Timeout | undefined;
+  /** the replacement is under way: the old PTY is leaving, the new run being born */
+  resuming: boolean;
 }
 
 /** The `agents.*`/`agent.*` doors' service, the runtime's owner and the fold.
@@ -343,9 +416,15 @@ export class AgentRuntimeService {
   /** personas mid-deletion: a reconcile racing the retire's bounce must not
    * re-enroll one it still finds in the registry */
   private readonly deleting = new Set<string>();
-  /** the fold: managed runs by runtimeRunId, and the terminal → run index */
+  /** the fold: managed runs by runtimeRunId, the pending ones beside them
+   * (AR-4), and the terminal → run index over both */
   private readonly managed = new Map<string, ManagedEntry>();
+  private readonly pending = new Map<string, PendingEntry>();
   private readonly byTerminal = new Map<string, string>();
+  /** the FIRST inventory of this boot is the re-attach; once */
+  private reattachStarted = false;
+  private readonly idleAfterMs: number;
+  private readonly pollMs: number;
   /** login panes awaiting their exit, by the floor's session id */
   private readonly logins = new Map<string, { profileId: string; timer: NodeJS.Timeout }>();
   private readonly subscribers = new Set<(rows: AgentListResult) => void>();
@@ -362,6 +441,8 @@ export class AgentRuntimeService {
       now: this.now,
       logger: this.logger,
     });
+    this.idleAfterMs = opts.resumeWhenIdle?.afterMs ?? RESUME_IDLE_AFTER_MS;
+    this.pollMs = opts.resumeWhenIdle?.pollMs ?? RESUME_POLL_MS;
     this.distribution =
       opts.vibefieldRoot === null
         ? null
@@ -401,6 +482,13 @@ export class AgentRuntimeService {
       host: this.host,
       defaultCwd: this.home,
       providers: opts.providers === undefined ? builtin : opts.providers(builtin),
+      // AR-4 — the durable creation registry a run is restored against
+      // (`agents/runs/`: the claims and the installation key, puppeteer's own
+      // schema and modes, 0700/0600 — PU-8 again). Every birth names a
+      // creation request so the next boot can re-attach at the next epoch.
+      creationRegistry: createFileCreationRequestRegistry({
+        directory: join(opts.userRoot, ...LAYOUT.AGENT_RUNS_DIR),
+      }),
       profiles: {
         store: createProfileStore({
           path: join(opts.userRoot, ...LAYOUT.AGENT_PROFILES_FILE),
@@ -493,19 +581,25 @@ export class AgentRuntimeService {
   async spawn(params: AgentSpawnParams, principal: GrantPrincipal): Promise<AgentSpawnResult> {
     const terminals = this.requireTerminals();
     const cwd = params.cwd ?? this.home;
+    const identity = this.newIdentity();
     const result = await this.runtime.spawn({
       agent: params.provider,
       cwd,
       ...(params.title !== undefined ? { title: params.title } : {}),
       ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
+      creationRequestId: identity.creationRequestId,
+      ingress: identity.ingress,
     });
     if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
-    return this.adopt(result, { cwd, title: params.title }, principal, terminals);
+    const entry = this.enter(result, { cwd, title: params.title, ...identity.launched() });
+    return this.ticketed(entry, principal, terminals);
   }
 
-  /** Continue an EXITED managed session from its record: a new run in a new
-   * PTY, the vendor's own conversation continued. A live terminal is refused —
-   * re-attaching to a running process is AR-4's. */
+  /** Continue a managed session from its record: a new run in a new PTY,
+   * the vendor's own conversation continued. For an EXITED session the
+   * ordinary path; for a PENDING one (AR-4: its PTY alive but unobserved,
+   * because this boot could not re-attach) the resume IS the replacement,
+   * by hand instead of at the next idle. A live, attached run is refused. */
   async resume(params: AgentResumeParams, principal: GrantPrincipal): Promise<AgentSpawnResult> {
     const terminals = this.requireTerminals();
     const record = this.records.read(params.runtimeRunId);
@@ -513,6 +607,11 @@ export class AgentRuntimeService {
       throw new RpcCallError("NOT_FOUND", `no managed session ${params.runtimeRunId}`, false, {
         runtimeRunId: params.runtimeRunId,
       });
+    }
+    const pending = this.pending.get(record.runtimeRunId);
+    if (pending !== undefined) {
+      const entry = await this.replacePending(pending, params.cwd, "manual");
+      return this.ticketed(entry, principal, terminals);
     }
     const live = this.managed.get(record.runtimeRunId);
     const terminalAlive =
@@ -522,27 +621,13 @@ export class AgentRuntimeService {
     if ((live !== undefined && !live.exiting) || terminalAlive) {
       throw new RpcCallError(
         "PRECONDITION_FAILED",
-        "the session's terminal is still running; re-attaching to a live agent lands with AR-4 (resume is for an exited session)",
+        "the session's terminal is still running and its run is attached; resume is for an exited or an unobserved session",
         false,
         { runtimeRunId: record.runtimeRunId, state: "terminal-alive" },
       );
     }
-    const continuation: AgentContinuation = {
-      providerId: record.continuation.providerId,
-      nativeSessionId: record.continuation.nativeSessionId,
-      implementation: record.continuation.implementation === "imposter" ? "imposter" : "native",
-      ...(record.continuation.state !== undefined ? { state: record.continuation.state } : {}),
-    };
-    const cwd = params.cwd ?? record.cwd;
-    const result = await this.runtime.resume({
-      continuation,
-      cwd,
-      ...(record.title !== undefined ? { title: record.title } : {}),
-      ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
-      workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
-    });
-    if (isSessionFailure(result)) throw this.sessionFailureToError(result, record.provider);
-    return this.adopt(result, { cwd, title: record.title }, principal, terminals);
+    const entry = await this.resumeFromRecord(record, params.cwd, undefined);
+    return this.ticketed(entry, principal, terminals);
   }
 
   /** The persona login pane: the vendor's own interactive login in a PTY
@@ -588,12 +673,19 @@ export class AgentRuntimeService {
     };
   }
 
-  /** The fold, now: one row per managed run, oldest first. */
+  /** The fold, now: one row per managed run — attached or pending — oldest first. */
   list(): AgentListResult {
-    const sessions = [...this.managed.values()]
-      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
-      .map((entry) => this.summarize(entry));
-    return { sessions };
+    const rows = [
+      ...[...this.managed.values()].map((entry) => ({
+        createdAt: entry.createdAt,
+        row: this.summarize(entry),
+      })),
+      ...[...this.pending.values()].map((entry) => ({
+        createdAt: entry.record.createdAt,
+        row: this.summarizePending(entry),
+      })),
+    ].sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+    return { sessions: rows.map((r) => r.row) };
   }
 
   /** `agent.subscribe`: full snapshots, at most one per tick. */
@@ -612,12 +704,17 @@ export class AgentRuntimeService {
     }
     const runtimeRunId = this.byTerminal.get(event.sessionId);
     if (runtimeRunId === undefined) return;
-    await this.closeRun(runtimeRunId, {
+    const exit = {
       exitCode: event.exitCode,
       signal: event.exitSignal,
       reason: event.exitOutcome,
       requestedTermination: event.requestedTermination,
-    });
+    };
+    if (this.pending.has(runtimeRunId)) {
+      this.closePending(runtimeRunId, exit);
+      return;
+    }
+    await this.closeRun(runtimeRunId, exit);
   }
 
   /** The floor's inventory (TerminalService `onInventory`): the join for the
@@ -625,7 +722,35 @@ export class AgentRuntimeService {
    * no longer does is gone, whether or not its cell's connection said so. */
   handleInventory(terminals: readonly TerminalInfo[]): void {
     const rows = new Map(terminals.map((row) => [row.sessionId, row]));
+    // AR-4 — the FIRST inventory of a boot is the re-attach: the records left
+    // by the last fieldd, against the PTYs this floor still lists.
+    if (!this.reattachStarted) {
+      this.reattachStarted = true;
+      void this.reattach(rows);
+    }
     let changed = false;
+    for (const [runtimeRunId, entry] of this.pending) {
+      const id = entry.record.terminalSessionId;
+      const row = id === undefined ? undefined : rows.get(id);
+      if (row !== undefined) {
+        if (!entry.seenInInventory || entry.terminal?.cell?.cellBootId !== row.cell?.cellBootId)
+          changed = true;
+        entry.seenInInventory = true;
+        entry.terminal = row;
+        if (entry.backstop !== undefined) {
+          clearTimeout(entry.backstop);
+          entry.backstop = undefined;
+        }
+      } else if (entry.seenInInventory && !entry.resuming && entry.backstop === undefined) {
+        // a pending PTY that left: the process ended on its own — stamped
+        // after the same grace the attached runs get
+        entry.backstop = setTimeout(() => {
+          entry.backstop = undefined;
+          this.closePending(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });
+        }, EXIT_GRACE_MS);
+        entry.backstop.unref();
+      }
+    }
     for (const [runtimeRunId, entry] of this.managed) {
       const row = rows.get(entry.info.terminalSessionId);
       if (row !== undefined) {
@@ -695,10 +820,26 @@ export class AgentRuntimeService {
     try {
       // 0. its sessions (AR-3): the floor's ladder, the exit closes the run
       const terminals = this.opts.terminals?.() ?? null;
-      for (const entry of this.managed.values()) {
-        if (entry.info.profileId !== profileId || terminals === null) continue;
+      const owned: Array<{ profileId: string | undefined; terminalSessionId: string | undefined }> =
+        [
+          ...[...this.managed.values()].map((entry) => ({
+            profileId: entry.info.profileId,
+            terminalSessionId: entry.info.terminalSessionId,
+          })),
+          ...[...this.pending.values()].map((entry) => ({
+            profileId: entry.record.profileId,
+            terminalSessionId: entry.record.terminalSessionId,
+          })),
+        ];
+      for (const entry of owned) {
+        if (
+          entry.profileId !== profileId ||
+          entry.terminalSessionId === undefined ||
+          terminals === null
+        )
+          continue;
         try {
-          await terminals.terminate(entry.info.terminalSessionId);
+          await terminals.terminate(entry.terminalSessionId);
         } catch (error) {
           this.logger.warn(
             "fieldd.agents.persona_session_stop_failed",
@@ -884,8 +1025,10 @@ export class AgentRuntimeService {
     return this.reconciling;
   }
 
-  /** Tear the runtime down. The PTYs live on (the floor's, EL1) and so do the
-   * records: a restarted fieldd finds them and AR-4 re-attaches. */
+  /** Tear the runtime down — and RELEASE the runs rather than close them
+   * (AR-4, PU-1's `dispose({detach})`): the PTYs are the floor's and outlive
+   * this fieldd (EL1), their claims stay allocated, no exit is dispatched and
+   * no record is stamped; the next boot finds the records and re-attaches. */
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
@@ -900,67 +1043,583 @@ export class AgentRuntimeService {
     for (const entry of this.managed.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
     }
+    for (const entry of this.pending.values()) {
+      if (entry.backstop !== undefined) clearTimeout(entry.backstop);
+      if (entry.poll !== undefined) clearTimeout(entry.poll);
+    }
     this.subscribers.clear();
     try {
-      await this.runtime.dispose();
+      await this.runtime.dispose({ detach: true });
     } catch (error) {
       this.logger.warn("fieldd.agents.dispose_failed", "Agent runtime did not dispose cleanly", {
         error: error instanceof Error ? error.message : String(error),
       });
     }
     this.managed.clear();
+    this.pending.clear();
     this.byTerminal.clear();
   }
 
   // ── internals: the fold ──
 
-  /** A run puppeteer just started (spawned or resumed) enters the fold: its
-   * record is written, its row published, its ticket minted. */
-  private adopt(
+  /** AR-4 — what a birth is given so the next boot can find it again: a
+   * creation request id (puppeteer's durable claim) and a say over the
+   * ingress, whose bound port and bearer the adapter reports BEFORE the
+   * process launches (an adapter without an ingress reports nothing). */
+  private newIdentity(): {
+    creationRequestId: string;
+    ingress: HostIngress;
+    launched(): { creationRequestId: string; ingress?: BoundIngress | undefined };
+  } {
+    const creationRequestId = randomUUID();
+    let bound: BoundIngress | undefined;
+    return {
+      creationRequestId,
+      ingress: {
+        onBound: (b) => {
+          bound = b;
+        },
+      },
+      launched: () => ({
+        creationRequestId,
+        ...(bound !== undefined ? { ingress: bound } : {}),
+      }),
+    };
+  }
+
+  /** A run puppeteer just started (spawned, resumed, or — AR-4 — re-attached)
+   * enters the fold: its record written (or, re-attached, brought to the new
+   * epoch), its row published. */
+  private enter(
     agent: Agent,
-    launch: { cwd: string; title?: string | undefined },
-    principal: GrantPrincipal,
-    terminals: TerminalService,
-  ): AgentSpawnResult {
+    launch: {
+      cwd: string;
+      title?: string | undefined;
+      creationRequestId?: string | undefined;
+      ingress?: BoundIngress | undefined;
+      /** the floor session this run replaced (resume-when-idle) */
+      replaced?: string | undefined;
+      /** AR-4 — the record already exists: this run was re-attached, and the
+       * inventory row that proved its PTY alive rides along */
+      reattached?: { record: AgentSessionRecord; terminal: TerminalInfo } | undefined;
+    },
+  ): ManagedEntry {
     const info = agent.info;
-    const born = this.terminalHost?.born(info.terminalSessionId);
-    if (born === undefined) {
-      throw new RpcCallError(
-        "INTERNAL",
-        "the agent's terminal was spawned outside the floor host; no ticket can be minted for it",
-        false,
-        { runtimeRunId: info.runtimeRunId },
-      );
-    }
     const now = this.now().toISOString();
-    this.records.write(recordForRun({ info, cwd: launch.cwd, title: launch.title, now }));
+    if (launch.reattached === undefined) {
+      this.records.write(
+        recordForRun({
+          info,
+          cwd: launch.cwd,
+          title: launch.title,
+          now,
+          creationRequestId: launch.creationRequestId,
+          ingress: launch.ingress,
+          replaced: launch.replaced,
+        }),
+      );
+    } else {
+      this.records.write({
+        ...launch.reattached.record,
+        runtimeEpoch: info.runtimeEpoch,
+        continuation: { ...info.continuation },
+        reattach: { state: "attached", at: now },
+        updatedAt: now,
+      });
+    }
     const entry: ManagedEntry = {
       agent,
       info,
       cwd: launch.cwd,
       title: launch.title,
-      createdAt: now,
+      createdAt: launch.reattached?.record.createdAt ?? now,
       stateChangedAt: now,
       status: "unknown",
       mirrorIssueLogged: false,
-      seenInInventory: false,
+      terminal: launch.reattached?.terminal,
+      seenInInventory: launch.reattached !== undefined,
       exiting: false,
+      creationRequestId: launch.creationRequestId,
+      ingress: launch.ingress,
+      reattached: launch.reattached !== undefined,
+      replaced: launch.replaced,
     };
     this.managed.set(info.runtimeRunId, entry);
     this.byTerminal.set(info.terminalSessionId, info.runtimeRunId);
     const current = this.runtime.monitorState(info.runtimeRunId);
     if (current !== undefined) this.applyMonitor(entry, current);
-    this.logger.info("fieldd.agents.session_started", "Managed agent session started", {
-      runtimeRunId: info.runtimeRunId,
-      provider: info.provider.id,
-      sessionId: info.terminalSessionId,
-      ...(info.profileId !== undefined ? { profileId: info.profileId } : {}),
-    });
+    this.logger.info(
+      launch.reattached === undefined
+        ? "fieldd.agents.session_started"
+        : "fieldd.agents.session_reattached",
+      launch.reattached === undefined
+        ? "Managed agent session started"
+        : "Managed agent session re-attached across the restart",
+      {
+        runtimeRunId: info.runtimeRunId,
+        runtimeEpoch: info.runtimeEpoch,
+        provider: info.provider.id,
+        sessionId: info.terminalSessionId,
+        ...(info.profileId !== undefined ? { profileId: info.profileId } : {}),
+        ...(launch.replaced !== undefined ? { replaced: launch.replaced } : {}),
+      },
+    );
     this.publish();
+    return entry;
+  }
+
+  /** The door's answer for a run born THIS call: the row, and the same routed
+   * ticket `terminal.create` answers, minted from the host's birth facts. */
+  private ticketed(
+    entry: ManagedEntry,
+    principal: GrantPrincipal,
+    terminals: TerminalService,
+  ): AgentSpawnResult {
+    const born = this.terminalHost?.born(entry.info.terminalSessionId);
+    if (born === undefined) {
+      throw new RpcCallError(
+        "INTERNAL",
+        "the agent's terminal was spawned outside the floor host; no ticket can be minted for it",
+        false,
+        { runtimeRunId: entry.info.runtimeRunId },
+      );
+    }
     return {
       session: this.summarize(entry),
       terminal: terminals.createOpenResult(principal, born),
     };
+  }
+
+  /** `runtime.resume` from a record: a new run in a new PTY with its own
+   * identity; `replaced` names the PTY the new run takes the place of. */
+  private async resumeFromRecord(
+    record: AgentSessionRecord,
+    cwdOverride: string | undefined,
+    replaced: string | undefined,
+  ): Promise<ManagedEntry> {
+    const continuation: AgentContinuation = {
+      providerId: record.continuation.providerId,
+      nativeSessionId: record.continuation.nativeSessionId,
+      implementation: record.continuation.implementation === "imposter" ? "imposter" : "native",
+      ...(record.continuation.state !== undefined ? { state: record.continuation.state } : {}),
+    };
+    const cwd = cwdOverride ?? record.cwd;
+    const identity = this.newIdentity();
+    const result = await this.runtime.resume({
+      continuation,
+      cwd,
+      ...(record.title !== undefined ? { title: record.title } : {}),
+      ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
+      workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
+      creationRequestId: identity.creationRequestId,
+      ingress: identity.ingress,
+    });
+    if (isSessionFailure(result)) throw this.sessionFailureToError(result, record.provider);
+    return this.enter(result, { cwd, title: record.title, ...identity.launched(), replaced });
+  }
+
+  // ── internals: the re-attach (AR-4) ──
+
+  /** The records the last fieldd left, against the PTYs this floor lists:
+   * alive → attached at the next epoch (or held pending); gone → stamped. */
+  private async reattach(rows: ReadonlyMap<string, TerminalInfo>): Promise<void> {
+    let records: AgentSessionRecord[];
+    try {
+      records = this.records.list();
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.reattach_unreadable",
+        "The session records could not be listed",
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      return;
+    }
+    for (const record of records) {
+      if (this.disposed) return;
+      if (record.exited !== undefined) continue;
+      if (this.managed.has(record.runtimeRunId) || this.pending.has(record.runtimeRunId)) continue;
+      const terminalId = record.terminalSessionId;
+      const row = terminalId === undefined ? undefined : rows.get(terminalId);
+      if (row === undefined || terminalId === undefined) {
+        // the PTY did not outlive the gap (the floor restarted too, or the
+        // process ended while no fieldd was there to see it): an unknown
+        // exit — the record resumes from the door like any other
+        this.records.stampExit(record.runtimeRunId, {
+          at: this.now().toISOString(),
+          exitCode: null,
+          signal: null,
+          reason: "unknown",
+        });
+        this.logger.info(
+          "fieldd.agents.session_gone",
+          "A managed session's PTY did not survive the restart; its record is stamped",
+          { runtimeRunId: record.runtimeRunId, provider: record.provider },
+        );
+        continue;
+      }
+      try {
+        await this.attachRecord(record, row, terminalId);
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.agents.reattach_failed",
+          "A managed session could not be re-attached or held; its record stands",
+          {
+            runtimeRunId: record.runtimeRunId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+      }
+    }
+  }
+
+  /** One record, one live PTY: puppeteer's `attach` at the next epoch, or a
+   * pending row when the adapter cannot (or the record predates AR-4). */
+  private async attachRecord(
+    record: AgentSessionRecord,
+    row: TerminalInfo,
+    terminalId: string,
+  ): Promise<void> {
+    const mutation: AuditMutation = {
+      action: "agent.session.reattach",
+      target: { kind: "agent-session", id: record.runtimeRunId },
+      attrs: {
+        provider: record.provider,
+        sessionId: terminalId,
+        runtimeEpoch: record.runtimeEpoch,
+      },
+    };
+    const outcome = await this.audited(
+      mutation,
+      async () => {
+        if (record.creationRequestId === undefined) {
+          return {
+            state: "failed" as const,
+            reason:
+              "the record predates the durable run identity (AR-4); there is no claim to restore against",
+          };
+        }
+        let result: CreateAgentSessionResult;
+        try {
+          result = await this.runtime.attach({
+            agent: record.provider,
+            creationRequestId: record.creationRequestId,
+            runtimeRunId: record.runtimeRunId,
+            expectedRuntimeEpoch: record.runtimeEpoch,
+            sessionId: record.continuation.nativeSessionId,
+            terminalSessionId: terminalId,
+            cwd: record.cwd,
+            ...(record.ingress !== undefined
+              ? { ingress: { port: record.ingress.port, token: record.ingress.token } }
+              : {}),
+            ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
+            workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
+          });
+        } catch (error) {
+          return {
+            state: "failed" as const,
+            reason: error instanceof Error ? error.message : String(error),
+          };
+        }
+        if (isSessionFailure(result)) {
+          return {
+            state:
+              result.error.code === "ATTACH_UNSUPPORTED"
+                ? ("unsupported" as const)
+                : ("failed" as const),
+            reason: result.error.message,
+          };
+        }
+        const agent = this.runtime.agent(result.terminalSessionId);
+        if (agent === undefined) {
+          return {
+            state: "failed" as const,
+            reason: "the runtime restored the run but holds no agent for it",
+          };
+        }
+        return { state: "attached" as const, agent };
+      },
+      (value) =>
+        value.state === "attached"
+          ? { outcome: "succeeded", attrs: { runtimeEpoch: value.agent.info.runtimeEpoch } }
+          : {
+              outcome: "failed",
+              reasonCode: value.state === "unsupported" ? "ATTACH_UNSUPPORTED" : "ATTACH_FAILED",
+              attrs: { state: value.state, reason: value.reason },
+            },
+    );
+    if (outcome.state === "attached") {
+      this.enter(outcome.agent, {
+        cwd: record.cwd,
+        title: record.title,
+        creationRequestId: record.creationRequestId,
+        ingress: record.ingress,
+        reattached: { record, terminal: row },
+      });
+      return;
+    }
+    this.hold(record, row, terminalId, outcome.state, outcome.reason);
+  }
+
+  /** A live PTY this boot could not re-attach to: the record says what
+   * happened, the fold carries a pending row, and resume-when-idle is armed. */
+  private hold(
+    record: AgentSessionRecord,
+    row: TerminalInfo,
+    terminalId: string,
+    state: "failed" | "unsupported",
+    reason: string,
+  ): void {
+    const now = this.now().toISOString();
+    const held: AgentSessionRecord = {
+      ...record,
+      reattach: { state, at: now, reason },
+      updatedAt: now,
+    };
+    this.records.write(held);
+    const entry: PendingEntry = {
+      record: held,
+      reason,
+      since: now,
+      terminal: row,
+      seenInInventory: true,
+      resuming: false,
+    };
+    this.pending.set(record.runtimeRunId, entry);
+    this.byTerminal.set(terminalId, record.runtimeRunId);
+    this.logger.warn(
+      "fieldd.agents.reattach_held",
+      "A managed session's PTY survived the restart but could not be re-attached; held pending, resumes when idle",
+      {
+        runtimeRunId: record.runtimeRunId,
+        provider: record.provider,
+        sessionId: terminalId,
+        state,
+        reason,
+      },
+    );
+    this.armPending(entry);
+    this.publish();
+  }
+
+  private armPending(entry: PendingEntry): void {
+    if (this.disposed || entry.resuming) return;
+    entry.poll = setTimeout(() => void this.pollPending(entry), this.pollMs);
+    entry.poll.unref();
+  }
+
+  private async pollPending(entry: PendingEntry): Promise<void> {
+    entry.poll = undefined;
+    const runtimeRunId = entry.record.runtimeRunId;
+    if (this.disposed || entry.resuming || this.pending.get(runtimeRunId) !== entry) return;
+    const idle = await this.isIdle(entry.record);
+    if (this.disposed || entry.resuming || this.pending.get(runtimeRunId) !== entry) return;
+    if (!idle) {
+      this.armPending(entry);
+      return;
+    }
+    try {
+      await this.replacePending(entry, undefined, "idle");
+    } catch (error) {
+      // the entry is gone either way (the old PTY was replaced, or the
+      // terminate itself failed and the poll was re-armed); the record says
+      // which, and the door's resume takes it next
+      this.logger.warn(
+        "fieldd.agents.resume_when_idle_failed",
+        "A pending managed session could not be resumed at idle",
+        { runtimeRunId, error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+  }
+
+  /** Whether the index says the session's conversation has been still long
+   * enough: known to rosetta, with timestamped evidence older than the
+   * threshold. NO evidence is NOT idle — a session the index has never read
+   * (an unenrolled root, a provider it does not index) stays pending until a
+   * person resumes it; an index that is down answers nothing, not "idle". */
+  private async isIdle(record: AgentSessionRecord): Promise<boolean> {
+    let facts: Awaited<ReturnType<IndexService["sessionByNativeId"]>>;
+    try {
+      facts = await this.opts.index.sessionByNativeId(record.continuation.nativeSessionId);
+    } catch (error) {
+      this.logger.debug(
+        "fieldd.agents.idle_unanswered",
+        "The index could not say whether a pending session is idle",
+        {
+          runtimeRunId: record.runtimeRunId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      return false;
+    }
+    if (facts === undefined || facts.activity === null) return false;
+    return this.now().getTime() - facts.activity.lastAt >= this.idleAfterMs;
+  }
+
+  /** The replacement: the old PTY terminated and gone from the inventory,
+   * the record stamped, then the continuation resumed into a new run whose
+   * row names the PTY it replaced. */
+  private async replacePending(
+    entry: PendingEntry,
+    cwdOverride: string | undefined,
+    how: "idle" | "manual",
+  ): Promise<ManagedEntry> {
+    const { record } = entry;
+    if (entry.resuming) {
+      throw new RpcCallError("PRECONDITION_FAILED", "the session is being resumed already", false, {
+        runtimeRunId: record.runtimeRunId,
+        state: "resuming",
+      });
+    }
+    entry.resuming = true;
+    if (entry.poll !== undefined) {
+      clearTimeout(entry.poll);
+      entry.poll = undefined;
+    }
+    if (entry.backstop !== undefined) {
+      clearTimeout(entry.backstop);
+      entry.backstop = undefined;
+    }
+    const terminals = this.requireTerminals();
+    const oldId = record.terminalSessionId;
+    const mutation: AuditMutation = {
+      action: "agent.session.resume",
+      target: { kind: "agent-session", id: record.runtimeRunId },
+      attrs: {
+        provider: record.provider,
+        how,
+        ...(oldId !== undefined ? { replaced: oldId } : {}),
+        ...(cwdOverride !== undefined ? { cwd: cwdOverride } : {}),
+      },
+    };
+    return await this.audited(
+      mutation,
+      async () => {
+        // 1. the old PTY leaves first, and is gone before the new run is born
+        if (oldId !== undefined && this.listed(terminals, oldId)) {
+          try {
+            await terminals.terminate(oldId);
+          } catch (error) {
+            entry.resuming = false;
+            this.armPending(entry);
+            throw error;
+          }
+          await this.awaitGone(terminals, oldId, REPLACE_GRACE_MS);
+        }
+        // the pending row leaves the fold now; the floor's own exit for the
+        // old PTY, when it lands, finds nothing — the record says why
+        this.pending.delete(record.runtimeRunId);
+        if (oldId !== undefined) this.byTerminal.delete(oldId);
+        const at = this.now().toISOString();
+        this.records.write({
+          ...record,
+          reattach: { state: "resumed", at, ...(oldId !== undefined ? { replaced: oldId } : {}) },
+          exited: { at, exitCode: null, signal: null, reason: "replaced" },
+          updatedAt: at,
+        });
+        this.publish();
+        // 2. the new run: the vendor's own conversation continued in a new PTY
+        let next: ManagedEntry;
+        try {
+          next = await this.resumeFromRecord(record, cwdOverride, oldId);
+        } catch (error) {
+          // the old PTY is gone and the record says so; the resume itself did
+          // not happen — noted, and the door's ordinary resume takes it next
+          const now = this.now().toISOString();
+          const current = this.records.read(record.runtimeRunId) ?? record;
+          this.records.write({
+            ...current,
+            reattach: {
+              state: "failed",
+              at: now,
+              reason: error instanceof Error ? error.message : String(error),
+            },
+            updatedAt: now,
+          });
+          throw error;
+        }
+        this.logger.info(
+          "fieldd.agents.session_resumed",
+          "A pending managed session was resumed into a new run",
+          {
+            runtimeRunId: record.runtimeRunId,
+            next: next.info.runtimeRunId,
+            provider: record.provider,
+            how,
+            ...(oldId !== undefined ? { replaced: oldId } : {}),
+          },
+        );
+        return next;
+      },
+      (next) => ({
+        outcome: "succeeded",
+        attrs: { runtimeRunId: next.info.runtimeRunId, sessionId: next.info.terminalSessionId },
+      }),
+    );
+  }
+
+  private closePending(
+    runtimeRunId: string,
+    exit: { exitCode: number | null; signal: string | null; reason: string },
+  ): void {
+    const entry = this.pending.get(runtimeRunId);
+    if (entry === undefined || entry.resuming) return;
+    if (entry.poll !== undefined) clearTimeout(entry.poll);
+    if (entry.backstop !== undefined) clearTimeout(entry.backstop);
+    this.pending.delete(runtimeRunId);
+    if (entry.record.terminalSessionId !== undefined)
+      this.byTerminal.delete(entry.record.terminalSessionId);
+    this.records.stampExit(runtimeRunId, { at: this.now().toISOString(), ...exit });
+    this.logger.info("fieldd.agents.session_exited", "Pending managed session's PTY exited", {
+      runtimeRunId,
+      provider: entry.record.provider,
+      pending: true,
+      reason: exit.reason,
+      ...(exit.exitCode !== null ? { exitCode: exit.exitCode } : {}),
+      ...(exit.signal !== null ? { signal: exit.signal } : {}),
+    });
+    this.publish();
+  }
+
+  /** Whether the floor lists the session — false, never a throw, before the
+   * first observation (an unobserved floor lists nothing). */
+  private listed(terminals: TerminalService, sessionId: string): boolean {
+    return terminals.observation() !== undefined && terminals.get(sessionId) !== undefined;
+  }
+
+  private async awaitGone(
+    terminals: TerminalService,
+    sessionId: string,
+    ms: number,
+  ): Promise<void> {
+    const deadline = Date.now() + ms;
+    while (this.listed(terminals, sessionId) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  /** The daemon's own act, in the ledger as the system actor when the daemon
+   * has one; run plain otherwise (unit seams). */
+  private audited<T>(
+    mutation: AuditMutation,
+    effect: () => Promise<T>,
+    describe: (value: T) => AuditMutationOutcome,
+  ): Promise<T> {
+    return this.opts.audit === undefined ? effect() : this.opts.audit(mutation, effect, describe);
+  }
+
+  private summarizePending(entry: PendingEntry): AgentSessionSummary {
+    return summarizePending({
+      record: entry.record,
+      label:
+        this.runtime.providers().find((p) => p.id === entry.record.provider)?.label ??
+        entry.record.provider,
+      device: this.opts.deviceId?.() ?? "local",
+      terminal: entry.terminal,
+      reason: entry.reason,
+      since: entry.since,
+    });
   }
 
   private onMonitorState(state: AgentMonitorState): void {
@@ -1116,7 +1775,12 @@ export class AgentRuntimeService {
       device: this.opts.deviceId?.() ?? "local",
       terminal: entry.terminal,
       hosted: !entry.exiting,
-      record: { persisted: true, resumable: false },
+      record: {
+        persisted: true,
+        resumable: false,
+        ...(entry.reattached ? { reattached: true } : {}),
+      },
+      replaced: entry.replaced,
       createdAt: entry.createdAt,
       stateChangedAt: entry.stateChangedAt,
       lastActivityAt: entry.lastActivityAt,
@@ -1321,7 +1985,9 @@ function restoredWorkspaceRequest(
   return request;
 }
 
-function isSessionFailure(value: SpawnAgentResult): value is AgentSessionFailure {
+function isSessionFailure(
+  value: SpawnAgentResult | CreateAgentSessionResult,
+): value is AgentSessionFailure {
   return "error" in value && typeof (value as { error?: unknown }).error === "object";
 }
 

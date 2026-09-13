@@ -27,17 +27,24 @@ export interface ManagedSummaryOptions {
   profileId?: string;
   /** omit the monitor projection entirely (a run before its first state) */
   monitor?: false;
+  /** AR-4 — a PENDING row: a live PTY fieldd could not re-attach to, with
+   * fieldd's reason; the row is then unobserved (no monitor, status unknown) */
+  pending?: string;
+  /** AR-4 — this run was re-attached across a fieldd restart */
+  reattached?: boolean;
+  /** AR-4 — the floor session this run replaced at a resume-when-idle */
+  replaced?: string;
 }
 
 export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessionSummary {
   const runtimeRunId = options.runtimeRunId ?? "run-1";
   const terminalSessionId =
     options.terminalSessionId === undefined ? `${runtimeRunId}-pty` : options.terminalSessionId;
-  const status = options.status ?? "idle";
+  const status = options.pending !== undefined ? "unknown" : (options.status ?? "idle");
   const createdAt = options.createdAt ?? "2026-09-12T10:00:00.000Z";
   const cwd = options.cwd ?? "/project/vibe-field";
   const monitor =
-    options.monitor === false
+    options.monitor === false || options.pending !== undefined
       ? undefined
       : {
           schemaVersion: 2,
@@ -94,7 +101,12 @@ export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessio
     terminal:
       terminalSessionId === null
         ? { hosted: "none" }
-        : { hosted: "local", runtimeSessionId: terminalSessionId, workloadClass: "agent" },
+        : {
+            hosted: "local",
+            runtimeSessionId: terminalSessionId,
+            workloadClass: "agent",
+            ...(options.replaced !== undefined ? { replaced: options.replaced } : {}),
+          },
     workspace: {
       mode: "direct",
       root: cwd,
@@ -105,9 +117,16 @@ export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessio
     },
     ...(monitor !== undefined ? { monitor } : {}),
     status,
-    observationLevel: "native-hooks",
+    observationLevel: options.pending !== undefined ? "none" : "native-hooks",
     createdAt,
     stateChangedAt: createdAt,
-    continuation: { persisted: true, resumable: false },
+    continuation:
+      options.pending !== undefined
+        ? { persisted: true, resumable: true, pending: "resume-when-idle", reason: options.pending }
+        : {
+            persisted: true,
+            resumable: false,
+            ...(options.reattached === true ? { reattached: true } : {}),
+          },
   };
 }

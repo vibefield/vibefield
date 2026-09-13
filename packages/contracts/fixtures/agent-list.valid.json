@@ -152,9 +152,7 @@
           {
             "id": "workflow-1",
             "active": true,
-            "actorRunKeys": [
-              "actor-child-1"
-            ],
+            "actorRunKeys": ["actor-child-1"],
             "artifactRefs": [
               {
                 "artifactId": "artifact-1",
@@ -176,9 +174,7 @@
         "environment": {
           "cwd": "/repo",
           "git": null,
-          "worktrees": [
-            "/repo-worktree"
-          ]
+          "worktrees": ["/repo-worktree"]
         },
         "session": {
           "nativeSessionId": "native-1",

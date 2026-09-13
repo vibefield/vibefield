@@ -175,4 +175,59 @@ describe("SessionSummary v2 and the doors", () => {
     // never a transcript, never a path to one
     expect(JSON.stringify(record)).not.toContain("transcript");
   });
+
+  it("AR-4: the record carries the durable identity a re-attach restores against, and what the last boot did", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    expect(record.creationRequestId).toBe("req-01J8Z3K9");
+    expect(record.ingress).toEqual({ port: 53210, token: "c0ffee-bearer" });
+    expect(record.reattach).toMatchObject({ state: "attached" });
+    expect(record.runtimeEpoch).toBe(2);
+    // a record written before AR-4 (no identity, no ingress) still parses
+    const { creationRequestId: _c, ingress: _i, reattach: _r, ...older } = record;
+    expect(AgentSessionRecord.safeParse(older).success).toBe(true);
+    // the ingress is a positive port and a non-empty bearer, or nothing
+    expect(
+      AgentSessionRecord.safeParse({ ...record, ingress: { port: 0, token: "x" } }).success,
+    ).toBe(false);
+    expect(
+      AgentSessionRecord.safeParse({ ...record, reattach: { state: "later", at: "now" } }).success,
+    ).toBe(false);
+  });
+
+  it("AR-4: the row says whether it was re-attached, or is pending a resume at its next idle", () => {
+    const summary = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect(summary.continuation).toEqual({ persisted: true, resumable: false, reattached: true });
+    const pending = AgentSessionSummary.parse({
+      ...summary,
+      observationLevel: "none",
+      status: "unknown",
+      continuation: {
+        persisted: true,
+        resumable: true,
+        pending: "resume-when-idle",
+        reason: "the adapter cannot attach to a running session",
+      },
+    });
+    expect(pending.continuation?.pending).toBe("resume-when-idle");
+    expect(
+      AgentSessionSummary.safeParse({
+        ...summary,
+        continuation: { persisted: true, resumable: true, pending: "someday" },
+      }).success,
+    ).toBe(false);
+    // a resumed run names the PTY it replaced
+    const replaced = AgentSessionSummary.parse({
+      ...summary,
+      terminal: { hosted: "local", runtimeSessionId: "sess-new", replaced: "sess-01J8Z3K9" },
+    });
+    expect(replaced.terminal?.replaced).toBe("sess-01J8Z3K9");
+  });
+});
+
+describe("LAYOUT (AR-4)", () => {
+  it("puppeteer's creation registry lives under this user's agents/ tree", () => {
+    expect(LAYOUT.AGENT_RUNS_DIR).toEqual(["agents", "runs"]);
+    expect(LAYOUT.AGENT_RUNS_DIR.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
+    expect(LAYOUT_ROOT_LEVEL).not.toContain("AGENT_RUNS_DIR");
+  });
 });

@@ -41,8 +41,17 @@ export interface MonitorDoor {
    * pane (`agent.spawn`, then the create ticket the answer carries). */
   spawn(request: LocalSpawnRequest): Promise<LocalSpawnOutcome>;
   /** AR-3 — mount a LOCAL floor session (a managed agent's PTY, an unclaimed
-   * terminal) in the ACTIVE pane. */
-  mountLocal(sessionId: string): Promise<LocalMountOutcome>;
+   * terminal) in the ACTIVE pane. AR-4 — with `replacing`, in the pane that
+   * is showing the PTY the session took the place of. */
+  mountLocal(sessionId: string, options?: LocalMountOptions): Promise<LocalMountOutcome>;
+}
+
+/** AR-4 — a mount that takes a PTY's place: the run was resumed into a new
+ * PTY (the fold's row names the old one under `terminal.replaced`), and the
+ * pane that holds the old one is handed the new one rather than the active
+ * pane. Ignored when no pane shows `replacing`. */
+export interface LocalMountOptions {
+  replacing?: string;
 }
 
 /** The name GT-4 gave the two-verb door; kept for the call sites that only

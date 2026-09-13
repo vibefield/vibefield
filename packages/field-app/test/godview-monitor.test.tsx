@@ -292,6 +292,31 @@ describe("the monitor stage", () => {
     expect(ackText(host)).toContain("mounted in the active pane");
   });
 
+  it("AR-4: a row that names a replaced PTY the deck is showing hands that pane the new one through the door, once", async () => {
+    // the codex run was resumed into a new PTY while the deck's pane still
+    // shows the old one (`run-codex-pty`, in PANES): the monitor asks the
+    // door to put the new PTY in that pane — with `replacing`, so the deck
+    // targets the pane rather than the active one — and only once
+    const door = fakeDoor([
+      managedSummary({
+        runtimeRunId: "run-codex",
+        terminalSessionId: "run-codex-pty-2",
+        replaced: "run-codex-pty",
+        cwd: "/project/voyager",
+      }),
+    ]);
+    const host = await mountMonitor("list", door);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(door.mountLocal).toHaveBeenCalledTimes(1);
+    expect(door.mountLocal.mock.calls[0]).toEqual([
+      "run-codex-pty-2",
+      { replacing: "run-codex-pty" },
+    ]);
+    expect(ackText(host)).toContain("resumed in its pane");
+  });
+
   it("an agent already in the active pane is acknowledged, not re-mounted", async () => {
     const door = fakeDoor();
     const host = await mountMonitor("list", door, { ...PANES, activeSessionId: "run-codex-pty" });

@@ -110,6 +110,10 @@ export const AgentSessionTerminal = z
     /** TC-S3 — the cell hosting it, when the inventory has tagged it */
     cellBootId: z.string().optional(),
     workloadClass: z.string().optional(),
+    /** AR-4 — the floor session this run REPLACED at a resume-when-idle: the
+     * old PTY the deck may still be showing, which the new one should take
+     * the place of. */
+    replaced: z.string().optional(),
   })
   .passthrough();
 export type AgentSessionTerminal = z.infer<typeof AgentSessionTerminal>;
@@ -158,9 +162,19 @@ export const AgentSessionSummary = z
     lastActivityAt: z.string().optional(),
     title: z.string().optional(),
     /** the persisted continuation (AR-3): whether a record exists and whether
-     * `agent.resume` would take it (the provider resumes; the terminal is gone) */
+     * `agent.resume` would take it (the provider resumes; the terminal is
+     * gone — or, since AR-4, alive but unobserved: a resume then replaces it).
+     * AR-4: `reattached` = this run was re-attached across a fieldd restart;
+     * `pending` = the row is a live terminal fieldd could NOT re-attach to
+     * (`reason` says why) and will resume at its next idle. */
     continuation: z
-      .object({ persisted: z.boolean(), resumable: z.boolean() })
+      .object({
+        persisted: z.boolean(),
+        resumable: z.boolean(),
+        reattached: z.boolean().optional(),
+        pending: z.enum(["resume-when-idle"]).optional(),
+        reason: z.string().optional(),
+      })
       .passthrough()
       .optional(),
   })
@@ -195,6 +209,30 @@ export const AgentSessionRecord = z
       })
       .passthrough(),
     workspace: AgentSessionWorkspace.optional(),
+    /** AR-4 — the durable identity a re-attach restores against: puppeteer's
+     * creation request id (the claim under `AGENT_RUNS_DIR`) and the ingress
+     * the process was launched with (the bearer is a per-session secret; the
+     * record is 0600 like the registry beside it). Absent on a record written
+     * before AR-4 or by an adapter with no ingress. */
+    creationRequestId: z.string().min(1).optional(),
+    ingress: z
+      .object({ port: z.number().int().positive(), token: z.string().min(1) })
+      .passthrough()
+      .optional(),
+    /** AR-4 — what the last fieldd boot did with a live terminal: attached at
+     * the next epoch, failed (the reason), unsupported by the adapter, or
+     * resumed into a new run (`replaced` names the PTY it took the place of). */
+    reattach: z
+      .object({
+        state: z.enum(["attached", "failed", "unsupported", "resumed"]),
+        at: z.string(),
+        reason: z.string().optional(),
+        replaced: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    /** AR-4 — the floor session this run replaced at a resume-when-idle */
+    replaced: z.string().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
     exited: z

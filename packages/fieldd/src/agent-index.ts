@@ -7,6 +7,7 @@ import type {
   RuntimeIngestStatus,
   RuntimeRow,
   RuntimesResponse,
+  SessionsResponse,
   StatusResponse,
 } from "@rosetta/protocol";
 import {
@@ -306,6 +307,18 @@ export interface IndexServiceOptions {
  * record; mutations rewrite the record, publish it, and restart the daemon
  * when something changed. Auditing is the caller's (the daemon wraps the
  * mutations in `audit.required`). */
+/** AR-4 — what the index says about one native session (see
+ * `IndexService.sessionByNativeId`). Timestamps are rosetta's epoch ms. */
+export interface IndexSessionFacts {
+  /** rosetta's canonical session id */
+  id: string;
+  nativeSessionId: string;
+  /** timestamped conversation evidence; null until rosetta has read some */
+  activity: { firstAt: number; lastAt: number } | null;
+  /** rosetta's ingest state for the session's source (open vocabulary) */
+  streamState: string;
+}
+
 export class IndexService {
   private readonly logger: Logger;
   private readonly fetchFn: typeof fetch;
@@ -537,6 +550,31 @@ export class IndexService {
         { service: "index", state: health.phase },
       );
     }
+  }
+
+  /** AR-4 — the index's facts about ONE provider-native session (the spine
+   * id every repo joins on): whether rosetta knows it, and when its
+   * conversation last moved. Read by resume-when-idle, which resumes a
+   * pending run only on this evidence — never on the absence of it. The
+   * canonical row is preferred when the native id resolves to a thread
+   * (`root_session_id == id`); undefined when the index has never read it. */
+  async sessionByNativeId(nativeSessionId: string): Promise<IndexSessionFacts | undefined> {
+    this.requireReady();
+    const body = await this.get<SessionsResponse>(
+      `/api/sessions?native_session_id=${encodeURIComponent(nativeSessionId)}&limit=50`,
+    );
+    const rows = body.sessions.filter((row) => row.native_session_id === nativeSessionId);
+    const row = rows.find((candidate) => candidate.root_session_id === candidate.id) ?? rows[0];
+    if (row === undefined) return undefined;
+    return {
+      id: row.id,
+      nativeSessionId: row.native_session_id,
+      activity:
+        row.activity === null
+          ? null
+          : { firstAt: row.activity.first_at, lastAt: row.activity.last_at },
+      streamState: row.stream_state,
+    };
   }
 
   /** One GET against the daemon's loopback origin — read from the supervisor's

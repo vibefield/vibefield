@@ -1,5 +1,6 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { projectLabel } from "./agent-status";
 import {
   assembleMonitorAgents,
   type MonitorManagedRecord,
@@ -233,6 +234,34 @@ export function useMonitorAgents({
   const announce = useCallback((message: string): void => {
     setAcknowledgement((current) => ({ nonce: (current?.nonce ?? 0) + 1, message }));
   }, []);
+
+  /**
+   * AR-4 — a run resumed into a new PTY. The fold's row names the PTY it
+   * replaced (`terminal.replaced`), and the pane that was showing the old one
+   * is handed the new one through the door, once per replacement — so a
+   * resume-when-idle never leaves a pane on a dead PTY. A replacement no pane
+   * shows is not this hook's business: the row is enough.
+   */
+  const remounted = useRef(new Set<string>());
+  useEffect(() => {
+    if (door === null) return;
+    for (const row of localRows) {
+      const next = row.terminal?.runtimeSessionId;
+      const old = row.terminal?.replaced;
+      if (next === undefined || old === undefined) continue;
+      const key = `${old}\0${next}`;
+      if (remounted.current.has(key) || !paneSessionIds.has(old) || paneSessionIds.has(next))
+        continue;
+      remounted.current.add(key);
+      void door.mountLocal(next, { replacing: old }).then((outcome) => {
+        if (outcome.state === "mounted") announce(`${projectLabel(row)} resumed in its pane`);
+        else if (outcome.state === "failed")
+          announce(
+            `${projectLabel(row)} resumed, but its pane could not be handed the new terminal — ${outcome.reason}`,
+          );
+      });
+    }
+  }, [door, localRows, paneSessionIds, announce]);
 
   /**
    * THE DOOR, opened (GT-D17). A remote row's select is the reference app's

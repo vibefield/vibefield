@@ -24,6 +24,11 @@
 // (the consented discovered runtime plus one row per enrolled root, labelled,
 // `provenance: "enrolled"`), and a `/api/status` whose `daemon.ingest.phase`
 // is `awaiting_consent` while nothing is consented and `live` otherwise.
+//
+// AR-4: `/api/sessions?native_session_id=a,b` — the rows fieldd's
+// resume-when-idle reads (`SessionRow[]`, filtered by native id), scripted by
+// FAKE_ROSETTAD_SESSIONS: a JSON file re-read on every request, so a test can
+// move a session's `activity.last_at` while the daemon polls.
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
@@ -207,6 +212,27 @@ if (mode === "silent") {
     }
     if (req.url === "/api/runtimes") {
       json(res, { runtimes: rows });
+      return;
+    }
+    if (req.url !== undefined && req.url.startsWith("/api/sessions?")) {
+      const url = new URL(req.url, "http://127.0.0.1");
+      const wanted = (url.searchParams.get("native_session_id") ?? "")
+        .split(",")
+        .filter((id) => id !== "");
+      let sessions = [];
+      const file = process.env.FAKE_ROSETTAD_SESSIONS;
+      if (file !== undefined && existsSync(file)) {
+        try {
+          sessions = JSON.parse(readFileSync(file, "utf8"));
+        } catch {
+          sessions = [];
+        }
+      }
+      json(res, {
+        sessions: sessions.filter(
+          (row) => wanted.length === 0 || wanted.includes(row.native_session_id),
+        ),
+      });
       return;
     }
     res.statusCode = 404;

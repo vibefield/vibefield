@@ -21,6 +21,10 @@ export type AgentVisualStatus = "idle" | "working" | "waiting";
  * alive is dropped: an exited agent is not a row.
  */
 export function classifyAgentStatus(summary: AgentSessionSummary): AgentVisualStatus | undefined {
+  // AR-4 — a PENDING row: a live PTY nothing observes, waiting to be resumed
+  // at its next idle. Idle is the honest word for it — no evidence says
+  // otherwise, and "working" would be a claim the fold did not make.
+  if (summary.continuation?.pending !== undefined) return "idle";
   if (summary.monitor?.alive === false) return undefined;
   switch (summary.status) {
     case "blocked":
@@ -60,6 +64,7 @@ export function providerLabel(summary: Pick<AgentSessionSummary, "kind" | "label
 /** One line under the project: what the agent is waiting on when it is,
  * else the latest assistant line when the monitor carried one, else the status. */
 export function agentDetail(summary: AgentSessionSummary, status: AgentVisualStatus): string {
+  if (summary.continuation?.pending === "resume-when-idle") return "unobserved · resumes when idle";
   const monitor = summary.monitor;
   if (monitor === undefined) return "starting";
   if (status === "waiting") {

@@ -509,6 +509,11 @@ export const LAYOUT = {
    * once there is one. What `agent.resume` reads and what AR-4's re-attach
    * will read; never a transcript (rosetta's) and never a credential. */
   AGENT_SESSIONS_DIR: ["agents", "sessions"],
+  /** AR-4 — puppeteer's durable creation registry for this user's runs
+   * (its own layout beneath: `claims/` + `installation.key`, all 0600/0700):
+   * the claim a run is restored against when fieldd re-attaches after a
+   * restart. Never written by VibeField; puppeteer owns every byte. */
+  AGENT_RUNS_DIR: ["agents", "runs"],
   /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
    * a full tree of the segments above; these four live at the VibeField root
    * itself and, with the `machine/` set below, are the only segments that

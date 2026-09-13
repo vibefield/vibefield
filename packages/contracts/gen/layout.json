@@ -119,6 +119,10 @@
     "agents",
     "sessions"
   ],
+  "AGENT_RUNS_DIR": [
+    "agents",
+    "runs"
+  ],
   "USERS_DIR": [
     "users"
   ],

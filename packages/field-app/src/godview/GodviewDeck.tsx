@@ -884,8 +884,8 @@ export function GodviewDeck({
           };
         }
       },
-      mountLocal: async (sessionId) => {
-        const context = workspaceRef.current;
+      mountLocal: async (sessionId, options) => {
+        let context = workspaceRef.current;
         if (context === undefined || context.activePaneId === undefined)
           return { state: "no-pane" };
         try {
@@ -894,7 +894,30 @@ export function GodviewDeck({
           const summary = await terminalSessionSummary(sessionId);
           if (summary === null)
             return { state: "failed", reason: "the floor does not list this session" };
+          // AR-4 — a replacement lands in the pane showing the PTY it took the
+          // place of: that pane is activated, the mount waits for the workspace
+          // to commit the activation (the active pane is a ref the workspace
+          // syncs after render, and `mountSession` reads that ref), and the
+          // pane the user was in is given back afterwards.
+          const replacing = options?.replacing;
+          const target =
+            replacing === undefined
+              ? undefined
+              : context.panes.find((pane) => pane.session.id === replacing);
+          const previous = context.activeSession?.id;
+          if (target !== undefined) {
+            context.activateSession(target.session.id);
+            const deadline = Date.now() + 500;
+            while (Date.now() < deadline && workspaceRef.current?.activePaneId !== target.id) {
+              await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            }
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            context = workspaceRef.current ?? context;
+          }
           context.mountSession(summary);
+          if (target !== undefined && previous !== undefined && previous !== target.session.id) {
+            context.activateSession(previous);
+          }
           return { state: "mounted", sessionId };
         } catch (cause) {
           return {

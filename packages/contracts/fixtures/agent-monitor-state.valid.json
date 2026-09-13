@@ -13,7 +13,10 @@
       "questions": [
         {
           "prompt": "Choose a database",
-          "options": [{ "label": "SQLite" }, { "label": "Postgres", "description": "Shared server" }],
+          "options": [
+            { "label": "SQLite" },
+            { "label": "Postgres", "description": "Shared server" }
+          ],
           "allowFreeForm": true
         }
       ]
@@ -50,7 +53,11 @@
       "configured": { "raw": "manual" },
       "intent": "observed"
     },
-    "providerPermission": { "raw": "accept-edits", "configured": { "raw": "manual" }, "intent": "observed" },
+    "providerPermission": {
+      "raw": "accept-edits",
+      "configured": { "raw": "manual" },
+      "intent": "observed"
+    },
     "asOf": "2026-08-16T12:00:00.000Z"
   },
   "subagents": [

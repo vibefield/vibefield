@@ -29,6 +29,7 @@
   "AGENT_PROFILES_FILE": ["agents", "profiles.json"],
   "AGENT_ROOTS_DIR": ["agents", "roots"],
   "AGENT_SESSIONS_DIR": ["agents", "sessions"],
+  "AGENT_RUNS_DIR": ["agents", "runs"],
   "USERS_DIR": ["users"],
   "USERS_FILE": ["users.json"],
   "USERS_LOCK": ["users.json.lock"],

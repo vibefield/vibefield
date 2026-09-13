@@ -203,4 +203,36 @@ describe("monitor agent assembly", () => {
     );
     expect(agent).toMatchObject({ status: "working", detail: "starting" });
   });
+
+  it("AR-4: a PENDING row reads idle and says so; a re-attached row is an ordinary row; a resumed row names the PTY it replaced", () => {
+    // a live PTY fieldd could not re-attach to: no monitor, status unknown —
+    // and the honest reading is idle with the reason in words, not "starting"
+    const pending = monitorAgentFromManaged(
+      { summary: managedSummary({ pending: "the adapter cannot attach to a running session" }) },
+      ACCENTS,
+    );
+    expect(pending).toMatchObject({ status: "idle", detail: "unobserved · resumes when idle" });
+    expect(pending?.agent?.summary.continuation?.pending).toBe("resume-when-idle");
+    // re-attached across a restart: the same row as before the restart
+    const reattached = monitorAgentFromManaged(
+      { summary: managedSummary({ reattached: true, lastAssistantText: "done" }) },
+      ACCENTS,
+    );
+    expect(reattached).toMatchObject({ status: "idle", detail: "done" });
+    expect(reattached?.agent?.summary.continuation?.reattached).toBe(true);
+    // resumed into a new PTY: the row's id is the NEW floor session, and the
+    // old one rides along for the pane hand-over
+    const resumed = monitorAgentFromManaged(
+      {
+        summary: managedSummary({
+          runtimeRunId: "run-2",
+          terminalSessionId: "pty-2",
+          replaced: "pty-1",
+        }),
+      },
+      ACCENTS,
+    );
+    expect(resumed?.id).toBe("pty-2");
+    expect(resumed?.agent?.summary.terminal?.replaced).toBe("pty-1");
+  });
 });

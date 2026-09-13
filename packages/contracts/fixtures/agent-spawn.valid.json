@@ -151,9 +151,7 @@
         {
           "id": "workflow-1",
           "active": true,
-          "actorRunKeys": [
-            "actor-child-1"
-          ],
+          "actorRunKeys": ["actor-child-1"],
           "artifactRefs": [
             {
               "artifactId": "artifact-1",
@@ -175,9 +173,7 @@
       "environment": {
         "cwd": "/repo",
         "git": null,
-        "worktrees": [
-          "/repo-worktree"
-        ]
+        "worktrees": ["/repo-worktree"]
       },
       "session": {
         "nativeSessionId": "native-1",
@@ -226,10 +222,7 @@
         "audienceCellBootId": "cb-7f3a9c1e-2026",
         "clientId": "win-3c4d-incarnation-2",
         "connectionSetId": "cs-win-3c4d-2-cb-7f3a9c1e",
-        "allowedChannels": [
-          "control",
-          "frames"
-        ],
+        "allowedChannels": ["control", "frames"],
         "transportGrantGeneration": 3,
         "issuedAt": 1787788800000,
         "expiresAt": 1787788860000,
@@ -255,11 +248,7 @@
         "leaseEpoch": 4,
         "routeRevision": 12,
         "grantGeneration": 1,
-        "rights": [
-          "geometry",
-          "input",
-          "read"
-        ],
+        "rights": ["geometry", "input", "read"],
         "issuedAt": 1787788800000,
         "expiresAt": 1787789400000
       },

@@ -14,12 +14,21 @@
     "cellBootId": "cb-7f3a9c1e-2026",
     "workloadClass": "agent"
   },
-  "workspace": { "mode": "direct", "root": "/repo", "sourcePath": "/repo", "branch": "main" },
+  "workspace": {
+    "mode": "direct",
+    "root": "/repo",
+    "sourcePath": "/repo",
+    "branch": "main"
+  },
   "status": "blocked",
   "observationLevel": "native-hooks",
   "createdAt": "2026-08-16T11:00:00.000Z",
   "stateChangedAt": "2026-08-16T12:00:00.000Z",
   "lastActivityAt": "2026-08-16T12:00:00.000Z",
   "title": "vibe-field",
-  "continuation": { "persisted": true, "resumable": false }
+  "continuation": {
+    "persisted": true,
+    "resumable": false,
+    "reattached": true
+  }
 }

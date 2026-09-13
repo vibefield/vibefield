@@ -115,6 +115,14 @@ export function recordForRun(input: {
   cwd: string;
   title?: string | undefined;
   now: string;
+  /** AR-4 — the durable identity the run was born with (puppeteer's creation
+   * request, the claim under `agents/runs/`) and the loopback ingress the
+   * adapter bound for it, when it has one (the bearer is a per-session
+   * secret; the record is 0600) */
+  creationRequestId?: string | undefined;
+  ingress?: { port: number; token: string } | undefined;
+  /** AR-4 — the floor session this run replaced at a resume-when-idle */
+  replaced?: string | undefined;
 }): AgentSessionRecord {
   const { info } = input;
   return {
@@ -128,6 +136,13 @@ export function recordForRun(input: {
     terminalSessionId: info.terminalSessionId,
     continuation: { ...info.continuation },
     workspace: workspaceOf(info),
+    ...(input.creationRequestId !== undefined
+      ? { creationRequestId: input.creationRequestId }
+      : {}),
+    ...(input.ingress !== undefined
+      ? { ingress: { port: input.ingress.port, token: input.ingress.token } }
+      : {}),
+    ...(input.replaced !== undefined ? { replaced: input.replaced } : {}),
     createdAt: input.now,
     updatedAt: input.now,
   };
@@ -183,7 +198,10 @@ export interface SummarizeInput {
   terminal: TerminalInfo | undefined;
   /** whether the terminal is (still) known to be hosted here */
   hosted: boolean;
-  record: { persisted: boolean; resumable: boolean };
+  /** the row's continuation claim (AR-3's two facts; AR-4's `reattached`) */
+  record: NonNullable<AgentSessionSummary["continuation"]>;
+  /** AR-4 — the floor session this run replaced at a resume-when-idle */
+  replaced?: string | undefined;
   createdAt: string;
   stateChangedAt: string;
   lastActivityAt?: string | undefined;
@@ -210,14 +228,8 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
       ? {
           hosted: "local",
           runtimeSessionId: info.terminalSessionId,
-          ...(input.terminal?.cell !== undefined
-            ? {
-                cellBootId: input.terminal.cell.cellBootId,
-                ...(input.terminal.cell.workloadClass !== undefined
-                  ? { workloadClass: input.terminal.cell.workloadClass }
-                  : {}),
-              }
-            : {}),
+          ...cellOf(input.terminal),
+          ...(input.replaced !== undefined ? { replaced: input.replaced } : {}),
         }
       : { hosted: "none" },
     workspace: workspaceOf(info),
@@ -229,5 +241,71 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     ...(input.lastActivityAt !== undefined ? { lastActivityAt: input.lastActivityAt } : {}),
     ...(input.title !== undefined ? { title: input.title } : {}),
     continuation: input.record,
+  };
+}
+
+/** The inventory row's cell tag, as the row carries it (absent on a legacy floor). */
+function cellOf(
+  terminal: TerminalInfo | undefined,
+): Pick<NonNullable<AgentSessionSummary["terminal"]>, "cellBootId" | "workloadClass"> {
+  if (terminal?.cell === undefined) return {};
+  return {
+    cellBootId: terminal.cell.cellBootId,
+    ...(terminal.cell.workloadClass !== undefined
+      ? { workloadClass: terminal.cell.workloadClass }
+      : {}),
+  };
+}
+
+export interface SummarizePendingInput {
+  record: AgentSessionRecord;
+  /** the adapter's own label for the provider (the record keeps only the id) */
+  label: string;
+  device: string;
+  /** the floor's inventory row for the run's terminal, when observed */
+  terminal: TerminalInfo | undefined;
+  /** why this boot could not re-attach (the adapter's or the runtime's words) */
+  reason: string;
+  /** when this boot found it */
+  since: string;
+}
+
+/** SessionSummary v2 for a run whose PTY outlived a fieldd that could NOT
+ * re-attach to it (AR-4): a live terminal nothing observes — `status`
+ * unknown, `observationLevel` none, the continuation resumable and PENDING a
+ * resume at the session's next idle (or by hand through `agent.resume`).
+ * The native id is the record's, so `sessionIdBasis` says so. Pure. */
+export function summarizePending(input: SummarizePendingInput): AgentSessionSummary {
+  const { record } = input;
+  return {
+    sessionId: record.continuation.nativeSessionId,
+    sessionIdBasis: "recorded",
+    kind: record.provider,
+    label: input.label,
+    device: input.device,
+    tier: "managed",
+    runtimeRunId: record.runtimeRunId,
+    runtimeEpoch: record.runtimeEpoch,
+    ...(record.profileId !== undefined ? { profileId: record.profileId } : {}),
+    terminal:
+      record.terminalSessionId !== undefined
+        ? {
+            hosted: "local",
+            runtimeSessionId: record.terminalSessionId,
+            ...cellOf(input.terminal),
+          }
+        : { hosted: "none" },
+    ...(record.workspace !== undefined ? { workspace: record.workspace } : {}),
+    status: "unknown",
+    observationLevel: "none",
+    createdAt: record.createdAt,
+    stateChangedAt: input.since,
+    ...(record.title !== undefined ? { title: record.title } : {}),
+    continuation: {
+      persisted: true,
+      resumable: true,
+      pending: "resume-when-idle",
+      reason: input.reason,
+    },
   };
 }
