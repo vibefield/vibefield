@@ -1,21 +1,59 @@
 import Foundation
 
-/// Agent vendors, as the runtime names them. The raw value is the provider id
+/// An agent vendor, as the runtime names it. The raw value is the provider id
 /// the mark atlas is keyed by (`AgentIcon.tsx`'s table).
-public enum AgentProvider: String, Sendable, CaseIterable, Codable {
-  case claude
-  case codex
-  case grok
-  case acp
+///
+/// OPEN, and that is the contract's own shape: `AgentProviderId` in
+/// `packages/contracts/src/agent-index.ts` is a validated STRING, not an enum —
+/// "AR-L1: no vendor is enumerated here" — and puppeteer's own atlas already
+/// carries `kimi` and `opencode` beside the four this build ships a mark for.
+/// A closed enum here made an unfamiliar provider unrepresentable, which cost
+/// the field a whole agent: the row could not be folded, so nobody could see
+/// it. The four below are the ones with a MARK, not the ones that exist.
+public struct AgentProvider: RawRepresentable, Sendable, Hashable, Codable {
+  public let rawValue: String
 
-  /// Desktop `providerLabel`.
+  /// Non-failable on purpose: every string is a provider this build must be
+  /// able to carry, whether or not it can draw a mark for it.
+  public init(rawValue: String) { self.rawValue = rawValue }
+
+  public static let claude = AgentProvider(rawValue: "claude")
+  public static let codex = AgentProvider(rawValue: "codex")
+  public static let grok = AgentProvider(rawValue: "grok")
+  public static let acp = AgentProvider(rawValue: "acp")
+
+  /// The providers this build has a mark or a named letter for. NOT every
+  /// provider — the name says which claim is being made.
+  public static let known: [AgentProvider] = [.claude, .codex, .grok, .acp]
+
+  /// Desktop `providerLabel`. An unfamiliar provider is called what the wire
+  /// called it, which is the only honest name available.
   public var displayName: String {
     switch self {
     case .claude: "Claude"
     case .codex: "Codex"
     case .grok: "Grok"
     case .acp: "ACP"
+    default: rawValue
     }
+  }
+
+  /// The LETTER a provider without a path mark wears — the reference's rule,
+  /// clause for clause (`AgentIcon.tsx`'s `agentMark`): an explicit override
+  /// first (`acp` → `A`), else the id's first character uppercased, else `?`
+  /// for an id with no characters at all.
+  ///
+  /// It lives here rather than in the renderer because BOTH surfaces draw it:
+  /// the swarm's Metal watermark and the card's SwiftUI glyph, which must not
+  /// disagree about what an agent is called.
+  public var markLetter: String {
+    if self == .acp { return "A" }
+    return rawValue.first.map { String($0).uppercased() } ?? "?"
+  }
+
+  /// Whether this build ships a drawn mark for it; false means the letter.
+  public var hasDrawnMark: Bool {
+    self == .claude || self == .codex || self == .grok
   }
 }
 

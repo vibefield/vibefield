@@ -246,17 +246,41 @@ private func blocker(kind: String) -> JSONValue {
 }
 
 @Suite struct AgentFieldBoardTests {
-  /// A provider this build has no mark for is COUNTED, not dressed as a vendor
-  /// it is not. Drawing Claude's mark on some other agent would say something
-  /// the wire never said — and an agent the user cannot see is a real gap, so
-  /// it is named rather than swallowed.
-  @Test func anUnknownProviderIsCountedRatherThanDrawnAsSomebodyElse() throws {
+  /// A provider this build has no MARK for still draws — it wears its letter,
+  /// which is the reference's own fallback and which the Metal renderer here
+  /// had already transcribed. The earlier cut of this refused such a row and
+  /// counted it; that hid a whole agent behind a closed enum.
+  @Test func anUnfamiliarProviderDrawsWithItsLetter() throws {
     let projection = try projectAgentField(rows: [
       try row(id: "a", kind: "claude"), try row(id: "b", kind: "hermes"),
-      try row(id: "c", kind: "hermes"),
+      try row(id: "c", kind: "opencode"),
     ])
-    #expect(projection.agents.map(\.id) == ["a"])
-    #expect(projection.undrawable == ["hermes": 2])
+    #expect(projection.agents.map(\.id) == ["a", "b", "c"])
+    #expect(projection.agents.map(\.provider.rawValue) == ["claude", "hermes", "opencode"])
+  }
+
+  /// The letter rule, clause for clause with `AgentIcon.tsx`'s `agentMark`:
+  /// the one override first, then the id's first character uppercased, then
+  /// `?` for an id with no characters at all.
+  @Test func theLetterRuleIsTheReferences() {
+    #expect(AgentProvider.acp.markLetter == "A")
+    #expect(AgentProvider(rawValue: "hermes").markLetter == "H")
+    #expect(AgentProvider(rawValue: "opencode").markLetter == "O")
+    #expect(AgentProvider(rawValue: "kimi").markLetter == "K")
+    #expect(AgentProvider(rawValue: "").markLetter == "?")
+    // The three with drawn marks never fall back.
+    for provider in [AgentProvider.claude, .codex, .grok] {
+      #expect(provider.hasDrawnMark)
+    }
+    #expect(!AgentProvider.acp.hasDrawnMark)
+    #expect(!AgentProvider(rawValue: "hermes").hasDrawnMark)
+  }
+
+  /// An unfamiliar provider is called what the wire called it — the only
+  /// honest name there is.
+  @Test func anUnfamiliarProviderIsNamedByItsId() {
+    #expect(AgentProvider.claude.displayName == "Claude")
+    #expect(AgentProvider(rawValue: "hermes").displayName == "hermes")
   }
 
   @Test func endedRunsAreCountedSoAnEmptyBoardAndAGraveyardReadDifferently() throws {
@@ -265,7 +289,6 @@ private func blocker(kind: String) -> JSONValue {
     ])
     #expect(projection.agents.map(\.id) == ["a"])
     #expect(projection.ended == 2)
-    #expect(projection.undrawable.isEmpty)
   }
 
   @Test func aBoardPastItsExpiryDoesNotDraw() throws {

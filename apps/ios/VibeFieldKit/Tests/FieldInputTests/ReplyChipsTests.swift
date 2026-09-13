@@ -15,7 +15,7 @@ struct ReplyChipsTests {
   /// answer, so the row is absent rather than empty.
   @Test("no pending permission, no chips — for every vendor")
   func nothingPendingIsNoChips() {
-    for provider in AgentProvider.allCases {
+    for provider in AgentProvider.known {
       #expect(replyChips(provider: provider, permissions: []).isEmpty)
     }
   }

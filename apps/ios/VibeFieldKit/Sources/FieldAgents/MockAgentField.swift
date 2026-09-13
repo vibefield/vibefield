@@ -170,7 +170,7 @@ public final class MockAgentField {
     spawnCounter += 1
     let chosenProvider =
       provider
-      ?? (random(10) < 6 ? .claude : AgentProvider.allCases[random(AgentProvider.allCases.count)])
+      ?? (random(10) < 6 ? .claude : AgentProvider.known[random(AgentProvider.known.count)])
     let id = "mock-session-\(spawnCounter)"
     let shape = burn ?? BurnShape.allCases[random(BurnShape.allCases.count)]
     burns[id] = Burn(shape: shape, total: state == nil ? 0 : Double(random(400_000)))

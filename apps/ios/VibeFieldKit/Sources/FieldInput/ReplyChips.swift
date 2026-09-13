@@ -81,8 +81,11 @@ public func replyChips(
       // number because the TUI printed none: it is the way out, not a choice.
       ReplyChip(id: "claude-esc", label: "Esc", act: .keystroke(TerminalKeystroke(.escape))),
     ]
-  case .codex, .grok, .acp:
-    // Absent, not disabled. See the structured transport above.
+  default:
+    // Absent, not disabled. See the structured transport above — and since
+    // `AgentProvider` opened, this is also where a vendor this build has never
+    // heard of lands: no chips, because we do not know what its TUI prints,
+    // and the card's "approve at the desktop" line stands in their place.
     return []
   }
 }

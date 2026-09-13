@@ -26,49 +26,42 @@ public func parseWireDate(_ text: String?) -> Date? {
   return try? iso8601WithoutFraction.parse(text)
 }
 
-/// What a board became, and what of it could not be drawn.
+/// What a board became.
 public struct AgentFieldProjection: Sendable, Equatable {
   public let agents: [AgentSnapshot]
-  /// Rows dropped because this build has no mark for their provider, counted
-  /// by the `kind` the wire used. See `agentSnapshot(from:)`.
-  public let undrawable: [String: Int]
   /// Rows dropped because the run has ended. Not a problem — an exited run
   /// leaves the field by design — but counted so "the board is empty" and
   /// "the board is five corpses" are different sentences.
   public let ended: Int
 
-  public static let empty = AgentFieldProjection(agents: [], undrawable: [:], ended: 0)
+  public static let empty = AgentFieldProjection(agents: [], ended: 0)
 }
 
 /// A whole board.
 public func projectAgentField(rows: [AgentFieldRow]) -> AgentFieldProjection {
   var agents: [AgentSnapshot] = []
-  var undrawable: [String: Int] = [:]
   var ended = 0
   for row in rows {
-    guard AgentProvider(rawValue: row.kind) != nil else {
-      undrawable[row.kind, default: 0] += 1
-      continue
-    }
     guard let snapshot = agentSnapshot(from: row) else {
       ended += 1
       continue
     }
     agents.append(snapshot)
   }
-  return AgentFieldProjection(agents: agents, undrawable: undrawable, ended: ended)
+  return AgentFieldProjection(agents: agents, ended: ended)
 }
 
-/// One row. `nil` = the run has ended and leaves the field.
+/// One row. `nil` = the run has ended and leaves the field, and that is now the
+/// ONLY reason a row does not draw.
 ///
-/// A row whose `kind` is not one of the four this build has a mark for is
-/// REFUSED by the caller above rather than handed a vendor it is not. Drawing
-/// Claude's mark on some other agent would be the projection claiming
-/// something the wire never said — the same rule `BubbleGlyph` already holds
-/// about a bare shell. The gap is counted and named instead, and closing it is
-/// a mark to design, not a mapping to write.
+/// `kind` is carried whatever it says. An earlier cut of this refused a
+/// provider this build had no mark for and counted it instead, which was the
+/// wrong trade twice over: the reference already answers the question — a
+/// provider without a mark wears its LETTER (`AgentIcon.tsx`) — and the Metal
+/// renderer here had transcribed that fallback all along. The only thing
+/// standing between an unfamiliar agent and the field was a closed enum.
 public func agentSnapshot(from row: AgentFieldRow) -> AgentSnapshot? {
-  guard let provider = AgentProvider(rawValue: row.kind) else { return nil }
+  let provider = AgentProvider(rawValue: row.kind)
 
   // MF-1e settled what these two fields mean: `alive` answers "is this agent
   // still there", `pending` answers "is anyone at the wheel". A run whose PTY
@@ -160,7 +153,6 @@ public func projectAgentSlices(
   _ slices: [AgentFieldSlice], now: Date = .now
 ) -> AgentFieldProjection {
   var agents: [AgentSnapshot] = []
-  var undrawable: [String: Int] = [:]
   var ended = 0
   // Device order, then the board's own order: a field that reshuffles because
   // a dictionary rehashed would respawn every body.
@@ -169,7 +161,6 @@ public func projectAgentSlices(
     let projected = projectAgentField(rows: slice.rows)
     agents.append(contentsOf: projected.agents)
     ended += projected.ended
-    for (kind, count) in projected.undrawable { undrawable[kind, default: 0] += count }
   }
-  return AgentFieldProjection(agents: agents, undrawable: undrawable, ended: ended)
+  return AgentFieldProjection(agents: agents, ended: ended)
 }

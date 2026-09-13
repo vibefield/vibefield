@@ -406,16 +406,16 @@ private func publishBoard(_ mesh: MeshRehearsal, _ value: JSONValue, version: In
     #expect(link.agents.isEmpty)
   }
 
-  @Test func anUndrawableProviderIsCountedOnTheLink() async throws {
+  /// Every row on a live board reaches the field, whatever vendor it names.
+  @Test func anUnfamiliarProviderStillReachesTheField() async throws {
     let (link, mesh, _) = try await standingLink()
     defer { link.stop() }
 
     await publishDevice(mesh, url: nil)
     await publishBoard(
       mesh, board(rows: [boardRow(id: "a"), boardRow(id: "b", kind: "hermes")]))
-    try await waitUntil("one body and one count") {
-      link.agents.count == 1 && link.undrawable["hermes"] == 1
-    }
+    try await waitUntil("both bodies") { link.agents.count == 2 }
+    #expect(link.agents.map(\.provider.rawValue) == ["claude", "hermes"])
   }
 }
 

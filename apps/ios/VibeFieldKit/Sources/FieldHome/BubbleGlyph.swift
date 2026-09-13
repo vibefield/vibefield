@@ -24,21 +24,25 @@ struct BubbleGlyph: View {
 
 /// Vendor glyphs. SVG geometry ships as template assets from LobeHub Lobe
 /// Icons v5.14.0 (MIT) — the same set the desktop godview embeds — so the
-/// two surfaces draw identical marks. ACP has no mark and uses a letter,
-/// as on the desktop.
+/// two surfaces draw identical marks.
+///
+/// A provider with no drawn mark wears its LETTER, which is the reference's
+/// own fallback (`AgentIcon.tsx`) and not a special case for ACP: `acp` is
+/// simply the one override in the table. Since `AgentProvider` opened, this is
+/// also what an unfamiliar vendor gets — an agent you can see and read,
+/// rather than one that could not be drawn and therefore was not shown.
 struct AgentGlyph: View {
   let provider: AgentProvider
 
   var body: some View {
-    switch provider {
-    case .acp:
-      Text("A")
-        .font(.system(size: 44, weight: .heavy, design: .monospaced))
-    case .claude, .codex, .grok:
+    if provider.hasDrawnMark {
       Image("agent-\(provider.rawValue)", bundle: .module)
         .renderingMode(.template)
         .resizable()
         .scaledToFit()
+    } else {
+      Text(provider.markLetter)
+        .font(.system(size: 44, weight: .heavy, design: .monospaced))
     }
   }
 }

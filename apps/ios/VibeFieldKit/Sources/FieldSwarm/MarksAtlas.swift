@@ -1,4 +1,5 @@
 import CoreGraphics
+import FieldAgents
 import Foundation
 import Metal
 import UIKit
@@ -71,9 +72,12 @@ public enum MarksAtlas {
   }
 
   /// The letter a provider without a tile wears (the reference's `LETTER_MARKS`).
+  ///
+  /// The rule itself lives on `AgentProvider` — the card's SwiftUI glyph draws
+  /// the same letter, and two transcriptions of one rule is how the two
+  /// surfaces come to disagree about what an agent is called.
   public static func letter(for providerID: String) -> String {
-    if providerID == "acp" { return "A" }
-    return providerID.first.map { String($0).uppercased() } ?? "?"
+    AgentProvider(rawValue: providerID).markLetter
   }
 
   /// The png's red channel as an `r8Unorm` texture. An undecodable atlas

@@ -62,10 +62,6 @@ public final class FieldLink {
   /// would respawn every body.
   public private(set) var agents: [AgentSnapshot] = []
   public private(set) var desktops: [FieldDesktop] = []
-  /// Rows that exist and cannot be drawn, by the provider `kind` the wire used.
-  /// An agent this build has no mark for is COUNTED and named rather than
-  /// dressed as a vendor it is not — see `agentSnapshot(from:)`.
-  public private(set) var undrawable: [String: Int] = [:]
   /// Bounded, deduplicated, never fatal.
   public private(set) var notes: [String] = []
   public private(set) var isPaused = false
@@ -161,7 +157,6 @@ public final class FieldLink {
     boards.unsubscribe()
     desktops = []
     agents = []
-    undrawable = [:]
   }
 
   // MARK: The card's one extra question
@@ -391,7 +386,6 @@ public final class FieldLink {
 
     let projection = projectAgentSlices(slices, now: now())
     var merged = projection.agents
-    var undrawn = projection.undrawable
     var seen = Set(merged.map(\.id))
 
     for deviceId in doorOnly {
@@ -402,11 +396,9 @@ public final class FieldLink {
         merged.append(agent)
         seen.insert(agent.id)
       }
-      for (kind, count) in fromDoor.undrawable { undrawn[kind, default: 0] += count }
     }
 
     agents = merged
-    undrawable = undrawn
     refreshFeeds(doorOnly: Set(doorOnly))
   }
 
