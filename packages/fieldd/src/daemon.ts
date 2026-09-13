@@ -6,6 +6,7 @@ import { join } from "node:path";
 // needs only the version its supervisor holds a spawned rosettad to
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
+  AgentInterruptParams,
   AgentResumeParams,
   AgentSpawnParams,
   AgentSubscribeParams,
@@ -1294,6 +1295,35 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               : {}),
           },
         }),
+      );
+    });
+    // AR-6-0 (MF-1 §10.2) — the stop verb, audited like the other two acts on a
+    // run (attempt before effect; the run id on the target). The floor's own
+    // answer decides the outcome: `succeeded` when it took the interrupt,
+    // `denied` with its word when it would not. A refusal here is NOT an error
+    // — a run that is mid-conflict with a person's typing is a state, and the
+    // caller is told so rather than thrown at.
+    api.register("agent.interrupt", async (ctx, params) => {
+      const parsed = AgentInterruptParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeRunId }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agent.session.interrupt",
+          target: { kind: "agent-session", id: parsed.data.runtimeRunId },
+          attrs: { runtimeRunId: parsed.data.runtimeRunId },
+        },
+        () => agents.interrupt(parsed.data),
+        (result) =>
+          result.accepted
+            ? { outcome: "succeeded", attrs: { accepted: true } }
+            : {
+                outcome: "denied",
+                reasonCode: "REFUSED",
+                // the floor's own word, never a sentence composed here
+                attrs: { accepted: false, reason: result.reason },
+              },
       );
     });
     api.register("agent.list", () => agents.list());

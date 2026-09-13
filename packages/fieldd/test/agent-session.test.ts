@@ -968,6 +968,86 @@ const rosettaRow = (nativeSessionId: string, stillForMs: number | null, child = 
   stream_state: "indexed",
 });
 
+describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
+  it("interrupts a live run through the floor, is refused for an exited or unknown one, needs agent.control, and lands in the ledger", async () => {
+    const { daemon, dataDir, envOut } = await setup({ floor: "real" });
+    // the deck's own scopes do NOT include agent.control — the fold's reader
+    // is not, by that fact, allowed to steer what it is watching
+    const watcher = await window(daemon, DECK, "i0");
+    const win = await window(daemon, [...DECK, "agent.control"], "i1");
+
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+
+    expect((await watcher.callErr("agent.interrupt", { runtimeRunId: runId })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    // a run nobody ever minted is NOT_FOUND, never a silent no-op
+    expect((await win.callErr("agent.interrupt", { runtimeRunId: "run-none" })).data?.kind).toBe(
+      "NOT_FOUND",
+    );
+    expect((await win.callErr("agent.interrupt", {})).data?.kind).toBe("PRECONDITION_FAILED");
+
+    // Wait for the floor's inventory to TAG the session with its cell before
+    // steering it. This is not politeness: every automate resolves the session's
+    // cell first, and an untagged session sends the operation to the wrong one,
+    // where the floor answers "unknown or remote session" and TerminalService
+    // raises INTERNAL (terminal-service.ts:645-660 — the pre-existing shape for
+    // paste and text too, not something this door introduced).
+    await poll(async () => {
+      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+      const row = rows.find((r) => r.runtimeRunId === runId);
+      return row?.terminal?.cellBootId !== undefined ? row : undefined;
+    }, 10_000);
+
+    // ── the act: the floor takes it, and the scripted PTY's `cat` dies of it ──
+    // `accepted` is the FLOOR's word — that the interrupt reached the PTY's
+    // process group, not that any agent obeyed it. The witness that it really
+    // reached a process is the exit below.
+    expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
+
+    await poll(async () => {
+      const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+      return rows.some((r) => r.runtimeRunId === runId) ? undefined : true;
+    }, 15_000);
+    const exited = await poll(async () => {
+      const record = readRecord(dataDir, runId);
+      return record.exited !== undefined ? record : undefined;
+    }, 10_000);
+    expect(exited.exited?.reason).toBeTruthy();
+
+    // ── the same run, now gone: not-alive, with the state a caller can read ──
+    const refused = (await win.callErr("agent.interrupt", {
+      runtimeRunId: runId,
+    })) as RpcErrorShape;
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    expect((refused.data?.details as { state?: string } | undefined)?.state).toBe("not-alive");
+
+    // ── the ledger: this device's own act, on the run, with its outcome ──
+    // (the attempt is written BEFORE the effect, so the refusals above are in
+    // the ledger too — the act is matched by its target, not by being first)
+    const act = auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.interrupt" && entry.target.id === runId,
+    );
+    expect(act.attempt.target).toMatchObject({ kind: "agent-session", id: runId });
+    expect(act.attempt.actor.kind).toBe("local-token");
+    expect(act.outcome.outcome).toBe("succeeded");
+    expect(act.outcome.attrs?.["accepted"]).toBe(true);
+    // an interrupt aimed at a run that does not exist is ledgered as an
+    // ATTEMPT that failed — a reach for someone else's session leaves a trace
+    const missed = auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.interrupt" && entry.target.id === "run-none",
+    );
+    expect(missed.outcome.outcome).toBe("failed");
+    expect(missed.outcome.reasonCode).toBe("NOT_FOUND");
+  });
+});
+
 describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
   it("re-attach across a restart: a graceful stop RELEASES the run (no exit, the PTY alive); the next boot attaches it at the next epoch, the same PTY, automation working; the attached run still refuses a resume; its exit is the ordinary one", async () => {
     const first = await setup({ floor: "real", attach: true });
@@ -1119,6 +1199,18 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     // the PTY is alive, listed by the floor, and nothing observes it
     expect(await listed(win2, ptyId)).toBe(true);
     expect(second.daemon.agents.runtime.agent(ptyId)).toBeUndefined();
+
+    // AR-6-0 — and it CANNOT be interrupted. The PTY is alive and fieldd even
+    // knows its id from the record, which is exactly why the refusal matters:
+    // nothing observes this run, so typing into its terminal would be steering
+    // blind. `not-alive` is the honest state for a row nothing is driving.
+    const stopper = await window(second.daemon, [...DECK, "agent.control"], "pe-stop");
+    const blind = (await stopper.callErr("agent.interrupt", {
+      runtimeRunId: runId,
+    })) as RpcErrorShape;
+    expect(blind.data?.kind).toBe("PRECONDITION_FAILED");
+    expect((blind.data?.details as { state?: string } | undefined)?.state).toBe("not-alive");
+    expect(await listed(win2, ptyId)).toBe(true); // and the PTY is untouched
 
     // ── the replacement by hand ──
     // A second window watches the floor's listing for the whole of the resume:

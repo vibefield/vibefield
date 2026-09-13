@@ -45,6 +45,8 @@ import {
   type AgentDistributionRecord,
   AgentDistributionRecord as AgentDistributionRecordSchema,
   type AgentInstall,
+  type AgentInterruptParams,
+  type AgentInterruptResult,
   type AgentListResult,
   type AgentMonitorMirror,
   type AgentPersona,
@@ -671,6 +673,62 @@ export class AgentRuntimeService {
     }
     const entry = await this.resumeFromRecord(record, params.cwd, undefined);
     return this.ticketed(entry, principal, terminals);
+  }
+
+  /** AR-6-0 (MF-1 §10.2) — the stop verb: interrupt what a run is DOING without
+   * ending it, the ⎋ a person at the keyboard would press. One semantic input
+   * through the floor's own epoch-ordered path, so it cannot race a human's
+   * typing into the same PTY.
+   *
+   * The PTY is always the RECORD'S OWN. The params name a RUN, and the id sent
+   * to the floor comes from the managed entry fieldd wrote when it spawned
+   * that run — never a terminal id a caller chose, and never a PTY this daemon
+   * did not mint. That is what keeps the act inside `agent.control` rather than
+   * making it a `terminal.attach`-class power (the `agent.resume` scope
+   * argument in methods.ts, applied here).
+   *
+   * Three answers, all honest:
+   *  - an unknown run is NOT_FOUND;
+   *  - a run that is gone (its record stamped) or PENDING (AR-4: a live PTY
+   *    nothing observes, which fieldd holds no adapter for) is
+   *    PRECONDITION_FAILED `{state: "not-alive"}` — refusing to type into a
+   *    terminal we cannot claim to be steering;
+   *  - otherwise the FLOOR's answer, verbatim. `accepted` means the floor took
+   *    the interrupt, never that the agent obeyed it. */
+  async interrupt(params: AgentInterruptParams): Promise<AgentInterruptResult> {
+    const entry = this.managed.get(params.runtimeRunId);
+    if (entry === undefined || entry.exiting) {
+      const known =
+        entry !== undefined ||
+        this.pending.has(params.runtimeRunId) ||
+        this.records.read(params.runtimeRunId) !== undefined;
+      if (!known) {
+        throw new RpcCallError("NOT_FOUND", `no managed session ${params.runtimeRunId}`, false, {
+          runtimeRunId: params.runtimeRunId,
+        });
+      }
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the session is not running under this daemon; interrupt is for a live, observed run",
+        false,
+        { runtimeRunId: params.runtimeRunId, state: "not-alive" },
+      );
+    }
+    const host = this.terminalHost;
+    if (host === null) {
+      // the same words the host itself would answer with — no floor, no act
+      return { accepted: false, reason: "no-terminal-host" };
+    }
+    const result = await host.automateTerminal(entry.info.terminalSessionId, {
+      kind: "interrupt",
+    });
+    this.logger.info("fieldd.agents.interrupted", "An agent run was interrupted", {
+      runtimeRunId: params.runtimeRunId,
+      sessionId: entry.info.terminalSessionId,
+      accepted: result.accepted,
+      ...(result.accepted ? {} : { reason: result.reason }),
+    });
+    return result.accepted ? { accepted: true } : { accepted: false, reason: result.reason };
   }
 
   /** The persona login pane: the vendor's own interactive login in a PTY
