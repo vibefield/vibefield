@@ -5342,7 +5342,11 @@ current · `pnpm typecheck` 25 projects · `cargo fmt --check` clean · clippy `
 AR's) red in the full graph and green alone, the loaded-host lottery · `pnpm test:rust` 241
 passed, 6 ignored · `pnpm gen:check` clean · `pnpm smoke:godview` exit 0 first attempt
 (`monitorLocalState: live`, the deck's own pane as its one row, canvas2d, cold open 286 ms) ·
-the fieldd agent-session suite 11/11 with `FIELDD_TEST_REAL_AGENT=1`. **Still owed:** the
+the fieldd agent-session suite 11/11 with `FIELDD_TEST_REAL_AGENT=1`. Measured on the working
+tree before the commit; `ba1a1eab` differs from it only by biome's reflow of five files (the four
+fixtures and the fieldd test). The runner's second pass found the one biome warning in
+`useMonitorAgents.ts` (a suppression with no effect) was AR-3's, not older debt; removed in the
+follow-up commit. **Still owed:** the
 Agents settings section (the persona login pane's UI; `agents.manage` on a window); AR-5 the
 views port; `agent.control` (AR-6); PU-11 above and PU-10; the ingested tier's rows (AR-8); the
 dev-local snapshot of the draft docs (James's ritual); the DESIGN.md Godview citation (James's

@@ -187,8 +187,7 @@ export function useMonitorAgents({
     for (const session of paneSessions ?? []) map.set(session.id, session);
     return map;
     // keyed by the facts a row draws, not by array identity (the deck
-    // republishes at ghosttea's cadence)
-    // biome-ignore lint/correctness/useExhaustiveDependencies: paneSummaryKey stands in for paneSessions
+    // republishes at ghosttea's cadence): paneSummaryKey stands in for paneSessions
   }, [paneSummaryKey]);
 
   /** A pane link is only true while a pane is actually showing the replica: the
