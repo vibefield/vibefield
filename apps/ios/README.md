@@ -127,9 +127,9 @@ For installation and updates on an iPhone away from the Mac, follow
 device archive and uploads it using Xcode's existing Apple account:
 
 ```sh
-# From the repository root. Build 1 is already uploaded; use a fresh number.
-bash apps/ios/scripts/testflight.sh archive 2
-bash apps/ios/scripts/testflight.sh upload 2
+# From the repository root. N = the next unused build number (TESTFLIGHT.md names the last).
+bash apps/ios/scripts/testflight.sh archive N
+bash apps/ios/scripts/testflight.sh upload N
 ```
 
 This app is deliberately **outside `pnpm verify`** (the gate must not require

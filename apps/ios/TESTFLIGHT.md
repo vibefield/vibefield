@@ -10,6 +10,18 @@ the build **Testing** in **Personal iPhone**. The group has one internal tester
 and uses manual distribution. App Store Connect shows the tester as **Invited**;
 open the TestFlight invitation email on the iPhone to accept and install.
 
+Build **0.1 (2)** was archived on September 13, 2026 from main `09c526ab`: the first
+build carrying the keyboard track (IOS-3c…5v — the write key's Keychain home and the
+input card) and the swarm on Metal (IOS-6). **Its upload is still owed.** Two runs of
+`testflight.sh upload 2` that afternoon stopped at the account step with
+**Failed to Use Accounts** — xcodebuild found no Apple account with App Store Connect
+access for team `9F79X9D26S`, two hours after build 1 uploaded with the same helper
+(the archive, signing and network were all fine). Sign in again in Xcode > Settings >
+Apple Accounts, then run the upload command below for build 2: the archive at
+`apps/ios/build/testflight/VibeField-2.xcarchive` persists and the helper never
+rebuilds an existing one. After Apple's processing, answer the export-compliance
+questionnaire for build 2 (the same answers as build 1) and add it to Personal iPhone.
+
 ## App identity and prerequisites
 
 | Setting | Value |
@@ -63,14 +75,14 @@ Each build is available for up to **90 days**.
 Run from the repository root:
 
 ```sh
-# Build 1 is already archived and uploaded. Use 2, 3, ... for new builds.
-bash apps/ios/scripts/testflight.sh archive 2
+# Builds 1 and 2 are archived (build 2's upload is owed — see above). Use 3, 4, ... for new builds.
+bash apps/ios/scripts/testflight.sh archive 3
 
 # Upload that exact archive using the Apple account already in Xcode.
-bash apps/ios/scripts/testflight.sh upload 2
+bash apps/ios/scripts/testflight.sh upload 3
 ```
 
-For build 2, the archive is `apps/ios/build/testflight/VibeField-2.xcarchive`. Logs and
+For build N, the archive is `apps/ios/build/testflight/VibeField-N.xcarchive`. Logs and
 upload output are beside it, under the gitignored `build/` directory. A
 completed archive is never overwritten. Xcode may increase the uploaded build
 number to avoid conflicts; App Store Connect displays the final number.
@@ -99,8 +111,9 @@ The Swift project documents the same transform's
 that report's reproducer is a different failure from this app's archive crash.
 Use the helper for archives on this toolchain instead of plain Product > Archive.
 
-The existing package tests were verified on an iPhone 17 Pro simulator with
-iOS 26.5 (135 tests). To repeat that gate on this Xcode build:
+The package tests were verified on an iPhone 17 Pro simulator with iOS 26.5:
+135 tests for build 1, 424 for build 2 (the README's gate, run verbatim on
+`09c526ab`, seven suites). To repeat that gate on this Xcode build:
 
 ```sh
 cd apps/ios/VibeFieldKit
@@ -156,9 +169,10 @@ rounded corners.
 1. Install Apple's [TestFlight](https://testflight.apple.com/) on the iPhone.
    Accept your internal tester invitation on that device, then install VibeField.
    Enable Automatic Updates for VibeField in TestFlight.
-2. Launch the app and check the field, session cards, and terminal appearance
-   settings. The local agent fleet is still a labeled mock; real remote terminal
-   discovery is a separate source.
+2. Launch the app and check the field (the swarm on Metal since build 2), the
+   session card and its input card, WRITE KEYS in settings, and the terminal
+   appearance settings. The local agent fleet is still the labeled mock; real
+   remote terminal discovery is a separate source.
 3. For a live remote terminal, leave the desktop awake, online, running VibeField,
    joined to your tailnet, and serving a terminal session. On the iPhone, tap the
    mesh control, choose **CONNECT**, and sign in to the same tailnet. Approve the
@@ -169,10 +183,15 @@ rounded corners.
 5. Turn off Wi-Fi and repeat over cellular. Background and reopen VibeField,
    check reconnection, and confirm the desktop terminal session is still alive.
 
-**Current product limit:** the iOS write-key storage/settings flow (IOS-3c)
-has not landed. `mirrorWriteCapability` remains nil, so this build is view-only
-even when the host session allows writes. TestFlight does not enable typing,
-remote approvals, or session creation that the app has not implemented.
+**Current product limits (build 2):** the write key landed with IOS-3c — entered on
+the card (ENTER KEY) from the desktop's `FIELD_NATIVE_TERMINAL_MIRROR_WRITE` value,
+kept in the Keychain per host, managed under WRITE KEYS in settings — so a host
+whose key this phone holds accepts typing from the input card (Draft and Live
+modes), and a host without one stays view-only and the card says so. Build 1 had
+none of this. Still not implemented: the agent fleet on the field is the mock (the
+fieldd binding has not landed), project colours are dealt per device, and the
+History tab (D-i10) is not built. TestFlight does not enable anything the app has
+not implemented.
 
 If no peers appear, check the tailnet login, device approval, desktop sleep,
 and network access. If peers appear but there are no sessions, check that the

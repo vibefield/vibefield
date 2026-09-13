@@ -6364,3 +6364,39 @@ carried across and pinned by the reference's own tests. D-i11…D-i17 are adopte
 James rules; DECISIONS rows follow. **The base branch is James's call** (§6 of the plan): `ios/swarm`
 is cut from `ios/keyboard`, so it lands on main after the keyboard track does, or as one merge with
 it. **The record:** `draft/thinking-ios-swarm.md` §9 is the landing log.
+
+## IOS-TF — the phone reaches TestFlight, and the keyboard and swarm tracks land on main
+
+**2026-09-13, `168548c4` (IOS-TF) + `09c526ab` (the merge) + the docs commit after them.** James:
+"all the new changes merge back to main properly and build and upload latest build containing all
+the latest changes to TestFlight." **The finding that started it:** TestFlight build 0.1 (1), set up
+that morning from main's working tree, carried the PRE-IOS-3c app — main's `apps/ios` had no commit
+since the fork point `0bef361b`, `ios/keyboard` (22 commits) and `ios/swarm` (4) were both unmerged,
+and the notes said so themselves ("IOS-3c has not landed", 135 tests); the archive log had no
+`FieldSwarm`, no write-key store, and the July views still compiling.
+
+**What landed.** James's TestFlight setup committed as IOS-TF (the helper `scripts/testflight.sh
+archive|upload N` with the Xcode 26.6 `-disable-large-loadable-types-reg2mem` workaround, the export
+options, the privacy manifest's three reasons, the icon, `ITSAppUsesNonExemptEncryption` removed so
+compliance is answered explicitly). Then `ios/swarm` merged — one merge with the keyboard track, the
+base-branch question ruled: `README.md` conflicted in two hunks against the TestFlight edits and the
+branch's rewrite won with the TestFlight paragraph kept; `project.pbxproj` merged clean with both sides
+(the camera/microphone/speech strings in, the compliance key out); `Package.resolved` the branch's;
+`docs/LANDED.md` main's run before the IOS entries. The branch had first taken main (`55335736`) so
+the kit is byte-identical to the tested tree, plus a README pin errata (`92c014ec`).
+
+**Gates on the merged tree:** the README's kit gate verbatim — 424/424 across seven suites, TEST
+SUCCEEDED — and its simulator build, exit 0; the helper's Release `generic/platform=iOS` archive of
+build 2 succeeded: `VibeField-2.xcarchive` carries the bundle id and team, 0.1 (2), the six `.metal`
+sources and `marks.png` in `VibeFieldKit_FieldSwarm.bundle`, the three usage strings, no compliance
+key, and `codesign --verify --deep --strict` passes.
+
+**NOT done — the upload.** `-exportArchive` stopped at the account step twice, sandbox on and off:
+"Failed to Use Accounts — failed to find an account with App Store Connect access for team
+9F79X9D26S", two hours after build 1 uploaded with the same helper and the same Apple account. Xcode's
+sign-in is James's; the archive persists and `testflight.sh upload 2` finishes the job, then the
+compliance answers and the Personal iPhone assignment in App Store Connect. **Records moved:** the
+roadmap row rewritten and its two IOS-3c claims corrected at source; DECISIONS gained the
+D-i11…D-i17 row and the base-branch ruling; TESTFLIGHT.md carries build 2's state and the product
+limits as they now are. **Still a device's to answer:** the shader compile at first launch, 30 Hz
+physics under the 120 Hz blend, the 7 pt type, VoiceOver per body, the tab bar as an obstacle.

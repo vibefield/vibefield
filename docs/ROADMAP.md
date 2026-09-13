@@ -294,7 +294,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
 | NF — native floor | NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4, with peers authenticated by tailnet WhoIs | `specs/native-floor.md` | per-device tokens (GT-D6) whenever the token work is wanted — NOT gated upstream (the v3 claim was retracted) |
-| IOS — companion | **IN FLIGHT** — IOS-0/2/2f + IOS-EL8, and **IOS-3a…3e + the 3r review landed** 2026-08-05/06 (peer terminals are bubbles; the card attaches; appearance + upstream's reconnect banner) | `thinking-ios-app.md` §10 · `research/ios-app-design.md` | **IOS-3c's capability/Keychain leg never landed — the phone attaches VIEW-ONLY.** That, plus the live-device run, is what remains of the attach story; artifact catalog/open = AH-5 |
+| IOS — companion | **IN FLIGHT** — IOS-0/2/2f + IOS-EL8 · IOS-3a…3e + 3r (2026-08-05/06) · **IOS-3c (the write key's Keychain home), IOS-5a…5e + 5v (the input card, in the canvas's chrome), IOS-6a…6d (the field is RFC 005's swarm on Metal) ON MAIN 2026-09-13 `09c526ab`** · **IOS-TF internal TestFlight `168548c4`** (build 1 = the pre-IOS-3c app; build 2 archived from this tree, its upload owed to Xcode's sign-in) | `thinking-ios-app.md` §10–§12 · `thinking-ios-swarm.md` · `apps/ios/TESTFLIGHT.md` | upload build 2 → the device gates (the shader compile at first launch, 30 Hz physics under the 120 Hz blend, 7 pt type, VoiceOver per body, the tab bar as an obstacle) · D-i11…D-i17 rulings · the fieldd binding (the agent fleet is still the mock; the project-colour door) · the History tab (D-i10) |
 | GT — Godview terminal | **IN FLIGHT** — GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** + **GT-5a…d the code review's fixes** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | the deck's own ladder is done. **The swarm on WebGPU and the other views ARRIVED at AR-5 (2026-09-13, `fe6b3d0a`)** as `@vibecook/puppeteer-views` (AR-D13a; puppeteer's Godview is the reference, ours the product — AR-D14); *erratum 2026-09-13: the 09-12 phrase "mounted into the worker's `adoptCanvas` socket" was GT-D16's expectation restated — as built the package's renderer paints on MAIN behind a physics DRIVER port and the socket stays unused; the spec's GT-D16 carries the correction*; the monitor's one mock module was DELETED at AR-3 (the local field is fieldd's fold through the deck's door); smoke row 13b unskips when a peer can be staged in the harness |
 | UI — design system | **LANDED** 2026-08-05/06; **Studio architecture landed 2026-08-26** — tokens → primitives → production compositions → a catalog that mounts shipping views → one real product + isolated Studio under the active dev host, with explicit ephemeral live appearance and ownership enforced by test | `DESIGN.md` (authority) · **`docs/UI_SYSTEM.md`** (where it lives in code) | the catalog's own acceptance is an eyeball (light/dark · keyboard focus · reduced motion · narrow); the browser-only catalog remains available without live-product authority |
 | UA — users & accounts | **IN FLIGHT** — spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
@@ -927,9 +927,11 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   "proven by the packaged gate" comment in four fieldd test files.
 - **AR** — the agent tracks; the reason everything else exists, and the only thing between here
   and the P0 exit. Its seam is one module wide and every dependency it named is landed.
-- **IOS-3c's capability leg** — the Keychain store, the write capability supplied at attach, and
-  the settings that manage it. Until it lands the phone can watch and cannot type, which is most
-  of what "the field in a pocket" was for.
+- **The phone on a device** — IOS-3c…IOS-6 are on main (2026-09-13, `09c526ab`) and TestFlight
+  carries them from build 2; what no fixture can answer is owed to a real iPhone: the shader
+  compile at first launch, the feel of 30 Hz physics under the 120 Hz blend, the type at 7 pt,
+  VoiceOver per body, the tab bar as an obstacle — and the fieldd binding (the agent fleet is
+  still the mock).
 - **Packaging WPs** — the ladder toward the signed macOS beta (WP10).
 - **LOG-39 packaged CI** — also carries NF's 24h-soak gate.
 - **ESR follow-on** bundle slice.
@@ -1003,7 +1005,9 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   lifecycle; no capability is ever supplied. The card's face is honest ("this device has no write
   key for this host") — this is a missing feature, not a lie — but the attach story's middle
   third does not exist yet, and IOS-3r's third HIGH was a direct consequence of the gap being
-  papered over by the listing's `readWrite` (2026-08-07).
+  papered over by the listing's `readWrite` (2026-08-07). **Resolved 2026-09-13:** the leg landed as IOS-3c `9b07fc61` on
+  `ios/keyboard` (the Keychain store, WRITE KEYS in settings, the token supplied at attach) and
+  reached main in the `ios/swarm` merge `09c526ab`.
 - **`GT-5` names two different things** — this file used it for *iOS attach, the last GT rung*,
   while `LANDED.md` §GT-5 records it as *the code review's findings, fixed* (`127df5c`…`17365fd`).
   The attach work shipped as IOS-3 instead. Both usages are now in the corpus and citing "GT-5"

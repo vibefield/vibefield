@@ -89,6 +89,14 @@ laws — users-and-accounts §6**.
   during the build and carries a dated correction at source; §10.3's unqualified "readWrite"
   gained a clarification for the same reason. Open and unanswered: the mock-fleet-beside-real-
   bubbles taste call (§10.6).
+- **D-i11…D-i17** — `thinking-ios-swarm.md` §3 (the swarm on Metal). **Adopted as leans, unruled;
+  on main since 2026-09-13 (`09c526ab`).** D-i11 Metal, a transcription of the reference renderer ·
+  D-i12 the open card is the phone's one pane · D-i13 project colours dealt per device (the fieldd
+  door for the sequence is the named follow-up) · D-i14 shaders as resources compiled at first use ·
+  D-i15 the lab is the pixel gate · D-i16 `agentIdentityHue` retires from the field (still the card
+  header) · D-i17 no tooltip. **The base branch (§6) RULED 2026-09-13 (James): one merge, the keyboard
+  track and the swarm together.** The IOS-3c status correction above is **RESOLVED**: the
+  capability/Keychain leg landed as `9b07fc61` (IOS-3c on `ios/keyboard`) and reached main at `09c526ab`.
 - **AH-0…AH-5** (AH-1a/1b split) — artifact-hub §10. AH-0 design ratified 2026-08-02;
   AH-1a/1b implementation landed at `9f80f0c` (physical second-client proof open);
   AH-2 implementation landed at `9c17c46`; AH-3 desktop runtime landed at `8c07bf4`
