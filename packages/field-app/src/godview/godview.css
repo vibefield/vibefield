@@ -25,7 +25,6 @@
   /* record §02: the theme's lightness and chroma for every project tint (AR-5, D3) */
   --tint-l: 0.6;
   --tint-c: 0.15;
-  --terminal-bg: var(--vf-godview-light-terminal-bg);
   --pane-access-text: rgba(20, 20, 20, 0.6);
   --pane-access-border: rgba(0, 0, 0, 0.12);
   --pane-access-bg: rgba(247, 247, 247, 0.8);
@@ -56,7 +55,6 @@
   /* record §02: the theme's lightness and chroma for every project tint (AR-5, D3) */
   --tint-l: 0.74;
   --tint-c: 0.15;
-  --terminal-bg: var(--vf-godview-dark-terminal-bg);
   --pane-access-text: rgba(255, 255, 255, 0.62);
   --pane-access-border: rgba(255, 255, 255, 0.14);
   --pane-access-bg: rgba(22, 24, 29, 0.82);
