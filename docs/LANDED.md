@@ -5561,3 +5561,57 @@ section (the persona login pane's UI; `agents.manage` on a window); **AR-5** the
 `agent.control` (AR-6); the ingested tier's rows (AR-8); the upstream pins still UNPUSHED
 (puppeteer `8402184`, rosetta `af6f0d7`); the dev-local snapshot of the draft docs (James's
 ritual); the DESIGN.md Godview citation (James's live edit); `SIBLINGS_TOKEN`.
+
+## AR-5-0 — the pins move: puppeteer `d2b0600`, rosetta `e8d907a`; every AR suite re-witnessed (2026-09-13)
+
+**A pin move, ledgered as the EL8 event it is** (`f6b2accc`; this docs commit after it).
+Between AR-4b's landing and the AR-5 plan, James landed `d2b0600` on puppeteer ("make session
+reattachment safe and restore verification" — on top of PU-1b: `runtime.attach` answers a run it
+already manages ONLY when the request names the same identity at the claim's next epoch — same
+provider, creation request, terminal, native id, refs — and refuses anything else
+`RUNTIME_RUN_CONFLICT`, as it refuses a terminal that already holds a session; every refusal after
+the bind disposes with `{release: true}`; an in-flight attach is awaited by `dispose`; a failed
+bind while attaching drops only the provisional run and releases the claim lease; the
+prepared-launch path forwards `ingress` and `reportBound` sits inside the try so a failing
+`onBound` releases the listeners; plus the org rename to `vibefield/puppeteer`, `.nvmrc`
+22.18.0, `packageManager: pnpm@10.34.5`) and `e8d907a` on rosetta ("clear validation failures
+before main integration" — the claude-code adapter's skim-admission fields, the pipeline live
+test, bench, fmt). `pnpm siblings` showed both HEADs ≠ pin and `pnpm preflight` FAILED, so the
+AR-5 plan's first slice is this one: `pnpm siblings:pin` (both pins are on no remote branch —
+James pushes), `pnpm siblings:build` (1 m 27 s, incremental, cargo's own target on the SSD),
+fieldd typechecked against the new sources (clean), and every suite AR-1…AR-4b left behind
+re-run at the new pins.
+
+**Witnessed, all at the new pins on the rebuilt rosettad:** `agent-session` 12 scripted rows + the
+2 REAL claude rows (`FIELDD_TEST_REAL_AGENT=1`: alive + `native-hooks`, re-attached at epoch 2
+with the hooks flowing again; 14/14 in 42 s) · `agent-runtime` 10 scripted + 1 real-rosettad
+row · `rosettad-daemon` 6 scripted + 3 real rows · `rosettad-supervisor` 11 scripted + 3 real
+rows · `agent-index-sessions` 13 · `agent-monitor-pin` 1. **Nothing in the upstream rewrite moved
+a fieldd row:** fieldd's `attachRecord` already attaches at the CLAIM's epoch and holds pending
+on any refusal, and `RUNTIME_RUN_CONFLICT` folds into the same `ATTACH_FAILED` reason as every
+other refusal.
+
+**One defect surfaced — ours, not upstream's.** The R4 reconcile row in
+`packages/fieldd/test/agent-runtime.test.ts` built its root as `vf-agents-pre-<pid>-<timestamp>`
+under `tmpdir()`, and under macOS's default `/var/folders/…/T/` the mock mgmt socket at
+`<root>/users/1/native/run/mgmt.sock` came to 112 bytes — past the 104-byte `sun_path` limit —
+so `MockMgmtServer.start` failed `listen EINVAL` on every run whose shell had not exported a short
+`TMPDIR` (the class the smokes already know; every other row uses `mkdtempSync`'s 16-character
+name and sits at 95 bytes). Fixed to `mkdtempSync(join(tmpdir(), "vf-pre-"))`; the file is 10/10
+under the default `TMPDIR` now. A row that passes only under an exported `TMPDIR=/tmp` is a row
+the gate can pass without exercising — worth a look at every fieldd fixture that plants a unix
+socket under a named temp root.
+
+**Facts for the CI clone step (`SIBLINGS_TOKEN`, still James's):** puppeteer now declares
+`packageManager: pnpm@10.34.5`, and pnpm's version management follows it under
+`--dir ../puppeteer` (verified locally: `pnpm --dir ../puppeteer --version` prints 10.34.5 from an
+11.13.1 shell), so the filtered install will fetch that pnpm; its `.nvmrc` says 22.18.0 while ours
+says 26 (`engines.node >=22.18.0` — no conflict for a `link:` consumer).
+
+**Gate:** `pnpm verify` verbatim (detached, logged) exits 1 at `pnpm lint`: all 12 biome diagnostics are in James's untracked `work/composer-directions.html` (the SNAP-0/AR-1 state); preflight (2 dirty-tree warnings), check:deps, icons:check and typecheck ran green inside it; biome over the tracked tree exits 0 (30 warnings, 15 infos, no errors); the six stages after lint run individually in the gate's order, each exit 0 — `cargo fmt --check` · `pnpm lint:rust` · `pnpm bundle:assert` · `pnpm test` (all 25 projects green: fieldd 77 files, 737 passed + 12 skipped; the two large renderer/shell suites 725 and 679 + 2 skipped) · `pnpm test:rust` (241 passed, 0 failed, 6 ignored over 21 result lines) · `pnpm gen:check`.
+
+**Still owed:** unchanged from AR-4b, minus the pin move: the pushes (now puppeteer `d2b0600`,
+rosetta `e8d907a`); PU-12; `deletePersona` under a live run; the Agents settings section; the
+DESIGN.md Godview citation (James's live edit); `SIBLINGS_TOKEN`; the dev-local snapshot (the
+AR-5 plan `thinking-ar-views-port.md` joins the draft docs awaiting it). Next: **AR-5** proper —
+PU-5a the views package upstream, in parallel with the fieldd halves of AR-5d/AR-5e (the plan's §7).
