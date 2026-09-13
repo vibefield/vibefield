@@ -1,0 +1,11 @@
+{
+  "contractsVersion": "0.1.0",
+  "serverKind": "field-native",
+  "grantedScopes": [],
+  "nativeBuild": "field-native/0.1.0+dev-4f3a91c07b2e5d68a1c40b93",
+  "terminal": {
+    "controlSocket": "/data/native/run/termctl.sock",
+    "frameSocket": "/data/native/run/termframe.sock",
+    "authToken": "per-boot-native-token"
+  }
+}

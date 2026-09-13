@@ -17,6 +17,7 @@ let package = Package(
     .library(name: "FieldDesign", targets: ["FieldDesign"]),
     .library(name: "SwarmPhysics", targets: ["SwarmPhysics"]),
     .library(name: "FieldAgents", targets: ["FieldAgents"]),
+    .library(name: "FieldProduct", targets: ["FieldProduct"]),
     .library(name: "FieldMesh", targets: ["FieldMesh"]),
     .library(name: "FieldTerminal", targets: ["FieldTerminal"]),
     .library(name: "FieldInput", targets: ["FieldInput"]),
@@ -56,6 +57,13 @@ let package = Package(
     // Agent domain: chopsticks-shaped state, status classification, identity
     // color, and the scripted mock fleet that stands in for the daemon feed.
     .target(name: "FieldAgents", dependencies: ["SwarmPhysics"]),
+    // The product-API client (IOS-4a, H-D3): JSON-RPC 2.0 over one WebSocket
+    // to a desktop's capability URL, the tolerant readers for the shapes the
+    // phone reads, and the subscription state machine. No UI and NO Ghosttea
+    // product — the wall is the manifest's, not a habit: this target is what
+    // the phone knows about fieldd, and the mesh leg below depends on IT for
+    // the wire shapes rather than the other way round.
+    .target(name: "FieldProduct"),
     // The mesh leg: the in-process Truffle/Tailscale runtime, login flow,
     // peer roster (IOS-2) — and since IOS-3, remote-session discovery, which
     // maps upstream's session summaries into FieldAgents' own vocabulary so
@@ -65,6 +73,7 @@ let package = Package(
       dependencies: [
         "FieldDesign",
         "FieldAgents",
+        "FieldProduct",
         .product(name: "GhostteaTruffle", package: "ghosttea"),
       ]
     ),
@@ -116,6 +125,13 @@ let package = Package(
     ),
     .testTarget(name: "SwarmPhysicsTests", dependencies: ["SwarmPhysics"]),
     .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
+    .testTarget(
+      name: "FieldProductTests",
+      dependencies: ["FieldProduct"],
+      // The contracts' OWN goldens, copied in (EL9 on the third side): the
+      // bytes the TypeScript tests parse are the bytes these tests parse.
+      resources: [.copy("Fixtures")]
+    ),
     .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),
     .testTarget(name: "FieldTerminalTests", dependencies: ["FieldTerminal"]),
     .testTarget(name: "FieldInputTests", dependencies: ["FieldInput"]),
