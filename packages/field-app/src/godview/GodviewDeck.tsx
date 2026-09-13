@@ -5,9 +5,23 @@ import {
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
+import {
+  type DeckFrameSlotProps,
+  DeckFrames,
+  PaneFrame,
+  type PaneFrameVerbs,
+} from "@vibecook/puppeteer-views";
 import { AgentListResult, AgentProvidersResult, AgentSpawnResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
-import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   emitGodviewColdOpenMarker,
   emitGodviewDeckMarker,
@@ -40,10 +54,11 @@ import {
   restoreSentence,
   savedPaneSessionIds,
 } from "./deck-restore";
-import { godviewTerminalEffects, godviewTerminalTheme } from "./deck-theme";
+import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { KillActivePane } from "./KillActivePane";
 import { historyPortOver, usagePortOver } from "./monitor/doors";
+import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
@@ -748,6 +763,73 @@ export function GodviewDeck({
     [bornSession, shell],
   );
 
+  /**
+   * A floor session, put in a pane — the workspace half of every mount this
+   * deck performs (the door's, and the pane frame's resume since GT-6).
+   *
+   * With no `replacing` the session lands in the pane the user is in. With one,
+   * it lands in the pane showing the PTY it takes the place of, and ONLY there
+   * (AR-4b): that pane is activated, the mount waits for the workspace to
+   * commit the activation (the active pane is a ref the workspace syncs after
+   * render, and `mountSession` reads that ref) and refuses if it never does —
+   * a pane that closed under the wait must not hand its replacement to
+   * whichever pane the user happens to be in. The user's own pane is given back
+   * afterwards.
+   *
+   * Stable by construction: everything it needs is a ref, so the door memo and
+   * the frame verbs can both hold it without being rebuilt.
+   */
+  const mountSummaryNow = useCallback(
+    async (summary: SessionSummary, replacing: string | undefined): Promise<LocalMountOutcome> => {
+      const paneShows = (sessionId: string): boolean =>
+        workspaceRef.current?.panes.some((pane) => pane.session.id === sessionId) === true;
+      // Read AFTER whatever round trip produced the summary: the panes and the
+      // active one are whatever the user made them while the floor answered.
+      let context = workspaceRef.current;
+      if (context === undefined || context.activePaneId === undefined) return { state: "no-pane" };
+      const sessionId = summary.id;
+      if (replacing === undefined) {
+        context.mountSession(summary);
+        return (await settled(() => paneShows(sessionId), 500))
+          ? { state: "mounted", sessionId }
+          : { state: "failed", reason: "the workspace did not take the mount" };
+      }
+      const target = context.panes.find((pane) => pane.session.id === replacing);
+      if (target === undefined)
+        return { state: "failed", reason: "no pane shows the replaced terminal any more" };
+      const previous = context.activeSession?.id;
+      if (context.activePaneId !== target.id) {
+        context.activateSession(target.session.id);
+        const committed = await settled(
+          () => workspaceRef.current?.activePaneId === target.id,
+          500,
+        );
+        context = workspaceRef.current ?? context;
+        if (!committed || context.activePaneId !== target.id) {
+          if (previous !== undefined) context.activateSession(previous);
+          return {
+            state: "failed",
+            reason: "the pane showing the replaced terminal could not be activated",
+          };
+        }
+      }
+      context.mountSession(summary);
+      const took = await settled(() => paneShows(sessionId), 500);
+      const after = workspaceRef.current ?? context;
+      if (
+        previous !== undefined &&
+        previous !== replacing &&
+        after.panes.some((pane) => pane.session.id === previous)
+      ) {
+        after.activateSession(previous);
+      }
+      return took
+        ? { state: "mounted", sessionId }
+        : { state: "failed", reason: "the workspace did not take the mount" };
+    },
+    [],
+  );
+
   // THE DOOR (GT-D17). Two verbs, built where the runtime and the workspace
   // already are, so the monitor beside this deck can list the mesh and mount
   // one of its sessions without ever touching either.
@@ -936,57 +1018,7 @@ export function GodviewDeck({
         const summary = await terminalSessionSummary(sessionId);
         if (summary === null)
           return { state: "failed", reason: "the floor does not list this session" };
-        // Re-read AFTER the round trip: the panes and the active one are
-        // whatever the user made them while the floor was answering.
-        let context = workspaceRef.current;
-        if (context === undefined || context.activePaneId === undefined)
-          return { state: "no-pane" };
-        const replacing = options?.replacing;
-        if (replacing === undefined) {
-          context.mountSession(summary);
-          return (await settled(() => paneShows(sessionId), 500))
-            ? { state: "mounted", sessionId }
-            : { state: "failed", reason: "the workspace did not take the mount" };
-        }
-        // AR-4 — a replacement lands in the pane showing the PTY it took the
-        // place of, and ONLY there (AR-4b): that pane is activated, the mount
-        // waits for the workspace to commit the activation (the active pane is
-        // a ref the workspace syncs after render, and `mountSession` reads
-        // that ref) and refuses if it never does — a pane that closed under
-        // the wait must not hand its replacement to whichever pane the user is
-        // in. The user's own pane is given back afterwards.
-        const target = context.panes.find((pane) => pane.session.id === replacing);
-        if (target === undefined)
-          return { state: "failed", reason: "no pane shows the replaced terminal any more" };
-        const previous = context.activeSession?.id;
-        if (context.activePaneId !== target.id) {
-          context.activateSession(target.session.id);
-          const committed = await settled(
-            () => workspaceRef.current?.activePaneId === target.id,
-            500,
-          );
-          context = workspaceRef.current ?? context;
-          if (!committed || context.activePaneId !== target.id) {
-            if (previous !== undefined) context.activateSession(previous);
-            return {
-              state: "failed",
-              reason: "the pane showing the replaced terminal could not be activated",
-            };
-          }
-        }
-        context.mountSession(summary);
-        const took = await settled(() => paneShows(sessionId), 500);
-        const after = workspaceRef.current ?? context;
-        if (
-          previous !== undefined &&
-          previous !== replacing &&
-          after.panes.some((pane) => pane.session.id === previous)
-        ) {
-          after.activateSession(previous);
-        }
-        return took
-          ? { state: "mounted", sessionId }
-          : { state: "failed", reason: "the workspace did not take the mount" };
+        return await mountSummaryNow(summary, options?.replacing);
       } catch (cause) {
         return {
           state: "failed",
@@ -994,10 +1026,7 @@ export function GodviewDeck({
         };
       }
     }
-    function paneShows(sessionId: string): boolean {
-      return workspaceRef.current?.panes.some((pane) => pane.session.id === sessionId) === true;
-    }
-  }, [runtime, fieldd, shell]);
+  }, [runtime, fieldd, shell, mountSummaryNow]);
 
   useEffect(() => {
     onRemoteDoor?.(door);
@@ -1020,6 +1049,169 @@ export function GodviewDeck({
   // every session's view binding and its declared demand are exactly what they
   // were — which is the difference between a zoom and upstream's remount.
   const zoom = useDeckZoom(zoomHostRef, workspace?.activePaneId);
+
+  // ── THE PANE FRAME (GT-6, record §07) ───────────────────────────────────
+  //
+  // Every pane wears the reference's frame, and the frame is the PACKAGE'S
+  // (`@vibecook/puppeteer-views`, PU-14): the badge growing out of the top
+  // edge, the `model · effort` readout, the context meter along the bottom,
+  // and the ghost verbs under the pointer. VibeField supplies what only a host
+  // can — the agent facts behind each pane (the window's one fold), the pane's
+  // own colour, the device a remote replica came from, the terminal ink the
+  // frame mixes with, and the three verbs — and reinterprets none of it
+  // (DESIGN.md §1.1).
+  //
+  // `DeckFrames` finds the panes under the deck element and portals one frame
+  // into each, following their coming, going and zooming with a mutation
+  // observer; it also marks that element `vf-deck-framed`, which is what the
+  // package's stylesheet keys its pane rules on (the record's safe areas, the
+  // active pane's radius, the line and the glow).
+  const paneAgents = useDeckAgentFacts();
+  /** The runs the verbs are aimed with, read at CALL time: the verbs must stay
+   * referentially stable (a fresh object per fold frame would re-render every
+   * frame in the deck), and what they need is whatever the fold says NOW. */
+  const paneRuns = useRef(paneAgents.runs);
+  paneRuns.current = paneAgents.runs;
+
+  /** The pane colours, keyed as the package wants them (by PANE, record §02).
+   * The deck records a colour per SESSION at the attach or mount that dealt it,
+   * so this is that ref joined through the panes the workspace currently lays
+   * out. Ghosttea also sets the colour on the pane element itself, which is
+   * where the frame's line and glow read it from; this is for the chrome the
+   * frame draws inside the portal. */
+  const framePaneColors = useMemo(() => {
+    const colours = new Map<string, string>();
+    for (const pane of workspace?.panes ?? []) {
+      const colour = paneColors.current.get(pane.session.id);
+      if (colour !== undefined) colours.set(pane.id, colour);
+    }
+    return colours;
+  }, [workspace]);
+
+  /**
+   * THE VERBS the deck lends the frame.
+   *
+   * `stop` is `agent.interrupt` on the fold's RUN — the one door AR-6-0 adds
+   * for exactly this (the floor delivers what ^C would, and yields to a human
+   * mid-keystroke). It answers whether the interrupt was DELIVERED, which is
+   * what turns the square hollow; a run the fold does not name, a refusal and a
+   * failure are all "not accepted", and each says so in the log rather than on
+   * a button that lies.
+   *
+   * `resume` is `agent.resume` — the existing door — and the answer carries the
+   * new run beside the SAME routed create ticket a birth gets, so the pool
+   * adopts it and the new PTY lands in the pane the verb was pressed in,
+   * replacing the exited one (AR-4b's hand-over, reused).
+   *
+   * `zoom` is this deck's own morph, never ghosttea's remount: the package
+   * hands over the pane element, and the deck's zoom takes a pane id.
+   */
+  const frameVerbs = useMemo<PaneFrameVerbs>(() => {
+    const log = () => getRendererLogger().child({ component: "godview" });
+    const runFor = (sessionId: string): string | undefined => paneRuns.current.get(sessionId);
+    return {
+      stop: async (sessionId) => {
+        const runtimeRunId = runFor(sessionId);
+        if (runtimeRunId === undefined) return { accepted: false };
+        try {
+          // The tolerant reader, at a door whose contract row is landing
+          // beside this slice: an answer this cannot read is NOT a delivery.
+          const answer = (await fieldd.request("agent.interrupt", { runtimeRunId })) as {
+            accepted?: unknown;
+            reason?: unknown;
+          } | null;
+          const accepted = answer?.accepted === true;
+          if (!accepted) {
+            log().info("renderer.godview.interrupt_refused", "fieldd would not stop this turn", {
+              runtimeRunId,
+              ...(typeof answer?.reason === "string" ? { reason: answer.reason } : {}),
+            });
+          }
+          return { accepted };
+        } catch (cause) {
+          log().error(
+            "renderer.godview.interrupt_failed",
+            "the stop verb could not reach fieldd",
+            cause,
+          );
+          return { accepted: false };
+        }
+      },
+      resume: async (sessionId) => {
+        const runtimeRunId = runFor(sessionId);
+        if (runtimeRunId === undefined) return;
+        try {
+          const answered = AgentSpawnResult.parse(
+            await fieldd.request("agent.resume", { runtimeRunId }),
+          );
+          const born = adoptCreatedTerminal(answered.terminal);
+          // Serialized with the door's own mounts (AR-4b): a resume landing in
+          // the same fold frame as a replacement must not race it for the
+          // active-pane slot.
+          const mount = mountQueue.current.then(() => mountSummaryNow(born.session, sessionId));
+          mountQueue.current = mount.then(
+            () => undefined,
+            () => undefined,
+          );
+          const outcome = await mount;
+          if (outcome.state !== "mounted") {
+            log().info(
+              "renderer.godview.resume_unmounted",
+              "the session resumed, but its pane could not be handed the new terminal",
+              {
+                runtimeRunId,
+                sessionId: born.sessionId,
+                state: outcome.state,
+                ...(outcome.state === "failed" ? { reason: outcome.reason } : {}),
+              },
+            );
+          }
+        } catch (cause) {
+          // fieldd's own words: a refusal here is a STATE (the terminal is
+          // still running, the record was already continued), not a crash.
+          log().error(
+            "renderer.godview.resume_failed",
+            "the resume verb could not continue this session",
+            cause,
+          );
+        }
+      },
+      zoom: (pane) => {
+        const paneId = pane.dataset["paneId"];
+        if (paneId !== undefined) zoom.toggle(paneId);
+      },
+      // The chord `ZoomActivePane` claims from ghosttea, in the frame's words.
+      zoomShortcut: getHost().platform === "darwin" ? "⌘⇧↵" : "⌃⇧↵",
+    };
+  }, [fieldd, mountSummaryNow, zoom]);
+
+  /**
+   * The host's frame: the package's, plus the one fact only this deck holds —
+   * the device a remote replica lives on (GT-5c's locality record, kept in a
+   * ref because `paneMeta` reads it too). Stable, so the portals are not torn
+   * down and rebuilt every time the workspace republishes.
+   */
+  const Frame = useMemo(
+    () =>
+      function GodviewPaneFrame({ paneId: _paneId, session, ...props }: DeckFrameSlotProps) {
+        const remote = remoteDevices.current.get(session.id);
+        return (
+          <PaneFrame session={session} {...props} {...(remote !== undefined ? { remote } : {})} />
+        );
+      },
+    [],
+  );
+
+  /** The pane the deck's own morph has zoomed. Passed explicitly because
+   * ghosttea's `is-zoomed` class is NOT the truth here: upstream's zoom
+   * remounts a pane and this deck refuses to (TP-D18), so the phase the
+   * controller is in is the only honest answer. */
+  const zoomedPaneId = zoom.state.phase === "idle" ? null : zoom.state.paneId;
+
+  /** The terminal's ground and ink, from the same projection the workspace is
+   * handed (record §07: the frame is mixed from the terminal's own ink, and the
+   * deck draws on the terminal's ground). */
+  const ground = useMemo(() => terminalGround(terminalTheme), [terminalTheme]);
 
   // DEMAND (TP-L-E'), declared where the views are.
   //
@@ -1247,7 +1439,17 @@ export function GodviewDeck({
           carries the gesture's phase attributes, and it clips the morph, which
           by design overflows the deck. (The zoomed pane itself resolves against
           upstream's `.terminal-host` — `deck-zoom.css` says how.) */}
-      <div ref={zoomHostRef} className="vf-deck-zoom" data-zoom-phase="idle">
+      <div
+        ref={zoomHostRef}
+        className="vf-deck-zoom"
+        data-zoom-phase="idle"
+        style={
+          {
+            "--vf-godview-terminal-bg": ground.background,
+            "--vf-godview-terminal-ink": ground.ink,
+          } as CSSProperties
+        }
+      >
         {workspace?.activeSession !== undefined && (
           <KillActivePane session={workspace.activeSession} fieldd={fieldd} />
         )}
@@ -1310,6 +1512,19 @@ export function GodviewDeck({
           enableRemoteSessions={false}
           showTitlebar={false}
           active={active}
+        />
+        {/* The frames follow the panes ghosttea laid out (GT-6). Mounted
+            inside the zoom host so a zoomed pane keeps its frame through the
+            morph, and so the stylesheet's `.vf-deck-framed` scope covers every
+            pane element under it. */}
+        <DeckFrames
+          deckRef={zoomHostRef}
+          panes={workspace?.panes ?? []}
+          agentsBySession={paneAgents.agents}
+          paneColors={framePaneColors}
+          verbs={frameVerbs}
+          frame={Frame}
+          zoomedPaneId={zoomedPaneId}
         />
       </div>
     </GhostteaProvider>

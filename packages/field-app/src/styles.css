@@ -15,6 +15,10 @@
 @import "./godview/godview.css";
 @import "./godview/deck-zoom.css";
 @import "@vibecook/puppeteer-views/styles/views.css";
+/* GT-6: the deck's pane frame (record §07) ships in the same package since
+   PU-14 and enters the same way — one row, the package's own bundle, and after
+   godview.css so the record's pane rules outrank a host's older reading. */
+@import "@vibecook/puppeteer-views/styles/deck-frame.css";
 @custom-variant dark (&:where(.dark, .dark *));
 /* Three hops from packages/field-app/src → repo root. Shared host primitives
    sit behind a workspace symlink, so auto-detection cannot see them. */

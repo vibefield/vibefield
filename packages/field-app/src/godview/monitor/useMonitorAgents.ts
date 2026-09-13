@@ -27,7 +27,8 @@ import {
   managedRowId,
 } from "./agents";
 import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
-import { type LocalFieldState, useLocalAgentField } from "./local-agent-field";
+import { useAgentFold } from "./GodviewAgentsProvider";
+import type { LocalFieldState } from "./local-agent-field";
 import {
   dealProjectSeqs,
   loadProjectLedger,
@@ -82,10 +83,12 @@ const USAGE_CACHE_KEY = "vf-godview-usage-history-v1";
  *
  * It is a COMPOSITION (GT-D17), and since AR-3 both halves are real:
  *
- *   · `LocalAgentField` — fieldd's fold (`agent.subscribe`): every managed
- *     session on this device, one row per run, with puppeteer's monitor
- *     projection riding verbatim. It replaced `MockAgentField`, and the
- *     label that said the rows were invented went with it.
+ *   · THE FOLD — fieldd's `agent.subscribe`: every managed session on this
+ *     device, one row per run, with puppeteer's monitor projection riding
+ *     verbatim. It replaced `MockAgentField`, and the label that said the rows
+ *     were invented went with it. Since GT-6 the stream itself belongs to
+ *     `GodviewAgentsProvider` one level up, because the deck's pane frames read
+ *     the same rows; this hook consumes the fold and stays a projection.
  *   · `RemoteSessionField` — REAL sessions on real peers, read from the mesh
  *     through the deck's own control connection, and mountable for real.
  *
@@ -256,7 +259,11 @@ export function useMonitorAgents({
   const [providers, setProviders] = useState<readonly AgentProviderSummary[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
 
-  const localField = useLocalAgentField({ door });
+  /** THE FOLD, from the window's one subscription (AR-6 §4.1, built at GT-6).
+   * This hook used to own `agent.subscribe` itself; the stream moved up to
+   * `GodviewAgentsProvider` so the deck's pane frames read the same rows in the
+   * same tick, and what stays here is the monitor's pure projection of them. */
+  const localField = useAgentFold();
   const remoteField = useRemoteSessionField({ door });
 
   // What one can spawn as, asked once per door. A door that cannot answer

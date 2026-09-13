@@ -39,6 +39,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
+import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
 import type { MonitorDoor, RemoteAttachOutcome } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { managedSummary } from "./managed-session-fixture";
@@ -204,12 +205,14 @@ async function mountMonitor(
   root = createRoot(container);
   await act(async () => {
     root?.render(
-      <GodviewMonitor
-        view={view}
-        parameters={monitorParameterDefaults(view.parameterGroups)}
-        door={door}
-        panes={panes}
-      />,
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor
+          view={view}
+          parameters={monitorParameterDefaults(view.parameterGroups)}
+          door={door}
+          panes={panes}
+        />
+      </GodviewAgentsProvider>,
     );
   });
   return container;
@@ -453,12 +456,14 @@ describe("select routes by source", () => {
 
     await act(async () => {
       root?.render(
-        <GodviewMonitor
-          view={monitorViewFor(ROW_VIEW)}
-          parameters={monitorParameterDefaults(monitorViewFor(ROW_VIEW).parameterGroups)}
-          door={door}
-          panes={{ sessionIds: [] }}
-        />,
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor
+            view={monitorViewFor(ROW_VIEW)}
+            parameters={monitorParameterDefaults(monitorViewFor(ROW_VIEW).parameterGroups)}
+            door={door}
+            panes={{ sessionIds: [] }}
+          />
+        </GodviewAgentsProvider>,
       );
     });
     expect(remoteRows(view, "mini")[0]?.classList.contains("is-linked")).toBe(false);

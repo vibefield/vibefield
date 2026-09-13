@@ -2940,6 +2940,54 @@ export async function runSmokeGodview(opts: {
         `the usage column is not on the stage (marker: ${usageFacts.usageTiles} tiles, DOM: ${usageColumnMounted})`,
       );
     }
+    // 1c. THE PANE FRAME (GT-6, record §07). The frame is the views package's
+    //     (PU-14) and is tested upstream and in the field-app fixture; what
+    //     only a real deck can answer is whether it reaches the pane at all —
+    //     the portal is into GHOSTTEA'S element, and the deck that owns those
+    //     elements needs a GPU, a floor and a shell to exist.
+    //
+    //     Three facts, read off the screen rather than off a marker: the deck
+    //     carries the class the package's stylesheet keys every pane rule on
+    //     (without it a frame draws over a pane with no safe areas), the
+    //     active pane holds a frame, and that frame's badge names the pane's
+    //     FOLDER — which for the smoke's free shell is the shell's own cwd,
+    //     never a terminal title. The narrow tier is asserted ABSENT: the
+    //     smoke's window is wide, and a frame that thought otherwise would be
+    //     hiding the readout on every pane in the deck.
+    const paneFrame = (await win.webContents.executeJavaScript(
+      `(() => {
+         const deck = document.querySelector(".vf-godview-terminal-deck .vf-deck-zoom");
+         const pane = document.querySelector(".vf-godview-terminal-deck .ghostty-pane.is-active")
+           ?? document.querySelector(".vf-godview-terminal-deck .ghostty-pane");
+         const frame = pane?.querySelector(".vf-pane-frame") ?? null;
+         return {
+           framed: deck?.classList.contains("vf-deck-framed") === true,
+           frames: document.querySelectorAll(".vf-godview-terminal-deck .vf-pane-frame").length,
+           frameInPane: frame !== null,
+           name: frame?.querySelector(".vf-pane-name")?.textContent ?? "",
+           narrow: document.querySelectorAll(".vf-godview-terminal-deck .ghostty-pane[data-vf-narrow]").length,
+         };
+       })()`,
+    )) as { framed: boolean; frames: number; frameInPane: boolean; name: string; narrow: number };
+    verdict["paneFrame"] = paneFrame;
+    if (!paneFrame.framed) {
+      throw new Error(
+        "the deck is not marked vf-deck-framed — the package's pane rules (the safe areas, the radius, the line) apply to nothing",
+      );
+    }
+    if (!paneFrame.frameInPane || paneFrame.frames < 1) {
+      throw new Error(`the active pane wears no frame (frames in the deck: ${paneFrame.frames})`);
+    }
+    if (paneFrame.name === "") {
+      throw new Error("the pane frame's badge is empty — a pane always has a folder to name");
+    }
+    verdict["paneFrameName"] = paneFrame.name;
+    verdict["paneFrameNarrow"] = paneFrame.narrow;
+    if (paneFrame.narrow > 0) {
+      throw new Error(
+        `${paneFrame.narrow} pane(s) took the narrow tier in a full-width deck — the readout is hidden for nobody`,
+      );
+    }
     // AR-5 (D6): ⌘F summons the find sheet over the stage, Escape dismisses it.
     // The chord is pressed the way the zoom chord is — into Chromium's input
     // pipeline, never OS injection — and both edges are read off the marker,

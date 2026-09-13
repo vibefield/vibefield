@@ -47,6 +47,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentProviderSummary, AgentSessionSummary } from "../src/godview/monitor/facet-types";
+import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
@@ -257,12 +258,14 @@ async function mountMonitor(
   root = createRoot(container);
   await act(async () => {
     root?.render(
-      <GodviewMonitor
-        view={view}
-        parameters={monitorParameterDefaults(view.parameterGroups)}
-        door={door}
-        panes={panes}
-      />,
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor
+          view={view}
+          parameters={monitorParameterDefaults(view.parameterGroups)}
+          door={door}
+          panes={panes}
+        />
+      </GodviewAgentsProvider>,
     );
   });
   return container;
@@ -560,15 +563,18 @@ describe("the monitor stage", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     await act(async () => {
+      const door = fakeDoor();
       root?.render(
-        <GodviewMonitor
-          view={view}
-          parameters={monitorParameterDefaults(view.parameterGroups)}
-          door={fakeDoor()}
-          panes={PANES}
-          onSelectView={(viewId) => selected.push(viewId)}
-          onThemeChange={(theme) => themes.push(theme)}
-        />,
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor
+            view={view}
+            parameters={monitorParameterDefaults(view.parameterGroups)}
+            door={door}
+            panes={PANES}
+            onSelectView={(viewId) => selected.push(viewId)}
+            onThemeChange={(theme) => themes.push(theme)}
+          />
+        </GodviewAgentsProvider>,
       );
     });
     const list = viewButtons(container).find(

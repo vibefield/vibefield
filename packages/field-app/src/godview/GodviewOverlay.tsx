@@ -15,6 +15,7 @@ import {
   godviewTuningStyle,
 } from "./GodviewTuningPanel";
 import { useLabSwitches } from "./lab-switches";
+import { GodviewAgentsProvider } from "./monitor/GodviewAgentsProvider";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
 import type { RemoteSessionDoor } from "./monitor/remote-door";
 import {
@@ -187,59 +188,66 @@ export function GodviewOverlay(): ReactElement | null {
   } as CSSProperties;
 
   return (
-    <GodviewStage
-      open={open}
-      theme={theme}
-      tuningOpen={tuningOpen}
-      // GT-3p, lab only: one attribute silences every ambient loop on the
-      // stage, so the frame readout can be watched with and without them. It
-      // changes no layout and no color — what leaves is the motion alone.
-      animations={labSwitches.animations}
-      style={screenStyle}
-      monitor={
-        open && labSwitches.monitor ? (
-          <GodviewMonitor
-            view={monitor.view}
-            parameters={monitor.parameters}
+    // THE FOLD, one per window (AR-6 §4.1, GT-6). The monitor and the deck are
+    // siblings under the stage and both read fieldd's agent rows — the monitor
+    // to draw the field, the deck to name and drive the agent in each pane — so
+    // the subscription is opened once, here, over the door the deck publishes
+    // upward. It asks nothing while Godview is closed (PF6).
+    <GodviewAgentsProvider door={remoteDoor} subscribed={open}>
+      <GodviewStage
+        open={open}
+        theme={theme}
+        tuningOpen={tuningOpen}
+        // GT-3p, lab only: one attribute silences every ambient loop on the
+        // stage, so the frame readout can be watched with and without them. It
+        // changes no layout and no color — what leaves is the motion alone.
+        animations={labSwitches.animations}
+        style={screenStyle}
+        monitor={
+          open && labSwitches.monitor ? (
+            <GodviewMonitor
+              view={monitor.view}
+              parameters={monitor.parameters}
+              theme={theme}
+              notice={notice}
+              tuningOpen={tuningOpen}
+              door={remoteDoor}
+              panes={panes}
+              onSelectView={monitor.selectView}
+              onToggleTuning={() => setTuningOpen((current) => !current)}
+              onThemeChange={changeTheme}
+            />
+          ) : undefined
+        }
+        tuningPanel={
+          <GodviewTuningPanel
+            open={open && tuningOpen}
             theme={theme}
-            notice={notice}
-            tuningOpen={tuningOpen}
-            door={remoteDoor}
-            panes={panes}
-            onSelectView={monitor.selectView}
-            onToggleTuning={() => setTuningOpen((current) => !current)}
+            value={tuning}
+            appearance={appearance}
+            monitorSections={monitorTuningSections(monitor)}
+            rendererBackend={rendererBackend}
+            onClose={() => setTuningOpen(false)}
             onThemeChange={changeTheme}
+            onChange={changeTuning}
+            onReset={resetTuning}
+            onResetMonitor={monitor.resetParameters}
           />
-        ) : undefined
-      }
-      tuningPanel={
-        <GodviewTuningPanel
-          open={open && tuningOpen}
-          theme={theme}
-          value={tuning}
-          appearance={appearance}
-          monitorSections={monitorTuningSections(monitor)}
-          rendererBackend={rendererBackend}
-          onClose={() => setTuningOpen(false)}
-          onThemeChange={changeTheme}
-          onChange={changeTuning}
-          onReset={resetTuning}
-          onResetMonitor={monitor.resetParameters}
-        />
-      }
-      deck={
-        terminalAvailable ? (
-          <GodviewDeck
-            active={open}
-            theme={theme}
-            onRendererBackend={setRendererBackend}
-            onRemoteDoor={setRemoteDoor}
-            onPanes={setPanes}
-          />
-        ) : (
-          <GodviewUnavailableDeck />
-        )
-      }
-    />
+        }
+        deck={
+          terminalAvailable ? (
+            <GodviewDeck
+              active={open}
+              theme={theme}
+              onRendererBackend={setRendererBackend}
+              onRemoteDoor={setRemoteDoor}
+              onPanes={setPanes}
+            />
+          ) : (
+            <GodviewUnavailableDeck />
+          )
+        }
+      />
+    </GodviewAgentsProvider>
   );
 }

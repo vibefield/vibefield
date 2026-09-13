@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { Section, Specimen } from "../catalog-ui";
 import { GodviewPreview } from "../GodviewPreview";
+import { PaneFramePreview } from "../PaneFramePreview";
 import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 import { TerminalMirrorPreview } from "../TerminalMirrorPreview";
 import { TerminalSessionPickerPreview } from "../TerminalSessionPickerPreview";
@@ -16,6 +17,13 @@ export function GodviewSection(): ReactElement {
     >
       <Specimen title="Godview stage" source="godview/GodviewStage.tsx" bleed>
         <GodviewPreview />
+      </Specimen>
+      <Specimen
+        title="Pane frame — what the deck draws around every terminal"
+        source="@vibecook/puppeteer-views/deck/PaneFrame.tsx"
+        bleed
+      >
+        <PaneFramePreview />
       </Specimen>
       <Specimen
         title="Swarm bodies — every drawn state, on the package's own fixtures"

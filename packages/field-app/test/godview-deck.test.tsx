@@ -25,6 +25,7 @@ import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
+import { bornSummary, routedTicket } from "./routed-terminal-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -135,6 +136,10 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
 const { configureTerminalPool, disposeTerminalPool, prewarmTerminalPool, terminalPoolSnapshot } =
   await import("../src/terminal/pool");
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
+// GT-6: the deck reads the window's one fold for the pane frames, so every
+// mount here is wrapped in the provider that owns it. With a null door it
+// asks nothing and the frames are bare — which is what these cases are about.
+const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
 const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
 const { DEFAULT_DECK_APPEARANCE, resetDeckAppearanceForTest, setDeckAppearance } = await import(
@@ -181,88 +186,9 @@ function installHost(): void {
 }
 
 // TP-S3e: the fixture floor answers the ROUTED contract — doors + grants, and
-// create carries the REQUIRED birth summary.
-const CELL = "cell-test-boot-1";
-function routedTicket(sessionId: string): Record<string, unknown> {
-  return {
-    route: { cellBootId: CELL, routeRevision: 1 },
-    endpoints: {
-      controlUrl: "ws://127.0.0.1:40001/control",
-      framesUrl: "ws://127.0.0.1:40001/frames",
-    },
-    transportGrant: {
-      protected: {
-        v: 1,
-        typ: "CellTransportGrant",
-        iss: "fieldd",
-        alg: "HS256",
-        kid: { cellBootId: CELL, keyGeneration: 1 },
-      },
-      claims: {
-        audienceCellBootId: CELL,
-        clientId: "renderer-1",
-        connectionSetId: "connection-1",
-        allowedChannels: ["control", "frames"],
-        transportGrantGeneration: 1,
-        issuedAt: 1_000,
-        expiresAt: 61_000,
-        nonce: "nonce-1",
-      },
-      mac: "bWFj",
-    },
-    attachGrant: {
-      protected: {
-        v: 1,
-        typ: "SessionAttachGrant",
-        iss: "fieldd",
-        alg: "HS256",
-        kid: { cellBootId: CELL, keyGeneration: 1 },
-      },
-      claims: {
-        audienceCellBootId: CELL,
-        clientId: "renderer-1",
-        sessionId,
-        leaseEpoch: 1,
-        routeRevision: 1,
-        grantGeneration: 1,
-        rights: ["input", "read"],
-        issuedAt: 1_000,
-        expiresAt: 61_000,
-      },
-      mac: "bWFj",
-    },
-  };
-}
-function bornSummary(sessionId: string): Record<string, unknown> {
-  return {
-    id: sessionId,
-    handle: "1",
-    executable: "/bin/zsh",
-    cols: 80,
-    rows: 24,
-    exited: false,
-    readWrite: true,
-    title: null,
-    cwd: "/home/tester",
-    bellCount: 0,
-    pid: 123,
-    createdAtMs: 1_000,
-    exitCode: null,
-    exitSignal: null,
-    requestedTermination: null,
-    exitOutcome: null,
-    ownerId: null,
-    persistence: "keep-until-exit",
-    activity: {
-      kind: "unknown",
-      source: "unsupported",
-      confidence: "heuristic",
-      rootProcessGroupId: null,
-      foregroundProcessGroupId: null,
-      observedAtMs: 1_000,
-    },
-  };
-}
+// create carries the REQUIRED birth summary. Both live in
+// `routed-terminal-fixture.ts` since GT-6, because the pane-frame fixture
+// beside this one asks the same floor the same questions.
 
 /** The fieldd client the deck sees.
  *
@@ -316,7 +242,11 @@ async function mountDeck(theme: "light" | "dark" = "light"): Promise<void> {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(<GodviewDeck active theme={theme} />);
+    root?.render(
+      <GodviewAgentsProvider door={null}>
+        <GodviewDeck active theme={theme} />
+      </GodviewAgentsProvider>,
+    );
   });
   await settle();
 }
@@ -534,7 +464,11 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
 
     // An unrelated re-render (same props): the deck must change nothing else.
     await act(async () => {
-      root?.render(<GodviewDeck active theme="light" />);
+      root?.render(
+        <GodviewAgentsProvider door={null}>
+          <GodviewDeck active theme="light" />
+        </GodviewAgentsProvider>,
+      );
     });
     await settle();
 
@@ -560,7 +494,11 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     expect(workspaceMounts[workspaceMounts.length - 1]!.active).toBe(true);
 
     await act(async () => {
-      root?.render(<GodviewDeck active={false} theme="light" />);
+      root?.render(
+        <GodviewAgentsProvider door={null}>
+          <GodviewDeck active={false} theme="light" />
+        </GodviewAgentsProvider>,
+      );
     });
     await settle();
 
@@ -755,13 +693,15 @@ describe("paneMeta, the durable half of restore (GT-D8 as amended)", () => {
     root = createRoot(container);
     await act(async () => {
       root?.render(
-        <GodviewDeck
-          active
-          theme="light"
-          onRemoteDoor={(next) => {
-            door = next;
-          }}
-        />,
+        <GodviewAgentsProvider door={null}>
+          <GodviewDeck
+            active
+            theme="light"
+            onRemoteDoor={(next) => {
+              door = next;
+            }}
+          />
+        </GodviewAgentsProvider>,
       );
     });
     await settle();
@@ -1086,13 +1026,15 @@ async function mountDeckWithDoor(
   root = createRoot(container);
   await act(async () => {
     root?.render(
-      <GodviewDeck
-        active
-        theme="light"
-        onRemoteDoor={(next) => {
-          captured.door = next;
-        }}
-      />,
+      <GodviewAgentsProvider door={null}>
+        <GodviewDeck
+          active
+          theme="light"
+          onRemoteDoor={(next) => {
+            captured.door = next;
+          }}
+        />
+      </GodviewAgentsProvider>,
     );
   });
   await settle();

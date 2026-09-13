@@ -31,6 +31,13 @@ describe("UI system ownership boundaries", () => {
     // stylesheet enters through the manifest like any other — one row, the
     // package's own bundle, never a copy of its rules.
     expect(appManifest).toContain('@import "@vibecook/puppeteer-views/styles/views.css";');
+    // GT-6: the deck's pane frame (record §07) ships in the same package since
+    // PU-14 and enters the same way — and AFTER godview.css, so the record's
+    // pane rules outrank anything a host still says about a pane.
+    expect(appManifest).toContain('@import "@vibecook/puppeteer-views/styles/deck-frame.css";');
+    expect(appManifest.indexOf("deck-frame.css")).toBeGreaterThan(
+      appManifest.indexOf("godview.css"),
+    );
 
     const catalogManifest = source("design-system/design-system.css");
     expect(catalogManifest).toContain('@import "./styles/catalog-shell.css";');
@@ -149,7 +156,8 @@ describe("UI system ownership boundaries", () => {
     const groundPreview = source("design-system/InfiniteCanvasGroundPreview.tsx");
     const mirror = source("design-system/TerminalMirrorPreview.tsx");
     const picker = source("design-system/TerminalSessionPickerPreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}`;
+    const paneFrame = source("design-system/PaneFramePreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -181,6 +189,8 @@ describe("UI system ownership boundaries", () => {
       "TerminalMirrorSurface",
       "TerminalSessionPickerPreview",
       "SessionPickerView",
+      "PaneFramePreview",
+      "PaneFrameChrome",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -261,6 +271,40 @@ describe("UI system ownership boundaries", () => {
     expect(rule).toContain("left: 13px");
     expect(rule).toContain("width: 46px");
     expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*left: 72px/m);
+  });
+
+  it("keeps the pane frame's own styling in the views package, never in a host's (GT-6)", () => {
+    // The frame — the badge, the readout, the verbs, the meter — is the
+    // record's drawing and ships in `@vibecook/puppeteer-views`. A `.vf-pane-*`
+    // rule written here would be VibeField's second reading of one record, and
+    // two readings of a record is how they drift (the AR-5b chrome-rule
+    // precedent, applied to the deck). The host keeps what a host owns: the
+    // deck's ground, the access chip's colours, and the exit face on
+    // GHOSTTEA's own badge element.
+    const godview = source("godview/godview.css");
+    expect(godview).not.toMatch(/\.vf-pane-/);
+    // The two the host used to draw for itself, now the package's: the line and
+    // the glow on the selected pane, and the divider between two resting ones.
+    // A RULE, not a mention: the prose above these lines names both selectors
+    // to say who owns them, and a bare substring would forbid explaining it.
+    expect(godview).not.toMatch(/\[data-pane-accent\]::before[^\n{]*\{/);
+    expect(godview).not.toMatch(/\.ghostty-split-divider[^\n{]*\{/);
+
+    const catalogCss = [
+      source("design-system/styles/catalog-shell.css"),
+      source("design-system/styles/foundations.css"),
+      source("design-system/styles/scenes.css"),
+      source("design-system/styles/tweaks.css"),
+    ].join("\n");
+    expect(catalogCss).not.toMatch(/\.vf-pane-/);
+
+    // And the catalog's fixture is an ADAPTER: the shipping chrome over
+    // fixture facts, with no markup and no stylesheet of its own.
+    const preview = source("design-system/PaneFramePreview.tsx");
+    expect(preview).toContain("PaneFrameChrome");
+    expect(preview).toContain("paneFrameAgentFacts");
+    expect(preview).not.toContain("<style");
+    expect(preview).not.toMatch(/className="vf-pane-/);
   });
 
   it("keeps the swarm's own styling in the views package, never in godview.css (AR-5)", () => {

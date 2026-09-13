@@ -602,40 +602,56 @@
   display: none;
 }
 
-.vf-godview-terminal-deck .ghostty-pane-badge {
-  padding: 3px 9px;
-  color: var(--vf-godview-dark-text-main);
-  background: var(--ghostty-pane-color);
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  transition:
-    color 160ms ease,
-    background-color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.vf-godview-terminal-deck .ghostty-pane:not(.is-active) .ghostty-pane-badge {
-  color: var(--ghostty-pane-color);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--ghostty-pane-color);
-}
-
-.vf-godview-terminal-deck .ghostty-pane.is-active[data-pane-accent]::before {
-  border-color: var(--ghostty-pane-color);
-  box-shadow: inset 0 0 12px color-mix(in srgb, var(--ghostty-pane-color) 18%, transparent);
-}
-
-.vf-godview-terminal-deck .ghostty-split-divider {
-  background: var(--terminal-divider);
-}
+/* THE PANE'S OWN CHROME IS THE RECORD'S (GT-6, record §07), and it ships in
+   the views package (`deck-frame.css`, PU-14): the badge growing out of the top
+   edge, the readout, the ghost verbs, the context meter, the safe areas, the
+   selected pane's radius, and the line and glow on `[data-pane-accent]::before`.
+   What used to stand here — this deck's own badge, its own glow and its own
+   divider — was VibeField's reading of the same drawing, and two readings of one
+   record is how they drift. They are DELETED rather than narrowed; the package's
+   rules are imported after this file, and what stays here is only what a HOST
+   owns: the deck's ground (above), the access chip's colours (below), and the
+   exit face (further below). */
 
 .vf-godview-terminal-deck .ghostty-pane-access {
-  top: 24px;
   color: var(--pane-access-text);
   border-color: var(--pane-access-border);
   background: var(--pane-access-bg);
+}
+
+/* THE EXIT FACE, kept and moved (GT-6).
+   `describePane` says what became of a dead pane — "exited · 1", "ended · 9" —
+   through the one vocabulary ghosttea gives an embedder, its pane badge; the
+   record has no field for it, and the frame's own badge now owns the top-right
+   corner that badge sits in. So the host's badge moves to the bottom-left, over
+   the meter's track and opposite the context figure, and takes the frame's type
+   rather than this deck's old uppercase chip. A pane that is alive carries no
+   label at all (`pane-faces.ts`: quiet IS the honesty), so nothing is drawn here
+   until a session ends. NAMED for James's eye: the record does not draw this,
+   because the reference has no exit face to draw. */
+.vf-deck-framed .ghostty-pane-badge {
+  top: auto;
+  right: auto;
+  bottom: 11px;
+  left: 0;
+  max-width: 50%;
+  padding: 2px 8px 2px 11px;
+  border-radius: 0 4px 4px 0;
+  color: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 62%, transparent);
+  background: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 8%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* A pane carrying an accent tints its exit chip with it — a failure's red from
+   `describePane` (§2.5: a state outranks a label), or the project colour the
+   monitor dealt the pane it mounted into. Both reach the pane the same way, as
+   `--ghostty-pane-color`. */
+.vf-deck-framed .ghostty-pane[data-pane-accent] .ghostty-pane-badge {
+  color: var(--ghostty-pane-color);
+  background: color-mix(in srgb, var(--ghostty-pane-color) 12%, transparent);
 }
 
 .vf-godview-unavailable,

@@ -40,6 +40,38 @@ function hex(value: string, alpha: number): Rgba {
   return [r, g, b, alpha];
 }
 
+/** The terminal's ground, as the deck's frames read it (GT-6). */
+export interface TerminalGround {
+  /** The theme's background, as CSS colour text — the ground a rounded pane's
+   * corners and the space between two panes show. */
+  background: string;
+  /** The theme's foreground: the INK every figure the pane frame draws is
+   * mixed from (record §07; the package's `deck-frame.css` reads it as
+   * `--vf-godview-terminal-ink`). */
+  ink: string;
+}
+
+function cssColor(colour: Rgba): string {
+  const channel = (value: number): number => Math.round(Math.min(1, Math.max(0, value)) * 255);
+  return `rgb(${channel(colour[0])} ${channel(colour[1])} ${channel(colour[2])})`;
+}
+
+/**
+ * The ground the pane frame mixes its colours from, read off the SAME
+ * projection the workspace is handed rather than restated as a token: a viewer
+ * who changes the deck's palette in Settings moves the frame with it, and the
+ * frame can never disagree with the terminal it is drawn around.
+ *
+ * The reference reads this from the daemon's live config snapshot
+ * (`terminal-ground.ts`); here the viewer's own appearance is the authority
+ * (GT-D12 — theme and opacity belong to the surface that draws), and
+ * `godviewTerminalTheme` is where that choice already becomes colours. The
+ * ALPHA is deliberately dropped: the ink is a colour to mix with, not a glass.
+ */
+export function terminalGround(theme: TerminalTheme): TerminalGround {
+  return { background: cssColor(theme.background), ink: cssColor(theme.foreground) };
+}
+
 /** The named theme, or `undefined` for the deck's own palette. A name that no
  * longer exists in the catalog resolves to `undefined` too — a pinned catalog
  * can drop an entry between releases, and falling back to this design system is

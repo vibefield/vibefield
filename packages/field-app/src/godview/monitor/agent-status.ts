@@ -42,8 +42,10 @@ export function classifyAgentStatus(summary: AgentSessionSummary): AgentVisualSt
   }
 }
 
-/** The path the project is named from, before folding. */
-function projectPath(summary: AgentSessionSummary): string {
+/** The path the project is named from, before folding. Exported since GT-6:
+ * the pane frame names its badge from the same chain, so a pane and its bubble
+ * say the same word about the same agent. */
+export function projectPath(summary: AgentSessionSummary): string {
   return (
     summary.monitor?.environment?.cwd ||
     summary.workspace?.sourcePath ||

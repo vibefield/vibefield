@@ -1400,3 +1400,38 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* THE PANE FRAME (GT-6): the deck's chrome as the views package draws it,
+   over fixture facts, in both terminal grounds. Every rule here is the
+   catalog's own LAYOUT — the specimen grid and the pane stand-in's caption.
+   Every selector the frame itself draws with lives in the package's
+   `deck-frame.css` and is never restated here (the boundary test says so, and
+   it reads this file as a substring, so they are not even named). */
+.vf-ds-pane-frames {
+  display: grid;
+  gap: 26px;
+}
+
+.vf-ds-pane-frame-deck {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding: 22px;
+  border: 1px solid var(--vf-ds-line);
+  border-radius: 12px;
+  background: var(--vf-ds-panel);
+}
+
+.vf-ds-pane-frame-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+}
+
+.vf-ds-pane-frame-figure figcaption {
+  max-width: 32ch;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  line-height: 1.5;
+}

@@ -10,6 +10,7 @@ import {
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "../godview/GodviewTuningPanel";
+import { GodviewAgentsProvider } from "../godview/monitor/GodviewAgentsProvider";
 
 /** Runtime-free composition of the production Godview shell and monitor. The
  * terminal bridge is deliberately absent and therefore renders the same honest
@@ -39,41 +40,46 @@ export function GodviewPreview(): ReactElement {
   } as CSSProperties;
 
   return (
-    <div className="vf-ds-godview-frame">
-      <GodviewStage
-        open
-        theme={theme}
-        tuningOpen={tuningOpen}
-        animations={false}
-        style={screenStyle}
-        monitor={
-          <GodviewMonitor
-            view={view}
-            parameters={parameters}
-            theme={theme}
-            tuningOpen={tuningOpen}
-            onSelectView={setViewId}
-            onToggleTuning={() => setTuningOpen((current) => !current)}
-            onThemeChange={changeTheme}
-          />
-        }
-        tuningPanel={
-          <GodviewTuningPanel
-            open={tuningOpen}
-            theme={theme}
-            value={tuning}
-            appearance={appearance}
-            monitorSections={[]}
-            rendererBackend="design preview"
-            onClose={() => setTuningOpen(false)}
-            onThemeChange={changeTheme}
-            onChange={(patch) => setTuning((current) => ({ ...current, ...patch }))}
-            onReset={() => setTuning(defaultGodviewTuning(theme))}
-            onResetMonitor={() => undefined}
-          />
-        }
-        deck={<GodviewUnavailableDeck />}
-      />
-    </div>
+    // The window's fold (GT-6), with no door to open: the catalog has no
+    // daemon, so the field is `no-door` — nobody has been asked — and the
+    // monitor draws the honest empty stage rather than invented rows.
+    <GodviewAgentsProvider door={null}>
+      <div className="vf-ds-godview-frame">
+        <GodviewStage
+          open
+          theme={theme}
+          tuningOpen={tuningOpen}
+          animations={false}
+          style={screenStyle}
+          monitor={
+            <GodviewMonitor
+              view={view}
+              parameters={parameters}
+              theme={theme}
+              tuningOpen={tuningOpen}
+              onSelectView={setViewId}
+              onToggleTuning={() => setTuningOpen((current) => !current)}
+              onThemeChange={changeTheme}
+            />
+          }
+          tuningPanel={
+            <GodviewTuningPanel
+              open={tuningOpen}
+              theme={theme}
+              value={tuning}
+              appearance={appearance}
+              monitorSections={[]}
+              rendererBackend="design preview"
+              onClose={() => setTuningOpen(false)}
+              onThemeChange={changeTheme}
+              onChange={(patch) => setTuning((current) => ({ ...current, ...patch }))}
+              onReset={() => setTuning(defaultGodviewTuning(theme))}
+              onResetMonitor={() => undefined}
+            />
+          }
+          deck={<GodviewUnavailableDeck />}
+        />
+      </div>
+    </GodviewAgentsProvider>
   );
 }
