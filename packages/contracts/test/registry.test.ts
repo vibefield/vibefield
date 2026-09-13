@@ -11,6 +11,7 @@ import {
   LOG_STREAMS,
   MESH_CONTROL_LIMITS,
   PORTS,
+  PRODUCT_API_LIMITS,
   SCOPES,
   SOCKETS,
   STORES,
@@ -72,6 +73,20 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
         subscription: false,
       },
     ]);
+  });
+
+  it("pins the product API's per-connection subscription budget", () => {
+    // A number the DOOR enforces (product-api.ts refuses past it with
+    // RESOURCE_EXHAUSTED), so it moves here deliberately or not at all: raising
+    // it raises what one socket can make this daemon do on every tick, and
+    // lowering it can refuse a window that legitimately watches several streams.
+    expect(PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION).toBe(32);
+    expect(Number.isSafeInteger(PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION)).toBe(true);
+    expect(PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION).toBeGreaterThan(
+      // the desktop's own busiest window: health, the fold, usage, the deck's
+      // routes, docs and artifacts, with room to spare
+      8,
+    );
   });
 
   it("socket names fit the tightest path budget (UA-D9 — sun_path)", () => {

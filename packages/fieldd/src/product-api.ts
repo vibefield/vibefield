@@ -10,6 +10,7 @@ import {
   METHODS,
   type MethodDef,
   NAMESPACES,
+  PRODUCT_API_LIMITS,
   type RendererParticipantIdentity,
   RPC_ERROR_CODES,
   type Scope,
@@ -292,6 +293,11 @@ export class ProductApi extends EventEmitter {
       return;
     }
     if (kind === "subscription") {
+      const refusal = this.subscriptionBudgetRefusal(state, id);
+      if (refusal !== null) {
+        reply(refusal);
+        return;
+      }
       const subId = `ps-${this.nextSubId++}`;
       let active = true;
       const emit = (payload: unknown) => {
@@ -787,6 +793,11 @@ export class ProductApi extends EventEmitter {
               );
               return;
             }
+            const federatedRefusal = this.subscriptionBudgetRefusal(state, id);
+            if (federatedRefusal !== null) {
+              reply(federatedRefusal);
+              return;
+            }
             const subId = `ps-${this.nextSubId++}`;
             const base = method.replace(/\.subscribe$/, "");
             let active = true;
@@ -847,6 +858,11 @@ export class ProductApi extends EventEmitter {
     const ctx = state.ctx;
     if (!ctx) return; // unreachable past the authed gate; keeps the type honest
     if (subHandler) {
+      const refusal = this.subscriptionBudgetRefusal(state, id);
+      if (refusal !== null) {
+        reply(refusal);
+        return;
+      }
       const subId = `ps-${this.nextSubId++}`;
       const base = method.replace(/\.subscribe$/, "");
       let active = true;
@@ -901,6 +917,28 @@ export class ProductApi extends EventEmitter {
       if (error) ws.terminate();
     });
     return true;
+  }
+
+  /** EL7 — a connection's subscription budget. A subscription is recurring WORK
+   * (the field projection lists and encodes per subscriber per flush), so an
+   * unbounded map let one socket buy the daemon's tick budget. Checked BEFORE
+   * the subscribe runs at all three install sites — the local handler, the
+   * federated proxy and a plugin provider's own method — so the refusal costs
+   * nothing and disturbs nothing already live. */
+  private subscriptionBudgetRefusal(state: ConnState, id: unknown): unknown | null {
+    if (state.subs.size < PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION) return null;
+    return this.err(
+      id,
+      "RESOURCE_EXHAUSTED",
+      "this connection holds too many live subscriptions",
+      // not retryable as-is: retrying the same call with the same map full
+      // fails identically. The caller unsubscribes, or dials a second socket.
+      false,
+      {
+        resource: "subscriptions",
+        limit: PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION,
+      },
+    );
   }
 
   private err(

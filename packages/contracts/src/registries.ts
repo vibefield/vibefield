@@ -73,6 +73,23 @@ export const MESH_CONTROL_LIMITS = {
   PRODUCT_QUEUED_BYTES: 128 * 1024 * 1024,
 } as const;
 
+/** Per-CONNECTION bounds on the product API (EL7). A subscription is not a
+ * read: it is WORK this daemon does on every tick for as long as the socket
+ * lives, and the field projection makes that concrete — each subscriber costs a
+ * list plus a JSON encode per row per flush, so the cost of one connection is
+ * linear in the number of subscriptions it holds. Nothing bounded that, and a
+ * single `agent.observe` holder (a phone left in a drawer, a plugin in a loop)
+ * could buy the whole daemon's tick budget with one socket. TS-only on purpose:
+ * this is the ProductAPI's own admission rule and the native plane has no
+ * subscriptions of this kind. */
+export const PRODUCT_API_LIMITS = {
+  /** Generous for every real client — the desktop's busiest window holds a
+   * handful — and small enough that a runaway is refused in the same second it
+   * starts. A caller past it gets RESOURCE_EXHAUSTED and keeps everything it
+   * already had: the refusal never disturbs live subscriptions. */
+  SUBSCRIPTIONS_PER_CONNECTION: 32,
+} as const;
+
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
  * seam (so they live in the genned registry, one authority both planes read).
  * THE fleet-memory lever — and a BYTE cap, not a row cap: styled 80-col
