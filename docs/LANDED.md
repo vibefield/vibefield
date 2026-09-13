@@ -5132,3 +5132,80 @@ over it. **Tests 331 → 332 green; 36 screenshots across 18 states in both them
 the artboard renders.** Still James's: the rest of the phone's chrome (the session card's
 header and affordances, the settings sheet, the mesh sheet) is godview mono today and waits on
 his scoping; every device gate from the IOS-5 entry is unchanged by a re-skin.
+
+## IOS-6a/6b — the field's model and physics catch up with RFC 005: the body model, the ledgers, the fixed step
+
+**LANDED 2026-09-13, `2ac90328` on `ios/swarm`** (branched from `ios/keyboard` `a3b8a7ec`; James
+merges). The plan is `draft/thinking-ios-swarm.md` (D-i11…D-i17, §4's slices). Two slices in one
+commit because `SwarmParameters` is the seam both need: the locked defaults (idle 50 · working
+60→80 by the session's share of the working sessions' tokens · blocked 50 · 30 Hz · fill 0.72 ·
+the light's 34/0.8/0) retire the July radii the old classifier read. **6a:** `AgentVisualStatus`
+is core's `idle · working · blocked` (the July off-by-one `bubbleVisual`/`AgentBubbleAppearance`
+gone; a question or a failure blocks like a permission); `AgentRuntimeState` grows a SUBSET of
+puppeteer's monitor mirror, names kept (`usage` + samples, `effort` + intent, `lastAssistantMessage`,
+`blockers`, `statusSince`, `lastEvidenceAt`) so IOS-4's binding is a mapping; `SwarmBodyModel` =
+the reference's `bubble-model.ts` transcribed whole (the five drawn states, the copy lines at the
+reference's sizes, the figures, the ring, the flood/hollow/comet, the watermark, the accessibility
+copy, the peer's host line said both ways per puppeteer `5389449`); `TextLayout`, `BurnBars`,
+`UsageLedger` (30 s × 20, the hold rule, the grace, the spread, export/seed), `UnreadLedger`,
+`ProjectTint` (OKLCH along the golden ratio with the withheld band and the gamut clamp — goldens
+generated from the TypeScript under Node 26), `ProjectLedger` + `PaneColourLedger`, `SwarmColor`;
+`FieldBubble` carries the row facts and `FieldAssembly` folds the ledgers per projection, dealing
+the phone's ONE pane (the card, D-i12) and every project a colour (D-i13); the mock fleet burns
+along the lab's four shapes, wears an effort, replies, asks, fails, and stamps the clocks.
+**6b:** `SwarmWorld.advance(now:)` — the reference's accumulator (floor 15 Hz, air-friction ceiling
+0.2, both clamped at every entry, the 100 ms stall cap, five steps a pump), every state's last two
+solved positions for the blend, `syncAgents` reporting membership, `queryPoint`. **Tests:** FieldAgents
+25 → 89 and SwarmPhysics 11 → 24, the reference's suites transcribed (values unchanged); the whole
+kit 408 green; the app shell builds.
+
+## IOS-6c — the swarm on Metal: the reference's renderer transcribed, and the lab that shows it
+
+**LANDED 2026-09-13, `0ba7a6a8` on `ios/swarm`.** A new target `FieldSwarm` (D-i11): the six
+shaders transcribed from the reference's WGSL line for line and shipped as RESOURCES that compile
+at first use (D-i14 as built — one source, no twins, no plugin; 1,073 ms for the five on the
+simulator, whose compiler is not a phone's), `SwarmRenderer` (the same five pipelines in painter's
+order, the same 40/44/16-float layouts and flag bits, one upload a frame, three buffer sets in
+flight), the glyph atlas (CoreText at the screen's scale into an `r8` shelf-packed texture; the
+folder, dot and bar from CoreGraphics paths into the same atlas), the mark atlas (the reference's
+`marks.png` byte for byte, its twenty-tile table), `SwarmTheme` (resolved from `FieldPalette` per
+scheme, never a second transcription), `SwarmStage` (`AgentSwarm.tsx` without React: the blend
+between the last two solved states, the radius spring at ω 16, the four-segment arrival curve, draw
+order, hit testing, drag / tap-and-nudge / hold-to-create, VoiceOver focus → the focus ring),
+`SwarmMetalView`, the SwiftUI `SwarmField`, and the design lab behind `-vf-swarm-lab[=section[:page]]`
+(D-i15): the reference's fixture stages on the production renderer, paged six a surface after one
+surface for the whole grid crossed the 8,192-pixel texture limit at 3×. **Two defects the gate
+caught:** `vertex` is a reserved word in Metal and the transcription used it as a parameter name
+(the compile witness), and the atlas's `sprite` shadowed its own `size` with the sprite's, putting
+every mark's UV off the texture (the first screenshots — no dot, bar or folder anywhere).
+**Witnessed:** `FieldSwarmTests` 16 rows (the mark table, the theme's pairs both schemes, the packed
+flags per state incl. the light only on the open card's body, the flood's ink, the frame's hold,
+the graph band, the arrival curve, the spring's landing and snap, draw order and hit test, the hold
+timer, and the five shaders compiling and the atlas measuring on the simulator's device); the lab
+screenshotted on the iPhone 17 Pro (26.5) simulator, both themes, every page.
+
+## IOS-6d — the field goes live: the home screen mounts the swarm on Metal, the July views retire
+
+**LANDED 2026-09-13, `360cf8c9` on `ios/swarm`.** `HomeScreen` mounts `SwarmField` over rows
+dressed by `FieldAssembly`, folded on every change of the feed, the card's subject and the colour
+scheme (the project ledger cached per device); the July field (`SwarmFieldView`, `FieldBubbleView`,
+`IgnitionView`, `DisplayLinkDriver`, the grid canvas) and the tokens only it read are deleted, not
+kept in parallel. The README is rewritten for the port. **Witnessed:** the whole kit 424 green;
+the live field screenshotted both themes over the mock fleet, with the peers' hollows
+(`-vf-demo-remote`) and with the card open (`-vf-auto-open-card` — the subject's body lit in the
+pane's colour). **Owed to a device (the README says so on screen):** the shader compile at first
+use, the feel of 30 Hz physics under a 120 Hz blend (`physicsHz` is a parameter), the type at 7 pt
+on a real panel. **Not in this track, recorded as deltas:** no panes beyond the open card
+(D-i12), no hover (the title is the VoiceOver label and the card's header), the project colour
+dealt per device until a fieldd door carries the sequence (D-i13).
+
+## IOS-6 — the swarm on Metal lands: the phone's field is RFC 005's, on `ios/swarm`
+
+**2026-09-13.** Four slices (`2ac90328` · `0ba7a6a8` · `360cf8c9`), the phone's port of the design
+pass the desktop consumed at AR-5, built as a TRANSCRIPTION of puppeteer `packages/views`'s swarm
+(design locked 2026-09-09; the 2026-09-12 pane-colour revision; the host line of `5389449`) rather
+than an import: every constant, every branch of the body model, every line of the six shaders
+carried across and pinned by the reference's own tests. D-i11…D-i17 are adopted provisionally —
+James rules; DECISIONS rows follow. **The base branch is James's call** (§6 of the plan): `ios/swarm`
+is cut from `ios/keyboard`, so it lands on main after the keyboard track does, or as one merge with
+it. **The record:** `draft/thinking-ios-swarm.md` §9 is the landing log.
