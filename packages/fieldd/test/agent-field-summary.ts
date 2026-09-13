@@ -28,6 +28,8 @@ export interface SummaryOptions {
   lastAssistantText?: string;
   title?: string;
   terminal?: AgentSessionSummary["terminal"];
+  /** no `terminal` key at all — an ingested row, or one the fold has no PTY for */
+  noTerminal?: boolean;
 }
 
 export function managedSummary(options: SummaryOptions = {}): AgentSessionSummary {
@@ -106,10 +108,14 @@ export function managedSummary(options: SummaryOptions = {}): AgentSessionSummar
     tier: "managed",
     runtimeRunId,
     runtimeEpoch: 1,
-    terminal:
-      options.terminal === undefined
-        ? { hosted: "local", runtimeSessionId: `${runtimeRunId}-pty`, workloadClass: "agent" }
-        : options.terminal,
+    ...(options.noTerminal === true
+      ? {}
+      : {
+          terminal:
+            options.terminal === undefined
+              ? { hosted: "local", runtimeSessionId: `${runtimeRunId}-pty`, workloadClass: "agent" }
+              : options.terminal,
+        }),
     workspace: { mode: "direct", root: cwd, sourcePath: cwd },
     ...(monitor !== undefined ? { monitor } : {}),
     status,

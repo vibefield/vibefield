@@ -64,9 +64,16 @@ export const AgentFieldRow = z
     stateChangedAt: z.string(),
     createdAt: z.string(),
     lastActivityAt: z.string().optional(),
+    /** Liveness as fieldd knows it: the monitor's own word when a monitor
+     * exists, and otherwise whether the floor still hosts the run's PTY.
+     * Never "is it observed" — see `pending`. */
     alive: z.boolean(),
     /** AR-4 — a live PTY fieldd could not re-attach to: it resumes at the
-     * session's next idle. The row is honest that nothing observes it. */
+     * session's next idle. The row is honest that nothing OBSERVES it, which
+     * is a different claim from `alive` (ruled 2026-09-13): a pending run is
+     * alive — its PTY is on the floor — and merely undriven. A reader draws
+     * `alive` as "is this agent still there", and `pending` as "and is anyone
+     * at the wheel". */
     pending: z.enum(["resume-when-idle"]).optional(),
     blockers: z.array(AgentFieldBlocker),
     usage: z

@@ -49,15 +49,21 @@ describe("MF-1 — the field row is content-free (§10.1)", () => {
     ]);
   });
 
-  it("states the honest faces: pending is unobserved, an ended PTY is not alive", () => {
+  it("states the honest faces: a pending row is ALIVE and undriven, an ended PTY is not alive", () => {
     const pending = slice.rows.find((row) => row.pending !== undefined);
     expect(pending?.pending).toBe("resume-when-idle");
-    // AR-4: its PTY is live but NOTHING observes it, so the row claims nothing
-    expect(pending?.alive).toBe(false);
+    // AR-4 (ruled 2026-09-13): its PTY is on the floor, so the run IS alive —
+    // what it lacks is an observer, which is what `pending` says. A reader
+    // draws `alive: false` as GONE, and dropping a live agent off a phone is
+    // the failure this golden exists to prevent.
+    expect(pending?.alive).toBe(true);
     expect(pending?.status).toBe("unknown");
+    expect(pending?.terminal?.hosted).toBe("local");
 
+    // and the row whose PTY is gone is the one that says so
     const exited = slice.rows.find((row) => row.terminal?.hosted === "none");
     expect(exited?.alive).toBe(false);
+    expect(exited?.pending).toBeUndefined();
   });
 
   it("refuses a row that lost an identity field, and tolerates an unknown one", () => {

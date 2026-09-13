@@ -95,18 +95,42 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     });
   });
 
-  it("claims no liveness it cannot witness", () => {
+  it("takes liveness from the mirror when there is one", () => {
     expect(projectFieldRow(summary({ alive: true })).alive).toBe(true);
     expect(projectFieldRow(summary({ alive: false })).alive).toBe(false);
-    // AR-4's pending row: a live PTY nothing observes. No mirror, no claim.
+  });
+
+  it("a pending row is ALIVE while its PTY is hosted — unobserved is not gone", () => {
+    // AR-4 (ruled 2026-09-13). This run has no monitor: fieldd could not
+    // re-attach, so nothing is driving it. Its PTY is still on this device's
+    // floor and fieldd will re-adopt or resume it, so the run IS alive, and
+    // `pending` is the field that says nobody is at the wheel. Answering
+    // `alive: false` here would read as GONE and drop a live agent off a phone.
     const pending = projectFieldRow(
       summary({ monitor: false, pending: "the adapter would not attach", status: "unknown" }),
     );
-    expect(pending.alive).toBe(false);
+    expect(pending.alive).toBe(true);
     expect(pending.pending).toBe("resume-when-idle");
+    expect(pending.terminal?.hosted).toBe("local");
     // and its `statusSince` falls back to the moment this boot learned of it
     expect(pending.statusSince).toBe("2026-09-13T10:05:00.000Z");
     expect(pending.blockers).toEqual([]);
+  });
+
+  it("without a mirror, the floor's listing is the whole witness", () => {
+    // the PTY is gone: no mirror, nothing hosted, nothing to claim
+    const gone = projectFieldRow(
+      summary({
+        monitor: false,
+        pending: "the adapter would not attach",
+        terminal: { hosted: "none" },
+      }),
+    );
+    expect(gone.alive).toBe(false);
+    // and a row carrying no terminal at all is not alive either — absence of a
+    // PTY is not evidence of one
+    const homeless = projectFieldRow(summary({ monitor: false, noTerminal: true }));
+    expect(homeless.alive).toBe(false);
   });
 });
 

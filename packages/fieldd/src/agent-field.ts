@@ -112,10 +112,15 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
     stateChangedAt: summary.stateChangedAt,
     createdAt: summary.createdAt,
     ...(summary.lastActivityAt !== undefined ? { lastActivityAt: summary.lastActivityAt } : {}),
-    // No mirror, no claim. A pending row's PTY is live but NOTHING observes it
-    // (AR-4), so the field says `alive: false` and `pending` says why — never a
-    // liveness this daemon cannot witness.
-    alive: monitor?.alive ?? false,
+    // Liveness AS FIELDD KNOWS IT (ruled 2026-09-13), which is not the same as
+    // "observed". With a mirror, the mirror's own word. WITHOUT one — AR-4's
+    // pending row — the floor's listing is the witness: its PTY is on this
+    // device and fieldd will re-adopt or resume it, so the run is ALIVE and
+    // merely unobserved, and `pending` is what says nothing is driving it. The
+    // first draft answered `false` here and that was a defect: a reader draws
+    // `alive: false` as GONE, which would have dropped a live agent off a
+    // phone. `hosted: "none"` (or no terminal at all) is the honest false.
+    alive: monitor?.alive ?? (summary.terminal !== undefined && summary.terminal.hosted !== "none"),
     ...(summary.continuation?.pending !== undefined
       ? { pending: summary.continuation.pending }
       : {}),
