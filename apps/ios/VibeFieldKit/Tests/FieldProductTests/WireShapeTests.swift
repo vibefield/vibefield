@@ -8,6 +8,13 @@ import Testing
 // byte — the same goldens the TypeScript tests parse, so a wire change upstream
 // is a red here rather than a runtime surprise on a phone.
 //
+// "Byte for byte" is now GATED rather than asserted in a comment:
+// `scripts/check-ios-fixtures.mjs`, which `pnpm verify` runs, compares every
+// copy under `apps/ios/VibeFieldKit/**` to the contracts' file of the same
+// name. It was written because this sentence was already false —
+// `agent-list.valid.json` had drifted by a line of formatting and nothing
+// noticed, which is exactly how a copy stops being evidence.
+//
 // The field trio — `agent-field-snapshot.valid.json`,
 // `agent-field-delta.valid.json`, `agent-field-slice.valid.json` — and the two
 // door answers beside them are likewise copies from `mf/fd1`'s
@@ -256,29 +263,44 @@ import Testing
     #expect(exited.burnRatePerMin == nil)
   }
 
-  /// §10.1's own list of what a field row must NOT carry. This test is the
-  /// wall: if a future shape starts shipping the reply text or a blocker's
-  /// prompt, the phone still will not read it.
-  @Test func theFieldRowCarriesNoConversationContent() throws {
-    let snapshot = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.valid"))
-    let names = Set(Mirror(reflecting: try #require(snapshot.rows.first)).children.map {
-      $0.label ?? ""
-    })
-    for absent in ["lastAssistantMessage", "title", "input", "questions", "detail", "monitor"] {
-      #expect(!names.contains(absent), "AgentFieldRow must not carry `\(absent)`")
+  /// §10.1's own list of what a field row must NOT carry — checked against a
+  /// PAYLOAD that carries all of it.
+  ///
+  /// The first version of this reflected over the Swift type, which the
+  /// compiler already guarantees: a property that is not declared cannot be
+  /// read, and the mirror was only asking the compiler to confirm its own
+  /// work. The question worth asking is what happens when the CONTENT ARRIVES
+  /// ANYWAY — a future fieldd, a hostile peer's slice — and the answer must be
+  /// that it lands in `unknownFields` and reaches nothing else.
+  @Test func contentThatArrivesAnywayIsCarriedAsUnknownAndReadByNobody() throws {
+    var row = try #require(
+      try Fixture.json("agent-field-snapshot.valid")["rows"]?.arrayValue?.first?.objectValue)
+    row["lastAssistantMessage"] = .object([
+      .init("text"): .string("the secret plan"), .init("at"): .string("2026-09-13T18:00:00Z"),
+    ])
+    row["title"] = .string("a title nobody asked for")
+    row["monitor"] = .object([.init("status"): .string("working")])
+    var blocker = try #require(row["blockers"]?.arrayValue?.first?.objectValue)
+    blocker["input"] = .string("rm -rf /")
+    blocker["questions"] = .array([.object([.init("prompt"): .string("are you sure?")])])
+    blocker["detail"] = .string("a detail")
+    row["blockers"] = .array([.object(blocker)])
+
+    let decoded = try AgentFieldRow(json: .object(row))
+    // Carried, named, and nowhere near a screen.
+    #expect(decoded.unknownFields == ["lastAssistantMessage", "monitor", "title"])
+    #expect(decoded.blockers.first?.unknownFields == ["detail", "input", "questions"])
+
+    // And the whole decoded row, rendered, contains none of the content. This
+    // is the assertion the reflection could not make: a field that leaked into
+    // some other property would show up here.
+    let rendered = String(describing: decoded)
+    for secret in ["the secret plan", "a title nobody asked for", "rm -rf /", "are you sure?"] {
+      #expect(!rendered.contains(secret), "`\(secret)` reached the decoded row")
     }
-    // And the golden itself carries none of them, which is the fieldd half of
-    // the same promise — a reader that ignored them would hide a leak.
-    let raw = try #require(try Fixture.json("agent-field-snapshot.valid")["rows"]?
-      .arrayValue?.first?.objectValue)
-    for absent in ["lastAssistantMessage", "title", "monitor"] {
-      #expect(raw[absent] == nil, "the golden row must not ship `\(absent)`")
-    }
-    var blocker = try #require(raw["blockers"]?.arrayValue?.first?.objectValue)
-    for absent in ["input", "questions", "detail", "permission"] {
-      #expect(blocker[absent] == nil, "the golden blocker must not ship `\(absent)`")
-    }
-    blocker.removeAll()
+    // The row still reads as itself.
+    #expect(decoded.runtimeRunId == "run-blocked")
+    #expect(decoded.blockers.first?.tool == "Bash")
   }
 
   @Test func aDeltaNamesWhatItReplacesAndWhatLeft() throws {

@@ -83,6 +83,22 @@ public final class MeshModel {
     get async { await runtime?.node }
   }
 
+  /// This node's own tailnet domain (`studio.tail1234.ts.net` → `tail1234.ts.net`).
+  ///
+  /// It is a fact about the tailnet we are ON, which is what makes it usable
+  /// as the suffix a peer's fully-qualified name must have: building the FQDN
+  /// from it keeps every host comparison an equality instead of a prefix
+  /// match, and a prefix match on a slug is how `studio.attacker.example` gets
+  /// mistaken for `studio` (EL7 M1).
+  public var magicDNSSuffix: String? {
+    get async {
+      guard let name = await runtime?.node.dnsName else { return nil }
+      let labels = name.split(separator: ".", omittingEmptySubsequences: true)
+      guard labels.count > 1 else { return nil }
+      return labels.dropFirst().joined(separator: ".")
+    }
+  }
+
   /// The user's deliberate act of joining the tailnet.
   public func connect() {
     guard runtime == nil else { return }

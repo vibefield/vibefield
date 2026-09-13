@@ -33,17 +33,22 @@ public struct FieldStoreSlice: Sendable, Equatable, Identifiable {
   /// The AUTHENTICATED sender this slice arrived from (truffle's hello-verified
   /// identity, never the wire's own `device_id`). See `attributionMismatches`.
   public let sentBy: String?
+  /// The addresses the sender was reachable at. A URL inside `data` is only
+  /// dialable if it names one of these (EL7 M1).
+  public let sentFrom: [String]
 
   public var id: String { deviceId }
 
   public init(
-    deviceId: String, data: JSONValue, version: Int64, updatedAt: Int64, sentBy: String? = nil
+    deviceId: String, data: JSONValue, version: Int64, updatedAt: Int64, sentBy: String? = nil,
+    sentFrom: [String] = []
   ) {
     self.deviceId = deviceId
     self.data = data
     self.version = version
     self.updatedAt = updatedAt
     self.sentBy = sentBy
+    self.sentFrom = sentFrom
   }
 
   /// Read this slice as a shape of ours — `DeviceInfo` for `field.devices.v1`,
@@ -97,11 +102,22 @@ public struct FieldStorePeer: Sendable, Equatable, Identifiable {
   /// peer we have not spoken to yet cannot be matched to a slice.
   public let deviceId: String?
   public let online: Bool
+  /// truffle's slugged tailscale hostname for this peer, and its tailnet IPs.
+  /// They are the only addresses this phone can hold a desktop to, and they
+  /// are what pins a published `productEndpoint.url` to the peer that
+  /// published it (EL7 M1).
+  public let hostname: String?
+  public let tailnetIPs: [String]
 
-  public init(id: String, deviceId: String?, online: Bool) {
+  public init(
+    id: String, deviceId: String?, online: Bool, hostname: String? = nil,
+    tailnetIPs: [String] = []
+  ) {
     self.id = id
     self.deviceId = deviceId
     self.online = online
+    self.hostname = hostname
+    self.tailnetIPs = tailnetIPs
   }
 }
 
@@ -116,12 +132,19 @@ public struct FieldStoreInbound: Sendable {
   public let fromDeviceId: String?
   public let msgType: String
   public let payload: Data
+  /// The sender's own addresses, carried so a slice can be pinned to the peer
+  /// that sent it.
+  public let fromAddresses: [String]
 
-  public init(fromPeerId: String, fromDeviceId: String?, msgType: String, payload: Data) {
+  public init(
+    fromPeerId: String, fromDeviceId: String?, msgType: String, payload: Data,
+    fromAddresses: [String] = []
+  ) {
     self.fromPeerId = fromPeerId
     self.fromDeviceId = fromDeviceId
     self.msgType = msgType
     self.payload = payload
+    self.fromAddresses = fromAddresses
   }
 }
 
@@ -177,13 +200,18 @@ public final class FieldStore {
   /// payload, a peer that could not be asked. Bounded, deduplicated, and never
   /// an error: a store is a gossip protocol and a dropped message is Tuesday.
   public private(set) var notes: [String] = []
-  /// Slices whose payload claimed a device id the AUTHENTICATED sender does not
-  /// have. In truffle 0.7.12 a node only ever broadcasts its OWN slice, so this
-  /// should be zero; it is COUNTED rather than refused because this reader has
-  /// never watched a live mesh do it, and a guard written from a guess is how a
-  /// phone silently reads nothing. When a live run confirms the keyspaces, this
-  /// becomes a refusal (IOS-4b).
-  public private(set) var attributionMismatches = 0
+  /// Messages REFUSED because the payload named a device the authenticated
+  /// sender is not.
+  ///
+  /// This was a counter that still applied the slice, which was the wrong
+  /// trade and the review found what it costs: any peer on the tailnet could
+  /// publish a slice claiming another desktop, at a version high enough to win
+  /// forever, carrying its own `productEndpoint.url` — and this phone's dial
+  /// target for that desktop became the attacker's until the next unsubscribe.
+  /// truffle authenticates the sender at hello (`MeshMessage.from` is the
+  /// connection's identity, never the wire's own `from`), so the check costs
+  /// one comparison and the hole was never worth keeping open.
+  public private(set) var attributionRefusals = 0
 
   @ObservationIgnored private let doors: FieldStoreDoors
   @ObservationIgnored private var messageTask: Task<Void, Never>?
@@ -221,21 +249,26 @@ public final class FieldStore {
     let namespace = Self.namespace(for: storeId)
     state = .reading(storeId: storeId)
 
-    messageTask = Task { [doors] in
+    // `[weak self]` throughout: a task that strongly held this store would
+    // keep it — and its streams — alive for as long as the mesh node ran, so a
+    // screen that dropped its reader would still be reading.
+    messageTask = Task { [weak self, doors] in
       let stream = await doors.messages(namespace)
       for await inbound in stream {
-        guard !Task.isCancelled else { return }
+        guard let self, !Task.isCancelled else { return }
         self.ingest(inbound, token: token)
       }
     }
-    peerTask = Task { [doors] in
+    peerTask = Task { [weak self, doors] in
       let stream = await doors.peerEvents()
       for await event in stream {
-        guard !Task.isCancelled else { return }
+        guard let self, !Task.isCancelled else { return }
         await self.handle(event, namespace: namespace, token: token)
       }
     }
-    Task { await self.requestFromOnlinePeers(namespace: namespace, token: token) }
+    Task { [weak self] in
+      await self?.requestFromOnlinePeers(namespace: namespace, token: token)
+    }
   }
 
   /// Stop LISTENING, and keep what was heard.
@@ -277,6 +310,13 @@ public final class FieldStore {
 
   public var isPaused: Bool { paused }
 
+  deinit {
+    // The streams outlive nothing. `deinit` cannot hop actors, and these two
+    // tasks are the only things this object owns that would keep running.
+    messageTask?.cancel()
+    peerTask?.cancel()
+  }
+
   /// Stop reading, and forget. A store nobody is watching holds no answers: the
   /// next subscribe asks again and is told afresh, which is cheaper than
   /// rendering a board from a mesh that has moved on.
@@ -295,7 +335,7 @@ public final class FieldStore {
   /// Ask every online peer for its slice. truffle's own node does this on peer
   /// join AND sends its own data unasked; this one only asks, because it has
   /// nothing to send.
-  public func requestFromOnlinePeers(namespace: String, token: Int) async {
+  func requestFromOnlinePeers(namespace: String, token: Int) async {
     for peer in await doors.onlinePeers() where peer.online {
       guard token == generation else { return }
       await ask(peer, namespace: namespace)
@@ -353,14 +393,14 @@ public final class FieldStore {
       break
 
     case .clear(let deviceId):
+      // A clear is a WRITE about somebody's slice, and it was not checked at
+      // all: any peer could evict any desktop's board. Same rule as an update.
+      guard attributed(inbound, claims: deviceId) else { return }
       guard slices.removeValue(forKey: deviceId) != nil else { return }
       note("dropped \(deviceId)'s slice: cleared")
 
     case .update(let slice), .full(let slice):
-      if let sender = inbound.fromDeviceId, sender != slice.deviceId {
-        attributionMismatches += 1
-        note("\(inbound.fromPeerId) sent a slice claiming \(slice.deviceId)")
-      }
+      guard attributed(inbound, claims: slice.deviceId) else { return }
       if let existing = slices[slice.deviceId], slice.version <= existing.version {
         note(
           "ignored \(slice.deviceId) v\(slice.version): not newer than v\(existing.version)")
@@ -368,8 +408,32 @@ public final class FieldStore {
       }
       slices[slice.deviceId] = FieldStoreSlice(
         deviceId: slice.deviceId, data: slice.data, version: slice.version,
-        updatedAt: slice.updatedAt, sentBy: inbound.fromDeviceId)
+        updatedAt: slice.updatedAt, sentBy: inbound.fromDeviceId,
+        sentFrom: inbound.fromAddresses)
     }
+  }
+
+  /// Whether this message may speak for that device.
+  ///
+  /// The sender's durable id is truffle's, established at hello. When the
+  /// message itself does not carry one, the id this peer was ASKED under
+  /// stands in — the same fallback a departing peer gets. A message we cannot
+  /// attribute at all is REFUSED: an unattributable write is exactly the hole,
+  /// and on this protocol every inbound message rides an authenticated
+  /// session, so being unable to name the sender is itself the anomaly.
+  private func attributed(_ inbound: FieldStoreInbound, claims deviceId: String) -> Bool {
+    let sender = inbound.fromDeviceId ?? (asked[inbound.fromPeerId] ?? nil)
+    guard let sender else {
+      attributionRefusals += 1
+      note("refused \(inbound.msgType) from \(inbound.fromPeerId): the sender has no identity")
+      return false
+    }
+    guard sender == deviceId else {
+      attributionRefusals += 1
+      note("refused \(inbound.msgType) from \(sender): it claimed \(deviceId)")
+      return false
+    }
+    return true
   }
 
   /// Every slice, read as one shape. A slice that does not fit is NAMED rather

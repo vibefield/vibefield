@@ -255,36 +255,85 @@ private func standingStore(
     #expect(store.notes.isEmpty)
   }
 
-  /// truffle 0.7.12 only ever broadcasts a node's OWN slice, so the claimed and
-  /// the authenticated id agree. This reader has never watched a live mesh do
-  /// it, so a mismatch is COUNTED and applied rather than refused — a guard
-  /// written from a guess is how a phone silently reads nothing.
-  @Test func aSliceClaimingAnotherDevicesIdIsCountedRatherThanRefused() async throws {
+  /// REFUSED, not counted. The review put a real cost on the old behaviour:
+  /// any peer could publish a slice claiming another desktop, at a version
+  /// high enough to win forever, carrying its own `productEndpoint.url` — and
+  /// this phone's dial target for that desktop became the attacker's. truffle
+  /// authenticates the sender at hello, so the check is one comparison.
+  @Test func aSliceClaimingAnotherDevicesIdIsRefused() async throws {
     let (store, mesh) = try await standingStore(peers: [studio])
     defer { store.unsubscribe() }
 
     await mesh.deliver(
       inbound(
         from: "node-studio", deviceId: "dev-studio", msgType: "update",
-        payload: sliceFrame("update", deviceId: "dev-laptop", version: 1, data: .object([:]))))
-    try await waitUntil("the mismatch") { store.attributionMismatches == 1 }
-    #expect(store.slices["dev-laptop"] != nil)
-    #expect(store.notes.contains { $0.contains("claiming dev-laptop") })
+        payload: sliceFrame(
+          "update", deviceId: "dev-laptop", version: 9_000_000,
+          data: .object(["productEndpoint": .object(["url": .string("ws://evil/t/x")])]))))
+    try await waitUntil("the refusal") { store.attributionRefusals == 1 }
+    #expect(store.slices["dev-laptop"] == nil)
+    #expect(store.slices.isEmpty)
+    #expect(store.notes.contains { $0.contains("claimed dev-laptop") })
   }
 
-  /// A sender truffle has not yet identified cannot be compared to anything,
-  /// and "unknown" is not "wrong".
-  @Test func anUnidentifiedSenderIsNoMismatch() async throws {
+  /// A `clear` is a WRITE about somebody's slice and was not checked at all:
+  /// any peer could evict any desktop's board.
+  @Test func aClearForAnotherDevicesSliceIsRefused() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio, laptop])
+    defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-laptop", deviceId: "dev-laptop", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-laptop", version: 1, data: .object([:]))))
+    try await waitUntil("the laptop's slice") { store.slices["dev-laptop"] != nil }
+
+    // studio tries to evict it.
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "clear",
+        payload: clearFrame(deviceId: "dev-laptop")))
+    try await waitUntil("the refusal") { store.attributionRefusals == 1 }
+    #expect(store.slices["dev-laptop"] != nil)
+
+    // Its owner may, of course.
+    await mesh.deliver(
+      inbound(
+        from: "node-laptop", deviceId: "dev-laptop", msgType: "clear",
+        payload: clearFrame(deviceId: "dev-laptop")))
+    try await waitUntil("the owner's clear") { store.slices["dev-laptop"] == nil }
+  }
+
+  /// A message this reader cannot attribute is refused too. Every inbound
+  /// message rides a hello-authenticated session, so a sender with no identity
+  /// is itself the anomaly — and an unattributable write is exactly the hole
+  /// the check above closes.
+  @Test func anUnattributableMessageIsRefused() async throws {
     let (store, mesh) = try await standingStore(peers: [studio])
     defer { store.unsubscribe() }
+
+    await mesh.deliver(
+      inbound(
+        from: "node-nobody", deviceId: nil, msgType: "update",
+        payload: sliceFrame("update", deviceId: "dev-studio", version: 1, data: .object([:]))))
+    try await waitUntil("the refusal") { store.attributionRefusals == 1 }
+    #expect(store.slices.isEmpty)
+    #expect(store.notes.contains { $0.contains("no identity") })
+  }
+
+  /// The id a peer was ASKED under stands in when the message itself carries
+  /// none — the same fallback a departing peer gets.
+  @Test func theAskedIdentityStandsInForAMessageThatCarriesNone() async throws {
+    let (store, mesh) = try await standingStore(peers: [studio])
+    defer { store.unsubscribe() }
+    try await waitUntil("the ask") { await mesh.requests(to: "node-studio") == 1 }
 
     await mesh.deliver(
       inbound(
         from: "node-studio", deviceId: nil, msgType: "update",
         payload: sliceFrame("update", deviceId: "dev-studio", version: 1, data: .object([:]))))
     try await waitUntil("the slice") { store.slices["dev-studio"] != nil }
-    #expect(store.attributionMismatches == 0)
-    #expect(store.slices["dev-studio"]?.sentBy == nil)
+    #expect(store.attributionRefusals == 0)
   }
 }
 

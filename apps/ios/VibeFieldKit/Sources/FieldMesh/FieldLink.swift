@@ -15,6 +15,10 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
     case reconnecting
     /// The door's own words.
     case failed(String)
+    /// EL7 M1 — the device published a door this phone will not dial, and why.
+    /// A DIFFERENT fact from `noDoor`: that desktop is serving something, and
+    /// what it named is not itself.
+    case refusedDoor(String)
   }
 
   /// The mesh device id — the slice's key, and this row's identity.
@@ -65,6 +69,9 @@ public final class FieldLink {
   /// Bounded, deduplicated, never fatal.
   public private(set) var notes: [String] = []
   public private(set) var isPaused = false
+  /// Desktops whose published door was REFUSED, and why (EL7 M1). A desktop
+  /// here is on the mesh and saying something this phone will not dial.
+  public private(set) var endpointRefusals: [String: String] = [:]
 
   /// Whether anything at all is being heard. `false` with `desktops` non-empty
   /// is the honest "they are there and saying nothing" that a blank field must
@@ -78,6 +85,9 @@ public final class FieldLink {
   @ObservationIgnored private let transport: any ProductTransport
   @ObservationIgnored private let options: FieldProductClient.Options
   @ObservationIgnored private let now: @MainActor () -> Date
+  /// This node's own tailnet domain, so a peer's FQDN can be BUILT rather than
+  /// guessed at when a published door is checked (EL7 M1).
+  @ObservationIgnored private let magicDNSSuffix: String?
 
   @ObservationIgnored private var clients: [String: FieldProductClient] = [:]
   @ObservationIgnored private var subscriptions: [String: ProductSubscription] = [:]
@@ -101,12 +111,14 @@ public final class FieldLink {
     storeDoors: FieldStoreDoors,
     transport: any ProductTransport = URLSessionProductTransport(),
     options: FieldProductClient.Options = .init(),
+    magicDNSSuffix: String? = nil,
     now: @escaping @MainActor () -> Date = { .now }
   ) {
     devices = FieldStore(doors: storeDoors)
     boards = FieldStore(doors: storeDoors)
     self.transport = transport
     self.options = options
+    self.magicDNSSuffix = magicDNSSuffix
     self.now = now
   }
 
@@ -160,6 +172,7 @@ public final class FieldLink {
     boards.unsubscribe()
     desktops = []
     agents = []
+    endpointRefusals = [:]
   }
 
   // MARK: The card's one extra question
@@ -318,18 +331,36 @@ public final class FieldLink {
     var seen: Set<String> = []
     for (deviceId, device) in rows {
       seen.insert(deviceId)
-      guard let url = device.productURL else {
-        // Published, not serving. Nothing to dial, and that is a state rather
-        // than a failure.
+      // EL7 M1 — a published URL is somebody else's string until the mesh
+      // vouches for it. The addresses come from the peer that SENT this slice,
+      // which `FieldStore` recorded at ingest; a desktop only gets to name
+      // itself as the place to dial.
+      let verdict = verifyProductEndpoint(
+        device.productEndpoint?.url,
+        from: devices.slices[deviceId]?.sentFrom ?? [],
+        magicDNSSuffix: magicDNSSuffix)
+      guard let url = verdict.url else {
+        // Not serving, or serving something we will not dial. Both are states
+        // rather than failures, and only the second is worth a word.
+        if device.productEndpoint?.url != nil, let reason = verdict.reason {
+          if endpointRefusals[deviceId] != reason {
+            endpointRefusals[deviceId] = reason
+            note("refused \(device.name)'s door: \(reason)")
+          }
+        } else {
+          endpointRefusals.removeValue(forKey: deviceId)
+        }
         closeDoor(to: deviceId)
         continue
       }
+      endpointRefusals.removeValue(forKey: deviceId)
       openDoor(to: deviceId, at: url)
     }
 
     // A desktop that left the devices store takes its door with it.
     for deviceId in clients.keys where !seen.contains(deviceId) {
       closeDoor(to: deviceId)
+      endpointRefusals.removeValue(forKey: deviceId)
     }
 
     refreshDesktops(rows.values)
@@ -341,7 +372,7 @@ public final class FieldLink {
       // The same desktop at a NEW url is a new door: a capability path is
       // minted per serve, and dialing the old one would be dialing a path that
       // no longer exists.
-      guard existing.url != url else {
+      guard !existing.targets(url) else {
         armDoorSubscription(deviceId)
         return
       }
@@ -526,7 +557,7 @@ public final class FieldLink {
         deviceId: deviceId,
         name: device.name,
         platform: device.platform,
-        state: state(of: deviceId, hasURL: device.productURL != nil),
+        state: state(of: deviceId, hasURL: device.productEndpoint?.url != nil),
         feed: feed(of: deviceId))
     }
   }
@@ -540,6 +571,7 @@ public final class FieldLink {
   }
 
   private func state(of deviceId: String, hasURL: Bool) -> FieldDesktop.State {
+    if let refusal = endpointRefusals[deviceId] { return .refusedDoor(refusal) }
     guard hasURL else { return .noDoor }
     guard let client = clients[deviceId] else { return .connecting }
     switch client.state {

@@ -36,22 +36,52 @@ public protocol ProductTransport: Sendable {
 }
 
 /// The real one: `URLSessionWebSocketTask`.
+///
+/// The SESSION is injected, and that is not a testing seam — it is the whole
+/// difference between reaching a desktop and not. This phone's tailnet runs
+/// IN PROCESS (TailscaleKit, userspace netstack), so a plain
+/// `URLSession(configuration:)` does not route over it: a `100.x` address goes
+/// nowhere, and a MagicDNS name resolves — if it resolves at all — on the
+/// device's ordinary network to whatever the public DNS says. truffle hands
+/// out a session bound to its own backend (`MeshNode.urlSession(configuration:)`),
+/// and FieldMesh passes it in. The default below is the system's, which is
+/// right for a loopback door and wrong for a tailnet one.
 public struct URLSessionProductTransport: ProductTransport {
+  /// How a session is obtained for a dial. Async because truffle's is.
+  public typealias SessionProvider = @Sendable (URLSessionConfiguration) async throws -> URLSession
+
   private let configuration: URLSessionConfiguration
+  private let provider: SessionProvider
 
   /// The request timeout is the PHONE's, not the desktop's: a radio that has
   /// wandered off the tailnet should fail a dial in seconds so the honest
   /// "reconnecting" face appears, rather than in the system default's minute.
-  public init(timeout: TimeInterval = 15) {
+  public init(timeout: TimeInterval = 15, session: SessionProvider? = nil) {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = timeout
     configuration.waitsForConnectivity = false
     self.configuration = configuration
+    self.provider = session ?? { URLSession(configuration: $0) }
   }
 
+  /// The biggest frame this phone will take.
+  ///
+  /// `URLSessionWebSocketTask` defaults to 1 MiB and FAILS THE TASK past it,
+  /// which on this client is a drop and a re-dial — and the same oversized
+  /// snapshot again, forever. The door's own outbound ceiling is
+  /// `MESH_CONTROL_LIMITS.PRODUCT_FRAME_BYTES`, 128 MiB, and matching it is
+  /// the wrong trade on a phone: 128 MiB of somebody else's bytes into this
+  /// process's memory is a worse failure than a refused frame. 16 MiB is far
+  /// above any legitimate product frame for a phone — the field projection is
+  /// ~300–500 B a row, and `agent.list`'s full rows are 2–5 KB each — so a
+  /// frame past it is a defect or an attack, and either way the honest answer
+  /// is to refuse it rather than to keep asking for it.
+  public static let maximumFrameBytes = 16 * 1024 * 1024
+
   public func connect(to url: URL) async throws -> any ProductConnection {
-    let session = URLSession(configuration: configuration)
+    let session = try await provider(configuration)
     let task = session.webSocketTask(with: url)
+    task.maximumMessageSize = Self.maximumFrameBytes
     task.resume()
     return WebSocketConnection(task: task, session: session)
   }

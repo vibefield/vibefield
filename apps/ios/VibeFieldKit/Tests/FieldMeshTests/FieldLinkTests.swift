@@ -182,6 +182,7 @@ private func standingLink(
   let link = FieldLink(
     storeDoors: await mesh.doors(), transport: door,
     options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
+    magicDNSSuffix: rehearsalSuffix,
     now: { now })
   link.start()
   try await waitUntil("both stores listening") {
@@ -768,5 +769,41 @@ private func publishBoard(_ mesh: MeshRehearsal, _ value: JSONValue, version: In
     let outcome = await link.requestMirrorWriteGrant(on: "dev-studio")
     #expect(!outcome.note.contains("mw_EXAMPLE"))
     #expect(!String(describing: outcome).contains("mw_EXAMPLE"))
+  }
+}
+
+@MainActor
+@Suite struct FieldLinkEndpointTests {
+  /// EL7 M1 end to end: a desktop that publishes a door on somebody else's
+  /// machine is never dialed, and the link says why.
+  @Test func aDoorPointingElsewhereIsNeverDialed() async throws {
+    let (link, mesh, door) = try await standingLink()
+    defer { link.stop() }
+
+    await publishDevice(mesh, url: "ws://attacker.example/t/secret")
+    try await waitUntil("the refusal") { !link.endpointRefusals.isEmpty }
+    #expect(await door.dials == 0)
+    #expect(
+      link.desktops.first?.state
+        == .refusedDoor("the published door points somewhere this desktop is not"))
+    #expect(
+      link.endpointRefusals["dev-studio"]
+        == "the published door points somewhere this desktop is not")
+    #expect(link.notes.contains { $0.contains("refused studio's door") })
+    // The chip says so, because a desktop naming somebody else's machine is a
+    // thing to look at rather than a thing to wait out.
+    #expect(MeshDisplay.linkLabel(desktops: link.desktops) == "DOOR")
+    #expect(MeshDisplay.chipWantsAttention(desktops: link.desktops))
+  }
+
+  /// And the desktop's own door still opens, so the check is not simply off.
+  @Test func theDesktopsOwnDoorStillOpens() async throws {
+    let (link, mesh, door) = try await standingLink()
+    defer { link.stop() }
+
+    await publishDevice(mesh, url: "ws://studio.tail.ts.net/t/secret")
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+    #expect(await door.dials == 1)
+    #expect(link.endpointRefusals.isEmpty)
   }
 }

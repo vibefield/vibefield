@@ -3,6 +3,22 @@ import Foundation
 import GhostteaTruffle
 import Truffle
 
+/// The product transport bound to the MESH's own network.
+///
+/// This is not a nicety. The phone's tailnet is a userspace netstack running
+/// IN THIS PROCESS, so a plain `URLSession` does not route over it — a `100.x`
+/// address goes nowhere and a MagicDNS name resolves, if at all, on the
+/// device's ordinary network to whatever public DNS returns. truffle hands out
+/// a session bound to its backend and this is the only correct way for the
+/// phone to dial a desktop's door.
+public func meshProductTransport(node: MeshNode, timeout: TimeInterval = 15)
+  -> URLSessionProductTransport
+{
+  URLSessionProductTransport(timeout: timeout) { configuration in
+    try await node.urlSession(configuration: configuration)
+  }
+}
+
 /// Why a send could not be made. A peer that has gone is not an incident — a
 /// tailnet is a set of devices that come and go — so this carries no more than
 /// which one, and the reader logs it as a note.
@@ -62,7 +78,10 @@ extension FieldStoreDoors {
               fromPeerId: message.from.tailscaleId,
               fromDeviceId: message.from.deviceId,
               msgType: message.msgType,
-              payload: message.payloadJSON))
+              payload: message.payloadJSON,
+              // EL7 M1 — what this peer IS reachable at, carried with what it
+              // said, so a published door can be held to it.
+              fromAddresses: Self.addresses(message.from)))
         }
         continuation.onTermination = { _ in
           Task { await subscription.cancel() }
@@ -96,6 +115,14 @@ extension FieldStoreDoors {
   /// durable `deviceId` files a slice (RFC 017 §8), and joining them against
   /// each other is the bug T1 §6 names.
   private static func peerView(_ peer: Peer) -> FieldStorePeer {
-    FieldStorePeer(id: peer.tailscaleId, deviceId: peer.deviceId, online: peer.online)
+    FieldStorePeer(
+      id: peer.tailscaleId, deviceId: peer.deviceId, online: peer.online,
+      hostname: peer.hostname, tailnetIPs: peer.tailnetIPs)
+  }
+
+  /// Every address the mesh says this peer answers at: its slugged tailscale
+  /// hostname and its tailnet IPs.
+  static func addresses(_ peer: Peer) -> [String] {
+    ([peer.hostname] + peer.tailnetIPs).filter { !$0.isEmpty }
   }
 }

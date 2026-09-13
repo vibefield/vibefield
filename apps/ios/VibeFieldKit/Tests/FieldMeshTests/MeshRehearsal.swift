@@ -115,12 +115,22 @@ func clearFrame(deviceId: String) -> Data {
 }
 
 func inbound(
-  from peerId: String, deviceId: String?, msgType: String, payload: Data
+  from peerId: String, deviceId: String?, msgType: String, payload: Data,
+  addresses: [String] = ["studio", "100.64.0.2"]
 ) -> FieldStoreInbound {
   FieldStoreInbound(
-    fromPeerId: peerId, fromDeviceId: deviceId, msgType: msgType, payload: payload)
+    fromPeerId: peerId, fromDeviceId: deviceId, msgType: msgType, payload: payload,
+    fromAddresses: addresses)
 }
 
-let studio = FieldStorePeer(id: "node-studio", deviceId: "dev-studio", online: true)
-let laptop = FieldStorePeer(id: "node-laptop", deviceId: "dev-laptop", online: true)
+let studio = FieldStorePeer(
+  id: "node-studio", deviceId: "dev-studio", online: true, hostname: "studio",
+  tailnetIPs: ["100.64.0.2"])
+let laptop = FieldStorePeer(
+  id: "node-laptop", deviceId: "dev-laptop", online: true, hostname: "laptop",
+  tailnetIPs: ["100.64.0.3"])
 let asleep = FieldStorePeer(id: "node-asleep", deviceId: "dev-asleep", online: false)
+
+/// The tailnet these rehearsals are on, so a peer's fully-qualified name can
+/// be built the way the live check builds it.
+let rehearsalSuffix = "tail.ts.net" 

@@ -262,7 +262,15 @@ private actor FakeSource: RemoteSessionSource {
     let field = RemoteSessionField(source: source, pollInterval: .milliseconds(10))
 
     field.start()
-    try await Task.sleep(for: .milliseconds(120))
+    // WAIT for the second ask rather than counting ticks in a fixed window.
+    // The window was 120 ms at a 10 ms period — twelve ticks of headroom —
+    // and it still starved to ONE under a loaded test process (IOS-4e's new
+    // concurrency suites were enough). Presence is a thing to wait for; only
+    // ABSENCE needs a clock, which is what the second half below uses.
+    let polled = ContinuousClock.now.advanced(by: .seconds(5))
+    while ContinuousClock.now < polled, await source.asks <= 1 {
+      try await Task.sleep(for: .milliseconds(5))
+    }
     let whileRunning = await source.asks
     field.stop()
 

@@ -124,18 +124,30 @@ public final class FieldProductClient {
   /// build does not read. Not an error, never fatal, and never silent.
   public private(set) var tolerantNotes: [String] = []
 
-  public let url: URL
+  /// The dial target. NOT public and NOT observable: it carries the C3
+  /// capability secret in its path, and a public property on an `@Observable`
+  /// model is one `Text(client.url)` away from being on a screen — or in a
+  /// screenshot. Callers that need to know whether this client already points
+  /// somewhere ask `targets(_:)`.
+  private let url: URL
 
   @ObservationIgnored private let transport: any ProductTransport
   @ObservationIgnored private let options: Options
 
   @ObservationIgnored private var connection: (any ProductConnection)?
   @ObservationIgnored private var receiveTask: Task<Void, Never>?
+  /// The dial in flight, held so `connect()` is idempotent across the await
+  /// that precedes `connection` being assigned.
+  @ObservationIgnored private var dialTask: Task<Void, Never>?
   @ObservationIgnored private var reconnectTask: Task<Void, Never>?
   @ObservationIgnored private var nextId: Int64 = 1
   @ObservationIgnored private var pending: [Int64: Pending] = [:]
   @ObservationIgnored private var subs: [Int: SubEntry] = [:]
   @ObservationIgnored private var subRoutes: [String: Int] = [:]
+  /// Subscriptions cancelled while they had no live route — during a reconnect,
+  /// before the replay answered. The id they must unsubscribe does not exist
+  /// yet; `handle` fires it the moment the door names one.
+  @ObservationIgnored private var cancelledBeforeRouted: Set<Int> = []
   @ObservationIgnored private var nextSubKey = 1
   @ObservationIgnored private var attempts = 0
   @ObservationIgnored private var closedByUser = false
@@ -153,6 +165,11 @@ public final class FieldProductClient {
   /// shrug. The door's own words win for the life of the dial that heard them.
   @ObservationIgnored private var lastErrorGeneration = -1
 
+  /// Whether this client is already pointed at that URL — the one question
+  /// about the target a caller may ask, so a re-dial can tell a NEW capability
+  /// path from the same one without the path ever leaving this object.
+  public func targets(_ other: URL) -> Bool { url == other }
+
   public init(url: URL, transport: any ProductTransport, options: Options = Options()) {
     self.url = url
     self.transport = transport
@@ -161,11 +178,17 @@ public final class FieldProductClient {
 
   // MARK: - Lifecycle
 
-  /// Idempotent: starts, or resumes, connecting.
+  /// Idempotent, INCLUDING while a dial is in flight.
+  ///
+  /// `connection` is assigned after an await, so guarding on it alone left a
+  /// window: three concurrent `call()`s each reached `ready()` → `connect()`
+  /// before any of them had a socket, and built three. Two were then abandoned
+  /// — and, before the fix above, never closed. The in-flight dial is held in
+  /// a task assigned synchronously, so the second caller sees it and waits.
   public func connect() {
     guard !closedByUser else { return }
     if case .failed = state { return }
-    guard connection == nil, reconnectTask == nil else { return }
+    guard connection == nil, reconnectTask == nil, dialTask == nil else { return }
     dial(reconnecting: false)
   }
 
@@ -175,6 +198,8 @@ public final class FieldProductClient {
     closedByUser = true
     reconnectTask?.cancel()
     reconnectTask = nil
+    dialTask?.cancel()
+    dialTask = nil
     receiveTask?.cancel()
     receiveTask = nil
     let connection = self.connection
@@ -184,6 +209,7 @@ public final class FieldProductClient {
     failPending(FieldProductError(kind: "UNAVAILABLE", message: "client closed"))
     subs.removeAll()
     subRoutes.removeAll()
+    cancelledBeforeRouted.removeAll()
     state = .closed
     flushReadyWaiters(FieldProductError(kind: "UNAVAILABLE", message: "client closed"))
   }
@@ -254,16 +280,47 @@ public final class FieldProductClient {
       onSnapshot(result["snapshot"] ?? .null)
       return ProductSubscription(subId: subId, key: key, client: self)
     } catch {
-      // Never leave an orphan the caller cannot cancel.
-      subs.removeValue(forKey: key)
+      // Never leave an orphan the caller cannot cancel — and never leave a
+      // LIVE subscription on the daemon that nobody on this side owns. If the
+      // door got far enough to name a subId, it is told; if it never did
+      // (a deadline, a dead socket), the subscription dies with that socket,
+      // which is the door's own rule.
+      let orphan = subs.removeValue(forKey: key)
+      if let subId = orphan?.subId {
+        subRoutes.removeValue(forKey: subId)
+        sendUnsubscribe(subId)
+      }
       throw error
     }
   }
 
   func unsubscribe(key: Int) {
-    guard let entry = subs.removeValue(forKey: key) else { return }
-    guard let subId = entry.subId else { return }
-    subRoutes.removeValue(forKey: subId)
+    guard let entry = subs.removeValue(forKey: key) else {
+      cancelledBeforeRouted.remove(key)
+      return
+    }
+    // The id on the entry is the last one the DOOR gave us, and after a drop
+    // it names a socket that no longer exists — the replay has not answered
+    // yet, so the new one has no name. Sending the old id to the new socket
+    // unsubscribes nothing and may unsubscribe somebody else's board.
+    //
+    // A live route is the proof that the id belongs to THIS socket. Without
+    // one, the cancel waits for the replay's answer and fires against the id
+    // that comes back (see `handle`).
+    if let subId = entry.subId, subRoutes[subId] == key {
+      subRoutes.removeValue(forKey: subId)
+      sendUnsubscribe(subId)
+      cancelledBeforeRouted.remove(key)
+      return
+    }
+    if let subId = entry.subId { subRoutes.removeValue(forKey: subId) }
+    cancelledBeforeRouted.insert(key)
+  }
+
+  /// Tell the door, best effort. A refusal here changes nothing we can act on:
+  /// the subscription is already ours no longer, and the socket's close is the
+  /// backstop.
+  private func sendUnsubscribe(_ subId: String) {
     guard case .ready = state else { return }
     Task { [weak self] in
       _ = try? await self?.send(
@@ -319,8 +376,12 @@ public final class FieldProductClient {
     generation &+= 1
     let token = generation
     state = reconnecting ? .reconnecting : .connecting
-    Task { [weak self] in
+    // Assigned SYNCHRONOUSLY: the body cannot run until this actor next
+    // suspends, so a concurrent `connect()` always sees the task that is
+    // already dialing.
+    dialTask = Task { [weak self] in
       guard let self else { return }
+      defer { if token == self.generation { self.dialTask = nil } }
       do {
         let connection = try await self.transport.connect(to: self.url)
         guard token == self.generation else {
@@ -388,15 +449,42 @@ public final class FieldProductClient {
     }
   }
 
+  /// Every established subscription, re-sent for a fresh snapshot (P5).
+  ///
+  /// TWO RULES, both of them scars. A subscription that vanished mid-replay
+  /// (its handle was cancelled while we awaited) skips — it does NOT end the
+  /// loop, because the boards after it in the key order are still owned and
+  /// their routes were cleared when the socket went. And a replay that FAILS
+  /// takes the socket down rather than returning quietly: the door answering
+  /// `NOT_FOUND` for a board that is gone, or a deadline on a slow radio, are
+  /// ordinary weather, and the old code left every remaining subscription
+  /// unsent with the client sitting in `.ready` — a frozen field under a state
+  /// that said fine, for the life of that socket. Dropping the socket puts the
+  /// re-dial in charge, which replays all of them from the top.
+  ///
+  /// This is the TypeScript client's shape: its replay rejection reaches
+  /// hello's own catch, which closes the socket (`client.ts:302`).
   private func replaySubscriptions(token: Int) async {
     for key in subs.keys.sorted() {
-      guard token == generation, let entry = subs[key], entry.sentOnce else { continue }
+      guard token == generation else { return }
+      guard let entry = subs[key], entry.sentOnce else { continue }
       do {
         let result = try await send(method: entry.method, params: entry.params, subKey: key)
-        guard token == generation, let live = subs[key] else { return }
+        guard token == generation else { return }
+        // Cancelled while we awaited: its board is nobody's now, and the rest
+        // of the loop is still owed.
+        guard let live = subs[key] else { continue }
         live.onSnapshot(result["snapshot"] ?? .null)
       } catch {
-        return  // the socket died mid-replay; the next dial replays from the top
+        guard token == generation else { return }
+        let refusal = Self.refusal(from: error)
+        record(refusal, for: token)
+        note("replaying \(entry.method) failed — re-dialing: \(refusal.message)")
+        let dying = connection
+        connection = nil
+        if let dying { Task { await dying.close() } }
+        socketDown(token: token, error: refusal)
+        return
       }
     }
   }
@@ -412,6 +500,12 @@ public final class FieldProductClient {
       if let key = entry.subKey, let subId = result["subId"]?.stringValue {
         subRoutes[subId] = key
         subs[key]?.subId = subId
+        // Cancelled while this was in flight: now there is an id to name.
+        if cancelledBeforeRouted.remove(key) != nil {
+          subRoutes.removeValue(forKey: subId)
+          subs.removeValue(forKey: key)
+          sendUnsubscribe(subId)
+        }
       }
       entry.continuation.resume(returning: result)
 
@@ -485,7 +579,14 @@ public final class FieldProductClient {
 
   private func socketDown(token: Int, error: any Error) {
     guard token == generation else { return }  // a stale socket's last word
+    // CLOSE WHAT YOU WALK AWAY FROM. The real transport's `connect` never
+    // throws — it builds a URLSession and hands back a task at once — so a
+    // dial that never reaches a door still leaves a live session behind, and
+    // only `close()` (`invalidateAndCancel`) ends one. Dropping the reference
+    // alone leaked one session per backoff tick against a sleeping desktop.
+    let dying = connection
     connection = nil
+    if let dying { Task { await dying.close() } }
     receiveTask?.cancel()
     receiveTask = nil
     record(Self.refusal(from: error), for: token)
@@ -528,6 +629,8 @@ public final class FieldProductClient {
     let connection = self.connection
     self.connection = nil  // detach first: this socket's close is now stale
     generation &+= 1
+    dialTask?.cancel()
+    dialTask = nil
     receiveTask?.cancel()
     receiveTask = nil
     state = .failed(error)
@@ -584,11 +687,18 @@ public final class FieldProductClient {
       kind: "UNAVAILABLE", message: shortReason(error), retryable: true)
   }
 
-  /// An error rendered short enough for a status line. `MeshModel` holds the
-  /// same rule for the mesh leg; the two are deliberately identical so one
-  /// screen never shows two lengths of the same kind of bad news.
+  /// An error rendered for a status line, WITHOUT its URL.
+  ///
+  /// `URLError`'s `localizedDescription` and its `userInfo` both carry
+  /// `NSErrorFailingURLStringKey` — the capability path, secret and all — and
+  /// the old rendering kept it out only by accident: a 117-character truncation
+  /// that happened to cut just before the URL. An accident is not a redaction.
+  /// A transport failure is named by its DOMAIN and CODE, which is what a
+  /// person can act on anyway ("the socket refused", not which path).
   static func shortReason(_ error: any Error) -> String {
-    let text = String(describing: error)
-    return text.count > 120 ? String(text.prefix(117)) + "…" : text
+    if let refusal = error as? FieldProductError { return refusal.message }
+    if let decode = error as? WireDecodeError { return decode.description }
+    let ns = error as NSError
+    return "\(ns.domain) \(ns.code)"
   }
 }

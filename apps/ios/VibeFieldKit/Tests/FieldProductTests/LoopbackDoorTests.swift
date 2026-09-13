@@ -164,7 +164,10 @@ private func waitUntil(
       }
     }
     let port = try await door.start()
-    defer { Task { await door.stop() } }
+    // Torn down WITH the test, not whenever a detached task gets to it: a
+    // listener that outlives its test holds a loopback port, and the next run
+    // of this suite is the one that finds out. Swift has no async `defer`, so
+    // every way out of this test stops the door explicitly — there are two.
 
     let client = FieldProductClient(
       url: URL(string: "ws://127.0.0.1:\(port)/t/a-secret-path")!,
@@ -178,6 +181,7 @@ private func waitUntil(
     }
     guard case .ready(let ready) = client.state else {
       Issue.record("expected ready, got \(client.state)")
+      await door.stop()
       return
     }
     #expect(ready.contractsVersion == "0.1.0")
@@ -205,6 +209,7 @@ private func waitUntil(
     await door.hangUp()
     try await waitUntil("a second connection") { await door.accepted == 2 }
     try await waitUntil("a fresh snapshot on the new socket") { snapshots.values.count == 2 }
+    await door.stop()
   }
 
   /// A door that is not there at all. The honest answer is `reconnecting` with

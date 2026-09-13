@@ -711,7 +711,16 @@ public struct HomeScreen: View {
     }
     Task {
       guard let node = await mesh.node else { return }
-      let opened = FieldLink(storeDoors: .live(node: node))
+      // The transport is the MESH's session, not the system's: this phone's
+      // tailnet is a userspace netstack in this process, and a plain
+      // URLSession does not route over it. The suffix is this node's own
+      // tailnet domain, which is what lets a peer's published door be checked
+      // against an address the mesh vouches for (EL7 M1).
+      let suffix = await mesh.magicDNSSuffix
+      let opened = FieldLink(
+        storeDoors: .live(node: node),
+        transport: meshProductTransport(node: node),
+        magicDNSSuffix: suffix)
       opened.start()
       link = opened
     }
