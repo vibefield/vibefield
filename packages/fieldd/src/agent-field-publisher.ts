@@ -1,5 +1,6 @@
 import {
   AGENT_FIELD,
+  type AgentFieldRow,
   type AgentFieldSlice,
   type AgentListResult,
   MESH_CONTROL_LIMITS,
@@ -40,34 +41,29 @@ export interface AgentFieldPublisherOptions {
   subscribe: (emit: (rows: AgentListResult) => void) => () => void;
   /**
    * THE GATE. Serving this device's agent field to the tailnet is a consent
-   * act, and the publisher writes only while that consent holds.
-   *
-   * §10.2 asks for "the floor's terminal mesh is SERVING" — the same consent
-   * that already advertises this device's sessions in `terminal.v1.hosts`.
-   * fieldd cannot read that today: the floor reports its terminal-mesh state
-   * ONLY as prose in a unit `detail` string
-   * (`field-native/src/services/terminal.rs`, the `publishing {store}` / `off —
-   * {reason}` face), the mgmt hello carries `terminal`/`terminalRoutes` and no
-   * mesh flag (`contracts/src/envelope.ts` HelloAck), and fieldd subscribes to
-   * no observed-unit stream at all. Adding a typed fact to the floor's hello is
-   * cross-plane work; until it lands, the daemon passes the best structured
-   * truth it HAS, and the gap is stated here rather than papered over with a
-   * string match on someone else's prose.
-   *
-   * MF-1h — THE FALSE POSITIVE that leaves, named. The product serve can be
-   * active while the floor's terminal mesh is OFF (both native flags ship
-   * off), and every row carries its `terminal` join verbatim: a phone then
-   * draws a TAPPABLE card for a PTY that is not on the mesh and cannot be
-   * attached to. The floor knows the answer — it mints a mirror-write
-   * capability at boot exactly when the mesh is on — but the only mgmt verb
-   * that reveals it hands over the CAPABILITY ITSELF, which MF-2a pins to one
-   * hop per grant (nothing caches it, and a plugin never even causes it to be
-   * read into this process). Polling it here would move a secret across the
-   * mgmt channel on a schedule nothing needs. A SECRET-FREE fact closes it: a
-   * `terminalMesh` boolean on the floor's hello beside `terminal`, or a
-   * `configured`-only verb. OWED.
+   * act, and the publisher writes only while that consent holds: this device's
+   * product serve is active, which is the door a reader dials and the URL
+   * DeviceService advertises in `field.devices.v1`.
    */
   serving: () => boolean;
+  /**
+   * TM-2 (MF-1l) — are this device's terminal doors PUBLISHED on the tailnet?
+   *
+   * §10.2 asked for "the floor's terminal mesh is SERVING" and MF-1h recorded
+   * why fieldd could not answer: the floor said it only as prose inside a unit
+   * `detail` string, the hello carried no such fact, and the one mgmt verb that
+   * revealed the same truth handed over the mirror-write CAPABILITY — a secret
+   * MF-2a pins to one hop per grant, which polling on a schedule would have
+   * spread. The secret-free fact that paragraph asked for is here: a
+   * `terminalMesh` boolean on the hello (TM-1), read by `NativeLink`.
+   *
+   * What it gates is the `terminal` JOIN, not the row. A row whose PTY nothing
+   * can attach to is still a true row — the agent is working, the phone should
+   * draw it — but the join is what makes its card TAPPABLE, and a tap that
+   * cannot land is the false positive. So the board publishes and the join
+   * does not.
+   */
+  terminalPublished: () => boolean;
   now?: () => number;
   /** test seams; the registry's values by default */
   sliceBytes?: number;
@@ -95,6 +91,11 @@ export class AgentFieldPublisher {
   private chain: Promise<void> = Promise.resolve();
   /** what the mesh was last told — so a gate that closes can clear it */
   private published = false;
+  /** TM-2 — the `terminalPublished` reading the last slice was built with. A
+   * board that has not moved is not news (the publisher's own law), but a
+   * board whose rows just LOST or GAINED their attach join is: the rows are
+   * identical and what a reader may do with them is not. */
+  private lastTerminalPublished: boolean | null = null;
   private disposed = false;
 
   constructor(private readonly opts: AgentFieldPublisherOptions) {
@@ -196,8 +197,11 @@ export class AgentFieldPublisher {
       return;
     }
     // A first publish after the gate opened is news even when the board did
-    // not move — the mesh has never seen it.
-    if (!changed && this.published) return;
+    // not move — the mesh has never seen it. TM-2: so is a flip of the attach
+    // join, which changes what every published row PROMISES without changing
+    // any row's own facts, and therefore never moves the projection's revision.
+    if (!changed && this.published && this.lastTerminalPublished === this.opts.terminalPublished())
+      return;
     await this.publish();
   }
 
@@ -205,6 +209,7 @@ export class AgentFieldPublisher {
     const snapshot = this.projection.snapshot();
     const at = this.now();
     this.published = true;
+    this.lastTerminalPublished = this.opts.terminalPublished();
     await this.write(
       this.capToLimit({
         v: 1,
@@ -212,7 +217,7 @@ export class AgentFieldPublisher {
         publishedAt: at,
         expiresAt: at + this.expiryMs,
         revision: snapshot.revision,
-        rows: snapshot.rows,
+        rows: this.attachableRows(snapshot.rows),
       }),
     );
     // The heartbeat exists for rows: an empty board has nothing to keep alive,
@@ -245,6 +250,29 @@ export class AgentFieldPublisher {
       clearTimeout(this.coalesce);
       this.coalesce = null;
     }
+  }
+
+  /**
+   * TM-2 (MF-1l) — the rows as the MESH may have them.
+   *
+   * The `terminal` join (`{hosted, runtimeSessionId, cellBootId?, …}`) is what
+   * a reader attaches THROUGH (G3). While this device is not publishing its
+   * doors, an attach cannot succeed — `terminal.openTicket` answers
+   * `doors_not_published` — so carrying the join would promise a tap that
+   * cannot land. The row itself stays: the agent is real and working, and
+   * dropping it would lose a live agent off a phone for a transport reason.
+   *
+   * `alive` is computed from the SUMMARY before this runs, so a pending row
+   * (AR-4: a PTY on this device with nothing driving it) keeps reading alive
+   * here rather than flipping to "gone" because the mesh is off.
+   */
+  private attachableRows(rows: readonly AgentFieldRow[]): AgentFieldRow[] {
+    if (this.opts.terminalPublished()) return [...rows];
+    return rows.map((row) => {
+      if (row.terminal === undefined) return row;
+      const { terminal: _unreachable, ...rest } = row;
+      return rest;
+    });
   }
 
   /** MF-1h — a slice has a transport limit, and a board can outgrow it: a

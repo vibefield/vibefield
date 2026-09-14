@@ -62,7 +62,9 @@ import {
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
+  REMOTE_CELL_PATH_PREFIX,
   RendererParticipantIdentity,
+  remoteCellEndpointsFor,
   SCOPES,
   type Scope,
   SettingsGetParams,
@@ -985,6 +987,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.terminalBirthWaitMs !== undefined
         ? { birthWaitMs: config.terminalBirthWaitMs }
         : {}),
+      // TM-2 (TM-D2) — the doors a TAILNET self peer is told to dial, read off
+      // the LIVE terminal serve. Three conditions, every one of them "is it
+      // serving right now" rather than "did fieldd ask for it":
+      //   · the serve is ACTIVE — in the fused view that is the node reporting
+      //     the proxy running, not this daemon's own reconcile verdict;
+      //   · THIS cell's route is in the declared set — a ticket minted in the
+      //     window between a cell's birth and its route landing would name a
+      //     path the sidecar answers 404 for, and a 404 is not a state any
+      //     client can act on;
+      //   · the URL composes — `remoteCellEndpointsFor` refuses anything that
+      //     is not a dialable http(s) origin instead of inventing one.
+      // Any of the three missing is `doors_not_published`, an honest state.
+      remoteEndpoints: (cellBootId) => {
+        const serve = mesh.serves().find((s) => (s.serveId ?? s.name) === TERMINAL_SERVE_ID);
+        if (serve?.status !== "active" || serve.url === undefined) return undefined;
+        const prefix = `${REMOTE_CELL_PATH_PREFIX}${cellBootId}/`;
+        if (!(serve.routes ?? []).some((route) => route.prefix === prefix)) return undefined;
+        return remoteCellEndpointsFor(serve.url, cellBootId);
+      },
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
@@ -1725,6 +1746,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // NF-3: honest capability — true iff the pairing hello delivered the
       // floor's endpoints (D31; re-synced on the terminal-endpoints event).
       terminalHost: () => native.terminalEndpoints !== undefined,
+      // TM-2 (MF-1l) — the REMOTE half: can another device attach here? The
+      // floor's own word, not an inference from a neighbouring consent.
+      terminalMesh: () => native.terminalMeshPublished(),
       // The daemon owns the serve secret + the fused serve state, so IT
       // composes the endpoint: url only while the product serve is active.
       productEndpoint: () => {
@@ -1741,16 +1765,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // serves, published into `field.agents.v1` so a phone joining the tailnet
     // reads every desktop's board from the mesh with no fieldd in its path.
     //
-    // THE GATE, stated honestly. §10.2 asks for "the floor's terminal mesh is
-    // SERVING". That fact does not exist on this plane: the floor reports its
-    // terminal-mesh state only as prose inside a unit `detail` string
-    // (field-native/src/services/terminal.rs — `publishing terminal.v1.hosts`
-    // / `off — {reason}`), the mgmt hello carries `terminal` + `terminalRoutes`
-    // and no mesh flag, and fieldd subscribes to no observed-unit stream that
-    // would carry the prose anyway. So the gate is the best STRUCTURED truth
-    // fieldd holds: this device's product serve is active, which is precisely
-    // the door a phone would dial and the URL DeviceService already advertises
-    // in `field.devices.v1`.
+    // THE GATE: this device's product serve is active — the door a phone
+    // dials and the URL DeviceService advertises in `field.devices.v1`.
+    //
+    // TM-2 (MF-1l) closes what §10.2 actually asked for, "the floor's terminal
+    // mesh is SERVING", as a SECOND and finer gate: `terminalPublished` is the
+    // floor's own `terminalMesh` word off the hello, and it gates the rows'
+    // `terminal` JOIN rather than the board. The distinction is the point —
+    // the board is true either way, and only the join promises a tap.
     //
     // ERRATA (2026-09-13, EL7 M1): this comment used to call `field.devices.v1`
     // a same-user-private store and lean on that as the precedent. It is not.
@@ -1766,34 +1788,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // — and it is one call site to change the day the floor's hello grows a
     // typed `terminalMesh` fact.
     //
-    // MF-1h — THE GATE'S FALSE POSITIVE, stated and OWED. A product serve can
-    // be active while the floor's terminal mesh is OFF (both native flags ship
-    // off, G5). Every row carries `terminal: {hosted: "local",
-    // runtimeSessionId}` verbatim, so a phone draws a TAPPABLE card for a PTY
-    // that is not on the mesh and cannot be attached to.
-    //
-    // Closing it needs a fact fieldd cannot read today. The floor DOES know —
-    // it mints a mirror-write capability at boot exactly when the terminal
-    // mesh is enabled — but the only mgmt verb that reveals it,
-    // `native.terminal.mirrorWriteCapability`, answers with the CAPABILITY
-    // ITSELF, and that secret is pinned to one hop: fieldd asks once per grant
-    // and caches nothing, so a rotation is live at the next grant and a plugin
-    // never even causes the capability to be read into this process
-    // (`mirror-write-grant.test.ts`, MF-2a's EL7 rows). Polling it to gate the
-    // publisher would move that secret across the mgmt channel on a schedule
-    // nothing needs. What closes this is a SECRET-FREE fact — a `terminalMesh`
-    // boolean on the floor's hello beside `terminal`/`terminalRoutes`, or a
-    // `configured`-only verb — which is cross-plane work, not a gate this
-    // lane may invent.
     const agentField = new AgentFieldPublisher({
       mesh,
       deviceId: () => devices.currentDeviceId(),
       list: () => agents.list(),
       subscribe: (emit) => agents.subscribe(emit),
       serving: () => mesh.serves().some((s) => s.name === "product" && s.status === "active"),
+      terminalPublished: () => native.terminalMeshPublished(),
       logger: logger.child({ component: "agents.field" }),
     });
     mesh.on("serves-changed", () => agentField.notifyServingChanged());
+    // TM-2 — the hello is where `terminalMesh` arrives and where it can change
+    // (a floor restart with the flag flipped), so a re-pair must republish the
+    // board with or without its attach joins.
+    native.on("terminal-endpoints", () => agentField.notifyServingChanged());
     agentField.start();
     // NF-3: the terminalHost capability follows the hello — republish when the
     // floor appears or a new native boot rotates the endpoints.

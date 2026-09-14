@@ -1,6 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
 import {
-  type CellEndpointSet,
   type CellTransportGrant,
   type CellTransportGrantClaims,
   DEFAULT_GRANT_VALIDITY_LIMITS,
@@ -17,6 +16,7 @@ import {
   TERMINAL_PIPELINE,
   type TerminalInfo,
   type TerminalOpenTicket,
+  type TicketEndpointSet,
 } from "@vibefield/contracts";
 import { RpcCallError } from "./native-link";
 
@@ -33,7 +33,19 @@ export interface GrantPrincipal {
   kind: string;
   tokenId?: string;
   login?: string;
+  /** UA-4/TM-D3 — set only on a `tailnet` principal whose WhoIs-verified login
+   * MATCHED the login recorded in link.json at link time. Absent on a
+   * pre-capture node, never `false` (product-api.ts) — so `=== true` is the
+   * only safe reading, and it is the one every caller here uses. */
+  self?: boolean;
   rendererParticipant?: { participantId: string; incarnation: string };
+}
+
+/** TM-D3 — is this the person who owns this desktop, reaching it from another
+ * of their own devices? The whole remote posture turns on it: a self peer is
+ * the user, a guest is not. */
+export function isSelfTailnetPrincipal(principal: GrantPrincipal): boolean {
+  return principal.kind === "tailnet" && principal.self === true;
 }
 
 /** spec §5.1 "Who mints clientId": never UI code. A renderer window's
@@ -45,7 +57,16 @@ export interface GrantPrincipal {
 export function clientIdFor(principal: GrantPrincipal): string {
   const rp = principal.rendererParticipant;
   if (rp !== undefined) return `win:${rp.participantId}#${rp.incarnation}`;
-  if (principal.kind === "tailnet-guest" || principal.kind === "tailnet-peer")
+  // TM-2: `tailnet` joins the login-keyed family. It was missing, and the
+  // fall-through below gave EVERY tailnet caller the bare clientId "tailnet" —
+  // one connection set and one attach-generation ledger shared by every remote
+  // client, which §5.1's per-client counters assume never happens. A login is
+  // the identity the door already verified (WhoIs), so it is the one to key on.
+  if (
+    principal.kind === "tailnet" ||
+    principal.kind === "tailnet-guest" ||
+    principal.kind === "tailnet-peer"
+  )
     return `${principal.kind}:${principal.login ?? "unknown"}`;
   if (principal.tokenId !== undefined) return `${principal.kind}:${principal.tokenId}`;
   return principal.kind;
@@ -54,10 +75,23 @@ export function clientIdFor(principal: GrantPrincipal): string {
 /** Rights per principal (spec §5.1; the v1 posture). A window (local token,
  * shell-main) may read, type and hold geometry; anything else — a tailnet
  * guest, a plugin — reads only. `geometryAdmin` is never minted in v1
- * (TP-D25: admin displacement is TP-S4). Sorted, as JCS requires. */
+ * (TP-D25: admin displacement is TP-S4). Sorted, as JCS requires.
+ *
+ * TM-D3 — a WhoIs-verified SELF peer may read and TYPE, and holds no geometry.
+ * Both halves are deliberate:
+ *   · `input` grants nothing new. `terminal.mirrorWriteGrant` already hands a
+ *     self peer the floor's mirror-write capability automatically, once per
+ *     connection (MF-2) — a durable bearer on disk. This is the same power as
+ *     a per-client, per-session, expiring, revocable-by-generation claim, which
+ *     is TP-D21's whole point; the bearer retires at TM-3, after the phone
+ *     moves to it.
+ *   · `geometry` stays with WINDOWS. The lease decides the PTY's cols and rows,
+ *     and a phone taking it would resize the desktop's own pane under the
+ *     person sitting at it. A remote viewer renders what the holder sized. */
 export function rightsFor(principal: GrantPrincipal): SessionAttachRight[] {
   if (principal.kind === "local-token" || principal.kind === "shell-main")
     return ["geometry", "input", "read"];
+  if (isSelfTailnetPrincipal(principal)) return ["input", "read"];
   return ["read"];
 }
 
@@ -103,8 +137,15 @@ export interface MintTicketInput {
   route: RouteBinding;
   /** The cell's T1 doors, copied verbatim into `TerminalOpenTicket.endpoints`.
    * REQUIRED since TP-S3e: a ticket without dialable doors is not a ticket —
-   * the caller refuses UNAVAILABLE before minting. */
-  doors: CellEndpointSet;
+   * the caller refuses UNAVAILABLE before minting.
+   *
+   * TM-2: LOOPBACK for a window, the TAILNET shape for a self peer. The CALLER
+   * decides which (terminal-service.ts), because only it can see whether the
+   * doors are published; the mint copies whatever it is handed. Nothing about
+   * the grants changes with the shape — same `audienceCellBootId`, same MAC,
+   * same key — so the cell cannot tell, and must not: a URL is a coordinate,
+   * and coordinates are not authority. */
+  doors: TicketEndpointSet;
 }
 
 export interface RenewAttachInput extends Omit<MintTicketInput, "doors"> {

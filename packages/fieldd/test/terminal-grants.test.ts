@@ -17,6 +17,7 @@ import {
   type CellGrantKey,
   clientIdFor,
   connectionSetIdFor,
+  isSelfTailnetPrincipal,
   projectRoster,
   rightsFor,
   TerminalGrantMinter,
@@ -35,6 +36,10 @@ const WINDOW = {
   rendererParticipant: { participantId: "p-3c4d", incarnation: "doc-2" },
 };
 const GUEST = { kind: "tailnet-guest", login: "me@example.com" };
+// TM-D3 — a WhoIs-verified SELF peer: the person who owns this desktop,
+// reaching it from another of their own devices (product-api sets `self` only
+// when the login matched link.json).
+const SELF = { kind: "tailnet", login: "me@example.com", self: true };
 const ROUTE = { cellBootId: KEY.cellBootId, routeRevision: 12 };
 const DOORS = {
   controlUrl: "ws://127.0.0.1:49152/control",
@@ -69,6 +74,36 @@ describe("clientId and rights derive from the principal, never from the caller's
     expect(rightsFor({ kind: "shell-main", tokenId: "t" })).toEqual(["geometry", "input", "read"]);
     expect(rightsFor(GUEST)).toEqual(["read"]);
     expect(rightsFor({ kind: "plugin", tokenId: "t" })).toEqual(["read"]);
+  });
+
+  // TM-D3 — the self peer joins the table.
+  it("a self peer reads and TYPES, and never holds geometry", () => {
+    expect(rightsFor(SELF)).toEqual(["input", "read"]);
+  });
+
+  it("`self` is the ONLY thing that lifts a tailnet principal's rights", () => {
+    // product-api sets `self` only when the WhoIs login matched link.json and
+    // leaves it ABSENT pre-capture rather than writing false — so absence must
+    // read as "not self", never as "unknown, be generous"
+    expect(rightsFor({ kind: "tailnet", login: "me@example.com" })).toEqual(["read"]);
+    expect(rightsFor({ kind: "tailnet", login: "me@example.com", self: false })).toEqual(["read"]);
+    // and the flag cannot be smuggled onto some other kind
+    expect(rightsFor({ kind: "tailnet-guest", login: "x@y", self: true })).toEqual(["read"]);
+    expect(rightsFor({ kind: "plugin", tokenId: "t", self: true })).toEqual(["read"]);
+    expect(isSelfTailnetPrincipal(SELF)).toBe(true);
+    expect(isSelfTailnetPrincipal(GUEST)).toBe(false);
+  });
+
+  it("a tailnet principal is keyed by its verified login, not by the bare kind", () => {
+    // it used to fall through to `principal.kind`, so EVERY remote client
+    // shared the clientId "tailnet" — one connection set and one attach
+    // ledger between them, which §5.1's per-client counters assume never
+    // happens
+    expect(clientIdFor(SELF)).toBe("tailnet:me@example.com");
+    expect(clientIdFor({ kind: "tailnet", login: "other@example.com", self: true })).toBe(
+      "tailnet:other@example.com",
+    );
+    expect(clientIdFor(SELF)).not.toBe(clientIdFor(GUEST));
   });
 });
 

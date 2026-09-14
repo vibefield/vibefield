@@ -105,7 +105,14 @@ describe("DeviceService — publish + identity", () => {
     const slice = parsed.data as DeviceSlice;
     // deviceId came from store.get (no deviceId) — the node's mesh identity (D30)
     expect(slice.deviceId).toBe("dev-self");
-    expect(slice.capabilities).toEqual({ terminalHost: false, docHost: true, push: false });
+    expect(slice.capabilities).toEqual({
+      terminalHost: false,
+      // TM-2 (MF-1l) — the REMOTE half of the terminal question, and a floor
+      // that said nothing is a no
+      terminalMesh: false,
+      docHost: true,
+      push: false,
+    });
     expect(slice.bootId).toBe(daemon.bootId);
     expect(slice.productEndpoint?.serve).toBe("product");
   });

@@ -13,6 +13,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  CONTRACTS_VERSION,
   type DeviceInfo,
   grantSigningInput,
   isPipeEndpoint,
@@ -2369,6 +2370,84 @@ describe("TP-S1 — the session-addressed grant model", () => {
     expect(created.endpoints).toEqual(doorsF);
     expect(created.route).toEqual({ cellBootId: "cell-f", routeRevision: 9 });
     expect(created.attachGrant.claims.sessionId).toBe(floor.createdSessionId);
+    expect(verifies(KEY_I, created.attachGrant)).toBe(true);
+    expect(verifies(KEY_I, created.transportGrant)).toBe(true);
+  });
+
+  // TM-2 (TM-D3) — `terminal.create` shares `ticketFor` with `openTicket`, so
+  // the door shape is chosen in ONE place. This row is what proves the sharing
+  // is real rather than asserted: the birth path is a different function with
+  // its own cell lookup, and it is the one a phone uses to start a session.
+  it("create answers a SELF peer with the tailnet doors and a self peer's rights", async () => {
+    const dataDir = makeDataDir();
+    mkdirSync(join(dataDir, "fieldd"), { recursive: true });
+    writeFileSync(
+      join(dataDir, "fieldd", "link.json"),
+      JSON.stringify({
+        login: "me@jamesyong42.com",
+        tailnet: "tail1234.ts.net",
+        linkedAt: "2026-09-14T00:00:00.000Z",
+      }),
+    );
+    const mock = await startMock(dataDir);
+    mock.helloTerminalMesh = true;
+    const floor = await startFakeFloor();
+    mock.terminalRoutes = keyedRoutes(9, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-f",
+        endpoints: floor.endpoints,
+        workloadClass: "interactive",
+        role: "class",
+        grantKey: KEY_I,
+        doors: {
+          controlUrl: "ws://127.0.0.1:50014/control",
+          framesUrl: "ws://127.0.0.1:50014/frames",
+        },
+      },
+    ]);
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    // wait for the terminal listener the routes ride
+    const deadline = Date.now() + 5_000;
+    while (
+      !daemon.mesh
+        .serves()
+        .some((s) => (s.serveId ?? s.name) === "terminal" && s.status === "active")
+    ) {
+      if (Date.now() > deadline) throw new Error("the terminal serve never came up");
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    // dial the product door the way the sidecar delivers a phone: the secret
+    // path (read back from health, as the phone reads it from the roster) plus
+    // the injected identity header that makes the caller `self`
+    const productUrl = daemon.health().mesh.serves.find((s) => s.name === "product")?.url;
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${daemon.controlPort}${new URL(productUrl as string).pathname}`,
+      { headers: { "Tailscale-User-Login": "me@jamesyong42.com" } },
+    );
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const rpc = new WsRpc(ws);
+    await rpc.call("system.hello", {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind: "ios",
+    });
+
+    const created = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    expect(created.sessionId).toBe(floor.createdSessionId);
+    expect(created.endpoints).toEqual({
+      controlUrl: "ws://mock.ts.net:9422/cell/cell-f/control",
+      framesUrl: "ws://mock.ts.net:9422/cell/cell-f/frames",
+    });
+    expect(created.attachGrant.claims.rights).toEqual(["input", "read"]);
+    // the grants are the cell's own, exactly as for a window
+    expect(created.route).toEqual({ cellBootId: "cell-f", routeRevision: 9 });
     expect(verifies(KEY_I, created.attachGrant)).toBe(true);
     expect(verifies(KEY_I, created.transportGrant)).toBe(true);
   });

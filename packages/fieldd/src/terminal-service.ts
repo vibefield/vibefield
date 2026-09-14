@@ -12,6 +12,7 @@ import {
   CELL_SUPERVISION,
   type CellEndpointSet,
   ObservedState,
+  type RemoteCellEndpointSet,
   type RouteBinding,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
   TERMINAL_SESSION_CAP,
@@ -33,12 +34,14 @@ import {
   TerminalRuntimeSessionsResult,
   type TerminalTerminateResult,
   type TerminalWorkloadClass,
+  type TicketEndpointSet,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError, terminalCreateTarget } from "./native-link";
 import {
   type CellGrantKey,
   type GrantPrincipal,
+  isSelfTailnetPrincipal,
   projectRoster,
   TerminalGrantMinter,
 } from "./terminal-grants";
@@ -101,6 +104,18 @@ export interface TerminalServiceOptions {
   /** TC-S2 test seam: the cell-birth wait budget. Production defaults to the
    * cell's own hello deadline (the genned CELL_SUPERVISION authority). */
   birthWaitMs?: number;
+  /**
+   * TM-2 (TM-D2) — this cell's doors AS A TAILNET CLIENT DIALS THEM, or
+   * `undefined` when they are not published.
+   *
+   * The daemon supplies it from the live terminal serve (`terminal-serve.ts`
+   * declares the routes; this reads the listener the node reports back), so
+   * "published" here means the sidecar is actually serving the route, not that
+   * fieldd once asked it to. Absent in every non-mesh composition — a fieldd
+   * with no remote surface mints loopback tickets and refuses remote ones,
+   * which is exactly the pre-TM-2 behaviour.
+   */
+  remoteEndpoints?: (cellBootId: string) => RemoteCellEndpointSet | undefined;
 }
 
 /** Free-shell spawn geometry until an attached view claims resize authority
@@ -505,8 +520,46 @@ export class TerminalService {
       principal,
       sessionId,
       route: this.routeBinding(cell.key),
-      doors: cell.doors,
+      doors: this.doorsFor(cell, principal),
     });
+  }
+
+  /**
+   * TM-2 (TM-D2) — WHICH doors this caller is told to dial.
+   *
+   * A window is byte-for-byte what TP-S3e shipped: the cell's own loopback
+   * pair, straight off the route row. A WhoIs-verified SELF peer gets the
+   * tailnet pair instead, because `127.0.0.1` on this Mac is not a coordinate
+   * any other device can use — that is the entire reason the second shape
+   * exists (D36 keeps `CellEndpointSet` loopback-only rather than widening it).
+   *
+   * Everything else that reaches this door keeps the loopback answer, and that
+   * is not a leak: the scope wall and the guest choke decide who gets here at
+   * all (`terminal.attach` is in TAILNET_SCOPES, the guest preset is empty), a
+   * URL is a coordinate rather than an authority, and the cell admits nobody
+   * without a MAC it verifies. A guest that somehow reached the mint would be
+   * handed an address it cannot route to — the strictly safer answer.
+   *
+   * The refusal when a self peer's doors are NOT published is its own state
+   * word: `transport_not_landed` means THIS CELL serves no T1 doors at all,
+   * while `doors_not_published` means the doors are fine and this DEVICE is not
+   * carrying them onto the tailnet (the floor's `terminalMesh` is off, the
+   * daemon is unlinked, or the serve has not come up). Different causes, and
+   * the remote reader's face says a different sentence for each.
+   */
+  private doorsFor(cell: CellTarget, principal: GrantPrincipal): TicketEndpointSet {
+    // `cell.doors` is proven present by the caller above.
+    const loopback = cell.doors as CellEndpointSet;
+    if (!isSelfTailnetPrincipal(principal)) return loopback;
+    const remote = this.opts.remoteEndpoints?.(cell.key);
+    if (remote === undefined)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "this device is not publishing its terminal doors on the tailnet",
+        true,
+        { service: "terminal", state: "doors_not_published" },
+      );
+    return remote;
   }
 
   /** The route binding at mint time. `leaseEpoch` stays absent until the

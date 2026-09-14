@@ -109,6 +109,7 @@ describe("MF-1h — nothing the publisher does can end the daemon", () => {
       },
       subscribe: () => () => undefined,
       serving: () => true,
+      terminalPublished: () => true,
       minIntervalMs: 1,
       logger: captureLogger(logs),
     });
@@ -129,6 +130,7 @@ describe("MF-1h — nothing the publisher does can end the daemon", () => {
       list: () => ({ sessions: [managedSummary()] }),
       subscribe: () => () => undefined,
       serving: () => true,
+      terminalPublished: () => true,
       minIntervalMs: 1,
       logger: captureLogger(logs),
     });
@@ -152,6 +154,7 @@ describe("MF-1h — nothing the publisher does can end the daemon", () => {
       serving: () => {
         throw new Error("the mesh client is mid-reconcile");
       },
+      terminalPublished: () => true,
       minIntervalMs: 1,
       logger: captureLogger(logs),
     });
@@ -171,6 +174,7 @@ describe("AgentFieldPublisher (MF-1 §10.2)", () => {
     source: ReturnType<typeof fold>,
     mesh: ReturnType<typeof meshSpy>,
     serving: () => boolean = () => true,
+    terminalPublished: () => boolean = () => true,
   ) =>
     new AgentFieldPublisher({
       mesh,
@@ -178,6 +182,7 @@ describe("AgentFieldPublisher (MF-1 §10.2)", () => {
       list: source.list,
       subscribe: source.subscribe,
       serving,
+      terminalPublished,
       now: () => 1_000_000,
     });
 
@@ -235,6 +240,7 @@ describe("AgentFieldPublisher (MF-1 §10.2)", () => {
       list: source.list,
       subscribe: source.subscribe,
       serving: () => true,
+      terminalPublished: () => true,
       now: () => clock,
     });
     publisher.start();
@@ -360,6 +366,7 @@ describe("AgentFieldPublisher (MF-1 §10.2)", () => {
       list: source.list,
       subscribe: source.subscribe,
       serving: () => true,
+      terminalPublished: () => true,
       now: () => 1_000_000,
       logger: captureLogger(logs),
     });
@@ -400,6 +407,7 @@ describe("AgentFieldPublisher (MF-1 §10.2)", () => {
       list: source.list,
       subscribe: source.subscribe,
       serving: () => true,
+      terminalPublished: () => true,
       now: () => 1_000_000,
       logger: captureLogger(logs),
     });
@@ -443,5 +451,52 @@ describe("AgentFieldPublisher (MF-1 §10.2)", () => {
     source.publish(board("run-9"));
     await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_HEARTBEAT_MS * 3);
     expect(mesh.writes).toHaveLength(2);
+  });
+
+  // TM-2 (MF-1l) — the false positive MF-1h named and owed, closed.
+  it("withholds the attach JOIN while the doors are not published, and keeps the row", async () => {
+    const source = fold(board("run-1"));
+    const mesh = meshSpy();
+    let published = false;
+    const publisher = build(
+      source,
+      mesh,
+      () => true,
+      () => published,
+    );
+    publisher.start();
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+
+    // the row is there — the agent is real and working, and dropping it for a
+    // transport reason would lose a live agent off a phone
+    expect(mesh.writes[0]?.rows.map((r) => r.runtimeRunId)).toEqual(["run-1"]);
+    // …but nothing on it says "tap me": the join is what a card attaches
+    // THROUGH, and an attach would answer doors_not_published
+    expect(mesh.writes[0]?.rows[0]?.terminal).toBeUndefined();
+    // and `alive` is computed BEFORE the join is withheld, so a hosted run
+    // does not read as gone because the mesh is off
+    expect(mesh.writes[0]?.rows[0]?.alive).toBe(true);
+
+    // the doors come up: the BOARD has not moved, but what its rows promise
+    // has, so this is news
+    published = true;
+    publisher.notifyServingChanged();
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+    expect(mesh.writes).toHaveLength(2);
+    expect(mesh.writes[1]?.rows[0]?.terminal).toMatchObject({ hosted: "local" });
+    expect(mesh.writes[1]?.revision).toBe(mesh.writes[0]?.revision);
+
+    // …and going quiet again withdraws it
+    published = false;
+    publisher.notifyServingChanged();
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+    expect(mesh.writes).toHaveLength(3);
+    expect(mesh.writes[2]?.rows[0]?.terminal).toBeUndefined();
+
+    // an unchanged board with an unchanged gate is still not news
+    publisher.notifyServingChanged();
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+    expect(mesh.writes).toHaveLength(3);
+    await publisher.dispose();
   });
 });

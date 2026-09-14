@@ -36,6 +36,8 @@ export interface DeviceServiceOptions {
    * terminal endpoints (the floor is real on this device). The daemon triggers
    * a re-sync when that flips so the published slice follows the truth. */
   terminalHost?: () => boolean;
+  /** TM-2 (MF-1l) — are this device's terminal doors on the tailnet? */
+  terminalMesh?: () => boolean;
   now?: () => number;
 }
 
@@ -187,8 +189,13 @@ export class DeviceService extends EventEmitter {
       contractsVersion: this.opts.contractsVersion,
       // honest capabilities (D31): terminalHost follows the NF-D8 hello
       // (true iff the floor delivered endpoints); DocumentService is B3-real.
+      // TM-2: `terminalMesh` is the REMOTE half of the same question — the
+      // floor's own word that its doors are published — and the two are
+      // deliberately separate facts, because a desktop can host terminals for
+      // itself all day without offering one to another device.
       capabilities: {
         terminalHost: this.opts.terminalHost?.() ?? false,
+        terminalMesh: this.opts.terminalMesh?.() ?? false,
         docHost: true,
         push: false,
       },
@@ -313,6 +320,8 @@ export class DeviceService extends EventEmitter {
         contractsVersion: slice.contractsVersion,
         capabilities: {
           terminalHost: slice.capabilities.terminalHost,
+          // a peer older than TM-2 does not carry it; absence is a no
+          terminalMesh: slice.capabilities.terminalMesh ?? false,
           docHost: slice.capabilities.docHost,
           push: slice.capabilities.push,
         },
@@ -402,6 +411,7 @@ function narrowDeviceSlice(slice: DeviceSlice): DeviceSlice {
     contractsVersion: slice.contractsVersion,
     capabilities: {
       terminalHost: slice.capabilities.terminalHost,
+      terminalMesh: slice.capabilities.terminalMesh ?? false,
       docHost: slice.capabilities.docHost,
       push: slice.capabilities.push,
     },

@@ -97,6 +97,13 @@ async function boot(): Promise<{ daemon: FielddDaemon; mock: MockMgmtServer }> {
   await mock.start();
   cleanup.push(() => mock.stop());
   mock.helloTerminal = ENDPOINTS;
+  // TM-2 (MF-1l): this floor PUBLISHES its doors, so the rows carry their
+  // `terminal` join. MF-1's premise is a phone reading this board and tapping
+  // a card, which is exactly the case the join is for — and the re-tag below
+  // reads `terminal.cellBootId` as its witness that the fold subscription is
+  // live. A floor with its doors off is the publisher test's row, not this
+  // file's.
+  mock.helloTerminalMesh = true;
   mock.observedState = observed([
     { sessionId: PANE, pid: 42, cell: { cellInstanceId: 1, cellBootId: "cell-a" } },
   ]);

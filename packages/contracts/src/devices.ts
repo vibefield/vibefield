@@ -25,7 +25,23 @@ export const DEVICE_LIMITS = {
 /** Honest per-device capability facts (D31: "capabilities honest per device"). */
 export const DeviceCapabilities = z
   .object({
+    /** This device HAS a terminal floor — the local fact. True iff the
+     * pairing hello delivered the floor's endpoints; it says nothing about
+     * whether anyone else can reach them (QA 2026-09-13 finding 2 turned on
+     * exactly that distinction). */
     terminalHost: z.boolean(),
+    /** TM-2 (MF-1l) — this device's terminal doors are PUBLISHED ON THE
+     * TAILNET, the floor's own word from its hello, which is the fact a
+     * REMOTE reader needs: `terminalHost` true with this false means the
+     * desktop is running terminals it will not let anyone attach to from
+     * another device, and a card drawn on the first fact alone is tappable
+     * and dead.
+     *
+     * OPTIONAL, and absence reads as FALSE. A slice published by a peer older
+     * than TM-2 simply does not carry it, and the tolerant-reader law says a
+     * missing field is "it did not say" — which for a promise of reachability
+     * is a no. */
+    terminalMesh: z.boolean().optional(),
     docHost: z.boolean(),
     push: z.boolean(),
   })
