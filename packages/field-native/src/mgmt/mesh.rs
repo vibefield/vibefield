@@ -794,12 +794,22 @@ pub struct ServeConfigInput<'a> {
 /// TM-2 (thinking-terminal-mesh-cells.md §3 T) — the declared route list of a
 /// `routes` serve, parsed into truffle [`ProxyRoute`]s.
 ///
-/// DELIBERATELY NARROW, and the narrowness is the EL7 argument: the caller
-/// names a path prefix and a LOOPBACK PORT, and nothing else. It cannot ask
-/// for a static directory, a non-loopback target, a fallback, or a per-route
-/// allow-list that would override the serve's login gate — so the worst a
-/// compromised fieldd can publish through this door is another loopback port
-/// on this machine, which is the same authority it already has.
+/// DELIBERATELY NARROW, and the narrowness is the EL7 argument: a declared
+/// route names a path prefix and a LOOPBACK PORT, and nothing else. No entry
+/// here can ask for a static directory, a non-loopback target, a fallback, or a
+/// per-route allow-list that would override the serve's login gate — so the
+/// worst a compromised fieldd can publish through a CELL ROUTE is another
+/// loopback port on this machine, which is the same authority it already has.
+///
+/// CORRECTED 2026-09-14 (N-L7). That paragraph used to claim the narrowness for
+/// "the caller", which is wider than this function can promise. The claim holds
+/// for the entries THIS FUNCTION parses; it does not hold for the `routes` ARM,
+/// which prepends `preview_routes` before extending with these — so a caller
+/// that passes `previewDir` DOES mount a static directory at
+/// `/.vibefield/preview` on a cell-routes serve. Nothing sends that today
+/// (`terminalServeSpec` names only `{prefix, targetPort}` rows) and N-H2's
+/// non-empty `allow` gates whatever is mounted, but the sentence claimed a
+/// property of the arm from a property of one of its inputs.
 ///
 /// `strip_prefix` is TRUE here, and that is load-bearing in the opposite
 /// direction from the product serve's `false`: a terminal cell's door matches
@@ -968,8 +978,13 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
             })
         }
         // TM-2 (TM-D2) — a serve whose ENTIRE surface is its declared routes:
-        // the terminal-cell listener, `/cell/<cellBootId>/` → that cell's
-        // loopback T1 door, one route per live cell.
+        // the terminal-cell listener, `/cell/<cellBootId>` → that cell's
+        // loopback T1 door, one route per live cell. NO TRAILING SLASH, and
+        // the sketch says so because the prefix really is slashless: TM-2b
+        // measured the shipped sidecar refusing to match one at all, and
+        // `parse_cell_routes` below REJECTS a trailing slash outright. Until
+        // 2026-09-14 (N-L7) this line drew it `/cell/<cellBootId>/`, the shape
+        // the arm cannot accept.
         //
         // No implicit root route, deliberately. The `port` arm below mounts a
         // catch-all `/` at the target whenever a listener port is named, and a

@@ -1089,11 +1089,17 @@ fn routes_stream_payload(
 
 /// MF-2i — the routes stream's forwarder: `spawn_forwarder`'s shape with
 /// `disclosed_routes` applied to every payload, so a delta can never say what
-/// the snapshot was forbidden to say. It skips nothing a floor actually sends
-/// today — the in-process serve's channel never moves off its initial, and a
-/// cell floor's first send IS the revision-1 announcement — and that is the
-/// point: the rule holds by construction rather than by those two facts
-/// staying true.
+/// the snapshot was forbidden to say.
+///
+/// CORRECTED 2026-09-14 (N-L7). This used to justify the rule with two facts in
+/// the PRESENT TENSE, one of which had already stopped being a fact: "the
+/// in-process serve's channel never moves off its initial" described the
+/// mesh-flagged floor TM-1 DELETED. There is one shape left — a cell floor,
+/// whose first send IS the revision-1 announcement — so the rule now skips
+/// nothing any floor sends, and that was always the point: it holds by
+/// construction rather than by the shapes of the day staying as they are. T-M2
+/// gives it a driven witness below, which is the stronger form of the same
+/// claim.
 ///
 /// E-F1 — and it now forwards a SECOND fact on the same stream: whether this
 /// floor's terminal doors are published on the tailnet. Two triggers, and the

@@ -2477,8 +2477,12 @@ fn observed_row(session: &SessionSummary) -> ObservedTerminal {
         persistence: session.persistence.clone(),
         title: session.title.clone(),
         cwd: session.cwd.clone(),
-        // TC-S3: the legacy in-process serve has no cell; the per-cell pump
-        // stamps the tag on the rows it owns.
+        // CORRECTED 2026-09-14 (N-L7). This used to read "the legacy in-process
+        // serve has no cell", which named a caller TM-1 deleted — there is no
+        // cell-less shape on this floor any more. What is true is narrower and
+        // local: this helper's ONLY caller is `observed_row_for_cell`, which
+        // stamps the tag on the very next line. `None` is the field's default
+        // in a two-step construction, not a statement about a serve.
         cell: None,
     }
 }

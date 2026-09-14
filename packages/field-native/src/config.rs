@@ -1,7 +1,15 @@
 use std::path::PathBuf;
 
-/// The terminal mesh's master switch, named once so the strip-list claim below
-/// can be asserted against the string this file actually reads.
+/// The terminal mesh's master switch: the ONE spelling of the env var, read by
+/// `NativeConfig::from_env` below and by nothing else in this process.
+///
+/// CORRECTED 2026-09-14 (N-L7). It used to say it was "named once so the
+/// strip-list claim below can be asserted against the string this file actually
+/// reads". There is no such claim below any more — the paragraph it pointed at
+/// is the RETIRED note that follows, gone with the mirror-write capability at
+/// TM-3 — and nothing ever asserted against this constant: its only use in the
+/// tree is the `std::env::var` call in `from_env`. A named constant with one
+/// reader is still worth having; the reason given for it was not true.
 pub const TERMINAL_MESH_ENV: &str = "FIELD_NATIVE_TERMINAL_MESH";
 
 // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
