@@ -105,6 +105,11 @@ public struct RoutedSessionState: Sendable {
   internal var demand: RoutedDemand = .live
   internal var transfer: RoutedTransfer?
   internal var activationSequence: Int64 = -1
+  /// CONSECUTIVE authoritative scenes this activation's sink refused. Reset by
+  /// any frame that applies; the bound it is counted against is
+  /// `RoutedTerminalClient.maxRefusedRepairs`, and what happens at the bound is
+  /// written on `repairRefused`.
+  internal var refusedRepairs = 0
 
   public var leaseLive: Bool { nowMs < leaseDeadlineMs }
   public var inputRightLive: Bool { nowMs < inputRightDeadlineMs }
@@ -214,6 +219,18 @@ public final class RoutedTerminalClient {
   /// the local half, so a keystroke is refused on the device rather than sent to
   /// be dropped and audited.
   private static let attachRenewalMarginMs = Int64(RoutedTerminalContract.attachRenewalMarginMs)
+
+  /// How many AUTHORITATIVE scenes in a row the sink may refuse before this
+  /// client stops asking for another (see `repairRefused`).
+  ///
+  /// Three, and not one: the first refusal of a self-contained frame is
+  /// plausibly a race — the sink's bound activation changed between the client
+  /// dispatching the frame and the sink taking it — and failing a session over
+  /// one lost race would be worse than the blank it replaces. Three in a row,
+  /// with a fresh scene between each, is not a race. It is not a wire number
+  /// and has no home in `registries.ts`: the cell has no opinion about what
+  /// this viewer's renderer can parse.
+  private static let maxRefusedRepairs = 3
 
   public init(
     transport: any RoutedLegTransport, sink: any RoutedFrameSink, options: Options = .init()
@@ -763,14 +780,29 @@ public final class RoutedTerminalClient {
         let content = transfer.resultContent
         let sessionId = session.sessionId
         let activationId = session.activationId
-        session.appliedContent = content
-        session.frames = .active
+        // NOT `appliedContent = content; frames = .active` here. The sink has
+        // not seen these bytes yet and may refuse them, and a client that
+        // stamped the scene first would report `SceneApplied` for a frame the
+        // glass never took — which is the cell's own signal to STOP seeding.
+        // `.applying` is the honest state for the gap: the frame is on its way
+        // to the sink, `PresentationReady` is false, and the stamp is set on
+        // the far side of the await or not at all.
+        session.frames = .applying
         let sink = self.sink
         Task { [weak self] in
-          await sink.applyFullFrame(
+          let applied = await sink.applyFullFrame(
             bytes, session: sessionId, activation: activationId, content: content)
           await MainActor.run { [weak self] in
-            self?.reportApplied(sessionId: sessionId, activationId: activationId, content: content)
+            guard let self else { return }
+            if applied {
+              self.frameApplied(
+                sessionId: sessionId, activationId: activationId, content: content)
+            } else {
+              // A full frame IS the repair. One the sink will not take leaves
+              // nothing to fall back to, so it is counted rather than asked for
+              // again forever.
+              self.repairRefused(sessionId: sessionId, activationId: activationId)
+            }
           }
         }
       } catch {
@@ -791,8 +823,13 @@ public final class RoutedTerminalClient {
     let sessionId = session.sessionId
     let activationId = session.activationId
     let base = header.baseContent
-    session.appliedContent = result
-    session.frames = .active
+    // The stamp is `frameApplied`'s to write, on the far side of the await and
+    // only if the sink took the frame — the same rule the transfer path keeps.
+    // Claiming it here first was harmless while every refusal routed to
+    // `lineageBroke` (which cleared it again), and is not harmless now that a
+    // refused SELF-CONTAINED frame can end in the bound below: the client would
+    // be carrying a scene the glass never held into whatever came next.
+    session.frames = .applying
     let sink = self.sink
     Task { [weak self] in
       let applied = await sink.applyDeltaFrame(
@@ -800,7 +837,12 @@ public final class RoutedTerminalClient {
       await MainActor.run { [weak self] in
         guard let self else { return }
         if applied {
-          self.reportApplied(sessionId: sessionId, activationId: activationId, content: result)
+          self.frameApplied(sessionId: sessionId, activationId: activationId, content: result)
+        } else if base == nil {
+          // A frame with NO base is self-contained: it is the repair, not a
+          // step onto one. Refusing it is the same answer a refused transfer
+          // gives and is counted the same way.
+          self.repairRefused(sessionId: sessionId, activationId: activationId)
         } else {
           // The sink holds a scene this delta does not describe. The honest
           // repair is a reseed, and the cell's own trigger for one is a
@@ -810,6 +852,20 @@ public final class RoutedTerminalClient {
         }
       }
     }
+  }
+
+  /// The sink took the frame. Only now is the scene this client's to claim.
+  private func frameApplied(
+    sessionId: String, activationId: String, content: RoutedSceneStamp
+  ) {
+    guard var session = sessions[sessionId], session.activationId == activationId else { return }
+    session.appliedContent = content
+    session.frames = .active
+    // The bound below counts CONSECUTIVE refusals, so an applied frame clears
+    // it: a sink that can show this scene is not a build that cannot show any.
+    session.refusedRepairs = 0
+    sessions[sessionId] = session
+    reportApplied(sessionId: sessionId, activationId: activationId, content: content)
   }
 
   /// Progress, in stamps. Sent on change AND repeated at least every
@@ -835,6 +891,43 @@ public final class RoutedTerminalClient {
     session.frames = .seeding
     session.lastSeedReason = "the sink holds a different scene"
     sessions[sessionId] = session
+  }
+
+  /// An AUTHORITATIVE scene the sink refused — a completed transfer, or a
+  /// self-contained frame with no base. Both are the repair a lineage break
+  /// asks for, so there is nothing further to fall back to.
+  ///
+  /// The repair is asked for again the same way a lineage break asks for it
+  /// (drop the applied stamp; the cell's own trigger for a seed is a
+  /// `SceneApplied` that does not advance) — but only up to a BOUND, because
+  /// the state this exists to prevent is a phone that asks for a scene it can
+  /// never show and a cell that keeps sending one. A build whose TRF1 reader
+  /// cannot parse what this cell renders would otherwise sit in that loop
+  /// behind a blank pane, spending the desktop's credit forever.
+  ///
+  /// Past the bound the client FAILS with a sentence naming the real thing.
+  /// Failing rather than idling is deliberate: the legs go with it, so the loop
+  /// stops costing the cell, and `.failed` is the one resting state that
+  /// reaches the card with a retry beside it. A retry re-attaches under a fresh
+  /// activation, which is the only move that could change the answer.
+  private func repairRefused(sessionId: String, activationId: String) {
+    guard var session = sessions[sessionId], session.activationId == activationId else { return }
+    session.refusedRepairs += 1
+    let refusals = session.refusedRepairs
+    session.appliedContent = nil
+    if refusals < Self.maxRefusedRepairs {
+      session.frames = .seeding
+      session.lastSeedReason = "the sink would not take the scene the cell sent"
+      sessions[sessionId] = session
+      return
+    }
+    let reason =
+      "this desktop's frames cannot be shown on this build "
+      + "— \(refusals) authoritative scenes in a row were refused"
+    session.frames = .failed(reason)
+    session.lastRefusal = reason
+    sessions[sessionId] = session
+    fail(reason)
   }
 
   // MARK: Credit and the idle refresh

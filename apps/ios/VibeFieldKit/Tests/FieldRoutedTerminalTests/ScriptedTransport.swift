@@ -136,6 +136,65 @@ final class ScriptedTransport: RoutedLegTransport, @unchecked Sendable {
   var dials: [String] { lock.withLock { dialed } }
 }
 
+/// A sink that can REFUSE, which `RoutedFrameRecorder` deliberately cannot.
+///
+/// The recorder holds bytes and a stamp and has no decoder, so the only frames
+/// it turns down are deltas whose base it does not hold. The real sink
+/// (`RoutedTerminalFrameSink`) refuses three further ways — a superseded
+/// activation, handles the cell did not declare, and bytes that will not parse
+/// as TRF1 at all — and it is the LAST of those that K-H1 was about: the client
+/// could not tell a refusal from an apply, so it acknowledged one. This stands
+/// in for a sink that says no, without dragging the Metal renderer and its TRF1
+/// decoder into a bundle that deliberately names neither.
+actor RefusingSink: RoutedFrameSink {
+  private var refusing = true
+  private var content: RoutedSceneStamp?
+  private(set) var refusedFull = 0
+  private(set) var refusedDelta = 0
+  private(set) var appliedFull = 0
+  private(set) var appliedDelta = 0
+  private(set) var identities: [String: RoutedTrfIdentity] = [:]
+  private(set) var endings: [String] = []
+
+  /// Take frames from now on — a race that resolved, rather than a build that
+  /// cannot show anything.
+  func accept() { refusing = false }
+  func refuse() { refusing = true }
+
+  func bindActivation(session: String, activation: String, identity: RoutedTrfIdentity) {
+    identities[activation] = identity
+  }
+
+  func applyFullFrame(
+    _ payload: Data, session: String, activation: String, content: RoutedSceneStamp
+  ) -> Bool {
+    if refusing {
+      refusedFull += 1
+      return false
+    }
+    self.content = content
+    appliedFull += 1
+    return true
+  }
+
+  func applyDeltaFrame(
+    _ payload: Data, session: String, activation: String, base: RoutedSceneStamp?,
+    result: RoutedSceneStamp
+  ) -> Bool {
+    if refusing {
+      refusedDelta += 1
+      return false
+    }
+    content = result
+    appliedDelta += 1
+    return true
+  }
+
+  func activationEnded(session: String, activation: String, reason: String) {
+    endings.append("\(activation):\(reason)")
+  }
+}
+
 // MARK: - Shapes the scripted door answers with
 
 enum Script {

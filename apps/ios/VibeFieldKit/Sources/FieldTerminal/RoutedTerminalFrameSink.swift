@@ -83,14 +83,21 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
     bound = Bound(session: session, activation: activation, identity: identity)
   }
 
+  /// A full frame REPLACES the scene, so there is no base to check — but the
+  /// two rules `admits` answers still apply, and until TM-r3 this method
+  /// swallowed both of them. It returns the answer now: `false` is this sink
+  /// saying the glass does not hold this frame, and the client must not report
+  /// it applied to a cell that would then stop seeding.
+  @discardableResult
   public func applyFullFrame(
     _ payload: Data, session: String, activation: String, content: RoutedSceneStamp
-  ) {
-    guard admits(payload, session: session, activation: activation) else { return }
+  ) -> Bool {
+    guard admits(payload, session: session, activation: activation) else { return false }
     self.content = content
     appliedFullFrames += 1
     lastOutcome = .applied
     publish(Data(payload))
+    return true
   }
 
   public func applyDeltaFrame(

@@ -31,8 +31,22 @@ public protocol RoutedFrameSink: AnyObject, Sendable {
 
   /// A full frame: the seed, or a catch-up, reassembled and checksum-verified.
   /// The receiver's scene is REPLACED — there is no base to apply against.
+  ///
+  /// It answers the same question its delta sibling does, and for a stronger
+  /// reason (TM-r3, 2026-09-14). This returned `Void`, so a sink that REFUSED a
+  /// seed — bytes that would not parse as TRF1, an activation this sink is not
+  /// showing — was acknowledged as though it had applied: the client stamped
+  /// the scene, sent `SceneApplied` to the cell, and the cell then had every
+  /// reason never to seed again. The glass stayed blank under a phase that said
+  /// `live`, which is precisely the blank this design refuses.
+  ///
+  /// So a sink that did not take the frame must say so by returning `false`.
+  /// The client then claims nothing, acknowledges nothing, and asks for the
+  /// scene again — and BOUNDS that asking, because a repair refused forever is
+  /// the same blank with a loop behind it.
   func applyFullFrame(
-    _ payload: Data, session: String, activation: String, content: RoutedSceneStamp) async
+    _ payload: Data, session: String, activation: String, content: RoutedSceneStamp
+  ) async -> Bool
 
   /// An incremental frame. It applies iff `base` equals what the sink currently
   /// holds; a sink that has moved on must say so by returning `false`, which the
@@ -66,12 +80,19 @@ public actor RoutedFrameRecorder: RoutedFrameSink {
     identities[activation] = identity
   }
 
+  /// This recorder always TAKES a full frame — it holds bytes and a stamp and
+  /// has no decoder that could refuse one. The refusing sink is the real one
+  /// (`RoutedTerminalFrameSink`, which owns the only TRF1 decoder on the
+  /// device); a test that needs a refusal mounts one that does, rather than
+  /// putting a switch here that no shipping caller would ever set.
+  @discardableResult
   public func applyFullFrame(
     _ payload: Data, session: String, activation: String, content: RoutedSceneStamp
-  ) {
+  ) -> Bool {
     lastFrame = Data(payload)
     self.content = content
     fullFrames += 1
+    return true
   }
 
   public func applyDeltaFrame(

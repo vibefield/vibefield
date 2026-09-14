@@ -34,8 +34,10 @@ import Testing
     let sink = RoutedTerminalFrameSink(publish: { published.append($0) })
     sink.bindActivation(
       session: "s-1", activation: "act-1", identity: try handles(frames.seed))
-    sink.applyFullFrame(frames.seed, session: "s-1", activation: "act-1", content: stamp(1))
+    let applied = sink.applyFullFrame(
+      frames.seed, session: "s-1", activation: "act-1", content: stamp(1))
 
+    #expect(applied)
     #expect(published == [frames.seed])
     #expect(sink.appliedFullFrames == 1)
     #expect(sink.lastOutcome == .applied)
@@ -59,8 +61,12 @@ import Testing
       identity: RoutedTrfIdentity(
         sessionHandle: String(UInt64(real.sessionHandle)! &+ 1), viewHandle: real.viewHandle))
 
-    sink.applyFullFrame(frames.seed, session: "s-1", activation: "act-1", content: stamp(1))
+    // The ANSWER is the half K-H1 was about: a full frame this sink refuses
+    // must say so, or the client acknowledges a scene the glass never held.
+    let applied = sink.applyFullFrame(
+      frames.seed, session: "s-1", activation: "act-1", content: stamp(1))
 
+    #expect(applied == false)
     #expect(published.isEmpty)
     #expect(failures.count == 1)
     #expect(failures.first?.contains(real.sessionHandle) == true)
@@ -85,7 +91,9 @@ import Testing
         sessionHandle: real.sessionHandle,
         viewHandle: String(UInt64(real.viewHandle)! &+ 1)))
 
-    sink.applyFullFrame(frames.seed, session: "s-1", activation: "act-1", content: stamp(1))
+    let applied = sink.applyFullFrame(
+      frames.seed, session: "s-1", activation: "act-1", content: stamp(1))
+    #expect(applied == false)
     #expect(published.isEmpty)
     #expect(sink.rejectedFrames == 1)
   }
@@ -117,9 +125,12 @@ import Testing
     sink.bindActivation(
       session: "s-1", activation: "act-1",
       identity: RoutedTrfIdentity(sessionHandle: "1", viewHandle: "1"))
-    sink.applyFullFrame(
+    let applied = sink.applyFullFrame(
       Data(repeating: 0x41, count: 128), session: "s-1", activation: "act-1", content: stamp(1))
 
+    // `.undecodable` is the case K-H1 rode in on: the bytes will not parse, the
+    // renderer gets nothing, and until TM-r3 the client was told it applied.
+    #expect(applied == false)
     #expect(published.isEmpty)
     if case .undecodable = sink.lastOutcome {} else {
       Issue.record("expected an undecodable outcome, got \(String(describing: sink.lastOutcome))")
@@ -158,8 +169,13 @@ import Testing
       publish: { published.append($0) }, identityFailed: { _, reason in failures.append(reason) })
     sink.bindActivation(
       session: "s-1", activation: "act-2", identity: try handles(frames.seed))
-    sink.applyFullFrame(frames.seed, session: "s-1", activation: "act-1", content: stamp(1))
+    let applied = sink.applyFullFrame(
+      frames.seed, session: "s-1", activation: "act-1", content: stamp(1))
 
+    // `false` here too — but a superseded frame is the ONE refusal the client
+    // must not count against its repair bound, which is why the client checks
+    // the activation before it counts anything.
+    #expect(applied == false)
     #expect(published.isEmpty)
     #expect(failures.isEmpty)
     #expect(sink.rejectedFrames == 0)

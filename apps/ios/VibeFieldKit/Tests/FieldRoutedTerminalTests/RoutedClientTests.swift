@@ -26,7 +26,7 @@ import Testing
   /// Bring a client all the way to `attached` and hand back everything the test
   /// needs to keep driving it.
   private func attached(
-    transport: ScriptedTransport, sink: RoutedFrameRecorder, client: RoutedTerminalClient,
+    transport: ScriptedTransport, sink: any RoutedFrameSink, client: RoutedTerminalClient,
     legGeneration: Int64 = 1
   ) async throws -> (control: ScriptedConnection, frames: ScriptedConnection, activation: String) {
     let control = transport.connection(for: "/control")
@@ -396,6 +396,131 @@ import Testing
     try await settle("the lineage break") { client.sessions[session]?.frames == .seeding }
     #expect(client.sessions[session]?.appliedContent == nil)
     #expect(await sink.deltaFrames == 2)
+    client.close()
+  }
+
+  /// A SEED the sink refuses is not an applied scene (TM-r3, K-H1).
+  ///
+  /// `applyFullFrame` returned `Void`, so a refusal was indistinguishable from
+  /// an apply: the client stamped the scene, told the cell `SceneApplied`, and
+  /// the cell — whose only trigger for another seed is an acknowledgement that
+  /// does NOT advance — had every reason to stop seeding. The phone sat at
+  /// phase `live` behind a blank pane with no banner and nothing arriving.
+  ///
+  /// The whole of the fix is asserted here in the negative first, which is the
+  /// only way this bug is visible: NOTHING was acknowledged.
+  @Test func aSeedTheSinkRefusesIsNeverAcknowledgedAsApplied() async throws {
+    let transport = ScriptedTransport()
+    let sink = RefusingSink()
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink, options: .init(viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    let seed = Data((0..<300).map { UInt8($0 % 251) })
+    let units = try Script.transferUnits(
+      session: session, activation: live.activation, creditEpoch: 1, firstSequence: 1,
+      kind: "seed", base: nil, result: Script.stamp(4417), payload: seed)
+    for unit in units { await live.frames.deliver(.binary(unit)) }
+
+    try await settle("the sink to refuse the seed") { await sink.refusedFull == 1 }
+    try await settle("the client to ask again") {
+      client.sessions[session]?.frames == .seeding
+    }
+    // The three things that were wrong, each named: no acknowledgement went to
+    // the cell, no scene is claimed, and the frames state says a seed is owed
+    // rather than that one landed.
+    #expect(await live.frames.lastSent("SceneApplied") == nil)
+    #expect(client.sessions[session]?.appliedContent == nil)
+    #expect(client.sessions[session]?.frames == .seeding)
+    client.close()
+  }
+
+  /// …and the asking is BOUNDED. A build whose TRF1 reader cannot parse what
+  /// this cell renders would otherwise ask for a scene it can never show, from
+  /// a cell that keeps sending one, behind a pane that stays blank — a silent
+  /// loop where the old bug was a silent blank.
+  ///
+  /// Three refused authoritative scenes in a row and the client says so, in a
+  /// sentence, in a state the card can render with a retry beside it.
+  @Test func aRepairRefusedThreeTimesStopsAskingAndSaysWhy() async throws {
+    let transport = ScriptedTransport()
+    let sink = RefusingSink()
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink, options: .init(viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    // Self-contained frames — no base — which is what a seed is however it is
+    // framed. Both roads into the sink are exercised: a transfer and a bare
+    // `trf1-frame`, because both replace the scene and both are the repair.
+    let units = try Script.transferUnits(
+      session: session, activation: live.activation, creditEpoch: 1, firstSequence: 1,
+      kind: "seed", base: nil, result: Script.stamp(1), payload: Data(count: 64))
+    for unit in units { await live.frames.deliver(.binary(unit)) }
+    try await settle("the first refusal") { client.sessions[session]?.frames == .seeding }
+
+    for (index, revision) in [Int64(2), Int64(3)].enumerated() {
+      let frame = try Script.frame(
+        session: session, activation: live.activation, sequence: Int64(10 + index), creditEpoch: 1,
+        base: nil, result: Script.stamp(revision), payload: Data("TRF1".utf8))
+      await live.frames.deliver(.binary(frame))
+    }
+
+    try await settle("the bound") {
+      if case .failed = client.state { return true } else { return false }
+    }
+    guard case .failed(let reason) = client.state else {
+      Issue.record("the client is failed at the bound")
+      return
+    }
+    // The sentence names what is actually wrong — this build cannot show these
+    // frames — rather than blaming a connection that is perfectly healthy.
+    #expect(reason.contains("cannot be shown on this build"))
+    #expect(reason.contains("3"))
+    #expect(client.lastRefusal == reason)
+    // Still nothing was ever acknowledged, and nothing is claimed.
+    #expect(await live.frames.lastSent("SceneApplied") == nil)
+    #expect(client.sessions[session]?.appliedContent == nil)
+    client.close()
+  }
+
+  /// The bound counts CONSECUTIVE refusals. A sink that takes a scene is not a
+  /// build that cannot show any, so an applied frame clears the count — without
+  /// which a long session would eventually fail on three unrelated races.
+  @Test func anAppliedSceneClearsTheRefusalCount() async throws {
+    let transport = ScriptedTransport()
+    let sink = RefusingSink()
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink, options: .init(viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    func deliverSelfContained(_ sequence: Int64, _ revision: Int64) async throws {
+      let frame = try Script.frame(
+        session: session, activation: live.activation, sequence: sequence, creditEpoch: 1,
+        base: nil, result: Script.stamp(revision), payload: Data("TRF1".utf8))
+      await live.frames.deliver(.binary(frame))
+    }
+
+    try await deliverSelfContained(1, 1)
+    try await deliverSelfContained(2, 2)
+    try await settle("two refusals") { await sink.refusedDelta == 2 }
+
+    // The sink starts taking frames again — a race that resolved, not a broken
+    // build — and the next scene applies and resets the count.
+    await sink.accept()
+    try await deliverSelfContained(3, 3)
+    try await settle("the applied scene") { await sink.appliedDelta == 1 }
+    #expect(client.sessions[session]?.appliedContent?.sceneRevision == 3)
+
+    // Two more refusals would have tripped a count that had not been cleared.
+    await sink.refuse()
+    try await deliverSelfContained(4, 4)
+    try await deliverSelfContained(5, 5)
+    try await settle("two more refusals") { await sink.refusedDelta == 4 }
+    #expect(client.state == .attached)
+    if case .failed = client.state { Issue.record("the count did not reset") }
     client.close()
   }
 
