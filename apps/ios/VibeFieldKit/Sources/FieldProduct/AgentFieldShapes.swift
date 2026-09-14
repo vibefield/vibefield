@@ -290,7 +290,9 @@ public struct AgentInterruptResult: Sendable, Equatable, Decodable {
 /// anywhere in a debug session would otherwise put a live write capability in a
 /// console, and the IOS-3c rule is that the secret is never displayed,
 /// exported, or logged.
-public struct TerminalMirrorWriteGrant: Sendable, Decodable, CustomStringConvertible {
+public struct TerminalMirrorWriteGrant: Sendable, Decodable, CustomStringConvertible,
+  CustomDebugStringConvertible
+{
   public let capability: String
   public let deviceId: String
   public let issuedAt: Int64
@@ -311,10 +313,43 @@ public struct TerminalMirrorWriteGrant: Sendable, Decodable, CustomStringConvert
   public var description: String {
     "TerminalMirrorWriteGrant(deviceId: \(deviceId), issuedAt: \(issuedAt), capability: <redacted>)"
   }
+
+  /// The OTHER door, and the one that was open.
+  ///
+  /// `dump()`, `String(reflecting:)` and `po` do not use `description` — they
+  /// fall back to the Mirror, which walks the stored properties and prints the
+  /// capability in full. A redaction that only covers `print` is a redaction
+  /// that covers the way nobody debugs.
+  public var debugDescription: String { description }
 }
 
-/// Equality that never compares the secret in a way a failure message could
-/// print. `Equatable` is synthesised nowhere near this type on purpose.
+/// The THIRD door, and the one `debugDescription` alone does not close.
+///
+/// `dump()` takes its header from `debugDescription` and then walks the
+/// MIRROR, printing every stored property — so a redacted header sat directly
+/// above `capability: mw_…`. `po` and `String(reflecting:)` reach the same
+/// children. A custom mirror is the only thing that covers all three, and the
+/// capability is the one field it will not hand over.
+extension TerminalMirrorWriteGrant: CustomReflectable {
+  public var customMirror: Mirror {
+    Mirror(
+      self,
+      children: [
+        "deviceId": deviceId,
+        "issuedAt": issuedAt,
+        "capability": "<redacted>",
+      ],
+      displayStyle: .struct)
+  }
+}
+
+/// Equality, written out.
+///
+/// It is behaviourally the synthesised one, and the earlier comment here
+/// claimed it was protecting something — it is not. What keeps the capability
+/// off a screen is `description` and `debugDescription` above; this is spelled
+/// out only so that adding a field to this type is a decision about equality
+/// rather than something the compiler does quietly.
 extension TerminalMirrorWriteGrant: Equatable {
   public static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.capability == rhs.capability && lhs.deviceId == rhs.deviceId

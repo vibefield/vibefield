@@ -297,15 +297,14 @@ public final class FieldStore {
   public func resume() {
     guard paused, case .reading(let storeId) = state else { return }
     paused = false
-    let restored = slices
+    // The slices are kept by NOT clearing them: `subscribe` below only clears
+    // through `unsubscribe`, which this does not call. The previous version
+    // saved them into a local and put them back afterwards, under a comment
+    // describing a mechanism that never ran — `state` was already `.closed`,
+    // so nothing had cleared anything and the loop restored a dictionary to
+    // itself. The behaviour was right by accident; now it is right on purpose.
     state = .closed
     subscribe(storeId)
-    // `subscribe` starts clean; the slices heard before the pause are put back
-    // under it, each still carrying its own version, so the first newer update
-    // supersedes them by the ordinary rule.
-    for (deviceId, slice) in restored where slices[deviceId] == nil {
-      slices[deviceId] = slice
-    }
   }
 
   public var isPaused: Bool { paused }

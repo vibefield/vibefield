@@ -94,6 +94,14 @@ public final class FieldLink {
   @ObservationIgnored private var doorBoards: [String: DoorBoard] = [:]
   /// Desktops already asked for a write grant on this connection (IOS-4d).
   @ObservationIgnored private var askedForGrant: Set<String> = []
+  /// Devices with a subscribe in flight. Set synchronously, so a burst cannot
+  /// walk past the slot that is only filled after the await.
+  @ObservationIgnored private var arming: Set<String> = []
+  /// One timer per live board, at its own `expiresAt`. Expiry is TIME, and the
+  /// reconcile is edge-triggered on store mutations — a publisher that goes
+  /// quiet sends no edge, so without these the board stayed on the field and
+  /// the door was never asked to replace it.
+  @ObservationIgnored private var expiryTimers: [String: Task<Void, Never>] = [:]
   @ObservationIgnored private var tracking = false
   @ObservationIgnored private var started = false
 
@@ -143,6 +151,9 @@ public final class FieldLink {
     isPaused = true
     for (_, subscription) in subscriptions { subscription.cancel() }
     subscriptions.removeAll()
+    for (_, timer) in expiryTimers { timer.cancel() }
+    expiryTimers.removeAll()
+    arming.removeAll()
     doorBoards.removeAll()
     devices.pause()
     boards.pause()
@@ -166,6 +177,9 @@ public final class FieldLink {
     subscriptions.removeAll()
     for (_, client) in clients { client.close() }
     clients.removeAll()
+    for (_, timer) in expiryTimers { timer.cancel() }
+    expiryTimers.removeAll()
+    arming.removeAll()
     doorBoards.removeAll()
     askedForGrant.removeAll()
     devices.unsubscribe()
@@ -363,7 +377,7 @@ public final class FieldLink {
       endpointRefusals.removeValue(forKey: deviceId)
     }
 
-    refreshDesktops(rows.values)
+    refreshDesktops(rows)
     refold()
   }
 
@@ -387,6 +401,8 @@ public final class FieldLink {
   private func closeDoor(to deviceId: String) {
     subscriptions.removeValue(forKey: deviceId)?.cancel()
     clients.removeValue(forKey: deviceId)?.close()
+    expiryTimers.removeValue(forKey: deviceId)?.cancel()
+    arming.remove(deviceId)
     doorBoards.removeValue(forKey: deviceId)
     // A new door is a new connection, and a new connection is the only event
     // that could change a refusal into a grant.
@@ -423,11 +439,22 @@ public final class FieldLink {
     guard !isPaused, subscriptions[deviceId] == nil, let client = clients[deviceId] else {
       return
     }
+    // The arming LATCH, set synchronously. `subscriptions[deviceId]` is only
+    // assigned after the subscribe's await, so a burst of devices-store
+    // updates around hello walked past that check four times and opened four
+    // subscriptions on one door — each streaming at 250 ms, all of them
+    // fighting over one `doorBoards[deviceId].revision`, so every `since`
+    // disagreed and every frame triggered a `resubscribe`. A self-sustaining
+    // storm, on a metered radio.
+    guard !arming.contains(deviceId) else { return }
     guard case .ready = client.state else { return }
     guard liveSlice(for: deviceId) == nil else { return }
+    arming.insert(deviceId)
 
     Task { @MainActor [weak self] in
-      guard let self, self.started, self.clients[deviceId] === client,
+      guard let self else { return }
+      defer { self.arming.remove(deviceId) }
+      guard self.started, self.clients[deviceId] === client,
         self.subscriptions[deviceId] == nil
       else { return }
       do {
@@ -440,7 +467,12 @@ public final class FieldLink {
           onDelta: { [weak self] payload in
             self?.applyDoorDelta(payload, from: deviceId)
           })
-        guard self.started, self.clients[deviceId] === client else {
+        // Re-checked AFTER the await, including the slot: whatever slipped
+        // through is cancelled rather than overwritten. An overwritten handle
+        // is a subscription nobody owns and the door keeps feeding.
+        guard self.started, self.clients[deviceId] === client,
+          self.subscriptions[deviceId] == nil
+        else {
           subscription.cancel()
           return
         }
@@ -510,6 +542,24 @@ public final class FieldLink {
   /// Every leg, merged into one field. The STORE wins where it has a live
   /// slice: it is the floor's own publication and needs no connection, and a
   /// desktop that publishes it is telling every phone at once.
+  /// A board's own expiry, as a timer.
+  ///
+  /// `reconcile` is edge-triggered on store MUTATIONS; expiry is a clock, and a
+  /// desktop that stops publishing sends no mutation to notice. Without this
+  /// the field kept drawing an expired board, `feed` still said `.store`, and
+  /// the door — the leg that exists for exactly this — was never asked.
+  private func armExpiry(for deviceId: String, at expiresAt: Int64) {
+    expiryTimers[deviceId]?.cancel()
+    let seconds = Double(expiresAt) / 1000 - now().timeIntervalSince1970
+    guard seconds > 0 else { return }
+    expiryTimers[deviceId] = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(seconds))
+      guard let self, !Task.isCancelled, self.started else { return }
+      self.expiryTimers[deviceId] = nil
+      self.reconcile()
+    }
+  }
+
   private func refold() {
     var slices: [AgentFieldSlice] = []
     var doorOnly: [String] = []
@@ -518,6 +568,9 @@ public final class FieldLink {
     for deviceId in known.sorted() {
       if let slice = liveSlice(for: deviceId) {
         slices.append(slice)
+        // Re-armed on every board, so a heartbeat that moves `expiresAt`
+        // moves the timer with it.
+        armExpiry(for: deviceId, at: slice.expiresAt)
       } else if doorBoards[deviceId] != nil {
         doorOnly.append(deviceId)
       }
@@ -541,18 +594,22 @@ public final class FieldLink {
     refreshFeeds(doorOnly: Set(doorOnly))
   }
 
-  /// The devices store, read. Named rather than spelled at each call site
-  /// because `decodeAll` answers a labelled pair and `.values` on it is the
-  /// PAIR's label, not the dictionary's — a collision that compiles nowhere
-  /// useful and reads as if it should.
-  private func currentDevices() -> [DeviceInfo] {
-    Array(devices.decodeAll(DeviceInfo.self).values.values)
+  /// The devices store, read, KEYED BY THE STORE.
+  ///
+  /// The key is the slice's envelope key — the device the mesh attributed the
+  /// slice to — and never the payload's own `deviceId`. Everything else here
+  /// is keyed that way (`clients`, `doorBoards`, `endpointRefusals`), and
+  /// mixing the two produced a desktop whose door was open and ready while its
+  /// row said "dialing" forever and `client(for:)` answered nil. After the
+  /// attribution refusal the two strings are equal by construction — which is
+  /// exactly why nothing may DERIVE one from the other again.
+  private func currentDevices() -> [String: DeviceInfo] {
+    devices.decodeAll(DeviceInfo.self).values
   }
 
-  private func refreshDesktops(_ rows: some Collection<DeviceInfo>) {
-    let byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.deviceId, $0) })
-    desktops = byId.keys.sorted().compactMap { deviceId in
-      guard let device = byId[deviceId] else { return nil }
+  private func refreshDesktops(_ rows: [String: DeviceInfo]) {
+    desktops = rows.keys.sorted().compactMap { deviceId in
+      guard let device = rows[deviceId] else { return nil }
       return FieldDesktop(
         deviceId: deviceId,
         name: device.name,

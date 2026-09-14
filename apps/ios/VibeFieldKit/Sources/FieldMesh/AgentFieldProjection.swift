@@ -110,8 +110,15 @@ public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> Age
   }
   if status != .blocked, !permissions.isEmpty || !blockers.isEmpty {
     // The other direction: fieldd says not-blocked while carrying blockers.
-    // Its word wins, so the lists are cleared for the CLASSIFIER and the
-    // blockers stay only where they cannot change the verdict.
+    // Its word wins and the blockers are DROPPED — not moved somewhere the
+    // classifier cannot see them, dropped. (An earlier comment here claimed
+    // they were kept out of the verdict's reach; they were not kept at all.)
+    //
+    // Dropping is the right answer for the one consumer that exists: the
+    // card's reply chips are derived from `permissions`, and offering somebody
+    // a button that answers a permission fieldd has already stopped reporting
+    // is worse than offering nothing. If a later surface wants the stale list,
+    // it gets its own field and the classifier still never reads it.
     permissions = []
     blockers = []
   }

@@ -425,6 +425,22 @@ import Testing
     #expect(rendered.contains("dev-01HQ8ZK4M7"))
     #expect(String(describing: grant) == rendered)
   }
+
+  /// The OTHER door, and the one that was open. `dump()`,
+  /// `String(reflecting:)` and `po` do not use `description` — they fall back
+  /// to the Mirror, which walks the stored properties and prints the
+  /// capability in full. A redaction that only covers `print` covers the way
+  /// nobody debugs.
+  @Test func theGrantIsRedactedInTheDebuggerToo() throws {
+    let grant = try TerminalMirrorWriteGrant(
+      json: try Fixture.json("terminal-mirror-write-grant.valid"))
+    #expect(!String(reflecting: grant).contains("mw_EXAMPLE"))
+    #expect(String(reflecting: grant).contains("<redacted>"))
+
+    var dumped = ""
+    dump(grant, to: &dumped)
+    #expect(!dumped.contains("mw_EXAMPLE"))
+  }
 }
 
 @Suite struct JSONValueTests {
