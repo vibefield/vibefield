@@ -1535,21 +1535,35 @@ describe("GT-2d — the adopted floor is named in health", () => {
 
 describe("TC-D15 — the routes consumer (TC-S2)", () => {
   it("keeps a LEGACY floor's endpoints when its routes subscribe answers the unrevised snapshot (MF-2i)", async () => {
-    // QA 2026-09-13, finding 2. With `FIELD_NATIVE_MESH=1
-    // FIELD_NATIVE_TERMINAL_MESH=1` the floor keeps the legacy in-process serve,
-    // so its route snapshot never leaves `{revision: 0, cells: []}` and the
-    // hello's LEGACY mirror is the only reading it has. The hello withheld the
-    // unrevised snapshot; the routes subscription answered it anyway — and
-    // resolving an empty cell list to "no endpoints" threw the mirror away one
-    // message after the ack vouched for it. `device.list` said
-    // `terminalHost: false`, Godview said the deck could not reach fieldd, and
-    // an authenticated `terminal.create` answered "the terminal floor is not
-    // available" on a floor that was serving PTYs the whole time.
+    // QA 2026-09-13, finding 2 — A FLOOR THAT NO LONGER EXISTS, scripted here
+    // because the plane outlives fieldd and this reader still has to survive
+    // meeting one.
     //
-    // The floor now withholds it on BOTH surfaces (field-native's
-    // `disclosed_routes`). This row scripts the floor that PREDATES that rule —
-    // the plane outlives fieldd and is adopted by design (GT-2d), so the reader
-    // carries the same rule and this is what proves it.
+    // ERRATA (2026-09-14): the paragraph below stood in the PRESENT tense and
+    // is true of no floor now. It said that with `FIELD_NATIVE_MESH=1
+    // FIELD_NATIVE_TERMINAL_MESH=1` the floor KEEPS a legacy in-process serve.
+    // TM-1 deleted that serve outright — `services/terminal_mesh.rs` is gone,
+    // cells run unconditionally, and the flag answers only "are this floor's
+    // terminal doors published on the tailnet" (`config.rs`'s `MeshPlan`, which
+    // carries the same correction). A flagged floor today has REAL route rows
+    // and says so on the hello's `terminalMesh`.
+    //
+    // AS IT WAS: the floor kept that serve, so its route snapshot never left
+    // `{revision: 0, cells: []}` and the hello's LEGACY mirror was the only
+    // reading it had. The hello withheld the unrevised snapshot; the routes
+    // subscription answered it anyway — and resolving an empty cell list to
+    // "no endpoints" threw the mirror away one message after the ack vouched
+    // for it. `device.list` said `terminalHost: false`, Godview said the deck
+    // could not reach fieldd, and an authenticated `terminal.create` answered
+    // "the terminal floor is not available" on a floor that was serving PTYs
+    // the whole time.
+    //
+    // WHAT SURVIVES is the rule, and it is the reader's: the floor withholds an
+    // unrevised snapshot on BOTH surfaces (field-native's `disclosed_routes` —
+    // `revision > 0`, applied to the subscribe payload and every delta). This
+    // row scripts a floor that PREDATES that rule, because a plane adopted by
+    // design (GT-2d) may be older than the daemon that adopts it, so fieldd
+    // carries the same rule on its own side. That is what this proves.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     const floor = await startFakeFloor();
