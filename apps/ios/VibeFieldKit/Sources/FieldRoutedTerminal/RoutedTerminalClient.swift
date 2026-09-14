@@ -16,6 +16,7 @@ public enum RoutedDemand: String, Sendable, Equatable {
 /// authority, and the cell must be able to suspend input while presentation
 /// continues. `PresentationReady` and `InputAllowed` are therefore computed, not
 /// stored, and each one names every term it needs.
+///
 /// Not `Equatable`: it carries a transfer's staging buffer, and an `==` that
 /// compared megabytes to answer "is this the same session" would be a trap with
 /// a plausible name. The two enums below ARE comparable, which is what callers
@@ -50,6 +51,23 @@ public struct RoutedSessionState: Sendable {
   /// The cell's own words for the last refusal, kept after the state moved on so
   /// a face can say WHY rather than showing an empty pane.
   public internal(set) var lastRefusal: String?
+
+  /// BOTH legs are attached for this activation.
+  ///
+  /// Attached is not the same as presenting: the frames leg is attached the
+  /// moment the cell acknowledges it, and what follows — resuming, seeding, the
+  /// first applied frame — is progress, not attachment. A client that called
+  /// itself attached only once a frame had landed would report `ready` over a
+  /// session it was fully attached to, which is what the first version of this
+  /// did until a real socket delivered the two acknowledgements in the other
+  /// order.
+  public var bothLegsAttached: Bool {
+    guard control == .attached else { return false }
+    switch frames {
+    case .attaching, .failed: return false
+    case .resuming, .seeding, .applying, .active: return true
+    }
+  }
 
   /// `PresentationReady(a)` — spec §5.4, every term of it:
   /// both legs' leases live, the cell's presentation dimension presenting, the
@@ -490,6 +508,15 @@ public final class RoutedTerminalClient {
     frames.send(.attachFramesLeg, framesBody)
   }
 
+  /// The SET is `attached` while any session has both legs attached. One place
+  /// decides it, because the two acknowledgements arrive in either order over a
+  /// real pair of sockets and a check written into each arm answers differently
+  /// depending on which won.
+  private func noteAttachment() {
+    guard state == .ready || state == .attached else { return }
+    state = sessions.values.contains(where: \.bothLegsAttached) ? .attached : .ready
+  }
+
   private func handle(_ type: RoutedMessageType, _ body: JSONValue) {
     switch type {
     case .controlLegAttached:
@@ -503,7 +530,7 @@ public final class RoutedTerminalClient {
       // the grant asked for.
       session.rights = attached.rights
       sessions[attached.sessionId] = session
-      if session.frames == .active { state = .attached }
+      noteAttachment()
 
     case .attachRefused:
       guard let refused = try? RoutedAttachRefused(json: body) else { return }
@@ -564,7 +591,7 @@ public final class RoutedTerminalClient {
       let sessionId = attached.sessionId
       let activationId = attached.activationId
       Task { [sink] in await sink.bindActivation(session: sessionId, activation: activationId, identity: identity) }
-      if session.control == .attached { state = .attached }
+      noteAttachment()
 
     case .cellActivationStatus:
       guard let status = try? RoutedActivationStatus(json: body) else { return }
@@ -581,6 +608,8 @@ public final class RoutedTerminalClient {
         session.control = .ended(reason: reason)
         session.frames = .failed(reason)
         endActivation(&session, reason: reason)
+        sessions[status.sessionId] = session
+        noteAttachment()
       }
       sessions[status.sessionId] = session
 
@@ -611,6 +640,7 @@ public final class RoutedTerminalClient {
         session.control = .ended(reason: "removed")
         endActivation(&session, reason: "removed")
         sessions[sessionId] = session
+        noteAttachment()
       }
 
     default:
@@ -695,7 +725,6 @@ public final class RoutedTerminalClient {
         let activationId = session.activationId
         session.appliedContent = content
         session.frames = .active
-        state = .attached
         let sink = self.sink
         Task { [weak self] in
           await sink.applyFullFrame(
@@ -724,7 +753,6 @@ public final class RoutedTerminalClient {
     let base = header.baseContent
     session.appliedContent = result
     session.frames = .active
-    state = .attached
     let sink = self.sink
     Task { [weak self] in
       let applied = await sink.applyDeltaFrame(
