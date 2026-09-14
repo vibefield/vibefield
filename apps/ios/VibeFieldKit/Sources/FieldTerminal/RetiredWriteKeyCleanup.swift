@@ -57,10 +57,28 @@ public enum RetiredWriteKeyCleanup {
     return false
   }
 
-  /// The delete itself, exposed for the test that proves no value is read.
-  @discardableResult
-  static func deleteAll() -> OSStatus {
-    let query: [String: Any] = [
+  /// The query the sweep runs, split out so a test can READ it.
+  ///
+  /// This said `deleteAll` was "exposed for the test that proves no value is
+  /// read" and no such test existed (TM-r3, E-F3). Worse, none could have
+  /// existed in the form that implied: a SwiftPM test bundle on the simulator
+  /// carries no application-identifier entitlement, so every Keychain call
+  /// answers `errSecMissingEntitlement` (-34018) before it reaches an item, and
+  /// a RUN can therefore witness nothing about what this deletes.
+  ///
+  /// What a test can read is this dictionary, and both properties the design
+  /// rests on are visible in it:
+  ///
+  /// - **No value is read.** There is no `kSecReturnData`, nor any other
+  ///   `kSecReturn*`, so the capability never enters this process — not even
+  ///   for a moment on its way to being destroyed. Nothing here could be
+  ///   repurposed into a reader.
+  /// - **It deletes by SERVICE.** There is no `kSecAttrAccount`. The retired
+  ///   store indexed items by the host's device id and this code holds no list
+  ///   of hosts, so taking the whole service is what makes the sweep complete
+  ///   rather than as complete as whatever the phone happens to know today.
+  static var deleteQuery: [String: Any] {
+    [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: retiredService,
       // The retired store wrote `kSecAttrSynchronizable = false`, and a delete
@@ -68,6 +86,12 @@ public enum RetiredWriteKeyCleanup {
       // which is what we want, and is stated rather than relied upon.
       kSecAttrSynchronizable as String: false,
     ]
-    return SecItemDelete(query as CFDictionary)
+  }
+
+  /// The delete itself. Its whole output is a status: there is no return value
+  /// that could carry a secret.
+  @discardableResult
+  static func deleteAll() -> OSStatus {
+    SecItemDelete(deleteQuery as CFDictionary)
   }
 }
