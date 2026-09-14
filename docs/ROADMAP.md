@@ -1328,8 +1328,11 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 ## Upstream / sibling pins (the EL8 watch)
 
 truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) ·
-ghosttea `=0.11.1` + **`ghosttea-truffle =0.11.1`** on the cargo and npm planes (the lockstep
-bump `85f7d769`; preflight pins the cargo rows and all four npm rows) while
+ghosttea `=0.11.1` on the cargo and npm planes (the lockstep bump `85f7d769`; preflight pins the
+cargo row and all four npm rows — *errata 2026-09-14, TM-1 `afc35b15`: this line said "+
+**`ghosttea-truffle =0.11.1`**"; that crate LEFT the workspace with the TSP1 adapter when the
+terminal mesh moved onto the cells' own doors (`thinking-terminal-mesh-cells.md`, TM-D1 ruled T), and
+preflight's pin table forgot it at TM-1a `c2ba516f`*) while
 `apps/ios/VibeFieldKit/Package.resolved` sits at **`0.10.1`** — NOT one version on all planes
 (*errata 2026-09-12, the AR-0 review: this line had said `=0.9.2` "on all planes" since GT-4
 2026-08-06 and trailed the manifests twice over; the manifests are the authority, read the
