@@ -34,9 +34,20 @@ export type DeviceCapabilities = z.infer<typeof DeviceCapabilities>;
 
 /** How to reach this device's product surface. Recorded delta from the spec's
  * "(mesh.serve name)": the FULL capability URL rides here too — C3's secret-path
- * design means the serve name alone cannot be dialed, and this same-user-private
- * store is exactly the distribution channel C3 reserved for it. `url` is present
- * only while the serve is active. */
+ * design means the serve name alone cannot be dialed, and this store is the
+ * distribution channel C3 reserved for it. `url` is present only while the
+ * serve is active.
+ *
+ * ERRATA (2026-09-13, EL7 M1): this paragraph called the store
+ * "same-user-private" and readers took that as a guarantee. It is not one.
+ * truffle-core broadcasts to EVERY tailnet node whose hostname starts with
+ * `truffle-vibefield-` — no WhoIs, no login check on the store's own path — so
+ * the store's audience is the APP's tailnet peers. Same-user holds by
+ * DEPLOYMENT (UA-D5: the tailnet is this person's), never by construction.
+ * What refuses a guest is the DOOR behind this URL (WhoIs + scopes + the
+ * `guestOk` choke), which the store does not go through: the capability URL
+ * published here is a dial coordinate, and the door is the gate. The posture
+ * ruling — what may ride a broadcast store at all — is GM-D10, open. */
 export const ProductEndpoint = z
   .object({
     serve: z.string().min(1).max(DEVICE_LIMITS.ENDPOINT_SERVE_CHARS),

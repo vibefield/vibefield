@@ -2,11 +2,34 @@ import {
   AGENT_FIELD,
   type AgentFieldSlice,
   type AgentListResult,
+  MESH_CONTROL_LIMITS,
   STORES,
 } from "@vibefield/contracts";
+import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentFieldPublisher } from "../src/agent-field-publisher";
+import { RpcCallError } from "../src/native-link";
 import { managedSummary } from "./agent-field-summary";
+
+interface CapturedLog {
+  event: string;
+  message: string;
+  attrs?: LogFields | undefined;
+}
+
+function captureLogger(events: CapturedLog[]): Logger {
+  const logger: Logger = {
+    child: () => logger,
+    trace: (event, message, attrs) => events.push({ event, message, attrs }),
+    debug: (event, message, attrs) => events.push({ event, message, attrs }),
+    info: (event, message, attrs) => events.push({ event, message, attrs }),
+    warn: (event, message, attrs) => events.push({ event, message, attrs }),
+    error: (event, message, _error, attrs) => events.push({ event, message, attrs }),
+    fatal: (event, message, _error, attrs) => events.push({ event, message, attrs }),
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
 
 // MF-1 (§10.2) — the store carrier. What is under test is the publisher's
 // three honesty rules: an unchanged board is not news, mesh-down is a normal
@@ -53,6 +76,92 @@ function fold(initial: AgentListResult) {
     },
   };
 }
+
+describe("MF-1h — nothing the publisher does can end the daemon", () => {
+  // REAL timers: an unhandled rejection is something NODE reports, on its own
+  // turn of the loop, and the fake clock cannot make that happen.
+  //
+  // What this guards is not hypothetical. Every call in a flush is an injected
+  // live service — the fold mid-rebuild, DeviceService before it is ready —
+  // and the flush runs from a timer with no caller to catch it. fieldd
+  // installs no `unhandledRejection` handler, so Node's default TERMINATES the
+  // process: an agent-field pass would take the whole daemon, its PTYs'
+  // supervision and every open door with it.
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown) => rejections.push(reason);
+  beforeEach(() => {
+    rejections.length = 0;
+    process.on("unhandledRejection", onRejection);
+  });
+  afterEach(() => process.off("unhandledRejection", onRejection));
+
+  /** let Node finish its own turn, which is when it decides a rejection was
+   * never handled */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+
+  it("a fold that throws is logged, not fatal", async () => {
+    const logs: CapturedLog[] = [];
+    const publisher = new AgentFieldPublisher({
+      mesh: { setSlice: async () => ({}) },
+      deviceId: () => "dev-1",
+      list: () => {
+        throw new Error("the fold is mid-rebuild");
+      },
+      subscribe: () => () => undefined,
+      serving: () => true,
+      minIntervalMs: 1,
+      logger: captureLogger(logs),
+    });
+    publisher.start();
+    await settle();
+    expect(rejections, "the publisher escaped as an unhandled rejection").toEqual([]);
+    expect(logs.filter((l) => l.event === "fieldd.agents.field_publish_failed")).toHaveLength(1);
+    await publisher.dispose();
+  });
+
+  it("a deviceId that throws is logged, not fatal — in a publish and in a dispose", async () => {
+    const logs: CapturedLog[] = [];
+    const publisher = new AgentFieldPublisher({
+      mesh: { setSlice: async () => ({}) },
+      deviceId: () => {
+        throw new Error("DeviceService is not ready");
+      },
+      list: () => ({ sessions: [managedSummary()] }),
+      subscribe: () => () => undefined,
+      serving: () => true,
+      minIntervalMs: 1,
+      logger: captureLogger(logs),
+    });
+    publisher.start();
+    await settle();
+    expect(rejections).toEqual([]);
+    // and a dispose that cannot name its device still resolves: a stop ladder
+    // must not reject halfway through
+    await expect(publisher.dispose()).resolves.toBeUndefined();
+    await settle();
+    expect(rejections).toEqual([]);
+  });
+
+  it("a `serving` that throws is logged, not fatal", async () => {
+    const logs: CapturedLog[] = [];
+    const publisher = new AgentFieldPublisher({
+      mesh: { setSlice: async () => ({}) },
+      deviceId: () => "dev-1",
+      list: () => ({ sessions: [] }),
+      subscribe: () => () => undefined,
+      serving: () => {
+        throw new Error("the mesh client is mid-reconcile");
+      },
+      minIntervalMs: 1,
+      logger: captureLogger(logs),
+    });
+    publisher.start();
+    await settle();
+    expect(rejections).toEqual([]);
+    expect(logs.filter((l) => l.event === "fieldd.agents.field_publish_failed")).toHaveLength(1);
+    await publisher.dispose();
+  });
+});
 
 describe("AgentFieldPublisher (MF-1 §10.2)", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -223,6 +332,97 @@ describe("AgentFieldPublisher (MF-1 §10.2)", () => {
     await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
     expect(mesh.writes).toHaveLength(1);
     expect(mesh.writes[0]?.rows).toHaveLength(2);
+    await publisher.dispose();
+  });
+
+  it("caps an oversized board instead of letting the floor refuse the whole write", async () => {
+    // MF-1h — a populated row measures ≈725 B against the 64 KiB cap, so a
+    // board of roughly ninety agents reaches it. An UNCAPPED write is refused
+    // by the floor, which the catch reads as mesh-down and retries forever:
+    // the desktop would vanish from every phone rather than arrive short.
+    const populated = (runtimeRunId: string) =>
+      managedSummary({
+        runtimeRunId,
+        status: "working",
+        permissionTool: "Bash",
+        cumulativeTokens: 902_140,
+        contextPercent: 72,
+        effort: { value: "high", intent: "observed" },
+        git: { branch: "mf/fd1" },
+        lastAssistantText: "a reply that never travels",
+      });
+    const source = fold({ sessions: Array.from({ length: 120 }, (_, i) => populated(`run-${i}`)) });
+    const mesh = meshSpy();
+    const logs: CapturedLog[] = [];
+    const publisher = new AgentFieldPublisher({
+      mesh,
+      deviceId: () => "dev-1",
+      list: source.list,
+      subscribe: source.subscribe,
+      serving: () => true,
+      now: () => 1_000_000,
+      logger: captureLogger(logs),
+    });
+    publisher.start();
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+
+    const slice = mesh.writes[0]!;
+    expect(Buffer.byteLength(JSON.stringify(slice), "utf8")).toBeLessThanOrEqual(
+      MESH_CONTROL_LIMITS.AGENT_FIELD_SLICE_BYTES,
+    );
+    expect(slice.rows.length).toBeLessThan(120);
+    expect(slice.omitted).toBe(120 - slice.rows.length);
+    // the board's END is what a reader loses: the fold's order is oldest
+    // first, so the newest runs are the ones left out
+    expect(slice.rows[0]?.runtimeRunId).toBe("run-0");
+    // ONE warning for the crossing, not one per flush
+    const crossings = () => logs.filter((l) => l.event === "fieldd.agents.field_slice_capped");
+    expect(crossings()).toHaveLength(1);
+    source.publish({ sessions: Array.from({ length: 121 }, (_, i) => populated(`run-${i}`)) });
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+    expect(crossings(), "the crossing was logged twice").toHaveLength(1);
+
+    // and coming back under says so, once
+    source.publish({ sessions: [populated("run-0")] });
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+    expect(mesh.writes.at(-1)?.omitted).toBeUndefined();
+    expect(logs.filter((l) => l.event === "fieldd.agents.field_slice_whole")).toHaveLength(1);
+    await publisher.dispose();
+  });
+
+  it("tells the floor's refusal from the mesh being down", async () => {
+    const source = fold(board("run-1"));
+    const mesh = meshSpy();
+    const logs: CapturedLog[] = [];
+    const publisher = new AgentFieldPublisher({
+      mesh,
+      deviceId: () => "dev-1",
+      list: source.list,
+      subscribe: source.subscribe,
+      serving: () => true,
+      now: () => 1_000_000,
+      logger: captureLogger(logs),
+    });
+    mesh.breakWith(
+      new RpcCallError("RESOURCE_EXHAUSTED", "store slice exceeds its transport limit", false, {
+        resource: "store-slice",
+        storeId: STORES.AGENT_FIELD,
+        limit: MESH_CONTROL_LIMITS.AGENT_FIELD_SLICE_BYTES,
+      }),
+    );
+    publisher.start();
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+    // the floor's own words, at WARN — retrying this unchanged never succeeds
+    const refused = logs.filter((l) => l.event === "fieldd.agents.field_slice_refused");
+    expect(refused).toHaveLength(1);
+    expect(refused[0]?.attrs?.["reason"]).toContain("transport limit");
+    expect(logs.filter((l) => l.event === "fieldd.agents.field_slice_unpublished")).toEqual([]);
+
+    // an ordinary mesh-down stays the quiet DEBUG it always was
+    mesh.breakWith(new Error("mesh node is not running"));
+    source.publish(board("run-1", "run-2"));
+    await vi.advanceTimersByTimeAsync(AGENT_FIELD.STORE_MIN_INTERVAL_MS);
+    expect(logs.filter((l) => l.event === "fieldd.agents.field_slice_unpublished")).toHaveLength(1);
     await publisher.dispose();
   });
 

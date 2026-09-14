@@ -2,10 +2,12 @@ import {
   AGENT_FIELD,
   type AgentFieldSlice,
   type AgentListResult,
+  MESH_CONTROL_LIMITS,
   STORES,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { FieldProjection } from "./agent-field";
+import { RpcCallError } from "./native-link";
 
 // MF-1 (§10.2, D4's hybrid) — the field's SECOND carrier: fieldd publishes its
 // own rows into the `field.agents.v1` SyncedStore, so a phone that joins the
@@ -51,10 +53,24 @@ export interface AgentFieldPublisherOptions {
    * cross-plane work; until it lands, the daemon passes the best structured
    * truth it HAS, and the gap is stated here rather than papered over with a
    * string match on someone else's prose.
+   *
+   * MF-1h — THE FALSE POSITIVE that leaves, named. The product serve can be
+   * active while the floor's terminal mesh is OFF (both native flags ship
+   * off), and every row carries its `terminal` join verbatim: a phone then
+   * draws a TAPPABLE card for a PTY that is not on the mesh and cannot be
+   * attached to. The floor knows the answer — it mints a mirror-write
+   * capability at boot exactly when the mesh is on — but the only mgmt verb
+   * that reveals it hands over the CAPABILITY ITSELF, which MF-2a pins to one
+   * hop per grant (nothing caches it, and a plugin never even causes it to be
+   * read into this process). Polling it here would move a secret across the
+   * mgmt channel on a schedule nothing needs. A SECRET-FREE fact closes it: a
+   * `terminalMesh` boolean on the floor's hello beside `terminal`, or a
+   * `configured`-only verb. OWED.
    */
   serving: () => boolean;
   now?: () => number;
   /** test seams; the registry's values by default */
+  sliceBytes?: number;
   minIntervalMs?: number;
   heartbeatMs?: number;
   expiryMs?: number;
@@ -67,6 +83,10 @@ export class AgentFieldPublisher {
   private readonly minIntervalMs: number;
   private readonly heartbeatMs: number;
   private readonly expiryMs: number;
+  private readonly sliceBytes: number;
+  /** MF-1h — whether the board is CURRENTLY over the cap, so the crossing is
+   * logged once in each direction instead of on every flush */
+  private capped = false;
   private readonly logger: Logger;
   private unsubscribe: (() => void) | null = null;
   private coalesce: NodeJS.Timeout | null = null;
@@ -82,6 +102,7 @@ export class AgentFieldPublisher {
     this.minIntervalMs = opts.minIntervalMs ?? AGENT_FIELD.STORE_MIN_INTERVAL_MS;
     this.heartbeatMs = opts.heartbeatMs ?? AGENT_FIELD.STORE_HEARTBEAT_MS;
     this.expiryMs = opts.expiryMs ?? AGENT_FIELD.STORE_EXPIRY_MS;
+    this.sliceBytes = opts.sliceBytes ?? MESH_CONTROL_LIMITS.AGENT_FIELD_SLICE_BYTES;
     this.logger = opts.logger ?? createNoopLogger();
   }
 
@@ -110,15 +131,23 @@ export class AgentFieldPublisher {
     this.clearTimers();
     if (!this.published) return;
     this.published = false;
-    const at = this.now();
-    await this.write({
-      v: 1,
-      deviceId: this.opts.deviceId(),
-      publishedAt: at,
-      expiresAt: at,
-      revision: this.projection.revision,
-      rows: [],
-    });
+    // MF-1h — a teardown must not throw: `deviceId()` is DeviceService, which
+    // a stop may already have disposed, and this is awaited by the daemon's
+    // own stop ladder. A field left standing for its expiry is a far smaller
+    // harm than a stop that rejects halfway through.
+    try {
+      const at = this.now();
+      await this.write({
+        v: 1,
+        deviceId: this.opts.deviceId(),
+        publishedAt: at,
+        expiresAt: at,
+        revision: this.projection.revision,
+        rows: [],
+      });
+    } catch (error) {
+      this.trouble("dispose", error);
+    }
   }
 
   // ---- internals ----
@@ -127,11 +156,23 @@ export class AgentFieldPublisher {
     if (this.disposed || this.coalesce !== null) return;
     this.coalesce = setTimeout(() => {
       this.coalesce = null;
-      void this.flush();
+      void this.flush().catch((error: unknown) => this.trouble("flush", error));
     }, this.minIntervalMs);
     this.coalesce.unref?.();
   }
 
+  /** The heartbeat's own body, so its `void` site has something to catch. */
+  private async beat(): Promise<void> {
+    if (this.disposed || !this.opts.serving()) return;
+    await this.publish();
+  }
+
+  /** MF-1h — EVERY call in here is an injected live service: `list()` is the
+   * fold mid-rebuild, `serving()` reads the mesh's fused serve state,
+   * `deviceId()` is DeviceService before it is ready. Each can throw, and this
+   * runs from a timer with no caller to catch it — Node's default handler for
+   * an unhandled rejection TERMINATES the daemon, and fieldd installs none. So
+   * the whole body is guarded, not just the mesh write. */
   private async flush(): Promise<void> {
     if (this.disposed) return;
     const changed = this.projection.apply(this.opts.list()) !== null;
@@ -164,14 +205,16 @@ export class AgentFieldPublisher {
     const snapshot = this.projection.snapshot();
     const at = this.now();
     this.published = true;
-    await this.write({
-      v: 1,
-      deviceId: this.opts.deviceId(),
-      publishedAt: at,
-      expiresAt: at + this.expiryMs,
-      revision: snapshot.revision,
-      rows: snapshot.rows,
-    });
+    await this.write(
+      this.capToLimit({
+        v: 1,
+        deviceId: this.opts.deviceId(),
+        publishedAt: at,
+        expiresAt: at + this.expiryMs,
+        revision: snapshot.revision,
+        rows: snapshot.rows,
+      }),
+    );
     // The heartbeat exists for rows: an empty board has nothing to keep alive,
     // and a reader with no rows to age has nothing to be wrong about.
     if (snapshot.rows.length === 0) {
@@ -185,8 +228,7 @@ export class AgentFieldPublisher {
     if (this.heartbeat !== null || this.disposed) return;
     this.heartbeat = setTimeout(() => {
       this.heartbeat = null;
-      if (this.disposed || !this.opts.serving()) return;
-      void this.publish();
+      void this.beat().catch((error: unknown) => this.trouble("heartbeat", error));
     }, this.heartbeatMs);
     this.heartbeat.unref?.();
   }
@@ -205,15 +247,80 @@ export class AgentFieldPublisher {
     }
   }
 
+  /** MF-1h — a slice has a transport limit, and a board can outgrow it: a
+   * populated row measures ≈725 B against a 64 KiB cap, so roughly ninety
+   * agents reach it. The floor REFUSES an oversized write
+   * (`RESOURCE_EXHAUSTED`), which the catch below would otherwise read as
+   * mesh-down and retry forever — this desktop would simply vanish from every
+   * phone rather than arrive short. So the board is trimmed from its END (the
+   * fold's own order is oldest first, so the newest runs are what a reader
+   * loses) and the slice says how many it lost. The DOOR is never capped; a
+   * phone that wants the whole board subscribes. */
+  private capToLimit(slice: AgentFieldSlice): AgentFieldSlice {
+    if (Buffer.byteLength(JSON.stringify(slice), "utf8") <= this.sliceBytes) {
+      if (this.capped) {
+        this.capped = false;
+        this.logger.info(
+          "fieldd.agents.field_slice_whole",
+          "The agent field fits its transport limit again; the whole board is published",
+          { rows: slice.rows.length, limit: this.sliceBytes },
+        );
+      }
+      return slice;
+    }
+    const rows = [...slice.rows];
+    let capped: AgentFieldSlice = slice;
+    while (rows.length > 0) {
+      rows.pop();
+      capped = { ...slice, rows: [...rows], omitted: slice.rows.length - rows.length };
+      if (Buffer.byteLength(JSON.stringify(capped), "utf8") <= this.sliceBytes) break;
+    }
+    if (!this.capped) {
+      this.capped = true;
+      this.logger.warn(
+        "fieldd.agents.field_slice_capped",
+        "The agent field outgrew its transport limit; the newest rows are left out of the slice",
+        { rows: capped.rows.length, omitted: capped.omitted ?? 0, limit: this.sliceBytes },
+      );
+    }
+    return capped;
+  }
+
+  /** A throw from a timer, said once and swallowed — the alternative is Node's
+   * default handler, which ends the daemon over a fold that was mid-rebuild. */
+  private trouble(where: string, error: unknown): void {
+    this.logger.warn(
+      "fieldd.agents.field_publish_failed",
+      "The agent field publisher could not complete a pass",
+      { where, error: error instanceof Error ? error.message : String(error) },
+    );
+  }
+
   /** One writer, serialized, and quiet when the mesh is not there. */
   private write(slice: AgentFieldSlice): Promise<void> {
     const run = this.chain.then(async () => {
       try {
         await this.opts.mesh.setSlice(STORES.AGENT_FIELD, slice);
       } catch (error) {
+        this.published = false;
+        // MF-1h — the floor REFUSING the slice is not the mesh being down. The
+        // refusal says the transport limit was exceeded, in the floor's own
+        // words, and retrying it unchanged would never succeed — so it is news
+        // at WARN rather than a quiet DEBUG a nobody reads.
+        if (error instanceof RpcCallError && error.kind === "RESOURCE_EXHAUSTED") {
+          this.logger.warn(
+            "fieldd.agents.field_slice_refused",
+            "The floor refused the agent field slice",
+            {
+              rows: slice.rows.length,
+              bytes: Buffer.byteLength(JSON.stringify(slice), "utf8"),
+              reason: error.message,
+            },
+          );
+          return;
+        }
         // mesh disabled / auth pending / node building — a NORMAL state, and
         // the next change retries. Never an error, never a throw at a caller.
-        this.published = false;
         this.logger.debug(
           "fieldd.agents.field_slice_unpublished",
           "The agent field slice was not published; the mesh is not there",

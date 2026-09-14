@@ -53,6 +53,12 @@ export type AgentFieldBlocker = z.infer<typeof AgentFieldBlocker>;
 export const AgentFieldRow = z
   .object({
     runtimeRunId: z.string().min(1),
+    /** fieldd's per-row change stamp, NOT an ordering (MF-1h). It bumps when
+     * the projected row changes, and it RESTARTS at 1 when a run leaves the
+     * board and returns — a reader applies every upsert it is given and never
+     * compares one row's revision with another's, or with an older one of its
+     * own. The board's own `revision` on the snapshot and delta is what orders
+     * frames. */
     revision: z.number().int(),
     kind: AgentProviderId,
     label: z.string().min(1),
@@ -151,6 +157,17 @@ export const AgentFieldSlice = z
     expiresAt: z.number().int(),
     revision: z.number().int(),
     rows: z.array(AgentFieldRow),
+    /** MF-1h — rows the CAP left out (absent when the board is whole).
+     *
+     * A slice has a transport limit (`MESH_CONTROL_LIMITS.AGENT_FIELD_SLICE_BYTES`)
+     * and a populated row measures ≈725 B, so a board of roughly ninety agents
+     * reaches it. Past that the publisher drops rows from the END of the board
+     * order and says how many rather than letting the floor refuse the whole
+     * write — a refusal would read as mesh-down and retry forever, and this
+     * desktop would simply vanish from every phone. The DOOR
+     * (`agent.subscribe {projection: "field"}`) is never capped: it carries the
+     * whole board. */
+    omitted: z.number().int().positive().optional(),
   })
   .passthrough();
 export type AgentFieldSlice = z.infer<typeof AgentFieldSlice>;

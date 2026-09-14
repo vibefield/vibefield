@@ -618,6 +618,14 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     expect((await win.callErr("agent.subscribe", { minIntervalMs: 5 })).data?.kind).toBe(
       "PRECONDITION_FAILED",
     );
+    // MF-1h — and a cadence asked for where it cannot apply is REFUSED, not
+    // ignored: a caller that silently got the desktop's own 16 ms tick would
+    // have no way to learn it had asked the wrong question
+    for (const params of [{ minIntervalMs: 250 }, { projection: "full", minIntervalMs: 250 }]) {
+      const refused = (await win.callErr("agent.subscribe", params)) as RpcErrorShape;
+      expect(refused.data?.kind, JSON.stringify(params)).toBe("PRECONDITION_FAILED");
+      expect(refused.message).toContain("field projection");
+    }
     // an unknown OPTION is not an error — it is the next version's field
     expect(
       (

@@ -1344,6 +1344,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       if (parsed.data.projection !== "field") {
+        // MF-1h — an option that cannot be honoured is refused, not ignored: a
+        // caller that asked for a cadence and silently got the desktop's 16 ms
+        // tick would have no way to learn it asked the wrong question.
+        if (parsed.data.minIntervalMs !== undefined)
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            "minIntervalMs applies to the field projection",
+            false,
+          );
         const dispose = agents.subscribe((rows) => emit(rows));
         return { snapshot: agents.list(), dispose };
       }
@@ -1686,10 +1695,41 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // would carry the prose anyway. So the gate is the best STRUCTURED truth
     // fieldd holds: this device's product serve is active, which is precisely
     // the door a phone would dial and the URL DeviceService already advertises
-    // in `field.devices.v1`. It is a NEIGHBOURING consent, not the same one —
+    // in `field.devices.v1`.
+    //
+    // ERRATA (2026-09-13, EL7 M1): this comment used to call `field.devices.v1`
+    // a same-user-private store and lean on that as the precedent. It is not.
+    // truffle-core broadcasts to every tailnet node whose hostname starts with
+    // `truffle-vibefield-`; there is no WhoIs and no login check on the store's
+    // own path. Same-user holds by DEPLOYMENT (UA-D5 — the tailnet is this
+    // person's), never by construction, and what refuses a guest is the door
+    // behind the URL (WhoIs + scopes + the guest choke), which the store does
+    // not go through. The posture ruling is GM-D10, open.
+    //
+    // It is a NEIGHBOURING consent, not the same one —
     // a floor can serve terminals with the product serve down, and vice versa
     // — and it is one call site to change the day the floor's hello grows a
     // typed `terminalMesh` fact.
+    //
+    // MF-1h — THE GATE'S FALSE POSITIVE, stated and OWED. A product serve can
+    // be active while the floor's terminal mesh is OFF (both native flags ship
+    // off, G5). Every row carries `terminal: {hosted: "local",
+    // runtimeSessionId}` verbatim, so a phone draws a TAPPABLE card for a PTY
+    // that is not on the mesh and cannot be attached to.
+    //
+    // Closing it needs a fact fieldd cannot read today. The floor DOES know —
+    // it mints a mirror-write capability at boot exactly when the terminal
+    // mesh is enabled — but the only mgmt verb that reveals it,
+    // `native.terminal.mirrorWriteCapability`, answers with the CAPABILITY
+    // ITSELF, and that secret is pinned to one hop: fieldd asks once per grant
+    // and caches nothing, so a rotation is live at the next grant and a plugin
+    // never even causes the capability to be read into this process
+    // (`mirror-write-grant.test.ts`, MF-2a's EL7 rows). Polling it to gate the
+    // publisher would move that secret across the mgmt channel on a schedule
+    // nothing needs. What closes this is a SECRET-FREE fact — a `terminalMesh`
+    // boolean on the floor's hello beside `terminal`/`terminalRoutes`, or a
+    // `configured`-only verb — which is cross-plane work, not a gate this
+    // lane may invent.
     const agentField = new AgentFieldPublisher({
       mesh,
       deviceId: () => devices.currentDeviceId(),
@@ -3255,6 +3295,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const artifactDrain = artifacts.dispose();
       federatedSubs.dispose();
       peers.dispose();
+      // MF-1h — the rollback disposes every neighbour and used to walk past
+      // this one: a boot that failed after the publisher started left its
+      // timers armed and its slice standing.
+      await agentField.dispose();
       devices.dispose();
       terminals.dispose();
       services.dispose();

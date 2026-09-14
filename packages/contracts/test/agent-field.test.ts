@@ -100,6 +100,33 @@ describe("MF-1 — the GOLDEN field row is content-free (§10.1)", () => {
   });
 });
 
+describe("MF-1h — a slice the cap trimmed", () => {
+  const capped = AgentFieldSlice.parse(
+    JSON.parse(readFileSync(join(FIXTURES, "agent-field-slice.capped.json"), "utf8")),
+  );
+
+  it("says how many rows it lost, and stays a slice in every other way", () => {
+    // A populated row measures ≈725 B against a 64 KiB cap, so a board of
+    // roughly ninety agents reaches it. The publisher trims from the END and
+    // stamps the count rather than letting the floor refuse the whole write —
+    // a refusal reads as mesh-down and retries forever, and the desktop
+    // vanishes from every phone instead of arriving short.
+    expect(capped.omitted).toBe(2);
+    expect(capped.rows).toHaveLength(3);
+    expect(capped.expiresAt).toBeGreaterThan(capped.publishedAt);
+    // a WHOLE board says nothing at all — absence is the ordinary case
+    expect(slice.omitted).toBeUndefined();
+  });
+
+  it("refuses a count that is not a positive whole number of rows", () => {
+    for (const omitted of [0, -1, 1.5, "2"]) {
+      expect(AgentFieldSlice.safeParse({ ...capped, omitted }).success, String(omitted)).toBe(
+        false,
+      );
+    }
+  });
+});
+
 describe("MF-1 — the subscription's options (§5)", () => {
   it("defaults to today's subscription when nothing is asked for", () => {
     // Absent projection = `full`: the desktop's renderer must not learn a new
