@@ -1,0 +1,691 @@
+import FieldProduct
+import Foundation
+import Testing
+
+@testable import FieldRoutedTerminal
+
+/// The connection SET: two legs, one activation per session, credits, frames,
+/// and the states a caller reads. Driven frame by frame through the scripted
+/// door, because every rule here is about ORDER and about what is DECIDED, not
+/// about bytes on a wire — that is `FakeCellDoorTests`' job.
+@MainActor
+@Suite(.serialized) struct RoutedClientTests {
+  private let session = "sess-01J8Z3K9"
+
+  private func client(_ transport: ScriptedTransport, sink: RoutedFrameRecorder)
+    -> RoutedTerminalClient
+  {
+    RoutedTerminalClient(
+      transport: transport, sink: sink, options: .init(viewId: "view-1"))
+  }
+
+  private func ticket(cellBootId: String = "cb-7f3a9c1e-2026") throws -> RoutedTerminalTicket {
+    try TicketFactory.make(cellBootId: cellBootId, sessionId: session)
+  }
+
+  /// Bring a client all the way to `attached` and hand back everything the test
+  /// needs to keep driving it.
+  private func attached(
+    transport: ScriptedTransport, sink: RoutedFrameRecorder, client: RoutedTerminalClient,
+    legGeneration: Int64 = 1
+  ) async throws -> (control: ScriptedConnection, frames: ScriptedConnection, activation: String) {
+    let control = transport.connection(for: "/control")
+    let frames = transport.connection(for: "/frames")
+    try await settle("two hellos") {
+      let onControl = await control.sentTags().contains("ConnectionHello")
+      let onFrames = await frames.sentTags().contains("ConnectionHello")
+      return onControl && onFrames
+    }
+    try await control.deliver(
+      .connectionAccepted, Script.accepted(channel: .control, legGeneration: legGeneration))
+    try await frames.deliver(
+      .connectionAccepted, Script.accepted(channel: .frames, legGeneration: legGeneration))
+    try await settle("both attaches") {
+      let onControl = await control.lastSent("AttachControlLeg") != nil
+      let onFrames = await frames.lastSent("AttachFramesLeg") != nil
+      return onControl && onFrames
+    }
+    let attach = await control.lastSent("AttachControlLeg")
+    let activation = attach?["activationId"]?.stringValue ?? ""
+    try await control.deliver(
+      .controlLegAttached,
+      Script.controlAttached(session: session, activation: activation, rights: ["input", "read"]))
+    try await frames.deliver(
+      .framesLegAttached, Script.framesAttached(session: session, activation: activation))
+    try await settle("attached") { client.state == .attached }
+    return (control, frames, activation)
+  }
+
+  // MARK: The handshake
+
+  /// One ticket opens BOTH legs: the hello carries the grant VERBATIM, names its
+  /// own channel, and advertises receive capacity on the frames leg only —
+  /// receive capacity belongs to the receiver, and the control leg receives no
+  /// presentation units.
+  @Test func oneTicketOpensBothLegsWithTheGrantCarriedVerbatim() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    let ticket = try ticket()
+    client.open(ticket)
+    #expect(client.state == .connecting)
+
+    let control = transport.connection(for: "/control")
+    let frames = transport.connection(for: "/frames")
+    try await settle("two hellos") {
+      let onControl = await control.lastSent("ConnectionHello") != nil
+      let onFrames = await frames.lastSent("ConnectionHello") != nil
+      return onControl && onFrames
+    }
+    let controlHello = await control.lastSent("ConnectionHello")
+    let framesHello = await frames.lastSent("ConnectionHello")
+
+    #expect(controlHello?["channel"]?.stringValue == "control")
+    #expect(framesHello?["channel"]?.stringValue == "frames")
+    #expect(controlHello?["protocolMajor"]?.intValue == 1)
+    // The grant on the wire is the grant that arrived — byte for byte the same
+    // JSON value, because the MAC covers what the CELL receives.
+    #expect(controlHello?["transportGrant"] == ticket.transportGrant.raw)
+    #expect(framesHello?["transportGrant"] == ticket.transportGrant.raw)
+    // Capacity is the FRAMES leg's alone.
+    #expect(controlHello?["receiverCapacities"] == nil)
+    #expect(framesHello?["receiverCapacities"]?["connectionCreditBytes"]?.intValue == 2_097_152)
+    #expect(framesHello?["receiverCapacities"]?["perActivationCreditBytes"]?.intValue == 524_288)
+    // Only capabilities this client can actually honour.
+    let advertised = controlHello?["capabilities"]?.arrayValue?.compactMap(\.stringValue)
+    #expect(advertised == ["resume", "session-events"])
+    client.close()
+  }
+
+  /// A grant outside its validity window is refused HERE, before a socket: at
+  /// the door it would earn a silent `1008` that carries no reason at all, and
+  /// guessing at one afterwards is worse than naming it now.
+  @Test func aDeadGrantIsRefusedBeforeItCostsASocket() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    let stale = try TicketFactory.make(
+      sessionId: session, issuedAt: 1_000, expiresAt: 61_000)
+    client.open(stale)
+    #expect(client.state == .reconnecting)
+    #expect(client.needsTicket)
+    #expect(transport.dials.isEmpty)
+    client.close()
+  }
+
+  // MARK: Activation
+
+  /// The CLIENT is the activation authority: it mints ONE id and both legs
+  /// attach under it. The cell holds the table and answers it; it never invents
+  /// an activation id, which is what makes a reconnect race impossible to
+  /// disagree about.
+  @Test func oneActivationIdCarriesBothLegs() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    let controlAttach = await live.control.lastSent("AttachControlLeg")
+    let framesAttach = await live.frames.lastSent("AttachFramesLeg")
+    #expect(controlAttach?["activationId"]?.stringValue == live.activation)
+    #expect(framesAttach?["activationId"]?.stringValue == live.activation)
+    #expect(!live.activation.isEmpty)
+    // A FIRST attach replaces nothing, and carries no resume: there is no token
+    // and no applied stamp to resume from.
+    #expect(controlAttach?["replacesActivationId"] == nil)
+    #expect(framesAttach?["resume"] == nil)
+    // The demand rides the control attach.
+    #expect(controlAttach?["initialDemand"]?["mode"]?.stringValue == "live")
+
+    // The rights the CELL accepted are the rights, not the ones the grant asked
+    // for — a downgrade applies the moment the cell accepts it.
+    #expect(client.sessions[session]?.rights == [.input, .read])
+    // The declared TRF1 identity is bound and handed to the sink, which owns the
+    // only decoder that can check the handles inside a frame.
+    #expect(client.sessions[session]?.identity?.sessionHandle == "77")
+    try await settle("the sink is bound") { await sink.identities[live.activation] != nil }
+    client.close()
+  }
+
+  /// `PresentationReady` ≠ `InputAllowed`. A read-only or lagging viewer still
+  /// presents; input is a SECOND dimension with its own answer, and the client
+  /// refuses a keystroke rather than sending one the cell will drop in silence.
+  @Test func presentationAndInputAreSeparateDimensions() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    // Attached, but no status yet: neither predicate holds — an activation with
+    // no lease is not ready, and saying otherwise would be a false ready.
+    #expect(client.sessions[session]?.presentationReady == false)
+
+    // A frame makes the frames leg active, then the lease arrives.
+    let frame = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(10), payload: Data("TRF1-seed".utf8))
+    await live.frames.deliver(.binary(frame))
+    try await settle("the frame applies") { await sink.deltaFrames == 1 }
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("presenting") { client.sessions[session]?.presentationReady == true }
+    #expect(client.sessions[session]?.inputAllowed == true)
+
+    // The cell suspends input for lag. Presentation continues; typing does not.
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(
+        session: session, activation: live.activation, sequence: 2, input: "suspended",
+        reason: "lagging"))
+    try await settle("input suspended") { client.sessions[session]?.inputAllowed == false }
+    #expect(client.sessions[session]?.presentationReady == true)
+    #expect(client.sessions[session]?.status?.input == .suspended(reason: "lagging"))
+
+    let before = await live.control.allSent("SendInput").count
+    client.send(text: "ls\n", to: session)
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(await live.control.allSent("SendInput").count == before)
+    client.close()
+  }
+
+  /// A status with an OLDER sequence is a reorder, not a revocation. Applying it
+  /// backwards would revoke a live lease from a message that was already stale
+  /// when it arrived.
+  @Test func anOlderStatusSequenceIsDropped() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 5))
+    try await settle("the status") { client.sessions[session]?.status != nil }
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(
+        session: session, activation: live.activation, sequence: 2, presentation: "revoked",
+        reason: "leg-dead"))
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(client.sessions[session]?.status?.cellStatusSequence == 5)
+    #expect(client.sessions[session]?.status?.presentation == .presenting)
+    client.close()
+  }
+
+  /// The input sequence is per-ACTIVATION and monotonic, minted here. It is not
+  /// the DOM's counter: several views share one cell view, and copying their
+  /// individual counters would collide at the cell's `authorize_input`.
+  @Test func theInputSequenceIsMonotonicPerActivation() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    let frame = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(10), payload: Data("TRF1".utf8))
+    await live.frames.deliver(.binary(frame))
+    try await settle("the frame applies") { await sink.deltaFrames == 1 }
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("input allowed") { client.sessions[session]?.inputAllowed == true }
+
+    client.send(text: "a", to: session)
+    client.send(key: RoutedKeyInput(key: "Enter", code: "Enter"), to: session)
+    client.paste("hello", to: session)
+    client.interrupt(session)
+    try await settle("four inputs") { await live.control.allSent("SendInput").count == 4 }
+
+    let inputs = await live.control.allSent("SendInput")
+    #expect(inputs.map { $0["inputSequence"]?.intValue } == [1, 2, 3, 4])
+    #expect(inputs.allSatisfy { $0["activationId"]?.stringValue == live.activation })
+    #expect(inputs.allSatisfy { $0["leaseEpoch"]?.intValue == 4 })
+    #expect(inputs[0]["op"]?["kind"]?.stringValue == "text")
+    // The key body is the ENGINE's serde shape, `repeat` and all — the cell
+    // deserializes the wire `op` straight into ghosttea's own type.
+    #expect(inputs[1]["op"]?["key"]?["code"]?.stringValue == "Enter")
+    #expect(inputs[1]["op"]?["key"]?["repeat"]?.boolValue == false)
+    #expect(inputs[1]["op"]?["key"]?["unshiftedCodepoint"]?.intValue == 0)
+    #expect(inputs[2]["op"]?["kind"]?.stringValue == "paste")
+    #expect(inputs[3]["op"]?["kind"]?.stringValue == "interrupt")
+    client.close()
+  }
+
+  /// FOCUS NEVER IMPLIES A CLAIM. The seat is explicit, the claim names its
+  /// claimant and the revision it expects, and the cell mints the holder
+  /// generation — a caller can only name itself.
+  @Test func theGeometrySeatIsClaimedExplicitly() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    // This ticket carries `geometry`; the default one in `attached` does not.
+    client.open(try TicketFactory.make(sessionId: session, rights: ["geometry", "input", "read"]))
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    // The cell's accepted rights are what count, so it must grant geometry too.
+    try await live.control.deliver(
+      .controlLegAttached,
+      Script.controlAttached(
+        session: session, activation: live.activation, rights: ["geometry", "input", "read"]))
+    try await settle("geometry granted") {
+      client.sessions[session]?.rights.contains(.geometry) == true
+    }
+
+    client.claimGeometry(cols: 100, rows: 30, for: session)
+    try await settle("the claim") { await live.control.lastSent("ClaimGeometry") != nil }
+    let claim = await live.control.lastSent("ClaimGeometry")
+    #expect(claim?["cols"]?.intValue == 100)
+    #expect(claim?["rows"]?.intValue == 30)
+    #expect(claim?["expectRevision"]?.intValue == 0)
+    #expect(claim?["claimant"]?["viewId"]?.stringValue == "view-1")
+    #expect(claim?["claimant"]?["clientId"]?.stringValue == "win-3c4d-incarnation-2")
+
+    try await live.control.deliver(
+      .geometryCommitted,
+      [
+        "holder": .object([
+          "clientId": .string("win-3c4d-incarnation-2"), "viewId": .string("view-1"),
+          "holderGeneration": .int(1),
+        ]),
+        "geometryRevision": .int(7), "cols": .int(100), "rows": .int(30),
+      ])
+    try await settle("the commit") { client.sessions[session]?.geometryRevision == 7 }
+    // The next claim expects the revision the cell committed — the CAS the
+    // contract asks for, rather than a hopeful zero.
+    client.claimGeometry(cols: 101, rows: 30, for: session)
+    try await settle("a second claim") {
+      await live.control.allSent("ClaimGeometry").count == 2
+    }
+    let second = await live.control.allSent("ClaimGeometry")[1]
+    #expect(second["expectRevision"]?.intValue == 7)
+    client.close()
+  }
+
+  /// A session with no `geometry` right never claims the seat — the cell would
+  /// refuse `RIGHT_MISSING`, and asking anyway is a message that can only fail.
+  @Test func aViewerWithoutTheGeometryRightDoesNotClaim() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    client.claimGeometry(cols: 80, rows: 24, for: session)
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(await live.control.lastSent("ClaimGeometry") == nil)
+    client.close()
+  }
+
+  /// Demand is per-activation, sequenced, and idempotent to re-send. `none`
+  /// detaches the cell's view; `live` attaches it.
+  @Test func demandIsSequencedPerActivation() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    client.declare(demand: .none, for: session)
+    client.declare(demand: .live, for: session)
+    try await settle("two demands") { await live.control.allSent("DeclareDemand").count == 2 }
+    let demands = await live.control.allSent("DeclareDemand")
+    #expect(demands.map { $0["demandSequence"]?.intValue } == [1, 2])
+    #expect(demands[0]["demand"]?["mode"]?.stringValue == "none")
+    #expect(demands[1]["demand"]?["mode"]?.stringValue == "live")
+    #expect(demands[0]["activationId"]?.stringValue == live.activation)
+    client.close()
+  }
+
+  // MARK: Frames and credits
+
+  /// A seed arrives as a TRANSFER — begin, chunks, end — is reassembled,
+  /// checksum-verified, applied whole, and acknowledged with a stamp.
+  @Test func aSeedTransferReassemblesAndIsAcknowledged() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    #expect(client.sessions[session]?.lastSeedReason == "no-cursor")
+
+    let seed = Data((0..<300).map { UInt8($0 % 251) })
+    let units = try Script.transferUnits(
+      session: session, activation: live.activation, creditEpoch: 1, firstSequence: 1,
+      kind: "seed", base: nil, result: Script.stamp(4417), payload: seed)
+    for unit in units { await live.frames.deliver(.binary(unit)) }
+    try await settle("the seed applies") { await sink.fullFrames == 1 }
+    #expect(await sink.lastFrame == seed)
+    #expect(await sink.content?.sceneRevision == 4417)
+
+    try await settle("the ack") { await live.frames.lastSent("SceneApplied") != nil }
+    let applied = await live.frames.lastSent("SceneApplied")
+    #expect(applied?["appliedContent"]?["sceneRevision"]?.intValue == 4417)
+    #expect(applied?["activationId"]?.stringValue == live.activation)
+    client.close()
+  }
+
+  /// A delta applies against the base the SINK holds — the only place that can
+  /// answer it. When the sink has moved on, the honest repair is a reseed, not a
+  /// delta onto the wrong scene.
+  @Test func aDeltaWhoseBaseTheSinkDoesNotHoldBreaksTheLineage() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    let seed = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(100), payload: Data("TRF1-full".utf8))
+    await live.frames.deliver(.binary(seed))
+    try await settle("the full frame") { await sink.deltaFrames == 1 }
+
+    let good = try Script.frame(
+      session: session, activation: live.activation, sequence: 2, creditEpoch: 1,
+      base: Script.stamp(100), result: Script.stamp(101), payload: Data("TRF1-delta".utf8))
+    await live.frames.deliver(.binary(good))
+    try await settle("the delta") { await sink.deltaFrames == 2 }
+    #expect(await sink.content?.sceneRevision == 101)
+
+    let stale = try Script.frame(
+      session: session, activation: live.activation, sequence: 3, creditEpoch: 1,
+      base: Script.stamp(55), result: Script.stamp(56), payload: Data("TRF1-wrong".utf8))
+    await live.frames.deliver(.binary(stale))
+    try await settle("the lineage break") { client.sessions[session]?.frames == .seeding }
+    #expect(client.sessions[session]?.appliedContent == nil)
+    #expect(await sink.deltaFrames == 2)
+    client.close()
+  }
+
+  /// Credit is returned for EVERY received unit, exactly once, cumulatively —
+  /// including one for an activation this client no longer holds, whose content
+  /// it discards. A receiver that returned credit only for units it liked would
+  /// starve the connection one mistake at a time.
+  @Test func everyUnitReturnsItsChargeIncludingAStaleOne() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    let first = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(1), payload: Data(count: 1000))
+    let orphan = try Script.frame(
+      session: session, activation: "an-activation-nobody-holds", sequence: 1, creditEpoch: 1,
+      base: nil, result: Script.stamp(1), payload: Data(count: 500))
+    await live.frames.deliver(.binary(first))
+    await live.frames.deliver(.binary(orphan))
+
+    try await settle("a credit return") { await live.frames.lastSent("TransportCredit") != nil }
+    let credit = await live.frames.lastSent("TransportCredit")
+    #expect(credit?["creditEpoch"]?.intValue == 1)
+    #expect(credit?["connectionBytesReturned"]?.intValue == Int64(first.count + orphan.count))
+    let accounts = credit?["accounts"]?.arrayValue ?? []
+    #expect(accounts.count == 2)
+    let orphanAccount = accounts.first { $0["activationId"]?.stringValue == "an-activation-nobody-holds" }
+    #expect(orphanAccount?["bytesReturned"]?.intValue == Int64(orphan.count))
+    // The orphan's CONTENT went nowhere.
+    #expect(await sink.deltaFrames == 1)
+    client.close()
+  }
+
+  /// A unit stamped with another credit epoch cannot be accounted for on this
+  /// leg. It is a protocol error rather than a discard, because a ledger that
+  /// silently absorbed it would be a ledger the cell and the client disagree
+  /// about.
+  @Test func aUnitFromAnotherCreditEpochEndsTheConnection() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    let wrong = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 99, base: nil,
+      result: Script.stamp(1), payload: Data(count: 10))
+    await live.frames.deliver(.binary(wrong))
+    try await settle("the failure") {
+      if case .failed = client.state { return true } else { return false }
+    }
+    client.close()
+  }
+
+  /// Two live activations of one set may not declare the same TRF1 session
+  /// handle: the sink indexes its replica by that handle, so two identities
+  /// routing to two replicas is the exact corruption the rule exists to prevent.
+  @Test func twoActivationsMayNotClaimOneTrfHandle() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    // A second session on the same set, attaching with the SAME handle.
+    let second = "sess-second"
+    client.open(try TicketFactory.make(sessionId: second))
+    try await settle("a second attach") {
+      await live.control.allSent("AttachControlLeg").count == 2
+    }
+    let secondAttach = await live.control.allSent("AttachControlLeg")[1]
+    let secondActivation = secondAttach["activationId"]?.stringValue ?? ""
+    try await live.frames.deliver(
+      .framesLegAttached,
+      Script.framesAttached(session: second, activation: secondActivation, sessionHandle: "77"))
+    try await settle("the collision") {
+      if case .failed = client.state { return true } else { return false }
+    }
+    #expect(client.lastRefusal?.contains("77") == true)
+    _ = live.activation
+    client.close()
+  }
+
+  // MARK: Loss and replacement
+
+  /// Losing ONE leg invalidates every activation on the SET — the other leg's
+  /// activations are no longer two-legged, so they are not activations — and the
+  /// client asks for a fresh ticket rather than re-dialing.
+  ///
+  /// There is no socket-level retry BY DESIGN: a transport grant's
+  /// `(nonce, channel)` is consumed at first use and held until the grant
+  /// expires (`tp/ledger.rs` `check_transport`), so a re-dial with the ticket in
+  /// hand earns `GRANT_NONCE_REPLAYED`, which is terminal for that grant. A
+  /// client that retried the socket would spin against a refusal that can never
+  /// become an acceptance.
+  @Test func aLostLegEndsEveryActivationAndAsksForAFreshTicket() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    await live.frames.hangUp(code: nil)
+    try await settle("reconnecting") { client.state == .reconnecting }
+    #expect(client.needsTicket)
+    #expect(client.sessions[session]?.control == .ended(reason: "leg-dead"))
+    try await settle("the sink is told") { await sink.endings.contains("\(live.activation):leg-dead") }
+    // Exactly ONE dial per leg: nothing retried the socket.
+    #expect(transport.dials.count == 2)
+    client.close()
+  }
+
+  /// The replacement is a FRESH TICKET, and it brings a new leg generation: the
+  /// cell's rule is that the credit epoch IS the frames leg generation, so every
+  /// total resets and the new activation names the one it replaces.
+  @Test func aFreshTicketReplacesTheSetWithANewCreditEpoch() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    // Spend some credit, then lose the leg.
+    let frame = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(10), payload: Data(count: 2000))
+    await live.frames.deliver(.binary(frame))
+    try await settle("a credit return") { await live.frames.lastSent("TransportCredit") != nil }
+    await live.control.hangUp(code: nil)
+    try await settle("reconnecting") { client.state == .reconnecting }
+
+    // A fresh ticket on fresh sockets.
+    let control = transport.rotate("/control")
+    let frames = transport.rotate("/frames")
+    client.open(try ticket())
+    let replaced = try await attached(
+      transport: transport, sink: sink, client: client, legGeneration: 2)
+    #expect(replaced.activation != live.activation)
+
+    let attach = await control.lastSent("AttachControlLeg")
+    #expect(attach?["replacesActivationId"]?.stringValue == live.activation)
+    // The resume capability was negotiated and there is a token plus an applied
+    // stamp, so the frames attach asks to resume rather than to reseed.
+    let framesAttach = await frames.lastSent("AttachFramesLeg")
+    #expect(framesAttach?["resume"]?["resumeToken"]?.stringValue == "rt-1")
+    #expect(framesAttach?["resume"]?["from"]?["sceneRevision"]?.intValue == 10)
+
+    // A new epoch: the first return on the replacement counts from zero.
+    let next = try Script.frame(
+      session: session, activation: replaced.activation, sequence: 1, creditEpoch: 2, base: nil,
+      result: Script.stamp(11), payload: Data(count: 100))
+    await frames.deliver(.binary(next))
+    try await settle("a return on the new leg") { await frames.lastSent("TransportCredit") != nil }
+    let credit = await frames.lastSent("TransportCredit")
+    #expect(credit?["creditEpoch"]?.intValue == 2)
+    #expect(credit?["creditSequence"]?.intValue == 1)
+    #expect(credit?["connectionBytesReturned"]?.intValue == Int64(next.count))
+    client.close()
+  }
+
+  /// `STALE_ROUTE` is its own state: the session moved, and the caller must
+  /// re-resolve the route before minting. The client cannot do either and does
+  /// not pretend to.
+  @Test func aStaleRouteCloseIsItsOwnState() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    await live.control.hangUp(code: 4000)
+    try await settle("stale route") { client.state == .staleRoute }
+    #expect(client.needsTicket)
+    client.close()
+  }
+
+  /// An `AttachRefused` naming `STALE_ROUTE` says the same thing as the close
+  /// code and gets the same answer.
+  @Test func anAttachRefusedForAStaleRouteAsksForAFreshTicket() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let control = transport.connection(for: "/control")
+    let frames = transport.connection(for: "/frames")
+    try await settle("two hellos") {
+      let onControl = await control.sentTags().contains("ConnectionHello")
+      let onFrames = await frames.sentTags().contains("ConnectionHello")
+      return onControl && onFrames
+    }
+    try await control.deliver(.connectionAccepted, Script.accepted(channel: .control))
+    try await frames.deliver(.connectionAccepted, Script.accepted(channel: .frames))
+    try await settle("the attach") { await control.lastSent("AttachControlLeg") != nil }
+    let activation = await control.lastSent("AttachControlLeg")?["activationId"]?.stringValue ?? ""
+    try await control.deliver(
+      .attachRefused,
+      [
+        "activationId": .string(activation), "code": .string("STALE_ROUTE"),
+        "retryable": .bool(true),
+      ])
+    try await settle("stale route") { client.state == .staleRoute }
+    #expect(client.sessions[session]?.lastRefusal == "STALE_ROUTE")
+    client.close()
+  }
+
+  /// "Re-mint once, then UNAVAILABLE" — the pre-authentication rule, counted
+  /// here because nothing else can count it: the close carried no code and no
+  /// body BY POLICY, so a second identical silence is the only evidence that
+  /// re-minting does not help.
+  @Test func aSecondSilentRefusalIsUnavailableRatherThanAThirdTry() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let control = transport.connection(for: "/control")
+    try await settle("the hello") { await control.sentTags().contains("ConnectionHello") }
+    await control.hangUp(code: 1008)
+    try await settle("reconnecting") { client.state == .reconnecting }
+    #expect(client.needsTicket)
+
+    let second = transport.rotate("/control")
+    _ = transport.rotate("/frames")
+    client.open(try ticket())
+    try await settle("a second hello") { await second.sentTags().contains("ConnectionHello") }
+    await second.hangUp(code: 1008)
+    try await settle("unavailable") {
+      if case .failed(let reason) = client.state { return reason.contains("UNAVAILABLE") }
+      return false
+    }
+    #expect(!client.needsTicket)
+    client.close()
+  }
+
+  /// A ticket naming a DIFFERENT cell boot replaces the set outright. A replaced
+  /// cell is a new key, never a reconnect: carrying an activation across one
+  /// would be carrying it across a lineage.
+  @Test func aTicketForAnotherCellBootReplacesTheSet() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    #expect(client.sessions[session]?.activationId == live.activation)
+
+    _ = transport.rotate("/control")
+    _ = transport.rotate("/frames")
+    client.open(try ticket(cellBootId: "cb-a-different-boot"))
+    try await settle("a new set") { client.state == .connecting }
+    // The old session's state went with the old cell rather than being carried.
+    #expect(client.sessions[session]?.activationId != live.activation)
+    client.close()
+  }
+
+  // MARK: Lifecycle events
+
+  /// `SessionEvent` rides the control leg behind the negotiated capability, and
+  /// the client SURFACES it rather than acting on an exit it cannot corroborate.
+  /// `removed` unregisters; `resync` is the cell's honest "my deltas dropped".
+  @Test func lifecycleEventsAreSurfacedAndNeverInvented() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    #expect(client.negotiatedCapabilities.contains("session-events"))
+
+    try await live.control.deliver(
+      .sessionEvent,
+      [
+        "event": .object([
+          "kind": .string("exited"), "sessionId": .string(session), "exitCode": .int(0),
+          "exitSignal": .null, "requestedTermination": .null, "exitOutcome": .string("completed"),
+        ])
+      ])
+    try await live.control.deliver(
+      .sessionEvent, ["event": .object(["kind": .string("resync")])])
+    try await live.control.deliver(
+      .sessionEvent, ["event": .object(["kind": .string("someFutureKind")])])
+    try await settle("three events") { client.sessionEvents.count == 3 }
+
+    let drained = client.drainSessionEvents()
+    #expect(drained[0] == .exited(
+      sessionId: session, exitCode: 0, exitSignal: nil, requestedTermination: nil,
+      exitOutcome: "completed"))
+    #expect(drained[1] == .resync)
+    // An unknown kind is drop-and-LOG at the receiver — a tolerant reader, never
+    // a leg close, because future variants are additive behind this capability.
+    #expect(drained[2] == .unknown(kind: "someFutureKind"))
+    #expect(client.sessionEvents.isEmpty)
+    client.close()
+  }
+}
