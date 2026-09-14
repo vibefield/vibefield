@@ -989,6 +989,37 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
             if cell_routes.is_empty() {
                 return Err("a routes serve needs at least one route".into());
             }
+            // N-H2 (EL7) — AND AN EMPTY `allow` IS THE SAME CLASS OF LOOPHOLE,
+            // spelled in the field next to it. truffle-core 0.7.12 documents
+            // it on the field itself: "loginName allow globs; EMPTY = WHOLE
+            // TAILNET (RFC 023 §9.7)" (`src/network/mod.rs`, ProxyConfig.allow).
+            // So a routes serve declared with no allow list publishes every
+            // live cell's T1 door to every node on the tailnet.
+            //
+            // WHY IT MUST BE REFUSED HERE and not left to the caller: a cell
+            // door's only wall is the TPv3 grant it verifies in the first
+            // frame, and `PRE_AUTH_CONNECTION_CAP` is 64 sockets PER CELL
+            // sitting pre-authentication. The wall that exists today is
+            // fieldd's policy (`terminal-serve.ts` gate 1 — no linked login, no
+            // terminal routes, ever), and the floor CANNOT SEE that policy: it
+            // is one process away, on the plane this one outlives. A floor that
+            // trusts its caller to have a gate is a floor with no gate.
+            //
+            // The product shape is unaffected: `terminalServeSpec` always sends
+            // exactly one glob, the linked login escaped by `serveAllowGlob`,
+            // and refuses to build a spec at all without one.
+            //
+            // Deliberately NOT extended to the other arms. The product and
+            // artifact serves put an authenticated door behind the proxy and
+            // their open shape is a considered choice with its own history;
+            // narrowing them is a separate decision, not a drive-by.
+            if allow.iter().all(|glob| glob.trim().is_empty()) {
+                return Err(
+                    "a routes serve needs a non-empty allow list — an empty allow publishes \
+                     every cell door to the whole tailnet (truffle RFC 023 §9.7)"
+                        .into(),
+                );
+            }
             let listen_port = parse_listen_port(0)?;
             if listen_port == 0 {
                 return Err("listenPort is required for routes serves".into());
@@ -1468,11 +1499,13 @@ mod tests {
     fn a_routes_serve_refuses_an_empty_list_a_secret_and_a_missing_listener() {
         let target = CELL_TARGET();
         let one = json!([{"prefix": "/cell/cb-1", "targetPort": 51001}]);
+        let gated = || vec!["james@example.com".to_string()];
         // empty would fall back to truffle's single-target shape — the loophole
         let empty = json!([]);
         let err = build_serve_config(ServeConfigInput {
             listen_port: Some(9422),
             routes: &empty,
+            allow: gated(),
             ..serve_input("terminal", &target)
         })
         .expect_err("an empty route list is refused");
@@ -1482,16 +1515,73 @@ mod tests {
             listen_port: Some(9422),
             path_secret: Some("s3cr3t"),
             routes: &one,
+            allow: gated(),
             ..serve_input("terminal", &target)
         })
         .is_err());
         // without an explicit listener there is no port to publish on
         let err = build_serve_config(ServeConfigInput {
             routes: &one,
+            allow: gated(),
             ..serve_input("terminal", &target)
         })
         .expect_err("a routes serve needs a listener");
         assert!(err.contains("listenPort"), "{err}");
+    }
+
+    /// N-H2 (EL7) — the loophole spelled in the field BESIDE the route list.
+    ///
+    /// truffle-core 0.7.12 documents it on `ProxyConfig.allow` itself:
+    /// "loginName allow globs; empty = whole tailnet (RFC 023 §9.7)". A cell
+    /// door's only wall is the TPv3 grant it verifies in the first frame, and
+    /// `PRE_AUTH_CONNECTION_CAP` is 64 pre-auth sockets PER CELL — so a routes
+    /// serve with no allow list puts every node on the tailnet one unguessed
+    /// grant away from a live PTY, 64 attempts at a time.
+    ///
+    /// The only wall before this was fieldd's own policy, one process away on a
+    /// plane this one OUTLIVES. A floor that trusts its caller to have a gate is
+    /// a floor with no gate.
+    #[test]
+    fn a_routes_serve_refuses_an_allow_list_that_gates_nobody() {
+        let target = CELL_TARGET();
+        let one = json!([{"prefix": "/cell/cb-1", "targetPort": 51001}]);
+
+        let err = build_serve_config(ServeConfigInput {
+            listen_port: Some(9422),
+            routes: &one,
+            allow: vec![],
+            ..serve_input("terminal", &target)
+        })
+        .expect_err("an empty allow publishes every cell door to the whole tailnet");
+        assert!(err.contains("allow"), "{err}");
+        assert!(
+            err.contains("whole tailnet"),
+            "the refusal names the hazard: {err}"
+        );
+
+        // A list of blanks is the same serve wearing a gate: truffle reads the
+        // globs, and a glob that matches no login is not a restriction, it is
+        // an empty list with extra steps.
+        let err = build_serve_config(ServeConfigInput {
+            listen_port: Some(9422),
+            routes: &one,
+            allow: vec![String::new(), "   ".to_string()],
+            ..serve_input("terminal", &target)
+        })
+        .expect_err("a list of blank globs gates nobody either");
+        assert!(err.contains("allow"), "{err}");
+
+        // AND THE SHAPE fieldd ACTUALLY SENDS STILL PASSES — one glob, the
+        // linked login escaped by `serveAllowGlob` (terminal-serve.ts). This
+        // half is what keeps the refusal from being a product outage.
+        let cfg = build_serve_config(ServeConfigInput {
+            listen_port: Some(9422),
+            routes: &one,
+            allow: vec!["james@example.com".to_string()],
+            ..serve_input("terminal", &target)
+        })
+        .expect("the product's own one-glob shape is accepted");
+        assert_eq!(cfg.allow, vec!["james@example.com".to_string()]);
     }
 
     #[test]
