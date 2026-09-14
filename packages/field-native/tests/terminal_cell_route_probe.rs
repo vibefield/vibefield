@@ -19,7 +19,15 @@
 //!     `kind: "routes"` arm produces for fieldd — prefix `/cell/<boot>/`,
 //!     a loopback `targetUrl`, `strip_prefix: true`, the login in `allow`;
 //!   · the dial: node B reaches node A's tailnet listener with `open_tcp`, and
-//!     the WebSocket rides that stream through the sidecar's hijack.
+//!     the WebSocket rides that stream through the sidecar's hijack;
+//!   · N-H1 (2026-09-14) — THE SEED. Both arms now decode a real presentation
+//!     transfer (`transfer-begin` / `transfer-chunk` / `transfer-end`) off the
+//!     real PTY and assert it carried bytes. Until this date neither arm drew
+//!     one and the row settled for asserting that the two agreed, which held
+//!     because both were `None`. The cause was this test's own
+//!     `worker_capacities()` declaring a connection window below the cell's
+//!     urgent reserve; see the correction at the seed assertion for the whole
+//!     of it.
 //!
 //! WHAT IS NOT, and it is one thing, stated because it bounds the claim: the
 //! serve is registered by THIS TEST against a test-minted node, not by fieldd
@@ -46,6 +54,7 @@ mod tp_mint;
 mod common;
 
 use common::{authkey, build_node, probe_app_id, redact, rendezvous, sidecar, AUTHKEY_ENV};
+use field_native::mgmt::mesh::{build_serve_config, ServeConfigInput};
 use field_native::registries::ports::TERMINAL_CELLS_SERVE;
 use field_native::services::terminal_client::ControlClient;
 use field_native::{bootstrap, config::NativeConfig, RunningDaemon};
@@ -106,6 +115,11 @@ async fn boot(dir: &std::path::Path) -> RunningDaemon {
 /// The route config for one cell, built the way `build_serve_config`'s
 /// `kind: "routes"` arm builds it (mgmt/mesh.rs). Kept in this shape ON
 /// PURPOSE: if that arm changes, this row should have to change with it.
+///
+/// T-M4 (2026-09-14) — and "should have to" is now enforced rather than
+/// intended: `assert_matches_production` builds the SAME route through the
+/// production function from fieldd's own params and requires the two to be
+/// equal before the serve is registered.
 fn cell_route_config(
     id: &str,
     cell_boot_id: &str,
@@ -133,6 +147,57 @@ fn cell_route_config(
             allow: vec![],
         }],
     }
+}
+
+/// T-M4 — the SAME route, built by the PRODUCTION mapping from the params
+/// fieldd actually sends (`terminalServeSpec`, terminal-serve.ts): target
+/// `{kind: "routes"}`, `tls: false`, one glob in `allow`, one
+/// `{prefix, targetPort}` row. This is `build_serve_config`'s own output, not a
+/// transcription of it.
+///
+/// The literal above is kept BESIDE it rather than replaced, and the two are
+/// asserted equal: the literal documents the shape a reader of this probe needs
+/// to see, and the assertion is what makes it impossible for that documentation
+/// to go quietly stale. Before this the probe hand-built its config with no link
+/// to the arm at all, so the row could have kept passing against a shape the
+/// product no longer produces.
+fn production_cell_route_config(
+    id: &str,
+    cell_boot_id: &str,
+    door_port: u16,
+    allow: Vec<String>,
+) -> ProxyConfig {
+    let target = json!({"kind": "routes"});
+    let routes = json!([{ "prefix": format!("/cell/{cell_boot_id}"), "targetPort": door_port }]);
+    build_serve_config(ServeConfigInput {
+        serve_id: id,
+        name: "terminal",
+        target: &target,
+        listen_port: Some(u64::from(TERMINAL_CELLS_SERVE)),
+        preview_dir: None,
+        allow,
+        tls: Some(false),
+        path_secret: None,
+        routes: &routes,
+    })
+    .expect("the production routes arm accepts the shape fieldd sends")
+}
+
+/// `ProxyConfig` derives no `PartialEq` upstream, so the comparison is over the
+/// serialized form — the same reason `fixture_parity` compares `Value`s.
+fn assert_matches_production(hand_built: &ProxyConfig, cell_boot_id: &str, door_port: u16) {
+    let production = production_cell_route_config(
+        &hand_built.id,
+        cell_boot_id,
+        door_port,
+        hand_built.allow.clone(),
+    );
+    assert_eq!(
+        serde_json::to_value(hand_built).expect("serialize"),
+        serde_json::to_value(&production).expect("serialize"),
+        "this probe's route no longer matches what build_serve_config produces \
+         for fieldd's own params — the row under test has drifted from the product"
+    );
 }
 
 /// The loopback port behind a cell's doors — both URLs name it, and fieldd
@@ -281,6 +346,118 @@ impl Leg {
 impl Drop for Leg {
     fn drop(&mut self) {
         self.beat.abort();
+    }
+}
+
+/// N-H1 — the seed window, with the CONTROL LEG DRAINED.
+///
+/// The cell does not fail silently: when a presentation cannot start it says so
+/// on the control leg, as `CellActivationStatus {presentation: {state, reason}}`
+/// (`tp/activation.rs`'s `presentation_stopped`). This probe used to stop
+/// reading that leg the moment the attach was acknowledged, so it RECEIVED the
+/// answer to its own question and discarded it — and then attributed the
+/// missing seed, in a comment, to a cause the cell cannot have.
+///
+/// Returns the decoded SEED TRANSFER and every control frame seen in the
+/// window, so a failing arm reports the cell's own account rather than a
+/// silence.
+///
+/// THE WHOLE TRANSFER, not the first envelope: a seed is
+/// `transfer-begin` → one or more `transfer-chunk` → `transfer-end`
+/// (`tp/presentation.rs`), and `transfer-begin` legitimately carries a ZERO
+/// byte payload — it announces the base and result stamps, the frame rides the
+/// chunks. Asserting on the first envelope's length would fail against a
+/// perfectly good seed, which is exactly what it did while this was being
+/// written.
+async fn seed_with_control(
+    frames: &mut Leg,
+    control: &mut Leg,
+    arm: &str,
+    budget: Duration,
+) -> (Option<SeedTransfer>, Vec<Value>) {
+    let deadline = tokio::time::Instant::now() + budget;
+    let mut control_frames: Vec<Value> = Vec::new();
+    let mut transfer: Option<SeedTransfer> = None;
+    let mut seed: Option<()> = None;
+    while seed.is_none() && tokio::time::Instant::now() < deadline {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        tokio::select! {
+            got = timeout(remaining, frames.stream.next()) => match got {
+                Ok(Some(Ok(Message::Binary(bytes)))) => {
+                    let Some((header, payload)) =
+                        field_native::tp::wire::decode_envelope(&bytes) else {
+                            panic!("[{arm}] the frames leg sent bytes that are not a \
+                                    presentation envelope ({} bytes)", bytes.len());
+                        };
+                    let kind = header["kind"].as_str().unwrap_or("?").to_string();
+                    eprintln!(
+                        "[probe] {arm} envelope: kind={kind} payload={} bytes",
+                        payload.len()
+                    );
+                    let t = transfer.get_or_insert_with(|| SeedTransfer {
+                        kinds: Vec::new(),
+                        payload_bytes: 0,
+                        begin: header.clone(),
+                    });
+                    t.payload_bytes += payload.len();
+                    t.kinds.push(kind.clone());
+                    // `transfer-end` closes a seed; a bare `trf1-frame` is a
+                    // whole unit on its own and needs no closer.
+                    if kind == "transfer-end" || kind == "trf1-frame" {
+                        seed = Some(());
+                    }
+                }
+                Ok(Some(Ok(Message::Text(t)))) => {
+                    let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
+                    if v["type"] != "LegHeartbeatAck" {
+                        eprintln!("[probe] {arm} frames leg: {v}");
+                    }
+                }
+                Ok(Some(Ok(_))) => {}
+                Ok(Some(Err(e))) => panic!("[{arm}] the frames leg failed: {e}"),
+                Ok(None) => break,
+                Err(_) => break,
+            },
+            got = timeout(remaining, control.stream.next()) => match got {
+                Ok(Some(Ok(Message::Text(t)))) => {
+                    let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
+                    if v["type"] == "LegHeartbeatAck" {
+                        continue;
+                    }
+                    eprintln!("[probe] {arm} CONTROL: {v}");
+                    control_frames.push(v);
+                }
+                Ok(Some(Ok(_))) => {}
+                Ok(Some(Err(e))) => panic!("[{arm}] the control leg failed: {e}"),
+                Ok(None) => break,
+                Err(_) => break,
+            },
+        }
+    }
+    (transfer.filter(|_| seed.is_some()), control_frames)
+}
+
+/// One completed seed: the kinds in order, the total payload carried, and the
+/// opening header (whose `resultContent` stamp names the revision seeded).
+#[derive(Debug)]
+struct SeedTransfer {
+    kinds: Vec<String>,
+    payload_bytes: usize,
+    begin: Value,
+}
+
+/// The cell's own words for why a presentation is not running, if it said any —
+/// what a failing arm prints instead of "we saw nothing".
+fn presentation_complaint(control_frames: &[Value]) -> String {
+    let stopped: Vec<String> = control_frames
+        .iter()
+        .filter(|f| f["type"] == "CellActivationStatus")
+        .map(|f| f["presentation"].to_string())
+        .collect();
+    if stopped.is_empty() {
+        "the cell said nothing on the control leg".to_string()
+    } else {
+        format!("the cell's presentation status: {}", stopped.join(", "))
     }
 }
 
@@ -523,17 +700,28 @@ async fn a_peer_reaches_a_real_cell_door_through_the_sidecars_cell_route() {
         let fa = frm.next_text("the loopback frames attach").await;
         assert_eq!(fa["type"], "FramesLegAttached", "{fa}");
 
-        let mut got: Option<usize> = None;
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
-        while tokio::time::Instant::now() < deadline && got.is_none() {
-            match timeout(Duration::from_secs(3), frm.stream.next()).await {
-                Ok(Some(Ok(Message::Binary(b)))) => got = Some(b.len()),
-                Ok(Some(Ok(_))) | Err(_) => continue,
-                _ => break,
-            }
-        }
-        eprintln!("[probe] LOOPBACK CONTROL ARM: seed bytes = {got:?}");
-        loopback_seed = got;
+        let (seed, control_frames) =
+            seed_with_control(&mut frm, &mut ctl, "loopback", Duration::from_secs(20)).await;
+        let seed = seed.unwrap_or_else(|| {
+            panic!(
+                "the loopback arm drew NO seed from a real cell over a plain socket — \
+                 no sidecar and no tailnet in the path, so this is the client flow or \
+                 the cell, never the route. {}",
+                presentation_complaint(&control_frames)
+            )
+        });
+        assert!(
+            seed.payload_bytes > 0,
+            "a transfer that carried no bytes is not a seed: {seed:?}"
+        );
+        eprintln!(
+            "[probe] LOOPBACK CONTROL ARM: {} envelopes {:?}, {} payload bytes, begin={}",
+            seed.kinds.len(),
+            seed.kinds,
+            seed.payload_bytes,
+            seed.begin
+        );
+        loopback_seed = Some(seed.payload_bytes);
     }
 
     // ---- WHAT THE SIDECAR DOES TO THE UPGRADE, measured rather than assumed ----
@@ -694,14 +882,20 @@ async fn a_peer_reaches_a_real_cell_door_through_the_sidecars_cell_route() {
         .expect("the closed serve removes");
 
     // ---- the open route: remove-then-add, the shape truffle's API forces ----
+    //
+    // T-M4 — and the row this test dials is checked against the PRODUCTION
+    // mapping before it is registered, so the literal above cannot drift away
+    // from what `build_serve_config` produces for fieldd's own params.
+    let open_route = cell_route_config(
+        "terminal",
+        &cell_boot_id,
+        control_port,
+        vec![login_b.clone()],
+    );
+    assert_matches_production(&open_route, &cell_boot_id, control_port);
     node_a
         .proxy()
-        .add(cell_route_config(
-            "terminal",
-            &cell_boot_id,
-            control_port,
-            vec![login_b.clone()],
-        ))
+        .add(open_route)
         .await
         .expect("the terminal serve registers");
     eprintln!("[probe] open gate: allow=[{login_b}] — the same dial must now land");
@@ -775,49 +969,75 @@ async fn a_peer_reaches_a_real_cell_door_through_the_sidecars_cell_route() {
     eprintln!("[probe] framesAttached={frames_attached}");
     eprintln!("[probe] controlAttached={control_attached}");
 
-    // ---- THE SEED, compared against the control arm rather than demanded ----
+    // ---- THE SEED, on BOTH arms, decoded ----
     //
-    // This client does not draw a seed out of a REAL cell — and the control arm
-    // above proves that is NOT the tailnet's doing: the identical ladder over a
-    // plain loopback socket, no sidecar and no tailnet in the path, is just as
-    // silent. The gap is in this probe's client flow (the likeliest cause is
-    // `TestMinter::attach`, which hardcodes `routeRevision: 1` and a window's
-    // `clientId` — a real cell's route revision is its own, and presentation is
-    // route-bound even where the attach itself is accepted). The seed ACROSS a
-    // proxy is already witnessed against a real cell in
-    // `packages/fieldd/test/terminal-remote-door.e2e.test.ts`, with a ticket
-    // fieldd really minted.
+    // CORRECTED 2026-09-14 (N-H1). What stood here until this date said the
+    // probe "does not draw a seed out of a REAL cell", named
+    // `TestMinter::attach`'s hardcoded `routeRevision: 1` and its window
+    // `clientId` as the likeliest cause, and settled for asserting that the two
+    // arms AGREED. Every part of that was wrong:
     //
-    // So the assertion here is the EQUALITY, which is the honest one and the
-    // one that keeps its value: whatever the frames leg does, it does the same
-    // through the sidecar as it does on loopback. The day the client flow is
-    // completed this row upgrades itself into a live seed witness with no edit.
-    let mut tailnet_seed: Option<usize> = None;
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
-    let mut seen: Vec<String> = Vec::new();
-    while tokio::time::Instant::now() < deadline && tailnet_seed.is_none() {
-        match timeout(Duration::from_secs(3), frames.stream.next()).await {
-            Ok(Some(Ok(Message::Binary(b)))) => tailnet_seed = Some(b.len()),
-            Ok(Some(Ok(Message::Text(t)))) => {
-                let v: Value = serde_json::from_str(&t).unwrap_or(Value::Null);
-                if v["type"] != "LegHeartbeatAck" {
-                    seen.push(v["type"].as_str().unwrap_or("?").to_string());
-                }
-            }
-            Err(_) => continue,
-            _ => break,
-        }
-    }
-    eprintln!("[probe] TAILNET ARM: seed bytes = {tailnet_seed:?}, other frames = {seen:?}");
-    assert_eq!(
-        tailnet_seed.is_some(),
+    //   · `AttachClaims.route_revision` is read by NOTHING outside cfg(test)
+    //     fixtures — the cell never compares it, so it cannot refuse over it;
+    //   · the `clientId` cross-check (`activation.rs`, `claims.client_id !=
+    //     set.client_id`) demonstrably PASSED — both attaches were accepted,
+    //     which is the only way `ControlLegAttached` / `FramesLegAttached`
+    //     arrive at all;
+    //   · and the equality assertion was VACUOUS: it compared two `Option`s
+    //     that were both `None`, so it held for the one reason it should have
+    //     failed.
+    //
+    // THE REAL CAUSE, found by draining the control leg the probe was already
+    // being sent: `CellActivationStatus {presentation: {state: "stopped",
+    // reason: "overload"}}`, at 3004 ms — `MAX_ACTIVATION_CATCHUP_MS`, so
+    // `wait_for_credit`, not the 2 s seed wait. `tp_mint::worker_capacities()`
+    // declared `connectionCreditBytes: 1 MiB`, an eighth of what a real client
+    // declares, and BELOW the cell's 2 MiB `URGENT_RESERVE_BYTES`; bulk
+    // admission may draw the window only down to that reserve, so bulk headroom
+    // was exactly zero and the seed was never admissible. The floor was
+    // blameless and so was the tailnet. Both halves are fixed — the helper now
+    // reads the product's own `DEFAULT_CELL_RECEIVER_CAPS`, and the cell's
+    // reserve clamp no longer collapses a small window to zero bulk
+    // (`CreditLedger::new`, N-H1).
+    //
+    // So the assertion is no longer a comparison of two absences. Each arm must
+    // decode a REAL presentation envelope off a REAL PTY, and the control arm
+    // is what keeps the tailnet arm honest: a failure on the loopback arm is
+    // this client or this cell, and only a failure on the tailnet arm alone is
+    // the sidecar's.
+    let (tailnet_seed, tailnet_control) = seed_with_control(
+        &mut frames,
+        &mut control,
+        "tailnet",
+        Duration::from_secs(20),
+    )
+    .await;
+    let tailnet = tailnet_seed.unwrap_or_else(|| {
+        panic!(
+            "the loopback arm seeded ({loopback_seed:?} payload bytes) and the tailnet arm \
+             did not — the sidecar's hijack is the ONLY difference between them. {}",
+            presentation_complaint(&tailnet_control)
+        )
+    });
+    assert!(
+        tailnet.payload_bytes > 0,
+        "a transfer that carried no bytes is not a seed: {tailnet:?}"
+    );
+    assert!(
         loopback_seed.is_some(),
-        "the sidecar path and the loopback path disagreed about the frame stream — \
-         tailnet={tailnet_seed:?} loopback={loopback_seed:?}"
+        "the control arm must have seeded, or this row proves nothing about the route"
+    );
+    let tailnet_bytes = tailnet.payload_bytes;
+    eprintln!(
+        "[probe] TAILNET ARM: {} envelopes {:?}, {tailnet_bytes} payload bytes, begin={}",
+        tailnet.kinds.len(),
+        tailnet.kinds,
+        tailnet.begin
     );
     eprintln!(
         "[probe] TM2B_WITNESS cell={cell_boot_id} session={} host={dns_a} \
-gate403=yes upgrade=101 both-legs-accepted=yes attached=yes seed-parity=yes",
+gate403=yes upgrade=101 both-legs-accepted=yes attached=yes \
+seed-loopback={loopback_seed:?} seed-tailnet={tailnet_bytes}",
         session.id
     );
 

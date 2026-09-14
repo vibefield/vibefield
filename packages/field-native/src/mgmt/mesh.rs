@@ -776,19 +776,19 @@ async fn serve_add(
 /// through the tailnet sidecar (only the sidecar's route config and fieldd's memory
 /// hold the secret). A `dir` serve is a static surface where a secret path proves
 /// nothing, so `path_secret` there is rejected rather than silently served.
-struct ServeConfigInput<'a> {
-    serve_id: &'a str,
-    name: &'a str,
-    target: &'a Value,
-    listen_port: Option<u64>,
-    preview_dir: Option<&'a str>,
-    allow: Vec<String>,
-    tls: Option<bool>,
-    path_secret: Option<&'a str>,
+pub struct ServeConfigInput<'a> {
+    pub serve_id: &'a str,
+    pub name: &'a str,
+    pub target: &'a Value,
+    pub listen_port: Option<u64>,
+    pub preview_dir: Option<&'a str>,
+    pub allow: Vec<String>,
+    pub tls: Option<bool>,
+    pub path_secret: Option<&'a str>,
     /// TM-2 — the declared path routes of a `kind: "routes"` serve. Ignored by
     /// every other target kind, so the product and artifact shapes are
     /// byte-for-byte what they were.
-    routes: &'a Value,
+    pub routes: &'a Value,
 }
 
 /// TM-2 (thinking-terminal-mesh-cells.md §3 T) — the declared route list of a
@@ -864,7 +864,7 @@ fn parse_cell_routes(routes: &Value) -> Result<Vec<ProxyRoute>, String> {
     Ok(out)
 }
 
-fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, String> {
+pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, String> {
     let ServeConfigInput {
         serve_id,
         name,

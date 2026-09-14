@@ -16,7 +16,11 @@
 //! generation than the fieldd that replaced it, and prove the same bootId.
 
 mod diagnostics;
-mod mesh;
+/// T-M4 — PUBLIC so an integration test can build a serve config through the
+/// PRODUCTION mapping rather than a copy of it (`build_serve_config`; the
+/// `terminal_cell_route_probe` row that dials a cell route). Nothing else in
+/// the module is part of that surface.
+pub mod mesh;
 
 use crate::config::MeshPlan;
 use crate::contracts::{DesiredState, Hello, TerminalRouteSnapshot, TerminalRoutesStreamPayload};

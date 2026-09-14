@@ -369,9 +369,29 @@ impl CreditLedger {
                 limit: connection_limit,
             },
             per_activation_limit: windows.per_activation_credit_bytes,
-            // never let the reserve exceed the window (a tiny window would
-            // otherwise starve bulk entirely and stall a seed)
-            urgent_reserve: urgent_reserve.min(connection_limit),
+            // N-H1 (2026-09-14) — the clamp used to read
+            // `urgent_reserve.min(connection_limit)`, under a comment saying
+            // "never let the reserve exceed the window (a tiny window would
+            // otherwise starve bulk entirely and stall a seed)". It did exactly
+            // the thing it named: a window AT OR BELOW the reserve clamped the
+            // reserve to the whole window, so `connection_limit_for(Bulk)` was
+            // `limit - limit == 0` and bulk could never be admitted at all. The
+            // client was not refused and no error was logged — the pump simply
+            // waited out `MAX_ACTIVATION_CATCHUP_MS` and reported
+            // `presentation: stopped {overload}` on the control leg, which is a
+            // lie about a connection that is merely small.
+            //
+            // HALF THE WINDOW, so bulk always keeps something to seed into. The
+            // §8/TP-S3d law is unharmed where it bites: URGENT_RESERVE_BYTES is
+            // sized at 8 x MAX_URGENT_PRESENTATION_UNIT_BYTES, so any window of
+            // at least 2 x MAX_URGENT_PRESENTATION_UNIT_BYTES still reserves
+            // room for a whole urgent unit, and every window a product client
+            // declares (DEFAULT_CELL_RECEIVER_CAPS = 16 MiB, eight times the
+            // reserve) is unaffected — the clamp does not engage at all there.
+            // What changes is only the small-window case the old comment
+            // claimed to handle: it degrades to a fair split instead of a
+            // silent, permanent seed stall.
+            urgent_reserve: urgent_reserve.min(connection_limit / 2),
             accounts: HashMap::new(),
         }
     }
@@ -2268,6 +2288,44 @@ mod tests {
         assert!(
             !l.try_admit("a", 1, UnitClass::Urgent),
             "now the whole window is in flight"
+        );
+
+        // (1b) N-H1 — THE CLAMP, which used to be the bug it was written to
+        // prevent. A window at or below the reserve clamped the reserve to the
+        // WHOLE window, so bulk headroom was zero and a seed could never be
+        // admitted: no refusal, no log, just `presentation: stopped {overload}`
+        // three seconds later on a leg nobody was reading. That is exactly how
+        // `terminal_cell_route_probe` came to have no seed on either arm.
+        //
+        // Half the window is the rule now, asserted at and below the boundary.
+        let mut l = CreditLedger::new(11, caps(100, 100), 100);
+        l.open_account("a");
+        assert_eq!(l.urgent_reserve, 50, "a reserve may claim at most half");
+        assert!(
+            l.try_admit("a", 50, UnitClass::Bulk),
+            "a window equal to the reserve must still seed — it is small, not broken"
+        );
+        assert!(!l.try_admit("a", 1, UnitClass::Bulk));
+        assert!(
+            l.try_admit("a", 50, UnitClass::Urgent),
+            "and urgent still has a reserve to draw on"
+        );
+
+        // A reserve far LARGER than the window is the case the probe hit (a
+        // 1 MiB declaration against a 2 MiB reserve): still half, still seedable.
+        let mut l = CreditLedger::new(12, caps(100, 100), 4_000);
+        l.open_account("a");
+        assert_eq!(l.urgent_reserve, 50);
+        assert!(l.try_admit("a", 50, UnitClass::Bulk));
+
+        // And the clamp must NOT engage where the product actually lives: every
+        // window a real client declares is many times the reserve, and the
+        // reserve there is the full §8 number, untouched.
+        let mut l = CreditLedger::new(13, caps(100, 100), 40);
+        l.open_account("a");
+        assert_eq!(
+            l.urgent_reserve, 40,
+            "a window comfortably above the reserve keeps the whole reserve"
         );
 
         // (2) the fairness FLOOR (§8 law 7 / TP-R15a): a stalled activation

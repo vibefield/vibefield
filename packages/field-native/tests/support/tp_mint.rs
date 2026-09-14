@@ -144,7 +144,30 @@ pub fn hello_with_capabilities(
     v.to_string()
 }
 
-pub fn worker_capacities() -> Value {
+/// The receiver capacities a REAL client declares — `DEFAULT_CELL_RECEIVER_CAPS`
+/// (contracts, `terminal-pipeline.ts`), read from the generated registry rather
+/// than transcribed, so this can never drift from the product again.
+///
+/// CORRECTED 2026-09-14 (N-H1). These were invented numbers, an eighth of the
+/// real ones — `connectionCreditBytes: 1 MiB` against a product value of 16 MiB
+/// — and a 1 MiB connection window is BELOW the cell's `URGENT_RESERVE_BYTES`
+/// (2 MiB). Bulk admission may draw the window only down to that reserve
+/// (§8/TP-S3d, `CreditLedger::connection_limit_for`), so bulk headroom was
+/// exactly ZERO, the seed transfer was never admissible, and every client built
+/// on this helper silently got NO SEED: the pump waited out
+/// `MAX_ACTIVATION_CATCHUP_MS` and reported `presentation: stopped {overload}`
+/// on the control leg — a leg no caller was reading. That is the whole of what
+/// `terminal_cell_route_probe` had been attributing to its own attach grant.
+/// A DELIBERATELY SMALL advertisement, for the one row that pins the window
+/// negotiation itself (`tp_door.rs` — "advertised < cell cap → advertised").
+///
+/// N-H1 — kept separate from [`worker_capacities`] and never the default,
+/// because these numbers are not merely small, they are UNSEEDABLE: a 1 MiB
+/// connection window is below the cell's 2 MiB `URGENT_RESERVE_BYTES`, so the
+/// clamp leaves bulk at most half of it and a client declaring this is asking
+/// for a window no real one asks for. A row that wants to watch the MIN being
+/// taken should say so; a row that wants a client should use the product's.
+pub fn small_capacities() -> Value {
     json!({
         "connectionCreditBytes": 1_048_576,
         "perActivationCreditBytes": 262_144,
@@ -152,5 +175,17 @@ pub fn worker_capacities() -> Value {
         "stagingBytesTotal": 16_777_216,
         "maxConcurrentActivations": 32,
         "maxConcurrentSeeds": 2,
+    })
+}
+
+pub fn worker_capacities() -> Value {
+    use field_native::registries::terminal_pipeline as tp;
+    json!({
+        "connectionCreditBytes": tp::CELL_CONNECTION_CREDIT_BYTES,
+        "perActivationCreditBytes": tp::CELL_PER_ACTIVATION_CREDIT_BYTES,
+        "stagingBytesPerSession": tp::CELL_STAGING_BYTES_PER_SESSION,
+        "stagingBytesTotal": tp::CELL_STAGING_BYTES_TOTAL,
+        "maxConcurrentActivations": tp::CELL_MAX_CONCURRENT_ACTIVATIONS,
+        "maxConcurrentSeeds": tp::CELL_MAX_CONCURRENT_SEEDS,
     })
 }

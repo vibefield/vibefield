@@ -19,7 +19,7 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tp_mint::{hello, worker_capacities, TestMinter, TransportSpec};
+use tp_mint::{hello, small_capacities, worker_capacities, TestMinter, TransportSpec};
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -164,8 +164,10 @@ async fn both_channels_accept_with_one_grant_and_announce_the_contracts_numbers(
     // frames, with the SAME grant (one generation may establish both
     // channels): a credit epoch and the MIN of advertised and cell windows.
     let (mut frames, _) = dial(&door.frames_url(), Some(APP_ORIGIN)).await;
+    // N-H1 — `small_capacities()`, not the product's: this row is ABOUT the MIN
+    // being taken, so it needs an advertisement genuinely below the cell's cap.
     let accepted =
-        expect_accepted(say_hello(&mut frames, "frames", &grant, Some(worker_capacities())).await);
+        expect_accepted(say_hello(&mut frames, "frames", &grant, Some(small_capacities())).await);
     assert_eq!(accepted["channel"], "frames");
     assert_eq!(accepted["legGeneration"], 1);
     assert_eq!(
