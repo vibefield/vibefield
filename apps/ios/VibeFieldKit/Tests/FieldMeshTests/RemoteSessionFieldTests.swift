@@ -1,5 +1,4 @@
 import FieldAgents
-import GhostteaTruffle
 import Testing
 
 @testable import FieldMesh
@@ -22,29 +21,6 @@ private func row(device: String, session: String) -> RemoteSessionRow {
       attachable: true,
       readWrite: false,
       createdAtMs: 1_700_000_000_000))
-}
-
-private func summary(
-  id: String,
-  running: Bool = true,
-  attachable: Bool = true,
-  activity: GhostteaSessionActivityKind = .shellIdle
-) -> GhostteaSharedSessionSummary {
-  GhostteaSharedSessionSummary(
-    sessionID: id,
-    title: "session \(id)",
-    cwdLabel: "/srv/\(id)",
-    running: running,
-    attachable: attachable,
-    readWrite: true,
-    createdAtMs: 42,
-    activity: GhostteaSessionActivity(
-      kind: activity,
-      source: .processGroup,
-      confidence: .heuristic,
-      rootProcessGroupID: nil,
-      foregroundProcessGroupID: nil,
-      observedAtMs: 0))
 }
 
 // MARK: - The fold (no clock, no mesh)
@@ -139,59 +115,16 @@ private func summary(
   }
 }
 
-// MARK: - The mapping (pure, no mesh)
-
-@Suite struct RemoteSessionMappingTests {
-  private let host = RemoteHost(deviceID: "dev-1", deviceName: "studio")
-
-  @Test func stoppedSessionsAreDropped() {
-    let rows = remoteSessionRows(
-      host: host,
-      summaries: [summary(id: "a"), summary(id: "b", running: false), summary(id: "c")])
-
-    #expect(rows.map(\.session.sessionID) == ["a", "c"])
-  }
-
-  /// A live session the peer is deliberately not sharing is a fact: the row
-  /// stays and the card refuses honestly, rather than the bubble vanishing.
-  @Test func unattachableSessionsAreKept() {
-    let rows = remoteSessionRows(host: host, summaries: [summary(id: "a", attachable: false)])
-
-    #expect(rows.count == 1)
-    #expect(rows[0].session.attachable == false)
-  }
-
-  @Test func rowsCarryTheHostAndTheQualifiedID() {
-    let rows = remoteSessionRows(host: host, summaries: [summary(id: "7")])
-
-    #expect(rows[0].host == host)
-    #expect(rows[0].id == "remote:dev-1:7")
-  }
-
-  /// THE SEAM: upstream's activity enum and `classifyTerminalStatus`'s string
-  /// literal never see each other, and this mapping is the only place they
-  /// meet. Pinned end to end so a rename upstream fails here, loudly.
-  @Test func theActivityKindSurvivesIntoTheStatusClassifier() {
-    let busy = remoteSessionRows(
-      host: host, summaries: [summary(id: "a", activity: .foregroundJob)])
-    let calm = remoteSessionRows(host: host, summaries: [summary(id: "b", activity: .shellIdle)])
-
-    #expect(busy[0].session.activityKind == "foreground-job")
-    #expect(classifyTerminalStatus(busy[0].session.activityKind) == .working)
-    #expect(classifyTerminalStatus(calm[0].session.activityKind) == .idle)
-  }
-
-  /// The durable id or nothing: an unconfirmed peer is skipped rather than
-  /// given an invented identity the reconnect engine could never re-resolve.
-  @Test func anUnconfirmedHostIsSkippedRatherThanInvented() throws {
-    #expect(remoteHost(displayName: "studio", reference: nil) == nil)
-
-    let confirmed = try GhostteaTruffleHostReference(deviceID: "dev-1")
-    #expect(
-      remoteHost(displayName: "studio", reference: confirmed)
-        == RemoteHost(deviceID: "dev-1", deviceName: "studio"))
-  }
-}
+// TM-5 — the mapping suite that lived here is GONE with what it mapped.
+//
+// It pinned `remoteSessionRows` (ghosttea's `SharedSessionSummary` → the
+// field's own row) and `remoteHost` (a peer's durable reference → a host),
+// including the activity-kind seam between upstream's enum and
+// `classifyTerminalStatus`. Both functions took Ghosttea types that no longer
+// reach this target: the per-host `list-sessions` that produced those summaries
+// retired at TM-1, and the phone's discovery is the fold now. What survives
+// below is the part that was never about Ghosttea — the tolerance rule, and the
+// field's own honesty about what it has and has not been told.
 
 // MARK: - The field, driven through a fake source
 

@@ -1,6 +1,5 @@
 import FieldProduct
 import Foundation
-import GhostteaTruffle
 import Truffle
 
 /// The product transport bound to the MESH's own network.
@@ -48,7 +47,7 @@ extension FieldStoreDoors {
   ///   `MeshEvent.peerUpsert` / `.peerLeft` carry the whole `Peer`. Ghosttea's
   ///   own wrapper flattens both into one `peersChanged` with no payload —
   ///   which is why this reads `node.events` directly instead of the runtime's,
-  ///   and why it needs no 2 s poll the way `RemoteSessionField` does.
+  ///   and why it needs no poll at all.
   public static func live(node: MeshNode) -> FieldStoreDoors {
     FieldStoreDoors(
       onlinePeers: {

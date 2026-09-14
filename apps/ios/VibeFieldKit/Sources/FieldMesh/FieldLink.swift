@@ -682,8 +682,14 @@ public final class FieldLink {
 
 /// The store ids the phone reads, from the contracts' `STORES` registry — never
 /// spelled at a call site.
+///
+/// `terminal.v1.hosts` was listed here and NEVER SUBSCRIBED — the rows the
+/// phone showed came from a live per-host `list-sessions`, not from the store,
+/// which is a divergence the design doc recorded against this file and TM-5
+/// closes by deletion. The store itself retired with the TSP1 adapter at TM-1
+/// (TM-D5), and the join is discovery now: a fold row names the session, the
+/// product door mints the ticket.
 public enum FieldStoreID {
   public static let devices = "field.devices.v1"
   public static let agents = "field.agents.v1"
-  public static let terminalHosts = "terminal.v1.hosts"
 }

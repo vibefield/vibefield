@@ -726,16 +726,14 @@ public struct HomeScreen: View {
       remoteField.start()
       discoveryPolling = true
     case .open:
+      // TM-5 — there is no live REMOTE-SESSION source any more. The per-host
+      // `list-sessions` poll dialed a TSP1 port no floor has served since TM-1,
+      // and under T the phone's discovery is the fold: a row names its session,
+      // the door mints a ticket for it. So the field keeps its door-less state
+      // (`.noDoor` — nobody has been asked, which is true) and the LINK is what
+      // opens here.
       discoveryPolling = true
-      Task {
-        guard let directory = await mesh.directory else {
-          discoveryPolling = false
-          return
-        }
-        remoteField = RemoteSessionField(source: TruffleSessionSource(directory: directory))
-        remoteField.start()
-        openLink()
-      }
+      openLink()
     }
   }
 

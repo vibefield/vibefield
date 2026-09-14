@@ -1,5 +1,4 @@
 import Foundation
-import GhostteaTruffle
 import Testing
 import Truffle
 
@@ -21,7 +20,7 @@ import Truffle
     // `scripts/check-ios-fixtures.mjs` holds this same string against
     // `packages/contracts/src/registries.ts`.
     #expect(configuration.appId == "vibefield")
-    #expect(configuration.appId != GhostteaTruffleContract.appID)
+    #expect(configuration.appId != FieldTruffleRuntime.legacyGhostteaAppID)
   }
 
   @Test func theAppIDIsAValidTruffleNamespace() throws {
@@ -31,7 +30,7 @@ import Truffle
     #expect(appID.value == FieldMeshContract.appID)
   }
 
-  @Test func theNodeKeepsTheRestOfGhostteasStartContract() {
+  @Test func theNodeKeepsTheRestOfItsStartContract() {
     let configuration = FieldTruffleRuntime.configuration(deviceName: "James's iPhone")
     #expect(configuration.deviceName == "James's iPhone")
     // Never ephemeral: the device ULID and the Tailscale node both outlive a
@@ -62,17 +61,21 @@ import Truffle
   @Test func aDesktopIsAdmittedHereAndWasRefusedUnderGhostteas() {
     let desktop = "truffle-vibefield-studio"
     #expect(Hostname.isAppPeer(hostname: desktop, appId: FieldMeshContract.appID))
-    #expect(!Hostname.isAppPeer(hostname: desktop, appId: GhostteaTruffleContract.appID))
+    #expect(!Hostname.isAppPeer(hostname: desktop, appId: FieldTruffleRuntime.legacyGhostteaAppID))
   }
 
+  /// TM-5 moved this mapping to `MeshModel` and took truffle's `MeshPhase`
+  /// straight: the runtime's own copy existed only to translate ghosttea's
+  /// re-publication of the same seven cases, and there is no ghosttea runtime
+  /// here any more. The face is still exhaustive, and still pinned.
   @Test func everyTrufflePhaseKeepsAnHonestFace() {
-    #expect(FieldTruffleRuntime.phase(for: .starting) == .starting)
-    #expect(FieldTruffleRuntime.phase(for: .needsLogin) == .needsLogin)
-    #expect(FieldTruffleRuntime.phase(for: .needsMachineAuth) == .needsMachineAuth)
-    #expect(FieldTruffleRuntime.phase(for: .running) == .running)
-    #expect(FieldTruffleRuntime.phase(for: .stopping) == .stopping)
-    #expect(FieldTruffleRuntime.phase(for: .stopped) == .stopped)
-    #expect(FieldTruffleRuntime.phase(for: .failed) == .failed)
+    #expect(MeshModel.state(for: .starting) == .starting)
+    #expect(MeshModel.state(for: .needsLogin) == .needsLogin)
+    #expect(MeshModel.state(for: .needsMachineAuth) == .needsMachineAuth)
+    #expect(MeshModel.state(for: .running) == .up)
+    #expect(MeshModel.state(for: .stopping) == .stopping)
+    #expect(MeshModel.state(for: .stopped) == .off)
+    #expect(MeshModel.state(for: .failed) == .failed("mesh runtime failed"))
   }
 }
 

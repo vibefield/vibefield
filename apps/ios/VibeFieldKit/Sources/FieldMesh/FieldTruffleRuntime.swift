@@ -1,46 +1,33 @@
 import Foundation
-import GhostteaTruffle
 import Truffle
 import TruffleTailscale
 
-/// The phone's Truffle node, composed by VibeField instead of by Ghosttea.
+/// This phone's node on the tailnet.
 ///
-/// One reason, and it is the whole of it: a node sees only peers in its OWN
-/// application namespace. `MeshNode.upsertFromLayer3` admits a peer into the
-/// registry only when its Tailscale hostname starts with `truffle-{appId}-`
-/// (RFC 017 §4). Ghosttea's `GhostteaTruffleRuntime.start` hardcodes
-/// `GhostteaTruffleContract.appID` — "ghosttea-terminal" — and its
-/// `init(node:)` is private, so there is no way to ask that runtime for a
-/// different namespace. The phone therefore joined `ghosttea-terminal` while
-/// every desktop floor joins `vibefield`, and a signed-in phone beside a
-/// serving desktop read `online · 0 peers in reach`: James's QA of
-/// 2026-09-13, finding 1, blocking W2 and W3.
+/// It exists because a node sees only peers in its OWN application namespace:
+/// `MeshNode.upsertFromLayer3` admits a peer into the registry only when its
+/// Tailscale hostname starts with `truffle-{appId}-` (RFC 017 §4). Ghosttea's
+/// Swift runtime hardcoded its own app id and kept its `init(node:)` private,
+/// so the phone joined `ghosttea-terminal` while every desktop floor joins
+/// `vibefield`, and a signed-in phone beside a serving desktop read
+/// `online · 0 peers in reach` — James's QA of 2026-09-13, finding 1.
 ///
-/// This is a COMPOSITION and not a fork. Every piece it assembles is
-/// upstream's own public surface — `MeshNode.startTailscale`,
-/// `MeshConfiguration`, and `GhostteaTrufflePeerDirectory(node:)`, whose init
-/// is public precisely so a node the app started can be handed to it. Nothing
-/// downstream changes: the attach path (IOS-3) takes the same directory type,
-/// dials the same `compactTerminalPort`, and speaks the same TSP1 hello to the
-/// same Ghosttea host. Only the tailnet this node joins is ours.
-///
-/// It retires the day ghosttea's runtime takes an app id of its own — the
-/// roadmap's unfiled "G14 injectable mesh runtime" petition, whose concrete
-/// ask is `GhostteaTruffleRuntime.start(appId:…)` or a public `init(node:)`.
-/// On that day this file becomes one call and deletes itself.
+/// **TM-5 emptied the rest of it.** This was a COMPOSITION of upstream's
+/// pieces around a ghosttea peer directory, because the phone's attach path
+/// dialed TSP1 through that directory. The attach is a routed T1 client now, so
+/// the directory, the host candidates, the phase and event mappings and the
+/// `GhostteaTruffle` product itself are gone from this target: what is left is
+/// truffle's own node, which is all the phone ever needed. **Petition G14 —
+/// "an injectable mesh runtime", asking ghosttea for `start(appId:)` or a
+/// public `init(node:)` — is MOOT and withdrawn**: there is no ghosttea runtime
+/// here to inject a namespace into.
 public actor FieldTruffleRuntime {
   /// The running node itself, for the surfaces that speak the mesh's own
-  /// protocols rather than Ghosttea's (`FieldStore`, `FieldLink`).
+  /// protocols (`FieldStore`, `FieldLink`, the terminal legs' `URLSession`).
   public let node: MeshNode
-
-  /// Ghosttea's own peer directory, over our node. The whole attach path
-  /// takes this and nothing else, which is why the composition is possible at
-  /// all: `GhostteaTrufflePeerDirectory(node:)` is public.
-  public let directory: GhostteaTrufflePeerDirectory
 
   private init(node: MeshNode) {
     self.node = node
-    directory = GhostteaTrufflePeerDirectory(node: node)
   }
 
   /// Join the tailnet in VibeField's namespace. Mirrors ghosttea's `start`
@@ -85,16 +72,23 @@ public actor FieldTruffleRuntime {
 
   // MARK: - Lifecycle, as the app already asks for it
 
-  public var phase: GhostteaTruffleRuntimePhase {
-    get async { Self.phase(for: await node.phase) }
+  public var phase: MeshPhase {
+    get async { await node.phase }
   }
 
   public func refresh() async throws {
     try await node.refresh()
   }
 
-  public func candidates() async -> [GhostteaTruffleHostCandidate] {
-    await directory.candidates()
+  /// The peers this node can currently see, online only.
+  ///
+  /// It was ghosttea's `candidates()` — online peers with their durable
+  /// identity confirmed, because the attachment DIALED one and needed a
+  /// reference that survives a re-dial. Nothing dials a peer any more (the
+  /// terminal legs dial a URL the ticket names), so the roster is the plain
+  /// question the chip asks: who is in reach.
+  public func peers() async -> [Peer] {
+    await node.peers().filter(\.online)
   }
 
   public func stop() async {
@@ -102,18 +96,19 @@ public actor FieldTruffleRuntime {
   }
 
   /// The node's events in the app's vocabulary — peer arrivals and departures
-  /// flattened to one `peersChanged`, node-to-node messages dropped. Identical
-  /// to ghosttea's mapping on purpose: `FieldStoreDoors` already reads
-  /// `node.events` directly when it needs the whole `Peer`, and two different
-  /// flattenings of one stream would be two different truths.
-  public func events() async -> AsyncStream<GhostteaTruffleRuntimeEvent> {
+  /// flattened to one `peersChanged`, node-to-node messages dropped.
+  ///
+  /// `FieldStoreDoors` reads `node.events` directly when it needs the whole
+  /// `Peer`; this one is for the surfaces that only need to know SOMETHING
+  /// changed, and the two must stay one flattening of one stream.
+  public func events() async -> AsyncStream<FieldMeshRuntimeEvent> {
     let upstream = await node.events
     return AsyncStream(bufferingPolicy: .bufferingNewest(128)) { continuation in
       let task = Task {
         for await event in upstream {
           switch event {
           case .phase(let phase):
-            continuation.yield(.phase(Self.phase(for: phase)))
+            continuation.yield(.phase(phase))
           case .authRequired(let url):
             continuation.yield(.authRequired(url))
           case .peerUpsert, .peerLeft:
@@ -127,23 +122,6 @@ public actor FieldTruffleRuntime {
         continuation.finish()
       }
       continuation.onTermination = { _ in task.cancel() }
-    }
-  }
-
-  /// `MeshPhase` → the phase the app renders, as an EXHAUSTIVE switch.
-  ///
-  /// Upstream maps these by raw value with a `?? .failed` fallback. This maps
-  /// them case by case, so a phase truffle adds is a compile error here rather
-  /// than a screen that quietly claims the mesh failed.
-  static func phase(for phase: MeshPhase) -> GhostteaTruffleRuntimePhase {
-    switch phase {
-    case .starting: .starting
-    case .needsLogin: .needsLogin
-    case .needsMachineAuth: .needsMachineAuth
-    case .running: .running
-    case .stopping: .stopping
-    case .stopped: .stopped
-    case .failed: .failed
     }
   }
 
@@ -216,9 +194,30 @@ public actor FieldTruffleRuntime {
   /// truffle's own derivation is as good as ours and gets to answer.
   static func resolvedStateDirectory() -> URL? {
     guard let current = defaultStateDirectory(appID: FieldMeshContract.appID) else { return nil }
-    if let previous = defaultStateDirectory(appID: GhostteaTruffleContract.appID) {
+    if let previous = defaultStateDirectory(appID: legacyGhostteaAppID) {
       migrateStateDirectory(from: previous, to: current)
     }
     return current
   }
+
+  /// The app id this phone's node was started under before IOS-4i, spelled out
+  /// rather than read from `GhostteaTruffleContract` — which left with the
+  /// product at TM-5.
+  ///
+  /// It is a historical fact about a DIRECTORY ON DISK, not a live dependency:
+  /// a phone that signed in before 2026-09-13 has its Tailscale keys and its
+  /// durable ULID under this name, and the one-time rename above is what
+  /// carries them across. It never changes again, which is why a literal is the
+  /// honest way to hold it.
+  static let legacyGhostteaAppID = "ghosttea-terminal"
+}
+
+/// What the app asks the node about itself. Ghosttea's runtime published its
+/// own copy of this and the phone read it through that; with the product gone
+/// this is the same flattening, owned here.
+public enum FieldMeshRuntimeEvent: Sendable {
+  case phase(MeshPhase)
+  case authRequired(URL)
+  case peersChanged
+  case health(String)
 }

@@ -1,5 +1,4 @@
 import Foundation
-import GhostteaTruffle
 import Observation
 import Truffle
 import UIKit
@@ -58,25 +57,6 @@ public final class MeshModel {
   public init() {}
 
   public var isRunning: Bool { runtime != nil && state != .stopping }
-
-  /// The running node's peer directory, for the surfaces that ask the mesh
-  /// questions of their own (IOS-3's remote-session discovery).
-  ///
-  /// The runtime's own `directory` is non-optional, so the optionality here is
-  /// exactly "there is no runtime" — never "the node has no directory". It is
-  /// deliberately not observable: it is a door, not display state, and a view
-  /// that re-renders on `state` already learns when it opens.
-  ///
-  /// `async` where it no longer has to be, deliberately. It was: ghosttea's
-  /// `directory` is a `let` on an ACTOR, and a cross-module actor property is
-  /// isolated even when it is immutable. `FieldTruffleRuntime` lives in THIS
-  /// module, so the same `let` is now reachable synchronously and the inner
-  /// `await` is gone — but the getter stays `async` because every caller
-  /// awaits it inside a `.task` already, and narrowing a door in the same
-  /// breath as moving the namespace would put two changes in one diff.
-  public var directory: GhostteaTrufflePeerDirectory? {
-    get async { runtime?.directory }
-  }
 
   /// The running node itself, for the surfaces that speak the mesh's own
   /// protocols rather than Ghosttea's (IOS-4b's synced-store reader).
@@ -207,17 +187,26 @@ public final class MeshModel {
 
   private func refreshPeers() async {
     guard let runtime else { return }
-    let candidates = await runtime.candidates()
-    peers = candidates.map { candidate in
-      MeshPeerView(
-        id: String(describing: candidate.id),
-        name: candidate.displayName,
-        address: candidate.peer.tailnetIPs.first)
-    }
+    peers = await runtime.peers().map(Self.peerView)
+  }
+
+  /// One peer, as the roster renders it. `tailscaleId` is what ROUTES, so it is
+  /// the row's identity; the durable `deviceId` files a slice and is a
+  /// different keyspace (RFC 017 §8), which is why neither is derived from the
+  /// other.
+  nonisolated static func peerView(_ peer: Peer) -> MeshPeerView {
+    MeshPeerView(
+      id: peer.tailscaleId, name: peer.displayName, address: peer.tailnetIPs.first)
   }
 
   /// Phase → state, pure (pinned by tests).
-  public nonisolated static func state(for phase: GhostteaTruffleRuntimePhase) -> State {
+  ///
+  /// Truffle's own `MeshPhase` since TM-5 — it was ghosttea's re-publication of
+  /// the same seven cases, read through a mapping that existed only because the
+  /// phone held a ghosttea runtime. The switch stays EXHAUSTIVE (upstream's own
+  /// maps by raw value with a `?? .failed` fallback), so a phase truffle adds is
+  /// a compile error here rather than a screen quietly claiming the mesh failed.
+  public nonisolated static func state(for phase: MeshPhase) -> State {
     switch phase {
     case .starting: .starting
     case .needsLogin: .needsLogin

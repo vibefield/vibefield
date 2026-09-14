@@ -1,18 +1,24 @@
 import FieldAgents
 import Foundation
-import GhostteaTruffle
 import Observation
 
-/// THE REAL SOURCE (ported from the desktop's `remote-session-field.ts`),
-/// beside `MockAgentField` behind the same seam.
+/// The stage's remote rows, and the fold that keeps them honest.
 ///
-/// `MockAgentField` invents a field; this one asks the mesh for one. Both answer
-/// in records the projection turns into `FieldBubble`s, which is the whole shape
-/// of the honesty split: two sources, two claims, one stage.
+/// **TM-5 took its live source away, and that is a stated loss.** This used to
+/// ask every online peer for its sessions — `candidates()` → `connect(to:)` →
+/// `listSessions()` → `close()`, a fresh TCP connection per host per two-second
+/// poll to a compile-time port. Nothing has served that port since TM-1 retired
+/// the in-process TSP1 adapter, and under T the phone's discovery is the JOIN:
+/// a fold row names `terminal.runtimeSessionId`, the product door mints a
+/// ticket for it (TM-D5). So the field's bubbles are the fold's AGENT runs, and
+/// a plain shell on a desktop is no longer one of them — the honest shape of
+/// v1, recorded here rather than papered over.
 ///
-/// The transport is discovery's own — `candidates()` → `connect(to:)` →
-/// `listSessions()` → `close()`, the control path upstream already publishes.
-/// Nothing here opens a data plane and no terminal bytes come near it (EL2).
+/// What is left is the vocabulary and the fold: the state machine that decides
+/// what a field KNOWS (nobody asked · asked and empty · asked and refused), its
+/// tolerance rule, and the seam a source plugs into. The DEBUG fixtures still
+/// plug into it, which is what keeps the screenshot path honest about what it
+/// is drawing.
 
 /// Upstream's own remote-palette cadence (2 s), kept deliberately: this asks the
 /// same daemon the same question, and inventing a different number would only
@@ -96,130 +102,12 @@ public func remoteFieldFold(
 
 // MARK: - The source
 
-/// Where a field's answers come from. Injectable so tests need no mesh.
+/// Where a field's answers come from. Injectable so tests need no mesh — and
+/// since TM-5, nothing in the shipping app implements it. A live field is built
+/// with `source: nil` and reports `.noDoor`, which is the truthful state: nobody
+/// has been asked.
 public protocol RemoteSessionSource: Sendable {
   func listAll() async throws -> (rows: [RemoteSessionRow], hosts: Int)
-}
-
-/// The live source: the mesh's own peer directory, asked one host at a time.
-public struct TruffleSessionSource: RemoteSessionSource {
-  private let directory: GhostteaTrufflePeerDirectory
-
-  public init(directory: GhostteaTrufflePeerDirectory) {
-    self.directory = directory
-  }
-
-  public func listAll() async throws -> (rows: [RemoteSessionRow], hosts: Int) {
-    // ONLINE hosts only — and upstream already applied the rule for us:
-    // `candidates()` is `node.peers().filter(\.online)` with identity
-    // confirmed along the way. The desktop had to filter `host.online` itself
-    // because its floor handed it offline hosts too; here the rule is
-    // upstream's and we inherit it rather than re-state it.
-    var asked: [(candidate: GhostteaTruffleHostCandidate, host: RemoteHost)] = []
-    for candidate in await directory.candidates() {
-      guard
-        let host = remoteHost(
-          displayName: candidate.displayName, reference: candidate.persistentReference)
-      else { continue }
-      asked.append((candidate, host))
-    }
-
-    var rows: [RemoteSessionRow] = []
-    var refusals: [any Error] = []
-    for entry in asked {
-      do {
-        let summaries = try await Self.listSessions(of: entry.candidate, over: directory)
-        rows.append(contentsOf: remoteSessionRows(host: entry.host, summaries: summaries))
-      } catch {
-        refusals.append(error)
-      }
-    }
-
-    // The desktop's door "rejects when the floor cannot be asked AT ALL". Here
-    // the doors are the peers themselves: one that refuses its listing is a
-    // peer we cannot reach, which the online-only rule already treats as
-    // absent — so it costs its own rows, not everyone's. Only when EVERY door
-    // refused has the mesh failed to answer, and then the first refusal's words
-    // are the ones the field carries.
-    if !asked.isEmpty, refusals.count == asked.count, let first = refusals.first {
-      throw first
-    }
-    return (rows, asked.count)
-  }
-
-  /// One short-lived connection per host: connect → list → close, on EVERY path.
-  ///
-  /// A compact connection carries one conversation, so discovery cannot share
-  /// the attachment's. Upstream's own dialer
-  /// (`GhostteaTruffleAttachmentDialer.listSessions`) is the model for this
-  /// call and closes only on the success path — a listing that throws leaks its
-  /// connection there. The do/catch is why ours cannot.
-  private static func listSessions(
-    of candidate: GhostteaTruffleHostCandidate,
-    over directory: GhostteaTrufflePeerDirectory
-  ) async throws -> [GhostteaSharedSessionSummary] {
-    let client = try await directory.connect(to: candidate)
-    do {
-      let summaries = try await client.listSessions()
-      await client.close()
-      return summaries
-    } catch {
-      await client.close()
-      throw error
-    }
-  }
-}
-
-// MARK: - The mapping (pure, test-pinned)
-
-/// A candidate's identity, or nothing.
-///
-/// A nil `persistentReference` means Truffle's hello has not confirmed this
-/// peer's durable app identity, and only the durable id is worth keeping: the
-/// reconnect engine re-resolves the host on every dial, so a transient peer
-/// value would keep dialing an address nobody is listening on — which the
-/// engine reads as "still absent" forever. We skip the host rather than invent
-/// an id for it.
-public func remoteHost(
-  displayName: String,
-  reference: GhostteaTruffleHostReference?
-) -> RemoteHost? {
-  guard let reference else { return nil }
-  return RemoteHost(deviceID: reference.deviceID, deviceName: displayName)
-}
-
-/// One host's summaries, flattened into rows (desktop `remoteSessionRows`).
-///
-/// Sessions that have STOPPED running are dropped: a bubble the user cannot
-/// open is a control that does nothing. `attachable: false` is KEPT and shown,
-/// because that one IS a fact about a live session the peer is deliberately not
-/// sharing — the row says so and the card refuses honestly, rather than the
-/// bubble vanishing.
-public func remoteSessionRows(
-  host: RemoteHost,
-  summaries: [GhostteaSharedSessionSummary]
-) -> [RemoteSessionRow] {
-  summaries
-    .filter(\.running)
-    .map { summary in
-      RemoteSessionRow(
-        host: host,
-        session: RemoteSessionInfo(
-          sessionID: summary.sessionID,
-          title: summary.title,
-          cwdLabel: summary.cwdLabel,
-          running: summary.running,
-          attachable: summary.attachable,
-          readWrite: summary.readWrite,
-          createdAtMs: summary.createdAtMs,
-          // The RAW kind, always. `classifyTerminalStatus` compares it to
-          // upstream's own "foreground-job" string and this mapping is the only
-          // place the two vocabularies meet, so it is pinned by a test. nil
-          // would be inventing an absence: upstream's decoder already
-          // substitutes `.unknown` when the peer said nothing about activity,
-          // and that IS the peer's answer.
-          activityKind: summary.activity.kind.rawValue))
-    }
 }
 
 // MARK: - The field

@@ -47,7 +47,20 @@ let package = Package(
     // 0.10.1 (2026-08-18, revision ad97fdb): the G13 Windows env-strip
     // case-fold + process_tree hardening — no Apple-plane delta; the pin
     // moves for the one-version law, same as every row above.
-    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.10.1")
+    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.10.1"),
+    // Truffle, DIRECTLY since TM-5 — the same package at the same exact pin it
+    // has always resolved to, declared here instead of arriving transitively
+    // through `GhostteaTruffle`.
+    //
+    // The phone's node was always truffle's (`MeshNode.startTailscale`,
+    // `MeshConfiguration`, `Peer`, `MeshPhase`); what ghosttea's product added
+    // was the TSP1 attach path, which retired with the protocol. Dropping the
+    // product from `FieldMesh` therefore drops the only row that was carrying
+    // truffle into this graph, so the dependency has to be stated rather than
+    // inherited. EL8 unchanged: `0.7.12` is field-native's `truffle-core` pin
+    // and the revision `Package.resolved` already carries — the manifests are
+    // the authority for both.
+    .package(url: "https://github.com/vibecook-dev/truffle.git", exact: "0.7.12"),
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.
@@ -65,17 +78,21 @@ let package = Package(
     // the phone knows about fieldd, and the mesh leg below depends on IT for
     // the wire shapes rather than the other way round.
     .target(name: "FieldProduct"),
-    // The mesh leg: the in-process Truffle/Tailscale runtime, login flow,
-    // peer roster (IOS-2) — and since IOS-3, remote-session discovery, which
-    // maps upstream's session summaries into FieldAgents' own vocabulary so
-    // the projection that makes bubbles never learns a Ghosttea type.
+    // The mesh leg: the in-process Truffle/Tailscale runtime, login flow, peer
+    // roster (IOS-2), the synced stores and the product-door join (IOS-4b).
+    //
+    // NO Ghosttea product since TM-5. It held one for exactly one reason — the
+    // TSP1 peer directory and dialer the old attach path used — and the attach
+    // is a routed T1 client now. What the mesh leg needs is truffle's node, so
+    // truffle is what it names.
     .target(
       name: "FieldMesh",
       dependencies: [
         "FieldDesign",
         "FieldAgents",
         "FieldProduct",
-        .product(name: "GhostteaTruffle", package: "ghosttea"),
+        .product(name: "Truffle", package: "truffle"),
+        .product(name: "TruffleTailscale", package: "truffle"),
       ],
       // The contracts' golden board, byte for byte, so `-vf-demo-field-slice`
       // draws the swarm over REAL-shaped rows through the real reader and the
