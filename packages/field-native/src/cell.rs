@@ -208,10 +208,17 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
     .context("private env prefixes rejected")?
     .with_text_engine(engine);
 
-    // NO mesh arm, by design: a cell cannot borrow the floor's tailnet node
-    // across a process boundary, so FIELD_NATIVE_TERMINAL_MESH keeps the
-    // in-process path in the parent (the flagged fallback) and the extracted
-    // path is mesh-free until the G14-class seam exists.
+    // NO mesh arm, and no seam waiting for one (TM-1, 2026-09-14). A cell
+    // serves its T1 doors on loopback and knows nothing about a tailnet: that
+    // is the whole architecture, not a gap. When the floor's doors ARE
+    // published off-device, the crossing is the truffle sidecar's reverse proxy
+    // — tailnet → sidecar → this cell's loopback door — with fieldd registering
+    // one route per live cell and neither the floor's process nor this one in
+    // the byte path. A cell that verified a tailnet identity would be a cell
+    // that trusts the network; it verifies an HMAC grant instead, exactly as it
+    // does for a window (`tp/grant.rs`). The comment this replaces said the
+    // extracted path was "mesh-free until the G14-class seam exists"; there is
+    // no such seam to build, because the mesh never reaches in here.
 
     let (handle, serving) = service.serve_managed(TerminalServiceListeners::new(control, frames));
 

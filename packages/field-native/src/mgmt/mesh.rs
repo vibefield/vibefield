@@ -1188,11 +1188,14 @@ mod tests {
         // The table is a CAP LIST, not an allow-list, and this row says so out
         // loud because the difference matters: a store with no row is admitted
         // UNCAPPED — any size, and (`spawn_store_forwarder`, the
-        // `store_slice_limit(..).is_some()` guard) no owner bound either. Only
-        // stores fieldd actually opens reach that path, but `terminal.v1.hosts`
-        // is one of them and has no row today. Asserted rather than fixed: a
-        // cap is a NUMBER, and choosing one for the hosts store is a decision
-        // with a registry row behind it, not a line to slip into this test.
+        // `store_slice_limit(..).is_some()` guard) no owner bound either.
+        //
+        // The uncapped store this row used to name was `terminal.v1.hosts`, the
+        // TSP1 adapter's advertisement store. TM-1 (2026-09-14) retired the
+        // adapter and the registry constant with it, so that particular gap is
+        // closed by subtraction rather than by a number — but the PROPERTY is
+        // unchanged and is what this row exists to state: the next store added
+        // without a row inherits exactly the same uncapped admission.
         assert!(store_data_allowed(
             "some.other.store.v1",
             "peer-a",

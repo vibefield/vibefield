@@ -103,11 +103,17 @@ truffle-core = "=0.7.12"
 # inbound extension mirror); the cargo rows move in the SAME event to keep the
 # one-version law, as GT-4 did in the other direction.
 ghosttea = "=0.11.1"
-# GT-4 (native-floor §7 / GT-D7): the mesh half of the terminal floor, added at
-# the same version as `ghosttea` — it depends on that crate by path upstream, so
-# a split would be two ghosttea revisions in one graph. It brings truffle-core
-# with it at =0.7.12, which is why the two pins above must agree exactly; a
-# mismatch is a resolver refusal, never a silent second Arc<Node> type. Consumed
-# ONLY behind FIELD_NATIVE_TERMINAL_MESH — with the flag off the crate is linked
-# but never constructed, and the floor is bit-for-bit its pre-GT-4 self.
-ghosttea-truffle = "=0.11.1"
+# RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
+# the terminal floor. It served TSP1 against an IN-PROCESS session registry
+# (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is
+# why the flag that enabled it had to keep the pre-cell floor alive — and why
+# cell isolation and the phone were mutually exclusive. The terminal-mesh design
+# (`thinking-terminal-mesh-cells.md`, T, ruled 2026-09-14) cut the seam at the
+# transport instead: the phone becomes a routed T1 client of a CELL's own door,
+# reached through the truffle sidecar's reverse proxy, and no adapter is needed
+# on this side at all. `ghosttea-truffle` is imported from no source file now,
+# so the dependency goes rather than sitting linked-but-unbuilt.
+#
+# The truffle-core agreement the retired comment enforced still binds: `ghosttea`
+# brings truffle-core =0.7.12 of its own, and the exact pin above is what keeps
+# one `Arc<Node>` type in the graph.

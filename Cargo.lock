@@ -493,7 +493,6 @@ dependencies = [
  "data-encoding",
  "futures-util",
  "ghosttea",
- "ghosttea-truffle",
  "hex",
  "hmac",
  "http",
@@ -767,27 +766,6 @@ dependencies = [
  "swash",
  "unicode-segmentation",
  "unicode-width",
-]
-
-[[package]]
-name = "ghosttea-truffle"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "829824e5645468df747753e58ded55aa4ef509a2671c49184ec173747d36ebb4"
-dependencies = [
- "anyhow",
- "async-trait",
- "ghosttea",
- "ghosttea-text",
- "libc",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "subtle",
- "tokio",
- "truffle-core",
- "uuid",
 ]
 
 [[package]]

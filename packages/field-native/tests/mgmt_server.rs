@@ -39,15 +39,6 @@ impl TestClient {
             .expect("connection closed");
         serde_json::from_str(&line).expect("json line")
     }
-    /// MF-2i — "nothing was said" as an ANSWER rather than a timeout panic:
-    /// the rows below assert that a withheld snapshot is not simply re-sent a
-    /// beat later as a delta.
-    async fn recv_within(&mut self, budget: Duration) -> Option<Value> {
-        match timeout(budget, self.reader.next_line()).await {
-            Ok(Ok(Some(line))) => Some(serde_json::from_str(&line).expect("json line")),
-            _ => None,
-        }
-    }
     async fn recv_eof(&mut self) -> bool {
         matches!(
             timeout(Duration::from_secs(5), self.reader.next_line()).await,
@@ -396,75 +387,26 @@ async fn routes_subscribe(client: &mut TestClient, id: u64) -> Value {
     client.recv().await
 }
 
-/// THE regression fence. With `FIELD_NATIVE_TERMINAL_MESH` the floor keeps the
-/// legacy in-process serve (a cell cannot borrow the floor's tailnet node), so
-/// its route snapshot never leaves `{revision: 0, cells: []}` and the hello's
-/// LEGACY `terminal` mirror is the floor's only real reading. The hello has
-/// always withheld the unrevised snapshot; the subscription used to answer it
-/// unconditionally, and fieldd — resolving an empty cell list to "no endpoints"
-/// — threw the mirror away one message after the ack vouched for it.
-/// `device.list` then said `terminalHost: false` and `terminal.create` refused
-/// on a floor that was serving PTYs the whole time.
-///
-/// So: the ack carries the mirror and no snapshot, the subscription carries a
-/// subId and no snapshot, and nothing arrives afterwards to contradict either.
-#[tokio::test]
-async fn the_routes_subscription_withholds_an_unrevised_snapshot_like_the_hello() {
-    let dir = serving_tempdir();
-    let daemon = bootstrap(NativeConfig {
-        terminal_mesh_enabled: true,
-        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
-    })
-    .await
-    .expect("bootstrap");
-    // The in-process unit builds a text engine off the boot path; the legacy
-    // endpoints appear when it serves. Wait for the floor this test is about.
-    let deadline = std::time::Instant::now() + Duration::from_secs(20);
-    while daemon.state.terminal.get().is_none() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the in-process terminal floor never published its legacy endpoints"
-        );
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert_eq!(
-        daemon.state.terminal_routes.borrow().revision,
-        0,
-        "this row is about the floor whose snapshot never leaves the initial"
-    );
-
-    let mut c = TestClient::connect(&daemon).await;
-    let ack = c.hello(&daemon, 1).await;
-    let result = &ack["result"];
-    assert!(
-        result["terminal"]["authToken"].is_string(),
-        "the legacy mirror is this floor's real reading: {result}"
-    );
-    assert!(
-        result.get("terminalRoutes").is_none(),
-        "the hello withholds an unrevised snapshot: {result}"
-    );
-
-    let subscribed = routes_subscribe(&mut c, 2).await;
-    let sub = &subscribed["result"];
-    assert!(
-        sub["subId"].is_string(),
-        "the subscription is armed either way — only the snapshot is withheld: {sub}"
-    );
-    assert!(
-        sub.get("snapshot").is_none(),
-        "the subscription must apply the hello's rule, not contradict it: {sub}"
-    );
-
-    // And no delta re-says it a beat later: the withheld reading is withheld on
-    // the stream too (revision only moves forward, so the initial is never news).
-    assert!(
-        c.recv_within(Duration::from_millis(400)).await.is_none(),
-        "an unrevised snapshot must not arrive as a delta either"
-    );
-
-    daemon.shutdown().await;
-}
+// RETIRED 2026-09-14 (TM-1). This was THE regression fence for QA finding 2:
+// with `FIELD_NATIVE_TERMINAL_MESH` the floor kept the pre-cell in-process
+// serve, its route snapshot never left `{revision: 0, cells: []}`, and the
+// hello's LEGACY `terminal` mirror was its only real reading — so when the
+// routes subscription answered that unrevised snapshot unconditionally, fieldd
+// resolved the empty cell list to "no endpoints" and threw the mirror away one
+// message after the ack vouched for it.
+//
+// The FLOOR it fenced is gone (TM-D7), and with it the only shape that could
+// serve at revision 0: `supervise_cells` announces the routes capability at
+// revision 1 before the first cell exists, so a floor with a terminal unit is
+// never unrevised for longer than a task spawn. The RULE is unchanged and
+// still witnessed — `disclosed_routes`'s own rows in `mgmt/mod.rs` prove the
+// withholding for both surfaces from one function, and the row below proves
+// the ack and the subscription agree on a real floor, which is the
+// contradiction finding 2 was actually about.
+//
+// The MF-1l rows that replaced it are further down: the hello now says whether
+// the terminal doors are on the tailnet, which is the fact a reader wanted
+// when it was reduced to inferring one from an empty cell list.
 
 /// The other half of the same rule, so a regression cannot pass by muting the
 /// surface: a floor with a REAL revision discloses it, on the subscription and

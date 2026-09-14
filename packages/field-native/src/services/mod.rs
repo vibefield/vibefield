@@ -5,7 +5,6 @@ pub mod mesh_bridge;
 pub mod stubs;
 pub mod terminal;
 pub mod terminal_client;
-pub mod terminal_mesh;
 
 use crate::config::NativeConfig;
 use crate::manager::NativeService;
@@ -19,12 +18,13 @@ use tokio::sync::mpsc::UnboundedSender;
 /// (C6/D5), and the terminal floor (NF-D7/D8).
 ///
 /// The terminal unit keeps its REGISTRATION slot after mesh-gateway (start
-/// order is design-02 law) and still declares no dependency on it. Since GT-4a
-/// it BORROWS that unit's handle — the floor's one named mesh exception (spec
-/// §7 / GT-D7) — but borrowing is not depending: with
-/// `FIELD_NATIVE_TERMINAL_MESH` unset the unit drops the handle at construction
-/// and nothing from `ghosttea-truffle` is ever built, and with it set a gateway
-/// that cannot lend a node costs the mesh rather than the PTYs.
+/// order is design-02 law) and declares no dependency on it. TM-1 made that
+/// literal: it no longer takes the gateway's handle at all. GT-4a's exception —
+/// the floor borrowing the gateway's `Arc<Node>` to serve TSP1 in-process — is
+/// retired, so nothing in this unit set reaches from terminals to the tailnet.
+/// Whether the terminal doors are PUBLISHED is a fact the mgmt hello composes
+/// from the config's plan and the gateway's live node, and fieldd owns the
+/// routes that do the publishing (TM-2).
 pub fn build_units(
     config: &NativeConfig,
     secret: [u8; 32],
@@ -37,7 +37,7 @@ pub fn build_units(
 ) {
     let mesh_unit = mesh::MeshUnit::new(config, ping.clone());
     let handle = mesh_unit.handle();
-    let terminal_unit = terminal::TerminalUnit::new(config, ping.clone(), handle.clone());
+    let terminal_unit = terminal::TerminalUnit::new(config, ping.clone());
     let terminal_handle = terminal_unit.handle();
     let bridge = mesh_bridge::MeshBridge::new(config, secret, ping);
     let bridge_handle = bridge.handle();

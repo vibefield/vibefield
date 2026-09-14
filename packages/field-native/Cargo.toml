@@ -15,7 +15,6 @@ data-encoding = "2.11.0"
 futures-util = "0.3.33"
 http = "1.4.2"
 ghosttea.workspace = true
-ghosttea-truffle.workspace = true
 hex = "0.4.3"
 hmac = "0.13.0"
 rand = "0.10.2"

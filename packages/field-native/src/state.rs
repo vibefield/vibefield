@@ -1,3 +1,4 @@
+use crate::config::MeshPlan;
 use crate::contracts::{
     DesiredState, NativeHealth, ObservedState, TerminalEndpoints, TerminalRouteSnapshot,
 };
@@ -6,7 +7,7 @@ use crate::registries::mesh_control_limits;
 use crate::services::mesh::MeshHandle;
 use crate::services::mesh_bridge::BridgeHandle;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Mutex};
 
 pub const MGMT_MAX_FRAME_BYTES: usize = mesh_control_limits::MGMT_FRAME_BYTES;
@@ -127,20 +128,19 @@ pub struct DaemonState {
     /// the lane-control door to the MeshData bridge (C6/D5). Control lives here;
     /// the bytes those lanes carry never touch this channel.
     pub bridge: BridgeHandle,
-    /// NF-D8: the terminal floor's endpoints + per-boot bearer token, which the
-    /// pairing hello hands to fieldd. A `OnceLock` and not a constructor
-    /// argument because the units are built BEFORE this state exists and the
-    /// value never changes again once boot has wired it — its emptiness is
-    /// exactly the `HelloAck.terminal` absence the contract allows. Memory-only:
-    /// the token never reaches a log, a config file, or any environment (EL7).
-    pub terminal: OnceLock<TerminalEndpoints>,
     /// TC-D15 (TC-S2) — the revisioned terminal route snapshot, watched from
-    /// the terminal unit's supervisor. In CELL mode this is the only truth
-    /// (the OnceLock above stays empty); in the flagged in-process mode it
-    /// stays at its {revision: 0, cells: []} initial and the OnceLock is the
-    /// legacy reading. `terminal_endpoints_now` folds the two for callers that
-    /// only want dial coordinates.
+    /// the terminal unit's supervisor: the floor's ONLY truth about where
+    /// terminals live. It replaced a `OnceLock<TerminalEndpoints>` the boot
+    /// sequence filled from the in-process serve's fixed pair; TM-1 retired
+    /// that serve, and with it the second reading (NF-D8's custody is
+    /// unchanged — the row carries the same per-boot bearer token on the same
+    /// paired channel, memory-only, never a log or an environment).
     pub terminal_routes: watch::Receiver<TerminalRouteSnapshot>,
+    /// TM-1 — whether this floor was ASKED to publish its terminal doors on the
+    /// tailnet. Config, resolved once at boot; the live half (is the gateway's
+    /// node actually up?) is read from `mesh` as each hello is written, because
+    /// a node can come and go while a floor keeps serving PTYs.
+    pub terminal_mesh: MeshPlan,
     /// MF-2a (GM-D5) — the floor's mirror-write capability, resolved at boot
     /// (the env's, or the one this floor minted). Held so the single paired
     /// management client can be ANSWERED for it
@@ -171,6 +171,7 @@ impl DaemonState {
         mesh: MeshHandle,
         bridge: BridgeHandle,
         terminal_routes: watch::Receiver<TerminalRouteSnapshot>,
+        terminal_mesh: MeshPlan,
         terminal_mirror_write: Option<String>,
         logging: Option<NativeLogging>,
     ) -> Arc<Self> {
@@ -185,8 +186,8 @@ impl DaemonState {
             current_client: Mutex::new(None),
             mesh,
             bridge,
-            terminal: OnceLock::new(),
             terminal_routes,
+            terminal_mesh,
             terminal_mirror_write,
             logging,
             next_conn_id: AtomicU64::new(1),
@@ -194,17 +195,35 @@ impl DaemonState {
         })
     }
 
-    /// The CURRENT terminal dial coordinates, whichever mode is serving them:
-    /// the route snapshot's single cell (cell mode) or the legacy OnceLock
-    /// (in-process mode). `None` is the honest not-up-yet on both paths.
+    /// The CURRENT terminal dial coordinates: the route snapshot's FIRST cell,
+    /// which `compose_route_rows` keeps as the interactive class host whenever
+    /// one serves. `None` is the honest not-up-yet. (Until TM-1 this folded a
+    /// second reading in — the in-process serve's fixed pair, held in a
+    /// `OnceLock`; that serve is gone, so there is one reading again.)
     pub fn terminal_endpoints_now(&self) -> Option<TerminalEndpoints> {
-        let routed = self
-            .terminal_routes
+        self.terminal_routes
             .borrow()
             .cells
             .first()
-            .map(|cell| cell.endpoints.clone());
-        routed.or_else(|| self.terminal.get().cloned())
+            .map(|cell| cell.endpoints.clone())
+    }
+
+    /// TM-1 (MF-1l) — `HelloAck.terminalMesh`: are this floor's terminal doors
+    /// published on the tailnet?
+    ///
+    /// BOTH halves, or it is false. The flag is a request; publishing needs the
+    /// gateway's node, and reading it here — per hello, not once at boot — is
+    /// what keeps the answer honest as the node comes and goes. `MeshHandle::node`
+    /// is a watch read, so this costs no wait: the 20 s attach budget the old
+    /// TSP1 adapter spent at boot has no successor, because nothing is being
+    /// CONSTRUCTED from the node any more.
+    ///
+    /// What it does NOT claim: that any particular door is reachable. The floor
+    /// publishes nothing itself — fieldd registers one serve route per live cell
+    /// (TM-2) — so this is the floor's half of the fact and fieldd's routes are
+    /// the other.
+    pub fn terminal_mesh_published(&self) -> bool {
+        !self.terminal_mesh.is_off() && self.mesh.node().is_some()
     }
 
     pub fn conn_id(&self) -> u64 {

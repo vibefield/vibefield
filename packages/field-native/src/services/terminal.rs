@@ -1,33 +1,41 @@
-//! TerminalUnit (NF-2) — ghosttea's `TerminalService` embedded as this device's
-//! single PTY authority (native-floor spec §4; NF-L1: every PTY the product
-//! creates lives here). The unit owns the run directory's endpoints, the
-//! per-boot bearer token, the inventory it publishes to fieldd, and — since
-//! NF-7 — the G7 drain handle: shutdown is upstream's `ServiceHandle::shutdown`
-//! (admission stop + full-ladder drain + honest `DrainReport`), not a
-//! self-client sweep.
+//! TerminalUnit (NF-2) — this device's single PTY authority (native-floor spec
+//! §4; NF-L1: every PTY the product creates lives here). ghosttea's
+//! `TerminalService` is no longer embedded HERE: since TC-S2 it runs in
+//! `field-terminal-host` cells, one per workload class plus solos, and this
+//! unit supervises them, mints their tokens and grant keys, publishes the
+//! revisioned route snapshot, and pumps the inventory it publishes to fieldd.
 //!
 //! Health honesty, in the M2 shape:
-//!   starting  — endpoints bound, service under construction (font discovery)
-//!   up        — serving control + frame traffic; detail names the text engine
-//!   crashed   — the serve task ended on its own; global health goes degraded
-//!               with this unit named. NO in-process restart (manager law:
-//!               fieldd decides whether to surface or bounce the pair).
-//!   degraded  — the unit could not even be configured (see `endpoints`)
+//!   starting  — cells spawning
+//!   up        — at least one cell serving control + frame traffic
+//!   crashed   — a class plane hit the restart-intensity dead end; global
+//!               health goes degraded with this unit named. NO in-process
+//!               restart of the unit (manager law: fieldd decides whether to
+//!               surface or bounce the pair).
+//!   degraded  — a class plane reached a dead end (no cell binary, an
+//!               unspellable run dir, or the restart intensity), or the
+//!               inventory pump stopped being able to see
 //!
-//! **`with_terminal_mesh` — the one named exception (GT-4a).** Until GT-4 the
-//! floor had no mesh coupling at all: remote ops `bail!` honestly without an
-//! adapter, and TSP1 mirroring was NF-remote (spec §7). That is still what the
-//! unit does by DEFAULT, and default here means absent — with
-//! `FIELD_NATIVE_TERMINAL_MESH` unset, nothing from `ghosttea-truffle` is
-//! constructed, no advertisement store is opened, and no listener exists. The
-//! exception is exactly one call, made from `serve` and gated by
-//! `terminal_mesh::MeshPlan`; the mechanism, the borrowed node, and the two
-//! flags' relationship live in `terminal_mesh.rs`.
+//! **No mesh coupling at all (TM-1, 2026-09-14).** GT-4a made this unit the
+//! floor's one named mesh exception: with `FIELD_NATIVE_TERMINAL_MESH` set it
+//! kept the PRE-CELL in-process serve — one embedded ghosttea service hosting
+//! every class, with `ghosttea-truffle`'s TSP1 adapter attached at construction
+//! and borrowing the gateway's `Arc<Node>` — because a cell cannot borrow that
+//! node across a process boundary. The price was cell isolation XOR the phone,
+//! and with the flag on the desktop deck could not open a pane at all: no route
+//! rows, no T1 doors, no grant keys, so fieldd could mint no routed ticket. The
+//! terminal-mesh design (`thinking-terminal-mesh-cells.md`, T, ruled
+//! 2026-09-14) cut the seam the other way, and TM-D7 deleted that path rather
+//! than fencing it: it was the pre-TP-S3e product, not the product minus
+//! isolation.
 //!
-//! The unit STILL declares no dependency on `mesh-gateway`. It is registered
-//! after it to keep design-02's start order, and it now also borrows that
-//! unit's node when the flag asks — but it cannot require it: a gateway that is
-//! off or degraded costs the mesh, never the PTYs.
+//! So this unit supervises cells, unconditionally, and knows nothing about a
+//! tailnet. The flag survives as `config::MeshPlan`, answering only whether the
+//! cells' doors are PUBLISHED off-device; the mgmt hello composes that with the
+//! gateway's live node into `HelloAck.terminalMesh`, and fieldd registers the
+//! per-cell serve routes that do the publishing (TM-2). The unit is still
+//! registered after `mesh-gateway` to keep design-02's start order, and now
+//! genuinely depends on nothing it holds.
 //!
 //! ## The NF-2 upstream absences, retired at NF-7 (ghosttea 0.6.0 → 0.7.0)
 //!
@@ -43,8 +51,10 @@
 //!    sessions, absent for remote replicas) — `ObservedTerminal.persistence` is
 //!    filled as opaque passthrough, and mgmt re-policy is real (`set-persistence`).
 //! 3. **The graceful drain is upstream** (spec §2.2/NF-D10 held: mechanism
-//!    moved, policy stayed). `serve_managed` hands this unit a `ServiceHandle`;
-//!    stop calls `shutdown(SWEEP_BUDGET)` and logs the `DrainReport` honestly.
+//!    moved, policy stayed). `serve_managed` hands the DRAIN HANDLE to whoever
+//!    calls it — which since TC-S2 is each cell, in its own process: this unit
+//!    drains by dropping a cell's leash and waiting out the budget, and the
+//!    cell runs upstream's ladder and reports what it drained.
 //!
 //! ## The persistence law (GT-D11)
 //!
@@ -66,17 +76,24 @@
 //! gap reconcile found that this floor had never published — and nothing wider,
 //! for the reason written there.
 //!
-//! ## What the inventory MEANS (GT-5d)
+//! ## What the inventory MEANS (GT-5d; the hazard closed at TM-1)
 //!
 //! Upstream's `list-sessions` answers the local registry PLUS
-//! `mesh_runtime.summaries()` — the replicas this floor opened as a VIEWER of
-//! another device (`Command::ListSessions`, ghosttea 0.9.2 service.rs:2168-2178).
+//! `mesh_runtime.summaries()` — the replicas a floor opened as a VIEWER of
+//! another device (`Command::ListSessions`, ghosttea service.rs).
 //! `ObservedTerminal` carries no device, so a replica published there would read
 //! as a session on THIS machine: an agent bound to its id, a kill affordance
 //! reasoning about it, or a restore gate counting it alive would each be acting
-//! on the wrong device. Before GT-4 `summaries()` was always empty, so turning
-//! the mesh flag on silently changed what the inventory MEANT, with no contract
-//! change to notice.
+//! on the wrong device. Before GT-4 `summaries()` was always empty; GT-4's mesh
+//! flag silently changed what the inventory MEANT with no contract change to
+//! notice, and the filter below was the answer.
+//!
+//! **Since TM-1 (2026-09-14) no session this floor lists can be a replica at
+//! all:** the pumps dial CELLS, and a cell has never had a mesh runtime
+//! (`cell.rs`), so `summaries()` is structurally empty on every connection this
+//! floor makes. The filter stays — it is the honest predicate either way, it
+//! costs one `Option` read, and it is what a future remote viewer would have to
+//! defeat deliberately rather than by accident.
 //!
 //! `reconcile` therefore publishes only what this floor GOVERNS, told apart by
 //! upstream's own marker: a replica reports NO persistence class, because
@@ -111,14 +128,8 @@ use crate::registries;
 use crate::resource_pressure::{
     self, CreateRefusal, FdPressureGauge, PressureClass, HIGH_WATER_PERCENT,
 };
-use crate::services::mesh::MeshHandle;
 use crate::services::terminal_client::{ControlClient, SessionSummary};
-use crate::services::terminal_mesh::{self, Attachment, MeshPlan};
 use crate::state::DaemonState;
-use ghosttea::{
-    ipc, ServiceHandle, TerminalService, TerminalServiceConfig, TerminalServiceListeners,
-    TextEngine,
-};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -128,19 +139,6 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
 
 pub const UNIT_ID: &str = "terminal";
-
-/// The whole drain, not one session's ladder — spec §4.4's "~6s". Upstream's
-/// ladder is interrupt → 2s → SIGTERM(pgrp) → 2s → SIGKILL(pgrp) → 1s, runs on
-/// its own thread per session, and G7's drain compresses it against this budget
-/// when it must — so this is one full ladder plus slack, not a per-session
-/// cost, and a sub-ladder budget degrades to earlier SIGKILLs rather than a
-/// false `unresponsive`.
-///
-/// The ceiling is not academic. A supervisor that SIGTERMs this daemon and then
-/// SIGKILLs it has its own patience (tests/native_logging.rs allows 5s for a
-/// session-less shutdown), and anything we spend past it is time the ladder does
-/// not get. Bounded is the law; small is the courtesy.
-const SWEEP_BUDGET: Duration = Duration::from_secs(6);
 
 /// Inventory publish floor — the `native.diagnostics` precedent (≤10Hz). Bursts
 /// of session events coalesce into at most one `list-sessions` per tick.
@@ -191,34 +189,6 @@ const APP_LIFETIME: &str = "terminate-with-app";
 /// What this product promises instead: sessions live as long as the floor does
 /// (NF-D3, the daemon-lifetime ceiling stated honestly).
 const FLOOR_LIFETIME: &str = "keep-until-exit";
-
-/// Socket paths and the per-boot token: everything a client needs, and the
-/// exact shape the NF-D8 hello carries.
-#[derive(Clone)]
-struct Endpoints {
-    control: String,
-    frame: String,
-    /// The app-owned config overlay (GT-3). A `PathBuf`, not a `String`: only
-    /// the SOCKET paths owe the contract UTF-8, and a config file on a path
-    /// this daemon cannot spell as UTF-8 is still a config file the service can
-    /// open — refusing the whole unit over it would be a contract requirement
-    /// leaking somewhere it was never made.
-    config: PathBuf,
-    /// 32 random bytes, hex, minted per field-native boot. Memory-only: never
-    /// logged, never written to disk, never placed in any environment (NF-D8,
-    /// EL7). Rotating it means restarting the pair.
-    token: String,
-}
-
-impl Endpoints {
-    fn contract(&self) -> TerminalEndpoints {
-        TerminalEndpoints {
-            control_socket: self.control.clone(),
-            frame_socket: self.frame.clone(),
-            auth_token: self.token.clone(),
-        }
-    }
-}
 
 /// TC-S3 — one class plane's state, as its supervisor reports it. `Failed` is
 /// the config-shaped dead end (no binary, unspellable run dir); `Crashed` is
@@ -272,25 +242,17 @@ struct Shared {
     served: Mutex<UnitHealth>,
     /// pokes the daemon's health-refresh task (lib.rs) after every transition
     ping: UnboundedSender<()>,
-    /// `None` only when the run directory cannot be expressed as the UTF-8
-    /// string the contract (and ghosttea's config) require — the one path on
-    /// which `HelloAck.terminal` is honestly absent.
-    endpoints: Option<Endpoints>,
-    /// TC-D3/TC-S2 — which serve shape this unit runs. Cell mode is the
-    /// DEFAULT (the extraction); a mesh-requested boot keeps the in-process
-    /// serve, because a cell cannot borrow the floor's tailnet node across a
-    /// process boundary (the flagged fallback until the G14-class seam).
-    cell_mode: bool,
     /// The supervisor's stop signal (cell mode): `stop()` flips it, the
     /// supervisor drops the cell's leash and waits out the drain budget.
     stopping: watch::Sender<bool>,
     /// TC-D15 (TC-S2) — the revisioned route snapshot the cell supervisor
     /// publishes: one row per live cell (K=2 class hosts + solos since
-    /// TC-S3), revision bumped on EVERY transition. The in-process
-    /// (mesh-flagged) mode never publishes past the {revision: 0, cells: []}
-    /// initial — its legacy OnceLock reading stays the truth there. Readers:
-    /// the mgmt hello and routes subscription (via DaemonState's receiver),
-    /// and the inventory pump manager, which runs one pump per row.
+    /// TC-S3), revision bumped on EVERY transition. Since TM-1 it is the
+    /// floor's ONLY reading of where terminals live — the supervisor announces
+    /// the capability at revision 1 before the first cell, so a floor with a
+    /// terminal unit never sits at the {revision: 0, cells: []} initial.
+    /// Readers: the mgmt hello and routes subscription (via DaemonState's
+    /// receiver), and the inventory pump manager, which runs one pump per row.
     routes: watch::Sender<TerminalRouteSnapshot>,
     /// TC-S3 — the row registry behind `routes`: each cell task upserts its
     /// row at hello and removes it at its end; every mutation recomposes the
@@ -298,11 +260,7 @@ struct Shared {
     /// assumes (interactive class, agent class, then solos by instance — so
     /// the legacy `cells[0]` mirror stays the interactive host).
     route_rows: Mutex<BTreeMap<u32, TerminalRouteCell>>,
-    /// TC-S3 — how many cells are serving right now; the count behind the
-    /// `serving` watch (any cell serving = the unit accepts work).
-    serving_cells: Mutex<u32>,
-    /// TC-S3 — per-class plane states, composed into the unit's health. Empty
-    /// in legacy mode (the serve task writes `served` directly there).
+    /// TC-S3 — per-class plane states, composed into the unit's health.
     class_states: Mutex<BTreeMap<&'static str, ClassPlaneState>>,
     /// TC-S3 — per-cell session counts, maintained by the inventory pumps.
     /// The class supervisors watch it for solo target rotation (a target that
@@ -322,18 +280,11 @@ struct Shared {
     /// `inventory_fault` health cell (one truth for readers, per-cell news
     /// for diagnosis).
     inventory_faults: Mutex<BTreeMap<u32, String>>,
-    /// A watch and not a flag: the inventory pump cannot start before the
-    /// service accepts connections, so it is woken rather than left to poll.
-    serving: watch::Sender<bool>,
-    /// G7's drain handle, deposited by the serve task once `serve_managed`
-    /// constructs the service. `stop` TAKES it — a taken handle is also how the
-    /// serve task's end path tells a requested shutdown from a crash.
-    drain: Mutex<Option<ServiceHandle>>,
-    /// What the inventory pump knows and the serve task cannot see: the reason
-    /// the observed inventory has stopped being maintained, or `None` while it
-    /// is. A SECOND cell rather than a write into `served` on purpose — the two
-    /// writers are independent, and either overwriting the other's state would
-    /// lose exactly the news the reader needs.
+    /// What the inventory pump knows and the cell supervisors cannot see: the
+    /// reason the observed inventory has stopped being maintained, or `None`
+    /// while it is. A SECOND cell rather than a write into `served` on purpose
+    /// — the two writers are independent, and either overwriting the other's
+    /// state would lose exactly the news the reader needs.
     inventory_fault: Mutex<Option<String>>,
     /// TC-D6(e) — resource pressure, ONE CELL PER CLASS, for the same reason
     /// there is a second health cell at all: these writers are independent of
@@ -403,14 +354,19 @@ impl Shared {
         });
     }
 
-    /// Returns whether a row was actually removed — a cell that never helloed
-    /// published nothing, and its ending must not decrement the serving count
-    /// it never incremented.
-    fn route_remove(&self, instance: u32) -> bool {
+    /// A cell's ending: drop its row and recompose. A cell that never helloed
+    /// published no row, so it publishes no REVISION either — a snapshot whose
+    /// revision moved with nothing in it is a reader's cue to re-read, and
+    /// spending one on a birth that never happened is a wake-up for nothing.
+    ///
+    /// It used to return whether a row went, so the caller could keep a count
+    /// of serving cells in step; that count fed a watch whose only subscriber
+    /// was the in-process floor's inventory pump, and TM-1 retired both.
+    fn route_remove(&self, instance: u32) {
         let cells = {
             let mut rows = self.route_rows.lock().unwrap();
             if rows.remove(&instance).is_none() {
-                return false;
+                return;
             }
             compose_route_rows(&rows)
         };
@@ -418,19 +374,6 @@ impl Shared {
             snapshot.revision += 1;
             snapshot.cells = cells;
         });
-        true
-    }
-
-    /// TC-S3 — the serving watch counts cells now: the unit accepts work while
-    /// ANY cell serves (per-class refusals are fieldd's routing business).
-    fn cell_serving(&self, up: bool) {
-        let mut count = self.serving_cells.lock().unwrap();
-        *count = if up {
-            *count + 1
-        } else {
-            count.saturating_sub(1)
-        };
-        self.serving.send_replace(*count > 0);
     }
 
     /// TC-S3 — one class's plane state moved; recompose the unit's health.
@@ -614,14 +557,6 @@ pub struct TerminalHandle {
 }
 
 impl TerminalHandle {
-    /// The NF-D8 endpoints, or `None` if the unit could not be configured.
-    /// Minted before any fallible step, so a registered unit answers this even
-    /// while it is still starting — readers learn whether the plane WORKS from
-    /// health, never from a missing field.
-    pub fn endpoints(&self) -> Option<TerminalEndpoints> {
-        self.shared.endpoints.as_ref().map(Endpoints::contract)
-    }
-
     /// TC-D15 — the route snapshot watch, wired into DaemonState by bootstrap
     /// so the mgmt plane can serve hello + the routes subscription without
     /// learning how cells are supervised.
@@ -658,34 +593,11 @@ impl TerminalHandle {
             PressureClass::PtyExhausted => {}
         }
     }
-
-    /// Park until the service is serving. Never resolves if it never serves,
-    /// which is the honest answer rather than a hang papering over one: there
-    /// is no inventory to pump, and the caller is aborted at shutdown (the
-    /// `MeshHandle::wait_for_node` precedent).
-    async fn wait_until_serving(&self) {
-        let mut rx = self.shared.serving.subscribe();
-        loop {
-            let serving = *rx.borrow_and_update();
-            if serving {
-                return;
-            }
-            if rx.changed().await.is_err() {
-                std::future::pending::<()>().await;
-            }
-        }
-    }
 }
 
 pub struct TerminalUnit {
     shared: Arc<Shared>,
     tasks: Mutex<Vec<TaskGuard>>,
-    /// GT-4a's named exception, resolved once at construction.
-    plan: MeshPlan,
-    /// The borrowed door to the gateway's node — `None` whenever the plan is
-    /// `Off`, which is the structural half of "off means absent": with the flag
-    /// unset this unit does not even hold a way to reach the mesh.
-    mesh: Option<MeshHandle>,
     /// TC-S2 — held for the cell supervisor: per-instance endpoint resolution
     /// and the cell binary's location both come from the ONE derivation
     /// authority rather than being re-spelled here.
@@ -693,54 +605,21 @@ pub struct TerminalUnit {
 }
 
 impl TerminalUnit {
-    pub fn new(config: &NativeConfig, ping: UnboundedSender<()>, mesh: MeshHandle) -> Self {
-        let plan = MeshPlan::resolve(config);
-        let mesh = (!plan.is_off()).then_some(mesh);
-        // TC-D3/TC-S2: the extraction owns the DEFAULT path; a mesh-requested
-        // boot keeps the in-process serve (the flagged fallback — a cell
-        // cannot borrow the floor's tailnet node across a process boundary).
-        let cell_mode = plan.is_off();
-        let run_dir = config.run_dir();
-        let config_file = config.terminal_config_file();
-        // WIN-D1: endpoints come from the one resolution law in NativeConfig —
-        // socket paths under the run dir on unix, scoped pipe names on win32.
-        // Minted ONLY for the in-process mode: a cell resolves per-instance
-        // names at each spawn, and leaving this `None` is what keeps the
-        // legacy OnceLock/hello mirror empty on the cell path.
-        let endpoints = (!cell_mode)
-            .then(|| {
-                config
-                    .terminal_control_endpoint()
-                    .zip(config.terminal_frame_endpoint())
-                    .map(|(control, frame)| Endpoints {
-                        control,
-                        frame,
-                        config: config_file.clone(),
-                        token: mint_token(),
-                    })
-            })
-            .flatten();
-        let detail = (!cell_mode && endpoints.is_none()).then(|| {
-            format!(
-                "run directory is not valid UTF-8, which the endpoint contract requires: {}",
-                run_dir.display()
-            )
-        });
+    /// TM-1 — no `MeshHandle` argument: the flag no longer selects a serve
+    /// shape, so this unit has nothing to ask the gateway for. Cells are the
+    /// only serve path (TC-D3/TC-S2's extraction, now unconditional), and a
+    /// cell resolves its per-instance endpoint names at each spawn — which is
+    /// why no endpoint is minted here at all.
+    pub fn new(config: &NativeConfig, ping: UnboundedSender<()>) -> Self {
         Self {
             shared: Arc::new(Shared {
                 served: Mutex::new(UnitHealth {
                     unit: UNIT_ID.to_string(),
-                    state: if cell_mode || endpoints.is_some() {
-                        UnitState::Starting
-                    } else {
-                        UnitState::Degraded
-                    },
-                    detail,
+                    state: UnitState::Starting,
+                    detail: None,
                     auth_url: None,
                 }),
                 ping,
-                endpoints,
-                cell_mode,
                 stopping: watch::channel(false).0,
                 routes: watch::channel(TerminalRouteSnapshot {
                     revision: 0,
@@ -748,38 +627,29 @@ impl TerminalUnit {
                 })
                 .0,
                 route_rows: Mutex::new(BTreeMap::new()),
-                serving: watch::channel(false).0,
-                serving_cells: Mutex::new(0),
                 // Seeded so the composition has both classes from the first
                 // health read — an absent class would compose as "all up" the
                 // moment the other served.
-                class_states: Mutex::new(if cell_mode {
-                    BTreeMap::from([
-                        (
-                            class_label(TerminalWorkloadClass::Agent),
-                            ClassPlaneState::Starting("spawning".into()),
-                        ),
-                        (
-                            class_label(TerminalWorkloadClass::Interactive),
-                            ClassPlaneState::Starting("spawning".into()),
-                        ),
-                    ])
-                } else {
-                    BTreeMap::new()
-                }),
+                class_states: Mutex::new(BTreeMap::from([
+                    (
+                        class_label(TerminalWorkloadClass::Agent),
+                        ClassPlaneState::Starting("spawning".into()),
+                    ),
+                    (
+                        class_label(TerminalWorkloadClass::Interactive),
+                        ClassPlaneState::Starting("spawning".into()),
+                    ),
+                ])),
                 occupancy: watch::channel(BTreeMap::new()).0,
                 strikes: Mutex::new(std::collections::HashMap::new()),
                 next_instance: std::sync::atomic::AtomicU32::new(0),
                 inventory_faults: Mutex::new(BTreeMap::new()),
-                drain: Mutex::new(None),
                 inventory_fault: Mutex::new(None),
                 fd_pressure: Mutex::new(None),
                 pty_pressure: Mutex::new(None),
                 fd_gauge: Mutex::new(FdPressureGauge::new()),
             }),
             tasks: Mutex::new(Vec::new()),
-            plan,
-            mesh,
             config: config.clone(),
         }
     }
@@ -797,57 +667,17 @@ impl NativeService for TerminalUnit {
         UNIT_ID
     }
 
-    /// Assembly per spec §4.1. The 0700 run directory is already created by
-    /// `bootstrap` before any unit starts, so this only owns the endpoints
-    /// inside it.
+    /// Assembly per spec §4.1 (TC-D3/TC-S2, unconditional since TM-1). The
+    /// 0700 run directory is already created by `bootstrap` before any unit
+    /// starts; this unit binds nothing itself — the cell supervisor owns spawn,
+    /// hello, route publication, restart intensity, and the drain-on-stop, and
+    /// this unit's health cells are its reporting surface.
     async fn start(&self) -> anyhow::Result<()> {
-        if self.shared.cell_mode {
-            // TC-D3: the extraction path. The supervisor owns spawn, hello,
-            // route publication, restart intensity, and the drain-on-stop;
-            // this unit's health cells are its reporting surface.
-            self.shared.set(
-                UnitState::Starting,
-                Some("spawning the terminal cell".into()),
-            );
-            let task = tokio::spawn(supervise_cells(self.shared.clone(), self.config.clone()));
-            self.tasks.lock().unwrap().push(TaskGuard(task));
-            let sampler = tokio::spawn(sample_fd_pressure(self.shared.clone()));
-            self.tasks.lock().unwrap().push(TaskGuard(sampler));
-            return Ok(());
-        }
-        let Some(endpoints) = self.shared.endpoints.clone() else {
-            return Ok(()); // already degraded with the reason; nothing to bind
-        };
-
-        // An endpoint outlives the process that bound it on unix, so a host
-        // that restarts replaces its own endpoints (ghosttea README, "Embedded
-        // service mode"). Binding is deliberately OURS, not `run()`'s: this
-        // daemon owns the endpoints and the start order — and ghosttea's
-        // ipc::Listener does the platform work either way (unix socket, or a
-        // windows pipe with the squat guard + CurrentUserOnly DACL), which is
-        // what lets ownership stay here without a windows fork (WIN-D3).
-        ipc::remove_stale_endpoint(&endpoints.control)?;
-        ipc::remove_stale_endpoint(&endpoints.frame)?;
-        let control = ipc::Listener::bind(&endpoints.control)?;
-        let frames = ipc::Listener::bind(&endpoints.frame)?;
-        #[cfg(unix)]
-        {
-            set_private_socket_permissions(&endpoints.control)?;
-            set_private_socket_permissions(&endpoints.frame)?;
-        }
-
-        self.shared
-            .set(UnitState::Starting, Some("binding terminal service".into()));
-
-        let shared = self.shared.clone();
-        let task = tokio::spawn(serve(
-            shared,
-            endpoints,
-            control,
-            frames,
-            self.plan.clone(),
-            self.mesh.clone(),
-        ));
+        self.shared.set(
+            UnitState::Starting,
+            Some("spawning the terminal cell".into()),
+        );
+        let task = tokio::spawn(supervise_cells(self.shared.clone(), self.config.clone()));
         self.tasks.lock().unwrap().push(TaskGuard(task));
         // TC-D6(e): started with the unit and torn down with it. It watches this
         // PROCESS's descriptors, which is what every PTY on this floor is spent
@@ -861,250 +691,32 @@ impl NativeService for TerminalUnit {
         self.shared.health()
     }
 
-    /// Stop = G7's drain, then teardown. No PTY survives field-native — the
-    /// honest ceiling the product promises and nothing more. Taking the handle
-    /// (not borrowing it) is deliberate: the serve task's end path reads
-    /// `drain.is_none()` as "this ending was requested".
+    /// Stop = the cells' drain, then teardown. No PTY survives field-native —
+    /// the honest ceiling the product promises and nothing more.
     async fn stop(&self) -> anyhow::Result<()> {
-        if self.shared.cell_mode {
-            // Ask, then wait bounded: the supervisor drops the cell's leash
-            // (stdin EOF — the portable drain trigger) and publishes the empty
-            // snapshot once the cell has exited; past DRAIN + EXIT_GRACE the
-            // supervisor kills. The empty snapshot doubles as the completion
-            // signal here, and the TaskGuard clear beneath reaps whatever a
-            // pathological hang leaves.
-            let _ = self.shared.stopping.send(true);
-            let budget = Duration::from_millis(
-                registries::cell_supervision::DRAIN_BUDGET_MS
-                    + registries::cell_supervision::EXIT_GRACE_MS
-                    + 1_000,
-            );
-            let mut rx = self.shared.routes.subscribe();
-            let _ = tokio::time::timeout(budget, async {
-                while !rx.borrow().cells.is_empty() {
-                    if rx.changed().await.is_err() {
-                        break;
-                    }
+        // Ask, then wait bounded: the supervisor drops each cell's leash (stdin
+        // EOF — the portable drain trigger) and publishes the empty snapshot
+        // once they have exited; past DRAIN + EXIT_GRACE the supervisor kills.
+        // The empty snapshot doubles as the completion signal here, and the
+        // TaskGuard clear beneath reaps whatever a pathological hang leaves.
+        let _ = self.shared.stopping.send(true);
+        let budget = Duration::from_millis(
+            registries::cell_supervision::DRAIN_BUDGET_MS
+                + registries::cell_supervision::EXIT_GRACE_MS
+                + 1_000,
+        );
+        let mut rx = self.shared.routes.subscribe();
+        let _ = tokio::time::timeout(budget, async {
+            while !rx.borrow().cells.is_empty() {
+                if rx.changed().await.is_err() {
+                    break;
                 }
-            })
-            .await;
-            self.tasks.lock().unwrap().clear();
-            return Ok(());
-        }
-        let handle = self.shared.drain.lock().unwrap().take();
-        if let Some(handle) = handle {
-            match handle.shutdown(SWEEP_BUDGET).await {
-                Ok(report) => {
-                    // The report is the record: every bucket named, nothing
-                    // inferred. `unresponsive`/`pending_creates` are the two
-                    // shapes of "a process may outlive this boot" — warn-level,
-                    // because the OS re-parents them and the observed tier
-                    // inherits the problem (spec §4.4).
-                    if report.unresponsive.is_empty() && report.pending_creates == 0 {
-                        tracing::info!(
-                            event = "field_native.terminal.drain_complete",
-                            component = "terminal",
-                            drained = report.drained,
-                            killed = report.killed,
-                            announced_shutdown = report.announced_shutdown,
-                            elapsed_ms = report.spent.as_millis() as u64,
-                            "Every terminal session concluded under the shutdown drain"
-                        );
-                    } else {
-                        tracing::warn!(
-                            event = "field_native.terminal.drain_incomplete",
-                            component = "terminal",
-                            drained = report.drained,
-                            killed = report.killed,
-                            unresponsive = %report.unresponsive.join(","),
-                            pending_creates = report.pending_creates,
-                            announced_shutdown = report.announced_shutdown,
-                            elapsed_ms = report.spent.as_millis() as u64,
-                            "The shutdown drain spent its budget with sessions unaccounted for"
-                        );
-                    }
-                }
-                Err(error) => tracing::warn!(
-                    event = "field_native.terminal.drain_failed",
-                    component = "terminal",
-                    error = %error,
-                    "The shutdown drain did not run; sessions may outlive this boot"
-                ),
             }
-        }
-        self.tasks.lock().unwrap().clear(); // TaskGuard aborts the serve loop
-        self.shared.serving.send_replace(false);
+        })
+        .await;
+        self.tasks.lock().unwrap().clear();
         Ok(())
     }
-}
-
-/// Build and serve. Construction happens here rather than in `start` so a slow
-/// font database never blocks the boot sequence — the unit reports `starting`
-/// meanwhile, which is true.
-async fn serve(
-    shared: Arc<Shared>,
-    endpoints: Endpoints,
-    control: ipc::Listener,
-    frames: ipc::Listener,
-    plan: MeshPlan,
-    mesh: Option<MeshHandle>,
-) {
-    // GT-4a: started BEFORE font discovery so the node wait overlaps a cost the
-    // boot already pays, rather than adding its budget on top. A `None` here is
-    // the flag-off floor, and from this point the two paths are the same code.
-    let attaching = match (&plan, mesh) {
-        (MeshPlan::Requested { mirror_write }, Some(mesh)) => Some(tokio::spawn(
-            terminal_mesh::attach(mirror_write.clone(), mesh, terminal_mesh::ATTACH_BUDGET),
-        )),
-        _ => None,
-    };
-
-    // field-native bundles no fonts, so the text engine comes from system
-    // discovery (ghosttead's `GHOSTTEA_FONT_DIR` path is a packaging concern —
-    // P2 may bundle a family and this becomes `TextEngine::from_fonts`). It is
-    // not optional: `serve()` would call `discover()` itself and fail the whole
-    // future, and every session needs the engine to build its model. Doing it
-    // here instead turns that into an honest unit state. `spawn_blocking`
-    // because loading the system font database is blocking, CPU-bound work.
-    let engine = match tokio::task::spawn_blocking(TextEngine::discover).await {
-        Ok(Ok(engine)) => engine,
-        Ok(Err(error)) => {
-            shared.set(
-                UnitState::Degraded,
-                Some(format!("no usable monospace font: {error}")),
-            );
-            return;
-        }
-        Err(error) => {
-            shared.set(
-                UnitState::Degraded,
-                Some(format!("font discovery task failed: {error}")),
-            );
-            return;
-        }
-    };
-    let family = engine.primary_family().to_owned();
-
-    let service = match TerminalService::new(TerminalServiceConfig {
-        control_socket: endpoints.control.clone(),
-        frame_socket: endpoints.frame.clone(),
-        auth_token: endpoints.token.clone(),
-    })
-    // GT-3: the app-owned config overlay, loaded AFTER the user's own Ghostty
-    // files so their existing setup is imported and ours refines it. Pointing
-    // the service here is also what makes the document editable at all —
-    // without an explicit path the service answers `configuration document is
-    // unavailable without an explicit overlay`, which is the honest state
-    // fieldd surfaces as UNAVAILABLE.
-    //
-    // The file is deliberately NOT created here. A missing overlay is a valid
-    // empty config upstream (the explicit path joins the loader's source list
-    // marked optional, and a NotFound on an optional source is skipped, not
-    // diagnosed), so touching the disk at boot would only be this daemon
-    // writing a file nobody asked for. It appears the first time someone saves.
-    .with_config_path(endpoints.config.clone())
-    // EL7/NF-D6: FIELD_/FIELDD_ join ghosttea's own GHOSTTEA_*/TERMINALD_*
-    // strip list at the service, so even an inherit-mode PTY cannot carry a
-    // daemon secret. Prefixes come from the generated registries, never a
-    // literal (NF-D9).
-    .with_private_env_prefixes(registries::ENV_PREFIXES.iter().copied())
-    {
-        Ok(service) => service.with_text_engine(engine),
-        Err(error) => {
-            shared.set(
-                UnitState::Degraded,
-                Some(format!("private env prefixes rejected: {error}")),
-            );
-            return;
-        }
-    };
-
-    // The mesh joins HERE or not at all: upstream takes the adapter before the
-    // service serves, so this is the last moment the floor can be handed one.
-    // A unit that is still waiting is still `starting`, which is what it is.
-    let (service, mesh_face) = match attaching {
-        None => (service, None),
-        Some(task) => {
-            shared.set(
-                UnitState::Starting,
-                Some("waiting for the tailnet node to publish the terminal mesh".into()),
-            );
-            match task.await {
-                Ok(Attachment::Attached(mesh)) => {
-                    let face = format!(
-                        "publishing {} ({})",
-                        registries::stores::TERMINAL_HOSTS,
-                        if plan.offers_mirror_write() {
-                            "mirror-write configured"
-                        } else {
-                            "view-only — no mirror-write configured"
-                        }
-                    );
-                    (service.with_terminal_mesh(*mesh), Some(face))
-                }
-                Ok(Attachment::Unavailable(reason)) => (service, Some(format!("off — {reason}"))),
-                // An aborted or panicked attach is the floor's problem to state,
-                // not to inherit: the PTYs are unaffected and say so.
-                Err(error) => (
-                    service,
-                    Some(format!("off — the attach task failed: {error}")),
-                ),
-            }
-        }
-    };
-
-    let detail = match &mesh_face {
-        None => format!("serving; text engine {family}"),
-        Some(face) => format!("serving; text engine {family}; terminal mesh {face}"),
-    };
-    shared.set(UnitState::Up, Some(detail));
-    shared.serving.send_replace(true);
-    tracing::info!(
-        event = "field_native.terminal.serving",
-        component = "terminal",
-        control_socket = %endpoints.control,
-        frame_socket = %endpoints.frame,
-        config_overlay = %endpoints.config.display(),
-        text_engine = %family,
-        // The FACE, never the capability: whether a mirror-write string exists
-        // is operational news, and its value is a secret (EL7/NF-D8).
-        terminal_mesh = mesh_face.as_deref().unwrap_or("not requested"),
-        "The terminal service is serving"
-    );
-
-    // G7 (NF-7): `serve_managed` runs until a listener fails OR a completed
-    // `shutdown` — the first non-failure way serving ends. The handle is
-    // deposited BEFORE the await so `stop` can always reach a serving plane.
-    let (handle, serving_future) =
-        service.serve_managed(TerminalServiceListeners::new(control, frames));
-    *shared.drain.lock().unwrap() = Some(handle);
-    let outcome = serving_future.await;
-    shared.serving.send_replace(false);
-    // `stop` TAKES the handle before draining, so a missing handle plus a clean
-    // exit is a requested shutdown — the one ending that is not a crash.
-    let requested = shared.drain.lock().unwrap().is_none();
-    if requested && outcome.is_ok() {
-        tracing::info!(
-            event = "field_native.terminal.serve_ended",
-            component = "terminal",
-            "The terminal service drained and stopped as requested"
-        );
-        return;
-    }
-    shared.drain.lock().unwrap().take(); // a dead plane's handle answers nothing
-    let detail = match outcome {
-        Ok(()) => "the terminal service stopped serving".to_string(),
-        Err(error) => format!("the terminal service failed: {error}"),
-    };
-    tracing::error!(
-        event = "field_native.terminal.serve_ended",
-        component = "terminal",
-        detail = %detail,
-        "The terminal service ended; sessions are no longer reachable"
-    );
-    // Manager law: no in-process restart. Global health goes degraded with this
-    // unit named and fieldd decides what to do about it.
-    shared.set(UnitState::Crashed, Some(detail));
 }
 
 /// TC-D6(e), the periodic half: watch this process's descriptor headroom and
@@ -1856,9 +1468,7 @@ async fn run_cell_generation(
         &mut reap,
     )
     .await;
-    if shared.route_remove(instance) {
-        shared.cell_serving(false);
-    }
+    shared.route_remove(instance);
     let _ = report.send(CellReport { instance, end });
 }
 
@@ -2016,7 +1626,6 @@ async fn run_cell_generation_inner(
             role: Some(plan.role),
         },
     );
-    shared.cell_serving(true);
     if plan.role == TerminalCellRole::Class {
         shared.set_class_state(
             plan.class,
@@ -2162,20 +1771,12 @@ pub fn install_inventory(
     ledger: Option<AdmissionLedger>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        // Legacy (in-process) mode dials a FIXED pair. Cell mode (TC-S3) runs
-        // ONE PUMP PER ROUTE ROW — each cell's sessions are observed on that
-        // cell's own control socket and merged under its `cell` tag; the pump
-        // manager follows the snapshot (TC-D15's re-read law, floor-side). A
-        // unit that is neither (the non-UTF-8 degraded case) parks forever.
-        let legacy = handle.shared.endpoints.clone();
-        if let Some(endpoints) = legacy {
-            legacy_inventory_loop(handle, state, ledger, endpoints).await;
-            return;
-        }
-        if !handle.shared.cell_mode {
-            std::future::pending::<()>().await;
-            return;
-        }
+        // TC-S3 — ONE PUMP PER ROUTE ROW: each cell's sessions are observed on
+        // that cell's own control socket and merged under its `cell` tag; the
+        // pump manager follows the snapshot (TC-D15's re-read law, floor-side).
+        // A floor with no cell yet has an empty desired set and simply waits on
+        // the watch — TM-1 removed the second shape (a fixed legacy pair dialled
+        // by the in-process serve), so there is no branch left to take.
         let merged = Arc::new(MergedInventory::new(
             state,
             handle.shared.clone(),
@@ -2252,46 +1853,6 @@ pub fn install_inventory(
 struct PumpEntry {
     cell_boot_id: String,
     _task: TaskGuard,
-}
-
-/// The S2 single-plane loop, unchanged: wait until the in-process service
-/// serves, dial the fixed pair, pump, reconnect on failure.
-async fn legacy_inventory_loop(
-    handle: TerminalHandle,
-    state: Arc<DaemonState>,
-    ledger: Option<AdmissionLedger>,
-    endpoints: Endpoints,
-) {
-    let mut watch = InventoryWatch::new(handle.clone());
-    let mut admission = LedgerPump::new(ledger, handle.shared.clone());
-    loop {
-        // Inside the loop, not before it: a torn connection reconnects at
-        // once while the service is still up, and a service that DIED parks
-        // here forever instead of dialing a dead socket twice a second. The
-        // unit's health already says the plane is gone; a retry storm would
-        // only add noise to a fact fieldd has.
-        handle.wait_until_serving().await;
-        // Dialing here rather than inside the pump is what lets a failed
-        // DIAL be told apart from a pump that ran and then broke.
-        match ControlClient::connect(&endpoints.control, &endpoints.token).await {
-            Ok((client, events)) => {
-                match pump_inventory(Arc::new(client), events, &state, &mut watch, &mut admission)
-                    .await
-                {
-                    Ok(()) => watch.disconnected(),
-                    Err(error) => watch.failed(&error),
-                }
-            }
-            Err(error) => watch.failed(&error),
-        }
-        // The last published inventory deliberately STAYS. A dead control
-        // connection does not kill PTYs, so clearing the rows would claim
-        // sessions ended when we simply cannot see them. What does NOT stay
-        // is the claim that the plane is fine: past `INVENTORY_FAULT_STREAK`
-        // the watch puts the pump's own error on the unit's health, which is
-        // what carries "this plane is degraded" (honest states, not blanks).
-        tokio::time::sleep(RECONNECT_DELAY).await;
-    }
 }
 
 /// One cell's inventory pump: dial its fixed coordinates, subscribe,
@@ -2536,45 +2097,29 @@ impl LedgerPump {
 /// length stays recoverable from the log, and the recovery is news again exactly
 /// once.
 struct InventoryWatch {
-    sink: FaultSink,
+    /// TC-S3 — where this pump's fault verdict lands: the per-cell composition
+    /// behind the unit's single fault cell. There used to be a second sink (the
+    /// unit's cell, written directly by the in-process serve's one pump); TM-1
+    /// retired that serve, so a pump is always a cell's pump and the enum that
+    /// chose between them collapsed into these two fields.
+    instance: u32,
+    shared: Arc<Shared>,
     failures: u32,
     recovery_owed: bool,
 }
 
-/// TC-S3 — where a pump's fault verdict lands: the unit's single fault cell
-/// (legacy mode) or the per-cell composition (cell mode). Same streak logic
-/// either way; only the sink differs.
-enum FaultSink {
-    Unit(TerminalHandle),
-    Cell { instance: u32, shared: Arc<Shared> },
-}
-
-impl FaultSink {
-    fn set(&self, fault: Option<String>) {
-        match self {
-            FaultSink::Unit(handle) => handle.shared.set_inventory_fault(fault),
-            FaultSink::Cell { instance, shared } => {
-                shared.set_cell_inventory_fault(*instance, fault)
-            }
-        }
-    }
-}
-
 impl InventoryWatch {
-    fn new(handle: TerminalHandle) -> Self {
-        Self {
-            sink: FaultSink::Unit(handle),
-            failures: 0,
-            recovery_owed: false,
-        }
-    }
-
     fn for_cell(instance: u32, shared: Arc<Shared>) -> Self {
         Self {
-            sink: FaultSink::Cell { instance, shared },
+            instance,
+            shared,
             failures: 0,
             recovery_owed: false,
         }
+    }
+
+    fn set_fault(&self, fault: Option<String>) {
+        self.shared.set_cell_inventory_fault(self.instance, fault);
     }
 
     /// One failed attempt — a dial that never landed, or a pump that ran and
@@ -2600,7 +2145,7 @@ impl InventoryWatch {
             );
         }
         if self.failures >= INVENTORY_FAULT_STREAK {
-            self.sink.set(Some(format!("{error:#}")));
+            self.set_fault(Some(format!("{error:#}")));
         }
     }
 
@@ -2610,7 +2155,7 @@ impl InventoryWatch {
     /// recovered nothing — and the streak restarts, so a plane that reconciles
     /// once between failures has to earn its degraded state again.
     fn reconciled(&mut self) {
-        self.sink.set(None);
+        self.set_fault(None);
         if self.recovery_owed {
             self.recovery_owed = false;
             tracing::info!(
@@ -2640,97 +2185,6 @@ impl InventoryWatch {
 /// missed events rather than replaying them, so it is the one event whose
 /// meaning is "you did not see what happened".
 const EVENTS_LOST: &str = "events-lost";
-
-/// One connection's worth of inventory maintenance: reconcile on connect, then
-/// on events and on the backstop.
-///
-/// The client arrives as an `Arc` because governance LEAVES this loop (see
-/// `govern_births`). Awaiting the GT-D11 flip inline put a request with the full
-/// 10s budget behind it in the select arm: one slow birth read no further
-/// events and took no reconcile tick, so an exit could stay invisible to fieldd
-/// for ten seconds on a connection that was working perfectly — against the
-/// spec's "< 2s" row.
-async fn pump_inventory(
-    client: Arc<ControlClient>,
-    mut events: tokio::sync::mpsc::UnboundedReceiver<Value>,
-    state: &Arc<DaemonState>,
-    watch: &mut InventoryWatch,
-    admission: &mut LedgerPump,
-) -> anyhow::Result<()> {
-    // Seeded from what the channel already holds so an unchanged inventory
-    // wakes no subscriber.
-    let mut published = inventory_value(&state.observed_tx.borrow().terminals);
-    let mut last_reconcile = Instant::now();
-
-    let (births_tx, births_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (governed_tx, mut governed_rx) = tokio::sync::mpsc::unbounded_channel();
-    // Bound to THIS connection: a flip queued against a socket that is gone has
-    // nothing to say, and the reconnect's own gap reconcile re-finds the row.
-    let _governor = TaskGuard(tokio::spawn(govern_births(
-        Arc::clone(&client),
-        births_rx,
-        governed_tx,
-    )));
-
-    // A connection that has only just opened was not watching a moment ago, so
-    // its first reconcile closes an observation gap by definition.
-    let known = known_session_ids(state);
-    let reconciled = reconcile(&client, state, published).await?;
-    watch.reconciled();
-    admission.observe(reconciled.governed);
-    published = reconciled.published;
-    regovern_unseen(&births_tx, &known, &reconciled.sessions);
-
-    let mut ticker = tokio::time::interval(RECONCILE_FLOOR);
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let mut dirty = false;
-    let mut gap = false;
-    loop {
-        tokio::select! {
-            event = events.recv() => match event {
-                // Every pushed event is a hint that the registry may have
-                // moved; the tick below is what bounds how often we ask.
-                Some(event) => {
-                    if let Some(birth) = birth_to_govern(&event) {
-                        let _ = births_tx.send(birth);
-                    }
-                    if event.get("type").and_then(Value::as_str) == Some(EVENTS_LOST) {
-                        gap = true;
-                    }
-                    dirty = true;
-                }
-                None => return Ok(()),
-            },
-            // A completed flip changed a row we publish and `set-persistence`
-            // announces nothing, so asking again is the only way the observed
-            // persistence stops trailing the truth by up to a backstop.
-            Some(()) = governed_rx.recv() => dirty = true,
-            _ = ticker.tick() => {
-                // An event-driven reconcile resets the backstop clock too: it
-                // asked `list-sessions` the same question the backstop would
-                // have, so counting from it kills a redundant second call.
-                if dirty || last_reconcile.elapsed() >= BACKSTOP_INTERVAL {
-                    dirty = false;
-                    // Read before the reconcile applies over it, and only when
-                    // a gap is owed — this is the floor's memory of what it has
-                    // already seen.
-                    let known = std::mem::take(&mut gap).then(|| known_session_ids(state));
-                    // Stamped from BEFORE the call, so a slow reconcile cannot
-                    // stretch the interval the kill matrix bounds.
-                    let started = Instant::now();
-                    let reconciled = reconcile(&client, state, published).await?;
-                    watch.reconciled();
-                    admission.observe(reconciled.governed);
-                    published = reconciled.published;
-                    if let Some(known) = known {
-                        regovern_unseen(&births_tx, &known, &reconciled.sessions);
-                    }
-                    last_reconcile = started;
-                }
-            },
-        }
-    }
-}
 
 /// TC-S3 — one cell's connection worth of inventory maintenance: the same
 /// loop as `pump_inventory` (reconcile on connect, then on events and the
@@ -2819,15 +2273,13 @@ async fn reconcile_cell(
         .map(|session| observed_row_for_cell(session, cell))
         .collect();
     let snapshot = inventory_value(&terminals);
-    let governed = terminals.len() as u32;
-    merged.observe_governed(instance, governed);
+    merged.observe_governed(instance, terminals.len() as u32);
     if snapshot != published {
         merged.set_rows(instance, terminals);
     }
     Ok(Reconciled {
         published: snapshot,
         sessions,
-        governed,
     })
 }
 
@@ -2895,19 +2347,6 @@ fn birth_to_govern(event: &Value) -> Option<SessionSummary> {
         }
     };
     is_ownerless_app_lifetime_birth(&session).then_some(session)
-}
-
-/// The session ids the floor has already published, captured BEFORE a reconcile
-/// applies over them. This is the floor's memory of what it has seen, and it
-/// deliberately survives a reconnect — the published inventory is never cleared.
-fn known_session_ids(state: &Arc<DaemonState>) -> std::collections::HashSet<String> {
-    state
-        .observed_tx
-        .borrow()
-        .terminals
-        .iter()
-        .map(|terminal| terminal.session_id.clone())
-        .collect()
 }
 
 /// Apply GT-D11 to the births this floor never SAW — the rows a gap reconcile
@@ -3000,59 +2439,14 @@ async fn govern_births(
 
 /// What one `list-sessions` answered: the snapshot to remember as published, and
 /// the rows behind it — which a gap reconcile needs and a steady one ignores.
+///
+/// It used to carry the GOVERNED count too, for a caller that fed the admission
+/// ledger from the return value; the per-cell reconcile publishes that straight
+/// into the merged inventory instead (`observe_governed`), and TM-1 deleted the
+/// caller that read it from here.
 struct Reconciled {
     published: Value,
     sessions: Vec<SessionSummary>,
-    /// How many of those rows this floor GOVERNS — the number the admission
-    /// ledger publishes as this pair's claim on the machine budget. Counted
-    /// here, from the same filter the inventory uses, so the ledger and the
-    /// published inventory can never mean two different things by "a session
-    /// on this device".
-    governed: u32,
-}
-
-/// `list-sessions` is truth (spec §10.5). Publishes only on a real change, and
-/// only what this floor GOVERNS — see the module note on what the inventory
-/// means.
-async fn reconcile(
-    client: &ControlClient,
-    state: &Arc<DaemonState>,
-    published: Value,
-) -> anyhow::Result<Reconciled> {
-    let mut sessions = client.list_sessions().await?;
-    // The service answers from a HashMap, so its order is arbitrary between
-    // calls. Without this sort every backstop tick would look like a change and
-    // wake every subscriber.
-    sessions.sort_by(|a, b| a.id.cmp(&b.id));
-    let terminals: Vec<ObservedTerminal> = sessions
-        .iter()
-        .filter(|session| is_governed_here(session))
-        .map(observed_row)
-        .collect();
-    let snapshot = inventory_value(&terminals);
-    let governed = terminals.len() as u32;
-    if snapshot == published {
-        return Ok(Reconciled {
-            published,
-            sessions,
-            governed,
-        });
-    }
-    let count = terminals.len();
-    state
-        .observed_tx
-        .send_modify(|observed| observed.terminals = terminals);
-    tracing::debug!(
-        event = "field_native.terminal.inventory_published",
-        component = "terminal",
-        terminals = count,
-        "The terminal inventory changed"
-    );
-    Ok(Reconciled {
-        published: snapshot,
-        sessions,
-        governed,
-    })
 }
 
 /// Is this row a session THIS device runs, or a replica of another device's?
@@ -3061,9 +2455,10 @@ async fn reconcile(
 /// hazard). Upstream's own marker decides it: a replica reports no persistence
 /// class because claiming one would assert a governance this host does not hold,
 /// and every locally created session carries one. Reading the marker rather than
-/// inventing a second one is also what keeps this honest if the mesh flag is
-/// off — with no replicas the predicate is true for every row, exactly as it was
-/// before GT-4.
+/// inventing a second one is what keeps this honest when there are no replicas
+/// to exclude: the predicate is then true for every row. Since TM-1 that is
+/// ALWAYS the case on this floor (the module note says why), so this is a
+/// standing guard rather than a live filter.
 fn is_governed_here(session: &SessionSummary) -> bool {
     session.persistence.is_some()
 }
@@ -3104,16 +2499,6 @@ fn mint_token() -> String {
 /// authenticates the legacy doors; the key signs TPv3 grants).
 fn mint_grant_key() -> String {
     hex::encode(rand::random::<[u8; 32]>())
-}
-
-/// The 0700 run directory is the real boundary, but a socket the owning user
-/// alone may open costs one syscall and does not rely on the directory staying
-/// that way. Unix-only by nature: the windows pipes get their CurrentUserOnly
-/// DACL at bind, inside ghosttea's listener (WIN-D4).
-#[cfg(unix)]
-fn set_private_socket_permissions(path: &str) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(PathBuf::from(path), std::fs::Permissions::from_mode(0o600))
 }
 
 #[cfg(test)]
@@ -3320,8 +2705,6 @@ mod tests {
                 auth_url: None,
             }),
             ping: tokio::sync::mpsc::unbounded_channel().0,
-            endpoints: None,
-            cell_mode: false,
             stopping: watch::channel(false).0,
             routes: watch::channel(TerminalRouteSnapshot {
                 revision: 0,
@@ -3329,14 +2712,11 @@ mod tests {
             })
             .0,
             route_rows: Mutex::new(BTreeMap::new()),
-            serving: watch::channel(false).0,
-            serving_cells: Mutex::new(0),
             class_states: Mutex::new(BTreeMap::new()),
             occupancy: watch::channel(BTreeMap::new()).0,
             strikes: Mutex::new(std::collections::HashMap::new()),
             next_instance: std::sync::atomic::AtomicU32::new(0),
             inventory_faults: Mutex::new(BTreeMap::new()),
-            drain: Mutex::new(None),
             inventory_fault: Mutex::new(None),
             fd_pressure: Mutex::new(None),
             pty_pressure: Mutex::new(None),
@@ -3350,9 +2730,10 @@ mod tests {
     #[test]
     fn a_permanently_failing_pump_degrades_the_unit_and_recovers_it() {
         let shared = test_shared();
-        let mut watch = InventoryWatch::new(TerminalHandle {
-            shared: shared.clone(),
-        });
+        // TM-1: a pump is always a CELL's pump now, so the streak runs through
+        // the per-cell composition — which lands on the same single fault cell
+        // the unit's health reads, tagged with the instance.
+        let mut watch = InventoryWatch::for_cell(1, shared.clone());
 
         for _ in 1..INVENTORY_FAULT_STREAK {
             watch.failed(&anyhow::anyhow!("connection refused"));

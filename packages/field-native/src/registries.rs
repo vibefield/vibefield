@@ -12,8 +12,6 @@ pub mod ports {
     pub const FIELDD_WS_CONTROL: u16 = 9410;
     pub const FIELDD_WS_DATA: u16 = 9411;
     pub const TRUFFLE_WS_RESERVED: u16 = 9417;
-    pub const GHOSTTEA_TSP1_QUIC: u16 = 9420;
-    pub const GHOSTTEA_TSP1_TCP: u16 = 9421;
     pub const DOC_SYNC_QUIC: u16 = 9440;
     pub const PRESENCE_UDP: u16 = 9441;
     pub const RELAY_HTTPS: u16 = 443;
@@ -30,7 +28,6 @@ pub mod sockets {
 }
 
 pub mod stores {
-    pub const TERMINAL_HOSTS: &str = "terminal.v1.hosts";
     pub const DOCS: &str = "field.docs.v1";
     pub const ARTIFACTS: &str = "field.artifacts.v1";
     pub const PUSH: &str = "field.push.v1";

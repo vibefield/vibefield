@@ -1681,3 +1681,92 @@ async fn the_floor_hosts_one_cell_per_class() {
     );
     daemon.shutdown().await;
 }
+
+/// TM-1 — THE slice's headline, asserted where a regression would land: with
+/// `FIELD_NATIVE_TERMINAL_MESH` set, CELLS serve.
+///
+/// Until 2026-09-14 this flag selected the pre-cell in-process floor, and the
+/// cost was not "isolation, minus the deck" — it was a deck that could not open
+/// a pane at all, because the route snapshot stayed empty, the cells' T1 doors
+/// never existed and no grant key was ever minted, so fieldd's ticket mint had
+/// nothing to name. That floor is deleted (TM-D7), and this row is the fence
+/// against it coming back: every artefact the old path could not produce is
+/// asserted here, on a floor booted with the flag ON.
+///
+/// What it deliberately does NOT assert: that anything is reachable over a
+/// tailnet. The flag's only remaining meaning is `HelloAck.terminalMesh`, whose
+/// false direction is fenced in `tests/mgmt_server.rs`; its true direction needs
+/// a live node and is Phase 0's witness.
+#[tokio::test]
+async fn the_mesh_flag_costs_the_floor_nothing_and_cells_still_serve() {
+    let dir = short_tempdir();
+    let daemon = bootstrap(NativeConfig {
+        terminal_mesh_enabled: true,
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    })
+    .await
+    .expect("bootstrap");
+    let mut routes = daemon.state.terminal_routes.clone();
+    timeout(
+        Duration::from_secs(20),
+        routes.wait_for(|snapshot| !snapshot.cells.is_empty()),
+    )
+    .await
+    .expect("a flagged floor must still announce a cell within the hello budget")
+    .expect("the routes watch outlives boot");
+
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+
+    // 1. ROUTE ROWS. The old in-process serve never published past
+    //    `{revision: 0, cells: []}`; a cell floor announces the capability at
+    //    revision 1 and a row per cell after it.
+    let snapshot = &ack["terminalRoutes"];
+    assert!(
+        snapshot["revision"].as_i64().is_some_and(|r| r > 0),
+        "a flagged floor owes a revised route snapshot: {snapshot}"
+    );
+    let cell = &snapshot["cells"][0];
+    assert!(
+        cell["cellBootId"].as_str().is_some_and(|id| !id.is_empty()),
+        "a route row owes the cell's own boot identity: {cell}"
+    );
+    assert!(
+        cell["pid"].as_i64().is_some_and(|pid| pid > 0),
+        "a route row owes a live cell PROCESS — the whole point of the extraction: {cell}"
+    );
+
+    // 2. GRANT KEYS. Without one fieldd mints no TPv3 grant, which is exactly
+    //    how the flagged floor used to refuse every pane.
+    let key = cell["grantKey"]
+        .as_str()
+        .expect("a cell owes its grant key");
+    assert_eq!(key.len(), 64, "32 random bytes as hex: {key}");
+    assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
+    assert_eq!(
+        cell["grantKeyGeneration"], 1,
+        "one generation per cell boot"
+    );
+
+    // 3. T1 DOORS. The renderer dials these; a keyed cell reports both.
+    let doors = &cell["doors"];
+    for leg in ["controlUrl", "framesUrl"] {
+        let url = doors[leg]
+            .as_str()
+            .unwrap_or_else(|| panic!("a keyed cell owes its {leg}: {doors}"));
+        assert!(
+            url.starts_with("ws://127.0.0.1:") || url.starts_with("ws://[::1]:"),
+            "the door contract is loopback-only (D36): {url}"
+        );
+    }
+
+    // 4. And it is a FLOOR: a real PTY starts on it and enters the inventory.
+    let (client, _events) = control(&ack).await;
+    let session = client
+        .create_session(tenant_options())
+        .await
+        .expect("create a session on the flagged floor");
+    assert!(session.pid.is_some(), "the PTY leader owes a pid");
+
+    daemon.shutdown().await;
+}

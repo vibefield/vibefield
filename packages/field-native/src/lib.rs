@@ -164,20 +164,24 @@ pub async fn bootstrap_with_logging(
         // and inventory lines below (the mgmt plane reads state; the unit
         // supervises cells; neither learns the other's job).
         terminal_handle.routes_rx(),
+        // TM-1: the flag's resolved plan rides the state for the same reason —
+        // the mgmt plane composes it with the gateway's live node into the
+        // hello's `terminalMesh` without learning what either one is.
+        config::MeshPlan::resolve(&config),
         // The capability rides the state so the mgmt plane can answer for it
-        // without learning what a terminal mesh is (the wiring law the three
-        // lines above follow).
+        // without learning what a terminal mesh is (the wiring law the lines
+        // above follow).
         config.terminal_mirror_write.clone(),
         logging.clone(),
     );
 
-    // NF-D8/§4.3: the endpoints reach fieldd through the pairing hello, and the
-    // unit's inventory reaches it through the observed watch channel. Both are
-    // WIRING — done here so the unit stays ignorant of the mgmt plane and the
-    // mgmt facade stays ignorant of the terminal control protocol.
-    if let Some(endpoints) = terminal_handle.endpoints() {
-        let _ = state.terminal.set(endpoints);
-    }
+    // NF-D8/§4.3: the endpoints reach fieldd through the pairing hello (off the
+    // route snapshot wired two lines above — TM-1 retired the second, fixed
+    // pair the in-process serve used to deposit here), and the unit's inventory
+    // reaches it through the observed watch channel. Both are WIRING — done
+    // here so the unit stays ignorant of the mgmt plane and the mgmt facade
+    // stays ignorant of the terminal control protocol.
+    //
     // TC-L1f: resolving the machine-wide ledger is WIRING for the same reason
     // the two lines above are — the unit must not learn how a data root becomes
     // a machine root, and the ledger must not learn what a session is. `None`

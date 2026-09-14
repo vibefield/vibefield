@@ -30,10 +30,16 @@ export const PORTS = {
   FIELDD_WS_DATA: 9411,
   /** reserved by truffle's own WS bus — never bind. */
   TRUFFLE_WS_RESERVED: 9417,
-  /** Ghosttea TSP1 terminal mirror (QUIC). */
-  GHOSTTEA_TSP1_QUIC: 9420,
-  /** Ghosttea TSP1 terminal mirror (TCP compact). */
-  GHOSTTEA_TSP1_TCP: 9421,
+  // RETIRED 2026-09-14 (TM-1): `GHOSTTEA_TSP1_QUIC` 9420 and `GHOSTTEA_TSP1_TCP`
+  // 9421, the ghosttea-truffle TSP1 terminal mirror's two listeners. The floor's
+  // in-process serve and its TSP1 adapter retired whole in that slice, so nothing
+  // on this device binds either number any more. 9420/9421 stay SPOKEN FOR rather
+  // than free: the phone's GhostteaKit still dials 9421 until TM-5 moves it onto
+  // T1, and a new listener taking the number in the meantime would answer a phone
+  // that thinks it reached a terminal host. The design is
+  // `thinking-terminal-mesh-cells.md` (T, ruled 2026-09-14); under it the phone's
+  // door is a cell's own T1 door reached through the sidecar's reverse proxy, and
+  // no fixed terminal port exists at all.
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
   DOC_SYNC_QUIC: 9440,
   /** presence + device heartbeats (UDP, lossy). */
@@ -44,7 +50,16 @@ export const PORTS = {
 
 /** SyncedStore ids (device-owned slices unless noted). */
 export const STORES = {
-  TERMINAL_HOSTS: "terminal.v1.hosts",
+  // RETIRED 2026-09-14 (TM-1): `TERMINAL_HOSTS: "terminal.v1.hosts"`, the TSP1
+  // adapter's advertisement store (title, cwd label, activity, `quicPort`,
+  // `hostInstanceId`, re-advertised every 5 s). Its only publisher was
+  // `ghosttea-truffle`, which left this floor with the in-process serve; no
+  // consumer ever subscribed — the phone enumerates tailnet peers and dials each
+  // one's `list-sessions` (`FieldStoreID.terminalHosts` is declared in the kit and
+  // never subscribed, the phone lane's to retire at TM-5), and the deck's palette
+  // stopped at GT-D17. Discovery under T is the ticket, not a store: the join
+  // walks a fold row to `terminal.runtimeSessionId` and asks fieldd for a
+  // `TerminalOpenTicket` (TM-D5).
   DOCS: "field.docs.v1",
   ARTIFACTS: "field.artifacts.v1",
   PUSH: "field.push.v1",

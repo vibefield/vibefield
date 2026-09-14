@@ -1,16 +1,60 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
-/// GT-4a's master switch, named once so the strip-list claim below can be
-/// asserted against the string this file actually reads.
+/// The terminal mesh's master switch, named once so the strip-list claim below
+/// can be asserted against the string this file actually reads.
 pub const TERMINAL_MESH_ENV: &str = "FIELD_NATIVE_TERMINAL_MESH";
 
 /// The mirror-write capability's home. Deliberately `FIELD_`-prefixed: EL7's
 /// strip list is prefix-based (`registries::ENV_PREFIXES`), so naming the
-/// variable inside that class is what keeps it out of every agent PTY —
-/// `tests/terminal_mesh.rs` binds the two together so a rename cannot quietly
-/// move the secret outside the class.
+/// variable inside that class is what keeps it out of every agent PTY — the
+/// test below binds the two together so a rename cannot quietly move the secret
+/// outside the class.
 pub const TERMINAL_MIRROR_WRITE_ENV: &str = "FIELD_NATIVE_TERMINAL_MIRROR_WRITE";
+
+/// TM-1 — what the flag asks of the mesh, and the ONLY thing it asks: are this
+/// floor's terminal doors published on the tailnet?
+///
+/// It used to choose a SERVE SHAPE. Until 2026-09-14 `FIELD_NATIVE_TERMINAL_MESH`
+/// kept the pre-cell in-process floor — one embedded ghosttea service hosting
+/// every class with `ghosttea-truffle`'s TSP1 adapter borrowing the gateway's
+/// node — because a cell cannot borrow that node across a process boundary. The
+/// cost was cell isolation XOR the phone, and worse: with the flag set the
+/// desktop deck could not open a pane at all (no route rows, no T1 doors, no
+/// grant keys, so fieldd could mint no routed ticket). TM-D7 retired that path
+/// whole rather than fencing it — it was the pre-TP-S3e product, not "the
+/// product minus isolation". Cells now serve unconditionally, and this type
+/// answers one question about them.
+///
+/// Two variants and no payload. The mirror-write capability lives in
+/// `NativeConfig::terminal_mirror_write` and reaches the paired client through
+/// the mgmt door; a second copy riding this enum would be a second place for a
+/// secret to leak from, for a reader that no longer exists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MeshPlan {
+    /// The doors stay loopback-only: local windows reach them, the tailnet
+    /// does not.
+    Off,
+    /// The floor was asked to publish its terminal doors on the tailnet. Asked,
+    /// not achieved — publishing also needs the gateway's node to be up, which
+    /// is a live fact the hello re-reads rather than a config one (TM-1's
+    /// `HelloAck.terminalMesh`).
+    Requested,
+}
+
+impl MeshPlan {
+    pub fn resolve(config: &NativeConfig) -> Self {
+        if config.terminal_mesh_enabled {
+            Self::Requested
+        } else {
+            Self::Off
+        }
+    }
+
+    pub fn is_off(&self) -> bool {
+        matches!(self, Self::Off)
+    }
+}
 
 /// field-native configuration (design-02 §2.8). Registries default from
 /// @vibefield/contracts constants; env overrides (dev):
@@ -30,16 +74,16 @@ pub struct NativeConfig {
     pub mesh_enabled: bool,
     /// explicit sidecar binary path; falls back to the truffle search order.
     pub sidecar_override: Option<PathBuf>,
-    /// GT-D7/NF-remote §7 — the terminal floor serves the TSP1 mesh. OFF by
-    /// default, and off means absent: nothing from `ghosttea-truffle` is
-    /// constructed, no advertisement store is opened, no listener exists.
+    /// TM-1 — the terminal floor publishes its doors on the tailnet. OFF by
+    /// default. It selects no serve shape: cells serve either way (TM-D7), and
+    /// this asks only whether their doors are reachable from off-device.
     ///
     /// It is a SEPARATE switch from `mesh_enabled` because the two are not the
     /// same question — one asks whether this device has a tailnet identity at
     /// all, the other whether the terminal floor publishes itself on it. The
-    /// dependency runs one way: the terminal mesh borrows the gateway's node,
-    /// so on without the gateway is a degraded state carrying the gateway's own
-    /// reason, never a panic and never a second node.
+    /// dependency runs one way: publishing needs the gateway's node, so on
+    /// without the gateway publishes nothing, and the floor says so on its
+    /// hello (`HelloAck.terminalMesh`) rather than degrading a PTY.
     pub terminal_mesh_enabled: bool,
     /// Mirror-write v1 (GT-D7): the single string a remote viewer must present
     /// to gain WRITE on a mirrored session. `None` — the default — means every
@@ -50,8 +94,15 @@ pub struct NativeConfig {
     /// env wins when it is set; otherwise `ensure_terminal_mirror_write` mints
     /// one at boot and keeps it in `terminal-mirror-write.key`, so the phone
     /// can be GRANTED the capability over the door instead of being handed a
-    /// string to type. A mesh-off floor stays `None`: nothing serves, so there
-    /// is nothing to gate.
+    /// string to type. A mesh-off floor stays `None`: nothing is published, so
+    /// there is nothing to gate.
+    ///
+    /// TM-1 (2026-09-14): nothing in this process READS the value any more —
+    /// the TSP1 adapter that compared it retired with the in-process serve. It
+    /// is kept, minted and answered for because the phone still calls
+    /// `terminal.mirrorWriteGrant` until TM-5 moves it onto T1; TM-3 deletes
+    /// the capability, the file, the env var and the mgmt door together, once
+    /// an expiring per-client attach grant carries the write right instead.
     ///
     /// EL7, twice over: it is `FIELD_`-prefixed, so it rides
     /// `registries::ENV_PREFIXES` into ghosttea's strip list and cannot reach an
@@ -59,7 +110,10 @@ pub struct NativeConfig {
     /// only whether one is configured. The value travels as an opaque string
     /// rather than anything we compare here, because upstream owns the compare.
     ///
-    /// That compare is constant-time in its CONTENTS and not in its length:
+    /// HISTORICAL since TM-1 (2026-09-14) — kept because the STRING is still
+    /// handed to a phone that presents it to a pre-TM-1 floor, and because the
+    /// property is what TM-D3's replacement has to beat: that compare was
+    /// constant-time in its CONTENTS and not in its length.
     /// `TruffleTerminalConfig::access_for` (re-read 2026-09-13 against the
     /// CURRENT pin, ghosttea-truffle 0.11.1 lib.rs:3972-3989 — this line said
     /// 0.9.2 lib.rs:3962-3979 until the pin moved; the code is unchanged)
@@ -199,11 +253,10 @@ impl NativeConfig {
         self.join_layout(crate::registries::layout::TERMINAL_MIRROR_WRITE_FILE)
     }
 
-    /// MF-2a — make "a serving floor always has a capability" true.
+    /// MF-2a — make "a publishing floor always has a capability" true.
     ///
-    /// Called once at boot, BEFORE the units are built (the terminal unit
-    /// resolves its `MeshPlan` from this config), and idempotent after that:
-    /// the env value wins and nothing is written, a mesh-off floor mints
+    /// Called once at boot, BEFORE the units are built, and idempotent after
+    /// that: the env value wins and nothing is written, a mesh-off floor mints
     /// nothing, and a floor that has minted before reads the same string back.
     ///
     /// Never fatal. A floor that cannot write the file keeps serving
@@ -539,6 +592,38 @@ fn resolve_log_root() -> anyhow::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// TM-1 — the plan is a two-state answer to ONE question, and `Off` is the
+    /// default. It used to select a serve shape; the row that asserted that is
+    /// gone with the shape (`tests/terminal_mesh.rs`, deleted), and what is
+    /// left is the derivation this file owns.
+    #[test]
+    fn the_plan_is_off_unless_the_flag_asks_for_the_tailnet_door() {
+        let mut config = NativeConfig::for_data_dir(std::path::PathBuf::from("/tmp/vf-plan"));
+        assert_eq!(MeshPlan::resolve(&config), MeshPlan::Off);
+        assert!(MeshPlan::resolve(&config).is_off());
+
+        config.terminal_mesh_enabled = true;
+        assert_eq!(MeshPlan::resolve(&config), MeshPlan::Requested);
+        assert!(!MeshPlan::resolve(&config).is_off());
+    }
+
+    /// EL7, moved here at TM-1 from `tests/terminal_mesh.rs` (deleted with the
+    /// TSP1 adapter): ghosttea's strip list is prefix-based, so this variable
+    /// is protected by its NAME. fieldd's kill matrix proves the class is
+    /// actually stripped from a live PTY; this proves our secret is IN that
+    /// class, which is the half a rename could silently break. It outlives the
+    /// adapter because the variable does — TM-3 deletes both together.
+    #[test]
+    fn the_mirror_write_variable_stays_inside_the_el7_strip_class() {
+        assert!(
+            crate::registries::ENV_PREFIXES
+                .iter()
+                .any(|prefix| TERMINAL_MIRROR_WRITE_ENV.starts_with(prefix)),
+            "{TERMINAL_MIRROR_WRITE_ENV} must start with one of {:?}",
+            crate::registries::ENV_PREFIXES
+        );
+    }
 
     fn serving(dir: &std::path::Path) -> NativeConfig {
         NativeConfig {
