@@ -209,6 +209,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,
   "tp-open-ticket": TerminalOpenTicketResult,
+  // TM-2 (thinking-terminal-mesh-cells.md §3 T) — the SAME ticket shape with
+  // the TAILNET door set and a self peer's rights. Pinned beside the loopback
+  // one so both arms of the endpoints union are golden, not just the arm the
+  // desktop ships today.
+  "tp-remote-open-ticket": TerminalOpenTicketResult,
   "tp-create-open": TerminalCreateOpenResult,
   "tp-renew-attach-params": TerminalRenewAttachParams,
   "tp-connection-hello": ConnectionHello,

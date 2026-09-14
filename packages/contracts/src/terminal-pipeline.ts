@@ -325,6 +325,86 @@ export function highWaterTombstoneTtlMs(
   return limits.maxGrantLifetimeMs + limits.maxClockSkewMs;
 }
 
+// ---------------------------------------------------------------------------
+// TM-2 (thinking-terminal-mesh-cells.md §3 T, TM-D2) — the REMOTE door set
+
+/** The tailnet path prefix under which fieldd publishes one serve route per
+ * live cell: `/cell/<cellBootId>/` → that cell's loopback T1 door. One
+ * authority for the writer (the serve driver) and the reader (this regex). */
+export const REMOTE_CELL_PATH_PREFIX = "/cell/" as const;
+
+/** The remote door path for one cell and one channel — the ONLY composer.
+ * Trailing-slash discipline is load-bearing: the sidecar's route match is a
+ * path PREFIX and longest-prefix wins, so `/cell/<boot>/` must never be a
+ * prefix of another cell's boot id. */
+export function remoteCellPath(cellBootId: string, channel: TransportChannel): string {
+  return `${REMOTE_CELL_PATH_PREFIX}${cellBootId}/${channel}`;
+}
+
+/** A cell door reached THROUGH the tailnet: a `ws://`/`wss://` URL on a
+ * NON-loopback host, whose path is `/cell/<cellBootId>/control|frames` and
+ * which carries no query and no fragment (TP-D21 — authority is the grant in
+ * the first frame; a token in a URL is a token in a log).
+ *
+ * The scheme is `wss` when the serve terminates TLS and `ws` when it does not
+ * — VibeField's product serve passes `tls: false` deliberately (plain HTTP
+ * inside WireGuard, no MagicDNS-cert dependency), so `ws://` is the shape that
+ * actually ships today and the design's `wss://` is the TLS-terminated case.
+ * Both are admitted; what is NOT admitted is loopback, which is the whole
+ * point of the split from `CellEndpointSet` (D36).
+ *
+ * The host class is the discriminator between the two endpoint shapes, so it
+ * is spelled as an exclusion rather than a pattern: anything that is not
+ * `127.0.0.1` / `[::1]` / `localhost`. */
+const REMOTE_WS =
+  /^wss?:\/\/(?!127\.0\.0\.1(:|\/|$))(?!\[::1\](:|\/|$))(?!localhost(:|\/|$))[^/?#\s]+\/cell\/[^/?#\s]+\/(control|frames)$/;
+
+/** TM-2 (TM-D2) — the two doors of ONE cell as a TAILNET client dials them.
+ * A PRODUCT-plane fact minted only by fieldd, only for a WhoIs-verified self
+ * peer: the sidecar's reverse proxy carries the upgrade to the cell's loopback
+ * door and the floor is never in the byte path. `CellEndpointSet` stays
+ * loopback-only (D36 holds) — this is a second shape beside it, never a
+ * widening of it. */
+export const RemoteCellEndpointSet = z
+  .object({
+    controlUrl: z.string().regex(REMOTE_WS, "a tailnet ws:// cell URL without query/fragment"),
+    framesUrl: z.string().regex(REMOTE_WS, "a tailnet ws:// cell URL without query/fragment"),
+  })
+  .passthrough();
+export type RemoteCellEndpointSet = z.infer<typeof RemoteCellEndpointSet>;
+
+/** What a ticket's `endpoints` may be. The LOOPBACK shape is tried first: the
+ * two are disjoint by host class, so the order is documentation rather than
+ * precedence — a URL cannot satisfy both. */
+export const TicketEndpointSet = z.union([CellEndpointSet, RemoteCellEndpointSet]);
+export type TicketEndpointSet = z.infer<typeof TicketEndpointSet>;
+
+/** Compose one cell's remote door set from the serve's own base URL (truffle's
+ * `ProxyInfo.url`, e.g. `http://host.ts.net:9422`) — the single place the
+ * `http→ws` / `https→wss` mapping is written. Returns `undefined` when the
+ * base is not a usable http(s) origin, so a caller refuses honestly instead of
+ * minting a URL nothing can dial. */
+export function remoteCellEndpointsFor(
+  serveBaseUrl: string,
+  cellBootId: string,
+): RemoteCellEndpointSet | undefined {
+  let base: URL;
+  try {
+    base = new URL(serveBaseUrl);
+  } catch {
+    return undefined;
+  }
+  const scheme =
+    base.protocol === "https:" ? "wss:" : base.protocol === "http:" ? "ws:" : undefined;
+  if (scheme === undefined) return undefined;
+  const origin = `${scheme}//${base.host}`;
+  const parsed = RemoteCellEndpointSet.safeParse({
+    controlUrl: `${origin}${remoteCellPath(cellBootId, "control")}`,
+    framesUrl: `${origin}${remoteCellPath(cellBootId, "frames")}`,
+  });
+  return parsed.success ? parsed.data : undefined;
+}
+
 /** The product-API ticket (spec §5.1): route + endpoints + both grants. The
  * end-state shape, and since TP-S3e the ONLY shape — the S1 union and the
  * legacy bridge trio beside it retired with the bridge. */
@@ -333,8 +413,12 @@ export const TerminalOpenTicket = z
     route: RouteBinding,
     /** The cell's two T1 doors. REQUIRED since TP-S3e: a floor that serves no
      * doors (keyless bootstrap) mints no ticket at all, and the reader shows
-     * `UNAVAILABLE {reason: transport-not-landed}` — never a half ticket. */
-    endpoints: CellEndpointSet,
+     * `UNAVAILABLE {reason: transport-not-landed}` — never a half ticket.
+     *
+     * TM-2: LOOPBACK for a window (byte-for-byte what TP-S3e shipped), the
+     * TAILNET shape for a WhoIs-verified self peer. Which one a caller gets is
+     * decided by its principal at mint time and by nothing on the wire. */
+    endpoints: TicketEndpointSet,
     transportGrant: CellTransportGrant,
     attachGrant: SessionAttachGrant,
   })

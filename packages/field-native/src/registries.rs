@@ -12,6 +12,7 @@ pub mod ports {
     pub const FIELDD_WS_CONTROL: u16 = 9410;
     pub const FIELDD_WS_DATA: u16 = 9411;
     pub const TRUFFLE_WS_RESERVED: u16 = 9417;
+    pub const TERMINAL_CELLS_SERVE: u16 = 9422;
     pub const DOC_SYNC_QUIC: u16 = 9440;
     pub const PRESENCE_UDP: u16 = 9441;
     pub const RELAY_HTTPS: u16 = 443;

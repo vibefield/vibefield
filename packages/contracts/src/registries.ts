@@ -39,7 +39,23 @@ export const PORTS = {
   // that thinks it reached a terminal host. The design is
   // `thinking-terminal-mesh-cells.md` (T, ruled 2026-09-14); under it the phone's
   // door is a cell's own T1 door reached through the sidecar's reverse proxy, and
-  // no fixed terminal port exists at all.
+  // no fixed TSP1 port exists; the cells' proxy listener is `TERMINAL_CELLS_SERVE` below.
+  /** TM-2 (thinking-terminal-mesh-cells.md §3 T, TM-D2) — the tailnet listener
+   * carrying ONE reverse-proxy route per live terminal cell,
+   * `/cell/<cellBootId>/control|frames` → that cell's loopback T1 door. fieldd
+   * declares it; the sidecar serves it; the floor is never in the byte path.
+   *
+   * ITS OWN PORT, not the product serve's, and the reason is truffle's API,
+   * not taste: `Proxy` offers `add` and `remove` and NO update
+   * (truffle-core 0.7.12 `src/proxy/mod.rs`), and a same-id add is
+   * `PROXY_EXISTS` — so changing a serve's route list is remove-then-add,
+   * which drops every live connection on that listener. Cell routes change
+   * whenever a cell is born or exits; the product door is the channel a
+   * dropped client would have to re-dial to get a replacement ticket, so
+   * bouncing it on cell churn would break the recovery path itself. Confining
+   * the churn here costs a terminal data leg a reconnect, which the routed
+   * client already handles (`STALE_ROUTE` → re-ticket). */
+  TERMINAL_CELLS_SERVE: 9422,
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
   DOC_SYNC_QUIC: 9440,
   /** presence + device heartbeats (UDP, lossy). */

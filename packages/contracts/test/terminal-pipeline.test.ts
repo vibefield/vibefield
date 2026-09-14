@@ -30,6 +30,10 @@ import {
   PRESENTATION_ENVELOPE_MAX_HEADER_BYTES,
   PresentationEnvelopeHeader,
   ProductSessionRosterItem,
+  REMOTE_CELL_PATH_PREFIX,
+  RemoteCellEndpointSet,
+  remoteCellEndpointsFor,
+  remoteCellPath,
   SendInput,
   SendInputOp,
   SessionAttachGrant,
@@ -137,6 +141,69 @@ describe("grants — the authenticated envelope (spec §5.1)", () => {
         framesUrl: "ws://127.0.0.1:2/f",
       }).success,
     ).toBe(false);
+  });
+});
+
+// TM-2 (thinking-terminal-mesh-cells.md §3 T, TM-D2) — the SECOND endpoint
+// shape. The two are disjoint BY HOST CLASS, which is what lets one union
+// carry both without a discriminator field on the wire.
+describe("the remote door set (TM-2)", () => {
+  const remote = {
+    controlUrl: "ws://desk.tail1234.ts.net:9422/cell/cb-1/control",
+    framesUrl: "ws://desk.tail1234.ts.net:9422/cell/cb-1/frames",
+  };
+
+  it("admits a tailnet cell URL on either scheme and refuses loopback", () => {
+    expect(RemoteCellEndpointSet.safeParse(remote).success).toBe(true);
+    expect(
+      RemoteCellEndpointSet.safeParse({
+        controlUrl: "wss://desk.tail1234.ts.net/cell/cb-1/control",
+        framesUrl: "wss://desk.tail1234.ts.net/cell/cb-1/frames",
+      }).success,
+    ).toBe(true);
+    // D36's whole point: the loopback shape is NOT this shape
+    for (const host of ["127.0.0.1:9422", "[::1]:9422", "localhost:9422"]) {
+      expect(
+        RemoteCellEndpointSet.safeParse({
+          controlUrl: `ws://${host}/cell/cb-1/control`,
+          framesUrl: `ws://${host}/cell/cb-1/frames`,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("refuses a token in the URL, a foreign path and a foreign channel", () => {
+    for (const controlUrl of [
+      "ws://desk.tail1234.ts.net:9422/cell/cb-1/control?token=x",
+      "ws://desk.tail1234.ts.net:9422/cell/cb-1/control#t",
+      "ws://desk.tail1234.ts.net:9422/control",
+      "ws://desk.tail1234.ts.net:9422/t/secret/cell/cb-1/control",
+      "ws://desk.tail1234.ts.net:9422/cell/cb-1/mirror",
+      "http://desk.tail1234.ts.net:9422/cell/cb-1/control",
+    ]) {
+      expect(RemoteCellEndpointSet.safeParse({ ...remote, controlUrl }).success, controlUrl).toBe(
+        false,
+      );
+    }
+  });
+
+  it("composes from the serve's own base URL, mapping http→ws and https→wss", () => {
+    expect(remoteCellEndpointsFor("http://desk.tail1234.ts.net:9422", "cb-1")).toEqual(remote);
+    expect(remoteCellEndpointsFor("https://desk.tail1234.ts.net:9422/", "cb-1")?.framesUrl).toBe(
+      "wss://desk.tail1234.ts.net:9422/cell/cb-1/frames",
+    );
+    // an unusable base is `undefined`, never a URL nothing can dial
+    expect(remoteCellEndpointsFor("not a url", "cb-1")).toBeUndefined();
+    expect(remoteCellEndpointsFor("ftp://desk.tail1234.ts.net", "cb-1")).toBeUndefined();
+    // a loopback serve base cannot mint a REMOTE set — the validator refuses
+    // what the composer built, and the composer reports that honestly
+    expect(remoteCellEndpointsFor("http://127.0.0.1:9422", "cb-1")).toBeUndefined();
+  });
+
+  it("the path composer is the one authority, with the trailing slash the prefix match needs", () => {
+    expect(remoteCellPath("cb-1", "control")).toBe("/cell/cb-1/control");
+    expect(remoteCellPath("cb-1", "frames")).toBe("/cell/cb-1/frames");
+    expect(REMOTE_CELL_PATH_PREFIX).toBe("/cell/");
   });
 });
 
