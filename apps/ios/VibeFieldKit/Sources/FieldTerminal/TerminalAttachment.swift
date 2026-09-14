@@ -278,9 +278,29 @@ public final class TerminalAttachment {
         // grant's `(nonce, channel)` at first use, so a re-dial with the ticket
         // in hand can only ever earn `GRANT_NONCE_REPLAYED`. The client owns the
         // backoff; this closure owns the door.
+        //
+        // And the FACE (TM-r3, K-M2). The client retries a refused mint forever
+        // under the state `.reconnecting`, which the card renders as "connecting
+        // over the mesh…" — so a desktop that had stopped publishing its doors
+        // read as a slow connection: no banner, no reason, no end. `doorRefusal`
+        // was being kept and shown to nobody, because the banner only consults
+        // it in the `.refused` phase and only the FIRST attach could set that.
+        // The door's sentence is the whole answer here exactly as it is on the
+        // first attach, so it reaches the card the same way.
         ticketProvider: { [weak self] session in
           guard let self else { throw CancellationError() }
-          return try await self.mintTicket(for: session)
+          do {
+            let ticket = try await self.mintTicket(for: session)
+            guard attach == self.attachID else { throw CancellationError() }
+            // A mint that came back retires the refusal an earlier one left on
+            // the card: the client is this session's authority again.
+            if case .refused = self.localPhase { self.localPhase = nil }
+            return ticket
+          } catch {
+            guard attach == self.attachID else { throw error }
+            self.localPhase = .refused(self.doorRefusal ?? Self.shortReason(error))
+            throw error
+          }
         },
         viewId: "phone-\(UUID().uuidString.lowercased())"))
     self.sink = sink

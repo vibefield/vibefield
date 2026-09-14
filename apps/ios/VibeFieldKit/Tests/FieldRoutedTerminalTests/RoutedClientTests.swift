@@ -113,6 +113,56 @@ import Testing
     client.close()
   }
 
+  /// …and a ticket refused that way does not STOP the re-minting (TM-r3, K-M2).
+  ///
+  /// The retry loop called `open` and returned whatever it did. `open` refusing
+  /// locally — a grant outside its window, which a clock that is still wrong
+  /// will produce again — left nobody minting: the task was gone, `needsTicket`
+  /// was set with nothing reading it, and the card sat on `.reconnecting`
+  /// forever. A refused ticket is a reason to ask again on the backoff.
+  @Test func aTicketTheClientRefusesLocallyDoesNotStopTheReMinting() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let mints = TicketMints()
+    let session = session
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        ticketProvider: { _ in
+          mints.calls += 1
+          guard mints.handOutLive else {
+            // Outside its window: `open` names it and spends no socket.
+            return try TicketFactory.make(
+              sessionId: session, issuedAt: 1_000, expiresAt: 61_000)
+          }
+          // A replacement set needs fresh sockets; the old ones have hung up.
+          _ = transport.rotate("/control")
+          _ = transport.rotate("/frames")
+          return try TicketFactory.make(sessionId: session)
+        },
+        maxBackoff: .milliseconds(200), viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    #expect(transport.dials.count == 2)
+    _ = live.activation
+
+    await live.frames.hangUp(code: nil)
+
+    // TWO mints asked for while every answer is refused — which is the whole
+    // assertion: after the first refusal there was nothing left to ask.
+    try await settle("a second mint after the first was refused") { mints.calls >= 2 }
+    // …and the precondition that makes it mean something: a refused ticket
+    // costs no socket, so nothing was dialed by either of them.
+    #expect(transport.dials.count == 2)
+    #expect(client.needsTicket)
+    #expect(client.state == .reconnecting)
+
+    mints.handOutLive = true
+    try await settle("the set to come back") { transport.dials.count == 4 }
+    #expect(!client.needsTicket)
+    client.close()
+  }
+
   // MARK: Activation
 
   /// The CLIENT is the activation authority: it mints ONE id and both legs
@@ -822,4 +872,18 @@ import Testing
     #expect(client.sessionEvents.isEmpty)
     client.close()
   }
+}
+
+/// What the ticket provider has been asked for, and what it hands back.
+///
+/// A class rather than a captured `var` because the provider closure is
+/// `@Sendable` and Swift 6 is right to refuse a mutable capture across that
+/// line; `@MainActor` because the client — and therefore every call of the
+/// provider — is main-actor isolated.
+@MainActor
+final class TicketMints {
+  var calls = 0
+  /// While false, every ticket handed out is one the client will refuse before
+  /// it spends a socket.
+  var handOutLive = false
 }

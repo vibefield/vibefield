@@ -1067,7 +1067,13 @@ public final class RoutedTerminalClient {
           let ticket = try await provider(sessionId)
           guard token == self.generation else { return }
           self.open(ticket)
-          return
+          // `open` can refuse the ticket it was just handed — a grant outside
+          // its window, which a clock that is still wrong will produce again —
+          // and it says so by leaving `needsTicket` set. Returning here left
+          // NOBODY minting: this task was gone and the card sat on
+          // `.reconnecting` forever (TM-r3, K-M2). A refused ticket is a reason
+          // to ask again on the backoff, not a reason to stop.
+          guard self.needsTicket else { return }
         } catch {
           self.lastRefusal = String(describing: error)
         }

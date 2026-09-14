@@ -100,7 +100,22 @@ import Testing
   @MainActor
   final class Mints {
     private(set) var count = 0
+    /// Whether the NEXT mint is refused — for the rows where the door changes
+    /// its mind partway through a session.
+    var refusing = false
     func record() { count += 1 }
+  }
+
+  /// The daemon's refusal for a desktop that has stopped carrying its terminal
+  /// doors onto the tailnet — the one `doorWords` turns into a sentence.
+  static func doorsNotPublished() -> FieldProductError {
+    FieldProductError(
+      kind: "UNAVAILABLE",
+      message: "this device is not publishing its terminal doors on the tailnet",
+      retryable: true,
+      details: .object([
+        "service": .string("terminal"), "state": .string("doors_not_published"),
+      ]))
   }
 
   // MARK: The witness
@@ -227,6 +242,68 @@ import Testing
     // an id, so a replacement can never be mistaken for the set it replaced.
     #expect(second != first)
 
+    await attachment.detach()
+  }
+
+  @MainActor
+  @Test func aReMintTheDoorRefusesReachesTheCardRatherThanConnectingForever() async throws {
+    // TM-r3, K-M2. The first attach's refusal has always reached a face. A
+    // refusal on the RE-mint — the desktop stopped publishing its doors while
+    // this session was live — did not: the client retried forever under
+    // `.reconnecting`, the card read "connecting over the mesh…" with no banner
+    // and no end, and `doorRefusal` was being kept for a `.refused` phase that
+    // only the first attach could ever set.
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+
+    let session = "sess-01J8Z3K9"
+    let mints = Mints()
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(),
+      appearance: .default,
+      door: { _ in
+        mints.record()
+        if mints.refusing { throw Self.doorsNotPublished() }
+        return try Self.ticketJSON(port: port, sessionId: session)
+      })
+
+    attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
+    _ = try await Self.value("the first attach") { await door.controlAttach?.activationId }
+    // The precondition, pinned: a live session carries no banner, so the one
+    // below is the refusal arriving and not a banner that was always there.
+    #expect(mints.count == 1)
+    #expect(attachment.banner == nil)
+
+    mints.refusing = true
+    await door.rotate()
+    await door.hangUp(.frames, code: 1001)
+
+    try await Self.until("the refused re-mint to reach the face") {
+      await MainActor.run {
+        if case .refused = attachment.phase { return true }
+        return false
+      }
+    }
+    #expect(mints.count >= 2)
+    #expect(
+      attachment.phase
+        == TerminalPhase.refused("studio is not publishing its terminal doors on the tailnet"))
+    let banner = try #require(attachment.banner)
+    #expect(banner.title == "studio is not publishing its terminal doors on the tailnet")
+    #expect(banner.coolsTerminal)
+    #expect(banner.actions.contains(TerminalBanner.Action.retryNow))
+
+    // …and the refusal RETIRES when the door starts answering again. Without
+    // this the card would keep a stale refusal over a session that reconnected,
+    // which is the same lie in the other direction.
+    mints.refusing = false
+    try await Self.until("the card to leave the refusal behind") {
+      await MainActor.run {
+        if case .refused = attachment.phase { return false }
+        return true
+      }
+    }
     await attachment.detach()
   }
 
