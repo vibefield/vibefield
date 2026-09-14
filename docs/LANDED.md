@@ -6502,7 +6502,7 @@ already mints (TM-2) — and TM-5 moved the phone onto it (`13120801`, `87d13ec9
 attachment sends no bearer). With no reader left, this slice is one deletion across four
 planes, nothing fenced and nothing flagged.
 
-**The floor (`9221666e`).** `config.rs` loses `TERMINAL_MIRROR_WRITE_ENV`,
+**The floor (`5d041995`).** `config.rs` loses `TERMINAL_MIRROR_WRITE_ENV`,
 `NativeConfig::terminal_mirror_write` and its three initialisers,
 `terminal_mirror_write_file()`, `ensure_terminal_mirror_write()` and
 `load_or_mint_mirror_write()` — the mint with its idempotence, its re-harden, its empty-file
@@ -6521,7 +6521,7 @@ nothing regresses, because the pairing secret is born 0600 and read back verbati
 in this daemon was ever re-hardened. Hardening the pairing file on read would be a NEW claim
 needing its own test; recorded, not done.
 
-**The contracts and fieldd (`9221666e`).** Both method rows, both mgmt shapes, both product
+**The contracts and fieldd (`5d041995`).** Both method rows, both mgmt shapes, both product
 shapes, `LAYOUT.TERMINAL_MIRROR_WRITE_FILE`, the golden
 `terminal-mirror-write-grant.valid.json` with its `fixtures.test.ts` row and its
 `layout.vector.json` entry, regenerated through `gen:rust` and root `pnpm gen`. fieldd loses
