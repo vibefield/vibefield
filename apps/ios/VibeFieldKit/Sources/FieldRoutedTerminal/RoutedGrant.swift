@@ -139,14 +139,34 @@ public struct RoutedGrant: Sendable, Equatable {
   /// The two limits the cell applies, applied here too — locally, before a dial,
   /// so a dead grant costs no socket and the caller gets a NAME instead of a
   /// silent `1008` it would have to guess about.
+  /// Every term below is arithmetic over timestamps a REMOTE minted, so each is
+  /// taken with a reporting operator rather than `+`/`-`. `expiresAt -
+  /// issuedAt` is reached from `open()` on every ticket and trapped on a grant
+  /// whose stamps were far enough apart — a defective fieldd crashing the app
+  /// rather than being told its grant is malformed (TM-r3, K-M3).
   public func validity(
     at nowMs: Int64,
     maxClockSkewMs: Int64 = Int64(RoutedTerminalContract.maxClockSkewMs),
     maxGrantLifetimeMs: Int64 = Int64(RoutedTerminalContract.maxGrantLifetimeMs)
   ) -> Validity {
-    if expiresAt - issuedAt > maxGrantLifetimeMs { return .lifetimeExceeded }
-    if nowMs < issuedAt - maxClockSkewMs { return .notYetValid }
-    if nowMs >= expiresAt + maxClockSkewMs { return .expired }
+    // A lifetime that cannot be represented, or one that runs BACKWARDS
+    // (`expiresAt` before `issuedAt`), is malformed for the same reason an
+    // over-long one is: it is not a window, whatever the clock says. The
+    // backwards case used to fall through to `.valid` — a grant that expired
+    // before it was issued, with every later comparison saying yes.
+    let lifetime = expiresAt.subtractingReportingOverflow(issuedAt)
+    if lifetime.overflow || lifetime.partialValue < 0
+      || lifetime.partialValue > maxGrantLifetimeMs
+    {
+      return .lifetimeExceeded
+    }
+    // An `issuedAt` so small that the skew cannot be taken off it names a
+    // moment before any clock, and nothing is earlier than that — so nothing is
+    // NOT YET valid against it. The same argument, mirrored, for `expiresAt`.
+    let earliest = issuedAt.subtractingReportingOverflow(maxClockSkewMs)
+    if !earliest.overflow, nowMs < earliest.partialValue { return .notYetValid }
+    let latest = expiresAt.addingReportingOverflow(maxClockSkewMs)
+    if !latest.overflow, nowMs >= latest.partialValue { return .expired }
     return .valid
   }
 

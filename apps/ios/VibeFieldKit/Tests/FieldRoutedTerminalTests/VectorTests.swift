@@ -185,6 +185,44 @@ enum Vector {
     #expect(attach.validity(at: 1_787_788_800_000, maxGrantLifetimeMs: 1_000) == .lifetimeExceeded)
   }
 
+  /// Timestamps at the ends of the range are a REFUSAL, not a crash (TM-r3,
+  /// K-M3).
+  ///
+  /// `expiresAt - issuedAt` is reached from `open()` on every ticket, and on a
+  /// grant whose stamps are far enough apart it overflowed and trapped — a
+  /// defective fieldd taking the app down rather than being told its grant is
+  /// malformed. Every term of `validity` is a reporting operator now, and a
+  /// window that cannot be represented is `.lifetimeExceeded`, which is what
+  /// that case already means: malformed, whatever the clock says.
+  @Test func grantTimestampsAtTheEndsOfTheRangeAreRefusedRatherThanTrapped() throws {
+    let vector = try Vector.json("tp-grant-mac.vector")
+    func grant(issuedAt: Int64, expiresAt: Int64) throws -> RoutedGrant {
+      let row = try #require(vector["attach"])
+      var claims = try #require(row["claims"]?.objectValue)
+      claims["issuedAt"] = .int(issuedAt)
+      claims["expiresAt"] = .int(expiresAt)
+      return try RoutedGrant(
+        json: .object([
+          "protected": try #require(row["protected"]), "claims": .object(claims),
+          "mac": try #require(row["mac"]),
+        ]))
+    }
+
+    // The subtraction that used to trap, both ways round.
+    #expect(try grant(issuedAt: .min, expiresAt: .max).validity(at: 0) == .lifetimeExceeded)
+    #expect(try grant(issuedAt: .max, expiresAt: .min).validity(at: 0) == .lifetimeExceeded)
+    // A window that runs BACKWARDS without overflowing. This used to read
+    // `.valid`: the lifetime was negative so it passed the bound, `now` was not
+    // before `issuedAt - skew`, and `now` was not past `expiresAt + skew`. A
+    // grant that expired before it was issued is not a window either.
+    #expect(
+      try grant(issuedAt: 1_000_000, expiresAt: 900_000).validity(at: 950_000)
+        == .lifetimeExceeded)
+    // The skew arithmetic, at both ends, under a lifetime that IS legal.
+    #expect(try grant(issuedAt: .min, expiresAt: .min + 1_000).validity(at: 0) == .expired)
+    #expect(try grant(issuedAt: .max - 1_000, expiresAt: .max).validity(at: 0) == .notYetValid)
+  }
+
   /// THE reason the grant is carried as received JSON rather than a struct: the
   /// MAC covers the values the cell receives, unknown fields INCLUDED. A field
   /// this build does not know is reported and re-sent, never dropped.

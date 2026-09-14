@@ -219,6 +219,51 @@ import Testing
     }
   }
 
+  /// A `byteOffset` at the top of the range is a REFUSAL, not a crash (TM-r3,
+  /// K-M3).
+  ///
+  /// The bounds check above read `offset + count <= totalBytes`, and with
+  /// `byteOffset: 9223372036854775807` and any non-empty chunk that sum
+  /// overflowed and trapped — one line before the check that would have refused
+  /// it. The number is the CELL's, arrives unvalidated, and a client that dies
+  /// on a defective one cannot report anything at all.
+  ///
+  /// The failure's own `description` is exercised too, because it computed the
+  /// same sum and would have trapped while explaining the refusal.
+  @Test func aByteOffsetAtTheTopOfTheRangeIsRefusedRatherThanTrapped() throws {
+    let bytes = Data(count: 100)
+    var transfer = try RoutedTransfer(
+      header: try beginHeader(
+        totalBytes: bytes.count, chunkCount: 1, checksum: RoutedCrc32c.checksum(bytes)),
+      budgetBytes: 4096)
+    #expect(
+      throws: RoutedTransfer.Failure.outOfBounds(
+        offset: Int(Int64.max), count: 8, totalBytes: 100)
+    ) {
+      try transfer.stage(
+        try chunkHeader(index: 0, offset: Int(Int64.max)), payload: Data(count: 8))
+    }
+    let named = RoutedTransfer.Failure.outOfBounds(
+      offset: Int(Int64.max), count: 8, totalBytes: 100
+    ).description
+    #expect(named.contains("9223372036854775807"))
+    #expect(named.contains("8-byte chunk"))
+    // The other end of the range, and the other failure, for the same reason.
+    #expect(
+      throws: RoutedTransfer.Failure.outOfBounds(offset: Int(Int64.min), count: 8, totalBytes: 100)
+    ) {
+      try transfer.stage(
+        try chunkHeader(index: 0, offset: Int(Int64.min)), payload: Data(count: 8))
+    }
+    #expect(
+      RoutedTransfer.Failure.overlap(offset: Int(Int64.max), count: 8).description
+        .contains("9223372036854775807"))
+    // …and the transfer is still usable afterwards: a refused chunk stages
+    // nothing, so the real one still fits and still verifies.
+    try transfer.stage(try chunkHeader(index: 0, offset: 0), payload: bytes)
+    #expect(try transfer.finish() == bytes)
+  }
+
   /// A byte count alone would accept a gap paid for by a duplicate, and the
   /// overlap check alone would accept a hole — so completion is decided by the
   /// ranges TILING the transfer exactly.

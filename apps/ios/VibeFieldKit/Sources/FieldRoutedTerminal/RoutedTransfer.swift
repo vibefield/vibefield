@@ -27,9 +27,14 @@ public struct RoutedTransfer: Sendable {
         "transfer of \(total) bytes exceeds this client's \(budget)-byte staging budget"
       case .badLayout: "transfer layout would overflow a computed allocation"
       case .badChunkCount: "transfer declares a chunk count its bytes cannot fill"
+      // Spelled as an offset and a LENGTH rather than as a half-open range: the
+      // offset is the CELL's, and an `offset + count` that cannot be
+      // represented would trap inside the very sentence explaining why the
+      // chunk was refused (TM-r3, K-M3).
       case .outOfBounds(let offset, let count, let total):
-        "chunk [\(offset), \(offset + count)) falls outside a \(total)-byte transfer"
-      case .overlap(let offset, let count): "chunk [\(offset), \(offset + count)) overlaps one already staged"
+        "a \(count)-byte chunk at offset \(offset) falls outside a \(total)-byte transfer"
+      case .overlap(let offset, let count):
+        "a \(count)-byte chunk at offset \(offset) overlaps one already staged"
       case .incomplete(let received, let total): "transfer ended with \(received) of \(total) bytes"
       case .checksumMismatch(let expected, let actual):
         "transfer checksum \(actual) does not match the declared \(expected)"
@@ -90,11 +95,18 @@ public struct RoutedTransfer: Sendable {
   public mutating func stage(_ header: RoutedEnvelopeHeader, payload: Data) throws {
     guard let offset = header.transfer?.byteOffset else { throw Failure.badChunkCount }
     let count = payload.count
-    guard offset >= 0, count >= 0, offset + count <= totalBytes else {
+    // `byteOffset` is the CELL's number and reaches this line unchecked, so the
+    // sum is taken with a reporting operator and NOT with `+`. With
+    // `byteOffset: 9223372036854775807` and any non-empty chunk, `offset +
+    // count` overflowed and trapped — a defective or hostile cell crashing the
+    // app one line before the bounds check that would have refused the chunk
+    // (TM-r3, K-M3). The same discipline `init` already keeps for the layout.
+    let sum = offset.addingReportingOverflow(count)
+    guard offset >= 0, count >= 0, !sum.overflow, sum.partialValue <= totalBytes else {
       throw Failure.outOfBounds(offset: offset, count: count, totalBytes: totalBytes)
     }
     guard count > 0 else { return }
-    let end = offset + count
+    let end = sum.partialValue
     for range in staged where offset < range.end && range.offset < end {
       throw Failure.overlap(offset: offset, count: count)
     }

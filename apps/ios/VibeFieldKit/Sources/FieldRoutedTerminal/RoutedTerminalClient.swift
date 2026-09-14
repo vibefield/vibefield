@@ -292,7 +292,7 @@ public final class RoutedTerminalClient {
       let current = held.grantGeneration, next >= current
     else { return }
     grants[sessionId] = grant
-    session.inputRightDeadlineMs = grant.expiresAt - Self.attachRenewalMarginMs
+    session.inputRightDeadlineMs = Self.inputRightDeadline(for: grant)
     sessions[sessionId] = session
     control?.send(
       .attachControlLeg,
@@ -535,7 +535,7 @@ public final class RoutedTerminalClient {
     var session = RoutedSessionState(sessionId: sessionId, activationId: activationId)
     session.rights = grant.rights ?? []
     session.nowMs = Self.nowMs()
-    session.inputRightDeadlineMs = grant.expiresAt - Self.attachRenewalMarginMs
+    session.inputRightDeadlineMs = Self.inputRightDeadline(for: grant)
     session.resumeToken = previous?.resumeToken
     session.appliedContent = previous?.appliedContent
     sessions[sessionId] = session
@@ -660,7 +660,12 @@ public final class RoutedTerminalClient {
       if let held = session.status, status.cellStatusSequence < held.cellStatusSequence { return }
       session.status = status
       session.nowMs = Self.nowMs()
-      session.leaseDeadlineMs = session.nowMs + status.leaseTtlMs
+      // `leaseTtlMs` is the CELL's number and reached a bare `+` here, so a cell
+      // announcing a TTL near `Int64.max` crashed the app (TM-r3, K-M3). A
+      // deadline that cannot be represented saturates instead: `leaseLive` is
+      // only ever a comparison, and the honest reading of "further away than a
+      // clock can say" is the furthest one it CAN say.
+      session.leaseDeadlineMs = Self.deadline(from: session.nowMs, after: status.leaseTtlMs)
       if case .revoked(let reason) = status.presentation {
         session.control = .ended(reason: reason)
         session.frames = .failed(reason)
@@ -1154,6 +1159,30 @@ public final class RoutedTerminalClient {
 
   private func leaseEpoch(for sessionId: String) -> Int64 {
     grants[sessionId]?.leaseEpoch ?? ticket?.leaseEpoch ?? 0
+  }
+
+  /// A deadline `ttlMs` after `nowMs`, SATURATING rather than trapping.
+  ///
+  /// Both terms can be a remote's: the TTL is the cell's and the margin is
+  /// subtracted from a grant's `expiresAt`, which fieldd minted. A deadline
+  /// that cannot be represented is not a crash — it is the furthest deadline
+  /// that can be, because every reader of one is a comparison (TM-r3, K-M3).
+  static func deadline(from nowMs: Int64, after ttlMs: Int64) -> Int64 {
+    let sum = nowMs.addingReportingOverflow(ttlMs)
+    guard sum.overflow else { return sum.partialValue }
+    return ttlMs > 0 ? Int64.max : Int64.min
+  }
+
+  /// When this client stops sending input for want of a renewal: the grant's
+  /// own expiry, less the cell's renewal margin. `expiresAt` is fieldd's
+  /// number and `open` validates only the TRANSPORT grant, so an attach grant
+  /// with an extreme stamp reaches this line unchecked and must not trap.
+  static func inputRightDeadline(for grant: RoutedGrant) -> Int64 {
+    let deadline = grant.expiresAt.subtractingReportingOverflow(attachRenewalMarginMs)
+    guard deadline.overflow else { return deadline.partialValue }
+    // Only an `expiresAt` at the very bottom of the range overflows here, and
+    // a right that expired before any clock started is simply not live.
+    return Int64.min
   }
 
   static func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }

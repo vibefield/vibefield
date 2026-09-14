@@ -435,6 +435,38 @@ enum TicketFactory {
       ]))
   }
 
+  /// A ticket whose two grants carry DIFFERENT windows: the transport grant
+  /// live, the attach grant at whatever the caller asks for.
+  ///
+  /// `open` validates the TRANSPORT grant alone — the attach grant is the
+  /// cell's to judge — so this is the only way a test reaches `attach()` with
+  /// an attach grant nothing on this device has checked, which is exactly where
+  /// its `expiresAt` meets the renewal-margin subtraction.
+  static func makeMixed(
+    controlUrl: String = "ws://127.0.0.1:9/control", framesUrl: String = "ws://127.0.0.1:9/frames",
+    cellBootId: String = "cb-7f3a9c1e-2026", sessionId: String,
+    attachIssuedAt: Int64, attachExpiresAt: Int64
+  ) throws -> RoutedTerminalTicket {
+    let live = try make(
+      controlUrl: controlUrl, framesUrl: framesUrl, cellBootId: cellBootId, sessionId: sessionId)
+    var attach = live.attachGrant.raw.objectValue ?? [:]
+    var claims = attach["claims"]?.objectValue ?? [:]
+    claims["issuedAt"] = .int(attachIssuedAt)
+    claims["expiresAt"] = .int(attachExpiresAt)
+    attach["claims"] = .object(claims)
+    return try RoutedTerminalTicket(
+      json: .object([
+        "route": .object([
+          "cellBootId": .string(cellBootId), "routeRevision": .int(12), "leaseEpoch": .int(4),
+        ]),
+        "endpoints": .object([
+          "controlUrl": .string(controlUrl), "framesUrl": .string(framesUrl),
+        ]),
+        "transportGrant": live.transportGrant.raw,
+        "attachGrant": .object(attach),
+      ]))
+  }
+
   /// The vector's grants were minted in 2026-05 and every validity check is
   /// against the CLOCK, so a test that wants a live grant re-stamps the window.
   /// The MAC is not re-computed — no test here verifies one, and the cell is the

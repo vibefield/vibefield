@@ -241,6 +241,69 @@ import Testing
     client.close()
   }
 
+  /// A `leaseTtlMs` at the top of the range is a lease that lasts, not a crash
+  /// (TM-r3, K-M3).
+  ///
+  /// `leaseDeadlineMs = nowMs + status.leaseTtlMs` was a bare `+` over a number
+  /// the CELL supplies, so a defective one took the app down. The deadline
+  /// saturates now: every reader of it is a comparison, and the honest reading
+  /// of "further away than a clock can say" is the furthest one it can say.
+  @Test func aLeaseTtlAtTheTopOfTheRangeSaturatesRatherThanTrapping() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(
+        session: session, activation: live.activation, sequence: 1, leaseTtlMs: .max))
+    try await settle("the status") { client.sessions[session]?.status != nil }
+    #expect(client.sessions[session]?.leaseLive == true)
+
+    // …and a NEGATIVE one is a lease that is already over, which is the same
+    // arithmetic saturating the other way rather than wrapping into the future.
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(
+        session: session, activation: live.activation, sequence: 2, leaseTtlMs: .min))
+    try await settle("the expired lease") { client.sessions[session]?.leaseLive == false }
+    #expect(client.sessions[session]?.presentationReady == false)
+    client.close()
+  }
+
+  /// The same discipline on the ATTACH grant's expiry, which `open` never
+  /// validates — it checks the TRANSPORT grant — so an extreme stamp reaches
+  /// `attach()`'s `expiresAt - attachRenewalMarginMs` unchecked. The client
+  /// attaches and simply holds no live input right, rather than trapping.
+  @Test func anAttachGrantExpiryAtTheBottomOfTheRangeDoesNotTrap() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    // A transport grant inside its window and an attach grant whose expiry is
+    // at the floor of the range. `TicketFactory` stamps both, so the attach
+    // grant's own validity is not what is under test here — the subtraction is.
+    client.open(
+      try TicketFactory.make(
+        sessionId: session, issuedAt: Int64.min, expiresAt: Int64.min + 1_000))
+    // The ticket is refused before a socket (its transport grant is not live),
+    // which is itself the arithmetic not trapping.
+    #expect(client.needsTicket)
+    #expect(transport.dials.isEmpty)
+
+    // Now the case that reaches `attach()`: a live transport grant, and an
+    // attach grant expiring at the floor.
+    let mixed = try TicketFactory.makeMixed(
+      sessionId: session, attachIssuedAt: Int64.min, attachExpiresAt: Int64.min + 1_000)
+    client.open(mixed)
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    _ = live.activation
+    #expect(client.sessions[session]?.inputRightLive == false)
+    #expect(client.sessions[session]?.inputAllowed == false)
+    client.close()
+  }
+
   /// A status with an OLDER sequence is a reorder, not a revocation. Applying it
   /// backwards would revoke a live lease from a message that was already stale
   /// when it arrived.
