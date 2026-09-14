@@ -183,12 +183,15 @@ rounded corners.
 5. Turn off Wi-Fi and repeat over cellular. Background and reopen VibeField,
    check reconnection, and confirm the desktop terminal session is still alive.
 
-**Current product limits (build 2):** the write key landed with IOS-3c — entered on
-the card (ENTER KEY) from the desktop's `FIELD_NATIVE_TERMINAL_MIRROR_WRITE` value,
-kept in the Keychain per host, managed under WRITE KEYS in settings — so a host
-whose key this phone holds accepts typing from the input card (Draft and Live
-modes), and a host without one stays view-only and the card says so. Build 1 had
-none of this. Still not implemented: the agent fleet on the field is the mock (the
+**Current product limits (build 2, archived from `09c526ab` — a build that PREDATES
+TM-3):** the write key landed with IOS-3c — entered on the card (ENTER KEY) from the
+desktop's `FIELD_NATIVE_TERMINAL_MIRROR_WRITE` value, kept in the Keychain per host,
+managed under WRITE KEYS in settings — so a host whose key this phone holds accepts
+typing from the input card (Draft and Live modes), and a host without one stays
+view-only and the card says so. Build 1 had none of this. **None of that is true of a
+build cut after 2026-09-14:** TM-3 deleted the key, the sheet, the settings section and
+the desktop door, and the right to type is a claim in the attach grant (TM-D3). The next
+build's limits paragraph is rewritten when it is archived. Still not implemented: the agent fleet on the field is the mock (the
 fieldd binding has not landed), project colours are dealt per device, and the
 History tab (D-i10) is not built. TestFlight does not enable anything the app has
 not implemented.

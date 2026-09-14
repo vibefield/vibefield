@@ -27,27 +27,28 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested; since IOS-6b it steps on the reference's fixed schedule (`advance(now:)`: 30 Hz behind an accumulator, the 15 Hz floor and the 0.2 air-friction ceiling clamped at every entry, a stall cap, every body's last two solved positions for the renderer's blend) |
 | `VibeFieldKit/Sources/FieldAgents` | the agent model — since IOS-6a a SUBSET of puppeteer's monitor mirror, field names kept (usage samples, effort with its intent, the latest reply, the blockers, the clocks) — the status classifier (`idle · working · blocked`, core's word), the body model (`SwarmBodyModel`: the reference's `bubble-model.ts` transcribed — the five drawn states, the copy lines, the figures, the ring, the burn bars), the ledgers the field folds every projection (`UsageLedger`, `UnreadLedger`, `ProjectLedger` + `ProjectTint` — record §02's colours, goldens generated from the TypeScript), `FieldAssembly` (the fold), and the scripted mock fleet, which burns tokens along the reference lab's four shapes |
 | `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime, login sheet, peer roster, the mesh chip — plus (IOS-4b) the synced stores and the product-door join. Since IOS-4i the runtime is `FieldTruffleRuntime`, so the node joins the namespace `FieldMeshContract.appID` names — the contracts' `APP_ID`, the one every desktop floor joins — rather than ghosttea's `ghosttea-terminal`, which is what a node's app id decides and nothing downstream can. Since **TM-5** it names NO Ghosttea product: the peer directory and the TSP1 dialer left with the protocol, and `truffle` is a direct package dependency (the same exact `0.7.12` pin it always resolved to) rather than one inherited through `GhostteaTruffle`. The per-host `list-sessions` discovery went with them — a session is named by the fold's `terminal.runtimeSessionId` now, and `terminal.v1.hosts` retired at TM-1. Since **TM-5a** a desktop row also carries `DeviceCapabilities.terminalMesh` from `device.list`, so a card can say a missing attach's reason BEFORE the tap rather than only after the mint refuses |
-| `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3, re-footed at TM-5): appearance → presentation config, the attachment over the ROUTED T1 client, the frame sink that hands a cell's own TRF1 to the Metal surface (and enforces the frame-identity rule on the way), the Metal surface — plus (IOS-3c) the per-host mirror-write key store, which TM-3 retires |
+| `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3, re-footed at TM-5): appearance → presentation config, the attachment over the ROUTED T1 client, the frame sink that hands a cell's own TRF1 to the Metal surface (and enforces the frame-identity rule on the way), the Metal surface. The per-host mirror-write key store IOS-3c added was DELETED at TM-3 (2026-09-14) |
 | `VibeFieldKit/Sources/FieldRoutedTerminal` | the routed T1 client (TM-4): two `URLSessionWebSocketTask` legs to one cell's doors, the grant-carrying handshake, per-session activation, byte credits, the presentation envelope and its transfers. No Ghosttea product and no mesh — written to move upstream into GhostteaKit as the third routed-client core (petition G27) |
 | `VibeFieldKit/Sources/FieldRoutedTerminal` | the ROUTED T1 client (TM-4): the phone's half of the terminal pipeline, and the first target that speaks a desktop CELL rather than the mesh. Two `URLSessionWebSocketTask` legs to one cell's `/control` and `/frames` doors over `MeshNode.urlSession(configuration:)`, a `ConnectionHello` carrying the transport grant VERBATIM (the MAC covers what the cell receives, unknown fields included, so a typed re-serialization would break one this device cannot compute), per-session activation on both legs under an id this client mints, receiver-advertised BYTE credits with the spec's seven laws, the `PresentationEnvelope` decoded to a TRF1 payload the renderer's own frame path takes, seed and catch-up transfers, the two-dimensional lease as values (`PresentationReady` ≠ `InputAllowed`), input and the explicit geometry lease. It takes `FieldProduct` for the tolerant-reader vocabulary and names NO Ghosttea product and no design kit — the manifest enforcing TM-D4, because this code is written to move upstream into GhostteaKit as the third routed-client core (petition G27). Nothing mounts it yet; `TerminalAttachment` moves onto it at TM-5 |
 | `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a…5e): a composer row over a rail of nine terminal keys in two modes — a local draft sent as one bracketed paste, or the terminal itself holding the keyboard — with one sticky Ctrl reaching through both, the long-press fans, the reply and paste chips, the closed row, a mic that dictates into the draft and never onto the wire, the `+` doors (scan, snippets, clipboard history) and the `⋯` keypad's three pages, every one of them sized for the reader's text size and spoken to a screen reader; its own target on purpose (K-D1) because a keyboard is state machines all the way down and the IOS-3 review found every serious bug living in the one module with no test target, and it takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product. Since IOS-5v it wears DESIGN.md's **chrome family** as the KeyboardLab canvas draws it — SF type in sentence case, a glass card with a hairline over the sheet's own glass, 44 pt keys at radius 9, round pills — while the swarm field and the terminal surface keep the godview instrument palette that §1.1 scopes to them |
 | `VibeFieldKit/Sources/FieldSwarm` | the swarm on Metal (IOS-6c, D-i11): the six shaders transcribed from the reference's WGSL (they ride as resources and compile at first use, D-i14), `SwarmRenderer` (the same five pipelines in painter's order, the same buffer layouts, one upload a frame), the glyph atlas (CoreText at the screen's scale into an `r8` shelf-packed texture; the folder, dot and bar drawn from paths into it), the mark atlas (the reference's `marks.png` byte for byte), `SwarmTheme` (the colours resolved from `FieldPalette` per scheme), `SwarmStage` (the loop: the blend, the radius spring, the arrival curve, draw order, hit testing, drag / tap / hold, VoiceOver focus), `SwarmMetalView`, the SwiftUI `SwarmField` with its chrome slot and `.swarmObstacle()`, and the design lab behind `-vf-swarm-lab` (D-i15) |
 | `VibeFieldKit/Sources/FieldHome` | the home composition: the field mounted over the dressed rows, the session card, the chrome corners, hold-to-create — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
-**Write keys (IOS-3c) — RETIRING.** The mirror-write capability a desktop
-grants this phone is the value of its `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`,
-kept in the Keychain as one generic-password item per host (service
-`com.jamesyong.vibefield.ios.mirror-write`, account = the host's device id,
-`AfterFirstUnlockThisDeviceOnly`, `kSecAttrSynchronizable = false` — a grant to
-one device must not ride iCloud to the others). It is never displayed,
-exported, or logged: the settings sheet lists the HOSTS and offers only REMOVE.
+**Write keys (IOS-3c) — DELETED at TM-3, 2026-09-14.** This phone held one
+Keychain item per host carrying that desktop's mirror-write capability, and a
+sheet, an ENTER KEY affordance and a WRITE KEYS settings section around it. All
+of it is gone, along with the desktop's mint, its key file, its env var, the
+`terminal.mirrorWriteGrant` door and the mgmt verb behind it (TM-D3).
 
-**Since TM-5 no attach reads it.** The right to type is a claim in the ATTACH
-GRANT fieldd mints per client per session — expiring, revocable by generation,
-and downgraded by the cell if the cell says so (TM-D3) — rather than a durable
-bearer this device holds. The store, its sheet and the
-`terminal.mirrorWriteGrant` door still exist and still work; **TM-3 deletes the
-three together**, which is why they are still described here.
+**The right to type is a claim in the ATTACH GRANT** fieldd mints per client per
+session — expiring, revocable by generation, and downgraded by the cell if the
+cell says so. A WhoIs-verified self peer is minted `[input, read]`; anything else
+is minted `[read]` and the attachment says so in its own words ("view only — this
+desktop granted read without input"). Nothing durable is stored on this device.
+
+**A phone upgrading from an older build** has its Keychain items REMOVED at the
+first launch on this build: a one-time delete by service, which never reads a
+value (`RetiredWriteKeyCleanup`). Nothing replaces them.
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
 TailscaleKit binary's floor — GhostteaApp's own) · simulator is arm64-only
@@ -106,8 +107,6 @@ reach states no `simctl` touch can:
 | `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole path with no finger on the glass: hear the fold, choose, mint a ticket at the product door, dial the cell's two legs. Gated on the CARD's own face, so it fires exactly when a tap would have worked; without a mesh it proves the honest-failure path instead |
 | `-vf-open-settings` | opens the terminal appearance sheet |
 | `-vf-swarm-lab[=section[:page]]` | covers the field with the **swarm design lab** (IOS-6c, D-i15): the reference's fixture stages — the 22 drawn states, the three weights of the pane light, the settled cluster, the mark contact sheet — on the production renderer, the pixels the field will paint. Bare, the whole lab scrolls; `=states:3`, `=light`, `=field` or `=marks` shows one page, because a screenshot run cannot scroll and every page is a gate. Six stages a surface: one surface for the whole grid crossed the 8192-pixel texture limit at 3× |
-| `-vf-open-write-key` | opens the WRITE KEY sheet on the demo host, the one surface a tap is otherwise the only way to reach |
-| `-vf-write-key=<secret>` | swaps the Keychain for an in-memory write-key store whose **wildcard** answers for any host, so `-vf-auto-attach` can type against a serving desktop with no finger on the glass; it also seeds one explicit demo host (`studio`) so the settings sheet's WRITE KEYS section has a row to render. A launch argument is visible to `ps` — a DEBUG smoke aid, never a way to carry a real secret onto a phone |
 | `-vf-demo-input-card` | mounts the input card over whatever card is open and prints every act it emits instead of sending one. The card's real gate is a live attachment this device may type into (K-D2), which no simulator has — so this forces the face for a look at our own pixels, never a claim that a terminal answered. Pair with `-vf-demo-remote -vf-auto-open-card`; every argument below rides on top of it |
 | `-vf-demo-input-live` | the strip instead of the composer — the terminal holding the keyboard, the mode key lit. The word "Live" is this spec's name for the mode and never the screen's |
 | `-vf-demo-input-draft` | a filled two-line draft under a LOCKED Ctrl: Send gone prominent, the dot on the lit `Ctrl` cap, the card grown by one line |
@@ -121,7 +120,7 @@ reach states no `simctl` touch can:
 | `-vf-demo-input-snippets` | opens the Snippets sheet holding ONE fixture snippet (`STATUS` · `git status --short`, sends Enter) in a scratch `UserDefaults` suite that is wiped at launch — a fixture must never write into, or read out of, what a real user saved |
 | `-vf-demo-input-history` | opens the Clipboard History sheet on two fixture entries in the same scratch suite. The real ring is fed only by pastes made THROUGH this card; nothing in the app ever reads the pasteboard's contents on its own |
 | `-vf-demo-input-scan` | opens the Scan Text cover. On every simulator this is the honest-missing face — `DataScannerViewController.isSupported` is false without a camera — which is precisely the state worth looking at, since it is the one a screenshot run can ever reach |
-| `-vf-demo-paste-review` | opens the paste-review sheet on fixture text. The sheet is otherwise reachable only by tapping a SYSTEM paste control with five lines or more on the pasteboard, and a headless run can do neither — the same door `-vf-open-write-key` opens, for the same reason |
+| `-vf-demo-paste-review` | opens the paste-review sheet on fixture text. The sheet is otherwise reachable only by tapping a SYSTEM paste control with five lines or more on the pasteboard, and a headless run can do neither |
 | `-vf-demo-landscape` | asks the window scene to turn on its side (IOS-5e). `xcrun simctl ui` sets appearance, contrast and text size and nothing that rotates a device, so a headless sweep of the card's landscape and iPad layout — where the width cap at 720 pt is the whole question — has no other door. The system may refuse the request, in which case the picture is portrait and says so |
 
 The two accessibility settings the sweep also drives are the simulator's, not
@@ -175,11 +174,10 @@ shader ports in the settings sheet, and our own banner. What went with TSP1: the
 per-host discovery that put every peer's session on the field as a bubble (the
 field's rows are the FOLD's agent runs now), and upstream's reconnect banner
 with the connection it described;
-and since IOS-3c the write key has a home: the per-host Keychain store above,
-ENTER KEY on the card's invitation, the sheet that takes it, and the WRITE KEYS
-section that lists and revokes — all of it retiring at TM-3, and since TM-5 read
-by no attach (the live attachment's status row stopped offering ENTER KEY, which
-could not have helped: the right to type is the attach grant's); and since IOS-5a…5e the input card, which is
+IOS-3c gave the write key a home — a per-host Keychain store, ENTER KEY on the
+card's invitation, the sheet that took it, the WRITE KEYS settings section — and
+TM-3 DELETED all of it on 2026-09-14, TM-5 having already left it unread by any
+attach (the right to type is the attach grant's); and since IOS-5a…5e the input card, which is
 finished: a composer row over a rail of nine terminal keys, in two modes that
 nothing but a tap on `>_` ever changes. Draft holds a local draft — the kit's
 own trait set on the field, so no autocorrect, no smart quotes and no

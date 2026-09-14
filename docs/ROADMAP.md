@@ -23,7 +23,9 @@
 > the pane frame upstream and pinned (`aa34eb1`/`fdb421b4`, `73b2d64`/`cfcd951c`) · the field's wire
 > shapes, the `field` projection on `agent.subscribe`, the `field.agents.v1` slice (capped, `omitted`)
 > and `agent.interrupt` (AR-6-0) · the floor-minted mirror-write capability behind an allow-listed
-> `terminal.mirrorWriteGrant` door · GT-6 the deck wears the record's frame · the phone's
+> `terminal.mirrorWriteGrant` door (**RETIRED 2026-09-14 at TM-3** — the write right is a claim in
+> the per-client expiring attach grant; the door, the mint, the key file, the env var and the
+> phone's Keychain slot are deleted) · GT-6 the deck wears the record's frame · the phone's
 > `FieldProduct` client, `FieldStore` reader, `FieldLink` live field, the join's five faces, the grant
 > from the sheet and the corner's link token · a six-lens review and its fix wave across every lane
 > (24 fix commits; the daemon-killing rejection, the phone's replay and attribution holes, the
@@ -334,7 +336,7 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
-| NF — native floor | **MF-2a/2f 2026-09-13 `d205548b`/`b1e330f7`: the floor mints its own mirror-write capability, born 0600 with no window; NF-8 the posture toggle owed** · NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4, with peers authenticated by tailnet WhoIs | `specs/native-floor.md` | per-device tokens (GT-D6) whenever the token work is wanted — NOT gated upstream (the v3 claim was retracted) |
+| NF — native floor | **MF-2a's mint RETIRED 2026-09-14 at TM-3** (`d205548b`/`b1e330f7` landed it; the capability, its key file and its env var are deleted — the write right is an attach-grant claim, TM-D3). MF-2f's `create_private` STAYS and the pairing secret is its one remaining member. NF-8 the posture toggle owed · NF-0…7 + **NF-remote (§7) COMPLETE** — the floor serves TSP1, hosts published, writes gated; proved on a real tailnet at GT-4, with peers authenticated by tailnet WhoIs | `specs/native-floor.md` | per-device tokens (GT-D6) whenever the token work is wanted — NOT gated upstream (the v3 claim was retracted) |
 | IOS — companion | **IN FLIGHT** — **IOS-4a…4h and 4e LANDED 2026-09-13/14 (tip `6b26cf23`): `FieldProduct` client + `FieldStore` reader · `FieldLink` the live field · the join's five faces · the grant from the sheet · the corner's link token and line; next Phase 0 on the device, IOS-EL8 the ghosttea pin, the mesh sheet's door line, `notes`** · IOS-0/2/2f + IOS-EL8 · IOS-3a…3e + 3r (2026-08-05/06) · **IOS-3c (the write key's Keychain home), IOS-5a…5e + 5v (the input card, in the canvas's chrome), IOS-6a…6d (the field is RFC 005's swarm on Metal) ON MAIN 2026-09-13 `09c526ab`** · **IOS-TF internal TestFlight `168548c4`** (build 1 = the pre-IOS-3c app; build 2 archived from this tree, its upload owed to Xcode's sign-in) | `thinking-ios-app.md` §10–§12 · `thinking-ios-swarm.md` · `apps/ios/TESTFLIGHT.md` | upload build 2 → the device gates (the shader compile at first launch, 30 Hz physics under the 120 Hz blend, 7 pt type, VoiceOver per body, the tab bar as an obstacle) · D-i11…D-i17 rulings · the fieldd binding (the agent fleet is still the mock; the project-colour door) · the History tab (D-i10) |
 | GT — Godview terminal | **IN FLIGHT** — **GT-6 LANDED 2026-09-13 `c2b6d71c` + the review's `15e746e7` · `980bc8e6` · `9b652ff4` · `510dfaec`: the deck wears the record's pane frame from `@vibecook/puppeteer-views` (PU-14/14b upstream), the fold lifted to the overlay, stop/resume/zoom over fieldd's doors** · GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** + **GT-5a…d the code review's fixes** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | the deck's own ladder is done. **The swarm on WebGPU and the other views ARRIVED at AR-5 (2026-09-13, `fe6b3d0a`)** as `@vibecook/puppeteer-views` (AR-D13a; puppeteer's Godview is the reference, ours the product — AR-D14); *erratum 2026-09-13: the 09-12 phrase "mounted into the worker's `adoptCanvas` socket" was GT-D16's expectation restated — as built the package's renderer paints on MAIN behind a physics DRIVER port and the socket stays unused; the spec's GT-D16 carries the correction*; the monitor's one mock module was DELETED at AR-3 (the local field is fieldd's fold through the deck's door); smoke row 13b unskips when a peer can be staged in the harness |
 | UI — design system | **LANDED** 2026-08-05/06; **Studio architecture landed 2026-08-26** — tokens → primitives → production compositions → a catalog that mounts shipping views → one real product + isolated Studio under the active dev host, with explicit ephemeral live appearance and ownership enforced by test | `DESIGN.md` (authority) · **`docs/UI_SYSTEM.md`** (where it lives in code) | the catalog's own acceptance is an eyeball (light/dark · keyboard focus · reduced motion · narrow); the browser-only catalog remains available without live-product authority |
@@ -862,8 +864,11 @@ entire reconnect leg for the life of the process. Fixed as pure functions with t
 IOS-3c, but the capability/Keychain leg never landed** — verified at three source sites, one of
 which says *"nothing assigns this yet"*. `claimControl` is plumbed; no capability is ever
 supplied; the phone attaches **view-only** and the card says so honestly. The old GT-5 acceptance
-row was *live view · type with mirror-write · reconnect banner* — the middle third is not
-reachable until that leg lands.
+row was *live view · type with mirror-write · reconnect banner* — the middle third was not
+reachable until that leg landed. **CORRECTED 2026-09-14 (TM-3):** that leg is not owed and never
+will be. MF-2/G4 shipped the capability leg on 2026-09-13, and TM-5 then moved the phone onto a
+routed T1 attach whose grant carries `input` for a self peer — so TM-3 deleted the capability, the
+Keychain slot and the sheet. The middle third is reachable, and it is a grant right, not a key.
 
 **UI.** A track the roadmap never had a row for, built entirely by James: `DESIGN.md` said what
 the product should look like and nothing said where that direction lived in code.
@@ -1134,10 +1139,12 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   WhoIs-verified peer can mint this device's floor ticket. Bounded (the token authenticates
   only on local unix sockets) but it is a daemon credential crossing a device boundary for no
   reason, and it falsifies GT-D6's "only spine code receives it" (GT review, 2026-08-06).
-- **Our mirror-write secret leaves the device** — upstream reuses the one configured string as
-  the VIEWER's outbound token, so attaching to a peer hands it the string that grants write on
-  our own sessions. Inherent to mirror-write v1, not a coding bug: it is the concrete argument
-  for the per-device-token upgrade (GT review, verified at the pinned source, 2026-08-06).
+- ~~**Our mirror-write secret leaves the device**~~ — upstream reused the one configured string
+  as the VIEWER's outbound token, so attaching to a peer handed it the string that granted write
+  on our own sessions. **CLOSED 2026-09-14 (TM-3)** by deletion rather than by the per-device-token
+  upgrade it argued for: there is no configured string on any plane. A grant is signed per cell
+  boot, per client, per session, and carries no credential the holder can replay elsewhere
+  (GT review, verified at the pinned source, 2026-08-06).
 - **F-C6-21 audit-integration flake** — struck 3× under full-suite load, green in isolation;
   "the track's oldest debt" (C6-6, 2026-07-28). The mcp EPIPE flake is separate and PAID
   (`37cce3b`). **NOT FIXED 2026-08-10, but narrowed by a source read — recorded so the next

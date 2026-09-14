@@ -6482,3 +6482,125 @@ B1 sequential, 200 writes: convergence 28 ms, the peer held all 200; request/rep
 **The design James asked for, and his ruling.** While the fixes landed, three read-only research lanes established at the source how the terminal mesh couples to the floor (`draft/thinking-terminal-mesh-cells.md`): the desktop's tailnet is a Go sidecar's userspace netstack, an inbound TCP connection arrives in the floor as a real owned socket, QUIC cannot leave the floor, the phone reads no hosts store and receives whole JSON grid rows while its Metal renderer already decodes TRF1 it encodes itself, ghosttea's serve path is typed on its in-process session map and calls 32 of its methods, and the sidecar's reverse proxy already routes WebSockets by path to loopback targets. **Verified in the source and stated in the plan:** with `FIELD_NATIVE_TERMINAL_MESH=1` the floor is the pre-TP-S3e product — no route rows, no T1 doors, no grants — and fieldd refuses every routed ticket `transport_not_landed`, so the mesh flag and the desktop deck are MUTUALLY EXCLUSIVE today; Phase 0 could not have shown the phone beside a working deck. **James ruled TM-D1 = T directly** (2026-09-14 04:59): the phone becomes a routed T1 client over the sidecar's proxy to the cells' doors, fed the cell's own TRF1, the write right a per-client expiring grant (the bearer retires), the in-process serve and the TSP1 adapter deleted; slices TM-1 (the floor), TM-2 (fieldd), TM-4 (the kit's routed client) in flight; DECISIONS carries TM-D1…D8. Petitions: **T3** (truffle's UDP relay accepts its registration from any local sender — EL7, the QUIC plane), **G27** drafted (the Swift routed client into GhostteaKit, after it lands here), G25/G26 withdrawn as moot under T, the T1 row's "QUIC remoteIdentity()" claim corrected (NAPI only).
 
 **Gate at `f999b6e1`** (the landing script, `pnpm verify` verbatim first): preflight OK · `check:ios-fixtures` 14 copies + 1 registry value identical · typecheck 25 projects · lint stops on James's untracked `work/` only (his QA dropped NDJSON there) · fmt 0 · clippy 0 · `bundle:assert` 0 · `pnpm test` 0 (field-app 90, fieldd 84 + 1 skipped, electron-shell 69) · `pnpm test:rust` 0 (21 suites) · gen:check's Rust half 0. **Owed:** James's live witnesses (discovery, the deck with the flag on — after TM-1), the kill affordance ruling, the Codex late-attach probe, the fail-fast prose line, a new TestFlight build (build 3 predates IOS-4), IOS-EL8 (the kit's ghosttea pin at 0.10.1 against 0.11.1).
+
+## TM-3 — the bearer key retires into grant rights (2026-09-14; lane tm-bearer)
+
+**What this retires, and why it could be retired rather than replaced.** MF-2 built a
+durable write credential: the floor minted 32 random bytes as hex at boot when
+`FIELD_NATIVE_TERMINAL_MIRROR_WRITE` was unset, kept them 0600 at
+`LAYOUT.TERMINAL_MIRROR_WRITE_FILE`, answered for them on ONE mgmt hop
+(`native.terminal.mirrorWriteCapability`), and fieldd handed them to a WhoIs-verified self
+peer through `terminal.mirrorWriteGrant` behind FD-2's default-refuse allow-list, audited as
+`capability.mirror_write.grant`. The phone kept what it was given in a Keychain item per host
+and presented it on every attach. Every property of that design was a consequence of the
+credential being DURABLE: one secret per floor, so a rotation revoked every device at once; a
+file on disk, so every same-uid process could read it (EL7's adversary); and a door that had
+to enumerate who may hold it, because a kind nobody had thought about must not be handed a key
+that never expires. TM-D3 replaced the credential with a CLAIM — `rights: ["input", "read"]`
+in the per-client, per-session, expiring, revocable-by-generation attach grant the ticket
+already mints (TM-2) — and TM-5 moved the phone onto it (`13120801`, `87d13ec9`: the
+attachment sends no bearer). With no reader left, this slice is one deletion across four
+planes, nothing fenced and nothing flagged.
+
+**The floor (`9221666e`).** `config.rs` loses `TERMINAL_MIRROR_WRITE_ENV`,
+`NativeConfig::terminal_mirror_write` and its three initialisers,
+`terminal_mirror_write_file()`, `ensure_terminal_mirror_write()` and
+`load_or_mint_mirror_write()` — the mint with its idempotence, its re-harden, its empty-file
+remint and its create-race read-back — plus six unit rows and the EL7 strip-class row TM-1 had
+moved here from the deleted `tests/terminal_mesh.rs` (it bound the variable's NAME to
+`registries::ENV_PREFIXES`, and there is no variable). `lib.rs` loses the boot act and the
+capability argument to `DaemonState::new`, and `bootstrap_with_logging` no longer needs `mut
+config` — that `mut` existed for this one call. `state.rs` loses the memory-only holder;
+`mgmt/mod.rs` loses the verb, so a pre-TM-3 caller falls through to METHOD_NOT_FOUND, which is
+the honest answer (the door is gone, not temporarily unavailable). `tests/mgmt_server.rs`
+loses the MF-2a block whole. **`secret_file.rs` stays and `harden` does not:** MF-2f's
+`create_private` is the pairing secret's O_EXCL-plus-mode fix and keeps its rows, but
+`harden`'s only callers were the capability's two read-back paths. It is deleted rather than
+left a public function with no caller under a doc comment claiming a live behaviour — and
+nothing regresses, because the pairing secret is born 0600 and read back verbatim, so no file
+in this daemon was ever re-hardened. Hardening the pairing file on read would be a NEW claim
+needing its own test; recorded, not done.
+
+**The contracts and fieldd (`9221666e`).** Both method rows, both mgmt shapes, both product
+shapes, `LAYOUT.TERMINAL_MIRROR_WRITE_FILE`, the golden
+`terminal-mirror-write-grant.valid.json` with its `fixtures.test.ts` row and its
+`layout.vector.json` entry, regenerated through `gen:rust` and root `pnpm gen`. fieldd loses
+the door, `MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS`, `mirrorWriteGrantRefusal`,
+`NativeLink.mirrorWriteCapability()` (the only place a secret ever came UP that channel), the
+mock's scripted capability and ask counter, and `mirror-write-grant.test.ts`'s 17 rows. Every
+registry keeps a DATED comment naming this slice and the design; the audit action has no
+registry row to annotate (`AuditActionV1` is a regex, not an enumeration), so its retirement
+is recorded where the product row was. **FD-2's allow-list is not replaced, because the
+question it answered is gone:** `rightsFor` reads the write right off the PRINCIPAL — a window
+and a self peer are minted `input`, everything else (a plugin, an unlinked tailnet peer, a
+guest, a peer-fieldd) is minted `["read"]` — so a caller the door refused now receives a grant
+that cannot type, and it expires either way. **One clause has no counterpart and that is
+stated at the source:** `agent-claim`, which refused a hello claiming `mcp-agent`. A ticket
+binds to the principal and never to a UI claim, so an agent's claim has never changed what a
+ticket grants; it only ever cost that caller the durable key. The walls the deleted suite
+proved were checked to exist elsewhere BEFORE deleting it — the guest choke and the scope wall
+in `terminal-remote-ticket.test.ts` and `terminal-grants.test.ts`, D36 locality in
+`tailnet-door.test.ts`, `guest-door.test.ts` and four more. One row is ADDED as the inverse of
+what it replaces: `registry.test.ts` asserted the registry DECLARED the door and now asserts
+that no method on any surface names a mirror-write door — a registry is the one place a
+retired door can quietly come back.
+
+**The phone.** `MirrorWriteStore` (the `MirrorWriteHost`/`MirrorWriteStoring` pair, the
+Keychain store and the in-memory double), `WriteKeySheet`, `FieldLink`'s
+`requestMirrorWriteGrant` with its `MirrorWriteGrant` outcomes, its `.automatic`/`.deliberate`
+asker, its once-per-connection latch and `hasAskedForGrant`, `TerminalMirrorWriteGrant` with
+the three-door redaction (`description`, `debugDescription`, a custom `Mirror`) and its golden
+copy, HomeScreen's whole ladder (the store, the mirrored host list, the sheet's subject, the
+note, the grant notes, `collectWriteGrants`, `askDesktopAction`, `requestWriteGrant`,
+`cardHasWriteKey`, `writeKeyEntry`, `refreshWriteKeys`, `saveWriteKey`, `removeWriteKey`) and
+its two DEBUG launch arguments, the settings sheet's WRITE KEYS section, and
+`FieldHomeModel.viewOnlyReason` (no shipping caller) and `keyEntryOffered` with the card's
+ENTER KEY invitation, its one caller. `writeInvitation` survives on ONE parameter: the
+listing's `sessionSharesWrites` is the only fact a card has before a tap, and the case it
+cannot know is named where it becomes known — `TerminalAttachment`'s "view only — this desktop
+granted read without input". Removing the affordance rather than disabling it is D-i6's rule.
+**The Keychain does not empty itself**, so a phone upgrading from an older build would keep
+secrets nothing can read, use or offer to remove: `RetiredWriteKeyCleanup.runOnce()` deletes
+them at the first launch on this build, by SERVICE rather than by account (the store indexed
+by host and this code has no host list) and with no `kSecReturnData` in the query, so the
+capability never enters the process even on its way to being destroyed. The flag is set only
+when the Keychain agrees the items are gone, so a locked-keychain launch retries rather than
+recording a lie.
+
+**Corrections at their sources (the errata rule).** `registries.ts`'s PORTS note kept
+9420/9421 SPOKEN FOR "because the phone's GhostteaKit still dials 9421 until TM-5" — TM-5
+landed, nothing on any plane dials either port, they are free. `terminal-grants.ts`'s
+`rightsFor` doc said `input` "grants nothing new" because the bearer door already handed a
+self peer the same power; it is now the ONLY way a self peer comes by the right to type.
+`native-link.ts` and `agent-field-publisher.ts` both explain the `terminalMesh` boolean by
+contrast with the secret-carrying verb. `process-service.test.ts`'s win32 strip row named the
+capability as §4.2's leak. `field-app`'s `remote-door.ts` and `useMonitorAgents.ts` called a
+read-only peer session "the mirror-write law" — traced before rewriting: no renderer code ever
+supplied such a key and `session.readWrite` is the mesh runtime's own flag, so only the NAME
+was wrong. ROADMAP's known issue **"our mirror-write secret leaves the device" is CLOSED by
+deletion** rather than by the per-device-token upgrade it argued for, and its IOS-3c paragraph
+("the middle third is not reachable until that leg lands") is corrected: the leg is not owed.
+DECISIONS carries TM-D3 **LANDED** and GM-D5 **SUPERSEDED**. TESTFLIGHT's build-2 limits
+paragraph is dated as describing a build that predates this slice.
+
+**Findings.** `scripts/check-ios-fixtures.mjs` SILENTLY skips a phone-side copy whose
+contracts origin no longer exists — it reads that as a fixture the lane authored for itself —
+so deleting a golden without its copy leaves an unchecked orphan and the count merely drops.
+Not fixed here; the copy is deleted instead. `packages/fieldd/test/terminal-service.test.ts`
+carries an unused `type TerminalCreateResult` import, pre-existing at `87d13ec9` (verified by
+re-running biome with this slice's change stashed) and left alone. On process: the fieldd
+suite's `global-setup.ts` spawns its own `cargo build -p field-native` and inherits the
+caller's environment, so running it without `CARGO_TARGET_DIR` starts a COLD build in the
+worktree's own `target/` beside the symlinks the harness needs — export the target dir for the
+pnpm invocation, not only for cargo.
+
+**Gate.** `cargo test -p field-native` 20 suites / 244 passed / 0 failed / 7 ignored ·
+clippy `-D warnings` clean · `cargo fmt --all --check` clean ·
+`pnpm --filter @vibefield/contracts test` 470 / 25 files · `gen:rust` + root `pnpm gen` then a
+diff over the generated paths: exactly the two expected deletions ·
+`pnpm --filter @vibefield/fieldd test` 844 passed / 14 skipped, 86 files / 1 skipped, no
+lottery row · typecheck 3 projects (`--skip-nx-cache`) · `pnpm lint` exit 0 ·
+`check-ios-fixtures` 17 copies + 15 registry values identical · the kit suite twice on a
+throwaway iPhone 17 Pro / iOS 26.5 simulator, deleted after · the app's own build command.
+**Owed:** the design corpus still describes the bearer as current in 11 documents (listed for
+James at the source), and TM-7 folds them.
