@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { blockerTool, projectKey, projectLabel } from "./agent-status";
 import {
   assembleMonitorAgents,
+  type MonitorFloorRecord,
   type MonitorManagedRecord,
   type MonitorRemoteRecord,
   type MonitorTerminalRecord,
@@ -129,6 +130,10 @@ export interface MonitorPaneFacts {
    * holds them): what makes an unclaimed pane a terminal row, and what lets
    * a managed row carry its PTY's summary. */
   sessions?: readonly SessionSummary[];
+  /** GT-6b — the UI roster the deck last read (`terminal.roster`, TP-D4): every
+   * live PTY the floor holds, pane or no pane. The monitor keeps the ones no
+   * pane is showing, so a session the deck displaced is still reachable. */
+  floor?: readonly MonitorFloorRecord[];
 }
 
 export interface MonitorAgentsResult {
@@ -484,6 +489,17 @@ export function useMonitorAgents({
       [...sessions.values()].filter((session) => !session.exited).map((session) => ({ session })),
     [sessions],
   );
+  /** GT-6b — the floor's live PTYs, as the deck last read them. Keyed on the
+   * facts a row draws rather than on array identity, for the same reason the
+   * pane summaries are: the deck republishes on its own cadence. */
+  const floorKey = JSON.stringify(
+    (panes.floor ?? []).map((row) => [row.sessionId, row.workloadClass, row.title ?? ""]),
+  );
+  const floor = useMemo<readonly MonitorFloorRecord[]>(
+    () => panes.floor ?? [],
+    // keyed by the facts above, not by the array the deck handed over
+    [floorKey],
+  );
 
   const agents = useMemo(() => {
     const nowMs = Date.now();
@@ -502,6 +518,7 @@ export function useMonitorAgents({
     const assembled = assembleMonitorAgents({
       managed,
       terminals,
+      floor,
       remotes,
       colours: { tint: palette.tint, neutral: palette.neutral },
       projectSeqs: projectLedger.seqByKey,
@@ -539,6 +556,7 @@ export function useMonitorAgents({
     localRows,
     managed,
     terminals,
+    floor,
     remotes,
     sessions,
     attachments,
@@ -670,7 +688,14 @@ export function useMonitorAgents({
    */
   const mountLocal = useCallback(
     async (agent: MonitorAgent): Promise<void> => {
-      const sessionId = agent.session?.id ?? agent.agent?.summary.terminal?.runtimeSessionId;
+      // Three ways a row can name a mountable PTY, in descending order of
+      // what the host knows about it: the summary a pane gave it, the floor id
+      // a roster-only row carries (GT-6b), and the terminal join the fold
+      // named for a managed run.
+      const sessionId =
+        agent.session?.id ??
+        agent.floorSessionId ??
+        agent.agent?.summary.terminal?.runtimeSessionId;
       if (sessionId === undefined) {
         announce(`${agent.project} has no terminal here to mount`);
         return;

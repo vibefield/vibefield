@@ -275,6 +275,28 @@ async function mountMonitor(
   return container;
 }
 
+/** Re-render the SAME root with new facts — the deck republishing its panes,
+ * which is what a select that moves a pane looks like from here. */
+async function renderMonitor(
+  viewId: string,
+  door: MonitorDoor | null,
+  panes: MonitorPaneFacts,
+): Promise<void> {
+  const view = monitorViewFor(viewId);
+  await act(async () => {
+    root?.render(
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor
+          view={view}
+          parameters={monitorParameterDefaults(view.parameterGroups)}
+          door={door}
+          panes={panes}
+        />
+      </GodviewAgentsProvider>,
+    );
+  });
+}
+
 const latest = (): GodviewMonitorFacts => markers[markers.length - 1] as GodviewMonitorFacts;
 const ackText = (host: HTMLElement): string =>
   host.querySelector(".vf-monitor-ack")?.textContent ?? "";
@@ -469,6 +491,86 @@ describe("the monitor stage", () => {
       expect(clearedIntervals, `interval ${id} survived the close`).toContain(id);
     }
     expect(disposedDrivers, "a physics driver outlived the close").toBe(builtDrivers);
+  });
+
+  it("keeps a live shell on the roster after a select takes its pane (GT-6b)", async () => {
+    // JAMES'S 2026-09-13 SEQUENCE, headless. Two live sessions — a plain shell
+    // in the deck's only pane, and a managed Codex run whose PTY no pane is
+    // showing. He selected the agent; GT-D17's law mounted it in the ACTIVE
+    // pane; the shell left the deck — and left the LIST with it, one row where
+    // there had been two, while `terminal.list` and `terminal.sessions` both
+    // still reported the shell alive. The floor's roster is what makes the row
+    // survive the pane.
+    const agent = managedSummary({
+      runtimeRunId: "run-vfqa",
+      terminalSessionId: "vfqa-agent-pty",
+      kind: "codex",
+      label: "Codex",
+      status: "idle",
+      cwd: "/private/tmp/vfqa-agent",
+    });
+    const door = fakeDoor([agent]);
+    const floor: MonitorPaneFacts["floor"] = [
+      { sessionId: "vfqa-shell", workloadClass: "interactive", title: "zsh" },
+      { sessionId: "vfqa-agent-pty", workloadClass: "agent" },
+    ];
+    const before: MonitorPaneFacts = {
+      sessionIds: ["vfqa-shell"],
+      activeSessionId: "vfqa-shell",
+      sessions: [pane("vfqa-shell", "/project/scratch")],
+      floor,
+    };
+    const host = await mountMonitor("list", door, before);
+    const rows = (): string[] =>
+      [...host.querySelectorAll<HTMLElement>(".vf-monitor-list-row")].map(
+        (element) => element.textContent ?? "",
+      );
+    expect(rows()).toHaveLength(2);
+
+    const agentRow = [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row")].find(
+      (candidate) => candidate.textContent?.includes("vfqa-agent"),
+    );
+    expect(agentRow).toBeDefined();
+    await act(async () => agentRow?.click());
+    expect(door.mountLocal.mock.calls[0]?.[0]).toBe("vfqa-agent-pty");
+
+    // …and the deck answers the way it did on the day: the one pane now shows
+    // the agent's PTY, and the shell is in no pane at all. The floor still
+    // holds both, so the monitor must too.
+    await renderMonitor("list", door, {
+      sessionIds: ["vfqa-agent-pty"],
+      activeSessionId: "vfqa-agent-pty",
+      sessions: [pane("vfqa-agent-pty", "/private/tmp/vfqa-agent")],
+      floor,
+    });
+    expect(rows(), "the shell is alive on the floor and must still be listed").toHaveLength(2);
+    expect(rows().some((text) => text.includes("zsh"))).toBe(true);
+  });
+
+  it("mounts a floor-only row through the door by the id the roster named (GT-6b)", async () => {
+    // The row carries no pane summary — the UI roster has no cwd, no activity
+    // and no birth time — so the only thing select can aim with is the floor
+    // id. A row that listed but could not be mounted would be worse than no
+    // row at all.
+    const door = fakeDoor([]);
+    const host = await mountMonitor("list", door, {
+      sessionIds: ["paned"],
+      activeSessionId: "paned",
+      sessions: [pane("paned")],
+      floor: [
+        { sessionId: "paned", workloadClass: "interactive", title: "zsh" },
+        { sessionId: "orphan", workloadClass: "interactive", title: "vim" },
+      ],
+    });
+    const orphan = [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row")].find(
+      (candidate) => candidate.textContent?.includes("vim"),
+    );
+    expect(orphan, "a live PTY in no pane is a row").toBeDefined();
+    // …and the paned session is NOT listed twice: the pane's own row stands.
+    expect(host.querySelectorAll(".vf-monitor-list-row")).toHaveLength(2);
+    await act(async () => orphan?.click());
+    expect(door.mountLocal).toHaveBeenCalledTimes(1);
+    expect(door.mountLocal.mock.calls[0]?.[0]).toBe("orphan");
   });
 
   it("select MOUNTS a managed agent's PTY through the door, and says so (AR-3)", async () => {

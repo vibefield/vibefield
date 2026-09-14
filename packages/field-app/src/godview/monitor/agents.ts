@@ -38,6 +38,31 @@ export interface MonitorTerminalRecord {
   spawnHint?: { x: number; y: number };
 }
 
+/**
+ * A LIVE PTY ON THE FLOOR THAT NO PANE IS SHOWING (GT-6b).
+ *
+ * The deck's panes were the only source of terminal rows until James's
+ * 2026-09-13 pass: he selected a managed agent, GT-D17's law mounted it in the
+ * ACTIVE pane, the shell that pane was showing left the deck — and left the
+ * roster with it, while `terminal.list` and `terminal.sessions` both still
+ * reported it alive. A PTY the floor holds must stay reachable; that is the
+ * whole of "view and control any active terminal session".
+ *
+ * It is a SEPARATE record from `MonitorTerminalRecord` because the facts are
+ * different and must not be invented into the same shape. This row comes from
+ * `terminal.roster` — the UI's projection (TP-D4): id, class, health and a
+ * title, with no placement and, deliberately, no cwd and no activity. The
+ * transport-facing `terminal.list` has those and is exactly what a UI may not
+ * read (TP-L-C), so the row says less rather than claiming more.
+ */
+export interface MonitorFloorRecord {
+  sessionId: string;
+  /** The floor's own word for what the PTY is for (`interactive` · `agent`). */
+  workloadClass: "agent" | "interactive";
+  /** The floor's title for the session, when it has one. */
+  title?: string;
+}
+
 /** A peer's session, and where it landed here if it has (GT-D17). */
 export interface MonitorRemoteRecord {
   row: RemoteSessionRow;
@@ -55,6 +80,10 @@ export interface AssembleMonitorAgentsInput {
   /** The fold's rows (AR-3). */
   managed: readonly MonitorManagedRecord[];
   terminals: readonly MonitorTerminalRecord[];
+  /** GT-6b — live PTYs the floor lists that no pane is showing. Additive: a
+   * roster that could not be read means no rows from here and never fewer
+   * pane rows, so a floor the deck cannot ask still shows what it can see. */
+  floor?: readonly MonitorFloorRecord[];
   /** The mesh's half of the field. Empty is the honest answer with no floor
    * serving — there are no placeholder peers and no invented hosts. */
   remotes?: readonly MonitorRemoteRecord[];
@@ -209,6 +238,43 @@ export function monitorAgentFromTerminal(
 }
 
 /**
+ * A live PTY the floor lists and no pane is showing (GT-6b).
+ *
+ * Everything a richer row draws — the cwd, the project, what the terminal is
+ * doing — is absent here rather than guessed, because the UI's roster carries
+ * none of it. What the row DOES carry is the one thing that makes it useful:
+ * the session id, under `floorSessionId`, so the monitor's own select can
+ * mount it in a pane. It is VibeField's field beside the package's shape
+ * (AR-D13a), not a `session`: the package's `session` means "the host holds
+ * this terminal's summary", which here it does not.
+ *
+ * `createdAtMs` is 0 and means UNKNOWN. The roster is id · class · health ·
+ * title and no birth time; a view only ever orders by this number, so these
+ * rows fall in the floor's own order among their peers rather than claiming a
+ * moment they were born.
+ */
+export function monitorAgentFromFloor(
+  record: MonitorFloorRecord,
+  colours: MonitorColours,
+): MonitorAgent {
+  return {
+    id: record.sessionId,
+    floorSessionId: record.sessionId,
+    createdAtMs: 0,
+    // No activity is reported for a session no pane is watching, and the
+    // classifier's answer for "nothing reported" is the honest one: a terminal
+    // that is not doing anything anyone can see. It is never `blocked` — that
+    // word means an agent is asking for something, and no agent has spoken.
+    status: classifyTerminalStatus(undefined),
+    project: folderName(undefined, record.title || "terminal"),
+    detail:
+      record.workloadClass === "agent" ? "agent PTY · in no pane" : "on the floor · in no pane",
+    color: colours.neutral,
+    active: false,
+  };
+}
+
+/**
  * A peer's session as a monitor citizen (GT-D17).
  *
  * Everything here comes from what the peer reported, and the two fields it did
@@ -296,11 +362,23 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
         input.colours,
       ),
     );
+  // The floor's own, last: every live PTY the roster names that is neither in
+  // a pane (the rows above already stand for those) nor spoken for by the
+  // fold. Ordered after them because a row you can see is a stronger fact
+  // than a row you are told about; the list view's own rules re-order anyway.
+  const paned = new Set(input.terminals.map((terminal) => terminal.session.id));
+  for (const agent of agents) {
+    const session = agent.session?.id;
+    if (session !== undefined) paned.add(session);
+  }
+  const floor = (input.floor ?? [])
+    .filter((row) => !paned.has(row.sessionId) && !claimed.has(row.sessionId))
+    .map((row) => monitorAgentFromFloor(row, input.colours));
   const remotes = (input.remotes ?? []).map((record) =>
     monitorAgentFromRemote(record, input.colours),
   );
 
-  return [...agents, ...terminals, ...remotes].map((agent) => {
+  return [...agents, ...terminals, ...floor, ...remotes].map((agent) => {
     // A pane shows a LOCAL session: the row's own, or, for a peer's row, the
     // replica the attach put there. The same question, asked of the id that
     // exists.

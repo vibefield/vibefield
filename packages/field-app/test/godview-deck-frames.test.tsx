@@ -592,6 +592,33 @@ describe("the deck's pane frames", () => {
     expect(workspace.panes[0]?.session.id).toBe("pty-resumed");
   });
 
+  it("re-reads the floor's roster when a pane changes hands (GT-6b)", async () => {
+    // The sweep that keeps a displaced PTY reachable. A pane being taken over
+    // is exactly when a live session can end up in no pane, so that — and not
+    // a timer — is what makes the deck ask the floor what is still alive. The
+    // ask is a READ: GT-D10 removed the adopt sweep because it PLACED unseen
+    // sessions in panes, and listing one as a row takes no such authority.
+    workspace.panes = [{ id: "pane-1", session: stubSession("pty-1", { exited: true }) }];
+    foldRows = [
+      managedSummary({
+        runtimeRunId: "run-1",
+        terminalSessionId: "pty-1",
+        kind: "codex",
+        label: "Codex",
+        alive: false,
+      }),
+    ];
+    const host = await mountDeck();
+    const asks = (): number => requests.filter((call) => call.method === "terminal.roster").length;
+    const atMount = asks();
+
+    await act(async () => verb(frameFor(host, "pty-1"), "resume")?.click());
+    await settle();
+
+    expect(workspace.panes[0]?.session.id, "the pane changed hands").toBe("pty-resumed");
+    expect(asks(), "the floor is asked what is still alive").toBeGreaterThan(atMount);
+  });
+
   it("names a fresh split by the folder the deck opened it in, not 'terminal' (PU-14b)", async () => {
     workspace.panes = [
       { id: "pane-1", session: stubSession("pty-1", { cwd: "/home/tester/rosetta" }) },

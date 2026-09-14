@@ -63,6 +63,7 @@ import {
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
 import { zoomLayoutApplied } from "./deck-zoom";
 import type { GodviewTheme } from "./GodviewTuningPanel";
+import type { MonitorFloorRecord } from "./monitor/agents";
 import { historyPortOver, usagePortOver } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
@@ -1311,6 +1312,58 @@ export function GodviewDeck({
   // of what the tier SHOULD be; it is not yet a claim that it is.
   useTerminalSessionViews(paneSessionIds, active ? "live" : "none");
 
+  // GT-6b — THE FLOOR'S OWN ROSTER, RE-READ WHEN THE PANES MOVE.
+  //
+  // James's 2026-09-13 pass: two live sessions, he selected the managed agent,
+  // GT-D17's law mounted it in the ACTIVE pane, and the shell that pane was
+  // showing left the deck — and left the monitor's roster with it, because the
+  // monitor's terminal rows were the deck's panes and nothing else. Both floor
+  // reads still listed the shell. A PTY the floor holds must stay reachable.
+  //
+  // This is a READ, never a placement, which is what keeps GT-D10 intact: the
+  // adopt sweep was removed because it pushed unseen sessions INTO panes and
+  // made the deck a second authority over what a pane holds. Listing a session
+  // as a row the user may click takes no such authority.
+  //
+  // Triggered by the panes changing rather than by a timer, for the same
+  // reason: a pane closing or being taken over is exactly when a live session
+  // can become unpaned, and nothing else in this window needs to know. Named
+  // residual, stated rather than papered over: a session born OUTSIDE the deck
+  // mid-run still does not surface until the next pane change (GT-D10's
+  // residual, unchanged by this — what closes it is the `session-created`
+  // route that ruling already names).
+  // The MOUNT is deliberately not one of those moments. TP-S3e's row holds a
+  // bare routed mount to asking fieldd NOTHING — no roster, no mint, no create
+  // — and a mount has displaced nothing yet; where there IS a saved layout the
+  // restore gate has already read the roster and `pool.roster` is warm. So the
+  // first run of this effect is skipped and the reads start at the first pane
+  // change, which in a live window is the workspace claiming its sessions.
+  const rosterSweepArmed = useRef(false);
+  useEffect(() => {
+    if (!active) return;
+    if (!rosterSweepArmed.current) {
+      rosterSweepArmed.current = true;
+      return;
+    }
+    void refreshTerminalRoster().catch(() => undefined);
+  }, [active, paneSessionIds]);
+
+  /** The live PTYs the floor holds, as the monitor's own record (TP-D4's UI
+   * projection — no placement, and no cwd either, so a row says less rather
+   * than claiming more). An unread or refused roster is an EMPTY list here and
+   * never fewer pane rows: these rows are additive. */
+  const floorRoster = useMemo<readonly MonitorFloorRecord[]>(
+    () =>
+      pool.roster
+        .filter((item) => item.health !== "exited")
+        .map((item) => ({
+          sessionId: item.sessionId,
+          workloadClass: item.workloadClass,
+          ...(item.title === undefined ? {} : { title: item.title }),
+        })),
+    [pool.roster],
+  );
+
   // The pane facts the monitor reads (GT-D17). Published on CHANGE only — this
   // fires on every workspace republish, and an unchanged array would re-run the
   // monitor's projection at ghosttea's cadence rather than at the panes'.
@@ -1337,6 +1390,9 @@ export function GodviewDeck({
         (session) =>
           `${session.id}:${session.exited ? 1 : 0}:${session.activity?.kind ?? ""}:${session.title ?? ""}:${session.cwd ?? ""}`,
       ),
+      // …and the floor's roster, or a session that became unpaned would never
+      // reach the monitor: the panes did not change when the roster did.
+      ...floorRoster.map((row) => `${row.sessionId}:${row.workloadClass}:${row.title ?? ""}`),
     ].join("\u0001");
     if (key === lastPaneFacts.current) return;
     lastPaneFacts.current = key;
@@ -1361,8 +1417,10 @@ export function GodviewDeck({
       // the floor summaries the panes hold (AR-3): an unclaimed pane is a
       // terminal row on the stage, a managed row carries its PTY's summary
       sessions,
+      // …and every live PTY the floor holds (GT-6b), pane or no pane.
+      floor: floorRoster,
     });
-  }, [paneSessionIds, workspace, onPanes]);
+  }, [paneSessionIds, workspace, onPanes, floorRoster]);
 
   /** The pane's face, plus the monitor link (GT-D17).
    *

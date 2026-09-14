@@ -771,6 +771,39 @@ describe("every birth goes through the product door (TP-S1)", () => {
     expect(requests).toContain("terminal.roster");
   });
 
+  it("publishes the floor's live PTYs beside its panes (GT-6b)", async () => {
+    // The monitor's terminal rows were the deck's PANES and nothing else, so a
+    // session the deck displaced — James's 2026-09-13 shell — left the roster
+    // while the floor still held it. The deck now hands the monitor the floor's
+    // own list too, placement-free (`terminal.roster`, TP-D4), and the monitor
+    // keeps the ones no pane is showing.
+    saveLayout(["alive-1"]);
+    floor = [{ sessionId: "alive-1" }, { sessionId: "alive-2" }];
+    const published: Array<{
+      sessionIds: readonly string[];
+      floor?: readonly { sessionId: string; workloadClass: string }[];
+    }> = [];
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={null}>
+          <GodviewDeck active theme="light" onPanes={(facts) => published.push(facts)} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+
+    const last = published[published.length - 1];
+    expect(last, "the deck publishes its facts at all").toBeDefined();
+    // The stub workspace draws no panes, which is exactly the state the old
+    // projection had no answer for: nothing in a pane, two PTYs alive.
+    expect(last?.sessionIds).toEqual([]);
+    expect(last?.floor?.map((row) => row.sessionId)).toEqual(["alive-1", "alive-2"]);
+    expect(last?.floor?.every((row) => row.workloadClass === "interactive")).toBe(true);
+  });
+
   it("opens by rejoining a saved pane rather than by creating a new shell", async () => {
     // The restore path's whole point: a window that had panes gets its
     // connection back through one of them, and spawns nothing.

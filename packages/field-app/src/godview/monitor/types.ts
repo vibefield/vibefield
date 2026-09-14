@@ -44,4 +44,10 @@ export interface MonitorAgentFacet extends ViewsMonitorAgentFacet {
 
 export interface MonitorAgent extends Omit<ViewsMonitorAgent, "agent"> {
   agent?: MonitorAgentFacet;
+  /** GT-6b — the floor's own id for a live PTY that no pane is showing, and
+   * the only thing such a row carries that a verb can act on. It is NOT the
+   * package's `session`: that field means the host holds the terminal's
+   * summary, and for a row read off `terminal.roster` it does not (no cwd, no
+   * activity, no birth time). Views ignore this; the door's select reads it. */
+  floorSessionId?: string;
 }
