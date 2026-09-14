@@ -105,9 +105,63 @@ describe("clientId and rights derive from the principal, never from the caller's
     );
     expect(clientIdFor(SELF)).not.toBe(clientIdFor(GUEST));
   });
+
+  // E-F2 (EL7 lens, 2026-09-14) — one login is not one client.
+  it("keys two of ONE PERSON'S devices apart by the sidecar's node id", () => {
+    const phone = { ...SELF, tailscaleId: "nodekey:aaaa" };
+    const ipad = { ...SELF, tailscaleId: "nodekey:bbbb" };
+    expect(clientIdFor(phone)).toBe("tailnet:me@example.com#nodekey:aaaa");
+    expect(clientIdFor(phone)).not.toBe(clientIdFor(ipad));
+    // …so they hold DIFFERENT connection sets on the same cell, which is what
+    // stops the cell answering the second leg with `replaces_current_leg` and
+    // closing the first as Superseded — the ping-pong, with backoff, that a
+    // person watching two of their own screens would see
+    expect(connectionSetIdFor(clientIdFor(phone), "cell-boot-A")).not.toBe(
+      connectionSetIdFor(clientIdFor(ipad), "cell-boot-A"),
+    );
+    // a guest is separated the same way, and never confusable with the owner
+    expect(clientIdFor({ ...GUEST, tailscaleId: "nodekey:aaaa" })).not.toBe(clientIdFor(phone));
+  });
+
+  it("falls back to the login alone when the sidecar injects no node id", () => {
+    // a pre-v3 sidecar carries no node header, and absence means "it did not
+    // say" — one shared client per login is what that fleet already had, so
+    // this is the old behaviour preserved, not a widening
+    expect(clientIdFor(SELF)).toBe("tailnet:me@example.com");
+    expect(clientIdFor(GUEST)).toBe("tailnet-guest:me@example.com");
+  });
+
+  // E-F4 / F-L6a — the arm that named a kind nobody mints.
+  it("keys a peer daemon by its deviceId, not by the bare kind", () => {
+    // `clientIdFor` used to test for "tailnet-peer", which has never existed;
+    // the real kind is `peer-fieldd`, it carries a deviceId and NO login, so it
+    // fell through to the constant "peer-fieldd" — one identity for every peer
+    // daemon. Unreachable today (locality refuses it before a mint), fixed so
+    // the slice that opens that door does not inherit it.
+    expect(clientIdFor({ kind: "peer-fieldd", deviceId: "dev-01H" })).toBe("peer-fieldd:dev-01H");
+    expect(clientIdFor({ kind: "peer-fieldd", deviceId: "dev-A" })).not.toBe(
+      clientIdFor({ kind: "peer-fieldd", deviceId: "dev-B" }),
+    );
+    // and a peer with no deviceId at all still gets the honest bare answer
+    expect(clientIdFor({ kind: "peer-fieldd" })).toBe("peer-fieldd");
+  });
 });
 
 describe("the minter — fresh transport grants, monotonic attach generations, verifiable MACs", () => {
+  // E-F2 — the same fix seen through the minter, which is where it bites.
+  it("gives two of one person's devices two connection sets, and two ledgers, on ONE cell", () => {
+    const minter = new TerminalGrantMinter(() => 1_787_788_800_000);
+    const phone = minter.mintTransport(KEY, { ...SELF, tailscaleId: "nodekey:aaaa" });
+    const ipad = minter.mintTransport(KEY, { ...SELF, tailscaleId: "nodekey:bbbb" });
+    expect(phone.claims.connectionSetId).not.toBe(ipad.claims.connectionSetId);
+    // and each device's transport ledger starts at 1. That is the other half of
+    // the bug: the generation counter is per {clientId, cellBootId}, so with one
+    // shared clientId the iPad's first grant arrived at generation 2 and raised
+    // the cell's high-water past every grant the phone still held.
+    expect(phone.claims.transportGrantGeneration).toBe(1);
+    expect(ipad.claims.transportGrantGeneration).toBe(1);
+  });
+
   it("mints a ticket whose grants parse, verify against the cell key, and bind audience/client/session", () => {
     let now = 1_787_788_800_000;
     const minter = new TerminalGrantMinter(() => now);

@@ -33,6 +33,15 @@ export interface GrantPrincipal {
   kind: string;
   tokenId?: string;
   login?: string;
+  /** T1 §1 / E-F2 — the SIDECAR's node id for this caller, transport-derived:
+   * ProductApi fills it from the proxy's own header, never from a claim
+   * (`product-api.ts`; the contract's `Principal` has carried it since T1).
+   * Absent means a pre-v3 sidecar injected no node header — never that the
+   * caller is anonymous. */
+  tailscaleId?: string;
+  /** the durable device id a `peer-fieldd` principal carries INSTEAD of a
+   * login (`envelope.ts`) */
+  deviceId?: string;
   /** UA-4/TM-D3 — set only on a `tailnet` principal whose WhoIs-verified login
    * MATCHED the login recorded in link.json at link time. Absent on a
    * pre-capture node, never `false` (product-api.ts) — so `=== true` is the
@@ -62,12 +71,37 @@ export function clientIdFor(principal: GrantPrincipal): string {
   // one connection set and one attach-generation ledger shared by every remote
   // client, which §5.1's per-client counters assume never happens. A login is
   // the identity the door already verified (WhoIs), so it is the one to key on.
-  if (
-    principal.kind === "tailnet" ||
-    principal.kind === "tailnet-guest" ||
-    principal.kind === "tailnet-peer"
-  )
-    return `${principal.kind}:${principal.login ?? "unknown"}`;
+  //
+  // E-F2 (2026-09-14) — …AND A LOGIN ALONE IS NOT ONE CLIENT. Two of this
+  // person's own devices carry the same verified login, so a phone and an iPad
+  // attaching to one cell landed on one clientId, therefore one connection set
+  // (`connectionSetIdFor` is clientId@cellBootId) and one attach ledger. The
+  // cell answers a second leg on one connection set with `replaces_current_leg`
+  // and closes the other as `Superseded`, so the two devices took turns
+  // evicting each other and each reconnected on backoff — a ping-pong neither
+  // user asked for. The sidecar's NODE ID is what separates them: it is
+  // transport-derived rather than claimed, and the principal has carried it
+  // since T1 — this function simply dropped it.
+  //
+  // Login-only stays the fallback, not a widening: a pre-v3 sidecar injects no
+  // node header, and one shared client per login is what that fleet already
+  // had.
+  if (principal.kind === "tailnet" || principal.kind === "tailnet-guest") {
+    const login = principal.login ?? "unknown";
+    return principal.tailscaleId === undefined
+      ? `${principal.kind}:${login}`
+      : `${principal.kind}:${login}#${principal.tailscaleId}`;
+  }
+  // E-F4 / F-L6a — the arm above used to name `tailnet-peer`, A KIND THAT HAS
+  // NEVER EXISTED: the minted one is `peer-fieldd` (`product-api.ts`,
+  // `envelope.ts`), which carries a `deviceId` and NO login, so it matched
+  // nothing and fell through to the bare constant "peer-fieldd" — one identity
+  // for every peer daemon, the exact shape TM-2 fixed for tailnet callers.
+  // Unreachable today (locality refuses `peer-fieldd` before a mint is
+  // possible), which is why it is corrected now rather than left as a trap for
+  // the slice that opens that door.
+  if (principal.kind === "peer-fieldd" && principal.deviceId !== undefined)
+    return `peer-fieldd:${principal.deviceId}`;
   if (principal.tokenId !== undefined) return `${principal.kind}:${principal.tokenId}`;
   return principal.kind;
 }
