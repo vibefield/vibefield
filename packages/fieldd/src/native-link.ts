@@ -166,13 +166,20 @@ export class NativeLink extends EventEmitter {
    * itself an answer (it is at least that old). */
   nativeBuild: string | undefined;
   /** TM-1/TM-2 (MF-1l) — "this floor's terminal doors are PUBLISHED on the
-   * tailnet", the floor's own word, re-learned at every re-pair.
+   * tailnet", the floor's own word (`HelloAck.terminalMesh`), re-learned at
+   * every re-pair.
    *
    * The fact MF-1h said was owed and could not be read. It is deliberately
    * SECRET-FREE: the only mgmt verb that revealed the same truth handed over
    * the mirror-write capability itself, so the honest gate had to wait for a
    * boolean. Everything that used to guess from a NEIGHBOURING consent (the
    * product serve being active) now reads this.
+   *
+   * TRUE needs BOTH halves on the floor's side (TM-1, envelope.ts): it was
+   * asked to publish AND its gateway node was up as the ack was written. So a
+   * flag over a gateway that never came up reads FALSE here, which is the
+   * false positive the field exists to close — and it means this reading can
+   * legitimately differ between two hellos of one floor BOOT.
    *
    * `undefined` means the floor did not answer the question — a floor older
    * than TM-1, which this plane outliving fieldd makes an ordinary case, not a
@@ -358,9 +365,11 @@ export class NativeLink extends EventEmitter {
     // Refusing an ABSENT proof is the point: an attacker downgrades otherwise.
     const record = (ack ?? {}) as {
       /** TM-1 (MF-1l) — the floor's word that its terminal doors are on the
-       * tailnet. Read as `unknown` like every other field here: the contract
-       * for it lands on the floor's lane, and the tolerant reader below is
-       * what lets this build run against a floor on either side of it. */
+       * tailnet (`HelloAck.terminalMesh`, landed on main 2026-09-14). Read as
+       * `unknown` like every other field on this record, and narrowed below:
+       * the ack is a tolerant reading of a plane that OUTLIVES fieldd, so the
+       * shape a live floor actually sent is what decides, never the schema
+       * this build happens to carry. */
       terminalMesh?: unknown;
       terminal?: unknown;
       terminalRoutes?: unknown;
