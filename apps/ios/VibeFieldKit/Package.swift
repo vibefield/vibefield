@@ -41,9 +41,17 @@ let package = Package(
     // law true, and the resolved revision 43361e53 is the same commit every
     // published 0.10.0 artifact was built from (npm gitHead + crate vcs-info,
     // checked — the later v0.10.0-retry.1 tag shipped in none of them). It
-    // still carries 0.9.0's appearance parity and 0.7.0's reconnect layer, and
-    // remains the version whose TruffleTerminalMesh the desktop floor
-    // publishes terminal hosts with (IOS-3's server).
+    // still carries 0.9.0's appearance parity and 0.7.0's reconnect layer.
+    //
+    // **ERRATUM (2026-09-14, TM-5).** The sentence that stood here — "and
+    // remains the version whose TruffleTerminalMesh the desktop floor publishes
+    // terminal hosts with (IOS-3's server)" — is FALSE and was false from
+    // TM-1: that slice deleted `terminal_mesh.rs`, `with_terminal_mesh` and
+    // the `ghosttea-truffle` dependency from the floor, so no version of it
+    // publishes anything for this phone to read. It is doubly moot now — this
+    // kit takes no `GhostteaTruffle` product at all, and the pin's whole job is
+    // the RENDERER. The manifests are the authority for every number here, as
+    // the errata rule says and this line failed to be.
     // 0.10.1 (2026-08-18, revision ad97fdb): the G13 Windows env-strip
     // case-fold + process_tree hardening — no Apple-plane delta; the pin
     // moves for the one-version law, same as every row above.

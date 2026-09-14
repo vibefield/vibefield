@@ -6,8 +6,14 @@ import Observation
 // `ss:<storeId>`, and this is the half of it a phone needs: the phone owns no
 // slice, publishes nothing, and answers nobody's `request` — it asks, and it
 // listens. `field.devices.v1` is how it learns a desktop's door;
-// `terminal.v1.hosts` is the floor's advertised sessions; `field.agents.v1`
-// will be the board.
+// `field.agents.v1` is the board.
+//
+// **ERRATUM (2026-09-14, TM-5).** This list used to name `terminal.v1.hosts`
+// among the stores "a phone needs", as "the floor's advertised sessions". No
+// phone ever subscribed to it: the terminal rows arrived by a live per-host
+// `list-sessions` over TSP1, which is the MECHANISM the sentence got wrong. The
+// store retired with that adapter at TM-1 and its id left `FieldStoreID` at
+// TM-5; a session is named by the fold's own `terminal.runtimeSessionId` now.
 //
 // The protocol is transcribed from `truffle-core 0.7.12`
 // (`src/synced_store/{types,sync}.rs`), which is the pinned crate both daemon

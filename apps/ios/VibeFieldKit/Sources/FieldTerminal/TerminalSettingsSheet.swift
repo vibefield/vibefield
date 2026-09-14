@@ -64,10 +64,17 @@ public struct TerminalSettingsSheet: View {
   private var header: some View {
     VStack(alignment: .leading, spacing: 8) {
       eyebrow("TERMINAL", size: 9, tracking: 0.18)
-      // D-i9 said in the one place the user could otherwise wonder: these are
-      // the phone's colors, and a desktop's theme never reaches through the
-      // mesh to restyle them.
-      Text("this phone's look — a host's theme never reaches through the mesh")
+      // **ERRATUM (2026-09-14, TM-5).** This line read "this phone's look — a
+      // host's theme never reaches through the mesh", which was D-i9 and was
+      // true of TSP1: the phone received LOGICAL GRID ROWS and rendered them
+      // itself, so the look was entirely local. Under T the cell renders and
+      // the phone decodes — a TRF1 frame carries rasterised glyph pixels and
+      // RGB style runs — so a remote terminal's type and its explicitly-styled
+      // colours ARE the desktop's. What these values still decide is this
+      // renderer's own ground: the background it composites onto, its opacity,
+      // its shaders, its padding. Said here because this sheet is the one place
+      // a person could otherwise wonder.
+      Text("this phone's ground — a remote terminal's glyphs are drawn on the desktop that owns it")
         .font(FieldType.mono(10))
         .foregroundStyle(FieldPalette.textMuted)
         .fixedSize(horizontal: false, vertical: true)
@@ -370,17 +377,17 @@ public struct TerminalSettingsSheet: View {
       }
       .padding(.top, 10)
 
-      // §10.1's second upstream law, stated before the cost is paid rather
-      // than after: `requiresNewRuntime` is literally
-      // `fontSize != other.fontSize`. It does NOT re-attach — the design doc
-      // said so and was wrong (corrected at source 2026-08-06): upstream
-      // swaps the runtime on the LIVE sink via
-      // `reconfigureDevicePresentation(_, runtime:, generation:)`, so the
-      // session never leaves. Saying otherwise would invent a cost the code
-      // does not pay.
+      // **ERRATUM (2026-09-14, TM-5).** This line read "font size is the one
+      // value the text runtime is rebuilt for — the session stays attached;
+      // colors, opacity, and shaders go live in place". Both halves are dead:
+      // the replica runtime a font-size change used to rebuild went with the
+      // TSP1 lifecycle, and nothing in this app can decline an edit any more
+      // (`appearanceFailure` retired with the component that raised it). What
+      // is true now is smaller and worth saying plainly — every value here goes
+      // live, and none of them reaches the desktop.
       Text(
-        "font size is the one value the text runtime is rebuilt for — the session stays "
-          + "attached; colors, opacity, and shaders go live in place"
+        "every value here goes live, and none of them reaches the desktop — a "
+          + "remote terminal's type is rendered where the session runs"
       )
       .font(FieldType.mono(9))
       .foregroundStyle(FieldPalette.textMuted)

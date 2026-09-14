@@ -5,7 +5,9 @@ session a physical body — the swarm of puppeteer's Godview (RFC 005, design
 locked 2026-09-09), drawn on one Metal surface by a transcription of its
 WebGPU renderer, ranked by what it is doing. Tapping a body raises its session
 card; the card's terminal area is the seam where the Ghosttea Metal surface
-attaches over Truffle.
+draws frames a desktop's terminal CELL rendered — reached since TM-5 by the
+routed T1 client, two WebSocket legs to that cell's doors on the tailnet, with a
+ticket fieldd minted for this device and this session.
 
 Design record: `draft/thinking-ios-app.md` (v1 shape, physics decision,
 aesthetic mapping, Ghosttea/Truffle integration plan, slice plan) and, for the
@@ -24,21 +26,28 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | `VibeFieldKit/Sources/FieldDesign` | two token sets and one motion table: the **godview** monochrome tokens (`FieldPalette`, `FieldType` — palette light+dark, mono type ramp, grid/scanlines/vignette), scoped to the swarm field and the terminal surface by DESIGN.md §1.1, and the **chrome** tokens (`ChromeType`, `ChromePalette`, `ChromeMaterial`, `ChromeControls`) every other surface wears — SF type, the glass card recipe, the radii and the two pill buttons |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested; since IOS-6b it steps on the reference's fixed schedule (`advance(now:)`: 30 Hz behind an accumulator, the 15 Hz floor and the 0.2 air-friction ceiling clamped at every entry, a stall cap, every body's last two solved positions for the renderer's blend) |
 | `VibeFieldKit/Sources/FieldAgents` | the agent model — since IOS-6a a SUBSET of puppeteer's monitor mirror, field names kept (usage samples, effort with its intent, the latest reply, the blockers, the clocks) — the status classifier (`idle · working · blocked`, core's word), the body model (`SwarmBodyModel`: the reference's `bubble-model.ts` transcribed — the five drawn states, the copy lines, the figures, the ring, the burn bars), the ledgers the field folds every projection (`UsageLedger`, `UnreadLedger`, `ProjectLedger` + `ProjectTint` — record §02's colours, goldens generated from the TypeScript), `FieldAssembly` (the fold), and the scripted mock fleet, which burns tokens along the reference lab's four shapes |
-| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime, login sheet, peer roster, the mesh chip — plus (IOS-3) remote-session discovery. Since IOS-4i the runtime is `FieldTruffleRuntime`, VibeField's own composition of `ghosttea`'s (exact 0.10.1) public pieces, so the node joins the namespace `FieldMeshContract.appID` names — the contracts' `APP_ID`, the one every desktop floor joins — rather than ghosttea's `ghosttea-terminal`, which is what a node's app id decides and nothing downstream can |
-| `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3): appearance → presentation config, the attachment lifecycle over Truffle, the Metal surface — plus (IOS-3c) the per-host mirror-write key store |
+| `VibeFieldKit/Sources/FieldMesh` | the mesh leg (IOS-2): the in-process Truffle/Tailscale runtime, login sheet, peer roster, the mesh chip — plus (IOS-4b) the synced stores and the product-door join. Since IOS-4i the runtime is `FieldTruffleRuntime`, so the node joins the namespace `FieldMeshContract.appID` names — the contracts' `APP_ID`, the one every desktop floor joins — rather than ghosttea's `ghosttea-terminal`, which is what a node's app id decides and nothing downstream can. Since **TM-5** it names NO Ghosttea product: the peer directory and the TSP1 dialer left with the protocol, and `truffle` is a direct package dependency (the same exact `0.7.12` pin it always resolved to) rather than one inherited through `GhostteaTruffle`. The per-host `list-sessions` discovery went with them — a session is named by the fold's `terminal.runtimeSessionId` now, and `terminal.v1.hosts` retired at TM-1 |
+| `VibeFieldKit/Sources/FieldTerminal` | the terminal leg (IOS-3, re-footed at TM-5): appearance → presentation config, the attachment over the ROUTED T1 client, the frame sink that hands a cell's own TRF1 to the Metal surface (and enforces the frame-identity rule on the way), the Metal surface — plus (IOS-3c) the per-host mirror-write key store, which TM-3 retires |
+| `VibeFieldKit/Sources/FieldRoutedTerminal` | the routed T1 client (TM-4): two `URLSessionWebSocketTask` legs to one cell's doors, the grant-carrying handshake, per-session activation, byte credits, the presentation envelope and its transfers. No Ghosttea product and no mesh — written to move upstream into GhostteaKit as the third routed-client core (petition G27) |
 | `VibeFieldKit/Sources/FieldRoutedTerminal` | the ROUTED T1 client (TM-4): the phone's half of the terminal pipeline, and the first target that speaks a desktop CELL rather than the mesh. Two `URLSessionWebSocketTask` legs to one cell's `/control` and `/frames` doors over `MeshNode.urlSession(configuration:)`, a `ConnectionHello` carrying the transport grant VERBATIM (the MAC covers what the cell receives, unknown fields included, so a typed re-serialization would break one this device cannot compute), per-session activation on both legs under an id this client mints, receiver-advertised BYTE credits with the spec's seven laws, the `PresentationEnvelope` decoded to a TRF1 payload the renderer's own frame path takes, seed and catch-up transfers, the two-dimensional lease as values (`PresentationReady` ≠ `InputAllowed`), input and the explicit geometry lease. It takes `FieldProduct` for the tolerant-reader vocabulary and names NO Ghosttea product and no design kit — the manifest enforcing TM-D4, because this code is written to move upstream into GhostteaKit as the third routed-client core (petition G27). Nothing mounts it yet; `TerminalAttachment` moves onto it at TM-5 |
 | `VibeFieldKit/Sources/FieldInput` | the input card (IOS-5a…5e): a composer row over a rail of nine terminal keys in two modes — a local draft sent as one bracketed paste, or the terminal itself holding the keyboard — with one sticky Ctrl reaching through both, the long-press fans, the reply and paste chips, the closed row, a mic that dictates into the draft and never onto the wire, the `+` doors (scan, snippets, clipboard history) and the `⋯` keypad's three pages, every one of them sized for the reader's text size and spoken to a screen reader; its own target on purpose (K-D1) because a keyboard is state machines all the way down and the IOS-3 review found every serious bug living in the one module with no test target, and it takes `FieldTerminal` for the keystroke vocabulary only and names no Ghosttea product. Since IOS-5v it wears DESIGN.md's **chrome family** as the KeyboardLab canvas draws it — SF type in sentence case, a glass card with a hairline over the sheet's own glass, 44 pt keys at radius 9, round pills — while the swarm field and the terminal surface keep the godview instrument palette that §1.1 scopes to them |
 | `VibeFieldKit/Sources/FieldSwarm` | the swarm on Metal (IOS-6c, D-i11): the six shaders transcribed from the reference's WGSL (they ride as resources and compile at first use, D-i14), `SwarmRenderer` (the same five pipelines in painter's order, the same buffer layouts, one upload a frame), the glyph atlas (CoreText at the screen's scale into an `r8` shelf-packed texture; the folder, dot and bar drawn from paths into it), the mark atlas (the reference's `marks.png` byte for byte), `SwarmTheme` (the colours resolved from `FieldPalette` per scheme), `SwarmStage` (the loop: the blend, the radius spring, the arrival curve, draw order, hit testing, drag / tap / hold, VoiceOver focus), `SwarmMetalView`, the SwiftUI `SwarmField` with its chrome slot and `.swarmObstacle()`, and the design lab behind `-vf-swarm-lab` (D-i15) |
 | `VibeFieldKit/Sources/FieldHome` | the home composition: the field mounted over the dressed rows, the session card, the chrome corners, hold-to-create — plus `FieldHomeModel`, the screen's decisions as pure functions (discovery lifecycle, the card's face, the write claims) so the integrator is testable without a simulator |
 
-**Write keys (IOS-3c).** The mirror-write capability a desktop grants this
-phone is the value of its `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`, kept in the
-Keychain as one generic-password item per host (service
+**Write keys (IOS-3c) — RETIRING.** The mirror-write capability a desktop
+grants this phone is the value of its `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`,
+kept in the Keychain as one generic-password item per host (service
 `com.jamesyong.vibefield.ios.mirror-write`, account = the host's device id,
 `AfterFirstUnlockThisDeviceOnly`, `kSecAttrSynchronizable = false` — a grant to
-one device must not ride iCloud to the others). It leaves the store exactly
-once, as the attachment's access token, and is never displayed, exported, or
-logged: the settings sheet lists the HOSTS and offers only REMOVE.
+one device must not ride iCloud to the others). It is never displayed,
+exported, or logged: the settings sheet lists the HOSTS and offers only REMOVE.
+
+**Since TM-5 no attach reads it.** The right to type is a claim in the ATTACH
+GRANT fieldd mints per client per session — expiring, revocable by generation,
+and downgraded by the cell if the cell says so (TM-D3) — rather than a durable
+bearer this device holds. The store, its sheet and the
+`terminal.mirrorWriteGrant` door still exist and still work; **TM-3 deletes the
+three together**, which is why they are still described here.
 
 Swift 6 (`SWIFT_STRICT_CONCURRENCY = complete`) · iOS **18.1** floor (the pinned
 TailscaleKit binary's floor — GhostteaApp's own) · simulator is arm64-only
@@ -93,8 +102,8 @@ reach states no `simctl` touch can:
 | `-vf-demo-fleet` | runs the SCRIPTED FLEET (`MockAgentField`). Since IOS-4b the mock is no longer the live path — the field's agents come from the daemon through `FieldLink` — so a screenshot that wants invented agents must ask for them. Implied by every `-vf-swarm-lab` page, which draws its own fixtures anyway |
 | `-vf-demo-field-slice` | mounts the field over the contracts' GOLDEN BOARD (`agent-field-slice.valid.json`, byte for byte from `packages/contracts/fixtures/`) through the **real** path: a fixture synced-store whose one `full` message is parsed by the real `AgentFieldSlice` reader and folded by the real projection. The five rows are the golden's — one blocked on `Bash`, one working, one idle, one pending, one exited — so the swarm can be photographed over real-shaped data in both themes with no desktop and no tailnet. It is a fixture STORE, not a demo path: nothing downstream of the store knows the difference, which is the whole point. `publishedAt`/`expiresAt` are rewritten to now, and only those, because a board minted in the past would be expired before it was read |
 | `-vf-demo-remote` | stands a FAKE peer up so remote-bubble rendering can be eyeballed without a desktop serving. A fixture for looking at our own pixels, never a claim that a mesh answered; the real source replaces it the moment the mesh is up |
-| `-vf-auto-open-card` | opens a session card, preferring an attachable remote one |
-| `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole IOS-3 path with no finger on the glass; without a mesh it proves the honest-failure path instead |
+| `-vf-auto-open-card` | opens a session card, preferring one whose join names a terminal (then the DEBUG fixture's remote row, then whatever is working) |
+| `-vf-auto-attach` | carries the run through ATTACH — on a phone whose mesh is up against a serving desktop this is the whole path with no finger on the glass: hear the fold, choose, mint a ticket at the product door, dial the cell's two legs. Gated on the CARD's own face, so it fires exactly when a tap would have worked; without a mesh it proves the honest-failure path instead |
 | `-vf-open-settings` | opens the terminal appearance sheet |
 | `-vf-swarm-lab[=section[:page]]` | covers the field with the **swarm design lab** (IOS-6c, D-i15): the reference's fixture stages — the 22 drawn states, the three weights of the pane light, the settled cluster, the mark contact sheet — on the production renderer, the pixels the field will paint. Bare, the whole lab scrolls; `=states:3`, `=light`, `=field` or `=marks` shows one page, because a screenshot run cannot scroll and every page is a gate. Six stages a surface: one surface for the whole grid crossed the 8192-pixel texture limit at 3× |
 | `-vf-open-write-key` | opens the WRITE KEY sheet on the demo host, the one surface a tap is otherwise the only way to reach |
@@ -159,13 +168,18 @@ own truffle namespace, the only one a desktop is visible in — in-app login
 (Safari sheet), the online-peer roster, and the mesh chip the bubbles
 physically flow around
 (`.swarmObstacle()` — the desktop obstacle pattern); and since IOS-3 the
-terminal leg: remote-session discovery putting every peer's session on the
-field as its own bubble, ATTACH over Truffle, the Ghosttea Metal surface, 602
-themes + 4 shader ports in the settings sheet, and upstream's reconnect banner;
+terminal leg — re-footed at **TM-5**: ATTACH is a routed T1 client dialing a
+desktop CELL's two doors with a ticket fieldd minted, the cell's own TRF1 into
+the Ghosttea Metal surface (no replica, no on-device encode), 602 themes + 4
+shader ports in the settings sheet, and our own banner. What went with TSP1: the
+per-host discovery that put every peer's session on the field as a bubble (the
+field's rows are the FOLD's agent runs now), and upstream's reconnect banner
+with the connection it described;
 and since IOS-3c the write key has a home: the per-host Keychain store above,
-ENTER KEY on the card's invitation (and on the status row of a live attachment
-that is view-only for want of one), the sheet that takes it, and the WRITE KEYS
-section that lists and revokes; and since IOS-5a…5e the input card, which is
+ENTER KEY on the card's invitation, the sheet that takes it, and the WRITE KEYS
+section that lists and revokes — all of it retiring at TM-3, and since TM-5 read
+by no attach (the live attachment's status row stopped offering ENTER KEY, which
+could not have helped: the right to type is the attach grant's); and since IOS-5a…5e the input card, which is
 finished: a composer row over a rail of nine terminal keys, in two modes that
 nothing but a tap on `>_` ever changes. Draft holds a local draft — the kit's
 own trait set on the field, so no autocorrect, no smart quotes and no
@@ -295,12 +309,14 @@ rather than a missing feature, and the mesh chip is what says why.
 **The chips are witnessed on the fixture only, and that is a fact about the feed
 rather than about the chips (IOS-5c).** A reply chip is derived from the card
 bubble's own pending permissions (`AgentFacet.permissions`), and only an AGENT
-bubble carries those. The bubbles this phone can attach to are remote TERMINALS
-discovered over the mesh: they have no agent facet, so they derive no chips —
-correctly. The mock fleet's agents do wait on permissions, and have no terminal to
-type an answer into. The two halves meet when the agent feed reaches the phone
-(IOS-4 / the AR plane); until then `-vf-demo-input-chips` is the only place the
-row renders, and this paragraph is the disclaimer. Structured approvals — codex,
+bubble carries those. This was written when the bubbles this phone could attach
+to were remote TERMINALS discovered over the mesh, which carry no agent facet
+and so derive no chips. **TM-5 moved the ground:** the field's rows are the
+fold's AGENT runs and an attach goes through the join, so the two halves now
+meet on the same bubble — a live agent with permissions pending and a terminal
+to answer in. What is still unwitnessed is that pairing on a real desktop, which
+is Phase 0's; `-vf-demo-input-chips` remains the only place the row renders
+here, and this paragraph is the disclaimer until a live run replaces it. Structured approvals — codex,
 grok and acp, which resolve over a product API instead of by typing — are
 **absent** rather than inert for as long as that API does not exist
 (`thinking-ar-agent-plane.md` §7); the card's "approve at the desktop" line stands

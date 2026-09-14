@@ -523,21 +523,29 @@ public struct HomeScreen: View {
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-open-card") {
           Task {
             try? await Task.sleep(for: .seconds(2))
-            // A peer's session first when there is one: the remote face is
+            // A bubble with a TERMINAL first when there is one: its face is
             // the one with an act on it, so it is what a screenshot run is
-            // usually after.
+            // usually after. Since TM-5 that is a fold row whose join names a
+            // session — a remote row is the DEBUG fixture's, and is kept as
+            // the fallback for exactly that reason.
             let wanted =
-              bubbles.first(where: { $0.remote?.attachable == true })
+              bubbles.first(where: { $0.agent?.join?.hasTerminal == true })
+              ?? bubbles.first(where: { $0.remote?.attachable == true })
               ?? bubbles.first(where: { $0.status == .working })
               ?? bubbles.first
             if let wanted { openCard(on: wanted) }
             // `-vf-auto-attach` carries the run one step further: on a phone
             // whose mesh is up against a serving desktop, this is the whole
-            // IOS-3 path — discover, choose, attach — with no finger on the
+            // path — hear the fold, choose, mint, dial — with no finger on the
             // glass. Without a mesh it proves the honest-failure path instead,
             // which is the other thing worth seeing.
+            //
+            // The guard is the CARD's own face, which `openCard` above has
+            // just set the subject for: asking the bubble directly would have
+            // to re-derive the join, and two answers to "may this attach" is
+            // exactly what the face exists to prevent.
             if ProcessInfo.processInfo.arguments.contains("-vf-auto-attach"),
-              let wanted, wanted.remote?.attachable == true
+              let wanted, cardTerminalFace.offersAttach
             {
               try? await Task.sleep(for: .seconds(1))
               beginAttachment(to: wanted)
