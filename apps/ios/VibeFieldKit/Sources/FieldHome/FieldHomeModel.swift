@@ -1,3 +1,4 @@
+import FieldMesh
 import FieldTerminal
 import SwiftUI
 
@@ -55,6 +56,117 @@ enum FieldHomeModel {
     if phase == .background { return polling ? .park : .none }
     guard phase == .active, !polling else { return .none }
     return hasDoor ? .resume : .open
+  }
+
+  // MARK: - The field's own leg (IOS-4e)
+
+  /// What the corner says about the doors, in the three parts the corner
+  /// draws: the chip's second token, whether it wants the user, and the
+  /// sentence under it naming the desktop the token is about.
+  ///
+  /// Every word here comes from `MeshDisplay`, which has owned this vocabulary
+  /// and its tests since IOS-4b. What this function adds is the thing
+  /// `MeshDisplay.linkLabel` cannot see from its own signature — WHICH desktop
+  /// the token is about, and the one state a token deliberately stays silent
+  /// through.
+  struct LinkFace: Equatable {
+    /// `MeshDisplay.linkLabel`, verbatim. Nil is the healthy answer: a desktop
+    /// that is ready and feeding needs no word, because the bodies on the
+    /// screen already are the word.
+    var token: String?
+    var wantsAttention: Bool
+    /// `MeshDisplay.linkLine` for the subject, or nil when there is nothing to
+    /// explain.
+    var line: String?
+
+    static let quiet = LinkFace(token: nil, wantsAttention: false, line: nil)
+  }
+
+  /// The corner's whole answer about the doors.
+  ///
+  /// `isHearing` is why this takes two arguments. `linkLabel` goes silent the
+  /// moment ANY desktop is `.ready`, which is right for the token and not
+  /// enough for the corner: a desktop that answered and has sent no board is
+  /// `FieldLink`'s own documented "they are there and saying nothing", and
+  /// with no bodies on the field that is the blank again wearing a healthy
+  /// chip. So the token still says nothing — the vocabulary is MeshDisplay's
+  /// and this does not overrule it — and the LINE appears instead, which is
+  /// the one place that fact has ever been written down ("connected · no field
+  /// yet").
+  static func linkFace(desktops: [FieldDesktop], isHearing: Bool) -> LinkFace {
+    guard let subject = linkSubject(desktops: desktops, isHearing: isHearing) else {
+      return .quiet
+    }
+    return LinkFace(
+      token: MeshDisplay.linkLabel(desktops: desktops),
+      wantsAttention: MeshDisplay.chipWantsAttention(desktops: desktops),
+      line: MeshDisplay.linkLine(desktop: subject))
+  }
+
+  /// The desktop the corner is about, in `linkLabel`'s own precedence — a
+  /// refusal first, then the ready one, then whoever is dialing, then the
+  /// desktops that publish no door at all. The two must not disagree: a token
+  /// reading "DOOR" over a line about a different desktop would be worse than
+  /// either alone.
+  static func linkSubject(desktops: [FieldDesktop], isHearing: Bool) -> FieldDesktop? {
+    // Both refusals, because `linkLabel` and `chipWantsAttention` count both:
+    // a door that said no, and a door this phone would not dial (EL7 M1). They
+    // are different sentences and the same token, and the subject has to be
+    // whichever one the token is about.
+    if let refused = desktops.first(where: {
+      switch $0.state {
+      case .failed, .refusedDoor: true
+      default: false
+      }
+    }) {
+      return refused
+    }
+    if let ready = desktops.first(where: { $0.state == .ready }) {
+      // Silence is the healthy answer only while something is actually
+      // arriving. `isHearing` is the whole difference between a quiet field
+      // and an empty one.
+      return isHearing ? nil : ready
+    }
+    if let dialing = desktops.first(where: {
+      $0.state == .connecting || $0.state == .reconnecting
+    }) {
+      return dialing
+    }
+    // Every desktop published a slice and none is serving a door.
+    return desktops.first
+  }
+
+  // MARK: - The link's own door
+
+  /// What a call to open the field's link should actually do.
+  ///
+  /// Two bugs live here and both were invisible because the rule was spelled
+  /// inline. `openLink` read `link == nil`, then awaited the mesh node, then
+  /// assigned — so two calls inside that window (a scene-phase flap reaches it
+  /// through discovery) each built a `FieldLink`, each with two `FieldStore`s
+  /// and its own sockets, and the second overwrote the first with nothing left
+  /// holding it to stop it. And the DEBUG guard beside it tested the two flags
+  /// the fixture LINK does not set (`-vf-demo-field-slice` sets neither), so
+  /// its only effect was skipping a resume for the two paths that own the
+  /// field's rows rather than its link.
+  enum LinkOpenAction: Equatable {
+    /// Nothing to do: a fixture owns the link, or an open is already in
+    /// flight and will install one.
+    case none
+    /// A link is standing; unpause it.
+    case resume
+    /// Build one.
+    case open
+  }
+
+  static func linkOpenAction(
+    fixtureOwnsLink: Bool, hasLink: Bool, isOpening: Bool
+  ) -> LinkOpenAction {
+    // A fixture link has no live door behind it: resuming it is a no-op and
+    // replacing it is the fixture lying about what it is.
+    if fixtureOwnsLink { return .none }
+    if hasLink { return .resume }
+    return isOpening ? .none : .open
   }
 
   // MARK: - The session card's face

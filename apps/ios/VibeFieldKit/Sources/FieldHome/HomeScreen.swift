@@ -26,12 +26,22 @@ public struct HomeScreen: View {
   /// exactly like discovery's own door; nil means nobody has been asked, which
   /// is not the same as a mesh that answered with no agents.
   @State private var link: FieldLink?
+  /// Whether an open is already in flight. Assigned synchronously by
+  /// `openLink`, before it awaits the mesh node, because the window between
+  /// that await and the assignment below is exactly where a second caller
+  /// used to build a second link.
+  @State private var linkOpening = false
   #if DEBUG
     /// Whether the scripted fleet is driving the field. Since IOS-4b the mock
     /// is NOT the live path: it runs only behind the lab and the demo
     /// arguments, because a preview that cannot be told from a daemon is the
     /// demo path the corpus forbids.
     @State private var mockActive = false
+    /// Whether the link on screen is a FIXTURE one, installed by a launch
+    /// argument. It is its own flag because no other flag answers the
+    /// question: the scripted fleet and the demo peer own the field's ROWS
+    /// and install no link at all.
+    @State private var fixtureLink = false
   #endif
   @State private var selection: SessionSelection?
   /// The card's SUBJECT, remembered rather than looked up fresh every frame.
@@ -197,10 +207,36 @@ public struct HomeScreen: View {
 
   @ViewBuilder
   private var chrome: some View {
-    MeshChip(state: mesh.state, peerCount: mesh.peers.count) {
-      meshSheetOpen = true
+    // The mesh's corner, and under it the field's own leg (IOS-4e). The chip
+    // says whether this phone is on the mesh; the token beside it says whether
+    // the doors behind that mesh have anything to report; the line names the
+    // desktop the token is about. Each is its own physics obstacle, so the
+    // swarm nestles around the words rather than under them.
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(alignment: .top, spacing: 6) {
+        MeshChip(state: mesh.state, peerCount: mesh.peers.count) {
+          meshSheetOpen = true
+        }
+        .swarmObstacle()
+
+        if let token = linkFace.token {
+          FieldChip(label: token, wantsAttention: linkFace.wantsAttention)
+            // The line below says the same fact in words, and a screen reader
+            // that read both would hear the state twice.
+            .accessibilityHidden(true)
+            .swarmObstacle()
+        }
+      }
+
+      if let line = linkFace.line {
+        LinkLine(text: line, wantsAttention: linkFace.wantsAttention)
+          .swarmObstacle()
+      }
     }
-    .swarmObstacle()
+    // The house curve at the opacity band's own duration (DESIGN.md §6): a
+    // door refusing is real news and may fade in, and nothing here moves on
+    // routine traffic — every one of these states is an event.
+    .animation(FieldMotion.ease(0.24), value: linkFace)
     .padding(.leading, 14)
     .padding(.top, 6)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -272,14 +308,23 @@ public struct HomeScreen: View {
         // photographed over real-shaped rows in both themes with no desktop
         // and no tailnet. It is not a demo path: nothing downstream of the
         // store knows the difference, which is the point.
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-field-slice"),
+        //
+        // `link == nil` because this whole block runs again on every return to
+        // the view: without it a disappear/reappear built a SECOND fixture
+        // link — two more `FieldStore`s, two more readers — and stranded the
+        // first, which is the live path's own stranding bug wearing a fixture.
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-field-slice"), link == nil,
           let doors = FieldStoreDoors.goldenBoard()
         {
           let fixture = FieldLink(storeDoors: doors)
           fixture.start()
           link = fixture
+          fixtureLink = true
         }
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-remote") {
+        // `!demoRemoteActive` for the reason the line above carries: a second
+        // appearance would otherwise replace a running fixture field with a
+        // fresh one and never stop the first.
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-remote"), !demoRemoteActive {
           demoRemoteActive = true
           remoteField = RemoteSessionField(source: DemoRemoteSource())
           remoteField.start()
@@ -502,6 +547,16 @@ public struct HomeScreen: View {
           }
         }
       #endif
+      // The counterpart of `onDisappear`'s parks, and it was missing. A
+      // disappear and reappear with no scene-phase change left the link paused
+      // and the poll stopped for good: only `onChange(of: mesh.state)` or
+      // `onChange(of: scenePhase)` revived either, and neither fires when a
+      // view merely comes back. `resume()` is idempotent (it guards on
+      // `isPaused`), and `syncDiscovery` is the one decision that owns the
+      // poll — with no mesh it answers `.none` rather than tearing anything
+      // down, so a fixture on a phone with no tailnet survives it.
+      link?.resume()
+      syncDiscovery(meshIsUp: mesh.state == .up, phase: scenePhase)
       refreshWriteKeys()
     }
     .onDisappear {
@@ -701,28 +756,51 @@ public struct HomeScreen: View {
   /// a synced store is truffle's own protocol, and `field.devices.v1` is where
   /// a desktop's capability URL lives.
   private func openLink() {
+    var fixtureOwnsLink = false
     #if DEBUG
-      // A fixture link owns the field while it is up.
-      if link != nil, mockActive || demoRemoteActive { return }
+      // A fixture link owns the field while it is up — whichever argument
+      // installed it. This used to read `mockActive || demoRemoteActive`, and
+      // `-vf-demo-field-slice` (the one argument that installs a LINK) sets
+      // neither: the two flags it did read own what the field DRAWS, so the
+      // block's only effect was skipping a resume on paths that have no
+      // fixture link at all.
+      fixtureOwnsLink = fixtureLink
     #endif
-    guard link == nil else {
-      link?.resume()
+    switch FieldHomeModel.linkOpenAction(
+      fixtureOwnsLink: fixtureOwnsLink, hasLink: link != nil, isOpening: linkOpening)
+    {
+    case .none:
       return
-    }
-    Task {
-      guard let node = await mesh.node else { return }
-      // The transport is the MESH's session, not the system's: this phone's
-      // tailnet is a userspace netstack in this process, and a plain
-      // URLSession does not route over it. The suffix is this node's own
-      // tailnet domain, which is what lets a peer's published door be checked
-      // against an address the mesh vouches for (EL7 M1).
-      let suffix = await mesh.magicDNSSuffix
-      let opened = FieldLink(
-        storeDoors: .live(node: node),
-        transport: meshProductTransport(node: node),
-        magicDNSSuffix: suffix)
-      opened.start()
-      link = opened
+    case .resume:
+      link?.resume()
+    case .open:
+      // Assigned HERE, synchronously, before the task suspends: the flag is
+      // the whole fix. `mesh.node` is an await, and two callers inside that
+      // window — a scene-phase flap reaches this through discovery — each
+      // built a link with two `FieldStore`s and its own sockets, the second
+      // overwrote the first, and nothing was left holding the first to stop
+      // it.
+      linkOpening = true
+      Task {
+        defer { linkOpening = false }
+        guard let node = await mesh.node else { return }
+        // The transport is the MESH's session, not the system's: this phone's
+        // tailnet is a userspace netstack in this process, and a plain
+        // URLSession does not route over it. The suffix is this node's own
+        // tailnet domain, which is what lets a peer's published door be checked
+        // against an address the mesh vouches for (EL7 M1).
+        let suffix = await mesh.magicDNSSuffix
+        // The link may have been closed while the node and the suffix were
+        // being fetched (a mesh that left runs `closeLink`), and a link built
+        // on a node from before that is one nobody asked for.
+        guard link == nil else { return }
+        let opened = FieldLink(
+          storeDoors: .live(node: node),
+          transport: meshProductTransport(node: node),
+          magicDNSSuffix: suffix)
+        opened.start()
+        link = opened
+      }
     }
   }
 
@@ -732,6 +810,11 @@ public struct HomeScreen: View {
   private func closeLink() {
     link?.stop()
     link = nil
+    #if DEBUG
+      // A fixture that has been stopped no longer owns anything, and a flag
+      // left standing would refuse the live path for the rest of the process.
+      fixtureLink = false
+    #endif
   }
 
   // MARK: - Sheets
@@ -1005,6 +1088,14 @@ public struct HomeScreen: View {
   /// The link's desktops, named so the modifier chain stays cheap to
   /// type-check. See the `.onChange` that reads it.
   private var linkDesktops: [FieldDesktop] { link?.desktops ?? [] }
+
+  /// What the corner says about the doors (IOS-4e). Named for the same reason
+  /// as the property above: the chrome is inside `body`'s type-checking
+  /// budget, and the decision belongs in `FieldHomeModel` where it is tested
+  /// without a simulator.
+  private var linkFace: FieldHomeModel.LinkFace {
+    FieldHomeModel.linkFace(desktops: linkDesktops, isHearing: link?.isHearing ?? false)
+  }
 
   private func collectWriteGrants() {
     guard let link else { return }
