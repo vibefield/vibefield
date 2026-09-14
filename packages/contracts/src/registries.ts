@@ -56,7 +56,17 @@ export const PORTS = {
    * dropped client would have to re-dial to get a replacement ticket, so
    * bouncing it on cell churn would break the recovery path itself. Confining
    * the churn here costs a terminal data leg a reconnect, which the routed
-   * client already handles (`STALE_ROUTE` → re-ticket). */
+   * client already handles.
+   *
+   * ERRATUM 2026-09-14 (N-M3): this sentence used to end "(`STALE_ROUTE` →
+   * re-ticket)", which names a mechanism that is UNBUILT. `STALE_ROUTE` (4000)
+   * has no production caller — the cell's only raise is `Door::close_set`,
+   * reached from tests alone (`field-native/src/tp/door.rs`, which carries the
+   * same note and the reason it cannot simply be called). The reconnect this
+   * paragraph describes is REAL, but a routed client observes it as a plain
+   * TRANSPORT DEATH: the remove-then-add above happens in the sidecar and tears
+   * the connections down there, so no cell-side close frame can precede it. The
+   * kit's 4000 arm is recovery for an event nothing currently raises. */
   TERMINAL_CELLS_SERVE: 9422,
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
   DOC_SYNC_QUIC: 9440,

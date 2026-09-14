@@ -432,6 +432,33 @@ impl Door {
 
     /// Tell every leg of a set to close with `reason` (TC-S6's STALE_ROUTE /
     /// FENCED path; tests). Returns how many legs were signalled.
+    ///
+    /// **UNBUILT as of 2026-09-14 (N-M3): `LegClose::StaleRoute` (4000) has NO
+    /// PRODUCTION CALLER.** This method is the only place that raises it and its
+    /// only callers are in `tests/tp_door.rs`. The kit implements the recovery
+    /// (4000 -> re-ticket) and `contracts/registries.ts` cites it under
+    /// `TERMINAL_CELLS_SERVE` as the reason cell-route churn is survivable, so
+    /// the claim reads as built from both ends. It is not.
+    ///
+    /// AND IT CANNOT BE WIRED HERE WITHOUT A NEW SEAM, which is why this is a
+    /// note rather than a fix:
+    ///   1. a cell has no inbound route channel at all. Its stdin carries one
+    ///      bootstrap line and is then a LEASH whose reader discards every byte
+    ///      until EOF (`cell.rs`), and the floor's route snapshot is the FLOOR's
+    ///      view of its cells — nothing carries it the other way;
+    ///   2. the event that actually invalidates a route is fieldd's
+    ///      remove-then-add of the serve, forced by truffle offering no proxy
+    ///      update (the same `registries.ts` comment says so). That happens in
+    ///      the SIDECAR and tears the TCP connections down itself;
+    ///   3. so by the time a cell could know, the socket a 4000 close frame
+    ///      would ride is already gone. What a routed client really observes on
+    ///      route churn is a plain transport death, not a named close.
+    ///
+    /// Wiring it therefore means a floor -> cell route channel and a decision
+    /// about which snapshot change invalidates which set — a design question,
+    /// not a missing call. Until then the recovery path is exercised only by
+    /// the transport-death route, and the kit's 4000 arm is dead code on this
+    /// product's paths.
     pub fn close_set(&self, connection_set_id: &str, reason: LegClose) -> usize {
         let reg = self.state.registry.lock().unwrap();
         reg.sets
