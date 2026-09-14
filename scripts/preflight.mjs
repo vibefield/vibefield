@@ -69,11 +69,10 @@ const PIN_EXPECTATIONS = [
     label: '"@vibecook/ice": 0.11.0',
   },
   { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.11\.1"/m, label: 'ghosttea = "=0.11.1"' },
-  {
-    file: "Cargo.toml",
-    re: /^ghosttea-truffle\s*=\s*"=0\.11\.1"/m,
-    label: 'ghosttea-truffle = "=0.11.1"',
-  },
+  // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1
+  // adapter left the floor (`thinking-terminal-mesh-cells.md`, TM-D1 ruled T), so
+  // there is no second ghosttea consumer to keep in lockstep; the ghosttea row
+  // alone carries truffle-core's version agreement now.
   {
     file: "pnpm-workspace.yaml",
     re: /"@vibecook\/ghosttea-client":\s*0\.11\.1/,
