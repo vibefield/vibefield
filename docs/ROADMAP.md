@@ -3,7 +3,18 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-09-14 — MF-1 LANDED `6b26cf23`: the re-cut toward the
+> stays in the design docs + specs. Last rewritten: **2026-09-14 — MF-1a LANDED `f999b6e1`: James's QA of the wave, its fix
+> wave, and the terminal-mesh ruling** (the phone joined the wrong truffle namespace — `vibefield`
+> now, its own runtime over truffle's public node; the floor's routes subscription contradicted its
+> hello under the mesh flag — one disclosure rule; the deck's old chips, a vanishing shell, the cwd
+> row, the dev page's second Zod; the Codex pane diagnosed to a late attach on the alternate screen.
+> Found designing the mesh on the cells: the mesh flag is the pre-S3e floor and the desktop deck
+> cannot open a pane under it. **James ruled T directly** — `draft/thinking-terminal-mesh-cells.md`,
+> TM-D1…D8: the phone a routed T1 client over the sidecar's proxy to the cells' doors, the bearer key
+> retiring into grant rights, the in-process serve and TSP1 deleted; TM-1/TM-2/TM-4 in flight; see
+> LANDED §MF-1a). Next: **TM-1 the floor · TM-2 fieldd · TM-4 the kit's routed client → TM-5 the
+> phone's attachment → TM-3 the bearer's deletion → Phase 0 on hardware**; then AG-1 and AR-6.
+> Previous rewrite, kept for continuity — **2026-09-14 — MF-1 LANDED `6b26cf23`: the re-cut toward the
 > Godview and its phone** (James's ruling the evening AR-5b landed: "land the Godview and its
 > mobile connected experience first" — `draft/thinking-godview-mobile-first.md`, three witnesses:
 > W1 the desktop reads as puppeteer's Godview · W2 the phone hears the desktop's fold efficiently ·
@@ -184,10 +195,13 @@ The direction since 2026-09-13 evening is ONE goal with three witnesses (§0 of
 `thinking-godview-mobile-first.md`): the desktop Godview reads as the reference, the phone's
 field is the desktop's live fold, and a tap on a body opens the same PTY the deck shows over
 truffle with the write grant handed over by the desktop. The wave that landed 2026-09-13/14
-(LANDED §MF-1, tip `6b26cf23`) built all three on the desktop and the simulator; what remains
-before any of it is TRUE on hardware is Phase 0, James's own witnesses (a serving `pnpm dev` with
-both native mesh flags on, the phone signed in by hand) — and the rulings the review surfaced,
-first among them GM-D10: who is on the tailnet that `field.agents.v1` reaches.
+(LANDED §MF-1, tip `6b26cf23`) built all three on the desktop and the simulator; James's QA the
+same night (§MF-1a, tip `f999b6e1`) found the phone on the wrong tailnet namespace and the mesh flag
+breaking the floor — both fixed — and the design that followed found the mesh flag and the desktop
+deck mutually exclusive by construction. James ruled **T directly** (`thinking-terminal-mesh-cells.md`):
+the phone as a routed T1 client through the sidecar's proxy to the cells' own doors. Until TM-1/2/4/5
+land, nothing on the phone is witnessable beside a working deck; after them, Phase 0 is James's
+hand sign-in and the rulings still open (GM-D10 the store's audience, a kill affordance for the deck).
 
 The P0 exit criterion — *real daily agent work, sessions surviving app restarts* — is half
 held: the board survives daemon restarts (B3), PTYs survive everything up to field-native (the
