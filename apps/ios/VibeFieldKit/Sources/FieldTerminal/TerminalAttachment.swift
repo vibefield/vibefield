@@ -720,6 +720,21 @@ public final class TerminalAttachment {
       return "\(who) is not publishing its terminal doors on the tailnet"
     case "transport_not_landed":
       return "\(who) is serving this session without a routed door to dial"
+    case "device_not_linked":
+      // fieldd's TM-r10 refusal: `doorsFor` turns down a tailnet principal whose
+      // `self` is not true rather than handing out its own loopback ticket — an
+      // unlinked desktop saying it cannot vouch for the caller. The default arm
+      // degraded it to "… cannot hand out a ticket — device_not_linked", which
+      // is a state word rather than a sentence.
+      //
+      // It is the one refusal in this set a person can FIX, and the fix is on
+      // the OTHER machine — which is why the act is named here rather than left
+      // to the banner's `retryNow`, since retrying changes nothing until the
+      // desktop is linked. The refusal is retryable for exactly that reason:
+      // linking makes the same mint succeed.
+      return
+        "\(who) is not linked to an account yet, so it cannot tell who you are — "
+        + "link it on the desktop"
     default:
       return "\(who) cannot hand out a ticket — \(unavailable.state)"
     }

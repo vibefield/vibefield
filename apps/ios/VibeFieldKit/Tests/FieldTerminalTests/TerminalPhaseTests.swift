@@ -166,6 +166,29 @@ import Testing
         == "studio is serving this session without a routed door to dial")
   }
 
+  @Test func anUnlinkedDesktopSaysWhyItCannotVouchAndWhereToFixIt() {
+    // fieldd's TM-r10 refusal, reaching a face. `doorsFor` turns down a tailnet
+    // principal whose `self` is not true instead of handing out its own
+    // loopback ticket, and the default arm below degraded that to the bare
+    // state word. It is the one refusal in this set a person can FIX, and the
+    // fix is on the OTHER machine — so the sentence carries the act, which
+    // `retryNow` cannot: retrying changes nothing until the desktop is linked.
+    #expect(
+      TerminalAttachment.doorWords(unavailable("device_not_linked"), device: "studio")
+        == "studio is not linked to an account yet, so it cannot tell who you are — "
+          + "link it on the desktop")
+    // …and it names the machine, or degrades to the family's own words for one
+    // it cannot name, exactly like its siblings.
+    #expect(
+      TerminalAttachment.doorWords(unavailable("device_not_linked"), device: nil)
+        == "that desktop is not linked to an account yet, so it cannot tell who you are — "
+          + "link it on the desktop")
+    // A SENTENCE, not the state word leaking through the default arm.
+    #expect(
+      !TerminalAttachment.doorWords(unavailable("device_not_linked"), device: "studio")
+        .contains("device_not_linked"))
+  }
+
   @Test func anUnknownStateIsCarriedRatherThanSwallowed() {
     // Tolerant reader: a state this build has never heard of is still a word a
     // person can read, and inventing a friendlier one would hide the daemon's.
