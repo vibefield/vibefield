@@ -446,4 +446,58 @@ mod tests {
         assert_eq!(MeshPlan::resolve(&config), MeshPlan::Requested);
         assert!(!MeshPlan::resolve(&config).is_off());
     }
+
+    /// N-M4 — THE READING, over all four combinations of its two halves.
+    ///
+    /// Written because the composition had a witness for only ONE of them.
+    /// `terminal_mesh_published` was spelled inline in `state.rs` as
+    /// `!plan.is_off() && node.is_some()`, and both `mgmt_server.rs` rows over
+    /// it were FALSE-side rows against a floor with no gateway — flag off and
+    /// flag on, node absent in each. Deleting the FLAG conjunct outright left
+    /// the whole suite green: with no node, `false && x` and `x` agree.
+    ///
+    /// A truth table is the right shape here precisely because the function is
+    /// one `&&`. The laws it encodes are product laws, not arithmetic:
+    ///   · ASKED IS NOT ACHIEVED (TM-1) — the flag is a request, and a request
+    ///     over a gateway that never came up publishes nothing. That is the
+    ///     false positive `HelloAck.terminalMesh` exists to close.
+    ///   · A NODE IS NOT A DOOR — a floor with a perfectly good tailnet node
+    ///     that was never asked to publish its terminal doors has not published
+    ///     them, and saying otherwise would advertise a PTY nobody meant to
+    ///     expose (EL7).
+    #[test]
+    fn the_terminal_mesh_reading_needs_both_halves() {
+        for (plan, node_present, expected, why) in [
+            (
+                MeshPlan::Off,
+                false,
+                false,
+                "no flag and no node: the ordinary desktop floor",
+            ),
+            (
+                MeshPlan::Off,
+                true,
+                false,
+                "a node is not a door — an unasked floor publishes nothing",
+            ),
+            (
+                MeshPlan::Requested,
+                false,
+                false,
+                "asked is not achieved — the flag over a gateway that never came up",
+            ),
+            (
+                MeshPlan::Requested,
+                true,
+                true,
+                "both halves, and only then",
+            ),
+        ] {
+            assert_eq!(
+                plan.publishes(node_present),
+                expected,
+                "{why} (plan {plan:?}, node_present {node_present})"
+            );
+        }
+    }
 }
