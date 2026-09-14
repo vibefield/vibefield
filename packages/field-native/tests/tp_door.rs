@@ -589,3 +589,87 @@ async fn shutdown_closes_every_leg_1001_and_close_set_names_its_reason() {
         "a stopped door does not accept: {refused:?}"
     );
 }
+
+/// N-M5 (EL7 Q8) — permessage-deflate, refused against a client that ACTUALLY
+/// OFFERS IT.
+///
+/// The refusal was already asserted in two places, and NEITHER could fail. Both
+/// this file's `dial` and the live probe use tokio-tungstenite at default
+/// features, which has no compression built in (there is no flate2 in
+/// Cargo.lock) — so neither client ever sends `Sec-WebSocket-Extensions`, and a
+/// server that never receives an offer cannot accept one. Deleting the door's
+/// entire compression stance would have left both assertions green.
+///
+/// IT MATTERS BECAUSE THE PHONE IS NOT THAT CLIENT. `URLSessionWebSocketTask`
+/// ALWAYS offers permessage-deflate, and the whole §8 byte ledger assumes both
+/// ends charge the same received length: if the cell ever negotiated it, the
+/// client would return credit for the COMPRESSED bytes it received while the
+/// cell had charged the uncompressed ones, and the two windows would drift
+/// apart silently, in the direction that starves the stream.
+///
+/// So this row hand-writes the upgrade on a raw socket — the same technique the
+/// probe's echo backend uses to read what the sidecar forwards — and reads the
+/// response head itself. Nothing but a raw socket can express this offer with
+/// the crates in this lockfile.
+#[tokio::test]
+async fn an_offered_permessage_deflate_is_never_echoed_in_the_101() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let m = minter();
+    let door = Door::serve(config(&m)).await.expect("serve");
+
+    let mut sock = tokio::net::TcpStream::connect(("127.0.0.1", door.port()))
+        .await
+        .expect("connect the control door");
+    let request = format!(
+        "GET /control HTTP/1.1\r\n\
+         Host: 127.0.0.1:{}\r\n\
+         Upgrade: websocket\r\n\
+         Connection: Upgrade\r\n\
+         Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
+         Sec-WebSocket-Version: 13\r\n\
+         Origin: {APP_ORIGIN}\r\n\
+         Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits\r\n\
+         \r\n",
+        door.port()
+    );
+    sock.write_all(request.as_bytes())
+        .await
+        .expect("write the upgrade");
+
+    // Read until the end of the response head.
+    let mut head = Vec::new();
+    let mut byte = [0_u8; 1];
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while !head.ends_with(b"\r\n\r\n") {
+        if tokio::time::Instant::now() >= deadline {
+            panic!("the door never finished a response head: {head:?}");
+        }
+        match tokio::time::timeout(Duration::from_secs(5), sock.read(&mut byte)).await {
+            Ok(Ok(0)) => panic!("the door closed mid-head: {head:?}"),
+            Ok(Ok(_)) => head.push(byte[0]),
+            Ok(Err(e)) => panic!("read: {e}"),
+            Err(_) => panic!("the door never answered the upgrade"),
+        }
+    }
+    let head = String::from_utf8_lossy(&head).to_string();
+    let lower = head.to_ascii_lowercase();
+
+    // PIN THE PRECONDITION: the offer really was sent, and the door really did
+    // upgrade — otherwise "no extension" would be the trivial truth about a
+    // refused connection rather than about a negotiation that declined.
+    assert!(
+        request.contains("Sec-WebSocket-Extensions: permessage-deflate"),
+        "this row is worthless if it does not offer"
+    );
+    assert!(
+        lower.starts_with("http/1.1 101"),
+        "the offer must not cost the upgrade — a door that 400s here would break \
+         every phone that always offers: {head}"
+    );
+    assert!(
+        !lower.contains("sec-websocket-extensions"),
+        "the door echoed an extension it must never negotiate — the §8 byte ledger \
+         charges uncompressed length on both ends: {head}"
+    );
+}
