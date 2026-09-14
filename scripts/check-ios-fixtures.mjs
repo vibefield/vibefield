@@ -59,10 +59,80 @@ for (const searchRoot of searchRoots) {
   }
 }
 
-if (problems.length > 0) {
-  console.error(`ios fixtures: ${problems.length} of ${checked} copies are stale\n`);
-  for (const problem of problems) console.error(`  ${problem}\n`);
+// The same argument one level up: the REGISTRY VALUES the phone speaks.
+//
+// `registries.ts` says ports, scopes, stores and the app id exist there and
+// nowhere else, but the kit is outside `pnpm verify` and has no generator
+// pointed at it, so every registry value it needs is a hand-written string
+// that can drift. One did, silently: the phone started its truffle node in
+// ghosttea's `ghosttea-terminal` namespace while every desktop floor joined
+// `vibefield`, and since a node admits a peer only by the `truffle-{appId}-`
+// hostname prefix, a signed-in phone read `0 peers in reach` beside a serving
+// desktop. Nothing in the tree could have noticed. This is the thing that
+// notices.
+const pins = [
+  {
+    name: "appID",
+    origin: {
+      file: "packages/contracts/src/registries.ts",
+      pattern: /^export const APP_ID = "([^"]*)"/m,
+      label: "APP_ID",
+    },
+    copy: {
+      file: "apps/ios/VibeFieldKit/Sources/FieldMesh/FieldMeshContract.swift",
+      pattern: /^ {2}public static let appID = "([^"]*)"/m,
+      label: "FieldMeshContract.appID",
+    },
+  },
+];
+
+const pinProblems = [];
+
+/** The one captured group, or `null` when the pin lost its witness. */
+function pinned({ file, pattern }) {
+  try {
+    return pattern.exec(readFileSync(join(root, file), "utf8"))?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+for (const pin of pins) {
+  const origin = pinned(pin.origin);
+  const copy = pinned(pin.copy);
+  // A pattern that stopped matching fails too. A pin nobody can read is not a
+  // pin that agrees — it is a gate that quietly stopped being one.
+  if (origin === null) {
+    pinProblems.push(
+      `${pin.origin.label} is unreadable in ${pin.origin.file}\n` +
+        `  fix: restore the declaration, or move this script's pattern with it`,
+    );
+  } else if (copy === null) {
+    pinProblems.push(
+      `${pin.copy.label} is unreadable in ${pin.copy.file}\n` +
+        `  fix: restore the declaration, or move this script's pattern with it`,
+    );
+  } else if (origin !== copy) {
+    pinProblems.push(
+      `${pin.copy.label} is "${copy}" but ${pin.origin.label} is "${origin}"\n` +
+        `  fix: set ${pin.copy.label} to "${origin}" in ${pin.copy.file} — or move BOTH,` +
+        ` deliberately, because it is the namespace every plane must share`,
+    );
+  }
+}
+
+if (problems.length > 0 || pinProblems.length > 0) {
+  if (problems.length > 0) {
+    console.error(`ios fixtures: ${problems.length} of ${checked} copies are stale\n`);
+    for (const problem of problems) console.error(`  ${problem}\n`);
+  }
+  if (pinProblems.length > 0) {
+    console.error(`ios pins: ${pinProblems.length} of ${pins.length} registry values drifted\n`);
+    for (const problem of pinProblems) console.error(`  ${problem}\n`);
+  }
   process.exit(1);
 }
 
+const values = pins.length === 1 ? "registry value" : "registry values";
 console.log(`ios fixtures: ${checked} copies identical to packages/contracts/fixtures`);
+console.log(`ios pins: ${pins.length} ${values} identical to packages/contracts/src/registries.ts`);

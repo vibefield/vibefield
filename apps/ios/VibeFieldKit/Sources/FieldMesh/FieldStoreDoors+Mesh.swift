@@ -107,8 +107,8 @@ extension FieldStoreDoors {
   }
 
   /// The live doors, over an app-owned runtime.
-  public static func live(runtime: GhostteaTruffleRuntime) async -> FieldStoreDoors {
-    live(node: await runtime.node)
+  public static func live(runtime: FieldTruffleRuntime) async -> FieldStoreDoors {
+    live(node: runtime.node)
   }
 
   /// The two keyspaces, kept apart on purpose: `tailscaleId` routes, the

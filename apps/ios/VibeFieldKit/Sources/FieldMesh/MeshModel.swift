@@ -24,6 +24,10 @@ public struct MeshPeerView: Identifiable, Sendable, Equatable {
 /// (`connect()`), and every state renders as itself: off is off, sign-in is
 /// sign-in, failed carries its reason. The corpus law stands: the phone is a
 /// client on the mesh, never a device row (it runs no fieldd).
+///
+/// The node is `FieldTruffleRuntime`'s and not ghosttea's, for one reason
+/// given in full at that declaration: the namespace a node joins is the app id
+/// it was started with, and ghosttea's runtime can only ever join its own.
 @MainActor
 @Observable
 public final class MeshModel {
@@ -47,7 +51,7 @@ public final class MeshModel {
   public private(set) var peers: [MeshPeerView] = []
   public private(set) var loginPage: LoginPage?
 
-  @ObservationIgnored private var runtime: GhostteaTruffleRuntime?
+  @ObservationIgnored private var runtime: FieldTruffleRuntime?
   @ObservationIgnored private var eventsTask: Task<Void, Never>?
   @ObservationIgnored private var lastLoginURL: URL?
 
@@ -63,24 +67,26 @@ public final class MeshModel {
   /// deliberately not observable: it is a door, not display state, and a view
   /// that re-renders on `state` already learns when it opens.
   ///
-  /// `async` because it must be: upstream's `directory` is a `let` on an ACTOR,
-  /// and a cross-module actor property is isolated even when it is immutable.
-  /// Caching it here would buy a synchronous getter at the price of a second
-  /// copy of the runtime's own state, which is a worse trade than an await in
-  /// the `.task` that composes the field.
+  /// `async` where it no longer has to be, deliberately. It was: ghosttea's
+  /// `directory` is a `let` on an ACTOR, and a cross-module actor property is
+  /// isolated even when it is immutable. `FieldTruffleRuntime` lives in THIS
+  /// module, so the same `let` is now reachable synchronously and the inner
+  /// `await` is gone — but the getter stays `async` because every caller
+  /// awaits it inside a `.task` already, and narrowing a door in the same
+  /// breath as moving the namespace would put two changes in one diff.
   public var directory: GhostteaTrufflePeerDirectory? {
-    get async { await runtime?.directory }
+    get async { runtime?.directory }
   }
 
   /// The running node itself, for the surfaces that speak the mesh's own
   /// protocols rather than Ghosttea's (IOS-4b's synced-store reader).
   ///
-  /// Same shape and same reason as `directory` above: `async` because the
-  /// runtime is an ACTOR, optional because "there is no runtime" is the only
-  /// thing the optionality means, and not observable because it is a door
-  /// rather than display state.
+  /// Same shape and same reason as `directory` above: `async` by the door's
+  /// own convention, optional because "there is no runtime" is the only thing
+  /// the optionality means, and not observable because it is a door rather
+  /// than display state.
   public var node: MeshNode? {
-    get async { await runtime?.node }
+    get async { runtime?.node }
   }
 
   /// This node's own tailnet domain (`studio.tail1234.ts.net` → `tail1234.ts.net`).
@@ -144,7 +150,7 @@ public final class MeshModel {
 
   private func startRuntime() async {
     do {
-      let runtime = try await GhostteaTruffleRuntime.start(
+      let runtime = try await FieldTruffleRuntime.start(
         deviceName: UIDevice.current.name,
         onAuthRequired: { [weak self] url in
           self?.lastLoginURL = url
