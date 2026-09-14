@@ -75,9 +75,27 @@ struct Shared {
 pub struct NodePresence {
     node: watch::Receiver<Option<Arc<MeshNode>>>,
     forced: watch::Receiver<bool>,
+    /// Only ever `Some` in [`NodePresence::for_tests`]: the node half's sender,
+    /// held so its receiver keeps reporting "no node" instead of "gone".
+    _detached_node: Option<watch::Sender<Option<Arc<MeshNode>>>>,
 }
 
 impl NodePresence {
+    /// T-M2 TEST SEAM — a presence fact with no mesh unit behind it, so a unit
+    /// row can drive the node half directly (`forced`) and exercise the readers
+    /// of this watch: the routes forwarder's two triggers and its dedupe. The
+    /// node half is a live channel that never moves, which is what a floor
+    /// whose gateway never came up really looks like.
+    #[doc(hidden)]
+    pub fn for_tests(forced: watch::Receiver<bool>) -> Self {
+        let (node_tx, node) = watch::channel(None);
+        Self {
+            node,
+            forced,
+            _detached_node: Some(node_tx),
+        }
+    }
+
     /// Is a node installed right now? Cheap — two watch borrows, no wait.
     pub fn get(&self) -> bool {
         self.node.borrow().is_some() || *self.forced.borrow()
@@ -120,6 +138,7 @@ impl MeshHandle {
         NodePresence {
             node: self.shared.node.subscribe(),
             forced: self.shared.node_presence_forced.subscribe(),
+            _detached_node: None,
         }
     }
 

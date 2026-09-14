@@ -1332,4 +1332,139 @@ mod tests {
             );
         }
     }
+
+    /// T-M2 / E-F1 — THE ROUTES FORWARDER'S RULE, driven directly.
+    ///
+    /// The delta path lost its only test when TM-2a retired
+    /// `the_routes_subscription_withholds_an_unrevised_snapshot_like_the_hello`
+    /// and its `recv_within` helper. `disclosed_routes`' SNAPSHOT half kept its
+    /// rows; the forwarder was left "holding by construction" with nothing
+    /// asserting it, at the same moment E-F1 gave it a second trigger and a
+    /// dedupe. This drives a watch from revision zero and pins both.
+    ///
+    /// THE RULE, in full:
+    ///   · an UNREVISED snapshot is withheld — the watch channel's initial is
+    ///     not a reading, and rows without a revision are still the initial;
+    ///   · a ROUTES move emits once the revision is real;
+    ///   · a NODE flip emits the UNCHANGED snapshot at the UNCHANGED revision
+    ///     under the new boolean — the revision orders ROUTE state, and moving
+    ///     it to announce a different fact would make it mean two things;
+    ///   · a node flip that does NOT move the composed reading emits nothing.
+    #[tokio::test]
+    async fn the_routes_forwarder_withholds_the_initial_and_pushes_a_node_flip_in_place() {
+        use crate::services::mesh::NodePresence;
+        use std::time::Duration;
+
+        fn cell(id: &str) -> TerminalRouteCell {
+            TerminalRouteCell {
+                cell_boot_id: id.to_string(),
+                cell_instance_id: 1,
+                doors: None,
+                endpoints: TerminalEndpoints {
+                    auth_token: "ab".repeat(32),
+                    control_socket: "/tmp/termctl.1.sock".to_string(),
+                    frame_socket: "/tmp/termframe.1.sock".to_string(),
+                },
+                grant_key: None,
+                grant_key_generation: None,
+                pid: 4242,
+                role: None,
+                token_generation: 1,
+                workload_class: None,
+            }
+        }
+
+        let (routes_tx, routes_rx) = tokio::sync::watch::channel(TerminalRouteSnapshot {
+            revision: 0,
+            cells: vec![],
+        });
+        let (presence_tx, presence_rx) = tokio::sync::watch::channel(false);
+        let (tx, mut outbox, _close) = MgmtOutbox::channel();
+
+        // `sent_at_subscribe: None` — the subscribe result withheld the
+        // snapshot, so this reader has been told nothing about the mesh and its
+        // first node flip must never be deduped away.
+        spawn_routes_forwarder(
+            tx,
+            routes_rx,
+            NodePresence::for_tests(presence_rx),
+            MeshPlan::Requested,
+            None,
+            "s-test".to_string(),
+        );
+
+        async fn next_payload(
+            outbox: &mut tokio::sync::mpsc::Receiver<OutMsg>,
+        ) -> Option<serde_json::Value> {
+            let msg = tokio::time::timeout(Duration::from_millis(400), outbox.recv())
+                .await
+                .ok()??;
+            let OutMsg::Line(line) = msg else {
+                panic!("the forwarder never closes the outbox");
+            };
+            let note: Value = serde_json::from_str(&line).expect("a JSON notification");
+            assert_eq!(note["method"], "native.lifecycle.terminal.routes.delta");
+            Some(note["params"]["payload"].clone())
+        }
+
+        // (1) the INITIAL, moved but still unrevised: rows without a revision
+        // are the initial as far as readers go, so nothing may be published.
+        routes_tx.send_replace(TerminalRouteSnapshot {
+            revision: 0,
+            cells: vec![cell("cb-early")],
+        });
+        assert!(
+            next_payload(&mut outbox).await.is_none(),
+            "an unrevised snapshot is not a reading, however many rows it carries"
+        );
+
+        // (2) a node flip while unrevised publishes nothing either — there is
+        // no payload to carry a boolean on.
+        presence_tx.send_replace(true);
+        assert!(
+            next_payload(&mut outbox).await.is_none(),
+            "a floor that has said nothing about routes says nothing about the mesh"
+        );
+
+        // (3) the REVISION moves: the first real reading, carrying the node
+        // state that flipped silently in (2).
+        routes_tx.send_replace(TerminalRouteSnapshot {
+            revision: 1,
+            cells: vec![cell("cb-1")],
+        });
+        let payload = next_payload(&mut outbox)
+            .await
+            .expect("a revised snapshot publishes");
+        assert_eq!(payload["revision"], 1);
+        assert_eq!(
+            payload["terminalMesh"], true,
+            "the first delivered payload carries the CURRENT reading, not the one \
+             that was true when the subscription started"
+        );
+
+        // (4) a node flip IN PLACE: same revision, new boolean. This is the
+        // whole of E-F1 — the correction the hello could not make.
+        presence_tx.send_replace(false);
+        let payload = next_payload(&mut outbox)
+            .await
+            .expect("a node flip publishes");
+        assert_eq!(
+            payload["revision"], 1,
+            "a node flip changes no route state, so the revision must not move"
+        );
+        assert_eq!(payload["terminalMesh"], false);
+        assert_eq!(
+            payload["cells"][0]["cellBootId"], "cb-1",
+            "the push carries the unchanged snapshot, not a bare boolean"
+        );
+
+        // (5) a node flip that does not move the READING is silent. The watch
+        // really moves here — it is the composition that does not, because the
+        // value is the one already delivered.
+        presence_tx.send_replace(false);
+        assert!(
+            next_payload(&mut outbox).await.is_none(),
+            "a reading that did not move is not a delta"
+        );
+    }
 }
