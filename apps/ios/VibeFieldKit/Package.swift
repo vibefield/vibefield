@@ -20,6 +20,7 @@ let package = Package(
     .library(name: "FieldProduct", targets: ["FieldProduct"]),
     .library(name: "FieldMesh", targets: ["FieldMesh"]),
     .library(name: "FieldTerminal", targets: ["FieldTerminal"]),
+    .library(name: "FieldRoutedTerminal", targets: ["FieldRoutedTerminal"]),
     .library(name: "FieldInput", targets: ["FieldInput"]),
     .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
@@ -97,6 +98,16 @@ let package = Package(
         .product(name: "GhostteaAppearance", package: "ghosttea"),
       ]
     ),
+    // The ROUTED T1 client (TM-4): the phone's half of the terminal pipeline —
+    // two `URLSessionWebSocketTask` legs to one cell's doors, the grant-carrying
+    // handshake, per-session activation, byte credits, the presentation envelope
+    // and its transfers. It takes FieldProduct for the tolerant-reader
+    // vocabulary (`JSONValue`/`WireObject`) and NOTHING else: no Ghosttea
+    // product, no design kit, no mesh. That is the manifest enforcing TM-D4 —
+    // this code is written to move upstream into GhostteaKit as the third
+    // routed-client core (petition G27), and the two FieldProduct types are the
+    // whole of what such a move would have to take or replace.
+    .target(name: "FieldRoutedTerminal", dependencies: ["FieldProduct"]),
     // The input card (IOS-5a): the composer, the rail, the latch — K-D1's own
     // target rather than more of FieldHome. The IOS-3 review's finding was that
     // every serious bug it found lived in the one module with no test target,
@@ -136,6 +147,15 @@ let package = Package(
       dependencies: ["FieldProduct"],
       // The contracts' OWN goldens, copied in (EL9 on the third side): the
       // bytes the TypeScript tests parse are the bytes these tests parse.
+      resources: [.copy("Fixtures")]
+    ),
+    .testTarget(
+      name: "FieldRoutedTerminalTests",
+      dependencies: ["FieldRoutedTerminal"],
+      // The contracts' OWN goldens, copied in (EL9 on the third side): the bytes
+      // the TypeScript tests parse and the Rust cell's fixture tests parse are
+      // the bytes these tests parse. `pnpm check:ios-fixtures` is what keeps the
+      // word "copy" true.
       resources: [.copy("Fixtures")]
     ),
     .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),

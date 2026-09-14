@@ -70,11 +70,40 @@ for (const searchRoot of searchRoots) {
 // hostname prefix, a signed-in phone read `0 peers in reach` beside a serving
 // desktop. Nothing in the tree could have noticed. This is the thing that
 // notices.
+const REGISTRIES = "packages/contracts/src/registries.ts";
+const ROUTED_CONTRACT = "apps/ios/VibeFieldKit/Sources/FieldRoutedTerminal/RoutedContract.swift";
+
+/**
+ * TM-4 — a TPv3 number the phone's routed T1 client BRANCHES on.
+ *
+ * The captured text is compared verbatim, which is why the Swift literals carry
+ * the same `_` grouping the TypeScript does. Numbers the client does not branch
+ * on are never copied: they arrive on the wire in `ConnectionAccepted`.
+ *
+ * `indent` is the Swift declaration's indentation — 2 for a top-level member of
+ * `RoutedTerminalContract`, 4 for one nested in its `CloseCode`.
+ */
+function tpPin(key, swiftName, indent = 2) {
+  return {
+    name: key,
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(`^ {2}${key}: ([0-9_]+),$`, "m"),
+      label: `TERMINAL_PIPELINE.${key}`,
+    },
+    copy: {
+      file: ROUTED_CONTRACT,
+      pattern: new RegExp(`^ {${indent}}public static let ${swiftName} = ([0-9_]+)$`, "m"),
+      label: `RoutedTerminalContract.${swiftName}`,
+    },
+  };
+}
+
 const pins = [
   {
     name: "appID",
     origin: {
-      file: "packages/contracts/src/registries.ts",
+      file: REGISTRIES,
       pattern: /^export const APP_ID = "([^"]*)"/m,
       label: "APP_ID",
     },
@@ -84,6 +113,27 @@ const pins = [
       label: "FieldMeshContract.appID",
     },
   },
+  // The handshake the phone offers and the liveness it keeps.
+  tpPin("PROTOCOL_MAJOR", "protocolMajor"),
+  tpPin("PROTOCOL_MINOR", "protocolMinor"),
+  tpPin("HEARTBEAT_INTERVAL_MS", "heartbeatIntervalMs"),
+  tpPin("HEARTBEAT_TTL_MS", "heartbeatTtlMs"),
+  // The two limits the client applies to a grant BEFORE it spends a socket on
+  // one — the cell applies the same pair, and a silent 1008 is what disagreeing
+  // about them looks like from the phone.
+  tpPin("MAX_CLOCK_SKEW_MS", "maxClockSkewMs"),
+  tpPin("MAX_GRANT_LIFETIME_MS", "maxGrantLifetimeMs"),
+  // Input closes this far before an attach grant expires without a renewal.
+  tpPin("ATTACH_RENEWAL_MARGIN_MS", "attachRenewalMarginMs"),
+  // Every close code the client branches on. `1008` is the silent
+  // pre-authentication class and the rest are always named by the cell.
+  tpPin("POLICY_PRE_AUTH", "policyPreAuth", 4),
+  tpPin("SERVER_ERROR", "serverError", 4),
+  tpPin("STALE_ROUTE", "staleRoute", 4),
+  tpPin("FENCED", "fenced", 4),
+  tpPin("SUPERSEDED", "superseded", 4),
+  tpPin("PROTOCOL", "protocolError", 4),
+  tpPin("LEG_TIMEOUT", "legTimeout", 4),
 ];
 
 const pinProblems = [];
