@@ -673,3 +673,111 @@ async fn an_offered_permessage_deflate_is_never_echoed_in_the_101() {
          charges uncompressed length on both ends: {head}"
     );
 }
+
+/// T-M3 — an AUTHENTICATED LEG OUTLIVES ITS TRANSPORT GRANT, which is the
+/// property the re-mint-rate analysis rests on and which nothing asserted.
+///
+/// The expiry row above proves only the refusal AT THE HELLO: a grant already
+/// dead when it arrives never establishes. What the design actually claims is
+/// the other half — that the 60 s `TRANSPORT_GRANT_TTL_MS` is an ESTABLISHMENT
+/// DEADLINE and not a session lifetime, so a phone that established a leg keeps
+/// it for hours and fieldd mints one transport grant per CONNECTION rather than
+/// one per minute. If the door ever re-verified on the heartbeat path, every
+/// leg on the device would drop 60 seconds after it opened and the re-mint rate
+/// would be sixty times what the design budgeted for.
+///
+/// The row narrows the skew to zero for its own door so the grant can be
+/// genuinely dead in a second rather than in a minute; the skew is a separate
+/// dimension and has its own place above.
+///
+/// AND IT PINS ITS PRECONDITION rather than only asserting the end state: a
+/// FRESH hello with an equally dead grant is refused in the same breath. Without
+/// that, a run where the clock never actually passed `expiresAt` would pass for
+/// the wrong reason.
+#[tokio::test]
+async fn an_established_leg_outlives_its_transport_grant() {
+    let m = minter();
+    let verifier = field_native::tp::grant::GrantVerifier::new(
+        field_native::tp::grant::GrantKey {
+            cell_boot_id: m.cell_boot_id.clone(),
+            key_generation: m.key_generation,
+            key: m.key.clone(),
+        },
+        field_native::tp::grant::GrantValidityLimits {
+            max_clock_skew_ms: 0,
+            ..field_native::tp::grant::GrantValidityLimits::default()
+        },
+    );
+    let door = Door::serve(DoorConfig::new(verifier, vec![APP_ORIGIN.to_string()]))
+        .await
+        .expect("serve");
+
+    let now = field_native::tp::unix_ms();
+    let short = |set: &'static str, nonce: &'static str| TransportSpec {
+        issued_at: Some(now - 1_000),
+        expires_at: Some(now + 1_200),
+        ..TransportSpec::basic(set, 1, nonce)
+    };
+
+    let (mut ws, _) = dial(&door.control_url(), Some(APP_ORIGIN)).await;
+    let accepted = expect_accepted(
+        say_hello(
+            &mut ws,
+            "control",
+            &m.transport(short("set-live", "n-live")),
+            None,
+        )
+        .await,
+    );
+    assert_eq!(accepted["connectionSetId"], "set-live");
+
+    // Past `expiresAt`, with no skew left to hide in.
+    tokio::time::sleep(Duration::from_millis(2_000)).await;
+    assert!(
+        field_native::tp::unix_ms() > now + 1_200,
+        "the clock must really have passed expiresAt, or this row proves nothing"
+    );
+
+    // THE PRECONDITION: an equally dead grant cannot establish any more. A
+    // different set and nonce, so this is refused for its EXPIRY and not as a
+    // replay of the leg above.
+    let (mut fresh, _) = dial(&door.control_url(), Some(APP_ORIGIN)).await;
+    expect_silent_1008(
+        say_hello(
+            &mut fresh,
+            "control",
+            &m.transport(short("set-dead", "n-dead")),
+            None,
+        )
+        .await,
+    );
+
+    // THE CLAIM: the leg established while the grant was alive is still a leg.
+    ws.send(Message::Text(
+        json!({
+            "type": "LegHeartbeat",
+            "connectionSetId": "set-live",
+            "channel": "control",
+            "legGeneration": 1,
+            "sequence": 1,
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .expect("send a heartbeat");
+    match next_reply(&mut ws).await {
+        Reply::Text(v) => assert_eq!(
+            v["type"], "LegHeartbeatAck",
+            "an established leg must survive its transport grant — the TTL is an \
+             ESTABLISHMENT deadline, not a session lifetime: {v}"
+        ),
+        other => panic!("the leg was closed after its grant expired: {other:?}"),
+    }
+
+    // And the door still holds it, not merely the socket.
+    let snapshot = door.snapshot();
+    assert_eq!(snapshot.sets.len(), 1);
+    assert_eq!(snapshot.sets[0].connection_set_id, "set-live");
+    assert_eq!(snapshot.sets[0].legs.len(), 1);
+}
