@@ -27,11 +27,22 @@ function jsonFiles(dir) {
   }
   for (const entry of entries) {
     const path = join(dir, entry.name);
+    // An asset catalog's `Contents.json` files are Xcode's, never a golden.
+    if (entry.isDirectory() && entry.name.endsWith(".xcassets")) continue;
     if (entry.isDirectory()) found.push(...jsonFiles(path));
     else if (entry.name.endsWith(".json")) found.push(path);
   }
   return found;
 }
+
+// The ONLY phone-side JSON files with no contracts origin: fixtures a kit lane
+// authored for itself (recorded TRF1 frames, not a wire shape). Anything else
+// with no origin is an ORPHAN — a golden that was deleted or renamed upstream
+// while its copy stayed behind, unchecked. Before 2026-09-14 (TM review, T-H2)
+// such a copy was silently skipped and `checked` merely dropped by one; a gate
+// that stops gating without a red is the failure this script exists to catch,
+// so the copy half now has the pin half's posture below.
+const LANE_AUTHORED = new Set(["trf1-frames.lane.json"]);
 
 const problems = [];
 let checked = 0;
@@ -43,8 +54,13 @@ for (const searchRoot of searchRoots) {
     try {
       statSync(origin);
     } catch {
-      // Not a contracts golden — a fixture this lane authored for itself, which
-      // is allowed and is not this script's business.
+      if (!LANE_AUTHORED.has(name)) {
+        problems.push(
+          `${relative(root, copy)} has no origin in packages/contracts/fixtures — a golden was ` +
+            "deleted or renamed and this phone-side copy is now unchecked\n" +
+            "  fix: delete the copy, or add its basename to LANE_AUTHORED in this script",
+        );
+      }
       continue;
     }
     checked += 1;
