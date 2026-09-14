@@ -11,7 +11,7 @@ a private mesh across machines, and an iPhone companion.
 | Path | What |
 |---|---|
 | `packages/contracts` | `@vibefield/contracts` — zod-first source of every VibeField-owned protocol; `gen/` JSON Schema → typify'd Rust |
-| `packages/field-native` | Rust native-plane daemon: mgmt server, D8 pairing, MeshGateway (truffle node), and the embedded ghosttea TerminalService — the native floor that outlives fieldd (NF-0…7 + NF-remote) |
+| `packages/field-native` | Rust native-plane daemon: mgmt server, D8 pairing, MeshGateway (truffle node), and the TerminalUnit that supervises the `field-terminal-host` cells — the native floor that outlives fieldd (NF-0…7). *(Corrected 2026-09-14 by the TM review: this row said "the embedded ghosttea TerminalService … (NF-0…7 + NF-remote)". Ghosttea's `TerminalService` is constructed in the CELL binary — `packages/field-native/src/cell.rs:199`, since the cells landed at TC-S2 — and the floor's own remote half retired at TM-1 `afc35b15`; the remote posture is T, each cell's door reached over the sidecar's route.)* |
 | `packages/fieldd` | Node product-plane daemon: NativeLink, TokenService, ProductAPI (dual-WS), MeshClient, DocumentService, ArtifactService |
 | `packages/users` | the multi-persona layer: the users.json lock, per-user roots, mint/migrate (UA track) |
 | `packages/logging` · `packages/audit` | the structured logging/diagnostics pipeline and the append-only audit log (LOG track) |

@@ -205,7 +205,11 @@ plugin's kill, its disable, and fieldd's own shutdown. `killPlan` now issues `ta
   > literals, unix mode-bit assertions, sun_path rows run without an explicit platform, symlink
   > fixtures needing Developer Mode). Those are fixed; the gate is green on the box.
 - **The kill matrix / native tests:** `cargo test -p field-native` (terminal_unit 14/14 windows,
-  terminal_mesh 7/7, mesh unit 3/3). `cargo test --workspace` for the lot.
+  ~~terminal_mesh 7/7,~~ mesh unit 3/3). `cargo test --workspace` for the lot.
+  *(Erratum 2026-09-14, the TM review's record lens: `packages/field-native/tests/terminal_mesh.rs` was DELETED at
+  TM-1 `afc35b15`, with the in-process TSP1 serve it covered — so that 7/7 names a suite this box can no longer run,
+  and it must not be carried forward as evidence. The box's next round re-establishes the native-test count without
+  it; the cell-side suites standing in its place are `terminal_unit` and `cell_lifecycle`.)*
 
 ## Gotchas that WILL bite (carried from the orchestrator's memories)
 

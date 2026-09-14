@@ -235,10 +235,20 @@ the fenced `link:` block in `pnpm-workspace.yaml`; CLAUDE.md §Machine setup). W
 the pin machinery revived from the truffle era, walls R20–R22, the Nx sibling stamp, the
 renderer's sibling-mode `fs.allow`, and fieldd's **rosettad supervisor** (one index daemon per
 user root, `FIELDD_ROSETTAD_BIN`, projected into `FielddHealth.rosettad`, kill matrix in
-`packages/fieldd/test/rosettad-supervisor.test.ts` + an opt-in live row). What is still true:
+`packages/fieldd/test/rosettad-supervisor.test.ts` + an opt-in live row). ~~What is still true:
 there is no `agents.ts` in `packages/contracts/src`, **no source imports a puppeteer package
 yet**, and the only agent surface is `MockAgentField` behind the Godview monitor's explicit MOCK
-label. Every dependency AR named is landed and waiting — the NF floor, the GT deck, C7
+label.~~ **Correction 2026-09-14 (the TM review's record lens): that sentence photographs the tree
+at AR-0 and was already false when AR-2 landed — it is an AR-0 paragraph left unrewritten, not a
+current state.** As of this rewrite: `packages/contracts/src` holds four agent modules
+(`agent-field.ts`, `agent-index.ts`, `agent-session.ts`, `agent-usage.ts`); **45 files import a
+`@vibecook/puppeteer*` package** (fieldd's src and test, field-app's godview, monitor, swarm views
+and design system); and the renderer's `MockAgentField` was DELETED at AR-3 `6b5e1612` — the fold
+behind `remote-session-field.ts` replaced it, and only dated comments still name it
+(`packages/field-app/src/godview/monitor/remote-session-field.ts:12`). The phone's Swift class of
+the same name survives as a screenshot fixture behind `-vf-demo-fleet` and is no live path
+(`apps/ios/README.md:103`).
+Every dependency AR named is landed and waiting — the NF floor, the GT deck, C7
 spawn-through (now puppeteer's `prepareInvocation`) — and the seam it plugs into is one module
 wide. The design is `draft/thinking-ar-agent-plane.md` (the triad, §17 delta 2026-09-12); the
 workbench is `draft/thinking-ar-sibling-workbench.md`. **The data topology is RATIFIED
@@ -787,18 +797,29 @@ upstream's exported data in our design system, persisted beside the layout, neve
 floor's config; the surface lab stays as the stage-tuning instrument. GT-3m ported the
 reference app's agent monitor (swarm/list/rain, matter-js) into the overlay behind an
 explicitly labeled MOCK source — the smoke fails if the label goes missing — with agent
-colors in the §2.6 accent slots (`--vf-accent-1..8` now real tokens); AR replaces exactly
-one module (`MockAgentField`) and deletes the label. GT-3f closed the G11 loop inside one
+colors in the §2.6 accent slots (`--vf-accent-1..8` now real tokens); ~~AR replaces exactly
+one module (`MockAgentField`) and deletes the label.~~ **DONE 2026-09-12 at AR-3 `6b5e1612`: the
+module and the label are gone and the monitor reads fieldd's fold** (correction 2026-09-14, the TM
+review's record lens — the future tense had outlived its slice by two days).
+GT-3f closed the G11 loop inside one
 day — drafted morning, landed upstream in 0.9.1, consumed by evening: shaders are LIVE and
 viewer-local (four ports as §8 chips; the withheld-upstream list renders honestly for the
 first time; the floor's config document provably untouched by a viewer's choice). James's
 own `6646f1b` (chopsticks-UI match, per-mode themes) landed between slices and everything
 stacked cleanly. **GT-4 landed the mesh in two halves**: the monitor became the door (remote
 sessions are monitor citizens — bubbles, columns, rows — and clicking one attaches the active
-pane; no palette), and the floor joined the tailnet, borrowing the gateway's single truffle
-node rather than standing up a second. The kill matrix ran for real — three ephemeral nodes,
+pane; no palette), and ~~the floor joined the tailnet, borrowing the gateway's single truffle
+node rather than standing up a second~~. The kill matrix ran for real — three ephemeral nodes,
 one seeing the host's session and refused write, the other holding the capability and
-accepted, with no fieldd anywhere. NF-remote is complete with it. GT-3p made the deck fast the honest way: James's own groundwork
+accepted, with no fieldd anywhere. ~~NF-remote is complete with it.~~ **Erratum 2026-09-14 (the TM
+review's record lens): the struck halves narrate a floor that no longer exists.** GT-4's floor half
+— the in-process TSP1 serve with `ghosttea-truffle` attached at construction, borrowing the
+gateway's `Arc<Node>` — RETIRED at TM-1 `afc35b15` (TM-D7, no rollback flag), and the crate left
+the workspace with it. The kill matrix as run is history and stands as written, but NF-remote
+names nothing in the floor today: the remote posture is T, each cell's own door reached through
+the sidecar's route (`thinking-terminal-mesh-cells.md`). The same correction sits at the code's
+source, in `packages/field-native/src/services/terminal.rs`'s header.
+GT-3p made the deck fast the honest way: James's own groundwork
 (the ICE frame gate, the rAF×LoAF frame counter, the ⇧⇧ one-door) plus the warm transport —
 bridge, worker, and WebGPU device ready at app-idle, sessions still born only on ⌘G — took a
 cold open from ~443ms to a ~36ms warm one, with the phase breakdown riding the smoke verdict
@@ -1151,11 +1172,19 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 - **GT-D11's second half is unmet** — no user-visible string states the daemon-lifetime
   ceiling or that closing a pane detaches rather than kills. The product never over-promises,
   so "never promises more" holds; "UX says so honestly" does not (GT review, 2026-08-06).
-- **`terminal.connectTicket` is reachable from another device** — `terminal.attach` federates
+- ~~**`terminal.connectTicket` is reachable from another device** — `terminal.attach` federates
   via `TAILNET_SCOPES` and `locality:"local"` is declared but never enforced, so a
   WhoIs-verified peer can mint this device's floor ticket. Bounded (the token authenticates
   only on local unix sockets) but it is a daemon credential crossing a device boundary for no
-  reason, and it falsifies GT-D6's "only spine code receives it" (GT review, 2026-08-06).
+  reason, and it falsifies GT-D6's "only spine code receives it" (GT review, 2026-08-06).~~
+  **RETIRED 2026-09-14 (the TM review's record lens) — both halves of the row are gone, and had
+  been for some time.** The door itself retired at TP-S3e with the bridge it fed: there is no
+  sessionless mint left to reach (`packages/fieldd/src/daemon.ts:1894`, and
+  `packages/fieldd/test/terminal-service.test.ts:645` reds if anyone re-registers it). And
+  `locality` stopped being a declaration at AR-4b — the column is READ on every call, refusing a
+  `peer-fieldd` principal outright and refusing a foreign `device` before the forwarder
+  (`packages/fieldd/src/product-api.ts:733` and `:757`), which this file's own AR-4b paragraph
+  already states.
 - ~~**Our mirror-write secret leaves the device**~~ — upstream reused the one configured string
   as the VIEWER's outbound token, so attaching to a peer handed it the string that granted write
   on our own sessions. **CLOSED 2026-09-14 (TM-3)** by deletion rather than by the per-device-token
@@ -1255,17 +1284,34 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
   ghosttea `0.9.2` (rev `b55b803`) and truffle `0.7.12` (rev `2cf5732`) — both planes name one
   wire. Standing lesson for this file: a debt row is a claim with a shelf life, and a rewrite that
   only *adds* is not a rewrite (GT-4 2026-08-06, retired 2026-08-07).
-- **Smoke row 13b (remote bubble → attach) is still skipped** — the floor is ready and the
+- **Smoke row 13b (remote bubble → attach) is still skipped** — ~~the floor is ready and the
   check is honest (`remotePeer:"unavailable"`), but unskipping needs a PEER staged in the
-  smoke harness, i.e. a second floor. Harness work GT-4 did not take (2026-08-06).
-- **G13 + G14 ghosttea petition candidates, unfiled** — G13: let a host inject the remote
-  banner's browse handler (today, with the palette disabled, a mounted remote pane that ENDS
-  renders a "Browse sessions" button that does nothing) so the monitor can be the door
-  there too. G14: an injectable `MeshRuntime` seam, so the terminal mesh adapter need not
-  hold the truffle node at construction — today a node arriving after the 20s budget does
-  not attach until the pair bounces (GT-4, 2026-08-06). **G14 WITHDRAWN 2026-09-14 at TM-5
-  `f7ecae67` (moot: the mesh adapter is gone from the floor and the phone's node is its own
-  `FieldTruffleRuntime`); G13 stands.**
+  smoke harness, i.e. a second floor. Harness work GT-4 did not take (2026-08-06).~~ The check is
+  still honest — `packages/electron-shell/src/testing/smoke.ts` reports
+  `remotePeer: "unavailable"` with the monitor's own state and never fakes a host — but **the
+  "ready floor" this row waited on was the in-process TSP1 serve, deleted at TM-1 `afc35b15`
+  (correction 2026-09-14, the TM review's record lens).** Under T the row's subject changed: a 13b
+  witness now means a SECOND desktop's cell, reached through that desktop's sidecar route by this
+  deck's routed client. That is **TM-6, DEFERRED behind the goal** (TM-D6: a desktop has no tailnet
+  socket of its own, and an outbound forward is uncosted). So the row waits on TM-6, not on harness
+  work; the row's own comment in the smoke source still names GT-4's half, and rewording it is the
+  deck lane's.
+- **Two ghosttea petition candidates, unfiled and UNNUMBERED** — an unfiled browse-handler
+  candidate: let a host inject the remote banner's browse handler (today, with the palette
+  disabled, a mounted remote pane that ENDS renders a "Browse sessions" button that does
+  nothing) so the monitor can be the door there too. And an injectable `MeshRuntime` seam, so the
+  terminal mesh adapter need not hold the truffle node at construction — today a node arriving
+  after the 20s budget does not attach until the pair bounces (GT-4, 2026-08-06). **G14 WITHDRAWN
+  2026-09-14 at TM-5 `f7ecae67` (moot: the mesh adapter is gone from the floor and the phone's node
+  is its own `FieldTruffleRuntime`);** ~~G13 stands.~~ **Correction 2026-09-14 (the TM review's
+  record lens): this row's title reused TAKEN numbers, and "G13 stands" is false.** G13 is the
+  ghosttea env-strip case-fold petition — drafted 2026-08-11, LANDED in ghosttea 0.10.1 and
+  CONSUMED the same day — so that clause said nothing about a browse handler; the browse-handler
+  candidate has never had a number and is named without one above. The `MeshRuntime` seam WAS
+  filed, as **G26**, and withdrawn 2026-09-14 as moot under T (the TSP1 adapter and
+  `with_terminal_mesh` left the floor at TM-1); the FILED **G14** is a different petition, the
+  phone's `GhostteaTruffleRuntime` namespace, and its TM-5 withdrawal above is exact. Petition
+  identities live in `draft/petitions/README.md` — read a number there before citing one.
 - ~~**The attach path with the mesh gateway genuinely UP is unexercised** — that combination
   has never booted outside the probe's hand-built services (GT-4, 2026-08-06).~~ **PAID
   2026-09-14 at TM-2b `4848a39b`: the key-gated live probe (`terminal_cell_route_probe.rs`, on
@@ -1373,12 +1419,24 @@ the lockfile holds one physical strata/Loro graph) ·
 `@vibecook/ice` **0.11.0** (registry pin; **bumped 2026-08-25 — build-selected magnet grid,
 Dot default plus device-local Dot/Needle tuning and the full 11-field Studio contract**, with the runtime classic/magnet preference
 retired; pin-drift history 2026-08-07: this line and `CLAUDE.md` had trailed the manifests
-at 0.2.0) · **`apps/ios` is in
-lockstep too** (`Package.resolved`: ghosttea 0.9.2 / truffle 0.7.12), which is what retires the
-staleness debt above. **The 0.9.2 release exists because of GT-4**: our
+at 0.2.0) · **`apps/ios` carries its own pins** (*errata 2026-09-14, the TM review's record lens:
+this clause read "`apps/ios` is in lockstep too (`Package.resolved`: ghosttea 0.9.2 / truffle
+0.7.12), which is what retires the staleness debt above" — stale, and contradicted by this very
+paragraph, which corrects the ghosttea number ten lines up.
+`apps/ios/VibeFieldKit/Package.resolved` reads ghosttea **0.10.1** (revision `ad97fdb3`) and
+truffle **0.7.12**; the phone is NOT in ghosttea lockstep with the cargo and npm planes at 0.11.1,
+which is GM-D7, still open. The manifest is the authority — read the number there, never from this
+line*). **The 0.9.2 release exists because of GT-4**: our
 `=0.7.12` and upstream's `=0.7.11` could not resolve together, and James moved ghosttea to
 meet us rather than the reverse — the exact-pin law producing a loud manifest error instead
 of a silent `Arc<Node>` split. G7/G8/G9 consumed at NF-7; G11 filed→landed→consumed at GT-3f
-in one day; G10 (spawn props), G12 (first-frame signal + `prepare()`), G13 (browse-handler
-injection), G14 (injectable mesh runtime) all named and unfiled; C7 implemented upstream,
+in one day; G10 (spawn props) plus two UNNUMBERED candidates — a first-frame signal +
+`prepare()`, and browse-handler injection — named and unfiled (*errata 2026-09-14, the TM review's
+record lens: this list called those two "G12" and "G13" and called "G14" unfiled. All three numbers
+are taken. **G12** is the `ghosttea-vt-sys` build fingerprint (landed in ghosttea 0.9.3, consumed);
+**G13** the terminal env-strip case-fold (landed in 0.10.1, consumed); **G14** the phone's
+injectable mesh runtime, FILED 2026-09-14 and WITHDRAWN at TM-5 `f7ecae67` — filed, not unfiled.
+The Rust injectable-runtime seam this list meant by "G14" was filed as **G26** and withdrawn the
+same day. `draft/petitions/README.md` is the authority on a petition number*); C7 implemented
+upstream,
 consumption rides AR. Full petition status: `petitions/README.md`.
