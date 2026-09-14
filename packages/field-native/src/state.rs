@@ -209,8 +209,27 @@ impl DaemonState {
     /// publishes nothing itself — fieldd registers one serve route per live cell
     /// (TM-2) — so this is the floor's half of the fact and fieldd's routes are
     /// the other.
+    ///
+    /// E-F1 — composed through `MeshPlan::publishes`, the ONE reading the hello
+    /// and the routes stream's push both go through. It was spelled inline here
+    /// until E-F1, which is how the FLAG half came to have no witness at all
+    /// (N-M4): both `mgmt_server.rs` rows over it were false-side rows, so
+    /// deleting the flag conjunct left the suite green.
     pub fn terminal_mesh_published(&self) -> bool {
-        !self.terminal_mesh.is_off() && self.mesh.node().is_some()
+        self.terminal_mesh.publishes(self.mesh.node_present())
+    }
+
+    /// E-F1 — subscribe to the half of that reading which MOVES after a hello.
+    ///
+    /// The flag cannot change without a floor restart. The node can, and
+    /// predictably does AFTER the hello has already been answered: the bring-up
+    /// task returns before the node exists (`services/mesh.rs`), while the mgmt
+    /// listener binds right after `start_all` and fieldd hellos the instant the
+    /// socket answers. The routes forwarder holds one of these so that
+    /// correction is PUSHED on a stream fieldd already reads, instead of
+    /// waiting for an unrelated re-pair that may never come.
+    pub fn terminal_mesh_presence(&self) -> crate::services::mesh::NodePresence {
+        self.mesh.node_presence()
     }
 
     pub fn conn_id(&self) -> u64 {

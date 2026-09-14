@@ -18,11 +18,13 @@
 mod diagnostics;
 mod mesh;
 
-use crate::contracts::{DesiredState, Hello, TerminalRouteSnapshot};
+use crate::config::MeshPlan;
+use crate::contracts::{DesiredState, Hello, TerminalRouteSnapshot, TerminalRoutesStreamPayload};
 #[cfg(test)]
 use crate::contracts::{TerminalEndpoints, TerminalRouteCell};
 use crate::local_ipc;
 use crate::pairing;
+use crate::services::mesh::NodePresence;
 use crate::services::terminal;
 use crate::services::terminal_client::ControlClient;
 use crate::state::{ClientHandle, DaemonState, MgmtOutbox, OutMsg, MGMT_MAX_FRAME_BYTES};
@@ -285,13 +287,34 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
                 // one for exactly that reason — the rule has to hold for the
                 // deltas too, or the contradiction simply moves one message
                 // later.
+                //
+                // E-F1 — the snapshot and every delta now carry the floor's
+                // LIVE `terminalMesh`, because the hello's reading is taken at
+                // a moment it is predictably false (the mesh node is installed
+                // by a spawned bring-up task that returns before the node
+                // exists) and nothing re-hellos. The SAME rule governs both
+                // halves here as governs the snapshot: a withheld snapshot
+                // carries no boolean either, and the forwarder is told so, so
+                // its first node flip is never deduped against a reading this
+                // subscriber never received.
                 let sub_id = state.sub_id();
+                let published = state.terminal_mesh_published();
                 let mut result = json!({ "subId": sub_id.clone() });
+                let mut sent_at_subscribe = None;
                 if let Some(snapshot) = disclosed_routes(&state.terminal_routes.borrow()) {
-                    result["snapshot"] = serde_json::to_value(snapshot).unwrap();
+                    result["snapshot"] =
+                        serde_json::to_value(routes_stream_payload(snapshot, published)).unwrap();
+                    sent_at_subscribe = Some(published);
                 }
                 send(&tx, ok(id, result));
-                spawn_routes_forwarder(tx.clone(), state.terminal_routes.clone(), sub_id);
+                spawn_routes_forwarder(
+                    tx.clone(),
+                    state.terminal_routes.clone(),
+                    state.terminal_mesh_presence(),
+                    state.terminal_mesh,
+                    sent_at_subscribe,
+                    sub_id,
+                );
             }
             "native.lifecycle.desired.set" => {
                 send(&tx, handle_desired_set(&state, conn_id, &params, id).await);
@@ -1041,6 +1064,25 @@ fn disclosed_routes(routes: &TerminalRouteSnapshot) -> Option<&TerminalRouteSnap
     (routes.revision > 0).then_some(routes)
 }
 
+/// E-F1 — one stream payload: the disclosed snapshot plus the floor's LIVE
+/// terminal-mesh reading, built through the generated contract type so the
+/// bytes on the wire are the ones `fixture_parity` pins (EL9).
+///
+/// The boolean is always PRESENT here, never omitted to mean "unchanged". A
+/// reader's tolerance for absence is for floors that predate this field, not a
+/// channel this floor uses to say nothing — a live payload that withheld it
+/// would be indistinguishable from an old floor's.
+fn routes_stream_payload(
+    routes: &TerminalRouteSnapshot,
+    published: bool,
+) -> TerminalRoutesStreamPayload {
+    TerminalRoutesStreamPayload {
+        revision: routes.revision,
+        cells: routes.cells.clone(),
+        terminal_mesh: Some(published),
+    }
+}
+
 /// MF-2i — the routes stream's forwarder: `spawn_forwarder`'s shape with
 /// `disclosed_routes` applied to every payload, so a delta can never say what
 /// the snapshot was forbidden to say. It skips nothing a floor actually sends
@@ -1048,18 +1090,83 @@ fn disclosed_routes(routes: &TerminalRouteSnapshot) -> Option<&TerminalRouteSnap
 /// cell floor's first send IS the revision-1 announcement — and that is the
 /// point: the rule holds by construction rather than by those two facts
 /// staying true.
+///
+/// E-F1 — and it now forwards a SECOND fact on the same stream: whether this
+/// floor's terminal doors are published on the tailnet. Two triggers, and the
+/// rule for each is stated here because nothing else states it (T-M2 — the
+/// delta path lost its only test when TM-2a retired the withholding row):
+///
+///   · THE ROUTES MOVED — emit, exactly as before, whenever the new snapshot is
+///     a reading (`disclosed_routes`). The revision is the key: an unrevised
+///     snapshot is withheld here as it is at the hello, so the two surfaces can
+///     never contradict each other. The live boolean rides along.
+///   · THE NODE FLIPPED — emit the UNCHANGED snapshot under the NEW boolean,
+///     and only when the boolean actually moved. A node watch can wake without
+///     moving the composed reading (a flagless floor's node coming up is still
+///     "not published"), and a payload that repeated itself would be a delta
+///     that says nothing. The revision deliberately does NOT move: it orders
+///     ROUTE state, which did not change, and bumping it to announce a
+///     different fact would make `revision` mean two things.
+///
+/// The second trigger is the whole point of E-F1. `HelloAck.terminalMesh` is
+/// read once, at a moment it is reliably FALSE — the mesh bring-up task returns
+/// before its node exists, while the mgmt listener binds immediately after
+/// `start_all` — and nothing re-hellos. Without this push a cold boot with
+/// `FIELD_NATIVE_MESH=1 FIELD_NATIVE_TERMINAL_MESH=1` reads false until fieldd
+/// re-pairs for some unrelated reason, with no route declared and the phone's
+/// card naming a flag that IS set.
 fn spawn_routes_forwarder(
     tx: MgmtOutbox,
     mut rx: tokio::sync::watch::Receiver<TerminalRouteSnapshot>,
+    mut presence: NodePresence,
+    plan: MeshPlan,
+    // What the subscribe RESULT conveyed, or `None` when it withheld the
+    // snapshot and therefore said nothing about the mesh. This is the dedupe
+    // baseline, and it is deliberately "what the READER last learned" rather
+    // than "what was last true": with no baseline the first node flip must
+    // always be sent, because the reader is still holding the hello's answer.
+    sent_at_subscribe: Option<bool>,
     sub_id: String,
 ) {
     tokio::spawn(async move {
-        while rx.changed().await.is_ok() {
+        // THE BASELINE IS WHAT THE SUBSCRIBE RESULT JUST SENT (T-M2). The
+        // receiver in `DaemonState` is never itself advanced, so a clone of it
+        // arrives here with the channel's INITIAL still marked unseen: the
+        // first `changed()` resolves instantly and the forwarder repeats, as a
+        // delta, the snapshot the result carried a microsecond earlier. That is
+        // harmless under TC-D15's state-transfer law — a full snapshot applied
+        // twice is the same state — which is exactly why it survived unnoticed;
+        // it is still a delta that reports no change, and E-F1's dedupe needs
+        // the baseline to be honest. Marking the current value seen makes the
+        // stream's first word a real one.
+        let _ = rx.borrow_and_update();
+        let mut last_sent = sent_at_subscribe;
+        loop {
+            enum Woke {
+                Routes,
+                Node,
+                Gone,
+            }
+            let woke = tokio::select! {
+                r = rx.changed() => if r.is_ok() { Woke::Routes } else { Woke::Gone },
+                r = presence.changed() => if r.is_ok() { Woke::Node } else { Woke::Gone },
+            };
+            if matches!(woke, Woke::Gone) {
+                break;
+            }
+            let published = plan.publishes(presence.get());
+            if matches!(woke, Woke::Node) && last_sent == Some(published) {
+                continue;
+            }
             let routes = rx.borrow().clone();
             let Some(snapshot) = disclosed_routes(&routes) else {
+                // Withheld: nothing was delivered, so the reader learned
+                // nothing and the baseline must NOT move. The revision-1
+                // announcement carries the current boolean the moment it exists.
                 continue;
             };
-            let payload = serde_json::to_value(snapshot).unwrap();
+            last_sent = Some(published);
+            let payload = serde_json::to_value(routes_stream_payload(snapshot, published)).unwrap();
             let note = json!({"jsonrpc":"2.0","method":"native.lifecycle.terminal.routes.delta","params": {"subId": sub_id, "payload": payload}});
             if tx.send(OutMsg::Line(note.to_string())).is_err() {
                 break;

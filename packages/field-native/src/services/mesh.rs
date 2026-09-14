@@ -59,6 +59,39 @@ struct Shared {
     /// a node, so a login completing AFTER an unlink cannot resurrect the
     /// identity the user just archived.
     retired: std::sync::atomic::AtomicBool,
+    /// E-F1 TEST SEAM — see [`MeshHandle::force_node_presence_for_tests`]. A
+    /// second watch rather than a fake node because a `Node` cannot be
+    /// constructed headlessly; it is OR'd with the real one and NOTHING in the
+    /// product ever writes it.
+    node_presence_forced: watch::Sender<bool>,
+}
+
+/// E-F1 — a subscription to `node_present()`: "is a tailnet node installed?",
+/// which is the half of `HelloAck.terminalMesh` that MOVES after the hello.
+///
+/// Two watches waited on together, because the fact has two writers with very
+/// different standing: the node watch (the real bring-up, `send_replace`) and
+/// the test override. `get()` is their OR; `changed()` parks until either moves.
+pub struct NodePresence {
+    node: watch::Receiver<Option<Arc<MeshNode>>>,
+    forced: watch::Receiver<bool>,
+}
+
+impl NodePresence {
+    /// Is a node installed right now? Cheap — two watch borrows, no wait.
+    pub fn get(&self) -> bool {
+        self.node.borrow().is_some() || *self.forced.borrow()
+    }
+
+    /// Park until either half moves. `Err(())` = the mesh unit is gone and this
+    /// fact will never move again, so a forwarder should stop selecting on it
+    /// rather than spin.
+    pub async fn changed(&mut self) -> Result<(), ()> {
+        tokio::select! {
+            r = self.node.changed() => r.map_err(|_| ()),
+            r = self.forced.changed() => r.map_err(|_| ()),
+        }
+    }
 }
 
 /// Cloneable door to the mesh for the mgmt server (design-02: fieldd consumes
@@ -71,6 +104,47 @@ pub struct MeshHandle {
 impl MeshHandle {
     pub fn node(&self) -> Option<Arc<MeshNode>> {
         self.shared.node.borrow().clone()
+    }
+
+    /// E-F1 — "is a tailnet node installed?", the live half of the terminal-mesh
+    /// reading, read WITHOUT cloning the node. `node().is_some()` plus the test
+    /// override; `state.rs`'s `terminal_mesh_published` composes it with the flag.
+    pub fn node_present(&self) -> bool {
+        self.shared.node.borrow().is_some() || *self.shared.node_presence_forced.borrow()
+    }
+
+    /// E-F1 — subscribe to `node_present()`. The routes forwarder holds one of
+    /// these so a node that arrives SECONDS AFTER the hello reaches fieldd as a
+    /// push instead of waiting for an unrelated re-pair.
+    pub fn node_presence(&self) -> NodePresence {
+        NodePresence {
+            node: self.shared.node.subscribe(),
+            forced: self.shared.node_presence_forced.subscribe(),
+        }
+    }
+
+    /// E-F1 TEST SEAM — force the node-presence fact, for tests only.
+    ///
+    /// WHY IT EXISTS, stated plainly because it bounds what the rows above it
+    /// prove: a tailnet node cannot be built headlessly. `MeshUnit::start` drives
+    /// an INTERACTIVE browser login (`build_with_auth_handler`), so no test on
+    /// this plane can put a real `Node` in the watch, and the floor's own mesh
+    /// service has no auth-key path at all (the same wall
+    /// `tests/terminal_cell_route_probe.rs` names in its module note — it mints
+    /// its OWN ephemeral nodes rather than making the floor join).
+    ///
+    /// So this moves the ONE fact everything downstream reads off the node
+    /// watch, and a test that uses it witnesses the PUSH MACHINERY — the watch
+    /// wakes the forwarder, the forwarder composes the boolean, the boolean
+    /// reaches fieldd with no second hello — not tsnet bring-up. The live
+    /// witness for "a real node flips this" is a hardware run.
+    ///
+    /// It ORs with the real node and never replaces it, so it cannot mask a
+    /// node that is genuinely absent-then-present. Nothing in the product calls
+    /// it.
+    #[doc(hidden)]
+    pub fn force_node_presence_for_tests(&self, present: bool) {
+        self.shared.node_presence_forced.send_replace(present);
     }
 
     /// The gateway's own health, for a consumer that must decide whether
@@ -188,6 +262,7 @@ impl MeshUnit {
                     auth_url: None,
                 }),
                 node: watch::channel(None).0,
+                node_presence_forced: watch::channel(false).0,
                 ping,
                 stores: tokio::sync::Mutex::new(HashMap::new()),
                 serves: tokio::sync::Mutex::new(HashMap::new()),

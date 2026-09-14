@@ -188,7 +188,18 @@ export class NativeLink extends EventEmitter {
    * tappable card for a session nothing can attach to is the failure this
    * field exists to prevent, so "I don't know" and "no" get the same,
    * conservative answer. `terminalMeshPublished()` is that reading, and it is
-   * the only one callers should use. */
+   * the only one callers should use.
+   *
+   * E-F1 — the hello is no longer the only writer, and it could not be: the
+   * ack is composed at a moment the answer is predictably FALSE (the floor's
+   * mesh node is installed by a spawned bring-up task that returns before the
+   * node exists, while the mgmt listener binds immediately after start_all and
+   * this link hellos as soon as the socket answers), and nothing re-hellos. The
+   * floor therefore PUSHES the correction on the routes stream, and
+   * `applyTerminalRoutes` writes it here. A payload WITHOUT the field says
+   * nothing about the mesh and leaves this alone — that is what a floor
+   * predating E-F1 sends, and reading it as `false` would be inventing a
+   * reading nobody made. */
   terminalMesh: boolean | undefined;
 
   /** The gate every TM-2 consumer reads: the doors are on the tailnet, and
@@ -463,8 +474,25 @@ export class NativeLink extends EventEmitter {
    * A payload that is not a snapshot keeps the last good one (tolerant reader,
    * with its logging half). Debug, not warn: a floor that answers a generic
    * subscription payload here is a capability gap rather than an anomaly, and
-   * the endpoints in hand are still the ones the hello vouched for. */
+   * the endpoints in hand are still the ones the hello vouched for.
+   *
+   * E-F1 — this stream also carries the floor's LIVE `terminalMesh`, and it is
+   * read BEFORE the revision short-circuit below on purpose. The node flip that
+   * the field exists to catch moves no route state, so the floor re-sends the
+   * unchanged snapshot under the new boolean; keying only on `revision` would
+   * discard exactly the message this was built to deliver. */
   private applyTerminalRoutes(payload: unknown, kind: SubEventKind): void {
+    // The mesh reading first, and on its OWN terms — a floor whose routes are
+    // malformed still answers "are the doors published", the same split the
+    // hello ack already makes for `nativeBuild`. ABSENT is not `false`: it is a
+    // payload that says nothing about the mesh (every floor predating E-F1
+    // sends exactly that), so the hello's answer stands.
+    const streamed = (payload as { terminalMesh?: unknown } | null | undefined)?.terminalMesh;
+    let meshMoved = false;
+    if (typeof streamed === "boolean" && streamed !== this.terminalMesh) {
+      this.terminalMesh = streamed;
+      meshMoved = true;
+    }
     const parsed = TerminalRouteSnapshot.safeParse(payload);
     if (!parsed.success) {
       this.logger.debug(
@@ -472,6 +500,10 @@ export class NativeLink extends EventEmitter {
         "A terminal routes payload was not a TerminalRouteSnapshot; routes unchanged",
         { kind },
       );
+      // E-F1 — the two readings are independent: a payload whose ROUTE half is
+      // unreadable can still have carried a readable mesh boolean, and a
+      // consumer that gated on the doors being published must hear it.
+      if (meshMoved) this.emit("terminal-endpoints");
       return;
     }
     // MF-2i — the floor's ROUTE-SNAPSHOT DISCLOSURE rule, read from this side
@@ -513,7 +545,14 @@ export class NativeLink extends EventEmitter {
       );
       return;
     }
-    if (this.terminalRoutes?.revision === parsed.data.revision) return;
+    if (this.terminalRoutes?.revision === parsed.data.revision) {
+      // E-F1 — the revision is the ROUTE change key and nothing else. A node
+      // arriving after the hello re-sends the unchanged snapshot under a new
+      // boolean, which is the whole delivery mechanism; returning silently here
+      // would drop it.
+      if (meshMoved) this.emit("terminal-endpoints");
+      return;
+    }
     this.terminalRoutes = parsed.data;
     this.terminalEndpoints = cellEndpoints(parsed.data);
     this.emit("terminal-endpoints");

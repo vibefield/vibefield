@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TerminalCellRole, TerminalWorkloadClass } from "./envelope";
+import { TerminalCellRole, TerminalRouteCell, TerminalWorkloadClass } from "./envelope";
 
 // Management channel (design-01 §5.2, M2 subset): native.lifecycle.* + the mesh
 // facade P0 subset (peers / store / serve). Laws honored here:
@@ -121,6 +121,50 @@ export const ObservedState = z
   })
   .passthrough();
 export type ObservedState = z.infer<typeof ObservedState>;
+
+/** E-F1 — the payload of `native.lifecycle.terminal.routes` (the subscribe
+ * result's `snapshot` and every `.delta`): the route snapshot, plus the floor's
+ * LIVE answer to "are these doors published on the tailnet".
+ *
+ * WHY THE BOOLEAN RIDES HERE AT ALL. `HelloAck.terminalMesh` is read exactly
+ * once, at a moment it is predictably FALSE: the floor's mesh node is installed
+ * by a spawned bring-up task that returns long before the node exists
+ * (`field-native/src/services/mesh.rs`), while the mgmt listener binds
+ * immediately after `start_all` and fieldd hellos as soon as the socket
+ * answers. tsnet bring-up takes seconds. So a cold boot with the flag set reads
+ * `terminalMesh: false` and — the ack being the only writer — keeps reading
+ * false until fieldd re-pairs for some unrelated reason: no routes declared,
+ * the field's `terminal` joins withheld, `terminal.openTicket` refusing
+ * `doors_not_published` on a floor whose doors came up seconds after the hello.
+ * This field is the floor PUSHING the correction on the stream it already owns.
+ *
+ * TOLERANT BY CONSTRUCTION, and the tolerance is the whole contract: ABSENT
+ * means "this payload says nothing about the mesh" and a reader KEEPS the value
+ * the hello gave it. That is what a floor predating E-F1 sends on every delta,
+ * so absence must never be read as `false` — it is not a reading at all. A
+ * present boolean is authoritative and supersedes the hello's.
+ *
+ * Secret-free like the hello's (EL7): a boolean, never the node's name, the
+ * capability, or a port. The snapshot half is unchanged — `revision` still
+ * orders, `cells` is still the full state-transfer payload (TC-D15) — so a
+ * reader that knows only `TerminalRouteSnapshot` parses this shape correctly
+ * and ignores the extra key. */
+export const TerminalRoutesStreamPayload = z
+  .object({
+    revision: z.number().int(),
+    /** SPELLED OUT rather than `TerminalRouteSnapshot.extend(...)`, and that is
+     * a codegen constraint, not a style choice: `.extend()` hands
+     * zod-to-json-schema the SAME `z.array(TerminalRouteCell)` instance the
+     * snapshot already emitted, which it dedupes into
+     * `#/definitions/TerminalRouteSnapshot/properties/cells` — a nested path
+     * `cargo typify` cannot resolve (it panics outright). A fresh array
+     * instance renders as `items: {$ref: "#/definitions/TerminalRouteCell"}`
+     * in both places, which is the shape the Rust side needs. */
+    cells: z.array(TerminalRouteCell),
+    terminalMesh: z.boolean().optional(),
+  })
+  .passthrough();
+export type TerminalRoutesStreamPayload = z.infer<typeof TerminalRoutesStreamPayload>;
 
 // ---- TC-S1 supervision (specs/terminal-custody.md TC-D1/TC-D2) ----
 

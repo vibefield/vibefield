@@ -452,10 +452,23 @@ async fn the_routes_subscription_serves_a_revised_snapshot() {
     );
 
     let subscribed = routes_subscribe(&mut c, 2).await;
-    let snapshot = subscribed["result"]["snapshot"].clone();
+    let mut snapshot = subscribed["result"]["snapshot"].clone();
+    // E-F1 — the stream payload is the snapshot plus the floor's live
+    // `terminalMesh`, so the two surfaces are compared on the ROUTE reading
+    // they share and on the mesh reading separately. Both must agree: the
+    // whole point of MF-2i is that the subscription cannot contradict the ack
+    // one message later, and E-F1 adds a second fact under the same rule.
+    assert_eq!(
+        snapshot["terminalMesh"], ack["result"]["terminalMesh"],
+        "the stream's mesh reading must not contradict the ack's: {subscribed}"
+    );
+    snapshot
+        .as_object_mut()
+        .expect("the snapshot is an object")
+        .remove("terminalMesh");
     assert_eq!(
         snapshot, acked,
-        "one floor, one reading: the subscription's snapshot is the ack's"
+        "one floor, one reading: the subscription's route snapshot is the ack's"
     );
     assert!(
         !snapshot["cells"].as_array().expect("cells").is_empty(),
@@ -512,6 +525,194 @@ async fn a_flagged_floor_without_a_gateway_says_the_doors_are_not_published() {
         ack["result"]["terminalMesh"], false,
         "asked is not achieved: with no node there is nothing on the tailnet: {ack}"
     );
+
+    daemon.shutdown().await;
+}
+
+/// E-F1 — and the reading the two rows above pin is taken at a moment it is
+/// predictably wrong, which is what this row is about.
+///
+/// `HelloAck.terminalMesh` is written ONCE per pairing. The mesh node is
+/// installed by a spawned bring-up task that RETURNS BEFORE THE NODE EXISTS
+/// (`services/mesh.rs` — `send_replace(Some(node))` happens inside the task),
+/// while the mgmt listener binds immediately after `start_all` and fieldd
+/// hellos the instant the socket answers. tsnet bring-up takes seconds. So on
+/// a cold boot with both flags set the ack says FALSE, correctly, and then
+/// nothing ever corrects it: the ack is the only writer and nothing re-hellos.
+/// fieldd declares no route, the field's `terminal` joins are withheld, and
+/// `terminal.openTicket` refuses `doors_not_published` on a floor whose doors
+/// came up two seconds after the pairing.
+///
+/// So the floor PUSHES the correction on the stream fieldd already reads. What
+/// this row proves end to end: the hello's false, a subscribe that agrees with
+/// it, then a node arriving, and a routes DELTA carrying `terminalMesh: true`
+/// at the SAME revision — with no second hello anywhere in the transcript.
+///
+/// WHAT IT DOES NOT PROVE, stated because it bounds the claim: that tsnet
+/// bring-up itself flips the watch. A tailnet node cannot be built headlessly
+/// (`MeshUnit::start` drives an interactive browser login), so the node half is
+/// moved through `force_node_presence_for_tests` — the seam's own doc says the
+/// same. Everything downstream of the watch is real: the composition, the
+/// forwarder's wake, the dedupe, the wire bytes. The live witness for a real
+/// node moving it is a hardware run.
+#[tokio::test]
+async fn a_node_arriving_after_the_hello_is_pushed_on_the_routes_stream() {
+    let dir = serving_tempdir();
+    let config = NativeConfig {
+        terminal_mesh_enabled: true,
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.expect("bootstrap");
+    // A revision must exist before the stream can say anything at all: an
+    // unrevised snapshot is withheld on BOTH surfaces (`disclosed_routes`), and
+    // a payload that is never sent carries no boolean either.
+    let mut routes = daemon.state.terminal_routes.clone();
+    timeout(
+        Duration::from_secs(20),
+        routes.wait_for(|snapshot| snapshot.revision > 0),
+    )
+    .await
+    .expect("the floor announced its routes capability within its budget")
+    .expect("the routes watch outlives boot");
+
+    let mut c = TestClient::connect(&daemon).await;
+    let ack = c.hello(&daemon, 1).await;
+    assert_eq!(
+        ack["result"]["terminalMesh"], false,
+        "the hello is answered before any node exists, and says so: {ack}"
+    );
+
+    let subscribed = routes_subscribe(&mut c, 2).await;
+    let snapshot = subscribed["result"]["snapshot"].clone();
+    assert_eq!(
+        snapshot["terminalMesh"], false,
+        "the subscribe result must not contradict the ack that preceded it: {subscribed}"
+    );
+    let revision_at_subscribe = snapshot["revision"]
+        .as_i64()
+        .expect("a disclosed snapshot has a revision");
+
+    // THE NODE ARRIVES — seconds after the hello, exactly as a real bring-up does.
+    daemon.state.mesh.force_node_presence_for_tests(true);
+
+    // The push, on the stream this client already holds. Route deltas may also
+    // be in flight (a second class cell announcing), so read until one carries
+    // the flip rather than demanding it be the very next line — every line is
+    // still checked for a second hello.
+    let delta = timeout(Duration::from_secs(20), async {
+        loop {
+            let note = c.recv().await;
+            assert_ne!(
+                note["method"], "native.lifecycle.hello",
+                "the correction must ride the stream, never a re-pair: {note}"
+            );
+            if note["method"] == "native.lifecycle.terminal.routes.delta"
+                && note["params"]["payload"]["terminalMesh"] == true
+            {
+                return note;
+            }
+        }
+    })
+    .await
+    .expect("the node flip reached the routes stream");
+
+    let payload = &delta["params"]["payload"];
+    assert_eq!(
+        payload["terminalMesh"], true,
+        "the floor's doors are published now, and the stream says so: {delta}"
+    );
+    assert_eq!(
+        payload["revision"].as_i64(),
+        Some(revision_at_subscribe),
+        "a node flip changes no ROUTE state — the revision orders routes, and \
+         moving it to announce a different fact would make it mean two things: {delta}"
+    );
+    assert!(
+        payload["cells"].is_array(),
+        "the push carries the unchanged snapshot, not a bare boolean: {delta}"
+    );
+
+    daemon.shutdown().await;
+}
+
+/// E-F1's other half: a node flip that does NOT move the reading sends nothing.
+///
+/// The flag is the reason — `MeshPlan::publishes` is an AND, so on a floor that
+/// was never asked to publish, a node coming up is still "not published". A
+/// forwarder that woke on the watch and emitted regardless would send a delta
+/// that says nothing changed, which is how a stream teaches its reader to
+/// ignore it.
+///
+/// ASSERTED AGAINST THE REVISION, not against silence. A real floor's cells
+/// announce on their own schedule (TM-1 made both class cells unconditional),
+/// so genuine route deltas can land at any moment in this window and a
+/// "nothing arrives" row would be a lottery ticket — it failed exactly that way
+/// while being written. A node-driven emission is identifiable instead: it
+/// repeats the revision, because a node flip changes no route state. So every
+/// delta in the window must carry a MOVED revision (route-driven) and
+/// `terminalMesh: false` (the AND holding).
+#[tokio::test]
+async fn a_node_on_an_unflagged_floor_pushes_nothing() {
+    let dir = serving_tempdir();
+    let daemon = bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
+        .await
+        .expect("bootstrap");
+    let mut routes = daemon.state.terminal_routes.clone();
+    timeout(
+        Duration::from_secs(20),
+        routes.wait_for(|snapshot| snapshot.revision > 0),
+    )
+    .await
+    .expect("the floor announced its routes capability within its budget")
+    .expect("the routes watch outlives boot");
+
+    let mut c = TestClient::connect(&daemon).await;
+    let ack = c.hello(&daemon, 1).await;
+    assert_eq!(ack["result"]["terminalMesh"], false, "{ack}");
+    let subscribed = routes_subscribe(&mut c, 2).await;
+    assert_eq!(subscribed["result"]["snapshot"]["terminalMesh"], false);
+    let revision_at_subscribe = subscribed["result"]["snapshot"]["revision"]
+        .as_i64()
+        .expect("a disclosed snapshot has a revision");
+
+    daemon.state.mesh.force_node_presence_for_tests(true);
+
+    // PIN THE PRECONDITION the other way round: the watch really did move, so a
+    // stream that stays quiet here is the dedupe working and not a seam that
+    // does nothing.
+    assert!(
+        daemon.state.mesh.node_present(),
+        "the seam must actually move the fact, or this row proves nothing"
+    );
+    assert!(
+        !daemon.state.terminal_mesh_published(),
+        "a node without the flag is still not published — that is the AND"
+    );
+
+    let mut highest = revision_at_subscribe;
+    loop {
+        let Ok(note) = timeout(Duration::from_secs(2), c.recv()).await else {
+            break; // the window closed with nothing further — the ordinary case
+        };
+        assert_eq!(
+            note["method"], "native.lifecycle.terminal.routes.delta",
+            "nothing but routes rides this subscription: {note}"
+        );
+        let payload = &note["params"]["payload"];
+        assert_eq!(
+            payload["terminalMesh"], false,
+            "the flag was never set, so no reading can say published: {note}"
+        );
+        let revision = payload["revision"]
+            .as_i64()
+            .expect("a delta has a revision");
+        assert!(
+            revision > highest,
+            "a delta that repeats the revision is a NODE-driven emission, and a \
+             node flip that moves no reading must send nothing (was {highest}): {note}"
+        );
+        highest = revision;
+    }
 
     daemon.shutdown().await;
 }

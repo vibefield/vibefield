@@ -90,6 +90,7 @@ import {
   ServeRoute,
   ServeTarget,
   StoreSnapshot,
+  TerminalRoutesStreamPayload,
   UnitHealth,
   UnitState,
   WhoIsIdentity,
@@ -261,6 +262,10 @@ const bundle = tightenLoggingWireSchema(
       RpcResponse,
       DiagnosticLogSnapshotV1,
       DiagnosticLogDeltaV1,
+      // E-F1 — the routes STREAM payload (the snapshot plus the floor's live
+      // `terminalMesh` push). BUNDLE-ONLY, not BASE_SHARED: nothing else embeds
+      // it, and BASE_SHARED is copied verbatim into all 21 per-entry files.
+      TerminalRoutesStreamPayload,
     },
   }),
 );

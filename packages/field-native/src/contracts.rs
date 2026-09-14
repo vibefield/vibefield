@@ -6283,6 +6283,51 @@ impl TerminalRouteSnapshot {
         Default::default()
     }
 }
+#[doc = "`TerminalRoutesStreamPayload`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"cells\","]
+#[doc = "    \"revision\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"cells\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/TerminalRouteCell\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"revision\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"terminalMesh\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct TerminalRoutesStreamPayload {
+    pub cells: ::std::vec::Vec<TerminalRouteCell>,
+    pub revision: i64,
+    #[serde(
+        rename = "terminalMesh",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub terminal_mesh: ::std::option::Option<bool>,
+}
+impl TerminalRoutesStreamPayload {
+    pub fn builder() -> builder::TerminalRoutesStreamPayload {
+        Default::default()
+    }
+}
 #[doc = "`TerminalWorkloadClass`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -11363,6 +11408,75 @@ pub mod builder {
             Self {
                 cells: Ok(value.cells),
                 revision: Ok(value.revision),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct TerminalRoutesStreamPayload {
+        cells:
+            ::std::result::Result<::std::vec::Vec<super::TerminalRouteCell>, ::std::string::String>,
+        revision: ::std::result::Result<i64, ::std::string::String>,
+        terminal_mesh: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
+    }
+    impl ::std::default::Default for TerminalRoutesStreamPayload {
+        fn default() -> Self {
+            Self {
+                cells: Err("no value supplied for cells".to_string()),
+                revision: Err("no value supplied for revision".to_string()),
+                terminal_mesh: Ok(Default::default()),
+            }
+        }
+    }
+    impl TerminalRoutesStreamPayload {
+        pub fn cells<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::TerminalRouteCell>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cells = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cells: {e}"));
+            self
+        }
+        pub fn revision<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.revision = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for revision: {e}"));
+            self
+        }
+        pub fn terminal_mesh<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.terminal_mesh = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for terminal_mesh: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<TerminalRoutesStreamPayload> for super::TerminalRoutesStreamPayload {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: TerminalRoutesStreamPayload,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                cells: value.cells?,
+                revision: value.revision?,
+                terminal_mesh: value.terminal_mesh?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::TerminalRoutesStreamPayload> for TerminalRoutesStreamPayload {
+        fn from(value: super::TerminalRoutesStreamPayload) -> Self {
+            Self {
+                cells: Ok(value.cells),
+                revision: Ok(value.revision),
+                terminal_mesh: Ok(value.terminal_mesh),
             }
         }
     }

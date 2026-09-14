@@ -1696,6 +1696,28 @@
       "additionalProperties": true,
       "description": "vibefield.diagnostics.delta.contract.v1"
     },
+    "TerminalRoutesStreamPayload": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer"
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TerminalRouteCell"
+          }
+        },
+        "terminalMesh": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "revision",
+        "cells"
+      ],
+      "additionalProperties": true
+    },
     "Hello": {
       "type": "object",
       "properties": {

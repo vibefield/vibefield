@@ -55,6 +55,22 @@ impl MeshPlan {
     pub fn is_off(&self) -> bool {
         matches!(self, Self::Off)
     }
+
+    /// N-M4 / E-F1 — THE terminal-mesh reading, as a pure function of its two
+    /// halves: was the floor asked to publish (this plan), and is a tailnet node
+    /// installed right now (`MeshHandle::node_present`)?
+    ///
+    /// Pure and named because it has TWO callers that must never disagree — the
+    /// hello ack (`state.rs`, per pairing) and the routes stream's push
+    /// (`mgmt/mod.rs`, per node flip) — and because the old spelling
+    /// (`!plan.is_off() && node.is_some()`, inline) had no witness for its FLAG
+    /// half: both `mgmt_server.rs` rows that exercised it were false-side rows
+    /// (flag off with no gateway; flag on with no gateway), so deleting the flag
+    /// conjunct left the suite green. Four combinations, all four asserted
+    /// below; the AND is the product law (TM-1): asked is not achieved.
+    pub fn publishes(&self, node_present: bool) -> bool {
+        !self.is_off() && node_present
+    }
 }
 
 /// field-native configuration (design-02 §2.8). Registries default from

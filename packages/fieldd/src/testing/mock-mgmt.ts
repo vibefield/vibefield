@@ -571,6 +571,20 @@ export class MockMgmtServer {
     this.pushDelta("terminal.routes.subscribe", snapshot);
   }
 
+  /** E-F1 — the floor's node arriving AFTER the hello, scripted.
+   *
+   * A real floor answers `HelloAck.terminalMesh` at a moment it is predictably
+   * false (its mesh node is installed by a spawned bring-up task that returns
+   * before the node exists) and then pushes the correction on the routes
+   * stream, because nothing re-hellos. This is that push: the CURRENT snapshot,
+   * unchanged and at its existing revision, under a new boolean — which is
+   * exactly what the floor emits, and what a reader keyed only on `revision`
+   * would silently drop. */
+  pushTerminalMeshPublished(published: boolean): void {
+    const snapshot = (this.terminalRoutes ?? { revision: 1, cells: [] }) as Record<string, unknown>;
+    this.pushRoutesDelta({ ...snapshot, terminalMesh: published });
+  }
+
   pushDiagnosticRecord(record: unknown): void {
     this.diagnosticCursor += 1;
     this.diagnosticRecords.push(record);

@@ -74,6 +74,7 @@ import {
   ServeEntry,
   ServeRoute,
   StoreSnapshot,
+  TerminalRoutesStreamPayload,
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
@@ -154,6 +155,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "audit-record": AuditRecordV1,
   "support-manifest": SupportBundleManifestV1,
   "terminal-routes": TerminalRouteSnapshot,
+  // E-F1 — the routes STREAM payload: the same snapshot plus the floor's live
+  // `terminalMesh` push. Two fixtures on purpose — the boolean present (a floor
+  // that speaks it) and ABSENT (one that predates it, whose deltas must leave a
+  // reader's hello value alone).
+  "terminal-routes-stream": TerminalRoutesStreamPayload,
   "terminal-create-params": TerminalCreateParams,
   // SNAP-D2 — the screenshot helper's stdout line and the shell's answer; the
   // Swift harness and the Rust crate parse these same files.

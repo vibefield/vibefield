@@ -7,7 +7,7 @@ use field_native::contracts::{
     DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, Hello, HelloAck,
     LogRecordV1, LoggingHealthV1, MeshLaneCloseRequest, MeshLaneClosed, MeshLaneOpenRequest,
     MeshLanePeerOpened, NativeHealth, ObservedState, PeerInfo, RpcRequest, RpcResponse,
-    ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
+    ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -78,6 +78,23 @@ fn terminal_routes_fixture() {
     // token). field-native EMITS this row, so it is strict; the door URLs are
     // pattern-validated newtypes on this side (the contract's loopback rule).
     roundtrip::<TerminalRouteSnapshot>("terminal-routes.doors.json", true);
+}
+
+#[test]
+fn terminal_routes_stream_fixture() {
+    // E-F1 — the routes STREAM payload: the snapshot the subscribe surface has
+    // always carried, plus the floor's live `terminalMesh` push. field-native
+    // EMITS this shape (`mgmt/mod.rs`'s routes forwarder), so both are strict.
+    //
+    // BOTH SIDES OF THE TOLERANCE, because only one of them is testable from
+    // the shape alone: with the boolean PRESENT the payload is a reading and
+    // supersedes the hello's; with it ABSENT — the shape every floor predating
+    // E-F1 sends — the payload says nothing about the mesh and a reader keeps
+    // what the hello gave it. The strict round-trip is what pins that absence
+    // stays absence: `Option<bool>` is `skip_serializing_if`, so a None can
+    // never re-serialize as `false` and turn "no reading" into "no".
+    roundtrip::<TerminalRoutesStreamPayload>("terminal-routes-stream.published.json", true);
+    roundtrip::<TerminalRoutesStreamPayload>("terminal-routes-stream.silent.json", true);
 }
 
 #[test]

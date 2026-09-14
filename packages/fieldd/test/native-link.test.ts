@@ -465,6 +465,95 @@ describe("NativeLink terminal routes (TC-D15)", () => {
       "re-subscribed by the replay path, never armed twice per connect",
     ).toHaveLength(2);
   });
+
+  // ---- E-F1 — the floor's node arriving AFTER the hello ----
+
+  it("a mesh push at the SAME revision flips terminalMeshPublished and fires the event", async () => {
+    // THE DEFECT THIS CLOSES. `HelloAck.terminalMesh` is written once, at a
+    // moment it is predictably false: the floor's mesh node is installed by a
+    // spawned bring-up task that returns before the node exists, while the mgmt
+    // listener binds immediately after start_all and this link hellos as soon
+    // as the socket answers. tsnet takes seconds. Nothing re-hellos, and the
+    // ack was the only writer — so a cold boot with both flags set read false
+    // forever, no route was declared, and terminal.openTicket refused
+    // `doors_not_published` on a floor whose doors came up two seconds later.
+    //
+    // The push carries the UNCHANGED snapshot at its EXISTING revision, because
+    // a node flip moves no route state. That is what makes the revision
+    // short-circuit the hazard: a reader keyed on it alone drops this message.
+    const { mock, link } = await setup();
+    mock.helloTerminalMesh = false;
+    mock.terminalRoutes = routes(4, 1, "cell-a");
+    await link.connect();
+    await awaitRoutesArmed(mock);
+    expect(link.terminalMeshPublished(), "the hello was answered before the node").toBe(false);
+
+    const seen: boolean[] = [];
+    link.on("terminal-endpoints", () => seen.push(link.terminalMeshPublished()));
+    mock.pushTerminalMeshPublished(true);
+    await sleep(50);
+
+    expect(link.terminalMeshPublished(), "the floor corrected it on the stream").toBe(true);
+    expect(seen, "the serve driver listens on this event and must be woken").toEqual([true]);
+    expect(link.terminalRoutes?.revision, "a node flip moves no route state").toBe(4);
+    expect(link.terminalEndpoints?.authToken, "and no coordinates").toBe("token-cell-a");
+  });
+
+  it("a payload with no terminalMesh leaves the hello's answer alone", async () => {
+    // A floor predating E-F1 sends exactly this shape on every delta. ABSENT is
+    // not `false` — it is a payload that says nothing about the mesh — and
+    // reading it as a denial would blank a floor that really is publishing.
+    const { mock, link } = await setup();
+    mock.helloTerminalMesh = true;
+    mock.terminalRoutes = routes(1, 1, "cell-a");
+    await link.connect();
+    await awaitRoutesArmed(mock);
+    expect(link.terminalMeshPublished()).toBe(true);
+
+    mock.pushRoutesDelta(routes(2, 2, "cell-b"));
+    await sleep(50);
+
+    expect(link.terminalMeshPublished(), "silence is not a denial").toBe(true);
+    expect(link.terminalEndpoints?.authToken, "the ROUTE half still applied").toBe("token-cell-b");
+  });
+
+  it("a push that withdraws the doors is heard too", async () => {
+    // The same mechanism in the direction that matters for safety: a gateway
+    // that goes away un-publishes the doors, and a consumer still advertising a
+    // tappable card for them is the failure the boolean exists to prevent.
+    const { mock, link } = await setup();
+    mock.helloTerminalMesh = true;
+    mock.terminalRoutes = routes(6, 1, "cell-a");
+    await link.connect();
+    await awaitRoutesArmed(mock);
+    expect(link.terminalMeshPublished()).toBe(true);
+
+    const seen: boolean[] = [];
+    link.on("terminal-endpoints", () => seen.push(link.terminalMeshPublished()));
+    mock.pushTerminalMeshPublished(false);
+    await sleep(50);
+
+    expect(link.terminalMeshPublished()).toBe(false);
+    expect(seen).toEqual([false]);
+  });
+
+  it("a repeated push at the same value is silent — the event drops live connections", async () => {
+    const { mock, link } = await setup();
+    mock.helloTerminalMesh = false;
+    mock.terminalRoutes = routes(2, 1, "cell-a");
+    await link.connect();
+    await awaitRoutesArmed(mock);
+
+    mock.pushTerminalMeshPublished(true);
+    await sleep(50);
+    const seen: string[] = [];
+    link.on("terminal-endpoints", () => seen.push("changed"));
+    mock.pushTerminalMeshPublished(true);
+    await sleep(50);
+
+    expect(seen, "a reading that did not move is not a change").toEqual([]);
+    expect(link.terminalMeshPublished()).toBe(true);
+  });
 });
 
 describe("NativeLink deadlines + ping (TC-D2)", () => {
