@@ -342,7 +342,16 @@ public final class RoutedTerminalClient {
   /// A pointer event, in ghosttea's own `MouseInput` serde spelling — the same
   /// rule `send(key:)` states: the cell deserializes the wire `op` straight into
   /// the engine's type.
+  ///
+  /// A non-finite coordinate is DROPPED here. `RoutedMouseInput`'s own doc said
+  /// so and nothing enforced it (TM-r3, K-L2): `TerminalAttachment.handleMouse`
+  /// checked `isFinite` and no other caller did, so the claim was true of one
+  /// path and false of this surface. The cell's reader refuses an infinity
+  /// before it can reach the engine (`deserialize_finite_mouse_input`), and a
+  /// message spent to be refused there is a message that told this device
+  /// nothing — the refusal is an audit line, not a reply.
   public func send(mouse: RoutedMouseInput, to sessionId: String) {
+    guard mouse.isFinite else { return }
     sendInput(sessionId: sessionId, op: .object(["kind": .string("mouse"), "mouse": mouse.json]))
   }
 
@@ -1256,8 +1265,11 @@ public struct RoutedKeyInput: Sendable, Equatable {
 ///
 /// `x`/`y` are FINITE f32 by contract — the cell's reader refuses an infinity
 /// rather than letting one reach the engine (`deserialize_finite_mouse_input`),
-/// so a non-finite coordinate is dropped HERE instead of spending a message to
-/// be refused there.
+/// so a non-finite coordinate is dropped on this device instead of spending a
+/// message to be refused there. `isFinite` is the predicate, and since TM-r3
+/// (K-L2) `RoutedTerminalClient.send(mouse:to:)` is what applies it — the
+/// sentence was true of `TerminalAttachment.handleMouse` alone until then, so
+/// any other caller of the client sent the infinity.
 public struct RoutedMouseInput: Sendable, Equatable {
   public enum Action: String, Sendable, Equatable {
     case press

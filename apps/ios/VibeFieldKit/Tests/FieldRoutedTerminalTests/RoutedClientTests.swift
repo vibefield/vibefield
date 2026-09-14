@@ -369,6 +369,50 @@ import Testing
     client.close()
   }
 
+  /// A non-finite pointer coordinate never leaves this device (TM-r3, K-L2).
+  ///
+  /// `RoutedMouseInput`'s doc has always said so; until now only
+  /// `TerminalAttachment.handleMouse` enforced it, so the claim was true of one
+  /// caller and false of this surface. The cell's reader refuses an infinity
+  /// before it reaches the engine and the refusal is an audit line with no
+  /// reply, so a message spent on one tells this device nothing.
+  @Test func aNonFinitePointerCoordinateNeverLeavesThisDevice() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    let frame = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(10), payload: Data("TRF1".utf8))
+    await live.frames.deliver(.binary(frame))
+    try await settle("the frame applies") { await sink.deltaFrames == 1 }
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("input allowed") { client.sessions[session]?.inputAllowed == true }
+
+    func mouse(x: Float, y: Float) -> RoutedMouseInput {
+      RoutedMouseInput(
+        action: .motion, button: 0, x: x, y: y, screenWidth: 800, screenHeight: 600,
+        cellWidth: 8, cellHeight: 16, paddingLeft: 0, paddingTop: 0)
+    }
+    // The precondition, pinned: a FINITE event does go, so the silence below is
+    // the guard and not an input path that was never open.
+    client.send(mouse: mouse(x: 10, y: 20), to: session)
+    try await settle("the finite event") { await live.control.allSent("SendInput").count == 1 }
+
+    for bad in [mouse(x: .infinity, y: 20), mouse(x: 10, y: -.infinity), mouse(x: .nan, y: .nan)] {
+      client.send(mouse: bad, to: session)
+    }
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(await live.control.allSent("SendInput").count == 1)
+    // …and the input SEQUENCE did not move either: a dropped event must not
+    // leave a gap the cell would read as a lost message.
+    #expect(client.sessions[session]?.inputSequence == 1)
+    client.close()
+  }
+
   /// FOCUS NEVER IMPLIES A CLAIM. The seat is explicit, the claim names its
   /// claimant and the revision it expects, and the cell mints the holder
   /// generation — a caller can only name itself.
@@ -663,14 +707,19 @@ import Testing
     // "any credit was sent". Totals are cumulative within the connection, so
     // the return that covers the orphan carries the sum (TM-4a, 2026-09-14 —
     // the row went red once under load with exactly that first return).
+    //
+    // …and the return that MATCHED is what is read below, rather than whatever
+    // `lastSent` answers a moment later (TM-r3, T-L(b)): re-reading a
+    // cumulative surface after settling on it is two reads, and an account
+    // pruned between them would change the answer under the assertions.
     let expected = Int64(first.count + orphan.count)
-    try await settle("a credit return covering both units") {
-      await live.frames.lastSent("TransportCredit")?["connectionBytesReturned"]?.intValue == expected
+    let credit = try await settled("a credit return covering both units") {
+      let sent = await live.frames.lastSent("TransportCredit")
+      return sent?["connectionBytesReturned"]?.intValue == expected ? sent : nil
     }
-    let credit = await live.frames.lastSent("TransportCredit")
-    #expect(credit?["creditEpoch"]?.intValue == 1)
-    #expect(credit?["connectionBytesReturned"]?.intValue == expected)
-    let accounts = credit?["accounts"]?.arrayValue ?? []
+    #expect(credit["creditEpoch"]?.intValue == 1)
+    #expect(credit["connectionBytesReturned"]?.intValue == expected)
+    let accounts = credit["accounts"]?.arrayValue ?? []
     #expect(accounts.count == 2)
     let orphanAccount = accounts.first { $0["activationId"]?.stringValue == "an-activation-nobody-holds" }
     #expect(orphanAccount?["bytesReturned"]?.intValue == Int64(orphan.count))

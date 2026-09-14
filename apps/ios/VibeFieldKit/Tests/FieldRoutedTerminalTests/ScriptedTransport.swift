@@ -486,6 +486,13 @@ enum TicketFactory {
 
 /// Poll a main-actor condition until it holds. Swift has no async `defer`, and a
 /// state machine driven by tasks needs a settle point that is not a sleep.
+///
+/// It THROWS on a timeout as well as recording the issue (TM-r3, T-L(a)). It
+/// used to record and RETURN, so the row carried on against a state that had
+/// not arrived and failed again at whatever expectation ran next — one timeout
+/// reported as two or three failures, with the LAST one naming a line that was
+/// never the problem. That is how a flake gets blamed on the wrong code. The
+/// sibling bundle's `until` already throws, for the same reason.
 @MainActor
 func settle(
   _ what: String, timeout: Duration = .seconds(5), _ condition: @MainActor () async -> Bool
@@ -496,4 +503,31 @@ func settle(
     try await Task.sleep(for: .milliseconds(5))
   }
   Issue.record("timed out waiting for \(what)")
+  throw SettleTimedOut(what: what)
+}
+
+/// The same, for a VALUE that arrives rather than a flag that flips — and it
+/// hands back the value it MATCHED on (TM-r3, T-L(b)).
+///
+/// A row that settles on a condition and then re-reads the source is reading it
+/// twice, and on a cumulative surface the second read can see something the
+/// first did not: the credit row waited for a return covering two units and
+/// then fetched "the last TransportCredit", which a prune between the two reads
+/// could have replaced with a different one. Returning the match closes that.
+@MainActor
+func settled<T: Sendable>(
+  _ what: String, timeout: Duration = .seconds(5), _ read: @MainActor () async -> T?
+) async throws -> T {
+  let deadline = ContinuousClock.now.advanced(by: timeout)
+  while ContinuousClock.now < deadline {
+    if let value = await read() { return value }
+    try await Task.sleep(for: .milliseconds(5))
+  }
+  Issue.record("timed out waiting for \(what)")
+  throw SettleTimedOut(what: what)
+}
+
+struct SettleTimedOut: Error, CustomStringConvertible {
+  let what: String
+  var description: String { "timed out waiting for \(what)" }
 }
