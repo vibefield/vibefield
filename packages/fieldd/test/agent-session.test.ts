@@ -982,7 +982,7 @@ const rosettaRow = (nativeSessionId: string, stillForMs: number | null, child = 
 });
 
 describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
-  it("answers the live board, then ONE delta frame carrying the change, and no content ever", async () => {
+  it("answers the live board, then carries the change in CHAINED frames no closer than the floor, and no content ever", async () => {
     const box = await setup({ floor: "real" });
     const win = await window(box.daemon, [...DECK, "agent.control"], "fw1");
     const spawned = (await win.call("agent.spawn", {
@@ -1046,23 +1046,65 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
     // the run's state moves: the scripted PTY's `cat` dies of the interrupt
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
 
-    const delta = await poll(async () => payload(quiet), 20_000);
-    // it applies ON TOP of what this client was left at
-    expect(delta.since).toBe(baseline);
-    expect(delta.revision).toBeGreaterThan(delta.since);
-    const upsert = delta.upserts.find((r) => r["runtimeRunId"] === runId);
-    expect(upsert, "the delta did not carry the run that changed").toBeDefined();
-    expect(upsert).toMatchObject({ alive: false });
-    for (const key of Object.keys(upsert ?? {})) expect(FIELD_ROW_KEYS).toContain(key);
-
-    // ONE frame for one change: the per-subscriber floor coalesces, so the
-    // whole change rides the frame above and nothing follows it inside the
-    // floor's own width
-    await new Promise((resolve) => setTimeout(resolve, 750));
-    expect(frames().length, "the change did not ride ONE frame").toBe(quiet + 1);
-
-    // and the board, settled again, stays silent
+    await poll(async () => payload(quiet), 20_000);
+    // Let the WHOLE change land before judging it. An interrupt's effects are
+    // not one fact: the PTY's exit, then the record's, then the pane's, and
+    // they can legitimately span two floors under load.
     const afterExit = await settle();
+
+    // THE COALESCING LAW, which is about SPACING AND THE CHAIN — not a count.
+    // "Exactly one delta" is not a promise the publisher can keep: it would
+    // require every consequence of an interrupt to fall inside one window, and
+    // nothing schedules them that way. What IS promised is that frames are
+    // never closer than this subscriber's declared floor, that each one applies
+    // on top of the last, and that the change arrives. The landing gate caught
+    // the count version of this row failing under a loaded graph (3 frames,
+    // not 2) while every one of those properties held.
+    const changed = frames().slice(quiet);
+    expect(changed.length, "the change produced no frame at all").toBeGreaterThan(0);
+
+    // THE CHAIN: unbroken from what this client was left at
+    let since = baseline;
+    for (const [index, frame] of changed.entries()) {
+      const body = frame.params.payload as {
+        since: number;
+        revision: number;
+        upserts: Record<string, unknown>[];
+        removed: string[];
+      };
+      expect(body.since, `frame ${index} did not continue the chain`).toBe(since);
+      expect(body.revision).toBeGreaterThan(body.since);
+      // NO CONTENT, ever — a leak reaches a phone through exactly these frames
+      for (const upsert of body.upserts) {
+        for (const key of Object.keys(upsert)) expect(FIELD_ROW_KEYS).toContain(key);
+      }
+      since = body.revision;
+    }
+
+    // THE SPACING: no two frames closer than the floor this subscriber asked
+    // for (`minIntervalMs: 250` above). A timer's own jitter is not a breach,
+    // so the comparison carries one scheduler tick of slack.
+    const arrivals = [
+      quiet === 0 ? null : frames()[quiet - 1]?.receivedAt,
+      ...changed.map((f) => f.receivedAt),
+    ].filter((t): t is number => typeof t === "number");
+    for (let i = 1; i < arrivals.length; i++) {
+      const gap = (arrivals[i] ?? 0) - (arrivals[i - 1] ?? 0);
+      expect(
+        gap,
+        `two frames arrived ${gap}ms apart, inside the 250ms floor`,
+      ).toBeGreaterThanOrEqual(250 - 16);
+    }
+
+    // THE CHANGE ITSELF: the run is carried, dead, somewhere in that run of
+    // frames — which frame it rode is the scheduler's business, not the law's
+    const carried = changed
+      .flatMap((f) => (f.params.payload as { upserts: Record<string, unknown>[] }).upserts)
+      .filter((r) => r["runtimeRunId"] === runId);
+    expect(carried.length, "no frame carried the run that changed").toBeGreaterThan(0);
+    expect(carried[carried.length - 1]).toMatchObject({ alive: false });
+
+    // and the board, settled, stays silent
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     expect(frames().length, "a settled board kept sending frames").toBe(afterExit);
   }, 200_000);

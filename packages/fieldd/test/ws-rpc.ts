@@ -16,7 +16,14 @@ export class WsRpc {
     number,
     { resolve: (v: unknown) => void; reject: (e: Error & { rpc?: RpcErrorShape }) => void }
   >();
-  notifications: Array<{ method: string; params: { subId?: string; payload?: unknown } }> = [];
+  /** `receivedAt` is additive and exists for one reason: a coalescing FLOOR is
+   * a claim about SPACING, and spacing cannot be read from an order-only log.
+   * Readers that only want `method`/`params` are unaffected. */
+  notifications: Array<{
+    method: string;
+    params: { subId?: string; payload?: unknown };
+    receivedAt: number;
+  }> = [];
   closed = false;
 
   constructor(private readonly ws: WebSocket) {
@@ -40,9 +47,10 @@ export class WsRpc {
         return;
       }
       if (typeof m["method"] === "string") {
-        this.notifications.push(
-          m as unknown as { method: string; params: { subId?: string; payload?: unknown } },
-        );
+        this.notifications.push({
+          ...(m as unknown as { method: string; params: { subId?: string; payload?: unknown } }),
+          receivedAt: Date.now(),
+        });
       }
     });
   }
