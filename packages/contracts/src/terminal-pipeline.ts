@@ -329,8 +329,16 @@ export function highWaterTombstoneTtlMs(
 // TM-2 (thinking-terminal-mesh-cells.md §3 T, TM-D2) — the REMOTE door set
 
 /** The tailnet path prefix under which fieldd publishes one serve route per
- * live cell: `/cell/<cellBootId>/` → that cell's loopback T1 door. One
- * authority for the writer (the serve driver) and the reader (this regex). */
+ * live cell: `/cell/<cellBootId>` → that cell's loopback T1 door. One authority
+ * for the writer (the serve driver) and the reader (this regex).
+ *
+ * ERRATA (F-L6b, 2026-09-14): this sentence drew the ROUTE as
+ * `/cell/<cellBootId>/`, contradicting the corrected law twenty lines below —
+ * a trailing-slash prefix never matches at all in the shipped sidecar, which
+ * TM-2b measured. The CONSTANT keeps its trailing slash because it is a
+ * prefix that gets a cell id appended to it; the route does not.
+ * `remoteCellRoutePrefix` is the only composer of a route, and it is the one
+ * to read. */
 export const REMOTE_CELL_PATH_PREFIX = "/cell/" as const;
 
 /** The remote door path for one cell and one channel — the ONLY composer of

@@ -4152,6 +4152,15 @@ export async function runSmokeGodview(opts: {
     //      two floors on a tailnet are not stageable here yet. With no peer the
     //      row REPORTS `unavailable` with the monitor's own state — it never
     //      fakes a host, and it never passes silently as though it had run.
+    //
+    //      R-L8 (TM review, 2026-09-14) — AND THERE IS A SECOND REASON the
+    //      paragraph above does not name. The monitor's host list comes from
+    //      `runtime.listRemoteHosts()` (GodviewDeck.tsx), whose VibeField
+    //      answerer TM-1 deleted along with the in-process serve and
+    //      `STORES.TERMINAL_HOSTS`. So `remotePeer: "unavailable"` today is not
+    //      "no peer was staged" but "nothing is left to answer" — still honest,
+    //      still never a silent pass, and still REPORTED rather than asserted.
+    //      The call site carries the same date and the reason it stays.
     const monitorNow = monitorWatch.current();
     verdict["remoteState"] = monitorNow?.remoteState ?? "unreported";
     verdict["remoteSessions"] = monitorNow?.remoteSessions ?? 0;

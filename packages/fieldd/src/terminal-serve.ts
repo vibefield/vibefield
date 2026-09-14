@@ -10,7 +10,10 @@ import type { ServeSpec } from "./mesh-client";
 // TM-2 (thinking-terminal-mesh-cells.md §3 T, TM-D2) — THE TERMINAL ROUTES.
 //
 // One tailnet listener carrying one reverse-proxy route per live terminal
-// cell: `/cell/<cellBootId>/` → `127.0.0.1:<that cell's T1 door port>`, gated
+// cell: `/cell/<cellBootId>` → `127.0.0.1:<that cell's T1 door port>`, gated
+// (ERRATA F-L6b, 2026-09-14: this line drew the route WITH a trailing slash,
+// which `cellRoutesFor` below has never sent and the shipped sidecar never
+// matches — see `remoteCellRoutePrefix`.)
 // by the linked login. The sidecar splices the WebSocket upgrade straight into
 // the cell, so neither fieldd nor the floor is in the byte path (EL2) and the
 // cell's authority stays the grant it verifies in the first frame.

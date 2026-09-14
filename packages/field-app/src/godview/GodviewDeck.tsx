@@ -899,6 +899,24 @@ export function GodviewDeck({
       // its ⌘⇧O binding — it does NOT gate these calls, which live on the
       // runtime and speak to the floor's control connection directly. That is
       // exactly what GT-D7's amendment asked for: their door closed, ours open.
+      // R-L8 (TM review, 2026-09-14) — THIS QUESTION HAS HAD NO ANSWERER SINCE
+      // TM-1, and it is left standing deliberately. `listRemoteHosts` is
+      // ghosttea's mesh-runtime ask, and TM-1 deleted the VibeField server that
+      // used to answer it: the in-process serve, `services/terminal_mesh.rs`,
+      // the `ghosttea-truffle` dependency, the TSP1 ports and
+      // `STORES.TERMINAL_HOSTS` all went, and the phone became a routed T1
+      // client of a cell's own door instead. So this door reports zero hosts on
+      // every poll, and the monitor's remote half can only ever be `serving`
+      // with nothing in it.
+      //
+      // NOT DELETED HERE, because it is not a contained deletion. Behind it are
+      // `monitor/remote-session-field.ts`, `monitor/remote-door.ts` and their
+      // composition into `useMonitorAgents` — a documented state machine
+      // (`no-door` versus an EMPTY `serving`, the two-failure tolerance, the 2 s
+      // cadence) spanning eight source files and eight test files. Removing it
+      // is a DESIGN decision about the deck's mesh half and what replaces it
+      // (the routed T1 client is the obvious candidate), which is not a review
+      // hygiene pass's to make.
       listHosts: () => runtime.listRemoteHosts(),
       // AR-5 — the find sheet's daemon questions and the usage column's feed,
       // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
