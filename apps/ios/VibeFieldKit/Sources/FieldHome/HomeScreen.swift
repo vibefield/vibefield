@@ -299,8 +299,10 @@ public struct HomeScreen: View {
           feed.start()
         }
         // `-vf-demo-field-slice`: the contracts' golden board through the REAL
-        // path. A fixture STORE — one peer, one `full`, the real
-        // `AgentFieldSlice` reader, the real fold — so the swarm can be
+        // path. A fixture STORE — three devices across two stores (the board's
+        // own device serving a door at a closed port, one with no endpoint at
+        // all, one with an endpoint and no board), the real `AgentFieldSlice`
+        // reader, the real fold — so the swarm AND the corner can be
         // photographed over real-shaped rows in both themes with no desktop
         // and no tailnet. It is not a demo path: nothing downstream of the
         // store knows the difference, which is the point.

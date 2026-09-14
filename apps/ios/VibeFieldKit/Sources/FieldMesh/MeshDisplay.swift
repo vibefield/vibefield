@@ -61,11 +61,21 @@ public enum MeshDisplay {
 
   /// The chip's SECOND token, when the doors have earned one.
   ///
-  /// Silence is the healthy answer: a desktop whose field is arriving needs no
-  /// word, because the bodies on the screen already are the word. The token
-  /// appears only when something is wrong or pending, which is the same rule
-  /// the mesh chip itself follows (EL5 — contrast is how this app says
-  /// "something needs you").
+  /// The token speaks for the DOOR and the bodies speak for the FIELD. That is
+  /// why the silence is keyed to `.ready` and not to "a board is arriving": a
+  /// live board over a dialing door is a field with nothing missing and a door
+  /// an attach could not use, since stop, resume and the write grant all ride
+  /// the door and only the bytes ride truffle. So "…" over a full field is the
+  /// honest warning rather than noise. The token appears only when something
+  /// is wrong or pending, which is the same rule the mesh chip itself follows
+  /// (EL5 — contrast is how this app says "something needs you").
+  ///
+  /// **Errata (2026-09-14):** this doc used to justify the silence by the FEED
+  /// — "a desktop whose field is arriving needs no word, because the bodies on
+  /// the screen already are the word" — while the code has always asked the
+  /// door. The code was right and the sentence was wrong, and the case that
+  /// tells them apart is the fixture's D1: a board arriving over the store
+  /// behind a door at a closed port.
   public static func linkLabel(desktops: [FieldDesktop]) -> String? {
     guard !desktops.isEmpty else { return nil }
     if desktops.contains(where: {

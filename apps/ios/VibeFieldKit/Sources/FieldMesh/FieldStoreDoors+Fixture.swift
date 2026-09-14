@@ -110,12 +110,22 @@
       // THREE desktops, so every face the phone can draw has something to draw
       // it from — and none of them needs a listener:
       //   D1 the board's own device, serving a door at a dead loopback port —
-      //      the store feeds its field, the door dials and fails;
+      //      the store feeds its field, the door dials forever;
       //   D2 no product endpoint at all — `noDoor`, on the mesh and not
       //      serving;
-      //   D3 an endpoint and no board — dialing, then failed.
+      //   D3 an endpoint and no board — dialing forever (a closed port is
+      //      reconnecting, not refused).
       // The ports are closed on purpose: the point is the FACES, and a fixture
       // that stood up a listener would be claiming a desktop answered.
+      //
+      // Errata (2026-09-14): D1 read "the door dials and fails" and D3 read
+      // "dialing, then failed" until a simulator run watched them for half a
+      // minute. A closed port is refused at once and retried, which
+      // `FieldProductClient` carries as `.reconnecting` and never as
+      // `.failed` — so this fixture draws the "…" token and cannot draw the
+      // DOOR one. It cannot draw D2's "NO DOOR" either, because `linkLabel`
+      // ranks a dialing desktop above a door-less one and these two dial
+      // forever. Staging a refusal needs something that answers and says no.
       let devices: [String: Data] = [
         boardDevice: deviceSlice(
           deviceId: boardDevice, name: "studio", url: "ws://127.0.0.1:9/t/fixture", now: now),
