@@ -1,13 +1,12 @@
 import {
   AGENT_FIELD,
-  type AgentFieldRow,
   type AgentFieldSlice,
   type AgentListResult,
   MESH_CONTROL_LIMITS,
   STORES,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { FieldProjection } from "./agent-field";
+import { attachableRows, FieldProjection } from "./agent-field";
 import { RpcCallError } from "./native-link";
 
 // MF-1 (§10.2, D4's hybrid) — the field's SECOND carrier: fieldd publishes its
@@ -218,7 +217,7 @@ export class AgentFieldPublisher {
         publishedAt: at,
         expiresAt: at + this.expiryMs,
         revision: snapshot.revision,
-        rows: this.attachableRows(snapshot.rows),
+        rows: attachableRows(snapshot.rows, this.opts.terminalPublished()),
       }),
     );
     // The heartbeat exists for rows: an empty board has nothing to keep alive,
@@ -251,29 +250,6 @@ export class AgentFieldPublisher {
       clearTimeout(this.coalesce);
       this.coalesce = null;
     }
-  }
-
-  /**
-   * TM-2 (MF-1l) — the rows as the MESH may have them.
-   *
-   * The `terminal` join (`{hosted, runtimeSessionId, cellBootId?, …}`) is what
-   * a reader attaches THROUGH (G3). While this device is not publishing its
-   * doors, an attach cannot succeed — `terminal.openTicket` answers
-   * `doors_not_published` — so carrying the join would promise a tap that
-   * cannot land. The row itself stays: the agent is real and working, and
-   * dropping it would lose a live agent off a phone for a transport reason.
-   *
-   * `alive` is computed from the SUMMARY before this runs, so a pending row
-   * (AR-4: a PTY on this device with nothing driving it) keeps reading alive
-   * here rather than flipping to "gone" because the mesh is off.
-   */
-  private attachableRows(rows: readonly AgentFieldRow[]): AgentFieldRow[] {
-    if (this.opts.terminalPublished()) return [...rows];
-    return rows.map((row) => {
-      if (row.terminal === undefined) return row;
-      const { terminal: _unreachable, ...rest } = row;
-      return rest;
-    });
   }
 
   /** MF-1h — a slice has a transport limit, and a board can outgrow it: a

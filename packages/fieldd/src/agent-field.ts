@@ -267,6 +267,41 @@ export class FieldProjection {
   }
 }
 
+/**
+ * TM-2 (MF-1l) — the rows as a READER outside this device may have them.
+ *
+ * The `terminal` join (`{hosted, runtimeSessionId, cellBootId?, …}`) is what a
+ * reader attaches THROUGH (G3). While this device is not publishing its doors,
+ * an attach cannot succeed — `terminal.openTicket` answers
+ * `doors_not_published` — so carrying the join would promise a tap that cannot
+ * land. The ROW itself stays: the agent is real and working, and dropping it
+ * for a transport reason would lose a live agent off a phone.
+ *
+ * ONE spelling, because the field has TWO carriers (F-M4, 2026-09-14): the
+ * store publisher's slice and the door's `agent.subscribe {projection:
+ * "field"}`. The withholding lived in the publisher alone, so the same board
+ * promised a tap over the door that it refused over the mesh — and the phone
+ * folds the door leg in beside the store leg, which is where the two answers
+ * met. A local reader (the desktop's own renderer) never sees this: it dials
+ * the loopback door with a window principal, whose ticket never depended on the
+ * tailnet at all.
+ *
+ * `alive` is computed from the SUMMARY before this runs, so a pending row
+ * (AR-4: a PTY on this device with nothing driving it) keeps reading alive here
+ * rather than flipping to "gone" because the mesh is off.
+ */
+export function attachableRows(
+  rows: readonly AgentFieldRow[],
+  terminalPublished: boolean,
+): AgentFieldRow[] {
+  if (terminalPublished) return [...rows];
+  return rows.map((row) => {
+    if (row.terminal === undefined) return row;
+    const { terminal: _unreachable, ...rest } = row;
+    return rest;
+  });
+}
+
 export interface FieldSubscriptionOptions {
   /** the fold's current rows */
   list: () => AgentListResult;
@@ -276,6 +311,22 @@ export interface FieldSubscriptionOptions {
   emit: (delta: AgentFieldDelta) => void;
   /** per-subscriber trailing-edge floor */
   minIntervalMs?: number;
+  /**
+   * TM-2 (F-M4) — are this device's terminal doors published on the tailnet?
+   * The SAME gate the store publisher applies, so the two carriers of one board
+   * cannot promise different things about the same row. Default `true` keeps
+   * the local callers that have no tailnet question to ask (and the unit rows
+   * that only care about the fold) exactly as they were.
+   *
+   * RESIDUAL, recorded rather than papered over: this is read at snapshot time
+   * and at each emitted frame, so a subscriber learns of a GATE change only
+   * with the next board change. Closing that would mean emitting a frame whose
+   * rows carry no new revision, and a board revision that moves on a join flip
+   * is precisely what the store carrier's design forbids (MF-1h: the rows'
+   * own facts have not moved). The safe direction is already safe — a gate
+   * that OPENS late only withholds a true join for a while.
+   */
+  terminalPublished?: () => boolean;
   onError?: (error: unknown) => void;
 }
 
@@ -295,6 +346,7 @@ export interface FieldSubscription {
 export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSubscription {
   const projection = new FieldProjection();
   const floor = opts.minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS;
+  const published = (): boolean => opts.terminalPublished?.() ?? true;
   projection.apply(opts.list());
   let timer: NodeJS.Timeout | null = null;
   let disposed = false;
@@ -311,7 +363,7 @@ export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSu
     }
     if (delta === null) return;
     try {
-      opts.emit(delta);
+      opts.emit({ ...delta, upserts: attachableRows(delta.upserts, published()) });
     } catch (error) {
       opts.onError?.(error);
     }
@@ -323,8 +375,9 @@ export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSu
     timer.unref?.();
   });
 
+  const snapshot = projection.snapshot();
   return {
-    snapshot: projection.snapshot(),
+    snapshot: { ...snapshot, rows: attachableRows(snapshot.rows, published()) },
     dispose: () => {
       disposed = true;
       if (timer !== null) {

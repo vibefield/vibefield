@@ -10,9 +10,11 @@ import {
   STORES,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint } from "./native-harness";
+import { helloAs, WsRpc } from "./ws-rpc";
 
 // MF-1 (§10.2) — the agent field's STORE publisher, as the DAEMON wires it.
 //
@@ -86,7 +88,9 @@ function writeExitedRecord(dataDir: string): void {
   }).write(record);
 }
 
-async function boot(): Promise<{ daemon: FielddDaemon; mock: MockMgmtServer }> {
+async function boot(
+  opts: { terminalMesh?: boolean } = {},
+): Promise<{ daemon: FielddDaemon; mock: MockMgmtServer }> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-field-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -103,7 +107,7 @@ async function boot(): Promise<{ daemon: FielddDaemon; mock: MockMgmtServer }> {
   // reads `terminal.cellBootId` as its witness that the fold subscription is
   // live. A floor with its doors off is the publisher test's row, not this
   // file's.
-  mock.helloTerminalMesh = true;
+  mock.helloTerminalMesh = opts.terminalMesh ?? true;
   mock.observedState = observed([
     { sessionId: PANE, pid: 42, cell: { cellInstanceId: 1, cellBootId: "cell-a" } },
   ]);
@@ -133,6 +137,60 @@ async function poll<T>(fn: () => T | undefined, ms = 5_000): Promise<T> {
 
 const slices = (mock: MockMgmtServer) =>
   mock.agentFieldWrites.map((raw) => AgentFieldSlice.parse(raw));
+
+/** F-M4 — the OTHER carrier: a local reader on the product door. */
+async function fieldDoor(daemon: FielddDaemon): Promise<Array<Record<string, unknown>>> {
+  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+  cleanup.push(() => ws.close());
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("error", reject);
+  });
+  const rpc = new WsRpc(ws);
+  await helloAs(rpc, daemon.tokens.mint(["agent.observe"], "fm4").token);
+  const sub = (await rpc.call("agent.subscribe", { projection: "field" })) as {
+    snapshot: { rows: Array<Record<string, unknown>> };
+  };
+  return sub.snapshot.rows;
+}
+
+describe("TM-2 (F-M4) — both carriers of one board answer the same question", () => {
+  // The field has TWO carriers: the `field.agents.v1` slice and the door's
+  // `agent.subscribe {projection: "field"}`. The attach-join withholding lived
+  // in the publisher alone, so with the floor's doors OFF a phone folding the
+  // door leg in beside the store leg got a bare row from one and a tappable
+  // card from the other — for the same run, in the same second.
+  it("withhold the attach join together while the doors are not published", async () => {
+    const { daemon, mock } = await boot({ terminalMesh: false });
+    await poll(() =>
+      daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
+    );
+    const slice = await poll(() => slices(mock).find((s) => s.rows.length > 0));
+    expect(slice.rows[0]?.terminal, "the store leg withholds it").toBeUndefined();
+
+    const rows = await fieldDoor(daemon);
+    const row = rows.find((r) => r["runtimeRunId"] === RUN);
+    // the ROW is there on both legs — the agent is real and working, and
+    // dropping it for a transport reason would lose a live agent off a phone
+    expect(row, "the door answered the board").toBeDefined();
+    expect(row).toMatchObject({ kind: "scripted" });
+    expect(row?.["terminal"], "…and the door leg withholds it too").toBeUndefined();
+  });
+
+  it("carry it together once the floor publishes its doors", async () => {
+    const { daemon, mock } = await boot({ terminalMesh: true });
+    await poll(() =>
+      daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
+    );
+    const slice = await poll(() => slices(mock).find((s) => s.rows.length > 0));
+    expect(slice.rows[0]?.terminal).toMatchObject({ runtimeSessionId: PANE });
+
+    const rows = await fieldDoor(daemon);
+    expect(rows.find((r) => r["runtimeRunId"] === RUN)?.["terminal"]).toMatchObject({
+      runtimeSessionId: PANE,
+    });
+  });
+});
 
 describe("MF-1 — the daemon publishes its field into field.agents.v1", () => {
   it("carries the fold's rows, withdraws when the serve goes, and publishes again when it returns", async () => {

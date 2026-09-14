@@ -1437,6 +1437,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         list: () => agents.list(),
         subscribe: (fn) => agents.subscribe(fn),
         emit: (delta) => emit(delta),
+        // TM-2 (F-M4) — the SAME gate the store publisher applies below. The
+        // two carriers serve one board, and a row that promises a tap over one
+        // leg while refusing it over the other is the false positive MF-1l
+        // exists to prevent — the phone folds both legs into one card.
+        terminalPublished: () => native.terminalMeshPublished(),
         ...(parsed.data.minIntervalMs !== undefined
           ? { minIntervalMs: parsed.data.minIntervalMs }
           : {}),

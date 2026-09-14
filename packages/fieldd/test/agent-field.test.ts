@@ -374,6 +374,48 @@ describe("createFieldSubscription — one subscriber's floor (§5)", () => {
     sub.dispose();
   });
 
+  it("withholds the attach join on the SNAPSHOT and on every DELTA (F-M4)", () => {
+    // The door is the field's second carrier, and the withholding used to live
+    // in the store publisher alone. Both legs of one board now read the same
+    // gate through one function, so a card cannot be tappable over one and bare
+    // over the other.
+    const source = fold(board(summary({ status: "idle" })));
+    const frames: Array<{ upserts: Array<Record<string, unknown>> }> = [];
+    let published = false;
+    const sub = createFieldSubscription({
+      list: source.list,
+      subscribe: source.subscribe,
+      emit: (delta) => frames.push(delta as never),
+      minIntervalMs: 250,
+      terminalPublished: () => published,
+    });
+    expect(sub.snapshot.rows[0]?.terminal, "the snapshot withholds it").toBeUndefined();
+    // the ROW survives — an agent nothing can attach to is still working
+    expect(sub.snapshot.rows[0]).toMatchObject({ kind: "claude", alive: true });
+
+    source.publish(board(summary({ status: "working" })));
+    vi.advanceTimersByTime(250);
+    expect(frames[0]?.upserts[0]?.["terminal"], "and so does the delta").toBeUndefined();
+
+    // the doors come up: the next frame carries the join again
+    published = true;
+    source.publish(board(summary({ status: "blocked", permissionTool: "Bash" })));
+    vi.advanceTimersByTime(250);
+    expect(frames[1]?.upserts[0]?.["terminal"]).toMatchObject({ hosted: "local" });
+    sub.dispose();
+  });
+
+  it("carries the join by default — a caller with no tailnet question to ask", () => {
+    const source = fold(board(summary({ status: "idle" })));
+    const sub = createFieldSubscription({
+      list: source.list,
+      subscribe: source.subscribe,
+      emit: () => {},
+    });
+    expect(sub.snapshot.rows[0]?.terminal).toMatchObject({ hosted: "local" });
+    sub.dispose();
+  });
+
   it("sends nothing for a burst that ends where it started", () => {
     // The honest consequence of a trailing-edge floor: a run that flapped
     // working → idle → working inside one window is, at the end of that
