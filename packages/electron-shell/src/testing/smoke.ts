@@ -2730,6 +2730,88 @@ function cwdPath(reported: string | null | undefined): string | null {
   }
 }
 
+/** One path with its symlinks resolved, or the path itself when they cannot be.
+ *
+ * `realpathSync`, DELIBERATELY NOT `realpathSync.native`. The JS implementation
+ * resolves symlinks while preserving the caller's spelling of every real
+ * component; `.native` (`realpath(3)`) additionally folds case to the on-disk
+ * truth. On case-insensitive APFS that folding would quietly make a path typed
+ * with a DROPPED SHIFT compare equal to the one intended — which is the exact
+ * silent drop `typeTerminalLine`'s modifier ladder exists to catch (see its
+ * comment: row 9's mkdtemp scratch dir once landed as its lowercase spelling and
+ * the `cd` still succeeded). The rows below must keep failing on that, so the
+ * canonicalisation stops at symlinks and goes no further.
+ *
+ * An unresolvable path comes back verbatim rather than throwing: these run
+ * inside poll predicates, where an exception is a harness crash rather than a
+ * "not yet". `samePlace` keeps a raw-string arm, so an unresolvable pair still
+ * answers honestly. */
+function canonicalPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+/** THE harness's one reading of "this pane is sitting in that directory".
+ *
+ * macOS hands out every temp root behind a SYMLINK, and the two spellings are
+ * not interchangeable in a string compare: `/tmp` → `/private/tmp`, and the
+ * DEFAULT `$TMPDIR` (`/var/folders/<hash>/T`) → `/private/var/folders/<hash>/T`.
+ * A shell announces whichever spelling its own `$PWD` holds, and both are
+ * reachable in one run: zsh's `cd` keeps the LOGICAL path it was handed, while a
+ * freshly spawned shell inherits the PHYSICAL one from `getcwd(3)`. So a pane's
+ * cwd legitimately comes back in either, and the expected side has to be
+ * canonicalised rather than trusted.
+ *
+ * Both spellings are MEASURED, not assumed — one green run reports both at once
+ * (2026-09-13, under `TMPDIR=/tmp` and under the macOS default alike):
+ *   recordedCwd    file://<host>/tmp/vf-smoke-godview-o3xiDp/work
+ *   rehydratedCwd  file://<host>/private/tmp/vf-smoke-godview-o3xiDp/work
+ *
+ * This was a local closure guarding ONE row — the rehydrated read, whose comment
+ * already knew about the pair — while the two readings before it (the `inWorkdir`
+ * wait and the layout's substring search) compared raw strings. Those two held
+ * only because zsh's `cd` keeps the LOGICAL path it was handed, so the typed
+ * line's echo happens to match a logical expectation: a property of the user's
+ * shell, not of the product, and one a `setopt chaselinks` or a `${PWD:A}` in an
+ * integration would take away. Hoisting the closure removes that dependence.
+ *
+ * HONEST SCOPE (QA 2026-09-13, finding 3c): this is NOT the demonstrated cause of
+ * that report's red under the default `$TMPDIR`. That red did not reproduce here
+ * — both roots pass, and they pass with the raw comparison too, because the
+ * recorded reading comes back logical under `/var/folders/…` exactly as it does
+ * under `/tmp`. What is fixed here is a latent asymmetry, not a witnessed
+ * failure. One helper, every cwd row. */
+function samePlace(announced: string | null | undefined, expected: string): boolean {
+  if (typeof announced !== "string" || announced === "") return false;
+  return announced === expected || canonicalPath(announced) === canonicalPath(expected);
+}
+
+// NO sun_path FAIL-FAST ROW HERE, and that is a measured decision rather than an
+// omission (QA 2026-09-13, finding 3c asked for one).
+//
+// 1. The class already fails fast, EARLIER than this file can reach. A data root
+//    whose sockets would blow the ~104-byte `sun_path` ceiling is refused by
+//    `assertDataRootUsable` inside the supervisor (fieldd-supervisor
+//    `supervisor.ts`), which runs while `fielddReady` is awaited — i.e. before
+//    `runSmokeGodview` is even called, before a window, and nowhere near a cwd
+//    row. Measured: `FIELDD_DATA_DIR` at an 83-byte root (termframe → 108) exits
+//    the smoke in ~4s. A guard here could not fire.
+// 2. Canonicalising the root for that budget would be WRONG, which is the
+//    non-obvious half. `realpath` belongs on a cwd COMPARISON (below) and not on
+//    a socket MEASUREMENT: field-native binds the literal string it is handed,
+//    and `sun_path` counts that string. Measured on this machine — a 75-byte
+//    `/tmp` root bound mgmt, meshdata and both cells' termctl/termframe without
+//    complaint, though its `/private/tmp` spelling reaches 110 bytes. Measuring
+//    the realpath would refuse roots that work.
+//
+// What is genuinely missing is one line of PROSE, not one of measurement: the
+// shell's top-level catch prints `VibeField shell failed before logging
+// initialized` and drops the SupervisorError detail, which already names the
+// socket and its byte count. That line lives in main, not in the harness.
+
 /** How the floor governs one session's retention, or undefined if it is gone. */
 const persistenceOf = (
   terminals: TerminalListResult["terminals"],
@@ -3667,9 +3749,12 @@ export async function runSmokeGodview(opts: {
       // not assumed from the deck's active marker: after a reload the marker and
       // the focused textarea can diverge (run 3 of this ladder witnessed it),
       // and the row's subject is "the pane that moved", whichever one that is.
+      // Compared through `samePlace`, never by string: the announcement and the
+      // directory this harness made have two legal spellings on macOS and which
+      // one arrives is the shell's business, not this row's subject.
       const inWorkdir = (terminals: TerminalListResult["terminals"]): string | undefined =>
-        restored.sessionIds.find(
-          (id) => cwdPath(terminals.find((t) => t.sessionId === id)?.cwd) === workdir,
+        restored.sessionIds.find((id) =>
+          samePlace(cwdPath(terminals.find((t) => t.sessionId === id)?.cwd), workdir),
         );
       const withCwd = await untilFloor(
         opts.handle,
@@ -3694,10 +3779,17 @@ export async function runSmokeGodview(opts: {
       // otherwise the restore below would be reading a meta this run never
       // wrote. This wait is the G24 consumption witness: the ONLY route from
       // the floor's cwd to the renderer's layout is the routed summary refresh.
+      // The layout carries the floor's reading VERBATIM, so this substring
+      // search has the same two-spellings problem the rows above do — and no
+      // path to compare, only a serialized blob to look inside. Both spellings
+      // are therefore searched for.
+      const workdirSpellings =
+        canonicalPath(workdir) === workdir ? [workdir] : [workdir, canonicalPath(workdir)];
       const layoutDeadline = Date.now() + 15_000;
       let persisted = false;
       while (Date.now() < layoutDeadline && !persisted) {
-        persisted = ((await readDeckLayout(win)) ?? "").includes(workdir);
+        const layout = (await readDeckLayout(win)) ?? "";
+        persisted = workdirSpellings.some((spelling) => layout.includes(spelling));
         if (!persisted) await sleep(200);
       }
       if (!persisted) throw new Error(`paneMeta never persisted the cwd ${workdir}`);
@@ -3773,21 +3865,14 @@ export async function runSmokeGodview(opts: {
       // over OSC 7 on the FIRST prompt, so if the deck relaunched the pane where
       // it was, the floor reports `workdir` without this harness typing a thing.
       // This closes the row's last gap: no named-pane instrument required.
-      // Compared by REALPATH on both sides (the pre-S3e row's own discipline): a
-      // freshly spawned shell announces the PHYSICAL path (`/private/tmp/…`)
-      // while the typed `cd` above kept the logical one (`/tmp/…`) — same
-      // directory, two spellings.
-      const samePlace = (announced: string | null): boolean => {
-        if (announced === null) return false;
-        try {
-          return realpathSync(announced) === realpathSync(workdir);
-        } catch {
-          return false;
-        }
-      };
+      // Compared by REALPATH on both sides (this row's own long-standing
+      // discipline, now the file's): a freshly spawned shell announces the
+      // PHYSICAL path (`/private/tmp/…`) while the typed `cd` above kept the
+      // logical one (`/tmp/…`) — same directory, two spellings.
       const rehydrated = await untilFloor(
         opts.handle,
-        (terminals) => samePlace(cwdPath(terminals.find((t) => t.sessionId === replacement)?.cwd)),
+        (terminals) =>
+          samePlace(cwdPath(terminals.find((t) => t.sessionId === replacement)?.cwd), workdir),
         `report the relaunched ${replacement} back in ${workdir}`,
         20_000,
       );
