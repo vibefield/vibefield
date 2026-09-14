@@ -1011,34 +1011,60 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
         // the base drops `.subscribe` (product-api.ts) — `agent.delta` here
         (n) => n.method === "agent.delta" && n.params.subId === sub.subId,
       );
-    expect(frames(), "a still board sent a frame").toEqual([]);
+    const payload = (index: number) =>
+      frames()[index]?.params.payload as
+        | { since: number; revision: number; upserts: Record<string, unknown>[]; removed: string[] }
+        | undefined;
+
+    /** Wait until the board STOPS MOVING: two readings of this subscriber's
+     * frame count, a few floors apart, that agree.
+     *
+     * A freshly spawned run keeps arriving for a moment after its birth — the
+     * inventory's cell tag on its pane, its first mirror, its status leaving
+     * the birth state — and under load those facts land after the snapshot and
+     * reach this subscriber as perfectly legitimate deltas. Every stillness
+     * claim below is a claim about a SETTLED board, so each one waits for one
+     * first. (The gate caught this: the file takes ~59 s beside two xcodebuild
+     * lanes, and a birth's own follow-up landed inside the window.) */
+    const settle = async (): Promise<number> =>
+      await poll(async () => {
+        const seen = frames().length;
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        return frames().length === seen ? seen : undefined;
+      }, 30_000);
+
+    const quiet = await settle();
+    // the chain continues from the LAST frame this subscriber holds — settling
+    // may legitimately have moved the board past the snapshot's revision
+    const baseline = quiet === 0 ? sub.snapshot.revision : (payload(quiet - 1)?.revision ?? -1);
+    expect(baseline).toBeGreaterThan(0);
+
+    // a settled board sends NOTHING
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(frames().length, "a settled board sent a frame").toBe(quiet);
 
     // the run's state moves: the scripted PTY's `cat` dies of the interrupt
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
 
-    const delta = await poll(async () => {
-      const [first] = frames();
-      return first === undefined
-        ? undefined
-        : (first.params.payload as {
-            since: number;
-            revision: number;
-            upserts: Record<string, unknown>[];
-            removed: string[];
-          });
-    }, 20_000);
-    // it applies ON TOP of what the snapshot left this client at
-    expect(delta.since).toBe(sub.snapshot.revision);
+    const delta = await poll(async () => payload(quiet), 20_000);
+    // it applies ON TOP of what this client was left at
+    expect(delta.since).toBe(baseline);
     expect(delta.revision).toBeGreaterThan(delta.since);
     const upsert = delta.upserts.find((r) => r["runtimeRunId"] === runId);
     expect(upsert, "the delta did not carry the run that changed").toBeDefined();
     expect(upsert).toMatchObject({ alive: false });
     for (const key of Object.keys(upsert ?? {})) expect(FIELD_ROW_KEYS).toContain(key);
-    // ONE frame for one change: the per-subscriber floor coalesces, and a
-    // still board that follows sends nothing more
-    const after = frames().length;
+
+    // ONE frame for one change: the per-subscriber floor coalesces, so the
+    // whole change rides the frame above and nothing follows it inside the
+    // floor's own width
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    expect(frames().length, "the change did not ride ONE frame").toBe(quiet + 1);
+
+    // and the board, settled again, stays silent
+    const afterExit = await settle();
     await new Promise((resolve) => setTimeout(resolve, 1_000));
-    expect(frames().length, "a still board kept sending frames").toBe(after);
+    expect(frames().length, "a settled board kept sending frames").toBe(afterExit);
   }, 200_000);
 });
 
