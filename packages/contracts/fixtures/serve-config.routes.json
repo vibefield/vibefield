@@ -1,0 +1,13 @@
+{
+  "serveId": "terminal",
+  "name": "terminal",
+  "listenPort": 9422,
+  "target": { "kind": "routes" },
+  "tls": false,
+  "allow": ["james@github"],
+  "routes": [
+    { "prefix": "/cell/01JCELLBOOT0000000000000004", "targetPort": 49152 },
+    { "prefix": "/cell/01JCELLBOOT0000000000000002", "targetPort": 49153 },
+    { "prefix": "/cell/01JCELLBOOT0000000000000005", "targetPort": 49154 }
+  ]
+}

@@ -1,7 +1,14 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PORTS, SOCKETS, type TerminalRouteSnapshot } from "@vibefield/contracts";
+import { fileURLToPath } from "node:url";
+import {
+  PORTS,
+  ServeConfig,
+  SOCKETS,
+  TerminalRouteSnapshot,
+  type TerminalRouteSnapshot as TerminalRouteSnapshotType,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { bootstrap } from "../src/index";
 import type { ServeSpec } from "../src/mesh-client";
@@ -54,8 +61,8 @@ function cell(bootId: string, port: number | undefined, extra: Record<string, un
   };
 }
 
-const snapshot = (revision: number, cells: ReturnType<typeof cell>[]): TerminalRouteSnapshot =>
-  ({ revision, cells }) as TerminalRouteSnapshot;
+const snapshot = (revision: number, cells: ReturnType<typeof cell>[]): TerminalRouteSnapshotType =>
+  ({ revision, cells }) as TerminalRouteSnapshotType;
 
 describe("TM-2 — which readings publish a terminal route, and which refuse", () => {
   const base = {
@@ -153,14 +160,44 @@ describe("TM-2 — which readings publish a terminal route, and which refuse", (
   });
 });
 
+/** A golden fixture from the contracts package, read the way the EL9 law means
+ * it: ONE file, parsed on both sides. */
+const contractsFixture = (name: string): unknown =>
+  JSON.parse(
+    readFileSync(
+      fileURLToPath(new URL(`../../contracts/fixtures/${name}`, import.meta.url)),
+      "utf8",
+    ),
+  );
+
+describe("TM-2 (F-H3) — the EL9 golden IS the spec this driver sends", () => {
+  it("builds serve-config.routes.json out of terminal-routes.doors.json", () => {
+    // The golden is not hand-written beside the code: it is what THIS function
+    // produces from the route snapshot the floor's own fixture pins, so a
+    // change to either side that drifts from the other reds here and in
+    // field-native's `fixture_parity` at the same time.
+    const spec = terminalServeSpec({
+      routes: TerminalRouteSnapshot.parse(contractsFixture("terminal-routes.doors.json")),
+      published: true,
+      linkedLogin: "james@github",
+    });
+    expect(spec).toEqual(contractsFixture("serve-config.routes.json"));
+  });
+
+  it("and the contract can describe it — which is the whole of F-H3", () => {
+    const parsed = ServeConfig.safeParse(contractsFixture("serve-config.routes.json"));
+    expect(parsed.success, JSON.stringify(parsed.success ? "" : parsed.error.issues)).toBe(true);
+  });
+});
+
 describe("TM-2 — the driver declares only on a real change", () => {
   function driver(initial: {
-    routes?: TerminalRouteSnapshot | undefined;
+    routes?: TerminalRouteSnapshotType | undefined;
     published?: boolean;
     linkedLogin?: string | null;
   }) {
     const state: {
-      routes: TerminalRouteSnapshot | undefined;
+      routes: TerminalRouteSnapshotType | undefined;
       published: boolean;
       linkedLogin: string | null;
     } = {

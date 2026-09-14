@@ -5239,6 +5239,12 @@ impl<'de> ::serde::Deserialize<'de> for SemverString {
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"minLength\": 1"]
 #[doc = "    },"]
+#[doc = "    \"routes\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/ServeRoute\""]
+#[doc = "      }"]
+#[doc = "    },"]
 #[doc = "    \"serveId\": {"]
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"minLength\": 1"]
@@ -5277,6 +5283,8 @@ pub struct ServeConfig {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub preview_dir: ::std::option::Option<ServeConfigPreviewDir>,
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub routes: ::std::vec::Vec<ServeRoute>,
     #[serde(
         rename = "serveId",
         default,
@@ -5660,6 +5668,115 @@ impl ::std::convert::TryFrom<::std::string::String> for ServeEntryStatus {
         value.parse()
     }
 }
+#[doc = "`ServeRoute`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"prefix\","]
+#[doc = "    \"targetPort\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"prefix\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"pattern\": \"^\\\\/(?:[\\\\s\\\\S]*[^\\\\/])?$\""]
+#[doc = "    },"]
+#[doc = "    \"targetPort\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"maximum\": 65535.0,"]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ServeRoute {
+    pub prefix: ServeRoutePrefix,
+    #[serde(rename = "targetPort")]
+    pub target_port: ::std::num::NonZeroU64,
+}
+impl ServeRoute {
+    pub fn builder() -> builder::ServeRoute {
+        Default::default()
+    }
+}
+#[doc = "`ServeRoutePrefix`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^\\\\/(?:[\\\\s\\\\S]*[^\\\\/])?$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ServeRoutePrefix(::std::string::String);
+impl ::std::ops::Deref for ServeRoutePrefix {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ServeRoutePrefix> for ::std::string::String {
+    fn from(value: ServeRoutePrefix) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ServeRoutePrefix {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^\\/(?:[\\s\\S]*[^\\/])?$").unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^\\/(?:[\\s\\S]*[^\\/])?$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeRoutePrefix {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeRoutePrefix {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeRoutePrefix {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ServeRoutePrefix {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "`ServeTarget`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -5713,6 +5830,19 @@ impl ::std::convert::TryFrom<::std::string::String> for ServeEntryStatus {
 #[doc = "        }"]
 #[doc = "      },"]
 #[doc = "      \"additionalProperties\": true"]
+#[doc = "    },"]
+#[doc = "    {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"required\": ["]
+#[doc = "        \"kind\""]
+#[doc = "      ],"]
+#[doc = "      \"properties\": {"]
+#[doc = "        \"kind\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"const\": \"routes\""]
+#[doc = "        }"]
+#[doc = "      },"]
+#[doc = "      \"additionalProperties\": true"]
 #[doc = "    }"]
 #[doc = "  ]"]
 #[doc = "}"]
@@ -5732,6 +5862,9 @@ pub enum ServeTarget {
         fallback: ::std::option::Option<::std::string::String>,
         kind: ::std::string::String,
         path: ::std::string::String,
+    },
+    Variant2 {
+        kind: ::std::string::String,
     },
 }
 #[doc = "`ServeTargetVariant0Scheme`"]
@@ -10512,6 +10645,7 @@ pub mod builder {
             ::std::option::Option<super::ServeConfigPreviewDir>,
             ::std::string::String,
         >,
+        routes: ::std::result::Result<::std::vec::Vec<super::ServeRoute>, ::std::string::String>,
         serve_id: ::std::result::Result<
             ::std::option::Option<super::ServeConfigServeId>,
             ::std::string::String,
@@ -10527,6 +10661,7 @@ pub mod builder {
                 name: Err("no value supplied for name".to_string()),
                 path_secret: Ok(Default::default()),
                 preview_dir: Ok(Default::default()),
+                routes: Ok(Default::default()),
                 serve_id: Ok(Default::default()),
                 target: Err("no value supplied for target".to_string()),
                 tls: Ok(Default::default()),
@@ -10584,6 +10719,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for preview_dir: {e}"));
             self
         }
+        pub fn routes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::ServeRoute>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.routes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for routes: {e}"));
+            self
+        }
         pub fn serve_id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<super::ServeConfigServeId>>,
@@ -10626,6 +10771,7 @@ pub mod builder {
                 name: value.name?,
                 path_secret: value.path_secret?,
                 preview_dir: value.preview_dir?,
+                routes: value.routes?,
                 serve_id: value.serve_id?,
                 target: value.target?,
                 tls: value.tls?,
@@ -10640,6 +10786,7 @@ pub mod builder {
                 name: Ok(value.name),
                 path_secret: Ok(value.path_secret),
                 preview_dir: Ok(value.preview_dir),
+                routes: Ok(value.routes),
                 serve_id: Ok(value.serve_id),
                 target: Ok(value.target),
                 tls: Ok(value.tls),
@@ -10801,6 +10948,60 @@ pub mod builder {
                 target: Ok(value.target),
                 tls: Ok(value.tls),
                 url: Ok(value.url),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct ServeRoute {
+        prefix: ::std::result::Result<super::ServeRoutePrefix, ::std::string::String>,
+        target_port: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
+    }
+    impl ::std::default::Default for ServeRoute {
+        fn default() -> Self {
+            Self {
+                prefix: Err("no value supplied for prefix".to_string()),
+                target_port: Err("no value supplied for target_port".to_string()),
+            }
+        }
+    }
+    impl ServeRoute {
+        pub fn prefix<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::ServeRoutePrefix>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.prefix = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for prefix: {e}"));
+            self
+        }
+        pub fn target_port<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.target_port = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for target_port: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ServeRoute> for super::ServeRoute {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ServeRoute,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                prefix: value.prefix?,
+                target_port: value.target_port?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ServeRoute> for ServeRoute {
+        fn from(value: super::ServeRoute) -> Self {
+            Self {
+                prefix: Ok(value.prefix),
+                target_port: Ok(value.target_port),
             }
         }
     }

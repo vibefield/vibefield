@@ -654,8 +654,40 @@
             "path"
           ],
           "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "routes"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": true
         }
       ]
+    },
+    "ServeRoute": {
+      "type": "object",
+      "properties": {
+        "prefix": {
+          "type": "string",
+          "pattern": "^\\/(?:[\\s\\S]*[^\\/])?$"
+        },
+        "targetPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "prefix",
+        "targetPort"
+      ],
+      "additionalProperties": true
     },
     "ServeConfig": {
       "type": "object",
@@ -683,6 +715,12 @@
         },
         "tls": {
           "type": "boolean"
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ServeRoute"
+          }
         },
         "previewDir": {
           "type": "string",

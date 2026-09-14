@@ -246,6 +246,39 @@ export const StoreSnapshot = z
   .passthrough();
 export type StoreSnapshot = z.infer<typeof StoreSnapshot>;
 
+/** TM-2 (TM-D2) — a route prefix as the floor's `parse_cell_routes` admits it
+ * (`field-native/src/mgmt/mesh.rs`): ABSOLUTE, and with NO trailing slash
+ * unless the prefix is the root itself.
+ *
+ * The trailing-slash rule is a measurement, not a preference (TM-2b,
+ * 2026-09-14, sidecar-slim at the pinned truffle 0.7.12): `/cell/<boot>/` never
+ * matched `/cell/<boot>/control` at all, while `/cell/<boot>` matched it and
+ * handed the backend `/control`, which is the exact path a cell door requires.
+ * The law and its evidence live on `remoteCellRoutePrefix`; this is the same
+ * rule stated where the WIRE is described, so a spec that would be refused by
+ * the floor is refused before it is sent. */
+export const SERVE_ROUTE_PREFIX_PATTERN = "^\\/(?:[\\s\\S]*[^\\/])?$";
+
+/** TM-2 (TM-D2) — one declared route on a `routes` serve: a path prefix onto
+ * ONE loopback port, and DELIBERATELY nothing else.
+ *
+ * The narrowness is the EL7 argument, and it is the floor's: `parse_cell_routes`
+ * admits a prefix and a port and refuses everything a truffle `ProxyRoute` can
+ * otherwise carry — a static dir, a non-loopback target, a fallback, or a
+ * per-route allow-list that would override the serve's login gate. `stripPrefix`
+ * is not a field either: the floor sets it TRUE for every one of these, because
+ * a cell's door matches `/control` and `/frames` exactly and answers anything
+ * else with `HelloMalformed`. So the worst a compromised fieldd can publish
+ * through this door is another loopback port on a machine it already owns. */
+export const ServeRoute = z
+  .object({
+    prefix: z.string().regex(new RegExp(SERVE_ROUTE_PREFIX_PATTERN)),
+    /** the cell's loopback T1 door; the floor composes `http://127.0.0.1:<port>` */
+    targetPort: z.number().int().min(1).max(65535),
+  })
+  .passthrough();
+export type ServeRoute = z.infer<typeof ServeRoute>;
+
 export const ServeTarget = z.discriminatedUnion("kind", [
   z
     .object({
@@ -259,6 +292,23 @@ export const ServeTarget = z.discriminatedUnion("kind", [
       kind: z.literal("dir"),
       path: z.string(),
       fallback: z.literal("/index.html").optional(),
+    })
+    .passthrough(),
+  /** TM-2 (TM-D2) — a serve whose ENTIRE surface is `ServeConfig.routes`, with
+   * no implicit root route: the terminal-cell listener. The `port` arm mounts a
+   * catch-all `/` at its target whenever a listener port is named, and a
+   * catch-all on THIS listener would publish whatever single port the shape
+   * happened to carry — fieldd's own control port, in the natural spelling — so
+   * an unmatched path here reaches no backend at all.
+   *
+   * ADDED 2026-09-14 (F-H3): fieldd has been sending this kind and the floor has
+   * been implementing it since TM-2, while the contract described two arms. The
+   * typify'd Rust twin therefore could not deserialize the spec the daemon
+   * really sends, and `serve-config.valid.json` pinned a shape nothing on this
+   * seam uses — an EL9 golden blind to the live wire. */
+  z
+    .object({
+      kind: z.literal("routes"),
     })
     .passthrough(),
 ]);
@@ -278,6 +328,13 @@ export const ServeConfig = z
     /** false = plain HTTP inside WireGuard (no MagicDNS-cert dependency —
      * the product-API serve's choice). Default true upstream. v2-sidecar. */
     tls: z.boolean().optional(),
+    /** TM-2 — the declared path routes. ONLY meaningful for `target.kind:
+     * "routes"`, where they are the serve's whole surface; every other kind
+     * ignores them. The floor REFUSES an empty list on a routes serve, because
+     * truffle reads `routes.is_empty()` as "use the single-target shape" and
+     * would silently fall back to a default target — a caller with nothing to
+     * publish removes the serve instead, which is what fieldd's driver does. */
+    routes: z.array(ServeRoute).optional(),
     /** Optional app-owned static preview root mounted ahead of the source route. */
     previewDir: z.string().min(1).optional(),
     /** C3 provenance proof: when set, the serve is a single route

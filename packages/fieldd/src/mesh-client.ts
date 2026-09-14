@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { ARTIFACT_SERVE_PREFIX, ServeStatus } from "@vibefield/contracts";
+import { ARTIFACT_SERVE_PREFIX, ServeConfig, ServeStatus } from "@vibefield/contracts";
 import type { NativeLink } from "./native-link";
 import { RpcCallError } from "./native-link";
 
@@ -236,7 +236,10 @@ export class MeshClient extends EventEmitter {
           continue; // keep runtime — the node's live status is the truth
         }
         try {
-          const added = (await this.link.request("native.mesh.serve.add", spec)) as {
+          const added = (await this.link.request(
+            "native.mesh.serve.add",
+            contractValidSpec(spec),
+          )) as {
             url?: string;
           };
           this.states.set(serveId, {
@@ -436,6 +439,31 @@ function coerceRuntimeEntry(raw: unknown): ({ name: string } & Partial<RuntimeEn
   if (typeof o["url"] === "string") out.url = o["url"];
   if (typeof o["error"] === "string") out.error = o["error"];
   return out;
+}
+
+/** EL9 / contracts-first (F-H3, 2026-09-14) — the spec as THE CONTRACT
+ * describes it, or a throw before a byte reaches the node.
+ *
+ * `ServeConfig` is what the floor's mgmt handler and the typify'd Rust twin are
+ * both built from, and this client used to forward whatever a caller handed it.
+ * That is how the terminal listener's `target: {kind: "routes"}` and its
+ * `routes` array shipped for a whole slice while the contract still described
+ * two target arms and no routes at all: the wire moved and the golden fixture
+ * kept pinning a shape nothing on this seam sent. A parse here is what makes
+ * that impossible to repeat — a spec the contract cannot describe never
+ * reaches the wire, and lands in the serve's `error` state with the reason
+ * instead of silently becoming a live proxy.
+ *
+ * The SPEC is returned, never zod's output: this VALIDATES, it does not
+ * reshape. (The schema is `.passthrough()`, so a caller's unknown fields ride
+ * along exactly as the tolerant-reader law says they must.) */
+function contractValidSpec(spec: ServeSpec): ServeSpec {
+  const parsed = ServeConfig.safeParse(spec);
+  if (parsed.success) return spec;
+  const why = parsed.error.issues
+    .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+    .join("; ");
+  throw new Error(`serve "${serveKey(spec)}" does not match ServeConfig (${why})`);
 }
 
 function serveKey(spec: Pick<ServeSpec, "serveId" | "name">): string {

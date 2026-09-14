@@ -72,6 +72,7 @@ import {
   PeerInfo,
   ServeConfig,
   ServeEntry,
+  ServeRoute,
   StoreSnapshot,
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
@@ -313,6 +314,74 @@ describe("TM-1 (MF-1l) — the hello says whether the terminal doors are on the 
     // as `true` on the way in.
     expect(HelloAck.safeParse({ ...floor, terminalMesh: "yes" }).success).toBe(false);
     expect(HelloAck.safeParse({ ...floor, terminalMesh: 1 }).success).toBe(false);
+  });
+});
+
+describe("TM-2 (F-H3) — the mgmt wire's THIRD serve target, and the routes it carries", () => {
+  // The contract described `port` and `dir` while fieldd had been sending
+  // `routes` and field-native had been implementing it since TM-2. These rows
+  // are the floor's own admission rules (`parse_cell_routes`,
+  // field-native/src/mgmt/mesh.rs), restated where the wire is described, so a
+  // spec the floor would refuse is refused before it is sent.
+  const base = {
+    serveId: "terminal",
+    name: "terminal",
+    listenPort: 9422,
+    target: { kind: "routes" as const },
+    tls: false,
+    allow: ["james@github"],
+  };
+
+  it("admits the routes target and its prefix/port pairs", () => {
+    const parsed = ServeConfig.safeParse({
+      ...base,
+      routes: [{ prefix: "/cell/01JCELLBOOT0000000000000004", targetPort: 49152 }],
+    });
+    expect(parsed.success, JSON.stringify(parsed.success ? "" : parsed.error.issues)).toBe(true);
+  });
+
+  it("refuses a relative prefix and a TRAILING SLASH, which never matches at all", () => {
+    // measured against the shipped sidecar (TM-2b): `/cell/<boot>/` did not
+    // take `/cell/<boot>/control`, and `stripPrefix` then has nothing to act on
+    expect(ServeRoute.safeParse({ prefix: "cell/x", targetPort: 49152 }).success).toBe(false);
+    expect(ServeRoute.safeParse({ prefix: "/cell/x/", targetPort: 49152 }).success).toBe(false);
+    expect(ServeRoute.safeParse({ prefix: "", targetPort: 49152 }).success).toBe(false);
+    // the root itself has no trailing slash to refuse, exactly as the floor reads it
+    expect(ServeRoute.safeParse({ prefix: "/", targetPort: 49152 }).success).toBe(true);
+    expect(ServeRoute.safeParse({ prefix: "/a//b", targetPort: 49152 }).success).toBe(true);
+  });
+
+  it("refuses a zero or out-of-range target port", () => {
+    // the floor does `u16::try_from` and then refuses 0 — a route to port 0 is
+    // a route to nothing
+    expect(ServeRoute.safeParse({ prefix: "/a", targetPort: 0 }).success).toBe(false);
+    expect(ServeRoute.safeParse({ prefix: "/a", targetPort: 65_536 }).success).toBe(false);
+    expect(ServeRoute.safeParse({ prefix: "/a", targetPort: 1.5 }).success).toBe(false);
+  });
+
+  it("carries NOTHING else per route — no dir, no fallback, no per-route allow", () => {
+    // the narrowness IS the EL7 argument: the worst a compromised fieldd can
+    // publish here is another loopback port on a machine it already owns. The
+    // tolerant-reader law keeps unknown keys rather than throwing, so what is
+    // pinned is that they are not PART of the shape a reader may rely on.
+    const parsed = ServeRoute.parse({
+      prefix: "/a",
+      targetPort: 49152,
+      dir: "/etc",
+      allow: ["*"],
+    }) as Record<string, unknown>;
+    expect(Object.keys(ServeRoute.shape)).toEqual(["prefix", "targetPort"]);
+    expect(parsed["dir"], "kept, per P3 — but no reader is entitled to it").toBe("/etc");
+  });
+
+  it("leaves the other two targets exactly as they were", () => {
+    expect(
+      ServeConfig.safeParse({ name: "product", target: { kind: "port", port: 3000 } }).success,
+    ).toBe(true);
+    expect(ServeConfig.safeParse({ name: "a", target: { kind: "dir", path: "/x" } }).success).toBe(
+      true,
+    );
+    expect(ServeConfig.safeParse({ name: "a", target: { kind: "nope" } }).success).toBe(false);
   });
 });
 

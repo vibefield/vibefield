@@ -87,6 +87,7 @@ import {
   PeerInfo,
   ServeConfig,
   ServeEntry,
+  ServeRoute,
   ServeTarget,
   StoreSnapshot,
   UnitHealth,
@@ -141,6 +142,9 @@ const BASE_SHARED = {
   MeshRetireResult,
   StoreSnapshot,
   ServeTarget,
+  // TM-2 (F-H3) — the routes serve's per-route shape, named for the same
+  // typify reason as everything else here.
+  ServeRoute,
   ServeConfig,
   ServeEntry,
   MeshLaneClass,

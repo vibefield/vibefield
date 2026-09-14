@@ -66,6 +66,57 @@ describe("MeshClient", () => {
     expect(mock.meshServes.has("site")).toBe(false);
   });
 
+  it("declares the TERMINAL listener's routes shape, which the contract now describes (F-H3)", async () => {
+    const { mock, mesh } = await setup();
+    const states = await mesh.setServes([
+      {
+        serveId: "terminal",
+        name: "terminal",
+        listenPort: PORTS.TERMINAL_CELLS_SERVE,
+        target: { kind: "routes" },
+        tls: false,
+        allow: ["james@github"],
+        routes: [{ prefix: "/cell/01JCELLBOOT0000000000000004", targetPort: 49152 }],
+      },
+    ]);
+    expect(states[0]!.status).toBe("active");
+    expect(mock.meshAddParams.at(-1)?.["routes"]).toEqual([
+      { prefix: "/cell/01JCELLBOOT0000000000000004", targetPort: 49152 },
+    ]);
+  });
+
+  it("REFUSES to send a spec the contract cannot describe, and says why (F-H3)", async () => {
+    // The guard exists because the wire once moved without the contract. A
+    // shape ServeConfig cannot describe never reaches the node at all: it lands
+    // in the serve's own error state with the parse reason, where a reader can
+    // see it, rather than becoming a live proxy nothing has a schema for.
+    const { mock, mesh } = await setup();
+    const states = await mesh.setServes([
+      { name: "bogus", target: { kind: "webhook" } as never },
+      { name: "api", target: { kind: "port", port: 3000 } },
+    ]);
+    const bogus = states.find((x) => x.name === "bogus") as ServeState;
+    expect(bogus.status).toBe("error");
+    expect(bogus.error).toContain("ServeConfig");
+    expect(mock.meshServes.has("bogus"), "nothing was sent").toBe(false);
+    // …and the well-formed serve beside it still landed
+    expect(states.find((x) => x.name === "api")?.status).toBe("active");
+
+    // the same wall on the routes shape itself: a trailing slash never matches
+    // in the shipped sidecar, so it is refused here rather than published dead
+    const bad = await mesh.setServes([
+      {
+        serveId: "terminal",
+        name: "terminal",
+        listenPort: PORTS.TERMINAL_CELLS_SERVE,
+        target: { kind: "routes" },
+        routes: [{ prefix: "/cell/x/", targetPort: 49152 }],
+      },
+    ]);
+    expect(bad[0]!.status).toBe("error");
+    expect(mock.meshServes.has("terminal")).toBe(false);
+  });
+
   it("re-serving is re-creating: a fresh node gets the desired set replayed", async () => {
     const { mock, mesh } = await setup();
     mock.clearServesOnDisconnect = true; // serves live in the node; node dies with the conn

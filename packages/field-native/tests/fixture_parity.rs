@@ -108,6 +108,15 @@ fn mgmt_mesh_fixtures() {
     roundtrip::<PeerInfo>("peer-info.valid.json", true);
     roundtrip::<StoreSnapshot>("store-snapshot.valid.json", true);
     roundtrip::<ServeConfig>("serve-config.valid.json", true);
+    // TM-2 (F-H3, 2026-09-14) — THE SHAPE FIELDD REALLY SENDS for the terminal
+    // cell listener: `target.kind: "routes"` plus one route per live cell. The
+    // contract described two target arms while this one had been on the wire
+    // and implemented by this crate's own mgmt handler since TM-2, so the twin
+    // above could not deserialize it and this golden did not exist. The
+    // fixture is generated from `terminal-routes.doors.json` by fieldd's own
+    // `terminalServeSpec`, and its fieldd-side test asserts exactly that — so
+    // the golden and the wire cannot drift apart again.
+    roundtrip::<ServeConfig>("serve-config.routes.json", true);
     roundtrip::<ServeEntry>("serve-entry.valid.json", true);
 }
 
