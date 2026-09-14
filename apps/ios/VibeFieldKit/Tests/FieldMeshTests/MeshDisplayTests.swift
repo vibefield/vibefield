@@ -26,6 +26,33 @@ import Testing
     #expect(MeshDisplay.chipLabel(state: .failed("x"), peerCount: 0) == "MESH · FAILED")
   }
 
+  /// IOS-4e — the field's own leg, carried as the chip's second token. The
+  /// mesh's half must survive the join exactly: a chip that reworded itself
+  /// because a door was down would be the link speaking for the mesh.
+  @Test func theLinkRidesAsTheChipsSecondToken() {
+    #expect(MeshDisplay.chipLabel(state: .up, peerCount: 2, linkToken: "DOOR") == "MESH · 2 · DOOR")
+    #expect(
+      MeshDisplay.chipLabel(state: .up, peerCount: 2, linkToken: "NO DOOR")
+        == "MESH · 2 · NO DOOR")
+    #expect(MeshDisplay.chipLabel(state: .up, peerCount: 0, linkToken: "…") == "MESH · 0 · …")
+    // A mesh that is not up still says its own word first — the two legs are
+    // different facts and neither is allowed to stand in for the other.
+    #expect(MeshDisplay.chipLabel(state: .off, peerCount: 0, linkToken: "DOOR") == "MESH · OFF · DOOR")
+  }
+
+  /// Silence is the healthy answer, and it has to be the DEFAULT: every caller
+  /// that knows nothing about doors is the chip exactly as IOS-2 drew it.
+  @Test func noLinkTokenLeavesTheChipAsItWas() {
+    for state in [
+      MeshModel.State.off, .starting, .needsLogin, .needsMachineAuth, .up, .stopping,
+      .failed("x"),
+    ] {
+      #expect(
+        MeshDisplay.chipLabel(state: state, peerCount: 3, linkToken: nil)
+          == MeshDisplay.chipLabel(state: state, peerCount: 3))
+    }
+  }
+
   @Test func statusLinesNeverOverstate() {
     #expect(
       MeshDisplay.statusLine(state: .off, peerCount: 0)

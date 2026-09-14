@@ -4,21 +4,43 @@ import SwiftUI
 /// The mesh chip: a quiet top-corner fact the bubbles physically flow
 /// around. Attention is contrast — when the mesh needs the user (sign-in),
 /// the chip inverts; otherwise it stays a muted instrument marking.
+///
+/// Since IOS-4e it carries the FIELD's leg as a second token (`linkToken`,
+/// from `MeshDisplay.linkLabel(desktops:)`), because the two facts are one
+/// subject: whether this phone can reach the desktops, and whether the doors
+/// behind that reach have anything to say. A refused door demands the user as
+/// much as a sign-in does, so `linkWantsAttention` inverts the same chip
+/// rather than lighting a second one — contrast is the corner's only way of
+/// saying "something needs you", and two things saying it at once would be
+/// two ways.
+///
+/// Both are OPTIONAL and default to silence: a caller with no link is the
+/// chip exactly as IOS-2 drew it.
 public struct MeshChip: View {
   private let state: MeshModel.State
   private let peerCount: Int
+  private let linkToken: String?
+  private let linkWantsAttention: Bool
   private let onTap: () -> Void
 
-  public init(state: MeshModel.State, peerCount: Int, onTap: @escaping () -> Void) {
+  public init(
+    state: MeshModel.State,
+    peerCount: Int,
+    linkToken: String? = nil,
+    linkWantsAttention: Bool = false,
+    onTap: @escaping () -> Void
+  ) {
     self.state = state
     self.peerCount = peerCount
+    self.linkToken = linkToken
+    self.linkWantsAttention = linkWantsAttention
     self.onTap = onTap
   }
 
   public var body: some View {
-    let wantsAttention = MeshDisplay.chipWantsAttention(state: state)
+    let wantsAttention = MeshDisplay.chipWantsAttention(state: state) || linkWantsAttention
     Button(action: onTap) {
-      Text(MeshDisplay.chipLabel(state: state, peerCount: peerCount))
+      Text(MeshDisplay.chipLabel(state: state, peerCount: peerCount, linkToken: linkToken))
         .font(FieldType.mono(9, .heavy))
         .tracking(FieldType.tracking(0.08, of: 9))
         .monospacedDigit()

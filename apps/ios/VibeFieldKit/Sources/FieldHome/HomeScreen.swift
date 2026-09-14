@@ -208,25 +208,21 @@ public struct HomeScreen: View {
   @ViewBuilder
   private var chrome: some View {
     // The mesh's corner, and under it the field's own leg (IOS-4e). The chip
-    // says whether this phone is on the mesh; the token beside it says whether
-    // the doors behind that mesh have anything to report; the line names the
-    // desktop the token is about. Each is its own physics obstacle, so the
-    // swarm nestles around the words rather than under them.
+    // carries both tokens because they are one subject — whether this phone
+    // reaches the desktops, and whether the doors behind that reach have
+    // anything to say — and the line under it names the desktop the second
+    // token is about. Both are physics obstacles, so the swarm nestles around
+    // the words rather than under them.
     VStack(alignment: .leading, spacing: 6) {
-      HStack(alignment: .top, spacing: 6) {
-        MeshChip(state: mesh.state, peerCount: mesh.peers.count) {
-          meshSheetOpen = true
-        }
-        .swarmObstacle()
-
-        if let token = linkFace.token {
-          FieldChip(label: token, wantsAttention: linkFace.wantsAttention)
-            // The line below says the same fact in words, and a screen reader
-            // that read both would hear the state twice.
-            .accessibilityHidden(true)
-            .swarmObstacle()
-        }
+      MeshChip(
+        state: mesh.state,
+        peerCount: mesh.peers.count,
+        linkToken: linkFace.token,
+        linkWantsAttention: linkFace.wantsAttention
+      ) {
+        meshSheetOpen = true
       }
+      .swarmObstacle()
 
       if let line = linkFace.line {
         LinkLine(text: line, wantsAttention: linkFace.wantsAttention)

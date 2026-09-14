@@ -2,7 +2,21 @@
 /// letterspaced, and never overstating (EL5). Pinned by tests.
 public enum MeshDisplay {
   /// The chip's word. Uppercase eyebrow style; the count is the only number.
-  public static func chipLabel(state: MeshModel.State, peerCount: Int) -> String {
+  ///
+  /// `linkToken` is the FIELD's own word — `linkLabel(desktops:)` — carried as
+  /// the chip's second token where the doors have earned one, on the separator
+  /// the mesh's own two halves already use. One marking that reads
+  /// "MESH · 2 · DOOR" is one instrument reading; two chips side by side are
+  /// two, and the corner has one subject.
+  public static func chipLabel(
+    state: MeshModel.State, peerCount: Int, linkToken: String? = nil
+  ) -> String {
+    let mesh = meshToken(state: state, peerCount: peerCount)
+    guard let linkToken else { return mesh }
+    return "\(mesh) · \(linkToken)"
+  }
+
+  private static func meshToken(state: MeshModel.State, peerCount: Int) -> String {
     switch state {
     case .off: "MESH · OFF"
     case .starting: "MESH · …"
