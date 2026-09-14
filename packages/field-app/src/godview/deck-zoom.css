@@ -114,60 +114,6 @@
   inset: 0;
 }
 
-/* ── the affordance (DESIGN.md §5 overlay-chip tier — the kill chip's sibling) ─
-   Same tier, same restraint: quiet until the pointer or the keyboard asks for
-   it. It names the ACTIVE pane, because that is the pane every workspace
-   hotkey already acts on and the one this deck's chrome has always spoken for. */
-
-.vf-godview-zoom {
-  position: absolute;
-  top: 8px;
-  /* The LEFT corner, with the kill chip alone on the right. Not a layout
-     accident: a benign view control and the deck's one irreversible act should
-     never sit a few pixels apart, and separating them means neither chip's
-     width can ever grow into the other's (the kill chip's does — it becomes a
-     question and two buttons when armed). */
-  left: 8px;
-  z-index: 8;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 5px;
-  border: 1px solid var(--panel-border);
-  border-radius: 5px;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--panel-bg) 90%, transparent);
-  backdrop-filter: blur(8px);
-  opacity: 0.45;
-  transition: opacity 120ms ease;
-}
-
-.vf-godview-zoom:hover,
-.vf-godview-zoom:focus-within {
-  opacity: 1;
-}
-
-.vf-godview-zoom-action {
-  padding: 2px 5px;
-  border: 0;
-  border-radius: 3px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 8px;
-  cursor: pointer;
-}
-
-.vf-godview-zoom-action:hover {
-  color: var(--text-main);
-  background: var(--control-hover-bg);
-}
-
-.vf-godview-zoom-hint {
-  color: var(--text-faint);
-  font-size: 8px;
-  font-variant-numeric: tabular-nums;
-}
-
 /* M6 — non-negotiable. The duration halves in `deck-zoom.ts` (the commit's
    deadline has to agree with the curve, so one number owns both); this makes
    the curve itself stop overshooting and travelling. */

@@ -206,8 +206,8 @@ export function AccountSection({
   );
 }
 
-/** How the unlink affordance reads. Two steps, never one, and for the same
- * reason the deck's kill chip has them (KillActivePane): the act is
+/** How the unlink affordance reads. Two steps, never one, for the reason the
+ * deck's retired kill chip had them (GT-3, gone at GT-6a): the act is
  * irreversible in the one way that matters — a relink is a NEW node identity,
  * never the old one back. */
 type UnlinkStep =

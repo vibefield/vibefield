@@ -1,26 +1,24 @@
-import {
-  type ReactElement,
-  type RefObject,
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  browserZoomHost,
-  DeckZoomController,
-  type DeckZoomState,
-  zoomLayoutApplied,
-} from "./deck-zoom";
+import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { browserZoomHost, DeckZoomController, type DeckZoomState } from "./deck-zoom";
 
-// The zoom affordance, and the chord that has to be taken away from upstream.
+// The zoom GESTURE — the chord that has to be taken away from upstream, and the
+// controller's phase projected for whoever draws the affordance.
 //
-// It lives out here rather than on the pane for the same reason `KillActivePane`
-// does, and the reason has not improved: ghosttea's `decoratePane` seam spends
-// its whole vocabulary on a label and an accent colour, so there is no per-pane
-// action slot to put a control in. So this is an overlay chip over the deck
-// (DESIGN.md §5 overlay-chip tier) naming the ACTIVE pane — the pane every
-// workspace hotkey already acts on.
+// It used to ship its own affordance too: an overlay chip over the deck naming
+// the active pane, put there because ghosttea's `decoratePane` seam spends its
+// whole vocabulary on a label and an accent colour, so there was no per-pane
+// action slot to put a control in. GT-6 opened one — the record's frame (§07) is
+// portalled INTO each pane and carries the fullscreen verb — so at GT-6a the
+// chip was retired and this module kept only what a verb cannot own: a window
+// listener that outranks the library's, and the phase the frame reads back.
+//
+// KNOWN GAP, upstream's to close (named at GT-6a): the package draws the
+// fullscreen verb only where the frame has a stop-or-resume verb to draw it
+// beside (`views/src/deck/PaneFrame.tsx` — `showZoom = model.verb !== undefined
+// && verbs.zoom !== undefined`, and `pane-frame.ts:23` gives a shell no verb),
+// so a BARE SHELL pane now has no pointer path to zoom and only the chord. The
+// record's own spec table says the verbs draw "the ink at 70% for a bare shell",
+// so this is the package catching up to §07, not a VibeField decision to undo.
 
 /** The chord ghosttea's own default catalogue binds `toggle_split_zoom` to
  * (`bindings/fixtures/keybinds-macos-default.json:296` — `super+shift+enter`;
@@ -75,7 +73,7 @@ export function useDeckZoom(
   const publish = useRef(onState);
   publish.current = onState;
   // The controller is a mutable object living outside the tree, so the phase it
-  // is in has to be mirrored into state for the chip to re-label itself. The
+  // is in has to be mirrored into state for the frame to re-label its verb. The
   // controller stays the source of truth: this is a projection of it, written
   // only from its own notification.
   const [state, setState] = useState<DeckZoomState>({ phase: "idle", paneId: null, commits: 0 });
@@ -121,39 +119,4 @@ export function useDeckZoom(
   useLayoutEffect(() => () => zoom.reset(), [zoom]);
 
   return { state, toggle, reset };
-}
-
-/**
- * The chip. Two words and a chord, in the deck's voice (DESIGN.md §9).
- *
- * It reads `phase` rather than a boolean so the label is honest DURING the
- * gesture: a pane that is on its way out already says what it is becoming,
- * which is what stops a second press from reading as a no-op.
- */
-export function ZoomActivePane({
-  phase,
-  paneId,
-  onToggle,
-}: {
-  phase: DeckZoomState["phase"];
-  paneId: string | undefined;
-  onToggle: (paneId: string) => void;
-}): ReactElement | null {
-  if (paneId === undefined) return null;
-  const zoomed = zoomLayoutApplied(phase);
-  return (
-    <div className="vf-godview-zoom" data-zoom-state={phase}>
-      <button
-        type="button"
-        className="vf-godview-zoom-action"
-        onClick={() => onToggle(paneId)}
-        aria-pressed={zoomed}
-      >
-        {zoomed ? "restore pane" : "zoom pane"}
-      </button>
-      <span className="vf-godview-zoom-hint" aria-hidden="true">
-        ⇧⌘⏎
-      </span>
-    </div>
-  );
 }

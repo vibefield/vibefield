@@ -18,7 +18,6 @@ import {
   savedPaneSessionIds,
 } from "../src/godview/deck-restore";
 import { GodviewToggle } from "../src/godview/GodviewToggle";
-import { KillActivePane } from "../src/godview/KillActivePane";
 import {
   isGodviewOpen,
   requestGodviewToggle,
@@ -246,73 +245,16 @@ describe("the device host, learned rather than asked for (GT-5c)", () => {
   });
 });
 
-// ---- the kill affordance (GT-3, GT-D5) ---------------------------------------
-
-describe("the kill affordance", () => {
-  function mountKill(session: DeckSession, request: (m: string, p: unknown) => Promise<unknown>) {
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
-    act(() => root?.render(<KillActivePane session={session} fieldd={{ request } as never} />));
-    return host;
-  }
-
-  const buttonNamed = (element: HTMLElement, text: string): HTMLButtonElement | undefined =>
-    [...element.querySelectorAll("button")].find((button) => button.textContent === text);
-
-  it("never kills on one click — the question comes first", () => {
-    const calls: string[] = [];
-    const element = mountKill(session({ id: "live-1" }), (method) => {
-      calls.push(method);
-      return Promise.resolve({ terminated: true });
-    });
-    act(() => buttonNamed(element, "kill session")?.click());
-    expect(calls, "arming is not killing").toEqual([]);
-    expect(element.textContent).toContain("end this session and its processes?");
-  });
-
-  it("kills the named session through fieldd's audited door on confirm", async () => {
-    // Through `terminal.terminate` and not the workspace's own runtime, even
-    // though the runtime has one: ending a user's processes belongs on the
-    // record with an actor beside it.
-    const calls: Array<{ method: string; params: unknown }> = [];
-    const element = mountKill(session({ id: "live-1" }), (method, params) => {
-      calls.push({ method, params });
-      return Promise.resolve({ terminated: true });
-    });
-    act(() => buttonNamed(element, "kill session")?.click());
-    await act(async () => buttonNamed(element, "kill")?.click());
-    expect(calls).toEqual([{ method: "terminal.terminate", params: { sessionId: "live-1" } }]);
-  });
-
-  it("cancel withdraws the question and kills nothing", () => {
-    const calls: string[] = [];
-    const element = mountKill(session({ id: "live-1" }), (method) => {
-      calls.push(method);
-      return Promise.resolve({ terminated: true });
-    });
-    act(() => buttonNamed(element, "kill session")?.click());
-    act(() => buttonNamed(element, "cancel")?.click());
-    expect(calls).toEqual([]);
-    expect(buttonNamed(element, "kill session")).toBeDefined();
-  });
-
-  it("offers nothing for a pane whose session already ended", () => {
-    const element = mountKill(session({ id: "gone", exited: true, exitCode: 0 }), () =>
-      Promise.reject(new Error("must not be called")),
-    );
-    expect(element.textContent).toBe("");
-  });
-
-  it("states a refusal verbatim rather than pretending it worked", async () => {
-    const element = mountKill(session({ id: "live-1" }), () =>
-      Promise.reject(new Error("the terminal floor is not available")),
-    );
-    act(() => buttonNamed(element, "kill session")?.click());
-    await act(async () => buttonNamed(element, "kill")?.click());
-    expect(element.textContent).toContain("the terminal floor is not available");
-  });
-});
+// ---- the kill affordance (GT-3, GT-D5), RETIRED at GT-6a -------------------
+//
+// Five rows lived here: the two-step arm, the audited `terminal.terminate`,
+// the cancel, the silence for an already-exited session, and the verbatim
+// refusal. They went with the chip the record's frame displaced (§07 names a
+// pane's whole chrome and no kill is in it). They are not rewritten against
+// another surface because there is no other surface: the monitor's actions
+// are `select` and `createAt` alone, and ghosttea's own pane close detaches.
+// If an end-a-session gesture comes back, these rows are in this file's
+// history at 522065df and should come back with it.
 
 // ---- the overlay state -------------------------------------------------------
 

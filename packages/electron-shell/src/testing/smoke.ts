@@ -2452,6 +2452,50 @@ async function clickDeckButton(win: BrowserWindow, label: string): Promise<void>
 }
 
 /**
+ * Click a verb on the record's PANE FRAME, by its accessible name (GT-6a).
+ *
+ * A separate helper from `clickDeckButton` because the frame's verbs are
+ * glyphs: they carry no text to match on, and their whole vocabulary is the
+ * `aria-label` the package writes (`views/src/deck/PaneFrame.tsx`). Pointer-only
+ * by design — the record shows the verbs under the pointer — which a DOM
+ * `click()` reaches anyway, the same way `clickDeckButton` reaches a chip that
+ * CSS has faded to 0.45 opacity.
+ *
+ * A failure here says what the DOM DID hold, because the commonest cause is not
+ * a missed render: it is a pane the package draws no verbs on at all (a bare
+ * shell, where `model.verb` is undefined), and a bare "not found" would send
+ * the reader hunting for a timing bug that is not there.
+ */
+async function clickPaneFrameVerb(win: BrowserWindow, ariaLabel: string): Promise<void> {
+  const deadline = Date.now() + 20_000;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const clicked = (await win.webContents.executeJavaScript(
+      `(() => {
+        const verbs = [...document.querySelectorAll(".vf-pane-frame .vf-pane-verb")];
+        const verb = verbs.find(
+          (candidate) => candidate.getAttribute("aria-label") === ${JSON.stringify(ariaLabel)},
+        );
+        if (!verb) {
+          const frames = document.querySelectorAll(".vf-pane-frame").length;
+          return "absent: frames=" + frames + " verbs=" + verbs
+            .map((v) => v.getAttribute("aria-label") ?? v.className)
+            .join("|");
+        }
+        verb.click();
+        return "ok";
+      })()`,
+    )) as string;
+    if (clicked === "ok") return;
+    seen = clicked;
+    await sleep(200);
+  }
+  throw new Error(
+    `no pane-frame verb labelled "${ariaLabel}" appeared within 20s (${seen}) — a frame with no verbs is a pane the package draws none on (a bare shell: \`model.verb\` undefined in views' pane-frame.ts)`,
+  );
+}
+
+/**
  * Click a bubble on the MONITOR stage, by CSS selector (GT-4).
  *
  * A DOM click for `clickDeckButton`'s reason (GT-2 finding 4: a synthesized
@@ -3301,25 +3345,30 @@ export async function runSmokeGodview(opts: {
     // DELIVERY is not assumed (the repo's own lesson, and the same caveat
     // `closeWindowAccelerator` documents for ⌘W: `sendInputEvent` injects below
     // AppKit's key-equivalent dispatch). A chord that produces no phase change
-    // is recorded as an unproven delivery and the row drives the chip instead,
-    // so the invariant is still measured and the reader is told which path ran.
+    // is recorded as an unproven delivery and the row drives the pointer path
+    // instead, so the invariant is still measured and the reader is told which
+    // path ran.
     //
-    // BOTH PATHS ARE MEASURED, not one path and one hope. On this machine the
-    // chord IS delivered (the row reports `zoomDriver: "chord"`), and the chip
-    // branch was exercised on purpose by suppressing the press for one run:
-    // same commits, same geometry, `zoomDriver: "chip"`. A fallback nobody has
-    // ever run is a guess about the machine that will need it.
+    // THE POINTER PATH CHANGED AT GT-6a. It used to be the deck's own `zoom
+    // pane` chip, and that branch had been exercised on purpose by suppressing
+    // the press for one run. The chip is retired (the record's frame owns a
+    // pane's chrome, §07), so the fallback is now the frame's own ⤢ verb, by
+    // its accessible name. NAMED GAP, upstream's: the package draws that verb
+    // only on a pane whose frame has a stop-or-resume verb beside it, and these
+    // are bare shells — so on a machine where the chord is not delivered this
+    // row FAILS and says so, rather than reporting a zoom nobody could reach.
+    // On this machine the chord IS delivered (`zoomDriver: "chord"`).
     pressZoomChord(win);
     let zoomDriver = "chord";
     let zoomedFacts = await deck
       .until((facts) => facts.zoom?.phase === "zoomed", "⌘⇧Enter to zoom the active pane", 6_000)
       .catch(() => null);
     if (zoomedFacts === null) {
-      zoomDriver = "chip";
-      await clickDeckButton(win, "zoom pane");
+      zoomDriver = "frame-verb";
+      await clickPaneFrameVerb(win, "Fullscreen the pane");
       zoomedFacts = await deck.until(
         (facts) => facts.zoom?.phase === "zoomed",
-        "the zoom chip to zoom the active pane",
+        "the frame's fullscreen verb to zoom the active pane",
         20_000,
       );
     }
@@ -3355,7 +3404,7 @@ export async function runSmokeGodview(opts: {
     // it started in — the last of which is what makes this a round trip rather
     // than two unrelated gestures.
     if (zoomDriver === "chord") pressZoomChord(win);
-    else await clickDeckButton(win, "restore pane");
+    else await clickPaneFrameVerb(win, "Restore the pane");
     const restoredFacts = await deck.until(
       (facts) => facts.zoom?.phase === "idle",
       "the zoom to return the pane to its split",
@@ -3745,44 +3794,22 @@ export async function runSmokeGodview(opts: {
       verdict["rehydratedCwd"] = rehydrated.find((t) => t.sessionId === replacement)?.cwd;
     }
 
-    // 10. THE KILL ROW (GT-D5). Closing a pane detaches (row 6); killing is a
-    //     separate, audited, confirmed act. Driven through the deck's own
-    //     affordance — two clicks, because one would be the bug.
-    await focusDeck(win);
-    // The chip acts on the ACTIVE pane and names no session on screen, so the
-    // target is read from the deck rather than chosen here — asserting about a
-    // session the chip was never pointed at would be a test of nothing.
-    const active = await deck.until(
-      (facts) => facts.panes === closed.panes && facts.activeSessionId !== undefined,
-      "the deck to name its active pane",
-      20_000,
-    );
-    const killTarget = active.activeSessionId!;
-    await clickDeckButton(win, "kill session");
-    await clickDeckButton(win, "kill");
-    // Two proofs, one for each plane. The floor: the session ends. The
-    // renderer: the pane ADMITS it, which no floor query can show.
-    await untilFloor(
-      opts.handle,
-      (terminals) => {
-        const row = terminals.find((t) => t.sessionId === killTarget);
-        return row === undefined || row.exited === true;
-      },
-      `end ${killTarget} on the deck's own kill`,
-      20_000,
-    );
-    verdict["killedSession"] = killTarget;
-    // The deck's OWN kill is a different animal from row 9's foreign death:
-    // the workspace kill affordance calls ghosttea's `runtime.terminate`,
-    // which REMOVES the local registration before the cell's `SessionEvent`
-    // can apply (`#removeRegisteredSession` in BOTH transports — upstream's
-    // design, read from 0.11.1's dist during this row's un-gapping), so no
-    // event-driven exited face follows a deliberate local kill. The floor
-    // half above and the audited two-step ARE this row's claims; the
-    // event-driven face is row 9's witness. Stated in the verdict so this
-    // row can never silently green-wash into the row-9 claim.
-    verdict["ownKillLocalFace"] =
-      "runtime-unregistered (ghosttea terminate drops local registration before the event)";
+    // 10. THE KILL ROW (GT-D5) — WITHDRAWN 2026-09-13 (GT-6a), not moved.
+    //
+    //     It drove the deck's own two-step `kill session` chip and proved
+    //     both planes: the floor ended the named session, and the chip had
+    //     asked first. The chip is gone — the record's frame (§07) owns a
+    //     pane's chrome and no kill is in it — and Godview now offers no
+    //     end-a-session gesture at all, so there is no affordance left for
+    //     this row to drive. It is NOT rewritten to call `terminal.terminate`
+    //     through the door: row 9 above already does exactly that and takes
+    //     the stronger witness with it (the pane admitting a death it did not
+    //     cause). A smoke row that drives the door and calls it a UI witness
+    //     would be the green-washing the old row's own comment warned about.
+    //     When an end-a-session gesture comes back, this row comes back with
+    //     it — it is in this file's history at 522065df.
+    verdict["deckKillAffordance"] =
+      "withdrawn at GT-6a (record §07); no product gesture ends a session";
 
     // 11. THE CONFIG ROW (GT-3 rider). A real write through the product door,
     //     the floor's own reload verdict, and the one property that matters
@@ -4012,15 +4039,15 @@ export async function runSmokeGodview(opts: {
         `selecting a local row changed the deck's shape (${beforeLocalClick.panes} → ${afterLocalClick.panes} panes)`,
       );
     }
-    // The killed session is excluded EXPLICITLY, for a different reason than
-    // the gap era's: row 10's own-kill pane stays mounted holding its last
-    // summary (ghosttea's terminate drops the local registration, so no
-    // exited face follows a deliberate local kill — row 10 says so in its
-    // verdict) while the floor lists that id `exited`. The liveness check
-    // below demands `exited !== true`, so that id is carved out. Everything
-    // else — and above all anything a local click could have invented — must
-    // be floor-known and alive.
-    const paneSessions = afterLocalClick.sessionIds.filter((id) => id !== killTarget);
+    // NOTHING IS CARVED OUT of this check any more (GT-6a). It used to exclude
+    // row 10's own-kill target, whose pane stayed mounted holding its last
+    // summary — ghosttea's terminate drops the local registration, so no exited
+    // face follows a deliberate local kill — while the floor listed that id
+    // `exited`. Row 10 is withdrawn with the kill chip it drove, so no pane
+    // here holds a dead session id, and the liveness claim can be made about
+    // EVERY pane: anything a local click could have invented must be
+    // floor-known and alive.
+    const paneSessions = afterLocalClick.sessionIds;
     await untilFloor(
       opts.handle,
       (terminals) =>

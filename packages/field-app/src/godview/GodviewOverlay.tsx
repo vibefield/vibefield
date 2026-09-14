@@ -171,8 +171,10 @@ export function GodviewOverlay(): ReactElement | null {
   // belongs entirely to whatever has focus.
   // The panel keeps its own × (`Close system controls`) and its toolbar toggle,
   // so the affordance is lost only from the keyboard, and only for the panel.
-  // KillActivePane's Esc-disarms stays: it is bubble-phase, armed-only, and
-  // withdrawing a destructive confirm is DESIGN.md §7's law, not this ladder's.
+  // (Until GT-6a the deck's kill chip kept a bubble-phase Esc of its own to
+  // withdraw its confirm — DESIGN.md §7's law rather than this ladder's. The
+  // chip is retired with the rest of the deck's overlay chrome, so no listener
+  // on this page competes for Escape at all now.)
 
   if (!everOpened) return null;
 

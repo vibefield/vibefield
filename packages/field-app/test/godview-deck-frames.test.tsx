@@ -409,6 +409,40 @@ describe("the deck's pane frames", () => {
     expect(paneOf(host, "pane-1")?.contains(frameFor(host, "pty-1"))).toBe(true);
   });
 
+  it("draws nothing over the deck but the panes' own frames (GT-6a, record §07)", async () => {
+    // The frame arrived in GT-6 while two older chips were still hanging in the
+    // deck's corners — `zoom pane` at the top-left, the two-step `kill session`
+    // at the top-right — which is exactly where the frame puts the readout and
+    // the badge. James's 2026-09-13 pass photographed the collision. §07 names a
+    // pane's whole chrome (badge · readout · meter · figure · the pointer's
+    // verbs) and neither chip is in it, so this row is the boundary: the deck
+    // layer owns the workspace, and every control a user can click belongs to a
+    // frame.
+    foldRows = [
+      managedSummary({ runtimeRunId: "run-1", terminalSessionId: "pty-1", status: "working" }),
+    ];
+    const host = await mountDeck();
+    expect(
+      host.querySelector(".vf-godview-zoom"),
+      "the zoom chip is the frame's verb now",
+    ).toBeNull();
+    expect(host.querySelector(".vf-godview-kill"), "the kill chip has no §07 home").toBeNull();
+    const zoomHost = host.querySelector<HTMLElement>(".vf-deck-zoom");
+    const frame = frameFor(host, "pty-1");
+    expect(frame).not.toBeNull();
+    // Counted, not just checked for absence: a button that belongs to no frame
+    // is chrome over the pane whatever it is called, and the assertion has to
+    // fail on the NEXT one as surely as it would have failed on those two.
+    const strays = [...(zoomHost?.querySelectorAll("button") ?? [])].filter(
+      (button) => frame?.contains(button) !== true,
+    );
+    expect(strays.map((button) => button.className)).toEqual([]);
+    // …and the verbs a working agent's frame does draw are the record's three,
+    // so "no chrome" has not quietly become "no affordances".
+    expect(verb(frame, "stop")).not.toBeNull();
+    expect(verb(frame, "zoom")).not.toBeNull();
+  });
+
   it("gives a shell pane the bare badge — the folder, and no readout, mark or verb", async () => {
     const host = await mountDeck();
     const frame = frameFor(host, "pty-1");

@@ -464,6 +464,28 @@
   color: var(--text-main);
 }
 
+/* …and the strip is chrome the same way the column is, so a view that lays out
+   IN FLOW starts below it (GT-6a). The package reserves nothing for this strip
+   because the reference host has no claims at all: `list.css` pins its toolbar
+   11px down, the strip is pinned 11px down, and James's 2026-09-13 pass caught
+   them printing over each other — "1 MANAGED AGENT · MESH UNAVAILABLE…" under
+   "1 SESSIONS" in the same corner.
+
+   No new spacing number is invented: the band under the strip is the package's
+   OWN top band, applied again from the strip's measured bottom (published by
+   `GodviewMonitor`, 0 when the strip is empty — which reproduces the package's
+   rule exactly). The rain and the swarm keep their full bleed: the swarm steers
+   its bodies around chrome by rect, and the rain is a canvas the column already
+   crosses. DESIGN.md §9: two claims that overlap are one unreadable claim. */
+.vf-godview-monitor-stage {
+  /* `@vibecook/puppeteer-views/styles/list.css` — a flow view's own top band. */
+  --vf-monitor-flow-band: 11px;
+}
+
+.vf-godview-monitor-stage .vf-monitor-list {
+  padding-top: calc(var(--vf-monitor-claims-bottom, 0px) + var(--vf-monitor-flow-band));
+}
+
 .vf-monitor-claims {
   position: absolute;
   z-index: 7;
@@ -716,60 +738,6 @@
   border-color: var(--control-hover-border);
   color: var(--text-main);
   background: var(--control-hover-bg);
-}
-
-.vf-godview-kill {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 8;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 5px 3px 7px;
-  border: 1px solid var(--panel-border);
-  border-radius: 5px;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--panel-bg) 90%, transparent);
-  box-shadow: none;
-  backdrop-filter: blur(8px);
-  opacity: 0.45;
-  transition: opacity 120ms ease;
-}
-
-.vf-godview-kill:hover,
-.vf-godview-kill:focus-within {
-  opacity: 1;
-}
-
-.vf-godview-kill-question {
-  max-width: 44ch;
-  color: var(--text-muted);
-  font-size: 8px;
-}
-
-.vf-godview-kill-action {
-  padding: 2px 5px;
-  border: 0;
-  border-radius: 3px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 8px;
-  cursor: pointer;
-}
-
-.vf-godview-kill-action:hover {
-  color: var(--text-main);
-  background: var(--control-hover-bg);
-}
-
-.vf-godview-kill-action.is-destructive {
-  color: var(--vf-red);
-}
-
-.vf-godview-kill-action:disabled {
-  cursor: default;
-  opacity: 0.4;
 }
 
 .vf-godview-scanlines,

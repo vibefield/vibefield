@@ -245,6 +245,10 @@ afterEach(() => {
   setSwarmPhysicsDriverFactory(undefined);
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   vi.restoreAllMocks();
+  // `restoreAllMocks` does not undo `stubGlobal`, and the inset row below stubs
+  // ResizeObserver — left behind it would be a fixture every later row silently
+  // inherited.
+  vi.unstubAllGlobals();
 });
 
 async function mountMonitor(
@@ -292,6 +296,74 @@ const pressedView = (host: HTMLElement): string | undefined =>
     ?.getAttribute("aria-label") ?? undefined;
 
 describe("the monitor stage", () => {
+  // ---- the claims strip and the flow views (GT-6a) --------------------------
+  //
+  // The strip is VibeField's own chrome (AR-3's counts, GT-5c's degraded
+  // sentence) and it is pinned 11px down the stage. `list.css` pins the
+  // package's toolbar 11px down too, because the reference host has no claims
+  // to make room for — so the two printed over each other on James's
+  // 2026-09-13 pass. The fix publishes the strip's measured bottom and the
+  // flow view's band starts from there; these rows hold that seam.
+  //
+  // Every rect in happy-dom is zero, so the geometry is FED here rather than
+  // laid out. That is the honest shape for this claim anyway: what is under
+  // test is the arithmetic and the wiring, and a layout engine would only be
+  // deciding the inputs.
+  function driveObservers(): Array<() => void> {
+    const fire: Array<() => void> = [];
+    class DrivenResizeObserver {
+      constructor(private readonly callback: ResizeObserverCallback) {
+        fire.push(() => this.callback([], this as unknown as ResizeObserver));
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal("ResizeObserver", DrivenResizeObserver);
+    return fire;
+  }
+  const rect = (top: number, bottom: number): DOMRect =>
+    ({ top, bottom, left: 0, right: 900, width: 900, height: bottom - top }) as DOMRect;
+
+  it("starts a flow view below the claims strip, never under it (GT-6a)", async () => {
+    const fire = driveObservers();
+    const host = await mountMonitor("list");
+    const stage = host.querySelector<HTMLElement>(".vf-godview-monitor-stage");
+    const claims = host.querySelector<HTMLElement>(".vf-monitor-claims");
+    // The strip has something to say here — otherwise this row would prove
+    // nothing about a collision that only happens when it does.
+    expect(claims?.textContent ?? "").toContain("managed agent");
+    stage!.getBoundingClientRect = () => rect(44, 400);
+    claims!.getBoundingClientRect = () => rect(55, 64);
+    act(() => {
+      for (const publish of fire) publish();
+    });
+    // 64 − 44: the strip's bottom in the stage's own coordinates. The band
+    // under it is the package's, added by the rule in `godview.css`, so this
+    // number is a measurement and not a spacing decision.
+    expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("20px");
+  });
+
+  it("gives a silent strip no room at all, so the package's own band stands", async () => {
+    const fire = driveObservers();
+    // No door: nobody has been asked yet, so there is no claim to make and
+    // `remoteUnavailableClaim` stays quiet on `no-door` (GT-5c).
+    const host = await mountMonitor("list", null);
+    const stage = host.querySelector<HTMLElement>(".vf-godview-monitor-stage");
+    const claims = host.querySelector<HTMLElement>(".vf-monitor-claims");
+    // Silent, but not childless: the strip always carries its empty aria-live
+    // span, which is why the publisher reads the strip's HEIGHT and not its
+    // child count. The fed rect has none.
+    expect(claims?.textContent).toBe("");
+    expect(claims?.childElementCount).toBeGreaterThan(0);
+    stage!.getBoundingClientRect = () => rect(44, 400);
+    claims!.getBoundingClientRect = () => rect(55, 55);
+    act(() => {
+      for (const publish of fire) publish();
+    });
+    expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("0px");
+  });
+
   it("mounts on the registry's default view with the fold's rows and the deck's pane on it", async () => {
     const host = await mountMonitor();
     expect(latest().viewId).toBe("swarm");

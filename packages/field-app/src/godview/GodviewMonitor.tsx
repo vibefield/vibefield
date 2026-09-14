@@ -174,6 +174,7 @@ export function GodviewMonitor({
     ...(panes ? { panes } : {}),
   });
   const chromeRef = useRef<HTMLDivElement>(null);
+  const claimsRef = useRef<HTMLDivElement>(null);
   const [findOpen, setFindOpen] = useState(false);
   /** What the swarm is painting with, read off its own element (AR-5). */
   const [swarmRenderer, setSwarmRenderer] = useState("none");
@@ -181,23 +182,54 @@ export function GodviewMonitor({
   const [usageTiles, setUsageTiles] = useState(-1);
   const counts = useMemo(() => monitorAgentCounts(agents), [agents]);
 
-  // Views that lay out in flow clear the chrome with this (the list's left
-  // padding reads it); the swarm instead reads the chrome's rect directly
-  // and steers bodies around it.
+  // Views that lay out in flow clear the chrome with these two insets (the
+  // list's padding reads both); the swarm instead reads the chrome elements'
+  // rects directly and steers bodies around them.
+  //
+  // The RIGHT inset is the package's own idea (`monitor/chrome.ts`): the usage
+  // column down the left edge is host chrome, and a view that cares finds it
+  // through the marker rather than by knowing what it is. The TOP inset is the
+  // same bargain for the strip above — and it is VibeField's to publish because
+  // the strip is VibeField's: AR-3's claims are not in the reference host at
+  // all, so the package's `list.css` reserves nothing for them and its toolbar
+  // laid out at y=11px, under a strip pinned at y=11px. James's 2026-09-13 pass
+  // photographed the result: "1 MANAGED AGENT · MESH UNAVAILABLE…" and
+  // "1 SESSIONS" printed over each other in the same corner. Two claims that
+  // overlap are one unreadable claim, which is the failure GT-D17 names.
+  //
+  // Measured rather than assumed, and for a reason worth keeping: the strip's
+  // height is not a constant. It carries between zero and four chips, the
+  // floor's own refusal sentence can run long enough to wrap, and a viewer's
+  // text scale moves all of it. A hardcoded band would be right on this
+  // machine and wrong on the next.
   useEffect(() => {
     const stage = stageRef.current;
     const chrome = chromeRef.current;
-    if (!stage || !chrome || typeof ResizeObserver === "undefined") return;
+    const claims = claimsRef.current;
+    if (!stage || !chrome || !claims || typeof ResizeObserver === "undefined") return;
     const publish = (): void => {
-      const rect = chrome.getBoundingClientRect();
       const stageRect = stage.getBoundingClientRect();
       stage.style.setProperty(
         "--vf-monitor-chrome-right",
-        `${Math.round(rect.right - stageRect.left)}px`,
+        `${Math.round(chrome.getBoundingClientRect().right - stageRect.left)}px`,
       );
+      // A strip with nothing to say takes no room: it publishes 0, and the
+      // view's own band then measures from the stage's top exactly as before.
+      // The GAP is not published — `godview.css` adds the package's own band to
+      // whatever this says, so no new spacing number is invented here
+      // (docs/UI_SYSTEM.md: a visual constant belongs in DESIGN.md and the
+      // token sheet, never loose in a component).
+      //
+      // "Nothing to say" is read off the HEIGHT, not off the child count: the
+      // strip always carries its `aria-live` acknowledgement span, empty or
+      // not, so counting children would reserve a band for a silent strip.
+      const claimsRect = claims.getBoundingClientRect();
+      const bottom = claimsRect.height === 0 ? 0 : Math.round(claimsRect.bottom - stageRect.top);
+      stage.style.setProperty("--vf-monitor-claims-bottom", `${bottom}px`);
     };
     const observer = new ResizeObserver(publish);
     observer.observe(chrome);
+    observer.observe(claims);
     publish();
     return () => observer.disconnect();
   }, []);
@@ -415,7 +447,7 @@ export function GodviewMonitor({
           <UsageColumn port={door?.usage ?? NO_USAGE} />
         </div>
         {/* The claims: VibeField's, on their own strip — also solid to the swarm. */}
-        <div className="vf-monitor-claims" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
+        <div ref={claimsRef} className="vf-monitor-claims" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
           {localClaim(sources) !== null ? (
             <span className="vf-monitor-local-chip">{localClaim(sources)}</span>
           ) : null}

@@ -63,13 +63,12 @@ import {
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
 import { zoomLayoutApplied } from "./deck-zoom";
 import type { GodviewTheme } from "./GodviewTuningPanel";
-import { KillActivePane } from "./KillActivePane";
 import { historyPortOver, usagePortOver } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
-import { useDeckZoom, ZoomActivePane } from "./ZoomActivePane";
+import { useDeckZoom } from "./use-deck-zoom";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -1084,7 +1083,7 @@ export function GodviewDeck({
   );
 
   // PANE ZOOM (TP-D18, §9.7). The chord is claimed from ghosttea here — see
-  // `ZoomActivePane` for why, and `deck-zoom.ts` for what upstream's own zoom
+  // `use-deck-zoom.ts` for why, and `deck-zoom.ts` for what upstream's own zoom
   // does instead. Note what this does NOT touch: demand. A zoomed deck shows
   // one pane and keeps every other pane MOUNTED (hidden, not unmounted), so
   // every session's view binding and its declared demand are exactly what they
@@ -1251,7 +1250,7 @@ export function GodviewDeck({
         const paneId = pane.dataset["paneId"];
         if (paneId !== undefined) deckZoom.current.toggle(paneId);
       },
-      // The chord `ZoomActivePane` claims from ghosttea, in the frame's words.
+      // The chord `useDeckZoom` claims from ghosttea, in the frame's words.
       zoomShortcut: getHost().platform === "darwin" ? "⌘⇧↵" : "⌃⇧↵",
     };
   }, [fieldd, mountSummaryNow]);
@@ -1538,14 +1537,22 @@ export function GodviewDeck({
         data-zoom-phase="idle"
         style={{ "--vf-godview-terminal-ink": ground.ink } as CSSProperties}
       >
-        {workspace?.activeSession !== undefined && (
-          <KillActivePane session={workspace.activeSession} fieldd={fieldd} />
-        )}
-        <ZoomActivePane
-          phase={zoom.state.phase}
-          paneId={workspace?.activePaneId}
-          onToggle={zoom.toggle}
-        />
+        {/* NOTHING IS DRAWN OVER THE DECK HERE (GT-6a, record §07). Two chips
+            used to hang in these corners — `zoom pane` at the top-left and the
+            two-step `kill session` at the top-right — and once GT-6 portalled
+            the record's frame into every pane they collided with it: the
+            readout and the badge own exactly those corners. §07 names the whole
+            of a pane's chrome (badge · readout · meter · figure · the verbs
+            under the pointer) and neither chip is in it, so both are gone
+            rather than moved (DESIGN.md §1.1: the reference is not
+            reinterpreted). The zoom SURVIVES as the frame's ⤢ verb and the
+            chord `useDeckZoom` claims. The KILL does not: ghosttea's own
+            `closePane` removes a pane from the layout and fires `onPaneClose`
+            (0.11.1 `dist/workspace/Workspace.js:516`, which VibeField does not
+            wire), so ⌘W DETACHES and the session keeps running on the floor —
+            GT-D5's split, unchanged. Ending a session therefore has no product
+            gesture after this commit; that is named as owed rather than
+            papered over. */}
         <GhostteaWorkspace
           platform={platform}
           theme={terminalTheme}
