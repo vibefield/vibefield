@@ -51,6 +51,7 @@ import type {
   AttachProviderSessionOptions,
 } from "@vibecook/puppeteer-runtime";
 import {
+  AGENT_FIELD,
   AgentFieldRow,
   type AgentListResult,
   type AgentProvidersResult,
@@ -993,9 +994,12 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
     await joinedRow(win, runId);
 
     // the SNAPSHOT is the live board, not an empty one
+    // the floor this subscriber asks for IS the registry's default; naming the
+    // constant keeps the option and the spacing assertion below from drifting
+    const floorMs = AGENT_FIELD.MIN_INTERVAL_MS;
     const sub = (await win.call("agent.subscribe", {
       projection: "field",
-      minIntervalMs: 250,
+      minIntervalMs: floorMs,
     })) as { subId: string; snapshot: { revision: number; rows: Record<string, unknown>[] } };
     const row = sub.snapshot.rows.find((r) => r["runtimeRunId"] === runId);
     expect(row, "the field snapshot did not carry the run").toBeDefined();
@@ -1044,6 +1048,7 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
     expect(frames().length, "a settled board sent a frame").toBe(quiet);
 
     // the run's state moves: the scripted PTY's `cat` dies of the interrupt
+    const interruptAt = Date.now();
     expect(await win.call("agent.interrupt", { runtimeRunId: runId })).toEqual({ accepted: true });
 
     await poll(async () => payload(quiet), 20_000);
@@ -1081,20 +1086,24 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
       since = body.revision;
     }
 
-    // THE SPACING: no two frames closer than the floor this subscriber asked
-    // for (`minIntervalMs: 250` above). A timer's own jitter is not a breach,
-    // so the comparison carries one scheduler tick of slack.
-    const arrivals = [
-      quiet === 0 ? null : frames()[quiet - 1]?.receivedAt,
-      ...changed.map((f) => f.receivedAt),
-    ].filter((t): t is number => typeof t === "number");
-    for (let i = 1; i < arrivals.length; i++) {
-      const gap = (arrivals[i] ?? 0) - (arrivals[i - 1] ?? 0);
-      expect(
-        gap,
-        `two frames arrived ${gap}ms apart, inside the 250ms floor`,
-      ).toBeGreaterThanOrEqual(250 - 16);
-    }
+    // THE SPACING, stated as a RATE rather than a per-pair gap — because a gap
+    // between ARRIVALS is not a measurement of the floor.
+    //
+    // The floor is enforced where frames are EMITTED; `receivedAt` is when a
+    // loaded Node event loop got round to reading the socket. A stall batches
+    // two properly-spaced frames into one tick and reports a gap of ~0, which
+    // is a false red — this row caught exactly that on its first loaded run.
+    // Batching can only ever DELAY arrivals, never manufacture frames, so the
+    // count over a window is sound in the direction that matters: a server
+    // honouring a floor of `floorMs` cannot have emitted more than one frame
+    // per floor across the window, however they clumped on the way in.
+    const lastArrival = changed[changed.length - 1]?.receivedAt ?? interruptAt;
+    const windowMs = Math.max(0, lastArrival - interruptAt);
+    const ceiling = Math.floor(windowMs / floorMs) + 1;
+    expect(
+      changed.length,
+      `${changed.length} frames in ${windowMs}ms breaches the ${floorMs}ms floor (max ${ceiling})`,
+    ).toBeLessThanOrEqual(ceiling);
 
     // THE CHANGE ITSELF: the run is carried, dead, somewhere in that run of
     // frames — which frame it rode is the scheduler's business, not the law's
