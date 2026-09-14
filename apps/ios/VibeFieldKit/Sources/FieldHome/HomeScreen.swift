@@ -1145,17 +1145,22 @@ public struct HomeScreen: View {
   /// G3's join for the card's subject. `.noJoin` for a remote bubble or the
   /// scripted fleet — neither has an agent row behind it.
   ///
-  /// The desktop's NAME comes from the devices store rather than from a
-  /// terminal listing: it is the same desktop either way, and the fold is the
-  /// only one of the two that still answers since TM-5.
+  /// Both extra facts come from the DEVICES store rather than from a terminal
+  /// listing: the desktop's name, and (TM-5a) whether it publishes its terminal
+  /// doors on the tailnet. It is the same desktop either way, and the devices
+  /// store is the only one of the two wires that still answers since TM-5.
   private var cardTerminalFace: AgentTerminalFace {
     guard let join = cardBubble?.agent?.join else { return .noJoin }
-    return agentTerminalFace(join: join, deviceName: desktopName(join.deviceID))
+    let desktop = desktop(join.deviceID)
+    return agentTerminalFace(
+      join: join, deviceName: desktop?.name,
+      publishesTerminalDoors: desktop?.publishesTerminalDoors)
   }
 
-  /// What the field calls a desktop, when it has been named.
-  private func desktopName(_ deviceID: String) -> String? {
-    link?.desktops.first { $0.deviceId == deviceID }?.name
+  /// The field's row for a desktop, when it has one. `nil` is a desktop the
+  /// devices store has not named — which is not the same as one that answered.
+  private func desktop(_ deviceID: String) -> FieldDesktop? {
+    link?.desktops.first { $0.deviceId == deviceID }
   }
 
   /// The one act an ended run has: RESUME, over that desktop's door. The new

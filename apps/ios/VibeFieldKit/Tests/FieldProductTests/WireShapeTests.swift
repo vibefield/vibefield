@@ -70,8 +70,58 @@ import Testing
     // not a missing field to paper over.
     #expect(device.productEndpoint == nil)
     #expect(device.productURL == nil)
-    #expect(device.unknownFields == ["capabilities", "fielddVersion", "bootId", "headless",
+    // `capabilities` left the unknown list at TM-5a — the phone reads it now.
+    #expect(device.unknownFields == ["fielddVersion", "bootId", "headless",
       "contractsVersion", "publishedAt"].sorted())
+  }
+
+  /// TM-5a — the capability a REMOTE reader acts on, and the three answers it
+  /// can get.
+  ///
+  /// The golden is the `nil` case and did not have to be edited to be one: it
+  /// predates TM-2 and carries `terminalHost`/`docHost`/`push` with no
+  /// `terminalMesh`, which is exactly the shape a desktop older than the field
+  /// publishes. It is kept as `nil` rather than folded to `false` because the
+  /// two draw different sentences on a card — see `DeviceCapabilities`.
+  @Test func theTerminalDoorCapabilityHasThreeAnswersAndKeepsThemApart() throws {
+    let golden = try DeviceInfo(json: try Fixture.json("device-info.valid"))
+    #expect(golden.capabilities?.terminalHost == false)
+    #expect(golden.capabilities?.terminalMesh == nil)
+
+    var fields = try #require(try Fixture.json("device-info.valid").objectValue)
+    var capabilities = try #require(fields["capabilities"]?.objectValue)
+
+    capabilities["terminalMesh"] = .bool(true)
+    fields["capabilities"] = .object(capabilities)
+    #expect(try DeviceInfo(json: .object(fields)).capabilities?.terminalMesh == true)
+
+    capabilities["terminalMesh"] = .bool(false)
+    fields["capabilities"] = .object(capabilities)
+    #expect(try DeviceInfo(json: .object(fields)).capabilities?.terminalMesh == false)
+  }
+
+  /// A capability block is read TOLERANTLY: a field this build has never heard
+  /// of is carried rather than refused, and a block missing the contract's own
+  /// required `terminalHost` costs the FACT, never the whole desktop.
+  @Test func anUnknownCapabilityIsCarriedAndAThinOneKeepsItsDevice() throws {
+    var fields = try #require(try Fixture.json("device-info.valid").objectValue)
+    fields["capabilities"] = .object([
+      "terminalMesh": .bool(true), "somethingNew": .string("later"),
+    ])
+    let device = try DeviceInfo(json: .object(fields))
+    #expect(device.deviceId == "nodeid-8f2a1c9b7e")
+    #expect(device.capabilities?.terminalMesh == true)
+    #expect(device.capabilities?.terminalHost == nil)
+    #expect(device.capabilities?.unknownFields == ["somethingNew"])
+  }
+
+  /// And a device with NO capability block at all is still a device.
+  @Test func aDeviceWithNoCapabilityBlockIsStillADevice() throws {
+    var fields = try #require(try Fixture.json("device-info.valid").objectValue)
+    fields["capabilities"] = nil
+    let device = try DeviceInfo(json: .object(fields))
+    #expect(device.capabilities == nil)
+    #expect(device.name == "James MacBook Pro")
   }
 
   /// The slice is where the phone actually learns a door: `productEndpoint.url`

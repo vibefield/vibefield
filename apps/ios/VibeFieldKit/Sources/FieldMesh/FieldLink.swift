@@ -28,8 +28,30 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   public let state: State
   /// Where this desktop's rows are coming from right now.
   public let feed: FieldFeedSource
+  /// TM-5a — whether this desktop publishes its terminal doors on the tailnet
+  /// (`DeviceCapabilities.terminalMesh`, TM-2/MF-1l), carried through so a card
+  /// can say a missing act's reason BEFORE the tap.
+  ///
+  /// Three values, not two. `true` = the doors are out and an attach has
+  /// somewhere to go; `false` = this desktop said its doors are not published,
+  /// which is a sentence a person can act on; `nil` = the slice did not carry
+  /// the field (a peer older than TM-2), which is not a refusal and must not be
+  /// drawn as one.
+  public let publishesTerminalDoors: Bool?
 
   public var id: String { deviceId }
+
+  public init(
+    deviceId: String, name: String, platform: String, state: State, feed: FieldFeedSource,
+    publishesTerminalDoors: Bool? = nil
+  ) {
+    self.deviceId = deviceId
+    self.name = name
+    self.platform = platform
+    self.state = state
+    self.feed = feed
+    self.publishesTerminalDoors = publishesTerminalDoors
+  }
 }
 
 /// Which leg of the hybrid a desktop's board arrived on (§5).
@@ -640,7 +662,8 @@ public final class FieldLink {
         name: device.name,
         platform: device.platform,
         state: state(of: deviceId, hasURL: device.productEndpoint?.url != nil),
-        feed: feed(of: deviceId))
+        feed: feed(of: deviceId),
+        publishesTerminalDoors: device.capabilities?.terminalMesh)
     }
   }
 
@@ -648,7 +671,8 @@ public final class FieldLink {
     desktops = desktops.map { desktop in
       FieldDesktop(
         deviceId: desktop.deviceId, name: desktop.name, platform: desktop.platform,
-        state: desktop.state, feed: feed(of: desktop.deviceId, doorOnly: doorOnly))
+        state: desktop.state, feed: feed(of: desktop.deviceId, doorOnly: doorOnly),
+        publishesTerminalDoors: desktop.publishesTerminalDoors)
     }
   }
 

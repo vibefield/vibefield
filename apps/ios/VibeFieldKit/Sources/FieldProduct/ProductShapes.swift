@@ -79,6 +79,8 @@ public struct DeviceInfo: Sendable, Equatable, Decodable, Identifiable {
   public let isSelf: Bool?
   public let lastSeenAt: Int64?
   public let productEndpoint: ProductEndpoint?
+  /// D31's honest per-device facts, as far as this phone reads them.
+  public let capabilities: DeviceCapabilities?
   public let unknownFields: [String]
 
   public var id: String { deviceId }
@@ -98,6 +100,64 @@ public struct DeviceInfo: Sendable, Equatable, Decodable, Identifiable {
     isSelf = object.bool("self")
     lastSeenAt = object.int("lastSeenAt")
     productEndpoint = try object.decodeObject("productEndpoint", ProductEndpoint.init(json:))
+    capabilities = try object.decodeObject("capabilities", DeviceCapabilities.init(json:))
+    unknownFields = object.unknownFields
+  }
+
+  public init(from decoder: any Decoder) throws {
+    try self.init(json: try JSONValue(from: decoder))
+  }
+}
+
+/// `DeviceCapabilities` (`devices.ts`), narrowed to the two facts a REMOTE
+/// reader acts on. D31: "capabilities honest per device".
+///
+/// Both are `Bool?` here where the contract makes `terminalHost` required, and
+/// that is the tolerant reader's own rule rather than a slackening: a row that
+/// omits a field is a row that DID NOT SAY, and dropping a whole desktop over a
+/// capability block would cost this phone the device instead of the fact.
+///
+/// **The distinction these two draw is the one that matters to a card.**
+/// `terminalHost` is local — this desktop has a terminal floor. `terminalMesh`
+/// (TM-2/MF-1l) is the floor's own word that its doors are PUBLISHED ON THE
+/// TAILNET, which is the only one of the two a phone can act on: `terminalHost`
+/// true with `terminalMesh` false is a desktop running terminals it will not
+/// let anyone attach to from another device, and a card drawn on the first fact
+/// alone is tappable and dead.
+public struct DeviceCapabilities: Sendable, Equatable, Decodable {
+  public let terminalHost: Bool?
+  /// Whether this device publishes its terminal doors on the tailnet.
+  ///
+  /// `nil` means the slice did not carry the field — a peer older than TM-2 —
+  /// and the contract's note says absence "reads as FALSE" FOR A PROMISE OF
+  /// REACHABILITY. It is kept as `nil` rather than folded to `false` here
+  /// because the two are different sentences on a card: a desktop that SAID no
+  /// earns "not publishing its terminal doors", and one that said nothing earns
+  /// no claim at all — the mint is then the authority, and it answers in
+  /// fieldd's own words. Neither of them is a promise, which is what the
+  /// contract's rule is about.
+  public let terminalMesh: Bool?
+  public let docHost: Bool?
+  public let push: Bool?
+  public let unknownFields: [String]
+
+  public init(
+    terminalHost: Bool? = nil, terminalMesh: Bool? = nil, docHost: Bool? = nil,
+    push: Bool? = nil
+  ) {
+    self.terminalHost = terminalHost
+    self.terminalMesh = terminalMesh
+    self.docHost = docHost
+    self.push = push
+    self.unknownFields = []
+  }
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "DeviceCapabilities", value: json)
+    terminalHost = object.bool("terminalHost")
+    terminalMesh = object.bool("terminalMesh")
+    docHost = object.bool("docHost")
+    push = object.bool("push")
     unknownFields = object.unknownFields
   }
 

@@ -114,6 +114,92 @@ private func join(
     #expect(face.offersResume)
   }
 
+  // MARK: TM-5a — the desktop's own word, before the tap
+
+  /// The doors are out: the act is offered and nothing is claimed beyond that.
+  @Test func aDesktopPublishingItsDoorsOffersTheAttach() {
+    let face = agentTerminalFace(
+      join: join(), deviceName: "studio", publishesTerminalDoors: true)
+    #expect(face.offersAttach)
+    #expect(face.note == nil)
+  }
+
+  /// The doors are down and the desktop SAID so, so the act is withheld and the
+  /// face says why — the honest-states law's own shape: a missing act explains
+  /// itself BEFORE the tap, not one tap later.
+  @Test func aDesktopThatSaysItsDoorsAreDownEarnsTheSentenceAndNoAct() {
+    let face = agentTerminalFace(
+      join: join(), deviceName: "studio", publishesTerminalDoors: false)
+    #expect(face == .notPublished(deviceName: "studio"))
+    #expect(!face.offersAttach)
+    #expect(!face.offersResume)
+    #expect(face.address == nil)
+    // The FLAG is named: "not published" tells a person nothing they can do.
+    #expect(
+      face.note
+        == "terminal not published — studio is not carrying its terminal doors "
+          + "onto the tailnet (FIELD_NATIVE_TERMINAL_MESH)")
+  }
+
+  /// An unnamed desktop still gets a sentence a person can read.
+  @Test func anUnnamedDesktopWithItsDoorsDownIsNeverAULID() {
+    let face = agentTerminalFace(join: join(), publishesTerminalDoors: false)
+    #expect(face == .notPublished(deviceName: nil))
+    #expect(face.note?.contains("that desktop") == true)
+  }
+
+  /// SILENCE IS NOT A REFUSAL. A slice that predates TM-2 carries no
+  /// `terminalMesh`, and drawing that as "the doors are off" would put a
+  /// sentence about a switch in front of a person whose desktop never had one.
+  /// The act is offered and the MINT answers, in fieldd's own words.
+  @Test func aDesktopThatSaidNothingIsOfferedTheActRatherThanARefusal() {
+    let face = agentTerminalFace(
+      join: join(), deviceName: "studio", publishesTerminalDoors: nil)
+    #expect(face.offersAttach)
+    #expect(face.note == nil)
+    if case .notPublished = face {
+      Issue.record("absence must not be drawn as a refusal, got \(face)")
+    }
+  }
+
+  /// The ENDED run keeps its one act with the doors down.
+  ///
+  /// RESUME goes over the PRODUCT door, not the terminal's, so a transport
+  /// complaint carrying no acts would be the wrong face: what is lost is the
+  /// pane to READ, and that is exactly the difference between `exitedWithPane`
+  /// and `exited`.
+  @Test func anEndedRunOnADoorlessDesktopKeepsResumeAndLosesOnlyTheRead() {
+    let down = agentTerminalFace(
+      join: join(exited: true), deviceName: "studio", publishesTerminalDoors: false)
+    #expect(down == .exited)
+    #expect(down.offersResume)
+    #expect(!down.offersAttach)
+
+    let up = agentTerminalFace(
+      join: join(exited: true), deviceName: "studio", publishesTerminalDoors: true)
+    #expect(up.offersAttach)
+    #expect(up.offersResume)
+  }
+
+  /// And a run with NO terminal is ended whatever the desktop publishes: saying
+  /// "the doors are off" about a terminal that does not exist would be the
+  /// wrong sentence, so the order of the two checks is load-bearing.
+  @Test func aRunWithNoTerminalIsEndedRatherThanBlamedOnTheDoors() {
+    let face = agentTerminalFace(
+      join: join(hosted: "none", session: nil), deviceName: "studio",
+      publishesTerminalDoors: false)
+    #expect(face == .exited)
+    #expect(face.note == "this run has ended — its terminal is gone")
+  }
+
+  /// A PENDING run is gated the same way — its PTY is real and just as
+  /// unreachable when the doors are down.
+  @Test func aPendingRunIsGatedByTheDoorsToo() {
+    let face = agentTerminalFace(
+      join: join(pending: true), deviceName: "studio", publishesTerminalDoors: false)
+    #expect(face == .notPublished(deviceName: "studio"))
+  }
+
   /// The scripted fleet has no desktop and no PTY, and its cards say nothing
   /// about terminals rather than offering one.
   @Test func noJoinOffersNothingAndClaimsNothing() {
