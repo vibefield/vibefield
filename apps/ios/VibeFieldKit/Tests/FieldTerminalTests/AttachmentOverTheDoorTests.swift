@@ -22,7 +22,14 @@ import Testing
   // MARK: The ticket
 
   /// The golden, with live windows and a loopback authority.
-  static func ticketJSON(port: UInt16, sessionId: String = "sess-01J8Z3K9") throws -> JSONValue {
+  ///
+  /// `attachLifetimeMs` is the attach grant's window. It is a parameter because
+  /// the phone closes input a minute before that window ends and nothing
+  /// renews it, so a SHORT one is the only way to reach the closed-input face
+  /// without waiting nine real minutes (TM-r3, K-M1).
+  static func ticketJSON(
+    port: UInt16, sessionId: String = "sess-01J8Z3K9", attachLifetimeMs: Int64 = 600_000
+  ) throws -> JSONValue {
     guard
       let url = Bundle.module.url(
         forResource: "tp-remote-open-ticket.valid", withExtension: "json", subdirectory: "Fixtures")
@@ -38,7 +45,7 @@ import Testing
     ticket["transportGrant"] = try restamp(
       ticket["transportGrant"], from: now, lifetimeMs: 60_000, sessionId: nil)
     ticket["attachGrant"] = try restamp(
-      ticket["attachGrant"], from: now, lifetimeMs: 600_000, sessionId: sessionId)
+      ticket["attachGrant"], from: now, lifetimeMs: attachLifetimeMs, sessionId: sessionId)
     return .object(ticket)
   }
 
@@ -241,6 +248,93 @@ import Testing
     // And a NEW activation: the client mints one per attempt and never reuses
     // an id, so a replacement can never be mistaken for the set it replaced.
     #expect(second != first)
+
+    await attachment.detach()
+  }
+
+  @MainActor
+  @Test func aClosedWriteGrantNamesTheActRatherThanPromisingARenewal() async throws {
+    // TM-r3, K-M1. The attach grant runs ten minutes and both ends close input
+    // a minute early unless a renewal arrives — and NOTHING on this phone
+    // renews one: there is no `terminal.renewAttach` in `FieldLink` and
+    // `RoutedTerminalClient.renew` has no caller. So typing stops while the
+    // phase stays `.live`, the scene keeps advancing, and the only sign used to
+    // be a keystroke going nowhere under the sentence "the write grant is
+    // expiring — renewing it", which was a promise about work nobody was doing.
+    //
+    // The grant here is stamped 30 s so the margin has already closed input,
+    // which is the same state a nine-minute session reaches without the wait.
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+
+    let frames = try LaneFrames.load()
+    let identity = try decodeTRF1Frame(frames.seed)
+    let session = "sess-01J8Z3K9"
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(),
+      appearance: .default,
+      door: { _ in
+        try Self.ticketJSON(port: port, sessionId: session, attachLifetimeMs: 30_000)
+      })
+
+    attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
+    let control = try await Self.value("the control leg to attach") { await door.controlAttach }
+    let activation = control.activationId
+    await door.send(
+      .controlLegAttached,
+      Script.controlAttached(session: session, activation: activation, rights: ["input", "read"]),
+      on: .control)
+    await door.send(
+      .framesLegAttached,
+      Script.framesAttached(
+        session: session, activation: activation,
+        sessionHandle: String(identity.sessionHandle), viewHandle: String(identity.viewHandle)),
+      on: .frames)
+
+    let seedStamp = Script.stamp(1)
+    await door.sendUnit(
+      try Script.frame(
+        session: session, activation: activation, sequence: 1, creditEpoch: 1,
+        base: nil, result: seedStamp, payload: frames.seed))
+    try await Self.until("the seed frame to reach the renderer") {
+      await MainActor.run { attachment.frame == frames.seed }
+    }
+    // The cell says presenting AND input allowed. The cell is not the one that
+    // closed input — this device is, on its own copy of the margin — which is
+    // the whole shape of the state: both ends agree, nobody is at fault, and
+    // the right simply ran out.
+    await door.send(
+      .cellActivationStatus,
+      Script.status(session: session, activation: activation, sequence: 1, accepted: seedStamp),
+      on: .control)
+    try await Self.until("the card to go live") {
+      await MainActor.run { attachment.phase == .live }
+    }
+
+    // Live, GRANTED input by the cell, and still not taking any.
+    #expect(attachment.phase == .live)
+    #expect(attachment.readWrite)
+    #expect(!attachment.acceptsInput)
+    #expect(attachment.writeGrantExpired)
+
+    // The banner names the ACT, and offers it: `retryNow` re-mints and
+    // re-attaches, which is what a renewal would have done without the round
+    // trip. It does NOT cool the terminal — the scene is still advancing.
+    let banner = try #require(attachment.banner)
+    #expect(banner.title.contains("input has closed"))
+    #expect(banner.title.contains("studio"))
+    #expect(banner.detail?.contains("reattach") == true)
+    #expect(banner.actions.contains(TerminalBanner.Action.retryNow))
+    #expect(!banner.coolsTerminal)
+
+    // …and a keystroke says the same true thing rather than promising a
+    // renewal. No input reached the cell.
+    attachment.typeText("ls\n")
+    let note = try #require(attachment.notice)
+    #expect(note == "the write grant has run out — reattach to type again")
+    #expect(!note.contains("renewing"))
+    #expect(await door.inputs.isEmpty)
 
     await attachment.detach()
   }

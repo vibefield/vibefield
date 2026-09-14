@@ -101,6 +101,42 @@ import Testing
       for: .refused("GRANT_INVALID"), device: nil, doorRefusal: nil)
     #expect(banner?.detail == "that desktop turned this attach down.")
   }
+
+  /// A live session whose WRITE grant ran out is the one banner about an ACT
+  /// rather than a state to wait out (TM-r3, K-M1). Nothing renews an attach
+  /// grant on this phone, so a long session reaches this and used to show
+  /// nothing at all: presentation continues, the phase stays `.live`, and the
+  /// only sign was a keystroke going quietly nowhere.
+  @Test func aLiveSessionWhoseWriteGrantRanOutNamesTheAct() throws {
+    let banner = try #require(
+      TerminalAttachment.banner(
+        for: .live, device: "studio", doorRefusal: nil, writeGrantExpired: true))
+    #expect(
+      banner.title
+        == "input has closed — studio is still showing this session but not taking keystrokes")
+    #expect(banner.detail == "the write grant ran out. reattach to type again.")
+    // `retryNow` IS the act: it re-mints and re-attaches, which is what a
+    // renewal would do without the round trip.
+    #expect(banner.actions.contains(.retryNow))
+    #expect(banner.actions.contains(.backToTheField))
+    // …and it does NOT cool the terminal. The scene is still advancing; only
+    // typing stopped, and dimming the pane would say the opposite.
+    #expect(!banner.coolsTerminal)
+  }
+
+  /// It speaks for the LIVE phase alone. Every other phase already has a face,
+  /// and an idle card has no session to hold a grant for.
+  @Test func anExpiredWriteGrantOnlySpeaksForALiveSession() {
+    #expect(
+      TerminalAttachment.banner(
+        for: .idle, device: "studio", doorRefusal: nil, writeGrantExpired: true) == nil)
+    #expect(
+      TerminalAttachment.banner(
+        for: .connecting, device: "studio", doorRefusal: nil, writeGrantExpired: true) == nil)
+    let ended = TerminalAttachment.banner(
+      for: .ended("process exited"), device: "studio", doorRefusal: nil, writeGrantExpired: true)
+    #expect(ended?.title == "this session ended — process exited")
+  }
 }
 
 @Suite struct TerminalDoorWordsTests {

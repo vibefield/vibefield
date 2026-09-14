@@ -286,6 +286,15 @@ public final class RoutedTerminalClient {
   /// `terminal.renewAttach`). Renewal rides the SAME `AttachControlLeg` at a
   /// higher generation: idempotent for the activation, rights and expiry
   /// updated, and a dropped input right revoked the moment the cell accepts it.
+  ///
+  /// **It has NO caller today** (stated TM-r3, K-M1). fieldd serves
+  /// `terminal.renewAttach`, but `FieldLink` opens no door for it, so nothing
+  /// on this phone asks — input simply closes a minute before the grant expires
+  /// and the card says so and offers a reattach. Wiring the renewal is a
+  /// product-wide follow-up shared with the renderer (`session-grants.ts`) and
+  /// deliberately not this fix: half a renewal on one client is a worse state
+  /// than none, because the face would stop being able to tell the truth about
+  /// which half ran.
   public func renew(_ grant: RoutedGrant) {
     guard let sessionId = grant.sessionId, var session = sessions[sessionId] else { return }
     guard let held = grants[sessionId], let next = grant.grantGeneration,

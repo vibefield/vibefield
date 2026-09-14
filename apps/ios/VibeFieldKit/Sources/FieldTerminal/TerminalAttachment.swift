@@ -203,7 +203,26 @@ public final class TerminalAttachment {
   }
 
   public var banner: TerminalBanner? {
-    Self.banner(for: phase, device: deviceName, doorRefusal: doorRefusal)
+    Self.banner(
+      for: phase, device: deviceName, doorRefusal: doorRefusal,
+      writeGrantExpired: writeGrantExpired)
+  }
+
+  /// This viewer's INPUT right has run out on a session that is otherwise live.
+  ///
+  /// The attach grant is minted for ten minutes and both ends close input a
+  /// minute early unless a renewal arrives (`ATTACH_RENEWAL_MARGIN_MS`), and
+  /// nothing on this phone renews one — there is no `terminal.renewAttach` in
+  /// `FieldLink` and `RoutedTerminalClient.renew` has no caller. So this is a
+  /// real resting state a long session reaches, and it used to be invisible:
+  /// presentation continues, the phase stays `.live`, and the only sign was a
+  /// keystroke quietly going nowhere.
+  public var writeGrantExpired: Bool {
+    guard let client, let sessionID, let session = client.sessions[sessionID] else { return false }
+    // Only for a viewer that WAS granted input. A read-only one has its own
+    // sentence, and it is not about anything running out.
+    guard session.rights.contains(.input) else { return false }
+    return !session.inputRightLive
   }
 
   // MARK: - Attach / detach
@@ -589,7 +608,15 @@ public final class TerminalAttachment {
       return "view only — this desktop granted read without input"
     }
     if !session.inputRightLive {
-      return "the write grant is expiring — renewing it"
+      // It said "the write grant is expiring — renewing it" until TM-r3, and
+      // NOTHING renews it: there is no `terminal.renewAttach` door in
+      // `FieldLink` and `RoutedTerminalClient.renew` has no caller. A sentence
+      // promising work that is not happening is the one thing the voice rule
+      // forbids outright (DESIGN.md §9 — never overstate what we know), and it
+      // is worse than silence, because it tells a person to wait for something
+      // that will never arrive. What is true is that the right is gone and a
+      // reattach is what gets it back.
+      return "the write grant has run out — reattach to type again"
     }
     if !session.presentationReady {
       return "waiting for the terminal to catch up"
@@ -636,12 +663,24 @@ public final class TerminalAttachment {
   /// The phase → the banner. Pure, so every sentence a person can be shown is
   /// decidable without a simulator.
   nonisolated static func banner(
-    for phase: TerminalPhase, device: String?, doorRefusal: String?
+    for phase: TerminalPhase, device: String?, doorRefusal: String?,
+    writeGrantExpired: Bool = false
   ) -> TerminalBanner? {
     let who = device ?? "that desktop"
     switch phase {
-    case .idle, .live:
+    case .idle:
       return nil
+    case .live:
+      // A live session whose WRITE grant has run out (TM-r3, K-M1). The scene
+      // is still advancing, so this does NOT cool the terminal — it is the one
+      // banner about an act the person can take rather than about a state they
+      // have to wait out. `retryNow` is that act: it re-mints and re-attaches,
+      // which is what a renewal would have done without the round trip.
+      guard writeGrantExpired else { return nil }
+      return TerminalBanner(
+        title: "input has closed — \(who) is still showing this session but not taking keystrokes",
+        detail: "the write grant ran out. reattach to type again.",
+        actions: [.retryNow, .backToTheField], coolsTerminal: false)
     case .connecting:
       return nil
     case .suspended(let why):
