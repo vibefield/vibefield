@@ -43,6 +43,18 @@ fn endpoint_for(root: &std::path::Path, file: &str) -> String {
 }
 
 fn spawn_cell(root: &std::path::Path, instance: u32) -> (Child, String, String) {
+    spawn_cell_with_env(root, instance, &[])
+}
+
+/// N-M6 — `spawn_cell` with variables planted in the CELL PROCESS's own
+/// environment, which is the only way to exercise the EL7 strip: the strip acts
+/// on what the cell inherited, so a test that cannot poison that inheritance
+/// cannot see the strip at all.
+fn spawn_cell_with_env(
+    root: &std::path::Path,
+    instance: u32,
+    env: &[(&str, &str)],
+) -> (Child, String, String) {
     let control = endpoint_for(
         root,
         &field_native::endpoints::cell_socket_file("termctl.sock", instance),
@@ -51,7 +63,11 @@ fn spawn_cell(root: &std::path::Path, instance: u32) -> (Child, String, String) 
         root,
         &field_native::endpoints::cell_socket_file("termframe.sock", instance),
     );
-    let child = Command::new(env!("CARGO_BIN_EXE_field-terminal-host"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_field-terminal-host"));
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    let child = command
         .args([
             "--control",
             &control,
@@ -465,4 +481,125 @@ fn a_keyless_bootstrap_serves_no_doors_and_says_so() {
     drop(stdin);
     let _ = lines.next();
     assert!(wait_exit(child, Duration::from_secs(10)).success());
+}
+
+/// N-M6 (EL7 — daemon secrets never enter agent environments) — the
+/// `FIELD_*` / `FIELDD_*` strip at PTY creation, witnessed on THIS plane.
+///
+/// The strip is one line in `cell.rs`
+/// (`with_private_env_prefixes(registries::ENV_PREFIXES…)`) and it had no Rust
+/// witness at all: fieldd's kill matrix proves it from outside, so deleting that
+/// line left the entire field-native gate green. A wall whose only witness lives
+/// in another package is a wall one refactor away from being a comment.
+///
+/// WHY IT IS THE WHOLE OF EL7 HERE. fieldd spawns the floor by handing down its
+/// ENTIRE environment (`bin.ts`), so every `FIELD_*`/`FIELDD_*` the shell was
+/// started with — pairing paths, build ids, daemon-private switches — reaches
+/// this process. A same-uid agent in a PTY is the adversary the law names, and
+/// the only thing between it and those values is this strip.
+///
+/// `mode: "inherit"` is the mode under test and the one the DECK uses
+/// (`terminal-service.ts`): inherit-minus-strip. Under `mode: "clean"` the row
+/// would pass against a cell with no strip at all, because nothing is inherited
+/// to strip — which is exactly the shape of vacuous test this wave is clearing
+/// out, so it is stated rather than left to be rediscovered.
+///
+/// THE CONTROL VARIABLE is what makes the absence mean something: an unprefixed
+/// variable planted the same way MUST arrive. Without it, a cell that inherited
+/// nothing at all (or a session that failed to start) would read as a pass.
+#[tokio::test]
+async fn a_real_pty_never_inherits_the_daemon_private_prefixes() {
+    use field_native::services::terminal_client::ControlClient;
+
+    let root = short_root();
+    let dump = root.path().join("envdump.txt");
+    let dump_path = dump.to_str().expect("utf8 dump path").to_string();
+
+    // Planted in the CELL's own environment, the way fieldd's handed-down
+    // environment plants the real ones. Both prefixes from the generated
+    // registry, plus an unprefixed control.
+    let (mut child, control, _frame) = spawn_cell_with_env(
+        root.path(),
+        11,
+        &[
+            ("FIELD_SMUGGLE", "field-must-not-escape"),
+            ("FIELDD_SMUGGLE", "fieldd-must-not-escape"),
+            ("VF_CELL_CONTROL", "this-one-must-arrive"),
+        ],
+    );
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    writeln!(stdin, "{}", serde_json::json!({ "token": "tok-strip" })).expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let _hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("hello").expect("read hello")).expect("parse");
+
+    let (client, _events) = ControlClient::connect(&control, "tok-strip")
+        .await
+        .expect("dial the cell's control socket");
+
+    // A REAL PTY, reporting its own environment. Written to a file rather than
+    // read off the frame plane so the assertion is over the tenant's actual
+    // `environ` and not over anything this test had to decode.
+    #[cfg(unix)]
+    let (executable, args) = (
+        "/bin/sh",
+        serde_json::json!(["-c", format!("env > {dump_path}")]),
+    );
+    #[cfg(windows)]
+    let (executable, args) = (
+        "cmd.exe",
+        serde_json::json!(["/c", format!("set > {dump_path}")]),
+    );
+
+    let session = client
+        .create_session(serde_json::json!({
+            "executable": executable,
+            "args": args,
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            // INHERIT, deliberately — see the doc comment. Under "clean" this
+            // row would hold against a cell with no strip at all.
+            "environment": {"mode": "inherit"},
+        }))
+        .await
+        .expect("create a session on the real cell");
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let dumped = loop {
+        if let Ok(text) = std::fs::read_to_string(&dump) {
+            if !text.is_empty() {
+                break text;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the tenant never wrote its environment to {dump_path}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+
+    // THE CONTROL FIRST: if this is absent the run proves nothing about the
+    // strip, because nothing was inherited for it to act on.
+    assert!(
+        dumped.contains("VF_CELL_CONTROL=this-one-must-arrive"),
+        "an unprefixed variable must reach the PTY, or this row is vacuous:\n{dumped}"
+    );
+    for prefix in field_native::registries::ENV_PREFIXES {
+        assert!(
+            !dumped.contains(&format!("{prefix}SMUGGLE")),
+            "a {prefix}* variable reached a same-uid tenant's environment (EL7):\n{dumped}"
+        );
+    }
+    // And by value too, so a renamed-but-forwarded variable cannot pass.
+    assert!(
+        !dumped.contains("must-not-escape"),
+        "a daemon-private VALUE reached the PTY under some other name:\n{dumped}"
+    );
+
+    let _ = client.terminate(&session.id, "strip-row").await;
+    drop(stdin);
+    let _ = lines.next();
+    let _ = wait_exit(child, Duration::from_secs(10));
 }
