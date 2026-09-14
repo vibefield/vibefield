@@ -1170,6 +1170,34 @@ mod tests {
             "peer-a",
             &json!({"padding": "x".repeat(DEVICE_SLICE_BYTES)})
         ));
+        // MF-1's agent field rides the same table and was the one row this
+        // test did not assert — a cap with no test is a cap that can be
+        // dropped from the match in a refactor and noticed by nobody. The
+        // slice a phone reads is content-free, so the budget is generous; what
+        // it stops is one peer amplifying every reader's board.
+        assert!(store_data_allowed(
+            stores::AGENT_FIELD,
+            "peer-a",
+            &json!({"v": 1, "deviceId": "dev-a", "rows": []})
+        ));
+        assert!(!store_data_allowed(
+            stores::AGENT_FIELD,
+            "peer-a",
+            &json!({"v": 1, "deviceId": "dev-a", "rows": [], "padding": "x".repeat(AGENT_FIELD_SLICE_BYTES)})
+        ));
+        // The table is a CAP LIST, not an allow-list, and this row says so out
+        // loud because the difference matters: a store with no row is admitted
+        // UNCAPPED — any size, and (`spawn_store_forwarder`, the
+        // `store_slice_limit(..).is_some()` guard) no owner bound either. Only
+        // stores fieldd actually opens reach that path, but `terminal.v1.hosts`
+        // is one of them and has no row today. Asserted rather than fixed: a
+        // cap is a NUMBER, and choosing one for the hosts store is a decision
+        // with a registry row behind it, not a line to slip into this test.
+        assert!(store_data_allowed(
+            "some.other.store.v1",
+            "peer-a",
+            &json!({"padding": "x".repeat(ARTIFACT_SLICE_BYTES * 4)})
+        ));
     }
 
     fn serve_input<'a>(serve_id: &'a str, target: &'a Value) -> ServeConfigInput<'a> {
