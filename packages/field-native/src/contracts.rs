@@ -1067,6 +1067,9 @@ impl Hello {
 #[doc = "    \"terminal\": {"]
 #[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
 #[doc = "    },"]
+#[doc = "    \"terminalMesh\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
 #[doc = "    \"terminalRoutes\": {"]
 #[doc = "      \"$ref\": \"#/definitions/TerminalRouteSnapshot\""]
 #[doc = "    },"]
@@ -1103,6 +1106,12 @@ pub struct HelloAck {
     pub server_mac: ::std::option::Option<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub terminal: ::std::option::Option<TerminalEndpoints>,
+    #[serde(
+        rename = "terminalMesh",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub terminal_mesh: ::std::option::Option<bool>,
     #[serde(
         rename = "terminalRoutes",
         default,
@@ -7422,6 +7431,7 @@ pub mod builder {
             ::std::option::Option<super::TerminalEndpoints>,
             ::std::string::String,
         >,
+        terminal_mesh: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         terminal_routes: ::std::result::Result<
             ::std::option::Option<super::TerminalRouteSnapshot>,
             ::std::string::String,
@@ -7440,6 +7450,7 @@ pub mod builder {
                 server_kind: Err("no value supplied for server_kind".to_string()),
                 server_mac: Ok(Default::default()),
                 terminal: Ok(Default::default()),
+                terminal_mesh: Ok(Default::default()),
                 terminal_routes: Ok(Default::default()),
                 user_id: Ok(Default::default()),
             }
@@ -7506,6 +7517,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for terminal: {e}"));
             self
         }
+        pub fn terminal_mesh<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.terminal_mesh = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for terminal_mesh: {e}"));
+            self
+        }
         pub fn terminal_routes<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<super::TerminalRouteSnapshot>>,
@@ -7537,6 +7558,7 @@ pub mod builder {
                 server_kind: value.server_kind?,
                 server_mac: value.server_mac?,
                 terminal: value.terminal?,
+                terminal_mesh: value.terminal_mesh?,
                 terminal_routes: value.terminal_routes?,
                 user_id: value.user_id?,
             })
@@ -7551,6 +7573,7 @@ pub mod builder {
                 server_kind: Ok(value.server_kind),
                 server_mac: Ok(value.server_mac),
                 terminal: Ok(value.terminal),
+                terminal_mesh: Ok(value.terminal_mesh),
                 terminal_routes: Ok(value.terminal_routes),
                 user_id: Ok(value.user_id),
             }

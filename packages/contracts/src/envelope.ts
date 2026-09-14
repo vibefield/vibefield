@@ -145,15 +145,16 @@ export const TerminalRouteCell = z
      * token; the HMAC-SHA256 key under every TPv3 grant fieldd issues for this
      * cell (`kid = {cellBootId, grantKeyGeneration}`). Same custody as
      * `authToken` (NF-D8/EL7: the paired mgmt channel only — never env, disk
-     * or logs). ABSENT on a pre-TP floor and on the in-process serve; a reader
-     * without it mints NO grants (the honest answer), never a half ticket. */
+     * or logs). ABSENT on a pre-TP floor; a reader without it mints NO grants
+     * (the honest answer), never a half ticket. (Until TM-1, 2026-09-14, the
+     * flagged in-process serve was the second keyless shape; it is gone.) */
     grantKey: z.string().optional(),
     /** `kid.keyGeneration` — 1 per cell boot today; rotation = a new boot. */
     grantKeyGeneration: z.number().int().optional(),
     /** TP-S3a (terminal-pipeline-v3 §8, TP-D26) — the cell's two T1 loopback
      * WebSocket doors, reported in its hello once it serves them. ABSENT when
-     * the cell has no grant key (a pre-TP floor, the in-process serve) or
-     * predates the door layer; fieldd carries them into
+     * the cell has no grant key (a pre-TP floor) or predates the door layer;
+     * fieldd carries them into
      * `TerminalOpenTicket.endpoints` and nothing else reads them (transport-
      * private — never UI). */
     doors: CellEndpointSet.optional(),
@@ -208,6 +209,23 @@ export const HelloAck = z
      * FULL snapshot, so a missed edge is repaired by the next one. Absent
      * from a pre-TC-S2 floor (tolerant readers fall back to `terminal`). */
     terminalRoutes: TerminalRouteSnapshot.optional(),
+    /** MF-1l / TM-1 — "this floor's terminal doors are published on the
+     * tailnet", re-asserted on every hello. TRUE needs BOTH halves: the floor
+     * was asked to publish them (`FIELD_NATIVE_TERMINAL_MESH`) AND the mesh
+     * gateway's tailnet node is up as the ack is written — a flag over a
+     * gateway that never came up publishes nothing, and saying otherwise is the
+     * false positive this field exists to close. FALSE is the honest answer on
+     * a floor serving PTYs perfectly well to local windows.
+     *
+     * Absent = a floor predating the field, never `false`: a tolerant reader
+     * that needs the distinction reads absence as "this floor cannot say".
+     *
+     * Secret-free by construction — a boolean, never the capability, the node's
+     * name, or a port (EL7). It says nothing about WHICH doors: under
+     * `thinking-terminal-mesh-cells.md`'s T the published doors are the cells'
+     * own T1 doors behind the sidecar's reverse proxy, and fieldd — not the
+     * floor — registers those routes. */
+    terminalMesh: z.boolean().optional(),
     /** GT-2d — who actually answered. field-native outlives everything and is
      * adopted by design, so the floor a shell pairs with can be far older than
      * the tree that built it; this label is how that becomes visible instead of

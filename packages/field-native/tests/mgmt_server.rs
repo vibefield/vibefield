@@ -565,3 +565,54 @@ async fn a_serving_floor_mints_a_capability_the_paired_client_can_be_granted() {
 
     daemon.shutdown().await;
 }
+
+// ---- TM-1 (MF-1l) — the hello says whether the terminal doors are on the
+// tailnet, and the answer is never inferred from an empty cell list ----
+
+/// The default floor: no flag, no gateway, doors loopback-only. The field is
+/// PRESENT and false — absence means "a floor that predates the field", and a
+/// floor that can answer must not be mistaken for one that cannot.
+#[tokio::test]
+async fn the_hello_says_the_terminal_doors_are_not_published() {
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    let ack = c.hello(&daemon, 1).await;
+
+    assert_eq!(
+        ack["result"]["terminalMesh"], false,
+        "a floor with the flag unset publishes nothing, and says so: {ack}"
+    );
+    assert!(
+        ack["result"].get("terminalMesh").is_some(),
+        "the field must be PRESENT — absence is reserved for a floor predating it: {ack}"
+    );
+
+    daemon.shutdown().await;
+}
+
+/// The FALSE-POSITIVE direction, which is the whole reason the field exists:
+/// the flag is a request, and a request over a gateway that never came up
+/// publishes nothing. A publisher gating on the flag alone would announce this
+/// floor's sessions as reachable when no tailnet node exists to reach them.
+///
+/// The floor is a floor throughout — the flag costs it nothing (TM-D7), which
+/// the serving row in `terminal_unit.rs` proves against real cells.
+#[tokio::test]
+async fn a_flagged_floor_without_a_gateway_says_the_doors_are_not_published() {
+    let dir = serving_tempdir();
+    let config = NativeConfig {
+        terminal_mesh_enabled: true,
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    assert!(!config.mesh_enabled, "the gateway is off in this scenario");
+    let daemon = bootstrap(config).await.expect("bootstrap");
+
+    let mut c = TestClient::connect(&daemon).await;
+    let ack = c.hello(&daemon, 1).await;
+    assert_eq!(
+        ack["result"]["terminalMesh"], false,
+        "asked is not achieved: with no node there is nothing on the tailnet: {ack}"
+    );
+
+    daemon.shutdown().await;
+}

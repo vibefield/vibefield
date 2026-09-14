@@ -302,9 +302,16 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
                 // carries its value: to the single pairing-verified client on
                 // a local socket, which grants it to a self peer over the
                 // tailnet door (`terminal.mirrorWriteGrant`). `configured:
-                // false` is the honest view-only floor — the same fact
-                // `MeshPlan::offers_mirror_write` publishes as a face — and it
-                // is what fieldd turns into UNAVAILABLE {no-mirror-write}.
+                // false` is the honest view-only floor, and it is what fieldd
+                // turns into UNAVAILABLE {no-mirror-write}.
+                //
+                // TM-1 (2026-09-14): nothing in this process COMPARES the
+                // capability any more — the TSP1 adapter that did retired with
+                // the in-process serve, and this door outlives it only because
+                // the phone still calls the grant it feeds. TM-3 deletes the
+                // door, the mint, the file and the env var together, once an
+                // expiring per-client attach grant carries the write right
+                // (TM-D3). Until then it is dead weight that answers honestly.
                 let result = match &state.terminal_mirror_write {
                     Some(capability) => json!({"configured": true, "capability": capability}),
                     None => json!({"configured": false}),
@@ -486,18 +493,26 @@ async fn handle_hello(
     //
     // TC-D15 (TC-S2): `terminal` is now the LEGACY single-cell mirror, kept in
     // lockstep with `terminalRoutes` — the revisioned snapshot new readers
-    // prefer. Cell mode fills both from the snapshot; the flagged in-process
-    // mode fills only the mirror from its OnceLock.
+    // prefer. Both come from the snapshot (TM-1 retired the in-process serve,
+    // which was the one shape that filled the mirror from somewhere else).
     //
-    // MF-2i: that last clause is now `disclosed_routes` — the rule, stated
-    // once, and the routes subscription applies the same one instead of
-    // contradicting this ack a message later.
+    // MF-2i: `disclosed_routes` is the rule, stated once, and the routes
+    // subscription applies the same one instead of contradicting this ack a
+    // message later.
     if let Some(endpoints) = state.terminal_endpoints_now() {
         ack["terminal"] = serde_json::to_value(endpoints).expect("terminal endpoints serialize");
     }
     if let Some(routes) = disclosed_routes(&state.terminal_routes.borrow()) {
         ack["terminalRoutes"] = serde_json::to_value(routes).expect("terminal routes serialize");
     }
+    // TM-1 (MF-1l) — whether this floor's terminal doors are published on the
+    // tailnet, re-asserted on EVERY hello because both halves can move between
+    // pairings (the flag with a floor restart, the node whenever the gateway's
+    // does). Unconditional, unlike the two fields above: `false` is a real
+    // answer here, and withholding it would make a floor that says "no"
+    // indistinguishable from one that predates the field. Secret-free — a
+    // boolean, never the capability, the node's name, or a port (EL7).
+    ack["terminalMesh"] = json!(state.terminal_mesh_published());
     (ok(id, ack), true)
 }
 

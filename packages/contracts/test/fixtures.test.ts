@@ -290,6 +290,29 @@ describe("GT-2d — the hello ack wears a provenance label", () => {
   });
 });
 
+describe("TM-1 (MF-1l) — the hello says whether the terminal doors are on the tailnet", () => {
+  const floor = {
+    contractsVersion: "0.1.0",
+    serverKind: "field-native" as const,
+    grantedScopes: [],
+  };
+
+  it("carries the boolean both ways and keeps absence distinct from false", () => {
+    expect(HelloAck.parse({ ...floor, terminalMesh: true }).terminalMesh).toBe(true);
+    expect(HelloAck.parse({ ...floor, terminalMesh: false }).terminalMesh).toBe(false);
+    // A floor predating the field says nothing — which a reader that needs the
+    // distinction must be able to tell from a floor that says "no".
+    expect(HelloAck.parse(floor).terminalMesh).toBeUndefined();
+  });
+
+  it("refuses a non-boolean rather than coercing one", () => {
+    // The field gates a remote-attach path, so a truthy string must never read
+    // as `true` on the way in.
+    expect(HelloAck.safeParse({ ...floor, terminalMesh: "yes" }).success).toBe(false);
+    expect(HelloAck.safeParse({ ...floor, terminalMesh: 1 }).success).toBe(false);
+  });
+});
+
 describe("P3 — tolerant reader", () => {
   it("passthrough preserves unknown fields end-to-end", () => {
     const raw = JSON.parse(readFileSync(join(FIXTURES, "hello.unknown-field.json"), "utf8"));

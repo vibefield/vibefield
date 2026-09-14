@@ -61,6 +61,12 @@ fn hello_ack_fixture() {
     // TC-D15 (TC-S2) — the ack carrying the revisioned route snapshot beside
     // the legacy single-cell mirror, in lockstep. Emitted here, so strict.
     roundtrip::<HelloAck>("hello-ack.terminal-routes.json", true);
+    // TM-1 (MF-1l) — the same ack from a floor whose terminal doors ARE
+    // published on the tailnet: `terminalMesh: true` beside a cell row carrying
+    // its grant key and its two T1 doors, which is the only shape the boolean
+    // can be true over (cells always; the flag means the tailnet door).
+    // Emitted here, so strict.
+    roundtrip::<HelloAck>("hello-ack.terminal-mesh.json", true);
 }
 
 #[test]

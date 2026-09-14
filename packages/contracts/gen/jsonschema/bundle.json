@@ -1485,6 +1485,9 @@
         "terminalRoutes": {
           "$ref": "#/definitions/TerminalRouteSnapshot"
         },
+        "terminalMesh": {
+          "type": "boolean"
+        },
         "nativeBuild": {
           "type": "string"
         },
