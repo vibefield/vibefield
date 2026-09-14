@@ -203,11 +203,17 @@ actor FakeCellDoor {
       legs[channel] = connection
       switch policy {
       case .accept:
-        send(
-          .connectionAccepted,
-          Script.accepted(
-            channel: channel, legGeneration: legGeneration, heartbeatTtlMs: heartbeatTtlMs),
-          on: channel)
+        // The accept is DERIVED from the contracts' golden, so a missing copy
+        // is a red rather than a door that quietly answers nothing.
+        do {
+          send(
+            .connectionAccepted,
+            try Script.accepted(
+              channel: channel, legGeneration: legGeneration, heartbeatTtlMs: heartbeatTtlMs),
+            on: channel)
+        } catch {
+          Issue.record("the accept golden is not in this bundle: \(error)")
+        }
       case .refuse(let code, let retryable):
         // POST-verification: the body, then a close naming the code.
         send(

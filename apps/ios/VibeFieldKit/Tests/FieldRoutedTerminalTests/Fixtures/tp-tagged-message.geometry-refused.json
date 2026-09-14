@@ -1,0 +1,6 @@
+{
+  "type": "GeometryRefused",
+  "code": "SEAT_HELD",
+  "currentHolder": { "clientId": "client-01", "viewId": "view-01", "holderGeneration": 2 },
+  "geometryRevision": 5
+}

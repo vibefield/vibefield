@@ -1,0 +1,15 @@
+{
+  "creditEpoch": 1,
+  "creditSequence": 41,
+  "connectionBytesReturned": 1048576,
+  "accounts": [
+    {
+      "activationId": "act-01",
+      "bytesReturned": 917504
+    },
+    {
+      "activationId": "act-00-draining",
+      "bytesReturned": 131072
+    }
+  ]
+}

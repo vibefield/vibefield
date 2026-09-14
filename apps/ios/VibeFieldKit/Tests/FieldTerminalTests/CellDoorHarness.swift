@@ -201,11 +201,17 @@ actor CellDoorHarness {
       legs[channel] = connection
       switch policy {
       case .accept:
-        send(
-          .connectionAccepted,
-          Script.accepted(
-            channel: channel, legGeneration: legGeneration, heartbeatTtlMs: heartbeatTtlMs),
-          on: channel)
+        // The accept is DERIVED from the contracts' golden, so a missing copy
+        // is a red rather than a door that quietly answers nothing.
+        do {
+          send(
+            .connectionAccepted,
+            try Script.accepted(
+              channel: channel, legGeneration: legGeneration, heartbeatTtlMs: heartbeatTtlMs),
+            on: channel)
+        } catch {
+          Issue.record("the accept golden is not in this bundle: \(error)")
+        }
       case .refuse(let code, let retryable):
         // POST-verification: the body, then a close naming the code.
         send(
@@ -284,42 +290,65 @@ private final class CellDoorOnce: @unchecked Sendable {
 
 // MARK: - The shapes the door answers with
 
+/// One golden out of THIS bundle.
+///
+/// A SwiftPM resource belongs to exactly one target, so the file this target
+/// reads is its own copy — the same argument `Vector` makes next door, and the
+/// reason `check:ios-fixtures` gates copies by basename wherever they sit.
+enum Golden {
+  static func json(_ name: String) throws -> JSONValue {
+    guard
+      let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures")
+    else { throw Missing(name: name) }
+    return try JSONValue.parse(try Data(contentsOf: url))
+  }
+
+  struct Missing: Error, CustomStringConvertible {
+    let name: String
+    var description: String { "golden `\(name).json` is not in the test bundle" }
+  }
+}
+
 /// TM-4's `Script`, copied with its door for the same reason. Every body here
 /// is the contract's own shape as `field-native/src/tp/door.rs` writes it; a
 /// test that invented a field would be witnessing itself.
+///
+/// **The duplication, since TM-r3 (2026-09-14):** these two copies are no
+/// longer two statements of the accept. `accepted` DERIVES from
+/// `tp-connection-accepted.frames.json` on both sides, so the contract's bytes
+/// are the one source and each copy is only the small set of overrides its
+/// tests vary. The Swift file stays duplicated because a SwiftPM source file
+/// belongs to one target and hoisting a just-landed lane's harness into a
+/// support library would churn TM-4 to save a wrapper; what the copy can drift
+/// on now is the overrides, and an override that drifted would fail the row
+/// that reads it rather than quietly changing the shape under every row.
 enum Script {
+  /// See `ScriptedTransport.swift` for the full note. In short: the seven
+  /// writer-side `protocolLimits` this hand-written body used to omit are the
+  /// golden's now, and the CONTROL leg drops `creditEpoch` and `initialWindows`
+  /// because `door.rs` writes both only on the frames leg.
   static func accepted(
     channel: RoutedChannel, legGeneration: Int64 = 1, heartbeatTtlMs: Int64 = 600,
     capabilities: [String] = ["resume", "session-events"],
-    creditWindow: Int64 = 2_097_152
-  ) -> [String: JSONValue] {
-    var body: [String: JSONValue] = [
-      "selectedProtocolVersion": .object(["major": .int(1), "minor": .int(0)]),
-      "connectionSetId": .string("cs-test"),
-      "channel": .string(channel.rawValue),
-      "legGeneration": .int(legGeneration),
-      "heartbeatTtlMs": .int(heartbeatTtlMs),
-      "protocolLimits": .object([
-        "maxControlMessageBytes": .int(65_536),
-        "maxPresentationChunkBytes": .int(262_144),
-        "maxCreditReturnDelayMs": .int(16),
-        "sceneAppliedRefreshMs": .int(1_000),
-        "activationAttachDeadlineMs": .int(5_000),
-        "maxCatchupBytes": .int(8_388_608),
-        "creditAccountDrainTtlMs": .int(5_000),
-      ]),
-      "capabilities": .array(capabilities.map(JSONValue.string)),
-    ]
-    if channel == .frames {
+    creditWindow: Int64 = 2_097_152, connectionSetId: String = "cs-win-3c4d-2-cb-7f3a9c1e"
+  ) throws -> [String: JSONValue] {
+    guard var body = try Golden.json("tp-connection-accepted.frames").objectValue else {
+      throw Golden.Missing(name: "tp-connection-accepted.frames")
+    }
+    body["connectionSetId"] = .string(connectionSetId)
+    body["channel"] = .string(channel.rawValue)
+    body["legGeneration"] = .int(legGeneration)
+    body["heartbeatTtlMs"] = .int(heartbeatTtlMs)
+    body["capabilities"] = .array(capabilities.map(JSONValue.string))
+    switch channel {
+    case .frames:
       body["creditEpoch"] = .int(legGeneration)
-      body["initialWindows"] = .object([
-        "connectionCreditBytes": .int(creditWindow),
-        "perActivationCreditBytes": .int(524_288),
-        "stagingBytesPerSession": .int(4_194_304),
-        "stagingBytesTotal": .int(16_777_216),
-        "maxConcurrentActivations": .int(8),
-        "maxConcurrentSeeds": .int(2),
-      ])
+      var windows = body["initialWindows"]?.objectValue ?? [:]
+      windows["connectionCreditBytes"] = .int(creditWindow)
+      body["initialWindows"] = .object(windows)
+    case .control:
+      body["creditEpoch"] = nil
+      body["initialWindows"] = nil
     }
     return body
   }

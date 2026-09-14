@@ -37,9 +37,9 @@ import Testing
       return onControl && onFrames
     }
     try await control.deliver(
-      .connectionAccepted, Script.accepted(channel: .control, legGeneration: legGeneration))
+      .connectionAccepted, try Script.accepted(channel: .control, legGeneration: legGeneration))
     try await frames.deliver(
-      .connectionAccepted, Script.accepted(channel: .frames, legGeneration: legGeneration))
+      .connectionAccepted, try Script.accepted(channel: .frames, legGeneration: legGeneration))
     try await settle("both attaches") {
       let onControl = await control.lastSent("AttachControlLeg") != nil
       let onFrames = await frames.lastSent("AttachFramesLeg") != nil
@@ -596,8 +596,8 @@ import Testing
       let onFrames = await frames.sentTags().contains("ConnectionHello")
       return onControl && onFrames
     }
-    try await control.deliver(.connectionAccepted, Script.accepted(channel: .control))
-    try await frames.deliver(.connectionAccepted, Script.accepted(channel: .frames))
+    try await control.deliver(.connectionAccepted, try Script.accepted(channel: .control))
+    try await frames.deliver(.connectionAccepted, try Script.accepted(channel: .frames))
     try await settle("the attach") { await control.lastSent("AttachControlLeg") != nil }
     let activation = await control.lastSent("AttachControlLeg")?["activationId"]?.stringValue ?? ""
     try await control.deliver(

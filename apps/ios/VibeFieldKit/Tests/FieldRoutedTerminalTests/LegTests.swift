@@ -70,7 +70,7 @@ import Testing
     leg.open(hello: hello(.control))
     try await settle("the hello") { await connection.sentTags().first == "ConnectionHello" }
     try await connection.deliver(
-      .connectionAccepted, Script.accepted(channel: .control, heartbeatTtlMs: 150))
+      .connectionAccepted, try Script.accepted(channel: .control, heartbeatTtlMs: 150))
     try await settle("the accept") { accepted != nil }
 
     // Keep the leg BUSY: heartbeats must still flow.
@@ -83,7 +83,7 @@ import Testing
     let beats = await connection.allSent("LegHeartbeat")
     // The identity must match EXACTLY or the cell closes 4003: it compares the
     // set id, the channel and the leg generation against the leg it accepted.
-    #expect(beats[0]["connectionSetId"]?.stringValue == "cs-test")
+    #expect(beats[0]["connectionSetId"]?.stringValue == "cs-win-3c4d-2-cb-7f3a9c1e")
     #expect(beats[0]["channel"]?.stringValue == "control")
     #expect(beats[0]["legGeneration"]?.intValue == 1)
     #expect(beats[0]["sequence"]?.intValue == 1)
@@ -117,7 +117,7 @@ import Testing
     let leg = makeLeg(transport: transport, onAccepted: { _ in accepted = true }, onFailed: { failure = $0 })
     leg.open(hello: hello(.control))
     try await settle("the hello") { await connection.sentTags().first == "ConnectionHello" }
-    try await connection.deliver(.connectionAccepted, Script.accepted(channel: .control))
+    try await connection.deliver(.connectionAccepted, try Script.accepted(channel: .control))
     try await settle("the accept") { accepted }
     await connection.hangUp(code: 1008)
     try await settle("the close") { failure != nil }
@@ -184,7 +184,7 @@ import Testing
       onFailed: { failure = $0 })
     leg.open(hello: hello(.frames))
     try await settle("the hello") { await connection.sentTags().first == "ConnectionHello" }
-    try await connection.deliver(.connectionAccepted, Script.accepted(channel: .frames))
+    try await connection.deliver(.connectionAccepted, try Script.accepted(channel: .frames))
     try await settle("the accept") { accepted }
     // `SessionEvent` is a CONTROL-leg verb. On the frames leg it is a violation.
     try await connection.deliver(.sessionEvent, ["event": .object(["kind": .string("resync")])])
@@ -217,7 +217,7 @@ import Testing
       transport: transport, onAccepted: { _ in accepted = true }, onFailed: { controlFailure = $0 })
     controlLeg.open(hello: hello(.control))
     try await settle("the hello") { await control.sentTags().first == "ConnectionHello" }
-    try await control.deliver(.connectionAccepted, Script.accepted(channel: .control))
+    try await control.deliver(.connectionAccepted, try Script.accepted(channel: .control))
     try await settle("the accept") { accepted }
     await control.deliver(.binary(Data([0x54, 0x50, 1, 0, 0, 0, 0, 0])))
     try await settle("the control binary") { controlFailure != nil }
@@ -236,7 +236,7 @@ import Testing
     let leg = makeLeg(transport: transport, onFailed: { failure = $0 })
     leg.open(hello: hello(.control))
     try await settle("the hello") { await connection.sentTags().first == "ConnectionHello" }
-    try await connection.deliver(.connectionAccepted, Script.accepted(channel: .frames))
+    try await connection.deliver(.connectionAccepted, try Script.accepted(channel: .frames))
     try await settle("the contradiction") { failure != nil }
     if case .protocolViolation = failure {} else {
       Issue.record("expected a protocol violation, got \(String(describing: failure))")
@@ -247,7 +247,7 @@ import Testing
     let secondLeg = makeLeg(transport: transport, onFailed: { majorFailure = $0 })
     secondLeg.open(hello: hello(.control))
     try await settle("the hello") { await second.sentTags().first == "ConnectionHello" }
-    var body = Script.accepted(channel: .control)
+    var body = try Script.accepted(channel: .control)
     body["selectedProtocolVersion"] = .object(["major": .int(2), "minor": .int(0)])
     try await second.deliver(.connectionAccepted, body)
     try await settle("the version") { majorFailure != nil }
@@ -268,7 +268,7 @@ import Testing
       transport: transport, onAccepted: { _ in accepted = true }, onFailed: { failure = $0 })
     leg.open(hello: hello(.control))
     try await settle("the hello") { await connection.sentTags().first == "ConnectionHello" }
-    try await connection.deliver(.connectionAccepted, Script.accepted(channel: .control))
+    try await connection.deliver(.connectionAccepted, try Script.accepted(channel: .control))
     try await settle("the accept") { accepted }
     // `TransportCredit` rides the FRAMES leg.
     leg.send(.transportCredit, ["creditEpoch": .int(1)])

@@ -139,38 +139,50 @@ final class ScriptedTransport: RoutedLegTransport, @unchecked Sendable {
 // MARK: - Shapes the scripted door answers with
 
 enum Script {
+  /// `ConnectionAccepted`, DERIVED from `tp-connection-accepted.frames.json`
+  /// rather than typed out (TM-r3, 2026-09-14).
+  ///
+  /// The hand-written version omitted SEVEN of the golden's fourteen
+  /// `protocolLimits` — the writer-side numbers this client happens not to read
+  /// — so every row here drove the reader against a body no cell would ever
+  /// send, and a limit the schema added would have reached the phone first on
+  /// James's hardware. Deriving makes the fixture the source: a field added
+  /// upstream arrives the moment `check:ios-fixtures` refreshes the copy, and
+  /// nothing has to remember to add it twice.
+  ///
+  /// Overridden are exactly the values a TEST varies, each for a reason:
+  /// `channel` (the golden is the frames one), `legGeneration` and the
+  /// `creditEpoch` that tracks it, `heartbeatTtlMs` (600 ms, so a liveness row
+  /// is not a six-second wait), `capabilities` (the golden negotiates `resume`
+  /// alone; most rows here want `session-events` too) and the connection credit
+  /// window.  Everything else is the golden's.
+  ///
+  /// The CONTROL leg drops `creditEpoch` and `initialWindows`, which is not a
+  /// convenience: `door.rs` builds both as `(channel == Channel::Frames).then(…)`,
+  /// so a control accept carrying them would be a shape the real cell never
+  /// writes.
   static func accepted(
     channel: RoutedChannel, legGeneration: Int64 = 1, heartbeatTtlMs: Int64 = 600,
     capabilities: [String] = ["resume", "session-events"],
-    creditWindow: Int64 = 2_097_152
-  ) -> [String: JSONValue] {
-    var body: [String: JSONValue] = [
-      "selectedProtocolVersion": .object(["major": .int(1), "minor": .int(0)]),
-      "connectionSetId": .string("cs-test"),
-      "channel": .string(channel.rawValue),
-      "legGeneration": .int(legGeneration),
-      "heartbeatTtlMs": .int(heartbeatTtlMs),
-      "protocolLimits": .object([
-        "maxControlMessageBytes": .int(65_536),
-        "maxPresentationChunkBytes": .int(262_144),
-        "maxCreditReturnDelayMs": .int(16),
-        "sceneAppliedRefreshMs": .int(1_000),
-        "activationAttachDeadlineMs": .int(5_000),
-        "maxCatchupBytes": .int(8_388_608),
-        "creditAccountDrainTtlMs": .int(5_000),
-      ]),
-      "capabilities": .array(capabilities.map(JSONValue.string)),
-    ]
-    if channel == .frames {
+    creditWindow: Int64 = 2_097_152, connectionSetId: String = "cs-win-3c4d-2-cb-7f3a9c1e"
+  ) throws -> [String: JSONValue] {
+    guard var body = try Vector.json("tp-connection-accepted.frames").objectValue else {
+      throw Vector.Failure.missing("tp-connection-accepted.frames")
+    }
+    body["connectionSetId"] = .string(connectionSetId)
+    body["channel"] = .string(channel.rawValue)
+    body["legGeneration"] = .int(legGeneration)
+    body["heartbeatTtlMs"] = .int(heartbeatTtlMs)
+    body["capabilities"] = .array(capabilities.map(JSONValue.string))
+    switch channel {
+    case .frames:
       body["creditEpoch"] = .int(legGeneration)
-      body["initialWindows"] = .object([
-        "connectionCreditBytes": .int(creditWindow),
-        "perActivationCreditBytes": .int(524_288),
-        "stagingBytesPerSession": .int(4_194_304),
-        "stagingBytesTotal": .int(16_777_216),
-        "maxConcurrentActivations": .int(8),
-        "maxConcurrentSeeds": .int(2),
-      ])
+      var windows = body["initialWindows"]?.objectValue ?? [:]
+      windows["connectionCreditBytes"] = .int(creditWindow)
+      body["initialWindows"] = .object(windows)
+    case .control:
+      body["creditEpoch"] = nil
+      body["initialWindows"] = nil
     }
     return body
   }
