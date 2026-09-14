@@ -246,6 +246,48 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
     expect(refused.data?.retryable).toBe(true);
   });
 
+  it("E-F6 — an UNLINKED desktop refuses honestly instead of handing out its own loopback", async () => {
+    // No stored login, so there is nothing to compare a WhoIs answer against:
+    // ProductApi grants TAILNET_SCOPES (terminal.attach included) and leaves
+    // `self` ABSENT rather than false. That caller used to be handed the cell's
+    // own 127.0.0.1 pair — a phone would dial ITS OWN loopback and the face
+    // would say `failed`, which is a lie about what went wrong.
+    const { daemon } = await boot({ login: null });
+    await poll(() => daemon.health().mesh.serves.find((s) => s.name === "product")?.url);
+    const rpc = await dialAsTailnet(daemon, LOGIN);
+    const refused = await rpc.callErr("terminal.openTicket", { sessionId: "pane-1" });
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    expect(refused.data?.details).toEqual({ service: "terminal", state: "device_not_linked" });
+    expect(refused.data?.retryable).toBe(true);
+    // and it is a NEW word, not a rename: `doors_not_published` is about a
+    // linked device whose serve is not up, which is a different sentence
+    expect(JSON.stringify(refused.data?.details)).not.toContain("doors_not_published");
+  });
+
+  it("E-F6 — WHO IS ADMITTED is unchanged: the same unlinked desktop still mints for a window", async () => {
+    // the unlinked-desktop posture is James's open ruling; this slice changes
+    // only the ANSWER a caller the device cannot vouch for receives
+    const { daemon } = await boot({ login: null });
+    const grant = daemon.tokens.mint(["terminal.attach"], "ef6-local");
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const rpc = new WsRpc(ws);
+    await rpc.call("system.hello", {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind: "renderer",
+      credential: grant.token,
+    });
+    const ticket = TerminalOpenTicketResult.parse(
+      await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
+    );
+    expect(ticket.endpoints.controlUrl).toBe(`ws://127.0.0.1:${CELL_DOOR}/control`);
+  });
+
   it("the SAME floor still mints a window's loopback ticket — the states are about REACH", async () => {
     // the distinction the new state word exists for: `transport_not_landed`
     // means this cell serves no doors at all; `doors_not_published` means the

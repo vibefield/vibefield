@@ -546,10 +546,33 @@ export class TerminalService {
    * carrying them onto the tailnet (the floor's `terminalMesh` is off, the
    * daemon is unlinked, or the serve has not come up). Different causes, and
    * the remote reader's face says a different sentence for each.
+   *
+   * E-F6 (EL7 lens, 2026-09-14) adds the third word. A `tailnet` principal
+   * WITHOUT `self` is a caller on an UNLINKED desktop: there is no stored login
+   * to compare a WhoIs answer against, so ProductApi grants `TAILNET_SCOPES` —
+   * `terminal.attach` included — and leaves `self` ABSENT rather than false.
+   * That caller used to fall into the paragraph above and be handed the cell's
+   * own `127.0.0.1` pair, so a phone dialled ITS OWN loopback and the face said
+   * `failed`. The truth is not a failure: this desktop cannot tell whether the
+   * caller owns it, because nobody has told it who its owner is.
+   *
+   * WHO IS ADMITTED IS DELIBERATELY UNCHANGED. The unlinked-desktop posture is
+   * an OPEN ruling, and narrowing the door here would decide it by accident.
+   * Only the ANSWER changes — from a coordinate that cannot work into a named
+   * state a card can say a sentence for.
    */
   private doorsFor(cell: CellTarget, principal: GrantPrincipal): TicketEndpointSet {
     // `cell.doors` is proven present by the caller above.
     const loopback = cell.doors as CellEndpointSet;
+    // E-F6 — a tailnet caller this device cannot vouch for gets an honest state,
+    // never a loopback address it has no way to reach (see the note above).
+    if (principal.kind === "tailnet" && principal.self !== true)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "this desktop has not captured a login, so it cannot tell whether you own it",
+        true,
+        { service: "terminal", state: "device_not_linked" },
+      );
     if (!isSelfTailnetPrincipal(principal)) return loopback;
     const remote = this.opts.remoteEndpoints?.(cell.key);
     if (remote === undefined)
