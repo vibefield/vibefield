@@ -39,7 +39,7 @@ import { terminalCreateTarget } from "../src/native-link";
 import { TerminalService } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint, shortTmpRoot } from "./native-harness";
-import { helloAs, WsRpc } from "./ws-rpc";
+import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -1537,6 +1537,75 @@ describe("GT-2d — the adopted floor is named in health", () => {
 });
 
 describe("TC-D15 — the routes consumer (TC-S2)", () => {
+  it("keeps a LEGACY floor's endpoints when its routes subscribe answers the unrevised snapshot (MF-2i)", async () => {
+    // QA 2026-09-13, finding 2. With `FIELD_NATIVE_MESH=1
+    // FIELD_NATIVE_TERMINAL_MESH=1` the floor keeps the legacy in-process serve,
+    // so its route snapshot never leaves `{revision: 0, cells: []}` and the
+    // hello's LEGACY mirror is the only reading it has. The hello withheld the
+    // unrevised snapshot; the routes subscription answered it anyway — and
+    // resolving an empty cell list to "no endpoints" threw the mirror away one
+    // message after the ack vouched for it. `device.list` said
+    // `terminalHost: false`, Godview said the deck could not reach fieldd, and
+    // an authenticated `terminal.create` answered "the terminal floor is not
+    // available" on a floor that was serving PTYs the whole time.
+    //
+    // The floor now withholds it on BOTH surfaces (field-native's
+    // `disclosed_routes`). This row scripts the floor that PREDATES that rule —
+    // the plane outlives fieldd and is adopted by design (GT-2d), so the reader
+    // carries the same rule and this is what proves it.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    mock.routesSubscribeSnapshot = { revision: 0, cells: [] };
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    // Assert AFTER the subscription has landed, or this row only ever tests the
+    // hello — which was never the broken half.
+    await poll(async () =>
+      mock.subscriptionRequests.includes("native.lifecycle.terminal.routes.subscribe")
+        ? true
+        : undefined,
+    );
+    expect(daemon.native.terminalEndpoints, "the hello-vouched mirror survives").toEqual(
+      floor.endpoints,
+    );
+    expect(
+      daemon.native.terminalRoutes,
+      "an unrevised snapshot is never a reading",
+    ).toBeUndefined();
+
+    const grant = daemon.tokens.mint(["terminal.attach", "workspace.read"], "mf2i-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const devices = (await rpc.call("device.list", {})) as { devices: DeviceInfo[] };
+    expect(
+      devices.devices.find((d) => d.self)?.capabilities.terminalHost,
+      "the device still hosts terminals",
+    ).toBe(true);
+
+    // And the deck's door opens. A mirror-only floor mints no GRANT (TP-S3e),
+    // so the create may still refuse at the ticket — what it must never be is
+    // the absent-floor refusal, and the session must reach the floor's wire.
+    let refusal: RpcErrorShape | undefined;
+    try {
+      await rpc.call("terminal.create", {});
+    } catch (error) {
+      refusal = (error as { rpc?: RpcErrorShape }).rpc;
+    }
+    expect(refusal?.message, "the floor is right there").not.toBe(
+      "the terminal floor is not available",
+    );
+    expect(
+      (refusal?.data?.details as { state?: string } | undefined)?.state,
+      "nothing about this floor is absent",
+    ).not.toBe("absent");
+    expect(floor.createOptions(), "the create reached the floor's own socket").toBeDefined();
+  });
+
   it("names every session a replaced engine took, with the S2 ceiling stated", async () => {
     // The receipt exists because this is the ONE moment the loss is knowable:
     // the observed stream repairs the inventory a beat later, and no snapshot

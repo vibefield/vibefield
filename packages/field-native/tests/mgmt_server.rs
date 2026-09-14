@@ -39,6 +39,15 @@ impl TestClient {
             .expect("connection closed");
         serde_json::from_str(&line).expect("json line")
     }
+    /// MF-2i — "nothing was said" as an ANSWER rather than a timeout panic:
+    /// the rows below assert that a withheld snapshot is not simply re-sent a
+    /// beat later as a delta.
+    async fn recv_within(&mut self, budget: Duration) -> Option<Value> {
+        match timeout(budget, self.reader.next_line()).await {
+            Ok(Ok(Some(line))) => Some(serde_json::from_str(&line).expect("json line")),
+            _ => None,
+        }
+    }
     async fn recv_eof(&mut self) -> bool {
         matches!(
             timeout(Duration::from_secs(5), self.reader.next_line()).await,
@@ -344,6 +353,159 @@ async fn tolerant_reader_on_hello() {
         resp["result"].is_object(),
         "unknown fields must not break hello (P3)"
     );
+}
+
+// ---- MF-2i — the route-snapshot disclosure rule, on the WIRE (QA 2026-09-13
+// finding 2: the hello applied it and the subscription did not) ----
+
+/// macOS caps a Unix socket path at ~104 bytes (`sun_path`) and the terminal
+/// sockets sit three levels under the data dir, so a floor that must actually
+/// SERVE roots its data dir at `/tmp` — the law tests/terminal_unit.rs states.
+/// The rows above never start a terminal, which is why `boot()` can use the
+/// platform temp dir; these two do.
+#[cfg(unix)]
+fn serving_tempdir() -> tempfile::TempDir {
+    let dir = tempfile::Builder::new()
+        .prefix("vfmf2i")
+        .tempdir_in("/tmp")
+        .expect("tempdir under /tmp");
+    let probe = dir.path().join("native/run/termctl.sock");
+    assert!(
+        probe.as_os_str().len() < 100,
+        "socket path would risk sun_path truncation: {}",
+        probe.display()
+    );
+    dir
+}
+
+/// WIN-D1: named pipes carry no `sun_path` budget, so the platform temp dir is
+/// the right root there.
+#[cfg(windows)]
+fn serving_tempdir() -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix("vfmf2i")
+        .tempdir()
+        .expect("tempdir")
+}
+
+async fn routes_subscribe(client: &mut TestClient, id: u64) -> Value {
+    client
+        .send(json!({"jsonrpc":"2.0","id":id,
+            "method":"native.lifecycle.terminal.routes.subscribe","params":{}}))
+        .await;
+    client.recv().await
+}
+
+/// THE regression fence. With `FIELD_NATIVE_TERMINAL_MESH` the floor keeps the
+/// legacy in-process serve (a cell cannot borrow the floor's tailnet node), so
+/// its route snapshot never leaves `{revision: 0, cells: []}` and the hello's
+/// LEGACY `terminal` mirror is the floor's only real reading. The hello has
+/// always withheld the unrevised snapshot; the subscription used to answer it
+/// unconditionally, and fieldd — resolving an empty cell list to "no endpoints"
+/// — threw the mirror away one message after the ack vouched for it.
+/// `device.list` then said `terminalHost: false` and `terminal.create` refused
+/// on a floor that was serving PTYs the whole time.
+///
+/// So: the ack carries the mirror and no snapshot, the subscription carries a
+/// subId and no snapshot, and nothing arrives afterwards to contradict either.
+#[tokio::test]
+async fn the_routes_subscription_withholds_an_unrevised_snapshot_like_the_hello() {
+    let dir = serving_tempdir();
+    let daemon = bootstrap(NativeConfig {
+        terminal_mesh_enabled: true,
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    })
+    .await
+    .expect("bootstrap");
+    // The in-process unit builds a text engine off the boot path; the legacy
+    // endpoints appear when it serves. Wait for the floor this test is about.
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    while daemon.state.terminal.get().is_none() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the in-process terminal floor never published its legacy endpoints"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(
+        daemon.state.terminal_routes.borrow().revision,
+        0,
+        "this row is about the floor whose snapshot never leaves the initial"
+    );
+
+    let mut c = TestClient::connect(&daemon).await;
+    let ack = c.hello(&daemon, 1).await;
+    let result = &ack["result"];
+    assert!(
+        result["terminal"]["authToken"].is_string(),
+        "the legacy mirror is this floor's real reading: {result}"
+    );
+    assert!(
+        result.get("terminalRoutes").is_none(),
+        "the hello withholds an unrevised snapshot: {result}"
+    );
+
+    let subscribed = routes_subscribe(&mut c, 2).await;
+    let sub = &subscribed["result"];
+    assert!(
+        sub["subId"].is_string(),
+        "the subscription is armed either way — only the snapshot is withheld: {sub}"
+    );
+    assert!(
+        sub.get("snapshot").is_none(),
+        "the subscription must apply the hello's rule, not contradict it: {sub}"
+    );
+
+    // And no delta re-says it a beat later: the withheld reading is withheld on
+    // the stream too (revision only moves forward, so the initial is never news).
+    assert!(
+        c.recv_within(Duration::from_millis(400)).await.is_none(),
+        "an unrevised snapshot must not arrive as a delta either"
+    );
+
+    daemon.shutdown().await;
+}
+
+/// The other half of the same rule, so a regression cannot pass by muting the
+/// surface: a floor with a REAL revision discloses it, on the subscription and
+/// in the ack alike, and the two agree.
+#[tokio::test]
+async fn the_routes_subscription_serves_a_revised_snapshot() {
+    let dir = serving_tempdir();
+    let daemon = bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
+        .await
+        .expect("bootstrap");
+    // The DEFAULT floor is cell mode: wait for the first cell's hello, which is
+    // what moves the revision off its initial.
+    let mut routes = daemon.state.terminal_routes.clone();
+    timeout(
+        Duration::from_secs(20),
+        routes.wait_for(|snapshot| !snapshot.cells.is_empty()),
+    )
+    .await
+    .expect("the terminal cell announced within its hello budget")
+    .expect("the routes watch outlives boot");
+
+    let mut c = TestClient::connect(&daemon).await;
+    let ack = c.hello(&daemon, 1).await;
+    let acked = ack["result"]["terminalRoutes"].clone();
+    assert!(
+        acked["revision"].as_i64().is_some_and(|r| r > 0),
+        "a cell floor's ack carries its revised snapshot: {acked}"
+    );
+
+    let subscribed = routes_subscribe(&mut c, 2).await;
+    let snapshot = subscribed["result"]["snapshot"].clone();
+    assert_eq!(
+        snapshot, acked,
+        "one floor, one reading: the subscription's snapshot is the ack's"
+    );
+    assert!(
+        !snapshot["cells"].as_array().expect("cells").is_empty(),
+        "the cell that armed this test owes a row: {snapshot}"
+    );
+
+    daemon.shutdown().await;
 }
 
 // ---- MF-2a — the mirror-write capability's one hop (GM-D5, §10.2) ----

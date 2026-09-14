@@ -71,6 +71,14 @@ export class MockMgmtServer {
    * tolerantly, rather than as a floor with no cells). Set it beside
    * `helloTerminal`, the legacy mirror a real floor keeps in lockstep. */
   terminalRoutes: unknown = null;
+  /** MF-2i — what the ROUTES SUBSCRIPTION answers when it must DIFFER from the
+   * hello's `terminalRoutes`. `undefined` (the default) is the lockstep a
+   * well-formed floor keeps: the subscription answers exactly what the ack
+   * carried. Set it to script the floor that predates the disclosure rule —
+   * the mesh-flagged in-process serve QA met on 2026-09-13, whose hello
+   * withheld its unrevised snapshot (and supplied `helloTerminal` instead)
+   * while its subscription answered `{revision: 0, cells: []}` anyway. */
+  routesSubscribeSnapshot: unknown = undefined;
   /** GT-2d — the build label the hello ack carries; null = a floor predating
    * GT-2d, which fieldd must surface as "it did not say", never as a guess. */
   helloNativeBuild: string | null = null;
@@ -228,23 +236,28 @@ export class MockMgmtServer {
       );
       return;
     }
-    if (
-      msg.method === "native.lifecycle.terminal.routes.subscribe" &&
-      this.terminalRoutes !== null
-    ) {
-      // Recorded like every other subscribe, so a test can assert the stream
-      // was armed (and re-armed) rather than infer it from a payload.
-      this.subscriptionRequests.push(msg.method);
-      const subId = `s${this.nextSub++}`;
-      this.issued.push({ sock, subId, method: msg.method });
-      sock.write(
-        `${JSON.stringify({
-          jsonrpc: "2.0",
-          id: msg.id,
-          result: { subId, snapshot: this.terminalRoutes },
-        })}\n`,
-      );
-      return;
+    if (msg.method === "native.lifecycle.terminal.routes.subscribe") {
+      const snapshot =
+        this.routesSubscribeSnapshot !== undefined
+          ? this.routesSubscribeSnapshot
+          : this.terminalRoutes;
+      // A floor that says nothing at all still falls through to the generic
+      // `{n:0}` handler — the pre-TC-S2 payload fieldd must read tolerantly.
+      if (snapshot !== null) {
+        // Recorded like every other subscribe, so a test can assert the stream
+        // was armed (and re-armed) rather than infer it from a payload.
+        this.subscriptionRequests.push(msg.method);
+        const subId = `s${this.nextSub++}`;
+        this.issued.push({ sock, subId, method: msg.method });
+        sock.write(
+          `${JSON.stringify({
+            jsonrpc: "2.0",
+            id: msg.id,
+            result: { subId, snapshot },
+          })}\n`,
+        );
+        return;
+      }
     }
     if (msg.method === "native.terminal.mirrorWriteCapability") {
       this.mirrorWriteAsks += 1;

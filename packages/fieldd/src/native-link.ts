@@ -431,6 +431,45 @@ export class NativeLink extends EventEmitter {
       );
       return;
     }
+    // MF-2i — the floor's ROUTE-SNAPSHOT DISCLOSURE rule, read from this side
+    // (`packages/field-native/src/mgmt/mod.rs`, `disclosed_routes`, which states
+    // it in full). An UNREVISED empty snapshot is the floor's watch-channel
+    // initial, not a reading: the mesh-flagged in-process serve holds it forever
+    // while the hello's LEGACY mirror carries that floor's real endpoints, so
+    // resolving it to "no endpoints" would throw away the very coordinates the
+    // ack just vouched for — QA 2026-09-13 finding 2, where `device.list`
+    // answered `terminalHost: false` and `terminal.create` refused on a floor
+    // that was serving PTYs throughout.
+    //
+    // A fixed floor never sends this (it withholds the snapshot, and the
+    // tolerant branch above is what receives that absence). The guard is for the
+    // floor that PREDATES the rule: this plane outlives fieldd and is adopted by
+    // design (GT-2d), so a running daemon older than this build is the ordinary
+    // case, not a hypothetical.
+    //
+    // NARROW ON PURPOSE: the guard fires only when there is a hello-vouched
+    // mirror to protect (`terminalEndpoints` present) and no snapshot has ever
+    // been accepted (`terminalRoutes` absent). A cell floor ANNOUNCES itself
+    // with an empty snapshot at revision 1 (TC-D15 — see `disclosed_routes` in
+    // packages/field-native/src/mgmt/mod.rs), so nothing this guard withholds
+    // was ever a cell floor's reading, and the birth wait in
+    // terminal-service.ts (`awaitEndpoints`) still gets the announcement it
+    // keys on. Once a real revision has landed, every later snapshot rules,
+    // empty `cells` included. Debug, not warn: an old floor is a capability
+    // gap, not an anomaly.
+    if (
+      parsed.data.revision === 0 &&
+      parsed.data.cells.length === 0 &&
+      this.terminalRoutes === undefined &&
+      this.terminalEndpoints !== undefined
+    ) {
+      this.logger.debug(
+        "fieldd.native_link.terminal_routes_unrevised",
+        "An unrevised empty route snapshot never replaces the hello's legacy endpoints; routes unchanged",
+        { kind },
+      );
+      return;
+    }
     if (this.terminalRoutes?.revision === parsed.data.revision) return;
     this.terminalRoutes = parsed.data;
     this.terminalEndpoints = cellEndpoints(parsed.data);
@@ -452,10 +491,14 @@ export class NativeLink extends EventEmitter {
    *
    * TC-D15: the route snapshot goes with them. It carries the same per-boot
    * token and the same live-credential bargain, and a remembered route is
-   * exactly the stale shape this method exists to close. A snapshot whose
-   * `cells` are EMPTY is still a live reading — it says the floor currently has
-   * no engine — so losing it is a real transition and is announced too, which
-   * is why the guard below reads both fields and not just the endpoints.
+   * exactly the stale shape this method exists to close. A REVISED snapshot
+   * whose `cells` are EMPTY is still a live reading — it says the floor's cell
+   * system currently has no engine — so losing it is a real transition and is
+   * announced too, which is why the guard below reads both fields and not just
+   * the endpoints. (MF-2i draws the line that sentence assumed: it is the
+   * revision that makes a snapshot a reading. An UNREVISED empty one is the
+   * floor's initial, never accepted here, so it is never one of the readings
+   * this method clears — see `applyTerminalRoutes`.)
    *
    * Silent when there was nothing to clear: no change, no event. */
   private clearTerminalEndpoints(): void {

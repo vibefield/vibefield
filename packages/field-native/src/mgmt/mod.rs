@@ -18,7 +18,9 @@
 mod diagnostics;
 mod mesh;
 
-use crate::contracts::{DesiredState, Hello};
+use crate::contracts::{DesiredState, Hello, TerminalRouteSnapshot};
+#[cfg(test)]
+use crate::contracts::{TerminalEndpoints, TerminalRouteCell};
 use crate::local_ipc;
 use crate::pairing;
 use crate::services::terminal;
@@ -274,17 +276,22 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
             "native.lifecycle.terminal.routes.subscribe" => {
                 // TC-D15 — snapshot now, FULL snapshots as deltas (state
                 // transfer, never edges: a missed delta is repaired by the
-                // next one, and reconnect re-subscribes). Same forwarder the
-                // observed stream rides.
+                // next one, and reconnect re-subscribes).
+                //
+                // MF-2i — under `disclosed_routes`, the SAME rule the hello
+                // applies: an unrevised snapshot is withheld from both
+                // surfaces, so the subscription can never contradict the ack
+                // that preceded it. Its own forwarder rather than the generic
+                // one for exactly that reason — the rule has to hold for the
+                // deltas too, or the contradiction simply moves one message
+                // later.
                 let sub_id = state.sub_id();
-                let snapshot = serde_json::to_value(&*state.terminal_routes.borrow()).unwrap();
-                send(&tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
-                spawn_forwarder(
-                    tx.clone(),
-                    state.terminal_routes.clone(),
-                    "native.lifecycle.terminal.routes.delta",
-                    sub_id,
-                );
+                let mut result = json!({ "subId": sub_id.clone() });
+                if let Some(snapshot) = disclosed_routes(&state.terminal_routes.borrow()) {
+                    result["snapshot"] = serde_json::to_value(snapshot).unwrap();
+                }
+                send(&tx, ok(id, result));
+                spawn_routes_forwarder(tx.clone(), state.terminal_routes.clone(), sub_id);
             }
             "native.lifecycle.desired.set" => {
                 send(&tx, handle_desired_set(&state, conn_id, &params, id).await);
@@ -480,18 +487,16 @@ async fn handle_hello(
     // TC-D15 (TC-S2): `terminal` is now the LEGACY single-cell mirror, kept in
     // lockstep with `terminalRoutes` — the revisioned snapshot new readers
     // prefer. Cell mode fills both from the snapshot; the flagged in-process
-    // mode fills only the mirror from its OnceLock (its snapshot never leaves
-    // revision 0, and an unrevised snapshot is NOT emitted — absence is the
-    // pre-TC-S2 shape readers already tolerate).
+    // mode fills only the mirror from its OnceLock.
+    //
+    // MF-2i: that last clause is now `disclosed_routes` — the rule, stated
+    // once, and the routes subscription applies the same one instead of
+    // contradicting this ack a message later.
     if let Some(endpoints) = state.terminal_endpoints_now() {
         ack["terminal"] = serde_json::to_value(endpoints).expect("terminal endpoints serialize");
     }
-    {
-        let routes = state.terminal_routes.borrow().clone();
-        if routes.revision > 0 {
-            ack["terminalRoutes"] =
-                serde_json::to_value(&routes).expect("terminal routes serialize");
-        }
+    if let Some(routes) = disclosed_routes(&state.terminal_routes.borrow()) {
+        ack["terminalRoutes"] = serde_json::to_value(routes).expect("terminal routes serialize");
     }
     (ok(id, ack), true)
 }
@@ -989,6 +994,78 @@ fn terminal_state(state: &DaemonState) -> Value {
         .map_or(Value::Null, |unit| json!(unit.state.to_string()))
 }
 
+/// MF-2i — the ROUTE-SNAPSHOT DISCLOSURE rule, in the ONE place both of its
+/// readers share (the hello ack and `native.lifecycle.terminal.routes.subscribe`,
+/// snapshot and deltas alike). The hello has applied it since TC-S2; the
+/// subscription did not, and that disagreement is the defect.
+///
+/// **An UNREVISED snapshot is not a reading, and is disclosed on no surface.**
+/// `{revision: 0, cells: []}` is the watch channel's initial, and TC-D15 gives
+/// revision ≥ 1 its own meaning: the cell supervisor's FIRST act is to publish
+/// an empty snapshot at revision 1 — "this floor speaks routes; no cell yet" —
+/// so that revision is a capability announcement, not just an ordering key
+/// (`services/terminal.rs`, `publish_routes_capability`). A floor that has not
+/// announced has nothing to say about cells.
+///
+/// The mesh-flagged in-process serve never announces at all: TC-D3/TC-S2 keep
+/// the legacy serve because a cell cannot borrow the floor's tailnet node, so
+/// that floor has no cell system, its snapshot never leaves the initial, and its
+/// LEGACY `terminal` mirror carries the real endpoints. Publish that initial and
+/// it says "this floor has no cells" in the one shape a reader resolves to "no
+/// endpoints".
+///
+/// That is what QA 2026-09-13 (finding 2) hit: the hello withheld the initial
+/// and the subscription answered it one message later, so fieldd learned the
+/// endpoints from the ack and threw them away — `device.list` answered
+/// `terminalHost: false`, Godview said the deck could not reach fieldd, and
+/// `terminal.create` refused on a floor that was serving PTYs the whole time.
+///
+/// ABSENCE is how a withheld snapshot is spelled, not an empty one: it is the
+/// pre-TC-S2 shape every reader already tolerates (`HelloAck.terminalRoutes` is
+/// optional and `SubscribeResult.snapshot` is `z.unknown()`, so both are
+/// contract-legal). TC-D15's state-transfer law is unharmed — a floor with no
+/// revision has no state to transfer, and the announcement arrives as an
+/// ordinary FULL-snapshot delta the moment it exists, which is also what closes
+/// the one window this rule leaves open: a cell floor paired in the instant
+/// before its supervisor's first act says nothing about routes on either
+/// surface (the hello has always behaved exactly so), and the revision-1 delta
+/// repairs that reader without a re-pair.
+///
+/// The paired reader is `packages/fieldd/src/native-link.ts`
+/// (`applyTerminalRoutes`), which refuses the same shape from a floor that
+/// predates this rule — this plane outlives fieldd and is adopted by design
+/// (GT-2d), so an already-running floor is a reader's problem, not a rebuild's.
+fn disclosed_routes(routes: &TerminalRouteSnapshot) -> Option<&TerminalRouteSnapshot> {
+    (routes.revision > 0).then_some(routes)
+}
+
+/// MF-2i — the routes stream's forwarder: `spawn_forwarder`'s shape with
+/// `disclosed_routes` applied to every payload, so a delta can never say what
+/// the snapshot was forbidden to say. It skips nothing a floor actually sends
+/// today — the in-process serve's channel never moves off its initial, and a
+/// cell floor's first send IS the revision-1 announcement — and that is the
+/// point: the rule holds by construction rather than by those two facts
+/// staying true.
+fn spawn_routes_forwarder(
+    tx: MgmtOutbox,
+    mut rx: tokio::sync::watch::Receiver<TerminalRouteSnapshot>,
+    sub_id: String,
+) {
+    tokio::spawn(async move {
+        while rx.changed().await.is_ok() {
+            let routes = rx.borrow().clone();
+            let Some(snapshot) = disclosed_routes(&routes) else {
+                continue;
+            };
+            let payload = serde_json::to_value(snapshot).unwrap();
+            let note = json!({"jsonrpc":"2.0","method":"native.lifecycle.terminal.routes.delta","params": {"subId": sub_id, "payload": payload}});
+            if tx.send(OutMsg::Line(note.to_string())).is_err() {
+                break;
+            }
+        }
+    });
+}
+
 fn spawn_forwarder<T>(
     tx: MgmtOutbox,
     mut rx: tokio::sync::watch::Receiver<T>,
@@ -1062,6 +1139,67 @@ mod tests {
             classify_prune_error("terminal control error: unknown session"),
             PruneErrorKind::AlreadyGone
         );
+    }
+
+    /// MF-2i — the disclosure rule itself, at the one function both the hello
+    /// ack and the routes subscription read it through. The REVISION is the
+    /// key, and TC-D15 is what gives it that job: a cell floor ANNOUNCES with
+    /// an empty snapshot at revision 1, so an unrevised one is a floor that has
+    /// said nothing about routes at all.
+    #[test]
+    fn an_unrevised_route_snapshot_is_disclosed_on_neither_surface() {
+        let initial = TerminalRouteSnapshot {
+            revision: 0,
+            cells: vec![],
+        };
+        assert!(
+            disclosed_routes(&initial).is_none(),
+            "the watch channel's initial must never be published as a floor with no cells"
+        );
+
+        // Revision, not emptiness: a revised snapshot IS a reading whether or
+        // not a cell is up right now (TC-D15 — empty `cells` is honest state).
+        let revised_empty = TerminalRouteSnapshot {
+            revision: 1,
+            cells: vec![],
+        };
+        // The generated contract type derives no PartialEq (typify's output is
+        // never hand-edited), so identity is the assertion: the rule DISCLOSES,
+        // it never rewrites.
+        assert!(
+            disclosed_routes(&revised_empty).is_some_and(|r| std::ptr::eq(r, &revised_empty)),
+            "a revised snapshot is a reading even with no cell up"
+        );
+
+        let cell = TerminalRouteCell {
+            cell_boot_id: "cell-boot".to_string(),
+            cell_instance_id: 1,
+            doors: None,
+            endpoints: TerminalEndpoints {
+                auth_token: "ab".repeat(32),
+                control_socket: "/tmp/termctl.1.sock".to_string(),
+                frame_socket: "/tmp/termframe.1.sock".to_string(),
+            },
+            grant_key: None,
+            grant_key_generation: None,
+            pid: 4242,
+            role: None,
+            token_generation: 1,
+            workload_class: None,
+        };
+        let revised = TerminalRouteSnapshot {
+            revision: 2,
+            cells: vec![cell.clone()],
+        };
+        assert!(disclosed_routes(&revised).is_some_and(|r| std::ptr::eq(r, &revised)));
+
+        // And the reverse of the same key, stated so it cannot drift: rows
+        // without a revision are still the initial as far as readers go.
+        let unrevised_with_rows = TerminalRouteSnapshot {
+            revision: 0,
+            cells: vec![cell],
+        };
+        assert!(disclosed_routes(&unrevised_with_rows).is_none());
     }
 
     #[test]
