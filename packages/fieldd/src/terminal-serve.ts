@@ -1,6 +1,6 @@
 import {
   PORTS,
-  REMOTE_CELL_PATH_PREFIX,
+  remoteCellRoutePrefix,
   type TerminalRouteCell,
   type TerminalRouteSnapshot,
 } from "@vibefield/contracts";
@@ -118,9 +118,9 @@ export function cellRoutesFor(snapshot: TerminalRouteSnapshot | undefined): Term
     if (targetPort === undefined) continue;
     out.push({
       cellBootId: cell.cellBootId,
-      // the trailing slash is the prefix-match discipline: without it
-      // `/cell/cb-1` would also match `/cell/cb-10/control`
-      prefix: `${REMOTE_CELL_PATH_PREFIX}${cell.cellBootId}/`,
+      // NO trailing slash — the shipped sidecar never matches one (TM-2b; the
+      // rule and its evidence live on `remoteCellRoutePrefix`)
+      prefix: remoteCellRoutePrefix(cell.cellBootId),
       targetPort,
     });
   }

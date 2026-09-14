@@ -106,8 +106,11 @@ async function standInSidecar(spec: ServeSpec): Promise<StandInSidecar> {
       socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
       return;
     }
-    // stripPrefix: true — the cell door matches /control and /frames EXACTLY
-    const rewritten = path.slice(route.prefix.length - 1);
+    // stripPrefix: true — the cell door matches /control and /frames EXACTLY.
+    // The prefix carries NO trailing slash (TM-2b measured the real sidecar
+    // refusing to match one), so the whole prefix comes off and what remains
+    // already starts with `/`.
+    const rewritten = path.slice(route.prefix.length);
     const upstream = tcpConnect(route.targetPort, "127.0.0.1", () => {
       const headers = Object.entries(req.headers)
         .filter(([k]) => k !== "tailscale-user-login" && k !== "tailscale-user-name")
@@ -263,7 +266,7 @@ describe("TM-2 — a cell route carries a real T1 connection to a real cell", ()
       linkedLogin: LOGIN,
     });
     if (spec === null) throw new Error("the floor's rows produced no terminal serve");
-    expect(spec.routes?.some((r) => r.prefix === `/cell/${cellBootId}/`)).toBe(true);
+    expect(spec.routes?.some((r) => r.prefix === `/cell/${cellBootId}`)).toBe(true);
 
     const sidecar = await standInSidecar(spec);
     // The URLs are composed by the SAME contracts function the ticket uses,

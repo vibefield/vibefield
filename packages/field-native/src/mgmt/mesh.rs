@@ -818,14 +818,30 @@ fn parse_cell_routes(routes: &Value) -> Result<Vec<ProxyRoute>, String> {
             .get("prefix")
             .and_then(Value::as_str)
             .ok_or("route.prefix required")?;
-        // Both ends matter. Leading `/`: truffle validates it anyway, and a
-        // relative prefix would silently never match. Trailing `/`: the engine
-        // matches by PREFIX and longest wins, so `/cell/cb-1` would also match
-        // `/cell/cb-10/control` — one cell's routes capturing another cell's
-        // traffic, which no later check would catch.
-        if !prefix.starts_with('/') || !prefix.ends_with('/') {
+        // MEASURED AGAINST THE REAL SIDECAR (TM-2b, 2026-09-14, sidecar-slim at
+        // the pinned 0.7.12), because the first guess here was backwards.
+        //
+        // A leading `/` is required: truffle validates it anyway, and a
+        // relative prefix would silently never match.
+        //
+        // A TRAILING `/` IS REFUSED, which is the opposite of what this
+        // function first demanded. A trailing-slash prefix does not match AT
+        // ALL in the shipped engine — `/stripped/` never took
+        // `/stripped/control`, which fell through to a catch-all or 404 — and
+        // `strip_prefix` then has nothing to act on. Without the slash both
+        // halves work: `/noslash` took `/noslash/control` and handed the
+        // backend `/control`. The trailing slash had been added here to stop
+        // `/cell/cb-1` from also matching `/cell/cb-10/control`; that hazard is
+        // real but is answered by the ENGINE — longest prefix wins (RFC 023
+        // D11), so cb-10's own route always outranks cb-1's for cb-10's paths —
+        // and by the ids themselves, which are fixed-width hex cell boot ids,
+        // so no id is ever a proper prefix of another.
+        if !prefix.starts_with('/') {
+            return Err(format!("route prefix {prefix:?} must start with '/'"));
+        }
+        if prefix.len() > 1 && prefix.ends_with('/') {
             return Err(format!(
-                "route prefix {prefix:?} must start and end with '/'"
+                "route prefix {prefix:?} must not end with '/' — a trailing slash never matches"
             ));
         }
         let port = entry
@@ -1411,8 +1427,8 @@ mod tests {
     fn routes_serve_mounts_one_stripping_loopback_route_per_cell() {
         let target = CELL_TARGET();
         let routes = json!([
-            {"prefix": "/cell/cb-1/", "targetPort": 51001},
-            {"prefix": "/cell/cb-2/", "targetPort": 51002},
+            {"prefix": "/cell/cb-1", "targetPort": 51001},
+            {"prefix": "/cell/cb-2", "targetPort": 51002},
         ]);
         let cfg = build_serve_config(ServeConfigInput {
             listen_port: Some(u64::from(ports::TERMINAL_CELLS_SERVE)),
@@ -1451,7 +1467,7 @@ mod tests {
     #[test]
     fn a_routes_serve_refuses_an_empty_list_a_secret_and_a_missing_listener() {
         let target = CELL_TARGET();
-        let one = json!([{"prefix": "/cell/cb-1/", "targetPort": 51001}]);
+        let one = json!([{"prefix": "/cell/cb-1", "targetPort": 51001}]);
         // empty would fall back to truffle's single-target shape — the loophole
         let empty = json!([]);
         let err = build_serve_config(ServeConfigInput {
@@ -1483,22 +1499,26 @@ mod tests {
         let target = CELL_TARGET();
         // `/cell/cb-1` (no trailing slash) is ALSO a prefix of `/cell/cb-10/…`
         // — one cell would capture another cell's traffic.
+        // TM-2b: measured against the real sidecar — a TRAILING slash never
+        // matches, so it is the shape that is refused, not the shape required.
+        let err = build_serve_config(ServeConfigInput {
+            listen_port: Some(9422),
+            routes: &json!([{"prefix": "/cell/cb-1/", "targetPort": 51001}]),
+            ..serve_input("terminal", &target)
+        })
+        .expect_err("a trailing-slash prefix is refused");
+        assert!(err.contains("must not end with '/'"), "{err}");
+        let err = build_serve_config(ServeConfigInput {
+            listen_port: Some(9422),
+            routes: &json!([{"prefix": "cell/cb-1", "targetPort": 51001}]),
+            ..serve_input("terminal", &target)
+        })
+        .expect_err("a relative prefix is refused");
+        assert!(err.contains("must start with '/'"), "{err}");
         for bad in [
-            json!([{"prefix": "/cell/cb-1", "targetPort": 51001}]),
-            json!([{"prefix": "cell/cb-1/", "targetPort": 51001}]),
-        ] {
-            let err = build_serve_config(ServeConfigInput {
-                listen_port: Some(9422),
-                routes: &bad,
-                ..serve_input("terminal", &target)
-            })
-            .expect_err("a malformed prefix is refused");
-            assert!(err.contains("must start and end with '/'"), "{err}");
-        }
-        for bad in [
-            json!([{"prefix": "/cell/cb-1/"}]),
-            json!([{"prefix": "/cell/cb-1/", "targetPort": 0}]),
-            json!([{"prefix": "/cell/cb-1/", "targetPort": 70_000}]),
+            json!([{"prefix": "/cell/cb-1"}]),
+            json!([{"prefix": "/cell/cb-1", "targetPort": 0}]),
+            json!([{"prefix": "/cell/cb-1", "targetPort": 70_000}]),
         ] {
             assert!(
                 build_serve_config(ServeConfigInput {
@@ -1517,7 +1537,7 @@ mod tests {
         // The product serve's shape is byte-for-byte what it was, even if a
         // caller sends `routes` beside it.
         let target = json!({"kind": "port", "port": 9410});
-        let routes = json!([{"prefix": "/cell/cb-1/", "targetPort": 51001}]);
+        let routes = json!([{"prefix": "/cell/cb-1", "targetPort": 51001}]);
         let cfg = build_serve_config(ServeConfigInput {
             tls: Some(false),
             path_secret: Some("s3cr3t"),

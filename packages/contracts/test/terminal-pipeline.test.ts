@@ -34,6 +34,7 @@ import {
   RemoteCellEndpointSet,
   remoteCellEndpointsFor,
   remoteCellPath,
+  remoteCellRoutePrefix,
   SendInput,
   SendInputOp,
   SessionAttachGrant,
@@ -200,10 +201,22 @@ describe("the remote door set (TM-2)", () => {
     expect(remoteCellEndpointsFor("http://127.0.0.1:9422", "cb-1")).toBeUndefined();
   });
 
-  it("the path composer is the one authority, with the trailing slash the prefix match needs", () => {
+  it("the CLIENT path and the ROUTE prefix are different strings, and the route has no trailing slash", () => {
     expect(remoteCellPath("cb-1", "control")).toBe("/cell/cb-1/control");
     expect(remoteCellPath("cb-1", "frames")).toBe("/cell/cb-1/frames");
     expect(REMOTE_CELL_PATH_PREFIX).toBe("/cell/");
+    // TM-2b, measured against the shipped sidecar: a trailing-slash prefix
+    // never matches, and the path a client dials must still begin with it
+    expect(remoteCellRoutePrefix("cb-1")).toBe("/cell/cb-1");
+    expect(remoteCellRoutePrefix("cb-1").endsWith("/")).toBe(false);
+    for (const channel of ["control", "frames"] as const) {
+      expect(remoteCellPath("cb-1", channel).startsWith(remoteCellRoutePrefix("cb-1"))).toBe(true);
+      // and what the sidecar hands the cell once the prefix comes off is the
+      // exact path its door matches
+      expect(remoteCellPath("cb-1", channel).slice(remoteCellRoutePrefix("cb-1").length)).toBe(
+        `/${channel}`,
+      );
+    }
   });
 });
 

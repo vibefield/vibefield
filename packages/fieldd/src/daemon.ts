@@ -62,9 +62,9 @@ import {
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
-  REMOTE_CELL_PATH_PREFIX,
   RendererParticipantIdentity,
   remoteCellEndpointsFor,
+  remoteCellRoutePrefix,
   SCOPES,
   type Scope,
   SettingsGetParams,
@@ -1002,7 +1002,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       remoteEndpoints: (cellBootId) => {
         const serve = mesh.serves().find((s) => (s.serveId ?? s.name) === TERMINAL_SERVE_ID);
         if (serve?.status !== "active" || serve.url === undefined) return undefined;
-        const prefix = `${REMOTE_CELL_PATH_PREFIX}${cellBootId}/`;
+        const prefix = remoteCellRoutePrefix(cellBootId);
         if (!(serve.routes ?? []).some((route) => route.prefix === prefix)) return undefined;
         return remoteCellEndpointsFor(serve.url, cellBootId);
       },

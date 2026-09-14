@@ -333,12 +333,29 @@ export function highWaterTombstoneTtlMs(
  * authority for the writer (the serve driver) and the reader (this regex). */
 export const REMOTE_CELL_PATH_PREFIX = "/cell/" as const;
 
-/** The remote door path for one cell and one channel — the ONLY composer.
- * Trailing-slash discipline is load-bearing: the sidecar's route match is a
- * path PREFIX and longest-prefix wins, so `/cell/<boot>/` must never be a
- * prefix of another cell's boot id. */
+/** The remote door path for one cell and one channel — the ONLY composer of
+ * what a CLIENT dials. */
 export function remoteCellPath(cellBootId: string, channel: TransportChannel): string {
   return `${REMOTE_CELL_PATH_PREFIX}${cellBootId}/${channel}`;
+}
+
+/** The reverse-proxy ROUTE prefix for one cell — the ONLY composer of what the
+ * sidecar is asked to match, and deliberately NOT the same string as the path
+ * above.
+ *
+ * NO TRAILING SLASH, measured against the shipped sidecar (TM-2b, 2026-09-14,
+ * sidecar-slim 0.7.12): a trailing-slash prefix never matches at all, and
+ * `stripPrefix` then has nothing to act on — `/cell/<boot>/` did not take
+ * `/cell/<boot>/control`, while `/cell/<boot>` took it and handed the cell
+ * `/control`, which is the exact path its door requires. The design's first
+ * guess was the opposite and this is the correction at its source.
+ *
+ * Two cells cannot capture each other's traffic without the slash: the engine
+ * matches longest-prefix-first (RFC 023 D11), so a cell's own route always
+ * outranks a shorter one, and cell boot ids are fixed-width hex, so none is a
+ * proper prefix of another. */
+export function remoteCellRoutePrefix(cellBootId: string): string {
+  return `${REMOTE_CELL_PATH_PREFIX}${cellBootId}`;
 }
 
 /** A cell door reached THROUGH the tailnet: a `ws://`/`wss://` URL on a

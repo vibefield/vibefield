@@ -77,8 +77,8 @@ describe("TM-2 — which readings publish a terminal route, and which refuse", (
       tls: false,
       allow: [LOGIN],
       routes: [
-        { prefix: "/cell/cb-1/", targetPort: 51001 },
-        { prefix: "/cell/cb-2/", targetPort: 51002 },
+        { prefix: "/cell/cb-1", targetPort: 51001 },
+        { prefix: "/cell/cb-2", targetPort: 51002 },
       ],
     } satisfies ServeSpec);
   });
@@ -109,7 +109,7 @@ describe("TM-2 — which readings publish a terminal route, and which refuse", (
       ...base,
       routes: snapshot(5, [cell("cb-1", undefined), cell("cb-2", 51002)]),
     });
-    expect(spec?.routes).toEqual([{ prefix: "/cell/cb-2/", targetPort: 51002 }]);
+    expect(spec?.routes).toEqual([{ prefix: "/cell/cb-2", targetPort: 51002 }]);
   });
 
   it("skips a cell whose two doors disagree about the port", () => {
@@ -205,9 +205,9 @@ describe("TM-2 — the driver declares only on a real change", () => {
     state.routes = snapshot(3, [cell("cb-2", 51005)]);
     await d.refresh();
     expect(declared.map((s) => s?.routes?.map((r) => r.prefix) ?? null)).toEqual([
-      ["/cell/cb-1/"],
+      ["/cell/cb-1"],
       null,
-      ["/cell/cb-2/"],
+      ["/cell/cb-2"],
     ]);
   });
 
@@ -299,7 +299,7 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
     const declared = await poll(() => terminalAdds(mock)[0]);
     expect(declared["listenPort"]).toBe(PORTS.TERMINAL_CELLS_SERVE);
     expect(declared["target"]).toEqual({ kind: "routes" });
-    expect(declared["routes"]).toEqual([{ prefix: "/cell/cb-1/", targetPort: 51001 }]);
+    expect(declared["routes"]).toEqual([{ prefix: "/cell/cb-1", targetPort: 51001 }]);
     expect(declared["allow"]).toEqual([LOGIN]);
     expect(declared["tls"]).toBe(false);
     // …and the product serve is STILL THERE, on its own listener, with its own
@@ -344,8 +344,8 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
     mock.pushRoutesDelta(snapshot(2, [cell("cb-1", 51001), cell("cb-2", 51002)]));
     const second = await poll(() => terminalAdds(mock)[1]);
     expect(second["routes"]).toEqual([
-      { prefix: "/cell/cb-1/", targetPort: 51001 },
-      { prefix: "/cell/cb-2/", targetPort: 51002 },
+      { prefix: "/cell/cb-1", targetPort: 51001 },
+      { prefix: "/cell/cb-2", targetPort: 51002 },
     ]);
     // the terminal listener was taken down first (truffle has no upsert)…
     expect(mock.meshRemovedServeIds).toContain(TERMINAL_SERVE_ID);
