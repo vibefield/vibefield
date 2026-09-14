@@ -37,7 +37,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { mirrorWriteGrantRefusal } from "../src/daemon";
+import { MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS, mirrorWriteGrantRefusal } from "../src/daemon";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { ProductApi } from "../src/product-api";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -99,7 +99,16 @@ async function wallDoor(getLinkedLogin?: () => string | null): Promise<number> {
     ...(getLinkedLogin !== undefined ? { getLinkedLogin } : {}),
   });
   apis.push(api);
-  api.register(METHOD, (ctx) => ({ reached: true, principal: ctx.principal }));
+  // The probe is not a copy of the door: it reaches past the registry walls and
+  // then asks the door's OWN rule what it would do with this principal. That is
+  // what makes the wire rows below bite on the allow-list — drop a kind from the
+  // set and the self-peer row goes red here, with the principal the real tailnet
+  // handshake minted rather than one a test typed.
+  api.register(METHOD, (ctx) => ({
+    reached: true,
+    principal: ctx.principal,
+    refusal: mirrorWriteGrantRefusal(ctx),
+  }));
   api.register("device.list", (ctx) => ({ reached: true, principal: ctx.principal }));
   return await api.listen();
 }
@@ -176,9 +185,13 @@ describe("terminal.mirrorWriteGrant — the walls it stands behind", () => {
     const served = (await wire.next())["result"] as {
       reached: boolean;
       principal: { kind: string; self?: boolean };
+      refusal: unknown;
     };
     expect(served.reached).toBe(true);
     expect(served.principal).toMatchObject({ kind: "tailnet", self: true });
+    // and the door's own rule ADMITS the principal the handshake minted — the
+    // half a probe handler alone could never claim
+    expect(served.refusal).toBeNull();
   });
 
   it("a tailnet GUEST is refused before dispatch (UA-4's choke)", async () => {
@@ -536,6 +549,23 @@ describe("terminal.mirrorWriteGrant — agent-class principals", () => {
     expect(lines.at(-1)).toMatchObject({ outcome: "failed", reasonCode: "FORBIDDEN_SCOPE" });
   });
 
+  it("names who may ASK, so an unenumerated principal kind is refused by default", async () => {
+    // Ruled 2026-09-13: a door that hands out a durable write key is an
+    // allow-list. The three admitted are the ones that legitimately ask — the
+    // desktop's shell, a renderer window, the phone as a linked self peer — and
+    // a kind nobody has enumerated (today's `tailnet-guest` and `peer-fieldd`,
+    // tomorrow's whatever) is refused because it is absent, not because someone
+    // remembered it.
+    expect([...MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS].sort()).toEqual([
+      "local-token",
+      "shell-main",
+      "tailnet",
+    ]);
+    for (const refused of ["plugin", "mcp-agent", "tailnet-guest", "peer-fieldd"] as const) {
+      expect(MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS.has(refused), refused).toBe(false);
+    }
+  });
+
   it("refuses an UNLINKED tailnet peer holding the whole preset (self is absent, never false)", async () => {
     // The hole this closes: with no login stored, `product-api` still mints a
     // `tailnet` principal and grants the full TAILNET_SCOPES preset —
@@ -558,13 +588,20 @@ describe("terminal.mirrorWriteGrant — agent-class principals", () => {
     // way surface-service.test.ts drives its own policy. The two WIRE rows in
     // this block are what keep the rule from being a decoration: the door
     // really calls it.
-    expect(mirrorWriteGrantRefusal(ctx({ kind: "plugin", id: "p", scopes: [] }))).toEqual({
-      principal: "plugin",
-      reason: "agent-principal",
-    });
-    expect(
-      mirrorWriteGrantRefusal(ctx({ kind: "mcp-agent", sessionId: "mcp-1", scopes: [] })),
-    ).toEqual({ principal: "mcp-agent", reason: "agent-principal" });
+    for (const refused of [
+      ctx({ kind: "plugin", id: "p", scopes: [] }),
+      ctx({ kind: "mcp-agent", sessionId: "mcp-1", scopes: [] }),
+      // neither of these reaches the handler in practice (the guest choke and
+      // D36 refuse them before dispatch) — they are here because an allow-list
+      // that only refuses what someone remembered is not an allow-list
+      ctx({ kind: "tailnet-guest", login: "colleague@example.test" }),
+      ctx({ kind: "peer-fieldd", deviceId: "dev-other" }),
+    ]) {
+      expect(mirrorWriteGrantRefusal(refused), refused.principal.kind).toEqual({
+        principal: refused.principal.kind,
+        reason: "not-admitted",
+      });
+    }
     expect(
       mirrorWriteGrantRefusal({
         ...ctx({ kind: "local-token", tokenId: "tk", scopes: [] }),

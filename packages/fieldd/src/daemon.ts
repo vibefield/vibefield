@@ -364,26 +364,40 @@ export interface FielddDaemon {
 /** The daemon's own version, published in the device slice (package version). */
 const FIELDD_VERSION = "0.1.0";
 
-/** FD-2 (EL7) — who `terminal.mirrorWriteGrant` refuses, as a rule rather than a
- * line inside a closure. `null` = this caller may be granted; otherwise the
+/** FD-2 (GM-D5, EL7) — who `terminal.mirrorWriteGrant` ADMITS. An allow-list,
+ * ruled 2026-09-13: a door that hands out a durable write key refuses a
+ * principal kind nobody has enumerated, rather than refusing the kinds someone
+ * remembered to list. The three here are the ones that legitimately ask —
+ * the desktop's own shell, a renderer window, and the phone as a linked self
+ * peer — and everything else is refused BY DEFAULT: a plugin, an `mcp-agent`, a
+ * tailnet-guest, a peer-fieldd (the guest choke and D36 refuse those two before
+ * dispatch; belt and braces is the point of a default-refuse list), and any kind
+ * added to `Principal` after this line was written. */
+export const MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS: ReadonlySet<
+  CallerContext["principal"]["kind"]
+> = new Set(["shell-main", "local-token", "tailnet"]);
+
+/** The rule behind the door: `null` = this caller may be granted, otherwise the
  * words that travel in the refusal's details.
  *
- * Exported because the door's OTHER refusals are all provable end to end (a
- * guest, a peer-fieldd, a scopeless token, a plugin principal, an agent's own
- * hello claim) while two of these are not: nothing in this repo MINTS an
- * `mcp-agent` principal, and a tailnet principal's `self` flag depends on a
- * stored login that a unit daemon has no tailnet to acquire. A rule can be
- * driven with a synthetic CallerContext the way `surface-service` is; the wire
- * rows beside it prove the door consults this rule and not a copy of it.
+ * Exported because the door's other refusals are provable end to end (a guest, a
+ * peer-fieldd, a scopeless token, a plugin principal, an agent's own hello
+ * claim) while two of these are not: nothing in this repo MINTS an `mcp-agent`
+ * principal, and a tailnet principal's `self` flag depends on a stored login a
+ * unit daemon has no tailnet to acquire. A rule can be driven with a synthetic
+ * CallerContext the way `surface-service` is; the wire rows beside it prove the
+ * door consults this rule and not a copy of it.
  *
- * The three clauses, and why each is here:
- * - a PLUGIN or an `mcp-agent` principal: `terminal.attach` is renderer-eligible
+ * Three clauses, in the order they have to run:
+ * - NOT ADMITTED: the allow-list above. `terminal.attach` is renderer-eligible
  *   for plugins, and attaching to a PTY on this device is not the power to hold
- *   the tailnet's write credential. Transport-derived, so this is the wall.
+ *   the tailnet's write credential — but the list is what matters, not that
+ *   example: a kind absent from it is refused whether or not anyone thought
+ *   about it.
  * - a caller CLAIMING an agent client kind: a claim may only ever RESTRICT
- *   (§11.2). It stops nothing that lies and costs an honest agent integration
+ *   (§11.2). It stops nothing that lies, and costs an honest agent integration
  *   exactly the key it should not be holding.
- * - a tailnet principal that is not SELF: `self` is UA-4's stored-login verdict,
+ * - a tailnet principal that is not SELF: `self` is UA-4's stored-login verdict
  *   and it is ABSENT — never false — on a desktop with no login linked yet
  *   (`product-api.ts`: no stored login ⇒ the pre-capture status quo, which still
  *   grants the whole TAILNET_SCOPES preset, `terminal.attach` included). GM-D5's
@@ -395,8 +409,8 @@ export function mirrorWriteGrantRefusal(
   ctx: CallerContext,
 ): { principal: string; reason: string } | null {
   const principal = ctx.principal.kind;
-  if (principal === "plugin" || principal === "mcp-agent")
-    return { principal, reason: "agent-principal" };
+  if (!MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS.has(principal))
+    return { principal, reason: "not-admitted" };
   if (ctx.clientKind === "mcp-agent") return { principal, reason: "agent-claim" };
   if (ctx.principal.kind === "tailnet" && ctx.principal.self !== true)
     return { principal, reason: "unlinked" };
