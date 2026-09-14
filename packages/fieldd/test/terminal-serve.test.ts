@@ -189,12 +189,32 @@ describe("TM-2 — the driver declares only on a real change", () => {
     expect(declared, "a replayed snapshot must not bounce the listener").toHaveLength(1);
   });
 
-  it("declares nothing at all while there is nothing to publish", async () => {
+  it("declares the WITHDRAWAL once when its first reading is nothing (F-H1)", async () => {
+    // A fresh driver has declared nothing, which is not the same as having
+    // declared "publish nothing": the floor outlives fieldd, so the listener a
+    // predecessor left behind is still up and only this daemon will ever take
+    // it down. The first refresh therefore declares even a null spec — and the
+    // second, answering the same way, still must not bounce the node.
     const { d, state, declared } = driver({ routes: undefined });
     await d.refresh();
+    expect(declared).toEqual([null]);
     state.published = false;
     await d.refresh();
-    expect(declared).toEqual([]);
+    expect(declared, "the same answer twice is not news").toEqual([null]);
+  });
+
+  it("declares that withdrawal ONCE across all three refusals", async () => {
+    // the floor's word, then the login, then routability: three different
+    // reasons to publish nothing, one declaration between them
+    const { d, state, declared } = driver({ published: false });
+    await d.refresh();
+    state.published = true;
+    state.linkedLogin = null;
+    await d.refresh();
+    state.linkedLogin = LOGIN;
+    state.routes = snapshot(1, []);
+    await d.refresh();
+    expect(declared).toEqual([null]);
   });
 
   it("withdraws when the last cell exits and re-declares when one returns", async () => {
@@ -257,7 +277,15 @@ async function poll<T>(fn: () => T | undefined, ms = 5_000): Promise<T> {
   }
 }
 
-async function boot(opts: { terminalMesh: boolean | null; login: string | null }) {
+async function boot(opts: {
+  terminalMesh: boolean | null;
+  login: string | null;
+  /** F-H1 — scripted NODE state to exist BEFORE this daemon connects: the
+   * serve a previous fieldd left behind in the floor, which outlives it. The
+   * mock keeps its serves across a disconnect by default, exactly as the floor
+   * does. */
+  seed?: (mock: MockMgmtServer) => void;
+}) {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-tm-serve-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -283,6 +311,7 @@ async function boot(opts: { terminalMesh: boolean | null; login: string | null }
     authToken: "per-boot-token",
   };
   mock.terminalRoutes = snapshot(1, [cell("cb-1", 51001)]);
+  opts.seed?.(mock);
 
   const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
   cleanup.push(() => daemon.stop());
@@ -334,6 +363,31 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
     await poll(() => mock.meshServes.get("product"));
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(terminalAdds(mock)).toEqual([]);
+  });
+
+  it("WITHDRAWS a listener this daemon inherited but no longer calls for (F-H1)", async () => {
+    // The scenario the review named: fieldd died, the FLOOR kept serving — a
+    // serve lives in the node and only an unlink-retire clears it there — and
+    // the next fieldd boots with no captured login, so its policy publishes
+    // nothing. A driver that remembered "none" from birth would recognise its
+    // own answer and declare nothing at all, leaving 9422 listening on the
+    // tailnet behind the PREDECESSOR's allow-list, routed at loopback ports the
+    // OS has since handed to other programs.
+    const { mock } = await boot({
+      terminalMesh: true,
+      login: null,
+      seed: (m) =>
+        m.meshServes.set(TERMINAL_SERVE_ID, {
+          serveId: TERMINAL_SERVE_ID,
+          name: TERMINAL_SERVE_ID,
+          listenPort: PORTS.TERMINAL_CELLS_SERVE,
+          target: { kind: "routes" },
+          url: `http://mock.ts.net:${PORTS.TERMINAL_CELLS_SERVE}`,
+        }),
+    });
+    await poll(() => (mock.meshRemovedServeIds.includes(TERMINAL_SERVE_ID) ? true : undefined));
+    expect(mock.meshServes.has(TERMINAL_SERVE_ID), "the node is no longer serving it").toBe(false);
+    expect(terminalAdds(mock), "and nothing was published in its place").toEqual([]);
   });
 
   it("a cell birth is a remove-then-add of the terminal serve alone", async () => {

@@ -176,8 +176,21 @@ export function terminalServeSignature(spec: ServeSpec | null): string {
 export class TerminalServeDriver {
   private readonly logger: Logger;
   /** what was last DECLARED — the signature, never the spec: two specs that
-   * differ only in field order are the same serve. */
-  private declared = "none";
+   * differ only in field order are the same serve.
+   *
+   * NULL until this driver has declared anything, and that is deliberately NOT
+   * the same value as "none" (F-H1, 2026-09-14). A serve lives in the FLOOR,
+   * which outlives fieldd: after a fieldd death the predecessor's terminal
+   * listener is still up, still gated by whatever allow-list it carried, and
+   * still aimed at loopback ports the OS has since recycled. If the first
+   * reading of a NEW fieldd computes null — the last cell exited while we were
+   * down, the login is not captured yet, the floor's flag is off — a driver
+   * that started at "none" would recognise its own answer, declare nothing, and
+   * leave that listener on the tailnet with nobody reconciling it:
+   * `MeshClient`'s stray sweep removes only serveIds THIS process recorded, and
+   * a fresh process has recorded none. So the first refresh ALWAYS declares,
+   * and a null spec is a withdrawal. */
+  private declared: string | null = null;
   private chain: Promise<void> = Promise.resolve();
   private disposed = false;
 
@@ -232,9 +245,21 @@ export class TerminalServeDriver {
     return this.chain;
   }
 
-  /** Stop reconciling. Does NOT withdraw the serve: the daemon's own stop
-   * ladder tears the whole serve set down, and a withdrawal raced against it
-   * would be a second remove of the same id. */
+  /** Stop reconciling. Does NOT withdraw the serve — and the reason that used
+   * to stand here, "the daemon's own stop ladder tears the whole serve set
+   * down", was simply untrue (F-H1, 2026-09-14). NO ladder removes any serve:
+   * the clean-stop, rollback and supersession ladders dispose this driver and
+   * close the native link, while the serves live in the FLOOR, where only an
+   * unlink-retire clears them (`field-native/src/services/mesh.rs`).
+   *
+   * So the listener really does outlive a stopped fieldd, which is the two-plane
+   * law working as written rather than a leak to patch here — a withdrawal
+   * raced against a dying link would only fail. What bounds it is the
+   * SUCCESSOR: its first refresh always declares (see `declared`), so the next
+   * boot withdraws a serve its own policy no longer calls for. While no fieldd
+   * runs at all the listener stays up; nobody can mint a grant for it in that
+   * window, and a cell admits no one without a grant it verifies, so the
+   * exposure ends on the grant clock rather than standing open. */
   dispose(): void {
     this.disposed = true;
   }
