@@ -938,6 +938,44 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       detachArtifactHealth = null;
     };
 
+    // TM-2 (TM-D2, F-H2) — THE ONE READING of "is this device carrying its
+    // terminal doors onto the tailnet RIGHT NOW", answered as the live serve
+    // itself or `undefined`. The ticket mint and `DeviceCapabilities.terminalMesh`
+    // ask the same question, so they ask it here.
+    //
+    // Three conditions, every one of them about what is SERVING rather than
+    // what this daemon asked for:
+    //   · the serve is `active` in the fused view. ERRATA (F-L6c, 2026-09-14):
+    //     the note that stood here called that "the node reporting the proxy
+    //     running, not this daemon's own reconcile verdict", and that is not
+    //     what the code does — `MeshClient.fuse` falls back to the reconcile
+    //     record whenever the runtime stream has said nothing about this serve,
+    //     and a successful `serve.add` writes `active` directly. So `active`
+    //     means "the node took it and has not since reported it stopped or
+    //     failed", which is weaker than a live liveness proof and is the
+    //     strongest thing available without one.
+    //   · it carries at least one route — the sidecar was handed a cell.
+    //   · the url composes — `remoteCellEndpointsFor` refuses anything that is
+    //     not a dialable http(s) origin instead of inventing one.
+    //
+    // WHY THE CAPABILITY MOVED HERE: it used to answer with
+    // `native.terminalMeshPublished()`, the floor's own boolean off the hello.
+    // That is only the FIRST of the driver's three gates (a captured login and
+    // a routable cell are the other two), so a desktop whose floor publishes
+    // and whose login is not captured yet — the whole pre-capture window, or a
+    // corrupt `link.json` — advertised "another device can attach here" while
+    // ZERO routes were on the tailnet. `devices.ts` promises that field is "the
+    // fact a REMOTE reader needs", and a card drawn on it was tappable and dead.
+    const publishedTerminalServe = ():
+      | { url: string; routes: ReadonlyArray<{ prefix: string; targetPort: number }> }
+      | undefined => {
+      const serve = mesh.serves().find((s) => (s.serveId ?? s.name) === TERMINAL_SERVE_ID);
+      if (serve?.status !== "active" || serve.url === undefined) return undefined;
+      const routes = serve.routes ?? [];
+      if (routes.length === 0) return undefined;
+      return { url: serve.url, routes };
+    };
+
     // -- Terminal floor (NF-3, native-floor spec §6): the observed inventory +
     // the D6 ticket seam. Tolerant of a floor-less native (no endpoints on the
     // hello → honest UNAVAILABLE at the ticket methods) and of the mock mgmt
@@ -957,22 +995,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ? { birthWaitMs: config.terminalBirthWaitMs }
         : {}),
       // TM-2 (TM-D2) — the doors a TAILNET self peer is told to dial, read off
-      // the LIVE terminal serve. Three conditions, every one of them "is it
-      // serving right now" rather than "did fieldd ask for it":
-      //   · the serve is ACTIVE — in the fused view that is the node reporting
-      //     the proxy running, not this daemon's own reconcile verdict;
-      //   · THIS cell's route is in the declared set — a ticket minted in the
-      //     window between a cell's birth and its route landing would name a
-      //     path the sidecar answers 404 for, and a 404 is not a state any
-      //     client can act on;
-      //   · the URL composes — `remoteCellEndpointsFor` refuses anything that
-      //     is not a dialable http(s) origin instead of inventing one.
-      // Any of the three missing is `doors_not_published`, an honest state.
+      // the LIVE terminal serve (`publishedTerminalServe` above) plus one
+      // condition only this caller has: THIS cell's route is in the published
+      // set. A ticket minted in the window between a cell's birth and its route
+      // landing would name a path the sidecar answers 404 for, and a 404 is not
+      // a state any client can act on. Anything missing is `doors_not_published`.
       remoteEndpoints: (cellBootId) => {
-        const serve = mesh.serves().find((s) => (s.serveId ?? s.name) === TERMINAL_SERVE_ID);
-        if (serve?.status !== "active" || serve.url === undefined) return undefined;
+        const serve = publishedTerminalServe();
+        if (serve === undefined) return undefined;
         const prefix = remoteCellRoutePrefix(cellBootId);
-        if (!(serve.routes ?? []).some((route) => route.prefix === prefix)) return undefined;
+        if (!serve.routes.some((route) => route.prefix === prefix)) return undefined;
         return remoteCellEndpointsFor(serve.url, cellBootId);
       },
     });
@@ -1715,9 +1747,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // NF-3: honest capability — true iff the pairing hello delivered the
       // floor's endpoints (D31; re-synced on the terminal-endpoints event).
       terminalHost: () => native.terminalEndpoints !== undefined,
-      // TM-2 (MF-1l) — the REMOTE half: can another device attach here? The
-      // floor's own word, not an inference from a neighbouring consent.
-      terminalMesh: () => native.terminalMeshPublished(),
+      // TM-2 (MF-1l), corrected by F-H2 — the REMOTE half: can another device
+      // attach here? The same live reading the ticket mint answers with, so
+      // the capability and the mint can never disagree. (It was the floor's
+      // `terminalMesh` boolean alone, which is true while a pre-capture daemon
+      // publishes nothing at all.)
+      terminalMesh: () => publishedTerminalServe() !== undefined,
       // The daemon owns the serve secret + the fused serve state, so IT
       // composes the endpoint: url only while the product serve is active.
       productEndpoint: () => {

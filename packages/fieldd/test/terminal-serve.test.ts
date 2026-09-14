@@ -159,7 +159,11 @@ describe("TM-2 — the driver declares only on a real change", () => {
     published?: boolean;
     linkedLogin?: string | null;
   }) {
-    const state = {
+    const state: {
+      routes: TerminalRouteSnapshot | undefined;
+      published: boolean;
+      linkedLogin: string | null;
+    } = {
       routes: initial.routes,
       published: initial.published ?? true,
       linkedLogin: initial.linkedLogin ?? LOGIN,
@@ -322,6 +326,12 @@ async function boot(opts: {
 const terminalAdds = (mock: MockMgmtServer) =>
   mock.meshAddParams.filter((p) => p["serveId"] === TERMINAL_SERVE_ID);
 
+/** F-H2 — what this device most recently ADVERTISED about its terminal doors,
+ * read off the `field.devices.v1` slice a remote reader actually gets. */
+const publishedTerminalMesh = (mock: MockMgmtServer): boolean | undefined =>
+  (mock.storeWrites.at(-1) as { capabilities?: { terminalMesh?: boolean } } | undefined)
+    ?.capabilities?.terminalMesh;
+
 describe("TM-2 — daemon.ts drives the routes off the floor's own readings", () => {
   it("publishes the cell route beside the product door's secret path", async () => {
     const { daemon, mock } = await boot({ terminalMesh: true, login: LOGIN });
@@ -339,6 +349,9 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
     expect(mock.meshServes.get(TERMINAL_SERVE_ID)?.listenPort).toBe(PORTS.TERMINAL_CELLS_SERVE);
     // the two listeners are distinct — a collision would have been refused
     expect(product.listenPort).not.toBe(PORTS.TERMINAL_CELLS_SERVE);
+    // F-H2 — with the serve really up and carrying a route, the capability a
+    // remote reader reads says so
+    await poll(() => (publishedTerminalMesh(mock) === true ? true : undefined));
   });
 
   it("publishes NOTHING when the floor says its doors are not on the tailnet", async () => {
@@ -363,6 +376,10 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
     await poll(() => mock.meshServes.get("product"));
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(terminalAdds(mock)).toEqual([]);
+    // F-H2 — and this device says so. The FLOOR's `terminalMesh` is true here;
+    // the daemon's three gates still published nothing, and the capability a
+    // remote reader draws its card from answers off what is SERVING.
+    expect(publishedTerminalMesh(mock), "a pre-capture desktop is not attachable").toBe(false);
   });
 
   it("WITHDRAWS a listener this daemon inherited but no longer calls for (F-H1)", async () => {

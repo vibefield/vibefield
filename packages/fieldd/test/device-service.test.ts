@@ -76,6 +76,38 @@ async function pollDevices(
   }
 }
 
+/** F-H2 — the capabilities this device most recently ADVERTISED, off the
+ * `field.devices.v1` slice a remote reader actually receives. */
+const lastCapabilities = (mock: MockMgmtServer): DeviceSlice["capabilities"] | undefined =>
+  (mock.storeWrites.at(-1) as DeviceSlice | undefined)?.capabilities;
+
+/** A floor route snapshot with one cell whose T1 doors are up, or none. */
+function routeSnapshot(revision: number, port?: number): unknown {
+  return {
+    revision,
+    cells:
+      port === undefined
+        ? []
+        : [
+            {
+              cellInstanceId: 1,
+              cellBootId: "cb-1",
+              pid: 4242,
+              endpoints: {
+                controlSocket: "/mock/native/run/termctl.1.sock",
+                frameSocket: "/mock/native/run/termframe.1.sock",
+                authToken: "per-boot-token",
+              },
+              tokenGeneration: 1,
+              doors: {
+                controlUrl: `ws://127.0.0.1:${port}/control`,
+                framesUrl: `ws://127.0.0.1:${port}/frames`,
+              },
+            },
+          ],
+  };
+}
+
 /** A valid peer DeviceSlice for scripting store deltas. */
 function peerSlice(over: Partial<DeviceSlice> = {}): DeviceSlice {
   return {
@@ -115,6 +147,52 @@ describe("DeviceService — publish + identity", () => {
     });
     expect(slice.bootId).toBe(daemon.bootId);
     expect(slice.productEndpoint?.serve).toBe("product");
+  });
+
+  it("terminalMesh is true only while a remote reader could really attach (F-H2)", async () => {
+    // The field promises "this device's terminal doors are PUBLISHED ON THE
+    // TAILNET — the fact a REMOTE reader needs" (contracts/devices.ts). It used
+    // to answer with the floor's own `terminalMesh` word, which knows nothing
+    // of fieldd's three gates: that boolean is TRUE for the whole of this test,
+    // and the truthful answer still moves when the last cell goes. (The other
+    // half — a floor shouting yes at an UNLINKED daemon that publishes nothing
+    // — is the no-login row in terminal-serve.test.ts.)
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mkdirSync(join(dataDir, "fieldd"), { recursive: true });
+    writeFileSync(
+      join(dataDir, "fieldd", "link.json"),
+      JSON.stringify({
+        login: "james@github",
+        tailnet: "tail1234.ts.net",
+        linkedAt: "2026-09-14T00:00:00.000Z",
+      }),
+    );
+    mock.helloTerminalMesh = true;
+    mock.helloTerminal = {
+      controlSocket: "/mock/native/run/termctl.1.sock",
+      frameSocket: "/mock/native/run/termframe.1.sock",
+      authToken: "per-boot-token",
+    };
+    mock.terminalRoutes = routeSnapshot(1, 51001);
+
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    // linked, a floor that publishes, one routable cell: the serve is up and
+    // the capability says a remote reader can attach
+    await until(() => lastCapabilities(mock)?.terminalMesh === true);
+    expect(lastCapabilities(mock)?.terminalHost).toBe(true);
+
+    // the last cell exits. The floor's word has not moved — it is still true —
+    // but the listener is withdrawn, so the promise is withdrawn with it.
+    mock.pushRoutesDelta(routeSnapshot(2));
+    await until(() => lastCapabilities(mock)?.terminalMesh === false);
+    // …and `terminalHost` goes with it, which is NOT this change's doing:
+    // `NativeLink.terminalEndpoints` is DERIVED from the route snapshot's
+    // cells, so a floor with no cells reports no endpoints. Recorded here
+    // rather than asserted the other way, because the first draft of this row
+    // assumed the local fact was independent and it is not.
+    expect(lastCapabilities(mock)?.terminalHost).toBe(false);
   });
 
   it("device.list returns the online self row; workspace.read gates the surface", async () => {
