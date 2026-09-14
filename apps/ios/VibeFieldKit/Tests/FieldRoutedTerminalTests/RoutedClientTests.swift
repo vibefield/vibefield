@@ -419,10 +419,19 @@ import Testing
     await live.frames.deliver(.binary(first))
     await live.frames.deliver(.binary(orphan))
 
-    try await settle("a credit return") { await live.frames.lastSent("TransportCredit") != nil }
+    // Settle on the credit that accounts for BOTH units, not on "a credit": the
+    // client's coalescing window may close between the two deliveries, and the
+    // first return (the 1000-byte frame alone, one account) already satisfies
+    // "any credit was sent". Totals are cumulative within the connection, so
+    // the return that covers the orphan carries the sum (TM-4a, 2026-09-14 —
+    // the row went red once under load with exactly that first return).
+    let expected = Int64(first.count + orphan.count)
+    try await settle("a credit return covering both units") {
+      await live.frames.lastSent("TransportCredit")?["connectionBytesReturned"]?.intValue == expected
+    }
     let credit = await live.frames.lastSent("TransportCredit")
     #expect(credit?["creditEpoch"]?.intValue == 1)
-    #expect(credit?["connectionBytesReturned"]?.intValue == Int64(first.count + orphan.count))
+    #expect(credit?["connectionBytesReturned"]?.intValue == expected)
     let accounts = credit?["accounts"]?.arrayValue ?? []
     #expect(accounts.count == 2)
     let orphanAccount = accounts.first { $0["activationId"]?.stringValue == "an-activation-nobody-holds" }
