@@ -418,7 +418,11 @@ async fn the_routes_subscription_serves_a_revised_snapshot() {
         .await
         .expect("bootstrap");
     // The DEFAULT floor is cell mode: wait for the first cell's hello, which is
-    // what moves the revision off its initial.
+    // what moves the revision off its initial — and then for the snapshot to
+    // SETTLE. TM-1 made the class cells unconditional, so a second cell's hello
+    // can land between the ack below and the subscribe after it; the row asserts
+    // "one floor, one reading" about a floor that has stopped moving, not about
+    // a floor mid-boot (found by the landing gate at `64c26a75` under load).
     let mut routes = daemon.state.terminal_routes.clone();
     timeout(
         Duration::from_secs(20),
@@ -427,6 +431,17 @@ async fn the_routes_subscription_serves_a_revised_snapshot() {
     .await
     .expect("the terminal cell announced within its hello budget")
     .expect("the routes watch outlives boot");
+    let settled = timeout(Duration::from_secs(20), async {
+        loop {
+            match timeout(Duration::from_millis(750), routes.changed()).await {
+                Ok(Ok(())) => continue,
+                Ok(Err(_)) => panic!("the routes watch outlives boot"),
+                Err(_) => break,
+            }
+        }
+    })
+    .await;
+    settled.expect("the route snapshot settled within its budget");
 
     let mut c = TestClient::connect(&daemon).await;
     let ack = c.hello(&daemon, 1).await;
