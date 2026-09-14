@@ -1,6 +1,6 @@
-//! How this daemon puts a secret on disk (EL7). Two files are in this class —
-//! the D8 pairing secret (`pairing.rs`) and MF-2a's mirror-write capability
-//! (`config.rs`) — and both used to write first and chmod second:
+//! How this daemon puts a secret on disk (EL7). ONE file is in this class since
+//! TM-3 deleted MF-2a's mirror-write capability (2026-09-14) — the D8 pairing
+//! secret (`pairing.rs`) — and it used to write first and chmod second:
 //!
 //! ```ignore
 //! fs::write(path, bytes)?;              // born at the umask's mode (0644 typically)
@@ -21,7 +21,6 @@
 //! profile's inherited ACLs carry the other-account boundary, and the same-uid
 //! adversary is held out by token discipline rather than by the filesystem.
 
-use anyhow::{Context, Result};
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 
@@ -40,28 +39,13 @@ pub fn create_private(path: &Path) -> std::io::Result<File> {
     options.open(path)
 }
 
-/// Bring an EXISTING file back to 0600 (unix). The mint path no longer needs
-/// this — `create_private` gets the mode right at birth — but a file written by
-/// an older boot, restored from a backup, or rewritten by an editor is
-/// tightened on the way back in rather than trusted.
-pub fn harden(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let current = std::fs::metadata(path)
-            .with_context(|| format!("stat {}", path.display()))?
-            .permissions()
-            .mode()
-            & 0o777;
-        if current != 0o600 {
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
-                .with_context(|| format!("chmod 0600 {}", path.display()))?;
-        }
-    }
-    #[cfg(not(unix))]
-    let _ = path;
-    Ok(())
-}
+// RETIRED 2026-09-14 (TM-3): `harden`, which brought an EXISTING secret file
+// back to 0600 on the way in. Its only callers were the mirror-write
+// capability's two read-back paths in `config.rs`, and they are deleted with
+// the capability. The pairing secret never took this route — it is born 0600
+// under `create_private` and read back verbatim — so no file in this daemon is
+// re-hardened any more, and none needs to be. Hardening the pairing file on
+// read would be a NEW claim (and a new test), not a leftover of this one.
 
 #[cfg(test)]
 mod tests {
@@ -123,19 +107,5 @@ mod tests {
             "untouched",
             "the link's target must not have been written through"
         );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn harden_tightens_a_loose_file_and_leaves_a_tight_one_alone() {
-        use std::os::unix::fs::PermissionsExt;
-        let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("secret");
-        std::fs::write(&path, "s").expect("seed");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).expect("chmod");
-        harden(&path).expect("harden");
-        assert_eq!(mode(&path), 0o600);
-        harden(&path).expect("harden again");
-        assert_eq!(mode(&path), 0o600);
     }
 }

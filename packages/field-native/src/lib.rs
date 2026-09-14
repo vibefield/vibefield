@@ -19,7 +19,8 @@ pub mod resource_pressure;
 /// TC-D6(a) — the descriptor-limit raise every boot owes itself.
 pub mod rlimit;
 /// EL7 — how a secret is created on disk (0600 at birth, never following a
-/// link); the pairing secret and the mirror-write capability both use it.
+/// link). ONE file is in this class since TM-3 retired the mirror-write
+/// capability (2026-09-14): the D8 pairing secret.
 pub mod secret_file;
 pub mod services;
 pub mod state;
@@ -95,7 +96,7 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
 /// been installed by main. Tests use `bootstrap` to avoid competing global
 /// subscribers inside one test process.
 pub async fn bootstrap_with_logging(
-    mut config: config::NativeConfig,
+    config: config::NativeConfig,
     boot_id: String,
     logging: Option<logging::NativeLogging>,
 ) -> Result<RunningDaemon> {
@@ -120,13 +121,10 @@ pub async fn bootstrap_with_logging(
     let pairing_file = config.pairing_file();
     let secret = pairing::load_or_create_secret(&pairing_file)?;
 
-    // MF-2a (GM-D5) — a floor that SERVES its terminals over the mesh always
-    // has a mirror-write capability, so the phone can be granted one instead of
-    // being handed a string to type. Here and not in `from_env` because it is a
-    // boot act (it writes a file, beside the pairing secret this line above
-    // just minted) and because the terminal unit reads the resolved value when
-    // `build_units` constructs it, two lines below.
-    config.ensure_terminal_mirror_write();
+    // TM-3 (2026-09-14) — the boot act that minted this floor's mirror-write
+    // capability beside the pairing secret above is GONE, with the file, the
+    // env var and the mgmt door it fed. A floor mints one secret on disk now,
+    // and it is the one this line above reads.
 
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
@@ -168,10 +166,6 @@ pub async fn bootstrap_with_logging(
         // the mgmt plane composes it with the gateway's live node into the
         // hello's `terminalMesh` without learning what either one is.
         config::MeshPlan::resolve(&config),
-        // The capability rides the state so the mgmt plane can answer for it
-        // without learning what a terminal mesh is (the wiring law the lines
-        // above follow).
-        config.terminal_mirror_write.clone(),
         logging.clone(),
     );
 

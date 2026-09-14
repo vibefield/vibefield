@@ -259,8 +259,10 @@ describe("ProcessService — §17.1", () => {
 describe("the child env law is platform-shaped (EL7)", () => {
   it("strips FIELD_*/FIELDD_* case-INSENSITIVELY on win32", () => {
     // Windows env keys are case-insensitive: a var stored `Field_Token` survives
-    // an exact-prefix compare and the child reads it back as FIELD_TOKEN. This
-    // is the mirror-write capability leak (§4.2), TS side.
+    // an exact-prefix compare and the child reads it back as FIELD_TOKEN. §4.2
+    // named the mirror-write capability as the leak; TM-3 deleted that variable
+    // (2026-09-14), and the law is unchanged — every FIELD_/FIELDD_ secret rides
+    // this strip, and the pairing hello's own token is the one it carries today.
     const env = pluginChildEnv(
       { Field_Token: "leak", fieldd_secret: "leak", FIELD_X: "leak", SAFE_VAR: "ok" },
       "win32",

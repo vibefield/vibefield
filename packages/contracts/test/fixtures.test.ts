@@ -8,7 +8,6 @@ import {
   AgentFieldSlice,
   AgentFieldSnapshot,
   AgentInterruptResult,
-  TerminalMirrorWriteGrantResult,
 } from "../src/agent-field";
 import {
   AgentDistributionRecord,
@@ -204,7 +203,6 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // Both arms of the interrupt's union: the refusal carries the FLOOR's own
   // word, never a sentence composed at the door.
   "agent-interrupt": AgentInterruptResult,
-  "terminal-mirror-write-grant": TerminalMirrorWriteGrantResult,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

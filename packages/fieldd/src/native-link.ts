@@ -6,7 +6,6 @@ import {
   isPipeEndpoint,
   MESH_CONTROL_LIMITS,
   NATIVE_SUPERVISION,
-  NativeTerminalMirrorWriteCapabilityResult,
   PingAck,
   TerminalEndpoints,
   type TerminalRouteCell,
@@ -172,8 +171,10 @@ export class NativeLink extends EventEmitter {
    * The fact MF-1h said was owed and could not be read. It is deliberately
    * SECRET-FREE: the only mgmt verb that revealed the same truth handed over
    * the mirror-write capability itself, so the honest gate had to wait for a
-   * boolean. Everything that used to guess from a NEIGHBOURING consent (the
-   * product serve being active) now reads this.
+   * boolean. (That verb is deleted as of TM-3, 2026-09-14 — this boolean is now
+   * the only reading of the fact, not merely the safe one.) Everything that
+   * used to guess from a NEIGHBOURING consent (the product serve being active)
+   * now reads this.
    *
    * TRUE needs BOTH halves on the floor's side (TM-1, envelope.ts): it was
    * asked to publish AND its gateway node was up as the ack was written. So a
@@ -790,26 +791,12 @@ export class NativeLink extends EventEmitter {
     return parsed.data;
   }
 
-  /** MF-2a (GM-D5) — the floor's mirror-write capability, for the ONE product
-   * door that grants it (`terminal.mirrorWriteGrant`). Parsed like the ping
-   * ack: a floor answering some other shape is an INTERNAL fault here, not a
-   * capability to pass on.
-   *
-   * The answer carries a secret, so it is returned and never logged — this
-   * method deliberately has no debug line, and callers must keep the value out
-   * of audit attrs and error details (EL7). `configured: false` is the honest
-   * view-only floor, and the caller turns it into UNAVAILABLE. */
-  async mirrorWriteCapability(): Promise<NativeTerminalMirrorWriteCapabilityResult> {
-    const answer = await this.rawRequest("native.terminal.mirrorWriteCapability", {});
-    const parsed = NativeTerminalMirrorWriteCapabilityResult.safeParse(answer);
-    if (!parsed.success)
-      throw new RpcCallError(
-        "INTERNAL",
-        "the floor's mirror-write answer was not a NativeTerminalMirrorWriteCapabilityResult",
-        false,
-      );
-    return parsed.data;
-  }
+  // RETIRED 2026-09-14 (TM-3, TM-D3): `mirrorWriteCapability()`, the only
+  // caller of `native.terminal.mirrorWriteCapability` and the only place a
+  // secret ever came UP this channel. The verb is deleted on the floor too. No
+  // method on this link carries a durable credential now — the grant fieldd
+  // signs for a ticket is minted from the cell's per-boot key on the route row,
+  // which is memory-only and rotates with the cell.
 
   private async rawRequest(
     method: string,

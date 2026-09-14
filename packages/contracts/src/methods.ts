@@ -268,17 +268,13 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: true,
   }),
-  // MF-2a (GM-D5) — the floor hands its mirror-write capability to its ONE
-  // paired management client so fieldd can grant it to a self peer over the
-  // tailnet door (`terminal.mirrorWriteGrant`). Idempotent: asking twice
-  // returns the same string, because the floor mints at most one.
-  defineMethod({
-    surface: "mgmt",
-    method: "native.terminal.mirrorWriteCapability",
-    scope: null,
-    idempotent: true,
-    locality: "local",
-  }),
+  // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
+  // the mgmt row `native.terminal.mirrorWriteCapability`, by which the floor
+  // handed its mirror-write capability to its ONE paired management client so
+  // fieldd could grant it to a self peer. The floor's mint, its key file and
+  // `FIELD_NATIVE_TERMINAL_MIRROR_WRITE` went with it: the write right is a
+  // claim in a per-client expiring attach grant, so no mgmt verb carries a
+  // durable secret for it.
   defineMethod({
     surface: "mgmt",
     method: "native.diagnostics.query",
@@ -1081,30 +1077,24 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
-  // MF-1/G4 — the phone asks this desktop for the floor's mirror-write
-  // capability instead of a person pasting a secret into a phone. Scope is
-  // `terminal.attach`, deliberately: the capability turns a VIEWER of a mirror
-  // into a WRITER of it, which is the same power `terminal.attach` already
-  // grants over the door (attach + create + terminate, the posture stated on
-  // the rows above), so a new scope would be a distinction no caller could
-  // act on. locality "local": the capability is THIS floor's — a peer's
-  // mirror-write is that peer's door to hand out, never this one federated.
-  // Idempotent: D5 v1 is ONE secret per floor, so asking twice returns the
-  // same string and a retry is free (rotation revokes every holder at once;
-  // per-device tokens are the named upgrade, GT-D6).
-  //
-  // `guestOk` stays FALSE (the default, undeclared): a guest is a WhoIs-verified
-  // tailnet peer whose login does not match this user's link, and writing into
-  // this user's terminals is exactly what the empty guest preset exists to
-  // refuse. Self peers reach it because `terminal.attach` sits in
-  // TAILNET_SCOPES already.
-  defineMethod({
-    surface: "product",
-    method: "terminal.mirrorWriteGrant",
-    scope: "terminal.attach",
-    idempotent: true,
-    locality: "local",
-  }),
+  // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
+  // the product row `terminal.mirrorWriteGrant` on `terminal.attach`, by which
+  // the phone asked this desktop for the floor's mirror-write capability. What
+  // it handed out was a DURABLE shared secret: one per floor, revoked only by
+  // deleting the floor's key file and bouncing the pair, which revoked every
+  // device at once. Since TM-2 the right to type is a claim in the attach grant
+  // `terminal.openTicket`/`terminal.create` already mints — per client, per
+  // session, expiring, revocable by generation — so a WhoIs-verified self peer
+  // is minted `rights: ["input", "read"]` and there is nothing left to ask for.
+  // The audit action `capability.mirror_write.grant` retired with the door;
+  // `AuditActionV1` is a regex, not an enumeration, so this is the only place
+  // that names it. `MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS` and its refusal
+  // rule went with it (fieldd's `daemon.ts`). Nothing has to enumerate who may
+  // NOT hold the write right any more, which is why that allow-list could go:
+  // `rightsFor` (fieldd's `terminal-grants.ts`) mints `input` for a self peer
+  // and a window, and `["read"]` for every other principal — a plugin, an
+  // `mcp-agent`'s claim, a guest, an unlinked tailnet peer — so a caller the
+  // old door would have refused is now minted a grant that cannot type.
   // GT-3 rider — the `config.ghostty` surface. Scope is `settings.manage`, NOT
   // `terminal.attach`: attaching to a terminal and rewriting the configuration
   // every terminal on the device loads are different powers, and the second one

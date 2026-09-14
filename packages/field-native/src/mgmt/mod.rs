@@ -296,28 +296,15 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
             "native.lifecycle.desired.set" => {
                 send(&tx, handle_desired_set(&state, conn_id, &params, id).await);
             }
-            "native.terminal.mirrorWriteCapability" => {
-                // MF-2a (GM-D5) — the floor is the only holder of the
-                // mirror-write capability, and this is the ONE hop that ever
-                // carries its value: to the single pairing-verified client on
-                // a local socket, which grants it to a self peer over the
-                // tailnet door (`terminal.mirrorWriteGrant`). `configured:
-                // false` is the honest view-only floor, and it is what fieldd
-                // turns into UNAVAILABLE {no-mirror-write}.
-                //
-                // TM-1 (2026-09-14): nothing in this process COMPARES the
-                // capability any more — the TSP1 adapter that did retired with
-                // the in-process serve, and this door outlives it only because
-                // the phone still calls the grant it feeds. TM-3 deletes the
-                // door, the mint, the file and the env var together, once an
-                // expiring per-client attach grant carries the write right
-                // (TM-D3). Until then it is dead weight that answers honestly.
-                let result = match &state.terminal_mirror_write {
-                    Some(capability) => json!({"configured": true, "capability": capability}),
-                    None => json!({"configured": false}),
-                };
-                send(&tx, ok(id, result));
-            }
+            // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 /
+            // TM-D3): `native.terminal.mirrorWriteCapability`, the ONE hop that
+            // ever carried this floor's mirror-write capability to its single
+            // pairing-verified client, so fieldd could grant it to a self peer.
+            // Deleted with the mint, the key file and the env var — the write
+            // right is a claim in a per-client expiring attach grant now, and
+            // no verb on this channel carries a durable secret for it. A
+            // pre-TM-3 caller falls through to METHOD_NOT_FOUND below, which is
+            // the honest answer: the door is gone, not temporarily unavailable.
             "native.diagnostics.query" => {
                 send(&tx, diagnostics::query(&state, &params, id));
             }

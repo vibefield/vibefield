@@ -261,18 +261,20 @@ describe("MF-1 — the field's two new doors and its store (§10.1)", () => {
     expect(TAILNET_SCOPES).toContain("agent.control");
   });
 
-  it("declares terminal.mirrorWriteGrant on terminal.attach, and never for a guest", () => {
-    const grant = METHODS.find((method) => method.method === "terminal.mirrorWriteGrant");
-    expect(grant).toEqual({
-      surface: "product",
-      method: "terminal.mirrorWriteGrant",
-      scope: "terminal.attach",
-      idempotent: true,
-      locality: "local",
-    });
-    // G4: a self peer reaches it (terminal.attach is in the preset); a guest
-    // never does — guestOk is undeclared, and the guest preset is empty.
-    expect(grant?.guestOk ?? false).toBe(false);
+  // TM-3 (2026-09-14, TM-D3) — the inverse of the row this replaces. The
+  // registry used to declare `terminal.mirrorWriteGrant` on `terminal.attach`,
+  // the door that handed a self peer the floor's DURABLE write secret, and
+  // `native.terminal.mirrorWriteCapability`, the mgmt hop that carried it off
+  // the floor. Both are deleted: the right to type is a claim in the per-client
+  // expiring attach grant the ticket already mints. A registry is the one place
+  // a retired door can quietly come back — a row costs a caller nothing to add
+  // and nothing in the tree would notice — so the absence is asserted, not
+  // assumed. `terminal.attach` stays in the tailnet preset: the phone still
+  // attaches, and it is the GRANT in its ticket that says whether it may type.
+  it("names no mirror-write door on any surface", () => {
+    expect(METHODS.map((method) => method.method).filter((m) => /[Mm]irrorWrite/.test(m))).toEqual(
+      [],
+    );
     expect(TAILNET_SCOPES).toContain("terminal.attach");
   });
 

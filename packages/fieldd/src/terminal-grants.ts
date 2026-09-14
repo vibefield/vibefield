@@ -79,12 +79,13 @@ export function clientIdFor(principal: GrantPrincipal): string {
  *
  * TM-D3 — a WhoIs-verified SELF peer may read and TYPE, and holds no geometry.
  * Both halves are deliberate:
- *   · `input` grants nothing new. `terminal.mirrorWriteGrant` already hands a
- *     self peer the floor's mirror-write capability automatically, once per
- *     connection (MF-2) — a durable bearer on disk. This is the same power as
- *     a per-client, per-session, expiring, revocable-by-generation claim, which
- *     is TP-D21's whole point; the bearer retires at TM-3, after the phone
- *     moves to it.
+ *   · `input` granted nothing new when it landed: `terminal.mirrorWriteGrant`
+ *     was already handing a self peer the floor's mirror-write capability
+ *     automatically, once per connection (MF-2) — a durable bearer on disk, with
+ *     no expiry and no per-client revocation. TM-3 deleted that door and the key
+ *     behind it on 2026-09-14, so this line is no longer the second way a self
+ *     peer comes by the right to type. It is the only one, which is TP-D21's
+ *     whole point: per client, per session, expiring, revocable by generation.
  *   · `geometry` stays with WINDOWS. The lease decides the PTY's cols and rows,
  *     and a phone taking it would resize the desktop's own pane under the
  *     person sitting at it. A remote viewer renders what the holder sized. */

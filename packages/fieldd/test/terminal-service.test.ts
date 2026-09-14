@@ -733,10 +733,6 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.terminate": "terminal.attach",
       "terminal.renewAttach": "terminal.attach",
       "terminal.roster": "terminal.attach",
-      // MF-1/G4 — the phone's mirror-write grant rides the attach scope: it
-      // turns a mirror's viewer into its writer, which is the same power the
-      // scope already grants over this door.
-      "terminal.mirrorWriteGrant": "terminal.attach",
       "terminal.config.read": "settings.manage",
       "terminal.config.write": "settings.manage",
     };

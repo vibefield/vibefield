@@ -154,7 +154,6 @@ pub mod layout {
     pub const MESH_STATE_DIR: &[&str] = &["native", "mesh"];
     pub const LINK_FILE: &[&str] = &["fieldd", "link.json"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
-    pub const TERMINAL_MIRROR_WRITE_FILE: &[&str] = &["native", "terminal-mirror-write.key"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
     pub const MESHDATA_SOCKET: &[&str] = &["native", "run", "meshdata.sock"];
     pub const TERMINAL_CONTROL_SOCKET: &[&str] = &["native", "run", "termctl.sock"];
@@ -197,7 +196,6 @@ pub mod layout {
         ("MESH_STATE_DIR", MESH_STATE_DIR),
         ("LINK_FILE", LINK_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
-        ("TERMINAL_MIRROR_WRITE_FILE", TERMINAL_MIRROR_WRITE_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),
         ("MESHDATA_SOCKET", MESHDATA_SOCKET),
         ("TERMINAL_CONTROL_SOCKET", TERMINAL_CONTROL_SOCKET),

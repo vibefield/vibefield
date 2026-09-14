@@ -62,10 +62,6 @@
     "native",
     "config.ghostty"
   ],
-  "TERMINAL_MIRROR_WRITE_FILE": [
-    "native",
-    "terminal-mirror-write.key"
-  ],
   "MGMT_SOCKET": [
     "native",
     "run",

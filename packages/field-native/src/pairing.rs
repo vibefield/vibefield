@@ -32,7 +32,8 @@ pub fn load_or_create_secret(path: &Path) -> Result<[u8; 32]> {
     // 0600 AT BIRTH, and never through a link. `fs::write` + `set_permissions`
     // left the secret world-readable for one syscall and followed a symlink
     // planted at the path; `create_private` opens with O_EXCL and the mode
-    // (MF-2f, the same fix at the mirror-write capability in `config.rs`).
+    // (MF-2f — the same fix landed at the mirror-write capability, which TM-3
+    // deleted on 2026-09-14; this secret is the class's only member now).
     // WIN-D4 unchanged: on windows the profile's inherited ACLs carry the
     // other-user boundary, and on every OS the same-uid adversary is held out
     // by the token discipline rather than by the file mode.

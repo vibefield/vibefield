@@ -629,7 +629,10 @@ export function useMonitorAgents({
    * runtime and the workspace live, and the one thing that crosses back is an
    * outcome. Every outcome is said out loud, including the two that are not
    * failures: a deck with no panes has nowhere to put a session, and a peer
-   * that refuses mirror-write has still handed over a session worth watching.
+   * that hands over a READ-ONLY session has still handed over one worth
+   * watching. (That clause said "refuses mirror-write" until TM-3 deleted
+   * VibeField's mirror-write capability, 2026-09-14 — the outcome is the peer's
+   * verdict either way, and the renderer never held such a key.)
    */
   const attachRemote = useCallback(
     async (agent: MonitorAgent): Promise<void> => {

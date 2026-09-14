@@ -25,7 +25,6 @@ import {
   ArtifactRefreshPreviewParams,
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
-  type CallerContext,
   CONTRACTS_VERSION,
   DeviceGetParams,
   DocCreateParams,
@@ -84,7 +83,6 @@ import {
   type TerminalCreateOpenResponse,
   TerminalCreateParams,
   type TerminalListResult,
-  type TerminalMirrorWriteGrantResult,
   TerminalRenewAttachParams,
   type TerminalRosterResult,
   type TerminalRuntimeSessionsResult,
@@ -367,58 +365,29 @@ export interface FielddDaemon {
 /** The daemon's own version, published in the device slice (package version). */
 const FIELDD_VERSION = "0.1.0";
 
-/** FD-2 (GM-D5, EL7) — who `terminal.mirrorWriteGrant` ADMITS. An allow-list,
- * ruled 2026-09-13: a door that hands out a durable write key refuses a
- * principal kind nobody has enumerated, rather than refusing the kinds someone
- * remembered to list. The three here are the ones that legitimately ask —
- * the desktop's own shell, a renderer window, and the phone as a linked self
- * peer — and everything else is refused BY DEFAULT: a plugin, an `mcp-agent`, a
- * tailnet-guest, a peer-fieldd (the guest choke and D36 refuse those two before
- * dispatch; belt and braces is the point of a default-refuse list), and any kind
- * added to `Principal` after this line was written. */
-export const MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS: ReadonlySet<
-  CallerContext["principal"]["kind"]
-> = new Set(["shell-main", "local-token", "tailnet"]);
-
-/** The rule behind the door: `null` = this caller may be granted, otherwise the
- * words that travel in the refusal's details.
- *
- * Exported because the door's other refusals are provable end to end (a guest, a
- * peer-fieldd, a scopeless token, a plugin principal, an agent's own hello
- * claim) while two of these are not: nothing in this repo MINTS an `mcp-agent`
- * principal, and a tailnet principal's `self` flag depends on a stored login a
- * unit daemon has no tailnet to acquire. A rule can be driven with a synthetic
- * CallerContext the way `surface-service` is; the wire rows beside it prove the
- * door consults this rule and not a copy of it.
- *
- * Three clauses, in the order they have to run:
- * - NOT ADMITTED: the allow-list above. `terminal.attach` is renderer-eligible
- *   for plugins, and attaching to a PTY on this device is not the power to hold
- *   the tailnet's write credential — but the list is what matters, not that
- *   example: a kind absent from it is refused whether or not anyone thought
- *   about it.
- * - a caller CLAIMING an agent client kind: a claim may only ever RESTRICT
- *   (§11.2). It stops nothing that lies, and costs an honest agent integration
- *   exactly the key it should not be holding.
- * - a tailnet principal that is not SELF: `self` is UA-4's stored-login verdict
- *   and it is ABSENT — never false — on a desktop with no login linked yet
- *   (`product-api.ts`: no stored login ⇒ the pre-capture status quo, which still
- *   grants the whole TAILNET_SCOPES preset, `terminal.attach` included). GM-D5's
- *   "a self peer is one of James's own devices by construction" holds only once
- *   a login IS stored; until then any WhoIs-verified peer on the tailnet reaches
- *   this door, and handing it the floor's write key is the one refusal that
- *   cannot wait for the link. */
-export function mirrorWriteGrantRefusal(
-  ctx: CallerContext,
-): { principal: string; reason: string } | null {
-  const principal = ctx.principal.kind;
-  if (!MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS.has(principal))
-    return { principal, reason: "not-admitted" };
-  if (ctx.clientKind === "mcp-agent") return { principal, reason: "agent-claim" };
-  if (ctx.principal.kind === "tailnet" && ctx.principal.self !== true)
-    return { principal, reason: "unlinked" };
-  return null;
-}
+// RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
+// `MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS` and `mirrorWriteGrantRefusal`, FD-2's
+// default-refuse allow-list for `terminal.mirrorWriteGrant`. It existed because
+// the door handed out a DURABLE write key — a secret whose holder could type
+// into this floor's sessions until a human deleted the file — so the question
+// "who may hold it?" had to be answered by enumeration, and a kind nobody had
+// thought about had to be refused rather than admitted.
+//
+// The question is gone, not merely answered elsewhere. The write right is a
+// claim in the attach grant minted per ticket, and `rightsFor`
+// (`terminal-grants.ts`) reads it off the PRINCIPAL: a window and a
+// WhoIs-verified SELF peer are minted `input`, and everything else — a plugin,
+// an unlinked tailnet peer, a guest, a peer-fieldd — is minted `["read"]`. A
+// caller the allow-list would have refused now receives a grant that cannot
+// type, which is the same refusal delivered as a capability rather than as an
+// error, and it expires either way.
+//
+// One clause has NO counterpart and is not meant to: `agent-claim`, which
+// refused a caller whose hello claimed `mcp-agent`. A ticket binds to the
+// principal and never to a UI claim (`openTicket` below), so an agent's claim
+// has never changed what a ticket grants — it only ever cost that caller the
+// durable key. Nothing regresses: the ticket path's posture on a claiming
+// caller is the one it already had before this slice.
 
 export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   const bootId = `fieldd-${randomBytes(8).toString("hex")}`;
@@ -1922,67 +1891,6 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (terminal.list stays the transport-facing inventory). Refuses before the
     // first observation exactly like list.
     api.register("terminal.roster", (): TerminalRosterResult => terminals.roster());
-    // FD-2 (GM-D5, §10.2) — the phone's write grant. Mirror-write v1 is ONE
-    // capability per floor, the floor is the only holder, and fieldd is its one
-    // paired management client — so this door is how a linked device comes by
-    // it: never a pasted env var, never a string typed into a sheet.
-    //
-    // Three walls hold with no line here, and three tests prove each fires
-    // rather than trusting the declaration: the registry's `terminal.attach`
-    // scope (a scopeless caller is refused; the scope is in TAILNET_SCOPES, so
-    // a self peer already has it), `guestOk` unset (UA-4's guest choke refuses
-    // a colleague's login BEFORE dispatch), and `locality: "local"` (D36
-    // refuses a peer-fieldd principal outright — a desktop does not borrow
-    // another desktop's write key).
-    //
-    // The ask lives INSIDE the audited effect on purpose: a grant that could
-    // not be served still leaves an attempt and a failed outcome in the grants
-    // ledger, which is the record a later question about "who asked for write
-    // on this floor" needs. The capability itself appears in the ANSWER and
-    // nowhere else — not in the attrs, not in the outcome, not in a log line
-    // (EL7); the ledger gets the floor's device id and the actor's principal.
-    api.register("terminal.mirrorWriteGrant", async (ctx) => {
-      const deviceId = devices.currentDeviceId();
-      return await audit.required(
-        ctx,
-        {
-          action: "capability.mirror_write.grant",
-          target: { kind: "capability", id: "terminal.mirror-write" },
-          attrs: { deviceId },
-        },
-        async (): Promise<TerminalMirrorWriteGrantResult> => {
-          // EL7's own wall, and the one the registry cannot state: the scope is
-          // renderer-eligible for PLUGINS and the tailnet preset reaches this
-          // door before a login is linked. The rule and its reasons live on
-          // `mirrorWriteGrantRefusal` above, where a test can drive them; the
-          // refusal happens INSIDE the audited effect on purpose, because a
-          // caller reaching for this key is exactly what the grants ledger is
-          // for.
-          const refusal = mirrorWriteGrantRefusal(ctx);
-          if (refusal !== null)
-            throw new RpcCallError(
-              "FORBIDDEN_SCOPE",
-              `terminal.mirrorWriteGrant is not available to this caller: ${refusal.reason}`,
-              false,
-              {
-                method: "terminal.mirrorWriteGrant",
-                ...refusal,
-                ...(ctx.clientKind !== undefined ? { clientKind: ctx.clientKind } : {}),
-              },
-            );
-          const floor = await native.mirrorWriteCapability();
-          if (!floor.configured || floor.capability === undefined)
-            throw new RpcCallError(
-              "UNAVAILABLE",
-              "this device serves no mirror-write capability",
-              false,
-              { service: "terminal", state: "no-mirror-write" },
-            );
-          return { capability: floor.capability, deviceId, issuedAt: Date.now() };
-        },
-        (result) => ({ outcome: "succeeded", attrs: { deviceId: result.deviceId } }),
-      );
-    });
     // GT-D10's `terminal.connectTicket` RETIRED at TP-S3e with the bridge it
     // fed: the routed transport is per SESSION (openTicket/create); there is
     // no sessionless credential to mint.

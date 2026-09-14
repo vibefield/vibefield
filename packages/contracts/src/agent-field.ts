@@ -187,22 +187,11 @@ export const AgentInterruptResult = z.discriminatedUnion("accepted", [
 ]);
 export type AgentInterruptResult = z.infer<typeof AgentInterruptResult>;
 
-/** G4 — the phone asks the desktop for the floor's mirror-write capability
- * instead of a person pasting an env var into a phone. No params: the grant is
- * for the CALLER, whose identity the door already knows. */
-export const TerminalMirrorWriteGrantParams = z.object({}).passthrough();
-export type TerminalMirrorWriteGrantParams = z.infer<typeof TerminalMirrorWriteGrantParams>;
-
-/** The capability the floor compares (D5 v1: ONE secret per floor, so a
- * rotation revokes every device — per-device tokens are the named upgrade,
- * GT-D6). `deviceId` is the floor's device, so a phone holding grants from two
- * desktops knows which is which. The capability NEVER enters an audit record;
- * the ledger gets `{deviceId, principal}` (§10.1). */
-export const TerminalMirrorWriteGrantResult = z
-  .object({
-    capability: z.string().min(1),
-    deviceId: z.string().min(1),
-    issuedAt: z.number().int(),
-  })
-  .passthrough();
-export type TerminalMirrorWriteGrantResult = z.infer<typeof TerminalMirrorWriteGrantResult>;
+// RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
+// `TerminalMirrorWriteGrantParams` and `TerminalMirrorWriteGrantResult
+// {capability, deviceId, issuedAt}` — G4's answer, by which the phone was
+// handed the floor's durable write secret instead of a person pasting an env
+// var into a phone. The secret it carried is deleted on every plane. The right
+// to type now rides the attach grant in the ticket (`rights: ["input", "read"]`
+// for a WhoIs-verified self peer, TM-2), so the phone asks for nothing extra
+// and holds nothing that outlives the session it was minted for.

@@ -53,9 +53,10 @@ export interface AgentFieldPublisherOptions {
    * why fieldd could not answer: the floor said it only as prose inside a unit
    * `detail` string, the hello carried no such fact, and the one mgmt verb that
    * revealed the same truth handed over the mirror-write CAPABILITY — a secret
-   * MF-2a pins to one hop per grant, which polling on a schedule would have
-   * spread. The secret-free fact that paragraph asked for is here: a
-   * `terminalMesh` boolean on the hello (TM-1), read by `NativeLink`.
+   * MF-2a pinned to one hop per grant, which polling on a schedule would have
+   * spread. (That verb and that secret are deleted as of TM-3, 2026-09-14.) The
+   * secret-free fact that paragraph asked for is here: a `terminalMesh` boolean
+   * on the hello (TM-1), read by `NativeLink`.
    *
    * What it gates is the `terminal` JOIN, not the row. A row whose PTY nothing
    * can attach to is still a true row — the agent is working, the phone should

@@ -115,8 +115,11 @@ export interface RemoteAttachRequest {
  * `no-pane` is a real outcome and not an error: a deck with every pane closed
  * has nowhere to put a session, and the honest answer is to say so rather than
  * to open a pane the user did not ask for (GT-D10 — the workspace owns births).
- * `view-only` is likewise not a failure: it is the mirror-write law arriving as
- * a fact, and the session IS attached.
+ * `view-only` is likewise not a failure: it is the peer's own write verdict
+ * arriving as a fact (`session.readWrite`, the mesh runtime's flag), and the
+ * session IS attached. This line named "the mirror-write law" until TM-3 deleted
+ * VibeField's mirror-write capability (2026-09-14); no renderer code ever
+ * supplied that key, so the outcome is unchanged and only the name was wrong.
  */
 export type RemoteAttachOutcome =
   | { state: "attached"; sessionId: string; readWrite: boolean }

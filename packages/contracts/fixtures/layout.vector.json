@@ -15,7 +15,6 @@
   "MESH_STATE_DIR": ["native", "mesh"],
   "LINK_FILE": ["fieldd", "link.json"],
   "TERMINAL_CONFIG_FILE": ["native", "config.ghostty"],
-  "TERMINAL_MIRROR_WRITE_FILE": ["native", "terminal-mirror-write.key"],
   "MGMT_SOCKET": ["native", "run", "mgmt.sock"],
   "MESHDATA_SOCKET": ["native", "run", "meshdata.sock"],
   "TERMINAL_CONTROL_SOCKET": ["native", "run", "termctl.sock"],

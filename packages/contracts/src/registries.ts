@@ -33,13 +33,15 @@ export const PORTS = {
   // RETIRED 2026-09-14 (TM-1): `GHOSTTEA_TSP1_QUIC` 9420 and `GHOSTTEA_TSP1_TCP`
   // 9421, the ghosttea-truffle TSP1 terminal mirror's two listeners. The floor's
   // in-process serve and its TSP1 adapter retired whole in that slice, so nothing
-  // on this device binds either number any more. 9420/9421 stay SPOKEN FOR rather
-  // than free: the phone's GhostteaKit still dials 9421 until TM-5 moves it onto
-  // T1, and a new listener taking the number in the meantime would answer a phone
-  // that thinks it reached a terminal host. The design is
-  // `thinking-terminal-mesh-cells.md` (T, ruled 2026-09-14); under it the phone's
-  // door is a cell's own T1 door reached through the sidecar's reverse proxy, and
-  // no fixed TSP1 port exists; the cells' proxy listener is `TERMINAL_CELLS_SERVE` below.
+  // on this device binds either number any more.
+  //
+  // CORRECTED 2026-09-14 (TM-3): this note said the numbers stayed SPOKEN FOR
+  // because "the phone's GhostteaKit still dials 9421 until TM-5". TM-5 landed
+  // (`13120801`, `87d13ec9`) — the phone's attachment is a routed T1 client over
+  // the sidecar's proxy now, and no VibeField code on any plane dials either
+  // port. They are free. The design is `thinking-terminal-mesh-cells.md` (T,
+  // ruled 2026-09-14); under it no fixed TSP1 port exists and the cells' proxy
+  // listener is `TERMINAL_CELLS_SERVE` below.
   /** TM-2 (thinking-terminal-mesh-cells.md §3 T, TM-D2) — the tailnet listener
    * carrying ONE reverse-proxy route per live terminal cell,
    * `/cell/<cellBootId>/control|frames` → that cell's loopback T1 door. fieldd
@@ -562,15 +564,14 @@ export const LAYOUT = {
   MESH_STATE_DIR: ["native", "mesh"],
   LINK_FILE: ["fieldd", "link.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
-  /** MF-2a (GM-D5) — the floor's mirror-write capability when nothing was
-   * exported: 32 random bytes as hex, 0600, minted once by a floor whose
-   * terminal mesh is on so that a SERVING floor always has one to grant
-   * (`terminal.mirrorWriteGrant`). Beside the pairing secret and not in the
-   * run dir, because it outlives a boot the way a user's configuration does;
-   * `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`, when set, still wins and nothing is
-   * written. Rotation is deleting this file and bouncing the pair — which
-   * revokes every phone at once (GT-D6 per-device tokens are the upgrade). */
-  TERMINAL_MIRROR_WRITE_FILE: ["native", "terminal-mirror-write.key"],
+  // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
+  // `TERMINAL_MIRROR_WRITE_FILE` = `native/terminal-mirror-write.key`, MF-2a's
+  // minted mirror-write capability. A durable secret on disk, readable by every
+  // same-uid process, whose holder could write into any mirrored session until
+  // a human deleted the file and bounced the pair. The write right is a claim in
+  // a per-client, expiring, revocable attach grant now — nothing mints this file
+  // and nothing reads it. A key left by a pre-TM-3 boot is inert; no code path
+  // consults the path, so it is stale bytes a user may delete.
   MGMT_SOCKET: ["native", "run", SOCKETS.MGMT],
   MESHDATA_SOCKET: ["native", "run", SOCKETS.MESHDATA],
   TERMINAL_CONTROL_SOCKET: ["native", "run", SOCKETS.TERMINAL_CONTROL],
