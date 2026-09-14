@@ -352,17 +352,45 @@ import Testing
 
   /// The 64 KiB cap can leave rows out, and a board that silently claims to be
   /// whole is the blank the corpus forbids. Decoded now, drawn by nobody:
-  /// "+N more" is a later slice's, and absence is every producer today.
-  @Test func theSliceCarriesHowManyRowsTheCapLeftOut() throws {
+  /// "+N more" is a later slice's to draw.
+  ///
+  /// Pinned against the publisher's OWN golden (MF-1j) rather than a field
+  /// bolted onto the whole-board one: what matters is that a capped slice reads
+  /// as a short board that SAYS it is short, and only the real bytes can show
+  /// the two halves agreeing — three rows present, two named as missing.
+  @Test func aCappedSliceIsAShortBoardThatSaysSo() throws {
+    let capped = try AgentFieldSlice(json: try Fixture.json("agent-field-slice.capped"))
+    #expect(capped.omitted == 2)
+    #expect(capped.rows.count == 3)
+    #expect(capped.droppedRows.isEmpty)
+    // The rows it DID carry are the board's own order, from the front — the
+    // publisher trims from the end.
+    #expect(capped.rows.map(\.runtimeRunId) == ["run-blocked", "run-working", "run-idle"])
+    // Same board, same revision: a cap is not a different board.
+    #expect(capped.revision == 64)
+    #expect(capped.deviceId == "dev-01HQ8ZK4M7")
+    // A field this build READS, so it is not an unknown.
+    #expect(!capped.unknownFields.contains("omitted"))
+  }
+
+  /// Absence is the ordinary case: a whole board carries no `omitted` at all,
+  /// and nil is "nothing was trimmed" rather than "nobody counted".
+  @Test func aWholeBoardCarriesNoOmittedCount() throws {
     let whole = try AgentFieldSlice(json: try Fixture.json("agent-field-slice.valid"))
     #expect(whole.omitted == nil)
+    #expect(whole.rows.count == 5)
+  }
 
-    var fields = try #require(try Fixture.json("agent-field-slice.valid").objectValue)
-    fields["omitted"] = .int(7)
-    let capped = try AgentFieldSlice(json: .object(fields))
-    #expect(capped.omitted == 7)
-    // And it is a field this build now READS, so it is not an unknown.
-    #expect(!capped.unknownFields.contains("omitted"))
+  /// The two goldens are the same board, capped and whole — which is what
+  /// makes the count meaningful: 3 carried + 2 omitted is the 5 the whole one
+  /// has.
+  @Test func theCappedAndWholeGoldensAreOneBoard() throws {
+    let capped = try AgentFieldSlice(json: try Fixture.json("agent-field-slice.capped"))
+    let whole = try AgentFieldSlice(json: try Fixture.json("agent-field-slice.valid"))
+    #expect(capped.deviceId == whole.deviceId)
+    #expect(capped.revision == whole.revision)
+    #expect(Int(capped.omitted ?? 0) + capped.rows.count == whole.rows.count)
+    #expect(capped.rows.map(\.runtimeRunId) == Array(whole.rows.map(\.runtimeRunId).prefix(3)))
   }
 
   /// The slice is the snapshot's board with the store's envelope around it —
