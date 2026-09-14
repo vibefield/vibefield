@@ -69,8 +69,20 @@ export interface TerminalServeDriverOptions {
   published: () => boolean;
   /** the WhoIs login this daemon is linked to, or null */
   linkedLogin: () => string | null;
-  /** re-declare the desired serve set with this terminal spec, or without one */
-  declare: (spec: ServeSpec | null) => Promise<void>;
+  /**
+   * Re-declare the desired serve set with this terminal spec, or without one.
+   *
+   * ANSWERS WHETHER IT LANDED (F-M5, 2026-09-14), and that is the whole point
+   * of the boolean: the injected closure goes through `MeshClient`, whose
+   * posture is deliberately non-throwing — a mesh that is not up marks every
+   * serve `pending` and resolves, and a per-serve add failure is recorded as an
+   * `error` state and resolves. A driver that read RESOLUTION as success
+   * recorded a signature nothing had reached the sidecar for, and then declined
+   * to retry because the signature had not moved. So: true iff the node's state
+   * now matches this declaration — the serve is ACTIVE for a spec, and really
+   * gone for a withdrawal.
+   */
+  declare: (spec: ServeSpec | null) => Promise<boolean>;
   logger?: Logger;
 }
 
@@ -218,7 +230,21 @@ export class TerminalServeDriver {
       const signature = terminalServeSignature(spec);
       if (signature === this.declared) return;
       try {
-        await this.opts.declare(spec);
+        const landed = await this.opts.declare(spec);
+        if (!landed) {
+          // F-M5 — RESOLVED IS NOT LANDED. The bridge resolves for a mesh that
+          // is not up (everything pending), for an add the node refused (an
+          // error state), and for a removal that failed. None of those put the
+          // routes on the tailnet, so none of them may be remembered: a
+          // remembered signature is exactly what stops the next event from
+          // retrying.
+          this.logger.debug(
+            "fieldd.terminal_serve.declare_deferred",
+            "A terminal route declaration did not reach the node; the next change retries",
+            { routes: spec?.routes?.length ?? 0 },
+          );
+          return;
+        }
         this.declared = signature;
         this.logger.debug(
           "fieldd.terminal_serve.declared",
@@ -228,9 +254,7 @@ export class TerminalServeDriver {
           { routes: spec?.routes?.length ?? 0, listenPort: spec?.listenPort ?? null },
         );
       } catch (error) {
-        // Deliberately NOT recorded as declared: the next event retries, and a
-        // remembered-but-unlanded declaration would make a route set that
-        // never reached the sidecar look live.
+        // Same law for a bridge that throws outright.
         this.logger.debug(
           "fieldd.terminal_serve.declare_deferred",
           "A terminal route declaration did not reach the node; the next change retries",

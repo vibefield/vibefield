@@ -207,6 +207,10 @@ describe("TM-2 — the driver declares only on a real change", () => {
     };
     const declared: Array<ServeSpec | null> = [];
     let fail = false;
+    /** F-M5 — the bridge RESOLVES without landing. This is the shape the wired
+     * closure really produces (a mesh that is not up, an add the node refused,
+     * a removal that failed); the throwing `fail` beside it is the rarer one. */
+    let unlanded = false;
     const d = new TerminalServeDriver({
       routes: () => state.routes,
       published: () => state.published,
@@ -214,9 +218,16 @@ describe("TM-2 — the driver declares only on a real change", () => {
       declare: async (spec) => {
         if (fail) throw new Error("mesh is down");
         declared.push(spec);
+        return !unlanded;
       },
     });
-    return { d, state, declared, setFail: (v: boolean) => (fail = v) };
+    return {
+      d,
+      state,
+      declared,
+      setFail: (v: boolean) => (fail = v),
+      setUnlanded: (v: boolean) => (unlanded = v),
+    };
   }
 
   it("is idempotent across a re-pair that replays the same rows", async () => {
@@ -282,6 +293,33 @@ describe("TM-2 — the driver declares only on a real change", () => {
     state.routes = snapshot(2, [cell("cb-1", 51001)]);
     await d.refresh();
     expect(declared).toHaveLength(1);
+  });
+
+  it("a declaration that RESOLVED WITHOUT LANDING is not remembered either (F-M5)", async () => {
+    // The wired bridge goes through MeshClient, which is deliberately
+    // non-throwing: a mesh that is not up marks every serve pending and
+    // resolves, and an add the node refused is recorded as an error state and
+    // resolves. A driver reading resolution as success would record a signature
+    // for routes nothing was serving, and then decline to retry because the
+    // signature had not moved — the listener would stay missing until a CELL
+    // changed, which is the one thing that has nothing to do with the failure.
+    const { d, state, declared, setUnlanded } = driver({
+      routes: snapshot(1, [cell("cb-1", 51001)]),
+    });
+    setUnlanded(true);
+    await d.refresh();
+    expect(declared, "it was attempted").toHaveLength(1);
+
+    // the readings have NOT moved, and the retry must still happen
+    setUnlanded(false);
+    await d.refresh();
+    expect(declared).toHaveLength(2);
+
+    // …and once it lands, the idempotence is back
+    await d.refresh();
+    state.routes = snapshot(2, [cell("cb-1", 51001)]);
+    await d.refresh();
+    expect(declared).toHaveLength(2);
   });
 
   it("stops reconciling once disposed", async () => {
@@ -442,6 +480,63 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
     await poll(() => (mock.meshRemovedServeIds.includes(TERMINAL_SERVE_ID) ? true : undefined));
     expect(mock.meshServes.has(TERMINAL_SERVE_ID), "the node is no longer serving it").toBe(false);
     expect(terminalAdds(mock), "and nothing was published in its place").toEqual([]);
+  });
+
+  it("an add the NODE refused is not remembered, and the next change retries it (F-M5)", async () => {
+    // MeshClient does not throw on a refused add — it records the serve in
+    // `error` and resolves. A driver reading resolution as success would
+    // remember the signature and then decline to retry, so the listener would
+    // stay down until a CELL changed, which is the one event that has nothing
+    // to do with the failure.
+    const { mock } = await boot({ terminalMesh: true, login: LOGIN });
+    await poll(() => terminalAdds(mock)[0]);
+
+    mock.failNextServeAdd = true;
+    mock.pushRoutesDelta(snapshot(2, [cell("cb-1", 51001), cell("cb-2", 51002)]));
+    await poll(() => terminalAdds(mock)[1]);
+    expect(mock.meshServes.has(TERMINAL_SERVE_ID), "the node refused it").toBe(false);
+
+    // the READINGS have not moved — the same two cells, a new revision — and
+    // the declaration must still be attempted again
+    mock.pushRoutesDelta(snapshot(3, [cell("cb-1", 51001), cell("cb-2", 51002)]));
+    const retried = await poll(() => terminalAdds(mock)[2]);
+    expect(retried["routes"]).toEqual([
+      { prefix: "/cell/cb-1", targetPort: 51001 },
+      { prefix: "/cell/cb-2", targetPort: 51002 },
+    ]);
+    expect(mock.meshServes.has(TERMINAL_SERVE_ID)).toBe(true);
+  });
+
+  it("a removal that FAILED leaves the OLD routes declared, not the new ones (F-M5)", async () => {
+    // truffle has no upsert, so a route change is remove-then-add. When the
+    // remove fails the old proxy is still live — and MeshClient's reconcile
+    // SKIPS a serveId the node already lists, so swapping the desired spec
+    // would record the NEW routes as `active` over a listener serving the OLD
+    // ones. `remoteEndpoints` mints off exactly that reading, so the daemon
+    // would hand a phone a ticket for a path the sidecar answers 404 for.
+    const { daemon, mock } = await boot({ terminalMesh: true, login: LOGIN });
+    await poll(() => terminalAdds(mock)[0]);
+    const addsBefore = terminalAdds(mock).length;
+
+    mock.failNextServeRemove = true;
+    mock.pushRoutesDelta(snapshot(2, [cell("cb-1", 51001), cell("cb-2", 51002)]));
+    await poll(() => (mock.meshRemoveCalls > 0 ? true : undefined));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(terminalAdds(mock).length, "nothing was added over the live proxy").toBe(addsBefore);
+    const serve = daemon.mesh.serves().find((x) => (x.serveId ?? x.name) === TERMINAL_SERVE_ID);
+    expect(
+      serve?.routes?.map((r) => r.prefix),
+      "the fused view still names what is really being served",
+    ).toEqual(["/cell/cb-1"]);
+
+    // and the next change retries the whole dance, now that the remove works
+    mock.pushRoutesDelta(snapshot(3, [cell("cb-1", 51001), cell("cb-2", 51002)]));
+    const landed = await poll(() => terminalAdds(mock)[addsBefore]);
+    expect(landed["routes"]).toEqual([
+      { prefix: "/cell/cb-1", targetPort: 51001 },
+      { prefix: "/cell/cb-2", targetPort: 51002 },
+    ]);
   });
 
   it("a cell birth is a remove-then-add of the terminal serve alone", async () => {

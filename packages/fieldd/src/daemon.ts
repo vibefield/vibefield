@@ -3190,9 +3190,30 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       published: () => native.terminalMeshPublished(),
       linkedLogin,
       declare: async (spec) => {
+        // F-M5 — A FAILED REMOVAL IS NOT A FRESH START. The old proxy is still
+        // live on the listener, and `MeshClient`'s reconcile SKIPS a serveId
+        // the node already lists: swapping the remembered spec here would have
+        // it recorded `active` over a proxy serving the PREVIOUS routes, so
+        // `mesh.serves()` would advertise routes the sidecar is not serving and
+        // `remoteEndpoints` would mint tickets for paths it answers 404 for.
+        // So the desired set keeps naming what is really up, and the driver is
+        // told the declaration did not land, which is what re-arms its retry.
+        try {
+          await mesh.removeServe(TERMINAL_SERVE_ID);
+        } catch (error) {
+          serveLog.debug(
+            "fieldd.terminal_serve.remove_deferred",
+            "The terminal listener could not be taken down; the previous routes stay declared",
+            { error: String(error) },
+          );
+          return false;
+        }
         lastTerminalServeSpec = spec;
-        await mesh.removeServe(TERMINAL_SERVE_ID).catch(() => {});
-        await mesh.setServes(desiredServes());
+        const states = await mesh.setServes(desiredServes());
+        // A withdrawal has nothing to place: the removal above IS the landing.
+        if (spec === null) return true;
+        const placed = states.find((state) => (state.serveId ?? state.name) === TERMINAL_SERVE_ID);
+        return placed?.status === "active";
       },
       logger: logger.child({ component: "terminal.serve" }),
     });
