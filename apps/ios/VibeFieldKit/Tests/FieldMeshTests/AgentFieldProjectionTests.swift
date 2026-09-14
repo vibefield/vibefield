@@ -17,7 +17,7 @@ private func rowJSON(
   alive: Bool = true,
   pending: String? = nil,
   blockers: [JSONValue] = [],
-  cwd: String? = "/Users/j/Projects/vibe-field",
+  folder: String? = "vibe-field",
   branch: JSONValue = .string("main"),
   model: JSONValue? = .object(["id": .string("claude-opus-5"), "displayName": .string("Opus 5")]),
   effort: JSONValue? = .object(["value": .string("high"), "intent": .string("observed")]),
@@ -44,7 +44,7 @@ private func rowJSON(
   ]
   if let pending { fields["pending"] = .string(pending) }
   if let lastActivityAt { fields["lastActivityAt"] = .string(lastActivityAt) }
-  if let cwd { fields["project"] = .object(["cwd": .string(cwd), "branch": branch]) }
+  if let folder { fields["project"] = .object(["name": .string(folder), "branch": branch]) }
   if let model { fields["model"] = model }
   if let effort { fields["effort"] = effort }
   if let usage { fields["usage"] = usage }
@@ -62,7 +62,7 @@ private func row(
   alive: Bool = true,
   pending: String? = nil,
   blockers: [JSONValue] = [],
-  cwd: String? = "/Users/j/Projects/vibe-field",
+  folder: String? = "vibe-field",
   branch: JSONValue = .string("main"),
   model: JSONValue? = .object(["id": .string("claude-opus-5"), "displayName": .string("Opus 5")]),
   effort: JSONValue? = .object(["value": .string("high"), "intent": .string("observed")]),
@@ -76,7 +76,8 @@ private func row(
   try AgentFieldRow(
     json: rowJSON(
       id: id, kind: kind, status: status, alive: alive, pending: pending, blockers: blockers,
-      cwd: cwd, branch: branch, model: model, effort: effort, usage: usage, context: context,
+      folder: folder, branch: branch, model: model, effort: effort, usage: usage,
+      context: context,
       terminal: terminal, lastActivityAt: lastActivityAt))
 }
 
@@ -190,12 +191,25 @@ private func blocker(kind: String) -> JSONValue {
     #expect(kept.join?.exited == true)
   }
 
-  @Test func theHeadlineIsTheProjectFolderAndTheFallbackIsTheLabel() throws {
+  /// MF-1i: the wire sends the FOLDER now, so the fold uses it as it stands —
+  /// running a basename over a name that is already one only finds new ways to
+  /// be wrong. The label stands in when the producer named nothing (a root, a
+  /// bare drive letter, no path at all).
+  @Test func theHeadlineIsTheProjectsNameAndTheFallbackIsTheLabel() throws {
     let named = try #require(agentSnapshot(from: try row(id: "r")))
     #expect(named.project == "vibe-field")
 
-    let rootless = try #require(agentSnapshot(from: try row(id: "r", cwd: nil)))
-    #expect(rootless.project == "Claude Code")
+    let unnamed = try #require(agentSnapshot(from: try row(id: "r", folder: nil)))
+    #expect(unnamed.project == "Claude Code")
+
+    // An empty name is "the producer looked and found none", not a headline.
+    let empty = try #require(agentSnapshot(from: try row(id: "r", folder: "")))
+    #expect(empty.project == "Claude Code")
+
+    // And a name with separators in it is NOT re-reduced: whatever the
+    // producer called the project is what the field draws.
+    let odd = try #require(agentSnapshot(from: try row(id: "r", folder: "a/b")))
+    #expect(odd.project == "a/b")
   }
 
   @Test func theRowsFactsReachTheFieldsOwnFields() throws {

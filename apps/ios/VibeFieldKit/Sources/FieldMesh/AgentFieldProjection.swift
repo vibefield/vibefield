@@ -153,7 +153,12 @@ public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> Age
     // when there is one, because that is what a card will attach to (IOS-4c).
     runtimeSessionID: row.terminal?.runtimeSessionId ?? row.runtimeRunId,
     provider: provider,
-    project: folderName(row.cwd, fallback: row.label),
+    // The wire now sends the FOLDER (MF-1i), so there is nothing left to
+    // reduce: `folderName` was doing the basename work the producer does now,
+    // and running it again on a name that is already one would only find new
+    // ways to be wrong. The label stands in when the producer named nothing —
+    // a root, a bare drive letter, or no path at all.
+    project: row.projectName.flatMap { $0.isEmpty ? nil : $0 } ?? row.label,
     state: state,
     createdAt: parseWireDate(row.createdAt) ?? .now,
     // G3's join. The DEVICE is the publisher's — the slice's key, or the

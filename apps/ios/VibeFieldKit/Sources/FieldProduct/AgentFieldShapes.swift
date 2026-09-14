@@ -81,7 +81,10 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
   public let modelDisplayName: String?
   public let effort: String?
   public let effortIntent: String?
-  public let cwd: String?
+  /// The FOLDER, never the path. MF-1i/EL7-B1: `field.agents.v1` is the app's
+  /// peers rather than one person's devices, so an absolute path was a leak
+  /// the row had no use for — and a card draws the folder anyway.
+  public let projectName: String?
   public let branch: String?
   public let terminal: AgentTerminalJoin?
   public let unknownFields: [String]
@@ -125,7 +128,7 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
     effort = effortObject.string("value")
     effortIntent = effortObject.string("intent")
     var project = object.object("project")
-    cwd = project.string("cwd")
+    projectName = project.string("name")
     branch = project.string("branch")
     terminal = try object.decodeObject("terminal", AgentTerminalJoin.init(json:))
     unknownFields = object.unknownFields
@@ -198,6 +201,11 @@ public struct AgentFieldSlice: Sendable, Equatable, Decodable {
   public let expiresAt: Int64
   public let revision: Int64
   public let rows: [AgentFieldRow]
+  /// Rows the 64 KiB slice cap left out. Decoded now and DRAWN by nobody: a
+  /// number the phone can carry is better than a board that silently claims to
+  /// be whole, and "+N more" is IOS-4e's to draw. Absent on a producer that
+  /// does not count them, which is every producer today.
+  public let omitted: Int64?
   public let droppedRows: [String]
   public let unknownFields: [String]
 
@@ -208,6 +216,7 @@ public struct AgentFieldSlice: Sendable, Equatable, Decodable {
     publishedAt = try object.requiredInt("publishedAt")
     expiresAt = try object.requiredInt("expiresAt")
     revision = try object.requiredInt("revision")
+    omitted = object.int("omitted")
     var dropped: [String] = []
     rows = try object.rows("rows", AgentFieldRow.init(json:), dropped: &dropped)
     droppedRows = dropped

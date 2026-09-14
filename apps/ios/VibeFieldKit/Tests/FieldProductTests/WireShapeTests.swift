@@ -201,7 +201,10 @@ import Testing
     #expect(blocked.burnRatePerMin == 1450)
     #expect(blocked.modelId == "claude-opus-5")
     #expect(blocked.modelDisplayName == "Opus 5")
-    #expect(blocked.cwd == "/Users/j/Projects/vibe-field")
+    // MF-1i/EL7-B1: the FOLDER, never the path. The absolute path no longer
+    // rides the slice — it reached every VibeField node on the tailnet and the
+    // card only ever drew the basename.
+    #expect(blocked.projectName == "vibe-field")
     #expect(blocked.branch == "mf/fd1")
     #expect(blocked.terminal?.hostedValue == .local)
     #expect(blocked.terminal?.runtimeSessionId == "pty-a41f")
@@ -226,7 +229,7 @@ import Testing
   @Test func aNullBranchInTheGoldenReadsAsAbsent() throws {
     let snapshot = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.valid"))
     let working = try #require(snapshot.rows.first { $0.runtimeRunId == "run-working" })
-    #expect(working.cwd == "/Users/j/Projects/ice")
+    #expect(working.projectName == "ice")
     #expect(working.branch == nil)
   }
 
@@ -345,6 +348,21 @@ import Testing
     let justAfter = Date(timeIntervalSince1970: Double(slice.expiresAt + 1) / 1000)
     #expect(!slice.isExpired(at: justBefore))
     #expect(slice.isExpired(at: justAfter))
+  }
+
+  /// The 64 KiB cap can leave rows out, and a board that silently claims to be
+  /// whole is the blank the corpus forbids. Decoded now, drawn by nobody:
+  /// "+N more" is a later slice's, and absence is every producer today.
+  @Test func theSliceCarriesHowManyRowsTheCapLeftOut() throws {
+    let whole = try AgentFieldSlice(json: try Fixture.json("agent-field-slice.valid"))
+    #expect(whole.omitted == nil)
+
+    var fields = try #require(try Fixture.json("agent-field-slice.valid").objectValue)
+    fields["omitted"] = .int(7)
+    let capped = try AgentFieldSlice(json: .object(fields))
+    #expect(capped.omitted == 7)
+    // And it is a field this build now READS, so it is not an unknown.
+    #expect(!capped.unknownFields.contains("omitted"))
   }
 
   /// The slice is the snapshot's board with the store's envelope around it —

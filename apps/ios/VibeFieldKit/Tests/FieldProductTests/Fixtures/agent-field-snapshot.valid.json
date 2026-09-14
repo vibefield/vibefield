@@ -38,7 +38,7 @@
         "intent": "observed"
       },
       "project": {
-        "cwd": "/Users/j/Projects/vibe-field",
+        "name": "vibe-field",
         "branch": "mf/fd1"
       },
       "terminal": {
@@ -76,7 +76,7 @@
         "value": "medium"
       },
       "project": {
-        "cwd": "/Users/j/Projects/ice",
+        "name": "ice",
         "branch": null
       },
       "terminal": {
@@ -108,7 +108,7 @@
         "displayName": "Sonnet 5"
       },
       "project": {
-        "cwd": "/Users/j/Projects/vibe-field"
+        "name": "vibe-field"
       },
       "terminal": {
         "hosted": "local",
@@ -154,7 +154,7 @@
         "cumulativeTokens": 33110
       },
       "project": {
-        "cwd": "/Users/j/Projects/vibe-field",
+        "name": "vibe-field",
         "branch": "main"
       },
       "terminal": {

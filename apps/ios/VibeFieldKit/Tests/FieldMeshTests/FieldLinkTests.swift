@@ -44,7 +44,7 @@ private func boardRow(id: String, status: String = "working", kind: String = "cl
     "stateChangedAt": .string("2026-09-13T18:42:11.000Z"),
     "createdAt": .string("2026-09-13T18:03:52.000Z"),
     "alive": .bool(true), "blockers": .array([]),
-    "project": .object(["cwd": .string("/Users/j/Projects/vibe-field")]),
+    "project": .object(["name": .string("vibe-field")]),
   ])
 }
 
