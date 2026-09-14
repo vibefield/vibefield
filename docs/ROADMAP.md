@@ -3,7 +3,24 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-09-14 — TM LANDED `bbe551a5`: the terminal mesh on the cells, done
+> stays in the design docs + specs. Last rewritten: **2026-09-14 — TM-r LANDED `496f9e3f`: the review of the terminal mesh — six
+> lenses, four lanes, seven HIGHs fixed** (James: "Now do a review round", the evening the T
+> rollout landed. The floor's `terminalMesh` reading was taken ONCE, before the tailnet node existed,
+> so a cold boot with both flags set never published a door — the floor now PUSHES it on the routes
+> stream · the live probe's missing seed had a real cause: a credit window advertised below the cell's
+> urgent reserve, and a cell clamp that starved bulk silently instead of refusing — both fixed, and the
+> probe decodes a real seed through the real sidecar · a cell-routes serve with an empty allow-list
+> would have published every door to the whole tailnet — refused at the floor · a terminal serve
+> outlived fieldd and was never withdrawn — the first refresh always declares · the device capability
+> and the ticket mint read one live-serve fact · the mgmt wire's `routes` target joined the contracts
+> · a seed the phone's sink refuses is never acknowledged as applied · the phone's readers decode the
+> contracts' goldens (40 byte-gated copies) and the fixtures checker reds on an orphan · fifteen
+> MEDIUMs fixed, fourteen record errors corrected, STALE_ROUTE recorded unbuilt; see LANDED §TM-r).
+> Next: **Phase 0 on hardware — James's hand sign-in with the flag on, the deck and the phone on the
+> same cell** → the rulings owed (GM-D10, the deck's kill affordance, NF-8, the unlinked-desktop
+> preset, the field join's reading — the floor's boolean or the live serve, one blinks on cell birth)
+> → AG-1 → AR-6 proper.
+> Previous rewrite, kept for continuity — **2026-09-14 — TM LANDED `bbe551a5`: the terminal mesh on the cells, done
 > the proper way** (James ruled T directly at 04:59 and the whole rollout landed the same morning —
 > `draft/thinking-terminal-mesh-cells.md`, TM-D1…D8: **TM-1** the floor's in-process TSP1 serve,
 > `ghosttea-truffle`, the hosts store and the TSP1 ports DELETED — cells serve unconditionally, the
@@ -221,6 +238,11 @@ routed client and the phone attaches over it. The live path is witnessed to `Fra
 a real tailnet by a key-gated probe; what is NOT witnessed is a phone on hardware — Phase 0 is James's
 hand sign-in with `FIELD_NATIVE_MESH=1 FIELD_NATIVE_TERMINAL_MESH=1`, the deck and the phone on the
 same cell, and the rulings still open (GM-D10 the store's audience, a kill affordance for the deck).
+The evening's review (§TM-r, tip `496f9e3f`) found and fixed the cold-boot reading that would have
+blocked Phase 0 first, the real cause of the probe's missing seed (a starved credit window and a cell
+clamp that starved it silently), a serve that outlived fieldd, and the phone's readers tested on
+hand-typed JSON. What a review cannot do is stand a phone in front of a real cell — Phase 0 is still
+the witness, and the floor's `terminalMesh` flip on a real node install rides it.
 
 The P0 exit criterion — *real daily agent work, sessions surviving app restarts* — is half
 held: the board survives daemon restarts (B3), PTYs survive everything up to field-native (the
