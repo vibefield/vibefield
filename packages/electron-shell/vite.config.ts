@@ -89,6 +89,22 @@ export default defineConfig(({ mode }) => ({
         ? ["spike-live-surfaces-lab.html"]
         : ["index.html", "studio-product.html", "studio.html", "design-system.html"],
     include: ["@vibefield/field-app > @react-three/fiber"],
+    // AR-0 sibling mode, corrected 2026-09-13: the optimizer registry is keyed
+    // by the BARE specifier, so the whole graph gets ONE `zod` entry — and
+    // `tryOptimizedResolve` returns that flat hit before it ever compares the
+    // importer's package directory. This workspace carries zod 3 (contracts,
+    // `^3.24.0`); the puppeteer checkout carries its own zod 4 (`^4.4.3`,
+    // resolved inside the sibling's node_modules, which is exactly what a
+    // `link:` row means). One entry cannot be both, so puppeteer-core's
+    // `import { z } from "zod"` was answered with the prebundled zod 3 and its
+    // workspace-event schema died on load — a `z.strictObject().refine()`
+    // discriminated-union option is still an object in v4 and a ZodEffects in
+    // v3, so v3's `type.shape[discriminator]` read `representation` off
+    // undefined and every catalog entry rendered blank. Excluding the bare id
+    // retires the flat entry; each importer then resolves the copy its own
+    // package.json asked for. Dev-only by construction — rollup already
+    // resolves per importer, which is why `build:design` never saw this.
+    exclude: ["zod"],
   },
   build: {
     // A catalog bundle is useful for isolated inspection, but it is development
