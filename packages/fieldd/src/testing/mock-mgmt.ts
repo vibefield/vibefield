@@ -42,6 +42,14 @@ export class MockMgmtServer {
   >();
   meshAddCalls = 0;
   meshRemoveCalls = 0;
+  /** TM-2 — every serve.add's FULL params, in order. `meshServes` projects a
+   * serve the way `serve.list` does (which deliberately omits routes), so a
+   * test that asserts WHAT WAS DECLARED — the cell prefixes, their loopback
+   * targets, the allow gate — has to read the request, not the projection. */
+  readonly meshAddParams: Array<Record<string, unknown>> = [];
+  /** TM-2 — every serve.remove's serveId, in order: the remove-then-add dance
+   * a route change costs is only visible as a SEQUENCE. */
+  readonly meshRemovedServeIds: string[] = [];
   /** one-shot fault seams for crash-safe artifact reconciliation tests */
   failNextServeAdd = false;
   failNextServeRemove = false;
@@ -79,6 +87,11 @@ export class MockMgmtServer {
    * withheld its unrevised snapshot (and supplied `helloTerminal` instead)
    * while its subscription answered `{revision: 0, cells: []}` anyway. */
   routesSubscribeSnapshot: unknown = undefined;
+  /** TM-1 (MF-1l) — the floor's word that its terminal doors are PUBLISHED on
+   * the tailnet, carried on the hello ack. `null` = a floor that predates the
+   * field and says nothing, which every consumer must read as NO (a tappable
+   * card for a session nothing can attach to is the failure it prevents). */
+  helloTerminalMesh: boolean | null = null;
   /** GT-2d — the build label the hello ack carries; null = a floor predating
    * GT-2d, which fieldd must surface as "it did not say", never as a guess. */
   helloNativeBuild: string | null = null;
@@ -216,6 +229,7 @@ export class MockMgmtServer {
             serverKind: "field-native",
             grantedScopes: [],
             ...(this.helloNativeBuild !== null ? { nativeBuild: this.helloNativeBuild } : {}),
+            ...(this.helloTerminalMesh !== null ? { terminalMesh: this.helloTerminalMesh } : {}),
             ...(this.helloTerminal !== null ? { terminal: this.helloTerminal } : {}),
             ...(this.terminalRoutes !== null ? { terminalRoutes: this.terminalRoutes } : {}),
             ...(serverMac !== undefined ? { serverMac } : {}),
@@ -398,6 +412,7 @@ export class MockMgmtServer {
         return;
       case "native.mesh.serve.add": {
         this.meshAddCalls += 1;
+        this.meshAddParams.push({ ...p });
         if (this.failNextServeAdd) {
           this.failNextServeAdd = false;
           reply({
@@ -460,6 +475,7 @@ export class MockMgmtServer {
           return;
         }
         const serveId = String(p["serveId"] ?? p["name"]);
+        this.meshRemovedServeIds.push(serveId);
         if (!this.meshServes.delete(serveId)) {
           reply({
             error: {

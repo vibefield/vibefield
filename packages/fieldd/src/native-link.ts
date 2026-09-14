@@ -165,6 +165,29 @@ export class NativeLink extends EventEmitter {
    * is a real question — undefined means the daemon predates GT-2d, which is
    * itself an answer (it is at least that old). */
   nativeBuild: string | undefined;
+  /** TM-1/TM-2 (MF-1l) — "this floor's terminal doors are PUBLISHED on the
+   * tailnet", the floor's own word, re-learned at every re-pair.
+   *
+   * The fact MF-1h said was owed and could not be read. It is deliberately
+   * SECRET-FREE: the only mgmt verb that revealed the same truth handed over
+   * the mirror-write capability itself, so the honest gate had to wait for a
+   * boolean. Everything that used to guess from a NEIGHBOURING consent (the
+   * product serve being active) now reads this.
+   *
+   * `undefined` means the floor did not answer the question — a floor older
+   * than TM-1, which this plane outliving fieldd makes an ordinary case, not a
+   * hypothetical. Absence is read as FALSE by every consumer: publishing a
+   * tappable card for a session nothing can attach to is the failure this
+   * field exists to prevent, so "I don't know" and "no" get the same,
+   * conservative answer. `terminalMeshPublished()` is that reading, and it is
+   * the only one callers should use. */
+  terminalMesh: boolean | undefined;
+
+  /** The gate every TM-2 consumer reads: the doors are on the tailnet, and
+   * the link that vouched for that is live. */
+  terminalMeshPublished(): boolean {
+    return this.connected && this.terminalMesh === true;
+  }
 
   constructor(private readonly opts: NativeLinkOptions) {
     super();
@@ -334,6 +357,11 @@ export class NativeLink extends EventEmitter {
     // auth token, which fieldd would then use — this refusal is what stops it.
     // Refusing an ABSENT proof is the point: an attacker downgrades otherwise.
     const record = (ack ?? {}) as {
+      /** TM-1 (MF-1l) — the floor's word that its terminal doors are on the
+       * tailnet. Read as `unknown` like every other field here: the contract
+       * for it lands on the floor's lane, and the tolerant reader below is
+       * what lets this build run against a floor on either side of it. */
+      terminalMesh?: unknown;
       terminal?: unknown;
       terminalRoutes?: unknown;
       nativeBuild?: unknown;
@@ -373,6 +401,11 @@ export class NativeLink extends EventEmitter {
     // that did not answer the question — the same honest blank a pre-GT-2d
     // daemon leaves, never a guess.
     this.nativeBuild = typeof record.nativeBuild === "string" ? record.nativeBuild : undefined;
+    // TM-1/TM-2 (MF-1l): read on its own terms like `nativeBuild`, and for the
+    // same reason — a floor whose ROUTES are malformed still answers "are the
+    // doors published", and the reverse. Anything but a boolean is a floor
+    // that did not answer, which `terminalMeshPublished()` reads as no.
+    this.terminalMesh = typeof record.terminalMesh === "boolean" ? record.terminalMesh : undefined;
     this.emit("terminal-endpoints");
   }
 

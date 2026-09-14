@@ -156,6 +156,7 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { createSurfaceService } from "./surface-service";
+import { serveAllowGlob, TERMINAL_SERVE_ID, TerminalServeDriver } from "./terminal-serve";
 import { TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
 
@@ -3190,16 +3191,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         pathSecret: servePathSecret,
         // the sidecar matches with Go path.Match, lowercased both sides — a
         // login is a LITERAL here, so its glob metacharacters are escaped
-        ...(login !== null ? { allow: [login.replace(/[\\*?[]/g, (c) => `\\${c}`)] } : {}),
+        ...(login !== null ? { allow: [serveAllowGlob(login)] } : {}),
       };
     };
     let lastArtifactServeSpecs: ServeSpec[] | null = null;
     let lastServeAllowLogin: string | null = null;
+    // TM-2 — the terminal-cell listener's spec, owned by the driver below and
+    // held here because `setServes` replaces the DESIRED SET wholesale: every
+    // declaration has to carry the whole set or it withdraws the rest.
+    let lastTerminalServeSpec: ServeSpec | null = null;
+    const desiredServes = (): ServeSpec[] => [
+      productServeSpec(),
+      ...(lastTerminalServeSpec === null ? [] : [lastTerminalServeSpec]),
+      ...(lastArtifactServeSpecs ?? []),
+    ];
     links.on("changed", () => {
       const login = linkedLogin();
       if (lastArtifactServeSpecs === null || login === lastServeAllowLogin) return;
       lastServeAllowLogin = login;
-      const specs = [productServeSpec(), ...lastArtifactServeSpecs];
       void (async () => {
         // the sidecar has no upsert (same-id add = PROXY_EXISTS) and the
         // reconcile SKIPS live serveIds — re-gating a live serve is
@@ -3207,7 +3216,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // state adopts the new spec (the mesh-client skip is recorded C3
         // debt; the brief serve blink here is once per link transition)
         await mesh.removeServe("product").catch(() => {});
-        await mesh.setServes(specs);
+        await mesh.setServes(desiredServes());
       })().catch((error: unknown) => {
         // mesh down/degraded: the next declare re-runs the reconcile; the
         // door's comparison still refuses guests meanwhile
@@ -3216,13 +3225,35 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         });
       });
     });
+    // TM-2 (TM-D2) — one serve route per live cell, driven off the floor's
+    // route snapshot and its `terminalMesh` word. The driver is pure policy;
+    // this closure is the only I/O, and it is remove-then-add for the reason
+    // the product serve's own comment above states.
+    const terminalServe = new TerminalServeDriver({
+      routes: () => native.terminalRoutes,
+      published: () => native.terminalMeshPublished(),
+      linkedLogin,
+      declare: async (spec) => {
+        lastTerminalServeSpec = spec;
+        await mesh.removeServe(TERMINAL_SERVE_ID).catch(() => {});
+        await mesh.setServes(desiredServes());
+      },
+      logger: logger.child({ component: "terminal.serve" }),
+    });
+    native.on("terminal-endpoints", () => void terminalServe.refresh());
+    links.on("changed", () => void terminalServe.refresh());
+    // the hello may already have landed before this driver existed — the
+    // route snapshot is STATE, so reading it once here is the same answer the
+    // event would have carried, and a second read is free (idempotent by
+    // signature).
+    void terminalServe.refresh();
     const artifacts = new ArtifactService({
       dataDir: config.dataDir,
       bridge: {
         declare: async (specs) => {
           lastArtifactServeSpecs = specs;
           lastServeAllowLogin = linkedLogin();
-          await mesh.setServes([productServeSpec(), ...specs]);
+          await mesh.setServes(desiredServes());
         },
         remove: async (serveId) => await mesh.removeServe(serveId),
         states: () => mesh.serves(),
@@ -3308,6 +3339,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         peers.dispose();
         // MF-1 — withdraw this device's field before the mesh goes: a reader
         // should lose us now, not in thirty seconds on the expiry clock
+        terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
         await agentField.dispose();
         devices.dispose();
         terminals.dispose();
@@ -3353,6 +3385,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // MF-1h — the rollback disposes every neighbour and used to walk past
       // this one: a boot that failed after the publisher started left its
       // timers armed and its slice standing.
+      terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
       await agentField.dispose();
       devices.dispose();
       terminals.dispose();
@@ -3688,6 +3721,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           const artifactDrain = artifacts.dispose();
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
+          terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
           await agentField.dispose(); // MF-1 — the field is withdrawn, not left to expire
           devices.dispose();
           // The fatal and rollback ladders always dropped the terminal control

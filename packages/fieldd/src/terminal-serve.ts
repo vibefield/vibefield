@@ -1,0 +1,241 @@
+import {
+  PORTS,
+  REMOTE_CELL_PATH_PREFIX,
+  type TerminalRouteCell,
+  type TerminalRouteSnapshot,
+} from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { ServeSpec } from "./mesh-client";
+
+// TM-2 (thinking-terminal-mesh-cells.md §3 T, TM-D2) — THE TERMINAL ROUTES.
+//
+// One tailnet listener carrying one reverse-proxy route per live terminal
+// cell: `/cell/<cellBootId>/` → `127.0.0.1:<that cell's T1 door port>`, gated
+// by the linked login. The sidecar splices the WebSocket upgrade straight into
+// the cell, so neither fieldd nor the floor is in the byte path (EL2) and the
+// cell's authority stays the grant it verifies in the first frame.
+//
+// This module is PURE POLICY over three live readings — the floor's route
+// snapshot, the floor's `terminalMesh` word, and the link's login — plus the
+// change detection that keeps a re-pair free. It owns no I/O: the declaration
+// goes out through an injected bridge, exactly as ArtifactService's serves do.
+//
+// THREE GATES, and each is a refusal to publish rather than a degraded
+// publish:
+//
+//   1. NO LINKED LOGIN, NO TERMINAL ROUTES, EVER. `allow` on a serve is the
+//      sidecar's WhoIs gate, and an empty allow list means THE WHOLE TAILNET
+//      (truffle RFC 023 §9.7). For the product door that is survivable — the
+//      door behind it still checks scopes — but a cell door's only wall is the
+//      grant, and a route with no allow-list would put every tailnet node one
+//      unguessed grant away from a live PTY. So an unlinked or pre-capture
+//      daemon publishes nothing at all.
+//   2. THE FLOOR'S OWN WORD. `terminalMesh` false or absent ⇒ nothing is
+//      published. The floor decides whether its doors belong on the tailnet;
+//      fieldd only carries the decision to the sidecar.
+//   3. A CELL WITHOUT DOORS IS NOT ROUTABLE. Keyless-bootstrap and pre-TP
+//      cells carry no `doors`, and a route to nothing is worse than no route:
+//      it answers a dial with a connection refused instead of a 404.
+//
+// WHY A SEPARATE SERVE, not routes added to the product serve (which is what
+// TM-D2 and the slice brief both ask for): truffle's proxy API is `add` and
+// `remove` with NO update (truffle-core 0.7.12 `src/proxy/mod.rs`), a same-id
+// add answers `PROXY_EXISTS`, and `MeshClient`'s reconcile skips a serveId
+// that is already live — so changing ANY serve's route list is a
+// remove-then-add that drops every connection on that listener. Cell routes
+// change on every cell birth and exit; the product door is what a dropped
+// client must re-dial to get a replacement ticket. Bouncing it on cell churn
+// would break the recovery path itself, so the churn is confined here, where
+// it costs a terminal leg one reconnect that the routed client already knows
+// how to make (`STALE_ROUTE` → re-ticket). Two listeners instead of one is the
+// price of an API with no upsert; the day truffle grows one, this collapses
+// back onto the product serve and `PORTS.TERMINAL_CELLS_SERVE` retires.
+
+/** The engine identity and display name of the terminal listener. One
+ * constant, because the driver declares it and the reconcile keys on it. */
+export const TERMINAL_SERVE_ID = "terminal" as const;
+
+/** One cell's route as the driver computes it, before it becomes a ServeSpec. */
+export interface TerminalCellRoute {
+  cellBootId: string;
+  prefix: string;
+  targetPort: number;
+}
+
+export interface TerminalServeDriverOptions {
+  /** the floor's revisioned route snapshot (NativeLink.terminalRoutes) */
+  routes: () => TerminalRouteSnapshot | undefined;
+  /** the floor's own word that its doors are on the tailnet (MF-1l) */
+  published: () => boolean;
+  /** the WhoIs login this daemon is linked to, or null */
+  linkedLogin: () => string | null;
+  /** re-declare the desired serve set with this terminal spec, or without one */
+  declare: (spec: ServeSpec | null) => Promise<void>;
+  logger?: Logger;
+}
+
+/** Escape a LITERAL login for truffle's `allow` globs. The sidecar matches with
+ * Go `path.Match`, lowercased on both sides, so a login's own glob
+ * metacharacters have to be escaped or a `?` in an address would widen the
+ * gate. Shared with the product serve's spec — one spelling of one rule. */
+export function serveAllowGlob(login: string): string {
+  return login.replace(/[\\*?[]/g, (c) => `\\${c}`);
+}
+
+/** The loopback port behind a cell's door pair, or `undefined` when the row
+ * cannot be routed.
+ *
+ * BOTH doors must name the SAME port. One route can only carry one target, and
+ * the cell serves `/control` and `/frames` on one listener by construction
+ * (`field-native/src/tp/door.rs`) — so a row that disagrees is a floor this
+ * build does not understand, and skipping it is the honest answer rather than
+ * publishing a route that would silently send frames to the control port. */
+export function cellDoorPort(cell: TerminalRouteCell): number | undefined {
+  const control = portOf(cell.doors?.controlUrl);
+  const frames = portOf(cell.doors?.framesUrl);
+  if (control === undefined || frames === undefined || control !== frames) return undefined;
+  return control;
+}
+
+function portOf(url: string | undefined): number | undefined {
+  if (url === undefined) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const port = Number(parsed.port);
+  return Number.isInteger(port) && port > 0 && port <= 65_535 ? port : undefined;
+}
+
+/** The routes a snapshot calls for, in snapshot order. Cells without dialable
+ * doors are DROPPED, not faked. */
+export function cellRoutesFor(snapshot: TerminalRouteSnapshot | undefined): TerminalCellRoute[] {
+  const out: TerminalCellRoute[] = [];
+  for (const cell of snapshot?.cells ?? []) {
+    const targetPort = cellDoorPort(cell);
+    if (targetPort === undefined) continue;
+    out.push({
+      cellBootId: cell.cellBootId,
+      // the trailing slash is the prefix-match discipline: without it
+      // `/cell/cb-1` would also match `/cell/cb-10/control`
+      prefix: `${REMOTE_CELL_PATH_PREFIX}${cell.cellBootId}/`,
+      targetPort,
+    });
+  }
+  return out;
+}
+
+/** The serve the current state calls for, or `null` for "publish nothing".
+ * Pure — the driver's whole policy, testable without a daemon. */
+export function terminalServeSpec(input: {
+  routes: TerminalRouteSnapshot | undefined;
+  published: boolean;
+  linkedLogin: string | null;
+}): ServeSpec | null {
+  if (!input.published) return null;
+  if (input.linkedLogin === null) return null;
+  const routes = cellRoutesFor(input.routes);
+  if (routes.length === 0) return null;
+  return {
+    serveId: TERMINAL_SERVE_ID,
+    name: TERMINAL_SERVE_ID,
+    listenPort: PORTS.TERMINAL_CELLS_SERVE,
+    target: { kind: "routes" },
+    // plain HTTP inside WireGuard, the product serve's own choice: no
+    // MagicDNS-cert dependency, and the ticket's URLs follow the serve's
+    // scheme rather than asserting one (`remoteCellEndpointsFor`).
+    tls: false,
+    allow: [serveAllowGlob(input.linkedLogin)],
+    routes: routes.map(({ prefix, targetPort }) => ({ prefix, targetPort })),
+  };
+}
+
+/** A change key for a spec. Re-declaring a serve costs every live connection on
+ * its listener, so the driver must be able to tell "the floor replayed its
+ * snapshot" from "a cell was born". The route snapshot's own `revision` is NOT
+ * that key: it moves on facts this serve does not carry (a token rotation, a
+ * pid), and it resets across floor boots. */
+export function terminalServeSignature(spec: ServeSpec | null): string {
+  if (spec === null) return "none";
+  return JSON.stringify([
+    spec.listenPort,
+    spec.allow ?? [],
+    (spec.routes ?? []).map((r) => [r.prefix, r.targetPort]),
+  ]);
+}
+
+/**
+ * Drives the terminal serve from the floor's route rows.
+ *
+ * `refresh()` is idempotent BY SIGNATURE and serialized: a floor re-pair that
+ * replays the identical snapshot declares nothing, and two changes arriving
+ * together never race two declarations to the node.
+ */
+export class TerminalServeDriver {
+  private readonly logger: Logger;
+  /** what was last DECLARED — the signature, never the spec: two specs that
+   * differ only in field order are the same serve. */
+  private declared = "none";
+  private chain: Promise<void> = Promise.resolve();
+  private disposed = false;
+
+  constructor(private readonly opts: TerminalServeDriverOptions) {
+    this.logger = opts.logger ?? createNoopLogger();
+  }
+
+  /** The spec the current live readings call for. */
+  desired(): ServeSpec | null {
+    return terminalServeSpec({
+      routes: this.opts.routes(),
+      published: this.opts.published(),
+      linkedLogin: this.opts.linkedLogin(),
+    });
+  }
+
+  /** Reconcile the declaration with the current readings. Never throws: the
+   * mesh being down is a normal state (MeshClient's own posture), and this
+   * runs from link events with no caller to catch a rejection. */
+  refresh(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    const run = this.chain.then(async () => {
+      if (this.disposed) return;
+      const spec = this.desired();
+      const signature = terminalServeSignature(spec);
+      if (signature === this.declared) return;
+      try {
+        await this.opts.declare(spec);
+        this.declared = signature;
+        this.logger.debug(
+          "fieldd.terminal_serve.declared",
+          spec === null
+            ? "The terminal cell routes were withdrawn"
+            : "The terminal cell routes were declared",
+          { routes: spec?.routes?.length ?? 0, listenPort: spec?.listenPort ?? null },
+        );
+      } catch (error) {
+        // Deliberately NOT recorded as declared: the next event retries, and a
+        // remembered-but-unlanded declaration would make a route set that
+        // never reached the sidecar look live.
+        this.logger.debug(
+          "fieldd.terminal_serve.declare_deferred",
+          "A terminal route declaration did not reach the node; the next change retries",
+          { error: String(error) },
+        );
+      }
+    });
+    this.chain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return this.chain;
+  }
+
+  /** Stop reconciling. Does NOT withdraw the serve: the daemon's own stop
+   * ladder tears the whole serve set down, and a withdrawal raced against it
+   * would be a second remove of the same id. */
+  dispose(): void {
+    this.disposed = true;
+  }
+}

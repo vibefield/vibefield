@@ -699,6 +699,7 @@ async fn serve_add(
         },
     };
     let path_secret = params.get("pathSecret").and_then(Value::as_str);
+    let routes = params.get("routes").cloned().unwrap_or(Value::Null);
     let allow_globs: Vec<String> = allow
         .as_array()
         .map(|a| {
@@ -716,6 +717,7 @@ async fn serve_add(
         allow: allow_globs,
         tls,
         path_secret,
+        routes: &routes,
     }) {
         Ok(c) => c,
         Err(msg) => return err(id, "PRECONDITION_FAILED", -32005, &msg, false, None),
@@ -783,6 +785,67 @@ struct ServeConfigInput<'a> {
     allow: Vec<String>,
     tls: Option<bool>,
     path_secret: Option<&'a str>,
+    /// TM-2 — the declared path routes of a `kind: "routes"` serve. Ignored by
+    /// every other target kind, so the product and artifact shapes are
+    /// byte-for-byte what they were.
+    routes: &'a Value,
+}
+
+/// TM-2 (thinking-terminal-mesh-cells.md §3 T) — the declared route list of a
+/// `routes` serve, parsed into truffle [`ProxyRoute`]s.
+///
+/// DELIBERATELY NARROW, and the narrowness is the EL7 argument: the caller
+/// names a path prefix and a LOOPBACK PORT, and nothing else. It cannot ask
+/// for a static directory, a non-loopback target, a fallback, or a per-route
+/// allow-list that would override the serve's login gate — so the worst a
+/// compromised fieldd can publish through this door is another loopback port
+/// on this machine, which is the same authority it already has.
+///
+/// `strip_prefix` is TRUE here, and that is load-bearing in the opposite
+/// direction from the product serve's `false`: a terminal cell's door matches
+/// the path EXACTLY (`/control` | `/frames`, `field-native/src/tp/door.rs`) and
+/// answers anything else with `HelloMalformed`, so the routing prefix must be
+/// gone by the time the upgrade reaches it. The cell's authority is the GRANT
+/// it verifies in the first frame, never the path it arrived on, so nothing is
+/// lost by stripping (spec §5.1; TM-D2).
+fn parse_cell_routes(routes: &Value) -> Result<Vec<ProxyRoute>, String> {
+    let Some(list) = routes.as_array() else {
+        return Err("routes must be an array".into());
+    };
+    let mut out = Vec::with_capacity(list.len());
+    for entry in list {
+        let prefix = entry
+            .get("prefix")
+            .and_then(Value::as_str)
+            .ok_or("route.prefix required")?;
+        // Both ends matter. Leading `/`: truffle validates it anyway, and a
+        // relative prefix would silently never match. Trailing `/`: the engine
+        // matches by PREFIX and longest wins, so `/cell/cb-1` would also match
+        // `/cell/cb-10/control` — one cell's routes capturing another cell's
+        // traffic, which no later check would catch.
+        if !prefix.starts_with('/') || !prefix.ends_with('/') {
+            return Err(format!(
+                "route prefix {prefix:?} must start and end with '/'"
+            ));
+        }
+        let port = entry
+            .get("targetPort")
+            .and_then(Value::as_u64)
+            .ok_or("route.targetPort required")?;
+        let port = u16::try_from(port).map_err(|_| "route.targetPort out of range".to_string())?;
+        if port == 0 {
+            return Err("route.targetPort must be nonzero".into());
+        }
+        out.push(ProxyRoute {
+            prefix: prefix.into(),
+            target_url: Some(format!("http://127.0.0.1:{port}")),
+            dir: None,
+            fallback: None,
+            strip_prefix: true, // LOAD-BEARING — see fn doc (the cell's exact paths)
+            allow: vec![],
+        });
+    }
+    Ok(out)
 }
 
 fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, String> {
@@ -795,6 +858,7 @@ fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, String
         allow,
         tls,
         path_secret,
+        routes: declared_routes,
     } = input;
     let tls = tls.unwrap_or(true); // upstream default; the product serve passes false
     if path_secret.is_some() && preview_dir.is_some() {
@@ -887,6 +951,46 @@ fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, String
                 routes,
             })
         }
+        // TM-2 (TM-D2) — a serve whose ENTIRE surface is its declared routes:
+        // the terminal-cell listener, `/cell/<cellBootId>/` → that cell's
+        // loopback T1 door, one route per live cell.
+        //
+        // No implicit root route, deliberately. The `port` arm below mounts a
+        // catch-all `/` at the target whenever a listener port is named, and a
+        // catch-all on THIS listener would publish whatever single port the
+        // shape happened to carry — fieldd's own control port, in the natural
+        // spelling. An unmatched path here reaches no backend at all.
+        Some("routes") => {
+            if path_secret.is_some() {
+                return Err("pathSecret is not supported for routes serves".into());
+            }
+            let cell_routes = parse_cell_routes(declared_routes)?;
+            // An empty list is not an honest empty serve, it is a LOOPHOLE:
+            // truffle reads `routes.is_empty()` as "use the single-target
+            // shape", so an empty declaration would silently fall back to
+            // `ProxyTarget::default()`. A caller with no routes to publish
+            // removes the serve (fieldd's driver does exactly that).
+            if cell_routes.is_empty() {
+                return Err("a routes serve needs at least one route".into());
+            }
+            let listen_port = parse_listen_port(0)?;
+            if listen_port == 0 {
+                return Err("listenPort is required for routes serves".into());
+            }
+            let mut routes = preview_routes;
+            routes.extend(cell_routes);
+            Ok(ProxyConfig {
+                id: serve_id.into(),
+                name: name.into(),
+                listen_port,
+                target: ProxyTarget::default(), // ignored: routes is non-empty
+                announce: false,                // the same law as the other arms
+                tls,
+                allow_non_loopback: false,
+                allow,
+                routes,
+            })
+        }
         Some("dir") => {
             if path_secret.is_some() {
                 return Err("pathSecret is not supported for dir serves".into());
@@ -924,7 +1028,7 @@ fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, String
                 routes,
             })
         }
-        _ => Err("target.kind must be port|dir".into()),
+        _ => Err("target.kind must be port|dir|routes".into()),
     }
 }
 
@@ -1127,6 +1231,7 @@ mod tests {
     //! (serve.subscribe → UNAVAILABLE when mesh is down) lives in the mgmt_server
     //! integration harness.
     use super::*;
+    use crate::registries::ports;
 
     // Serve dir paths are validated with `Path::is_absolute`, which is
     // platform-aware: `/srv/pub` is absolute on unix but NOT on Windows (no
@@ -1203,6 +1308,9 @@ mod tests {
         ));
     }
 
+    /// TM-2 — the absent route list every non-`routes` target kind passes.
+    static NO_ROUTES: Value = Value::Null;
+
     fn serve_input<'a>(serve_id: &'a str, target: &'a Value) -> ServeConfigInput<'a> {
         ServeConfigInput {
             serve_id,
@@ -1213,6 +1321,7 @@ mod tests {
             allow: vec![],
             tls: None,
             path_secret: None,
+            routes: &NO_ROUTES,
         }
     }
 
@@ -1292,6 +1401,133 @@ mod tests {
         assert_eq!(cfg.routes[0].dir.as_deref(), Some(PUB_DIR));
         assert_eq!(cfg.allow, vec!["*@corp.com".to_string()]);
         assert_eq!(cfg.listen_port, 0);
+    }
+
+    // ---- TM-2: the terminal-cell routes serve ----
+
+    const CELL_TARGET: fn() -> Value = || json!({"kind": "routes"});
+
+    #[test]
+    fn routes_serve_mounts_one_stripping_loopback_route_per_cell() {
+        let target = CELL_TARGET();
+        let routes = json!([
+            {"prefix": "/cell/cb-1/", "targetPort": 51001},
+            {"prefix": "/cell/cb-2/", "targetPort": 51002},
+        ]);
+        let cfg = build_serve_config(ServeConfigInput {
+            listen_port: Some(u64::from(ports::TERMINAL_CELLS_SERVE)),
+            tls: Some(false),
+            allow: vec!["james@example.com".into()],
+            routes: &routes,
+            ..serve_input("terminal", &target)
+        })
+        .expect("a routes serve builds");
+        assert_eq!(cfg.listen_port, ports::TERMINAL_CELLS_SERVE);
+        assert_eq!(cfg.routes.len(), 2, "one route per cell, and NO catch-all");
+        for (route, port) in cfg.routes.iter().zip([51001, 51002]) {
+            assert_eq!(
+                route.target_url.as_deref(),
+                Some(&*format!("http://127.0.0.1:{port}"))
+            );
+            assert!(
+                route.strip_prefix,
+                "the cell door matches /control and /frames EXACTLY — the prefix must be stripped"
+            );
+            assert!(route.dir.is_none(), "this door never mounts a directory");
+            assert!(
+                route.allow.is_empty(),
+                "a per-route allow OVERRIDES the serve's login gate — never set here"
+            );
+        }
+        assert_eq!(
+            cfg.allow,
+            vec!["james@example.com".to_string()],
+            "the linked login gates every cell route at the sidecar"
+        );
+        assert!(!cfg.announce);
+        assert!(!cfg.allow_non_loopback);
+    }
+
+    #[test]
+    fn a_routes_serve_refuses_an_empty_list_a_secret_and_a_missing_listener() {
+        let target = CELL_TARGET();
+        let one = json!([{"prefix": "/cell/cb-1/", "targetPort": 51001}]);
+        // empty would fall back to truffle's single-target shape — the loophole
+        let empty = json!([]);
+        let err = build_serve_config(ServeConfigInput {
+            listen_port: Some(9422),
+            routes: &empty,
+            ..serve_input("terminal", &target)
+        })
+        .expect_err("an empty route list is refused");
+        assert!(err.contains("at least one route"), "{err}");
+        // the provenance secret belongs to the product serve alone
+        assert!(build_serve_config(ServeConfigInput {
+            listen_port: Some(9422),
+            path_secret: Some("s3cr3t"),
+            routes: &one,
+            ..serve_input("terminal", &target)
+        })
+        .is_err());
+        // without an explicit listener there is no port to publish on
+        let err = build_serve_config(ServeConfigInput {
+            routes: &one,
+            ..serve_input("terminal", &target)
+        })
+        .expect_err("a routes serve needs a listener");
+        assert!(err.contains("listenPort"), "{err}");
+    }
+
+    #[test]
+    fn a_cell_route_prefix_must_be_absolute_and_terminated() {
+        let target = CELL_TARGET();
+        // `/cell/cb-1` (no trailing slash) is ALSO a prefix of `/cell/cb-10/…`
+        // — one cell would capture another cell's traffic.
+        for bad in [
+            json!([{"prefix": "/cell/cb-1", "targetPort": 51001}]),
+            json!([{"prefix": "cell/cb-1/", "targetPort": 51001}]),
+        ] {
+            let err = build_serve_config(ServeConfigInput {
+                listen_port: Some(9422),
+                routes: &bad,
+                ..serve_input("terminal", &target)
+            })
+            .expect_err("a malformed prefix is refused");
+            assert!(err.contains("must start and end with '/'"), "{err}");
+        }
+        for bad in [
+            json!([{"prefix": "/cell/cb-1/"}]),
+            json!([{"prefix": "/cell/cb-1/", "targetPort": 0}]),
+            json!([{"prefix": "/cell/cb-1/", "targetPort": 70_000}]),
+        ] {
+            assert!(
+                build_serve_config(ServeConfigInput {
+                    listen_port: Some(9422),
+                    routes: &bad,
+                    ..serve_input("terminal", &target)
+                })
+                .is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_other_target_kinds_ignore_a_declared_route_list() {
+        // The product serve's shape is byte-for-byte what it was, even if a
+        // caller sends `routes` beside it.
+        let target = json!({"kind": "port", "port": 9410});
+        let routes = json!([{"prefix": "/cell/cb-1/", "targetPort": 51001}]);
+        let cfg = build_serve_config(ServeConfigInput {
+            tls: Some(false),
+            path_secret: Some("s3cr3t"),
+            routes: &routes,
+            ..serve_input("product", &target)
+        })
+        .expect("the product shape still builds");
+        assert_eq!(cfg.routes.len(), 1);
+        assert_eq!(cfg.routes[0].prefix, "/t/s3cr3t");
+        assert!(!cfg.routes[0].strip_prefix, "EL7 provenance proof, unmoved");
     }
 
     #[test]

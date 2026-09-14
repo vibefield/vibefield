@@ -29,7 +29,15 @@ export interface ServeSpec {
   listenPort?: number;
   target:
     | { kind: "port"; port: number; scheme?: "http" | "https" }
-    | { kind: "dir"; path: string; fallback?: "/index.html" };
+    | { kind: "dir"; path: string; fallback?: "/index.html" }
+    /** TM-2 — a serve whose whole surface is `routes` below, with NO implicit
+     * root route. The terminal-cell listener's shape. */
+    | { kind: "routes" };
+  /** TM-2 — declared path routes, each a prefix onto ONE loopback port. Only
+   * meaningful for `kind: "routes"`; every other kind ignores it. The native
+   * side builds these with `stripPrefix` true (a cell door matches `/control`
+   * and `/frames` exactly) and refuses an empty list. */
+  routes?: Array<{ prefix: string; targetPort: number }>;
   /** App-owned static route mounted ahead of the source root. */
   previewDir?: string;
   allow?: string[];
