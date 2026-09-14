@@ -70,25 +70,12 @@ public struct HomeScreen: View {
   @State private var attachedDeviceID: String?
   @State private var copiedNote: String?
   @State private var appearance = TerminalAppearanceStore.load()
-  /// Where this phone's mirror-write secrets live (IOS-3c). One per host: a
-  /// key is a grant from ONE desktop, and the absent default is the honest
-  /// one — a viewer, not a typist (GT-4a's asymmetry from the client side).
-  /// The secret leaves here exactly once, into `TerminalAttachment`'s
-  /// `accessToken`; nothing on this screen ever renders it.
-  @State private var writeKeys: any MirrorWriteStoring = KeychainMirrorWriteStore()
-  /// The store's host list, mirrored into state because a store is not
-  /// observable: SwiftUI has no way to learn that a keychain changed, so every
-  /// save and every removal refreshes this and the views read it.
-  @State private var writeKeyHosts: [MirrorWriteHost] = []
-  /// The host whose key sheet is open, or none.
-  @State private var writeKeySheetHost: MirrorWriteHost?
-  /// What the store said when it could not do as it was asked — and the one
-  /// non-failure it also carries: a key saved while an attach was already in
-  /// flight, which cannot be re-presented until the next one.
-  @State private var writeKeyNote: String?
-  /// IOS-4d — what each desktop said when asked for a write key, for the
-  /// surfaces that ask about it later. A refusal is a sentence, not an alert.
-  @State private var grantNotes: [String: String] = [:]
+  // RETIRED 2026-09-14 (TM-3, TM-D3): this screen's mirror-write state — the
+  // Keychain store, its mirrored host list, the sheet's subject, the store's
+  // error note and the per-desktop grant notes. No attach has read a key since
+  // TM-5, and there is no key: the right to type is a claim in the attach grant
+  // the ticket carries. A key an older build stored is deleted at first launch
+  // by `RetiredWriteKeyCleanup.runOnce()` in `onAppear`, which never reads one.
   #if DEBUG
     @State private var demoRemoteActive = false
     /// `-vf-swarm-lab[=section[:page]]`: the design lab over the field (IOS-6c, D-i15).
@@ -254,27 +241,10 @@ public struct HomeScreen: View {
       assembly.projects = projectStore.load()
       refold()
       #if DEBUG
-        // `-vf-write-key=<secret>` swaps the keychain for an in-memory store
-        // whose WILDCARD answers for any host, so `-vf-auto-attach` can type
-        // against a serving desktop with no finger on the glass. It runs
-        // before anything reads a key, and it cannot exist in Release. A
-        // launch argument is visible to `ps`: this is a smoke aid, never a way
-        // to carry a real secret onto a phone.
-        if let seeded = ProcessInfo.processInfo.arguments
-          .first(where: { $0.hasPrefix(Self.writeKeyArgument) })?
-          .dropFirst(Self.writeKeyArgument.count), !seeded.isEmpty
-        {
-          let store = InMemoryMirrorWriteStore(wildcard: String(seeded))
-          // One EXPLICIT host beside the wildcard, so the settings sheet's
-          // WRITE KEYS section has a row to render headless. It names the
-          // `-vf-demo-remote` fixture's peer, and it is the same kind of
-          // object that fixture is: our own pixels, never a claim that a
-          // desktop granted anything.
-          try? store.set(
-            String(seeded),
-            for: MirrorWriteHost(deviceID: "demo-device-01", deviceName: "studio"))
-          writeKeys = store
-        }
+        // RETIRED 2026-09-14 (TM-3): `-vf-write-key=<secret>`, which swapped
+        // the Keychain for an in-memory store so a headless `-vf-auto-attach`
+        // could type. There is no key to seed — whether the phone may type is
+        // the desktop's grant, which a fixture cannot forge and should not.
         // Headless smoke hooks (the GhostteaApp pattern: opt-in automation,
         // Debug-only): drive flows a simulator run can't tap into.
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
@@ -355,14 +325,8 @@ public struct HomeScreen: View {
           swarmLabOpen = true
         }
         // --- end IOS-6c
-        // The key sheet is otherwise reachable only by a finger on ENTER KEY,
-        // and a headless run has none — so its pixels could never be looked
-        // at. Same fixture host as `-vf-demo-remote`, and the same disclaimer:
-        // our own pixels, never a claim that a desktop granted anything.
-        if ProcessInfo.processInfo.arguments.contains("-vf-open-write-key") {
-          writeKeySheetHost = MirrorWriteHost(
-            deviceID: "demo-device-01", deviceName: "studio")
-        }
+        // RETIRED 2026-09-14 (TM-3): `-vf-open-write-key`, which opened the key
+        // sheet a headless run could not tap its way to. The sheet is deleted.
         // --- IOS-5a ------------------------------------------------------
         // The card needs a LIVE attachment this device may type into, and a
         // simulator has no mesh — so this forces the face and prints the acts
@@ -563,7 +527,10 @@ public struct HomeScreen: View {
       // down, so a fixture on a phone with no tailnet survives it.
       link?.resume()
       syncDiscovery(meshIsUp: mesh.state == .up, phase: scenePhase)
-      refreshWriteKeys()
+      // TM-3 — a phone upgrading from a build that held mirror-write keys has
+      // secrets in its Keychain that nothing can read, use or offer to remove.
+      // This deletes them, once, without ever reading a value.
+      RetiredWriteKeyCleanup.runOnce()
     }
     .onDisappear {
       feed.stop()
@@ -583,17 +550,9 @@ public struct HomeScreen: View {
     .onChange(of: mesh.state) { _, state in
       syncDiscovery(meshIsUp: state == .up, phase: scenePhase)
     }
-    // IOS-4d — a desktop that has just finished hello is the moment to ask it
-    // for this device's write key, and the only moment: `collectWriteGrants`
-    // asks once per desktop per connection and skips every host we already
-    // hold a key for.
-    //
-    // The value is a NAMED property rather than `link?.desktops ?? []` inline:
-    // this body sits at the type-checker's budget, and an optional chain with
-    // a coalesce inside the modifier chain is what tips it over.
-    .onChange(of: linkDesktops) { _, _ in
-      collectWriteGrants()
-    }
+    // RETIRED 2026-09-14 (TM-3): the IOS-4d trigger that asked each desktop for
+    // this device's write key the moment it finished hello. There is no door to
+    // ask and no key to hold.
     .onChange(of: scenePhase) { _, phase in
       // The phase is passed rather than re-read: inside this closure the
       // environment's own value is the one thing we should not have to guess
@@ -663,23 +622,8 @@ public struct HomeScreen: View {
         .presentationCornerRadius(40)
         .fieldGlassSheet()
     }
-    // Entering a key, from either face of the card. `item:` rather than a
-    // flag: the sheet is ABOUT a host, and a sheet that outlived its subject
-    // would write a secret against the wrong device.
-    .sheet(item: $writeKeySheetHost) { host in
-      WriteKeySheet(
-        host: host,
-        hasKey: writeKeyHosts.contains { $0.deviceID == host.deviceID },
-        onSave: { secret in saveWriteKey(secret, for: host) },
-        onRemove: { removeWriteKey(host) },
-        onAskDesktop: askDesktopAction(for: host),
-        grantNote: grantNotes[host.deviceID]
-      )
-      .presentationDetents([.fraction(0.42), .medium])
-      .presentationDragIndicator(.visible)
-      .presentationCornerRadius(40)
-      .fieldGlassSheet()
-    }
+    // RETIRED 2026-09-14 (TM-3): the write-key sheet, which took a pasted
+    // capability or asked the desktop for one. Both doors are deleted.
     .sheet(isPresented: $meshSheetOpen) {
       MeshSheet(model: mesh)
         .presentationDetents([.fraction(0.45), .medium])
@@ -823,14 +767,12 @@ public struct HomeScreen: View {
       bubble: bubble,
       listed: listed,
       isAttached: attachment != nil,
-      hasWriteKey: cardHasWriteKey,
       statusNote: attachmentNote,
       statusDetail: attachmentDetail,
       statusActions: attachmentActions,
       cooled: attachment?.banner?.coolsTerminal ?? false,
       onAttach: { if let bubble { beginAttachment(to: bubble) } },
-      terminalReason: cardTerminalFace.note,
-      onEnterKey: writeKeyEntry(for: bubble)
+      terminalReason: cardTerminalFace.note
     ) {
       liveTerminal(title: bubble?.project)
     }
@@ -1041,11 +983,7 @@ public struct HomeScreen: View {
   }
 
   private var settingsSheet: some View {
-    TerminalSettingsSheet(
-      appearance: appearance,
-      writeKeyHosts: writeKeyHosts,
-      onRemoveWriteKey: { host in removeWriteKey(host) }
-    ) { next in
+    TerminalSettingsSheet(appearance: appearance) { next in
       // The PREFERENCE commits eagerly and is what every future attach is
       // seeded from; `TerminalAttachment.appearance` is what the terminal on
       // screen is wearing. Since TM-5 they cannot disagree — there is no
@@ -1088,57 +1026,11 @@ public struct HomeScreen: View {
     FieldHomeModel.linkFace(desktops: linkDesktops, isHearing: link?.isHearing ?? false)
   }
 
-  private func collectWriteGrants() {
-    guard let link else { return }
-    for desktop in link.desktops where desktop.state == .ready {
-      let deviceID = desktop.deviceId
-      guard writeKeys.capability(for: deviceID) == nil else { continue }
-      guard !link.hasAskedForGrant(on: deviceID) else { continue }
-      Task { await requestWriteGrant(from: link, deviceID: deviceID, name: desktop.name) }
-    }
-  }
-
-  /// The sheet's "get it from studio", or nil when there is no door to ask.
-  /// A button that cannot reach anything is the dead control D-i6 forbids, and
-  /// the paste field beside it still works.
-  private func askDesktopAction(for host: MirrorWriteHost) -> (() -> Void)? {
-    guard let link, link.client(for: host.deviceID) != nil else { return nil }
-    return {
-      Task {
-        await requestWriteGrant(
-          from: link, deviceID: host.deviceID, name: host.deviceName, asker: .deliberate)
-      }
-    }
-  }
-
-  private func requestWriteGrant(
-    from link: FieldLink, deviceID: String, name: String,
-    asker: FieldLink.GrantAsker = .automatic
-  ) async {
-    let outcome = await link.requestMirrorWriteGrant(on: deviceID, asker: asker)
-    switch outcome {
-    case .granted(let grant):
-      // The one place the capability is written, and it goes exactly where a
-      // pasted one goes: one Keychain item per host. It is never rendered —
-      // not here, not in the note, not in a log.
-      do {
-        try writeKeys.set(
-          grant.capability, for: MirrorWriteHost(deviceID: deviceID, deviceName: name))
-        refreshWriteKeys()
-        grantNotes[deviceID] = outcome.note
-      } catch {
-        writeKeyNote = "could not store \(name)'s key — \(MeshModel.shortReason(error))"
-      }
-    case .refused, .notMinted:
-      // Honest and quiet: both are ordinary states of somebody else's desktop,
-      // and the sheet says the words when a person goes looking. Nothing here
-      // retries — but a person pressing the button may ask again, which is
-      // what `asker` is for.
-      grantNotes[deviceID] = outcome.note
-    case .noDoor, .alreadyAsked:
-      break
-    }
-  }
+  // RETIRED 2026-09-14 (TM-3, TM-D3): `collectWriteGrants`,
+  // `askDesktopAction` and `requestWriteGrant` — the IOS-4d ladder that asked
+  // each ready desktop for this device's write key, once per connection, and
+  // stored what came back. The door is deleted; the right to type is a claim
+  // in the attach grant, which this phone neither asks for nor keeps.
 
   // MARK: - IOS-4c: the agent card's terminal
 
@@ -1184,9 +1076,6 @@ public struct HomeScreen: View {
     // A copy is the most recent thing the user did, and it is transient —
     // it says so and then gets out of the way.
     if let copiedNote { return copiedNote }
-    // A store that refused is about this phone, and it outranks the mesh's
-    // news: nothing the terminal says next explains why the key did not land.
-    if let writeKeyNote { return writeKeyNote }
     if let attachRefusal { return attachRefusal }
     if let renderFailure { return "the renderer refused this frame — \(renderFailure)" }
     // IOS-4c — what the FEED says about this run's terminal, when there is no
@@ -1226,7 +1115,7 @@ public struct HomeScreen: View {
   /// The banner's second line, and only ever that: our own phase words are
   /// single-line by construction, so a detail here always belongs to a banner.
   private var attachmentDetail: String? {
-    guard copiedNote == nil, writeKeyNote == nil, attachRefusal == nil, renderFailure == nil
+    guard copiedNote == nil, attachRefusal == nil, renderFailure == nil
     else { return nil }
     return attachment?.banner?.detail
   }
@@ -1283,10 +1172,6 @@ public struct HomeScreen: View {
     // which is true whether or not a terminal ever answered.
     inputCard.history = clipboardHistory
     // --- end IOS-5d
-    // A key note belongs to the card it was raised on. Removing a key from the
-    // settings sheet can leave one standing with no card open, and it must not
-    // greet the next session as if it were about that one.
-    writeKeyNote = nil
     selection = SessionSelection(id: bubble.id)
   }
 
@@ -1358,7 +1243,6 @@ public struct HomeScreen: View {
     renderFailure = nil
     attachRefusal = nil
     copiedNote = nil
-    writeKeyNote = nil
     // --- IOS-5a: a draft belongs to the session it was typed for ---
     inputCard.sink = nil
     inputCard.reset()
@@ -1375,58 +1259,9 @@ public struct HomeScreen: View {
 
   // MARK: - Write keys
 
-  /// Whether THIS phone holds a key for the card's host.
-  ///
-  /// It no longer decides anything an attach does — since TM-D3 the right to
-  /// type is the attach grant's, and no attach reads this store. It is still
-  /// answered honestly because the settings sheet lists what the phone is
-  /// holding, and a key still held is a fact until TM-3 deletes the store it
-  /// lives in.
-  private var cardHasWriteKey: Bool {
-    guard let deviceID = cardBubble?.remote?.deviceID ?? attachedDeviceID else { return false }
-    return writeKeyHosts.contains { $0.deviceID == deviceID }
-      || writeKeys.capability(for: deviceID) != nil
-  }
-
-  /// `nil` when there is no host to enter a key FOR (an agent bubble, or no
-  /// subject at all). Whether to DRAW it is the card's own rule.
-  private func writeKeyEntry(for bubble: FieldBubble?) -> (() -> Void)? {
-    guard let remote = bubble?.remote else { return nil }
-    return {
-      writeKeySheetHost = MirrorWriteHost(
-        deviceID: remote.deviceID, deviceName: remote.deviceName)
-    }
-  }
-
-  private func refreshWriteKeys() {
-    writeKeyHosts = writeKeys.hosts()
-  }
-
-  private func saveWriteKey(_ secret: String, for host: MirrorWriteHost) {
-    writeKeySheetHost = nil
-    do {
-      try writeKeys.set(secret, for: host)
-    } catch {
-      // Surfaced on the card, never as a crash and never with the secret in
-      // it: the reason a keychain refused is the store's, and the value is
-      // nobody's.
-      writeKeyNote = "could not save the key — \(error)"
-      return
-    }
-    writeKeyNote = nil
-    refreshWriteKeys()
-  }
-
-  private func removeWriteKey(_ host: MirrorWriteHost) {
-    writeKeySheetHost = nil
-    do {
-      try writeKeys.remove(for: host.deviceID)
-      writeKeyNote = nil
-    } catch {
-      writeKeyNote = "could not remove the key — \(error)"
-    }
-    refreshWriteKeys()
-  }
+  // RETIRED 2026-09-14 (TM-3, TM-D3): `cardHasWriteKey`, `writeKeyEntry`,
+  // `refreshWriteKeys`, `saveWriteKey` and `removeWriteKey` — the card's key
+  // question and the store's four acts. Nothing holds a key to answer about.
 
   /// The pasteboard confirmation, in the reference's own vocabulary — and it
   /// expires, because a stale "copied" line would sit on top of a real status
@@ -1462,8 +1297,6 @@ public struct HomeScreen: View {
   }
 
   #if DEBUG
-    private static let writeKeyArgument = "-vf-write-key="
-
     // --- IOS-5d ------------------------------------------------------------
     /// The names IOS-5d's fixtures answer to, in one place.
     ///

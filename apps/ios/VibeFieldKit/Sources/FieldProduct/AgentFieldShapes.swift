@@ -289,79 +289,9 @@ public struct AgentInterruptResult: Sendable, Equatable, Decodable {
   }
 }
 
-/// `terminal.mirrorWriteGrant`'s answer (G4): the mirror-write capability this
-/// device is granted, over the door instead of a pasted env var.
-///
-/// `capability` IS the secret. It leaves this struct exactly once — into
-/// `MirrorWriteStore`'s Keychain item — and it is deliberately kept out of
-/// `description`, out of any log line, and out of `unknownFields`. The
-/// `CustomStringConvertible` below is not decoration: a `print` of this value
-/// anywhere in a debug session would otherwise put a live write capability in a
-/// console, and the IOS-3c rule is that the secret is never displayed,
-/// exported, or logged.
-public struct TerminalMirrorWriteGrant: Sendable, Decodable, CustomStringConvertible,
-  CustomDebugStringConvertible
-{
-  public let capability: String
-  public let deviceId: String
-  public let issuedAt: Int64
-  public let unknownFields: [String]
-
-  public init(json: JSONValue) throws {
-    var object = try WireObject(shape: "TerminalMirrorWriteGrant", value: json)
-    capability = try object.requiredString("capability")
-    deviceId = try object.requiredString("deviceId")
-    issuedAt = try object.requiredInt("issuedAt")
-    unknownFields = object.unknownFields
-  }
-
-  public init(from decoder: any Decoder) throws {
-    try self.init(json: try JSONValue(from: decoder))
-  }
-
-  public var description: String {
-    "TerminalMirrorWriteGrant(deviceId: \(deviceId), issuedAt: \(issuedAt), capability: <redacted>)"
-  }
-
-  /// The OTHER door, and the one that was open.
-  ///
-  /// `dump()`, `String(reflecting:)` and `po` do not use `description` — they
-  /// fall back to the Mirror, which walks the stored properties and prints the
-  /// capability in full. A redaction that only covers `print` is a redaction
-  /// that covers the way nobody debugs.
-  public var debugDescription: String { description }
-}
-
-/// The THIRD door, and the one `debugDescription` alone does not close.
-///
-/// `dump()` takes its header from `debugDescription` and then walks the
-/// MIRROR, printing every stored property — so a redacted header sat directly
-/// above `capability: mw_…`. `po` and `String(reflecting:)` reach the same
-/// children. A custom mirror is the only thing that covers all three, and the
-/// capability is the one field it will not hand over.
-extension TerminalMirrorWriteGrant: CustomReflectable {
-  public var customMirror: Mirror {
-    Mirror(
-      self,
-      children: [
-        "deviceId": deviceId,
-        "issuedAt": issuedAt,
-        "capability": "<redacted>",
-      ],
-      displayStyle: .struct)
-  }
-}
-
-/// Equality, written out.
-///
-/// It is behaviourally the synthesised one, and the earlier comment here
-/// claimed it was protecting something — it is not. What keeps the capability
-/// off a screen is `description` and `debugDescription` above; this is spelled
-/// out only so that adding a field to this type is a decision about equality
-/// rather than something the compiler does quietly.
-extension TerminalMirrorWriteGrant: Equatable {
-  public static func == (lhs: Self, rhs: Self) -> Bool {
-    lhs.capability == rhs.capability && lhs.deviceId == rhs.deviceId
-      && lhs.issuedAt == rhs.issuedAt
-  }
-}
+// RETIRED 2026-09-14 (TM-3, TM-D3): `TerminalMirrorWriteGrant`, G4's answer —
+// the mirror-write capability a desktop handed this phone, with the redaction
+// that kept it out of `description`, `debugDescription` and a custom `Mirror`,
+// and its golden copy under `Tests/**`. The secret is deleted on every plane;
+// the right to type rides the attach grant in the ticket (TM-2), which is
+// per client, per session and expiring, so nothing durable reaches this app.

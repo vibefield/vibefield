@@ -499,44 +499,11 @@ import Testing
     #expect(result.reason == "human-input-conflict")
   }
 
-  @Test func theMirrorWriteGrantReadsItsThreeFacts() throws {
-    let grant = try TerminalMirrorWriteGrant(
-      json: try Fixture.json("terminal-mirror-write-grant.valid"))
-    #expect(grant.deviceId == "dev-01HQ8ZK4M7")
-    #expect(grant.issuedAt == 1_789_671_899_000)
-    #expect(grant.capability == "mw_EXAMPLE_not_a_real_capability_0000")
-  }
-
-  /// IOS-3c's rule, enforced by the type rather than by everyone remembering
-  /// it: the capability is never displayed, exported, or logged. A `print` of
-  /// this value in a debug session must not put a live write capability in a
-  /// console — so `description` redacts it, and a failing `#expect` on two of
-  /// these prints the redacted form too.
-  @Test func theGrantNeverRendersItsSecret() throws {
-    let grant = try TerminalMirrorWriteGrant(
-      json: try Fixture.json("terminal-mirror-write-grant.valid"))
-    let rendered = "\(grant)"
-    #expect(!rendered.contains("mw_EXAMPLE_not_a_real_capability_0000"))
-    #expect(rendered.contains("<redacted>"))
-    #expect(rendered.contains("dev-01HQ8ZK4M7"))
-    #expect(String(describing: grant) == rendered)
-  }
-
-  /// The OTHER door, and the one that was open. `dump()`,
-  /// `String(reflecting:)` and `po` do not use `description` — they fall back
-  /// to the Mirror, which walks the stored properties and prints the
-  /// capability in full. A redaction that only covers `print` covers the way
-  /// nobody debugs.
-  @Test func theGrantIsRedactedInTheDebuggerToo() throws {
-    let grant = try TerminalMirrorWriteGrant(
-      json: try Fixture.json("terminal-mirror-write-grant.valid"))
-    #expect(!String(reflecting: grant).contains("mw_EXAMPLE"))
-    #expect(String(reflecting: grant).contains("<redacted>"))
-
-    var dumped = ""
-    dump(grant, to: &dumped)
-    #expect(!dumped.contains("mw_EXAMPLE"))
-  }
+  // RETIRED 2026-09-14 (TM-3, TM-D3): the three `TerminalMirrorWriteGrant`
+  // rows — its decode against the contracts golden, and the two redaction rows
+  // proving `description` and `dump()` never printed the capability. The shape
+  // is deleted on every plane along with its golden, so there is no secret on
+  // this wire to keep off a console.
 }
 
 @Suite struct JSONValueTests {

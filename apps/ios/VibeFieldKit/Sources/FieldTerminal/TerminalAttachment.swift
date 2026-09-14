@@ -68,9 +68,11 @@ public struct TerminalBanner: Sendable, Equatable {
 /// **What left with TSP1** (TM-5's retirements, each for a stated reason):
 /// GhostteaKit's attachment lifecycle, its replica sink and the on-device TRF1
 /// ENCODE (the cell renders once now; the phone decodes, like every other
-/// viewer), the peer directory and its compact dial, the banner presenter, and
-/// the mirror-write bearer — the right to type is a claim in an expiring grant
-/// minted per client per session (TM-D3), never a string this device holds.
+/// viewer), the peer directory and its compact dial, and the banner presenter.
+/// The mirror-write bearer left the ATTACH path here and was deleted outright at
+/// TM-3 (2026-09-14) — store, sheet, door and all. The right to type is a claim
+/// in an expiring grant minted per client per session (TM-D3), never a string
+/// this device holds.
 ///
 /// **What the phone is NOT granted:** the geometry lease. fieldd mints a
 /// tailnet self peer `[input, read]`, so a phone viewer is ADDITIVE to the

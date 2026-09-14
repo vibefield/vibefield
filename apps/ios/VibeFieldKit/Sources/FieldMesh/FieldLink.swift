@@ -114,8 +114,6 @@ public final class FieldLink {
   @ObservationIgnored private var clients: [String: FieldProductClient] = [:]
   @ObservationIgnored private var subscriptions: [String: ProductSubscription] = [:]
   @ObservationIgnored private var doorBoards: [String: DoorBoard] = [:]
-  /// Desktops already asked for a write grant on this connection (IOS-4d).
-  @ObservationIgnored private var askedForGrant: Set<String> = []
   /// Devices with a subscribe in flight. Set synchronously, so a burst cannot
   /// walk past the slot that is only filled after the await.
   @ObservationIgnored private var arming: Set<String> = []
@@ -203,7 +201,6 @@ public final class FieldLink {
     expiryTimers.removeAll()
     arming.removeAll()
     doorBoards.removeAll()
-    askedForGrant.removeAll()
     devices.unsubscribe()
     boards.unsubscribe()
     desktops = []
@@ -273,91 +270,13 @@ public final class FieldLink {
       "agent.resume", params: .object(["runtimeRunId": .string(runtimeRunId)]))
   }
 
-  // MARK: The grant (IOS-4d)
-
-  /// What asking a desktop for this device's mirror-write capability came to.
-  ///
-  /// Every arm but `granted` is a SENTENCE the sheet can show. A refusal is
-  /// not an error to swallow and not a reason to ask again: a guest peer is
-  /// refused by the door's own preset, and asking a second time produces the
-  /// same refusal and one more audit record.
-  public enum MirrorWriteGrant: Sendable, Equatable {
-    case granted(TerminalMirrorWriteGrant)
-    /// The door said no — `FORBIDDEN_SCOPE` for a peer that is not self, or
-    /// any other refusal, in its own words.
-    case refused(String)
-    /// `UNAVAILABLE {service: "terminal", state: "no-mirror-write"}` — the
-    /// desktop mints no key because its terminal mesh is off. Nothing is
-    /// wrong; there is simply nothing to be granted, and the paste path stands.
-    case notMinted
-    /// No door to that desktop at all.
-    case noDoor
-    /// Already asked on this connection. Kept as its own arm so a caller in a
-    /// loop learns that it is in a loop.
-    case alreadyAsked
-
-    /// The sheet's own words.
-    public var note: String {
-      switch self {
-      case .granted: "this desktop granted a write key"
-      case .refused(let reason): "this desktop refused: \(reason)"
-      case .notMinted:
-        "this desktop mints no write key — its terminal mesh is off "
-          + "(FIELD_NATIVE_TERMINAL_MESH); paste one instead"
-      case .noDoor: "no connection to this desktop"
-      case .alreadyAsked: "already asked this desktop on this connection"
-      }
-    }
-  }
-
-  /// Who is asking, which is what decides whether the latch applies.
-  public enum GrantAsker: Sendable, Equatable {
-    /// The app, on its own, because a desktop went ready. Asks ONCE per
-    /// connection.
-    case automatic
-    /// A person pressed a button. The latch does not apply: "do not retry" is
-    /// a rule about the PHONE's impatience, and somebody asking again is not
-    /// the phone retrying — they have usually just changed something on the
-    /// desktop and want to see whether it took.
-    case deliberate
-  }
-
-  /// Ask a desktop for this device's mirror-write capability (G4).
-  ///
-  /// The once-ness lives here rather than at the caller because it is the rule
-  /// that matters: a refusal is audited on the desktop, and a phone that
-  /// retried on every reconnect would fill a person's grants ledger with its
-  /// own impatience. The latch clears when the door is closed and rebuilt, and
-  /// a DELIBERATE ask goes straight through it.
-  ///
-  /// The capability is RETURNED and never stored here: where a secret lives is
-  /// the composition layer's business (`MirrorWriteStore`, one Keychain item
-  /// per host), and FieldMesh has no business knowing what a terminal is.
-  public func requestMirrorWriteGrant(
-    on deviceId: String, asker: GrantAsker = .automatic
-  ) async -> MirrorWriteGrant {
-    guard let client = clients[deviceId] else { return .noDoor }
-    if asker == .automatic, askedForGrant.contains(deviceId) { return .alreadyAsked }
-    askedForGrant.insert(deviceId)
-    do {
-      let grant = try await client.call(
-        "terminal.mirrorWriteGrant", params: .object([:]),
-        as: TerminalMirrorWriteGrant.self)
-      return .granted(grant)
-    } catch let error as FieldProductError {
-      if error.kind == "UNAVAILABLE", error.unavailable?.state == "no-mirror-write" {
-        return .notMinted
-      }
-      return .refused(error.message)
-    } catch {
-      return .refused(MeshModel.shortReason(error))
-    }
-  }
-
-  /// Whether this desktop has been asked on this connection.
-  public func hasAskedForGrant(on deviceId: String) -> Bool {
-    askedForGrant.contains(deviceId)
-  }
+  // RETIRED 2026-09-14 (TM-3, TM-D3): the grant (IOS-4d) —
+  // `requestMirrorWriteGrant`, its `MirrorWriteGrant` outcome enum, the
+  // `.automatic`/`.deliberate` asker, the once-per-connection latch and
+  // `hasAskedForGrant`. The door it called is deleted on the desktop. Since
+  // TM-5 the right to type is a claim in the attach grant the ticket carries,
+  // so this phone asks for nothing extra and holds nothing that outlives the
+  // session it was minted for.
 
   // MARK: Reconciliation
 
@@ -451,9 +370,6 @@ public final class FieldLink {
     expiryTimers.removeValue(forKey: deviceId)?.cancel()
     arming.remove(deviceId)
     doorBoards.removeValue(forKey: deviceId)
-    // A new door is a new connection, and a new connection is the only event
-    // that could change a refusal into a grant.
-    askedForGrant.remove(deviceId)
   }
 
   /// Watch one client's state so the chip is honest and the door subscription

@@ -20,24 +20,12 @@ public struct TerminalSettingsSheet: View {
   @State private var query = ""
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   private let onChange: (TerminalAppearance) -> Void
-  /// The hosts this phone holds a mirror-write key for, passed in rather than
-  /// read here: the store is not observable, so the host owns the refresh and
-  /// this sheet renders whatever it was handed.
-  private let writeKeyHosts: [MirrorWriteHost]
-  /// `nil` where no store is wired (previews, and every call site that
-  /// predates IOS-3c) — the section then shows its honest empty line rather
-  /// than rows whose REMOVE would do nothing.
-  private let onRemoveWriteKey: ((MirrorWriteHost) -> Void)?
 
   public init(
     appearance: TerminalAppearance,
-    writeKeyHosts: [MirrorWriteHost] = [],
-    onRemoveWriteKey: ((MirrorWriteHost) -> Void)? = nil,
     onChange: @escaping (TerminalAppearance) -> Void
   ) {
     _draft = State(initialValue: appearance)
-    self.writeKeyHosts = writeKeyHosts
-    self.onRemoveWriteKey = onRemoveWriteKey
     self.onChange = onChange
   }
 
@@ -49,7 +37,6 @@ public struct TerminalSettingsSheet: View {
         transparencySection
         shaderSection
         fontSection
-        writeKeySection
         Spacer(minLength: 28)
       }
       .padding(.horizontal, 22)
@@ -422,75 +409,12 @@ public struct TerminalSettingsSheet: View {
     .accessibilityLabel(label)
   }
 
-  // MARK: - Write keys
-
-  /// The keys themselves are never here — this is a list of HOSTS and one act
-  /// (§10.4: the capability is Keychain-only, never on disk and never in a
-  /// snapshot). Revoking is the only thing that can be done to a secret you
-  /// cannot see, so REMOVE is the only control.
-  private var writeKeySection: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      eyebrow("WRITE KEYS")
-        .padding(.top, 30)
-
-      Text("hosts this phone may type into — the key itself is never shown")
-        .font(FieldType.mono(9))
-        .foregroundStyle(FieldPalette.textMuted)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 8)
-
-      if writeKeyHosts.isEmpty {
-        // The absence in words rather than an empty box (D-i6): "none yet" is
-        // the app's actual state on every phone until a desktop hands one over.
-        Text("no host has given this phone a write key")
-          .font(FieldType.mono(9))
-          .foregroundStyle(FieldPalette.textMuted)
-          .padding(.top, 12)
-      } else {
-        VStack(spacing: 4) {
-          ForEach(writeKeyHosts) { writeKeyRow($0) }
-        }
-        .padding(.top, 10)
-      }
-    }
-  }
-
-  private func writeKeyRow(_ host: MirrorWriteHost) -> some View {
-    HStack(spacing: 10) {
-      VStack(alignment: .leading, spacing: 3) {
-        Text(host.deviceName)
-          .font(FieldType.mono(11, .medium))
-          .foregroundStyle(FieldPalette.textMain)
-          .lineLimit(1)
-          .truncationMode(.tail)
-        // The id under the name because two desktops can answer to one name,
-        // and the thing being revoked is the device, not the word.
-        Text(host.shortDeviceID)
-          .font(FieldType.mono(8))
-          .foregroundStyle(FieldPalette.textFaint)
-          .lineLimit(1)
-      }
-      Spacer(minLength: 0)
-      if let onRemoveWriteKey {
-        Button { onRemoveWriteKey(host) } label: {
-          Text("REMOVE")
-            .font(FieldType.mono(9, .heavy))
-            .tracking(FieldType.tracking(0.1, of: 9))
-            .foregroundStyle(FieldPalette.textMain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .overlay(
-              RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Remove the write key for \(host.deviceName)")
-      }
-    }
-    .padding(.horizontal, 8)
-    .padding(.vertical, 7)
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
+  // RETIRED 2026-09-14 (TM-3, TM-D3): the WRITE KEYS section — the list of
+  // hosts this phone held a mirror-write key for, and REMOVE beside each. The
+  // keys are deleted (and a key an older build stored is removed at first
+  // launch), so the section would list nothing and offer nothing. Its removal
+  // changes no visual constant: every section carries its own top padding and
+  // the trailing Spacer is unchanged, so DESIGN.md's sheet metrics stand.
 
   // MARK: - Shared chrome
 

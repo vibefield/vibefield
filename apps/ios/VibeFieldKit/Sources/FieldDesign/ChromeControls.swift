@@ -4,7 +4,7 @@ import SwiftUI
 /// title, and a button that is a pill.
 ///
 /// They live in `FieldDesign` rather than beside one sheet because both the
-/// input card's sheets (`FieldInput`) and the write-key sheet (`FieldHome`)
+/// input card's sheets (`FieldInput`) and the settings sheet (`FieldTerminal`)
 /// draw them, and a second copy of a pill is how two surfaces drift apart.
 
 /// DESIGN.md §3's eyebrow: 11 medium, uppercase, `tracking-wider`, 60%.

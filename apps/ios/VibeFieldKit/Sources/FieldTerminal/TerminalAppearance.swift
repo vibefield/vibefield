@@ -69,8 +69,9 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
 }
 
 /// UserDefaults-backed persistence for the appearance (§10.4: theme name,
-/// shader ids, opacity, font size). The mirror-write capability is NOT here —
-/// it is a secret and lives in the Keychain (IOS-3c), never on disk.
+/// shader ids, opacity, font size). It carries no secret and never did: the
+/// mirror-write capability this sentence used to exclude was deleted at TM-3
+/// (2026-09-14), and nothing on this device holds a credential to keep out.
 public enum TerminalAppearanceStore {
   static let key = "fieldterminal.appearance.v1"
 

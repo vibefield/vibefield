@@ -43,7 +43,6 @@ struct SessionCardView<Terminal: View>: View {
   /// session's own `readWrite`, which only says the session is shared for
   /// writing — the two were being conflated into a promise this app cannot
   /// keep until the Keychain leg lands.
-  let hasWriteKey: Bool
   /// The attachment's own words, when it has any: connecting, view-only, the
   /// reason it failed. The card renders them and never derives them — the
   /// terminal owns its truth, and this view stays ignorant of how one works.
@@ -68,7 +67,6 @@ struct SessionCardView<Terminal: View>: View {
   /// renders a control it cannot honour (D-i6). It is a callback rather than a
   /// store because where a key LIVES is the host's business: the card knows
   /// only that entering one is a thing the user may do here.
-  var onEnterKey: (() -> Void)?
   @ViewBuilder let terminal: () -> Terminal
 
   private var face: FieldHomeModel.CardFace {
@@ -263,39 +261,24 @@ struct SessionCardView<Terminal: View>: View {
 
         // `remote.readWrite` says the SESSION is shared for writing — it rides
         // in a host advertisement broadcast to the whole mesh and knows
-        // nothing about who is asking. Whether THIS device may type is a
-        // per-attach grant against a write key it does not have yet, so
-        // promising typing from the listing alone was a promise the next tap
-        // broke.
+        // nothing about who is asking. Whether THIS device may type is decided
+        // per attach by the grant in its ticket, and the live attachment says
+        // so in its own words when a desktop grants read without input.
         Text(
           statusNote
-            ?? FieldHomeModel.writeInvitation(
-              sessionSharesWrites: remote.readWrite, hasWriteKey: hasWriteKey)
+            ?? FieldHomeModel.writeInvitation(sessionSharesWrites: remote.readWrite)
         )
         .font(FieldType.mono(9))
         .foregroundStyle(FieldPalette.textMuted)
         .multilineTextAlignment(.center)
 
-        // The one case where the sentence above names something the USER can
-        // change: the host shares writes and this phone holds no key. It is
-        // offered before the tap, because that is when the sentence appears.
-        if let onEnterKey,
-          FieldHomeModel.keyEntryOffered(
-            sessionSharesWrites: remote.readWrite, hasWriteKey: hasWriteKey)
-        {
-          Button(action: onEnterKey) {
-            Text("ENTER KEY")
-              .font(FieldType.mono(9, .heavy))
-              .tracking(FieldType.tracking(0.1, of: 9))
-              .foregroundStyle(FieldPalette.textMain)
-              .padding(.horizontal, 12)
-              .padding(.vertical, 7)
-              .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                  .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
-          }
-          .buttonStyle(.plain)
-        }
+        // RETIRED 2026-09-14 (TM-3): the ENTER KEY invitation stood here, the
+        // one act that could change the sentence above — the host shares writes
+        // and this phone holds no mirror-write key. There is no key to enter:
+        // the right to type is a claim in the attach grant (TM-D3), granted or
+        // not by the desktop, with nothing for a person to supply. Removing the
+        // affordance rather than disabling it is D-i6's rule — an absence is a
+        // state in words, never a dead control.
       } else {
         // The row survives and refuses honestly: a live session the peer is
         // deliberately not sharing is a fact, and hiding it would be the
@@ -365,12 +348,11 @@ extension SessionCardView where Terminal == EmptyView {
   init(
     bubble: FieldBubble?,
     listed: Bool = true,
-    hasWriteKey: Bool = false,
     statusNote: String? = nil,
     onAttach: @escaping () -> Void
   ) {
     self.init(
-      bubble: bubble, listed: listed, isAttached: false, hasWriteKey: hasWriteKey,
+      bubble: bubble, listed: listed, isAttached: false,
       statusNote: statusNote, statusDetail: nil,
       statusActions: [], cooled: false, onAttach: onAttach
     ) {

@@ -197,7 +197,7 @@ public enum ChromePalette {
   /// `.srow.sel` — a selected row in a list on glass.
   public static let rowSelected = dynamic(
     light: 0x000000, lightAlpha: 0.06, dark: 0xFFFFFF, darkAlpha: 0.10)
-  /// A text well: the snippet editor's body, the write key's field.
+  /// A text well: the snippet editor's body, a search field.
   public static let wellFill = dynamic(
     light: 0x000000, lightAlpha: 0.04, dark: 0xFFFFFF, darkAlpha: 0.08)
   public static let wellHairline = dynamic(

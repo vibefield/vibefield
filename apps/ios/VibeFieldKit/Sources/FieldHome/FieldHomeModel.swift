@@ -221,47 +221,24 @@ enum FieldHomeModel {
 
   // MARK: - Writes
 
-  /// Why this device cannot type, in the order the reasons are actually known.
+  /// What the card can say about typing BEFORE a tap, which since TM-3
+  /// (2026-09-14) is one fact rather than two.
   ///
-  /// The two `readWrite` booleans on this path are DIFFERENT FACTS and were
-  /// being conflated. A listing's `readWrite` rides in upstream's
-  /// `TerminalHostAdvertisement` — a broadcast with no per-caller context — so
-  /// it says the session is *shared* for writing, never that WE may write. The
-  /// grant is per-attach: the client presents an access token on `AttachView`
-  /// and the host answers `readWrite` on `ViewAttached`.
+  /// `sessionSharesWrites` rides in the listing — a broadcast with no
+  /// per-caller context — so it says the session is *shared* for writing, never
+  /// that WE may write. Whether this device may type is decided per attach, and
+  /// it used to depend on a mirror-write key this phone either held or did not:
+  /// a second fact, a sheet to enter it, and an ENTER KEY affordance beside this
+  /// sentence. TM-D3 replaced the key with a claim in the attach grant, so there
+  /// is nothing for a person to obtain and nothing to offer them here.
   ///
-  /// So a device holding no write key cannot have been granted writes, and
-  /// blaming the host for that ("this host is not sharing writes") blamed it
-  /// for our own missing capability.
-  static func viewOnlyReason(sessionSharesWrites: Bool, hasWriteKey: Bool) -> String {
-    if !sessionSharesWrites { return "view only — this session is shared read-only" }
-    if !hasWriteKey { return "view only — this device has no write key for this host" }
-    return "view only — the host refused this device's write key"
-  }
-
-  /// The same facts before an attachment exists, where the third one cannot
-  /// have happened yet: nothing has been presented to a host, so a refusal is
-  /// not among the things that could be true.
-  static func writeInvitation(sessionSharesWrites: Bool, hasWriteKey: Bool) -> String {
-    guard sessionSharesWrites else { return "view only — this session is shared read-only" }
-    return hasWriteKey
+  /// The remaining unknown is answered where it becomes known rather than
+  /// guessed at here: a desktop that grants `read` without `input` is named by
+  /// the live attachment in its own words (`TerminalAttachment`, "view only —
+  /// this desktop granted read without input").
+  static func writeInvitation(sessionSharesWrites: Bool) -> String {
+    sessionSharesWrites
       ? "you can type here"
-      : "view only — this device has no write key for this host"
-  }
-
-  /// Whether to offer the act that FIXES the sentence above (IOS-3c).
-  ///
-  /// Both halves are refusals of a control that would do nothing (D-i6: an
-  /// absence is a state in words, never a dead affordance). A session nobody
-  /// shares for writing cannot be typed into with any key, so entering one
-  /// would be theatre; a device that already holds a key has nothing to enter,
-  /// and the copy beside it already says "you can type here". Only the middle
-  /// case — the host shares writes and this phone has no key — is an act.
-  ///
-  /// Deliberately NOT a function of the attachment: the offer stands before
-  /// the tap as well as after it, which is the whole point of the invitation
-  /// line saying the truth early.
-  static func keyEntryOffered(sessionSharesWrites: Bool, hasWriteKey: Bool) -> Bool {
-    sessionSharesWrites && !hasWriteKey
+      : "view only — this session is shared read-only"
   }
 }

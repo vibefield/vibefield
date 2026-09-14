@@ -166,7 +166,7 @@ public enum ChromeMaterial {
         color: shadow?.color ?? .clear, radius: shadow?.radius ?? 0, x: 0, y: shadow?.y ?? 0)
   }
 
-  /// A text well on a sheet: the snippet editor's body, the write-key field,
+  /// A text well on a sheet: the snippet editor's body, a search field,
   /// the paste preview.
   public static func well(radius: CGFloat = ChromeRadius.well) -> some View {
     let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)

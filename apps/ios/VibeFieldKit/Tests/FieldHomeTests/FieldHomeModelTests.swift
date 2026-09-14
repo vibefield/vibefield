@@ -149,117 +149,47 @@ struct CardFaceTests {
 
 // MARK: - Writes
 
-/// The bug: the card read the LISTING's `readWrite` and promised "you can type
-/// here". That boolean rides in upstream's `TerminalHostAdvertisement` — a
-/// broadcast with no per-caller context — so it says the session is shared for
-/// writing, never that we may write. The grant is per-attach (`AttachView`'s
-/// access token → `ViewAttached`'s `readWrite`), and this app holds no key yet,
-/// so the next tap answered view-only and blamed the host for it.
+/// The bug this suite was written for: the card read the LISTING's `readWrite`
+/// and promised "you can type here". That boolean rides in a host advertisement
+/// broadcast to the whole mesh — no per-caller context — so it says the session
+/// is shared for writing, never that WE may write.
+///
+/// TM-3 (2026-09-14) removed the second half of the answer rather than fixing
+/// it again: whether this device may type was a mirror-write key it held or did
+/// not, and there is no key. The right to type is a claim in the attach grant,
+/// so the pre-tap sentence is a function of the ONE fact the listing carries,
+/// and the case it cannot know is named by the live attachment instead of
+/// guessed at here. `viewOnlyReason` (never called by shipping code) and
+/// `keyEntryOffered` (whose only caller was the card's ENTER KEY invitation)
+/// went with the key.
 @Suite("write claims")
 struct WriteCopyTests {
   @Test("a read-only session is named as the read-only thing it is")
   func readOnlySessionNamesTheSession() {
-    let invitation = FieldHomeModel.writeInvitation(
-      sessionSharesWrites: false, hasWriteKey: false)
-    #expect(invitation == "view only — this session is shared read-only")
-    // Holding a key changes nothing about a session nobody shares for writing.
     #expect(
-      FieldHomeModel.writeInvitation(sessionSharesWrites: false, hasWriteKey: true) == invitation)
-  }
-
-  /// THE regression: a writable session plus no key is view-only, and says so
-  /// BEFORE the tap rather than after it.
-  @Test("a writable session with no key never promises typing")
-  func writableWithoutKeyDoesNotPromise() {
-    let invitation = FieldHomeModel.writeInvitation(
-      sessionSharesWrites: true, hasWriteKey: false)
-    #expect(invitation == "view only — this device has no write key for this host")
-    #expect(!invitation.contains("you can type"))
-  }
-
-  @Test("a writable session with a key is the one case that invites typing")
-  func writableWithKeyInvites() {
-    #expect(
-      FieldHomeModel.writeInvitation(sessionSharesWrites: true, hasWriteKey: true)
-        == "you can type here")
-  }
-
-  /// The post-attach half must agree with what the invitation said, and must
-  /// not blame the host for a capability this device never had.
-  @Test("view-only blames the host only when a key was actually presented")
-  func viewOnlyAttributesCorrectly() {
-    #expect(
-      FieldHomeModel.viewOnlyReason(sessionSharesWrites: true, hasWriteKey: false)
-        == "view only — this device has no write key for this host")
-    #expect(
-      FieldHomeModel.viewOnlyReason(sessionSharesWrites: true, hasWriteKey: true)
-        == "view only — the host refused this device's write key")
-    #expect(
-      FieldHomeModel.viewOnlyReason(sessionSharesWrites: false, hasWriteKey: true)
+      FieldHomeModel.writeInvitation(sessionSharesWrites: false)
         == "view only — this session is shared read-only")
   }
 
-  /// The whole point of splitting the two booleans: with no key, no
-  /// combination of facts produces a promise to type.
-  @Test("no keyless combination can promise typing")
-  func keylessNeverPromises() {
+  @Test("a session shared for writing invites typing, with nothing to obtain first")
+  func sharedSessionInvitesTyping() {
+    #expect(FieldHomeModel.writeInvitation(sessionSharesWrites: true) == "you can type here")
+  }
+
+  /// A total function of one boolean, asserted as one: the sentence names the
+  /// SESSION's sharing in both directions and never blames the host for
+  /// something this device was missing, which is what the old third arm did.
+  @Test("the sentence is decided by the listing alone, and says nothing else")
+  func theInvitationIsTotal() {
     for shared in [true, false] {
-      #expect(
-        FieldHomeModel.writeInvitation(sessionSharesWrites: shared, hasWriteKey: false)
-          .hasPrefix("view only"))
-      #expect(
-        FieldHomeModel.viewOnlyReason(sessionSharesWrites: shared, hasWriteKey: false)
-          .hasPrefix("view only"))
+      let copy = FieldHomeModel.writeInvitation(sessionSharesWrites: shared)
+      #expect(!copy.isEmpty)
+      #expect(!copy.contains("write key"))
+      #expect(copy.hasPrefix("view only") == !shared)
     }
   }
 }
 
-// MARK: - Entering a key
-
-/// The act that answers the sentence the suite above pins. Until IOS-3c there
-/// was nothing to offer, so "view only — this device has no write key for this
-/// host" was a dead end on screen: true, and with no way out of it.
-@Suite("write key entry")
-struct KeyEntryTests {
-  /// THE case the act exists for: the host shares writes, this phone holds no
-  /// key, so the missing thing is one the user can supply.
-  @Test("a writable session with no key offers entry")
-  func writableWithoutKeyOffers() {
-    #expect(FieldHomeModel.keyEntryOffered(sessionSharesWrites: true, hasWriteKey: false))
-  }
-
-  /// A key changes nothing about a session nobody shares for writing, so
-  /// offering to enter one would be a control that cannot do what it says.
-  @Test("a read-only session offers nothing")
-  func readOnlySessionOffersNothing() {
-    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: false, hasWriteKey: false))
-    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: false, hasWriteKey: true))
-  }
-
-  /// A device that already holds one has nothing to enter — the copy beside it
-  /// says "you can type here", and an ENTER KEY under that sentence would read
-  /// as a repair for something that is not broken.
-  @Test("a device that holds a key is not asked for one")
-  func heldKeyOffersNothing() {
-    #expect(!FieldHomeModel.keyEntryOffered(sessionSharesWrites: true, hasWriteKey: true))
-  }
-
-  /// The invariant that ties the act to the copy: entry is offered exactly
-  /// when the invitation blames THIS device, and never when it blames the
-  /// session or promises typing.
-  @Test("entry is offered exactly where the copy names a missing key")
-  func offerAgreesWithCopy() {
-    for shared in [true, false] {
-      for held in [true, false] {
-        let copy = FieldHomeModel.writeInvitation(
-          sessionSharesWrites: shared, hasWriteKey: held)
-        let offered = FieldHomeModel.keyEntryOffered(
-          sessionSharesWrites: shared, hasWriteKey: held)
-        #expect(offered == (copy == "view only — this device has no write key for this host"))
-      }
-    }
-  }
-}
 
 // MARK: - The input card's face
 
