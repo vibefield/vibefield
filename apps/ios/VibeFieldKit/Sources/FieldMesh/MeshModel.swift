@@ -89,6 +89,23 @@ public final class MeshModel {
     get async { runtime?.node }
   }
 
+  /// A `URLSession` factory bound to the MESH's own network, for the surfaces
+  /// that dial a desktop over the tailnet (TM-5's terminal legs).
+  ///
+  /// It exists so a caller can hold the ability to dial without holding a
+  /// truffle type: the phone's tailnet is a userspace netstack in this process,
+  /// so a plain `URLSession` sends a `100.x` address nowhere, and this is the
+  /// one session that routes. `nil` means there is no runtime — never "the node
+  /// has no session".
+  public var urlSessionProvider:
+    (@Sendable (URLSessionConfiguration) async throws -> URLSession)?
+  {
+    get async {
+      guard let node = runtime?.node else { return nil }
+      return { configuration in try await node.urlSession(configuration: configuration) }
+    }
+  }
+
   /// This node's own tailnet domain (`studio.tail1234.ts.net` → `tail1234.ts.net`).
   ///
   /// It is a fact about the tailnet we are ON, which is what makes it usable

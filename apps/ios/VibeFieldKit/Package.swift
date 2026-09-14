@@ -84,15 +84,24 @@ let package = Package(
       // Release, which is the price of a screenshot gate with provenance.
       resources: [.copy("Fixtures")]
     ),
-    // The terminal leg (IOS-3): everything that knows Ghosttea's renderer
-    // exists — appearance → presentation config, the attachment lifecycle,
-    // and the Metal surface. Kept apart from FieldHome so the card composes
-    // a terminal without the field learning how one works.
+    // The terminal leg (IOS-3, re-footed at TM-5): everything that knows
+    // Ghosttea's RENDERER exists — appearance → presentation config, the
+    // attachment, the frame sink, the Metal surface. Kept apart from FieldHome
+    // so the card composes a terminal without the field learning how one works.
+    //
+    // `GhostteaTruffle` left at TM-5 with the TSP1 lifecycle it was here for
+    // (the peer directory, the compact dialer, the replica sink, the banner
+    // presenter). What remains of Ghosttea in this target is the RENDERER and
+    // nothing else; the wire is `FieldRoutedTerminal`'s, and `FieldProduct` is
+    // named for the one type a ticket arrives as (`JSONValue`) — which is what
+    // lets the composition layer hand one over without either side importing
+    // the other's vocabulary.
     .target(
       name: "FieldTerminal",
       dependencies: [
         "FieldDesign",
-        .product(name: "GhostteaTruffle", package: "ghosttea"),
+        "FieldProduct",
+        "FieldRoutedTerminal",
         .product(name: "GhostteaTerminal", package: "ghosttea"),
         .product(name: "GhostteaCore", package: "ghosttea"),
         .product(name: "GhostteaAppearance", package: "ghosttea"),
@@ -159,7 +168,16 @@ let package = Package(
       resources: [.copy("Fixtures")]
     ),
     .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),
-    .testTarget(name: "FieldTerminalTests", dependencies: ["FieldTerminal"]),
+    .testTarget(
+      name: "FieldTerminalTests",
+      dependencies: ["FieldTerminal", "FieldRoutedTerminal"],
+      // TM-5's witness needs two kinds of bytes. `tp-remote-open-ticket.valid`
+      // is the contracts' OWN golden, copied in (EL9 on the third side) and
+      // kept byte-identical by `pnpm check:ios-fixtures`; `trf1-frames.lane` is
+      // a LANE fixture — two real frames from the repo's terminal-perf corpus,
+      // which no contracts directory carries and the gate therefore ignores.
+      resources: [.copy("Fixtures")]
+    ),
     .testTarget(name: "FieldInputTests", dependencies: ["FieldInput"]),
     .testTarget(name: "FieldSwarmTests", dependencies: ["FieldSwarm"]),
     // The home screen's DECISIONS, which is all of it that is testable without

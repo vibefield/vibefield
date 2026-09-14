@@ -5,20 +5,14 @@ import Testing
 
 @testable import FieldMesh
 
-// IOS-4c — the join, decided. Four faces and the rules between them, none of
-// which wants a simulator.
-
-private func hostRow(
-  device: String = "dev-studio", name: String = "studio", session: String = "pty-a41f",
-  attachable: Bool = true, readWrite: Bool = true
-) -> RemoteSessionRow {
-  RemoteSessionRow(
-    host: RemoteHost(deviceID: device, deviceName: name),
-    session: RemoteSessionInfo(
-      sessionID: session, title: "zsh", cwdLabel: "~/Projects", running: true,
-      attachable: attachable, readWrite: readWrite, createdAtMs: 1_757_808_000_000,
-      activityKind: "foreground-job"))
-}
+// IOS-4c — the join, decided; TM-5 — decided from the JOIN ALONE.
+//
+// The hosts rows this used to cross-check against are gone: no phone ever
+// subscribed to that store, nothing has served the per-host `list-sessions` it
+// was filled from since TM-1, and since TM-2 the publisher drops the `terminal`
+// join from a row while a device is not carrying its doors — so a join that is
+// present already means what the cross-check was asking. Five faces and the
+// rules between them, none of which wants a simulator.
 
 private func join(
   device: String = "dev-studio", hosted: String = "local", session: String? = "pty-a41f",
@@ -33,68 +27,50 @@ private func join(
   /// The ordinary case: the desktop advertises this run's PTY, so the act is
   /// the IOS-3 attach and nothing about it is special.
   @Test func aPublishedTerminalOffersTheOrdinaryAttach() {
-    let face = agentTerminalFace(join: join(), hosts: [hostRow()])
-    #expect(face == .attach(
-      AgentTerminalAddress(
-        deviceID: "dev-studio", deviceName: "studio", sessionID: "pty-a41f",
-        attachable: true, readWrite: true)))
+    let face = agentTerminalFace(join: join(), deviceName: "studio")
+    #expect(
+      face
+        == .attach(
+          AgentTerminalAddress(
+            deviceID: "dev-studio", deviceName: "studio", sessionID: "pty-a41f")))
     #expect(face.offersAttach)
     #expect(!face.offersResume)
     #expect(face.note == nil)
     #expect(face.address?.sessionID == "pty-a41f")
   }
 
-  /// The match is on BOTH ids. A session id is the floor's own, so it is
-  /// unique on its desktop and says nothing about anyone else's — matching on
-  /// the id alone would collide the first time two machines are on the mesh.
-  @Test func aSessionIdOnAnotherDesktopIsNotThisRunsTerminal() {
-    let face = agentTerminalFace(
-      join: join(device: "dev-studio"),
-      hosts: [hostRow(device: "dev-laptop", name: "laptop", session: "pty-a41f")])
-    guard case .notPublished = face else {
-      Issue.record("a same-id session on another desktop must not match, got \(face)")
-      return
-    }
-    #expect(!face.offersAttach)
+  /// The desktop's id is the JOIN's — the publisher's, the key a product client
+  /// is filed under — and it is what the ticket will be minted over. A face
+  /// that carried a name without the id would be a sentence with nowhere to
+  /// dial.
+  @Test func theAddressCarriesThePublishersDeviceId() {
+    let face = agentTerminalFace(join: join(device: "dev-laptop"), deviceName: "laptop")
+    #expect(face.address?.deviceID == "dev-laptop")
   }
 
-  /// The flag is NAMED. "Terminal not published" tells a person nothing they
-  /// can do; the flag tells them which switch on which machine.
-  @Test func anUnpublishedTerminalNamesTheDesktopAndTheFlag() {
-    // The desktop is on the field with another session, so it has a name.
-    let known = agentTerminalFace(
-      join: join(session: "pty-missing"), hosts: [hostRow(session: "pty-other")])
-    #expect(known == .notPublished(deviceName: "studio"))
-    #expect(
-      known.note
-        == "terminal not published — studio's terminal mesh is off (FIELD_NATIVE_TERMINAL_MESH)")
-    #expect(!known.offersAttach)
-    #expect(!known.offersResume)
-
-    // And a desktop advertising nothing at all has no name to give, which the
-    // sentence has to survive.
-    let unknown = agentTerminalFace(join: join(), hosts: [])
-    #expect(unknown == .notPublished(deviceName: nil))
-    #expect(
-      unknown.note
-        == "terminal not published — that desktop's terminal mesh is off "
-          + "(FIELD_NATIVE_TERMINAL_MESH)")
+  /// A desktop the fold has not named is still attachable — the id is what the
+  /// mint takes — and the copy never puts a ULID in front of a person.
+  @Test func anUnnamedDesktopIsStillAttachableAndIsNeverAULID() {
+    let face = agentTerminalFace(join: join())
+    #expect(face.offersAttach)
+    #expect(face.address?.deviceName == "that desktop")
   }
 
   /// An ended run: `hosted: "none"`, RESUME and no attach.
   @Test func anEndedRunOffersResumeAndNoTerminal() {
-    let face = agentTerminalFace(join: join(hosted: "none", session: nil), hosts: [hostRow()])
+    let face = agentTerminalFace(join: join(hosted: "none", session: nil), deviceName: "studio")
     #expect(face == .exited)
     #expect(face.offersResume)
     #expect(!face.offersAttach)
     #expect(face.note == "this run has ended — its terminal is gone")
   }
 
-  /// The fold's word outranks a stale advertisement. A hosts row that still
-  /// names a session the feed has reported gone must not offer a terminal.
-  @Test func anEndedRunIsEndedEvenIfTheHostsStoreStillListsIt() {
+  /// The wire's word is the whole word: `hosted: "none"` with a session id
+  /// still on the row is an ended run, and a face that read the id alone would
+  /// offer a terminal the fold has already reported gone.
+  @Test func hostedNoneEndsTheRunWhateverSessionIdRidesWithIt() {
     let face = agentTerminalFace(
-      join: join(hosted: "none", session: "pty-a41f"), hosts: [hostRow()])
+      join: join(hosted: "none", session: "pty-a41f"), deviceName: "studio")
     #expect(face == .exited)
     #expect(!face.offersAttach)
   }
@@ -102,7 +78,7 @@ private func join(
   /// AR-4's pending run: its PTY is real, so ATTACH is offered. RESUME is not
   /// — the run has not ended, and resuming it twice is not a thing to offer.
   @Test func aPendingRunAttachesAndIsNotResumed() {
-    let face = agentTerminalFace(join: join(pending: true), hosts: [hostRow()])
+    let face = agentTerminalFace(join: join(pending: true), deviceName: "studio")
     guard case .unobserved(let address) = face else {
       Issue.record("expected the unobserved face, got \(face)")
       return
@@ -113,20 +89,11 @@ private func join(
     #expect(face.note == "live, unobserved — this run resumes when it next goes idle")
   }
 
-  /// A session the desktop shares read-only is still attachable; a session it
-  /// does not share at all is not, and the card must not offer what the row
-  /// refuses.
-  @Test func anUnattachableRowOffersNoAttach() {
-    let face = agentTerminalFace(join: join(), hosts: [hostRow(attachable: false)])
-    #expect(face.address != nil)
-    #expect(!face.offersAttach)
-  }
-
   /// MF-1f's row: the process ended and the floor STILL lists its PTY. Both
   /// acts are real — read what it printed, or continue it — and this is the
   /// face §07's "resume after an exit" was asking for.
   @Test func anExitedRunWithItsPaneStillOnTheFloorOffersBothActs() {
-    let face = agentTerminalFace(join: join(exited: true), hosts: [hostRow()])
+    let face = agentTerminalFace(join: join(exited: true), deviceName: "studio")
     guard case .exitedWithPane(let address) = face else {
       Issue.record("expected the exited-with-pane face, got \(face)")
       return
@@ -141,7 +108,7 @@ private func join(
   /// act: there is nothing left to read.
   @Test func anExitedRunWhosePaneWentOffersOnlyResume() {
     let face = agentTerminalFace(
-      join: join(hosted: "none", session: nil, exited: true), hosts: [hostRow()])
+      join: join(hosted: "none", session: nil, exited: true), deviceName: "studio")
     #expect(face == .exited)
     #expect(!face.offersAttach)
     #expect(face.offersResume)
@@ -150,7 +117,7 @@ private func join(
   /// The scripted fleet has no desktop and no PTY, and its cards say nothing
   /// about terminals rather than offering one.
   @Test func noJoinOffersNothingAndClaimsNothing() {
-    let face = agentTerminalFace(join: nil, hosts: [hostRow()])
+    let face = agentTerminalFace(join: nil, deviceName: "studio")
     #expect(face == .noJoin)
     #expect(!face.offersAttach)
     #expect(!face.offersResume)
@@ -248,7 +215,7 @@ private func join(
     let snapshot = try #require(agentSnapshot(from: fieldRow(hosted: nil, session: nil)))
     #expect(snapshot.join?.hosted == "none")
     #expect(snapshot.join?.hasTerminal == false)
-    #expect(agentTerminalFace(join: snapshot.join, hosts: []) == .exited)
+    #expect(agentTerminalFace(join: snapshot.join) == .exited)
   }
 
   @Test func aPendingRowCarriesItsFlagIntoTheJoin() throws {

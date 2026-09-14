@@ -313,6 +313,46 @@ public final class RoutedTerminalClient {
     sendInput(sessionId: sessionId, op: .object(["kind": .string("interrupt")]))
   }
 
+  /// A pointer event, in ghosttea's own `MouseInput` serde spelling — the same
+  /// rule `send(key:)` states: the cell deserializes the wire `op` straight into
+  /// the engine's type.
+  public func send(mouse: RoutedMouseInput, to sessionId: String) {
+    sendInput(sessionId: sessionId, op: .object(["kind": .string("mouse"), "mouse": mouse.json]))
+  }
+
+  /// Scroll by rows. SIGNED — negative scrolls up (the contract's own note on
+  /// `SendInputOp.scroll`).
+  public func scroll(rows: Int, for sessionId: String) {
+    guard rows != 0 else { return }
+    sendInput(
+      sessionId: sessionId, op: .object(["kind": .string("scroll"), "rows": .int(Int64(rows))]))
+  }
+
+  /// Scroll to an ABSOLUTE row index.
+  public func scrollTo(row: Int, for sessionId: String) {
+    guard row >= 0 else { return }
+    sendInput(
+      sessionId: sessionId,
+      op: .object(["kind": .string("scroll-to"), "row": .int(Int64(row))]))
+  }
+
+  /// Ask for a fresh authoritative scene.
+  ///
+  /// There is no "send me a seed" verb on the wire, and inventing one would be
+  /// this client claiming a surface the cell does not have. The cell's OWN
+  /// trigger for a reseed is a `SceneApplied` that does not advance, so that is
+  /// exactly what this does: it drops the applied stamp, which stops this client
+  /// reporting progress it can no longer back up, and the cell sends a seed.
+  /// The same mechanism `lineageBroke` uses when the sink rejects a delta —
+  /// stated once, in one place, with one behaviour.
+  public func requestReseed(for sessionId: String) {
+    guard var session = sessions[sessionId] else { return }
+    session.appliedContent = nil
+    session.frames = .seeding
+    session.lastSeedReason = "the viewer asked for a fresh scene"
+    sessions[sessionId] = session
+  }
+
   /// Declare what this viewer wants. `live` attaches the cell's view (and starts
   /// the frames), `none` detaches it — warm and hot are the engine's own reading
   /// of whether anyone is watching.
@@ -1068,6 +1108,81 @@ public struct RoutedKeyInput: Sendable, Equatable {
       "alt": .bool(alt),
       "meta": .bool(meta),
       "unshiftedCodepoint": .int(Int64(unshiftedCodepoint)),
+    ])
+  }
+}
+
+/// A pointer event in ghosttea's `MouseInput` serde spelling, pinned to the
+/// engine for the same reason `RoutedKeyInput` is: the cell deserializes the
+/// wire `op` straight into the engine's own type, so the field names and their
+/// ranges are the engine's and not this client's to choose.
+///
+/// `x`/`y` are FINITE f32 by contract — the cell's reader refuses an infinity
+/// rather than letting one reach the engine (`deserialize_finite_mouse_input`),
+/// so a non-finite coordinate is dropped HERE instead of spending a message to
+/// be refused there.
+public struct RoutedMouseInput: Sendable, Equatable {
+  public enum Action: String, Sendable, Equatable {
+    case press
+    case release
+    case motion
+  }
+
+  public var action: Action
+  public var button: UInt8
+  public var x: Float
+  public var y: Float
+  public var screenWidth: UInt32
+  public var screenHeight: UInt32
+  public var cellWidth: UInt32
+  public var cellHeight: UInt32
+  public var paddingLeft: UInt32
+  public var paddingTop: UInt32
+  public var shift: Bool
+  public var control: Bool
+  public var alt: Bool
+  public var meta: Bool
+
+  public init(
+    action: Action, button: UInt8, x: Float, y: Float, screenWidth: UInt32, screenHeight: UInt32,
+    cellWidth: UInt32, cellHeight: UInt32, paddingLeft: UInt32, paddingTop: UInt32,
+    shift: Bool = false, control: Bool = false, alt: Bool = false, meta: Bool = false
+  ) {
+    self.action = action
+    self.button = button
+    self.x = x
+    self.y = y
+    self.screenWidth = screenWidth
+    self.screenHeight = screenHeight
+    self.cellWidth = cellWidth
+    self.cellHeight = cellHeight
+    self.paddingLeft = paddingLeft
+    self.paddingTop = paddingTop
+    self.shift = shift
+    self.control = control
+    self.alt = alt
+    self.meta = meta
+  }
+
+  /// Whether this event can be spelled on the wire at all.
+  public var isFinite: Bool { x.isFinite && y.isFinite }
+
+  public var json: JSONValue {
+    .object([
+      "action": .string(action.rawValue),
+      "button": .int(Int64(button)),
+      "x": .double(Double(x)),
+      "y": .double(Double(y)),
+      "screenWidth": .int(Int64(screenWidth)),
+      "screenHeight": .int(Int64(screenHeight)),
+      "cellWidth": .int(Int64(cellWidth)),
+      "cellHeight": .int(Int64(cellHeight)),
+      "paddingLeft": .int(Int64(paddingLeft)),
+      "paddingTop": .int(Int64(paddingTop)),
+      "shift": .bool(shift),
+      "control": .bool(control),
+      "alt": .bool(alt),
+      "meta": .bool(meta),
     ])
   }
 }

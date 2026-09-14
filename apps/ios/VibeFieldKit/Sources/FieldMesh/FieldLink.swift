@@ -210,6 +210,31 @@ public final class FieldLink {
   /// of their own (IOS-4c's attach, IOS-4d's grant).
   public func client(for deviceId: String) -> FieldProductClient? { clients[deviceId] }
 
+  /// TM-5 — a routed terminal ticket for one session on one desktop.
+  ///
+  /// This is the whole of the phone's attach authority: `terminal.openTicket`
+  /// answers a WhoIs-verified SELF peer with the cell's TAILNET doors and two
+  /// grants, and the grants are what the cell verifies. Nothing is cached — a
+  /// mint is deliberately not idempotent, every leg replacement needs a fresh
+  /// one (a transport grant's nonce is spent at first use), and a ticket held
+  /// for later is a credential with no purpose.
+  ///
+  /// The answer comes back as the JSON the daemon sent, unread. FieldMesh knows
+  /// how to ASK a door; what a ticket means belongs to the target that dials
+  /// with it, and keeping that shape out of this signature is what keeps the
+  /// field from learning what a terminal is.
+  public func openTerminalTicket(on deviceId: String, sessionId: String) async throws -> JSONValue {
+    guard let client = clients[deviceId] else {
+      throw FieldProductError(
+        kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
+        details: .object([
+          "service": .string("terminal"), "state": .string("no_door"),
+        ]))
+    }
+    return try await client.call(
+      "terminal.openTicket", params: .object(["sessionId": .string(sessionId)]))
+  }
+
   /// IOS-4c — RESUME an ended run, over the desktop that owns it.
   ///
   /// The answer carries the NEW run, and this deliberately does not put it on

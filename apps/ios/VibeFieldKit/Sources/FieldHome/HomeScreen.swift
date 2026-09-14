@@ -639,16 +639,6 @@ public struct HomeScreen: View {
       inputCard.chips = replyChips(for: match)
       // --- end IOS-5c
     }
-    // A `suspended(host absent)` attachment NEVER ends on its own — upstream's
-    // engine stops dialing and waits to be told, and its own comment says
-    // "nothing else in the app tells it". Discovery is the only thing here
-    // that learns a peer came back, so it is what tells the attachment.
-    .onChange(of: remoteField.snapshot.rows) { _, rows in
-      guard let attachedDeviceID,
-        rows.contains(where: { $0.host.deviceID == attachedDeviceID })
-      else { return }
-      attachment?.noteHostReachable()
-    }
     .sheet(item: $selection, onDismiss: { closeCard() }) { selected in
       sessionCard(selected)
         // Attaching earns the room: a terminal at the 0.55 detent is a
@@ -1051,19 +1041,16 @@ public struct HomeScreen: View {
       onRemoveWriteKey: { host in removeWriteKey(host) }
     ) { next in
       // The PREFERENCE commits eagerly and is what every future attach is
-      // seeded from. Whether the terminal currently on screen took it is a
-      // different fact, and `TerminalAttachment.appearance` is the one that
-      // answers it — they disagree exactly when a reconfiguration failed, and
-      // `appearanceFailure` is that disagreement said out loud.
+      // seeded from; `TerminalAttachment.appearance` is what the terminal on
+      // screen is wearing. Since TM-5 they cannot disagree — there is no
+      // replica left that could decline a change.
       appearance = next
       TerminalAppearanceStore.save(next)
-      // Live where it can be: the attachment splits the work itself —
-      // colors/opacity/shaders reconfigure on the running sink, and only a
-      // font-size move rebuilds the text runtime (the session stays attached
-      // either way).
-      if let attachment {
-        Task { await attachment.apply(appearance: next) }
-      }
+      // The DEVICE half goes live at once. Under T there is no replica here
+      // to rebuild and nothing that can refuse the edit — the glyphs in a
+      // remote frame are the cell's, and what these values still style is this
+      // renderer's own ground (see `TerminalSettingsSheet`'s note).
+      attachment?.apply(appearance: next)
     }
   }
 
@@ -1149,12 +1136,20 @@ public struct HomeScreen: View {
 
   // MARK: - IOS-4c: the agent card's terminal
 
-  /// G3's join for the card's subject, resolved against the hosts store the
-  /// phone already polls. `.noJoin` for a remote bubble or the scripted fleet
-  /// — neither has an agent row behind it.
+  /// G3's join for the card's subject. `.noJoin` for a remote bubble or the
+  /// scripted fleet — neither has an agent row behind it.
+  ///
+  /// The desktop's NAME comes from the devices store rather than from a
+  /// terminal listing: it is the same desktop either way, and the fold is the
+  /// only one of the two that still answers since TM-5.
   private var cardTerminalFace: AgentTerminalFace {
     guard let join = cardBubble?.agent?.join else { return .noJoin }
-    return agentTerminalFace(join: join, hosts: remoteField.snapshot.rows)
+    return agentTerminalFace(join: join, deviceName: desktopName(join.deviceID))
+  }
+
+  /// What the field calls a desktop, when it has been named.
+  private func desktopName(_ deviceID: String) -> String? {
+    link?.desktops.first { $0.deviceId == deviceID }?.name
   }
 
   /// The one act an ended run has: RESUME, over that desktop's door. The new
@@ -1188,16 +1183,12 @@ public struct HomeScreen: View {
     // above nothing, because an unattached agent card has no other news.
     if attachment == nil, let face = cardTerminalFace.note { return face }
     guard let attachment else { return nil }
-    // Upstream's banner outranks our phase words wherever it exists: it names
-    // the device ("studio is offline") where the phase can only name the
-    // condition, and it carries upstream's own timing for when to say it. The
-    // phase reasons stay as the tier beneath — the machine-readable one that
-    // covers the states a banner deliberately stays quiet for.
+    // The banner outranks the phase words wherever it exists: it names the
+    // device ("studio is not publishing its terminal doors") where a phase can
+    // only name the condition. The phase reasons stay as the tier beneath —
+    // they cover the states a banner deliberately stays quiet for.
     if let banner = attachment.banner { return banner.title }
-    // A look the renderer would not take is real and durable, but it is the
-    // least of these: it ranks last, so it surfaces exactly when the terminal
-    // has nothing more load-bearing to say, and waits when it does.
-    return phaseNote(attachment) ?? attachment.appearanceFailure
+    return phaseNote(attachment)
   }
 
   private func phaseNote(_ attachment: TerminalAttachment) -> String? {
@@ -1205,15 +1196,17 @@ public struct HomeScreen: View {
     case .idle: return nil
     case .connecting: return "connecting over the mesh…"
     case .live:
-      if attachment.acceptsInput { return attachment.inputCue?.text }
-      if attachment.readWrite { return attachment.inputCue?.text ?? "taking control…" }
-      // NOT `remote.readWrite`: that one says the SESSION is shared for
-      // writing, and this one is the host's answer to this device. Which of
-      // the two failed decides who to name.
-      return FieldHomeModel.viewOnlyReason(
-        sessionSharesWrites: cardBubble?.remote?.readWrite ?? false,
-        hasWriteKey: cardHasWriteKey)
-    case .suspended(let why): return "suspended — \(why)"
+      // A transient note (a keystroke this device declined to send) outranks
+      // the standing one, and the standing one is the GRANT's answer: since
+      // TM-D3 the right to type is a claim the cell accepted, not a key this
+      // phone holds, so there is nothing here for a person to go and fix.
+      if let notice = attachment.notice { return notice }
+      guard !attachment.acceptsInput else { return nil }
+      return attachment.readWrite
+        ? "waiting for the desktop to allow input"
+        : "view only — this desktop granted read without input"
+    case .suspended(let why): return why
+    case .refused(let words): return words
     case .ended(let why): return "ended — \(why)"
     case .failed(let why): return "failed — \(why)"
     }
@@ -1227,32 +1220,21 @@ public struct HomeScreen: View {
     return attachment?.banner?.detail
   }
 
-  /// Ghosttea's action vocabulary translated into acts this card can offer.
-  /// `browseSessions` becomes "back to the field": upstream means "go choose
-  /// another session", and on this phone the chooser IS the field.
+  /// The banner's acts, as the card can offer them. "Back to the field" is
+  /// this phone's whole session chooser, so leaving the card IS the act.
   private var attachmentActions: [CardAction] {
     var actions = bannerActions
-    // The invitation's ENTER KEY, in the shape the attached face has room for:
-    // once a terminal is live there is no invitation left to hang it on, and a
-    // session that refused our writes for want of a key is exactly when the
-    // act is worth offering. The card still knows nothing about a store.
-    if attachedViewOnlyForWantOfKey, let enter = writeKeyEntry(for: cardBubble) {
-      actions.append(CardAction(id: "enter-key", label: "ENTER KEY", run: enter))
-    }
+    // The attached face used to carry an ENTER KEY here, for a view-only
+    // session that had refused OUR writes for want of a pasted key. TM-D3 took
+    // the reason away: the right to type is a claim in the attach grant fieldd
+    // mints per device per session, and a key entered on this phone changes
+    // nothing about it. The store, the sheet and the door they call stay until
+    // TM-3 retires the three together; the act that could not work is gone now.
     // IOS-4c — an ended run's one act.
     if let resume = resumeAction(cardBubble?.agent?.join, runtimeRunId: cardBubble?.id) {
       actions.append(resume)
     }
     return actions
-  }
-
-  /// A live attachment that cannot type, where the reason is ours: no key was
-  /// presented. A host that refused a key we DID present is a different fact
-  /// and offers nothing to enter.
-  private var attachedViewOnlyForWantOfKey: Bool {
-    guard let attachment, attachment.phase == .live, !attachment.acceptsInput else { return false }
-    return FieldHomeModel.keyEntryOffered(
-      sessionSharesWrites: cardBubble?.remote?.readWrite ?? false, hasWriteKey: cardHasWriteKey)
   }
 
   private var bannerActions: [CardAction] {
@@ -1261,18 +1243,16 @@ public struct HomeScreen: View {
       let label: String =
         switch action {
         case .retryNow: "RETRY"
-        case .resume: "RESUME"
-        case .browseSessions: "BACK TO THE FIELD"
-        case .close: "CLOSE"
+        case .backToTheField: "BACK TO THE FIELD"
         }
-      return .init(id: String(describing: action), label: label) {
+      return .init(id: action.rawValue, label: label) {
         switch action {
-        case .browseSessions, .close:
+        case .backToTheField:
           // Navigation is the card's act, not the attachment's — dismissing
           // the sheet is what detaches (onDismiss), so both paths agree.
           selection = nil
-        default:
-          attachment.perform(action)
+        case .retryNow:
+          attachment.retryNow()
         }
       }
     }
@@ -1301,22 +1281,26 @@ public struct HomeScreen: View {
 
   private func beginAttachment(to bubble: FieldBubble) {
     // IOS-4c — an AGENT bubble attaches to its own run's PTY, found through
-    // G3's join. It is the same act and the same code below: a managed
-    // agent's terminal is one of the floor's advertised sessions, and the only
-    // thing that made it special was not knowing which one.
-    if bubble.remote == nil, let address = cardTerminalFace.address,
-      cardTerminalFace.offersAttach
-    {
-      beginAttachment(
-        deviceID: address.deviceID, deviceName: address.deviceName,
-        sessionID: address.sessionID)
-      return
-    }
-    guard let remote = bubble.remote, remote.attachable else { return }
+    // G3's join: a managed agent's terminal is one of the floor's own sessions,
+    // and the only thing that made it special was not knowing which one.
+    guard let address = cardTerminalFace.address, cardTerminalFace.offersAttach else { return }
     beginAttachment(
-      deviceID: remote.deviceID, deviceName: remote.deviceName, sessionID: remote.sessionID)
+      deviceID: address.deviceID, deviceName: address.deviceName, sessionID: address.sessionID)
   }
 
+  /// The link went away between the tap and the mint. Its own type rather than
+  /// a product error so this screen never has to name the wire's vocabulary.
+  private struct NoDesktopDoor: Error, CustomStringConvertible {
+    var description: String { "no connection to this desktop" }
+  }
+
+  /// TM-5 — the attach, over the routed T1 client.
+  ///
+  /// Three things are handed over and nothing else: how to reach the tailnet
+  /// (the mesh node's own `URLSession` — a plain one dials a `100.x` address
+  /// nowhere), how to ASK for a ticket (one `terminal.openTicket` over this
+  /// desktop's product door), and the look. The attachment owns the rest, and
+  /// the closure is what keeps this screen from learning what a ticket is.
   private func beginAttachment(deviceID: String, deviceName: String, sessionID: String) {
     // One attachment at a time, latched BEFORE the await — see `attaching`.
     guard attachment == nil, !attaching else { return }
@@ -1325,32 +1309,32 @@ public struct HomeScreen: View {
     attachRefusal = nil
     Task {
       defer { attaching = false }
-      guard let directory = await mesh.directory else {
+      guard let urlSession = await mesh.urlSessionProvider else {
         // Honest rather than inert: the button did something, and the reason
         // it went nowhere is the mesh, not the session and not the renderer.
         attachRefusal = "the mesh is not up on this device — connect it first"
         return
       }
-      // The one place a secret leaves the store: the host's own key, read at
-      // attach and re-presented by the lifecycle on every re-dial. `nil` is
-      // the honest default and the card has already said so.
       let attachment = TerminalAttachment(
-        directory: directory,
+        session: urlSession,
         appearance: appearance,
-        accessToken: writeKeys.capability(for: deviceID))
+        door: { [link] session in
+          guard let link else { throw NoDesktopDoor() }
+          return try await link.openTerminalTicket(on: deviceID, sessionId: session)
+        })
       self.attachment = attachment
       attachedDeviceID = deviceID
       // --- IOS-5a ---
       installInputSink(on: attachment)
       // --- end IOS-5a ---
-      // A starting grid the surface immediately corrects through onGridSize —
-      // the host needs SOME viewport to open with, and 80×24 is the one every
-      // terminal has agreed on since the VT100.
-      // The device NAME rides along so the banner can say "studio is offline"
-      // rather than naming a ULID at the user.
+      // A starting grid the surface immediately corrects through onGridSize.
+      // 80×24 is the one every terminal has agreed on since the VT100 — and
+      // under T it shapes nothing on the desktop, because a phone is minted
+      // `[input, read]` and holds no geometry lease (TM-D3).
+      // The device NAME rides along so a refusal can say "studio is not
+      // publishing its terminal doors" rather than naming a ULID at the user.
       attachment.attach(
-        deviceID: deviceID, sessionID: sessionID, cols: 80, rows: 24,
-        deviceName: deviceName)
+        sessionID: sessionID, cols: 80, rows: 24, deviceName: deviceName)
     }
   }
 
@@ -1380,16 +1364,15 @@ public struct HomeScreen: View {
 
   // MARK: - Write keys
 
-  /// Whether THIS phone holds a key for the card's host — the per-host fact
-  /// the copy needs, not the process-wide one the old flag carried.
+  /// Whether THIS phone holds a key for the card's host.
   ///
-  /// Both halves are deliberate. `writeKeyHosts` is the reactive mirror, and
-  /// reading it here is what makes the card re-render after a save; the store
-  /// is then asked directly because it is the authority the attach will use —
-  /// a DEBUG wildcard answers for hosts it never listed, and the card must not
-  /// promise less than the next attach is about to present.
+  /// It no longer decides anything an attach does — since TM-D3 the right to
+  /// type is the attach grant's, and no attach reads this store. It is still
+  /// answered honestly because the settings sheet lists what the phone is
+  /// holding, and a key still held is a fact until TM-3 deletes the store it
+  /// lives in.
   private var cardHasWriteKey: Bool {
-    guard let deviceID = cardBubble?.remote?.deviceID else { return false }
+    guard let deviceID = cardBubble?.remote?.deviceID ?? attachedDeviceID else { return false }
     return writeKeyHosts.contains { $0.deviceID == deviceID }
       || writeKeys.capability(for: deviceID) != nil
   }
@@ -1421,7 +1404,6 @@ public struct HomeScreen: View {
     }
     writeKeyNote = nil
     refreshWriteKeys()
-    reattachWithNewKey(to: host)
   }
 
   private func removeWriteKey(_ host: MirrorWriteHost) {
@@ -1433,34 +1415,6 @@ public struct HomeScreen: View {
       writeKeyNote = "could not remove the key — \(error)"
     }
     refreshWriteKeys()
-  }
-
-  /// A key saved under an open, view-only attachment is re-presented at once:
-  /// the token rides `TerminalAttachment.init` and the lifecycle re-presents
-  /// only what it was built with, so the sole way a live session learns of a
-  /// new key is a fresh attach. Doing it here is why the user does not have to
-  /// close the card to start typing in it.
-  ///
-  /// The detach is awaited before the new attach begins — two lifecycles
-  /// against one session is exactly what `attaching` exists to prevent — and
-  /// an attach already in flight is left alone: it would swallow this one
-  /// silently, so the card says the true thing instead.
-  private func reattachWithNewKey(to host: MirrorWriteHost) {
-    guard let attachment, attachedDeviceID == host.deviceID,
-      let bubble = cardBubble, bubble.remote?.deviceID == host.deviceID
-    else { return }
-    guard !attaching else {
-      writeKeyNote = "key saved — reattach to type"
-      return
-    }
-    self.attachment = nil
-    attachedDeviceID = nil
-    renderFailure = nil
-    attachRefusal = nil
-    Task {
-      await attachment.detach()
-      beginAttachment(to: bubble)
-    }
   }
 
   /// The pasteboard confirmation, in the reference's own vocabulary — and it

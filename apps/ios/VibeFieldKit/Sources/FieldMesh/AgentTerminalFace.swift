@@ -2,23 +2,30 @@ import FieldAgents
 import Foundation
 
 // IOS-4c — G3's join, decided. An agent body's card wants the desktop's OWN
-// PTY: the fold says which session and on which device, the hosts store says
-// whether that desktop is advertising it, and this pure function is where the
-// two meet.
+// PTY, and the fold says which session and on which device.
 //
 // It is a function and not a method because every clause is a FACE the card
 // has to wear honestly, and a face is exactly the kind of thing that should be
 // decided without a simulator.
+//
+// TM-5 took its second argument away. It used to cross-check the fold against
+// the rows `RemoteSessionField` polled out of `terminal.v1.hosts` — a store no
+// phone ever subscribed to, filled by a per-host `list-sessions` over a TSP1
+// port that no floor serves since TM-1. The join is now the only source, and it
+// is a better one: since TM-2 the publisher DROPS the `terminal` join from a
+// row while this device is not carrying its doors onto the tailnet, so a join
+// that is present is a door that was published. What a stale advertisement used
+// to be asked is now answered by the mint — `terminal.openTicket` refuses with
+// `doors_not_published` in fieldd's own words — and a refusal that arrives one
+// tap later beats a promise made from a listing two seconds old.
 
 /// What an agent's card can offer for its terminal.
 public enum AgentTerminalFace: Sendable, Equatable {
-  /// The desktop is advertising this run's PTY. The act is the IOS-3 attach,
-  /// unchanged — a managed agent's terminal is a remote terminal like any
-  /// other once you know which one it is.
+  /// The desktop is hosting this run's PTY. The act is the attach.
   case attach(AgentTerminalAddress)
 
-  /// The run is live and its PTY is published, but fieldd is not observing it
-  /// (AR-4's `pending`). Attach is offered — the terminal is real — and
+  /// The run is live and its PTY is real, but fieldd is not observing it
+  /// (AR-4's `pending`). Attach is offered — the terminal is there — and
   /// RESUME is not, because the run has not ended and resuming it twice is
   /// not a thing to offer.
   case unobserved(AgentTerminalAddress)
@@ -32,81 +39,51 @@ public enum AgentTerminalFace: Sendable, Equatable {
   /// and this is the face §07's "resume after an exit" was asking for.
   case exitedWithPane(AgentTerminalAddress)
 
-  /// The desktop is on the mesh and advertising no terminal for this run. Not
-  /// a failure and not a dead button: the floor's terminal mesh is off, and
-  /// the face says so by name.
-  case notPublished(deviceName: String?)
-
-  /// The feed gave no join at all — the scripted fleet, or a row from a
-  /// producer that carries no terminal field. Nothing is offered and nothing
-  /// is claimed.
+  /// The feed gave no join at all — the scripted fleet, or a producer that
+  /// carries no terminal field. Nothing is offered and nothing is claimed.
   case noJoin
 }
 
 /// Everything an attach needs, resolved.
+///
+/// Three fields since TM-5: the two ids the mint takes, and the name a sentence
+/// can use. `attachable` and `readWrite` left with the hosts rows that used to
+/// carry them, and neither is a loss — an attach's answer is the TICKET (a
+/// desktop that will not hand one out says so in its own words), and the right
+/// to type is the attach grant's `rights`, which the CELL accepts or downgrades
+/// per client per session. Both were guesses made two seconds early; both are
+/// now facts that arrive with the thing they describe.
 public struct AgentTerminalAddress: Sendable, Equatable {
   public let deviceID: String
   public let deviceName: String
   public let sessionID: String
-  public let attachable: Bool
-  public let readWrite: Bool
 
-  public init(
-    deviceID: String, deviceName: String, sessionID: String, attachable: Bool, readWrite: Bool
-  ) {
+  public init(deviceID: String, deviceName: String, sessionID: String) {
     self.deviceID = deviceID
     self.deviceName = deviceName
     self.sessionID = sessionID
-    self.attachable = attachable
-    self.readWrite = readWrite
   }
 }
 
 /// The join, as one decision.
 ///
-/// `hosts` is the phone's existing view of `terminal.v1.hosts` — the rows
-/// `RemoteSessionField` already polls, which is deliberately the SAME source a
-/// plain shell bubble attaches through. An agent's terminal is not a second
-/// kind of terminal; it is one of those rows, found by id.
-///
-/// The match is on BOTH the device and the session id. A session id is the
-/// floor's, so it is unique on its own desktop and says nothing about anyone
-/// else's — matching on the id alone would let two desktops' sessions collide
-/// the first time two machines are on the mesh.
-public func agentTerminalFace(
-  join: AgentJoin?, hosts: [RemoteSessionRow]
-) -> AgentTerminalFace {
+/// `deviceName` is the field's own name for the desktop the row came from (the
+/// devices store's `name`), passed in rather than looked up because this
+/// function knows about one run and nothing else. Absent = the fold has not
+/// named it, and the copy says "that desktop" rather than a ULID.
+public func agentTerminalFace(join: AgentJoin?, deviceName: String? = nil) -> AgentTerminalFace {
   guard let join else { return .noJoin }
 
-  // An ended run has nothing to attach to, whatever the hosts store says. The
-  // wire's word wins: a stale advertisement must not offer a terminal that the
-  // fold has already reported gone.
+  // An ended run has nothing to attach to. The wire's word wins.
   guard join.hasTerminal else { return .exited }
   guard let sessionID = join.runtimeSessionID else { return .exited }
 
-  let row = hosts.first {
-    $0.host.deviceID == join.deviceID && $0.session.sessionID == sessionID
-  }
-  guard let row else { return .notPublished(deviceName: hostName(for: join.deviceID, in: hosts)) }
-
   let address = AgentTerminalAddress(
-    deviceID: row.host.deviceID,
-    deviceName: row.host.deviceName,
-    sessionID: row.session.sessionID,
-    attachable: row.session.attachable,
-    readWrite: row.session.readWrite)
+    deviceID: join.deviceID,
+    deviceName: deviceName ?? "that desktop",
+    sessionID: sessionID)
   if join.exited { return .exitedWithPane(address) }
   return join.pending ? .unobserved(address) : .attach(address)
-}
-
-/// The desktop's NAME, when any of its other sessions is on the field.
-///
-/// A phone that can say "studio is not publishing its terminals" is saying
-/// something a person can act on; one that can only say "a desktop" is not.
-/// Absent when this desktop advertises nothing at all, which is the case the
-/// sentence has to survive.
-private func hostName(for deviceID: String, in hosts: [RemoteSessionRow]) -> String? {
-  hosts.first { $0.host.deviceID == deviceID }?.host.deviceName
 }
 
 // MARK: - The words
@@ -114,11 +91,6 @@ private func hostName(for deviceID: String, in hosts: [RemoteSessionRow]) -> Str
 extension AgentTerminalFace {
   /// The card's status line for this face, or nil where the card's ordinary
   /// invitation already says it.
-  ///
-  /// The flag is NAMED on purpose. "Terminal not published" tells a person
-  /// nothing they can do; naming `FIELD_NATIVE_TERMINAL_MESH` tells them
-  /// exactly which switch on which machine, which is the difference between an
-  /// honest state and a shrug.
   public var note: String? {
     switch self {
     case .attach:
@@ -129,24 +101,17 @@ extension AgentTerminalFace {
       return "this run has ended — its terminal is gone"
     case .exitedWithPane:
       return "this run has ended — its terminal is still open to read"
-    case .notPublished(let deviceName):
-      let who = deviceName ?? "that desktop"
-      return
-        "terminal not published — \(who)'s terminal mesh is off "
-        + "(FIELD_NATIVE_TERMINAL_MESH)"
     case .noJoin:
       return nil
     }
   }
 
   /// Whether the card may offer ATTACH. A pending run's PTY is real, so it may.
-  public var offersAttach: Bool {
-    switch self {
-    case .attach(let address), .unobserved(let address), .exitedWithPane(let address):
-      return address.attachable
-    case .exited, .notPublished, .noJoin: return false
-    }
-  }
+  ///
+  /// Every face that HAS an address offers it now: whether the attach lands is
+  /// the ticket's answer and nobody else's, and a button greyed out on a
+  /// two-second-old listing was refusing on the desktop's behalf.
+  public var offersAttach: Bool { address != nil }
 
   /// Whether the card may offer RESUME. Both ENDED faces do — with a pane to
   /// read or without one — and a pending run never does: it has not ended, and
@@ -154,7 +119,7 @@ extension AgentTerminalFace {
   public var offersResume: Bool {
     switch self {
     case .exited, .exitedWithPane: return true
-    case .attach, .unobserved, .notPublished, .noJoin: return false
+    case .attach, .unobserved, .noJoin: return false
     }
   }
 
@@ -162,7 +127,7 @@ extension AgentTerminalFace {
     switch self {
     case .attach(let address), .unobserved(let address), .exitedWithPane(let address):
       return address
-    case .exited, .notPublished, .noJoin: return nil
+    case .exited, .noJoin: return nil
     }
   }
 }

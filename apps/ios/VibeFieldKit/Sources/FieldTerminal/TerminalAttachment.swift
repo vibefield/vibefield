@@ -1,7 +1,8 @@
+import FieldProduct
+import FieldRoutedTerminal
 import Foundation
 import GhostteaCore
 import GhostteaTerminal
-import GhostteaTruffle
 import Observation
 
 /// What the card renders. Every resting state carries its reason — nothing
@@ -11,59 +12,114 @@ public enum TerminalPhase: Equatable, Sendable {
   case connecting
   case live
   case suspended(String)
+  /// A refusal in the door's or the cell's OWN words — the mint that would not
+  /// be made, or the attach the cell turned down. Its own case since TM-5,
+  /// because a refusal is not a failure and not a pause: it is an answer, and
+  /// the sentence that came back is the only honest thing to show.
+  case refused(String)
   case ended(String)
   case failed(String)
 }
 
-/// One remote terminal session attached over the Truffle mesh, wrapped as
-/// honest `@Observable` UI state — runtime + replica sink + dialer +
-/// reconnect lifecycle behind one card-shaped face.
+/// The card's one banner: what is wrong, and what can be done about it.
 ///
-/// The lifecycle actor owns the connection, the heartbeat, and every sequence
-/// space the wire orders; this model owns only the presentation of what it
-/// reports (the reference's own division of labor).
+/// GhostteaKit's `GhostteaAttachmentBannerPresenter` retired with the TSP1
+/// lifecycle at TM-5 — it was the outage vocabulary of a connection this phone
+/// no longer makes. This is ours, and it is deliberately smaller: the routed
+/// client re-tickets itself with backoff, so there is no retry clock to render
+/// and no grace window to keep; what is left is the state, its reason, and the
+/// two acts a person actually has.
+public struct TerminalBanner: Sendable, Equatable {
+  public enum Action: String, Sendable, Equatable {
+    /// Mint a ticket now rather than waiting out the client's backoff.
+    case retryNow
+    /// Leave the card. The chooser on this phone is the field.
+    case backToTheField
+  }
+
+  public let title: String
+  /// The second line, when there is one worth the room.
+  public let detail: String?
+  public let actions: [Action]
+  /// Whether the terminal below is showing a scene that is no longer being
+  /// advanced. The sink keeps what it has — an honest stale face beats a blank
+  /// one — and this is what tells the card to say so.
+  public let coolsTerminal: Bool
+
+  public init(title: String, detail: String? = nil, actions: [Action], coolsTerminal: Bool) {
+    self.title = title
+    self.detail = detail
+    self.actions = actions
+    self.coolsTerminal = coolsTerminal
+  }
+}
+
+/// One remote terminal session attached over the ROUTED T1 client (TM-5).
+///
+/// The shape of an attach, end to end: the join already names the session
+/// (`terminal.runtimeSessionId` on the fold row), the composition layer hands
+/// this object a door that mints a `TerminalOpenTicket` for it over the product
+/// API, and the ticket names a cell's two WebSocket doors on the desktop's
+/// tailnet address. `RoutedTerminalClient` dials both legs, presents the
+/// transport grant in each hello, attaches the session under one activation, and
+/// streams the cell's own TRF1 into `RoutedTerminalFrameSink` — which is the
+/// Metal renderer's frame path and nothing else.
+///
+/// **What left with TSP1** (TM-5's retirements, each for a stated reason):
+/// GhostteaKit's attachment lifecycle, its replica sink and the on-device TRF1
+/// ENCODE (the cell renders once now; the phone decodes, like every other
+/// viewer), the peer directory and its compact dial, the banner presenter, and
+/// the mirror-write bearer — the right to type is a claim in an expiring grant
+/// minted per client per session (TM-D3), never a string this device holds.
+///
+/// **What the phone is NOT granted:** the geometry lease. fieldd mints a
+/// tailnet self peer `[input, read]`, so a phone viewer is ADDITIVE to the
+/// desktop's — it types into the session but never resizes it, and the reclaim
+/// funnel that used to fight for the control epoch is gone with the protocol
+/// that had one. The pane's own grid is still recorded here because the input
+/// card lays itself out against it.
 @MainActor
 @Observable
 public final class TerminalAttachment {
-  public private(set) var phase: TerminalPhase = .idle
-  /// The last rendered TRF1 frame, fed to `TerminalSurface`.
-  public private(set) var frame: Data?
-  /// The host's verdict, from the snapshot — never assumed. No capability ⇒
-  /// `false`, which the card says plainly (view-only), never as a disabled-
-  /// looking lie.
-  public private(set) var readWrite = false
-  /// Whether THIS view holds the resize-control epoch.
-  public private(set) var hasControl = false
-  /// Live phase AND the host's read-write grant, composed upstream.
-  public private(set) var acceptsInput = false
-  /// A user-directed claim is in flight; the controller announcement answers.
-  public private(set) var isClaimingControl = false
-  /// The §8.1 outage banner, or `nil` when the session needs no explanation.
-  /// Produced by upstream's own presenter — its grace window, resumed flash,
-  /// and retry clocks are the kit's answer to "is this connection healthy",
-  /// not a second one of ours.
-  public private(set) var banner: GhostteaAttachmentBanner?
-  /// The transient §4.3 note that a keystroke was dropped (never a queue
-  /// receipt: the keystroke is gone). Expires on the presenter's clock.
-  public private(set) var inputCue: GhostteaAttachmentInputCue?
-  /// `inputCue`'s text, kept as the card's one-line convenience. Same
-  /// vocabulary, same expiry — never a second answer.
-  public private(set) var notice: String?
-  public private(set) var presentation: GhostteaTerminalPresentationConfig
-  /// What the terminal below is ACTUALLY wearing — not what was asked for. It
-  /// only moves when the renderer takes the change, so it and `presentation`
-  /// can never disagree about the same edit.
-  public private(set) var appearance: TerminalAppearance
-  /// A look the renderer would not take, said out loud and left standing.
+  /// How a ticket is obtained: one call of `terminal.openTicket` over the
+  /// product door, answered as the raw JSON the daemon sent.
   ///
-  /// Durable on purpose: the condition it describes is durable. The settings
-  /// sheet keeps showing the value the user chose (that is their preference,
-  /// and every future attach is seeded from it) while this terminal keeps
-  /// rendering the old one, and an expiring cue would let the disagreement
-  /// outlive its own explanation. Cleared by the next edit that lands, and by
-  /// teardown — a new attachment builds its runtime from the current
-  /// appearance, so it starts with nothing to disagree about.
-  public private(set) var appearanceFailure: String?
+  /// Raw rather than a decoded ticket ON PURPOSE — it is what keeps the field
+  /// from learning what a terminal is. FieldMesh owns the door and knows how to
+  /// ask; this target owns the ticket and knows what the answer means; neither
+  /// has to import the other's vocabulary to say so.
+  public typealias TicketDoor = @MainActor @Sendable (String) async throws -> JSONValue
+
+  /// How to reach the tailnet: the mesh node's own `URLSession` factory.
+  ///
+  /// The phone's tailnet is a userspace netstack in THIS process, so a plain
+  /// `URLSession` sends a `100.x` dial nowhere. Taking the factory rather than
+  /// a built transport is what lets the composition layer hand over the ability
+  /// to dial without naming a wire type — the same reason `TicketDoor` carries
+  /// raw JSON.
+  public typealias SessionProvider = URLSessionRoutedTransport.SessionProvider
+
+  /// The last rendered TRF1 frame, fed to `TerminalSurface`. The CELL's bytes,
+  /// verbatim — nothing on this device re-encodes a frame any more.
+  public private(set) var frame: Data?
+  /// What the appearance sheet's values project to. Under T this styles the
+  /// DEVICE's half of the render (background, opacity, shaders, padding); the
+  /// glyphs and every explicitly-styled colour arrive rasterized inside the
+  /// frame, from the cell — see `TerminalPresentation`'s note.
+  public private(set) var presentation: GhostteaTerminalPresentationConfig
+  public private(set) var appearance: TerminalAppearance
+  /// The local half of the session, when the user or the app put it there:
+  /// `idle` before an attach and after a detach, `suspended` while the app is
+  /// in the background, a refusal or a failure the door itself answered. Absent
+  /// = the client is the authority and `phase` reads it.
+  private var localPhase: TerminalPhase? = .idle
+  /// The door's own words for the last mint it refused, kept after the state
+  /// moves on so the banner can say WHY instead of showing a blank pane.
+  public private(set) var doorRefusal: String?
+  /// The transient note beside the terminal — a keystroke this device declined
+  /// to send, a scene that had to be re-seeded. Never a queue receipt: an input
+  /// the client drops is gone.
+  public private(set) var notice: String?
 
   // --- IOS-5b ---------------------------------------------------------------
   /// The input card's sticky Ctrl, reaching the terminal's OWN keyboard.
@@ -78,246 +134,234 @@ public final class TerminalAttachment {
   @ObservationIgnored public var softwareInputLatch: (() -> TerminalModifiers)?
   // --- end IOS-5b -----------------------------------------------------------
 
-  @ObservationIgnored private let directory: GhostteaTrufflePeerDirectory
-  /// The client half of the host's mirror-write secret, riding on the
-  /// lifecycle init and re-presented on every re-dial. `nil` ⇒ the host will
-  /// answer view-only, which is the honest default.
-  @ObservationIgnored private let accessToken: String?
-  /// The stable identity this client's pane is known by across re-dials.
-  @ObservationIgnored private let localViewID = UUID().uuidString
-
-  @ObservationIgnored private var lifecycle: GhostteaAttachmentLifecycle?
-  @ObservationIgnored private var replicaSink: GhostteaAttachmentReplicaSink?
-  /// Upstream's banner presenter — pure over a caller-supplied `nowMs`, so
-  /// every published answer is stamped from one clock here.
-  @ObservationIgnored private var bannerPresenter: GhostteaAttachmentBannerPresenter?
-  @ObservationIgnored private var bannerRefreshTask: Task<Void, Never>?
-  @ObservationIgnored private let clock = GhostteaSystemClock()
-  /// Retained for the attachment's whole life: the sink's publisher renders
-  /// through it, and the model must not be the one to let it die early.
-  @ObservationIgnored private var attachmentRuntime: GhostteaRuntime?
+  @ObservationIgnored private let door: TicketDoor
+  @ObservationIgnored private let transport: any RoutedLegTransport
+  @ObservationIgnored private var client: RoutedTerminalClient?
+  @ObservationIgnored private var sink: RoutedTerminalFrameSink?
+  @ObservationIgnored private var sessionID: String?
+  @ObservationIgnored private var deviceName: String?
   @ObservationIgnored private var attachTask: Task<Void, Never>?
-  @ObservationIgnored private var eventsTask: Task<Void, Never>?
-  @ObservationIgnored private var presentationTask: Task<Void, Never>?
-  /// Which attach the sink callbacks and control answers belong to — a
-  /// superseded attachment must not repaint the new one.
-  @ObservationIgnored private var attachID: UInt64 = 0
-  /// §4.2.2 extended past the actor's edge: a retired reader's frame can
-  /// still be in flight, and only the token can say so.
-  @ObservationIgnored private var appliedGeneration: UInt64 = 0
-  /// Monotone forever — the sink admits presentations in generation order,
-  /// and a fresh sink accepts anything above zero.
-  @ObservationIgnored private var presentationGeneration: UInt64 = 0
-  @ObservationIgnored private var nextSessionHandle: UInt64 = 1
-  @ObservationIgnored private var currentPhase: GhostteaAttachmentPhase?
-  /// Re-arms the reclaim per attachment: a resume invalidates this view's
-  /// controller record (§4.2.1/§4.2.3 upstream).
-  @ObservationIgnored private var attachmentGeneration: UInt64 = 0
-  @ObservationIgnored private var lastControlClaim: GhostteaControlReclaimAttempt?
-  /// One typing-driven claim per attachment generation (§10.3's "claims
-  /// control before the first keystroke"), so keystrokes never strobe claims.
-  @ObservationIgnored private var typingClaimGeneration: UInt64?
+  @ObservationIgnored private var noticeTask: Task<Void, Never>?
   @ObservationIgnored private var grid = GhostteaTerminalGridSize(columns: 80, rows: 24)
+  /// Which attach a late answer belongs to — a superseded one must not repaint
+  /// the new one. The client is rebuilt per attach, so this is the cheap check
+  /// that a task started before the rebuild is not still writing to it.
+  @ObservationIgnored private var attachID: UInt64 = 0
 
-  public init(
-    directory: GhostteaTrufflePeerDirectory,
+  public convenience init(
+    session: @escaping SessionProvider,
     appearance: TerminalAppearance,
-    accessToken: String?
+    door: @escaping TicketDoor
   ) {
-    self.directory = directory
+    self.init(
+      transport: URLSessionRoutedTransport(session: session), appearance: appearance, door: door)
+  }
+
+  /// The seam the tests hold: a transport with no sockets behind it. Every
+  /// shipping caller takes the initializer above — this one exists so the
+  /// attachment's own state machine can be driven without a server, which is
+  /// the same split `RoutedTerminalClient` keeps one layer down.
+  public init(
+    transport: any RoutedLegTransport,
+    appearance: TerminalAppearance,
+    door: @escaping TicketDoor
+  ) {
+    self.transport = transport
     self.appearance = appearance
-    self.accessToken = accessToken
+    self.door = door
     presentation = presentationConfig(for: appearance)
+  }
+
+  // MARK: - What the card reads
+
+  /// The session as ONE state. Computed rather than stored: the client is
+  /// `@Observable`, so a view that reads this is tracking the client's own
+  /// fields and there is no second copy of the truth to fall behind.
+  public var phase: TerminalPhase {
+    if let localPhase { return localPhase }
+    guard let client, let sessionID else { return .idle }
+    return Self.phase(for: client.state, session: client.sessions[sessionID])
+  }
+
+  /// Whether the CELL accepted this client's right to type. The grant asks; the
+  /// cell answers, and a downgrade applies the moment it lands — so this is the
+  /// accepted rights and never the requested ones.
+  public var readWrite: Bool {
+    guard let client, let sessionID else { return false }
+    return client.sessions[sessionID]?.rights.contains(.input) ?? false
+  }
+
+  /// `InputAllowed(a)` — every term of it, computed by the client: both legs
+  /// attached, the cell presenting, the lease live against a local deadline,
+  /// the applied scene at or past what the cell accepted, the cell's input
+  /// dimension allowed, and the attach grant still inside its renewal margin.
+  public var acceptsInput: Bool {
+    guard let client, let sessionID else { return false }
+    return client.sessions[sessionID]?.inputAllowed ?? false
+  }
+
+  public var banner: TerminalBanner? {
+    Self.banner(for: phase, device: deviceName, doorRefusal: doorRefusal)
   }
 
   // MARK: - Attach / detach
 
-  /// `deviceName` feeds the banner copy ("Connection to <name> lost…"); when
-  /// discovery has one, pass it — the device id stands in honestly otherwise.
+  /// Attach to one session by the id the join already named.
+  ///
+  /// `deviceName` feeds the banner copy ("studio is not publishing its terminal
+  /// doors") — when the field has one, pass it; the copy degrades to "that
+  /// desktop" rather than naming a ULID at anybody.
   public func attach(
-    deviceID: String, sessionID: String, cols: UInt16, rows: UInt16,
-    deviceName: String? = nil
+    sessionID: String, cols: UInt16, rows: UInt16, deviceName: String? = nil
   ) {
-    // The DURABLE host reference, never a captured peer value: the reconnect
-    // engine re-resolves the host on every dial, and a cached candidate keeps
-    // dialing an address nobody is listening on.
-    guard let host = try? GhostteaTruffleHostReference(deviceID: deviceID) else {
-      phase = .failed("this desktop has not confirmed its identity yet")
-      return
-    }
     grid = GhostteaTerminalGridSize(columns: cols, rows: rows)
-    phase = .connecting
+    self.sessionID = sessionID
+    self.deviceName = deviceName
+    localPhase = .connecting
+    doorRefusal = nil
     notice = nil
+    frame = nil
+    attachID &+= 1
+    let attach = attachID
     attachTask?.cancel()
     attachTask = Task { [weak self] in
       guard let self else { return }
-      await teardown(cancelPending: false)
+      await self.teardown(resetPhase: false)
+      guard attach == self.attachID, !Task.isCancelled else { return }
+      // The FIRST ticket is awaited here rather than handed to the client,
+      // because a mint that is refused has no socket to report itself on: the
+      // door's sentence is the whole answer and it must reach a face.
+      let ticket: RoutedTerminalTicket
       do {
-        let localDeviceID = try await directory.localDeviceID()
-        try Task.checkCancellation()
-        // Sampled AFTER the last suspension point, so a settings edit made
-        // while the directory lookup was in flight cannot seed the attachment
-        // with stale device resources (the reference comments this exact
-        // hazard). Everything below here is synchronous until commit.
-        let presentation = presentationConfig(for: appearance)
-        let runtime = try GhostteaRuntime(presentation: presentation)
-        let handle = nextSessionHandle
-        nextSessionHandle = handle == UInt64.max ? 1 : handle + 1
-        attachID &+= 1
-        let attach = attachID
-        appliedGeneration = 0
-        let sink = try GhostteaAttachmentReplicaSink(
-          runtime: runtime,
-          sessionHandle: handle,
-          presentation: presentation,
-          // The phone's theme wins; a remote host never restyles us (D-i9).
-          // Shared-session semantics remain host-owned; colors, opacity,
-          // padding, and shaders do not.
-          presentationAuthority: .device
-        ) { [weak self] event, token in
-          await self?.handleSink(event, token: token, attach: attach)
-        }
-        let engine = GhostteaAttachmentLifecycle(
-          sessionID: sessionID,
-          localViewID: localViewID,
-          cols: cols,
-          rows: rows,
-          dialer: GhostteaTruffleAttachmentDialer(
-            directory: directory, host: host, localDeviceID: localDeviceID),
-          sink: sink,
-          // The mirror-write capability rides here and is re-presented on
-          // every re-dial; without it the host's snapshot says view-only.
-          accessToken: accessToken)
-        guard !Task.isCancelled else {
-          await engine.close()
-          return
-        }
-        self.presentation = presentation
-        attachmentRuntime = runtime
-        lifecycle = engine
-        replicaSink = sink
-        bannerPresenter = GhostteaAttachmentBannerPresenter(deviceName: deviceName ?? deviceID)
-        banner = nil
-        inputCue = nil
-        frame = nil
-        readWrite = false
-        hasControl = false
-        acceptsInput = false
-        isClaimingControl = false
-        attachmentGeneration = 0
-        lastControlClaim = nil
-        typingClaimGeneration = nil
-        eventsTask = Task { [weak self] in
-          for await event in await engine.events() {
-            guard let self, !Task.isCancelled else { return }
-            self.handle(event, from: engine)
-          }
-        }
-        await engine.start()
+        ticket = try await self.mintTicket(for: sessionID)
       } catch {
-        if Task.isCancelled || error is CancellationError { return }
-        phase = .failed("could not attach — \(Self.shortReason(error))")
+        guard attach == self.attachID, !Task.isCancelled else { return }
+        self.localPhase = .refused(self.doorRefusal ?? Self.shortReason(error))
+        return
       }
+      guard attach == self.attachID, !Task.isCancelled else { return }
+      self.open(ticket, sessionID: sessionID, attach: attach)
     }
   }
 
   /// The user's own act — the one legitimate road back to `idle`.
   public func detach() async {
-    await teardown()
-    phase = .idle
+    attachTask?.cancel()
+    attachTask = nil
+    await teardown(resetPhase: true)
   }
 
-  // MARK: - Viewport & control
+  private func open(_ ticket: RoutedTerminalTicket, sessionID: String, attach: UInt64) {
+    let sink = RoutedTerminalFrameSink(
+      publish: { [weak self] frame in
+        guard let self, attach == self.attachID else { return }
+        self.frame = frame
+      },
+      identityFailed: { [weak self] _, reason in
+        guard let self, attach == self.attachID else { return }
+        // The cell stamped a frame with handles it did not declare. There is no
+        // repair for that inside the activation — the scene on screen may be
+        // another session's — so the attachment fails with the reason, loudly.
+        self.localPhase = .failed(reason)
+      },
+      activationEnded: { [weak self] _, reason in
+        guard let self, attach == self.attachID else { return }
+        self.note("the scene stopped advancing — \(reason)")
+      })
+    let client = RoutedTerminalClient(
+      transport: transport,
+      sink: sink,
+      options: .init(
+        // Every leg replacement is a FRESH MINT: the cell consumes a transport
+        // grant's `(nonce, channel)` at first use, so a re-dial with the ticket
+        // in hand can only ever earn `GRANT_NONCE_REPLAYED`. The client owns the
+        // backoff; this closure owns the door.
+        ticketProvider: { [weak self] session in
+          guard let self else { throw CancellationError() }
+          return try await self.mintTicket(for: session)
+        },
+        viewId: "phone-\(UUID().uuidString.lowercased())"))
+    self.sink = sink
+    self.client = client
+    self.sessionID = sessionID
+    localPhase = nil
+    client.open(ticket)
+    // `open` is synchronous and can refuse before a socket is spent — a grant
+    // outside its window earns a SILENT `1008` at the real door, so the client
+    // names it here rather than dialing to be told nothing. A refusal it cannot
+    // act on by itself (`needsTicket` with nowhere to go) must reach a face, or
+    // the card would say "connecting…" over a client that has stopped.
+    if client.needsTicket {
+      localPhase = .refused(client.lastRefusal ?? "this desktop's ticket could not be used")
+    }
+  }
 
-  /// Records the pane's geometry first — a resize made during an outage still
-  /// shapes the attach that ends it — then resizes if this view holds the
-  /// control epoch, or runs the reclaim funnel if not. Claiming here
-  /// unconditionally would take control from whichever view legitimately
-  /// holds it; the funnel decides whether a claim is allowed at all.
+  /// One mint over the product door, with its refusal kept in the door's own
+  /// words. The daemon's `UNAVAILABLE {service, state}` is turned into a
+  /// sentence here — the honest degraded face the corpus asks for — and every
+  /// other error keeps whatever the door said.
+  private func mintTicket(for session: String) async throws -> RoutedTerminalTicket {
+    do {
+      let answer = try await door(session)
+      let ticket = try RoutedTerminalTicket(json: answer)
+      doorRefusal = nil
+      return ticket
+    } catch let error as FieldProductError {
+      doorRefusal = Self.doorWords(error, device: deviceName)
+      throw error
+    } catch {
+      doorRefusal = Self.shortReason(error)
+      throw error
+    }
+  }
+
+  private func teardown(resetPhase: Bool) async {
+    noticeTask?.cancel()
+    noticeTask = nil
+    client?.close()
+    client = nil
+    sink = nil
+    frame = nil
+    notice = nil
+    if resetPhase {
+      localPhase = .idle
+      sessionID = nil
+      doorRefusal = nil
+    }
+  }
+
+  // MARK: - Viewport
+
+  /// Record the pane's geometry.
+  ///
+  /// It does NOT resize the remote terminal, and that is the grant's doing
+  /// rather than an omission: a tailnet self peer is minted `[input, read]`
+  /// (TM-D3), so this client holds no geometry right and `claimGeometry` would
+  /// be refused at the cell. The number is kept because the input card and the
+  /// accessibility summary both lay out against it, and because the day a
+  /// phone is granted `geometry` this is the value it would claim with.
   public func setViewport(cols: UInt16, rows: UInt16) {
-    let value = GhostteaTerminalGridSize(columns: cols, rows: rows)
-    guard value != grid else { return }
-    grid = value
-    guard let lifecycle else { return }
-    let attach = attachID
-    Task { [weak self] in
-      await lifecycle.setViewport(cols: cols, rows: rows)
-      guard await lifecycle.heldControlEpoch != nil else {
-        guard let self, attach == self.attachID else { return }
-        self.reevaluateReclaim()
-        return
-      }
-      do {
-        try await lifecycle.resize(cols: cols, rows: rows)
-      } catch {
-        // Control refusals are thrown to the caller and deliberately kept off
-        // the event stream, so this is the only place they become visible.
-        guard let self, attach == self.attachID else { return }
-        self.note(error, action: "Resize")
-      }
-    }
-  }
-
-  /// A user-directed takeover, deliberately separate from automatic reclaim:
-  /// it compare-and-swaps against the controller state this view actually
-  /// observed and carries the current viewport in the claim.
-  public func claimControl(cols: UInt16, rows: UInt16) {
-    guard let lifecycle, !isClaimingControl else { return }
     grid = GhostteaTerminalGridSize(columns: cols, rows: rows)
-    isClaimingControl = true
-    let attach = attachID
-    Task { [weak self] in
-      do {
-        try await lifecycle.claimControl(cols: cols, rows: rows)
-      } catch {
-        guard let self, attach == self.attachID else { return }
-        self.isClaimingControl = false
-        self.note(error, action: "Take control")
-        return
-      }
-      // The write only submits the fenced request; the controller
-      // announcement is its authoritative answer. Stay single-flight until it
-      // arrives, but never strand the UI on a peer that won't answer.
-      try? await Task.sleep(nanoseconds: 5_000_000_000)
-      guard let self, attach == self.attachID, self.isClaimingControl else { return }
-      self.isClaimingControl = false
-      self.bannerPresenter?.noteCue("Control request timed out. Try again.", at: self.clock.nowMs)
-      self.republishBanner()
-    }
   }
 
-  /// Act on what the current banner offered — the model half of each action;
-  /// `browseSessions` also lands here as a detach, because navigation back to
-  /// the field is the card's own act and `idle` is what it navigates from.
-  public func perform(_ action: GhostteaAttachmentBannerAction) {
-    switch action {
-    case .retryNow:
-      retryNow()
-    case .resume:
-      // Routed: a `.resume` banner only exists in suspended-by-app, where
-      // this resumes for real.
-      resumeFromForeground()
-    case .browseSessions, .close:
-      Task { await detach() }
-    }
+  /// Ask for a fresh authoritative frame (the surface calls this when a frame
+  /// would not decode).
+  public func requestFullRefresh() {
+    guard let client, let sessionID else { return }
+    client.requestReseed(for: sessionID)
   }
 
   // MARK: - Input
 
   /// Text from the card's own affordances (a command bar, a paste action).
   public func send(text: String) {
-    ensureControlForTyping()
-    forward(.text(text))
+    forward { $0.send(text: text, to: $1) }
   }
 
   /// The Metal view's software keyboard events, converted exactly as the
   /// reference converts them — after the card's latch has had its say.
   public func handleSoftwareInput(_ event: GhostteaSoftwareInputEvent) {
     // --- IOS-5b: Live mode's latch ------------------------------------------
-    // The keyboard's own events pass the card's sticky Ctrl on the way in. With
-    // no latch installed this is one nil check and the behavior below is
-    // unchanged, which is what keeps the demo fixture and every existing test
-    // on the original path.
     if let stroke = latchedKeystroke(for: event) {
       press(stroke)
       return
@@ -333,12 +377,6 @@ public final class TerminalAttachment {
   /// survives, which is the point of locking), so it is called exactly once per
   /// event and never for a paste — a block of text is not the key an arm was
   /// meant for, and asking would spend the arm on it.
-  ///
-  /// A multi-character commit spends the arm and then passes through untouched:
-  /// an IME composition has no single key to name. Peeking first would avoid
-  /// that, but at the cost of two closures and a latch that can be read without
-  /// being spent, which is a sharper edge than one lost arm on a composition
-  /// nobody types under Ctrl.
   private func latchedKeystroke(for event: GhostteaSoftwareInputEvent) -> TerminalKeystroke? {
     guard let softwareInputLatch else { return nil }
     if case .paste = event { return nil }
@@ -350,81 +388,79 @@ public final class TerminalAttachment {
   /// The card's own verbs must NOT re-enter the latch: the model already spent
   /// it when the user tapped the key (`tapKey`, `interceptCharacter`), and a
   /// second consumption here would put Ctrl on the Enter that follows a Send.
-  /// The latch belongs to the keyboard's door, not to ours.
   private func deliverSoftwareInput(_ event: GhostteaSoftwareInputEvent) {
-    ensureControlForTyping()
     switch event {
-    case .text(let text): forward(.text(text))
-    case .enter: forward(.text("\r"))
+    case .text(let text): forward { $0.send(text: text, to: $1) }
+    case .enter: forward { $0.send(text: "\r", to: $1) }
     case .deleteBackward:
-      forward(
-        .key(
-          GhostteaKeyInput(
-            type: "down", key: "Backspace", code: "Backspace", repeat: false,
-            shift: false, control: false, alt: false, meta: false,
-            unshiftedCodepoint: 0)))
-    case .paste(let text): forward(.paste(text))
+      let key = RoutedKeyInput(key: "Backspace", code: "Backspace")
+      forward { $0.send(key: key, to: $1) }
+    case .paste(let text): forward { $0.paste(text, to: $1) }
     case .key(let key): _ = handleHardwareKey(key)
     }
   }
   // --- end IOS-5b -----------------------------------------------------------
 
-  /// Deliberately not gated on read-write or phase: the lifecycle rejects
-  /// what it must and says so on the event stream, and a silent local drop
-  /// would teach the user nothing (§4.3).
+  /// A hardware key. Not gated on `acceptsInput` here: the client holds the
+  /// same gate one layer down (the cell DROPS input it does not allow, with an
+  /// audit line and no reply, so a client that sent anyway would be typing into
+  /// a silence), and this is where the user learns their keystroke went
+  /// nowhere.
+  @discardableResult
   public func handleHardwareKey(_ event: GhostteaHardwareKeyEvent) -> Bool {
-    guard lifecycle != nil else { return false }
-    ensureControlForTyping()
+    guard client != nil else { return false }
     let modifiers = event.modifiers
-    forward(
-      .key(
-        GhostteaKeyInput(
-          type: event.action == .up ? "up" : "down",
-          key: event.text.isEmpty ? event.code : event.text,
-          code: event.code,
-          repeat: event.action == .repeated,
-          shift: modifiers.contains(.shift),
-          control: modifiers.contains(.control),
-          alt: modifiers.contains(.option),
-          meta: modifiers.contains(.command),
-          unshiftedCodepoint: event.unshiftedCodepoint)))
+    let key = RoutedKeyInput(
+      type: event.action == .up ? .up : .down,
+      key: event.text.isEmpty ? event.code : event.text,
+      code: event.code,
+      repeatKey: event.action == .repeated,
+      shift: modifiers.contains(.shift),
+      control: modifiers.contains(.control),
+      alt: modifiers.contains(.option),
+      meta: modifiers.contains(.command),
+      unshiftedCodepoint: event.unshiftedCodepoint)
+    forward { $0.send(key: key, to: $1) }
     return true
   }
 
   /// Pointer and scroll gestures are viewport-shaped, not keystroke-shaped:
   /// they arrive continuously and a rejection cue would strobe, so they drop
-  /// quietly when input is not accepted (the reference's §4.3 reading).
+  /// quietly when input is not accepted.
   public func handleMouse(_ event: GhostteaTerminalMouseEvent) {
     guard acceptsInput else { return }
     let modifiers = event.modifiers
-    let action =
-      switch event.action {
-      case .press: "press"
-      case .release: "release"
-      case .motion: "motion"
-      }
-    forward(
-      .mouse(
-        GhostteaMouseInput(
-          action: action, button: event.button.rawValue, x: event.x, y: event.y,
-          screenWidth: event.screenWidth, screenHeight: event.screenHeight,
-          cellWidth: event.cellWidth, cellHeight: event.cellHeight,
-          paddingLeft: event.paddingLeft, paddingTop: event.paddingTop,
-          shift: modifiers.contains(.shift), control: modifiers.contains(.control),
-          alt: modifiers.contains(.option), meta: modifiers.contains(.command))))
+    let mouse = RoutedMouseInput(
+      action: Self.mouseAction(event.action),
+      button: event.button.rawValue,
+      x: event.x,
+      y: event.y,
+      screenWidth: event.screenWidth,
+      screenHeight: event.screenHeight,
+      cellWidth: event.cellWidth,
+      cellHeight: event.cellHeight,
+      paddingLeft: event.paddingLeft,
+      paddingTop: event.paddingTop,
+      shift: modifiers.contains(.shift),
+      control: modifiers.contains(.control),
+      alt: modifiers.contains(.option),
+      meta: modifiers.contains(.command))
+    // A non-finite coordinate is refused by the cell's own reader before it can
+    // reach the engine; dropping it here costs a message instead of an audit.
+    guard mouse.isFinite else { return }
+    forward { $0.send(mouse: mouse, to: $1) }
   }
 
   public func handleScroll(rows: Int) {
     guard rows != 0, acceptsInput else { return }
-    forward(.scroll(Int64(rows)))
+    forward { $0.scroll(rows: rows, for: $1) }
   }
 
   // MARK: - The input card's verbs (IOS-5a)
 
   /// One rail key. A stroke this layout cannot encode is a no-op and says
   /// nothing: the rail only offers keys it can send, so an unencodable one is
-  /// a programming error rather than news for the user, and a status line that
-  /// blamed the terminal for it would be a lie about who refused.
+  /// a programming error rather than news for the user.
   public func press(_ stroke: TerminalKeystroke) {
     guard let event = stroke.ghostteaEvent() else { return }
     _ = handleHardwareKey(event)
@@ -433,19 +469,13 @@ public final class TerminalAttachment {
   /// Send the composer's draft: a paste, then Enter.
   ///
   /// The paste op is what makes a three-line draft arrive as ONE input rather
-  /// than three commands — the host encodes it through its own terminal model,
-  /// which wraps it in the bracketed-paste sequences exactly when the program
-  /// on the far end has enabled them (DECSET 2004) and otherwise writes the
-  /// text with newlines normalized. Sending the text as keystrokes could not
-  /// do that: bracketing is the host terminal's decision, not ours.
+  /// than three commands — the cell encodes it through the session's own
+  /// terminal model, which wraps it in the bracketed-paste sequences exactly
+  /// when the program on the far end has enabled them (DECSET 2004).
   ///
   /// An empty draft is Enter alone, which is the whole point of a Send that is
-  /// never disabled (D-i6): with nothing to say, the act is still "run it".
-  /// The draft is NOT trimmed — a draft of spaces is a draft the user typed.
+  /// never disabled (D-i6). The draft is NOT trimmed.
   public func sendDraft(_ text: String) {
-    // IOS-5b: `deliverSoftwareInput` rather than `handleSoftwareInput` — the
-    // card spent its own latch when Send was tapped, and this Enter is the
-    // draft's terminator, not a key the user is holding Ctrl for.
     if !text.isEmpty { deliverSoftwareInput(.paste(text)) }
     deliverSoftwareInput(.enter)
   }
@@ -454,20 +484,11 @@ public final class TerminalAttachment {
   /// chips that type an answer without committing it.
   public func typeText(_ text: String) {
     guard !text.isEmpty else { return }
-    // Unlatched for the same reason as `sendDraft`: this text is the card's,
-    // already shaped by whatever the model decided.
     deliverSoftwareInput(.text(text))
   }
 
   // --- IOS-5c
-  /// One block of text as a paste, with NO Enter behind it — the paste chip's
-  /// verb.
-  ///
-  /// `sendDraft` is this op followed by a commit; this one deliberately stops
-  /// short. A pasted block lands in whatever line editor is running and waits
-  /// for the user to finish it, which is the whole reason pasting into a live
-  /// shell is survivable — and it rides `.paste` rather than `.text` so the
-  /// host brackets it when the far program has DECSET 2004 on.
+  /// One block of text as a paste, with NO Enter behind it.
   public func pasteText(_ text: String) {
     guard !text.isEmpty else { return }
     handleSoftwareInput(.paste(text))
@@ -476,438 +497,178 @@ public final class TerminalAttachment {
 
   // MARK: - Lifecycle nudges
 
-  /// §8.2: foreground dials immediately rather than waiting out a schedule; a
-  /// session that never suspended only wants a fresh frame.
-  public func resumeFromForeground() {
-    guard let lifecycle else { return }
-    Task {
-      if case .suspended(.suspendedByApp) = await lifecycle.currentSnapshot.phase {
-        await lifecycle.resumeFromForeground()
-      } else {
-        await lifecycle.requestSnapshot()
-      }
-    }
-  }
-
-  /// §8.2's other half: an orderly suspend, not a connection left to rot —
-  /// the heartbeat stops, the connection closes, and the reason is recorded.
-  public func suspendForBackground() {
-    guard let lifecycle else { return }
-    Task { await lifecycle.suspendForBackground() }
-  }
-
-  /// Manual retry out of a suspended rest.
+  /// Mint now rather than waiting out the client's backoff — the banner's one
+  /// act while a leg is being replaced.
   public func retryNow() {
-    guard let lifecycle else { return }
-    Task { await lifecycle.retryNow() }
+    guard let sessionID else { return }
+    attach(
+      sessionID: sessionID, cols: grid.columns, rows: grid.rows, deviceName: deviceName)
   }
 
-  /// The engine stops dialing after its suspend window and then waits to be
-  /// TOLD the host is back — nothing ends a `suspended(host absent)` rest on
-  /// its own. The discovery poll that sees the host reappear calls this.
-  public func noteHostReachable() {
-    guard let lifecycle else { return }
-    Task { await lifecycle.noteDeviceReachable() }
+  /// §8.2: coming back to the foreground re-attaches at once rather than
+  /// waiting for a schedule. A session that never suspended only wants a fresh
+  /// scene.
+  public func resumeFromForeground() {
+    guard let sessionID else { return }
+    if case .suspended = phase {
+      attach(sessionID: sessionID, cols: grid.columns, rows: grid.rows, deviceName: deviceName)
+      return
+    }
+    requestFullRefresh()
   }
 
-  /// Ask for a fresh authoritative frame (the surface calls this when a frame
-  /// would not decode; the card may on foreground).
-  public func requestFullRefresh() {
-    guard let lifecycle else { return }
-    Task { await lifecycle.requestSnapshot() }
+  /// §8.2's other half: an orderly suspend, not two sockets left to rot.
+  ///
+  /// The legs CLOSE rather than idling. iOS does not keep a WebSocket alive
+  /// behind a backgrounded app, and the cell closes a leg that misses its
+  /// heartbeat deadline (`4004`) — so closing deliberately is the difference
+  /// between a state this phone chose and one it discovered later.
+  public func suspendForBackground() {
+    guard client != nil else { return }
+    client?.close()
+    client = nil
+    sink = nil
+    localPhase = .suspended("paused in the background")
   }
 
   // MARK: - Appearance
 
-  /// Live where it can be, honest where it can't: only a fontSize change
-  /// builds a new runtime (and hands it to the live sink — no re-attach on
-  /// the 0.9.x path); colors, opacity, and shaders reconfigure in place; a
-  /// value-identical edit never touches the Metal or replica paths.
-  public func apply(appearance next: TerminalAppearance) async {
-    let target = presentationConfig(for: next)
-    guard let sink = replicaSink else {
-      // No live attachment: the next attach samples this after its own last
-      // suspension point, so publishing the value is the whole job — and
-      // there is no renderer that could refuse it.
-      commitAppearance(next, presentation: target)
-      return
-    }
-    guard !target.hasSameDevicePresentation(as: presentation) else {
-      // Document identity may have moved; the renderer values did not.
-      commitAppearance(next, presentation: target)
-      return
-    }
-    let needsRuntime = target.requiresNewRuntime(comparedTo: presentation)
-    let superseded = presentationTask
-    superseded?.cancel()
-    presentationGeneration &+= 1
-    let generation = presentationGeneration
-    let attach = attachID
-    let task = Task { [weak self] in
-      // A native reconfiguration is atomic but not itself cancellable: let an
-      // in-flight predecessor leave the replica before applying its
-      // successor, so generation order stays physical.
-      await superseded?.value
-      guard let self else { return }
-      do {
-        try Task.checkCancellation()
-        let runtime = try await Self.makeRuntimeIfNeeded(needsRuntime, presentation: target)
-        try Task.checkCancellation()
-        guard attach == self.attachID, generation == self.presentationGeneration else { return }
-        let result = try await sink.reconfigureDevicePresentation(
-          target, runtime: runtime, generation: generation
-        ) { [weak self] result in
-          await self?.publishDevicePresentation(
-            result, appearance: next, presentation: target, runtime: runtime,
-            generation: generation, attach: attach)
-        }
-        // Upstream runs the `publish` callback ONLY on its applied path —
-        // every `applied: false` returns before reaching it — so a refusal is
-        // visible here or nowhere. Staleness is checked first because a
-        // superseded edit has nothing to complain about: the newer one is the
-        // truth and will commit its own words.
-        guard attach == self.attachID, generation == self.presentationGeneration else { return }
-        if !result.applied {
-          self.appearanceFailure =
-            "the terminal kept its previous look — the renderer declined the change"
-        }
-      } catch is CancellationError {
-        return
-      } catch {
-        guard attach == self.attachID, generation == self.presentationGeneration else { return }
-        self.appearanceFailure =
-          "the terminal kept its previous look — \(Self.shortReason(error))"
-      }
-    }
-    presentationTask = task
-    await task.value
-    // Still the newest generation ⇒ the stored task is still ours to clear.
-    if generation == presentationGeneration {
-      presentationTask = nil
-    }
-  }
-
-  /// Runs from inside the sink's replica transaction. Publishing the config
-  /// and its optional frame in one MainActor turn keeps new metrics and
-  /// reshaped cells in one SwiftUI transaction, and stops a newer host frame
-  /// from being overwritten by a delayed settings continuation.
-  private func publishDevicePresentation(
-    _ result: GhostteaDevicePresentationResult,
-    appearance next: TerminalAppearance,
-    presentation target: GhostteaTerminalPresentationConfig,
-    runtime: GhostteaRuntime?,
-    generation: UInt64,
-    attach: UInt64
-  ) {
-    guard result.applied, attach == attachID, generation == presentationGeneration else { return }
-    if let runtime { attachmentRuntime = runtime }
-    // The commit point, and the ONLY one on the live path: publishing the
-    // appearance up front left the model claiming a look the renderer had
-    // refused, which a later attach would then seed itself from — a failure
-    // that repaired its own evidence.
-    commitAppearance(next, presentation: target)
-    if let rendered = result.update?.effects.last(where: { $0.kind == .frameReady })?.payload {
-      frame = rendered
-    }
-  }
-
-  /// What the terminal is wearing, and the fact that nothing is outstanding
-  /// about it — always together, because a stale failure beside a fresh
-  /// appearance is exactly the disagreement this field exists to report.
-  private func commitAppearance(
-    _ next: TerminalAppearance, presentation target: GhostteaTerminalPresentationConfig
-  ) {
+  /// The device half of the look, applied live.
+  ///
+  /// Under T there is no replica runtime to rebuild and nothing that can refuse
+  /// an edit: the renderer takes the configuration on its next update, and the
+  /// GLYPHS are the cell's either way. Which is why the old
+  /// `appearanceFailure` retired with the replica that used to raise it — there
+  /// is no longer a component here that can decline a change.
+  public func apply(appearance next: TerminalAppearance) {
     appearance = next
-    presentation = target
-    appearanceFailure = nil
-  }
-
-  nonisolated private static func makeRuntimeIfNeeded(
-    _ needed: Bool,
-    presentation: GhostteaTerminalPresentationConfig
-  ) async throws -> GhostteaRuntime? {
-    guard needed else { return nil }
-    // Off the main actor: runtime creation shapes fonts through FFI.
-    let creation = Task.detached(priority: .userInitiated) {
-      try Task.checkCancellation()
-      return try GhostteaRuntime(presentation: presentation)
-    }
-    return try await withTaskCancellationHandler {
-      try await creation.value
-    } onCancel: {
-      creation.cancel()
-    }
-  }
-
-  // MARK: - Event handling
-
-  /// One lifecycle transition, or one refusal. A stream outlives the
-  /// attachment it belongs to by however long the last event takes to arrive;
-  /// a superseded engine must not repaint the new one.
-  private func handle(
-    _ event: GhostteaAttachmentLifecycleEvent,
-    from engine: GhostteaAttachmentLifecycle
-  ) {
-    guard lifecycle === engine else { return }
-    // The presenter ingests every event — it owns the outage vocabulary and
-    // its timing (grace window, resumed flash, cue expiry); re-deriving that
-    // from the phase enum would be a second answer to "is this healthy".
-    bannerPresenter?.apply(event, at: clock.nowMs)
-    switch event {
-    case .state(let snapshot):
-      readWrite = snapshot.readWrite
-      acceptsInput = snapshot.acceptsInput
-      currentPhase = snapshot.phase
-      phase = Self.phase(for: snapshot.phase, exitCode: snapshot.exitCode)
-      switch snapshot.phase {
-      case .live:
-        // A resume invalidates this view's controller record: every new
-        // attachment re-arms the claim rather than trusting a once-per-
-        // session flag.
-        attachmentGeneration &+= 1
-        reevaluateReclaim()
-      case .opening, .synchronizing, .reconnecting, .suspended, .ended:
-        isClaimingControl = false
-      }
-    case .inputRejected:
-      // The presenter turned it into the cue; nothing else to record.
-      break
-    }
-    republishBanner()
-  }
-
-  /// One applied frame, or one thing the frame said about the session.
-  /// Nothing mutates before the event is proved current: the sink may belong
-  /// to a previous attach entirely, and within one attach a retired reader's
-  /// frame can still be in flight — the attach identity and the state
-  /// generation are both checked.
-  private func handleSink(
-    _ event: GhostteaAttachmentSinkEvent,
-    token: GhostteaAttachmentStateToken,
-    attach: UInt64
-  ) {
-    guard attach == attachID, token.generation >= appliedGeneration else { return }
-    appliedGeneration = token.generation
-    switch event {
-    case .frame(let update, _):
-      if let rendered = update.effects.last(where: { $0.kind == .frameReady })?.payload {
-        frame = rendered
-      }
-    case .controller:
-      guard let lifecycle else { return }
-      Task { [weak self] in
-        // Asked rather than compared locally: against a legacy host the wire
-        // view id rotates under the stable one this model knows, and only the
-        // lifecycle knows which identity is currently attached.
-        let held = await lifecycle.heldControlEpoch != nil
-        let state = await lifecycle.currentControlState
-        guard let self, attach == self.attachID else { return }
-        self.hasControl = held
-        self.isClaimingControl = false
-        // A clear that arrives while this card is up is exactly when a
-        // reclaim is due.
-        self.maybeReclaim(observing: state, held: held)
-      }
-    case .activity:
-      // The bubble field owns activity via discovery; the card does not
-      // re-derive it from the attachment.
-      break
-    case .presentation:
-      // Device-authoritative sinks consume host presentation events without
-      // publishing them; kept as a defensive boundary exactly like the
-      // reference.
-      break
-    }
-  }
-
-  // MARK: - Reclaim funnel
-
-  /// §10.3: a readWrite attachment claims control before the first keystroke,
-  /// so the host's PTY matches the grid this phone is rendering. One claim
-  /// per attachment generation — an explicit Take Control tap is the user's
-  /// escalation, not ours.
-  private func ensureControlForTyping() {
-    guard readWrite, !hasControl, !isClaimingControl,
-      typingClaimGeneration != attachmentGeneration
-    else { return }
-    typingClaimGeneration = attachmentGeneration
-    claimControl(cols: grid.columns, rows: grid.rows)
-  }
-
-  /// Read the controller state and run the funnel — used by the inputs that
-  /// do not already hold an observation.
-  private func reevaluateReclaim() {
-    guard let lifecycle else { return }
-    let attach = attachID
-    Task { [weak self] in
-      let held = await lifecycle.heldControlEpoch != nil
-      let state = await lifecycle.currentControlState
-      guard let self, attach == self.attachID else { return }
-      self.maybeReclaim(observing: state, held: held)
-    }
-  }
-
-  /// Upstream's own §4.2.3 funnel decides; the single-flight record keeps
-  /// re-evaluation idempotent rather than chatty, and the funnel never fights
-  /// another controller. `hasFocus` is `true` by construction: the phone
-  /// renders exactly one terminal, and backgrounding suspends the whole
-  /// lifecycle out of Live before focus could go stale.
-  private func maybeReclaim(
-    observing state: (controller: GhostteaControllerInfo?, revision: UInt64),
-    held: Bool
-  ) {
-    guard let lifecycle, let currentPhase else { return }
-    let observation: GhostteaControlObservation =
-      if held {
-        .selfHolds
-      } else if state.controller == nil {
-        // Revision 0 is the legacy "cannot report revisions" sentinel, which
-        // nothing may compare-and-swap against.
-        .noController(revision: state.revision == 0 ? nil : state.revision)
-      } else {
-        .otherHolds
-      }
-    let decision = GhostteaControlReclaim.decide(
-      phase: currentPhase,
-      readWrite: readWrite,
-      hasFocus: true,
-      observation: observation,
-      attachmentGeneration: attachmentGeneration,
-      lastClaim: lastControlClaim)
-    guard case .claim(let expected) = decision else { return }
-    lastControlClaim = GhostteaControlReclaimAttempt(
-      attachmentGeneration: attachmentGeneration, expectedRevision: expected)
-    let size = grid
-    let attach = attachID
-    Task { [weak self] in
-      do {
-        try await lifecycle.claimControl(cols: size.columns, rows: size.rows)
-      } catch {
-        guard let self, attach == self.attachID else { return }
-        self.note(error, action: "Control")
-      }
-    }
+    presentation = presentationConfig(for: next)
   }
 
   // MARK: - Plumbing
 
-  /// Refusals arrive on the event stream (§4.3's visible half), so the throw
-  /// is deliberately dropped here.
-  private func forward(_ operation: GhostteaTunnelInput) {
-    guard let lifecycle else { return }
-    Task { try? await lifecycle.send(operation) }
-  }
-
-  /// Surface a refusal the lifecycle threw rather than published. Keystroke
-  /// rejections arrive on the event stream instead and must not come through
-  /// here, or they would render twice. Raised as a presenter cue (the
-  /// reference's noteControlFailure copy) so it expires on the kit's clock.
-  private func note(_ error: Error, action: String) {
-    guard let rejection = error as? GhostteaAttachmentInputRejection else { return }
-    let message =
-      switch rejection.reason {
-      case .readOnly: "This session is read-only."
-      case .writeFailed: "\(action) failed — reconnecting."
-      case .noControl: "Take control before resizing the terminal."
-      case .attachmentEnded: "\(action) did not finish before the connection dropped."
-      case .notLive: "\(action) is unavailable while the session reconnects."
-      }
-    bannerPresenter?.noteCue(message, at: clock.nowMs)
-    republishBanner()
-  }
-
-  /// Recompute what the banner and cue say now, and arm the next wake they
-  /// need — the presenter reports its own deadline, so no free-running ticker.
-  private func republishBanner() {
-    bannerRefreshTask?.cancel()
-    bannerRefreshTask = nil
-    guard let bannerPresenter else {
-      banner = nil
-      inputCue = nil
-      notice = nil
+  /// Every input verb funnels through one gate, so "who may type" is answered
+  /// in exactly one place and a declined keystroke always says so.
+  private func forward(_ send: (RoutedTerminalClient, String) -> Void) {
+    guard let client, let sessionID else { return }
+    guard acceptsInput else {
+      note(inputRefusalNote)
       return
     }
-    let now = clock.nowMs
-    banner = bannerPresenter.banner(at: now)
-    inputCue = bannerPresenter.inputCue(at: now)
-    notice = inputCue?.text
-    guard let delay = bannerPresenter.nextRefreshMs(at: now) else { return }
-    bannerRefreshTask = Task { [weak self] in
-      try? await Task.sleep(nanoseconds: delay * 1_000_000)
-      guard !Task.isCancelled else { return }
-      self?.republishBanner()
-    }
+    send(client, sessionID)
   }
 
-  private func teardown(cancelPending: Bool = true) async {
-    presentationTask?.cancel()
-    presentationTask = nil
-    presentationGeneration &+= 1
-    if cancelPending {
-      attachTask?.cancel()
-      attachTask = nil
+  /// Why this keystroke went nowhere, in the most specific words available.
+  private var inputRefusalNote: String {
+    guard let client, let sessionID, let session = client.sessions[sessionID] else {
+      return "not attached — nothing to type into yet"
     }
-    eventsTask?.cancel()
-    eventsTask = nil
-    bannerRefreshTask?.cancel()
-    bannerRefreshTask = nil
-    bannerPresenter = nil
-    banner = nil
-    inputCue = nil
-    let current = lifecycle
-    lifecycle = nil
-    replicaSink = nil
-    await current?.close()
-    // Only after close: the sink's publisher renders through this runtime
-    // until the lifecycle has let go.
-    attachmentRuntime = nil
-    frame = nil
-    readWrite = false
-    hasControl = false
-    acceptsInput = false
-    isClaimingControl = false
-    currentPhase = nil
-    attachmentGeneration = 0
-    lastControlClaim = nil
-    typingClaimGeneration = nil
-    notice = nil
-    // The next attachment builds its runtime from the current appearance, so
-    // it starts with nothing to disagree about — carrying the old complaint
-    // into it would be a stale claim about a renderer that never refused.
-    appearanceFailure = nil
+    if !session.rights.contains(.input) {
+      return "view only — this desktop granted read without input"
+    }
+    if !session.inputRightLive {
+      return "the write grant is expiring — renewing it"
+    }
+    if !session.presentationReady {
+      return "waiting for the terminal to catch up"
+    }
+    return "the desktop has paused input for this viewer"
+  }
+
+  /// A note that expires: a stale line about a keystroke would sit on top of a
+  /// real status the terminal wanted to say.
+  private func note(_ line: String) {
+    notice = line
+    noticeTask?.cancel()
+    noticeTask = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(4))
+      guard !Task.isCancelled else { return }
+      guard let self, self.notice == line else { return }
+      self.notice = nil
+    }
   }
 
   // MARK: - Pure mappings (pinned by tests)
 
-  /// Upstream phase → card phase. `connecting` covers first dials and
-  /// reconnects alike — someone is actively dialing in both — while
-  /// `suspended` means the dialing has deliberately stopped and says why.
+  /// The client's state → the card's phase. A session that ENDED outranks the
+  /// set's state: the connection may be perfectly healthy and the thing the
+  /// card is about gone.
   nonisolated static func phase(
-    for phase: GhostteaAttachmentPhase, exitCode: Int32? = nil
+    for state: RoutedTerminalClient.State, session: RoutedSessionState?
   ) -> TerminalPhase {
+    if let session, case .ended(let reason) = session.control { return .ended(reason) }
+    switch state {
+    case .off: return .idle
+    case .connecting, .ready: return .connecting
+    case .attached:
+      // Attached is not presenting. A session whose legs are up but whose first
+      // frame has not landed is still connecting, and saying `live` over it
+      // would be the blank this design refuses.
+      return session?.presentationReady == true ? .live : .connecting
+    case .reconnecting, .staleRoute: return .connecting
+    case .refused(let code): return .refused(code)
+    case .failed(let reason): return .failed(reason)
+    }
+  }
+
+  /// The phase → the banner. Pure, so every sentence a person can be shown is
+  /// decidable without a simulator.
+  nonisolated static func banner(
+    for phase: TerminalPhase, device: String?, doorRefusal: String?
+  ) -> TerminalBanner? {
+    let who = device ?? "that desktop"
     switch phase {
-    case .opening, .synchronizing, .reconnecting:
-      .connecting
-    case .live:
-      .live
-    case .suspended(.hostAbsent):
-      .suspended("host absent — reconnects when it returns")
-    case .suspended(.suspendedByApp):
-      .suspended("paused in the background")
-    case .suspended(.accessDenied):
-      .suspended("the host refused this device")
-    case .ended(.sessionClosed):
-      .ended("session closed on the host")
-    case .ended(.sessionExited):
-      .ended(exitCode.map { "process exited (code \($0))" } ?? "process exited")
-    case .ended(.sessionUnavailable):
-      .ended("session unavailable — the host could not say why")
-    case .ended(.hostRestarted):
-      .ended("the host restarted")
-    case .ended(.hostShutdown):
-      .ended("the host shut down")
-    case .ended(.closedLocally):
-      .ended("closed from this device")
+    case .idle, .live:
+      return nil
+    case .connecting:
+      return nil
+    case .suspended(let why):
+      return TerminalBanner(
+        title: why, detail: "this session is still running on \(who).",
+        actions: [.retryNow, .backToTheField], coolsTerminal: true)
+    case .refused(let words):
+      return TerminalBanner(
+        title: doorRefusal ?? words,
+        detail: doorRefusal == nil ? "\(who) turned this attach down." : nil,
+        actions: [.retryNow, .backToTheField], coolsTerminal: true)
+    case .ended(let why):
+      return TerminalBanner(
+        title: "this session ended — \(why)", detail: nil,
+        actions: [.backToTheField], coolsTerminal: true)
+    case .failed(let why):
+      return TerminalBanner(
+        title: "the connection failed — \(why)", detail: nil,
+        actions: [.retryNow, .backToTheField], coolsTerminal: true)
+    }
+  }
+
+  /// The daemon's refusal as a sentence a person can act on.
+  ///
+  /// `doors_not_published` is the one this slice exists to say out loud: the
+  /// desktop is there, fieldd answered, and it is not carrying its terminal
+  /// doors onto the tailnet. `transport_not_landed` is its sibling and a
+  /// DIFFERENT fact — that cell serves no T1 doors at all — and the two are
+  /// never folded into one shrug.
+  nonisolated static func doorWords(_ error: FieldProductError, device: String?) -> String {
+    let who = device ?? "that desktop"
+    guard let unavailable = error.unavailable, unavailable.service == "terminal" else {
+      return error.message.isEmpty ? error.kind : error.message
+    }
+    switch unavailable.state {
+    case "doors_not_published":
+      return "\(who) is not publishing its terminal doors on the tailnet"
+    case "transport_not_landed":
+      return "\(who) is serving this session without a routed door to dial"
+    default:
+      return "\(who) cannot hand out a ticket — \(unavailable.state)"
+    }
+  }
+
+  nonisolated static func mouseAction(_ action: GhostteaMouseAction) -> RoutedMouseInput.Action {
+    switch action {
+    case .press: .press
+    case .release: .release
+    case .motion: .motion
     }
   }
 
