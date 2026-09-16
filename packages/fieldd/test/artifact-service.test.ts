@@ -281,6 +281,12 @@ function service(
     catalog?: ArtifactCatalogBridge;
     /** UA-P-0c — which account this desktop is; `null` is the unlinked one. */
     linkedLogin?: () => string | null;
+    /** UA-P-0e — drive the catalog's BUS legs. Default ON for this harness:
+     * the AH-2 rows below are the store carrier's own suite, and they are what
+     * keeps the code UA-P-4 switches back on honest while the daemon runs with
+     * it off. The `Artifact Hub over a real daemon` block, further down, boots a
+     * real daemon and therefore gets the product's answer. */
+    meshBus?: boolean;
   } = {},
 ): ArtifactService {
   return new ArtifactService({
@@ -288,6 +294,7 @@ function service(
     bridge,
     maintenanceMs: false,
     linkedLogin: options.linkedLogin ?? (() => TEST_LOGIN),
+    meshBus: options.meshBus ?? true,
     probe: options.probe ?? (async () => true),
     ...(options.catalog !== undefined ? { catalog: options.catalog } : {}),
     ...(options.writeIntent !== undefined ? { writeIntent: options.writeIntent } : {}),
@@ -1469,13 +1476,25 @@ describe("Artifact Hub over a real daemon", () => {
     cleanup.push(() => started.daemon.stop());
     cleanup.push(() => started.mock.stop());
 
-    await until(() => started.daemon.artifacts.artifacts().length === 1);
-    expect(started.daemon.devices.get("dev-peer")?.tailnetDnsName).toBeUndefined();
-    expect(started.daemon.artifacts.artifacts()[0]).toMatchObject({
-      originDeviceId: "dev-peer",
-      openable: false,
-    });
-    expect(started.daemon.artifacts.artifacts()[0]?.url).toBeUndefined();
+    // UA-P-0e (D2) — THE DEFENCE MOVED ONE LAYER OUT, and it got simpler.
+    //
+    // This row used to assert that a peer's self-asserted `tailnetDnsName`
+    // could not bind a URL: the foreign slice ARRIVED, was adopted, and the
+    // projection refused to make it openable. Under D2 no foreign slice is
+    // adopted at all — neither the device one nor the artifact one — so the
+    // poisoned claim never reaches a projection to be refused by. Both stores
+    // are seeded above and both are ignored.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(started.daemon.artifacts.artifacts()).toEqual([]);
+    // the peer is not in the roster either: no WhoIs login means no account to
+    // match, so it is not this account's device
+    expect(started.daemon.devices.get("dev-peer")).toBeUndefined();
+    // and the hostile string is nowhere in either answer
+    const answers = JSON.stringify([
+      started.daemon.artifacts.artifacts(),
+      started.daemon.devices.list(),
+    ]);
+    expect(answers).not.toContain("evil.example.com");
   });
 
   it("publishes an exact artifact URL, keeps the product secret separate, replays, and removes", async () => {
@@ -1575,7 +1594,83 @@ describe("Artifact Hub over a real daemon", () => {
     });
   }, 30_000);
 
-  it("converges add, collision, update, status, subscription, and removal across two daemon stacks", async () => {
+  it("UA-P-0e: two stacks on one tailnet do NOT converge, because nothing is published", async () => {
+    // Today's truth, stated positively beside the skipped row below. `dev-a`
+    // publishes an artifact; `dev-b` is a self peer on the same tailnet with a
+    // live relay between the two mocks — and still sees nothing, because
+    // `field.artifacts.v1` is not written and not read.
+    const source = await localSource();
+    const a = await boot(makeDataDir(), (mock) => {
+      mock.meshDeviceId = "dev-a";
+      mock.storeSlices.clear();
+      mock.meshPeers = [
+        {
+          id: "node-b",
+          deviceId: "dev-b",
+          online: true,
+          whois: { login: TEST_LOGIN, deviceName: "MOCK.TS.NET." },
+        },
+      ];
+    });
+    const b = await boot(makeDataDir(), (mock) => {
+      mock.meshDeviceId = "dev-b";
+      mock.storeSlices.clear();
+      mock.meshPeers = [
+        {
+          id: "node-a",
+          deviceId: "dev-a",
+          online: true,
+          whois: { login: TEST_LOGIN, deviceName: "mock.ts.net" },
+        },
+      ];
+    });
+    cleanup.push(() => a.daemon.stop());
+    cleanup.push(() => b.daemon.stop());
+    cleanup.push(() => a.mock.stop());
+    cleanup.push(() => b.mock.stop());
+
+    const rpcA = await rpcFor(a.daemon.controlPort, a.daemon.shellToken);
+    await rpcA.call("artifact.publish", {
+      artifactId: A,
+      title: "A workbench",
+      source: { kind: "proxy", port: source.port, scheme: "http" },
+    });
+    await until(() => a.daemon.artifacts.statuses()[0]?.status === "active", 8_000);
+
+    // A's own list has it — the local half of the catalog is untouched, which
+    // is the CONTROL: this is not a daemon that failed to publish anything
+    expect(a.daemon.artifacts.artifacts().map((v) => v.artifactKey)).toEqual([`dev-a:${A}`]);
+    // nothing went to the bus — there is no slice to relay, which is why the
+    // relay helper is not called here (it would throw on the absence)
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(a.mock.artifactStoreWrites).toEqual([]);
+
+    // and the INBOUND half: a slice pushed at B as if A had published it is
+    // ignored, so the off-state is not merely "nobody wrote" — nobody reads
+    b.mock.artifactStoreSlices.set("dev-a", {
+      v: 1,
+      artifacts: [catalogEntry("dev-a", A, { url: "https://mock.ts.net:17180" })],
+    });
+    b.mock.pushArtifactStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-a",
+      data: b.mock.artifactStoreSlices.get("dev-a"),
+      version: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(b.daemon.artifacts.artifacts()).toEqual([]);
+    // …and B does see A as a device, because the ROSTER comes from the
+    // tailnet's registry rather than the bus
+    expect(b.daemon.devices.get("dev-a")?.tailnetDnsName).toBe("mock.ts.net");
+  }, 60_000);
+
+  // UA-P-4 — the store carrier's two-stack convergence, preserved whole for the
+  // day truffle can gate a store by login (`MESH_BUS_CARRIES_CONTENT`). Skipped
+  // rather than deleted or rewritten: it describes behaviour the product
+  // deliberately does not have right now and is meant to have again, and
+  // rebuilding it from a commit message is the cost of deleting it. The row
+  // above states what is true instead.
+  it.skip("converges add, collision, update, status, subscription, and removal across two daemon stacks", async () => {
     const source = await localSource();
     const a = await boot(makeDataDir(), (mock) => {
       mock.meshDeviceId = "dev-a";

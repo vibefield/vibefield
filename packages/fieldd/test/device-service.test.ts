@@ -10,7 +10,8 @@ import {
   CONTRACTS_VERSION,
   type DeviceInfo,
   type DeviceListResult,
-  DeviceSlice,
+  type DeviceSlice,
+  PORTS,
   SOCKETS,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
@@ -76,10 +77,54 @@ async function pollDevices(
   }
 }
 
-/** F-H2 — the capabilities this device most recently ADVERTISED, off the
- * `field.devices.v1` slice a remote reader actually receives. */
-const lastCapabilities = (mock: MockMgmtServer): DeviceSlice["capabilities"] | undefined =>
-  (mock.storeWrites.at(-1) as DeviceSlice | undefined)?.capabilities;
+/** F-H2 — the capabilities this device most recently reported.
+ *
+ * UA-P-0e (D2): read from the SELF ROW of `device.list`, not from the
+ * `field.devices.v1` slice, because there is no slice — the bus reaches every
+ * VibeField node on the tailnet and cannot be told to reach only this account's,
+ * so nothing content-bearing rides it. The capability is the same fact; where a
+ * remote reader gets it is the peer's own door. */
+const selfCapabilities = async (rpc: WsRpc): Promise<DeviceInfo["capabilities"]> =>
+  (await listVia(rpc)).find((d) => d.self)?.capabilities;
+
+/** UA-P-0e — one app peer as the TAILNET's registry reports it. `login` is the
+ * control plane's WhoIs answer about the peer, not a claim by it, and it is the
+ * whole of what decides whether the peer is in this account's roster. */
+function tailnetPeer(over: {
+  id: string;
+  deviceId?: string;
+  login?: string;
+  name?: string;
+  online?: boolean;
+  lastSeen?: number;
+  deviceName?: string;
+}): unknown {
+  return {
+    id: over.id,
+    ...(over.deviceId !== undefined ? { deviceId: over.deviceId } : {}),
+    name: over.name ?? over.id,
+    online: over.online ?? true,
+    ...(over.lastSeen !== undefined ? { lastSeen: over.lastSeen } : {}),
+    ...(over.login !== undefined
+      ? {
+          whois: {
+            login: over.login,
+            ...(over.deviceName !== undefined ? { deviceName: over.deviceName } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+/** The account every row below is scoped to, and a link.json that says so. */
+const ACCOUNT = "james@github";
+function linkTo(dataDir: string, login: string = ACCOUNT): void {
+  mkdirSync(join(dataDir, "fieldd"), { recursive: true });
+  writeFileSync(
+    join(dataDir, "fieldd", "link.json"),
+    JSON.stringify({ login, tailnet: "tail1234.ts.net", linkedAt: "2026-09-14T00:00:00.000Z" }),
+  );
+}
 
 /** A floor route snapshot with one cell whose T1 doors are up, or none. */
 function routeSnapshot(revision: number, port?: number): unknown {
@@ -125,19 +170,33 @@ function peerSlice(over: Partial<DeviceSlice> = {}): DeviceSlice {
 }
 
 describe("DeviceService — publish + identity", () => {
-  it("publishes a valid self-slice on boot with the mesh identity dev-self", async () => {
+  it("UA-P-0e: publishes NOTHING into field.devices.v1, and the self row says the same", async () => {
+    // THE FLIP. This row asserted the shape of the slice this daemon published;
+    // under D2 there is no slice. What it published — hostname, platform,
+    // versions, capabilities, and the product capability URL WITH its route
+    // secret — went to every VibeField node on the tailnet, because truffle
+    // broadcasts a store to every peer whose hostname carries the app prefix
+    // and cannot be told to narrow it by login.
+    //
+    // So the facts move to the SELF ROW, which is where a local reader always
+    // read them and where a remote reader reads them through a door that
+    // checked who it is. Every assertion below is the same assertion; the
+    // carrier is what changed.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
+    linkTo(dataDir);
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
-    await until(() => mock.storeWrites.length > 0);
-    const parsed = DeviceSlice.safeParse(mock.storeWrites[0]);
-    expect(parsed.success).toBe(true);
-    const slice = parsed.data as DeviceSlice;
-    // deviceId came from store.get (no deviceId) — the node's mesh identity (D30)
-    expect(slice.deviceId).toBe("dev-self");
-    expect(slice.capabilities).toEqual({
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    const self = (await pollDevices(rpc, (d) => d.some((x) => x.self))).find(
+      (x) => x.self,
+    ) as DeviceInfo;
+    // deviceId came from store.get (no deviceId) — the node's mesh identity (D30).
+    // That read survives D2: it asks the floor for OUR OWN ULID and reaches no peer.
+    expect(self.deviceId).toBe("dev-self");
+    expect(self.capabilities).toEqual({
       terminalHost: false,
       // TM-2 (MF-1l) — the REMOTE half of the terminal question, and a floor
       // that said nothing is a no
@@ -145,8 +204,15 @@ describe("DeviceService — publish + identity", () => {
       docHost: true,
       push: false,
     });
-    expect(slice.bootId).toBe(daemon.bootId);
-    expect(slice.productEndpoint?.serve).toBe("product");
+    expect(self.bootId).toBe(daemon.bootId);
+    expect(self.productEndpoint?.serve).toBe("product");
+
+    // and the bus is INERT — not "empty for now", but never written to, with a
+    // settle window so a late publish would still be caught
+    await sleep(250);
+    expect(mock.storeWrites).toEqual([]);
+    expect(mock.agentFieldWrites).toEqual([]);
+    expect(mock.artifactStoreWrites).toEqual([]);
   });
 
   it("terminalMesh is true only while a remote reader could really attach (F-H2)", async () => {
@@ -159,15 +225,7 @@ describe("DeviceService — publish + identity", () => {
     // — is the no-login row in terminal-serve.test.ts.)
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
-    mkdirSync(join(dataDir, "fieldd"), { recursive: true });
-    writeFileSync(
-      join(dataDir, "fieldd", "link.json"),
-      JSON.stringify({
-        login: "james@github",
-        tailnet: "tail1234.ts.net",
-        linkedAt: "2026-09-14T00:00:00.000Z",
-      }),
-    );
+    linkTo(dataDir);
     mock.helloTerminalMesh = true;
     mock.helloTerminal = {
       controlSocket: "/mock/native/run/termctl.1.sock",
@@ -178,21 +236,23 @@ describe("DeviceService — publish + identity", () => {
 
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
     // linked, a floor that publishes, one routable cell: the serve is up and
     // the capability says a remote reader can attach
-    await until(() => lastCapabilities(mock)?.terminalMesh === true);
-    expect(lastCapabilities(mock)?.terminalHost).toBe(true);
+    await pollDevices(rpc, (d) => d.find((x) => x.self)?.capabilities?.terminalMesh === true);
+    expect((await selfCapabilities(rpc))?.terminalHost).toBe(true);
 
     // the last cell exits. The floor's word has not moved — it is still true —
     // but the listener is withdrawn, so the promise is withdrawn with it.
     mock.pushRoutesDelta(routeSnapshot(2));
-    await until(() => lastCapabilities(mock)?.terminalMesh === false);
+    await pollDevices(rpc, (d) => d.find((x) => x.self)?.capabilities?.terminalMesh === false);
     // …and `terminalHost` goes with it, which is NOT this change's doing:
     // `NativeLink.terminalEndpoints` is DERIVED from the route snapshot's
     // cells, so a floor with no cells reports no endpoints. Recorded here
     // rather than asserted the other way, because the first draft of this row
     // assumed the local fact was independent and it is not.
-    expect(lastCapabilities(mock)?.terminalHost).toBe(false);
+    expect((await selfCapabilities(rpc))?.terminalHost).toBe(false);
   });
 
   it("device.list returns the online self row; workspace.read gates the surface", async () => {
@@ -242,155 +302,201 @@ describe("DeviceService — publish + identity", () => {
   });
 });
 
-describe("DeviceService — roster fusion", () => {
-  it("fuses a peer slice from the store stream (offline without a tailnet entry)", async () => {
+// UA-P-0e (D2) — THE ROSTER IS THE SELF-PEER SET.
+//
+// What was here: five rows about fusing peer SLICES out of `field.devices.v1`
+// — the store stream, the ULID↔tailscale-id join, the tolerant malformed drop,
+// the owner binding that stripped peer-authored trust fields, and the delta
+// stream. Every one of them existed because a peer's row came from something
+// the peer PUBLISHED, and that publication reached every VibeField node on the
+// tailnet. James ruled the store scoped to the login identity; until truffle
+// can do that, nothing content-bearing rides the bus at all.
+//
+// So a peer's row comes from the TAILNET'S OWN REGISTRY now, and the questions
+// change with the source. There is no slice to malform, no owner to bind a
+// claim to and no trust field to strip, because a peer says nothing. The
+// question that replaces all of them is the only one left: WHOSE peer is this?
+//
+// The slice path itself is not deleted — it is behind `MESH_BUS_CARRIES_CONTENT`
+// for UA-P-4, and the rows above prove it is inert.
+describe("DeviceService — the self-peer set", () => {
+  it("lists ONLY peers whose WhoIs login is this account's", async () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-mine", deviceId: "dev-mine", login: ACCOUNT, name: "my laptop" }),
+      // a colleague's VibeField on the same tailnet. It carries the app's
+      // hostname prefix, it is in truffle's registry, and before this ruling it
+      // was drawn exactly like the user's own device.
+      tailnetPeer({
+        id: "node-theirs",
+        deviceId: "dev-theirs",
+        login: "colleague@corp.example",
+        name: "their laptop",
+      }),
+      // and a peer the tailnet will not name: no login to compare, so not
+      // this account's. Absent, never assumed.
+      tailnetPeer({ id: "node-anon", deviceId: "dev-anon", name: "who?" }),
+    ];
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
-
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, daemon.shellToken, "shell-main");
-    await until(() => mock.storeWrites.length > 0); // publish ran ⇒ store sub is live
 
-    const slice = peerSlice({ publishedAt: 1_700_000_123_456 });
-    mock.pushStoreDelta({ kind: "peerUpdated", deviceId: "dev-peer", data: slice, version: 1 });
-    const two = await pollDevices(rpc, (d) => d.length === 2);
-    const peer = two.find((x) => x.deviceId === "dev-peer") as DeviceInfo;
-    expect(peer.self).toBe(false);
-    expect(peer.online).toBe(false); // no tailnet peer entry backs it
-    expect(peer.lastSeenAt).toBe(slice.publishedAt); // freshest honest fact = publishedAt
-
-    mock.pushStoreDelta({ kind: "peerRemoved", deviceId: "dev-peer" });
-    await pollDevices(rpc, (d) => d.length === 1);
+    const roster = await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-mine"));
+    expect(roster.map((d) => d.deviceId).sort()).toEqual(["dev-mine", "dev-self"]);
+    expect(roster.find((d) => d.deviceId === "dev-theirs")).toBeUndefined();
+    expect(roster.find((d) => d.deviceId === "dev-anon")).toBeUndefined();
+    // and no trace of the foreign peer anywhere in the answer
+    expect(JSON.stringify(roster)).not.toContain("colleague@corp.example");
+    expect(JSON.stringify(roster)).not.toContain("their laptop");
   });
 
-  it("fuses tailnet liveness through the registry correlation, never the ULID (T1 §6)", async () => {
+  it("an UNLINKED desktop has no account, so it has no peers", async () => {
+    // The same posture the door and the serve take: with no captured login
+    // there is nothing to compare a WhoIs answer against, so the honest roster
+    // is this device alone — not "everyone on the tailnet" by default.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
-    // Both keyspaces present and DIFFERENT, exactly as truffle guarantees
-    // (Peer.device_id never equals tailscale_id): the join must travel
-    // slice ULID → PeerInfo.deviceId → tailscale id, or it lands on nothing —
-    // which is the bug this test exists to keep dead.
+    mock.meshPeers = [tailnetPeer({ id: "node-mine", deviceId: "dev-mine", login: ACCOUNT })];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    const roster = await pollDevices(rpc, (d) => d.some((x) => x.self));
+    await sleep(200);
+    expect((await listVia(rpc)).map((d) => d.deviceId)).toEqual(["dev-self"]);
+    expect(roster.every((d) => d.self)).toBe(true);
+  });
+
+  it("carries liveness, the dial id and the MagicDNS name — and NOT what the peer never said", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
     mock.meshPeers = [
-      {
-        id: "nodeid-peer",
+      tailnetPeer({
+        id: "node-peer",
         deviceId: "dev-peer",
+        login: ACCOUNT,
+        name: "peerbox",
         online: true,
         lastSeen: 1_700_000_200_000,
-        whois: { login: "me@example.com", deviceName: "PEER.TAILNET.TS.NET." },
-      },
-      { id: "nodeid-loner", online: true }, // no published ULID — stays uncorrelated
+        deviceName: "PEER.TAILNET.TS.NET.",
+      }),
     ];
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
-
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, daemon.shellToken, "shell-main");
-    await until(() => mock.storeWrites.length > 0); // publish ran ⇒ peers were refreshed
-
-    const slice = peerSlice({ publishedAt: 1_700_000_123_456 });
-    mock.pushStoreDelta({ kind: "peerUpdated", deviceId: "dev-peer", data: slice, version: 1 });
     const roster = await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-peer"));
-    const peer = roster.find((x) => x.deviceId === "dev-peer") as DeviceInfo;
-    expect(peer.online).toBe(true); // the join hit — a live tailnet peer reads online
-    expect(peer.tailscaleId).toBe("nodeid-peer"); // the dial keyspace, exposed for liveness consumers
+    const peer = roster.find((d) => d.deviceId === "dev-peer") as DeviceInfo;
+
+    expect(peer.self).toBe(false);
+    expect(peer.name).toBe("peerbox");
+    expect(peer.online).toBe(true);
+    expect(peer.lastSeenAt).toBe(1_700_000_200_000);
+    // the DIAL keyspace, never mixed with the roster ULID (T1 §6)
+    expect(peer.tailscaleId).toBe("node-peer");
     expect(peer.tailnetDnsName).toBe("peer.tailnet.ts.net"); // transport-derived, canonical
-    expect(peer.lastSeenAt).toBe(1_700_000_200_000); // liveness lastSeen beats publishedAt
+
+    // and the honest absences: a peer's OS, its versions, what it can host and
+    // when it last published are claims it has not made through a door that
+    // checked who it is. Absent, not guessed — which is the tolerant-reader law
+    // applied to ourselves.
+    expect(peer.platform).toBeUndefined();
+    expect(peer.fielddVersion).toBeUndefined();
+    expect(peer.contractsVersion).toBeUndefined();
+    expect(peer.capabilities).toBeUndefined();
+    expect(peer.bootId).toBeUndefined();
+    expect(peer.publishedAt).toBeUndefined();
+    // the CONTROL: SELF still carries every one of them — it is this process
+    const self = roster.find((d) => d.self) as DeviceInfo;
+    expect(self.platform).toBe(process.platform);
+    expect(self.capabilities).toBeDefined();
+    expect(self.bootId).toBe(daemon.bootId);
   });
 
-  it("drops a malformed peer slice and stays alive (tolerant reader)", async () => {
+  it("the door coordinate is DERIVED from MagicDNS and the registry port, never published", async () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
-    cleanup.push(() => daemon.stop());
-
-    const rpc = await openRpc(daemon.controlPort);
-    await helloAs(rpc, daemon.shellToken, "shell-main");
-    await until(() => mock.storeWrites.length > 0);
-    const before = await listVia(rpc);
-
-    mock.pushStoreDelta({
-      kind: "peerUpdated",
-      deviceId: "dev-bad",
-      data: { not: "a device slice" },
-      version: 1,
-    });
-    await sleep(150);
-    const after = await listVia(rpc);
-    expect(after.length).toBe(before.length);
-    expect(after.some((d) => d.deviceId === "dev-bad")).toBe(false);
-    // the daemon is unharmed — the product surface still answers
-    const health = (await rpc.call("system.health", {})) as { nativeConnected: boolean };
-    expect(health.nativeConnected).toBe(true);
-  });
-
-  it("binds a slice to its store owner and strips peer-authored trust fields", async () => {
-    const dataDir = makeDataDir();
-    const mock = await startMock(dataDir);
+    linkTo(dataDir);
     mock.meshPeers = [
-      {
-        id: "nodeid-peer",
+      tailnetPeer({
+        id: "node-peer",
         deviceId: "dev-peer",
-        online: true,
-        // Deliberately no WhoIs DNS name: the slice may not fill this blank.
-      },
+        login: ACCOUNT,
+        deviceName: "peer.tailnet.ts.net",
+      }),
+      // a self peer the tailnet has not named a host for: a door with no host
+      // is not a door, so the locator is absent rather than invented
+      tailnetPeer({ id: "node-hostless", deviceId: "dev-hostless", login: ACCOUNT }),
     ];
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, daemon.shellToken, "shell-main");
-    await until(() => mock.storeWrites.length > 0);
+    const roster = await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-peer"));
 
-    mock.pushStoreDelta({
-      kind: "peerUpdated",
-      deviceId: "dev-owner",
-      data: peerSlice({ deviceId: "dev-claim" }),
-      version: 1,
-    });
-    mock.pushStoreDelta({
-      kind: "peerUpdated",
-      deviceId: "dev-peer",
-      data: {
-        ...peerSlice(),
-        tailnetDnsName: "evil.example.com",
-        tailscaleId: "attacker-node",
-        link: "connected",
-      },
-      version: 2,
-    });
-
-    const roster = await pollDevices(rpc, (devices) =>
-      devices.some((device) => device.deviceId === "dev-peer"),
+    const peer = roster.find((d) => d.deviceId === "dev-peer") as DeviceInfo;
+    expect(peer.productEndpoint?.url).toBe(
+      `https://peer.tailnet.ts.net:${PORTS.FIELDD_PRODUCT_SERVE}`,
     );
-    expect(roster.some((device) => device.deviceId === "dev-owner")).toBe(false);
-    expect(roster.some((device) => device.deviceId === "dev-claim")).toBe(false);
-    const peer = roster.find((device) => device.deviceId === "dev-peer")!;
-    expect(peer.tailscaleId).toBe("nodeid-peer");
-    expect(peer.tailnetDnsName).toBeUndefined();
-    expect(peer.link).toBeUndefined();
-    expect(JSON.stringify(peer)).not.toContain("evil.example.com");
-    expect(JSON.stringify(peer)).not.toContain("attacker-node");
+    // UA-P-0d: a coordinate carries no key — the route secret is the sidecar's
+    // target path, so there is nothing in this string to protect
+    expect(peer.productEndpoint?.url).not.toContain("/t/");
+
+    const hostless = roster.find((d) => d.deviceId === "dev-hostless") as DeviceInfo;
+    expect(hostless.productEndpoint?.url).toBeUndefined();
+    expect(hostless.productEndpoint?.serve).toBe("product");
   });
 
-  it("streams device.delta over the product WS when a peer joins", async () => {
+  it("a peer leaving the account's set leaves the roster", async () => {
+    // The set is rebuilt whole on every peer refresh, so "no longer mine" and
+    // "no longer here" are the same event — there is no retained slice to age
+    // out and no last-known-safe row to keep drawing.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [tailnetPeer({ id: "node-peer", deviceId: "dev-peer", login: ACCOUNT })];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-peer"));
+
+    // the tailnet re-reports it under a DIFFERENT login (a device handed over,
+    // a tag applied): it is not this account's any more
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-peer", deviceId: "dev-peer", login: "someone-else@corp.example" }),
+    ];
+    mock.pushPeersDelta({ kind: "peerUpdated", peer: mock.meshPeers[0] });
+    await pollDevices(rpc, (d) => !d.some((x) => x.deviceId === "dev-peer"));
+  });
+
+  it("streams device.delta over the product WS when a self peer joins", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, daemon.shellToken, "shell-main");
-    await until(() => mock.storeWrites.length > 0);
-
     const sub = (await rpc.call("device.subscribe", {})) as {
       subId: string;
       snapshot: DeviceInfo[];
     };
     expect(sub.snapshot.some((d) => d.self)).toBe(true);
 
-    const slice = peerSlice({ deviceId: "dev-peer2", name: "peer2" });
-    mock.pushStoreDelta({ kind: "peerUpdated", deviceId: "dev-peer2", data: slice, version: 1 });
+    const joined = tailnetPeer({
+      id: "node-peer2",
+      deviceId: "dev-peer2",
+      login: ACCOUNT,
+      name: "peer2",
+    });
+    mock.meshPeers = [joined];
+    mock.pushPeersDelta({ kind: "peerUpdated", peer: joined });
 
     await until(() =>
       rpc.notifications.some(

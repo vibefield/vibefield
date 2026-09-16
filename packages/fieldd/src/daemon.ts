@@ -58,6 +58,7 @@ import {
   PluginsReloadParams,
   PluginsResolveModuleParams,
   PluginsUninstallParams,
+  PORTS,
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
@@ -124,6 +125,7 @@ import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
+import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import { MeshClient, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
@@ -1775,6 +1777,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // `terminalMesh` boolean alone, which is true while a pre-capture daemon
       // publishes nothing at all.)
       terminalMesh: () => publishedTerminalServe() !== undefined,
+      // UA-P-0e (D2) — the account the roster is scoped to, and the port a
+      // peer's door coordinate is derived with. `linkedLogin` is declared
+      // further down (the serve machinery owns it); this closure defers to it.
+      linkedLogin: () => links.status().link?.login ?? null,
+      productServePort: PORTS.FIELDD_PRODUCT_SERVE,
       // The daemon owns the serve secret + the fused serve state, so IT
       // composes the endpoint: url only while the product serve is active.
       productEndpoint: () => {
@@ -1823,12 +1830,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       terminalPublished: () => native.terminalMeshPublished(),
       logger: logger.child({ component: "agents.field" }),
     });
-    mesh.on("serves-changed", () => agentField.notifyServingChanged());
-    // TM-2 — the hello is where `terminalMesh` arrives and where it can change
-    // (a floor restart with the flag flipped), so a re-pair must republish the
-    // board with or without its attach joins.
-    native.on("terminal-endpoints", () => agentField.notifyServingChanged());
-    agentField.start();
+    // UA-P-0e (D2) — the field's STORE carrier is off. `field.agents.v1` reaches
+    // every VibeField node on the tailnet, and what it carries is every agent's
+    // label, project, branch, model, effort and blocker tool. The publisher is
+    // CONSTRUCTED (so it stays compiled and typechecked for UA-P-4) and simply
+    // never started, which is the whole of the off-state: no fold subscription,
+    // no slice, no heartbeat.
+    //
+    // Nothing is lost for a self reader: the same content-free rows ride
+    // `agent.subscribe {projection: "field"}` over the product door, which is
+    // where the phone already reads them and which compares the caller's WhoIs
+    // login to the stored link before it answers.
+    if (MESH_BUS_CARRIES_CONTENT) {
+      mesh.on("serves-changed", () => agentField.notifyServingChanged());
+      // TM-2 — the hello is where `terminalMesh` arrives and where it can change
+      // (a floor restart with the flag flipped), so a re-pair must republish the
+      // board with or without its attach joins.
+      native.on("terminal-endpoints", () => agentField.notifyServingChanged());
+      agentField.start();
+    }
     // NF-3: the terminalHost capability follows the hello — republish when the
     // floor appears or a new native boot rotates the endpoints.
     native.on("terminal-endpoints", () => void devices.sync());
@@ -3136,7 +3156,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // -- PeerLink (C5, design-04 D32): the device?-routing substrate --
     const peers = new PeerLink({
       ownDeviceId: () => devices.currentDeviceId(),
-      // endpoint truth = the peer's slice (the store, via the parsed roster)
+      // UA-P-0e — endpoint truth is the roster's DERIVED locator (it was the
+      // peer's published slice). Same call, and now it can only ever answer for
+      // a peer the tailnet says shares this account.
       endpointFor: (deviceId) => devices.get(deviceId)?.productEndpoint?.url,
       ...(config.peerWebSocket !== undefined ? { webSocket: config.peerWebSocket } : {}),
     });
@@ -3183,6 +3205,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return {
         name: "product",
         target: { kind: "port", port: controlPort },
+        // UA-P-0e (D2) — the TAILNET listener is the registry's fixed port, not
+        // whatever ephemeral number the loopback control plane bound. With
+        // nothing content-bearing on the bus there is no published slice to
+        // learn a port from, so a peer DERIVES the coordinate — and a
+        // derivation needs a number that is the same on every device. The two
+        // planes are separate now: loopback stays ephemeral (UA-D12).
+        listenPort: PORTS.FIELDD_PRODUCT_SERVE,
         tls: false,
         pathSecret: servePathSecret,
         // the sidecar matches with Go path.Match, lowercased both sides — a
@@ -3293,6 +3322,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           return () => mesh.off("serves-changed", cb);
         },
       },
+      // UA-P-0e (D2) — the bridge stays WIRED and the service decides what it
+      // uses: its `subscribe`/`publish` legs are the bus and are off, while the
+      // same bridge's device correlation and local refresh are what make this
+      // desktop's OWN artifacts listable at all. (Dropping the bridge here was
+      // the first shape and it was wrong — `artifacts()` returns nothing
+      // without one, so turning off the public catalog hid the user's own work.)
       catalog: {
         bootId,
         currentDeviceId: () => devices.currentDeviceId(),

@@ -10,7 +10,7 @@ import {
   type TerminalRouteSnapshot as TerminalRouteSnapshotType,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { bootstrap } from "../src/index";
+import { bootstrap, type FielddDaemon } from "../src/index";
 import type { ServeSpec } from "../src/mesh-client";
 import {
   cellDoorPort,
@@ -407,11 +407,14 @@ const reconciled = (mock: MockMgmtServer) => mock.meshCalls.includes("native.mes
 const terminalAdds = (mock: MockMgmtServer) =>
   mock.meshAddParams.filter((p) => p["serveId"] === TERMINAL_SERVE_ID);
 
-/** F-H2 — what this device most recently ADVERTISED about its terminal doors,
- * read off the `field.devices.v1` slice a remote reader actually gets. */
-const publishedTerminalMesh = (mock: MockMgmtServer): boolean | undefined =>
-  (mock.storeWrites.at(-1) as { capabilities?: { terminalMesh?: boolean } } | undefined)
-    ?.capabilities?.terminalMesh;
+/** F-H2 — what this device most recently said about its terminal doors.
+ *
+ * UA-P-0e (D2): read from the SELF ROW of the daemon's own roster, not from the
+ * `field.devices.v1` slice, because there is no slice — nothing content-bearing
+ * rides the bus until truffle can scope a store to a login. The FACT is the
+ * same one; a remote reader gets it through this desktop's door. */
+const publishedTerminalMesh = (daemon: FielddDaemon): boolean | undefined =>
+  daemon.devices.list().find((d) => d.self)?.capabilities?.terminalMesh;
 
 describe("TM-2 — daemon.ts drives the routes off the floor's own readings", () => {
   it("publishes the cell route beside the product door's secret path", async () => {
@@ -426,13 +429,18 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
     // secret path. One tailnet port would have been nicer; truffle has no
     // route update, and bouncing this one on cell churn is the price.
     const product = await poll(() => mock.meshServes.get("product"));
-    expect(product.listenPort).toBe(daemon.controlPort);
+    // UA-P-0e — the product door's TAILNET listener is the registry's fixed
+    // port now, not the ephemeral loopback control port. A peer DERIVES the
+    // coordinate (there is no published slice to learn one from), and a
+    // derivation needs a number that is the same on every device.
+    expect(product.listenPort).toBe(PORTS.FIELDD_PRODUCT_SERVE);
+    expect(product.listenPort).not.toBe(daemon.controlPort);
     expect(mock.meshServes.get(TERMINAL_SERVE_ID)?.listenPort).toBe(PORTS.TERMINAL_CELLS_SERVE);
     // the two listeners are distinct — a collision would have been refused
     expect(product.listenPort).not.toBe(PORTS.TERMINAL_CELLS_SERVE);
     // F-H2 — with the serve really up and carrying a route, the capability a
     // remote reader reads says so
-    await poll(() => (publishedTerminalMesh(mock) === true ? true : undefined));
+    await poll(() => (publishedTerminalMesh(daemon) === true ? true : undefined));
   });
 
   it("publishes NOTHING when the floor says its doors are not on the tailnet", async () => {
@@ -453,7 +461,7 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
   });
 
   it("publishes NOTHING with no linked login, however many doors are up", async () => {
-    const { mock } = await boot({ terminalMesh: true, login: null });
+    const { daemon, mock } = await boot({ terminalMesh: true, login: null });
     // UA-P-0a — "the daemon got that far" can no longer be the product serve:
     // with no linked login there IS no product serve to wait for (an unlinked
     // desktop is offline, and the serve used to be declared allow-less, which
@@ -466,7 +474,7 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
     // F-H2 — and this device says so. The FLOOR's `terminalMesh` is true here;
     // the daemon's three gates still published nothing, and the capability a
     // remote reader draws its card from answers off what is SERVING.
-    expect(publishedTerminalMesh(mock), "a pre-capture desktop is not attachable").toBe(false);
+    expect(publishedTerminalMesh(daemon), "a pre-capture desktop is not attachable").toBe(false);
   });
 
   it("WITHDRAWS a listener this daemon inherited but no longer calls for (F-H1)", async () => {

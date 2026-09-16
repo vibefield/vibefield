@@ -49,6 +49,7 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { canonicalTailnetDnsName } from "./device-service";
+import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import type { ObservedServe, ServeSpec, ServeState } from "./mesh-client";
 import { RpcCallError } from "./native-link";
 import { serveAllowGlob } from "./terminal-serve";
@@ -97,6 +98,13 @@ export interface ArtifactServiceOptions {
    * A caller that cannot answer this question cannot decide an audience, and
    * silently choosing the widest one for them is what this closes. */
   linkedLogin: () => string | null;
+  /** UA-P-0e TEST SEAM — drive the catalog's BUS legs (subscribe + publish)
+   * against a scripted bridge, the way `agent-field-publisher.test.ts` drives
+   * its publisher. Defaults to `MESH_BUS_CARRIES_CONTENT`, which is `false`;
+   * the daemon never passes it, and a boundary a caller could turn off would
+   * not be a boundary. It exists so the store-carrier suite keeps proving the
+   * code UA-P-4 will switch back on. */
+  meshBus?: boolean;
   /** Required by production from AH-2 onward; optional only for focused AH-1
    * unit tests that exercise the local serving state machine in isolation. */
   catalog?: ArtifactCatalogBridge;
@@ -232,6 +240,7 @@ export class ArtifactService {
   readonly #now: () => number;
   readonly #random: () => number;
   readonly #linkedLogin: () => string | null;
+  readonly #meshBus: boolean;
   readonly #probe: (source: ArtifactSource) => Promise<boolean>;
   readonly #maintenanceMs: number | false;
   readonly #writeIntent: (path: string, body: string) => void;
@@ -292,6 +301,7 @@ export class ArtifactService {
     this.#bridge = opts.bridge;
     this.#catalog = opts.catalog;
     this.#linkedLogin = opts.linkedLogin;
+    this.#meshBus = opts.meshBus ?? MESH_BUS_CARRIES_CONTENT;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "artifacts" });
     this.#now = opts.now ?? Date.now;
     this.#random = opts.random ?? Math.random;
@@ -1167,6 +1177,19 @@ export class ArtifactService {
     const catalog = this.#catalog;
     if (catalog === undefined || this.#disposed) return;
     this.#refreshLocalCatalog(this.statuses());
+    // UA-P-0e (D2) — the catalog's BUS legs are off; its local half is not.
+    // `field.artifacts.v1` carries every artifact's title and URL to every
+    // VibeField node on the tailnet, and a per-artifact allow (UA-P-0c) says
+    // nothing about who may read a catalog that names it. So: no subscription
+    // (no foreign slice is adopted) and no publish (nothing of ours goes out).
+    //
+    // `#refreshLocalCatalog` above stays, and it is load-bearing: it is what
+    // puts this device's OWN artifacts into the view `artifact.list` answers
+    // from. Turning the bus off must not hide the user's own work from them.
+    if (!this.#meshBus) {
+      this.#emitCatalog();
+      return;
+    }
     if (!this.#catalogSubscribed) {
       try {
         const subscription = await catalog.subscribe((payload, kind) => {
@@ -1210,6 +1233,7 @@ export class ArtifactService {
   }
 
   async #publishCatalogIfNeeded(): Promise<void> {
+    if (!this.#meshBus) return; // UA-P-0e (D2) — see #syncCatalog
     const catalog = this.#catalog;
     const owner = this.#catalogSelfDeviceId;
     if (catalog === undefined || owner === null || !this.#catalogDirty) return;

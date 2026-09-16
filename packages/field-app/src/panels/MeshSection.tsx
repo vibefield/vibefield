@@ -190,8 +190,13 @@ export function MeshSection(): ReactElement {
                   </span>
                 </span>
                 <span className="flex flex-none items-center gap-1.5">
-                  {d.capabilities.docHost && <span className={labelCls}>docs</span>}
-                  <span className={labelCls}>{d.platform}</span>
+                  {/* UA-P-0e (D2): a PEER row is built from the tailnet's own
+                      facts, not from a slice it published, so what it can host
+                      and what it runs on are things it has not told us. Absent
+                      draws as nothing rather than as a guess — the row still
+                      says who and whether, which is what a roster is for. */}
+                  {d.capabilities?.docHost === true && <span className={labelCls}>docs</span>}
+                  {d.platform !== undefined && <span className={labelCls}>{d.platform}</span>}
                   {/* C5 (D32): our link verdict to a peer — a muted text fact
                       (mono lowercase), separate from the online dot. */}
                   {!d.self && d.link !== undefined && <span className={labelCls}>{d.link}</span>}

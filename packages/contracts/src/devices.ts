@@ -90,28 +90,63 @@ export const DeviceSlice = z
   .passthrough();
 export type DeviceSlice = z.infer<typeof DeviceSlice>;
 
-/** The roster row: a slice fused with liveness. `online` derives from tailnet
- * peer state (self is always online); `lastSeenAt` = max(publishedAt, peer
- * last-seen) — honest without heartbeats. `link` is PeerLink's live verdict
- * about OUR connection to the device (C5/D32) — absent when never dialed. */
-export const DeviceInfo = DeviceSlice.extend({
-  self: z.boolean(),
-  online: z.boolean(),
-  lastSeenAt: z.number().int(),
-  link: z.enum(["connected", "dialing", "incompatible"]).optional(),
-  /** The Tailscale stable node id, when the peer registry correlates it to
-   * this device (PeerInfo.deviceId ⋈ slice key). This is the DIAL/liveness
-   * keyspace — `lane.open`, doc-sync peers, the C5 endpoint door — distinct
-   * from `deviceId` (the durable ULID roster key, D30); the two never collide
-   * and must never be joined against each other (T1 §6). Absent for self and
-   * for devices the registry does not currently list. */
-  tailscaleId: z.string().optional(),
-  /** Authenticated MagicDNS hostname derived from PeerInfo.whois.deviceName
-   * only after the lawful ULID → Tailscale-id registry join. It is deliberately
-   * absent from DeviceSlice: a peer may not self-assert the host used to bind
-   * an Artifact Hub URL. */
-  tailnetDnsName: z.string().min(1).max(253).optional(),
-}).passthrough();
+/** The roster row. `online` derives from tailnet peer state (self is always
+ * online); `lastSeenAt` = max(publishedAt, peer last-seen) — honest without
+ * heartbeats. `link` is PeerLink's live verdict about OUR connection to the
+ * device (C5/D32) — absent when never dialed.
+ *
+ * UA-P-0e (D2, 2026-09-15) — THE SLICE-DERIVED FACTS ARE OPTIONAL NOW, and this
+ * row no longer extends `DeviceSlice`. It used to: a roster row WAS a slice
+ * fused with liveness, so every field a peer published was a field the roster
+ * required. Under D2 nothing content-bearing rides the bus until truffle can
+ * gate a store by login, so there are no peer slices to fuse — a peer row is
+ * built from the tailnet's own facts (the peer registry plus its WhoIs login)
+ * and from a DERIVED door locator, and the things only a slice could have said
+ * are simply not said.
+ *
+ * Which is the tolerant-reader law applied to ourselves: a peer's OS, its
+ * fieldd version, what it can host — these are claims a device makes about
+ * itself, and until it makes them through a door that checked who it is, the
+ * honest answer is absence, not a guess. SELF still carries every field; it is
+ * this process, and nothing about it has to cross a wire to be known.
+ *
+ * They return, per device, when a reader asks the peer's own door for them, or
+ * when UA-P-4 lands the scoped bus and the slices come back. */
+export const DeviceInfo = z
+  .object({
+    deviceId: z.string().min(1).max(DEVICE_LIMITS.DEVICE_ID_CHARS),
+    name: z.string().min(1).max(DEVICE_LIMITS.NAME_CHARS),
+    platform: z.string().min(1).max(DEVICE_LIMITS.PLATFORM_CHARS).optional(),
+    headless: z.boolean().optional(),
+    fielddVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
+    contractsVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
+    capabilities: DeviceCapabilities.optional(),
+    /** UA-P-0e — for a PEER this is a derived LOCATOR (`https://<magicdns>:<the
+     * registry's product serve port>`), never a published value and never a
+     * secret: D7 moved the route secret to the sidecar's target path, so a door
+     * coordinate is all there is to hold. For SELF it is this daemon's own
+     * serve, `url` present only while it is active. */
+    productEndpoint: ProductEndpoint.optional(),
+    bootId: z.string().min(1).max(DEVICE_LIMITS.BOOT_ID_CHARS).optional(),
+    publishedAt: z.number().int().optional(),
+    self: z.boolean(),
+    online: z.boolean(),
+    lastSeenAt: z.number().int(),
+    link: z.enum(["connected", "dialing", "incompatible"]).optional(),
+    /** The Tailscale stable node id, when the peer registry correlates it to
+     * this device (PeerInfo.deviceId ⋈ slice key). This is the DIAL/liveness
+     * keyspace — `lane.open`, doc-sync peers, the C5 endpoint door — distinct
+     * from `deviceId` (the durable ULID roster key, D30); the two never collide
+     * and must never be joined against each other (T1 §6). Absent for self and
+     * for devices the registry does not currently list. */
+    tailscaleId: z.string().optional(),
+    /** Authenticated MagicDNS hostname derived from PeerInfo.whois.deviceName
+     * only after the lawful ULID → Tailscale-id registry join. It is deliberately
+     * absent from DeviceSlice: a peer may not self-assert the host used to bind
+     * an Artifact Hub URL. */
+    tailnetDnsName: z.string().min(1).max(253).optional(),
+  })
+  .passthrough();
 export type DeviceInfo = z.infer<typeof DeviceInfo>;
 
 export const DeviceListResult = z.object({ devices: z.array(DeviceInfo) }).passthrough();

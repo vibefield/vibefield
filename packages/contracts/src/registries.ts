@@ -68,6 +68,24 @@ export const PORTS = {
    * the connections down there, so no cell-side close frame can precede it. The
    * kit's 4000 arm is recovery for an event nothing currently raises. */
   TERMINAL_CELLS_SERVE: 9422,
+  /** UA-P-0e (D2) — the product door's TAILNET listener. Fixed, and the reason
+   * is the account boundary rather than convenience.
+   *
+   * Under D2 nothing content-bearing rides the synced-store bus until truffle
+   * can gate a store by login, so `field.devices.v1` carries no capability URL
+   * any more — it carries nothing, because it is not published. A peer that
+   * wants to reach another desktop's door therefore has to DERIVE where it is,
+   * and a derivation needs a number that is the same on every device.
+   *
+   * The serve used to listen on whatever ephemeral port the LOOPBACK control
+   * plane happened to bind (UA-D12), which made the port a published fact and
+   * the publication the only way to learn it. The two planes are separate now:
+   * loopback stays ephemeral, the tailnet listener is this.
+   *
+   * No host-level collision between two local users: each user's pair has its
+   * OWN truffle node with its own tailnet address, and the sidecar's listener
+   * binds there — the same reason `TERMINAL_CELLS_SERVE` above can be fixed. */
+  FIELDD_PRODUCT_SERVE: 9423,
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
   DOC_SYNC_QUIC: 9440,
   /** presence + device heartbeats (UDP, lossy). */

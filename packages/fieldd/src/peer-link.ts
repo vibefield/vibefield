@@ -13,6 +13,17 @@ import { RpcCallError } from "./native-link";
 // per D32's layering note — read through DeviceService's parsed roster to
 // avoid a second store subscription).
 //
+// UA-P-0e (D2, 2026-09-15) — THE ENDPOINT IS DERIVED NOW, NOT PUBLISHED. With
+// nothing content-bearing on the bus there is no peer slice to read a URL out
+// of, so the roster's `productEndpoint.url` is a LOCATOR this device computed:
+// the peer's authenticated MagicDNS name (from the tailnet's WhoIs, never from
+// anything the peer said) plus the registry's product serve port. This file is
+// unchanged by that — it still asks the roster for a peer's endpoint — but the
+// change closes a redirect primitive that was real: a spoofed slice could name
+// any `productEndpoint.url` and `endpointFor` would dial it. And the roster is
+// the SELF-PEER SET, so `endpointFor` can only answer for a peer whose WhoIs
+// login is this account's.
+//
 // One OUTBOUND connection per peer, dial-on-demand, idle-close (5min), per-call
 // deadline (8s). Failure honesty: no endpoint → UNAVAILABLE {device,
 // state:"offline"}; transport failure/timeout → the link drops (next call

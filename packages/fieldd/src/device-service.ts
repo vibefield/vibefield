@@ -12,6 +12,7 @@ import {
   type ProductEndpoint,
   STORES,
 } from "@vibefield/contracts";
+import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import type { MeshClient } from "./mesh-client";
 
 // DeviceService (design-04 §3.1, D31 — C4 P1-lite): the device directory.
@@ -22,6 +23,25 @@ import type { MeshClient } from "./mesh-client";
 // persisted local device-id keeps identity stable for solo operation (recorded
 // deviation from D30's mesh-identity law: solo fields still need an id), the
 // roster is self-only, and the slice stays unpublished until the mesh returns.
+//
+// UA-P-0e (D2, 2026-09-15) — AND THE STORE HALF OF ALL THAT IS SWITCHED OFF.
+// `MESH_BUS_CARRIES_CONTENT` is `false` (see mesh-bus.ts for the ruling and for
+// why it is a switch rather than a deletion): this device publishes no slice,
+// subscribes to no store, and fuses no peer slice, because the bus reaches
+// every VibeField node on the tailnet and cannot be told to reach only this
+// account's.
+//
+// The roster is then THE SELF-PEER SET: app peers from the tailnet's own
+// registry whose WhoIs login equals this user's linked login. Liveness comes
+// from the peer list, identity from truffle's durable ULID, and a door
+// coordinate is DERIVED (the peer's authenticated MagicDNS name + the
+// registry's product serve port) rather than published — UA-P-0d having moved
+// the route secret to the sidecar's target path, so a coordinate carries no key.
+//
+// What a peer no longer says about itself — platform, versions, capabilities,
+// bootId — is ABSENT on its row rather than guessed, which is why those fields
+// are optional on `DeviceInfo`. SELF still carries all of them: it is this
+// process. A reader that needs a peer's own claims asks the peer's door.
 
 export interface DeviceServiceOptions {
   dataDir: string;
@@ -43,7 +63,29 @@ export interface DeviceServiceOptions {
    * gates behind that. Re-published on "serves-changed" like the product
    * endpoint beside it. */
   terminalMesh?: () => boolean;
+  /** UA-P-0e (D2) — THE ACCOUNT. A peer is in this roster only when the
+   * tailnet's own WhoIs says its login is this one; `null` (unlinked, or a
+   * capture still running) admits nobody, which is the same posture the door
+   * and the serve take. */
+  linkedLogin?: () => string | null;
+  /** UA-P-0e — the peer door coordinate's port. Injected so the derivation has
+   * one source and a test can name it; production passes the registry row. */
+  productServePort?: number;
   now?: () => number;
+}
+
+/** UA-P-0e — what the tailnet's own registry says about one peer, which after
+ * D2 is the whole of what a roster row for a peer can honestly be built from. */
+interface SelfPeer {
+  /** truffle's durable published ULID — the roster key (D30). A peer that has
+   * not published one is uncorrelated and gets no row: absent, not guessed. */
+  deviceId: string;
+  tailscaleId: string;
+  name: string;
+  online: boolean;
+  lastSeen: number;
+  /** authenticated MagicDNS hostname, when WhoIs supplied one */
+  dnsName?: string;
 }
 
 interface PeerLiveness {
@@ -77,8 +119,17 @@ export class DeviceService extends EventEmitter {
    * in the same registry pass as tsByUlid and only after PeerInfo supplies the
    * durable ULID correlation; DeviceSlice can never assert this value. */
   private dnsByUlid = new Map<string, string>();
+  /** UA-P-0e — the self-peer set, keyed by the roster ULID. Rebuilt whole on
+   * every peer refresh; a peer that leaves the set leaves the roster. */
+  private selfPeers = new Map<string, SelfPeer>();
   private storeSubscribed = false;
   private storeOff: (() => void) | null = null;
+  /** UA-P-0e — the roster is built from the tailnet's peer registry now, so a
+   * peer joining, leaving or being re-identified has to WAKE it. Nothing
+   * subscribed to this stream before: the roster's peers came from the store,
+   * and the peer list was only ever read to fuse liveness onto a slice that had
+   * already arrived. */
+  private peersSubscribed = false;
   private lastRosterSig = "";
   /** syncs SERIALIZE (the MeshClient chain law): each pass sees its trigger's state */
   private chain: Promise<void> = Promise.resolve();
@@ -151,11 +202,27 @@ export class DeviceService extends EventEmitter {
     if (this.disposed) return;
     try {
       // Identity first (D30): the store's own device id IS the mesh identity.
+      // UA-P-0e keeps this read — it asks the floor for OUR OWN durable ULID and
+      // reaches no peer. Nothing is published by reading it, and the alternative
+      // (a per-boot local id on a linked device) would break every roster key.
       const self = (await this.opts.mesh.getSlice(STORES.DEVICES)) as { deviceId?: unknown };
       if (typeof self.deviceId === "string" && self.deviceId.length > 0) {
         this.deviceId = self.deviceId; // the mesh identity supersedes the local fallback (D30)
       }
-      if (!this.storeSubscribed) {
+      // UA-P-0e — the PEER stream, which is the tailnet's own registry and not
+      // a content store: it carries who is on this tailnet and the control
+      // plane's WhoIs answer about each, both of which are facts about peers
+      // rather than claims by them. The roster derives from it, so it must wake
+      // on it. Not behind the bus switch for exactly that reason.
+      if (!this.peersSubscribed) {
+        await this.opts.mesh.subscribePeers(() => void this.sync());
+        this.peersSubscribed = true; // NativeLink replays across reconnects (P5)
+      }
+      // UA-P-0e — the store leg, OFF. Not subscribed, so no foreign slice is
+      // ever adopted; not published, so nothing of this device's goes out.
+      // Both halves are the same ruling: the bus reaches every VibeField node
+      // on the tailnet, and this account is not all of them.
+      if (MESH_BUS_CARRIES_CONTENT && !this.storeSubscribed) {
         const subscription = await this.opts.mesh.subscribeStoreManaged(
           STORES.DEVICES,
           (payload, kind) => this.onStoreEvent(payload, kind),
@@ -169,7 +236,7 @@ export class DeviceService extends EventEmitter {
         this.applyStoreSnapshot(subscription.snapshot);
       }
       await this.refreshPeers();
-      await this.publish();
+      if (MESH_BUS_CARRIES_CONTENT) await this.publish();
     } catch {
       // mesh down (disabled / auth pending / node building) — self-only roster,
       // local identity, unpublished slice; the next mesh event retries.
@@ -213,9 +280,14 @@ export class DeviceService extends EventEmitter {
 
   private async refreshPeers(): Promise<void> {
     const raw = await this.opts.mesh.peers();
+    // UA-P-0e (D2) — THE ACCOUNT, read once per pass. `null` admits nobody:
+    // an unlinked or still-capturing desktop has no account to compare against,
+    // and the same posture the door and the serve take is the one here.
+    const account = this.opts.linkedLogin?.() ?? null;
     this.peerLiveness.clear();
     this.tsByUlid.clear();
     this.dnsByUlid.clear();
+    this.selfPeers.clear();
     for (const p of raw) {
       const parsed = PeerInfo.safeParse(p);
       if (!parsed.success) continue; // tolerant: a malformed peer never breaks the roster
@@ -226,12 +298,54 @@ export class DeviceService extends EventEmitter {
       });
       // a peer without a published ULID stays uncorrelated — its slice (if
       // any) reads offline honestly rather than joining on a guessed key
-      if (parsed.data.deviceId !== undefined) {
-        this.tsByUlid.set(parsed.data.deviceId, parsed.data.id);
-        const dnsName = canonicalTailnetDnsName(parsed.data.whois?.deviceName);
-        if (dnsName !== undefined) this.dnsByUlid.set(parsed.data.deviceId, dnsName);
-      }
+      if (parsed.data.deviceId === undefined) continue;
+      this.tsByUlid.set(parsed.data.deviceId, parsed.data.id);
+      const dnsName = canonicalTailnetDnsName(parsed.data.whois?.deviceName);
+      if (dnsName !== undefined) this.dnsByUlid.set(parsed.data.deviceId, dnsName);
+
+      // UA-P-0e — SELF OR NOTHING. The login comes from the tailnet's control
+      // plane (the floor WhoIs-es each peer's address), so it is a fact about
+      // the peer and not a claim by it; the comparison is the same stored-login
+      // one UA-D13 gives the door. A peer the tailnet will not name has no
+      // login to compare and is therefore not this account's.
+      const login = parsed.data.whois?.login;
+      if (account === null || login === undefined || login.toLowerCase() !== account.toLowerCase())
+        continue;
+      this.selfPeers.set(parsed.data.deviceId, {
+        deviceId: parsed.data.deviceId,
+        tailscaleId: parsed.data.id,
+        name: parsed.data.name ?? parsed.data.deviceId,
+        online: parsed.data.online,
+        lastSeen: typeof lastSeen === "number" ? lastSeen : 0,
+        ...(dnsName !== undefined ? { dnsName } : {}),
+      });
     }
+  }
+
+  /** UA-P-0e (D2) — the peers this account owns, in the DIAL keyspace. The one
+   * reader every mesh service that has to ask "is this peer mine?" goes
+   * through: doc-sync's fan-out, presence, and the inbound lane gate (UA-P-0f).
+   * Built from the tailnet's own WhoIs, never from anything a peer published. */
+  selfPeerIds(): string[] {
+    return [...this.selfPeers.values()].map((peer) => peer.tailscaleId);
+  }
+
+  /** UA-P-0e — is this dial-keyspace peer one of this account's? */
+  isSelfPeer(tailscaleId: string): boolean {
+    for (const peer of this.selfPeers.values()) if (peer.tailscaleId === tailscaleId) return true;
+    return false;
+  }
+
+  /** UA-P-0e — where a peer's product door is, DERIVED: its authenticated
+   * MagicDNS name plus the registry's fixed product serve port. Never published,
+   * and never a secret — UA-P-0d put the route secret on the sidecar's target
+   * path, so a coordinate is only a coordinate. Absent when the tailnet has not
+   * named the host, because a door with no host is not a door. */
+  doorLocator(deviceId: string): string | undefined {
+    const peer = this.selfPeers.get(deviceId);
+    const port = this.opts.productServePort;
+    if (peer?.dnsName === undefined || port === undefined) return undefined;
+    return `https://${peer.dnsName}:${port}`;
   }
 
   /** Store stream: snapshots replace the slice map wholesale (P5); deltas merge
@@ -303,7 +417,13 @@ export class DeviceService extends EventEmitter {
   }
 
   /** Fuse slices with liveness. Self is always online; a peer is online per the
-   * tailnet (transport truth); lastSeenAt = the freshest honest fact we hold. */
+   * tailnet (transport truth); lastSeenAt = the freshest honest fact we hold.
+   *
+   * UA-P-0e — with the bus off there are no peer slices, so the loop below runs
+   * over SELF alone and `selfPeerRows()` supplies the rest. The slice path is
+   * kept whole for UA-P-4, when a scoped bus makes a peer's own claims
+   * trustworthy again and the two sources fuse per device rather than
+   * alternate. */
   private roster(): DeviceInfo[] {
     const out: DeviceInfo[] = [];
     const seen = new Set<string>();
@@ -356,8 +476,44 @@ export class DeviceService extends EventEmitter {
       // Unpublished (mesh down / first sync pending): the roster still shows
       // this device honestly rather than an empty list.
       out.push({ ...this.selfSlice(), self: true, online: true, lastSeenAt: this.now() });
+      seen.add(this.deviceId);
+    }
+    for (const row of this.selfPeerRows()) {
+      if (seen.has(row.deviceId)) continue;
+      out.push(row);
+      seen.add(row.deviceId);
     }
     return out.sort((a, b) => Number(b.self) - Number(a.self) || a.name.localeCompare(b.name));
+  }
+
+  /** UA-P-0e (D2) — a roster row per SELF PEER, from the tailnet's own facts.
+   *
+   * What is here is what the control plane knows: the durable ULID, the
+   * display name, liveness, the dial id, the authenticated MagicDNS name and a
+   * derived door coordinate. What is NOT here — platform, versions,
+   * capabilities, bootId — is absent rather than guessed, because those are
+   * claims a device makes about itself and it has not made them through a door
+   * that checked who it is. A reader that needs them asks that door. */
+  private selfPeerRows(): DeviceInfo[] {
+    const rows: DeviceInfo[] = [];
+    for (const peer of this.selfPeers.values()) {
+      if (peer.deviceId === this.deviceId) continue; // self is never a peer of itself
+      const url = this.doorLocator(peer.deviceId);
+      const link = this.peers?.linkState(peer.deviceId);
+      rows.push({
+        deviceId: peer.deviceId,
+        name: peer.name,
+        self: false,
+        online: peer.online,
+        lastSeenAt: peer.lastSeen,
+        // a locator, not a capability: D7 left no secret in it
+        productEndpoint: { serve: "product", ...(url !== undefined ? { url } : {}) },
+        tailscaleId: peer.tailscaleId,
+        ...(peer.dnsName !== undefined ? { tailnetDnsName: peer.dnsName } : {}),
+        ...(link !== undefined ? { link } : {}),
+      });
+    }
+    return rows;
   }
 
   private emitRoster(): void {
@@ -379,8 +535,10 @@ export class DeviceService extends EventEmitter {
         // appears, disappears, or changes even if liveness itself is stable.
         d.tailnetDnsName ?? null,
         // capabilities flip at runtime (terminalHost follows the NF-D8 hello);
-        // omitting them made the flip invisible to device.subscribe (NF-6)
-        d.capabilities,
+        // omitting them made the flip invisible to device.subscribe (NF-6).
+        // UA-P-0e: absent on a peer row, and absence is itself a fact worth
+        // waking a subscriber for (it is how a row says "ask my door").
+        d.capabilities ?? null,
       ]),
     );
     if (sig === this.lastRosterSig) return;

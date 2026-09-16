@@ -159,129 +159,94 @@ async function fieldDoor(daemon: FielddDaemon): Promise<Array<Record<string, unk
   return sub.snapshot.rows;
 }
 
-describe("TM-2 (F-M4) — both carriers of one board answer the same question", () => {
-  // The field has TWO carriers: the `field.agents.v1` slice and the door's
-  // `agent.subscribe {projection: "field"}`. The attach-join withholding lived
-  // in the publisher alone, so with the floor's doors OFF a phone folding the
-  // door leg in beside the store leg got a bare row from one and a tappable
-  // card from the other — for the same run, in the same second.
-  it("withhold the attach join together while the doors are not published", async () => {
+// UA-P-0e (D2) — ONE CARRIER, not two.
+//
+// The field had two: the `field.agents.v1` slice and the door's
+// `agent.subscribe {projection: "field"}`. James ruled the store scoped to the
+// login identity, and truffle cannot do that — it broadcasts to every tailnet
+// node whose hostname carries the app prefix — so the slice carrier is off.
+// What it carried was not incidental: every agent's label, project, branch,
+// model, effort and blocker tool, to other people's desktops.
+//
+// The door carrier is untouched, and it is the one the phone already reads.
+// It answers the SAME rows, and it answers them only to a caller whose WhoIs
+// login matches the stored link.
+//
+// What these rows used to assert about the slice — the withdraw-on-gate-close,
+// the re-publish, the fold subscription, the graceful empty slice — is still
+// asserted, in `agent-field-publisher.test.ts`, against a publisher driven
+// directly. That is where it belongs while the daemon does not wire one: the
+// publisher is correct code for a bus that can be scoped, and UA-P-4 is when it
+// gets one.
+describe("TM-2 (F-M4) — the board's surviving carrier answers the same question", () => {
+  it("withholds the attach join while the doors are not published", async () => {
     const { daemon, mock } = await boot({ terminalMesh: false });
     await poll(() =>
       daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
     );
-    const slice = await poll(() => slices(mock).find((s) => s.rows.length > 0));
-    expect(slice.rows[0]?.terminal, "the store leg withholds it").toBeUndefined();
 
     const rows = await fieldDoor(daemon);
     const row = rows.find((r) => r["runtimeRunId"] === RUN);
-    // the ROW is there on both legs — the agent is real and working, and
-    // dropping it for a transport reason would lose a live agent off a phone
+    // the ROW is there — the agent is real and working, and dropping it for a
+    // transport reason would lose a live agent off a phone
     expect(row, "the door answered the board").toBeDefined();
     expect(row).toMatchObject({ kind: "scripted" });
-    expect(row?.["terminal"], "…and the door leg withholds it too").toBeUndefined();
+    expect(row?.["terminal"], "the join is withheld").toBeUndefined();
+
+    // and the bus carried none of it
+    expect(mock.agentFieldWrites).toEqual([]);
   });
 
-  it("carry it together once the floor publishes its doors", async () => {
+  it("carries the attach join once the floor publishes its doors", async () => {
     const { daemon, mock } = await boot({ terminalMesh: true });
     await poll(() =>
       daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
     );
-    const slice = await poll(() => slices(mock).find((s) => s.rows.length > 0));
-    expect(slice.rows[0]?.terminal).toMatchObject({ runtimeSessionId: PANE });
 
     const rows = await fieldDoor(daemon);
     expect(rows.find((r) => r["runtimeRunId"] === RUN)?.["terminal"]).toMatchObject({
       runtimeSessionId: PANE,
     });
+    expect(mock.agentFieldWrites).toEqual([]);
   });
 });
 
-describe("MF-1 — the daemon publishes its field into field.agents.v1", () => {
-  it("carries the fold's rows, withdraws when the serve goes, and publishes again when it returns", async () => {
+describe("UA-P-0e — the daemon's store carrier for the field is inert", () => {
+  it("publishes no slice, through a full boot, a serve cycle and a graceful stop", async () => {
     const { daemon, mock } = await boot();
 
-    // the fold has a row: MF-1f's exited-but-hosted run, re-listed by the
-    // first inventory (no floor needed to reach it)
+    // the fold has a row: MF-1f's exited-but-hosted run, re-listed by the first
+    // inventory (no floor needed to reach it). Everything the publisher would
+    // have reacted to happens below, and none of it reaches the bus.
     await poll(() =>
       daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
     );
+    expect(mock.agentFieldWrites, "boot published nothing").toEqual([]);
 
-    // The daemon's own boot brings the product serve up (the artifact service
-    // declares it), so the gate is OPEN here and the fold's row reaches the
-    // mesh without anything in this test asking for it — which is precisely
-    // the wiring under test: `agents.list` and `agents.subscribe` are the
-    // publisher's sources because daemon.ts made them so.
-    const published = await poll(() => slices(mock).find((slice) => slice.rows.length > 0));
-    expect(published.v).toBe(1);
-    expect(published.deviceId).toBe(daemon.devices.currentDeviceId());
-    expect(published.expiresAt).toBeGreaterThan(published.publishedAt);
-    expect(published.rows.map((row) => row.runtimeRunId)).toEqual([RUN]);
-    expect(published.rows[0]).toMatchObject({ alive: false, kind: "scripted" });
-    // content-free on the wire (§10.1)
-    expect(Object.keys(published.rows[0] ?? {})).not.toContain("monitor");
-    expect(mock.agentFieldWrites.length).toBeGreaterThan(0);
-
-    // THE GATE, closing: the serve goes away and the field is WITHDRAWN rather
-    // than left to age out of a reader on the expiry clock
-    const before = slices(mock).length;
+    // the gate closing and opening again — the two `serves-changed` edges the
+    // publisher's own suite drives it on
     await daemon.mesh.removeServe("product");
-    const withdrawn = await poll(() => {
-      const all = slices(mock);
-      return all.length > before ? all[all.length - 1] : undefined;
-    });
-    expect(withdrawn.rows).toEqual([]);
-    expect(withdrawn.expiresAt).toBeLessThanOrEqual(withdrawn.publishedAt);
-
-    // and nothing more goes out while it stays shut
-    const quiet = slices(mock).length;
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(slices(mock).length, "a shut gate published anyway").toBe(quiet);
-
-    // THE GATE, opening again: the fold has NOT moved since, so the only thing
-    // that can wake the publisher is the daemon's `serves-changed` hook
+    await new Promise((resolve) => setTimeout(resolve, 400));
     await daemon.mesh.setServes([productServe(daemon)]);
-    const again = await poll(() => {
-      const all = slices(mock);
-      return all.length > quiet ? all[all.length - 1] : undefined;
-    });
-    expect(again.rows.map((row) => row.runtimeRunId)).toEqual([RUN]);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(mock.agentFieldWrites, "a serve cycle published nothing").toEqual([]);
 
-    // THE FOLD, moving on its own — the witness for `agentField.start()`.
-    //
-    // The pane's cell tag changes in the floor's inventory. Nothing touches the
-    // serve, so the ONLY path from this fact to the mesh is the fold
-    // subscription `start()` opens. It is deliberately an INSTANT change (a
-    // re-tag, not a withdrawal behind MF-1f's grace) so the window here is the
-    // publisher's own 250 ms floor: a publisher that learned of it some other
-    // way, seconds later, is a publisher that was never subscribed.
-    const beforeFold = slices(mock).length;
+    // the FOLD moving on its own — an instant re-tag in the floor's inventory,
+    // which is the one event only a live fold subscription could carry
     mock.pushObserved(
       observed([{ sessionId: PANE, pid: 42, cell: { cellInstanceId: 2, cellBootId: "cell-b" } }]),
     );
-    const retagged = await poll(() => {
-      const all = slices(mock);
-      const last = all.length > beforeFold ? all[all.length - 1] : undefined;
-      return last?.rows[0]?.terminal?.cellBootId === "cell-b" ? last : undefined;
-    }, 4_000);
-    expect(retagged.rows.map((row) => row.runtimeRunId)).toEqual([RUN]);
-    // a changed projection is a NEW revision: the row moved, so the frame counts
-    expect(retagged.rows[0]?.revision).toBeGreaterThan(published.rows[0]?.revision ?? 0);
-  }, 60_000);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(mock.agentFieldWrites, "a fold change published nothing").toEqual([]);
 
-  it("a graceful stop publishes the empty slice", async () => {
-    const { daemon, mock } = await boot();
-    await poll(() =>
-      daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
-    );
-    await daemon.mesh.setServes([productServe(daemon)]);
-    await poll(() => (slices(mock).some((s) => s.rows.length > 0) ? true : undefined));
+    // the CONTROL: the board is genuinely live on the surviving carrier, so
+    // these are absences and not a test of a daemon that never had a field
+    const rows = await fieldDoor(daemon);
+    expect(rows.some((r) => r["runtimeRunId"] === RUN)).toBe(true);
 
+    // and a graceful stop has no empty slice to publish, because it published
+    // no full one
     await daemon.stop();
-    const last = slices(mock).at(-1);
-    expect(last?.rows).toEqual([]);
-    // already past: a reader drops this desktop NOW rather than in thirty
-    // seconds on the expiry clock
-    expect(last?.expiresAt).toBeLessThanOrEqual(last?.publishedAt ?? 0);
+    expect(mock.agentFieldWrites).toEqual([]);
   }, 60_000);
 });

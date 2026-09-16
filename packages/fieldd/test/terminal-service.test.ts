@@ -1506,7 +1506,7 @@ describe("TerminalService (NF-3, mock native)", () => {
     await helloAs(rpc, grant.token);
     const res = (await rpc.call("device.list", {})) as { devices: DeviceInfo[] };
     const self = res.devices.find((d) => d.self);
-    expect(self?.capabilities.terminalHost).toBe(true);
+    expect(self?.capabilities?.terminalHost).toBe(true);
   });
 });
 
@@ -1595,7 +1595,7 @@ describe("TC-D15 — the routes consumer (TC-S2)", () => {
 
     const devices = (await rpc.call("device.list", {})) as { devices: DeviceInfo[] };
     expect(
-      devices.devices.find((d) => d.self)?.capabilities.terminalHost,
+      devices.devices.find((d) => d.self)?.capabilities?.terminalHost,
       "the device still hosts terminals",
     ).toBe(true);
 

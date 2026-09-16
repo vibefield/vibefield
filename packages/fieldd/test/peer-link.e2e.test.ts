@@ -66,15 +66,30 @@ function makeDataDir(): string {
   return dataDir;
 }
 
-/** The sidecar-simulating ws-ctor: dials the url UNCHANGED (the secret path is
- * already in it) but injects the WhoIs login header the real sidecar would add.
- * Returns a fresh dial counter so tests can assert one-connection-per-peer. */
-function sidecar(): { ctor: WsCtor; dials: () => number } {
+/** The sidecar-simulating ws-ctor, which after UA-P-0d and UA-P-0e plays BOTH
+ * halves of what the real sidecar does to a dial:
+ *
+ *  1. It TERMINATES the tailnet coordinate and forwards to the target's
+ *     loopback address WITH the route secret joined onto the path (UA-P-0d:
+ *     the secret is the target's path now, added on forward, so the caller
+ *     never holds it). A's roster hands PeerLink `https://<magicdns>:<the
+ *     registry's product serve port>` — a derived locator with no secret in it
+ *     — and that is exactly the string a phone would dial.
+ *  2. It injects the WhoIs login header, which a caller cannot forge.
+ *
+ * The sim used to dial the URL unchanged, because the secret was already in it
+ * — which was the defect D7 closed. Returns a dial counter so tests can assert
+ * one-connection-per-peer. */
+function sidecar(loopback: () => string): { ctor: WsCtor; dials: () => number } {
   let count = 0;
   class SidecarSim extends WebSocket {
     constructor(url: string) {
       count += 1;
-      super(url, { headers: { "Tailscale-User-Login": LOGIN } });
+      // A coordinate this sim has no door behind — the roster's other rows —
+      // resolves to a closed port, which is what an unreachable peer really is.
+      const target = url.includes("device-b.tailnet.ts.net") ? loopback() : "ws://127.0.0.1:1/";
+      const forwarded = url.startsWith("wss://") || url.startsWith("https://") ? target : url;
+      super(forwarded, { headers: { "Tailscale-User-Login": LOGIN } });
     }
   }
   return { ctor: SidecarSim, dials: () => count };
@@ -136,32 +151,43 @@ interface Pair {
  * B's own health, publish B into A's store as a DISTINCT id ("dev-b"), and wait
  * for A's roster to carry it (so A.peers.endpointFor resolves). */
 async function bootPair(): Promise<Pair> {
-  // B first — A needs B's capability secret + control port to build the slice.
+  // B first — A needs B's loopback door (port + route secret) to play B's
+  // sidecar for it.
   const dirB = makeDataDir();
   const mockB = await startMock(dirB);
   const B = await bootstrap({ dataDir: dirB, controlPort: 0, dataPort: 0 });
   cleanup.push(() => B.stop());
   const secret = await capabilitySecret(B, mockB);
-  const bEndpoint = `http://127.0.0.1:${B.controlPort}/t/${secret}`;
+  const bEndpoint = `ws://127.0.0.1:${B.controlPort}/t/${secret}`;
 
-  // A dials peers through the sidecar sim (injected as the peer ws-ctor).
-  const { ctor, dials } = sidecar();
+  // A dials peers through the sidecar sim, which resolves A's derived tailnet
+  // coordinate to B's real loopback door (UA-P-0d).
+  const { ctor, dials } = sidecar(() => bEndpoint);
   const dirA = makeDataDir();
   const mockA = await startMock(dirA);
+  // UA-P-0e — B reaches A's roster the way every peer does now: through the
+  // TAILNET'S OWN REGISTRY, with the control plane's WhoIs saying B belongs to
+  // this account. It used to reach it as a published SLICE naming its own URL,
+  // which was a redirect primitive — a spoofed slice could name any endpoint
+  // and `endpointFor` would dial it. A DISTINCT device id is still required:
+  // both mocks report `dev-self`, so B's real id would collide with A's own.
+  mockA.meshPeers = [
+    {
+      id: "node-b",
+      deviceId: "dev-b",
+      name: "device-b",
+      online: true,
+      whois: { login: LOGIN, deviceName: "device-b.tailnet.ts.net" },
+    },
+  ];
   const A = await bootstrap({ dataDir: dirA, controlPort: 0, dataPort: 0, peerWebSocket: ctor });
   cleanup.push(() => A.stop());
 
-  // Publish B into A's store as "dev-b". A DISTINCT id is required: both mocks
-  // report device_id "dev-self", so B's real id collides with A's own —
-  // "dev-b" makes A treat it as a peer and lets endpointFor find B's loopback.
-  await until(() => mockA.storeWrites.length > 0); // A's store sub is live
-  mockA.pushStoreDelta({
-    kind: "peerUpdated",
-    deviceId: "dev-b",
-    data: peerSlice("dev-b", bEndpoint),
-    version: 1,
-  });
   await until(() => A.devices.get("dev-b") !== undefined, 4000);
+  // the coordinate A will dial is DERIVED, and carries no secret
+  const locator = A.devices.get("dev-b")?.productEndpoint?.url;
+  if (locator === undefined || locator.includes("/t/"))
+    throw new Error(`A's locator for B is not a secret-free derivation: ${locator}`);
 
   return { A, B, mockA, mockB, dials, bEndpoint };
 }
@@ -233,13 +259,21 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
 
   it("a dead endpoint → UNAVAILABLE {state:'unreachable'} within the per-call deadline", async () => {
     const { A, mockA } = await bootPair();
-    // a slice whose capability URL points at a CLOSED port (refused fast)
-    mockA.pushStoreDelta({
-      kind: "peerUpdated",
-      deviceId: "dev-dead",
-      data: peerSlice("dev-dead", "http://127.0.0.1:1/t/x"),
-      version: 1,
-    });
+    // UA-P-0e — a SELF peer whose derived coordinate the sidecar sim cannot
+    // reach. It used to be a slice naming a closed port; a peer cannot name its
+    // own endpoint any more, so the unreachability is in the dial, which is
+    // exactly where a real one would be.
+    mockA.meshPeers = [
+      ...mockA.meshPeers,
+      {
+        id: "node-dead",
+        deviceId: "dev-dead",
+        name: "dead",
+        online: true,
+        whois: { login: LOGIN, deviceName: "dead.tailnet.ts.net" },
+      },
+    ];
+    mockA.pushPeersDelta({ kind: "peerUpdated" });
     await until(() => A.devices.get("dev-dead") !== undefined, 4000);
 
     const rpcA = await openRpc(A.controlPort);
@@ -282,15 +316,20 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
       events.push({ payload, kind }),
     );
     const roster = sub.snapshot as DeviceInfo[];
-    expect(roster.some((d) => d.self)).toBe(true); // B's own slice, through A
+    expect(roster.some((d) => d.self)).toBe(true); // B's own row, through A
 
-    // B's roster changes (a peer appears in B's store) → a delta reaches A.
-    mockB.pushStoreDelta({
-      kind: "peerUpdated",
-      deviceId: "dev-x",
-      data: peerSlice("dev-x", "http://127.0.0.1:9/t/x"),
-      version: 1,
-    });
+    // B's roster changes (a self peer appears on B's tailnet) → a delta reaches
+    // A. UA-P-0e: B's roster is the peer registry now, not its store.
+    mockB.meshPeers = [
+      {
+        id: "node-x",
+        deviceId: "dev-x",
+        name: "x",
+        online: true,
+        whois: { login: LOGIN, deviceName: "x.tailnet.ts.net" },
+      },
+    ];
+    mockB.pushPeersDelta({ kind: "peerUpdated" });
     await until(
       () =>
         events.some((e) =>
@@ -301,12 +340,17 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
 
     sub.dispose();
     const heard = events.length;
-    mockB.pushStoreDelta({
-      kind: "peerUpdated",
-      deviceId: "dev-y",
-      data: peerSlice("dev-y", "http://127.0.0.1:9/t/y"),
-      version: 1,
-    });
+    mockB.meshPeers = [
+      ...mockB.meshPeers,
+      {
+        id: "node-y",
+        deviceId: "dev-y",
+        name: "y",
+        online: true,
+        whois: { login: LOGIN, deviceName: "y.tailnet.ts.net" },
+      },
+    ];
+    mockB.pushPeersDelta({ kind: "peerUpdated" });
     await new Promise((r) => setTimeout(r, 300));
     expect(events.length).toBe(heard); // disposed means disposed
   }, 30_000);
@@ -322,7 +366,9 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
 
   it("C6-5: a standing subscription PINS the link against the idle sweep", async () => {
     const { bEndpoint } = await bootPair();
-    const { ctor } = sidecar();
+    // this row drives PeerLink directly with B's loopback door, so the sim has
+    // no coordinate to resolve — it only injects the identity header
+    const { ctor } = sidecar(() => bEndpoint);
     const link = new PeerLink({
       ownDeviceId: () => "dev-a",
       endpointFor: () => bEndpoint,
@@ -347,7 +393,7 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
 
   it("an idle link is swept closed and the next call re-dials", async () => {
     const { bEndpoint } = await bootPair(); // reuse B (the pair's dial target)
-    const { ctor, dials } = sidecar();
+    const { ctor, dials } = sidecar(() => bEndpoint);
     const link = new PeerLink({
       ownDeviceId: () => "dev-a",
       endpointFor: () => bEndpoint,

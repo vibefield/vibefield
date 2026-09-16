@@ -493,6 +493,16 @@ export class MockMgmtServer {
       case "native.mesh.peers.list":
         reply({ result: { peers: [...this.meshPeers] } });
         return;
+      case "native.mesh.peers.subscribe": {
+        // UA-P-0e — the peer registry's stream. Recorded in `issued` like every
+        // other subscription so `pushPeersDelta` can target it; the snapshot is
+        // the same list `peers.list` answers with, which is what the real
+        // forwarder sends.
+        const subId = `s${this.nextSub++}`;
+        this.issued.push({ sock, subId, method: msg.method });
+        reply({ result: { subId, snapshot: { peers: [...this.meshPeers] } } });
+        return;
+      }
       case "native.mesh.store.open": {
         const storeId = String(p["storeId"]);
         reply({ result: this.storeSnapshot(storeId) });
@@ -622,6 +632,13 @@ export class MockMgmtServer {
 
   /** Push a serve runtime delta — a PARTIAL entry {serveId, status, url?, error?}
    * (native.mesh.serve.subscribe → native.mesh.serve.delta). */
+  /** UA-P-0e — push a peer-registry delta to every live peers subscription.
+   * `meshPeers` is the list a subsequent `peers.list` answers with; set it
+   * first, then push, the way a real registry moves. */
+  pushPeersDelta(payload: unknown): void {
+    this.pushDelta("mesh.peers.subscribe", payload);
+  }
+
   pushServeDelta(entry: unknown): void {
     this.pushDelta("mesh.serve.subscribe", entry);
   }

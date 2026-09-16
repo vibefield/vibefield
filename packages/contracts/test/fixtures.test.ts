@@ -144,6 +144,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "lane-put-meta": LanePutMeta,
   "lane-err": LaneErr,
   "device-slice": DeviceSlice,
+  // UA-P-0e (D2) — TWO fixtures on purpose: the SELF row (everything, because
+  // it is that process) and a SELF-PEER row (identity, liveness and a derived
+  // door locator, with every slice-derived claim absent because the peer
+  // publishes nothing).
   "device-info": DeviceInfo,
   "plugin-manifest": PluginManifestV1,
   "plugin-registry-snapshot": PluginRegistrySnapshot,
