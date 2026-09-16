@@ -114,16 +114,28 @@ public struct FieldStorePeer: Sendable, Equatable, Identifiable {
   /// published it (EL7 M1).
   public let hostname: String?
   public let tailnetIPs: [String]
+  /// UA-P-5 — the tailnet login that OWNS this peer, as Layer 3 reports it
+  /// (`Peer.loginName`, RFC 025 §3.6 D7). It is the account boundary itself:
+  /// a peer whose login is this node's login is this account's device, and one
+  /// whose login is another is somebody else's machine.
+  ///
+  /// `nil` is "the netmap named no owner", never "no owner" — a transient
+  /// failure to resolve the user map reads exactly like this (RFC 024 §8.1.2),
+  /// and the honest answer to an unresolved owner is to keep asking the door,
+  /// not to declare the peer foreign. Under a gated node it is rarely nil and
+  /// never foreign, because Layer 3 has already filtered on it.
+  public let loginName: String?
 
   public init(
     id: String, deviceId: String?, online: Bool, hostname: String? = nil,
-    tailnetIPs: [String] = []
+    tailnetIPs: [String] = [], loginName: String? = nil
   ) {
     self.id = id
     self.deviceId = deviceId
     self.online = online
     self.hostname = hostname
     self.tailnetIPs = tailnetIPs
+    self.loginName = loginName
   }
 }
 

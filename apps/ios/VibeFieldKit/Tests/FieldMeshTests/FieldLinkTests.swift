@@ -281,6 +281,7 @@ private func standingLink(
   answerDelay: Duration = .zero,
   probe: LinkProbe = LinkProbe(),
   storeBus: Bool = false,
+  selfLogin: String? = nil,
   script: @escaping LinkDoor.Script = selfDoor
 ) async throws -> (FieldLink, MeshRehearsal, LinkDoor, LinkProbe) {
   let mesh = MeshRehearsal()
@@ -292,6 +293,7 @@ private func standingLink(
     magicDNSSuffix: rehearsalSuffix,
     schedule: briskSchedule,
     storeBus: storeBus,
+    selfLogin: selfLogin,
     now: { now })
   link.start()
   return (link, mesh, door, probe)
@@ -302,10 +304,13 @@ private func standingLink(
 @MainActor
 private func storeBusLink(
   now: Date = Date(timeIntervalSince1970: 1_757_808_001),
+  peers: [FieldStorePeer] = [studio],
   probe: LinkProbe = LinkProbe(fallback: .unreachable("nothing there")),
+  selfLogin: String? = nil,
   script: @escaping LinkDoor.Script = selfDoor
 ) async throws -> (FieldLink, MeshRehearsal, LinkDoor, LinkProbe) {
-  let rig = try await standingLink(now: now, probe: probe, storeBus: true, script: script)
+  let rig = try await standingLink(
+    now: now, peers: peers, probe: probe, storeBus: true, selfLogin: selfLogin, script: script)
   try await waitUntil("both stores listening") {
     let devicesUp = await rig.1.isListening(to: devicesNamespace)
     let agentsUp = await rig.1.isListening(to: agentsNamespace)
@@ -1099,15 +1104,20 @@ private final class Refusal: @unchecked Sendable {
   // right to type is a claim in the attach grant the ticket carries.
 }
 
-// MARK: - The dormant bus (UA-P-1b)
+// MARK: - The bus, scoped to the gate (UA-P-1b, UA-P-5)
 
 @MainActor
 @Suite struct FieldStoreBusTests {
-  /// THE SWITCH. With the bus off the phone subscribes to neither store, so a
-  /// desktop that published one would be publishing into a room with nobody in
-  /// it — which is the ruling: nothing content-bearing rides the bus.
-  @Test func theBusIsOffAndNothingSubscribesToIt() async throws {
-    #expect(FieldStoreBus.enabledByDefault == false)
+  /// THE SWITCH, and what it is keyed to since UA-P-5.
+  ///
+  /// The FLAG says the bus exists again — truffle gates a node by login now
+  /// (RFC 025), which is the condition James's ruling set. The LINK still
+  /// reads nothing unless its node is gated, and a link that names neither
+  /// reads nothing at all: an ungated node is on the whole tailnet, which is
+  /// the audience the ruling forbids. Both halves in one row, because it is
+  /// the pair that is the rule and either alone reads as the opposite.
+  @Test func theBusExistsAgainAndAnUngatedLinkStillReadsNothing() async throws {
+    #expect(FieldStoreBus.enabledByDefault == true)
     let (link, mesh, _, _) = try await standingLink()
     defer { link.stop() }
     try await waitUntil("ready") { link.desktops.first?.state == .ready }
@@ -1118,8 +1128,9 @@ private final class Refusal: @unchecked Sendable {
     #expect(link.boards.storeId == nil)
   }
 
-  /// And a slice delivered anyway changes nothing: the field is the door's.
-  @Test func aSliceOnADeadBusDrawsNothing() async throws {
+  /// And a slice delivered to an UNGATED link changes nothing: the field is
+  /// the door's until the node can name the account it is on.
+  @Test func aSliceOnAnUngatedLinkDrawsNothing() async throws {
     let (link, mesh, _, _) = try await standingLink()
     defer { link.stop() }
     try await waitUntil("ready") { link.desktops.first?.state == .ready }
@@ -1132,10 +1143,10 @@ private final class Refusal: @unchecked Sendable {
     #expect(link.desktops.first?.feed == FieldFeedSource.none)
   }
 
-  /// THE DORMANT READER, RUN. Everything the fold drew from the store still
-  /// draws when the switch is on — which is what makes UA-P-4 a one-word event
-  /// rather than an archaeology.
-  @Test func theReaderStillWorksWhenTheSwitchIsOn() async throws {
+  /// THE READER, BACK. Everything the fold drew from the store draws again on
+  /// a gated link — which is what UA-P-1b's "dormant rather than deleted" was
+  /// for: turning it on is a one-word event and not an archaeology.
+  @Test func theReaderWorksAgainOnAGatedLink() async throws {
     let (link, mesh, _, _) = try await storeBusLink()
     defer { link.stop() }
 
@@ -1227,5 +1238,238 @@ private final class Refusal: @unchecked Sendable {
     #expect(quiet.feed == FieldFeedSource.none)
     #expect(link.endpointRefusals.isEmpty)
     #expect(link.foreignDoors.isEmpty)
+  }
+}
+
+// MARK: - Self and guest, by login (UA-P-5)
+
+/// The tailnet's own spelling of the laptop peer's door.
+private let laptopDoorHost = "laptop.\(rehearsalSuffix)"
+
+/// One peer, with a login on it. Layer 3 carries this now (RFC 025 §3.6, D7)
+/// and it is the account boundary itself.
+private func peer(
+  _ base: FieldStorePeer, login: String?
+) -> FieldStorePeer {
+  FieldStorePeer(
+    id: base.id, deviceId: base.deviceId, online: base.online, hostname: base.hostname,
+    tailnetIPs: base.tailnetIPs, loginName: login)
+}
+
+@MainActor
+@Suite struct FieldLinkAccountTests {
+  /// A peer this account owns is probed and drawn, exactly as before — the
+  /// login is a cheaper FIRST verdict, never a replacement for the door.
+  @Test func aPeerUnderThisLoginIsProbedAndDrawn() async throws {
+    let (link, _, door, probe) = try await standingLink(
+      peers: [peer(studio, login: "alice@corp.com")], selfLogin: "alice@corp.com")
+    defer { link.stop() }
+
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+    #expect(await door.dials == 1)
+    #expect(await probe.asks >= 1)
+    #expect(link.foreignDoors.isEmpty)
+  }
+
+  /// **THE SAVING.** A peer the tailnet says belongs to someone else is never
+  /// probed at all: no socket, no timeout, no row. The verdict is the one the
+  /// door would have reached, arrived at from a fact the mesh already carried.
+  @Test func aPeerUnderAnotherLoginIsNeverDialedAndNeverDrawn() async throws {
+    let (link, _, door, probe) = try await standingLink(
+      peers: [peer(studio, login: "bob@corp.com")], selfLogin: "alice@corp.com")
+    defer { link.stop() }
+
+    try await waitUntil("the refusal") { !link.foreignDoors.isEmpty }
+    #expect(link.desktops.isEmpty)
+    #expect(await probe.asks == 0)
+    #expect(await door.dials == 0)
+    #expect(
+      link.foreignDoors["dev-studio"]
+        == "the tailnet says this device is signed in as bob@corp.com")
+    #expect(link.notes.contains { $0.contains("is not this account's desktop") })
+    // Never a failure face — somebody else's desktop is an ordinary thing for
+    // a tailnet to contain.
+    #expect(!MeshDisplay.chipWantsAttention(desktops: link.desktops))
+  }
+
+  /// The case comparison is the gate's own (RFC 025 §3.2 — lowercased on both
+  /// sides). A tailnet that spells a login differently must not turn this
+  /// person's own desktop into a stranger.
+  @Test func theLoginComparisonIsCaseInsensitive() async throws {
+    let (link, _, _, _) = try await standingLink(
+      peers: [peer(studio, login: "ALICE@Corp.COM")], selfLogin: "alice@corp.com")
+    defer { link.stop() }
+
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+    #expect(link.foreignDoors.isEmpty)
+  }
+
+  /// **ABSENT IS NOT FOREIGN.** A row that names no owner is a netmap that
+  /// could not resolve one (RFC 024 §8.1.2 keeps such a peer rather than
+  /// evicting it), so the phone keeps asking the door — which is where the
+  /// authority has been since UA-P-1a — instead of inventing a refusal.
+  @Test func aPeerWithNoLoginIsStillAskedAtItsDoor() async throws {
+    let (link, _, door, probe) = try await standingLink(
+      peers: [peer(studio, login: nil)], selfLogin: "alice@corp.com")
+    defer { link.stop() }
+
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+    #expect(await probe.asks >= 1)
+    #expect(await door.dials == 1)
+    #expect(link.foreignDoors.isEmpty)
+  }
+
+  /// The PRE-LOGIN WINDOW: this node does not know its own login yet, so it
+  /// has no account to compare against and calls nobody foreign on that
+  /// evidence. The door is the only witness there, exactly as through UA-P-1a.
+  @Test func withNoSelfLoginNothingIsForeignOnLoginEvidence() async throws {
+    let (link, _, door, probe) = try await standingLink(
+      peers: [peer(studio, login: "bob@corp.com")], selfLogin: nil)
+    defer { link.stop() }
+
+    try await waitUntil("ready") { link.desktops.first?.state == .ready }
+    #expect(await probe.asks >= 1)
+    #expect(await door.dials == 1)
+    #expect(link.foreignDoors.isEmpty)
+  }
+
+  /// And the door's verdict still stands on its own in that window: a 403 is
+  /// the other way a peer lands in `foreignDoors`, which is what keeps the
+  /// optional "N other accounts' desktops" line a fact rather than a zero.
+  @Test func theDoorsRefusalStillFillsTheTableInThePreLoginWindow() async throws {
+    let probe = LinkProbe(answers: [studioDoorHost: .status(403)])
+    let (link, _, _, _) = try await standingLink(
+      peers: [peer(studio, login: nil)], probe: probe, selfLogin: nil)
+    defer { link.stop() }
+
+    try await waitUntil("the refusal") { !link.foreignDoors.isEmpty }
+    #expect(link.desktops.isEmpty)
+    #expect(link.foreignDoors["dev-studio"] == "the door refused this login (403)")
+  }
+}
+
+// MARK: - The scoped bus and the door's last word (UA-P-5)
+
+@MainActor
+@Suite struct FieldLinkScopedBusTests {
+  /// **THE HOLE THIS CLOSES.** `refold` folds a board for every device id it
+  /// knows, while `refreshDesktops` drops a peer the door refused — so with
+  /// the bus on, a FOREIGN desktop's board put bodies on this person's field
+  /// while its own row was correctly hidden. Bodies with no desktop, from a
+  /// machine the phone had already established is somebody else's.
+  @Test func aRefusedPeersBoardIsHeldOffTheField() async throws {
+    // Neither door answers — the contrast this row is about is the VERDICT,
+    // not the socket: `studio` is asleep (this account's, drawable) and
+    // `laptop` refused (somebody else's, held).
+    let probe = LinkProbe(
+      answers: [laptopDoorHost: .status(403)], fallback: .unreachable("nothing there"))
+    let (link, mesh, _, _) = try await storeBusLink(peers: [studio, laptop], probe: probe)
+    defer { link.stop() }
+
+    try await waitUntil("the laptop refused") { link.foreignDoors["dev-laptop"] != nil }
+
+    // The refused peer publishes a board anyway. Nothing on this bus is
+    // forged — truffle authenticated the sender — and it is still not this
+    // phone's to draw.
+    await mesh.deliver(
+      inbound(
+        from: "node-laptop", deviceId: "dev-laptop", msgType: "update",
+        payload: sliceFrame(
+          "update", deviceId: "dev-laptop", version: 1,
+          data: board(rows: [boardRow(id: "run-not-mine")], device: "dev-laptop"))),
+      to: agentsNamespace)
+
+    // And this account's desktop publishes one at the same time, so the row is
+    // about the FILTER and not about a fold that draws nothing.
+    await publishBoard(mesh, board(rows: [boardRow(id: "run-mine")]))
+
+    try await waitUntil("this account's body") { link.agents.map(\.id) == ["run-mine"] }
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(link.agents.map(\.id) == ["run-mine"])
+    #expect(!link.desktops.contains { $0.deviceId == "dev-laptop" })
+  }
+
+  /// A device row from a refused peer is not read either — the store is not a
+  /// second opinion that overrides a door.
+  @Test func aRefusedPeersDeviceRowNeverNamesADesktop() async throws {
+    let probe = LinkProbe(answers: [laptopDoorHost: .status(403)])
+    let (link, mesh, _, _) = try await storeBusLink(peers: [laptop], probe: probe)
+    defer { link.stop() }
+
+    try await waitUntil("the refusal") { link.foreignDoors["dev-laptop"] != nil }
+    await mesh.deliver(
+      inbound(
+        from: "node-laptop", deviceId: "dev-laptop", msgType: "full",
+        payload: sliceFrame(
+          "full", deviceId: "dev-laptop", version: 1,
+          data: deviceSlice(name: "not-mine", url: nil))),
+      to: devicesNamespace)
+    try await Task.sleep(for: .milliseconds(120))
+
+    #expect(link.desktops.isEmpty)
+    #expect(!link.desktops.contains { $0.name == "not-mine" })
+  }
+
+  /// A SLEEPING door is not a refusal. The peer is one truffle's gate admitted,
+  /// so its slice is this account's by construction (RFC 025 §3.1) and the
+  /// board arrives with no connection open — which is the whole of what §5's
+  /// hybrid buys. Holding here would make the store leg a slower door.
+  @Test func aBoardStillArrivesWhileTheDoorIsAsleep() async throws {
+    let (link, mesh, door, _) = try await storeBusLink()
+    defer { link.stop() }
+
+    await publishBoard(mesh, board(rows: [boardRow(id: "run-1")]))
+    try await waitUntil("the body over the store") { link.agents.map(\.id) == ["run-1"] }
+    #expect(link.desktops.first?.feed == .store)
+    #expect(link.desktops.first?.state == .noDoor)
+    #expect(await door.dials == 0)
+  }
+
+  /// THE GOLDEN, THROUGH THE LIVE READER. The device row the re-armed bus
+  /// decodes is the contracts' own bytes — `device-slice.valid.json`, byte for
+  /// byte, kept so by `pnpm check:ios-fixtures` — and not a shape this lane
+  /// typed out for itself. A reader pinned by its own author's idea of the
+  /// wire is pinned to nothing (the TM-r lesson).
+  @Test func theDeviceRowTheBusReadsIsTheContractsGolden() async throws {
+    let golden = try MeshFixture.json("device-slice.valid")
+    let (link, mesh, _, _) = try await storeBusLink()
+    defer { link.stop() }
+
+    // The golden's own device id, so the slice is filed where the peer is.
+    let goldenId = try #require(golden["deviceId"]?.stringValue)
+    #expect(goldenId == "nodeid-8f2a1c9b7e")
+
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 1, data: golden)),
+      to: devicesNamespace)
+
+    // It reads, through `FieldStore` and `DeviceInfo` — the same decoder the
+    // roster uses — and the name it carries reaches the desktop row.
+    try await waitUntil("the golden's name on the row") {
+      link.desktops.first?.name == "James MacBook Pro"
+    }
+    let row = try #require(link.desktops.first)
+    #expect(row.platform == "darwin")
+    #expect(row.publishesTerminalDoors == nil)  // the golden says nothing about it
+  }
+
+}
+
+// MARK: - The contracts' own bytes, in this bundle
+
+enum MeshFixture {
+  static func json(_ name: String) throws -> JSONValue {
+    guard
+      let url = Bundle.module.url(
+        forResource: name, withExtension: "json", subdirectory: "Fixtures")
+    else { throw MissingFixture(name: name) }
+    return try JSONValue.parse(try Data(contentsOf: url))
+  }
+
+  struct MissingFixture: Error, CustomStringConvertible {
+    let name: String
+    var description: String { "fixture `\(name).json` is not in the FieldMeshTests bundle" }
   }
 }

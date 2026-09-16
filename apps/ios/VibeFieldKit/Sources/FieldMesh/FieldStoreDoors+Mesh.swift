@@ -129,10 +129,15 @@ extension FieldStoreDoors {
   /// The two keyspaces, kept apart on purpose: `tailscaleId` routes, the
   /// durable `deviceId` files a slice (RFC 017 §8), and joining them against
   /// each other is the bug T1 §6 names.
+  ///
+  /// UA-P-5 carries a third fact across: the peer's `loginName`, which is the
+  /// account boundary. It is passed through exactly as Layer 3 reports it —
+  /// including absent — because a login this phone invented would be the one
+  /// thing that could make a stranger look like this account's desktop.
   private static func peerView(_ peer: Peer) -> FieldStorePeer {
     FieldStorePeer(
       id: peer.tailscaleId, deviceId: peer.deviceId, online: peer.online,
-      hostname: peer.hostname, tailnetIPs: peer.tailnetIPs)
+      hostname: peer.hostname, tailnetIPs: peer.tailnetIPs, loginName: peer.loginName)
   }
 
   /// Every address the mesh says this peer answers at: its slugged tailscale

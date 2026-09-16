@@ -91,7 +91,12 @@ public struct MeshSheet: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.top, 8)
 
-      // UA-P-1c — the account line, under the status it qualifies.
+      // UA-P-1c, UA-P-5 — the account line, under the status it qualifies.
+      //
+      // It says WHO since UA-P-5: "<login> · <domain>" where the login is
+      // known, the UA-P-1c domain line where it is not. Same place, same
+      // weight, one more fact — which is the point of having drawn the interim
+      // line at all.
       //
       // The SHEET and not the corner, deliberately. The corner is one subject
       // — whether this phone reaches the desktops — carried by one chip and
@@ -104,7 +109,9 @@ public struct MeshSheet: View {
       // Muted rather than hued: attention is contrast, and this is a standing
       // fact rather than something that needs the user — the rule `MeshChip`
       // states and the only thing this app has ever used to mean "look here".
-      if let account = MeshDisplay.accountLine(domain: model.tailnetDomain) {
+      if let account = MeshDisplay.accountLine(
+        login: model.loginName, domain: model.tailnetDomain)
+      {
         Text(account)
           .font(FieldType.mono(10))
           .foregroundStyle(FieldPalette.textFaint)

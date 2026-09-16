@@ -30,26 +30,41 @@ public enum MeshDisplay {
   /// The account line (UA-P-1c, D3 interim).
   ///
   /// James's chain is *tailscale login → the account bound to it → that
-  /// account's mesh → the services on top*, and until now the phone drew no
-  /// part of it: "signed in" was a truffle PHASE, never a WHO. The one
-  /// account-adjacent fact this phone holds is the tailnet domain it already
+  /// account's mesh → the services on top*, and the phone drew no part of it:
+  /// "signed in" was a truffle PHASE, never a WHO. UA-P-1c drew the one
+  /// account-adjacent fact this phone then held — the tailnet domain it
   /// computes so a peer's fully-qualified name can be built
-  /// (`MeshModel.magicDNSSuffix`), and it had never been shown anywhere.
+  /// (`MeshModel.magicDNSSuffix`), shown nowhere until then.
   ///
-  /// **It is the INTERIM line and says so by what it names.** A tailnet is not
-  /// a person: `tail1234.ts.net` is the network this account's login belongs
-  /// to, not the login. The real line — "<login> · <domain>" — needs the login
-  /// name on truffle's Apple plane, which is not there today
-  /// (`AuthenticatedPeer` carries a stable id and addresses; `login_name` is
-  /// Rust-only), and arrives with petition T4 under UA-P-D3. So this says
-  /// exactly what it knows and not one word more.
+  /// **UA-P-5 makes it the REAL line.** It was the interim one, and said so by
+  /// what it named: a tailnet is not a person, `tail1234.ts.net` is the network
+  /// this account's login belongs to rather than the login, and the login name
+  /// was not on truffle's Apple plane to draw. Petition T4 landed it — RFC 025
+  /// §3.6 (D7) puts the login on every public identity surface,
+  /// `MeshNode.loginName` included — so the line asserts WHO now. Three
+  /// shapes, each saying exactly what is in hand:
   ///
-  /// `nil` while there is no domain to name — before the node is up, or on a
-  /// dns name with no labels to drop. An absent line is a fact not yet known;
-  /// a line reading "signed in to —" would be the blank design-00 forbids.
-  public static func accountLine(domain: String?) -> String? {
-    guard let domain, !domain.isEmpty else { return nil }
-    return "signed in to \(domain)"
+  /// - both — `"alice@corp.com · tail1234.ts.net"`: the person, then the
+  ///   network they are on, in the separator the mesh's own instrument
+  ///   readings already use;
+  /// - the login alone, when there is no domain yet (a dns name with no labels
+  ///   to drop) — a person without a network named is still true;
+  /// - the domain alone — the UA-P-1c line, word for word, for the window
+  ///   before Layer 3 has reported a login. It claims nothing about who, which
+  ///   is the honest report of not yet knowing (RFC 022: absent, never
+  ///   fabricated).
+  ///
+  /// `nil` when neither is known. An absent line is a fact not yet in hand; a
+  /// line reading "signed in to —" would be the blank design-00 forbids.
+  public static func accountLine(login: String? = nil, domain: String?) -> String? {
+    let login = (login?.isEmpty ?? true) ? nil : login
+    let domain = (domain?.isEmpty ?? true) ? nil : domain
+    switch (login, domain) {
+    case (let login?, let domain?): return "\(login) · \(domain)"
+    case (let login?, nil): return login
+    case (nil, let domain?): return "signed in to \(domain)"
+    case (nil, nil): return nil
+    }
   }
 
   /// The sheet's status sentence — lowercase facts, reasons verbatim.

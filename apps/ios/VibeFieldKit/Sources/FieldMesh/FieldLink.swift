@@ -77,8 +77,8 @@ public enum FieldFeedSource: String, Sendable, Equatable {
   /// Nothing yet.
   case none
   /// `field.agents.v1` — the floor's own publication, no connection needed.
-  /// DORMANT since UA-P-1b: no desktop publishes that slice. See
-  /// `FieldStoreBus`.
+  /// Dormant through UA-P-1b and live again under UA-P-5, on a gated node and
+  /// for a door-confirmed device. See `FieldStoreBus`.
   case store
   /// `agent.subscribe {projection: "field"}` over the door.
   case door
@@ -133,6 +133,15 @@ public struct FieldDiscoverySchedule: Sendable, Equatable {
 /// secret is on the wire for it to have read: the sidecar adds the capability
 /// path on forward, and what admits this phone is its WhoIs login.
 ///
+/// **UA-P-5 put the store back in front of it (2026-09-16), scoped.** truffle
+/// gates a node by login now (RFC 025), so on a GATED node every store is this
+/// account's by construction and the two slices are subscribed again. They do
+/// not replace the chain above — they FUSE with it, by device id, and the door
+/// keeps the last word: a slice for a device the probe has not confirmed is
+/// held rather than drawn, because the gate says whose ACCOUNT a node is on
+/// and the door says whether that desktop is serving this phone anything. On
+/// an ungated node — the pre-login window — nothing is subscribed at all.
+///
 /// It lives in FieldMesh, not FieldHome, for the reason `remoteSessionRows`
 /// does: this is the one module that sees both the wire vocabulary and the
 /// field's, so the projection that makes bubbles never learns a wire type, and
@@ -157,10 +166,25 @@ public final class FieldLink {
   /// Peers with no address the mesh will vouch for, and why (EL7 M1). A peer
   /// here is on the mesh and there is nowhere to dial it.
   public private(set) var endpointRefusals: [String: String] = [:]
-  /// UA-P-1a — peers whose door refused this login, by device id, with the
-  /// reason. LOGGED AND NEVER DRAWN: these are other accounts' desktops, the
-  /// count is a diagnostic, and a phone that drew them would be putting another
-  /// person's machine in this person's corner.
+  /// UA-P-1a — peers this phone has established are not this account's, by
+  /// device id, with the reason. LOGGED AND NEVER DRAWN: these are other
+  /// accounts' desktops, the count is a diagnostic, and a phone that drew them
+  /// would be putting another person's machine in this person's corner.
+  ///
+  /// **UA-P-5 narrowed what can land here, and kept the table.** Under a gated
+  /// node it is empty by construction: truffle's Layer 3 filter reports only
+  /// peers whose login matches the gate, so a stranger is never a peer and
+  /// never gets probed. What still fills it is the PRE-LOGIN WINDOW — the one
+  /// launch after a fresh sign-in, before this phone knows its own login and
+  /// can gate on it — where the node is on the whole tailnet and the two
+  /// verdicts below apply: a peer whose Layer 3 login differs from this node's
+  /// (UA-P-5, and no socket is spent on it), or a door that answered 403 or
+  /// granted nothing (UA-P-1a).
+  ///
+  /// So the optional "N other accounts' desktops on this tailnet" line KEEPS
+  /// its fact rather than being deleted: it can still be non-zero, in exactly
+  /// one window, and a count that is always zero afterwards is the honest
+  /// report of a mesh that is finally scoped.
   public private(set) var foreignDoors: [String: String] = [:]
 
   /// Whether anything at all is being heard. `false` with `desktops` non-empty
@@ -170,9 +194,10 @@ public final class FieldLink {
 
   // MARK: The plumbing
 
-  /// DORMANT since UA-P-1b (`FieldStoreBus`). Held, not deleted: UA-P-4 turns
-  /// the bus back on once truffle gates a store by login, and these are the
-  /// reader that has already passed its own kill matrix.
+  /// The store reader. Dormant through UA-P-1b and LIVE AGAIN under UA-P-5 —
+  /// but only on a GATED node (`storeBus` below): truffle now reports and
+  /// admits by login (RFC 025), so every store on a gated node is scoped to
+  /// this account by construction, which is the condition James's ruling set.
   @ObservationIgnored public let devices: FieldStore
   @ObservationIgnored public let boards: FieldStore
   @ObservationIgnored private let doors: FieldStoreDoors
@@ -180,11 +205,26 @@ public final class FieldLink {
   @ObservationIgnored private let probe: any ProductDoorProbe
   @ObservationIgnored private let options: FieldProductClient.Options
   @ObservationIgnored private let schedule: FieldDiscoverySchedule
+  /// UA-P-5 — whether this link may read the synced-store bus at all.
+  ///
+  /// It is the NODE'S GATE, passed in: true only where the running node's
+  /// `loginAllow` is this account's login. A synced store reaches every node
+  /// in the app's namespace, so on an ungated node — the pre-login window —
+  /// the bus is the tailnet's whole audience and this stays false. There is no
+  /// default that turns it on: `FieldLink(storeDoors:)` with nothing named
+  /// reads no store.
   @ObservationIgnored private let storeBus: Bool
   @ObservationIgnored private let now: @MainActor () -> Date
   /// This node's own tailnet domain, so a peer's FQDN can be BUILT rather than
   /// guessed at, and the built address still held to the peer (EL7 M1).
   @ObservationIgnored private let magicDNSSuffix: String?
+  /// UA-P-5 — this node's own tailnet login, so a peer can be told from a
+  /// stranger by the thing that actually separates them (RFC 025 §3.6, D7).
+  ///
+  /// `nil` is the pre-login window: no account to compare against, so nothing
+  /// is called foreign on this evidence and the door probe remains the sole
+  /// witness, exactly as it was through UA-P-1a.
+  @ObservationIgnored private let selfLogin: String?
 
   @ObservationIgnored private var clients: [String: FieldProductClient] = [:]
   @ObservationIgnored private var subscriptions: [String: ProductSubscription] = [:]
@@ -195,7 +235,7 @@ public final class FieldLink {
   /// One timer per live board, at its own `expiresAt`. Expiry is TIME, and the
   /// reconcile is edge-triggered — a publisher that goes quiet sends no edge,
   /// so without these the board stayed on the field and the door was never
-  /// asked to replace it. Dormant with the bus (UA-P-1b); a door board has no
+  /// asked to replace it. Live with the bus (UA-P-5); a door board has no
   /// expiry, because the socket carrying it is its own liveness.
   @ObservationIgnored private var expiryTimers: [String: Task<Void, Never>] = [:]
   @ObservationIgnored private var tracking = false
@@ -242,7 +282,13 @@ public final class FieldLink {
     options: FieldProductClient.Options = .init(),
     magicDNSSuffix: String? = nil,
     schedule: FieldDiscoverySchedule = .init(),
-    storeBus: Bool = FieldStoreBus.enabledByDefault,
+    // FAIL CLOSED, and deliberately not `FieldStoreBus.enabledByDefault`: that
+    // flag says the bus EXISTS again, this parameter says this link's node is
+    // gated, and only the caller holding the node can answer the second. A
+    // default that read the flag would put an ungated link on the bus the
+    // moment the flag flipped.
+    storeBus: Bool = false,
+    selfLogin: String? = nil,
     now: @escaping @MainActor () -> Date = { .now }
   ) {
     devices = FieldStore(doors: storeDoors)
@@ -254,6 +300,7 @@ public final class FieldLink {
     self.magicDNSSuffix = magicDNSSuffix
     self.schedule = schedule
     self.storeBus = storeBus
+    self.selfLogin = selfLogin
     self.now = now
   }
 
@@ -496,6 +543,23 @@ public final class FieldLink {
       var entry = found[deviceId] ?? Found(peer: peer)
       entry.peer = peer
 
+      // UA-P-5 — the account boundary, BEFORE a socket is spent on it. Under a
+      // gated node this never fires (Layer 3 reported only this account's
+      // peers); in the pre-login window it is the whole of the saving.
+      //
+      // Asked on EVERY sweep rather than behind the re-ask deadline, and
+      // deliberately: a login is a fact the peer row already carries, so it
+      // costs nothing to re-read, and a peer whose login becomes ours — a
+      // device transferred, a person finishing a sign-in — is picked up on the
+      // next sweep instead of five minutes later.
+      if let reason = Self.foreignLoginReason(peer: peer, selfLogin: selfLogin) {
+        entry.doorURL = nil
+        endpointRefusals.removeValue(forKey: deviceId)
+        found[deviceId] = entry
+        apply(.notThisAccount(reason), to: deviceId)
+        continue
+      }
+
       let verdict = peerProductDoorURL(
         hostname: peer.hostname, tailnetIPs: peer.tailnetIPs, magicDNSSuffix: magicDNSSuffix)
       switch verdict {
@@ -586,6 +650,55 @@ public final class FieldLink {
     }
   }
 
+  /// UA-P-5 — the account boundary as the tailnet itself states it.
+  ///
+  /// Both logins have to be KNOWN for this to answer. An absent PEER login is
+  /// not a refusal — RFC 022's absent-never-fabricated rule, which RFC 024
+  /// §8.1.2 applies by KEEPING an unattributable peer rather than evicting it
+  /// — and an absent SELF login is the pre-login window, where this phone has
+  /// no account to compare against. In both cases the door probe stays the
+  /// witness, which is where the authority has been since UA-P-1a; this only
+  /// ever ADDS a refusal the door would have reached more slowly and at the
+  /// cost of a socket.
+  static func foreignLoginReason(peer: FieldStorePeer, selfLogin: String?) -> String? {
+    guard let selfLogin, !selfLogin.isEmpty else { return nil }
+    guard let theirs = peer.loginName, !theirs.isEmpty else { return nil }
+    guard !AccountGate.sameLogin(theirs, selfLogin) else { return nil }
+    return "the tailnet says this device is signed in as \(theirs)"
+  }
+
+  /// UA-P-5 — whose slices this phone may draw. The DOOR decides, not the bus.
+  ///
+  /// The hole this closes was real and is not obvious. `refold` folds a board
+  /// for every device id it knows about, while `refreshDesktops` drops a peer
+  /// the door refused — so with the bus on, a FOREIGN desktop's board would
+  /// have put bodies on this person's field while its own row was correctly
+  /// hidden. Bodies with no desktop, from a machine the phone had already
+  /// established is somebody else's.
+  ///
+  /// So the probe's verdict gates the slice, and the three verdicts are three
+  /// different answers rather than two:
+  ///
+  /// - **no verdict yet** — held. Nothing has been established about this
+  ///   device; one sweep later something has. A slice must never be the thing
+  ///   that introduces a desktop, which is the shape UA-P-1a left behind.
+  /// - **`notThisAccount`** — held, permanently and on purpose. This is the
+  ///   case above: the door said this is not this account's machine, and the
+  ///   bus is not a second opinion that overrides a door.
+  /// - **`unreachable`** — DRAWN. The door is asleep and the peer is still one
+  ///   truffle's gate admitted, so its slice is this account's by construction
+  ///   (RFC 025 §3.1: every store on a gated node is scoped). Holding here
+  ///   would use liveness as a stand-in for authorization and delete the store
+  ///   leg's whole reason for existing — §5's hybrid is a board that arrives
+  ///   with no connection needed, and a board that needs the connection open
+  ///   anyway is just a slower door.
+  private func sliceIsDrawable(_ deviceId: String) -> Bool {
+    switch found[deviceId]?.admission {
+    case .answering, .unreachable: true
+    case .notThisAccount, nil: false
+    }
+  }
+
   /// A peer that left takes its door, its board and its verdict with it.
   private func forget(_ peer: FieldStorePeer) {
     guard let deviceId = peer.deviceId, !deviceId.isEmpty else { return }
@@ -612,8 +725,8 @@ public final class FieldLink {
   /// per change and must be re-armed, which is what the `Task` does — it also
   /// puts the work AFTER the mutation, so the reconcile sees the new value.
   ///
-  /// DORMANT with the bus (UA-P-1b): with no store subscribed nothing mutates,
-  /// so `start()` does not even arm it.
+  /// Armed with the bus (UA-P-5): on an ungated node nothing is subscribed, so
+  /// nothing mutates, and `start()` does not even arm it.
   private func track() {
     guard !tracking else { return }
     tracking = true
@@ -741,10 +854,11 @@ public final class FieldLink {
 
   /// The board over the door.
   ///
-  /// Since UA-P-1b this is the ONLY leg: the store that used to carry a board
-  /// is not published. The store check below stays because the reader does —
-  /// with the bus on (UA-P-4, or a test exercising the dormant path) a live
-  /// slice still outranks a subscription, which is the hybrid §5 describes.
+  /// Through UA-P-1b this was the ONLY leg, because no desktop published a
+  /// board. Under UA-P-5 the store is back on a gated node, and the check
+  /// below is the hybrid §5 describes: a live slice for a door-confirmed
+  /// device outranks a subscription, and the door still carries every board
+  /// the store cannot.
   ///
   /// Once open it STAYS open. A slice that expires and returns would otherwise
   /// tear the subscription down and build it up on the store's own heartbeat,
@@ -812,10 +926,11 @@ public final class FieldLink {
 
   // MARK: The two legs
 
-  /// DORMANT with the bus (UA-P-1b): with `field.agents.v1` unpublished this
-  /// answers nil for every desktop, and the door is the only leg.
+  /// The store leg (UA-P-5): live on a gated node, for a device whose door has
+  /// not refused this phone. Both conditions, and the second is the one that
+  /// is easy to lose — see `sliceIsDrawable`.
   private func liveSlice(for deviceId: String) -> AgentFieldSlice? {
-    guard storeBus else { return nil }
+    guard storeBus, sliceIsDrawable(deviceId) else { return nil }
     guard let slice = boards.slices[deviceId] else { return nil }
     guard let board = try? slice.decode(AgentFieldSlice.self) else { return nil }
     return board.isExpired(at: now()) ? nil : board
@@ -871,7 +986,7 @@ public final class FieldLink {
 
   // MARK: The fold
 
-  /// A board's own expiry, as a timer. Dormant with the bus (UA-P-1b).
+  /// A board's own expiry, as a timer. Live with the bus (UA-P-5).
   ///
   /// The reconcile is edge-triggered; expiry is a clock, and a desktop that
   /// stops publishing sends no mutation to notice. Without this the field kept
@@ -894,8 +1009,14 @@ public final class FieldLink {
     var doorOnly: [String] = []
     var known = Set(found.keys)
     if storeBus {
-      known.formUnion(devices.slices.keys)
-      known.formUnion(boards.slices.keys)
+      // The FILTER is the rule (UA-P-5): a board from a device the door said
+      // is not this account's is held, and every key here is already in
+      // `found` anyway — a slice arrives from a peer — so the union is the
+      // belt. Without the filter a foreign desktop's board reached the fold
+      // while its own row was correctly hidden, which is bodies with no
+      // desktop, from a machine this phone had already refused.
+      known.formUnion(devices.slices.keys.filter(sliceIsDrawable))
+      known.formUnion(boards.slices.keys.filter(sliceIsDrawable))
     }
 
     for deviceId in known.sorted() {
@@ -959,14 +1080,14 @@ public final class FieldLink {
 
   /// What this desktop says about itself.
   ///
-  /// The DOOR's `device.list` first, because since UA-P-1b that is the only
-  /// place these facts come from. The dormant store second and only while the
-  /// bus is on (UA-P-4, or a test exercising the reader): a slice that is being
-  /// published is the same row by another road, and reading it keeps the
-  /// reader's own path whole rather than half-wired against the day it returns.
+  /// The DOOR's `device.list` first, because since UA-P-1b that is where these
+  /// facts come from and it is the answer this phone was granted. The store
+  /// second, on a gated node and only where the door has not refused this
+  /// phone (UA-P-5): a published slice is the same row by another road, and
+  /// the road does not change who is allowed to walk it.
   private func describe(_ deviceId: String, _ entry: Found) -> DeviceInfo? {
     if let info = entry.info { return info }
-    guard storeBus else { return nil }
+    guard storeBus, sliceIsDrawable(deviceId) else { return nil }
     return try? devices.slices[deviceId]?.decode(DeviceInfo.self)
   }
 
@@ -1029,10 +1150,10 @@ public final class FieldLink {
 /// The store ids the phone reads, from the contracts' `STORES` registry — never
 /// spelled at a call site.
 ///
-/// DORMANT since UA-P-1b (`FieldStoreBus`): under James's ruling of 2026-09-15
-/// no desktop publishes either of these, and this phone subscribes to neither.
-/// They stay because the reader does — UA-P-4 turns the bus back on once
-/// truffle gates a store by the login identity.
+/// Dormant through UA-P-1b, when James's ruling of 2026-09-15 took every
+/// content-bearing slice off the bus. UA-P-5 subscribes to both again, and
+/// only on a node gated on this account's login — truffle gates by login now
+/// (RFC 025), which is the condition the ruling set.
 ///
 /// `terminal.v1.hosts` was listed here and NEVER SUBSCRIBED — the rows the
 /// phone showed came from a live per-host `list-sessions`, not from the store,

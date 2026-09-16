@@ -284,7 +284,15 @@ public struct HomeScreen: View {
         if ProcessInfo.processInfo.arguments.contains("-vf-demo-field-slice"), link == nil,
           let doors = FieldStoreDoors.goldenBoard()
         {
-          let fixture = FieldLink(storeDoors: doors)
+          // `storeBus: true` NAMED, and it has to be. The fixture IS a store —
+          // three devices' slices delivered the moment the reader listens —
+          // and `FieldLink`'s bus defaults to off (UA-P-5: a link reads a
+          // store only where its node is gated, and a fixture has no node).
+          // This line has been the difference between a lab and a blank screen
+          // since UA-P-1b turned the bus off under it, with nothing to notice:
+          // `GoldenFixtureStageTests` builds its own link and names the flag
+          // itself, so the test went on passing over a dead argument.
+          let fixture = FieldLink(storeDoors: doors, storeBus: true)
           fixture.start()
           link = fixture
           fixtureLink = true
@@ -728,6 +736,14 @@ public struct HomeScreen: View {
         // tailnet domain, which is what lets a peer's published door be checked
         // against an address the mesh vouches for (EL7 M1).
         let suffix = await mesh.magicDNSSuffix
+        // UA-P-5 — the two account facts, asked of the runtime in the same
+        // breath as the node. The GATE decides whether this link may read the
+        // synced-store bus at all: a store reaches every node in the app's
+        // namespace, so only a node gated on this account's login has an
+        // audience the ruling allows. The LOGIN is what tells this account's
+        // desktop from a stranger's before a socket is spent on either.
+        let gated = await mesh.nodeIsGatedOnAccount
+        let login = await mesh.nodeLoginName
         // The link may have been closed while the node and the suffix were
         // being fetched (a mesh that left runs `closeLink`), and a link built
         // on a node from before that is one nobody asked for.
@@ -739,7 +755,9 @@ public struct HomeScreen: View {
           // default is the system's session, which is right for a loopback
           // door and would call every desktop on the tailnet unreachable.
           probe: meshDoorProbe(node: node),
-          magicDNSSuffix: suffix)
+          magicDNSSuffix: suffix,
+          storeBus: FieldStoreBus.enabledByDefault && gated,
+          selfLogin: login)
         opened.start()
         link = opened
       }

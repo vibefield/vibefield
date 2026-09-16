@@ -235,7 +235,16 @@ let package = Package(
       // word "copy" true.
       resources: [.copy("Fixtures")]
     ),
-    .testTarget(name: "FieldMeshTests", dependencies: ["FieldMesh"]),
+    .testTarget(
+      name: "FieldMeshTests",
+      dependencies: ["FieldMesh"],
+      // UA-P-5 — the contracts' OWN goldens, copied in (EL9 on the third
+      // side). The store bus is live again on a gated node, so the slice
+      // readers this target drives sit on a wire seam once more — and a reader
+      // pinned by JSON a lane typed out by hand is pinned to that lane's idea
+      // of the shape. `pnpm check:ios-fixtures` keeps the word "copy" true.
+      resources: [.copy("Fixtures")]
+    ),
     .testTarget(
       name: "FieldTerminalTests",
       dependencies: ["FieldTerminal", "FieldRoutedTerminal"],

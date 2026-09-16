@@ -56,13 +56,35 @@ public final class MeshModel {
   /// the phone computed its own tailnet domain to pin a peer's door to that
   /// peer and showed no part of the account chain to the person holding it.
   ///
-  /// It is the INTERIM account line (UA-P-D3) and the domain is not the login
-  /// — see `MeshDisplay.accountLine`. `nil` until the node is up.
+  /// It was the INTERIM account line (UA-P-D3) — the domain is not the login.
+  /// Since UA-P-5 it is the line's SECOND half, and `loginName` is the first;
+  /// see `MeshDisplay.accountLine`. `nil` until the node is up.
   public private(set) var tailnetDomain: String?
+  /// UA-P-5 — the tailnet login this node is signed in as (RFC 025 §3.6, D7),
+  /// as a drawable fact.
+  ///
+  /// It is the WHO the account line could not say. `nil` until Layer 3 has
+  /// reported it, and absent is absent: the Apple plane reads the login
+  /// through a status overlay that can fail (RFC 024 §8.1.2), so a nil here
+  /// means "this node cannot currently state who it is" and never "nobody".
+  public private(set) var loginName: String?
+  /// UA-P-5 — whether this node's mesh is gated on this account's login.
+  ///
+  /// `false` is the honest pre-login window: an ungated node is on the whole
+  /// tailnet, which is why nothing content-bearing rides the store bus until
+  /// this is true (UA-P-D2, and `FieldLink`'s `storeBus`).
+  public private(set) var isGatedOnAccount = false
+  /// A standing account note — why the gate could not be recorded, when it
+  /// could not. Absent is the ordinary case.
+  public private(set) var accountNote: String?
 
   @ObservationIgnored private var runtime: FieldTruffleRuntime?
   @ObservationIgnored private var eventsTask: Task<Void, Never>?
   @ObservationIgnored private var lastLoginURL: URL?
+  /// UA-P-5's latch: one re-gate at a time. Set synchronously, because the
+  /// account is re-read from several events and two restarts racing each
+  /// other would leave a node nobody holds.
+  @ObservationIgnored private var regating = false
 
   public init() {}
 
@@ -77,6 +99,30 @@ public final class MeshModel {
   /// than display state.
   public var node: MeshNode? {
     get async { runtime?.node }
+  }
+
+  /// UA-P-5 — the gate, asked of the RUNTIME rather than read from the
+  /// observable copy above.
+  ///
+  /// The link is built in a task that already awaits `node`, and the
+  /// observable copy is set by `refreshAccount()` on the same events that make
+  /// the mesh look up. Reading the copy there is a race with a silent loser: a
+  /// link built one beat early gets its store bus off and never re-arms it,
+  /// because nothing re-builds a link that is already open. So the wiring asks
+  /// the thing that knows.
+  public var nodeIsGatedOnAccount: Bool {
+    get async {
+      guard let runtime else { return false }
+      return await runtime.isGatedOnAccount
+    }
+  }
+
+  /// This node's own login, asked of the runtime, for the same reason.
+  public var nodeLoginName: String? {
+    get async {
+      guard let runtime else { return nil }
+      return await runtime.loginName
+    }
   }
 
   /// A `URLSession` factory bound to the MESH's own network, for the surfaces
@@ -114,7 +160,9 @@ public final class MeshModel {
 
   /// The user's deliberate act of joining the tailnet.
   public func connect() {
-    guard runtime == nil else { return }
+    // `regating` as well as the runtime: UA-P-5's restart has a beat with no
+    // runtime in hand, and a tap landing in it would start a second node.
+    guard runtime == nil, !regating else { return }
     state = .starting
     Task { await startRuntime() }
   }
@@ -128,6 +176,12 @@ public final class MeshModel {
     peers = []
     loginPage = nil
     tailnetDomain = nil
+    // The account facts are facts about a RUNNING node, so they go with it.
+    // The remembered login on disk does NOT — leaving the mesh is not signing
+    // out, and what an account switch forgets is UA-P-D4's, which is open.
+    loginName = nil
+    isGatedOnAccount = false
+    accountNote = nil
     Task {
       await runtime.stop()
       if state == .stopping { state = .off }
@@ -174,15 +228,28 @@ public final class MeshModel {
           switch event {
           case .phase(let phase):
             self.state = Self.state(for: phase)
-            await self.refreshTailnetDomain()
+            await self.refreshAccount()
           case .authRequired(let url):
             self.lastLoginURL = url
             self.loginPage = LoginPage(url: url)
           case .peersChanged:
             await self.refreshPeers()
-          case .health:
-            // Unit health lines join the sheet in a later slice.
-            break
+            // UA-P-5 — the login is re-read HERE as well as on a phase change.
+            // `MeshNode.apply(status:)` sets the login from the same snapshot
+            // it sets the dns name from, but it emits `.phase` only when the
+            // phase CHANGES: a login that arrives in a later refresh of an
+            // already-running node moves no phase, and a machine that waited
+            // for one would sit ungated with the answer in hand.
+            await self.refreshAccount()
+          case .health(let message):
+            // Unit health lines join the sheet in a later slice. One class of
+            // them is already load-bearing, though: RFC 025 §3.3 has a gated
+            // node emit a one-shot notice when Layer 3 reports an app peer it
+            // cannot name an owner for — which is the only warning that an
+            // empty mesh is the status overlay failing rather than a quiet
+            // tailnet. Carried as a note so the reason exists somewhere a face
+            // can read it, instead of being dropped on the floor.
+            self.accountNote = message
           }
         }
       }
@@ -195,19 +262,67 @@ public final class MeshModel {
   private func applyCurrentPhase() async {
     guard let runtime else { return }
     state = Self.state(for: await runtime.phase)
-    await refreshTailnetDomain()
+    await refreshAccount()
   }
 
-  /// UA-P-1c — the account line's fact, re-read whenever the node's phase
-  /// moves.
+  /// UA-P-1c and UA-P-5 — the account line's facts, re-read whenever the node
+  /// has anything new to say, and the gate driven from what they say.
   ///
   /// The dns name only exists once the backend has one, which is after a
   /// sign-in rather than at `start`, so this is asked at every phase change
   /// instead of once: a domain fetched at `starting` is nil forever, and a
   /// corner that never says who you are signed in as is the gap UA-P-1c is
-  /// about.
-  private func refreshTailnetDomain() async {
+  /// about. The login arrives on the same snapshot and gets the same
+  /// treatment.
+  private func refreshAccount() async {
+    guard let runtime else { return }
     tailnetDomain = await magicDNSSuffix
+    loginName = await runtime.loginName
+    isGatedOnAccount = await runtime.isGatedOnAccount
+    if let note = await runtime.accountNote { accountNote = note }
+    await regateIfNeeded()
+  }
+
+  /// UA-P-5 — ONE restart per fresh sign-in, and one per account switch.
+  ///
+  /// The node's gate is fixed for its lifetime (RFC 025 §3.1), so the only way
+  /// to gate a node that started ungated is to start another one. The runtime
+  /// records the login first and answers `.nothing` if it could not, so a
+  /// restart is never asked for unless it will stick.
+  ///
+  /// There is no browser round: the tailscale state lives in the node's state
+  /// directory and outlives the node, so the replacement comes up signed in.
+  /// What the person sees is the mesh chip going through `…` once.
+  ///
+  /// **It clears nothing.** An account switch re-gates the mesh and leaves
+  /// every store, ledger and preference exactly where it was — what a phone
+  /// forgets when the account changes is UA-P-D4, which is open and James's.
+  private func regateIfNeeded() async {
+    guard let runtime, !regating else { return }
+    let step = await runtime.accountStep()
+    guard step.login != nil else { return }
+    regating = true
+    defer { regating = false }
+
+    eventsTask?.cancel()
+    eventsTask = nil
+    peers = []
+    loginPage = nil
+    // A note is about the node it came from, and that node is going. Carrying
+    // it onto the replacement would be this app asserting a condition nobody
+    // has observed on the thing now running.
+    accountNote = nil
+    state = .starting
+    // `self.runtime` deliberately still points at the old node through the
+    // stop. Nulling it first opens a window in which `connect()` sees no
+    // runtime and starts a SECOND one, and `disconnect()` sees none and
+    // returns without honouring the tap. Holding it means the user's acts keep
+    // working on the thing that exists, and the identity check below is what
+    // notices that one of them happened.
+    await runtime.stop()
+    guard self.runtime === runtime, state == .starting else { return }
+    self.runtime = nil
+    await startRuntime()
   }
 
   private func refreshPeers() async {

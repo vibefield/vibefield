@@ -26,27 +26,89 @@ public actor FieldTruffleRuntime {
   /// protocols (`FieldStore`, `FieldLink`, the terminal legs' `URLSession`).
   public let node: MeshNode
 
-  private init(node: MeshNode) {
+  /// UA-P-5 — the login this node was STARTED gated on, or nil for the
+  /// pre-login window. Read from `account.login` beside truffle's state at
+  /// `start`; it never changes under a running node, because the gate never
+  /// does (RFC 025 §3.1 — the list is fixed for the node's lifetime).
+  public let gatedLogin: String?
+
+  /// Where the remembered login lives, or nil when this device has no state
+  /// directory to keep one in. A runtime with no store can never gate: it
+  /// stays on the whole tailnet and `isGatedOnAccount` says so, which keeps
+  /// the store bus off rather than publishing to an audience nobody chose.
+  private let loginStore: AccountLoginStore?
+
+  /// Why the gate could not be recorded, if it could not. Held rather than
+  /// thrown: the node is running and useful, and the only consequence is that
+  /// this launch stays in the pre-login window.
+  public private(set) var accountNote: String?
+
+  private init(node: MeshNode, gatedLogin: String?, loginStore: AccountLoginStore?) {
     self.node = node
+    self.gatedLogin = gatedLogin
+    self.loginStore = loginStore
   }
 
   /// Join the tailnet in VibeField's namespace. Mirrors ghosttea's `start`
   /// step for step — same backend, same interactive auth, same durable node —
   /// differing only in the app id and in resolving the state directory here
   /// rather than leaving it to truffle's derivation (see below).
+  ///
+  /// **UA-P-5 — it starts GATED when it can.** If this app remembers a login
+  /// for this node's state directory, the node starts with that login as its
+  /// whole `loginAllow`, so the mesh it joins is this account's from the first
+  /// packet, with no window in which a stranger is a peer. With nothing
+  /// remembered it starts UNGATED and the caller drives `accountStep()` until
+  /// the login is known — one restart, and the machine is at that declaration.
   public static func start(
     deviceName: String,
     stateDirectory: URL? = nil,
     controlURL: URL? = nil,
     onAuthRequired: @MainActor @escaping @Sendable (URL) async -> Void
   ) async throws -> FieldTruffleRuntime {
-    let node = try await MeshNode.startTailscale(
-      configuration(
+    let plan = startPlan(
+      deviceName: deviceName, stateDirectory: stateDirectory, controlURL: controlURL,
+      onAuthRequired: onAuthRequired)
+    let node = try await MeshNode.startTailscale(plan.configuration)
+    return FieldTruffleRuntime(
+      node: node, gatedLogin: plan.rememberedLogin, loginStore: plan.loginStore)
+  }
+
+  /// Everything `start` decides BEFORE it touches a tailnet: which directory,
+  /// which login it remembers there, and therefore which gate.
+  ///
+  /// Split out for the reason `configuration` was — `startTailscale` wants a
+  /// tailnet and a hand sign-in, which no simulator has, while the gate a node
+  /// comes up with is decidable on a scratch directory and is the whole of
+  /// UA-P-5's first move. The machine's rows drive this and the file store in
+  /// sequence, which is the same sequence two launches make.
+  struct StartPlan {
+    let configuration: MeshConfiguration
+    let rememberedLogin: String?
+    let loginStore: AccountLoginStore?
+
+    /// Whether this plan starts a GATED node. The pre-login window is `false`.
+    var isGated: Bool { !configuration.loginAllow.isEmpty }
+  }
+
+  static func startPlan(
+    deviceName: String,
+    stateDirectory: URL? = nil,
+    controlURL: URL? = nil,
+    onAuthRequired: @MainActor @escaping @Sendable (URL) async -> Void = { _ in }
+  ) -> StartPlan {
+    let directory = stateDirectory ?? resolvedStateDirectory()
+    let store = directory.map(AccountLoginStore.init(stateDirectory:))
+    let remembered = store?.read()
+    return StartPlan(
+      configuration: configuration(
         deviceName: deviceName,
-        stateDirectory: stateDirectory ?? resolvedStateDirectory(),
+        stateDirectory: directory,
         controlURL: controlURL,
-        onAuthRequired: onAuthRequired))
-    return FieldTruffleRuntime(node: node)
+        loginAllow: AccountGate.allowList(for: remembered),
+        onAuthRequired: onAuthRequired),
+      rememberedLogin: remembered,
+      loginStore: store)
   }
 
   /// The configuration a node WOULD be started with, as a value.
@@ -54,11 +116,13 @@ public actor FieldTruffleRuntime {
   /// Split out of `start` because it is the only seam a test can hold:
   /// `startTailscale` wants a tailnet and a hand sign-in, which no simulator
   /// has, but the app id a node is configured with is assertable without
-  /// starting one — and the app id is the whole defect.
+  /// starting one — and the app id is the whole defect. UA-P-5 puts a second
+  /// load-bearing value through the same seam: the gate.
   static func configuration(
     deviceName: String,
     stateDirectory: URL? = nil,
     controlURL: URL? = nil,
+    loginAllow: [String] = [],
     onAuthRequired: @MainActor @escaping @Sendable (URL) async -> Void = { _ in }
   ) -> MeshConfiguration {
     MeshConfiguration(
@@ -67,7 +131,65 @@ public actor FieldTruffleRuntime {
       stateDirectory: stateDirectory,
       controlURL: controlURL,
       ephemeral: false,
-      auth: .interactive(onAuthRequired: onAuthRequired))
+      auth: .interactive(onAuthRequired: onAuthRequired),
+      loginAllow: loginAllow)
+  }
+
+  // MARK: - The account gate (UA-P-5)
+
+  /// This node's own tailnet login, as Layer 3 last reported it. `nil` until
+  /// known — never fabricated (RFC 022, RFC 025 §3.6 D7).
+  public var loginName: String? {
+    get async { await node.loginName }
+  }
+
+  /// Whether this node's running gate is exactly this account's login.
+  ///
+  /// It asks the NODE for its list rather than trusting `gatedLogin`, because
+  /// the list the node is running is the thing that gates and our copy of it
+  /// is only a claim. It is what `FieldLink`'s store bus is keyed to: an
+  /// ungated node reads and publishes nothing, because an ungated node is on
+  /// the whole tailnet and a synced store reaches every node in the app's
+  /// namespace (UA-P-D2).
+  public var isGatedOnAccount: Bool {
+    get async {
+      guard let gatedLogin, !gatedLogin.isEmpty else { return false }
+      return AccountGate.gates(await node.loginAllow, login: gatedLogin)
+    }
+  }
+
+  /// What this node's current login asks of the gate it started with — and
+  /// the remembering, done here, before the caller acts on it.
+  ///
+  /// The caller's contract is one line: on `.remember` or `.regate`, STOP this
+  /// runtime and start a new one. The new one reads the file this wrote and
+  /// comes up gated on it. Nothing else re-gates a node, because nothing else
+  /// can: `loginAllow` is fixed for a node's lifetime (RFC 025 §3.1).
+  ///
+  /// Two properties make the restart safe to drive from an event:
+  ///
+  /// - **the write precedes the restart**, so a launch that dies between them
+  ///   comes back gated rather than repeating the window;
+  /// - **a write that fails answers `.nothing`**, so the caller does not
+  ///   restart. A restart we cannot make stick is a loop — the new node would
+  ///   read no file, come up ungated, learn the same login and ask again —
+  ///   and a phone spinning its tailnet node is worse than one that stays in
+  ///   the pre-login window with the reason recorded.
+  public func accountStep() async -> AccountStep {
+    let step = AccountGate.step(gatedOn: gatedLogin, reports: await node.loginName)
+    guard let login = step.login else { return .nothing }
+    guard let loginStore else {
+      accountNote = "no state directory to remember this account's login in"
+      return .nothing
+    }
+    do {
+      try loginStore.write(login)
+      accountNote = nil
+      return step
+    } catch {
+      accountNote = "could not record this account's login: \(MeshModel.shortReason(error))"
+      return .nothing
+    }
   }
 
   // MARK: - Lifecycle, as the app already asks for it
