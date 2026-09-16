@@ -517,18 +517,56 @@ private final class MovableClock {
   func advance(_ seconds: TimeInterval) { now = now.addingTimeInterval(seconds) }
 }
 
+/// How many discovery passes have run.
+///
+/// The schedule rows need it to PIN THEIR PRECONDITION. "the probe was not
+/// asked again" is only evidence about the window if a sweep actually happened
+/// and chose not to ask — otherwise a sweep that simply had not run yet passes
+/// the same assertion, and the test proves nothing. Every pass reads the peer
+/// list exactly once, so counting that read counts passes.
+private actor SweepCounter {
+  private(set) var count = 0
+  func bump() { count += 1 }
+}
+
 @MainActor
-private func clockedLink(clock: MovableClock, probe: LinkProbe) async -> FieldLink {
+private func clockedLink(
+  clock: MovableClock, probe: LinkProbe
+) async -> (FieldLink, MeshRehearsal, SweepCounter) {
   let mesh = MeshRehearsal()
   await mesh.set(peers: [studio])
+  let counter = SweepCounter()
+  var doors = await mesh.doors()
+  let peers = doors.onlinePeers
+  doors.onlinePeers = {
+    await counter.bump()
+    return await peers()
+  }
   let door = LinkDoor(script: selfDoor)
   let link = FieldLink(
-    storeDoors: await mesh.doors(), transport: door, probe: probe,
+    storeDoors: doors, transport: door, probe: probe,
     options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
     magicDNSSuffix: rehearsalSuffix, schedule: briskSchedule, storeBus: false,
     now: { clock.now })
   link.start()
-  return link
+  return (link, mesh, counter)
+}
+
+/// Ask for a pass NOW rather than waiting on the ticker, and return once one
+/// has finished.
+///
+/// The rules these rows are about are the two WINDOWS, not the ticker's
+/// cadence. Leaning on the cadence made them fail under a loaded full-suite run
+/// and pass eight times out of eight alone — a timing dependency the rule does
+/// not have. A peer event is the same edge a live tailnet delivers, and it
+/// drives a pass directly.
+@MainActor
+private func sweepNow(
+  _ mesh: MeshRehearsal, _ counter: SweepCounter, file: String = #function
+) async throws {
+  let before = await counter.count
+  await mesh.emit(.upsert(studio))
+  try await waitUntil("a discovery pass") { await counter.count > before }
 }
 
 @MainActor
@@ -539,17 +577,20 @@ private func clockedLink(clock: MovableClock, probe: LinkProbe) async -> FieldLi
   @Test func aRefusedLoginIsAskedAgainOnlyAfterMinutes() async throws {
     let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
     let probe = LinkProbe(answers: [studioDoorHost: .status(403)])
-    let link = await clockedLink(clock: clock, probe: probe)
+    let (link, mesh, counter) = await clockedLink(clock: clock, probe: probe)
     defer { link.stop() }
 
     try await waitUntil("the first ask") { await probe.asks >= 1 }
-    // PIN THE PRECONDITION: the sweep is running at 20 ms and asks nobody,
-    // because the window has not passed.
+
+    // PIN THE PRECONDITION: a pass RAN inside the window and chose not to ask.
+    // Without the pass, "it was not asked again" is equally true of a sweep
+    // that had not happened yet.
     clock.advance(120)
-    try await Task.sleep(for: .milliseconds(150))
+    try await sweepNow(mesh, counter)
     #expect(await probe.asks == 1, "a refusal is not re-asked inside its window")
 
     clock.advance(200)  // past 300 s in total
+    try await sweepNow(mesh, counter)
     try await waitUntil("the second ask") { await probe.asks >= 2 }
   }
 
@@ -557,15 +598,17 @@ private func clockedLink(clock: MovableClock, probe: LinkProbe) async -> FieldLi
   @Test func anUnreachableDoorIsAskedAgainSoon() async throws {
     let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
     let probe = LinkProbe(fallback: .unreachable("connection refused"))
-    let link = await clockedLink(clock: clock, probe: probe)
+    let (link, mesh, counter) = await clockedLink(clock: clock, probe: probe)
     defer { link.stop() }
 
     try await waitUntil("the first ask") { await probe.asks >= 1 }
+
     clock.advance(10)
-    try await Task.sleep(for: .milliseconds(150))
+    try await sweepNow(mesh, counter)
     #expect(await probe.asks == 1, "not yet")
 
     clock.advance(25)  // past 30 s in total
+    try await sweepNow(mesh, counter)
     try await waitUntil("the second ask") { await probe.asks >= 2 }
   }
 
@@ -575,12 +618,13 @@ private func clockedLink(clock: MovableClock, probe: LinkProbe) async -> FieldLi
   @Test func anOpenDoorIsNotProbedAgain() async throws {
     let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
     let probe = LinkProbe()
-    let link = await clockedLink(clock: clock, probe: probe)
+    let (link, mesh, counter) = await clockedLink(clock: clock, probe: probe)
     defer { link.stop() }
 
     try await waitUntil("ready") { link.desktops.first?.state == .ready }
     clock.advance(600)
-    try await Task.sleep(for: .milliseconds(200))
+    try await sweepNow(mesh, counter)
+    try await sweepNow(mesh, counter)
     #expect(await probe.asks == 1)
   }
 }
