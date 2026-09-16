@@ -4,11 +4,12 @@ import {
   fsyncSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   LAYOUT,
   MeshRetireResult,
@@ -20,6 +21,7 @@ import {
   type UserLinkStatus,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+import { readUsersFile, rootAboveUserRoot } from "@vibefield/users";
 import { RpcCallError } from "./native-link";
 
 // UA-3 — the link lifecycle (spec §7.1/§7.2): fieldd owns link.json, captures
@@ -439,6 +441,90 @@ export class LinkService extends EventEmitter {
     // WIN-10: the commit point, retried past a scanner's handle on win32.
     durableRenameSync(tmp, this.linkPath);
   }
+}
+
+/**
+ * UA-P-0b (D8) — every OTHER local user's captured login, with a name to put in
+ * a sentence. James's ruling: "one local user per tailscale account; a second
+ * link is forbidden until the first unlinks."
+ *
+ * WHY IT IS ENFORCED HERE AND NOT IN `users.json`. `UserRecord` has no account
+ * field — the one-to-one binding IS the containment of `link.json` inside
+ * `users/<fuid>/`, and a login only ever enters a user's tree at capture. So
+ * capture is the one moment the law can be checked, and this is the enumeration
+ * it checks against. Two local users holding one login would see each other as
+ * SELF at every door on this machine, which is the account boundary inverted
+ * rather than enforced.
+ *
+ * Every read is best-effort and none of them can fail the caller: a data dir
+ * that is not shaped `<root>/users/<fuid>` (an injected or embedded root — dev,
+ * tests, a headless boot) has no siblings to enumerate and honestly answers
+ * nothing. A `users.json` that will not parse costs the SENTENCE, not the
+ * refusal — the user is named by fuid instead.
+ *
+ * KNOWN GAP, recorded rather than papered over: another user whose `link.json`
+ * is CORRUPT holds a login this cannot read, so the refusal cannot fire for it.
+ * That user's own desktop is offline for the same reason (UA-P-0a), so nothing
+ * is serving under the collision while it lasts — but if they repair the file,
+ * two users hold one account and neither capture saw the other. It is logged at
+ * warn so the condition is visible rather than silent; fail-closed here would
+ * mean refusing every link on the machine because of one unreadable file.
+ */
+export function otherUserLinks(
+  dataDir: string,
+  logger: Logger = createNoopLogger(),
+): Array<{ label: string; login: string }> {
+  const root = rootAboveUserRoot(dataDir);
+  if (root === undefined) return [];
+  const mine = basename(dataDir);
+  const usersDir = join(root, ...LAYOUT.USERS_DIR);
+  let fuids: string[];
+  try {
+    fuids = readdirSync(usersDir);
+  } catch {
+    return [];
+  }
+  const names = new Map<string, string>();
+  try {
+    const file = readUsersFile(root);
+    for (const user of file?.users ?? []) names.set(String(user.fuid), user.name);
+  } catch (error) {
+    logger.warn(
+      "fieldd.link.users_file_unreadable",
+      "users.json could not be read; another user holding this login will be named by number",
+      { error: String(error) },
+    );
+  }
+  const out: Array<{ label: string; login: string }> = [];
+  for (const fuid of fuids) {
+    if (fuid === mine || !/^[1-9][0-9]*$/.test(fuid)) continue;
+    const path = join(usersDir, fuid, ...LAYOUT.LINK_FILE);
+    let raw: string;
+    try {
+      raw = readFileSync(path, "utf8");
+    } catch {
+      continue; // unlinked, or a root we may not read — holds nothing we can see
+    }
+    let parsed: ReturnType<typeof TailscaleLink.safeParse>;
+    try {
+      parsed = TailscaleLink.safeParse(JSON.parse(raw));
+    } catch {
+      parsed = { success: false } as ReturnType<typeof TailscaleLink.safeParse>;
+    }
+    if (!parsed.success) {
+      logger.warn(
+        "fieldd.link.other_user_link_unreadable",
+        "Another local user's link.json is unusable, so the one-account-per-user check cannot see it",
+        { path },
+      );
+      continue;
+    }
+    const login = parsed.data.login;
+    if (typeof login === "string" && login.length > 0) {
+      out.push({ label: names.get(fuid) ?? `user ${fuid}`, login });
+    }
+  }
+  return out;
 }
 
 /** "host.tail1234.ts.net" → "tail1234.ts.net" — display only, never trust. */

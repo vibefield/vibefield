@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { LinkService } from "../src/link-service";
+import { LinkService, otherUserLinks } from "../src/link-service";
 import { RpcCallError } from "../src/native-link";
 
 // UA-3 — the link lifecycle at its seam: capture folds honest states from the
@@ -321,6 +321,146 @@ describe("UA-P-0a — the mesh posture", () => {
       nodeState: "starting",
       authUrl: "https://login.tailscale.example/a/b",
     });
+    svc.stop();
+  });
+});
+
+// ---- UA-P-0b (D8): one local user per tailscale account ----
+//
+// The law has no place to live in `users.json` — `UserRecord` has no account
+// field, and the one-to-one binding IS the containment of `link.json` inside
+// `users/<fuid>/`. So it is enforced at the one moment a login enters a user's
+// tree: capture. These rows build real two-user roots, because the enumeration
+// walks a real directory and a mocked one would prove nothing about the shape.
+
+/** A `<root>/users/<fuid>/` machine, optionally with users.json and links. */
+function machine(users: Array<{ fuid: number; name: string; login?: string }>) {
+  const root = mkdtempSync(join(tmpdir(), "vf-uap0b-"));
+  for (const user of users) {
+    const dir = join(root, "users", String(user.fuid));
+    mkdirSync(join(dir, "fieldd"), { recursive: true });
+    if (user.login !== undefined) {
+      writeFileSync(
+        join(dir, "fieldd", "link.json"),
+        JSON.stringify({ login: user.login, linkedAt: "2026-09-15T00:00:00.000Z" }),
+      );
+    }
+  }
+  writeFileSync(
+    join(root, "users.json"),
+    JSON.stringify({
+      version: 1,
+      nextFuid: users.length + 1,
+      lastAttached: null,
+      users: users.map((u) => ({
+        userId: `01USER${u.fuid}`.padEnd(26, "X"),
+        fuid: u.fuid,
+        name: u.name,
+        resident: true,
+        onboarded: true,
+        createdAt: "2026-09-15T00:00:00.000Z",
+      })),
+    }),
+  );
+  return { root, dirFor: (fuid: number) => join(root, "users", String(fuid)) };
+}
+
+describe("UA-P-0b — one local user per tailscale account", () => {
+  it("enumerates the OTHER users' held logins, with their names", () => {
+    const { root, dirFor } = machine([
+      { fuid: 1, name: "James", login: "james@github" },
+      { fuid: 2, name: "Work", login: "james@corp.example" },
+      { fuid: 3, name: "Unlinked" },
+    ]);
+    // never its own, and never a user that holds nothing
+    expect(otherUserLinks(dirFor(1))).toEqual([{ label: "Work", login: "james@corp.example" }]);
+    expect(
+      otherUserLinks(dirFor(3))
+        .map((o) => o.login)
+        .sort(),
+    ).toEqual(["james@corp.example", "james@github"]);
+    expect(root).toContain("vf-uap0b-");
+  });
+
+  it("a data dir that is not <root>/users/<fuid> has no siblings, and says so quietly", () => {
+    // dev roots, embedded roots, the headless boot: there is no machine scope
+    // above them, so the honest answer is nothing rather than a guessed one
+    expect(otherUserLinks(mkRoot())).toEqual([]);
+  });
+
+  it("REFUSES a capture of a login another user holds, and names that user", async () => {
+    const { dirFor } = machine([
+      { fuid: 1, name: "James", login: "james@github" },
+      { fuid: 2, name: "Work" },
+    ]);
+    // user 2 links, and the node comes up under the SAME tailscale account
+    const { svc, calls } = build(
+      dirFor(2),
+      (method) =>
+        method === "native.mesh.self"
+          ? Promise.resolve({ deviceId: "01DEVICE", login: "james@github" })
+          : Promise.resolve({ mode: "capture", started: true, stopped: true }),
+      { otherUserLinks: () => otherUserLinks(dirFor(2)) },
+    );
+    const status = await svc.begin();
+
+    expect(status.linkState).toBe("login_already_linked");
+    expect(status.meshEnabled).toBe(false);
+    // the SENTENCE is the point: "already linked" with no name is a dead end
+    expect(status.linkDetail).toContain("James");
+    // nothing was written into user 2's tree — the account did not move
+    expect(existsSync(linkPath(dirFor(2)))).toBe(false);
+    // and the node is STOPPED, never retired: the keys stay, so linking again
+    // after user 1 unlinks costs no new tailnet identity
+    expect(calls).toContain("native.mesh.stop");
+    expect(calls).not.toContain("native.mesh.retire");
+    svc.stop();
+  });
+
+  it("the comparison is case-insensitive, because a tailnet login is", async () => {
+    const { dirFor } = machine([
+      { fuid: 1, name: "James", login: "James@GitHub" },
+      { fuid: 2, name: "Work" },
+    ]);
+    const { svc } = build(
+      dirFor(2),
+      (method) =>
+        method === "native.mesh.self"
+          ? Promise.resolve({ deviceId: "01DEVICE", login: "james@github" })
+          : Promise.resolve({ mode: "capture", started: true, stopped: true }),
+      { otherUserLinks: () => otherUserLinks(dirFor(2)) },
+    );
+    expect((await svc.begin()).linkState).toBe("login_already_linked");
+    svc.stop();
+  });
+
+  it("captures normally once that user unlinks", async () => {
+    const { dirFor } = machine([
+      { fuid: 1, name: "James", login: "james@github" },
+      { fuid: 2, name: "Work" },
+    ]);
+    // user 1 unlinks: the file goes, and the enumeration is re-read at capture
+    // rather than cached at boot — a resident background pair can unlink at any
+    // time (UA-D3), and the answer that matters is the one true right now
+    rmSync(linkPath(dirFor(1)), { force: true });
+    const { svc } = build(dirFor(2), floorWithLogin(), {
+      otherUserLinks: () => otherUserLinks(dirFor(2)),
+    });
+    const status = await svc.begin();
+    expect(status.linkState).toBe("linked");
+    expect(JSON.parse(readFileSync(linkPath(dirFor(2)), "utf8")).login).toBe("james@github");
+    svc.stop();
+  });
+
+  it("a DIFFERENT account on the same machine is not a collision", async () => {
+    const { dirFor } = machine([
+      { fuid: 1, name: "James", login: "james@github" },
+      { fuid: 2, name: "Work" },
+    ]);
+    const { svc } = build(dirFor(2), floorWithLogin("james@corp.example"), {
+      otherUserLinks: () => otherUserLinks(dirFor(2)),
+    });
+    expect((await svc.begin()).linkState).toBe("linked");
     svc.stop();
   });
 });

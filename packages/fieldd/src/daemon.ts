@@ -122,7 +122,7 @@ import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
-import { LinkService } from "./link-service";
+import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
 import { MeshClient, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
@@ -584,10 +584,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // UA-3 — the link lifecycle (spec §7.1/§7.2): capture the S1 self-whois
     // login once the node is Running; the stored login is UA-4's trust
     // comparison value. link.json lives under this user's root.
+    const linkLogger = logger.child({ component: "link" });
     const links = new LinkService({
       dataDir: config.dataDir,
       native,
-      logger: logger.child({ component: "link" }),
+      logger: linkLogger,
+      // UA-P-0b (D8) — one local user per tailscale account. Read at CAPTURE,
+      // not cached at boot: another user may link or unlink while this daemon
+      // is resident (UA-D3 — background pairs keep running), and the answer
+      // that matters is the one true at the moment a login enters this tree.
+      otherUserLinks: () => otherUserLinks(config.dataDir, linkLogger),
     });
     links.start();
     // C6-3g: sync is constructed after docs but has to be reachable from its
