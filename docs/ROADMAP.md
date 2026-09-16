@@ -3,7 +3,24 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-09-15 — UA-P LANDED `68b62fb1`: the account is the ground** (James asked
+> stays in the design docs + specs. Last rewritten: **2026-09-16 — UA-P-W / UA-P-4 / UA-P-5a LANDED `87987bc4`: the truffle side of the
+> account foundation is BUILT, and the mesh runs scoped to the login on both planes** (James: "now plan and
+> work on the truffle side of work, land the proper and solid". Petitions T4 and T5 became truffle RFC 025
+> "login-scoped nodes" on local branches of his repo — a per-NODE login allow-list evaluated at the hello by
+> WhoIs (4004, before our hello is revealed; a gated node never falls open), Layer 3 reporting only matching
+> logins (the sidecar carries `loginName`, protocol 5) and evicting a peer whose login turns refused,
+> sender-bound store slices, the login on every identity surface of the Rust core, the bindings and the
+> Apple plane — two read-only reviews each found a HIGH and both are fixed. VibeField consumes it through
+> CLAUDE.md's petition window, reopened on three planes and pinned by one revision (`siblings.lock.json`
+> `truffle`; the sidecar built beside `field-native`). Then the consumption: the floor starts GATED on the
+> linked login and rebuilds the node when the gate moves, `MESH_BUS_CARRIES_CONTENT = true` — the bus is
+> back, scoped; the phone starts gated on its own remembered login, reads the bus only inside the gate,
+> and its corner says WHO. See LANDED §UA-P-W, §UA-P-4, §UA-P-5a and `draft/thinking-ua-phone-account.md`
+> §7.) Next: **James pushes the two truffle branches and tags 0.7.14 (the window's 8-place exit), and
+> runs the two-account tailnet witness and Phase 0 on hardware** → his rulings (D4 the phone's sign-out
+> and switch; whether a slice from a SLEEPING desktop is drawn — UA-P-5a draws it; the deck's kill
+> affordance) → design-06 (UA-P-6) → AG-1 → AR-6 proper.
+> Previous rewrite, kept for continuity — **2026-09-15 — UA-P LANDED `68b62fb1`: the account is the ground** (James asked
 > whether the iOS app honors the desktop's user-account foundation — one VibeField user ↔ one tailscale
 > login, the mesh on top of it. A three-lane audit said no: the phone had no account of its own and dialed
 > every VibeField node on the tailnet, the store bus was a namespace that reached every node with the roster,
@@ -19,219 +36,6 @@
 > hardware and the two-account tailnet witness** → James's rulings (D4 the phone's sign-out and switch;
 > GM-D10 is answered by D2; the deck's kill affordance; the unlinked-desktop preset is answered by D1) →
 > the truffle petitions T4 and T5 → AG-1 → AR-6 proper.
-> Previous rewrite, kept for continuity — **2026-09-14 — TM-r LANDED `496f9e3f`: the review of the terminal mesh — six
-> lenses, four lanes, seven HIGHs fixed** (James: "Now do a review round", the evening the T
-> rollout landed. The floor's `terminalMesh` reading was taken ONCE, before the tailnet node existed,
-> so a cold boot with both flags set never published a door — the floor now PUSHES it on the routes
-> stream · the live probe's missing seed had a real cause: a credit window advertised below the cell's
-> urgent reserve, and a cell clamp that starved bulk silently instead of refusing — both fixed, and the
-> probe decodes a real seed through the real sidecar · a cell-routes serve with an empty allow-list
-> would have published every door to the whole tailnet — refused at the floor · a terminal serve
-> outlived fieldd and was never withdrawn — the first refresh always declares · the device capability
-> and the ticket mint read one live-serve fact · the mgmt wire's `routes` target joined the contracts
-> · a seed the phone's sink refuses is never acknowledged as applied · the phone's readers decode the
-> contracts' goldens (40 byte-gated copies) and the fixtures checker reds on an orphan · fifteen
-> MEDIUMs fixed, fourteen record errors corrected, STALE_ROUTE recorded unbuilt; see LANDED §TM-r).
-> Next: **Phase 0 on hardware — James's hand sign-in with the flag on, the deck and the phone on the
-> same cell** → the rulings owed (GM-D10, the deck's kill affordance, NF-8, the unlinked-desktop
-> preset, the field join's reading — the floor's boolean or the live serve, one blinks on cell birth)
-> → AG-1 → AR-6 proper.
-> Previous rewrite, kept for continuity — **2026-09-14 — TM LANDED `bbe551a5`: the terminal mesh on the cells, done
-> the proper way** (James ruled T directly at 04:59 and the whole rollout landed the same morning —
-> `draft/thinking-terminal-mesh-cells.md`, TM-D1…D8: **TM-1** the floor's in-process TSP1 serve,
-> `ghosttea-truffle`, the hosts store and the TSP1 ports DELETED — cells serve unconditionally, the
-> mesh flag means only "the doors are published" and the hello says so · **TM-2** fieldd mints
-> `RemoteCellEndpointSet` tickets for WhoIs-verified self peers with `[input, read]` and drives one
-> sidecar route per live cell on its own listener 9422 (TM-2b: the trailing-slash prefix that never
-> matched the real sidecar, and the live path to `FramesLegAttached` over a real tailnet) · **TM-4**
-> `FieldRoutedTerminal`, the routed T1 client in the kit · **TM-5** the phone attaches over it; the
-> TSP1 half and `GhostteaTruffle` leave the kit · **TM-3** the bearer mirror-write machinery retired
-> across three planes and the kit into grant rights; see LANDED §TM). Next: **Phase 0 on hardware —
-> James's hand sign-in with the flag on, the deck and the phone on the same cell** → the rulings owed
-> (GM-D10, the deck's kill affordance, NF-8, the unlinked-desktop preset) → AG-1 → AR-6 proper.
-> Previous rewrite, kept for continuity — **2026-09-14 — MF-1a LANDED `f999b6e1`: James's QA of the wave, its fix
-> wave, and the terminal-mesh ruling** (the phone joined the wrong truffle namespace — `vibefield`
-> now, its own runtime over truffle's public node; the floor's routes subscription contradicted its
-> hello under the mesh flag — one disclosure rule; the deck's old chips, a vanishing shell, the cwd
-> row, the dev page's second Zod; the Codex pane diagnosed to a late attach on the alternate screen.
-> Found designing the mesh on the cells: the mesh flag is the pre-S3e floor and the desktop deck
-> cannot open a pane under it. **James ruled T directly** — `draft/thinking-terminal-mesh-cells.md`,
-> TM-D1…D8: the phone a routed T1 client over the sidecar's proxy to the cells' doors, the bearer key
-> retiring into grant rights, the in-process serve and TSP1 deleted; TM-1/TM-2/TM-4 in flight; see
-> LANDED §MF-1a). Next: **TM-1 the floor · TM-2 fieldd · TM-4 the kit's routed client → TM-5 the
-> phone's attachment → TM-3 the bearer's deletion → Phase 0 on hardware**; then AG-1 and AR-6.
-> Previous rewrite, kept for continuity — **2026-09-14 — MF-1 LANDED `6b26cf23`: the re-cut toward the
-> Godview and its phone** (James's ruling the evening AR-5b landed: "land the Godview and its
-> mobile connected experience first" — `draft/thinking-godview-mobile-first.md`, three witnesses:
-> W1 the desktop reads as puppeteer's Godview · W2 the phone hears the desktop's fold efficiently ·
-> W3 tap a body, attach to the same PTY over truffle, type; slate GM-D1…D9 ruled, **GM-D10 the
-> field store's AUDIENCE is OPEN for James** — see DECISIONS). Landed in the wave: PU-14 + PU-14b
-> the pane frame upstream and pinned (`aa34eb1`/`fdb421b4`, `73b2d64`/`cfcd951c`) · the field's wire
-> shapes, the `field` projection on `agent.subscribe`, the `field.agents.v1` slice (capped, `omitted`)
-> and `agent.interrupt` (AR-6-0) · the floor-minted mirror-write capability behind an allow-listed
-> `terminal.mirrorWriteGrant` door (**RETIRED 2026-09-14 at TM-3** — the write right is a claim in
-> the per-client expiring attach grant; the door, the mint, the key file, the env var and the
-> phone's Keychain slot are deleted) · GT-6 the deck wears the record's frame · the phone's
-> `FieldProduct` client, `FieldStore` reader, `FieldLink` live field, the join's five faces, the grant
-> from the sheet and the corner's link token · a six-lens review and its fix wave across every lane
-> (24 fix commits; the daemon-killing rejection, the phone's replay and attribution holes, the
-> unlinked-desktop grant, secrets born private); see LANDED §MF-1. Next: **Phase 0, James's
-> hardware witnesses** (nothing on the phone is end-to-end witnessed until then) → the rulings owed
-> (GM-D10, MF-1g's persistence, the unlinked-desktop preset, NF-8) → **MF-1l** (`terminalMesh` on
-> the floor's hello) → **AG-1** the Agents settings section → **AR-6 proper**. Behind the goal:
-> AR-7, AR-8, push.
-> Previous rewrite, kept for continuity — **2026-09-13 — AR-5b LANDED `5bb79329`: the
-> review's fixes** (six lenses over AR-5 the day it landed — the usage column's missing rule
-> (it never painted), two CONTENT scopes split off the plugin-eligible census and fold scopes
-> the new doors rode, the reader's query kept out of fieldd's log, the attribution walk that
-> dropped a fifth of a board's matches and named a hit its own root, the usage poll's first
-> frame that said every account had failed, a credits-only reading drawn as a refusal, an
-> ORPHANED MOUNT behind the gate's "lottery" red; puppeteer `4d734c9` + `b0f08ec` upstream,
-> pinned; see LANDED §AR-5b); next **AR-6** approvals + prompts.
-> Previous rewrite, kept for continuity — **2026-09-13 — AR-5 LANDED `fe6b3d0a`: the
-> views port** (the Godview monitor's views are `@vibecook/puppeteer-views`, a pinned sibling
-> package cut from puppeteer's Godview at PU-5a — the swarm on WebGPU, list, rain, the
-> instrument bar, the usage column and the ⌘F find sheet, host-agnostic behind two injected
-> ports · VibeField keeps the fold, the door, its physics worker, its tokens and its chrome, and
-> adapts the ports over fieldd's new doors: `agents.usage` (+ its subscription, demand-driven
-> polling of puppeteer's account-usage monitor, moved upstream into the runtime) and
-> `index.sessions` / `index.search` (rosettad's search behind fieldd, AR-8's first brick) ·
-> project colours per the record's §02 replace the §2.6 accent slots · the DOM bubble and its
-> tuned shadows retired with the ambient keyframes · six upstream commits on James's main
-> (`f33da93` the package · `b9a0ce9` · `77f24fd` · `33d8369` · `8af9df9` · `5389449`), four of them
-> fixes this consumer's suites and smoke found; see LANDED §AR-5); next **AR-6** approvals +
-> prompts.
-> Previous rewrite, kept for continuity — **2026-09-13 — AR-4b LANDED `8c0725a5`:
-> the review's fixes** (six lenses over AR-3/AR-4 and the upstream landing; the re-attach's
-> shape is unchanged, what it TRUSTS is not — session records are signed and only agent-cell
-> PTYs are re-adopted · the claim is the authority on the epoch · every wait is a verdict and
-> every throw restores the pending row · D36's `locality` column is ENFORCED, a gap since it
-> was declared · the deck's replacing mount refuses rather than landing a stranger in the
-> user's pane · PU-1b upstream `8402184` releases bindings instead of deleting the process's
-> files — PU-11's cause, found and fixed; see LANDED §AR-4b); next **AR-5** the views port.
-> Previous rewrite, kept for continuity — **2026-09-12 — AR-4 LANDED `ba1a1eab`: a managed
-> session outlives fieldd** (the durable claim + the pinned ingress in every record, a
-> releasing stop, the re-attach at the next boot's first inventory, PENDING rows that
-> resume-when-idle replaces on rosetta's evidence; LANDED §AR-4).
-> Previous rewrite, kept for continuity — **2026-09-09 — SNAP-0 LANDED `46c0c190`:
-> the native screenshot tool is in the tree** (contracts `screenshot.ts` + fixtures parsed in
-> three languages · `@vibefield/screenshot` · the Swift helper bundle and its Rust twin as an
-> own-workspace crate · `window.vibefield.screenshot.capture()` + View ▸ Take Screenshot on
-> ⌃⌘A / Alt+A · optional in the stage, never boot-fatal); owed: James's first ⌃⌘A in
-> `pnpm dev` (the overlay itself was not exercised live) and the Windows box round (SNAP-4).
-> Previous rewrite, kept for continuity — **2026-08-18 — PRC-6c2b PREFLIGHT
-> GREEN · R3-0 CLOSED, the mind-map runway is clear (gating: MM-D1…D14 alone).** PRC-5a–d
-> established exact renderer identity, immutable signed-artifact slots, explicit candidate
-> authority, and stable renderer replacement. PRC-5e assembled the authenticated coordinator and
-> source/ack transport in `7873e60` + `31a48c1` + `303374f` + `ffd1ae2` + `0c58fe7`; PRC-5f
-> `b35f73d` made phase expiry request an exact boundary while requiring later positive death.
-> PRC-5g `137f086` makes the atomic `{artifact, commitEpoch}` pointer the restart journal and a
-> changed fieldd boot id the fence for every surviving renderer realm. Real child SIGKILLs on both
-> sides of pointer rename reconstruct old/1 or candidate/2; the packaged two-window witness keeps
-> both windows at **22 widget types / 5 staged plugins**, preserves stable participant ids, mints
-> fresh incarnations, and automatically adopts a new boot. Complete gates are fieldd **566 passed +
-> 1 platform skip**, Electron **574/574**, and supervisor **54/54**. Literal hardware power loss and
-> a Windows filesystem run remain explicit release/portability witnesses, not inferred from macOS
-> SIGKILL. PRC-6a `26fcfdf` now provides the serialization-safe shared runtime projection: one
-> global 128-effect/32-error budget, compact 64-event lifecycle history with explicit omissions,
-> exact desired/committed/close/force facts, passive contained observers, and a 64-level ownership
-> safety ceiling. Adversarial reports stay below 64 KiB and do not retain retired runtime objects;
-> 2,388 live effects measured 1.29 ms p99. PRC-6b `06860e0` + `078d8fc` + `9fb74f8` now joins
-> passive authenticated service/renderer/update/behavior truth into the bounded Plugin Manager and
-> Doctor fold, with one existing log event per lifecycle transition and no feedback into PRC-5
-> voting. PRC-6c1 `bf281bf` adds exact ownership censuses and closes behavior-handle, service-promise,
-> terminal-map, and Ajv schema-cache retention. Its 120-cycle production-seam run keeps 18 resource
-> maxima at zero and rejects a planted real-listener leak. PRC-6c2a `d2fd9e5` + `03c9adb` +
-> `5b6a190`, hardened by `c88acdd`, lands the ignored packaged two-window/real-worker/restart/log
-> runner, incremental JSONL, monotonic elapsed-time claim gate, five-minute continuity bound,
-> active Electron suspension blocker, and seven-reading OS sampler. An extended 32-cycle
-> calibration (8 warmup + 24 graded) keeps all 13 lifecycle exact gates at zero; a 15-second
-> duration/terminal calibration keeps all 14 gates zero, proves the blocker active, and reports a
-> 14.0-second maximum observation gap. The listener control is rejected at 1→2→3, and the
-> deterministic oracle rejects both origin and mid-run gap controls. **Now: PRC-6c2b literal
-> uninterrupted 24-hour execution; §24.6 remains open until that verdict.** The real-tailnet QUIC
-> witness remains
-> **1/1 in 35.11 s** across two ephemeral nodes, including fragmentation, STOP/reopen, replay
-> deduplication, and vanished-peer repair.
-> Earlier milestone context follows for continuity: R3-0 landed three slices
-> on main, each behind a verbatim green gate: **S2**
-> `e66143a` (keyboard claim declared in contracts; + the docs-generator inline-object
-> threshold fix its rendering regression exposed, + two raw NUL bytes found making
-> schema-walk.ts binary to git/grep, re-encoded), **W1** `30fd403` (the SDK wire door:
-> Wire/WireFrom/WirePorts/WirePrefab/WireTo + widgetSpawnInits + door-shape test), **S3**
-> `57c4720` (`useUndo` — engine undo for claiming widgets). **R3-0 then CLOSED
-> 2026-08-18** (ledger §R3-0): S1 landed `a002dc5` (auto-size measures — the queue rides
-> the engine) and probe P1 ran (blob AND data anchor downloads both work under the
-> production CSP, control-proven; verdict in evidence §F; scaffolding never merged).
-> Previously the LATE pass —
-> **the mind map redirect, twice, landing ECS-NATIVE.** James redirected the pack's form AM
-> (one contained widget, v2) and again PM to the standing design, `thinking-mindmap-pack.md`
-> **v3** (MM-D1…D14, PROPOSAL awaiting James): each node its own entity, edges on the engine's
-> **Wire** entities as deliberate wire-dogfooding, structure in ordered ChildOf (sibling order
-> IS the relation sequence; cascade delete), a sweep-drag auto-growing frame widget, layout as
-> a pure function run inside the gesture transaction (+ an `{undoable:false}` janitor — the
-> plugin system runtime is manifest-only today and gets routed around, not built), and the
-> engine's shipped drag-to-connect gives cross-link wires (XMind relationships) for free.
-> Research: four reports condensed into `predesign-mindmap-evidence.md` §A–§D (XMind study ·
-> engine survey · two in-repo audit rounds, load-bearing claims re-verified). Pre-pack slices:
-> **W1 the SDK wire door** (Wire/WireFrom/WireTo/WirePorts/WirePrefab + OrderPlace + a
-> spawn-inits helper — the concrete PA-27 evidence) · S1 MeasureQueue wiring (auto-size is a
-> dead declaration) · S2 keyboard-claim contract fields · S3 SDK `useUndo` · probe P1 (blob
-> download under CSP). New: an **upstream ICE demand list** the dogfooding is for — per-wire
-> styling/labels (vs design-004 §6 "wires defer to content"), `ops.glide`, a Hidden story
-> (collapse deferred out of v1), spawn-focus intent. MM-D14 proposes decoupling P8d's bar to
-> a template toy — a gate change, James's call. Docs-only pass; nothing in the tree changed.
-> The EVENING pass —
-> **the P8b milestone: the artifact loads.** Four commits (`0b8ad13` · `ded012b` · `39c165a` ·
-> `608e78e`): the CORS probe's four verdicts (P8-D9/D10 refuted · the corsEnabled blocker ·
-> the CSP-hash proof · one verdict corrected same-day as overbroad), the P8b-2 secure-context
-> regression found and fixed (the one-call scheme-registration law), the externals list into
-> contracts, and the staged loader landing with the census witnessed
-> (`stagedPlugins: 4`). Ledger: `LANDED.md` §P8b-3 + §P8b-3e (the seam e2e landed `089274c`
-> before the pass closed — P8b is closed whole); a new debt row records that the census smoke
-> sits in NO gate (two silent-red eras in one week). The MORNING pass — the P8 fold + the dogfood
-> destination: thinking-p8's §7 fold map ran (owed since destination (a) — agents author
-> widgets — was ratified 2026-08-11): the four 2026-08-09 plugin debt rows consolidate into the
-> PLUG track row + one pointer row, a PLUG in-flight paragraph and Next-up bullet are added,
-> `DECISIONS.md`'s PA row gains the P8 note, and the plugin spec gains §21.9, the §11.6 P8-D1′
-> origin delta, and §5.4's retired fence + as-built deltas. James named the four production
-> dogfood packs (`thinking-prod-dogfood-packs.md` — mind map · dev tools/live-surfaces ·
-> essential · microservice; the dev-phase packs are not the final forms) and ratified the
-> **mind map pack** as the first prod dogfood product — P8d's ten-minute bar measures on it.
-> Nothing in the tree changed; `pnpm verify` run verbatim at `ad8b804`, exit 0.
-> Previously **2026-08-11** — the WIN milestone: the Windows
-> port's first wave (WIN-0…4, `5ffd30b`/`85cce04`/`f982d27`) landed on `f98f58a`; this pass adds the WIN
-> track row and its Next-up bullet, the wave's residue named there — and the WIN-6 terminal rung
-> (`03cc648`, WIN-D2 adopted) folded into the same row and ledger. Previously **2026-08-07** — a
-> RECONCILIATION pass, not a milestone. An onboarding read found this file had gone stale against its own tree: two
-> whole bodies of work (IOS-3 and the UI system) had landed with **zero** entries in `LANDED.md`
-> and zero mentions here or in `DECISIONS.md`, one debt below was already closed, and three
-> docs disagreed with the manifests about the EL8 pins. All four are fixed in this pass; the
-> ledger gained the two missing entries, and the pin claims are corrected at their sources
-> (`CLAUDE.md`, `README.md`). Nothing in the tree changed — `pnpm verify` was run verbatim at
-> `d36528a` and exits 0. Main is **22 commits ahead of `origin/main`** (last push `4f2b21d`);
-> `fcd4c36` (the canvas-ground workbench, an eleventh UI-track commit) landed while this pass
-> was being written and is folded into the ledger entry rather than left for the next sweep —
-> which is the habit whose absence caused this pass.
-> Previously rewritten 2026-08-06 (GT-4 `3aa5ba1`/`39c1b1d`/
-> `0a2ac28` — the mesh in two halves: the monitor is the door, the floor joined the tailnet,
-> the kill matrix proved on three real nodes, NF-remote complete, and ghosttea 0.9.2 released
-> upstream to meet our truffle pin. Earlier: UA-0 `fcd0af9` — the
-> users track opens: layout registry landed hours after `specs/users-and-accounts.md` was
-> drafted from James's OS-user framing, spike-verified (S1/V2–V5 all resolved — self-whois
-> works on the pinned truffle, so the guest door needs no upstream), RATIFIED, and folded
-> into five design docs; GT-3p perf + GT-3c physics-in-worker landed alongside from
-> James's side; earlier: GT-3f `7a76f4d` —
-> shaders live viewer-local, G11 drafted→landed upstream 0.9.1→consumed the same day;
-> GT-3m `7dea861` mocked monitor; GT-3v `440b04e` glass deck; James's own `6646f1b`
-> chopsticks-UI match between them; earlier: GT-2e `a3babb7` + GT-3
-> `af316db` — the one-authority correction, then restore/kill/config;
-> AH-0 ratified; T2 consumed in exact-pinned Truffle v0.7.12; AH-1a/1b serving
-> implementation landed at `9f80f0c` with its physical two-client tailnet proof still owed;
-> AH-2 global validated catalog landed at `9c17c46`; AH-3 desktop runtime landed at
-> `8c07bf4`, with WP8 packaged-plugin discovery and the physical UI/native-picker closeout
-> still explicit; AH-4's preview runtime is in implementation, with physical tailnet proof
-> deliberately still open).
 >
 > Lives in main-tracked `docs/` (moved from `draft/` 2026-08-02). Corpus citations here
 > (`specs/…`, `thinking-…`, `predesign-…`, `research/…`, `petitions/…`) resolve under
@@ -263,7 +67,11 @@ tip `68b62fb1`), the account became the ground the mesh stands on: an unlinked d
 one interacts only with nodes under its own tailscale login, the phone discovers desktops by their doors on a
 fixed port and draws no stranger's, and the bus carries no content until truffle can scope it by login.
 What Phase 0 must now also show is the second account: a colleague's login on the same tailnet seeing
-nothing of yours, which no headless run can stand up.
+nothing of yours, which no headless run can stand up. Since 2026-09-16 (§UA-P-W/4/5a, tip `87987bc4`) the mesh IS
+scoped on both planes — the floor's node admits only the linked login at the hello and Layer 3 reports only
+its peers, the phone's node likewise on its own login — so the second-account witness now has something
+concrete to falsify: a colleague's desktop must never appear in the roster, never receive a slice, and be
+refused at the hello with 4004.
 
 The P0 exit criterion — *real daily agent work, sessions surviving app restarts* — is half
 held: the board survives daemon restarts (B3), PTYs survive everything up to field-native (the
@@ -402,15 +210,15 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 | PLUG — plugins | P0–P7 COMPLETE; P8b artifact loading and P8d authoring kit COMPLETE. PRC-0 through PRC-3d landed; **PRC-4/PRC-5 COMPLETE**; **PRC-6a/6b/6c1/6c2a LANDED through `c88acdd`**. | `specs/plugin-architecture.md` §8.8/§12.7/§18.5/§21.9/§23/§24.4/§24.6 · `thinking-plugin-runtime-composability.md` · `thinking-prc6-diagnostics-soak.md` | **PRC-6c2b now:** execute and archive the literal 24-hour physical verdict. P8c rides WP8; P8e gates third-party listing. |
 | PLUG — PRC-5 update coordinator | **COMPLETE.** PRC-5a identity `c5dcca9`; 5b slots `6817116`; 5c candidate authority `3fa514f` + `1602654`; 5d renderer replacement `6cafd0a`; 5e coordinated authority through `0c58fe7`; 5f positive death `b35f73d`; 5g durable epoch/boot fence/physical two-window restart `137f086`. | plugin-architecture §18.5 · `thinking-prc5-update-coordinator.md` | Release portability only: literal power-loss and Windows filesystem witness. Protocol follow-on is PRC-6. |
 | PLUG — PRC-6 diagnostics + soak | **IN FLIGHT THROUGH PRC-6c2a; PRC-6c2b PREFLIGHT GREEN.** 6a `26fcfdf` bounded the shared projection; 6b through `9fb74f8` landed passive aggregation/logging/behavior folds; 6c1 `bf281bf` landed exact censuses/inverses; 6c2a through `c88acdd` landed the packaged physical runner, durable evidence path, monotonic duration, five-minute observation-gap gate, and active suspension blocker. The 32-cycle calibration holds 13 lifecycle gates at zero; the duration calibration holds all 14 gates at zero; the listener and sample-gap controls fail for their named reasons. Electron 583/583, field-app 514/514, fieldd 580 + 1 skip. | plugin-architecture §23/§24.4/§24.6 · `thinking-prc6-diagnostics-soak.md` | **PRC-6c2b:** one uninterrupted 24h run; archive JSONL + passing literal-duration verdict. |
-| C — mesh | **UA-P 2026-09-15 (tip `68b62fb1`): the bus carries NO content until truffle can scope a store to a login — `mesh-bus.ts` `MESH_BUS_CARRIES_CONTENT = false`; the roster derives from the peer registry's WhoIs logins; petition T5 (a per-store login allow-list at the hello, sender-bound slices = TF-2's fix, the accept loop honouring the app-peer filter, no fail-open) is the return path; GM-D10 is answered by UA-P-D2** · **TM 2026-09-14 (tip `bbe551a5`): the terminal mesh rides the sidecar's reverse proxy — one route per live cell on `PORTS.TERMINAL_CELLS_SERVE` 9422 (its own listener: truffle's `Proxy` has no route update, a shared listener would bounce the product door on every cell churn), the linked login the allow-list, `ws://` inside WireGuard; the TSP1 ports and `terminal.v1.hosts` retired** · **`field.agents.v1` since MF-1 (2026-09-13): the field projection as a synced-store slice, gated on the product serve, capped at 64 KiB with `omitted`; GM-D10 (the store's audience) OPEN; TF-2 (truffle applies slices under the payload's id) filed** · C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
+| C — mesh | **UA-P-4 2026-09-16 (tip `87987bc4`): `MESH_BUS_CARRIES_CONTENT = true` — the bus carries content again because truffle RFC 025 gates a node by login at the hello, reports only its peers, and binds every slice to its authenticated sender; the device roster takes a slice only for a device the registry lists; petition T5 answered per node, not per store** · **UA-P 2026-09-15 (tip `68b62fb1`): the bus carries NO content until truffle can scope a store to a login — `mesh-bus.ts` `MESH_BUS_CARRIES_CONTENT = false`; the roster derives from the peer registry's WhoIs logins; petition T5 (a per-store login allow-list at the hello, sender-bound slices = TF-2's fix, the accept loop honouring the app-peer filter, no fail-open) is the return path; GM-D10 is answered by UA-P-D2** · **TM 2026-09-14 (tip `bbe551a5`): the terminal mesh rides the sidecar's reverse proxy — one route per live cell on `PORTS.TERMINAL_CELLS_SERVE` 9422 (its own listener: truffle's `Proxy` has no route update, a shared listener would bounce the product door on every cell churn), the linked login the allow-list, `ws://` inside WireGuard; the TSP1 ports and `terminal.v1.hosts` retired** · **`field.agents.v1` since MF-1 (2026-09-13): the field projection as a synced-store slice, gated on the product serve, capped at 64 KiB with `omitted`; GM-D10 (the store's audience) OPEN; TF-2 (truffle applies slices under the payload's id) filed** · C1–C6 + T1 COMPLETE; the P2 mesh chapter closed | design-04 · `thinking-c6-meshdata.md` | doc-existence replication (named follow-up); artifact product work moved to AH |
 | AH — Artifact Hub | **IN FLIGHT** — AH-1 serving `9f80f0c`; AH-2 catalog `9c17c46`; AH-3 desktop runtime `8c07bf4`; AH-4 preview runtime in implementation; live AH-1 proof + AH-3/AH-4 physical closeout owed | `specs/artifact-hub.md` | land/review AH-4 + physical two-device witness → AH-5 phone |
 | D — widgetlab port | COMPLETE (code) | `thinking-widgetlab-port.md` | visual fidelity pass = James's eyeball (§5 checklist) |
 | LOG — logging/diagnostics/audit | L0–L6 + post-L6 hardening COMPLETE (§23: 31/32 accepted) | `specs/logging-and-diagnostics.md` | LOG-39 packaged multi-platform CI · LOG-V5/V7/V8 decisions |
-| NF — native floor | **UA-P-0a 2026-09-15 (tip `68b62fb1`): the node exists only to capture a login or as the linked account — `native.mesh.start`/`stop`, the capture belt refusing `serve.add`/`store.set`, the state dir 0700; `FIELD_NATIVE_MESH` is a forced-on development override, not the product's switch; NF-8's toggle collapsed into the link (UA-P-D1)** · **TM-1/TM-3 2026-09-14 (tip `bbe551a5`): the in-process TSP1 serve, `ghosttea-truffle`, the hosts store and the TSP1 ports LEFT the floor at TM-1 — cells serve unconditionally, the flag means only "the doors are published" and the hello says so (`terminalMesh`); MF-2a's mint RETIRED at TM-3** (`d205548b`/`b1e330f7` landed it; the capability, its key file and its env var are deleted — the write right is an attach-grant claim, TM-D3). MF-2f's `create_private` STAYS and the pairing secret is its one remaining member. NF-8 the posture toggle owed; the floor has NO auth-key path (an interactive login only), so no headless test can make a floor join a tailnet — an NF follow-up · NF-0…7 landed; **NF-remote (§7)** landed 2026-08 and RETIRED 2026-09-14 (native-floor §7's dated note): the TSP1 posture — the floor serving TSP1, hosts published, writes gated, proved on a real tailnet at GT-4 — is gone with the serve it required | `specs/native-floor.md` | NF-8 · the auth-key path for headless floor-on-tailnet rows · per-device tokens (GT-D6) are MOOT since TM-3 — no token exists to scope |
-| IOS — companion | **IN FLIGHT** — **UA-P-1 2026-09-15 (tip `68b62fb1`): discovery by the door on port 9423 (a 403 is not your desktop and is never drawn; a hello with a grant is), the store reader dormant until the scoped bus returns, "signed in to <tailnet domain>" in the corner (the login itself waits on truffle petition T4); sign-out and switch (UA-P-D4) OPEN** · **TM-4/TM-5/TM-5a/TM-3 2026-09-14 (tip `bbe551a5`): `FieldRoutedTerminal` the routed T1 client (two legs on the node's `urlSession`, grants, byte credits, the envelope), the attachment over it with `RoutedTerminalFrameSink`, the TSP1 half and `GhostteaTruffle` out of the kit (`truffle` a direct dep at exact 0.7.12), the write key's Keychain item and `WriteKeySheet` gone with the bearer; next Phase 0 on the device** · **IOS-4a…4h and 4e LANDED 2026-09-13/14 (tip `6b26cf23`): `FieldProduct` client + `FieldStore` reader · `FieldLink` the live field · the join's five faces · the grant from the sheet · the corner's link token and line; next Phase 0 on the device, IOS-EL8 the ghosttea pin, the mesh sheet's door line, `notes`** · IOS-0/2/2f + IOS-EL8 · IOS-3a…3e + 3r (2026-08-05/06) · **IOS-3c (the write key's Keychain home), IOS-5a…5e + 5v (the input card, in the canvas's chrome), IOS-6a…6d (the field is RFC 005's swarm on Metal) ON MAIN 2026-09-13 `09c526ab`** · **IOS-TF internal TestFlight `168548c4`** (build 1 = the pre-IOS-3c app; build 2 archived from this tree, its upload owed to Xcode's sign-in) | `thinking-ios-app.md` §10–§12 · `thinking-ios-swarm.md` · `apps/ios/TESTFLIGHT.md` | upload build 2 → the device gates (the shader compile at first launch, 30 Hz physics under the 120 Hz blend, 7 pt type, VoiceOver per body, the tab bar as an obstacle) · D-i11…D-i17 rulings · the fieldd binding (the agent fleet is still the mock; the project-colour door) · the History tab (D-i10) |
+| NF — native floor | **UA-P-4 2026-09-16 (tip `87987bc4`): `spawn_bring_up` passes `.login_allow([login])` in linked mode and `MeshHandle::start` REBUILDS the node when the gate moves (the gate is fixed for a node's lifetime, RFC 025 §3.1 — the capture→linked promotion is a restart now); peer rows take `whois.login` from Layer 3's `Peer.login_name`, the self row carries `loginAllow`; the window's sidecar sits beside `field-native`** · **UA-P-0a 2026-09-15 (tip `68b62fb1`): the node exists only to capture a login or as the linked account — `native.mesh.start`/`stop`, the capture belt refusing `serve.add`/`store.set`, the state dir 0700; `FIELD_NATIVE_MESH` is a forced-on development override, not the product's switch; NF-8's toggle collapsed into the link (UA-P-D1)** · **TM-1/TM-3 2026-09-14 (tip `bbe551a5`): the in-process TSP1 serve, `ghosttea-truffle`, the hosts store and the TSP1 ports LEFT the floor at TM-1 — cells serve unconditionally, the flag means only "the doors are published" and the hello says so (`terminalMesh`); MF-2a's mint RETIRED at TM-3** (`d205548b`/`b1e330f7` landed it; the capability, its key file and its env var are deleted — the write right is an attach-grant claim, TM-D3). MF-2f's `create_private` STAYS and the pairing secret is its one remaining member. NF-8 the posture toggle owed; the floor has NO auth-key path (an interactive login only), so no headless test can make a floor join a tailnet — an NF follow-up · NF-0…7 landed; **NF-remote (§7)** landed 2026-08 and RETIRED 2026-09-14 (native-floor §7's dated note): the TSP1 posture — the floor serving TSP1, hosts published, writes gated, proved on a real tailnet at GT-4 — is gone with the serve it required | `specs/native-floor.md` | NF-8 · the auth-key path for headless floor-on-tailnet rows · per-device tokens (GT-D6) are MOOT since TM-3 — no token exists to scope |
+| IOS — companion | **IN FLIGHT** — **UA-P-5a 2026-09-16 (tip `87987bc4`): `AccountGate` — the node starts gated on a remembered login (one restart per fresh sign-in; absent is not a switch; another login re-gates and clears nothing, D4's), the store bus reads only inside the gate, a refused desktop's board is held off the field, the corner reads "<login> · <domain>"; kit 806/150** · **UA-P-1 2026-09-15 (tip `68b62fb1`): discovery by the door on port 9423 (a 403 is not your desktop and is never drawn; a hello with a grant is), the store reader dormant until the scoped bus returns, "signed in to <tailnet domain>" in the corner (the login itself waits on truffle petition T4); sign-out and switch (UA-P-D4) OPEN** · **TM-4/TM-5/TM-5a/TM-3 2026-09-14 (tip `bbe551a5`): `FieldRoutedTerminal` the routed T1 client (two legs on the node's `urlSession`, grants, byte credits, the envelope), the attachment over it with `RoutedTerminalFrameSink`, the TSP1 half and `GhostteaTruffle` out of the kit (`truffle` a direct dep at exact 0.7.12), the write key's Keychain item and `WriteKeySheet` gone with the bearer; next Phase 0 on the device** · **IOS-4a…4h and 4e LANDED 2026-09-13/14 (tip `6b26cf23`): `FieldProduct` client + `FieldStore` reader · `FieldLink` the live field · the join's five faces · the grant from the sheet · the corner's link token and line; next Phase 0 on the device, IOS-EL8 the ghosttea pin, the mesh sheet's door line, `notes`** · IOS-0/2/2f + IOS-EL8 · IOS-3a…3e + 3r (2026-08-05/06) · **IOS-3c (the write key's Keychain home), IOS-5a…5e + 5v (the input card, in the canvas's chrome), IOS-6a…6d (the field is RFC 005's swarm on Metal) ON MAIN 2026-09-13 `09c526ab`** · **IOS-TF internal TestFlight `168548c4`** (build 1 = the pre-IOS-3c app; build 2 archived from this tree, its upload owed to Xcode's sign-in) | `thinking-ios-app.md` §10–§12 · `thinking-ios-swarm.md` · `apps/ios/TESTFLIGHT.md` | upload build 2 → the device gates (the shader compile at first launch, 30 Hz physics under the 120 Hz blend, 7 pt type, VoiceOver per body, the tab bar as an obstacle) · D-i11…D-i17 rulings · the fieldd binding (the agent fleet is still the mock; the project-colour door) · the History tab (D-i10) |
 | GT — Godview terminal | **IN FLIGHT** — **GT-6 LANDED 2026-09-13 `c2b6d71c` + the review's `15e746e7` · `980bc8e6` · `9b652ff4` · `510dfaec`: the deck wears the record's pane frame from `@vibecook/puppeteer-views` (PU-14/14b upstream), the fold lifted to the overlay, stop/resume/zoom over fieldd's doors** · GT-0…3 + 3v/3m/3f/3p/3c + **GT-4 the mesh, both halves** (its floor half — the in-process TSP1 serve — RETIRED at TM-1 2026-09-14; the remote posture is T, `thinking-terminal-mesh-cells.md`) + **GT-5a…d the code review's fixes** landed (spec v0.3, GT-D10…D17); the kill matrix ran over a real tailnet | `specs/godview-terminal.md` | the deck's own ladder is done. **The swarm on WebGPU and the other views ARRIVED at AR-5 (2026-09-13, `fe6b3d0a`)** as `@vibecook/puppeteer-views` (AR-D13a; puppeteer's Godview is the reference, ours the product — AR-D14); *erratum 2026-09-13: the 09-12 phrase "mounted into the worker's `adoptCanvas` socket" was GT-D16's expectation restated — as built the package's renderer paints on MAIN behind a physics DRIVER port and the socket stays unused; the spec's GT-D16 carries the correction*; the monitor's one mock module was DELETED at AR-3 (the local field is fieldd's fold through the deck's door); smoke row 13b unskips when a peer can be staged in the harness |
 | UI — design system | **LANDED** 2026-08-05/06; **Studio architecture landed 2026-08-26** — tokens → primitives → production compositions → a catalog that mounts shipping views → one real product + isolated Studio under the active dev host, with explicit ephemeral live appearance and ownership enforced by test | `DESIGN.md` (authority) · **`docs/UI_SYSTEM.md`** (where it lives in code) | the catalog's own acceptance is an eyeball (light/dark · keyboard focus · reduced motion · narrow); the browser-only catalog remains available without live-product authority |
-| UA — users & accounts | **IN FLIGHT** — **UA-P-0 LANDED 2026-09-15 (tip `68b62fb1`): the posture derives from the link — `native.mesh.start {capture | linked}` / `stop`, a capture belt, `linkState` with the corrupt and tagged paths loud, the unlinked grant branch deleted; the second link refused (one local user per tailscale account); the artifact audience defaults to its owner; the secret crosses the proxy on forward; the bus carries no content; documents only among same-login desktops — DECISIONS UA-P-D1…D8; D4 (the phone's sign-out and switch) OPEN; the two-account tailnet witness owed since UA-4 is now the witness for everything here** · spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
+| UA — users & accounts | **IN FLIGHT** — **UA-P-W + UA-P-4 + UA-P-5a LANDED 2026-09-16 (tip `87987bc4`): the truffle side of T4/T5 built upstream as RFC 025 and consumed through the petition window; the floor starts GATED on the linked login (capture and the dev override stay ungated; a pre-protocol-5 sidecar degrades with truffle's sentence verbatim); the bus is back, scoped; the phone starts gated on its own remembered login with one restart per fresh sign-in and says WHO; D4 (sign-out and switch) still OPEN — the one thing UA-P-5 lacks** · **UA-P-0 LANDED 2026-09-15 (tip `68b62fb1`): the posture derives from the link — `native.mesh.start {capture | linked}` / `stop`, a capture belt, `linkState` with the corrupt and tagged paths loud, the unlinked grant branch deleted; the second link refused (one local user per tailscale account); the artifact audience defaults to its owner; the secret crosses the proxy on forward; the bus carries no content; documents only among same-login desktops — DECISIONS UA-P-D1…D8; D4 (the phone's sign-out and switch) OPEN; the two-account tailnet witness owed since UA-4 is now the witness for everything here** · spec v0.2 RATIFIED 2026-08-05; UA-0 `fcd0af9` · UA-1 `ca1ce49` · UA-2 `3750f20` · UA-3 `15832c0`+`30aece8`+`96e9e9d` · UA-6 `a4bed08`+`1a2a846` · **UA-4 door `105e6bd`** · **UA-3w wizard `1e27c7b`** · **UA-5 second user `cfe87b8`+`f3aa78a`+`e83033a`** — **CODE COMPLETE: all nine slices across two days**, three by worktree agents, zero integration-fix commits on the last two; the sun_path regression James's first real boot found is fixed (`d6f8489`); UA-D12 landed in full (ephemeral ports everywhere — the two-pair audit on real daemons is the V5 mutex's tombstone) | `specs/users-and-accounts.md` | **Physical witnesses only:** S1 live probe (`cargo test --ignored` + TRUFFLE_TEST_AUTHKEY) · two-account guest refusal (gates ANY shared-tailnet login) · the switch kill-matrix row (a live session in user 1 survives switch-away-and-back) · the switcher/wizard eyeball in both themes |
 | EDP/ESP — distribution & packaging | specs ready (EDP v0.3 · ESP v0.2 · plan v0.2); WP3 icons + WP6 tray/single-window landed | the three `specs/electron-*.md` | WP ladder toward WP10 = first signed macOS beta (EDP §16.1); ops first: Immutable Releases toggle + Azure signing eligibility (`thinking-auto-update.md` §next-actions) |
 | WIN — Windows port | **IN FLIGHT** — WIN-0…4 landed `5ffd30b`/`85cce04`/`f982d27` (2026-08-11; ratified 2026-08-10, James: "follow your plan"): gate + dev loop portable, the endpoint law in two languages (WIN-D1), the native plane on named pipes with a real stderr floor, the pair's probe/env/spawn doors, the stop VERB (WIN-D5; WIN-D3 resolved by construction) — all proven on the box (WORKSTATION4090) · **WIN-6 terminal hosting landed `03cc648`** (WIN-D2 adopted 2026-08-11: hosting in GA — the ConPTY kill matrix, two-plane adoption, and frame-plane I/O all on the box; the case-variant env-strip gap booked upstream as G13) · **WIN-5 the app BOOTS on Windows** (`51aa3ab`) — `pnpm smoke` green headless over ssh: shell + pipe-joined daemon pair + renderer + a live godview terminal, all on the box · **WIN-7 opened** (`edd5882`) — the mesh finds its `.exe` sidecar on Windows | `draft/thinking-windows-port.md` (plan; spec graduates with the track) | box gates green (Rust workspace incl. terminal_unit 14/14 · terminal_mesh 7/7 · mesh unit 3/3; fieldd terminal-seam 3/3 · terminal-kill-matrix 6/6 · the full fieldd suite 454/2-skip (the 2 = the tracked concurrent-edit doc-sync pair) · fieldd-client 12/12 · field-app 417; `pnpm smoke` boots headless over ssh); next: WIN-5 VISUAL polish (WIN-D9 chrome, tray `.ico`, glyphs — needs a Studio eyeball), WIN-7 live mesh witness (needs a tailnet auth key), WIN-8 packaging + the EL8 pin delta (electron-builder vs EDP-39) |
 | LSF — live surfaces foundation | **LANDED 2026-08-15/16** (`9a8ee9b1`…`90b54219`; spec RATIFIED v0.9) — browser OSR + SCK/Simulator producers, ticketed transport, renderer WebGPU store, Swift capture helper, labs + 20-min soaks all green on macOS; **ledgered LATE 2026-08-28** (entry §LSF — the second recurrence of the 2026-08-07 drift class) | `specs/live-surfaces-foundation.md` (LSF-D1…D16) | consumed by DT below; **DEFERRED (2026-08-28, James):** the §18 Windows rows (LSF-3/3C/6) and the LSF-4 signed-helper artifact (rides EDP/WP10) |
