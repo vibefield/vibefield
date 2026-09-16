@@ -417,7 +417,7 @@ describe("DeviceService — the self-peer set", () => {
 
     const peer = roster.find((d) => d.deviceId === "dev-peer") as DeviceInfo;
     expect(peer.productEndpoint?.url).toBe(
-      `https://peer.tailnet.ts.net:${PORTS.FIELDD_PRODUCT_SERVE}`,
+      `http://peer.tailnet.ts.net:${PORTS.FIELDD_PRODUCT_SERVE}`,
     );
     // UA-P-0d: a coordinate carries no key — the route secret is the sidecar's
     // target path, so there is nothing in this string to protect

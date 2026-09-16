@@ -1,7 +1,7 @@
 {
   "deviceId": "01JAMESPEERULID0000000000",
   "name": "studio",
-  "productEndpoint": { "serve": "product", "url": "https://studio.tail1234.ts.net:9423" },
+  "productEndpoint": { "serve": "product", "url": "http://studio.tail1234.ts.net:9423" },
   "self": false,
   "online": true,
   "lastSeenAt": 1757894400000,

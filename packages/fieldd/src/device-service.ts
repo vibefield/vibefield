@@ -351,7 +351,11 @@ export class DeviceService extends EventEmitter {
   }
 
   /** UA-P-0e — where a peer's product door is, DERIVED: its authenticated
-   * MagicDNS name plus the registry's fixed product serve port. Never published,
+   * MagicDNS name plus the registry's fixed product serve port, over plain `http`
+   * because the product serve is declared `tls: false` — WireGuard is the wire's
+   * privacy, and the listener speaks no TLS (UA-P-0g: the first cut said `https`,
+   * a scheme the door does not answer; the phone builds its own address and never
+   * read this, which is why it could sit wrong). Never published,
    * and never a secret — UA-P-0d put the route secret on the sidecar's target
    * path, so a coordinate is only a coordinate. Absent when the tailnet has not
    * named the host, because a door with no host is not a door. */
@@ -359,7 +363,7 @@ export class DeviceService extends EventEmitter {
     const peer = this.selfPeers.get(deviceId);
     const port = this.opts.productServePort;
     if (peer?.dnsName === undefined || port === undefined) return undefined;
-    return `https://${peer.dnsName}:${port}`;
+    return `http://${peer.dnsName}:${port}`;
   }
 
   /** Store stream: snapshots replace the slice map wholesale (P5); deltas merge

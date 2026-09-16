@@ -121,7 +121,7 @@ export const DeviceInfo = z
     fielddVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
     contractsVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
     capabilities: DeviceCapabilities.optional(),
-    /** UA-P-0e — for a PEER this is a derived LOCATOR (`https://<magicdns>:<the
+    /** UA-P-0e — for a PEER this is a derived LOCATOR (`http://<magicdns>:<the
      * registry's product serve port>`), never a published value and never a
      * secret: D7 moved the route secret to the sidecar's target path, so a door
      * coordinate is all there is to hold. For SELF it is this daemon's own
