@@ -1,6 +1,7 @@
 // MeshUnit (C1) lifecycle honesty — no tailnet, no network, no env mutation:
 // configs are constructed directly so tests stay parallel-safe.
 use field_native::{bootstrap, config::NativeConfig};
+use std::sync::Arc;
 
 fn unit<'a>(h: &'a serde_json::Value, name: &str) -> &'a serde_json::Value {
     h["units"]
@@ -454,4 +455,137 @@ done
         }
     }
     daemon.shutdown().await;
+}
+
+/// UA-P-4 — THE PROMOTION REBUILDS A **GATED** NODE, which is a stronger claim
+/// than "it restarted" and the one that matters.
+///
+/// The rows above witness the floor's DECISION with no node installed, so the
+/// `start` path they take is the ordinary first bring-up. This one takes the
+/// PROMOTION path: a LIVE capture node, ungated, asked to become linked.
+/// Without it, "linked means gated" would be a fact about an empty floor.
+///
+/// THE WALL THIS GETS PAST, since `force_node_presence_for_tests` documents the
+/// opposite: a node cannot be built headlessly *against a real tailnet*,
+/// because `build_with_auth_handler` drives an interactive browser login. It
+/// CAN be built against a stand-in sidecar. The sidecar is a child process
+/// speaking newline JSON on stdio, so a shell script that answers `tsnet:start`
+/// with a protocol-5 `tsnet:started` gets a genuine `Node` installed in the
+/// watch — every layer above Layer 3 is the product's. What this cannot
+/// witness is truffle honouring the list on a real netmap; that is
+/// `mesh_login_gate_probe.rs`, on the real tailnet.
+#[cfg(unix)]
+#[tokio::test]
+async fn the_promotion_rebuilds_a_gated_node_and_keeps_the_identity() {
+    use field_native::contracts::MeshMode;
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let stub = dir.path().join("sidecar-slim");
+    std::fs::write(
+        &stub,
+        r#"#!/bin/sh
+# A protocol-5 sidecar stand-in: it can name a login, so a gated node may start.
+while IFS= read -r line; do
+  case "$line" in
+    *tsnet:start*)
+      printf '%s\n' '{"event":"tsnet:started","data":{"state":"running","hostname":"truffle-vibefield-stub","dnsName":"truffle-vibefield-stub.tail0.ts.net","tailscaleIP":"127.0.0.1","nodeId":"nStub0CNTRL","loginName":"james@github","protocolVersion":5}}'
+      ;;
+    *tsnet:peers*)
+      printf '%s\n' '{"event":"tsnet:peers","data":{"peers":[]}}'
+      ;;
+  esac
+done
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let config = NativeConfig {
+        sidecar_override: Some(stub),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+
+    // THE PRECONDITION, asserted rather than assumed: a live CAPTURE node, and
+    // it is UNGATED. A row that only checked the end state could pass because
+    // the node was gated all along — which is the shape of the bug this slice
+    // exists to fix.
+    mesh.start(MeshMode::Capture, None).await.unwrap();
+    let capture_node = await_node(mesh).await;
+    assert!(
+        mesh.login_allow().is_empty(),
+        "the capture node must be ungated: {:?}",
+        mesh.login_allow()
+    );
+    let capture_device_id = capture_node.local_info().device_id.clone();
+    assert!(!capture_device_id.is_empty());
+
+    // A RE-DECLARE OF THE SAME POSTURE MUST NOT CHURN. The control for the
+    // rebuild below: if every `start` replaced the node, the assertion that the
+    // promotion replaced it would mean nothing.
+    assert!(
+        !mesh.start(MeshMode::Capture, None).await.unwrap(),
+        "re-asking for the live posture is an idempotent no-op"
+    );
+    assert!(
+        Arc::ptr_eq(&capture_node, &mesh.node().expect("still up")),
+        "an idempotent re-declare must not replace the node"
+    );
+
+    // THE PROMOTION.
+    assert!(
+        mesh.start(MeshMode::Linked, Some("james@github".into()))
+            .await
+            .unwrap(),
+        "capture → linked is a real transition"
+    );
+    let linked_node = await_node(mesh).await;
+
+    // (1) GATED — the point of the row. Not "a node is up", not "something
+    //     restarted": the installed node carries the captured login as its gate.
+    assert_eq!(
+        mesh.login_allow(),
+        vec!["james@github".to_string()],
+        "the promoted node must be gated on the captured login"
+    );
+    // (2) REBUILT, not relabelled — a different node object is installed.
+    assert!(
+        !Arc::ptr_eq(&capture_node, &linked_node),
+        "the promotion must build a NEW node: the gate is fixed for a node's \
+         lifetime (RFC 025 §3.1), so relabelling would leave the ungated one up"
+    );
+    // (3) …and the IDENTITY survived it. Same state dir, same device id, so the
+    //     rebuild costs no second interactive login and peers see no new device.
+    assert_eq!(
+        linked_node.local_info().device_id,
+        capture_device_id,
+        "a rebuild is not a re-mint: the tailnet identity must survive"
+    );
+
+    // and unlink still takes it all down
+    mesh.stop().await;
+    assert!(!mesh.node_present());
+    assert!(mesh.login_allow().is_empty());
+    daemon.shutdown().await;
+}
+
+/// Park until a node is installed. The bring-up is spawned, and a promotion
+/// tears the old node down before building, so "is there a node?" is briefly
+/// false in the middle of one — a bare `node()` read races it.
+#[cfg(unix)]
+async fn await_node(
+    mesh: &field_native::services::mesh::MeshHandle,
+) -> Arc<field_native::services::mesh::MeshNode> {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        if let Some(node) = mesh.node() {
+            return node;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "no node within 30s — the stub sidecar never brought one up"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 }
