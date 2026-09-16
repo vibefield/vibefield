@@ -34,12 +34,16 @@ a private mesh across machines, and an iPhone companion.
 ## Getting started
 
 Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify` ·
-Go (the mesh sidecar, while the truffle window is open) · three SIBLING CHECKOUTS beside this one.
-**The RFC 025 petition window is open (2026-09-16):** `truffle-core` is patched in from
-`../truffle-rfc025` by cargo `[patch.crates-io]`, the iOS kit takes truffle as a path package, and
-`pnpm siblings:build` builds its Go sidecar beside `field-native` — so the repo does NOT build
-standalone right now, as it did from 2026-07-28 until the window opened. `../puppeteer` and
-`../rosetta` are the other two (AR-0). Every revision is pinned in `siblings.lock.json`:
+three SIBLING CHECKOUTS beside this one: `../puppeteer` and `../rosetta` (AR-0) and
+`../truffle-rfc025`.
+**The RFC 025 petition window (2026-09-16) closed on two planes of three:** truffle 0.7.14
+shipped, so `truffle-core` is an exact registry pin again, the `[patch.crates-io]` row is gone,
+and the mesh sidecar comes from npm rather than being built from source (Go is no longer a
+prereq). The iOS kit's path package STAYS: ghosttea pins truffle `exact: "0.7.12"` in every
+published Swift tag, so the kit can move neither to 0.7.14 nor back to 0.7.12 (its own sources
+need RFC 025's login API) — the unblock is a ghosttea Swift release, and `Cargo.toml`'s closure
+note carries it. So the repo does not build standalone. Every revision is pinned in
+`siblings.lock.json`:
 `pnpm siblings` prints the state, `pnpm preflight` fails on drift, `pnpm siblings:pin` is the
 deliberate upgrade. `@vibecook/ice` stays an exact npm pin and needs no checkout. Every number
 lives in the manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from there, not from prose
@@ -49,7 +53,7 @@ lives in the manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from the
 ```sh
 pnpm install
 pnpm siblings       # the sibling checkouts: path, pin, dirtiness, built binaries
-pnpm siblings:build # rosettad + the truffle mesh sidecar, from the pinned checkouts
+pnpm siblings:build # rosettad, from the pinned checkout
 pnpm preflight      # tool versions + sibling pins + import-boundary walls
 pnpm hooks:install  # one-time: wires scripts/git-hooks (the dev-local push guard)
 pnpm dev            # desktop app dev loop

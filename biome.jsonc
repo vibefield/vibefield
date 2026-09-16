@@ -24,7 +24,7 @@
     // capture would be teaching a recorder about biome. The `.trf1` files are
     // binary; the manifest is `JSON.stringify(…, null, 2)`.
     //
-    // `truffle-rfc025` (RFC 025 window, 2026-09-16): biome FOLLOWS symlinks, and
+    // `truffle-rfc025` (RFC 025 window): biome FOLLOWS symlinks, and
     // apps/ios/VibeFieldKit/.window/truffle — the SwiftPM identity link the
     // window needs — points at a whole other repository. Without this line
     // `biome check .` walks that checkout and reports ITS lint (readline
@@ -33,7 +33,11 @@
     // is what biome matches once it has followed the link — a `!apps/ios/…`
     // pattern on the link's own path matches nothing, and apps/ios/biome.jsonc,
     // which turns biome off for that subtree, does not reach past a symlink
-    // either. Both were tried. Goes when the window does.
+    // either. Both were tried. The cargo and npm halves of that window closed on
+    // 2026-09-16 (UA-P-X) and this line stayed, because the SwiftPM half could
+    // not: ghosttea pins truffle exactly at 0.7.12, so the kit can move to
+    // neither 0.7.14 nor back. Goes when the link does.
+    //
     "includes": [
       "**",
       "!packages/contracts/gen",

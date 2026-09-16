@@ -71,12 +71,12 @@ try {
 // @vibecook/ice was absent from this table until 2026-08-16 — the one pin that
 // drags loro-crdt AND strata-ecs behind it was the one nothing here checked.
 const PIN_EXPECTATIONS = [
-  // RFC 025 window (2026-09-16): the requirement names the SIBLING's crate
-  // version, because a [patch.crates-io] row replaces a dependency only when the
-  // patched package's version satisfies it — 0.7.12 here would leave the patch
-  // silently unused and the registry crate in the graph. Cargo.toml's comment
-  // carries the window's terms and its exit.
-  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.13"/m, label: 'truffle-core = "=0.7.13"' },
+  // A REGISTRY pin again since 2026-09-16 (UA-P-X): truffle 0.7.14 shipped RFC
+  // 025's login-scoped nodes, so the requirement names a crates.io version
+  // rather than the sibling checkout's 0.7.13 that the petition window needed.
+  // Cargo.toml's closure note carries what that window was and every place its
+  // exit touched.
+  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.14"/m, label: 'truffle-core = "=0.7.14"' },
   {
     file: "pnpm-workspace.yaml",
     re: /"@vibecook\/ice":\s*0\.11\.0/,
@@ -108,22 +108,22 @@ const PIN_EXPECTATIONS = [
     label: '"@vibecook/ghosttea-protocol": 0.11.1',
   },
 ];
-// While the lock declares the truffle sibling, the [patch.crates-io] row that
-// redirects the requirement above at that checkout is part of the pin: without
-// it the exact version is a registry version again and the window is quietly
-// shut. Conditional on the lock entry so that CLOSING the window (delete the
-// entry, delete the row, pin the released version) passes this table rather than
-// fighting it — while OPENING one has to edit the table, which is the ritual the
-// comment above describes. The dynamic half, every patch row backed by a pin and
-// every pin by a row, is the sibling block below.
-if (readLock(root)?.siblings?.truffle !== undefined) {
-  PIN_EXPECTATIONS.push({
-    file: "Cargo.toml",
-    re: /^truffle-core\s*=\s*\{\s*path\s*=\s*"\.\.\/truffle-rfc025\/crates\/truffle-core"\s*\}/m,
-    label:
-      'truffle-core = { path = "../truffle-rfc025/crates/truffle-core" } — the RFC 025 window\'s [patch.crates-io] row, owed while siblings.lock.json declares the truffle sibling',
-  });
-}
+// A petition window's [patch.crates-io] row is part of its pin: without it the
+// exact version is a registry version again and the window is quietly shut. That
+// expectation was CONDITIONAL on the lock entry precisely so that CLOSING a
+// window — delete the entry, delete the row, pin the released version — would
+// pass this table rather than fight it, which is what it did on 2026-09-16 when
+// truffle 0.7.14 closed the RFC 025 window; no row is pushed here today because
+// no lock entry declares a patch. OPENING one has to edit this table, which is
+// the ritual the comment above describes.
+//
+// The NEGATIVE half is deliberately NOT spelled here. The sibling block below
+// derives both directions from the lock — every lock patch owes a row, and every
+// row owes a lock entry — so a leftover path patch is caught there with the
+// revision-pin message that says why, and spelling it twice is how two places
+// drift apart. Its registry-mode branch carries the same rule for the one case
+// this table could not see anyway: a patch row still standing after the LAST
+// lock entry goes (W-D8), when there is no lock left to derive anything from.
 for (const { file, re, label } of PIN_EXPECTATIONS) {
   try {
     const text = readFileSync(resolve(root, file), "utf8");
@@ -164,6 +164,20 @@ for (const { file, re, label } of PIN_EXPECTATIONS) {
           `${name} is a link: override but ${LOCK_FILE} is absent — a path dependency needs a pin (pnpm siblings:pin after declaring the sibling)`,
         );
       }
+    }
+    // …and no [patch.crates-io] row either, for the same reason and with the
+    // same words. The cargo half of the family rule lived only in the sibling
+    // branch below until 2026-09-16 (UA-P-X), which left registry mode able to
+    // carry an unpinned path patch silently — the exact shape CLAUDE.md forbids
+    // ("never leave a path patch unpinned") and the one cb652e0a created this
+    // machinery for. Closing the RFC 025 window is what surfaced it: with the
+    // last window entry gone the lock still exists here (puppeteer, rosetta), so
+    // the branch below still guards this tree — but W-D8 deletes the file, and a
+    // rule that stops applying when the last sibling leaves is not a rule.
+    for (const [crate, path] of cargoPatchRows(root).rows) {
+      problems.push(
+        `Cargo.toml patches ${crate}${path === null ? "" : ` with path "${path}"`} but ${LOCK_FILE} is absent — a path patch needs a revision pin (declare the sibling, then \`pnpm siblings:pin\`), never a bare working tree`,
+      );
     }
   } else {
     const lockPackages = new Map();

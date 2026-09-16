@@ -8,17 +8,19 @@
 # events, and preflight hard-fails when a checkout does not match the lock. The clone step
 # below is the truffle-era step (retired 7fcdfd2c) revived for two PRIVATE repos.
 #
-# RFC 025 WINDOW (2026-09-16) — READ THIS BEFORE TRUSTING A RED RUN. The lock now names a
-# THIRD sibling, ../truffle-rfc025, and this step does not fetch it: its pin is a revision
-# on a LOCAL branch (integration/rfc025) that exists on no remote, so there is nothing for
-# a runner to clone and preflight will fail here with "truffle checkout missing" until the
-# window closes (truffle 0.7.14 published ⇒ the [patch.crates-io] row, the lock entry and
-# the kit's path package all go, per Cargo.toml's exit list). `pnpm siblings:pin` warns
-# about exactly this, per sibling, and on 2026-09-16 it warned for ALL THREE — puppeteer's
-# and rosetta's pins were unpushed too, so this workflow could not have been green with or
-# without truffle. Stated rather than patched around: teaching the loop to skip a sibling
-# would make CI verify a DIFFERENT TREE than the one the gate ran on, which is the whole
-# thing this step exists to prevent.
+# RFC 025 WINDOW (2026-09-16) — READ THIS BEFORE TRUSTING A RED RUN. truffle 0.7.14 closed
+# the cargo and npm halves the same day (UA-P-X): the [patch.crates-io] row is gone and the
+# sidecars come from npm. The SWIFT half stayed open — ghosttea pins truffle exactly at
+# 0.7.12 in every published tag, so the kit can move neither forward nor back (Cargo.toml's
+# closure note has both errors) — so the lock STILL names ../truffle-rfc025 and this step
+# still does not fetch it: its pin is a revision on a LOCAL branch (integration/rfc025) that
+# exists on no remote, so preflight fails here with "truffle checkout missing" until a
+# ghosttea Swift release at truffle 0.7.14 frees the kit. And that is not the only blocker:
+# `pnpm siblings:pin` warns when a pinned revision is unpushed, and on 2026-09-16 it warned
+# for ALL THREE siblings — puppeteer's and rosetta's pins are unpushed too, so this workflow
+# could not be green with or without truffle. Stated rather than patched around: teaching the
+# loop to skip a sibling would make CI verify a DIFFERENT TREE than the one the gate ran on,
+# which is the whole thing this step exists to prevent.
 name: verify
 
 on:

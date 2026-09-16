@@ -56,61 +56,82 @@ let package = Package(
     // case-fold + process_tree hardening — no Apple-plane delta; the pin
     // moves for the one-version law, same as every row above.
     .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.10.1"),
-    // Truffle, DIRECTLY since TM-5 — the same package at the same exact pin it
-    // has always resolved to, declared here instead of arriving transitively
-    // through `GhostteaTruffle`.
+    // Truffle, DIRECTLY since TM-5 — declared here instead of arriving
+    // transitively through `GhostteaTruffle`.
     //
     // The phone's node was always truffle's (`MeshNode.startTailscale`,
     // `MeshConfiguration`, `Peer`, `MeshPhase`); what ghosttea's product added
     // was the TSP1 attach path, which retired with the protocol. Dropping the
     // product from `FieldMesh` therefore drops the only row that was carrying
     // truffle into this graph, so the dependency has to be stated rather than
-    // inherited. EL8 unchanged: `0.7.12` is field-native's `truffle-core` pin
-    // and the revision `Package.resolved` already carries — the manifests are
-    // the authority for both.
+    // inherited. EL8 binds it to field-native's `truffle-core`: two planes, ONE
+    // revision, and the manifests are the authority for the number.
     //
-    // **ERRATUM (2026-09-16).** That last sentence describes a state this file
-    // no longer has: field-native's pin is `=0.7.13` and Package.resolved
-    // carries no truffle row at all. Both are the window below, and its whole
-    // point is that the two planes still ride ONE revision — the rule the
-    // sentence states is intact; the numbers it quotes are not. The manifests
-    // remain the authority, which is why this correction is here and not only
-    // in a ledger.
+    // **ERRATUM (2026-09-16).** The sentence that stood here — "EL8 unchanged:
+    // `0.7.12` is field-native's `truffle-core` pin and the revision
+    // `Package.resolved` already carries" — described a state this file did not
+    // have: the RFC 025 petition window had moved the Rust pin to `=0.7.13` and
+    // taken this row to a PATH package reached through `.window/truffle`, and a
+    // path package records no revision, so `Package.resolved` carried no truffle
+    // row at all. The rule the sentence stated was intact throughout; its
+    // numbers were not.
     //
-    // RFC 025 PETITION WINDOW (2026-09-16, B0) — truffle is a PATH package for
-    // the duration of the window. The login gate the account foundation needs
-    // is unreleased, so this plane reads it from the SAME checkout the Rust
-    // floor patches in: ../truffle-rfc025 (branch integration/rfc025, crate
-    // version 0.7.13), pinned by revision in the repo's siblings.lock.json and
-    // verified by `pnpm preflight` on every gate. A path package records no
-    // revision, so Package.resolved LOSES its truffle row while the window is
-    // open — that absence is the window's shape, not a missing pin; the lock's
-    // SHA is what makes this plane resolvable twice.
+    // **THE WINDOW CLOSED ON 2026-09-16 (UA-P-X) — BUT NOT ON THIS PLANE.**
+    // truffle 0.7.14 published RFC 025's login-scoped nodes (tag `v0.7.14`,
+    // commit 9f0d6287), and cargo and npm both took it: `truffle-core` is a
+    // registry pin again and apps/desktop installs the protocol-5 sidecar. This
+    // row could not follow, and the reason is a VICE, not a choice — both ways
+    // out are closed, each measured rather than assumed.
     //
-    // Why the row points at a SYMLINK rather than at the checkout. A path
-    // package's identity is its DIRECTORY NAME, and `ghosttea` declares
-    // `.package(url: …/truffle.git, exact: "0.7.12")` of its own. Pointed
-    // straight at ../truffle-rfc025 the graph gets TWO packages — identities
-    // `truffle-rfc025` and `truffle` — and SwiftPM refuses outright ("multiple
-    // similar targets 'TailscaleKit', 'Truffle', … appear in package
-    // 'truffle-rfc025' and 'truffle'"), which is the Apple plane's version of
-    // the Arc<Node> type split the cargo pin exists to prevent. Reached through
-    // `.window/truffle`, the identity IS `truffle`, so this root-local package
-    // OVERRIDES ghosttea's remote edge and one truffle serves the whole graph —
-    // `swift package show-dependencies` shows ghosttea's own truffle row
-    // resolving to this very checkout. SwiftPM warns about the URL-vs-path
-    // identity conflict on every resolve and says it will become an error in a
-    // future version; that warning is the cost of the override, and the exit
-    // below is what ends it. A mirror is NOT the alternative: SwiftPM clones a
-    // mirror, so it cannot take a worktree ("cannot clone from local
-    // directory"), and it would honour `exact: 0.7.12` and hand back the
-    // released code the window exists to bypass.
+    // Forward to 0.7.14 is UNSATISFIABLE. `ghosttea` declares
+    // `.package(url: truffleRepository, exact: "0.7.12")` of its own, and every
+    // published ghosttea Swift tag through v0.11.1 still reads
+    // `let truffleVersion: Version = "0.7.12"` (checked at v0.10.1, v0.11.0 and
+    // v0.11.1). Two EXACT requirements at different versions cannot both hold:
     //
-    // THE EXIT — when James tags 0.7.14: this row goes back to
-    // `.package(url: "https://github.com/vibecook-dev/truffle.git", exact: "0.7.14")`,
-    // `.window/` is deleted, and `swift package resolve` writes the truffle row
-    // back into Package.resolved. The full list of places that one event
-    // touches is in the root Cargo.toml, above the truffle-core requirement.
+    //     error: Dependencies could not be resolved because root depends on
+    //     'truffle' 0.7.14. 'truffle' 0.7.12 is required because 'ghosttea'
+    //     0.10.1 depends on 'truffle' 0.7.12 and root depends on 'ghosttea'
+    //     0.10.1.
+    //
+    // Back to the released 0.7.12 DOES resolve — and then does not COMPILE,
+    // because UA-P-5a (`77a771c7`) taught this kit the login API that shipped in
+    // RFC 025 and exists in no 0.7.12:
+    //
+    //     FieldTruffleRuntime.swift:91: value of type 'MeshConfiguration' has no
+    //       member 'loginAllow'
+    //     FieldTruffleRuntime.swift:135: extra argument 'loginAllow' in call
+    //     FieldTruffleRuntime.swift:143,179: 'MeshNode' has no member 'loginName'
+    //     FieldTruffleRuntime.swift:157: 'MeshNode' has no member 'loginAllow'
+    //     FieldStoreDoors+Mesh.swift:140: 'Peer' has no member 'loginName'
+    //
+    // So the path package STAYS until the one thing that can free it lands: a
+    // ghosttea Swift release whose `truffleVersion` is 0.7.14. That is GT-4's
+    // cargo conflict in the other direction and it resolves upstream the same
+    // way — nothing in this repo can do it. Filed as the Apple plane's exit
+    // precondition; the root Cargo.toml's closure note names it too.
+    //
+    // What the window's remaining half still is, and why it is shaped this way:
+    // a path package's identity is its DIRECTORY NAME, so reaching the checkout
+    // through a symlink named `truffle` is what lets this root-local package
+    // OVERRIDE ghosttea's remote edge — pointed straight at `../truffle-rfc025`
+    // the graph gets two packages and SwiftPM refuses ("multiple similar targets
+    // 'TailscaleKit', 'Truffle', … appear in package 'truffle-rfc025' and
+    // 'truffle'"). A path package records no revision, so `Package.resolved`
+    // carries NO truffle row while this stands; that absence is the window's
+    // shape, not a missing pin, and siblings.lock.json's SHA is the pin. SwiftPM
+    // warns about the URL-vs-path identity conflict on every resolve and says it
+    // will one day be an error — that warning is the cost of the override.
+    //
+    // The checkout this reads is the RELEASED code, not a pre-release: on
+    // 2026-09-16 `../truffle-rfc025` was advanced to 9f0d6287, the commit tagged
+    // `truffle-v0.7.14`, and siblings.lock.json pins exactly that (`pnpm
+    // siblings:pin`, an EL8 event — and the one sibling pin that raises no
+    // unpushed-revision warning, because it IS a published tag). So all three
+    // planes now read 0.7.14; this one just reaches it through a path package
+    // instead of a version, because ghosttea's exact pin will not let a version
+    // through. That is the whole residue of the window, and the ghosttea release
+    // is what ends it.
     .package(path: ".window/truffle"),
   ],
   targets: [

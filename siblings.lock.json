@@ -1,5 +1,5 @@
 {
-  "//": "AR-0 sibling mode — machine-coupled checkouts pinned by revision. puppeteer (the agent runtime) and rosetta (agent history) are unpublished, so their packages enter as link: rows in pnpm-workspace.yaml and rosettad is built from source; truffle is here for the RFC 025 PETITION WINDOW (2026-09-16) and is consumed three further ways — a cargo [patch.crates-io] row (`patch`), a SwiftPM path package reached through an identity symlink (`swift` — a path package's identity is its directory name, and it has to read `truffle` to override ghosttea's own remote edge), and a Go sidecar built beside field-native (`go`). `pnpm preflight` verifies presence, revision, dirtiness (warn), that the overrides block and the [patch.crates-io] section agree with this file, that the SwiftPM link resolves to the pinned checkout and the kit manifest names it, and that the sidecar is built and fresh (warn); `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift). EXIT — npm (W-D8): replace each link: row with an exact version and delete its entry here. truffle (when 0.7.14 ships): delete the [patch.crates-io] block and the truffle entry here, pin the crate exactly, restore the kit's SwiftPM row to a tag, bump the npm sidecars — Cargo.toml's own comment carries that list.",
+  "//": "AR-0 sibling mode — machine-coupled checkouts pinned by revision. puppeteer (the agent runtime) and rosetta (agent history) are unpublished, so their packages enter as link: rows in pnpm-workspace.yaml and rosettad is built from source. `pnpm preflight` verifies presence, revision, dirtiness (warn), that the overrides block and the [patch.crates-io] section agree with this file, that a declared SwiftPM link resolves to the pinned checkout and the kit manifest names it, and that a declared sidecar is built and fresh (warn); `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift). truffle is here for the RFC 025 PETITION WINDOW (2026-09-16), which closed on 2026-09-16 for CARGO and NPM — truffle 0.7.14 shipped, so the [patch.crates-io] row and the `patch` key are gone, the crate is an exact registry pin, and the Go sidecar comes from npm so the `go` key is gone too. The `swift` half REMAINS OPEN and is not ours to close: ghosttea pins truffle `exact: \"0.7.12\"` in every published Swift tag, so a kit row at 0.7.14 is unsatisfiable, while 0.7.12 no longer COMPILES because UA-P-5a taught the kit RFC 025's login API. The exit is a ghosttea Swift release at truffle 0.7.14; Package.swift carries both errors verbatim. EXIT — npm (W-D8): replace each link: row with an exact version and delete its entry here.",
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
@@ -26,17 +26,10 @@
     },
     "truffle": {
       "path": "../truffle-rfc025",
-      "sha": "8abd8256edc37121fec15b50a4a2b5ff0c0b5793",
-      "patch": {
-        "truffle-core": "crates/truffle-core"
-      },
+      "sha": "9f0d628795443d2be85a749a344fb43a90005c0f",
       "swift": {
         "manifest": "apps/ios/VibeFieldKit/Package.swift",
         "link": "apps/ios/VibeFieldKit/.window/truffle"
-      },
-      "go": {
-        "module": "packages/sidecar-slim",
-        "binary": "sidecar-slim"
       }
     }
   }
