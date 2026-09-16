@@ -31,7 +31,10 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   /// self row can confirm this value rather than introduce a second one.
   public let deviceId: String
   public let name: String
-  public let platform: String
+  /// `nil` since UA-P-0e — a PEER row carries no platform, because a peer
+  /// publishes nothing and its row is built from the tailnet's own facts. It is
+  /// "this desktop did not say", never a platform, and nothing draws it.
+  public let platform: String?
   public let state: State
   /// Where this desktop's rows are coming from right now.
   public let feed: FieldFeedSource
@@ -56,7 +59,7 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   public var id: String { deviceId }
 
   public init(
-    deviceId: String, name: String, platform: String, state: State, feed: FieldFeedSource,
+    deviceId: String, name: String, platform: String?, state: State, feed: FieldFeedSource,
     publishesTerminalDoors: Bool? = nil, fieldRefusal: String? = nil
   ) {
     self.deviceId = deviceId
@@ -943,7 +946,10 @@ public final class FieldLink {
       return FieldDesktop(
         deviceId: deviceId,
         name: row?.name.isEmpty == false ? row!.name : fallbackName(entry),
-        platform: row?.platform ?? "",
+        // `?? nil` flattens the double optional rather than defaulting: since
+        // UA-P-0e a peer row carries no `platform` at all, and "" would be this
+        // phone inventing an empty answer where the wire said nothing.
+        platform: row?.platform ?? nil,
         state: state(of: deviceId, entry: entry),
         feed: feed(of: deviceId),
         publishesTerminalDoors: row?.capabilities?.terminalMesh,

@@ -75,6 +75,34 @@ import Testing
       "contractsVersion", "publishedAt"].sorted())
   }
 
+  /// UA-P-0e — THE PEER ROW, which is the shape that would have broken the
+  /// roster.
+  ///
+  /// `DeviceInfo` stopped extending `DeviceSlice` when the ruling took the
+  /// content off the bus: a peer publishes nothing, so its row is built from
+  /// the tailnet's own facts and carries none of `platform`, `headless`,
+  /// `fielddVersion`, `contractsVersion`, `capabilities`, `bootId` or
+  /// `publishedAt`. This reader took `platform` as required, so the FIRST peer
+  /// row in a `device.list` answer threw and took the whole roster with it —
+  /// and the phone calls `device.list` on every desktop it opens since UA-P-1a.
+  ///
+  /// The golden is the contracts' own bytes, checked byte for byte by
+  /// `scripts/check-ios-fixtures.mjs`.
+  @Test func theGoldenPeerRowReadsWithoutTheFieldsAPeerDoesNotPublish() throws {
+    let device = try DeviceInfo(json: try Fixture.json("device-info.self-peer"))
+    #expect(device.deviceId == "01JAMESPEERULID0000000000")
+    #expect(device.name == "studio")
+    #expect(device.isSelf == false)
+    #expect(device.online == true)
+    // Absent, and absent is "it did not say" rather than a value.
+    #expect(device.platform == nil)
+    #expect(device.capabilities == nil)
+    // The locator IS there, and carries no secret — D7 moved the route secret
+    // to the sidecar's target path, so a door coordinate is all a peer holds.
+    #expect(device.productEndpoint?.url == "https://studio.tail1234.ts.net:9423")
+    #expect(device.productURL?.absoluteString.contains("/t/") == false)
+  }
+
   /// TM-5a — the capability a REMOTE reader acts on, and the three answers it
   /// can get.
   ///

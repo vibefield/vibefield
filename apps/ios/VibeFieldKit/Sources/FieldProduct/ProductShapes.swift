@@ -71,10 +71,22 @@ public struct ProductEndpoint: Sendable, Equatable, Decodable {
 /// absence as `false` would put "offline" under a device nobody asked about —
 /// and the STORE's slices carry neither field at all, because liveness is not
 /// a thing a device can publish about itself.
+///
+/// **`platform` became OPTIONAL at UA-P-0e (2026-09-15), and the reason is the
+/// ruling rather than tolerance.** `DeviceInfo` no longer extends
+/// `DeviceSlice`: nothing content-bearing rides the bus, so a PEER publishes
+/// nothing and its row is built from the tailnet's own facts — `platform`,
+/// `headless`, `fielddVersion`, `contractsVersion`, `capabilities`, `bootId`
+/// and `publishedAt` are all absent on it, while the SELF row still carries
+/// every one. This reader took `platform` as REQUIRED, so the first peer row in
+/// a `device.list` answer would have thrown and taken the whole roster with it.
+/// `device-info.self-peer.json` is that row, pinned in this bundle.
 public struct DeviceInfo: Sendable, Equatable, Decodable, Identifiable {
   public let deviceId: String
   public let name: String
-  public let platform: String
+  /// Absent on a PEER row since UA-P-0e — see the note above. `nil` is "it did
+  /// not say", never a platform.
+  public let platform: String?
   public let online: Bool?
   public let isSelf: Bool?
   public let lastSeenAt: Int64?
@@ -95,7 +107,7 @@ public struct DeviceInfo: Sendable, Equatable, Decodable, Identifiable {
     var object = try WireObject(shape: "DeviceInfo", value: json)
     deviceId = try object.requiredString("deviceId")
     name = try object.requiredString("name")
-    platform = try object.requiredString("platform")
+    platform = object.string("platform")
     online = object.bool("online")
     isSelf = object.bool("self")
     lastSeenAt = object.int("lastSeenAt")
