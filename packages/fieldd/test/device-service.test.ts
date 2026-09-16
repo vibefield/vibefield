@@ -6,11 +6,18 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type DeviceInfo, type DeviceListResult, PORTS, SOCKETS } from "@vibefield/contracts";
+import {
+  CONTRACTS_VERSION,
+  type DeviceInfo,
+  type DeviceListResult,
+  PORTS,
+  SOCKETS,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { productPathSecret } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -147,18 +154,18 @@ function routeSnapshot(revision: number, port?: number): unknown {
 }
 
 describe("DeviceService — publish + identity", () => {
-  it("UA-P-0e: publishes NOTHING into field.devices.v1, and the self row says the same", async () => {
-    // THE FLIP. This row asserted the shape of the slice this daemon published;
-    // under D2 there is no slice. What it published — hostname, platform,
-    // versions, capabilities, and the product capability URL WITH its route
-    // secret — went to every VibeField node on the tailnet, because truffle
-    // broadcasts a store to every peer whose hostname carries the app prefix
-    // and cannot be told to narrow it by login.
+  it("UA-P-4: publishes the device slice again, and NO ROUTE SECRET rides it", async () => {
+    // THE FLIP BACK. UA-P-0e stopped this publish because the bus reached every
+    // VibeField node on the tailnet; RFC 025 gates the node on the account's
+    // login, so the bus's audience IS the account and the slice goes out again
+    // (the citations are in mesh-bus.ts).
     //
-    // So the facts move to the SELF ROW, which is where a local reader always
-    // read them and where a remote reader reads them through a door that
-    // checked who it is. Every assertion below is the same assertion; the
-    // carrier is what changed.
+    // What does NOT come back is the secret. D7 moved the route secret to the
+    // sidecar's target path and that ruling is untouched by the gate: a slice
+    // may name where a door IS, never how to open it. This row proves it
+    // against the PUBLISHED BYTES rather than against the shape we meant to
+    // publish — the secret is read from the same serve declaration the real
+    // sidecar is configured from, then hunted in what actually went on the wire.
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
     linkTo(dataDir);
@@ -170,8 +177,7 @@ describe("DeviceService — publish + identity", () => {
     const self = (await pollDevices(rpc, (d) => d.some((x) => x.self))).find(
       (x) => x.self,
     ) as DeviceInfo;
-    // deviceId came from store.get (no deviceId) — the node's mesh identity (D30).
-    // That read survives D2: it asks the floor for OUR OWN ULID and reaches no peer.
+    // deviceId came from store.get (no deviceId) — the node's mesh identity (D30)
     expect(self.deviceId).toBe("dev-self");
     expect(self.capabilities).toEqual({
       terminalHost: false,
@@ -184,12 +190,35 @@ describe("DeviceService — publish + identity", () => {
     expect(self.bootId).toBe(daemon.bootId);
     expect(self.productEndpoint?.serve).toBe("product");
 
-    // and the bus is INERT — not "empty for now", but never written to, with a
-    // settle window so a late publish would still be caught
-    await sleep(250);
-    expect(mock.storeWrites).toEqual([]);
-    expect(mock.agentFieldWrites).toEqual([]);
-    expect(mock.artifactStoreWrites).toEqual([]);
+    // the slice really went out, and it is this device's own row
+    await until(() => mock.storeWrites.length > 0, 8000);
+    const slice = mock.storeWrites.at(-1) as Record<string, unknown>;
+    expect(slice["deviceId"]).toBe("dev-self");
+    expect(slice["bootId"]).toBe(daemon.bootId);
+    expect(slice["platform"]).toBe(process.platform);
+    expect((slice["capabilities"] as Record<string, unknown>)["docHost"]).toBe(true);
+
+    // THE PROOF. Every byte fieldd has written to the bus, searched for the
+    // route secret and for the capability-path shape that used to carry it.
+    // `productPathSecret` reads it off the serve declaration the daemon sent
+    // its floor, so this compares the wire against the REAL secret rather than
+    // against a value this test made up.
+    await until(() => daemon.health().mesh.serves.some((x) => x.name === "product"), 8000);
+    const secret = productPathSecret(mock);
+    expect(secret.length).toBeGreaterThan(0);
+    const published = JSON.stringify(mock.storeWrites);
+    expect(published).not.toContain(secret);
+    expect(published).not.toContain("/t/");
+    // THE POSITIVE CONTROL: the secret really is live on this daemon — declared
+    // to the floor, which is the one place it is allowed to be. Without this the
+    // two absences above could be a test that searched for a value nothing ever
+    // held.
+    expect(JSON.stringify(mock.meshAddParams)).toContain(secret);
+    // and the endpoint that DID ride it is a locator: scheme, host, port, no path
+    const endpoint = slice["productEndpoint"] as { url?: string } | undefined;
+    if (endpoint?.url !== undefined) {
+      expect(new URL(endpoint.url).pathname).toBe("/");
+    }
   });
 
   it("terminalMesh is true only while a remote reader could really attach (F-H2)", async () => {
@@ -279,23 +308,17 @@ describe("DeviceService — publish + identity", () => {
   });
 });
 
-// UA-P-0e (D2) — THE ROSTER IS THE SELF-PEER SET.
+// UA-P-0e (D2) — THE ROSTER IS THE SELF-PEER SET, and UA-P-4 did not change
+// that. The bus is on again and scoped (RFC 025), so peer slices arrive once
+// more — but a slice DESCRIBES a member, it does not make one. Membership comes
+// from the TAILNET'S OWN REGISTRY filtered to this account's login, which is
+// what these rows are about, and a slice naming a device the registry does not
+// list is dropped at the fusion point with a log.
 //
-// What was here: five rows about fusing peer SLICES out of `field.devices.v1`
-// — the store stream, the ULID↔tailscale-id join, the tolerant malformed drop,
-// the owner binding that stripped peer-authored trust fields, and the delta
-// stream. Every one of them existed because a peer's row came from something
-// the peer PUBLISHED, and that publication reached every VibeField node on the
-// tailnet. James ruled the store scoped to the login identity; until truffle
-// can do that, nothing content-bearing rides the bus at all.
-//
-// So a peer's row comes from the TAILNET'S OWN REGISTRY now, and the questions
-// change with the source. There is no slice to malform, no owner to bind a
-// claim to and no trust field to strip, because a peer says nothing. The
-// question that replaces all of them is the only one left: WHOSE peer is this?
-//
-// The slice path itself is not deleted — it is behind `MESH_BUS_CARRIES_CONTENT`
-// for UA-P-4, and the rows above prove it is inert.
+// The question they ask is the one UA-P-0e made central and the gate did not
+// retire: WHOSE peer is this? Answering it here as well as at the transport is
+// defence in depth — RFC 025 §3.5 binds a slice to its sender, and one bug
+// upstream should not be able to conjure a device into somebody's roster.
 describe("DeviceService — the self-peer set", () => {
   it("lists ONLY peers whose WhoIs login is this account's", async () => {
     const dataDir = makeDataDir();
@@ -328,6 +351,77 @@ describe("DeviceService — the self-peer set", () => {
     // and no trace of the foreign peer anywhere in the answer
     expect(JSON.stringify(roster)).not.toContain("colleague@corp.example");
     expect(JSON.stringify(roster)).not.toContain("their laptop");
+  });
+
+  it("UA-P-4: a slice DESCRIBES a registry member, and never ADDS one", async () => {
+    // THE REGISTRY IS THE AUTHORITY. RFC 025 binds a slice to its sender's
+    // authenticated device id, so a slice for a device the tailnet does not
+    // list for this account should not arrive — this row is the defence in
+    // depth behind that, and it is cheap: one map lookup at the fusion point.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({
+        id: "node-mine",
+        deviceId: "dev-mine",
+        login: ACCOUNT,
+        name: "my laptop",
+        deviceName: "my-laptop.tail1234.ts.net",
+      }),
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-mine"));
+
+    const slice = (deviceId: string, name: string) => ({
+      deviceId,
+      name,
+      platform: "linux",
+      headless: false,
+      fielddVersion: "0.1.0",
+      contractsVersion: CONTRACTS_VERSION,
+      capabilities: { terminalHost: true, docHost: true, push: false },
+      bootId: `boot-${deviceId}`,
+      publishedAt: 1,
+    });
+
+    // (1) a LISTED member's slice DESCRIBES it: the claims a device makes about
+    // itself reach its row, which is the whole point of the bus coming back
+    mock.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-mine",
+      data: slice("dev-mine", "my laptop"),
+      version: 1,
+    });
+    const described = await pollDevices(
+      rpc,
+      (d) => d.find((x) => x.deviceId === "dev-mine")?.platform === "linux",
+    );
+    expect(described.find((x) => x.deviceId === "dev-mine")).toMatchObject({
+      platform: "linux",
+      bootId: "boot-dev-mine",
+      capabilities: { terminalHost: true },
+    });
+
+    // (2) an UNLISTED device's slice adds NOTHING, however well-formed. This
+    // one parses, fits every limit, and names a plausible device; the tailnet
+    // simply does not say it is this account's.
+    mock.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-ghost",
+      data: slice("dev-ghost", "ghost laptop"),
+      version: 1,
+    });
+    await sleep(300);
+    const after = await listVia(rpc);
+    expect(after.find((x) => x.deviceId === "dev-ghost")).toBeUndefined();
+    expect(JSON.stringify(after)).not.toContain("ghost laptop");
+    // the CONTROL: the listed member is still described, so (2) is a drop and
+    // not a store leg that stopped working
+    expect(after.find((x) => x.deviceId === "dev-mine")?.platform).toBe("linux");
   });
 
   it("an UNLINKED desktop has no account, so it has no peers", async () => {

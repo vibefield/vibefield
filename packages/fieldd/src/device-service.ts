@@ -12,6 +12,7 @@ import {
   type ProductEndpoint,
   STORES,
 } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import type { MeshClient } from "./mesh-client";
 
@@ -24,24 +25,33 @@ import type { MeshClient } from "./mesh-client";
 // deviation from D30's mesh-identity law: solo fields still need an id), the
 // roster is self-only, and the slice stays unpublished until the mesh returns.
 //
-// UA-P-0e (D2, 2026-09-15) — AND THE STORE HALF OF ALL THAT IS SWITCHED OFF.
-// `MESH_BUS_CARRIES_CONTENT` is `false` (see mesh-bus.ts for the ruling and for
-// why it is a switch rather than a deletion): this device publishes no slice,
-// subscribes to no store, and fuses no peer slice, because the bus reaches
-// every VibeField node on the tailnet and cannot be told to reach only this
-// account's.
+// UA-P-0e (D2, 2026-09-15) switched the store half OFF; UA-P-4 (2026-09-16)
+// switched it back ON, SCOPED — `MESH_BUS_CARRIES_CONTENT` is `true` again
+// because RFC 025 gates the node on the account's login, refuses a foreign
+// hello, and binds every slice to its sender's authenticated device id (the
+// ruling and its three citations live in mesh-bus.ts).
 //
-// The roster is then THE SELF-PEER SET: app peers from the tailnet's own
-// registry whose WhoIs login equals this user's linked login. Liveness comes
-// from the peer list, identity from truffle's durable ULID, and a door
-// coordinate is DERIVED (the peer's authenticated MagicDNS name + the
-// registry's product serve port) rather than published — UA-P-0d having moved
-// the route secret to the sidecar's target path, so a coordinate carries no key.
+// TWO SOURCES, AND THEY ARE NOT EQUALS. The tailnet's own peer registry says
+// WHO EXISTS; a store slice says what a device CLAIMS ABOUT ITSELF. So:
 //
-// What a peer no longer says about itself — platform, versions, capabilities,
-// bootId — is ABSENT on its row rather than guessed, which is why those fields
-// are optional on `DeviceInfo`. SELF still carries all of them: it is this
-// process. A reader that needs a peer's own claims asks the peer's door.
+//  - The registry is the authority on membership. `selfPeers` is app peers
+//    whose WhoIs login equals this user's linked login, and a roster row
+//    requires one — a slice for a device the registry does not list is DROPPED
+//    with a log, never added. That is defence in depth over RFC 025 §3.5's
+//    sender binding: one upstream bug should not be able to conjure a device
+//    into somebody's roster, and the check costs a map lookup.
+//  - A slice, having passed that, supplies what only a device can say about
+//    itself: platform, versions, capabilities, bootId. Absent when there is no
+//    slice yet, which is why those fields are optional on `DeviceInfo`.
+//
+// THE DOOR COORDINATE STAYS DERIVED for peers (UA-P-0d/D7): the peer's
+// authenticated MagicDNS name plus the registry's product serve port, in
+// preference to the `productEndpoint.url` the peer published. The gate makes a
+// published URL an account peer's claim rather than a stranger's, but a claim
+// is still what `peer-link` would dial, and a coordinate we derive from the
+// control plane is not a claim at all. Either way it carries no key — the route
+// secret is the sidecar's target path. SELF keeps its own published endpoint:
+// it is this process, composed by the daemon that owns the serve.
 
 export interface DeviceServiceOptions {
   dataDir: string;
@@ -71,6 +81,10 @@ export interface DeviceServiceOptions {
   /** UA-P-0e — the peer door coordinate's port. Injected so the derivation has
    * one source and a test can name it; production passes the registry row. */
   productServePort?: number;
+  /** UA-P-4 — needed the moment the store leg came back: a slice the registry
+   * does not vouch for is dropped, and a drop nobody can see is how a roster
+   * goes quietly wrong. Defaults to the no-op logger for focused unit tests. */
+  logger?: Logger;
   now?: () => number;
 }
 
@@ -103,6 +117,7 @@ interface PeerLinkView {
 
 export class DeviceService extends EventEmitter {
   private readonly now: () => number;
+  private readonly logger: Logger;
   /** the mesh identity once known (D30); the persisted local id until then */
   private deviceId: string;
   private slices = new Map<string, DeviceSlice>();
@@ -131,6 +146,10 @@ export class DeviceService extends EventEmitter {
    * already arrived. */
   private peersSubscribed = false;
   private lastRosterSig = "";
+  /** UA-P-4 — device ids already warned about, so the drop is logged once per
+   * device rather than once per roster projection. Cleared per device when the
+   * registry starts listing it. */
+  private unlistedLogged = new Set<string>();
   /** syncs SERIALIZE (the MeshClient chain law): each pass sees its trigger's state */
   private chain: Promise<void> = Promise.resolve();
   /** C5/D32 — wired post-construction (PeerLink is built after DeviceService) */
@@ -140,6 +159,7 @@ export class DeviceService extends EventEmitter {
   constructor(private readonly opts: DeviceServiceOptions) {
     super();
     this.now = opts.now ?? Date.now;
+    this.logger = (opts.logger ?? createNoopLogger()).child({ component: "devices" });
     this.deviceId = this.loadLocalId();
     // Re-sync on every mesh event that can change identity, reachability, or
     // the capability URL. "reconciled" also fires after every link reconnect.
@@ -218,10 +238,19 @@ export class DeviceService extends EventEmitter {
         await this.opts.mesh.subscribePeers(() => void this.sync());
         this.peersSubscribed = true; // NativeLink replays across reconnects (P5)
       }
-      // UA-P-0e — the store leg, OFF. Not subscribed, so no foreign slice is
-      // ever adopted; not published, so nothing of this device's goes out.
-      // Both halves are the same ruling: the bus reaches every VibeField node
-      // on the tailnet, and this account is not all of them.
+      // UA-P-4 — THE REGISTRY FIRST, THEN THE STORE. The order is load-bearing
+      // now that slices are fused against the self-peer set: subscribing first
+      // would hand `applyStoreSnapshot` a whole store to judge against an empty
+      // registry, and every row of it would read as a device the tailnet does
+      // not list. Refreshing first means the first snapshot is judged against
+      // real membership. (Deltas that arrive between passes are handled at the
+      // FUSION point, not by dropping them — see `roster`.)
+      await this.refreshPeers();
+      // UA-P-4 — the store leg is back, scoped. Subscribed, so an account
+      // peer's slice describes it; published, so this device's own claims reach
+      // the account's other devices. Both halves are the same ruling as the
+      // off-state was: the bus's audience is the account, and RFC 025 is what
+      // finally makes that true of the transport rather than of the deployment.
       if (MESH_BUS_CARRIES_CONTENT && !this.storeSubscribed) {
         const subscription = await this.opts.mesh.subscribeStoreManaged(
           STORES.DEVICES,
@@ -235,7 +264,6 @@ export class DeviceService extends EventEmitter {
         this.storeSubscribed = true; // NativeLink replays across reconnects (P5)
         this.applyStoreSnapshot(subscription.snapshot);
       }
-      await this.refreshPeers();
       if (MESH_BUS_CARRIES_CONTENT) await this.publish();
     } catch {
       // mesh down (disabled / auth pending / node building) — self-only roster,
@@ -311,6 +339,9 @@ export class DeviceService extends EventEmitter {
       const login = parsed.data.whois?.login;
       if (account === null || login === undefined || login.toLowerCase() !== account.toLowerCase())
         continue;
+      // UA-P-4 — a device the registry now lists is no longer "unlisted": clear
+      // its log latch so a LATER fall-out is reported instead of swallowed.
+      this.unlistedLogged.delete(parsed.data.deviceId);
       this.selfPeers.set(parsed.data.deviceId, {
         deviceId: parsed.data.deviceId,
         tailscaleId: parsed.data.id,
@@ -428,6 +459,22 @@ export class DeviceService extends EventEmitter {
     this.slices.set(deviceId, narrowDeviceSlice(parsed.data));
   }
 
+  /** UA-P-4 — log a dropped slice ONCE per device, not once per roster rebuild.
+   * The roster is re-projected on every peer event, every link change and every
+   * sync, so an unconditional warn would turn one unlisted device into a log
+   * flood — and a flood is how a real signal stops being read. The id leaves
+   * the set the moment the registry does list it (`refreshPeers`), so a peer
+   * that arrives late is logged again if it ever falls out again. */
+  private noteUnlistedSlice(deviceId: string): void {
+    if (this.unlistedLogged.has(deviceId)) return;
+    this.unlistedLogged.add(deviceId);
+    this.logger.warn(
+      "fieldd.devices.slice_from_unlisted_device",
+      "A device slice named a device the tailnet registry does not list for this account; dropped",
+      { deviceId },
+    );
+  }
+
   private remoteSliceCount(): number {
     let count = 0;
     for (const deviceId of this.slices.keys()) if (deviceId !== this.deviceId) count += 1;
@@ -437,16 +484,24 @@ export class DeviceService extends EventEmitter {
   /** Fuse slices with liveness. Self is always online; a peer is online per the
    * tailnet (transport truth); lastSeenAt = the freshest honest fact we hold.
    *
-   * UA-P-0e — with the bus off there are no peer slices, so the loop below runs
-   * over SELF alone and `selfPeerRows()` supplies the rest. The slice path is
-   * kept whole for UA-P-4, when a scoped bus makes a peer's own claims
-   * trustworthy again and the two sources fuse per device rather than
-   * alternate. */
+   * UA-P-4 — AND THE FUSION IS WHERE THE REGISTRY WINS. A slice contributes a
+   * row only for SELF or for a device the tailnet's own registry lists as this
+   * account's peer; anything else is dropped here with a log and never reaches
+   * a reader. Doing it at the fusion point rather than at adoption is
+   * deliberate: a delta can legitimately arrive in the gap between two registry
+   * passes, and dropping it on arrival would lose a real peer's row until it
+   * happened to republish. Held, then judged, is both strict and race-free —
+   * the roster is the thing anyone reads, so the roster is where "the registry
+   * is the authority" has to be true. */
   private roster(): DeviceInfo[] {
     const out: DeviceInfo[] = [];
     const seen = new Set<string>();
     for (const [deviceId, slice] of this.slices) {
       const self = deviceId === this.deviceId;
+      if (!self && !this.selfPeers.has(deviceId)) {
+        this.noteUnlistedSlice(deviceId);
+        continue;
+      }
       // ULID slice key → tailscale id → liveness. Joining peerLiveness by the
       // ULID directly is the T1 §6 bug: the map is keyed by the tailnet's own
       // node id, and the two keyspaces never intersect.
@@ -455,6 +510,13 @@ export class DeviceService extends EventEmitter {
       const live = tailscaleId !== undefined ? this.peerLiveness.get(tailscaleId) : undefined;
       // link is OUR verdict about the connection to a peer — never self (C5/D32)
       const link = self ? undefined : this.peers?.linkState(deviceId);
+      // UA-P-0d/D7, kept by UA-P-4 — a peer's door coordinate is DERIVED from
+      // the control plane in preference to the one it published. The published
+      // URL is now an account peer's claim rather than a stranger's, which is
+      // the gate working; it is still a claim, and `peer-link` dials it.
+      const endpoint = slice.productEndpoint;
+      const derived = self ? undefined : this.doorLocator(deviceId);
+      const url = self ? endpoint?.url : (derived ?? endpoint?.url);
       out.push({
         deviceId: slice.deviceId,
         name: slice.name,
@@ -469,13 +531,11 @@ export class DeviceService extends EventEmitter {
           docHost: slice.capabilities.docHost,
           push: slice.capabilities.push,
         },
-        ...(slice.productEndpoint !== undefined
+        ...(endpoint !== undefined
           ? {
               productEndpoint: {
-                serve: slice.productEndpoint.serve,
-                ...(slice.productEndpoint.url !== undefined
-                  ? { url: slice.productEndpoint.url }
-                  : {}),
+                serve: endpoint.serve,
+                ...(url !== undefined ? { url } : {}),
               },
             }
           : {}),

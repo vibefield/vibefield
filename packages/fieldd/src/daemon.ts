@@ -1811,6 +1811,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // further down (the serve machinery owns it); this closure defers to it.
       linkedLogin: () => links.status().link?.login ?? null,
       productServePort: PORTS.FIELDD_PRODUCT_SERVE,
+      // UA-P-4 — a slice the peer registry does not vouch for is dropped, and
+      // the drop has to be visible: this is the roster quietly disagreeing with
+      // the tailnet, which is exactly the class nobody notices without a line.
+      logger,
       // The daemon owns the serve secret + the fused serve state, so IT
       // composes the endpoint: url only while the product serve is active.
       productEndpoint: () => {
@@ -1837,13 +1841,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // the board is true either way, and only the join promises a tap.
     //
     // ERRATA (2026-09-13, EL7 M1): this comment used to call `field.devices.v1`
-    // a same-user-private store and lean on that as the precedent. It is not.
-    // truffle-core broadcasts to every tailnet node whose hostname starts with
-    // `truffle-vibefield-`; there is no WhoIs and no login check on the store's
-    // own path. Same-user holds by DEPLOYMENT (UA-D5 — the tailnet is this
-    // person's), never by construction, and what refuses a guest is the door
-    // behind the URL (WhoIs + scopes + the guest choke), which the store does
-    // not go through. The posture ruling is GM-D10, open.
+    // a same-user-private store and lean on that as the precedent. It was not:
+    // truffle-core broadcast to every tailnet node whose hostname started with
+    // `truffle-vibefield-`, with no WhoIs and no login check on the store's own
+    // path, so same-user held by DEPLOYMENT and never by construction.
+    //
+    // RESOLVED (2026-09-16, UA-P-4): RFC 025 gates the node on the linked login,
+    // so both stores are same-account by construction (mesh-bus.ts carries the
+    // citations) and GM-D10 is closed by UA-P-D2. The erratum stays because the
+    // reasoning it corrected — "it is a store, therefore it is private" — is
+    // the reasoning that must not come back: what makes it private is the GATE,
+    // named and pinned, and a future store on an ungated node would be as open
+    // as this one was.
     //
     // It is a NEIGHBOURING consent, not the same one —
     // a floor can serve terminals with the product serve down, and vice versa
@@ -1859,17 +1868,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       terminalPublished: () => native.terminalMeshPublished(),
       logger: logger.child({ component: "agents.field" }),
     });
-    // UA-P-0e (D2) — the field's STORE carrier is off. `field.agents.v1` reaches
-    // every VibeField node on the tailnet, and what it carries is every agent's
-    // label, project, branch, model, effort and blocker tool. The publisher is
-    // CONSTRUCTED (so it stays compiled and typechecked for UA-P-4) and simply
-    // never started, which is the whole of the off-state: no fold subscription,
-    // no slice, no heartbeat.
+    // UA-P-4 (D2) — the field's STORE carrier is on again, scoped. UA-P-0e left
+    // this publisher CONSTRUCTED but never started, because `field.agents.v1`
+    // reached every VibeField node on the tailnet and carried every agent's
+    // label, project, branch, model, effort and blocker tool. RFC 025 gates the
+    // node on the linked login, so the store's audience is the account and the
+    // carrier is wired to the daemon's events again.
     //
-    // Nothing is lost for a self reader: the same content-free rows ride
+    // TWO CARRIERS, ON PURPOSE. The same content-free rows also ride
     // `agent.subscribe {projection: "field"}` over the product door, which is
-    // where the phone already reads them and which compares the caller's WhoIs
-    // login to the stored link before it answers.
+    // where the phone reads them and which compares the caller's WhoIs login to
+    // the stored link before it answers. The store carrier is what lets a phone
+    // that has joined the tailnet read every desktop's board with no fieldd in
+    // its path; the door carrier is what answers a reader that has one.
     if (MESH_BUS_CARRIES_CONTENT) {
       mesh.on("serves-changed", () => agentField.notifyServingChanged());
       // TM-2 — the hello is where `terminalMesh` arrives and where it can change

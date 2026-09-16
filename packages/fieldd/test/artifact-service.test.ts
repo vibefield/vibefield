@@ -1480,20 +1480,39 @@ describe("Artifact Hub over a real daemon", () => {
     //
     // This row used to assert that a peer's self-asserted `tailnetDnsName`
     // could not bind a URL: the foreign slice ARRIVED, was adopted, and the
-    // projection refused to make it openable. Under D2 no foreign slice is
-    // adopted at all — neither the device one nor the artifact one — so the
-    // poisoned claim never reaches a projection to be refused by. Both stores
-    // are seeded above and both are ignored.
+    // projection refused to make it openable. Under D2 the defence became
+    // membership instead: this peer carries no WhoIs login, so the tailnet
+    // never names it as this account's and neither store's slice for it
+    // produces anything. Both stores are seeded above and both are ignored.
+    //
+    // UA-P-4 keeps the SECURITY property true with the BUS ON, and the shape of
+    // the answer changes. The slices are adopted now — the bus is scoped, so
+    // adoption is the normal path — so the artifact catalog holds a row for
+    // `dev-peer`. It is INERT: `projectCatalogEntry` binds a URL only from the
+    // transport's own view of the origin, and the roster does not name this
+    // peer at all, so the row is offline, not openable, and carries no URL.
+    // The poisoned `tailnetDnsName` binds nothing, which was always the claim
+    // this row is named for.
+    //
+    // The DEVICE roster still drops the slice outright (the registry is the
+    // authority on membership). The artifact catalog deliberately does not:
+    // AH-2 retains a departed peer's last-known-safe metadata across peer
+    // removal and a restart, and a drop here would delete that behaviour to buy
+    // safety the projection already provides.
     await new Promise((resolve) => setTimeout(resolve, 400));
-    expect(started.daemon.artifacts.artifacts()).toEqual([]);
-    // the peer is not in the roster either: no WhoIs login means no account to
-    // match, so it is not this account's device
+    const views = started.daemon.artifacts.artifacts();
+    const peerView = views.find((view) => view.originDeviceId === "dev-peer");
+    expect(peerView, "the slice is adopted — the bus is on").toBeDefined();
+    expect(peerView).toMatchObject({ availability: "offline", openable: false });
+    // THE CLAIM BINDS NOTHING: no URL was derived from the peer's own DNS
+    // assertion, which is the whole of what this row is named for
+    expect(peerView?.url).toBeUndefined();
+
+    // the peer is not in the DEVICE roster: no WhoIs login means no account to
+    // match, so it is not this account's device and no slice may add it
     expect(started.daemon.devices.get("dev-peer")).toBeUndefined();
     // and the hostile string is nowhere in either answer
-    const answers = JSON.stringify([
-      started.daemon.artifacts.artifacts(),
-      started.daemon.devices.list(),
-    ]);
+    const answers = JSON.stringify([views, started.daemon.devices.list()]);
     expect(answers).not.toContain("evil.example.com");
   });
 
@@ -1594,11 +1613,23 @@ describe("Artifact Hub over a real daemon", () => {
     });
   }, 30_000);
 
-  it("UA-P-0e: two stacks on one tailnet do NOT converge, because nothing is published", async () => {
-    // Today's truth, stated positively beside the skipped row below. `dev-a`
-    // publishes an artifact; `dev-b` is a self peer on the same tailnet with a
-    // live relay between the two mocks — and still sees nothing, because
-    // `field.artifacts.v1` is not written and not read.
+  // UA-P-4 — THE CONVERGENCE ROW IS BACK, unskipped and unchanged in substance.
+  //
+  // UA-P-0e replaced it with a "two stacks do NOT converge" row and left this
+  // one `it.skip`ped rather than deleting it, on the grounds that the behaviour
+  // was meant to return and rebuilding it from a commit message is the cost of
+  // deleting it. It has returned: RFC 025 gates the node on the account's
+  // login, so `field.artifacts.v1` reaches this account's desktops and no
+  // others (mesh-bus.ts carries the citations). The non-convergence row it
+  // stood in for is deleted, because the product no longer behaves that way.
+  //
+  // The one substantive edit: both fixtures' peer logins are `TEST_LOGIN` now,
+  // the login the link fixture writes. When this row was written the roster did
+  // not scope by login at all and any string did; under UA-P-0e a peer whose
+  // WhoIs login is not the account's is not a peer, so a stale `me@example.com`
+  // would have made these two desktops strangers to each other and the
+  // convergence it asserts impossible.
+  it("converges add, collision, update, status, subscription, and removal across two daemon stacks", async () => {
     const source = await localSource();
     const a = await boot(makeDataDir(), (mock) => {
       mock.meshDeviceId = "dev-a";
@@ -1621,78 +1652,6 @@ describe("Artifact Hub over a real daemon", () => {
           deviceId: "dev-a",
           online: true,
           whois: { login: TEST_LOGIN, deviceName: "mock.ts.net" },
-        },
-      ];
-    });
-    cleanup.push(() => a.daemon.stop());
-    cleanup.push(() => b.daemon.stop());
-    cleanup.push(() => a.mock.stop());
-    cleanup.push(() => b.mock.stop());
-
-    const rpcA = await rpcFor(a.daemon.controlPort, a.daemon.shellToken);
-    await rpcA.call("artifact.publish", {
-      artifactId: A,
-      title: "A workbench",
-      source: { kind: "proxy", port: source.port, scheme: "http" },
-    });
-    await until(() => a.daemon.artifacts.statuses()[0]?.status === "active", 8_000);
-
-    // A's own list has it — the local half of the catalog is untouched, which
-    // is the CONTROL: this is not a daemon that failed to publish anything
-    expect(a.daemon.artifacts.artifacts().map((v) => v.artifactKey)).toEqual([`dev-a:${A}`]);
-    // nothing went to the bus — there is no slice to relay, which is why the
-    // relay helper is not called here (it would throw on the absence)
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(a.mock.artifactStoreWrites).toEqual([]);
-
-    // and the INBOUND half: a slice pushed at B as if A had published it is
-    // ignored, so the off-state is not merely "nobody wrote" — nobody reads
-    b.mock.artifactStoreSlices.set("dev-a", {
-      v: 1,
-      artifacts: [catalogEntry("dev-a", A, { url: "https://mock.ts.net:17180" })],
-    });
-    b.mock.pushArtifactStoreDelta({
-      kind: "peerUpdated",
-      deviceId: "dev-a",
-      data: b.mock.artifactStoreSlices.get("dev-a"),
-      version: 1,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    expect(b.daemon.artifacts.artifacts()).toEqual([]);
-    // …and B does see A as a device, because the ROSTER comes from the
-    // tailnet's registry rather than the bus
-    expect(b.daemon.devices.get("dev-a")?.tailnetDnsName).toBe("mock.ts.net");
-  }, 60_000);
-
-  // UA-P-4 — the store carrier's two-stack convergence, preserved whole for the
-  // day truffle can gate a store by login (`MESH_BUS_CARRIES_CONTENT`). Skipped
-  // rather than deleted or rewritten: it describes behaviour the product
-  // deliberately does not have right now and is meant to have again, and
-  // rebuilding it from a commit message is the cost of deleting it. The row
-  // above states what is true instead.
-  it.skip("converges add, collision, update, status, subscription, and removal across two daemon stacks", async () => {
-    const source = await localSource();
-    const a = await boot(makeDataDir(), (mock) => {
-      mock.meshDeviceId = "dev-a";
-      mock.storeSlices.clear();
-      mock.meshPeers = [
-        {
-          id: "node-b",
-          deviceId: "dev-b",
-          online: true,
-          whois: { login: "me@example.com", deviceName: "MOCK.TS.NET." },
-        },
-      ];
-    });
-    const b = await boot(makeDataDir(), (mock) => {
-      mock.meshDeviceId = "dev-b";
-      mock.storeSlices.clear();
-      mock.meshPeers = [
-        {
-          id: "node-a",
-          deviceId: "dev-a",
-          online: true,
-          whois: { login: "me@example.com", deviceName: "mock.ts.net" },
         },
       ];
     });

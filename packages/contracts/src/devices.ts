@@ -55,15 +55,25 @@ export type DeviceCapabilities = z.infer<typeof DeviceCapabilities>;
  * serve is active.
  *
  * ERRATA (2026-09-13, EL7 M1): this paragraph called the store
- * "same-user-private" and readers took that as a guarantee. It is not one.
- * truffle-core broadcasts to EVERY tailnet node whose hostname starts with
+ * "same-user-private" and readers took that as a guarantee. It was not one.
+ * truffle-core broadcast to EVERY tailnet node whose hostname started with
  * `truffle-vibefield-` — no WhoIs, no login check on the store's own path — so
- * the store's audience is the APP's tailnet peers. Same-user holds by
- * DEPLOYMENT (UA-D5: the tailnet is this person's), never by construction.
- * What refuses a guest is the DOOR behind this URL (WhoIs + scopes + the
- * `guestOk` choke), which the store does not go through: the capability URL
- * published here is a dial coordinate, and the door is the gate. The posture
- * ruling — what may ride a broadcast store at all — is GM-D10, open. */
+ * the store's audience was the APP's tailnet peers, and same-user held by
+ * DEPLOYMENT (UA-D5: the tailnet is this person's) rather than by construction.
+ *
+ * RESOLVED (2026-09-16, UA-P-4): it is same-account BY CONSTRUCTION now, and
+ * the erratum above is kept because the reasoning it corrected is the reasoning
+ * that must not come back. RFC 025 gates the node on the linked login, so a
+ * store reaches only nodes whose owner's login matches (§3.3), a foreign hello
+ * is refused before our identity block (§3.4), and a slice applies only under
+ * its sender's authenticated device id (§3.5). GM-D10's posture question is
+ * closed by UA-P-D2: the store is scoped to the login identity.
+ *
+ * WHAT DID NOT CHANGE, and is the more important half: this URL is a LOCATOR,
+ * not a capability. UA-P-0d (D7) moved the route secret to the sidecar's target
+ * path, so a caller dials a bare root and the sidecar adds the secret on
+ * forward. The DOOR behind this URL is still the gate — WhoIs, scopes, the
+ * `guestOk` choke — and the gate on the bus does not stand in for it. */
 export const ProductEndpoint = z
   .object({
     serve: z.string().min(1).max(DEVICE_LIMITS.ENDPOINT_SERVE_CHARS),
@@ -95,23 +105,28 @@ export type DeviceSlice = z.infer<typeof DeviceSlice>;
  * heartbeats. `link` is PeerLink's live verdict about OUR connection to the
  * device (C5/D32) — absent when never dialed.
  *
- * UA-P-0e (D2, 2026-09-15) — THE SLICE-DERIVED FACTS ARE OPTIONAL NOW, and this
- * row no longer extends `DeviceSlice`. It used to: a roster row WAS a slice
- * fused with liveness, so every field a peer published was a field the roster
- * required. Under D2 nothing content-bearing rides the bus until truffle can
- * gate a store by login, so there are no peer slices to fuse — a peer row is
- * built from the tailnet's own facts (the peer registry plus its WhoIs login)
- * and from a DERIVED door locator, and the things only a slice could have said
- * are simply not said.
+ * UA-P-0e (D2, 2026-09-15) — THE SLICE-DERIVED FACTS ARE OPTIONAL, and this row
+ * no longer extends `DeviceSlice`. It used to: a roster row WAS a slice fused
+ * with liveness, so every field a peer published was a field the roster
+ * required. That coupling is what made the row undescribable the moment the bus
+ * went quiet, and it stays broken on purpose.
+ *
+ * UA-P-4 (2026-09-16) — the slices are back (RFC 025 scopes the bus to the
+ * account), so a peer row usually carries them again. They remain OPTIONAL
+ * because their absence is a real and ordinary state: a self peer the registry
+ * lists before its slice has arrived, a peer that published none, a mesh still
+ * coming up. A row is then built from the tailnet's own facts — the peer
+ * registry, its WhoIs login, a DERIVED door locator — and says nothing it
+ * cannot source.
  *
  * Which is the tolerant-reader law applied to ourselves: a peer's OS, its
- * fieldd version, what it can host — these are claims a device makes about
- * itself, and until it makes them through a door that checked who it is, the
- * honest answer is absence, not a guess. SELF still carries every field; it is
- * this process, and nothing about it has to cross a wire to be known.
+ * fieldd version, what it can host are claims a device makes about itself, and
+ * absence is the honest answer until it has made them. SELF still carries every
+ * field; it is this process, and nothing about it has to cross a wire.
  *
- * They return, per device, when a reader asks the peer's own door for them, or
- * when UA-P-4 lands the scoped bus and the slices come back. */
+ * MEMBERSHIP IS NOT A SLICE'S TO GRANT. A row exists for a device the tailnet's
+ * own registry lists for this account; a slice may describe such a device and
+ * may never add one. */
 export const DeviceInfo = z
   .object({
     deviceId: z.string().min(1).max(DEVICE_LIMITS.DEVICE_ID_CHARS),
@@ -121,11 +136,14 @@ export const DeviceInfo = z
     fielddVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
     contractsVersion: z.string().min(1).max(DEVICE_LIMITS.VERSION_CHARS).optional(),
     capabilities: DeviceCapabilities.optional(),
-    /** UA-P-0e — for a PEER this is a derived LOCATOR (`http://<magicdns>:<the
-     * registry's product serve port>`), never a published value and never a
-     * secret: D7 moved the route secret to the sidecar's target path, so a door
-     * coordinate is all there is to hold. For SELF it is this daemon's own
-     * serve, `url` present only while it is active. */
+    /** UA-P-0e, kept by UA-P-4 — for a PEER this is a derived LOCATOR
+     * (`http://<magicdns>:<the registry's product serve port>`) in preference
+     * to anything the peer published, and never a secret: D7 moved the route
+     * secret to the sidecar's target path, so a door coordinate is all there is
+     * to hold. The scoped bus makes a published URL an account peer's claim
+     * rather than a stranger's; it is still a claim, and `peer-link` dials it.
+     * For SELF it is this daemon's own serve, `url` present only while it is
+     * active. */
     productEndpoint: ProductEndpoint.optional(),
     bootId: z.string().min(1).max(DEVICE_LIMITS.BOOT_ID_CHARS).optional(),
     publishedAt: z.number().int().optional(),

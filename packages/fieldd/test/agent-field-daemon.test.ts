@@ -154,25 +154,26 @@ async function fieldDoor(daemon: FielddDaemon): Promise<Array<Record<string, unk
   return sub.snapshot.rows;
 }
 
-// UA-P-0e (D2) — ONE CARRIER, not two.
+// TWO CARRIERS AGAIN (UA-P-4), and these rows are about the DOOR one.
 //
-// The field had two: the `field.agents.v1` slice and the door's
-// `agent.subscribe {projection: "field"}`. James ruled the store scoped to the
-// login identity, and truffle cannot do that — it broadcasts to every tailnet
-// node whose hostname carries the app prefix — so the slice carrier is off.
-// What it carried was not incidental: every agent's label, project, branch,
-// model, effort and blocker tool, to other people's desktops.
+// The field has two: the `field.agents.v1` slice and the door's
+// `agent.subscribe {projection: "field"}`. UA-P-0e turned the slice carrier off
+// (a broadcast store carried every agent's label, project, branch, model,
+// effort and blocker tool to other people's desktops); RFC 025's login gate
+// brought it back scoped, and the daemon wiring for it is the UA-P-4 describe
+// below. The door carrier was never touched: it answers the SAME rows, only to
+// a caller whose WhoIs login matches the stored link, and it is what the phone
+// reads today.
 //
-// The door carrier is untouched, and it is the one the phone already reads.
-// It answers the SAME rows, and it answers them only to a caller whose WhoIs
-// login matches the stored link.
-//
-// What these rows used to assert about the slice — the withdraw-on-gate-close,
-// the re-publish, the fold subscription, the graceful empty slice — is still
-// asserted, in `agent-field-publisher.test.ts`, against a publisher driven
-// directly. That is where it belongs while the daemon does not wire one: the
-// publisher is correct code for a bus that can be scoped, and UA-P-4 is when it
-// gets one.
+// The `agentFieldWrites` assertions in these two rows are NOT a claim that the
+// bus is off — it is on. They hold because neither row ever opens the
+// publisher's gate: `boot()` leaves the product serve as it finds it and these
+// tests drive no `serves-changed` edge, so the carrier has nothing to publish
+// yet. Stated plainly because an assertion that passes for a reason other than
+// the one it names is how a suite stops meaning anything. The slice carrier's
+// own behaviour — withdraw on gate close, re-publish, the fold subscription,
+// the graceful empty slice — is asserted in `agent-field-publisher.test.ts`
+// against a publisher driven directly, and its daemon wiring below.
 describe("TM-2 (F-M4) — the board's surviving carrier answers the same question", () => {
   it("withholds the attach join while the doors are not published", async () => {
     const { daemon, mock } = await boot({ terminalMesh: false });
@@ -188,7 +189,8 @@ describe("TM-2 (F-M4) — the board's surviving carrier answers the same questio
     expect(row).toMatchObject({ kind: "scripted" });
     expect(row?.["terminal"], "the join is withheld").toBeUndefined();
 
-    // and the bus carried none of it
+    // the slice carrier's gate never opened in this row, so it has published
+    // nothing — see the note above: this is not the bus being off
     expect(mock.agentFieldWrites).toEqual([]);
   });
 
@@ -206,42 +208,62 @@ describe("TM-2 (F-M4) — the board's surviving carrier answers the same questio
   });
 });
 
-describe("UA-P-0e — the daemon's store carrier for the field is inert", () => {
-  it("publishes no slice, through a full boot, a serve cycle and a graceful stop", async () => {
+describe("UA-P-4 — the daemon's store carrier for the field is live again, scoped", () => {
+  it("publishes the board at the gate's edges, and clears it on a graceful stop", async () => {
+    // THE FLIP BACK. UA-P-0e constructed this publisher and never started it,
+    // because `field.agents.v1` reached every VibeField node on the tailnet and
+    // carried every agent's label, project, branch, model, effort and blocker
+    // tool. RFC 025 gates the node on the account's login, so the store's
+    // audience is the account (mesh-bus.ts carries the citations) and the
+    // carrier is wired to the daemon's events again.
+    //
+    // What this row witnesses is the WIRING, not the publisher's own logic
+    // (that is `agent-field-publisher.test.ts`): that the daemon starts it,
+    // that the two `serves-changed` edges reach it, that a fold change reaches
+    // it, and that a graceful stop clears the slice rather than leaving a dead
+    // board on the bus.
     const { daemon, mock } = await boot();
 
-    // the fold has a row: MF-1f's exited-but-hosted run, re-listed by the first
-    // inventory (no floor needed to reach it). Everything the publisher would
-    // have reacted to happens below, and none of it reaches the bus.
     await poll(() =>
       daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : undefined,
     );
-    expect(mock.agentFieldWrites, "boot published nothing").toEqual([]);
 
     // the gate closing and opening again — the two `serves-changed` edges the
-    // publisher's own suite drives it on
+    // publisher's own suite drives it on, here driven through the real daemon
     await daemon.mesh.removeServe("product");
     await new Promise((resolve) => setTimeout(resolve, 400));
     await daemon.mesh.setServes([productServe(daemon)]);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    expect(mock.agentFieldWrites, "a serve cycle published nothing").toEqual([]);
+    await poll(() => (mock.agentFieldWrites.length > 0 ? true : undefined));
+    const published = mock.agentFieldWrites.at(-1) as { rows?: Array<Record<string, unknown>> };
+    expect(published.rows?.some((r) => r["runtimeRunId"] === RUN)).toBe(true);
+
+    // CONTENT-FREE ROWS (MF-1 §10.2): the board says an agent exists and how to
+    // reach it, never what it is doing. The gate is why the store may carry a
+    // board at all; it is not a reason to widen what a board says.
+    const row = published.rows?.find((r) => r["runtimeRunId"] === RUN) as Record<string, unknown>;
+    for (const content of ["branch", "model", "effort", "blocker", "project", "prompt"]) {
+      expect(row, `a field row must not carry ${content}`).not.toHaveProperty(content);
+    }
 
     // the FOLD moving on its own — an instant re-tag in the floor's inventory,
     // which is the one event only a live fold subscription could carry
+    const before = mock.agentFieldWrites.length;
     mock.pushObserved(
       observed([{ sessionId: PANE, pid: 42, cell: { cellInstanceId: 2, cellBootId: "cell-b" } }]),
     );
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(mock.agentFieldWrites, "a fold change published nothing").toEqual([]);
+    await poll(() => (mock.agentFieldWrites.length > before ? true : undefined));
 
-    // the CONTROL: the board is genuinely live on the surviving carrier, so
-    // these are absences and not a test of a daemon that never had a field
+    // the CONTROL: the board is live on the DOOR carrier too, so the store rows
+    // above are a second carrier of a real board and not the only sign of one
     const rows = await fieldDoor(daemon);
     expect(rows.some((r) => r["runtimeRunId"] === RUN)).toBe(true);
 
-    // and a graceful stop has no empty slice to publish, because it published
-    // no full one
+    // and a graceful stop CLEARS the slice — a desktop that has gone away must
+    // not leave its board standing on the bus for the account's other devices
+    const atStop = mock.agentFieldWrites.length;
     await daemon.stop();
-    expect(mock.agentFieldWrites).toEqual([]);
+    expect(mock.agentFieldWrites.length).toBeGreaterThan(atStop);
+    const last = mock.agentFieldWrites.at(-1) as { rows?: unknown[] };
+    expect(last.rows ?? []).toEqual([]);
   }, 60_000);
 });

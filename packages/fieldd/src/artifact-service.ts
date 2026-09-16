@@ -100,10 +100,11 @@ export interface ArtifactServiceOptions {
   linkedLogin: () => string | null;
   /** UA-P-0e TEST SEAM — drive the catalog's BUS legs (subscribe + publish)
    * against a scripted bridge, the way `agent-field-publisher.test.ts` drives
-   * its publisher. Defaults to `MESH_BUS_CARRIES_CONTENT`, which is `false`;
-   * the daemon never passes it, and a boundary a caller could turn off would
-   * not be a boundary. It exists so the store-carrier suite keeps proving the
-   * code UA-P-4 will switch back on. */
+   * its publisher. Defaults to `MESH_BUS_CARRIES_CONTENT`, which UA-P-4 set
+   * back to `true`; the daemon never passes it, and a boundary a caller could
+   * turn off would not be a boundary. It exists so a focused unit row can drive
+   * the bus legs without a mesh, and it kept the code alive and typechecked
+   * through the window when the constant was off. */
   meshBus?: boolean;
   /** Required by production from AH-2 onward; optional only for focused AH-1
    * unit tests that exercise the local serving state machine in isolation. */
@@ -638,7 +639,20 @@ export class ArtifactService {
   }
 
   /** AH-2 authoritative global union. Remote URL claims cross this boundary
-   * only after transport-owned origin binding; local source details never do. */
+   * only after transport-owned origin binding; local source details never do.
+   *
+   * UA-P-4 CONSIDERED AND REJECTED a registry-authority drop here, the one
+   * DeviceService applies to its own slices: an owner the roster does not list
+   * would contribute no row at all. It collides with a ratified AH-2 behaviour
+   * — a departed peer's catalog is RETAINED as last-known-safe metadata across
+   * peer removal and a fieldd restart, which is what makes a peer's artifacts
+   * legible while it is away. The safety the drop would buy is already bought
+   * by `projectCatalogEntry`: an entry whose origin is not in the roster is
+   * projected `offline`, NOT openable, and with its URL withheld, because a URL
+   * is bound by the transport's own view of the origin and never by the slice's
+   * claim. So an unlisted owner yields an inert row rather than a hidden one,
+   * and the hostile case (a peer asserting somebody else's DNS name) stays
+   * closed. */
   artifacts(): ArtifactView[] {
     if (this.#catalog === undefined) return [];
     const selfDeviceId = this.#catalog.currentDeviceId();
