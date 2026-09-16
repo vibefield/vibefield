@@ -32,6 +32,10 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+// Not a dependency — a repo script. scripts/siblings.mjs is the ONE reader of
+// siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
+// consumer after preflight, the Nx cache stamp and the dev runner.
+import { sidecarStagingSource } from "./siblings.mjs";
 
 const args = process.argv.slice(2);
 const argValue = (flag) => {
@@ -72,7 +76,32 @@ const truffleSidecarPackages = new Set([
   "win32-x64",
 ]);
 if (!truffleSidecarPackages.has(trufflePlatform)) {
-  throw new Error(`Truffle 0.7.12 has no desktop sidecar package for ${trufflePlatform}`);
+  // Names the SET, not a version: the number in this message was `0.7.12` while
+  // the pin moved underneath it, and an error that states a version it never
+  // read is the class of claim this repo corrects at its source.
+  throw new Error(
+    `no @vibecook/truffle-sidecar package exists for ${trufflePlatform} ` +
+      `(published targets: ${[...truffleSidecarPackages].join(", ")})`,
+  );
+}
+
+// ---- which sidecar a package stages ----------------------------------------
+// The floor resolves this binary BESIDE ITSELF first (services/mesh.rs
+// resolve_sidecar), so whatever lands in `bin/` is what a packaged desktop runs.
+// While a truffle petition window is open the registry package and the built one
+// are NOT interchangeable: a node started gated (UA-P-4 passes `login_allow`)
+// refuses to come up against a sidecar below protocol 5 — no row would carry a
+// login, the gate would fail closed on every peer — and the floor surfaces that
+// as Degraded. The registry package is protocol 4 at 0.7.12; the window's is 5.
+// So: window open ⇒ stage the BUILT sidecar; no window ⇒ the registry package,
+// exactly as before; window open but the binary missing or stale ⇒ REFUSE. There
+// is deliberately no fallback, because the fallback is a green build that ships a
+// mismatched pair. The decision and its freshness rule live in siblings.mjs, with
+// preflight and `pnpm siblings`, so all three cannot disagree.
+const sidecarStaging = sidecarStagingSource(repoRoot);
+if (sidecarStaging.source === "refuse") {
+  console.error(`stage REFUSED: ${sidecarStaging.reason}`);
+  process.exit(1);
 }
 
 // `app/` becomes app.asar (electron-builder's `files` root); `bin/`, `tray/` and `plugins/` are
@@ -200,13 +229,22 @@ const PLAN = [
     // AH-1b: field-native resolves this exact executable beside itself. The
     // platform packages are optional only so pnpm can install one lockfile on
     // every OS; for the active package target this input is REQUIRED.
+    //
+    // The SOURCE is the window's, decided above. `target/debug/` is where
+    // `pnpm siblings:build` puts it — beside the floor's dev binary, which is
+    // the whole point of that path — and `go build` has no profile split, so a
+    // release package staging from a directory cargo named "debug" ships the
+    // same bytes truffle tests at this revision.
     stage: `bin/${truffleSidecarName}`,
     from:
-      `apps/desktop/node_modules/@vibecook/truffle-sidecar-${trufflePlatform}` +
-      `/bin/${truffleSidecarName}`,
+      sidecarStaging.source === "window"
+        ? sidecarStaging.from
+        : `apps/desktop/node_modules/@vibecook/truffle-sidecar-${trufflePlatform}` +
+          `/bin/${truffleSidecarName}`,
     kind: "file",
     mode: EXEC_MODE,
-    produce: "pnpm install --frozen-lockfile",
+    produce:
+      sidecarStaging.source === "window" ? "pnpm siblings:build" : "pnpm install --frozen-lockfile",
   },
   {
     stage: "tray",

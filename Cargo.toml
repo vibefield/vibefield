@@ -74,6 +74,14 @@ exclude = ["apps/desktop/native/windows/screenshot-helper"]
 #   6. pnpm-workspace.yaml + apps/desktop/package.json: the five
 #      @vibecook/truffle-sidecar-* rows → 0.7.14 (this is what gives the PACKAGED
 #      app a login-gated node)
+#      · scripts/stage-package.mjs needs NO edit at the exit: with the lock entry
+#        gone the staging falls back to the registry sidecar on its own (the
+#        "npm" branch of sidecarStagingSource) — VERIFY that rather than assume
+#        it, by staging once afterwards and checking where bin/sidecar-slim came
+#        from. While the window is open it stages the BUILT one and refuses to
+#        stage anything if that binary is missing or stale, because a released
+#        sidecar beside a window-built floor degrades every linked desktop at
+#        bring-up (a gated node refuses a sidecar below protocol 5).
 #   7. .github/workflows/verify.yml: drop the RFC 025 note in the header
 #   8. CLAUDE.md §Machine setup + README.md: the window paragraphs, with a dated
 #      line saying when it closed

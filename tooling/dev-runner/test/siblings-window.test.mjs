@@ -6,13 +6,26 @@
 // path spelled one component wrong, turns every one of those checks into a
 // green that proves nothing. The RFC 025 window (2026-09-16) added two of the
 // three, so they arrive with the seam.
+//
+// The staging rows below (UA-P-W3) are the fourth consumer: which truffle
+// sidecar a PACKAGE ships. They are here and not beside stage-package.mjs
+// because that script does its work at import time and cannot be loaded as a
+// module — the decision it calls is what is testable, so the decision is what
+// lives in siblings.mjs.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { cargoPatchRows, goSidecar, patchPath, stamp } from "../../../scripts/siblings.mjs";
+import {
+  cargoPatchRows,
+  goSidecar,
+  goSidecarState,
+  patchPath,
+  sidecarStagingSource,
+  stamp,
+} from "../../../scripts/siblings.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(import.meta.url), "../../../..");
 
@@ -139,4 +152,87 @@ test("nx.json actually CONSUMES the sibling stamp", async () => {
     nx.namedInputs.siblings.some((input) => input.runtime?.includes("siblings.mjs stamp")),
     "the siblings input must run the stamp, not just watch the lock file",
   );
+});
+
+/** A fixture tree with a go sibling: the checkout's module (one .go source) and,
+ * optionally, a built binary under <root>/target/debug. `built: "stale"` makes
+ * the binary older than the source, which is the only thing the freshness rule
+ * looks at. */
+function goFixture({ built = "fresh" } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "vf-stage-"));
+  const checkout = join(root, "..", "truffle-fixture");
+  const moduleDir = join(checkout, "packages/sidecar-slim");
+  mkdirSync(moduleDir, { recursive: true });
+  writeFileSync(join(moduleDir, "main.go"), "package main\n");
+  writeFileSync(
+    join(root, "siblings.lock.json"),
+    JSON.stringify({
+      siblings: {
+        truffle: {
+          path: "../truffle-fixture",
+          sha: "c".repeat(40),
+          go: { module: "packages/sidecar-slim", binary: "sidecar-slim" },
+        },
+      },
+    }),
+  );
+  if (built !== "missing") {
+    mkdirSync(join(root, "target/debug"), { recursive: true });
+    const binary = join(root, "target/debug/sidecar-slim");
+    writeFileSync(binary, "binary");
+    if (built === "stale") {
+      const before = Date.now() / 1000 - 600;
+      utimesSync(binary, before, before);
+    }
+  }
+  return root;
+}
+
+test("staging takes the REGISTRY sidecar when no window is open", () => {
+  const root = fixtureRoot({ lock: { siblings: {} } });
+  assert.deepEqual(sidecarStagingSource(root), { source: "npm" });
+  // And with no lock at all — registry mode, the state the exit returns to.
+  assert.deepEqual(sidecarStagingSource(fixtureRoot()), { source: "npm" });
+});
+
+test("staging takes the WINDOW's sidecar, by a repo-relative path", () => {
+  const root = goFixture();
+  const choice = sidecarStagingSource(root, "darwin");
+  assert.equal(choice.source, "window");
+  // Repo-relative, because a stage PLAN row is resolved against the repo root —
+  // an absolute path here would stage correctly on this machine only.
+  assert.equal(choice.from, "target/debug/sidecar-slim");
+  assert.equal(goSidecarState(root, "darwin").state, "fresh");
+});
+
+test("staging REFUSES rather than falling back when the window's sidecar is missing", () => {
+  const root = goFixture({ built: "missing" });
+  const choice = sidecarStagingSource(root, "darwin");
+  // The fallback is the dangerous answer: a released sidecar beside a floor
+  // built from the window degrades every linked desktop at bring-up, under a
+  // green build. So there is no `from` here at all.
+  assert.equal(choice.source, "refuse");
+  assert.equal(choice.from, undefined);
+  assert.match(choice.reason, /missing/);
+  assert.match(choice.reason, /pnpm siblings:build/);
+  assert.match(choice.reason, /protocol 5/);
+});
+
+test("staging REFUSES when the window's sidecar is older than its source", () => {
+  const root = goFixture({ built: "stale" });
+  assert.equal(goSidecarState(root, "darwin").state, "stale");
+  const choice = sidecarStagingSource(root, "darwin");
+  assert.equal(choice.source, "refuse");
+  assert.match(choice.reason, /stale/);
+});
+
+test("stage-package.mjs consults the decision and keeps its refusal", () => {
+  // A source-level guard, deliberately narrow: this script cannot be imported
+  // (it stages at import time), so the one thing worth pinning is that it still
+  // asks and still refuses. Reintroducing an unconditional registry row would
+  // be silent everywhere else.
+  const script = readFileSync(join(REPO_ROOT, "scripts/stage-package.mjs"), "utf8");
+  assert.match(script, /import \{ sidecarStagingSource \} from "\.\/siblings\.mjs"/);
+  assert.match(script, /sidecarStagingSource\(repoRoot\)/);
+  assert.match(script, /stage REFUSED/);
 });

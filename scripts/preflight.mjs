@@ -19,10 +19,9 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import {
   cargoPatchRows,
-  goSidecar,
+  goSidecarState,
   LOCK_FILE,
   linkRow,
-  newestGoSourceMtime,
   newestSourceMtime,
   patchPath,
   readLock,
@@ -326,20 +325,15 @@ for (const { file, re, label } of PIN_EXPECTATIONS) {
     // is a degraded dev stack, not a broken tree — and every TS gate runs
     // without it. `go build` keeps no fingerprint of its own, so the source
     // mtimes are the freshness question, as they are for cargo above.
-    const sidecar = goSidecar(root);
-    if (sidecar !== null && existsSync(sidecar.moduleDir)) {
-      if (!existsSync(sidecar.path)) {
-        warnings.push(
-          `mesh sidecar not built (${sidecar.path}) — pnpm siblings:build; the floor reports the mesh Degraded until then`,
-        );
-      } else {
-        const newest = newestGoSourceMtime(sidecar.moduleDir);
-        if (newest !== null && statSync(sidecar.path).mtimeMs < newest) {
-          warnings.push(
-            `mesh sidecar stale — pnpm siblings:build (a source in ${sidecar.name}/${sidecar.module} is newer than ${sidecar.path})`,
-          );
-        }
-      }
+    const { sidecar, state: sidecarState } = goSidecarState(root);
+    if (sidecarState === "missing") {
+      warnings.push(
+        `mesh sidecar not built (${sidecar.path}) — pnpm siblings:build; the floor reports the mesh Degraded until then`,
+      );
+    } else if (sidecarState === "stale") {
+      warnings.push(
+        `mesh sidecar stale — pnpm siblings:build (a source in ${sidecar.name}/${sidecar.module} is newer than ${sidecar.path})`,
+      );
     }
   }
 }

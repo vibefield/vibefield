@@ -44,7 +44,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -358,6 +358,56 @@ export function goSidecar(root = REPO_ROOT, platform = process.platform) {
   return null;
 }
 
+/** The built go sidecar's state against the sources it was built from:
+ * `none` (the lock declares no go sibling), `missing`, `stale` or `fresh`.
+ * ONE rule, three consumers — preflight WARNs on it, `pnpm siblings` prints it,
+ * and the packaged stage REFUSES on it — because a freshness rule spelled three
+ * times is a freshness rule that will disagree with itself. `go build` keeps no
+ * fingerprint of its own, so source mtimes are the whole of the question. */
+export function goSidecarState(root = REPO_ROOT, platform = process.platform) {
+  const sidecar = goSidecar(root, platform);
+  if (sidecar === null) return { sidecar: null, state: "none" };
+  if (!existsSync(sidecar.moduleDir)) return { sidecar, state: "missing" };
+  if (!existsSync(sidecar.path)) return { sidecar, state: "missing" };
+  const newest = newestGoSourceMtime(sidecar.moduleDir);
+  if (newest !== null && statSync(sidecar.path).mtimeMs < newest)
+    return { sidecar, state: "stale" };
+  return { sidecar, state: "fresh" };
+}
+
+/** WHICH truffle sidecar a PACKAGE must stage, and why — the packaging half of
+ * the window (scripts/stage-package.mjs is the caller).
+ *
+ * The floor resolves its sidecar beside its own executable FIRST, and the stage
+ * puts one there, so this decision is what a packaged desktop will actually
+ * run. While the window is open the two candidates are not interchangeable: the
+ * registry package is the RELEASED sidecar, and a node started gated (UA-P-4
+ * passes `login_allow`) refuses to come up against one below protocol 5 —
+ * truffle's own words, surfaced by the floor as Degraded. Shipping the released
+ * binary beside a floor built from the window would therefore degrade every
+ * linked desktop at bring-up, which is why there is no silent fallback here.
+ *
+ * - `{ source: "npm" }` — no window: the registry package, exactly as before.
+ * - `{ source: "window", from }` — window open, binary fresh; `from` is
+ *   repo-relative so a stage PLAN row carries it verbatim.
+ * - `{ source: "refuse", reason }` — window open, binary missing or stale. The
+ *   caller must FAIL: falling back to the registry package would ship a
+ *   mismatched pair under a green build. */
+export function sidecarStagingSource(root = REPO_ROOT, platform = process.platform) {
+  const { sidecar, state } = goSidecarState(root, platform);
+  if (state === "none") return { source: "npm" };
+  if (state === "fresh") return { source: "window", from: relative(root, sidecar.path), sidecar };
+  return {
+    source: "refuse",
+    sidecar,
+    reason:
+      `the ${LOCK_FILE} window declares ${sidecar.name}'s ${sidecar.binary} but the built binary is ` +
+      `${state} (${sidecar.path}) — run \`pnpm siblings:build\`. Staging the registry sidecar ` +
+      "instead would pair a released binary with a floor built from the window, and a gated node " +
+      "refuses to start against a sidecar below protocol 5",
+  };
+}
+
 // --- CLI ---------------------------------------------------------------------
 
 function status(root) {
@@ -408,17 +458,15 @@ function status(root) {
       `rosettad   ${bin.path}${existsSync(bin.path) ? "" : "  (NOT BUILT — pnpm siblings:build)"}`,
     );
   }
-  const sidecar = goSidecar(root);
+  const { sidecar, state } = goSidecarState(root);
   if (sidecar !== null) {
-    const stale =
-      existsSync(sidecar.path) &&
-      (newestGoSourceMtime(sidecar.moduleDir) ?? 0) > statSync(sidecar.path).mtimeMs;
-    const state = !existsSync(sidecar.path)
-      ? "  (NOT BUILT — pnpm siblings:build)"
-      : stale
-        ? "  (STALE — pnpm siblings:build)"
-        : "";
-    console.log(`${sidecar.binary.padEnd(10)} ${sidecar.path}${state}`);
+    const note =
+      state === "missing"
+        ? "  (NOT BUILT — pnpm siblings:build)"
+        : state === "stale"
+          ? "  (STALE — pnpm siblings:build)"
+          : "";
+    console.log(`${sidecar.binary.padEnd(10)} ${sidecar.path}${note}`);
   }
   return 0;
 }
