@@ -33,17 +33,24 @@ a private mesh across machines, and an iPhone companion.
 
 ## Getting started
 
-Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify`.
-The repo builds standalone: `truffle-core` is an exact crates-io pin (`=0.7.12`) and
-`@vibecook/ice` an exact npm pin (`0.4.0`) — no sibling checkouts. Both numbers live in the
-manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from there, not from prose — this
-line said `=0.7.11`/`0.2.0` until 2026-08-07. (A truffle petition window
-reopens the `../p008/truffle` `[patch.crates-io]` + `siblings.lock.json` dance; see
-`CLAUDE.md` "Machine setup" and git history.)
+Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify` ·
+Go (the mesh sidecar, while the truffle window is open) · three SIBLING CHECKOUTS beside this one.
+**The RFC 025 petition window is open (2026-09-16):** `truffle-core` is patched in from
+`../truffle-rfc025` by cargo `[patch.crates-io]`, the iOS kit takes truffle as a path package, and
+`pnpm siblings:build` builds its Go sidecar beside `field-native` — so the repo does NOT build
+standalone right now, as it did from 2026-07-28 until the window opened. `../puppeteer` and
+`../rosetta` are the other two (AR-0). Every revision is pinned in `siblings.lock.json`:
+`pnpm siblings` prints the state, `pnpm preflight` fails on drift, `pnpm siblings:pin` is the
+deliberate upgrade. `@vibecook/ice` stays an exact npm pin and needs no checkout. Every number
+lives in the manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from there, not from prose
+— this line said `=0.7.11`/`0.2.0` until 2026-08-07, and its ice pin still read `0.4.0` on
+2026-09-16 when the manifest had been at `0.11.0` for weeks, which is why it now names none.
 
 ```sh
 pnpm install
-pnpm preflight      # tool versions + import-boundary walls
+pnpm siblings       # the sibling checkouts: path, pin, dirtiness, built binaries
+pnpm siblings:build # rosettad + the truffle mesh sidecar, from the pinned checkouts
+pnpm preflight      # tool versions + sibling pins + import-boundary walls
 pnpm hooks:install  # one-time: wires scripts/git-hooks (the dev-local push guard)
 pnpm dev            # desktop app dev loop
 pnpm dev:studio     # desktop app + development Studio

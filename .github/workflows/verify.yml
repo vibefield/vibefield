@@ -7,6 +7,18 @@
 # pinned by revision in siblings.lock.json. EL8: the pins move only as deliberate upgrade
 # events, and preflight hard-fails when a checkout does not match the lock. The clone step
 # below is the truffle-era step (retired 7fcdfd2c) revived for two PRIVATE repos.
+#
+# RFC 025 WINDOW (2026-09-16) — READ THIS BEFORE TRUSTING A RED RUN. The lock now names a
+# THIRD sibling, ../truffle-rfc025, and this step does not fetch it: its pin is a revision
+# on a LOCAL branch (integration/rfc025) that exists on no remote, so there is nothing for
+# a runner to clone and preflight will fail here with "truffle checkout missing" until the
+# window closes (truffle 0.7.14 published ⇒ the [patch.crates-io] row, the lock entry and
+# the kit's path package all go, per Cargo.toml's exit list). `pnpm siblings:pin` warns
+# about exactly this, per sibling, and on 2026-09-16 it warned for ALL THREE — puppeteer's
+# and rosetta's pins were unpushed too, so this workflow could not have been green with or
+# without truffle. Stated rather than patched around: teaching the loop to skip a sibling
+# would make CI verify a DIFFERENT TREE than the one the gate ran on, which is the whole
+# thing this step exists to prevent.
 name: verify
 
 on:
@@ -50,6 +62,10 @@ jobs:
             echo "::error::SIBLINGS_TOKEN is not set — sibling mode needs a read token for vibefield/puppeteer and vibefield/rosetta (repo Settings → Secrets)"
             exit 1
           fi
+          # Hardcoded, not lock-driven: each sibling's repo lives under a different account
+          # (truffle is vibecook-dev's) and the lock records paths, not URLs. A sibling in the
+          # lock and absent from this list fails LOUDLY at preflight, which is the honest
+          # outcome — see the RFC 025 note in this file's header.
           for name in puppeteer rosetta; do
             sha=$(jq -r ".siblings.${name}.sha" siblings.lock.json)
             path=$(jq -r ".siblings.${name}.path" siblings.lock.json)

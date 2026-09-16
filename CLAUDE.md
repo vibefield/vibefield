@@ -64,11 +64,29 @@ in the split.
 
 ## Machine setup
 
-The repo builds standalone since 2026-07-28. `truffle-core` is an **exact crates-io pin**
-(`=0.7.12` in the root Cargo.toml) — the `../p008/truffle` sibling `[patch.crates-io]` and its
-`siblings.lock.json` SHA pin retired when the T1 petition window closed. To co-develop truffle
-again (a new petition window), re-add the `[patch]` and restore the sibling-pin machinery from
-git history; never leave a path patch unpinned.
+**RFC 025 petition window — OPEN since 2026-09-16 (B0).** `truffle-core` comes from a SIBLING
+CHECKOUT again, not the registry: `[patch.crates-io] truffle-core = { path =
+"../truffle-rfc025/crates/truffle-core" }`, with the requirement at `=0.7.13` because a patch
+replaces a dependency only at a version that satisfies it. The REVISION is pinned in
+`siblings.lock.json` beside puppeteer and rosetta and `pnpm preflight` fails on drift — the rule
+the retired paragraph left behind ("never leave a path patch unpinned") is the rule this window
+follows. It binds two further planes. The kit's SwiftPM row is a PATH package reached through
+`apps/ios/VibeFieldKit/.window/truffle`: a path package's identity is its DIRECTORY NAME, and it
+has to read `truffle` to override the remote truffle edge `ghosttea` declares of its own, so
+`Package.resolved` carries NO truffle row while the window is open (that absence is the shape,
+not a missing pin). And `pnpm siblings:build` now builds truffle's Go sidecar to
+`target/debug/sidecar-slim` — beside `field-native`, where `services/mesh.rs::resolve_sidecar`
+looks FIRST, so a dev stack picks it up on its next restart with no env var. The PACKAGED app is
+untouched: `apps/desktop` still installs `@vibecook/truffle-sidecar-*@0.7.12` from npm (protocol
+4), so a shipped build cannot run a login-gated node until 0.7.14 ships. The exit list lives in
+`Cargo.toml` above the requirement; no prose here is the authority for a number.
+
+> **Errata (2026-09-16):** the paragraph that stood here — "The repo builds standalone since
+> 2026-07-28 … the `../p008/truffle` sibling `[patch.crates-io]` and its `siblings.lock.json`
+> SHA pin retired when the T1 petition window closed" — stopped being true when the RFC 025
+> window opened. **This repo does not build standalone while a window is open:**
+> `../truffle-rfc025` is required, and `pnpm preflight` says so rather than letting a build fail
+> later. `../p008/truffle` is James's own checkout and is still nothing this repo reads.
 
 `@vibecook/ice` is an **exact registry pin** (`0.11.0`, declared once in the pnpm-workspace.yaml
 overrides — packages ask for `"*"`). It stopped being a `file:` sibling on 2026-07-25: npm ships
@@ -88,7 +106,8 @@ pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
 
 **AR-0 sibling mode (2026-09-12):** the agent runtime is **puppeteer** and agent history is
 **rosetta** (chopsticks and spaghetti retired 2026-09-04). Neither is published, so this repo
-consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta`, pinned by revision in
+consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta` (three since 2026-09-16 —
+`../truffle-rfc025` joined them for the RFC 025 window above), pinned by revision in
 `siblings.lock.json`: puppeteer's packages and rosetta's TypeScript client enter as `link:` rows in
 the fenced block of `pnpm-workspace.yaml` (packages ask for `"*"`; only directly imported packages
 are rows; adapters never — walls R20–R22), and `rosettad` is built from the rosetta checkout by
@@ -102,7 +121,8 @@ through esbuild's and Vite's own input tracking, never through the runner's watc
 `link:` row with an exact version and delete the lock entry.
 
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
-(contracts codegen; preflight checks the version).
+(contracts codegen; preflight checks the version) · Go, while the RFC 025 window is open (the
+mesh sidecar; `pnpm siblings:build` fetches the toolchain the module names, GOTOOLCHAIN=auto).
 
 ## Commands
 
