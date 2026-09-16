@@ -24,30 +24,27 @@ public enum FieldMeshContract {
 
   /// The tailnet port a desktop's product serve listens on.
   ///
-  /// **UNPINNED, and deliberately so — read this before moving it.** Every
-  /// other registry value this app speaks is compared against
-  /// `packages/contracts/src/registries.ts` by `scripts/check-ios-fixtures.mjs`
-  /// and a drift reds the gate. This one has no row to compare against yet:
-  /// `PORTS` carries no product-serve entry, and the serve fieldd declares
-  /// names no `listenPort` at all (`packages/fieldd/src/daemon.ts` —
-  /// `productServeSpec`), so the floor falls its listener back to the TARGET
-  /// port (`packages/field-native/src/mgmt/mesh.rs`, `parse_listen_port`),
-  /// which since UA-5 is fieldd's EPHEMERAL control port. A per-boot random
-  /// high port is not a number a phone can dial, which is the whole reason
-  /// discovery has needed `productEndpoint.url` from the store until now.
+  /// = `PORTS.FIELDD_PRODUCT_SERVE` in `packages/contracts/src/registries.ts`,
+  /// and pinned against it by `scripts/check-ios-fixtures.mjs` like every other
+  /// registry value this app speaks. The name differs on purpose: the registry
+  /// lists ports for several daemons and the `FIELDD_` prefix is what separates
+  /// them there, while inside `FieldMeshContract` there is only one product
+  /// door. The checker names both sides in its failure, so the pair is never
+  /// ambiguous — the same licence `appID` takes against `APP_ID`.
   ///
-  /// So UA-P-1a rests on the desktop lane declaring an explicit `listenPort`
-  /// on a registry row, the way the terminal-cell listener already does
-  /// (`PORTS.TERMINAL_CELLS_SERVE`, `packages/fieldd/src/terminal-serve.ts`).
-  /// It cannot BE that listener: those routes are remove-then-add on every
-  /// cell birth and exit, and the registry's own note says the product door
-  /// must not share that churn because it is the channel a dropped client
-  /// re-dials. 9423 is the next free number after it.
+  /// **ERRATUM (2026-09-15).** This declaration first shipped UNPINNED with a
+  /// long note saying no such registry row could exist, because
+  /// `productServeSpec` declared no `listenPort` and the floor therefore fell
+  /// its tailnet listener back to fieldd's EPHEMERAL control port — a per-boot
+  /// random number no phone can dial, which is why discovery needed a published
+  /// URL. That was true when written and is FALSE NOW: UA-P-0e split the two
+  /// planes, so the tailnet listener is this fixed registry port while the
+  /// loopback control plane stays ephemeral (UA-D12). 9423 was a placeholder
+  /// here and is the contract's number now.
   ///
-  /// The moment the row lands, arm the pin: add a `PRODUCT_SERVE` entry to
-  /// `pins` in `scripts/check-ios-fixtures.mjs` (the commented row is there,
-  /// with the pattern already written) and this constant is gated like every
-  /// other.
+  /// It is load-bearing, not a label: it is half of the only address this phone
+  /// dials. The other half is the peer's own MagicDNS name, and the pair is
+  /// built in one place below so the whole app follows a single edit.
   public static let productServePort = 9423
 
   /// The door's path, as the phone dials it.

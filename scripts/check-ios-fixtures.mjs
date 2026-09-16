@@ -116,30 +116,35 @@ function tpPin(key, swiftName, indent = 2) {
 }
 
 /**
- * UA-P-1a — the product serve's tailnet port, pinned the day the registry
- * declares it.
+ * UA-P-1a — the product serve's tailnet port.
  *
- * **It is not armed yet, and the NOTICE below is why.** `PORTS` carries no
- * product-serve row: the serve fieldd declares names no `listenPort`
- * (`packages/fieldd/src/daemon.ts`, `productServeSpec`), so the floor falls its
- * listener back to the TARGET port (`packages/field-native/src/mgmt/mesh.rs`,
- * `parse_listen_port`), which since UA-5 is fieldd's EPHEMERAL control port.
- * Discovery by the door needs a number a phone can dial, so the desktop lane is
- * declaring an explicit `listenPort` on a new registry row — and the phone's
- * `FieldMeshContract.productServePort` is a hand-picked constant until it does.
+ * **ARMED since 2026-09-15 (UA-P-0e).** When this pin was written the registry
+ * carried no product-serve row and could not: `productServeSpec` declared no
+ * `listenPort`, so the floor fell the listener back to the TARGET port, which
+ * since UA-5 is fieldd's EPHEMERAL control port — a per-boot random number no
+ * phone can dial. UA-P-0e fixed that at the source: the tailnet listener is now
+ * `PORTS.FIELDD_PRODUCT_SERVE` while the loopback control plane stays ephemeral
+ * (`packages/fieldd/src/daemon.ts`, `productServeSpec`), because a peer DERIVES
+ * the coordinate and a derivation needs the same number on every device.
  *
- * This pin therefore ARMS ITSELF: it joins `pins` the moment the registry row
- * is readable, and from then on a drift reds the gate like every other value.
- * Until then the run prints a NOTICE rather than skipping in silence — a gate
- * that stops gating without saying so is the exact failure this script exists
- * to catch, and an unarmed pin nobody is told about is one.
+ * **ERRATUM (2026-09-15):** this pin was first written against a bare
+ * `PRODUCT_SERVE`, which is the name the row did NOT get — the lane followed the
+ * `FIELDD_*` prefix of the neighbouring rows. A pin whose pattern misses reads
+ * exactly like a row that does not exist, which is why the miss printed a
+ * reassuring NOTICE instead of a red.
+ *
+ * The self-arming shape STAYS, and not as a leftover: it joins `pins` whenever
+ * the registry row is readable and prints a NOTICE when it is not, so if the
+ * row is ever renamed or removed the run says so instead of going quiet. A gate
+ * that stops gating without a red is the exact failure this script exists to
+ * catch, and an unarmed pin nobody is told about is one.
  */
 const productServePin = {
-  name: "PRODUCT_SERVE",
+  name: "FIELDD_PRODUCT_SERVE",
   origin: {
     file: REGISTRIES,
-    pattern: /^ {2}PRODUCT_SERVE: ([0-9_]+),$/m,
-    label: "PORTS.PRODUCT_SERVE",
+    pattern: /^ {2}FIELDD_PRODUCT_SERVE: ([0-9_]+),$/m,
+    label: "PORTS.FIELDD_PRODUCT_SERVE",
   },
   copy: {
     file: "apps/ios/VibeFieldKit/Sources/FieldMesh/FieldMeshContract.swift",
@@ -202,10 +207,10 @@ if (pinned(productServePin.origin) !== null) {
   pins.push(productServePin);
 } else {
   notices.push(
-    `${productServePin.origin.label} does not exist yet, so ` +
+    `${productServePin.origin.label} is unreadable, so ` +
       `${productServePin.copy.label} is UNPINNED (UA-P-1a)\n` +
-      "  the phone dials a hand-picked number until the desktop lane declares the row;\n" +
-      "  this pin arms itself the moment it does, and nothing else need change",
+      "  the row landed at UA-P-0e, so this means it was renamed or removed — the phone\n" +
+      "  is dialing a number nothing agrees with. Fix the row, or move this pattern to it.",
   );
 }
 
