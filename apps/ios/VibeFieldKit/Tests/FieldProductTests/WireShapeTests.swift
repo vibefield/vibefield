@@ -99,7 +99,10 @@ import Testing
     #expect(device.capabilities == nil)
     // The locator IS there, and carries no secret — D7 moved the route secret
     // to the sidecar's target path, so a door coordinate is all a peer holds.
-    #expect(device.productEndpoint?.url == "https://studio.tail1234.ts.net:9423")
+    // `http`, not `https`: the product serve is declared `tls: false` (WireGuard is
+    // the wire's privacy), so the derived locator names the scheme the door
+    // speaks (UA-P-0g; the golden and this copy moved together).
+    #expect(device.productEndpoint?.url == "http://studio.tail1234.ts.net:9423")
     #expect(device.productURL?.absoluteString.contains("/t/") == false)
   }
 
