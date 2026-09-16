@@ -90,7 +90,7 @@ public enum MeshDisplay {
     if desktops.contains(where: { $0.state == .connecting || $0.state == .reconnecting }) {
       return "…"
     }
-    // Every desktop published a slice and none is serving a door.
+    // Every peer is on the mesh and none is serving a door.
     return "NO DOOR"
   }
 
@@ -109,9 +109,13 @@ public enum MeshDisplay {
     case .failed(let reason):
       return "\(desktop.name) — refused: \(reason)"
     case .refusedDoor(let reason):
-      // Worth its own sentence: this desktop IS serving, and what it published
-      // is not itself. That is a thing to look at, not a thing to retry.
-      return "\(desktop.name) — its published door was refused: \(reason)"
+      // Worth its own sentence, and the sentence CHANGED at UA-P-1a. It used
+      // to be "its published door was refused" — a desktop naming a machine it
+      // is not. Nothing is published now: the phone builds the address from the
+      // peer's own MagicDNS name, so what this state means is that there was
+      // nowhere to build one from. Still a thing to look at rather than a thing
+      // to retry, and still not the same fact as a door that did not answer.
+      return "\(desktop.name) — no door this phone can dial: \(reason)"
     case .ready:
       switch desktop.feed {
       case .store: return "\(desktop.name) — connected · field from the mesh"

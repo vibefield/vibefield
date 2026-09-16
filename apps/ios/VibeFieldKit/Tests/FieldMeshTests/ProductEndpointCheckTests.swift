@@ -87,3 +87,95 @@ private let studioAddresses = ["studio", "100.64.0.2"]
     #expect(verdict.url != nil)
   }
 }
+
+// MARK: - UA-P-1a: the door the PHONE builds
+
+/// Discovery by the door inverts where the dial target comes from: the phone
+/// composes it from the peer's own MagicDNS name and the registry port, so a
+/// peer cannot name a machine it is not. What the pin still asserts is that
+/// what was composed IS an address the mesh vouches for — and it is the line
+/// that would catch the composition ever learning a host from somewhere else.
+@Suite struct PeerDoorBuilderTests {
+  @Test func theDoorIsThePeersOwnFullyQualifiedNameAndTheRegistryPort() throws {
+    let verdict = peerProductDoorURL(
+      hostname: "studio", tailnetIPs: ["100.64.0.2"], magicDNSSuffix: "tail.ts.net")
+    let url = try #require(verdict.url)
+    #expect(url.scheme == "ws")
+    #expect(url.host == "studio.tail.ts.net")
+    #expect(url.port == FieldMeshContract.productServePort)
+    #expect(url.path == "/")
+  }
+
+  /// NO SECRET. The C3 capability path is the sidecar's to add on forward, and
+  /// the whole point of UA-P-1a is that the phone never learns one: a locator
+  /// that carried a secret would be a credential this phone read off a wire.
+  @Test func theBuiltDoorCarriesNoCapabilityPath() throws {
+    let url = try #require(
+      peerProductDoorURL(
+        hostname: "studio", tailnetIPs: [], magicDNSSuffix: "tail.ts.net").url)
+    #expect(!url.absoluteString.contains("/t/"))
+  }
+
+  /// A peer whose hostname is ALREADY fully qualified is not qualified twice.
+  @Test func anAlreadyQualifiedNameIsNotDoubled() throws {
+    let url = try #require(
+      peerProductDoorURL(
+        hostname: "studio.tail.ts.net", tailnetIPs: [], magicDNSSuffix: "tail.ts.net").url)
+    #expect(url.host == "studio.tail.ts.net")
+  }
+
+  /// With no suffix of our own the slug is not qualified at all, and a tailnet
+  /// IP is preferred: a phone with no tailnet domain is a phone whose resolver
+  /// may answer a short name from the public DNS.
+  @Test func anAddressIsPreferredWhenThereIsNoSuffix() throws {
+    let url = try #require(
+      peerProductDoorURL(
+        hostname: "studio", tailnetIPs: ["100.64.0.2"], magicDNSSuffix: nil).url)
+    #expect(url.host == "100.64.0.2")
+  }
+
+  /// And a peer the mesh says nothing about has nowhere to dial. Silence is
+  /// not permission, and it is a sentence rather than a silent absence.
+  @Test func aPeerWithNoAddressAtAllIsRefused() {
+    let verdict = peerProductDoorURL(hostname: nil, tailnetIPs: [], magicDNSSuffix: "tail.ts.net")
+    #expect(verdict.url == nil)
+    #expect(verdict.reason == "this desktop has no address the mesh will vouch for")
+    #expect(peerProductDoorURL(hostname: "", tailnetIPs: [], magicDNSSuffix: nil).url == nil)
+  }
+}
+
+/// The two halves of the account check, as rules — no clock, no socket, no peer.
+@Suite struct DoorPolicyTests {
+  /// The sidecar's own answer, and the one the ruling is about.
+  @Test func aForbiddenDoorIsNotThisAccounts() {
+    #expect(
+      DoorPolicy.admission(for: .status(403))
+        == .notThisAccount("the door refused this login (403)"))
+    // 401 joins it: a door that asks this phone for a credential is a door it
+    // cannot open, because it presents none by design (C5).
+    #expect(DoorPolicy.admission(for: .status(401)) != .answering)
+  }
+
+  /// EVERY other status is an answer, including the ones a WebSocket endpoint
+  /// gives a plain GET. Reading 400 or 426 as a refusal would turn the phone's
+  /// own probe into the reason it never dials.
+  @Test func aWebSocketEndpointsAnswerToAPlainGetIsStillAnAnswer() {
+    for status in [200, 400, 404, 426, 500] {
+      #expect(DoorPolicy.admission(for: .status(status)) == .answering, "\(status)")
+    }
+  }
+
+  @Test func silenceIsUnreachableAndNeverARefusal() {
+    #expect(
+      DoorPolicy.admission(for: .unreachable("connection refused"))
+        == .unreachable("connection refused"))
+  }
+
+  /// fieldd's `tailnet-guest`: the hello succeeds and grants nothing.
+  @Test func anEmptyGrantIsNotThisAccountEither() {
+    #expect(
+      DoorPolicy.admission(forGrantedScopes: [])
+        == .notThisAccount("the door granted nothing — this is another account's desktop"))
+    #expect(DoorPolicy.admission(forGrantedScopes: ["agent.read"]) == .answering)
+  }
+}

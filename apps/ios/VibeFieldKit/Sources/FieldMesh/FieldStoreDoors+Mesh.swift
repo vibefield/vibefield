@@ -18,6 +18,22 @@ public func meshProductTransport(node: MeshNode, timeout: TimeInterval = 15)
   }
 }
 
+/// UA-P-1a — the discovery probe, bound to the same network for the same
+/// reason.
+///
+/// Discovery asks a peer's door one plain question before spending a socket on
+/// it, and that question has to travel the tailnet: a probe on the system's
+/// session would reach a `100.x` address never, and a MagicDNS name only if the
+/// public resolver happened to answer — which is the one outcome that must not
+/// be mistaken for a desktop.
+public func meshDoorProbe(node: MeshNode, timeout: TimeInterval = 8)
+  -> URLSessionDoorProbe
+{
+  URLSessionDoorProbe(timeout: timeout) { configuration in
+    try await node.urlSession(configuration: configuration)
+  }
+}
+
 /// Why a send could not be made. A peer that has gone is not an incident — a
 /// tailnet is a set of devices that come and go — so this carries no more than
 /// which one, and the reader logs it as a note.

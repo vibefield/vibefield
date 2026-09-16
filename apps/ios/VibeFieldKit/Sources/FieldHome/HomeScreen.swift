@@ -735,6 +735,10 @@ public struct HomeScreen: View {
         let opened = FieldLink(
           storeDoors: .live(node: node),
           transport: meshProductTransport(node: node),
+          // UA-P-1a — discovery's own probe, on the mesh's network. The
+          // default is the system's session, which is right for a loopback
+          // door and would call every desktop on the tailnet unreachable.
+          probe: meshDoorProbe(node: node),
           magicDNSSuffix: suffix)
         opened.start()
         link = opened
