@@ -330,6 +330,20 @@ export class DeviceService extends EventEmitter {
     return [...this.selfPeers.values()].map((peer) => peer.tailscaleId);
   }
 
+  /** UA-P-0f (D5) — the fan-out list doc-sync and presence share, in the shape
+   * they already take (`SyncPeer`: the dial id plus liveness).
+   *
+   * Built from the self-peer set and NOT from a second read of the floor's peer
+   * list, so there is exactly one place the account boundary is applied and no
+   * way for a caller to reach the wider list past it. Liveness rides along
+   * because the set already carries it — the same `online` the roster shows. */
+  selfSyncPeers(): Array<{ id: string; online: boolean }> {
+    return [...this.selfPeers.values()].map((peer) => ({
+      id: peer.tailscaleId,
+      online: peer.online,
+    }));
+  }
+
   /** UA-P-0e — is this dial-keyspace peer one of this account's? */
   isSelfPeer(tailscaleId: string): boolean {
     for (const peer of this.selfPeers.values()) if (peer.tailscaleId === tailscaleId) return true;

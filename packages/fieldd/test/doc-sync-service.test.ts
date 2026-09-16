@@ -113,7 +113,7 @@ async function until(predicate: () => boolean | Promise<boolean>, label: string)
   throw new Error(`timed out waiting for: ${label}`);
 }
 
-function harness(peerIds: string[] = ["peer-a"]) {
+function harness(peerIds: string[] = ["peer-a"], isSelfPeer?: (peer: string) => boolean) {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-syncsvc-"));
   dirs.push(dataDir);
   const control = new FakeControl();
@@ -135,6 +135,7 @@ function harness(peerIds: string[] = ["peer-a"]) {
     allocateLaneId: () => nextLaneId++,
     peers: async () => [...peerState].map(([id, online]) => ({ id, online })),
     resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), posture.value),
+    ...(isSelfPeer !== undefined ? { isSelfPeer } : {}),
   });
   return { docs, control, bytes, sync, peerState, posture };
 }
@@ -864,5 +865,91 @@ describe("sync intent — a doc that stays home (UA-D7)", () => {
     expect(control.opened[0]?.docId).toBe(docId);
     expect(docs.syncIntentOf(docId)).toBeUndefined();
     expect(stateOf(sync, docId)).toBeDefined();
+  });
+});
+
+// UA-P-0f (D5) — "documents sync only among VibeField DESKTOPS that share the
+// same tailscale login identity. A phone never receives a document."
+//
+// Before this, doc-sync had NO gate in either direction: the fan-out went to
+// every app peer with the default `automatic` posture, and an inbound lane was
+// claimed on the strength of naming a docId. On a shared tailnet that is other
+// people's desktops receiving this account's documents.
+describe("UA-P-0f — documents cross only within one account", () => {
+  it("refuses an inbound lane from a peer outside the account, and closes it", async () => {
+    const { docs, control, bytes, sync } = harness(["peer-mine"], (peer) => peer === "peer-mine");
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 11;
+    const before = docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0;
+
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-theirs",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+
+    // UNCLAIMED — no handler registered, so what the peer already sent lands
+    // nowhere rather than being applied and then regretted
+    bytes.deliver(laneId, record(new Uint8Array([7, 0, 0, 9])));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0).toBe(before);
+    // and closed, so the peer is not left holding a stream that never answers
+    expect(control.closed).toContain(laneId);
+    // no return lane was opened toward them either
+    expect(control.opened.some((o) => o.peer === "peer-theirs")).toBe(false);
+  });
+
+  it("admits the same lane from this account's peer", async () => {
+    // the CONTROL: the refusal above is about WHOSE peer it is, and nothing
+    // else about the lane changed between the two rows
+    const { docs, control, bytes, sync } = harness(["peer-mine"], (peer) => peer === "peer-mine");
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 12;
+
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-mine",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+
+    const update = new Uint8Array([7, 0, 0, 9]);
+    bytes.deliver(laneId, record(update));
+    await until(
+      () => (docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0) > ice1().byteLength,
+      "this account's peer's record to land",
+    );
+    expect(control.closed).not.toContain(laneId);
+  });
+
+  it("with no account, an inbound lane is refused — the same posture as the door", async () => {
+    // `isSelfPeer` answering false for everyone is what an UNLINKED desktop
+    // looks like: no captured login, so no peer can be compared to one. The
+    // honest answer is nobody, not everybody.
+    const { docs, control, bytes, sync } = harness(["peer-a"], () => false);
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 13;
+    const before = docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0;
+
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.deliver(laneId, record(new Uint8Array([7, 0, 0, 9])));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0).toBe(before);
+    expect(control.closed).toContain(laneId);
   });
 });

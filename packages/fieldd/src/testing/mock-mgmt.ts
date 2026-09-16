@@ -130,6 +130,11 @@ export class MockMgmtServer {
    * above. UA-P-0a needs it: a desktop with no account declares NO serve, so
    * "the reconcile ran" can no longer be inferred from a serve appearing. */
   readonly meshCalls: string[] = [];
+  /** UA-P-0f — every `native.mesh.lane.open` this floor was asked for, in
+   * order. The outbound half of "documents sync only within one account" is a
+   * decision about WHICH PEERS get a lane, so the witness is the list of lanes
+   * asked for, not the bytes on them. */
+  readonly meshLaneOpens: Array<{ peer: string; protocol: string; docId?: string }> = [];
 
   /** `endpoint` is a WIN-D1 endpoint, resolved by the suite (which owns its data
    * root) — a filesystem path on unix, a `\\.\pipe\…` name on win32. Node's
@@ -380,6 +385,14 @@ export class MockMgmtServer {
     // answer. (`subscriptionRequests` never sees these — the mesh facade is
     // dispatched ahead of the generic `*.subscribe` recorder.)
     this.meshCalls.push(msg.method);
+    if (msg.method === "native.mesh.lane.open") {
+      const p = msg.params ?? {};
+      this.meshLaneOpens.push({
+        peer: String(p["peer"]),
+        protocol: String(p["protocol"]),
+        ...(typeof p["docId"] === "string" ? { docId: p["docId"] } : {}),
+      });
+    }
     const reply = (body: object) =>
       sock.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body }) + "\n");
     if (this.meshUnavailable) {

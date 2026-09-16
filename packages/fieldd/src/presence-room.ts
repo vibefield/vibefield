@@ -31,6 +31,11 @@ export interface PresenceRoomRouterOptions {
   bytes: PresenceLaneBytes;
   peers: () => Promise<SyncPeer[]>;
   allocateLaneId: () => number;
+  /** UA-P-0f (D5) — presence follows documents: a room is a document's room, so
+   * who may be IN it is who may sync it. Same dial keyspace as `peers`, same
+   * fail-closed reading as doc-sync's. Absent admits everyone (the pre-UA-P
+   * world); the daemon always passes it. */
+  isSelfPeer?: (peer: string) => boolean;
   logger?: Logger;
   maxLogicalBytes?: number;
 }
@@ -74,6 +79,7 @@ export class PresenceRoomRouter implements DocumentPresenceRooms {
   readonly #bytes: PresenceLaneBytes;
   readonly #peers: () => Promise<SyncPeer[]>;
   readonly #allocateLaneId: () => number;
+  readonly #isSelfPeer: ((peer: string) => boolean) | undefined;
   readonly #logger: Logger;
   readonly #maxLogicalBytes: number;
   readonly #rooms = new Map<string, Room>();
@@ -87,6 +93,7 @@ export class PresenceRoomRouter implements DocumentPresenceRooms {
     this.#bytes = opts.bytes;
     this.#peers = opts.peers;
     this.#allocateLaneId = opts.allocateLaneId;
+    this.#isSelfPeer = opts.isSelfPeer;
     this.#maxLogicalBytes = opts.maxLogicalBytes ?? MESHDATA_LOSSY_MAX_LOGICAL_BYTES;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "presence.room" });
   }
@@ -333,6 +340,20 @@ export class PresenceRoomRouter implements DocumentPresenceRooms {
 
   #claim(lane: LaneInfo): void {
     if (lane.inbound !== true || lane.protocol !== "presence" || lane.class !== "lossy") return;
+    // UA-P-0f (D5) — a presence room is a DOCUMENT's room, so who may be in it
+    // is who may sync it. `lane.peer` is the tailnet's own answer for the
+    // address that dialled (`resolve_peer_by_ip`), in the same keyspace the
+    // self-peer set is keyed by. Fails closed for the same reason doc-sync's
+    // does: a peer the registry has not caught up to is refused for a beat.
+    if (this.#isSelfPeer !== undefined && !this.#isSelfPeer(lane.peer)) {
+      this.#logger.warn(
+        "fieldd.presence.lane_refused_foreign_account",
+        "A peer outside this account opened a presence lane",
+        { laneId: lane.laneId, peer: lane.peer },
+      );
+      void this.#control.close(lane.laneId).catch(() => undefined);
+      return;
+    }
     if (lane.docId === undefined) {
       void this.#control.close(lane.laneId).catch(() => undefined);
       return;

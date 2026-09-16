@@ -204,7 +204,7 @@ describe("TM-2 — a self peer is told to dial the tailnet, a window the loopbac
   });
 
   it("leaves a WINDOW's ticket byte-for-byte what it was", async () => {
-    const { daemon, mock } = await boot();
+    const { daemon } = await boot();
     await serving(daemon);
     const grant = daemon.tokens.mint(["terminal.attach"], "tm-2-window");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
@@ -270,7 +270,7 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
     // ticket's shape to the door's existence, and that is what this row now
     // witnesses. (`device_not_linked` survives in `doorsFor` as a belt behind
     // that closed door — a principal it can no longer receive.)
-    const { daemon, mock } = await boot({ login: null });
+    const { daemon } = await boot({ login: null });
     // the FLOOR is fully willing — its doors are published and its routes are
     // live — so nothing here is a coincidence of an unready fixture
     await poll(() => (daemon.health().nativeConnected ? true : undefined));
@@ -283,7 +283,7 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
     // UA-P-0a closed the TAILNET side of the unlinked posture and nothing else:
     // a local window on a desktop with no account is the ordinary first-run
     // case, and it keeps working exactly as it did
-    const { daemon, mock } = await boot({ login: null });
+    const { daemon } = await boot({ login: null });
     const grant = daemon.tokens.mint(["terminal.attach"], "ef6-local");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     cleanup.push(() => ws.close());
@@ -308,7 +308,7 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
     // the distinction the new state word exists for: `transport_not_landed`
     // means this cell serves no doors at all; `doors_not_published` means the
     // doors are fine and this device is not carrying them onto the tailnet
-    const { daemon, mock } = await boot({ terminalMesh: false });
+    const { daemon } = await boot({ terminalMesh: false });
     const grant = daemon.tokens.mint(["terminal.attach"], "tm-2-local");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     cleanup.push(() => ws.close());

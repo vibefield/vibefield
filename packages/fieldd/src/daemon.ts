@@ -648,12 +648,28 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return (snapshot as { lanes: LaneInfo[] } | undefined) ?? { lanes: [] };
       },
     };
-    const meshPeers = async (): Promise<Array<{ id: string; online: boolean }>> => {
-      const peers = (await mesh.peers()) as { id?: unknown; online?: unknown }[];
-      return peers
-        .filter((peer): peer is { id: string; online?: unknown } => typeof peer.id === "string")
-        .map((peer) => ({ id: peer.id, online: peer.online !== false }));
-    };
+    // UA-P-0f (D5) — "documents sync only among VibeField DESKTOPS that share
+    // the same tailscale login identity." This closure is the ONE peer source
+    // both doc-sync and presence fan out over, so narrowing it here narrows
+    // both, and there is no second list for a caller to reach past it.
+    //
+    // It reads DeviceService's self-peer set (UA-P-0e), which is built from the
+    // tailnet's own WhoIs rather than from anything a peer published. The
+    // roster keys by the durable ULID and lanes key by the tailscale node id —
+    // the two never collide (T1 §6) — so `selfSyncPeers` hands back the DIAL
+    // keyspace and the liveness fold below stays in it too. It reads that set
+    // rather than intersecting a SECOND read of the floor's peer list, so there
+    // is exactly one place the account boundary is applied.
+    //
+    // A phone is in this set and has no doc-sync listener: nothing on the phone
+    // binds `PORTS.DOC_SYNC_QUIC`. A dial toward one therefore fails at the
+    // transport, which `#openLane` already treats as ordinary — logged at info,
+    // the peer marked unreachable for that doc, no queue, no retry storm. D5's
+    // "a phone never receives a document" holds by the phone having no door,
+    // and the failure is quiet by the path that reaches it already being the
+    // mesh-down path.
+    const meshPeers = async (): Promise<Array<{ id: string; online: boolean }>> =>
+      devicesForAgents?.selfSyncPeers() ?? [];
     // PLUG-P2 — the plugin registry (§9): manifest-only discovery, pre-listen
     // so the first snapshot is warm. No module code loads here (§19.1).
     // P7 — the installed root is fieldd-OWNED: absent on first boot is the
@@ -688,6 +704,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // A peer that does not SAY offline gets the attempt (tolerant reader); a
       // failed open records the truth either way.
       peers: meshPeers,
+      // UA-P-0f (D5) — the INBOUND half. `peers` above is already the self-peer
+      // set, but a lane that ARRIVES never consults it, so the gate is asked
+      // here per lane.
+      //
+      // Both closures read `devicesForAgents`, which is bound further down —
+      // after this service starts. That window refuses (`?? false`) rather than
+      // admits, which is the correct direction and costs a peer that dials in
+      // the first beats of a boot one retry: doc-sync re-opens a lane on the
+      // next commit or the next peer-returns re-greet, and a lane is cheap and
+      // mortal by design (D5).
+      isSelfPeer: (peer) => devicesForAgents?.isSelfPeer(peer) ?? false,
       // UA-D7 — the one place per-doc intent and user posture are folded
       // together; the service itself never learns that a posture exists.
       resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), syncPosture),
@@ -697,6 +724,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       control: laneControl,
       bytes: laneLink,
       peers: meshPeers,
+      // UA-P-0f — the INBOUND half: a lane arrives without consulting `peers`
+      isSelfPeer: (peer) => devicesForAgents?.isSelfPeer(peer) ?? false,
       allocateLaneId: laneIds.allocate,
       logger: logger.child({ component: "presence.room" }),
     });

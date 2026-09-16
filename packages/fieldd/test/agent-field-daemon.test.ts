@@ -3,17 +3,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AGENT_SESSION_RECORD_FORMAT,
-  AgentFieldSlice,
   type AgentSessionRecord,
   LAYOUT,
   SOCKETS,
-  STORES,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
-import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
+import { writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
@@ -139,9 +137,6 @@ async function poll<T>(fn: () => T | undefined, ms = 5_000): Promise<T> {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 }
-
-const slices = (mock: MockMgmtServer) =>
-  mock.agentFieldWrites.map((raw) => AgentFieldSlice.parse(raw));
 
 /** F-M4 — the OTHER carrier: a local reader on the product door. */
 async function fieldDoor(daemon: FielddDaemon): Promise<Array<Record<string, unknown>>> {

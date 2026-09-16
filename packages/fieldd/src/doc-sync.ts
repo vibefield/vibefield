@@ -108,6 +108,15 @@ export interface DocSyncOptions {
    * answer is registry-and-preference state fieldd already holds in memory.
    * Absent means the pre-UA-6 world — everything syncs. */
   resolveIntent?: (docId: string) => DocSyncIntent;
+  /** UA-P-0f (D5) — "documents sync only among VibeField DESKTOPS that share
+   * the same tailscale login identity. A phone never receives a document."
+   *
+   * The INBOUND half of that, in the same dial keyspace `peers` uses: is this
+   * `PeerInfo.id` one of this account's? The outbound half needs no gate here —
+   * `peers` itself is the self-peer set — but an inbound lane arrives without
+   * ever consulting that list, so it is asked here. Absent means the pre-UA-P
+   * world and admits everyone, which is why the daemon always passes it. */
+  isSelfPeer?: (peer: string) => boolean;
   logger?: Logger;
   /** injectable clock — the state tests drive it directly */
   now?: () => number;
@@ -149,6 +158,7 @@ export class DocSyncService {
   readonly #bytes: LaneBytes;
   readonly #peers: () => Promise<SyncPeer[]>;
   readonly #resolveIntent: (docId: string) => DocSyncIntent;
+  readonly #isSelfPeer: ((peer: string) => boolean) | undefined;
   readonly #logger: Logger;
   readonly #now: () => number;
   readonly #allocateLaneId: () => number;
@@ -178,6 +188,7 @@ export class DocSyncService {
     this.#peers = opts.peers;
     this.#allocateLaneId = opts.allocateLaneId;
     this.#resolveIntent = opts.resolveIntent ?? (() => "sync");
+    this.#isSelfPeer = opts.isSelfPeer;
     this.#now = opts.now ?? Date.now;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "doc.sync" });
   }
@@ -454,6 +465,36 @@ export class DocSyncService {
 
   #claim(lane: LaneInfo): void {
     if (lane.inbound !== true || lane.protocol !== "doc-sync") return;
+    // UA-P-0f (D5) — THE ACCOUNT GATE, first, because it is the widest refusal
+    // and the one that does not depend on what the lane says about itself.
+    // `lane.peer` is the tailnet's own answer for the address that dialled us
+    // (`resolve_peer_by_ip` — the WhoIs node id, or an honest `unknown:<ip>`
+    // when the control plane will not name it), which is the same keyspace the
+    // self-peer set is keyed by. So this is a set membership test on a fact,
+    // not a comparison against a claim.
+    //
+    // FAILS CLOSED, deliberately: a peer this device has not yet seen in its
+    // registry refresh is refused and re-admitted on the next one. Documents
+    // are the thing D5 is about, and a beat of "not yet" is cheaper than a beat
+    // of "anyone".
+    if (this.#isSelfPeer !== undefined && !this.#isSelfPeer(lane.peer)) {
+      // Left UNCLAIMED, the same shape of "no" as the two refusals below: no
+      // handler registers, no return lane opens, and whatever the peer already
+      // sent ages out of MeshLaneLink's bounded orphan buffer rather than
+      // landing. The lane is closed so the peer is not left holding a stream
+      // that will never answer.
+      this.#logger.warn(
+        "fieldd.doc_sync.lane_refused_foreign_account",
+        "A peer outside this account opened a doc-sync lane",
+        {
+          laneId: lane.laneId,
+          peer: lane.peer,
+          ...(lane.docId !== undefined ? { docId: lane.docId } : {}),
+        },
+      );
+      void this.#control.close(lane.laneId).catch(() => undefined);
+      return;
+    }
     const docId = lane.docId;
     if (docId === undefined) {
       // A doc-sync lane that names no doc has nowhere to deliver. Refusing it

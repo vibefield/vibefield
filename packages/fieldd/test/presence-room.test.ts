@@ -83,7 +83,7 @@ async function until(predicate: () => boolean, label: string): Promise<void> {
   throw new Error(`timed out waiting for ${label}`);
 }
 
-function harness(peers = [{ id: "peer-a", online: true }]) {
+function harness(peers = [{ id: "peer-a", online: true }], isSelfPeer?: (peer: string) => boolean) {
   const control = new FakeControl();
   const bytes = new FakeBytes();
   let nextLaneId = 8;
@@ -92,6 +92,7 @@ function harness(peers = [{ id: "peer-a", online: true }]) {
     bytes,
     peers: async () => peers,
     allocateLaneId: () => nextLaneId++,
+    ...(isSelfPeer !== undefined ? { isSelfPeer } : {}),
   });
   return { router, control, bytes };
 }
@@ -172,5 +173,62 @@ describe("PresenceRoomRouter", () => {
     }
     expect(router.state()).toEqual({ rooms: 0, outbound: 0, inbound: 0, retainedBytes: 0 });
     await router.stop();
+  });
+});
+
+// UA-P-0f (D5) — presence follows documents: a room is a DOCUMENT's room, so
+// who may be in it is who may sync it. James ruled documents sync only among
+// VibeField desktops sharing one tailscale login.
+describe("UA-P-0f — presence admits only this account's peers", () => {
+  it("refuses an inbound lane from a foreign peer and closes it", async () => {
+    const { router, control, bytes } = harness([], (peer) => peer === "peer-mine");
+    const received: number[] = [];
+    await router.start();
+    const room = router.attach("doc-a", (payload) => received.push(payload[0] ?? -1));
+    const lane = MESHDATA_INBOUND_LANE_ID_BASE;
+
+    control.announce({
+      kind: "peerOpened",
+      laneId: lane,
+      inbound: true,
+      class: "lossy",
+      protocol: "presence",
+      peer: "peer-theirs",
+      docId: "doc-a",
+    });
+
+    // unclaimed: no handler, so whatever the peer already sent lands nowhere
+    expect(bytes.claimed(lane)).toBe(false);
+    bytes.deliver(lane, new Uint8Array([9]));
+    expect(received).toEqual([]);
+    expect(router.state().inbound).toBe(0);
+    // and closed, so the peer is not left holding a stream that never answers
+    expect(control.closed).toContain(lane);
+    await room.close();
+  });
+
+  it("admits this account's peer on the same room", async () => {
+    // the CONTROL for the row above: the refusal is about WHOSE peer it is, not
+    // about the room, the class or the lane being inbound
+    const { router, control, bytes } = harness([], (peer) => peer === "peer-mine");
+    const received: number[] = [];
+    await router.start();
+    const room = router.attach("doc-a", (payload) => received.push(payload[0] ?? -1));
+    const lane = MESHDATA_INBOUND_LANE_ID_BASE + 1;
+
+    control.announce({
+      kind: "peerOpened",
+      laneId: lane,
+      inbound: true,
+      class: "lossy",
+      protocol: "presence",
+      peer: "peer-mine",
+      docId: "doc-a",
+    });
+    expect(bytes.claimed(lane)).toBe(true);
+    bytes.deliver(lane, new Uint8Array([7]));
+    expect(received).toEqual([7]);
+    expect(control.closed).not.toContain(lane);
+    await room.close();
   });
 });

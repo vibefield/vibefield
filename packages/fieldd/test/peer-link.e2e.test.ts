@@ -21,12 +21,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  CONTRACTS_VERSION,
-  type DeviceInfo,
-  type DeviceSlice,
-  SOCKETS,
-} from "@vibefield/contracts";
+import { type DeviceInfo, SOCKETS } from "@vibefield/contracts";
 import type { WsCtor } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -107,23 +102,6 @@ async function capabilitySecret(daemon: FielddDaemon, mock: MockMgmtServer): Pro
     8000,
   );
   return productPathSecret(mock);
-}
-
-/** A valid peer DeviceSlice whose product endpoint points at a real loopback
- * control port + secret path (the thing PeerLink dials). */
-function peerSlice(deviceId: string, endpointUrl: string): DeviceSlice {
-  return {
-    deviceId,
-    name: `device-${deviceId}`,
-    platform: "linux",
-    headless: false,
-    fielddVersion: "0.1.0",
-    contractsVersion: CONTRACTS_VERSION,
-    capabilities: { terminalHost: false, docHost: true, push: false },
-    productEndpoint: { serve: "product", url: endpointUrl },
-    bootId: `boot-${deviceId}`,
-    publishedAt: Date.now(),
-  };
 }
 
 async function openRpc(port: number): Promise<WsRpc> {

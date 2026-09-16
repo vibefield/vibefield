@@ -6,14 +6,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  CONTRACTS_VERSION,
-  type DeviceInfo,
-  type DeviceListResult,
-  type DeviceSlice,
-  PORTS,
-  SOCKETS,
-} from "@vibefield/contracts";
+import { type DeviceInfo, type DeviceListResult, PORTS, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap } from "../src/index";
@@ -150,22 +143,6 @@ function routeSnapshot(revision: number, port?: number): unknown {
               },
             },
           ],
-  };
-}
-
-/** A valid peer DeviceSlice for scripting store deltas. */
-function peerSlice(over: Partial<DeviceSlice> = {}): DeviceSlice {
-  return {
-    deviceId: "dev-peer",
-    name: "peerbox",
-    platform: "linux",
-    headless: false,
-    fielddVersion: "0.1.0",
-    contractsVersion: CONTRACTS_VERSION,
-    capabilities: { terminalHost: false, docHost: true, push: false },
-    bootId: "boot-peer",
-    publishedAt: 1_700_000_000_000,
-    ...over,
   };
 }
 
@@ -525,5 +502,63 @@ describe("DeviceService — the self-peer set", () => {
 
     const missing = await rpc.callErr("device.get", { deviceId: "no-such-device" });
     expect(missing.data?.kind).toBe("NOT_FOUND");
+  });
+});
+
+// UA-P-0f (D5) — the OUTBOUND half, at the daemon. `meshPeers` in daemon.ts is
+// the ONE peer source doc-sync and presence fan out over, so narrowing it there
+// narrows both and there is no second list a caller could reach past.
+describe("UA-P-0f — the fan-out reaches only this account's desktops", () => {
+  it("opens a doc-sync lane to a self peer and none to a foreign one", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-mine", deviceId: "dev-mine", login: ACCOUNT, name: "mine" }),
+      tailnetPeer({
+        id: "node-theirs",
+        deviceId: "dev-theirs",
+        login: "colleague@corp.example",
+        name: "theirs",
+      }),
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-mine"));
+
+    // `selfSyncPeers()` IS the list — `meshPeers` in daemon.ts returns it
+    // unchanged, and doc-sync and presence are both constructed with that one
+    // closure. The foreign desktop is on the same tailnet, in the same registry
+    // and carrying the same app hostname prefix; what keeps it out is its login.
+    const fanOut = daemon.devices.selfSyncPeers();
+    expect(fanOut.map((p) => p.id)).toEqual(["node-mine"]);
+    // liveness rides along in the DIAL keyspace, which is the keyspace a lane
+    // is opened in (T1 §6 — never the roster ULID)
+    expect(fanOut[0]?.online).toBe(true);
+
+    // and the same set answers the per-lane inbound question both services ask
+    expect(daemon.devices.isSelfPeer("node-mine")).toBe(true);
+    expect(daemon.devices.isSelfPeer("node-theirs")).toBe(false);
+  });
+
+  it("an UNLINKED desktop fans out to nobody", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-mine", deviceId: "dev-mine", login: ACCOUNT, name: "mine" }),
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await pollDevices(rpc, (d) => d.some((x) => x.self));
+    await sleep(200);
+    // no captured login, so no peer can be compared to one — and a document
+    // reaches nobody rather than everybody
+    expect(daemon.devices.selfSyncPeers()).toEqual([]);
+    expect(daemon.devices.isSelfPeer("node-mine")).toBe(false);
   });
 });
