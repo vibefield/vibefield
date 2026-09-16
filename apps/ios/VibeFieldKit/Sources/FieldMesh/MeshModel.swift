@@ -49,6 +49,16 @@ public final class MeshModel {
   public private(set) var state: State = .off
   public private(set) var peers: [MeshPeerView] = []
   public private(set) var loginPage: LoginPage?
+  /// UA-P-1c — the tailnet this node is signed in to, as a drawable fact.
+  ///
+  /// The same string `magicDNSSuffix` computes, kept as observable state
+  /// because a sheet cannot await a property. It had never been drawn anywhere:
+  /// the phone computed its own tailnet domain to pin a peer's door to that
+  /// peer and showed no part of the account chain to the person holding it.
+  ///
+  /// It is the INTERIM account line (UA-P-D3) and the domain is not the login
+  /// — see `MeshDisplay.accountLine`. `nil` until the node is up.
+  public private(set) var tailnetDomain: String?
 
   @ObservationIgnored private var runtime: FieldTruffleRuntime?
   @ObservationIgnored private var eventsTask: Task<Void, Never>?
@@ -117,6 +127,7 @@ public final class MeshModel {
     self.runtime = nil
     peers = []
     loginPage = nil
+    tailnetDomain = nil
     Task {
       await runtime.stop()
       if state == .stopping { state = .off }
@@ -163,6 +174,7 @@ public final class MeshModel {
           switch event {
           case .phase(let phase):
             self.state = Self.state(for: phase)
+            await self.refreshTailnetDomain()
           case .authRequired(let url):
             self.lastLoginURL = url
             self.loginPage = LoginPage(url: url)
@@ -183,6 +195,19 @@ public final class MeshModel {
   private func applyCurrentPhase() async {
     guard let runtime else { return }
     state = Self.state(for: await runtime.phase)
+    await refreshTailnetDomain()
+  }
+
+  /// UA-P-1c — the account line's fact, re-read whenever the node's phase
+  /// moves.
+  ///
+  /// The dns name only exists once the backend has one, which is after a
+  /// sign-in rather than at `start`, so this is asked at every phase change
+  /// instead of once: a domain fetched at `starting` is nil forever, and a
+  /// corner that never says who you are signed in as is the gap UA-P-1c is
+  /// about.
+  private func refreshTailnetDomain() async {
+    tailnetDomain = await magicDNSSuffix
   }
 
   private func refreshPeers() async {

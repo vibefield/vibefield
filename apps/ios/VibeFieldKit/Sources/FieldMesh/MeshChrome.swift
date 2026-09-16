@@ -91,6 +91,27 @@ public struct MeshSheet: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.top, 8)
 
+      // UA-P-1c — the account line, under the status it qualifies.
+      //
+      // The SHEET and not the corner, deliberately. The corner is one subject
+      // — whether this phone reaches the desktops — carried by one chip and
+      // one caption, and the swarm physically flows around both; a third line
+      // there would put a second subject in a place that has always had one,
+      // and one more obstacle in front of the bodies. The sheet is already
+      // where the mesh states its own facts in sentences, and "who am I signed
+      // in as" belongs immediately under "am I online".
+      //
+      // Muted rather than hued: attention is contrast, and this is a standing
+      // fact rather than something that needs the user — the rule `MeshChip`
+      // states and the only thing this app has ever used to mean "look here".
+      if let account = MeshDisplay.accountLine(domain: model.tailnetDomain) {
+        Text(account)
+          .font(FieldType.mono(10))
+          .foregroundStyle(FieldPalette.textFaint)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.top, 6)
+      }
+
       if let action = MeshDisplay.primaryAction(state: model.state) {
         Button {
           perform(action)

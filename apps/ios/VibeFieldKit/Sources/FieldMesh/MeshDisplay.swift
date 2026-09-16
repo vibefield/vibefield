@@ -27,6 +27,31 @@ public enum MeshDisplay {
     }
   }
 
+  /// The account line (UA-P-1c, D3 interim).
+  ///
+  /// James's chain is *tailscale login → the account bound to it → that
+  /// account's mesh → the services on top*, and until now the phone drew no
+  /// part of it: "signed in" was a truffle PHASE, never a WHO. The one
+  /// account-adjacent fact this phone holds is the tailnet domain it already
+  /// computes so a peer's fully-qualified name can be built
+  /// (`MeshModel.magicDNSSuffix`), and it had never been shown anywhere.
+  ///
+  /// **It is the INTERIM line and says so by what it names.** A tailnet is not
+  /// a person: `tail1234.ts.net` is the network this account's login belongs
+  /// to, not the login. The real line — "<login> · <domain>" — needs the login
+  /// name on truffle's Apple plane, which is not there today
+  /// (`AuthenticatedPeer` carries a stable id and addresses; `login_name` is
+  /// Rust-only), and arrives with petition T4 under UA-P-D3. So this says
+  /// exactly what it knows and not one word more.
+  ///
+  /// `nil` while there is no domain to name — before the node is up, or on a
+  /// dns name with no labels to drop. An absent line is a fact not yet known;
+  /// a line reading "signed in to —" would be the blank design-00 forbids.
+  public static func accountLine(domain: String?) -> String? {
+    guard let domain, !domain.isEmpty else { return nil }
+    return "signed in to \(domain)"
+  }
+
   /// The sheet's status sentence — lowercase facts, reasons verbatim.
   public static func statusLine(state: MeshModel.State, peerCount: Int) -> String {
     switch state {
