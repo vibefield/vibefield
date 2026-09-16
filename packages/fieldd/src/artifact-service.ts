@@ -51,6 +51,7 @@ import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/log
 import { canonicalTailnetDnsName } from "./device-service";
 import type { ObservedServe, ServeSpec, ServeState } from "./mesh-client";
 import { RpcCallError } from "./native-link";
+import { serveAllowGlob } from "./terminal-serve";
 
 // ArtifactService (AH-1; artifact-hub §4/§5) owns source-local, durable serving
 // intent. The Truffle listener is derived state: an intent fingerprints the
@@ -89,6 +90,13 @@ export interface ArtifactCatalogBridge {
 export interface ArtifactServiceOptions {
   dataDir: string;
   bridge: ArtifactServeBridge;
+  /** UA-P-0c (D6) — the account an artifact's audience DEFAULTS to. Required,
+   * with no fallback, because the fallback was the bug: `allow` defaulted to
+   * `[]`, which truffle reads as "the whole tailnet" (RFC 023 §9.7), so every
+   * artifact was published to every node unless the publisher said otherwise.
+   * A caller that cannot answer this question cannot decide an audience, and
+   * silently choosing the widest one for them is what this closes. */
+  linkedLogin: () => string | null;
   /** Required by production from AH-2 onward; optional only for focused AH-1
    * unit tests that exercise the local serving state machine in isolation. */
   catalog?: ArtifactCatalogBridge;
@@ -223,6 +231,7 @@ export class ArtifactService {
   readonly #logger: Logger;
   readonly #now: () => number;
   readonly #random: () => number;
+  readonly #linkedLogin: () => string | null;
   readonly #probe: (source: ArtifactSource) => Promise<boolean>;
   readonly #maintenanceMs: number | false;
   readonly #writeIntent: (path: string, body: string) => void;
@@ -282,6 +291,7 @@ export class ArtifactService {
   constructor(opts: ArtifactServiceOptions) {
     this.#bridge = opts.bridge;
     this.#catalog = opts.catalog;
+    this.#linkedLogin = opts.linkedLogin;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "artifacts" });
     this.#now = opts.now ?? Date.now;
     this.#random = opts.random ?? Math.random;
@@ -701,6 +711,47 @@ export class ArtifactService {
 
   // ---- normalization and identity ---------------------------------------
 
+  /**
+   * UA-P-0c (D6) — the audience a publish that names none gets.
+   *
+   * James: "an artifact's allow-list defaults to the linked login; sharing with
+   * the tailnet is an explicit act." Before this, an absent `allow` and an
+   * explicit `[]` were the same value by the time anything read them, and that
+   * value means THE WHOLE TAILNET at the sidecar (`ProxyConfig.allow`, truffle
+   * RFC 023 §9.7 — "EMPTY = WHOLE TAILNET"). So the quiet path and the
+   * deliberate one had one meaning, and it was the wide one.
+   *
+   * `undefined` and `[]` are different acts now, which is why `allow` is
+   * optional on both publish shapes and why this is the one place that decides:
+   * absent means the owner, `[]` still means the tailnet and still says so.
+   *
+   * WITH NO LINKED LOGIN THIS REFUSES, rather than falling back to the old
+   * default. It is not a convenience that is being withheld: an unlinked
+   * desktop does not know who its owner IS, so "just me" is not a list it can
+   * write, and under UA-P-0a it has no node and could not serve the artifact
+   * anyway. Choosing the widest audience on the caller's behalf — and having it
+   * go live the moment they link — is precisely the outcome D6 closes. An
+   * explicit `allow` still publishes, so a caller with an audience in mind is
+   * never blocked.
+   */
+  #defaultAllow(): string[] {
+    const login = this.#linkedLogin();
+    if (login === null) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "this desktop is not linked to a tailscale account, so there is no owner to " +
+          "default an artifact's audience to — link the account, or publish with an " +
+          "explicit allow list (an empty one means the whole tailnet)",
+        false,
+        { reason: "not_linked" },
+      );
+    }
+    // the sidecar matches with Go path.Match, lowercased both sides — a login
+    // is a LITERAL in a pattern slot, so its glob metacharacters are escaped
+    // (the same spelling `terminal-serve.ts` and the product serve use)
+    return canonicalAllow([serveAllowGlob(login)]);
+  }
+
   async #normalizePublish(params: ArtifactPublishParams): Promise<{
     artifactId: string;
     title: string;
@@ -714,7 +765,7 @@ export class ArtifactService {
         artifactId: v2.data.artifactId,
         title: v2.data.title,
         source: normalizeSource(v2.data.source, true),
-        allow: canonicalAllow(v2.data.allow),
+        allow: v2.data.allow === undefined ? this.#defaultAllow() : canonicalAllow(v2.data.allow),
       };
     }
     const legacy = LegacyArtifactPublishParams.parse(params);
@@ -728,7 +779,7 @@ export class ArtifactService {
           : { kind: "folder", path: legacy.target.path },
         true,
       ),
-      allow: canonicalAllow(legacy.allow),
+      allow: legacy.allow === undefined ? this.#defaultAllow() : canonicalAllow(legacy.allow),
       legacyName: legacy.name,
     };
   }

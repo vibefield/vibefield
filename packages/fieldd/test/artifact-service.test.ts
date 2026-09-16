@@ -48,6 +48,7 @@ import {
 import { bootstrap, verifyAuditSegment } from "../src/index";
 import type { ObservedServe, ServeSpec, ServeState } from "../src/mesh-client";
 import { RpcCallError } from "../src/native-link";
+import { serveAllowGlob } from "../src/terminal-serve";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
@@ -278,12 +279,15 @@ function service(
     ) => Promise<ShellWebContentsCaptureArtifactPreviewResult>;
     capturePreviewAvailable?: () => boolean;
     catalog?: ArtifactCatalogBridge;
+    /** UA-P-0c — which account this desktop is; `null` is the unlinked one. */
+    linkedLogin?: () => string | null;
   } = {},
 ): ArtifactService {
   return new ArtifactService({
     dataDir,
     bridge,
     maintenanceMs: false,
+    linkedLogin: options.linkedLogin ?? (() => TEST_LOGIN),
     probe: options.probe ?? (async () => true),
     ...(options.catalog !== undefined ? { catalog: options.catalog } : {}),
     ...(options.writeIntent !== undefined ? { writeIntent: options.writeIntent } : {}),
@@ -386,7 +390,85 @@ describe("ArtifactService (AH-1 unit)", () => {
       publicTls: true,
       desired: "published",
       retiringServeIds: [],
+      // an EXPLICIT allow is carried through untouched but canonicalised — the
+      // round trip the sidecar's Go path.Match sees
+      allow: ["b@example.com"],
     });
+  });
+
+  // ---- UA-P-0c (D6): the audience a publish that names none gets ----
+
+  it("UA-P-0c: an absent allow defaults to the linked login, on both publish shapes", async () => {
+    // It used to default to `[]`, which is not "no audience" — truffle reads an
+    // empty allow as THE WHOLE TAILNET (RFC 023 §9.7). So every artifact
+    // published without a thought about who should see it went to every node.
+    const bridge = new FakeBridge();
+    const svc = service(makeDataDir(), bridge);
+    await svc.start();
+
+    await svc.publish(proxy(A));
+    expect(bridge.last()[0]!.allow).toEqual([TEST_LOGIN]);
+
+    // the C6 legacy shape defaults the same way — a compatibility window is not
+    // a place to keep a different answer to the same question
+    await svc.publish({ name: "legacy-one", target: { kind: "port", port: 4_000 } });
+    expect(bridge.last().at(-1)!.allow).toEqual([TEST_LOGIN]);
+  });
+
+  it("UA-P-0c: an EXPLICIT empty list is still the deliberate whole-tailnet act", async () => {
+    const bridge = new FakeBridge();
+    const svc = service(makeDataDir(), bridge);
+    await svc.start();
+    await svc.publish(proxy(A, { allow: [] }));
+    // absent and `[]` are different acts now, and this is the one that says
+    // "anyone on the tailnet" out loud
+    expect(bridge.last()[0]!.allow).toEqual([]);
+  });
+
+  it("UA-P-0c: the default escapes a login's glob metacharacters", async () => {
+    // a login is a LITERAL in a pattern slot; `path.Match` would otherwise read
+    // one as a wildcard and admit logins the owner never meant
+    const bridge = new FakeBridge();
+    const nasty = "a?b*c[d@x";
+    const svc = service(makeDataDir(), bridge, { linkedLogin: () => nasty });
+    await svc.start();
+    await svc.publish(proxy(A));
+    const landed = bridge.last()[0]!.allow;
+    // the same spelling the product serve and the cells serve use, asserted
+    // against the function so this row cannot drift from it
+    expect(landed).toEqual([serveAllowGlob(nasty)]);
+    // and the control: the RAW login is not what landed, which is the whole
+    // point — `a?b*c[d@x` unescaped would match logins nobody chose
+    expect(landed).not.toEqual([nasty]);
+    expect(landed?.[0]).toContain("\\?");
+  });
+
+  it("UA-P-0c: an UNLINKED desktop refuses to guess an audience", async () => {
+    // There is no owner to default to, and the old default was "everyone" —
+    // which would go live the moment the user linked, without them ever
+    // choosing it. Refusing names the two ways forward instead.
+    const bridge = new FakeBridge();
+    const svc = service(makeDataDir(), bridge, { linkedLogin: () => null });
+    await svc.start();
+    await expect(svc.publish(proxy(A))).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      details: { reason: "not_linked" },
+    });
+    // an explicit audience still publishes — a caller with one in mind is never
+    // blocked by the desktop not knowing who it is
+    await svc.publish(proxy(A, { allow: ["*@corp.example"] }));
+    expect(bridge.last()[0]!.allow).toEqual(["*@corp.example"]);
+  });
+
+  it("UA-P-0c: update leaves an audience alone unless it is named", async () => {
+    const bridge = new FakeBridge();
+    const svc = service(makeDataDir(), bridge);
+    await svc.start();
+    await svc.publish(proxy(A, { allow: ["*@corp.example"] }));
+    await svc.update({ artifactId: A, title: "renamed" });
+    expect(bridge.last()[0]!.allow).toEqual(["*@corp.example"]);
+    await svc.update({ artifactId: A, allow: [] });
+    expect(bridge.last()[0]!.allow).toEqual([]);
   });
 
   it("captures after first publish, refines only a generated title, and advances revisions", async () => {

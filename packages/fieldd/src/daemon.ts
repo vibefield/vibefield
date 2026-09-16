@@ -3264,6 +3264,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     void terminalServe.refresh();
     const artifacts = new ArtifactService({
       dataDir: config.dataDir,
+      // UA-P-0c (D6) — the account an artifact's audience defaults to. The same
+      // reader the product serve's allow and the door's comparison use, so all
+      // three can only ever agree about who this desktop belongs to.
+      linkedLogin,
       bridge: {
         declare: async (specs) => {
           lastArtifactServeSpecs = specs;
