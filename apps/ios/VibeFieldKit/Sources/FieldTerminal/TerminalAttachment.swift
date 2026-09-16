@@ -732,6 +732,14 @@ public final class TerminalAttachment {
       // to the banner's `retryNow`, since retrying changes nothing until the
       // desktop is linked. The refusal is retryable for exactly that reason:
       // linking makes the same mint succeed.
+      //
+      // TOLERATED, NOT EXPECTED (2026-09-15, UA-P-1d). Under James's UA-P-D1
+      // ruling an unlinked desktop is OFFLINE — no node, no serve, no store —
+      // so a desktop that could answer this is one whose door should not have
+      // been reachable at all. The sentence stays anyway: it is the honest
+      // thing to say if one ever arrives, and a phone that dropped a refusal
+      // because the other plane promised never to send it would be trusting a
+      // promise instead of reading the wire.
       return
         "\(who) is not linked to an account yet, so it cannot tell who you are — "
         + "link it on the desktop"

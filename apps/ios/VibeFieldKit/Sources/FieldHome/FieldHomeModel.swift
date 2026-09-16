@@ -109,18 +109,14 @@ enum FieldHomeModel {
   /// reading "DOOR" over a line about a different desktop would be worse than
   /// either alone.
   static func linkSubject(desktops: [FieldDesktop], isHearing: Bool) -> FieldDesktop? {
-    // Both refusals, because `linkLabel` and `chipWantsAttention` count both:
-    // a door that said no, and a door this phone would not dial (EL7 M1). They
-    // are different sentences and the same token, and the subject has to be
-    // whichever one the token is about.
-    if let refused = desktops.first(where: {
-      switch $0.state {
-      case .failed, .refusedDoor: true
-      default: false
-      }
-    }) {
-      return refused
-    }
+    // Every fact that makes the corner speak up, through the ONE predicate
+    // `linkLabel` and `chipWantsAttention` use: a door that said no, a peer
+    // with no address the mesh will vouch for (EL7 M1), and — since UA-P-1d —
+    // a door that answered hello and then refused the field. They are
+    // different sentences and the same token, so the subject has to be
+    // whichever one the token is about, and asking the same function is what
+    // keeps them from ever disagreeing.
+    if let refused = desktops.first(where: MeshDisplay.wantsTheUser) { return refused }
     if let ready = desktops.first(where: { $0.state == .ready }) {
       // Silence is the healthy answer only while something is actually
       // arriving. `isHearing` is the whole difference between a quiet field

@@ -103,20 +103,30 @@ public enum MeshDisplay {
   /// behind a door at a closed port.
   public static func linkLabel(desktops: [FieldDesktop]) -> String? {
     guard !desktops.isEmpty else { return nil }
-    if desktops.contains(where: {
-      switch $0.state {
-      case .failed, .refusedDoor: true
-      default: false
-      }
-    }) {
-      return "DOOR"
-    }
+    if desktops.contains(where: wantsTheUser) { return "DOOR" }
     if desktops.contains(where: { $0.state == .ready }) { return nil }
     if desktops.contains(where: { $0.state == .connecting || $0.state == .reconnecting }) {
       return "…"
     }
     // Every peer is on the mesh and none is serving a door.
     return "NO DOOR"
+  }
+
+  /// The three facts that make the corner speak up, in one place because
+  /// `linkLabel`, `chipWantsAttention` and `FieldHomeModel.linkSubject` must
+  /// never disagree about which desktop the token is about.
+  ///
+  /// The third is UA-P-1d's: a door that answered hello and then refused the
+  /// FIELD. It used to reach `FieldLink.notes` alone, which no view reads, so
+  /// the desktop drew "connected" over an empty field with the reason written
+  /// nowhere — the same blank a refused door would have been, wearing a
+  /// healthy chip.
+  public static func wantsTheUser(_ desktop: FieldDesktop) -> Bool {
+    if desktop.fieldRefusal != nil { return true }
+    switch desktop.state {
+    case .failed, .refusedDoor: return true
+    default: return false
+    }
   }
 
   /// The sheet's sentence about one desktop — lowercase facts, the door's
@@ -142,6 +152,13 @@ public enum MeshDisplay {
       // to retry, and still not the same fact as a door that did not answer.
       return "\(desktop.name) — no door this phone can dial: \(reason)"
     case .ready:
+      // UA-P-1d — the field's own refusal, in the door's words. It outranks
+      // the feed because it IS the reason there is no feed, and "connected ·
+      // no field yet" over a desktop that said no is the honest sentence
+      // hiding the honest reason.
+      if let refusal = desktop.fieldRefusal {
+        return "\(desktop.name) — connected · the field was refused: \(refusal)"
+      }
       switch desktop.feed {
       case .store: return "\(desktop.name) — connected · field from the mesh"
       case .door: return "\(desktop.name) — connected · field over the door"
@@ -162,11 +179,6 @@ public enum MeshDisplay {
   /// link state a person can act on, and a field that is silently empty
   /// because of it would be the blank the corpus forbids.
   public static func chipWantsAttention(desktops: [FieldDesktop]) -> Bool {
-    desktops.contains {
-      switch $0.state {
-      case .failed, .refusedDoor: true
-      default: false
-      }
-    }
+    desktops.contains(where: wantsTheUser)
   }
 }
