@@ -127,6 +127,67 @@ async fn mesh_enabled_without_sidecar_degrades_honestly() {
     daemon.shutdown().await;
 }
 
+/// UA-P-0d (D7) — the mesh state dir is 0700, and so is every directory truffle
+/// creates beneath it. The reason is `synced_store/backend.rs`: the FileBackend
+/// persists slices with an ordinary create into this tree, and the run dir's own
+/// chmod (`lib.rs`) never covered it — so a slice sat on disk at whatever the
+/// umask gave it. The secret no longer rides a slice (that is the other half of
+/// D7), but the tree still holds the node's identity and keys.
+///
+/// Driven through a bring-up that DEGRADES (no sidecar): the directory is
+/// created and hardened before truffle is handed it, which is the ordering that
+/// matters — a mode set after the first write is a mode set too late.
+#[cfg(unix)]
+#[tokio::test]
+async fn the_mesh_state_dir_is_private_to_this_user() {
+    use field_native::contracts::MeshMode;
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    // A sidecar that RESOLVES (only `is_file` is checked here) but cannot be a
+    // tailnet node: the bring-up gets past the sidecar gate, creates and hardens
+    // the state dir synchronously, and then degrades in its spawned task. That
+    // ordering is the point — a mode set after truffle's first write is a mode
+    // set too late. With a MISSING sidecar the dir is never created at all,
+    // which is also correct: no sidecar, no node, no state to protect.
+    let config = NativeConfig {
+        sidecar_override: Some("/bin/echo".into()),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let state_dir = config.mesh_state_dir();
+    let daemon = bootstrap(config).await.unwrap();
+    // nothing has asked for a node, so nothing has been created yet
+    assert!(
+        !state_dir.exists(),
+        "an offline desktop mints no mesh state"
+    );
+
+    daemon
+        .state
+        .mesh
+        .start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    assert!(state_dir.exists(), "the link act creates the state dir");
+    let mode = std::fs::metadata(&state_dir).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o700, "mode was {mode:o}");
+
+    // and a directory truffle would create underneath is hardened on the next
+    // pass, which is what `harden_state_dir` walking the tree is for
+    let nested = state_dir.join("synced_store");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::set_permissions(&nested, std::fs::Permissions::from_mode(0o755)).unwrap();
+    daemon.state.mesh.stop().await;
+    daemon
+        .state
+        .mesh
+        .start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    let nested_mode = std::fs::metadata(&nested).unwrap().permissions().mode() & 0o777;
+    assert_eq!(nested_mode, 0o700, "nested mode was {nested_mode:o}");
+    daemon.shutdown().await;
+}
+
 /// Live tailnet bring-up — needs a real sidecar binary (and possibly a browser
 /// login). Run by hand:
 ///   FIELD_NATIVE_SIDECAR_PATH=<path-to-sidecar-slim> \

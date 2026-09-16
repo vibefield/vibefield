@@ -871,12 +871,36 @@ async fn serve_add(
 ///
 /// Security-load-bearing (thinking-c3 §1, EL7 — same-uid agents are the adversary):
 /// a `path_secret` on a `port` serve builds a ROUTES-mode config whose single route
-/// carries the secret prefix `/t/<secret>` with `strip_prefix = false`. Keeping
-/// `strip_prefix` **false** is load-bearing: the backend must SEE the secret path on
-/// every proxied request — that is the provenance proof that a connection arrived
-/// through the tailnet sidecar (only the sidecar's route config and fieldd's memory
-/// hold the secret). A `dir` serve is a static surface where a secret path proves
-/// nothing, so `path_secret` there is rejected rather than silently served.
+/// makes the backend SEE `/t/<secret>` on every proxied request. That is the
+/// provenance proof that a connection arrived through the tailnet sidecar — only
+/// the sidecar's route config and fieldd's memory hold the secret, so a same-uid
+/// process that dials the loopback control port and types `Tailscale-*` headers
+/// cannot reach the tailnet door. A `dir` serve is a static surface where a secret
+/// path proves nothing, so `path_secret` there is rejected rather than silently
+/// served.
+///
+/// UA-P-0d (D7, 2026-09-15) — WHICH SIDE OF THE PROXY THE SECRET LIVES ON CHANGED,
+/// and the proof did not. It used to be the PUBLIC prefix: the route was
+/// `/t/<secret>` → `http://127.0.0.1:<port>`, so every caller had to know the
+/// secret to reach the door, and fieldd therefore had to PUBLISH it — the
+/// capability URL carrying the secret went into `field.devices.v1`, which truffle's
+/// `FileBackend` then wrote to disk in a directory that was not 0700. James ruled
+/// the secret never rides a store or the disk.
+///
+/// So it is the TARGET path now: `/` → `http://127.0.0.1:<port>/t/<secret>`. The
+/// sidecar adds the secret on forward, the phone dials the bare root, and the
+/// secret never leaves this machine. The backend sees exactly what it saw before,
+/// which is why fieldd's door is untouched.
+///
+/// VERIFIED, not assumed (the probe is in UA-P-0d's commit message): sidecar-slim
+/// builds every route handler with `httputil.NewSingleHostReverseProxy`
+/// (`main.go:3294`), whose director joins the target's path onto the request's —
+/// `/` becomes `/t/<secret>/`, `/anything` becomes `/t/<secret>/anything` — and
+/// with a path-less target nothing is prefixed. `parse_cell_routes` and the
+/// artifact shapes pass path-less targets and are unaffected.
+///
+/// `strip_prefix` stays FALSE for the same reason it always was: nothing may be
+/// removed from what the backend sees, because what the backend sees IS the proof.
 pub struct ServeConfigInput<'a> {
     pub serve_id: &'a str,
     pub name: &'a str,
@@ -1031,9 +1055,12 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
             let listen_port = parse_listen_port(port)?;
             let mut routes = preview_routes;
             match path_secret {
+                // UA-P-0d (D7) — the secret is the TARGET's path, not the public
+                // prefix: the sidecar adds it on forward, so the door still sees
+                // its provenance proof and the secret never has to be published.
                 Some(secret) => routes.push(ProxyRoute {
-                    prefix: format!("/t/{secret}"),
-                    target_url: Some(format!("{scheme}://127.0.0.1:{port}")),
+                    prefix: "/".into(),
+                    target_url: Some(format!("{scheme}://127.0.0.1:{port}/t/{secret}")),
                     dir: None,
                     fallback: None,
                     strip_prefix: false, // LOAD-BEARING — see fn doc (EL7 provenance proof)
@@ -1488,8 +1515,14 @@ mod tests {
         }
     }
 
+    /// UA-P-0d (D7) — the secret moved from the PUBLIC prefix to the TARGET's
+    /// path. The door's proof is unchanged (the backend still sees
+    /// `/t/<secret>` on every request, because the sidecar's reverse proxy
+    /// joins the target's path onto the caller's); what changed is that the
+    /// caller no longer has to know the secret, so fieldd no longer has to
+    /// publish it into a store that truffle writes to disk.
     #[test]
-    fn port_with_secret_builds_secret_route_strip_false_tls_false() {
+    fn port_with_secret_puts_the_secret_on_the_target_not_the_public_path() {
         let target = json!({"kind": "port", "port": 9410});
         let cfg = build_serve_config(ServeConfigInput {
             tls: Some(false),
@@ -1500,15 +1533,23 @@ mod tests {
         assert!(!cfg.tls, "tls:false must thread through to ProxyConfig");
         assert_eq!(cfg.routes.len(), 1, "port+secret is exactly one route");
         let route = &cfg.routes[0];
-        assert_eq!(route.prefix, "/t/s3cr3t", "secret-path prefix");
+        assert_eq!(
+            route.prefix, "/",
+            "the PUBLIC prefix is the bare root — a caller dials it without knowing anything"
+        );
         assert_eq!(
             route.target_url.as_deref(),
-            Some("http://127.0.0.1:9410"),
-            "loopback target URL"
+            Some("http://127.0.0.1:9410/t/s3cr3t"),
+            "the secret rides the TARGET, so the sidecar adds it on forward"
+        );
+        assert!(
+            !route.prefix.contains("s3cr3t"),
+            "the secret must not be reachable from the public side of the proxy"
         );
         assert!(
             !route.strip_prefix,
-            "strip_prefix MUST be false — the backend must see the secret path (EL7 proof)"
+            "strip_prefix MUST be false — nothing may be removed from what the backend sees, \
+             because what the backend sees IS the proof (EL7)"
         );
         assert!(route.dir.is_none(), "a port route is not a dir route");
         assert_eq!(
@@ -1516,6 +1557,35 @@ mod tests {
             "routes mode leaves the top-level target unset"
         );
         assert_eq!(cfg.listen_port, 9410);
+    }
+
+    /// The CONTROL for the row above: every other shape passes a path-less
+    /// target, so nothing is prefixed onto their forwards. A cell route whose
+    /// target grew a path would send frames to the wrong place silently.
+    #[test]
+    fn every_other_target_stays_path_less() {
+        let routes = json!([{ "prefix": "/cell/cb-1", "targetPort": 51001 }]);
+        let target = json!({"kind": "routes"});
+        let cfg = build_serve_config(ServeConfigInput {
+            listen_port: Some(9422),
+            allow: vec!["me@example.com".into()],
+            routes: &routes,
+            ..serve_input("terminal", &target)
+        })
+        .expect("routes config builds");
+        for route in &cfg.routes {
+            let Some(url) = route.target_url.as_deref() else {
+                continue; // a dir route has no target to prefix onto
+            };
+            // `http://127.0.0.1:51001` — the two slashes of the scheme and no
+            // more. A third would be a path, and a path is what gets joined
+            // onto every forwarded request.
+            assert_eq!(
+                url.matches('/').count(),
+                2,
+                "a non-product target must end at its port, with no path to prefix: {url}"
+            );
+        }
     }
 
     #[test]
@@ -1752,7 +1822,13 @@ mod tests {
         })
         .expect("the product shape still builds");
         assert_eq!(cfg.routes.len(), 1);
-        assert_eq!(cfg.routes[0].prefix, "/t/s3cr3t");
+        assert_eq!(cfg.routes[0].prefix, "/");
+        assert_eq!(
+            cfg.routes[0].target_url.as_deref(),
+            Some("http://127.0.0.1:9410/t/s3cr3t"),
+            "UA-P-0d: the secret is on the target, and a declared route list beside the \
+             product target changes nothing about that"
+        );
         assert!(!cfg.routes[0].strip_prefix, "EL7 provenance proof, unmoved");
     }
 

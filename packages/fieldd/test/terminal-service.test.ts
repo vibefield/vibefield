@@ -39,6 +39,7 @@ import { bootstrap, NativeLink, RpcCallError } from "../src/index";
 import { terminalCreateTarget } from "../src/native-link";
 import { TerminalService } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { productDoorPath } from "./link-fixture";
 import { nativeEndpoint, shortTmpRoot } from "./native-harness";
 import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
 
@@ -2429,14 +2430,14 @@ describe("TP-S1 — the session-addressed grant model", () => {
       if (Date.now() > deadline) throw new Error("the terminal serve never came up");
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    // dial the product door the way the sidecar delivers a phone: the secret
-    // path (read back from health, as the phone reads it from the roster) plus
-    // the injected identity header that makes the caller `self`
-    const productUrl = daemon.health().mesh.serves.find((s) => s.name === "product")?.url;
-    const ws = new WebSocket(
-      `ws://127.0.0.1:${daemon.controlPort}${new URL(productUrl as string).pathname}`,
-      { headers: { "Tailscale-User-Login": "me@jamesyong42.com" } },
-    );
+    // dial the product door the way the sidecar DELIVERS a phone, which after
+    // UA-P-0d is not the way the phone dials: the phone asks for the bare root
+    // and the sidecar adds the secret on forward, so a test playing the sidecar
+    // adds it from the floor's own copy of the route config. Plus the injected
+    // identity header that makes the caller `self`.
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}${productDoorPath(mock)}`, {
+      headers: { "Tailscale-User-Login": "me@jamesyong42.com" },
+    });
     cleanup.push(() => ws.close());
     await new Promise<void>((resolve, reject) => {
       ws.once("open", () => resolve());

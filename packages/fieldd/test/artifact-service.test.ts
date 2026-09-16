@@ -50,7 +50,7 @@ import type { ObservedServe, ServeSpec, ServeState } from "../src/mesh-client";
 import { RpcCallError } from "../src/native-link";
 import { serveAllowGlob } from "../src/terminal-serve";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
-import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
+import { productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -1497,7 +1497,29 @@ describe("Artifact Hub over a real daemon", () => {
     const productHealth = health.mesh.serves.find((serve) => serve.name === "product");
     expect(artifactHealth?.url).toBe(published.url);
     expect(artifactHealth?.url).not.toContain("/t/");
-    expect(productHealth?.url).toContain("/t/");
+
+    // UA-P-0d (D7) — THE SECRET LEAVES NOTHING. This row used to assert the
+    // opposite about the product URL (`toContain("/t/")`), because the secret
+    // WAS the capability: fieldd appended it, published the result into
+    // `field.devices.v1`, and truffle's FileBackend wrote that slice to disk in
+    // a directory that was not 0700. A same-uid reader had the self grant.
+    //
+    // The secret is the sidecar's target path now. What the product serve
+    // advertises is a LOCATOR — where the door is — and every payload that
+    // leaves this process is checked against the real secret here, not against
+    // the string "/t/", so a future composition that leaked it a different way
+    // still reds this row.
+    const secret = productPathSecret(first.mock);
+    expect(secret.length).toBeGreaterThan(20);
+    expect(productHealth?.url).not.toContain("/t/");
+    expect(JSON.stringify(health)).not.toContain(secret);
+    expect(JSON.stringify(first.mock.storeWrites)).not.toContain(secret);
+    expect(JSON.stringify(first.mock.artifactStoreWrites)).not.toContain(secret);
+    expect(JSON.stringify(published)).not.toContain(secret);
+    // the CONTROL: the secret really is live on this daemon — it is declared to
+    // the floor, which is the one place it is allowed to be — so the four
+    // absences above are absences and not a test that found nothing anywhere
+    expect(JSON.stringify(first.mock.meshAddParams)).toContain(secret);
     expect(health.artifacts).toMatchObject({
       count: 1,
       storage: "ready",

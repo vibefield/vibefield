@@ -249,6 +249,29 @@ describe("the tailnet door (C3 provenance auth)", () => {
     await closed(ws);
   });
 
+  it("UA-P-0d: the path a TAILNET caller dials is worthless on loopback", async () => {
+    // D7 moved the secret to the sidecar's TARGET path, so a phone now dials
+    // the bare root and the sidecar adds the secret on forward. That makes the
+    // public path something everyone knows — which is fine, and this row is why:
+    // the door has never trusted the path a caller asks for, only the path it
+    // ARRIVES on at the loopback port. A same-uid process (EL7's adversary) can
+    // dial exactly what the phone dials, with exactly the headers the sidecar
+    // injects, and still gets nothing.
+    const { port } = await api();
+    const ws = await dial(port, {
+      path: "/",
+      headers: {
+        "Tailscale-User-Login": LINKED,
+        "Tailscale-Node-Id": "nQRJl4CNTRL",
+      },
+    });
+    const res = (await call(ws, 1, "system.hello", hello())) as {
+      error: { data: { kind: string } };
+    };
+    expect(res.error.data.kind).toBe("UNAUTHORIZED");
+    await closed(ws);
+  });
+
   it("secret path WITHOUT a login header is dropped before hello", async () => {
     const { port } = await api();
     const ws = await dial(port, { path: `/t/${SECRET}` });

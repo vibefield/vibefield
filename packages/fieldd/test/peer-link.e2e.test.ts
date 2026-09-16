@@ -32,7 +32,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, PeerLink } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
-import { writeLinkFixture } from "./link-fixture";
+import { productPathSecret, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -83,16 +83,15 @@ function sidecar(): { ctor: WsCtor; dials: () => number } {
 /** B's capability secret = the route path fieldd composes into its own health
  * serve URL (base + /t/<secret>). The serve reconcile is fire-and-forget at
  * bootstrap, so poll until it lands. */
-async function capabilitySecret(daemon: FielddDaemon): Promise<string> {
+/** UA-P-0d — the secret is no longer IN the capability URL (that is what D7
+ * changed), so this reads it the way the sidecar does: off the `serve.add`
+ * the daemon sent to its floor. The dial below then plays the sidecar. */
+async function capabilitySecret(daemon: FielddDaemon, mock: MockMgmtServer): Promise<string> {
   await until(
     () => daemon.health().mesh.serves.some((s) => s.name === "product" && s.url !== undefined),
     8000,
   );
-  const url = daemon.health().mesh.serves.find((s) => s.name === "product")?.url;
-  const secret = url?.split("/t/")[1];
-  if (secret === undefined || secret.length === 0)
-    throw new Error(`no capability secret in serve url: ${url}`);
-  return secret;
+  return productPathSecret(mock);
 }
 
 /** A valid peer DeviceSlice whose product endpoint points at a real loopback
@@ -142,7 +141,7 @@ async function bootPair(): Promise<Pair> {
   const mockB = await startMock(dirB);
   const B = await bootstrap({ dataDir: dirB, controlPort: 0, dataPort: 0 });
   cleanup.push(() => B.stop());
-  const secret = await capabilitySecret(B);
+  const secret = await capabilitySecret(B, mockB);
   const bEndpoint = `http://127.0.0.1:${B.controlPort}/t/${secret}`;
 
   // A dials peers through the sidecar sim (injected as the peer ws-ctor).

@@ -42,7 +42,7 @@ import WebSocket from "ws";
 import type { FielddDaemon } from "../src/index";
 import { type AccountUsageRuntime, AccountUsageService, bootstrap } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
-import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
+import { productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
 import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
 
@@ -212,6 +212,9 @@ function scriptedProvider(options: {
 
 interface Box {
   daemon: FielddDaemon;
+  /** UA-P-0d — the floor, so a row that plays the sidecar can read the route
+   * secret off the `serve.add` instead of out of a published URL. */
+  mock: MockMgmtServer;
   scripted: ScriptedProvider;
   /** rewrite what the adapter answers, from the next request on */
   script(next: UsageScript): void;
@@ -257,7 +260,7 @@ async function setup(options: { profiles?: boolean; realAgent?: boolean } = {}):
     terminalBirthWaitMs: 300,
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
-  return { daemon, scripted, script };
+  return { daemon, mock, scripted, script };
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -489,14 +492,15 @@ describe("the account usage doors (AR-5d)", () => {
   }, 60_000);
 
   it("D36: a peer-fieldd principal cannot read this device's quota at all", async () => {
-    const { daemon } = await setup();
+    const { daemon, mock } = await setup();
     // the capability path fieldd composes into its own serve URL
     await until(
       () => daemon.health().mesh.serves.some((s) => s.name === "product" && s.url !== undefined),
       8_000,
     );
-    const url = daemon.health().mesh.serves.find((s) => s.name === "product")?.url;
-    const secret = url?.split("/t/")[1];
+    // UA-P-0d — the URL is a LOCATOR now and carries no secret; the sidecar's
+    // own copy is what a caller playing the sidecar has to hold
+    const secret = productPathSecret(mock);
     expect(secret).toBeTruthy();
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}/t/${secret}`, {
       headers: { "Tailscale-User-Login": TEST_LOGIN },

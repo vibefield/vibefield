@@ -856,9 +856,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // shared by exactly two parties, this process and the sidecar's route
     // config. 192-bit; base64url is path-safe. Never logged, never in
     // serve.list responses (the Rust side redacts); rotation = restart.
+    //
+    // UA-P-0d (D7) — AND NEVER IN A URL ANYBODY ELSE HOLDS. It used to be
+    // appended here, so the "capability URL" a phone dialled carried the secret
+    // — into `field.devices.v1`, which truffle's `FileBackend` then wrote to
+    // disk in a directory that was not 0700. A same-uid process that read that
+    // file and forged the injected headers had the self grant.
+    //
+    // The secret is the sidecar's TARGET path now (`build_serve_config`), so
+    // the sidecar adds it on forward and a caller dials the bare root. fieldd's
+    // door is untouched: the backend sees `/t/<secret>` exactly as before.
+    // What a peer holds is a LOCATOR — where the door is — and never a key.
     const servePathSecret = randomBytes(24).toString("base64url");
     const capabilityUrl = (base: string | undefined): string | undefined =>
-      base === undefined ? undefined : `${base.replace(/\/+$/, "")}/t/${servePathSecret}`;
+      base === undefined ? undefined : base.replace(/\/+$/, "");
     // -- health aggregation: native deltas + link liveness, one stream out --
     let latestHealth: NativeHealth | null = null;
     let artifactsRef: ArtifactService | null = null;

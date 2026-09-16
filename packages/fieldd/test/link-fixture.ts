@@ -32,3 +32,39 @@ export function writeLinkFixture(dataDir: string, login: string = TEST_LOGIN): v
     )}\n`,
   );
 }
+
+/**
+ * UA-P-0d (D7) — the product serve's route secret, read from the floor the way
+ * the SIDECAR learns it: off the `serve.add` this daemon sent.
+ *
+ * It exists because the secret stopped being discoverable from the product's
+ * own surfaces, which is the whole point of D7. It used to ride the capability
+ * URL — `https://host:port/t/<secret>` — so a test could lift it out of
+ * `daemon.health()` exactly as a phone lifted it out of `field.devices.v1`, and
+ * so could anything else that could read the slice truffle had written to disk.
+ * The secret is the sidecar's TARGET path now: the public prefix is `/`, the
+ * sidecar adds the secret on forward, and nothing outside this process and the
+ * floor's route config ever holds it.
+ *
+ * A test that plays the sidecar still has to know it, and this is the honest
+ * place to get it: the same declaration the real sidecar is configured from.
+ * Pass the mock the daemon is talking to.
+ */
+export function productPathSecret(mock: {
+  meshAddParams: ReadonlyArray<Record<string, unknown>>;
+}): string {
+  for (let i = mock.meshAddParams.length - 1; i >= 0; i -= 1) {
+    const spec = mock.meshAddParams[i];
+    if (spec?.["name"] !== "product") continue;
+    const secret = spec["pathSecret"];
+    if (typeof secret === "string" && secret.length > 0) return secret;
+  }
+  throw new Error("the product serve has not been declared to this floor yet");
+}
+
+/** The path a sidecar-proxied caller arrives on at fieldd's control port. */
+export function productDoorPath(mock: {
+  meshAddParams: ReadonlyArray<Record<string, unknown>>;
+}): string {
+  return `/t/${productPathSecret(mock)}`;
+}

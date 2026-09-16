@@ -13,6 +13,7 @@ import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { TERMINAL_SERVE_ID } from "../src/terminal-serve";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { productDoorPath } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { WsRpc } from "./ws-rpc";
 
@@ -121,17 +122,25 @@ async function boot(opts: { terminalMesh?: boolean; login?: string | null } = {}
 /** The product door's capability URL, exactly as the phone reads it out of
  * `field.devices.v1` — and the only place this test can learn the path secret,
  * which is minted per boot and never leaves the daemon otherwise. */
-function productPath(daemon: FielddDaemon): string {
+/** UA-P-0d — the path a sidecar-proxied caller ARRIVES ON at fieldd's control
+ * port, which is no longer the path it DIALS: the public prefix is `/` and the
+ * sidecar adds the secret on forward. A test that plays the sidecar has to add
+ * it itself, from the floor's own copy of the route config. */
+function productPath(daemon: FielddDaemon, mock: MockMgmtServer): string {
   const url = daemon.health().mesh.serves.find((s) => s.name === "product")?.url;
   if (url === undefined) throw new Error("the product serve has no URL yet");
-  return new URL(url).pathname;
+  return productDoorPath(mock);
 }
 
 /** Dial the product door the way the SIDECAR would: the secret path plus the
  * identity headers it injects and a caller cannot forge (they are stripped on
  * the ordinary door — `tailnet-door.test.ts` owns that row). */
-async function dialAsTailnet(daemon: FielddDaemon, login: string): Promise<WsRpc> {
-  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}${productPath(daemon)}`, {
+async function dialAsTailnet(
+  daemon: FielddDaemon,
+  mock: MockMgmtServer,
+  login: string,
+): Promise<WsRpc> {
+  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}${productPath(daemon, mock)}`, {
     headers: { "Tailscale-User-Login": login },
   });
   cleanup.push(() => ws.close());
@@ -160,9 +169,9 @@ async function serving(daemon: FielddDaemon): Promise<void> {
 
 describe("TM-2 — a self peer is told to dial the tailnet, a window the loopback", () => {
   it("answers the self peer with the cell's tailnet doors and [input, read]", async () => {
-    const { daemon } = await boot();
+    const { daemon, mock } = await boot();
     await serving(daemon);
-    const rpc = await dialAsTailnet(daemon, LOGIN);
+    const rpc = await dialAsTailnet(daemon, mock, LOGIN);
 
     const ticket = TerminalOpenTicketResult.parse(
       await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
@@ -195,7 +204,7 @@ describe("TM-2 — a self peer is told to dial the tailnet, a window the loopbac
   });
 
   it("leaves a WINDOW's ticket byte-for-byte what it was", async () => {
-    const { daemon } = await boot();
+    const { daemon, mock } = await boot();
     await serving(daemon);
     const grant = daemon.tokens.mint(["terminal.attach"], "tm-2-window");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
@@ -226,9 +235,9 @@ describe("TM-2 — a self peer is told to dial the tailnet, a window the loopbac
   it("a GUEST never reaches the mint at all — the scope wall, unmoved", async () => {
     // a WhoIs-verified peer whose login does NOT match link.json gets the empty
     // guest preset, and `terminal.openTicket` declares no guestOk
-    const { daemon } = await boot();
+    const { daemon, mock } = await boot();
     await serving(daemon);
-    const rpc = await dialAsTailnet(daemon, GUEST_LOGIN);
+    const rpc = await dialAsTailnet(daemon, mock, GUEST_LOGIN);
     const refused = await rpc.callErr("terminal.openTicket", { sessionId: "pane-1" });
     expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
   });
@@ -236,10 +245,10 @@ describe("TM-2 — a self peer is told to dial the tailnet, a window the loopbac
 
 describe("TM-2 — doors_not_published is its own honest state", () => {
   it("refuses the remote ticket when the floor keeps its doors off the tailnet", async () => {
-    const { daemon } = await boot({ terminalMesh: false });
+    const { daemon, mock } = await boot({ terminalMesh: false });
     // the product door still comes up; the terminal listener never does
     await poll(() => daemon.health().mesh.serves.find((s) => s.name === "product")?.url);
-    const rpc = await dialAsTailnet(daemon, LOGIN);
+    const rpc = await dialAsTailnet(daemon, mock, LOGIN);
     const refused = await rpc.callErr("terminal.openTicket", { sessionId: "pane-1" });
     expect(refused.data?.kind).toBe("UNAVAILABLE");
     expect(refused.data?.details).toEqual({ service: "terminal", state: "doors_not_published" });
@@ -261,7 +270,7 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
     // ticket's shape to the door's existence, and that is what this row now
     // witnesses. (`device_not_linked` survives in `doorsFor` as a belt behind
     // that closed door — a principal it can no longer receive.)
-    const { daemon } = await boot({ login: null });
+    const { daemon, mock } = await boot({ login: null });
     // the FLOOR is fully willing — its doors are published and its routes are
     // live — so nothing here is a coincidence of an unready fixture
     await poll(() => (daemon.health().nativeConnected ? true : undefined));
@@ -274,7 +283,7 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
     // UA-P-0a closed the TAILNET side of the unlinked posture and nothing else:
     // a local window on a desktop with no account is the ordinary first-run
     // case, and it keeps working exactly as it did
-    const { daemon } = await boot({ login: null });
+    const { daemon, mock } = await boot({ login: null });
     const grant = daemon.tokens.mint(["terminal.attach"], "ef6-local");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     cleanup.push(() => ws.close());
@@ -299,7 +308,7 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
     // the distinction the new state word exists for: `transport_not_landed`
     // means this cell serves no doors at all; `doors_not_published` means the
     // doors are fine and this device is not carrying them onto the tailnet
-    const { daemon } = await boot({ terminalMesh: false });
+    const { daemon, mock } = await boot({ terminalMesh: false });
     const grant = daemon.tokens.mint(["terminal.attach"], "tm-2-local");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
     cleanup.push(() => ws.close());
