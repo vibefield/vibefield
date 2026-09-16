@@ -67,7 +67,7 @@ function makeDataDir(): string {
  *  1. It TERMINATES the tailnet coordinate and forwards to the target's
  *     loopback address WITH the route secret joined onto the path (UA-P-0d:
  *     the secret is the target's path now, added on forward, so the caller
- *     never holds it). A's roster hands PeerLink `https://<magicdns>:<the
+ *     never holds it). A's roster hands PeerLink `http://<magicdns>:<the
  *     registry's product serve port>` — a derived locator with no secret in it
  *     — and that is exactly the string a phone would dial.
  *  2. It injects the WhoIs login header, which a caller cannot forge.
@@ -83,7 +83,12 @@ function sidecar(loopback: () => string): { ctor: WsCtor; dials: () => number } 
       // A coordinate this sim has no door behind — the roster's other rows —
       // resolves to a closed port, which is what an unreachable peer really is.
       const target = url.includes("device-b.tailnet.ts.net") ? loopback() : "ws://127.0.0.1:1/";
-      const forwarded = url.startsWith("wss://") || url.startsWith("https://") ? target : url;
+      // A TAILNET coordinate is recognised by its host, never by its scheme: the
+      // product serve is `tls: false`, so the locator is `http://` and the dial
+      // `ws://` — the same scheme a loopback dial carries. This sim once keyed on
+      // `wss`/`https` and let a `ws://<magicdns>` dial through to a listener that
+      // does not exist (UA-P-0i; the first cut's `https` locator hid it).
+      const forwarded = url.includes(".ts.net") ? target : url;
       super(forwarded, { headers: { "Tailscale-User-Login": LOGIN } });
     }
   }
