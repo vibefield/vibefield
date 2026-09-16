@@ -307,6 +307,93 @@ async fn mesh_answers_honest_unavailable_with_real_unit_state() {
     assert_eq!(resp["error"]["data"]["retryable"], true);
 }
 
+/// UA-P-0a (D1) — the posture verbs answer BEFORE the node gate, which is the
+/// whole point: `start` is how a node comes to exist, so gating it on a node
+/// would make an unlinked desktop permanently unlinkable. There is no sidecar
+/// here, so the bring-up degrades — and that is the honest answer too: the verb
+/// SUCCEEDED (the posture is recorded), the unit reports why there is no node.
+#[tokio::test]
+async fn the_posture_verbs_answer_without_a_node() {
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    c.hello(&daemon, 1).await;
+
+    // peers.list, one line up from here, is refused UNAVAILABLE with no node.
+    // start is not: it is the verb that asks for one.
+    c.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.mesh.start","params":{"mode":"capture"}}),
+    )
+    .await;
+    let resp = c.recv().await;
+    assert_eq!(resp["result"]["mode"], "capture", "{resp}");
+    assert_eq!(resp["result"]["started"], true, "{resp}");
+
+    // the promotion the capture ends in
+    c.send(
+        json!({"jsonrpc":"2.0","id":3,"method":"native.mesh.start","params":{
+            "mode":"linked","login":"james@github"
+        }}),
+    )
+    .await;
+    let resp = c.recv().await;
+    assert_eq!(resp["result"]["mode"], "linked", "{resp}");
+
+    // stop reports honestly that there was no node to drop (no sidecar here)
+    c.send(json!({"jsonrpc":"2.0","id":4,"method":"native.mesh.stop","params":{}}))
+        .await;
+    let resp = c.recv().await;
+    assert_eq!(resp["result"]["stopped"], false, "{resp}");
+
+    daemon.shutdown().await;
+}
+
+/// UA-P-0a — the two modes are validated AGAINST EACH OTHER. `linked` with no
+/// login is a node claiming an account it cannot name; `capture` with one is a
+/// caller asserting an identity the tailnet has not answered for (EL7 —
+/// identity comes from the control plane, never from a claim).
+#[tokio::test]
+async fn a_posture_that_contradicts_its_login_is_refused() {
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    c.hello(&daemon, 1).await;
+
+    c.send(json!({"jsonrpc":"2.0","id":2,"method":"native.mesh.start","params":{"mode":"linked"}}))
+        .await;
+    let resp = c.recv().await;
+    assert_eq!(
+        resp["error"]["data"]["kind"], "PRECONDITION_FAILED",
+        "{resp}"
+    );
+
+    c.send(
+        json!({"jsonrpc":"2.0","id":3,"method":"native.mesh.start","params":{
+            "mode":"capture","login":"james@github"
+        }}),
+    )
+    .await;
+    let resp = c.recv().await;
+    assert_eq!(
+        resp["error"]["data"]["kind"], "PRECONDITION_FAILED",
+        "{resp}"
+    );
+
+    // and an unknown mode is a refusal, not a tolerated shape: the posture is a
+    // closed enum because each arm means a different thing about the account
+    c.send(
+        json!({"jsonrpc":"2.0","id":4,"method":"native.mesh.start","params":{"mode":"whatever"}}),
+    )
+    .await;
+    let resp = c.recv().await;
+    assert_eq!(
+        resp["error"]["data"]["kind"], "PRECONDITION_FAILED",
+        "{resp}"
+    );
+
+    // nothing was recorded by any of the three
+    assert!(daemon.state.mesh.mode().is_none());
+    daemon.shutdown().await;
+}
+
 #[tokio::test]
 async fn serve_subscribe_refused_honestly_when_mesh_down() {
     // No tailnet in CI: the node is absent, so serve.subscribe must be refused with

@@ -32,6 +32,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, PeerLink } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -56,6 +57,12 @@ async function startMock(dataDir: string): Promise<MockMgmtServer> {
 function makeDataDir(): string {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-c5-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  // UA-P-0a — both daemons are the SAME account, which is what D35 federation
+  // means: a person's own devices. Before the posture derived from the link,
+  // neither had one and the door handed the preset to anyone; now an unlinked
+  // desktop declares no serve and mints a guest, so the fixture has to say who
+  // these two are.
+  writeLinkFixture(dataDir, LOGIN);
   return dataDir;
 }
 

@@ -8,6 +8,7 @@ import { ProductInfo } from "../src/shell";
 import {
   LayoutStamp,
   TailscaleLink,
+  UserLinkState,
   UserLinkStatus,
   UserRecord,
   UsersFile,
@@ -77,6 +78,8 @@ describe("link lifecycle (UA-3)", () => {
       meshEnabled: false,
       nodeState: "disabled",
       authUrl: null,
+      linkState: "offline",
+      linkDetail: null,
     });
     expect(off.meshEnabled).toBe(false);
     const pending = UserLinkStatus.parse({
@@ -84,8 +87,51 @@ describe("link lifecycle (UA-3)", () => {
       meshEnabled: true,
       nodeState: "starting",
       authUrl: "https://login.example/x",
+      linkState: "capturing",
+      linkDetail: null,
     });
     expect(pending.authUrl).toContain("https://");
+  });
+
+  // UA-P-0a (D1) — the posture is a CLOSED enum, and four of its six arms are
+  // refusals that carry a sentence. The shape is what makes an Account pane
+  // able to say "move this file" or "unlink that user" instead of a blank.
+  it("UA-P-0a — every refusal state parses, and the ones that need a sentence carry one", () => {
+    for (const state of [
+      "offline",
+      "capturing",
+      "linked",
+      "link_corrupt",
+      "login_unavailable",
+      "login_already_linked",
+    ] as const) {
+      expect(UserLinkState.parse(state)).toBe(state);
+    }
+    expect(UserLinkState.safeParse("enabled").success).toBe(false);
+
+    const corrupt = UserLinkStatus.parse({
+      link: null,
+      meshEnabled: false,
+      nodeState: null,
+      authUrl: null,
+      linkState: "link_corrupt",
+      linkDetail: "link.json is present but unusable: /u/1/fieldd/link.json",
+    });
+    // the PATH is the point: a state a human cannot act on is a blank with a
+    // name on it
+    expect(corrupt.linkDetail).toContain("link.json");
+    expect(corrupt.meshEnabled).toBe(false);
+
+    // and the posture is not optional — a status without it would let a stale
+    // producer read as "offline" by omission
+    expect(
+      UserLinkStatus.safeParse({
+        link: null,
+        meshEnabled: false,
+        nodeState: null,
+        authUrl: null,
+      }).success,
+    ).toBe(false);
   });
 
   it("MeshSelfIdentity never requires what the node cannot know", () => {

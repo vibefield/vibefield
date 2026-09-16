@@ -94,8 +94,22 @@ pub struct NativeConfig {
     /// Development/test-only target filter, admitted only by an explicit
     /// caller decision. Production defaults to INFO.
     pub log_filter: Option<String>,
-    /// mesh-gateway master switch (C1: off by default until the tailnet story
-    /// is wired end to end; the unit reports "disabled" honestly).
+    /// UA-P-0a (D1) — the FORCED-ON DEVELOPMENT OVERRIDE, and nothing more.
+    ///
+    /// This was the mesh's master switch. It is not any more: the posture
+    /// DERIVES FROM THE LINK. An unlinked VibeField user is a default local
+    /// account and the desktop is offline — no node, no serve, no store, no
+    /// lane — and linking is what asks this floor for a node
+    /// (`native.mesh.start`, capture then linked). The separate NF-8 toggle
+    /// that was owed COLLAPSES INTO THAT RULING: the posture IS the link, and a
+    /// second switch beside it could only disagree with the account boundary.
+    ///
+    /// What survives here is the development path for the things that have no
+    /// fieldd to ask them for a posture: the `#[ignore]`d live probes and the
+    /// kill matrix. Set, the unit starts a node at boot in `linked` mode with
+    /// NO login, which is a node with no account scope — fine for a probe on a
+    /// throwaway tailnet, never a product state. Do not reach for it to "turn
+    /// the mesh on"; link the account instead.
     pub mesh_enabled: bool,
     /// explicit sidecar binary path; falls back to the truffle search order.
     pub sidecar_override: Option<PathBuf>,

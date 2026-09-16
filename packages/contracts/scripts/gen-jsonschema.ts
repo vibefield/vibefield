@@ -77,8 +77,12 @@ import {
   MeshLaneOpenRequest,
   MeshLanePeerOpened,
   MeshLaneProtocol,
+  MeshMode,
   MeshRetireResult,
   MeshSelfIdentity,
+  MeshStartParams,
+  MeshStartResult,
+  MeshStopResult,
   NativeHealth,
   ObservedState,
   ObservedTerminal,
@@ -141,6 +145,13 @@ const BASE_SHARED = {
   PeerInfo,
   MeshSelfIdentity,
   MeshRetireResult,
+  // UA-P-0a — the posture verbs. `MeshMode` is named for the usual typify
+  // reason: it is embedded by BOTH start shapes, so an unnamed copy dedupes
+  // into a nested $ref in the bundle.
+  MeshMode,
+  MeshStartParams,
+  MeshStartResult,
+  MeshStopResult,
   StoreSnapshot,
   ServeTarget,
   // TM-2 (F-H3) — the routes serve's per-route shape, named for the same
@@ -202,6 +213,9 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "peer-info": PeerInfo,
   "mesh-self-identity": MeshSelfIdentity,
   "mesh-retire-result": MeshRetireResult,
+  "mesh-start-params": MeshStartParams,
+  "mesh-start-result": MeshStartResult,
+  "mesh-stop-result": MeshStopResult,
   "store-snapshot": StoreSnapshot,
   "serve-config": ServeConfig,
   "serve-entry": ServeEntry,

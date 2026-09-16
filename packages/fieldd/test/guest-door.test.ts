@@ -133,17 +133,38 @@ describe("UA-4 — the self/guest door", () => {
     });
   });
 
-  it("no stored login is the pre-capture status quo: full preset, self ABSENT (never false)", async () => {
+  it("UA-P-0a: NO STORED LOGIN IS A GUEST — the pre-capture full grant is gone", async () => {
+    // THE FLIP. This row asserted the opposite: a desktop with no captured
+    // login handed the whole preset to any tailnet-verified caller, and the
+    // `tailnet` principal arrived without `self` to say so. James ruled the
+    // posture derives from the link — unlinked is offline, capturing declares
+    // nothing — so the state this row described cannot arise from the product's
+    // own paths any more. The answer if something reaches the door anyway is
+    // zero scopes: a desktop that does not know which account it is cannot know
+    // that this caller is it.
     const port = await boot(() => null);
     const wire = await dial(port, `/t/${SECRET}`, { "tailscale-user-login": "anyone@github" });
 
     wire.send(hello(1, "renderer"));
-    expect(result(await wire.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
+    expect(result(await wire.next())["grantedScopes"]).toEqual([]);
 
+    wire.send(call(2, "system.health"));
+    expect(errKind(await wire.next())).toBe("FORBIDDEN_SCOPE");
+  });
+
+  it("UA-P-0a: and a `tailnet` principal without `self` can no longer arise", async () => {
+    // `self` was conditional on a stored login existing, because pre-capture
+    // landed in the same branch as a match. It is unconditional now: reaching
+    // the self branch AT ALL means the comparison succeeded.
+    const port = await boot(() => "me@github");
+    const wire = await dial(port, `/t/${SECRET}`, { "tailscale-user-login": "me@github" });
+
+    wire.send(hello(1, "renderer"));
+    expect(result(await wire.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
     wire.send(call(2, "system.health"));
     const principal = result(await wire.next())["principal"] as Record<string, unknown>;
     expect(principal["kind"]).toBe("tailnet");
-    expect("self" in principal).toBe(false);
+    expect(principal["self"]).toBe(true);
   });
 
   it("peer-fieldd is not exempt: the comparison, not the clientKind, decides", async () => {

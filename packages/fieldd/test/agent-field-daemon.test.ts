@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
@@ -95,6 +96,10 @@ async function boot(
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+  // UA-P-0a (D1) — the desktop has an ACCOUNT. The posture derives from the
+  // link now: without one there is no product serve and the tailnet door mints
+  // a guest, which none of the rows below are about.
+  writeLinkFixture(dataDir);
   writeExitedRecord(dataDir);
 
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));

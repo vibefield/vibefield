@@ -397,6 +397,12 @@ async function boot(opts: {
   return { daemon, mock };
 }
 
+/** UA-P-0a — the MeshClient's first reconcile has run (it reads the node's
+ * inventory there before deciding anything). The marker a "publishes NOTHING"
+ * row waits on when there is no linked login, since such a desktop declares no
+ * serve at all and the old marker was the product serve appearing. */
+const reconciled = (mock: MockMgmtServer) => mock.meshCalls.includes("native.mesh.serve.list");
+
 /** Every serve.add that declared the terminal listener, in order. */
 const terminalAdds = (mock: MockMgmtServer) =>
   mock.meshAddParams.filter((p) => p["serveId"] === TERMINAL_SERVE_ID);
@@ -448,7 +454,13 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
 
   it("publishes NOTHING with no linked login, however many doors are up", async () => {
     const { mock } = await boot({ terminalMesh: true, login: null });
-    await poll(() => mock.meshServes.get("product"));
+    // UA-P-0a — "the daemon got that far" can no longer be the product serve:
+    // with no linked login there IS no product serve to wait for (an unlinked
+    // desktop is offline, and the serve used to be declared allow-less, which
+    // the sidecar reads as "anyone the tailnet verified"). The serve
+    // SUBSCRIPTION is the marker instead — the MeshClient opens it on its first
+    // reconcile whatever the desired set turns out to be.
+    await poll(() => (reconciled(mock) ? true : undefined));
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(terminalAdds(mock)).toEqual([]);
     // F-H2 — and this device says so. The FLOOR's `terminalMesh` is true here;

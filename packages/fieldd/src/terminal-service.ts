@@ -556,10 +556,19 @@ export class TerminalService {
    * `failed`. The truth is not a failure: this desktop cannot tell whether the
    * caller owns it, because nobody has told it who its owner is.
    *
-   * WHO IS ADMITTED IS DELIBERATELY UNCHANGED. The unlinked-desktop posture is
-   * an OPEN ruling, and narrowing the door here would decide it by accident.
-   * Only the ANSWER changes — from a coordinate that cannot work into a named
-   * state a card can say a sentence for.
+   * WHO IS ADMITTED WAS DELIBERATELY UNCHANGED here, because the
+   * unlinked-desktop posture was an OPEN ruling and narrowing the door in this
+   * method would have decided it by accident. Only the ANSWER changed — from a
+   * coordinate that cannot work into a named state a card can say a sentence
+   * for.
+   *
+   * UA-P-0a (D1, ruled 2026-09-15) CLOSED THAT RULING, one layer out: the mesh
+   * posture derives from the link, so an unlinked desktop declares no product
+   * serve and a caller with no stored login to match is minted a guest with no
+   * scopes. A `tailnet` principal without `self` can therefore no longer reach
+   * this method. The refusal below stays as a BELT — a principal this door can
+   * no longer receive is exactly the kind of thing a later change could
+   * reintroduce, and the honest answer to it does not depend on how it arrived.
    */
   private doorsFor(cell: CellTarget, principal: GrantPrincipal): TicketEndpointSet {
     // `cell.doors` is proven present by the caller above.

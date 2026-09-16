@@ -2,12 +2,30 @@
 //! identity (design-02 §2.1 MeshGateway; v0.5 law: truffle lives ONLY here).
 //!
 //! Lifecycle honesty over the M2 health shape:
-//!   disabled              — mesh off by config (the default until C2 wires the facade)
+//!   disabled              — no node: nobody has asked for one (the default)
 //!   starting              — background node bring-up (truffle's build() blocks
 //!                           until the tailnet is Running, so it runs spawned)
 //!   starting + authUrl    — sidecar wants a browser login; URL surfaced verbatim
 //!   up                    — node online; detail = tailnet DNS name
 //!   degraded              — sidecar missing / bring-up failed (daemon stays up)
+//!
+//! UA-P-0a (D1) — THE POSTURE DERIVES FROM THE LINK. This unit no longer brings
+//! a node up at boot because an env flag said so. It comes up when fieldd asks
+//! (`native.mesh.start`), in one of two modes, and fieldd asks because a user
+//! linked a tailscale account — unlinked is a default LOCAL account and a
+//! desktop with no node at all. The two modes are not cosmetic:
+//!
+//!   capture — the interactive login is running and NOTHING may be declared or
+//!             published. The floor enforces that itself (`serve.add` and
+//!             `store.set` are refused) rather than trusting fieldd to remember:
+//!             the account is not known yet, so nothing can be scoped to it.
+//!   linked  — the captured login IS the account; it is held here so a later
+//!             upstream per-store gate (UA-P-4) has it without a round trip.
+//!
+//! `FIELD_NATIVE_MESH=1` survives as a FORCED-ON DEVELOPMENT OVERRIDE only —
+//! the probes and the kill matrix drive this floor without a fieldd to ask —
+//! and it starts the node in `linked` mode with no login. It is not the
+//! product's switch and must never become one again.
 //!
 //! The sidecar binary is truffle's Go child process. Resolution mirrors
 //! truffle-sidecar's runtime order WITHOUT its build-time downloader (a network
@@ -17,7 +35,7 @@
 //! executable-adjacent probe picks up first.
 
 use crate::config::NativeConfig;
-use crate::contracts::{UnitHealth, UnitState};
+use crate::contracts::{MeshMode, UnitHealth, UnitState};
 use crate::manager::NativeService;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -55,6 +73,17 @@ struct Shared {
     /// truffle state root (identity + keys) — lives on Shared so the mgmt
     /// facade can retire it even when no node ever came up (UA-3 unlink).
     state_dir: PathBuf,
+    /// UA-P-0a — the resolved sidecar path and the places looked, on Shared
+    /// because BRING-UP IS NOW A HANDLE CALL: `native.mesh.start` reaches this
+    /// through `MeshHandle`, long after `MeshUnit::start` ran and returned.
+    sidecar: Option<PathBuf>,
+    searched: Vec<String>,
+    /// UA-P-0a — the posture, `None` while there is no node. Read by the mgmt
+    /// facade's capture-mode refusal; written only by `start`/`stop`/`retire`.
+    mode: Mutex<Option<(MeshMode, Option<String>)>>,
+    /// UA-P-0a — the in-flight bring-up, on Shared for the same reason as the
+    /// sidecar: `stop` has to abort it, and `stop` arrives through the handle.
+    task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// UA-3 — set by retire(); the bring-up task checks it before installing
     /// a node, so a login completing AFTER an unlink cannot resurrect the
     /// identity the user just archived.
@@ -222,6 +251,82 @@ impl MeshHandle {
         self.shared.serves.lock().await.get(name).cloned()
     }
 
+    /// UA-P-0a — the posture, or `None` when no node is installed. The mgmt
+    /// facade reads this to refuse `serve.add` and `store.set` while capturing:
+    /// the account is not known yet, so nothing can be scoped to it and
+    /// therefore nothing may be declared or published.
+    pub fn mode(&self) -> Option<MeshMode> {
+        self.shared.mode.lock().unwrap().as_ref().map(|(m, _)| *m)
+    }
+
+    /// UA-P-0a — the account this node's surfaces are scoped to, once captured.
+    /// Held for UA-P-4's upstream per-store gate; nothing reads it as a trust
+    /// input today (the DOOR compares against fieldd's own `link.json`).
+    pub fn login(&self) -> Option<String> {
+        self.shared
+            .mode
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|(_, login)| login.clone())
+    }
+
+    /// UA-P-0a (D1) — bring the node up in `mode`, or move a running node to it.
+    ///
+    /// Idempotent per posture: asking for the mode a live node is already in
+    /// answers `started: false` and touches nothing. Asking for a DIFFERENT
+    /// posture is always a real transition, and the ordinary one is capture →
+    /// linked at the moment fieldd captures the login — which costs no restart,
+    /// because the node is the same node and only the account it is scoped to
+    /// became known.
+    ///
+    /// Clearing `retired` here is the deliberate inverse of UA-3's guard: that
+    /// flag exists so a login completing AFTER an unlink cannot resurrect an
+    /// archived identity, and a fresh `start` is exactly the act that says the
+    /// user wants an identity again.
+    pub async fn start(&self, mode: MeshMode, login: Option<String>) -> anyhow::Result<bool> {
+        let already = {
+            let current = self.shared.mode.lock().unwrap();
+            current.as_ref().map(|(m, _)| *m)
+        };
+        *self.shared.mode.lock().unwrap() = Some((mode, login));
+        if already == Some(mode) && self.shared.node.borrow().is_some() {
+            return Ok(false);
+        }
+        if already.is_some() && self.shared.node.borrow().is_some() {
+            // a live node changing posture: no bring-up, no sidecar churn —
+            // the tailnet identity did not move, only what we know about it
+            return Ok(true);
+        }
+        self.shared
+            .retired
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        spawn_bring_up(&self.shared)?;
+        Ok(true)
+    }
+
+    /// UA-P-0a — drop the node WITHOUT touching the identity on disk.
+    ///
+    /// This is not unlink. `retire` archives the state dir, so relinking mints
+    /// a fresh tailnet identity peers see as a new device; `stop` is the
+    /// posture going offline with the identity intact — a capture that never
+    /// learned a login, or a login another local user already holds (UA-P-0b),
+    /// both of which the user may resolve and retry.
+    pub async fn stop(&self) -> bool {
+        if let Some(t) = self.shared.task.lock().unwrap().take() {
+            t.abort(); // in-flight bring-up: the sidecar child is kill_on_drop
+        }
+        let had = self.shared.node.send_replace(None);
+        let was_up = had.is_some();
+        self.shared.stores.lock().await.clear();
+        self.shared.serves.lock().await.clear();
+        *self.shared.mode.lock().unwrap() = None;
+        drop(had); // node drop kills the sidecar (kill_on_drop)
+        self.shared
+            .set(UnitState::Disabled, Some(OFFLINE.into()), None);
+        was_up
+    }
+
     /// UA-3 unlink, native half: drop the node (the sidecar dies with it),
     /// clear the facade's node-bound state, mark the unit retired so a
     /// mid-flight bring-up cannot resurrect the identity, and hand back the
@@ -231,9 +336,13 @@ impl MeshHandle {
         self.shared
             .retired
             .store(true, std::sync::atomic::Ordering::SeqCst);
+        if let Some(t) = self.shared.task.lock().unwrap().take() {
+            t.abort(); // UA-P-0a: an in-flight bring-up dies with the identity
+        }
         let old = self.shared.node.send_replace(None);
         self.shared.stores.lock().await.clear();
         self.shared.serves.lock().await.clear();
+        *self.shared.mode.lock().unwrap() = None;
         drop(old); // node drop kills the sidecar (kill_on_drop)
         self.shared.set(
             UnitState::Disabled,
@@ -257,12 +366,17 @@ impl Shared {
     }
 }
 
+/// UA-P-0a — the honest word for "no node, and that is the correct state".
+/// An unlinked desktop is a default LOCAL account, not a broken one.
+const OFFLINE: &str = "offline — no tailscale link (linking starts the node)";
+
 pub struct MeshUnit {
-    enabled: bool,
-    sidecar: Option<PathBuf>,
-    searched: Vec<String>,
+    /// UA-P-0a — the FORCED-ON DEVELOPMENT OVERRIDE (`FIELD_NATIVE_MESH=1`),
+    /// not the product's switch: the probes and the kill matrix drive this
+    /// floor with no fieldd to ask it for a posture. Off, the node waits for
+    /// `native.mesh.start`.
+    forced: bool,
     shared: Arc<Shared>,
-    task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl MeshUnit {
@@ -270,9 +384,7 @@ impl MeshUnit {
         let mut searched = Vec::new();
         let sidecar = resolve_sidecar(config.sidecar_override.clone(), &mut searched);
         Self {
-            enabled: config.mesh_enabled,
-            sidecar,
-            searched,
+            forced: config.mesh_enabled,
             shared: Arc::new(Shared {
                 health: Mutex::new(UnitHealth {
                     unit: "mesh-gateway".into(),
@@ -286,9 +398,12 @@ impl MeshUnit {
                 stores: tokio::sync::Mutex::new(HashMap::new()),
                 serves: tokio::sync::Mutex::new(HashMap::new()),
                 state_dir: config.mesh_state_dir(),
+                sidecar,
+                searched,
+                mode: Mutex::new(None),
+                task: Mutex::new(None),
                 retired: std::sync::atomic::AtomicBool::new(false),
             }),
-            task: Mutex::new(None),
         }
     }
 
@@ -312,103 +427,18 @@ impl NativeService for MeshUnit {
     }
 
     async fn start(&self) -> anyhow::Result<()> {
-        if !self.enabled {
-            self.shared.set(
-                UnitState::Disabled,
-                Some("disabled (FIELD_NATIVE_MESH=1 to enable)".into()),
-                None,
-            );
+        // UA-P-0a (D1) — boot no longer brings a node up. The posture derives
+        // from fieldd's link, and fieldd asks for it over the mgmt channel; the
+        // floor's own default is OFFLINE, which is the honest state of an
+        // unlinked desktop rather than a degradation. The one exception is the
+        // forced-on development override, which starts `linked` with no login
+        // so the probes and the kill matrix keep working without a fieldd.
+        if !self.forced {
+            self.shared
+                .set(UnitState::Disabled, Some(OFFLINE.into()), None);
             return Ok(());
         }
-        let Some(sidecar) = self.sidecar.clone() else {
-            self.shared.set(
-                UnitState::Degraded,
-                Some(format!(
-                    "tailscale sidecar not found (searched: {}); set FIELD_NATIVE_SIDECAR_PATH",
-                    self.searched.join(", ")
-                )),
-                None,
-            );
-            return Ok(()); // degraded, not fatal — the daemon keeps serving
-        };
-        std::fs::create_dir_all(&self.shared.state_dir)?;
-        self.shared.set(
-            UnitState::Starting,
-            Some("bringing up tailnet node".into()),
-            None,
-        );
-
-        let shared = self.shared.clone();
-        let state_dir = self.shared.state_dir.to_string_lossy().into_owned();
-        let handle = tokio::spawn(async move {
-            let auth_shared = shared.clone();
-            let built = async {
-                Node::<TailscaleProvider>::builder()
-                    .app_id(APP_ID)
-                    .map_err(|e| anyhow::anyhow!("app_id: {e}"))?
-                    .sidecar_path(&sidecar)
-                    .state_dir(&state_dir)
-                    .build_with_auth_handler(move |url| {
-                        tracing::info!(
-                            event = "field_native.mesh.authentication_required",
-                            component = "mesh",
-                            auth_url_present = true,
-                            "Mesh authentication is required"
-                        );
-                        auth_shared.set(
-                            UnitState::Starting,
-                            Some("tailnet login required".into()),
-                            Some(url),
-                        );
-                    })
-                    .await
-                    .map_err(|e| anyhow::anyhow!("node build: {e}"))
-            }
-            .await;
-            match built {
-                Ok(node) => {
-                    if shared.retired.load(std::sync::atomic::Ordering::SeqCst) {
-                        // UA-3: retired mid-bring-up — never resurrect an
-                        // identity the user just archived; dropping the node
-                        // kills the sidecar and the retired face stands.
-                        tracing::info!(
-                            event = "field_native.mesh.bring_up_discarded",
-                            component = "mesh",
-                            "Mesh bring-up completed after retire; node discarded"
-                        );
-                        return;
-                    }
-                    let node = Arc::new(node);
-                    let info = node.local_info();
-                    let name = info
-                        .dns_name
-                        .clone()
-                        .unwrap_or_else(|| info.tailscale_hostname.clone());
-                    shared.node.send_replace(Some(node));
-                    shared.set(UnitState::Up, Some(format!("tailnet {name}")), None);
-                    tracing::info!(
-                        event = "field_native.mesh.node_ready",
-                        component = "mesh",
-                        node_name = %name,
-                        "The mesh node is ready"
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        event = "field_native.mesh.bring_up_failed",
-                        component = "mesh",
-                        error = %e,
-                        "Mesh bring-up failed"
-                    );
-                    shared.set(
-                        UnitState::Degraded,
-                        Some(format!("bring-up failed: {e}")),
-                        None,
-                    );
-                }
-            }
-        });
-        *self.task.lock().unwrap() = Some(handle);
+        self.handle().start(MeshMode::Linked, None).await?;
         Ok(())
     }
 
@@ -417,12 +447,173 @@ impl NativeService for MeshUnit {
     }
 
     async fn stop(&self) -> anyhow::Result<()> {
-        if let Some(t) = self.task.lock().unwrap().take() {
-            t.abort(); // in-flight bring-up: sidecar child is kill_on_drop
-        }
-        self.shared.node.send_replace(None); // dropping the Node kills the sidecar
+        // UA-P-0a — one teardown, shared with the posture verb: abort any
+        // in-flight bring-up, drop the node (which kills the sidecar), clear
+        // the facade state, and say offline.
+        self.handle().stop().await;
         Ok(())
     }
+}
+
+/// UA-P-0a — THE bring-up, called from exactly two places: the forced-on
+/// development override at boot, and `MeshHandle::start` when fieldd asks
+/// because a user linked. Everything about the node's construction is here, so
+/// a posture that reaches a node and a flag that reaches one cannot drift.
+///
+/// Returns `Err` only for a state dir that cannot be created — a MISSING
+/// SIDECAR is degraded, not fatal (the daemon keeps serving every other unit),
+/// and a bring-up that fails later reports itself through the health shape.
+fn spawn_bring_up(shared: &Arc<Shared>) -> anyhow::Result<()> {
+    let Some(sidecar) = shared.sidecar.clone() else {
+        shared.set(
+            UnitState::Degraded,
+            Some(format!(
+                "tailscale sidecar not found (searched: {}); set FIELD_NATIVE_SIDECAR_PATH",
+                shared.searched.join(", ")
+            )),
+            None,
+        );
+        return Ok(());
+    };
+    std::fs::create_dir_all(&shared.state_dir)?;
+    // UA-P-0d (D7) — 0700 the moment the directory exists, and BEFORE truffle
+    // is handed it: the synced-store FileBackend writes slices in here with an
+    // ordinary create, and the run dir's own chmod (lib.rs) never covered this
+    // tree. A same-uid reader is still the adversary EL7 names — this is the
+    // OS-level floor under that, not a substitute for keeping secrets out.
+    harden_state_dir(&shared.state_dir);
+    shared.set(
+        UnitState::Starting,
+        Some("bringing up tailnet node".into()),
+        None,
+    );
+
+    let state_dir = shared.state_dir.to_string_lossy().into_owned();
+    let task_shared = shared.clone();
+    let handle = tokio::spawn(async move {
+        let shared = task_shared;
+        let auth_shared = shared.clone();
+        let built = async {
+            Node::<TailscaleProvider>::builder()
+                .app_id(APP_ID)
+                .map_err(|e| anyhow::anyhow!("app_id: {e}"))?
+                .sidecar_path(&sidecar)
+                .state_dir(&state_dir)
+                .build_with_auth_handler(move |url| {
+                    tracing::info!(
+                        event = "field_native.mesh.authentication_required",
+                        component = "mesh",
+                        auth_url_present = true,
+                        "Mesh authentication is required"
+                    );
+                    auth_shared.set(
+                        UnitState::Starting,
+                        Some("tailnet login required".into()),
+                        Some(url),
+                    );
+                })
+                .await
+                .map_err(|e| anyhow::anyhow!("node build: {e}"))
+        }
+        .await;
+        match built {
+            Ok(node) => {
+                if shared.retired.load(std::sync::atomic::Ordering::SeqCst) {
+                    // UA-3: retired mid-bring-up — never resurrect an identity
+                    // the user just archived; dropping the node kills the
+                    // sidecar and the retired face stands.
+                    tracing::info!(
+                        event = "field_native.mesh.bring_up_discarded",
+                        component = "mesh",
+                        "Mesh bring-up completed after retire; node discarded"
+                    );
+                    return;
+                }
+                if shared.mode.lock().unwrap().is_none() {
+                    // UA-P-0a: STOPPED mid-bring-up. The abort usually wins the
+                    // race, but a build that completed in the same beat must not
+                    // install a node the posture no longer asks for — an
+                    // unlinked desktop is offline, and a node nobody asked for
+                    // would publish its presence on somebody's tailnet.
+                    tracing::info!(
+                        event = "field_native.mesh.bring_up_discarded",
+                        component = "mesh",
+                        "Mesh bring-up completed after stop; node discarded"
+                    );
+                    return;
+                }
+                let node = Arc::new(node);
+                let info = node.local_info();
+                let name = info
+                    .dns_name
+                    .clone()
+                    .unwrap_or_else(|| info.tailscale_hostname.clone());
+                // UA-P-0d — truffle creates `synced_store/` under the state dir
+                // on its own schedule; re-harden now that the tree exists.
+                harden_state_dir(&shared.state_dir);
+                shared.node.send_replace(Some(node));
+                shared.set(UnitState::Up, Some(format!("tailnet {name}")), None);
+                tracing::info!(
+                    event = "field_native.mesh.node_ready",
+                    component = "mesh",
+                    node_name = %name,
+                    "The mesh node is ready"
+                );
+            }
+            Err(e) => {
+                tracing::error!(
+                    event = "field_native.mesh.bring_up_failed",
+                    component = "mesh",
+                    error = %e,
+                    "Mesh bring-up failed"
+                );
+                shared.set(
+                    UnitState::Degraded,
+                    Some(format!("bring-up failed: {e}")),
+                    None,
+                );
+            }
+        }
+    });
+    *shared.task.lock().unwrap() = Some(handle);
+    Ok(())
+}
+
+/// UA-P-0d (D7) — the mesh state dir is 0700, and so is every directory
+/// truffle creates beneath it. Best-effort by design: a permission failure is
+/// logged, never fatal — the daemon losing its tailnet because a mode could
+/// not be set would be a worse outcome than the mode not being set.
+///
+/// A no-op on Windows, where the tree inherits the user profile's ACL and
+/// there is no mode bit to set.
+fn harden_state_dir(dir: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(path) = stack.pop() {
+            if let Err(e) = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))
+            {
+                tracing::warn!(
+                    event = "field_native.mesh.state_dir_mode_failed",
+                    component = "mesh",
+                    error = %e,
+                    "The mesh state directory could not be restricted to this user"
+                );
+                continue;
+            }
+            let Ok(entries) = std::fs::read_dir(&path) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                    stack.push(entry.path());
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
 }
 
 /// truffle-sidecar's runtime search order, minus the build-time downloader.

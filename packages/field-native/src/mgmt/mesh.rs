@@ -9,6 +9,7 @@
 //! Handlers send their own responses (subscribe paths must order the response
 //! line before any forwarded event).
 
+use crate::contracts::{MeshMode, MeshStartParams};
 use crate::registries::{mesh_control_limits, stores};
 use crate::services::mesh::{JsonStore, MeshNode};
 use crate::services::mesh_bridge::{Lane, LaneClass, LaneEvent, INBOUND_LANE_ID_BASE};
@@ -80,10 +81,48 @@ pub async fn handle(
         send(tx, retire_identity(state, id).await);
         return;
     }
+    // UA-P-0a (D1) — the posture verbs, answered BEFORE the node gate for the
+    // reason they exist: `start` is how a node comes to be at all, so gating it
+    // on a node would make an unlinked desktop permanently unlinkable.
+    if method == "native.mesh.start" {
+        send(tx, mesh_start(state, params, id).await);
+        return;
+    }
+    if method == "native.mesh.stop" {
+        let stopped = state.mesh.stop().await;
+        send(tx, ok(id, json!({ "stopped": stopped })));
+        return;
+    }
     let Some(node) = state.mesh.node() else {
         send(tx, unavailable(state, id));
         return;
     };
+    // UA-P-0a — THE CAPTURE-MODE BELT. While the interactive login is running
+    // the account is not known, so nothing can be scoped to it and therefore
+    // nothing may be declared or published. fieldd already declines to declare
+    // or publish in this window (the suspenders); this refusal is the floor
+    // saying so by construction, so a caller that forgets — a future one, a
+    // racing one, or a same-uid one holding the pairing secret — cannot put a
+    // serve on the tailnet or a slice on the bus under an unknown account.
+    //
+    // READS are untouched: `self`, `peers.list` and `store.get` are how the
+    // capture is completed in the first place.
+    if matches!(method, "native.mesh.serve.add" | "native.mesh.store.set")
+        && state.mesh.mode() == Some(MeshMode::Capture)
+    {
+        send(
+            tx,
+            err(
+                id,
+                "PRECONDITION_FAILED",
+                -32005,
+                "the mesh is capturing a tailscale login; nothing is declared or published until it is linked",
+                true,
+                Some(json!({ "code": "MESH_CAPTURING" })),
+            ),
+        );
+        return;
+    }
     let resp = match method {
         "native.mesh.self" => ok(id, self_identity(&node).await),
         "native.mesh.peers.list" => ok(id, json!({ "peers": list_peers(&node).await })),
@@ -461,7 +500,69 @@ async fn self_identity(node: &Arc<MeshNode>) -> Value {
     out
 }
 
-/// UA-3 unlink, mgmt half: lifecycle through the handle (drop node, kill
+/// UA-P-0a (D1) — `native.mesh.start`: the posture, which fieldd derives from
+/// the link and from nothing else.
+///
+/// The two modes are validated against each other rather than accepted as
+/// given: `linked` WITHOUT a login would be a node claiming an account it
+/// cannot name, and `capture` WITH one would be a caller asserting an identity
+/// the tailnet has not answered for (EL7 — identity comes from the control
+/// plane, never from a claim). Both are refusals, not tolerated shapes.
+async fn mesh_start(state: &Arc<DaemonState>, params: &Value, id: Option<Value>) -> Value {
+    let parsed = match serde_json::from_value::<MeshStartParams>(params.clone()) {
+        Ok(p) => p,
+        Err(e) => {
+            return err(
+                id,
+                "PRECONDITION_FAILED",
+                -32005,
+                &format!("mesh.start expects {{mode, login?}}: {e}"),
+                false,
+                None,
+            )
+        }
+    };
+    let login = parsed.login.as_ref().map(|l| l.as_str().to_owned());
+    match (parsed.mode, login.as_deref()) {
+        (MeshMode::Linked, None) => {
+            return err(
+                id,
+                "PRECONDITION_FAILED",
+                -32005,
+                "linked mode requires the captured login it scopes to",
+                false,
+                None,
+            )
+        }
+        (MeshMode::Capture, Some(_)) => {
+            return err(
+                id,
+                "PRECONDITION_FAILED",
+                -32005,
+                "capture mode names no login — the tailnet has not answered who this node is yet",
+                false,
+                None,
+            )
+        }
+        _ => {}
+    }
+    match state.mesh.start(parsed.mode, login).await {
+        Ok(started) => ok(
+            id,
+            json!({ "mode": parsed.mode.to_string(), "started": started }),
+        ),
+        Err(e) => err(
+            id,
+            "INTERNAL",
+            -32000,
+            &format!("mesh could not start: {e}"),
+            true,
+            None,
+        ),
+    }
+}
+
+/// UA-3 unlink, mgmt half: lifecycle through the handle (drop node, kill/// UA-3 unlink, mgmt half: lifecycle through the handle (drop node, kill
 /// sidecar, mark retired), then archive the state dir beside itself. The
 /// sidecar's death is asynchronous (kill_on_drop), so the rename retries a
 /// few beats before reporting an honest INTERNAL.

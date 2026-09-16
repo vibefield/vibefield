@@ -246,27 +246,34 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
     expect(refused.data?.retryable).toBe(true);
   });
 
-  it("E-F6 — an UNLINKED desktop refuses honestly instead of handing out its own loopback", async () => {
-    // No stored login, so there is nothing to compare a WhoIs answer against:
-    // ProductApi grants TAILNET_SCOPES (terminal.attach included) and leaves
-    // `self` ABSENT rather than false. That caller used to be handed the cell's
-    // own 127.0.0.1 pair — a phone would dial ITS OWN loopback and the face
-    // would say `failed`, which is a lie about what went wrong.
+  it("UA-P-0a — an UNLINKED desktop has no product door on the tailnet at all", async () => {
+    // WHAT THIS ROW USED TO BE, and why it changed. E-F6 asked what a tailnet
+    // caller on an unlinked desktop is handed, because that desktop granted
+    // `TAILNET_SCOPES` to any WhoIs-verified login and left `self` ABSENT
+    // rather than false; the answer had to stop being the cell's own 127.0.0.1
+    // pair (a phone would dial ITS OWN loopback and the face would say
+    // `failed`) and become `device_not_linked`.
+    //
+    // James then ruled the question away: the posture derives from the link, so
+    // an unlinked desktop is OFFLINE — it declares no product serve, which
+    // means there is no capability URL, no path for a phone to dial, and no
+    // tailnet caller to answer. The refusal moved one layer out, from the
+    // ticket's shape to the door's existence, and that is what this row now
+    // witnesses. (`device_not_linked` survives in `doorsFor` as a belt behind
+    // that closed door — a principal it can no longer receive.)
     const { daemon } = await boot({ login: null });
-    await poll(() => daemon.health().mesh.serves.find((s) => s.name === "product")?.url);
-    const rpc = await dialAsTailnet(daemon, LOGIN);
-    const refused = await rpc.callErr("terminal.openTicket", { sessionId: "pane-1" });
-    expect(refused.data?.kind).toBe("UNAVAILABLE");
-    expect(refused.data?.details).toEqual({ service: "terminal", state: "device_not_linked" });
-    expect(refused.data?.retryable).toBe(true);
-    // and it is a NEW word, not a rename: `doors_not_published` is about a
-    // linked device whose serve is not up, which is a different sentence
-    expect(JSON.stringify(refused.data?.details)).not.toContain("doors_not_published");
+    // the FLOOR is fully willing — its doors are published and its routes are
+    // live — so nothing here is a coincidence of an unready fixture
+    await poll(() => (daemon.health().nativeConnected ? true : undefined));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(daemon.health().mesh.serves.find((s) => s.name === "product")).toBeUndefined();
+    expect(daemon.health().mesh.serves.some((s) => s.url !== undefined)).toBe(false);
   });
 
-  it("E-F6 — WHO IS ADMITTED is unchanged: the same unlinked desktop still mints for a window", async () => {
-    // the unlinked-desktop posture is James's open ruling; this slice changes
-    // only the ANSWER a caller the device cannot vouch for receives
+  it("E-F6 — WHO IS ADMITTED locally is unchanged: the same unlinked desktop still mints for a window", async () => {
+    // UA-P-0a closed the TAILNET side of the unlinked posture and nothing else:
+    // a local window on a desktop with no account is the ordinary first-run
+    // case, and it keeps working exactly as it did
     const { daemon } = await boot({ login: null });
     const grant = daemon.tokens.mint(["terminal.attach"], "ef6-local");
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);

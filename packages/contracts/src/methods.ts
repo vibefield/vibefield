@@ -325,6 +325,23 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // UA-P-0a (D1) — the posture verbs. The floor runs no node until fieldd asks,
+  // and fieldd asks because of the LINK and nothing else. `FIELD_NATIVE_MESH`
+  // survives beside these only as a forced-on development override.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.start",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.stop",
+    scope: null,
+    idempotent: false,
+    locality: "local",
+  }),
   defineMethod({
     surface: "mgmt",
     method: "native.mesh.peers.list",
@@ -785,6 +802,19 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
     subscription: true,
+  }),
+  // UA-P-0a (D1) — the LINK ACT. Before this verb there was none: a node came
+  // up because an env flag said so, and "linking" was a side effect of the
+  // interactive login happening to run. Now the user asks, the floor starts the
+  // node in `capture` mode, and the link COMPLETES when the login is captured —
+  // which is also when the first serve is declared and the first slice may go
+  // out. The answer is the status, so a caller watches one shape throughout.
+  defineMethod({
+    surface: "product",
+    method: "user.link.begin",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "local",
   }),
   defineMethod({
     surface: "product",

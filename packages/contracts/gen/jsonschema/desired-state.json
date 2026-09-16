@@ -581,6 +581,57 @@
       ],
       "additionalProperties": true
     },
+    "MeshMode": {
+      "type": "string",
+      "enum": [
+        "capture",
+        "linked"
+      ]
+    },
+    "MeshStartParams": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/definitions/MeshMode"
+        },
+        "login": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": true
+    },
+    "MeshStartResult": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/definitions/MeshMode"
+        },
+        "started": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "started"
+      ],
+      "additionalProperties": true
+    },
+    "MeshStopResult": {
+      "type": "object",
+      "properties": {
+        "stopped": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "stopped"
+      ],
+      "additionalProperties": true
+    },
     "StoreSnapshot": {
       "type": "object",
       "properties": {

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { RpcCallError } from "../src/native-link";
 import { ProductApi } from "../src/product-api";
+import { TEST_LOGIN } from "./link-fixture";
 
 const SECRET = "3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM";
 const OWN_ID = "dev-self";
@@ -26,6 +27,10 @@ async function api(forwarder = vi.fn()) {
           : null,
     },
     tailnetPathSecret: SECRET,
+    // UA-P-0a — these rows are about ROUTING, not about the posture, so the
+    // harness says which account this desktop is. Without it the door mints a
+    // guest and every row below fails on the grant rather than the routing.
+    getLinkedLogin: () => TEST_LOGIN,
   });
   a.setDeviceRouting(() => OWN_ID, forwarder);
   a.register("device.list", (ctx, params) => ({ principal: ctx.principal, params }));
@@ -71,7 +76,7 @@ const hello = (over: Record<string, unknown> = {}) => ({
 describe("the peer-fieldd door branch (C5)", () => {
   it("secret path + claim → {kind:'peer-fieldd', deviceId} with the same preset", async () => {
     const { port } = await api();
-    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": "me@jamesyong42.com" });
+    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
     const ack = (await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }))) as {
       result: { grantedScopes: string[] };
     };
@@ -99,7 +104,7 @@ describe("the peer-fieldd door branch (C5)", () => {
 
   it("a non-peer clientKind on the tailnet door stays a tailnet principal despite a claim", async () => {
     const { port } = await api();
-    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": "me@jamesyong42.com" });
+    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
     await call(ws, 1, "system.hello", hello({ clientKind: "ios", deviceId: "dev-sneaky" }));
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string } };
@@ -190,7 +195,7 @@ describe("the device? routing hook (C5/D35)", () => {
       spawned += 1;
       return {};
     });
-    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": "me@jamesyong42.com" });
+    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
     await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
     const health = (await call(ws, 2, "system.health", {})) as {
       error: { data: { kind: string; details: Record<string, unknown> } };

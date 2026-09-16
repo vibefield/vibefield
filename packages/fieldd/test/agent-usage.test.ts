@@ -42,6 +42,7 @@ import WebSocket from "ws";
 import type { FielddDaemon } from "../src/index";
 import { type AccountUsageRuntime, AccountUsageService, bootstrap } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
 import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
 
@@ -222,6 +223,10 @@ async function setup(options: { profiles?: boolean; realAgent?: boolean } = {}):
   const dataDir = join(root, ...LAYOUT.USERS_DIR, "1");
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+  // UA-P-0a (D1) — the desktop has an ACCOUNT. The posture derives from the
+  // link now: without one there is no product serve and the tailnet door mints
+  // a guest, which none of the rows below are about.
+  writeLinkFixture(dataDir);
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   await mock.start();
   cleanup.push(() => mock.stop());
@@ -494,7 +499,7 @@ describe("the account usage doors (AR-5d)", () => {
     const secret = url?.split("/t/")[1];
     expect(secret).toBeTruthy();
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}/t/${secret}`, {
-      headers: { "Tailscale-User-Login": "me@jamesyong42.com" },
+      headers: { "Tailscale-User-Login": TEST_LOGIN },
     });
     cleanup.push(() => ws.close());
     await new Promise<void>((resolve, reject) => {

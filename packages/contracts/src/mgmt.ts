@@ -268,6 +268,58 @@ export const MeshSelfIdentity = z
   .passthrough();
 export type MeshSelfIdentity = z.infer<typeof MeshSelfIdentity>;
 
+/** UA-P-0a (D1) — the mesh POSTURE, which derives from the link and from
+ * nothing else. The floor runs no tailnet node until fieldd asks for one:
+ *
+ *  - `capture` — the user's Link act. The interactive login runs and
+ *    `native.mesh.self` starts answering once the netmap loads. NOTHING may be
+ *    declared or published in this mode: the floor itself refuses `serve.add`
+ *    and `store.set` (the belt), and fieldd declares no serve and publishes no
+ *    slice (the suspenders). The account is not known yet, so nothing can be
+ *    scoped to it.
+ *  - `linked` — a login was captured and IS the account. Every surface is
+ *    scoped to it; the floor carries the login so a later upstream gate
+ *    (UA-P-4) has it in hand without a second round trip.
+ *
+ * Unlinked is the absence of both: no node, no serve, no store, no lane. */
+export const MeshMode = z.enum(["capture", "linked"]);
+export type MeshMode = z.infer<typeof MeshMode>;
+
+/** UA-P-0a — `native.mesh.start`: bring the node up in one posture, or move a
+ * running node to another (capture → linked is the ordinary promotion at the
+ * moment the login lands). `login` is REQUIRED in `linked` mode and refused in
+ * `capture` mode — a captured login is the only thing that may name an
+ * account, and pre-capture there is nothing to name. */
+export const MeshStartParams = z
+  .object({
+    mode: MeshMode,
+    login: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type MeshStartParams = z.infer<typeof MeshStartParams>;
+
+/** `started: false` = the node was already up in this exact posture — an
+ * idempotent re-ask, not a failure. A posture CHANGE always reports true. */
+export const MeshStartResult = z
+  .object({
+    mode: MeshMode,
+    started: z.boolean(),
+  })
+  .passthrough();
+export type MeshStartResult = z.infer<typeof MeshStartResult>;
+
+/** UA-P-0a — `native.mesh.stop`: drop the node without touching the identity
+ * on disk. This is NOT unlink (`native.mesh.retire` archives the state dir and
+ * mints a fresh identity on relink); it is the posture going offline — a
+ * capture that could not learn a login, or a login another local user already
+ * holds. `stopped: false` = there was no node — an honest no-op. */
+export const MeshStopResult = z
+  .object({
+    stopped: z.boolean(),
+  })
+  .passthrough();
+export type MeshStopResult = z.infer<typeof MeshStopResult>;
+
 /** UA-3 — `native.mesh.retire`: unlink's native half. Stops the node (the
  * sidecar dies with it), archives the state dir to `mesh.retired-<ts>`
  * beside itself, and reports where. `retired: false` = nothing to retire

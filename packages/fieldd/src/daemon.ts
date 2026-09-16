@@ -2798,6 +2798,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       links.on("changed", fn);
       return { snapshot: links.status(), dispose: () => links.off("changed", fn) };
     });
+    // UA-P-0a (D1) — the LINK ACT. Audited beside unlink because it is the
+    // same kind of event from the other side: this is the moment a desktop
+    // stops being a default local account and asks for a tailnet identity, and
+    // every mesh surface it will ever open descends from it.
+    api.register("user.link.begin", async (ctx) => {
+      requireAppPreferencesCaller(ctx);
+      return audit.requiredSystem(
+        {
+          action: "user.link.begin",
+          target: { kind: "mesh", id: "tailnet-link" },
+        },
+        () => links.begin(),
+        (result) => ({ attrs: { linkState: result.linkState } }),
+      );
+    });
     api.register("user.link.unlink", async (ctx) => {
       requireAppPreferencesCaller(ctx);
       return audit.requiredSystem(
@@ -3138,8 +3153,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // surfaces (spec §7.3).
     const serveLog = logger.child({ component: "mesh.serves" });
     const linkedLogin = (): string | null => links.status().link?.login ?? null;
-    const productServeSpec = (): ServeSpec => {
+    // UA-P-0a (D1) — THE PRODUCT SERVE IS NOT DECLARED WITHOUT AN ACCOUNT.
+    // `null` here means the serve is absent from the desired set entirely, not
+    // present with an empty allow: an unlinked desktop is offline and a
+    // capturing one has no account to scope a door to yet. (What it did before:
+    // declared the serve with NO allow, which the sidecar reads as "anyone the
+    // tailnet verified" — an open door under a UI that said "not linked". The
+    // cells serve already refused this shape; the product serve does now too.)
+    const productServeSpec = (): ServeSpec | null => {
       const login = linkedLogin();
+      if (login === null) return null;
       return {
         name: "product",
         target: { kind: "port", port: controlPort },
@@ -3147,7 +3170,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         pathSecret: servePathSecret,
         // the sidecar matches with Go path.Match, lowercased both sides — a
         // login is a LITERAL here, so its glob metacharacters are escaped
-        ...(login !== null ? { allow: [serveAllowGlob(login)] } : {}),
+        allow: [serveAllowGlob(login)],
       };
     };
     let lastArtifactServeSpecs: ServeSpec[] | null = null;
@@ -3156,15 +3179,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // held here because `setServes` replaces the DESIRED SET wholesale: every
     // declaration has to carry the whole set or it withdraws the rest.
     let lastTerminalServeSpec: ServeSpec | null = null;
-    const desiredServes = (): ServeSpec[] => [
-      productServeSpec(),
-      ...(lastTerminalServeSpec === null ? [] : [lastTerminalServeSpec]),
-      ...(lastArtifactServeSpecs ?? []),
-    ];
+    const desiredServes = (): ServeSpec[] => {
+      const product = productServeSpec();
+      return [
+        ...(product === null ? [] : [product]),
+        ...(lastTerminalServeSpec === null ? [] : [lastTerminalServeSpec]),
+        ...(lastArtifactServeSpecs ?? []),
+      ];
+    };
     links.on("changed", () => {
       const login = linkedLogin();
-      if (lastArtifactServeSpecs === null || login === lastServeAllowLogin) return;
+      if (login === lastServeAllowLogin) return;
       lastServeAllowLogin = login;
+      // UA-P-0a — a link transition now includes null in BOTH directions, so
+      // this runs before the artifact service has declared anything: a capture
+      // completing must declare the product serve, and an unlink must withdraw
+      // it, neither of which can wait on an unrelated subsystem's first pass.
+      // (It used to return early while `lastArtifactServeSpecs` was null,
+      // which was safe only because the allow was cosmetic then.)
       void (async () => {
         // the sidecar has no upsert (same-id add = PROXY_EXISTS) and the
         // reconcile SKIPS live serveIds — re-gating a live serve is

@@ -16,8 +16,15 @@ afterEach(async () => {
   cleanup = [];
 });
 
+// UA-P-0a — every door row now says which ACCOUNT the desktop is, because that
+// is what the door compares against. `LINKED` is the ordinary posture; passing
+// `null` is the unlinked/capturing desktop, which after UA-P-0a gets a guest
+// and not the preset.
+const LINKED = "me@jamesyong42.com";
+
 async function api(
   correlateNodeId?: (nodeId: string) => string | undefined,
+  linkedLogin: string | null = LINKED,
 ): Promise<{ api: ProductApi; port: number }> {
   const a = new ProductApi({
     port: 0,
@@ -28,6 +35,7 @@ async function api(
           : null,
     },
     tailnetPathSecret: SECRET,
+    getLinkedLogin: () => linkedLogin,
     ...(correlateNodeId ? { correlateNodeId } : {}),
   });
   // probe handlers on real registry methods: echo the caller's principal kind
@@ -83,11 +91,11 @@ function closed(ws: WebSocket): Promise<void> {
 }
 
 describe("the tailnet door (C3 provenance auth)", () => {
-  it("secret path + injected login → hello without credential gets the D32 preset", async () => {
+  it("secret path + the LINKED login → hello without credential gets the D32 preset", async () => {
     const { port } = await api();
     const ws = await dial(port, {
       path: `/t/${SECRET}`,
-      headers: { "Tailscale-User-Login": "me@jamesyong42.com" },
+      headers: { "Tailscale-User-Login": LINKED },
     });
     const ack = (await call(ws, 1, "system.hello", hello())) as {
       result: { grantedScopes: string[] };
@@ -97,7 +105,10 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; login: string }; transport: string };
     };
-    expect(probe.result.principal).toEqual({ kind: "tailnet", login: "me@jamesyong42.com" });
+    // UA-P-0a: a matched login is SELF, unconditionally. `self` used to be
+    // omitted whenever no login was stored, because pre-capture landed in this
+    // same branch; it cannot any more, so the slot is always filled.
+    expect(probe.result.principal).toEqual({ kind: "tailnet", login: LINKED, self: true });
     expect(probe.result.transport).toBe("ws-tailnet");
 
     const docDenied = (await call(ws, 3, "doc.list", {})) as {
@@ -119,7 +130,7 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const ws = await dial(port, {
       path: `/t/${SECRET}`,
       headers: {
-        "Tailscale-User-Login": "me@jamesyong42.com",
+        "Tailscale-User-Login": LINKED,
         "Tailscale-Node-Id": "nQRJl4CNTRL",
       },
     });
@@ -138,7 +149,7 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const ws = await dial(port, {
       path: `/t/${SECRET}`,
       headers: {
-        "Tailscale-User-Login": "me@jamesyong42.com",
+        "Tailscale-User-Login": LINKED,
         "Tailscale-Node-Id": "nUNKNOWN01",
       },
     });
@@ -154,7 +165,7 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const ws = await dial(port, {
       path: `/t/${SECRET}`,
       headers: {
-        "Tailscale-User-Login": "me@jamesyong42.com",
+        "Tailscale-User-Login": LINKED,
         "Tailscale-Node-Id": "nQRJl4CNTRL",
       },
     });
@@ -162,14 +173,64 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; login: string } };
     };
-    // UA-4 fills the declared tailscaleId slot from the transport fact; no
-    // stored login in this harness, so `self` stays absent (toEqual pins
-    // that too) — and the KIND still never follows the software claim
+    // UA-4 fills the declared tailscaleId slot from the transport fact, and
+    // UA-P-0a fills `self` unconditionally on a match — and the KIND still
+    // never follows the software claim
     expect(probe.result.principal).toEqual({
       kind: "tailnet",
-      login: "me@jamesyong42.com",
+      login: LINKED,
+      self: true,
       tailscaleId: "nQRJl4CNTRL",
     });
+  });
+
+  // ---- UA-P-0a (D1): the desktop with no account ----
+
+  it("UA-P-0a: an UNLINKED desktop grants a guest, never the preset", async () => {
+    // THE FLIP. This row used to assert the opposite — an unlinked desktop
+    // handing the whole `TAILNET_SCOPES` preset (canvas.write, agent.spawn,
+    // agent.control, approval.respond, terminal.attach) to any login the
+    // tailnet verified. James ruled the posture derives from the link: unlinked
+    // is a default LOCAL account and the desktop is offline, so no serve is
+    // declared and this door is not on the tailnet at all. If something reaches
+    // it anyway — a serve left live across a posture change, a stale sidecar
+    // route — the answer is zero scopes, because a desktop that does not know
+    // which account it is cannot know that this caller is it.
+    const { port } = await api(undefined, null);
+    const ws = await dial(port, {
+      path: `/t/${SECRET}`,
+      headers: { "Tailscale-User-Login": LINKED },
+    });
+    const ack = (await call(ws, 1, "system.hello", hello())) as {
+      result: { grantedScopes: string[] };
+    };
+    expect(ack.result.grantedScopes).toEqual([]);
+
+    const probe = (await call(ws, 2, "device.list", {})) as {
+      error: { data: { kind: string } };
+    };
+    expect(probe.error.data.kind).toBe("FORBIDDEN_SCOPE");
+  });
+
+  it("UA-P-0a: the guest mint does not depend on the caller's clientKind", async () => {
+    // a colleague's fieldd reaching an account-less desktop is a guest too —
+    // the comparison decides, never the claim (UA-D5, and the same law that
+    // makes a foreign login a guest on a LINKED desktop)
+    const { port } = await api(
+      (nodeId) => (nodeId === "nQRJl4CNTRL" ? "dev-roster" : undefined),
+      null,
+    );
+    const ws = await dial(port, {
+      path: `/t/${SECRET}`,
+      headers: {
+        "Tailscale-User-Login": LINKED,
+        "Tailscale-Node-Id": "nQRJl4CNTRL",
+      },
+    });
+    const ack = (await call(ws, 1, "system.hello", hello())) as {
+      result: { grantedScopes: string[] };
+    };
+    expect(ack.result.grantedScopes).toEqual([]);
   });
 
   it("THE SPOOF: typed headers on the ordinary door are ignored — token still required", async () => {
@@ -199,7 +260,7 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const { port } = await api();
     const ws = await dial(port, {
       path: "/t/wrong-secret-entirely-000000000",
-      headers: { "Tailscale-User-Login": "me@jamesyong42.com" },
+      headers: { "Tailscale-User-Login": LINKED },
     });
     await closed(ws);
     expect(ws.readyState).toBe(WebSocket.CLOSED);
@@ -209,7 +270,7 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const { port } = await api();
     const ws = await dial(port, {
       path: `/t/${SECRET}`,
-      headers: { "Tailscale-User-Login": "me@jamesyong42.com" },
+      headers: { "Tailscale-User-Login": LINKED },
     });
     const ack = (await call(ws, 1, "system.hello", hello("good-token"))) as {
       result: { grantedScopes: string[] };
@@ -228,7 +289,7 @@ describe("the tailnet door (C3 provenance auth)", () => {
     cleanup.push(() => a.close());
     const ws = await dial(port, {
       path: "/t/anything",
-      headers: { "Tailscale-User-Login": "me@jamesyong42.com" },
+      headers: { "Tailscale-User-Login": LINKED },
     });
     // "/t/..." is just an ordinary path now: headers ignored, token required
     const res = (await call(ws, 1, "system.hello", hello())) as {

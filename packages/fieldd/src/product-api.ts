@@ -563,14 +563,26 @@ export class ProductApi extends EventEmitter {
       } else if (state.tailnetLogin !== null) {
         // UA-4 — the stored-login comparison law (spec §7.3, UA-D5/UA-D13):
         // the peer's WhoIs-verified login against the login recorded in
-        // link.json at link time — no live self-lookup per request. No stored
-        // login (unlinked, or pre-capture on a shy/tagged node) = today's
-        // status-quo grant: activation is gated on capture, and shared-tailnet
-        // login stays unadvertised until the two-account witness passes. The
+        // link.json at link time — no live self-lookup per request. The
         // comparison, not the clientKind, decides — a peer-fieldd hello from
         // a colleague's login is a guest like any other.
+        //
+        // UA-P-0a (D1) — NO STORED LOGIN IS NO LONGER A FULL GRANT. It used to
+        // be: an unlinked (or pre-capture, or corrupt-link) desktop handed the
+        // whole `TAILNET_SCOPES` preset — canvas.write, agent.spawn,
+        // agent.control, approval.respond, terminal.attach — to any login the
+        // tailnet verified. James ruled the posture derives from the link, so
+        // that state cannot arise any more: unlinked means no node and no
+        // serve; capturing means a node with nothing declared. This branch is
+        // therefore unreachable from the product's own paths.
+        //
+        // It is kept, as a GUEST mint, because "unreachable" is a claim about
+        // the paths we know: a serve left live across a posture change (the C3
+        // remove-then-add debt), a sidecar still holding an old route, a
+        // future caller. The safe answer to "somebody reached the door and we
+        // do not know which account we are" is zero scopes, not every scope.
         const storedLogin = this.opts.getLinkedLogin?.() ?? null;
-        if (storedLogin !== null && state.tailnetLogin !== storedLogin) {
+        if (storedLogin === null || state.tailnetLogin !== storedLogin) {
           state.authed = true;
           state.scopes = [...TAILNET_GUEST_SCOPES];
           state.ctx = {
@@ -606,10 +618,14 @@ export class ProductApi extends EventEmitter {
             principal: peer
               ? { kind: "peer-fieldd", deviceId: deviceId as string }
               : {
-                  // matched ⇒ self:true; pre-capture ⇒ absent (never false)
+                  // UA-P-0a — reaching here means the login MATCHED the stored
+                  // one, so `self` is unconditionally true. It used to be
+                  // conditional because pre-capture also landed here; that
+                  // state is a guest now, and a `tailnet` principal without
+                  // `self` can no longer arise on a linked desktop.
                   kind: "tailnet",
                   login: state.tailnetLogin,
-                  ...(storedLogin !== null ? { self: true } : {}),
+                  self: true,
                   // T1 §1 — the declared slot, filled from the transport fact
                   ...(state.tailnetNodeId !== null ? { tailscaleId: state.tailnetNodeId } : {}),
                 },

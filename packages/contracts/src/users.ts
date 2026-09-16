@@ -62,14 +62,53 @@ export const TailscaleLink = z
   .passthrough();
 export type TailscaleLink = z.infer<typeof TailscaleLink>;
 
+/** UA-P-0a (D1) — the POSTURE this desktop is in, as one word the Account pane
+ * can draw. The mesh derives from the link, so these are the only six shapes a
+ * desktop has, and four of them are honest refusals rather than blanks:
+ *
+ *  - `offline` — unlinked. A default local account: no node, no serve, no
+ *    store, no lane. The ordinary first-run state, not a fault.
+ *  - `capturing` — the user asked to link; the interactive login is running.
+ *    Nothing is declared and nothing is published until the login lands.
+ *  - `linked` — a login was captured and is the account.
+ *  - `link_corrupt` — `link.json` is present and unusable. OFFLINE and LOUD:
+ *    the identity record is never overwritten by a guess, and `linkDetail`
+ *    names the file so a human can move it aside. (Before UA-P-0a this state
+ *    paused capture forever while `link` read null — a LINKED desktop serving
+ *    an open door under a UI that said "not linked".)
+ *  - `login_unavailable` — the node came up but the tailnet never answered
+ *    with a user for it (a TAGGED node, which has no login by construction).
+ *    Capture ends; the node is stopped; the desktop is offline and says why.
+ *  - `login_already_linked` — UA-P-0b (D8): another local user on this machine
+ *    already holds this tailscale account. One local user per tailscale
+ *    account, LAW; `linkDetail` names the other user, and capture succeeds
+ *    only after that user unlinks. */
+export const UserLinkState = z.enum([
+  "offline",
+  "capturing",
+  "linked",
+  "link_corrupt",
+  "login_unavailable",
+  "login_already_linked",
+]);
+export type UserLinkState = z.infer<typeof UserLinkState>;
+
 /** The Account surface's fold: link truth + live mesh reachability, honest
- * about every degraded shape (mesh off, auth pending, capture pending). */
+ * about every degraded shape (mesh off, auth pending, capture pending).
+ *
+ * UA-P-0a adds the posture itself. `linkState` is the WORD; `linkDetail` is
+ * the SENTENCE that makes a refusal actionable (the corrupt file's path, the
+ * other user's name) and is null whenever the word needs no elaboration. The
+ * three older fields keep their meaning and stay: `meshEnabled` is "is there a
+ * node at all", `nodeState`/`authUrl` are the floor's own bring-up facts. */
 export const UserLinkStatus = z
   .object({
     link: TailscaleLink.nullable(),
     meshEnabled: z.boolean(),
     nodeState: z.string().nullable(),
     authUrl: z.string().nullable(),
+    linkState: UserLinkState,
+    linkDetail: z.string().nullable(),
   })
   .passthrough();
 export type UserLinkStatus = z.infer<typeof UserLinkStatus>;

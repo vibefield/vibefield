@@ -34,8 +34,12 @@ async fn settled_health(daemon: &field_native::RunningDaemon) -> serde_json::Val
     }
 }
 
+/// UA-P-0a (D1) — the default posture is OFFLINE, and the detail says WHY in
+/// the product's own terms. It used to name the env flag, because the flag was
+/// the switch; the switch is the LINK now, and a sentence pointing a user at an
+/// environment variable would be pointing at the development override.
 #[tokio::test]
-async fn mesh_disabled_by_default_and_daemon_stays_up() {
+async fn mesh_is_offline_until_something_links_and_the_daemon_stays_up() {
     let dir = tempfile::tempdir().unwrap();
     let daemon = bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
         .await
@@ -43,12 +47,58 @@ async fn mesh_disabled_by_default_and_daemon_stays_up() {
     let h = settled_health(&daemon).await;
     let mesh = unit(&h, "mesh-gateway");
     assert_eq!(mesh["state"], "disabled");
-    assert!(mesh["detail"]
-        .as_str()
-        .unwrap()
-        .contains("FIELD_NATIVE_MESH"));
-    // disabled-by-config is not degradation: the daemon reports up
+    let detail = mesh["detail"].as_str().unwrap();
+    assert!(
+        detail.contains("offline") && detail.contains("link"),
+        "{detail}"
+    );
+    assert!(
+        !detail.contains("FIELD_NATIVE_MESH"),
+        "the offline sentence must not send a user to the dev override: {detail}"
+    );
+    // no node, and no posture: nobody has asked for one
+    assert!(daemon.state.mesh.mode().is_none());
+    assert!(!daemon.state.mesh.node_present());
+    // offline-by-posture is not degradation: the daemon reports up
     assert_eq!(h["state"], "up");
+    daemon.shutdown().await;
+}
+
+/// UA-P-0a — the posture is recorded and the capture→linked promotion does not
+/// need a node to be a real transition. A bring-up cannot happen here (no
+/// sidecar, and `build_with_auth_handler` drives an interactive browser login —
+/// the same wall `force_node_presence_for_tests` documents), so what this row
+/// witnesses is the POSTURE STATE MACHINE: what `mode()`/`login()` answer after
+/// each verb, and that `stop` puts both back to nothing.
+#[tokio::test]
+async fn the_posture_follows_start_and_stop() {
+    use field_native::contracts::MeshMode;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some("/nonexistent/sidecar-slim".into()),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    assert!(mesh.mode().is_none(), "boot asks for no posture");
+
+    // the Link act: capture, and no account is named yet
+    assert!(mesh.start(MeshMode::Capture, None).await.unwrap());
+    assert_eq!(mesh.mode(), Some(MeshMode::Capture));
+    assert_eq!(mesh.login(), None);
+
+    // the capture landed: the login IS the account from here on
+    assert!(mesh
+        .start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap());
+    assert_eq!(mesh.mode(), Some(MeshMode::Linked));
+    assert_eq!(mesh.login().as_deref(), Some("james@github"));
+
+    // stop is the posture going offline; the identity on disk is untouched
+    mesh.stop().await;
+    assert!(mesh.mode().is_none());
+    assert_eq!(mesh.login(), None);
     daemon.shutdown().await;
 }
 
@@ -59,6 +109,9 @@ async fn mesh_enabled_without_sidecar_degrades_honestly() {
     // test cares about two fields, and spelling every other one only means a
     // new config field breaks tests that have no opinion about it.
     let config = NativeConfig {
+        // UA-P-0a: `mesh_enabled` is the forced-on DEVELOPMENT override now —
+        // the one path that still brings a node up at boot with no fieldd to
+        // ask for a posture, which is exactly what this row needs.
         mesh_enabled: true,
         sidecar_override: Some("/nonexistent/sidecar-slim".into()),
         ..NativeConfig::for_data_dir(dir.path().to_path_buf())

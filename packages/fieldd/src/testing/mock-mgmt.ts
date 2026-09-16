@@ -125,6 +125,11 @@ export class MockMgmtServer {
   private issued: Array<{ sock: Socket; subId: string; method: string; storeId?: string }> = [];
   /** Historical subscribe requests, retained across scripted reconnects. */
   readonly subscriptionRequests: string[] = [];
+  /** Every `native.mesh.*` method asked of this floor, in order — the facade's
+   * own log, since it is dispatched ahead of the generic subscribe recorder
+   * above. UA-P-0a needs it: a desktop with no account declares NO serve, so
+   * "the reconcile ran" can no longer be inferred from a serve appearing. */
+  readonly meshCalls: string[] = [];
 
   /** `endpoint` is a WIN-D1 endpoint, resolved by the suite (which owns its data
    * root) — a filesystem path on unix, a `\\.\pipe\…` name on win32. Node's
@@ -370,6 +375,11 @@ export class MockMgmtServer {
     sock: Socket,
     msg: { id: number; method: string; params?: Record<string, unknown> },
   ): void {
+    // Recorded before anything is decided about the call, `meshUnavailable`
+    // included: a test asking "did fieldd get that far?" wants the ASK, not the
+    // answer. (`subscriptionRequests` never sees these — the mesh facade is
+    // dispatched ahead of the generic `*.subscribe` recorder.)
+    this.meshCalls.push(msg.method);
     const reply = (body: object) =>
       sock.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body }) + "\n");
     if (this.meshUnavailable) {

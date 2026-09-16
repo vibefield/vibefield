@@ -34,6 +34,7 @@ import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { ProductApi } from "../src/product-api";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -187,6 +188,10 @@ async function setup(
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+  // UA-P-0a (D1) — the desktop has an ACCOUNT. The posture derives from the
+  // link now: without one there is no product serve and the tailnet door mints
+  // a guest, which none of the rows below are about.
+  writeLinkFixture(dataDir);
   const sessionsFile = join(dataDir, "sessions.json");
   const searchFile = join(dataDir, "search.json");
   const logFile = join(dataDir, "requests.log");
@@ -558,6 +563,9 @@ describe("the doors' posture", () => {
       port: 0,
       tokens: { verify: () => null },
       tailnetPathSecret: secret,
+      // UA-P-0a — the row is about LOCALITY, so say which account this desktop
+      // is; an account-less desktop refuses on the grant before locality runs.
+      getLinkedLogin: () => TEST_LOGIN,
     });
     let called = 0;
     for (const method of ["index.sessions", "index.search"]) {
@@ -569,7 +577,7 @@ describe("the doors' posture", () => {
     const port = await api.listen();
     cleanup.push(() => api.close());
     const ws = new WebSocket(`ws://127.0.0.1:${port}/t/${secret}`, {
-      headers: { "Tailscale-User-Login": "me@jamesyong42.com" },
+      headers: { "Tailscale-User-Login": TEST_LOGIN },
     });
     cleanup.push(() => ws.close());
     await new Promise<void>((resolve, reject) => {

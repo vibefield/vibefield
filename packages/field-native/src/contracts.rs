@@ -3876,6 +3876,78 @@ impl ::std::convert::TryFrom<::std::string::String> for MeshLaneProtocol {
         value.parse()
     }
 }
+#[doc = "`MeshMode`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"capture\","]
+#[doc = "    \"linked\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum MeshMode {
+    #[serde(rename = "capture")]
+    Capture,
+    #[serde(rename = "linked")]
+    Linked,
+}
+impl ::std::fmt::Display for MeshMode {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Capture => f.write_str("capture"),
+            Self::Linked => f.write_str("linked"),
+        }
+    }
+}
+impl ::std::str::FromStr for MeshMode {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "capture" => Ok(Self::Capture),
+            "linked" => Ok(Self::Linked),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshMode {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshMode {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshMode {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 #[doc = "`MeshRetireResult`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -3976,6 +4048,169 @@ pub struct MeshSelfIdentity {
 }
 impl MeshSelfIdentity {
     pub fn builder() -> builder::MeshSelfIdentity {
+        Default::default()
+    }
+}
+#[doc = "`MeshStartParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"mode\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"login\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"mode\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshMode\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshStartParams {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub login: ::std::option::Option<MeshStartParamsLogin>,
+    pub mode: MeshMode,
+}
+impl MeshStartParams {
+    pub fn builder() -> builder::MeshStartParams {
+        Default::default()
+    }
+}
+#[doc = "`MeshStartParamsLogin`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshStartParamsLogin(::std::string::String);
+impl ::std::ops::Deref for MeshStartParamsLogin {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshStartParamsLogin> for ::std::string::String {
+    fn from(value: MeshStartParamsLogin) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshStartParamsLogin {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshStartParamsLogin {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshStartParamsLogin {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshStartParamsLogin {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshStartParamsLogin {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`MeshStartResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"mode\","]
+#[doc = "    \"started\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"mode\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshMode\""]
+#[doc = "    },"]
+#[doc = "    \"started\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshStartResult {
+    pub mode: MeshMode,
+    pub started: bool,
+}
+impl MeshStartResult {
+    pub fn builder() -> builder::MeshStartResult {
+        Default::default()
+    }
+}
+#[doc = "`MeshStopResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"stopped\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"stopped\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshStopResult {
+    pub stopped: bool,
+}
+impl MeshStopResult {
+    pub fn builder() -> builder::MeshStopResult {
         Default::default()
     }
 }
@@ -9546,6 +9781,157 @@ pub mod builder {
                 ip: Ok(value.ip),
                 login: Ok(value.login),
                 tailscale_id: Ok(value.tailscale_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshStartParams {
+        login: ::std::result::Result<
+            ::std::option::Option<super::MeshStartParamsLogin>,
+            ::std::string::String,
+        >,
+        mode: ::std::result::Result<super::MeshMode, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshStartParams {
+        fn default() -> Self {
+            Self {
+                login: Ok(Default::default()),
+                mode: Err("no value supplied for mode".to_string()),
+            }
+        }
+    }
+    impl MeshStartParams {
+        pub fn login<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::MeshStartParamsLogin>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.login = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for login: {e}"));
+            self
+        }
+        pub fn mode<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshMode>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.mode = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for mode: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshStartParams> for super::MeshStartParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshStartParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                login: value.login?,
+                mode: value.mode?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshStartParams> for MeshStartParams {
+        fn from(value: super::MeshStartParams) -> Self {
+            Self {
+                login: Ok(value.login),
+                mode: Ok(value.mode),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshStartResult {
+        mode: ::std::result::Result<super::MeshMode, ::std::string::String>,
+        started: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshStartResult {
+        fn default() -> Self {
+            Self {
+                mode: Err("no value supplied for mode".to_string()),
+                started: Err("no value supplied for started".to_string()),
+            }
+        }
+    }
+    impl MeshStartResult {
+        pub fn mode<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshMode>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.mode = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for mode: {e}"));
+            self
+        }
+        pub fn started<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.started = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for started: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshStartResult> for super::MeshStartResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshStartResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                mode: value.mode?,
+                started: value.started?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshStartResult> for MeshStartResult {
+        fn from(value: super::MeshStartResult) -> Self {
+            Self {
+                mode: Ok(value.mode),
+                started: Ok(value.started),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshStopResult {
+        stopped: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshStopResult {
+        fn default() -> Self {
+            Self {
+                stopped: Err("no value supplied for stopped".to_string()),
+            }
+        }
+    }
+    impl MeshStopResult {
+        pub fn stopped<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.stopped = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for stopped: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshStopResult> for super::MeshStopResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshStopResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                stopped: value.stopped?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshStopResult> for MeshStopResult {
+        fn from(value: super::MeshStopResult) -> Self {
+            Self {
+                stopped: Ok(value.stopped),
             }
         }
     }
