@@ -229,3 +229,229 @@ async fn mesh_live_bring_up_reaches_auth_or_up() {
     }
     daemon.shutdown().await;
 }
+
+// ---------------------------------------------------------------------------
+// UA-P-4 — the gate
+// ---------------------------------------------------------------------------
+
+/// UA-P-4 (RFC 025 §3.1) — the LOGIN ALLOW-LIST the floor hands truffle, which
+/// is a different fact from the posture and is the one `native.mesh.self`
+/// reports as `loginAllow`.
+///
+/// Driven through a degrading bring-up (no usable sidecar) because that is the
+/// only headless path: what it witnesses is the DECISION — linked-with-a-login
+/// gates on exactly that login, capture gates on nothing, the development
+/// override's login-less `linked` gates on nothing, and a stop clears it. The
+/// live witness that truffle honours the list is the real-tailnet row in
+/// truffle's own suite (RFC 025 §5) plus the two-account tailnet James owes.
+#[tokio::test]
+async fn the_gate_is_the_captured_login_and_nothing_wider() {
+    use field_native::contracts::MeshMode;
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        sidecar_override: Some("/nonexistent/sidecar-slim".into()),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    assert!(mesh.login_allow().is_empty(), "no node, no gate");
+
+    // capture: the tailnet has not said who we are, so there is nothing to gate
+    // on. The capture BELT (serve.add / store.set refused) is what holds this
+    // window, not a gate invented from a claim.
+    mesh.start(MeshMode::Capture, None).await.unwrap();
+    assert!(
+        mesh.login_allow().is_empty(),
+        "capture mode is ungated: {:?}",
+        mesh.login_allow()
+    );
+
+    // linked: ONE exact login. Not `*@domain`, not a prefix — D2 scopes to the
+    // login identity, and a glob would be a wider ruling than the one James made.
+    mesh.start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+    assert_eq!(mesh.login_allow(), vec!["james@github".to_string()]);
+
+    // relinking to a DIFFERENT account moves the gate with it
+    mesh.start(MeshMode::Linked, Some("other@github".into()))
+        .await
+        .unwrap();
+    assert_eq!(mesh.login_allow(), vec!["other@github".to_string()]);
+
+    // offline: no node, no gate — and no stale list left behind for the next
+    // reader to mistake for a live one.
+    mesh.stop().await;
+    assert!(mesh.login_allow().is_empty());
+    daemon.shutdown().await;
+}
+
+/// UA-P-4 — the development override starts UNGATED, and this row exists to
+/// keep that deliberate rather than accidental. `FIELD_NATIVE_MESH=1` brings a
+/// node up in `linked` mode with NO login; an empty allow-list is RFC 025's
+/// "no gate", which is what the probes and the kill matrix need (they want
+/// every peer on a test tailnet and have no account to scope to). The product
+/// cannot reach this state: `native.mesh.start` refuses linked without a login.
+#[tokio::test]
+async fn the_development_override_is_ungated() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = NativeConfig {
+        mesh_enabled: true,
+        sidecar_override: Some("/nonexistent/sidecar-slim".into()),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    assert!(
+        daemon.state.mesh.login_allow().is_empty(),
+        "the forced-on override must not gate: {:?}",
+        daemon.state.mesh.login_allow()
+    );
+    daemon.shutdown().await;
+}
+
+/// UA-P-4 (RFC 025 D3) — A GATED NODE REFUSES TO START AGAINST A SIDECAR THAT
+/// CANNOT REPORT LOGINS, and the refusal reaches the health shape with
+/// truffle's own sentence in it.
+///
+/// Why this matters more than it looks: below sidecar protocol 5 no peer row
+/// carries a `loginName`, so a gated node's filter would fail closed on every
+/// row and the node would sit silently peerless — or, read carelessly, be
+/// treated as ungated, which is the fail-open shape UA-P-0 spent itself
+/// closing. truffle chooses the loud failure (`NetworkError::StartFailed`); the
+/// floor's job is not to swallow it.
+///
+/// THE STAND-IN: a real child process speaking the sidecar's stdin/stdout JSON
+/// line protocol, answering `tsnet:start` with a `tsnet:started` that declares
+/// `protocolVersion: 4`. It is a stand-in for a SIDECAR, never for the gate —
+/// the gate is truffle's, and this test drives the real one.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_gated_node_refuses_a_sidecar_that_cannot_name_a_login() {
+    use field_native::contracts::MeshMode;
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let stub = dir.path().join("sidecar-slim");
+    std::fs::write(
+        &stub,
+        r#"#!/bin/sh
+# A sidecar from before RFC 025: it starts, and it cannot name anyone's login.
+while IFS= read -r line; do
+  case "$line" in
+    *tsnet:start*)
+      printf '%s\n' '{"event":"tsnet:started","data":{"state":"running","hostname":"truffle-vibefield-stub","dnsName":"truffle-vibefield-stub.tail0.ts.net","tailscaleIP":"100.64.0.9","nodeId":"nStub0CNTRL","protocolVersion":4}}'
+      ;;
+  esac
+done
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let config = NativeConfig {
+        sidecar_override: Some(stub),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    daemon
+        .state
+        .mesh
+        .start(MeshMode::Linked, Some("james@github".into()))
+        .await
+        .unwrap();
+
+    // the bring-up runs spawned; wait for the unit to leave `starting`
+    let mut rx = daemon.state.health_tx.subscribe();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    let detail = loop {
+        let h = serde_json::to_value(&*rx.borrow_and_update()).unwrap();
+        let m = unit(&h, "mesh-gateway").clone();
+        if m["state"] == "degraded" {
+            break m["detail"].as_str().unwrap().to_string();
+        }
+        assert_ne!(m["state"], "up", "a gated node must not come up here: {m}");
+        tokio::select! {
+            r = rx.changed() => r.expect("health channel closed"),
+            _ = tokio::time::sleep_until(deadline) => panic!("no transition within 30s: {m}"),
+        }
+    };
+
+    // truffle's reason, VERBATIM — not a sentence this crate invented about a
+    // failure it did not diagnose. The version numbers are the load-bearing
+    // half: "5" is what a gate needs, "4" is what this sidecar said.
+    assert!(
+        detail.contains("login_allow requires sidecar protocol 5"),
+        "truffle's reason must ride through verbatim: {detail}"
+    );
+    assert!(
+        detail.contains("this sidecar speaks 4"),
+        "the sentence must name what the sidecar actually speaks: {detail}"
+    );
+    // and no node was installed — a refused gate leaves nothing behind
+    assert!(!daemon.state.mesh.node_present());
+    daemon.shutdown().await;
+}
+
+/// UA-P-4 — the CONTROL for the row above, and the reason it proves anything:
+/// the SAME stand-in sidecar, the same bring-up, but UNGATED (capture mode).
+/// An ungated node is unaffected by the protocol floor — every version
+/// qualifies — so it must NOT degrade with that sentence. Without this row a
+/// stub that simply failed to be a sidecar at all would pass the test above.
+#[cfg(unix)]
+#[tokio::test]
+async fn an_ungated_node_is_unaffected_by_the_sidecar_protocol_floor() {
+    use field_native::contracts::MeshMode;
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let stub = dir.path().join("sidecar-slim");
+    std::fs::write(
+        &stub,
+        r#"#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *tsnet:start*)
+      printf '%s\n' '{"event":"tsnet:started","data":{"state":"running","hostname":"truffle-vibefield-stub","dnsName":"truffle-vibefield-stub.tail0.ts.net","tailscaleIP":"100.64.0.9","nodeId":"nStub0CNTRL","protocolVersion":4}}'
+      ;;
+  esac
+done
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let config = NativeConfig {
+        sidecar_override: Some(stub),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    daemon
+        .state
+        .mesh
+        .start(MeshMode::Capture, None)
+        .await
+        .unwrap();
+    assert!(daemon.state.mesh.login_allow().is_empty());
+
+    // Settle far enough to know the protocol refusal did not fire. This node
+    // may or may not finish building against a stub (it is not a tailnet), and
+    // that is not what is under test — what is under test is that the SENTENCE
+    // does not appear, on a node the gate does not apply to.
+    let mut rx = daemon.state.health_tx.subscribe();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        let h = serde_json::to_value(&*rx.borrow_and_update()).unwrap();
+        let m = unit(&h, "mesh-gateway").clone();
+        let detail = m["detail"].as_str().unwrap_or("");
+        assert!(
+            !detail.contains("login_allow requires sidecar protocol"),
+            "an ungated node must never hit the protocol-5 floor: {detail}"
+        );
+        if m["state"] == "up" || m["state"] == "degraded" {
+            break;
+        }
+        tokio::select! {
+            r = rx.changed() => r.expect("health channel closed"),
+            _ = tokio::time::sleep_until(deadline) => break,
+        }
+    }
+    daemon.shutdown().await;
+}

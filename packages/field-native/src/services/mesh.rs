@@ -19,13 +19,29 @@
 //!             published. The floor enforces that itself (`serve.add` and
 //!             `store.set` are refused) rather than trusting fieldd to remember:
 //!             the account is not known yet, so nothing can be scoped to it.
-//!   linked  — the captured login IS the account; it is held here so a later
-//!             upstream per-store gate (UA-P-4) has it without a round trip.
+//!   linked  — the captured login IS the account, and since UA-P-4 it is the
+//!             NODE'S OWN GATE: the builder gets `.login_allow([login])`, so
+//!             Layer 3 reports only peers under that login and the hello
+//!             refuses every other one (RFC 025 §3.3/§3.4). Every subsystem on
+//!             the session plane — the synced store above all — is scoped by
+//!             construction rather than by a check each caller must remember.
+//!
+//! UA-P-4 — THE GATE IS A BUILD-TIME FACT (RFC 025 §3.1: fixed for the node's
+//! lifetime). So the capture → linked promotion REBUILDS rather than relabels:
+//! a live capture node is ungated, and leaving it installed while the posture
+//! says "linked" would be a node scoped to nobody wearing an account's name.
+//! `Shared.login_allow` records what the LIVE node was actually built with, so
+//! the rebuild decision and `native.mesh.self`'s honest `loginAllow` read the
+//! same fact rather than re-deriving it from the posture.
 //!
 //! `FIELD_NATIVE_MESH=1` survives as a FORCED-ON DEVELOPMENT OVERRIDE only —
 //! the probes and the kill matrix drive this floor without a fieldd to ask —
-//! and it starts the node in `linked` mode with no login. It is not the
-//! product's switch and must never become one again.
+//! and it starts the node in `linked` mode with NO login, which after UA-P-4
+//! means it starts UNGATED (an empty allow-list is RFC 025's "no gate"): the
+//! probes need every peer on the test tailnet, and there is no account to scope
+//! to. It is not the product's switch and must never become one again — the
+//! product reaches `linked` only through a captured login, and a captured login
+//! is always a gate.
 //!
 //! The sidecar binary is truffle's Go child process. Resolution mirrors
 //! truffle-sidecar's runtime order WITHOUT its build-time downloader (a network
@@ -81,6 +97,20 @@ struct Shared {
     /// UA-P-0a — the posture, `None` while there is no node. Read by the mgmt
     /// facade's capture-mode refusal; written only by `start`/`stop`/`retire`.
     mode: Mutex<Option<(MeshMode, Option<String>)>>,
+    /// UA-P-4 (RFC 025 §3.1) — the login allow-list the current bring-up hands
+    /// truffle, and therefore the one the INSTALLED node was built with. A
+    /// different fact from the posture: the gate is fixed for a node's
+    /// lifetime, so between `start(Linked, login)` and the rebuild it forces,
+    /// the posture already says "linked" while the node still running is the
+    /// ungated capture one. Written only by `spawn_bring_up` (the one place a
+    /// node is constructed) and cleared by `teardown_node` with the node, so it
+    /// is never a stale list describing a node that is gone.
+    ///
+    /// Two readers, and both need the BUILT value rather than the intended
+    /// one: `start` decides whether a posture change has to rebuild, and
+    /// `native.mesh.self` answers `loginAllow` — "is this node gated?" — which
+    /// would be a lie told from the posture.
+    login_allow: Mutex<Vec<String>>,
     /// UA-P-0a — the in-flight bring-up, on Shared for the same reason as the
     /// sidecar: `stop` has to abort it, and `stop` arrives through the handle.
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -260,8 +290,9 @@ impl MeshHandle {
     }
 
     /// UA-P-0a — the account this node's surfaces are scoped to, once captured.
-    /// Held for UA-P-4's upstream per-store gate; nothing reads it as a trust
-    /// input today (the DOOR compares against fieldd's own `link.json`).
+    /// UA-P-4 made it a trust input as well as a record: it is the node's own
+    /// `login_allow` (the DOOR still compares against fieldd's `link.json` —
+    /// two independent readings of one link, which is the point).
     pub fn login(&self) -> Option<String> {
         self.shared
             .mode
@@ -271,14 +302,33 @@ impl MeshHandle {
             .and_then(|(_, login)| login.clone())
     }
 
+    /// UA-P-4 (RFC 025 §3.6) — the allow-list the INSTALLED node was built
+    /// with. `[]` is RFC 025's "no gate" and is the honest answer for a capture
+    /// node, for the development override, and for no node at all. Never
+    /// derived from the posture: see `Shared::login_allow`.
+    pub fn login_allow(&self) -> Vec<String> {
+        self.shared.login_allow.lock().unwrap().clone()
+    }
+
     /// UA-P-0a (D1) — bring the node up in `mode`, or move a running node to it.
     ///
     /// Idempotent per posture: asking for the mode a live node is already in
-    /// answers `started: false` and touches nothing. Asking for a DIFFERENT
-    /// posture is always a real transition, and the ordinary one is capture →
-    /// linked at the moment fieldd captures the login — which costs no restart,
-    /// because the node is the same node and only the account it is scoped to
-    /// became known.
+    /// answers `started: false` and touches nothing.
+    ///
+    /// CORRECTED BY UA-P-4 (2026-09-16). This doc used to say the ordinary
+    /// capture → linked promotion "costs no restart, because the node is the
+    /// same node and only the account it is scoped to became known", and the
+    /// code returned early on any posture change to a live node. That was true
+    /// while the login was only a RECORD. Since RFC 025 the login is the node's
+    /// `login_allow`, which §3.1 fixes for the node's lifetime — so relabelling
+    /// a live capture node "linked" would leave an UNGATED node serving an
+    /// account's surfaces, which is exactly what D2 forbids. The promotion
+    /// rebuilds: same state dir, same tailnet identity, same keys (so no second
+    /// interactive login), new node with the gate compiled in.
+    ///
+    /// The decision is made against `login_allow()` — what the live node was
+    /// BUILT with — and not against the posture, so an in-flight bring-up that
+    /// has not installed its node yet cannot be mistaken for a gated one.
     ///
     /// Clearing `retired` here is the deliberate inverse of UA-3's guard: that
     /// flag exists so a login completing AFTER an unlink cannot resurrect an
@@ -289,20 +339,46 @@ impl MeshHandle {
             let current = self.shared.mode.lock().unwrap();
             current.as_ref().map(|(m, _)| *m)
         };
+        let desired_allow = desired_login_allow(mode, login.as_deref());
         *self.shared.mode.lock().unwrap() = Some((mode, login));
-        if already == Some(mode) && self.shared.node.borrow().is_some() {
+        let node_present = self.shared.node.borrow().is_some();
+        if already == Some(mode) && node_present && self.login_allow() == desired_allow {
             return Ok(false);
         }
-        if already.is_some() && self.shared.node.borrow().is_some() {
-            // a live node changing posture: no bring-up, no sidecar churn —
-            // the tailnet identity did not move, only what we know about it
+        if node_present && self.login_allow() == desired_allow {
+            // a live node whose GATE does not move: the tailnet identity did
+            // not move either, and nothing about the node's construction
+            // changed — only what we call the posture.
             return Ok(true);
         }
+        // UA-P-4 — the gate moved (or there is no node yet), so BUILD. The
+        // teardown is unconditional: it kills a live node's sidecar before the
+        // new one binds the state dir, AND it aborts an in-flight bring-up that
+        // would otherwise install a node the new posture never asked for. On a
+        // first start it is a no-op.
+        self.teardown_node().await;
         self.shared
             .retired
             .store(false, std::sync::atomic::Ordering::SeqCst);
         spawn_bring_up(&self.shared)?;
         Ok(true)
+    }
+
+    /// UA-P-4 — drop the installed node and everything bound to it, WITHOUT
+    /// touching the posture or the health state. Shared by `stop` (which then
+    /// says offline) and by the gate-change rebuild in `start` (which then
+    /// builds again immediately). Factored out so the two paths cannot drift on
+    /// what "the node is gone" means — a store handle or serve record surviving
+    /// a rebuild would be bound to a dead node.
+    async fn teardown_node(&self) {
+        if let Some(t) = self.shared.task.lock().unwrap().take() {
+            t.abort(); // in-flight bring-up: the sidecar child is kill_on_drop
+        }
+        let had = self.shared.node.send_replace(None);
+        self.shared.stores.lock().await.clear();
+        self.shared.serves.lock().await.clear();
+        *self.shared.login_allow.lock().unwrap() = Vec::new();
+        drop(had); // node drop kills the sidecar (kill_on_drop)
     }
 
     /// UA-P-0a — drop the node WITHOUT touching the identity on disk.
@@ -313,15 +389,9 @@ impl MeshHandle {
     /// learned a login, or a login another local user already holds (UA-P-0b),
     /// both of which the user may resolve and retry.
     pub async fn stop(&self) -> bool {
-        if let Some(t) = self.shared.task.lock().unwrap().take() {
-            t.abort(); // in-flight bring-up: the sidecar child is kill_on_drop
-        }
-        let had = self.shared.node.send_replace(None);
-        let was_up = had.is_some();
-        self.shared.stores.lock().await.clear();
-        self.shared.serves.lock().await.clear();
+        let was_up = self.shared.node.borrow().is_some();
+        self.teardown_node().await;
         *self.shared.mode.lock().unwrap() = None;
-        drop(had); // node drop kills the sidecar (kill_on_drop)
         self.shared
             .set(UnitState::Disabled, Some(OFFLINE.into()), None);
         was_up
@@ -336,14 +406,10 @@ impl MeshHandle {
         self.shared
             .retired
             .store(true, std::sync::atomic::Ordering::SeqCst);
-        if let Some(t) = self.shared.task.lock().unwrap().take() {
-            t.abort(); // UA-P-0a: an in-flight bring-up dies with the identity
-        }
-        let old = self.shared.node.send_replace(None);
-        self.shared.stores.lock().await.clear();
-        self.shared.serves.lock().await.clear();
+        // UA-P-0a: an in-flight bring-up dies with the identity — `retired` is
+        // set FIRST so a build that completes in the same beat discards itself.
+        self.teardown_node().await;
         *self.shared.mode.lock().unwrap() = None;
-        drop(old); // node drop kills the sidecar (kill_on_drop)
         self.shared.set(
             UnitState::Disabled,
             Some("retired — relink to mint a new tailnet identity".into()),
@@ -401,6 +467,7 @@ impl MeshUnit {
                 sidecar,
                 searched,
                 mode: Mutex::new(None),
+                login_allow: Mutex::new(Vec::new()),
                 task: Mutex::new(None),
                 retired: std::sync::atomic::AtomicBool::new(false),
             }),
@@ -463,7 +530,25 @@ impl NativeService for MeshUnit {
 /// Returns `Err` only for a state dir that cannot be created — a MISSING
 /// SIDECAR is degraded, not fatal (the daemon keeps serving every other unit),
 /// and a bring-up that fails later reports itself through the health shape.
+///
+/// UA-P-4 — and it is the ONE place `login_allow` is decided and recorded, for
+/// the same reason the rest of the construction lives here: a gate applied
+/// somewhere else could drift from the posture that asked for it.
 fn spawn_bring_up(shared: &Arc<Shared>) -> anyhow::Result<()> {
+    // UA-P-4 — the gate, recorded FIRST: before the sidecar check, before the
+    // state dir, before the spawn. It is the gate THIS bring-up is for, so a
+    // desktop that is linked but has no sidecar reads as "meant to be gated
+    // with no node" rather than as "ungated" — the fail-closed reading of a
+    // desktop whose node did not come up. (`node_present()` is the separate
+    // question, and `native.mesh.self` only answers when a node exists.)
+    let login_allow = {
+        let mode = shared.mode.lock().unwrap();
+        match mode.as_ref() {
+            Some((m, login)) => desired_login_allow(*m, login.as_deref()),
+            None => Vec::new(),
+        }
+    };
+    *shared.login_allow.lock().unwrap() = login_allow.clone();
     let Some(sidecar) = shared.sidecar.clone() else {
         shared.set(
             UnitState::Degraded,
@@ -499,6 +584,13 @@ fn spawn_bring_up(shared: &Arc<Shared>) -> anyhow::Result<()> {
                 .map_err(|e| anyhow::anyhow!("app_id: {e}"))?
                 .sidecar_path(&sidecar)
                 .state_dir(&state_dir)
+                // RFC 025 §3.1/§3.3/§3.4 — ONE exact login, never a widened
+                // glob: `login_allowed` lowercases both sides and matches the
+                // whole string, so an account's own login is the pattern and
+                // `*@domain` would be a different (wider) ruling than D2's.
+                // An EMPTY list is truffle's "no gate" and is what capture mode
+                // and the development override pass.
+                .login_allow(login_allow.clone())
                 .build_with_auth_handler(move |url| {
                     tracing::info!(
                         event = "field_native.mesh.authentication_required",
@@ -561,6 +653,16 @@ fn spawn_bring_up(shared: &Arc<Shared>) -> anyhow::Result<()> {
                 );
             }
             Err(e) => {
+                // UA-P-4 — truffle's reason rides through VERBATIM, and the one
+                // that matters most here is RFC 025 D3's: a GATED node refuses
+                // to start against a sidecar below protocol 5 ("login_allow
+                // requires sidecar protocol 5 (loginName on peers); this
+                // sidecar speaks N"), because below 5 no row carries a login,
+                // the gate would fail closed on every peer, and the node would
+                // sit silently peerless. Degraded with that sentence is the
+                // honest face of it — never a blank, and never a quiet
+                // downgrade to an ungated node (the tolerant-reader law:
+                // degraded states surface, they do not get papered over).
                 tracing::error!(
                     event = "field_native.mesh.bring_up_failed",
                     component = "mesh",
@@ -577,6 +679,28 @@ fn spawn_bring_up(shared: &Arc<Shared>) -> anyhow::Result<()> {
     });
     *shared.task.lock().unwrap() = Some(handle);
     Ok(())
+}
+
+/// UA-P-4 (D2, RFC 025 §3.1) — the login allow-list a posture asks for.
+///
+/// `linked` with a captured login is the ONE gated case, and its list is that
+/// one login exactly. Everything else is `[]` — truffle's "no gate" — and each
+/// for its own honest reason:
+///
+///  - `capture`: the tailnet has not answered who this node is yet. A gate
+///    needs a login and there is none; the CAPTURE BELT (the mgmt facade's
+///    refusal of `serve.add` and `store.set`) is what keeps the window safe,
+///    not a gate that would have to be invented from a claim.
+///  - `linked` with no login: only the `FIELD_NATIVE_MESH` development
+///    override reaches this, and the probes it exists for need the whole test
+///    tailnet. The product cannot: `native.mesh.start` refuses linked without a
+///    login (`mgmt/mesh.rs`), which is why this arm is a dev-only state and not
+///    a fail-open hole.
+fn desired_login_allow(mode: MeshMode, login: Option<&str>) -> Vec<String> {
+    match (mode, login) {
+        (MeshMode::Linked, Some(login)) if !login.is_empty() => vec![login.to_owned()],
+        _ => Vec::new(),
+    }
 }
 
 /// UA-P-0d (D7) — the mesh state dir is 0700, and so is every directory

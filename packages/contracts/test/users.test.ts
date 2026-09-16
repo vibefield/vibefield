@@ -135,10 +135,37 @@ describe("link lifecycle (UA-3)", () => {
   });
 
   it("MeshSelfIdentity never requires what the node cannot know", () => {
-    expect(MeshSelfIdentity.parse({ deviceId: "01D" }).login).toBeUndefined();
-    expect(MeshSelfIdentity.parse({ deviceId: "01D", ip: "100.64.0.1", login: "a@b" }).login).toBe(
-      "a@b",
-    );
+    // `login` is a TAILNET fact and the tailnet may decline to state it — a
+    // tagged node has no user profile at all — so it is optional, and absence
+    // is a typed pre-capture state rather than an error.
+    expect(MeshSelfIdentity.parse({ deviceId: "01D", loginAllow: [] }).login).toBeUndefined();
+    expect(
+      MeshSelfIdentity.parse({
+        deviceId: "01D",
+        ip: "100.64.0.1",
+        login: "a@b",
+        loginAllow: ["a@b"],
+      }).login,
+    ).toBe("a@b");
+  });
+
+  it("MeshSelfIdentity DOES require the gate, because the node always knows it", () => {
+    // UA-P-4 — the other side of the rule above, and the distinction is the
+    // whole of it. `loginAllow` is not a fact the tailnet supplies; it is the
+    // allow-list the floor HANDED truffle when it built this node (RFC 025
+    // §3.1 fixes it for the node's lifetime). A floor either has a node and
+    // knows what it built it with, or has no node to describe at all.
+    //
+    // So it is required, and `[]` is a real answer — truffle's "no gate" —
+    // rather than a missing one. Optional would give the question a third
+    // state, and the reader most in need of it ("is this node admitting only
+    // my account?") would read absence as "ungated": the fail-OPEN shape
+    // UA-P-0 spent itself closing.
+    expect(MeshSelfIdentity.safeParse({ deviceId: "01D" }).success).toBe(false);
+    expect(MeshSelfIdentity.parse({ deviceId: "01D", loginAllow: [] }).loginAllow).toEqual([]);
+    expect(
+      MeshSelfIdentity.parse({ deviceId: "01D", loginAllow: ["me@example.com"] }).loginAllow,
+    ).toEqual(["me@example.com"]);
   });
 
   it("MeshRetireResult reports both the archive and the honest no-op", () => {

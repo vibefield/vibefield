@@ -1,0 +1,9 @@
+{
+  "deviceId": "01J0FAKEULID0000000000SELF",
+  "deviceName": "jamess-macbook-pro",
+  "dnsName": "truffle-vibefield-jamess-macbook-pro.tail1a2b3.ts.net",
+  "tailscaleId": "nodeid:4c9e2d",
+  "ip": "100.101.102.104",
+  "login": "me@jamesyong42.com",
+  "loginAllow": ["me@jamesyong42.com"]
+}

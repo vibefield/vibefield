@@ -871,8 +871,11 @@ async fn subscribers_hear_a_peer_open_a_lane_and_hear_it_close() {
     assert_eq!(payload["peer"], "ts-abc");
     assert_eq!(payload["protocol"], "doc-sync");
     assert_eq!(payload["docId"], "doc-1");
-    // EL7: absent, not empty — truffle's Peer carries no tailnet login, and a
-    // synthesized one would be fabricated identity.
+    // EL7: absent, not empty. ERRATUM (2026-09-16, UA-P-4): the old reason here
+    // was "truffle's Peer carries no tailnet login" — RFC 025 §3.6 gave it one.
+    // The lane payload still has no `whois` because a `Lane` holds a Tailscale
+    // id and nothing else, so an owner here would be a lookup this projection
+    // does not do; a caller joins to `native.mesh.peers.list` on the same id.
     assert!(payload.get("whois").is_none());
 
     // The peer hangs up at the transport.

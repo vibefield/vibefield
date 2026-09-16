@@ -123,14 +123,20 @@ pub async fn handle(
         );
         return;
     }
+    // UA-P-4 (RFC 025 §3.1) — the gate the INSTALLED node was built with, read
+    // once for this request. The floor records it at bring-up rather than
+    // deriving it from the posture, because the two differ for as long as a
+    // promotion's rebuild takes; see `services::mesh::Shared::login_allow`.
+    let login_allow = state.mesh.login_allow();
+    let gated = !login_allow.is_empty();
     let resp = match method {
-        "native.mesh.self" => ok(id, self_identity(&node).await),
-        "native.mesh.peers.list" => ok(id, json!({ "peers": list_peers(&node).await })),
+        "native.mesh.self" => ok(id, self_identity(&node, &login_allow).await),
+        "native.mesh.peers.list" => ok(id, json!({ "peers": list_peers(&node, gated).await })),
         "native.mesh.peers.subscribe" => {
             let sub_id = state.sub_id();
-            let snapshot = json!({ "peers": list_peers(&node).await });
+            let snapshot = json!({ "peers": list_peers(&node, gated).await });
             send(tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
-            spawn_peer_forwarder(tx.clone(), node, sub_id);
+            spawn_peer_forwarder(tx.clone(), node, sub_id, gated);
             return;
         }
         "native.mesh.store.open" | "native.mesh.store.get" | "native.mesh.store.set" => {
@@ -407,9 +413,15 @@ async fn handle_lane(
 }
 
 /// One live lane as the contracts see it (mgmt.ts `MeshLanePeerOpened` for the
-/// inbound shape). `whois` is absent, not empty: truffle's `Peer` carries no
-/// tailnet user login, and synthesizing one would fabricate identity (EL7,
-/// same finding as `list_peers`). It arrives when upstream's `whois(ip)` does.
+/// inbound shape). `whois` is absent, not empty.
+///
+/// ERRATUM (2026-09-16, UA-P-4): this said "truffle's `Peer` carries no tailnet
+/// user login". It does now — RFC 025 §3.6 put `login_name` on it, and
+/// `list_peers` reads it. The lane payload still carries no `whois`, for a
+/// different and still-good reason: a `Lane` holds a Tailscale id and nothing
+/// else, so naming an owner here would mean a lookup this projection does not
+/// do. Absent, never synthesized (EL7). A caller that needs the owner joins to
+/// `native.mesh.peers.list` on the same id.
 fn lane_json(lane: &Lane) -> Value {
     let mut v = json!({
         "laneId": lane.lane_id,
@@ -477,9 +489,25 @@ fn spawn_lane_forwarder(
 /// tailscale#19894 guarantees the self user-profile in the netmap). Absent
 /// fields are ABSENT, never synthesized (EL7); a tagged node yields no login
 /// and the caller treats that as a typed pre-capture state.
-async fn self_identity(node: &Arc<MeshNode>) -> Value {
+///
+/// UA-P-4 (RFC 025 §3.3/§3.6) — the login now has a CHEAPER AND EARLIER source:
+/// `NodeIdentity.login_name`, which the sidecar puts on the `tsnet:started` /
+/// `tsnet:status` event at protocol 5, so the node knows its own owner without
+/// a lookup. The self-WhoIs stays behind it for the ungated cases (a sidecar
+/// below protocol 5 reports no login at all), which is also the path the
+/// capture loop walks — capture runs UNGATED by construction, so this fallback
+/// is the one that finishes a link rather than a vestige.
+///
+/// `loginAllow` is what the INSTALLED node was BUILT with (the caller reads it
+/// off the floor, not off the posture), so a reader can say "gated" honestly
+/// instead of inferring it from the presence of a login: `[]` is RFC 025's "no
+/// gate" and means capture mode, the development override, or a node built
+/// before this landed. Always present, never guessed — a missing field would be
+/// a third state that means "ask again", and the whole point is a caller that
+/// can answer the question.
+async fn self_identity(node: &Arc<MeshNode>, login_allow: &[String]) -> Value {
     let info = node.local_info();
-    let mut out = json!({ "deviceId": info.device_id });
+    let mut out = json!({ "deviceId": info.device_id, "loginAllow": login_allow });
     if !info.device_name.is_empty() {
         out["deviceName"] = json!(info.device_name);
     }
@@ -489,11 +517,16 @@ async fn self_identity(node: &Arc<MeshNode>) -> Value {
     if !info.tailscale_id.is_empty() {
         out["tailscaleId"] = json!(info.tailscale_id);
     }
+    if let Some(login) = info.login_name.clone().filter(|l| !l.is_empty()) {
+        out["login"] = json!(login);
+    }
     if let Some(ip) = info.ip {
         out["ip"] = json!(ip.to_string());
-        if let Ok(Some(identity)) = node.whois(&ip.to_string()).await {
-            if let Some(login) = identity.login_name.filter(|l| !l.is_empty()) {
-                out["login"] = json!(login);
+        if out.get("login").is_none() {
+            if let Ok(Some(identity)) = node.whois(&ip.to_string()).await {
+                if let Some(login) = identity.login_name.filter(|l| !l.is_empty()) {
+                    out["login"] = json!(login);
+                }
             }
         }
     }
@@ -644,34 +677,67 @@ fn map_node_err(state: &Arc<DaemonState>, id: Option<Value>, msg: &str) -> Value
     err(id, "INTERNAL", -32000, msg, false, None)
 }
 
-async fn list_peers(node: &Arc<MeshNode>) -> Vec<Value> {
+/// UA-P-4 — `gated` is the floor's own `login_allow`, non-empty (see below for
+/// why a login's PROVENANCE has to change with it).
+async fn list_peers(node: &Arc<MeshNode>, gated: bool) -> Vec<Value> {
     let mut out = Vec::new();
     for p in node.peers().await {
-        // whois {login, …}: the T1 petition landed (truffle 0.7.9 `whois(ip)`),
-        // so the tailnet user identity now populates from the control plane —
-        // best-effort, per-peer, riding truffle's own 60s success cache. On
-        // any failure (pre-v3 sidecar fails fast, no identity for the
-        // address, tagged node without a user) the field is ABSENT — never
-        // synthesized (EL7). WhoIsIdentity.login is REQUIRED by the contract,
-        // so an answer without a login contributes nothing.
-        let whois = match node.whois(&p.ip.to_string()).await {
-            Ok(Some(identity)) => {
-                identity
-                    .login_name
-                    .filter(|login| !login.is_empty())
-                    .map(|login| {
-                        let mut w = json!({ "login": login });
-                        if let Some(dns) = identity.dns_name.filter(|d| !d.is_empty()) {
-                            w["deviceName"] = json!(dns);
-                        }
-                        if let Some(node_id) = identity.node_id.filter(|n| !n.is_empty()) {
-                            w["tailscaleId"] = json!(node_id);
-                        }
-                        w
-                    })
-            }
-            _ => None,
+        // UA-P-4 (RFC 025 §3.3) — THE LOGIN IS A LAYER 3 FACT NOW.
+        // `Peer.login_name` comes off the netmap row the sidecar delivered
+        // (protocol 5). On a gated node it is *the fact that admitted the
+        // peer*, so sourcing the roster's login from it means the gate and the
+        // roster are one reading rather than two that can disagree. It is still
+        // never self-declared: the hello does not carry a login.
+        //
+        // WHY `whois(ip)` SURVIVES ON BOTH PATHS, which the first cut of this
+        // slice got wrong by dropping it: RFC 022's `Peer` projection carries
+        // `hostname` (the bare `truffle-vibefield-…` label) and NO `dns_name`,
+        // and `whois.deviceName` is the MagicDNS FQDN that DeviceService turns
+        // into the peer's door locator (`canonicalTailnetDnsName` rejects a
+        // dotless name, so a hostname substituted here would silently delete
+        // every peer's door). WhoIs is the only source of that name we have; an
+        // upstream `Peer.dns_name` would retire this call.
+        //
+        // THE LOGIN FALLBACK IS NOT UNCONDITIONAL. On an UNGATED node (capture
+        // mode, the development override, a sidecar below protocol 5) WhoIs is
+        // the only source there is, and it is T1's original one. On a GATED
+        // node an absent Layer 3 login is a DECISION, not a gap: RFC 025 §3.3's
+        // refinement says a node whose owner is unresolved reports its login
+        // absent rather than carrying the last-known one forward, and opens no
+        // new session to it. Reaching past that to WhoIs would re-state as
+        // current exactly what truffle declined to state — and would hand
+        // DeviceService a login for a peer the gate is holding at arm's length.
+        // So: gated + no Layer 3 login = no login. Absent, never synthesized
+        // (EL7), and `WhoIsIdentity.login` is required by the contract, so such
+        // a row carries no `whois` at all.
+        let layer3_login = p.login_name.clone().filter(|login| !login.is_empty());
+        let identity = node.whois(&p.ip.to_string()).await.ok().flatten();
+        let login = match layer3_login {
+            Some(login) => Some(login),
+            None if gated => None,
+            None => identity
+                .as_ref()
+                .and_then(|i| i.login_name.clone())
+                .filter(|login| !login.is_empty()),
         };
+        let whois = login.map(|login| {
+            let mut w = json!({ "login": login });
+            if let Some(dns) = identity
+                .as_ref()
+                .and_then(|i| i.dns_name.clone())
+                .filter(|d| !d.is_empty())
+            {
+                w["deviceName"] = json!(dns);
+            }
+            if let Some(node_id) = identity
+                .as_ref()
+                .and_then(|i| i.node_id.clone())
+                .filter(|n| !n.is_empty())
+            {
+                w["tailscaleId"] = json!(node_id);
+            }
+            w
+        });
         let mut entry = json!({
             "id": p.tailscale_id,
             "name": p.display_name,
@@ -1276,7 +1342,10 @@ async fn serve_entries(state: &Arc<DaemonState>, node: &Arc<MeshNode>) -> Vec<Va
     serves
 }
 
-fn spawn_peer_forwarder(tx: Tx, node: Arc<MeshNode>, sub_id: String) {
+/// UA-P-4 — `gated` is captured at subscribe time, not re-read per delta: the
+/// gate is fixed for the node's lifetime (RFC 025 §3.1) and this forwarder dies
+/// with the node, so the value cannot go stale under it.
+fn spawn_peer_forwarder(tx: Tx, node: Arc<MeshNode>, sub_id: String, gated: bool) {
     tokio::spawn(async move {
         let mut rx = node.on_peer_change();
         loop {
@@ -1287,7 +1356,7 @@ fn spawn_peer_forwarder(tx: Tx, node: Arc<MeshNode>, sub_id: String) {
                     }
                     // coalesce bursts, then re-project the full list (self-healing)
                     while rx.try_recv().is_ok() {}
-                    let payload = json!({ "peers": list_peers(&node).await });
+                    let payload = json!({ "peers": list_peers(&node, gated).await });
                     let note = json!({"jsonrpc":"2.0","method":"native.mesh.peers.delta","params":{"subId": sub_id, "payload": payload}});
                     if tx.send(OutMsg::Line(note.to_string())).is_err() {
                         break;

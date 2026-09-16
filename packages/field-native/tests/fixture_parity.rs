@@ -6,8 +6,9 @@
 use field_native::contracts::{
     DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, Hello, HelloAck,
     LogRecordV1, LoggingHealthV1, MeshLaneCloseRequest, MeshLaneClosed, MeshLaneOpenRequest,
-    MeshLanePeerOpened, NativeHealth, ObservedState, PeerInfo, RpcRequest, RpcResponse,
-    ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+    MeshLanePeerOpened, MeshSelfIdentity, NativeHealth, ObservedState, PeerInfo, RpcRequest,
+    RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
+    TerminalRoutesStreamPayload,
 };
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -135,6 +136,13 @@ fn mgmt_mesh_fixtures() {
     // the golden and the wire cannot drift apart again.
     roundtrip::<ServeConfig>("serve-config.routes.json", true);
     roundtrip::<ServeEntry>("serve-entry.valid.json", true);
+    // UA-P-4 (RFC 025 §3.6) — `native.mesh.self`, which this crate EMITS, so
+    // both rows are strict: the shape fieldd's `MeshSelfIdentity.parse` reads
+    // must be the shape the floor writes, `loginAllow` included. The CAPTURING
+    // row is the one that matters most — a floor with no login yet still states
+    // its (empty) gate, so a reader never has to infer "ungated" from silence.
+    roundtrip::<MeshSelfIdentity>("mesh-self-identity.valid.json", true);
+    roundtrip::<MeshSelfIdentity>("mesh-self-identity.capturing.json", true);
 }
 
 #[test]

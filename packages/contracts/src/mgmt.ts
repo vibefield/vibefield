@@ -255,7 +255,23 @@ export type PeerInfo = z.infer<typeof PeerInfo>;
  * self-whois login (best-effort — absent means the sidecar could not answer
  * for self, or a tagged node has no user; never synthesized, EL7). This is
  * the left-hand side of UA-4's self/guest comparison, captured once at link
- * time into link.json, never looked up per request. */
+ * time into link.json, never looked up per request.
+ *
+ * UA-P-4 (RFC 025 §3.6) — `loginAllow` is the node's own GATE: the login globs
+ * the installed node was BUILT with, which truffle fixes for its lifetime
+ * (§3.1). `[]` is truffle's "no gate" and is the honest answer for capture mode
+ * and for the `FIELD_NATIVE_MESH` development override; the product's linked
+ * node carries exactly one entry, its account's login.
+ *
+ * REQUIRED, and deliberately not optional. The question it answers — "is this
+ * node admitting only my account?" — has no third state: a floor either knows
+ * what it built its node with or has no node to describe. An optional field
+ * would let an absent value read as "ungated" at exactly the reader that most
+ * needs to fail closed, which is the shape of every fail-open bug UA-P-0 spent
+ * itself closing. It is NOT derived from the posture: between
+ * `native.mesh.start {mode:"linked"}` and the rebuild that gate change forces,
+ * the posture already says linked while the live node is still ungated, and
+ * this field tracks the node. */
 export const MeshSelfIdentity = z
   .object({
     deviceId: z.string(),
@@ -264,6 +280,7 @@ export const MeshSelfIdentity = z
     tailscaleId: z.string().optional(),
     ip: z.string().optional(),
     login: z.string().optional(),
+    loginAllow: z.array(z.string()),
   })
   .passthrough();
 export type MeshSelfIdentity = z.infer<typeof MeshSelfIdentity>;

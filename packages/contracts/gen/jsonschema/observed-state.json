@@ -557,10 +557,17 @@
         },
         "login": {
           "type": "string"
+        },
+        "loginAllow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
-        "deviceId"
+        "deviceId",
+        "loginAllow"
       ],
       "additionalProperties": true
     },

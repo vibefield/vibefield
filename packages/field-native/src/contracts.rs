@@ -3993,7 +3993,8 @@ impl MeshRetireResult {
 #[doc = "{"]
 #[doc = "  \"type\": \"object\","]
 #[doc = "  \"required\": ["]
-#[doc = "    \"deviceId\""]
+#[doc = "    \"deviceId\","]
+#[doc = "    \"loginAllow\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
 #[doc = "    \"deviceId\": {"]
@@ -4010,6 +4011,12 @@ impl MeshRetireResult {
 #[doc = "    },"]
 #[doc = "    \"login\": {"]
 #[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"loginAllow\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"type\": \"string\""]
+#[doc = "      }"]
 #[doc = "    },"]
 #[doc = "    \"tailscaleId\": {"]
 #[doc = "      \"type\": \"string\""]
@@ -4039,6 +4046,8 @@ pub struct MeshSelfIdentity {
     pub ip: ::std::option::Option<::std::string::String>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub login: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "loginAllow")]
+    pub login_allow: ::std::vec::Vec<::std::string::String>,
     #[serde(
         rename = "tailscaleId",
         default,
@@ -9678,6 +9687,8 @@ pub mod builder {
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
+        login_allow:
+            ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
         tailscale_id: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
@@ -9691,6 +9702,7 @@ pub mod builder {
                 dns_name: Ok(Default::default()),
                 ip: Ok(Default::default()),
                 login: Ok(Default::default()),
+                login_allow: Err("no value supplied for login_allow".to_string()),
                 tailscale_id: Ok(Default::default()),
             }
         }
@@ -9746,6 +9758,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for login: {e}"));
             self
         }
+        pub fn login_allow<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.login_allow = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for login_allow: {e}"));
+            self
+        }
         pub fn tailscale_id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
@@ -9768,6 +9790,7 @@ pub mod builder {
                 dns_name: value.dns_name?,
                 ip: value.ip?,
                 login: value.login?,
+                login_allow: value.login_allow?,
                 tailscale_id: value.tailscale_id?,
             })
         }
@@ -9780,6 +9803,7 @@ pub mod builder {
                 dns_name: Ok(value.dns_name),
                 ip: Ok(value.ip),
                 login: Ok(value.login),
+                login_allow: Ok(value.login_allow),
                 tailscale_id: Ok(value.tailscale_id),
             }
         }

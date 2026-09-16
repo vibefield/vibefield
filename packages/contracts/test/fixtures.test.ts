@@ -67,6 +67,7 @@ import {
   MeshLaneCloseRequest,
   MeshLaneOpenRequest,
   MeshLanePeerOpened,
+  MeshSelfIdentity,
   NativeHealth,
   ObservedState,
   PeerInfo,
@@ -149,6 +150,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // door locator, with every slice-derived claim absent because the peer
   // publishes nothing).
   "device-info": DeviceInfo,
+  // UA-P-4 (RFC 025 §3.6) — TWO fixtures on purpose: a LINKED node (a login and
+  // the one-entry gate it was built with) and a CAPTURING one (no login yet, so
+  // `loginAllow` is the empty list truffle reads as "no gate"). The pair pins
+  // that the gate is always stated and never inferred from the login's presence.
+  "mesh-self-identity": MeshSelfIdentity,
   "plugin-manifest": PluginManifestV1,
   "plugin-registry-snapshot": PluginRegistrySnapshot,
   "log-record": LogRecordV1,

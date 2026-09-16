@@ -182,6 +182,36 @@ pub async fn build_node(
         .expect("node build")
 }
 
+/// UA-P-4 — the same node, GATED on `login_allow` (RFC 025 §3.1). Separate from
+/// `build_node` rather than an extra argument on it because the failure mode is
+/// different and worth naming: a gated node REFUSES TO START against a sidecar
+/// below protocol 5, so a build error here is usually a pin problem (the npm
+/// `@vibecook/truffle-sidecar-*` packages are pre-RFC-025 while the petition
+/// window is open) and not a broken test. Point `FIELD_NATIVE_SIDECAR_PATH` at
+/// the sidecar `pnpm siblings:build` produced.
+pub async fn build_gated_node(
+    app_id: &str,
+    name: &str,
+    state: &Path,
+    key: &str,
+    sidecar: &Path,
+    login_allow: &[String],
+) -> Result<Node<TailscaleProvider>, String> {
+    NodeBuilder::default()
+        .app_id(app_id.to_string())
+        .expect("app_id parses")
+        .device_name(name.to_string())
+        .sidecar_path(sidecar.to_path_buf())
+        .state_dir(state.to_str().expect("utf8 state dir"))
+        .auth_key(key)
+        .ephemeral(true)
+        .ws_port(WS_PORT)
+        .login_allow(login_allow.to_vec())
+        .build()
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Wait until `from` can SEE `host`, and answer with the peer id
 /// (`PeerInfo.id` / `tailscale_id`) — the same string `native.mesh.peers.list`
 /// publishes and `native.mesh.lane.open` takes back, so the tests exercise the

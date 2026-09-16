@@ -41,7 +41,16 @@ function build(
 
 /** UA-P-0a — the default responder for a floor that has a node up and knows
  * who it is. `mesh.start`/`mesh.stop` answer their own shapes so the parse on
- * the fieldd side is exercised rather than stubbed past. */
+ * the fieldd side is exercised rather than stubbed past.
+ *
+ * UA-P-4 — and it states its GATE, because a real floor always does: a node
+ * that has captured a login is built with `login_allow = [that login]` (RFC 025
+ * §3.1), so `loginAllow` is that one entry. A stand-in that omitted the field
+ * would be standing in for a floor that does not exist — `MeshSelfIdentity`
+ * requires it, so the capture would fail to parse and the link would never
+ * land. Every responder below carries the value ITS posture would really have:
+ * `[]` while capturing (no login yet, nothing to gate on) and `[login]` once
+ * linked. */
 const floorWithLogin =
   (login = "james@github", dnsName = "host.tail1234.ts.net") =>
   (method: string): Promise<unknown> => {
@@ -49,7 +58,7 @@ const floorWithLogin =
     if (method === "native.mesh.stop") return Promise.resolve({ stopped: true });
     if (method === "native.mesh.retire")
       return Promise.resolve({ retired: true, archivedTo: "/tmp/mesh.retired-1" });
-    return Promise.resolve({ deviceId: "01DEVICE", dnsName, login });
+    return Promise.resolve({ deviceId: "01DEVICE", dnsName, login, loginAllow: [login] });
   };
 
 /** The timer loop is cadence only — every row drives the probe directly, so a
@@ -97,7 +106,7 @@ describe("UA-3 — LinkService", () => {
       native: {
         request: (method: string) =>
           method === "native.mesh.self"
-            ? Promise.resolve({ deviceId: "01DEVICE", login })
+            ? Promise.resolve({ deviceId: "01DEVICE", login, loginAllow: [login] })
             : Promise.resolve({ mode: "linked", started: true }),
       },
       now: () => 1_754_000_000_000,
@@ -183,7 +192,13 @@ describe("UA-P-0a — the mesh posture", () => {
     const { svc, params } = build(root, (method) => {
       if (method === "native.mesh.start")
         return Promise.resolve({ mode: login === undefined ? "capture" : "linked", started: true });
-      return Promise.resolve({ deviceId: "01DEVICE", ...(login !== undefined ? { login } : {}) });
+      // the gate follows the posture: nothing while capturing, the captured
+      // login once there is one to gate on
+      return Promise.resolve({
+        deviceId: "01DEVICE",
+        ...(login !== undefined ? { login } : {}),
+        loginAllow: login !== undefined ? [login] : [],
+      });
     });
 
     await svc.begin();
@@ -213,7 +228,7 @@ describe("UA-P-0a — the mesh posture", () => {
     const { svc } = build(root, (method) =>
       method === "native.mesh.start"
         ? Promise.resolve({ mode: "capture", started: false })
-        : Promise.resolve({ deviceId: "01DEVICE" }),
+        : Promise.resolve({ deviceId: "01DEVICE", loginAllow: [] }),
     );
     await svc.begin();
     await svc.begin(); // idempotent: still capturing, no throw
@@ -257,7 +272,8 @@ describe("UA-P-0a — the mesh posture", () => {
       root,
       (method) =>
         method === "native.mesh.self"
-          ? Promise.resolve({ deviceId: "01DEVICE" }) // up, and no user for it, ever
+          ? // up, and no user for it, ever — so never a gate either
+            Promise.resolve({ deviceId: "01DEVICE", loginAllow: [] })
           : Promise.resolve({ mode: "capture", started: true, stopped: true }),
       { captureAttempts: 3 },
     );
@@ -398,7 +414,9 @@ describe("UA-P-0b — one local user per tailscale account", () => {
       dirFor(2),
       (method) =>
         method === "native.mesh.self"
-          ? Promise.resolve({ deviceId: "01DEVICE", login: "james@github" })
+          ? // still CAPTURING when this answers: the promotion to linked is
+            // the act that gets refused, so the node is not gated yet
+            Promise.resolve({ deviceId: "01DEVICE", login: "james@github", loginAllow: [] })
           : Promise.resolve({ mode: "capture", started: true, stopped: true }),
       { otherUserLinks: () => otherUserLinks(dirFor(2)) },
     );
@@ -426,7 +444,9 @@ describe("UA-P-0b — one local user per tailscale account", () => {
       dirFor(2),
       (method) =>
         method === "native.mesh.self"
-          ? Promise.resolve({ deviceId: "01DEVICE", login: "james@github" })
+          ? // still CAPTURING when this answers: the promotion to linked is
+            // the act that gets refused, so the node is not gated yet
+            Promise.resolve({ deviceId: "01DEVICE", login: "james@github", loginAllow: [] })
           : Promise.resolve({ mode: "capture", started: true, stopped: true }),
       { otherUserLinks: () => otherUserLinks(dirFor(2)) },
     );
