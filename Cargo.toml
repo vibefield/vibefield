@@ -36,7 +36,48 @@ exclude = ["apps/desktop/native/windows/screenshot-helper"]
 # own stated reason for pinning truffle exactly. It resolved UPSTREAM: ghosttea
 # 0.9.2 moves its workspace to truffle-core =0.7.12, so both sides now name the
 # same revision and the dep joins below at that version.
-truffle-core = "=0.7.12"
+# RFC 025 PETITION WINDOW (2026-09-16, B0) — truffle is co-developed again, so
+# truffle-core comes from a SIBLING CHECKOUT rather than the registry. The
+# requirement below names the SIBLING's own crate version (0.7.13, unreleased)
+# because a [patch.crates-io] row replaces a dependency only when the patched
+# package's version satisfies it: patching a `=0.7.12` requirement with a 0.7.13
+# path leaves the patch silently unused and pulls the registry crate back in.
+# CLAUDE.md §Machine setup sanctions exactly this shape — "re-add the [patch]
+# and restore the sibling-pin machinery from git history; never leave a path
+# patch unpinned". The REVISION is pinned in siblings.lock.json, `pnpm
+# preflight` FAILS when the checkout drifts off that pin, and `pnpm
+# siblings:pin` is the deliberate acceptance of a new one (EL8).
+# What the window buys: RFC 025 login-scoped nodes — the account foundation
+# (UA-P) needs a node whose peers are gated by the tailnet login. It is consumed
+# from ../truffle-rfc025 (branch integration/rfc025) together with truffle's GO
+# SIDECAR, which `pnpm siblings:build` builds beside field-native because
+# services/mesh.rs::resolve_sidecar searches the running executable's own
+# directory FIRST — no env var, and the dev stack picks it up on its next
+# restart.
+# What it does NOT buy: the PACKAGED app. apps/desktop still installs
+# @vibecook/truffle-sidecar-*@0.7.12 from npm (protocol 4), so a shipped build
+# cannot run a login-gated node until 0.7.14 is published. Dev runs the built
+# sidecar; that split is deliberate, and stated here rather than discovered at a
+# release.
+# THE EXIT — when James tags 0.7.14, one event, eight places (this list is the
+# authority; every one of them names this file back):
+#   1. here: delete the [patch.crates-io] block at the bottom, pin `=0.7.14`
+#   2. siblings.lock.json: delete the `truffle` entry (patch + swift + go)
+#   3. scripts/preflight.mjs: PIN_EXPECTATIONS' truffle-core row → `=0.7.14`
+#      (the patch-row expectation retires with the lock entry on its own)
+#   4. apps/ios/VibeFieldKit/Package.swift: the row goes back to
+#      `.package(url: …/truffle.git, exact: "0.7.14")`, delete
+#      apps/ios/VibeFieldKit/.window/, then `swift package resolve` writes the
+#      truffle row back into Package.resolved
+#   5. biome.jsonc: drop the `!**/truffle-rfc025` ignore (it exists only because
+#      biome follows the identity symlink into that checkout)
+#   6. pnpm-workspace.yaml + apps/desktop/package.json: the five
+#      @vibecook/truffle-sidecar-* rows → 0.7.14 (this is what gives the PACKAGED
+#      app a login-gated node)
+#   7. .github/workflows/verify.yml: drop the RFC 025 note in the header
+#   8. CLAUDE.md §Machine setup + README.md: the window paragraphs, with a dated
+#      line saying when it closed
+truffle-core = "=0.7.13"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
@@ -114,6 +155,24 @@ ghosttea = "=0.11.1"
 # on this side at all. `ghosttea-truffle` is imported from no source file now,
 # so the dependency goes rather than sitting linked-but-unbuilt.
 #
-# The truffle-core agreement the retired comment enforced still binds: `ghosttea`
-# brings truffle-core =0.7.12 of its own, and the exact pin above is what keeps
-# one `Arc<Node>` type in the graph.
+# The truffle-core agreement the retired comment enforced still binds in
+# principle — one `Arc<Node>` type per graph — but its stated mechanism does not.
+#
+# **ERRATUM (2026-09-16, the RFC 025 window).** The sentence that stood here,
+# "`ghosttea` brings truffle-core =0.7.12 of its own, and the exact pin above is
+# what keeps one `Arc<Node>` type in the graph", is FALSE and has been since TM-1
+# dropped `ghosttea-truffle`: the locked `ghosttea` 0.11.1 package lists no
+# truffle-core among its dependencies at all (Cargo.lock), and `field-native` is
+# the graph's ONLY consumer of the crate. The exact pin is still the law, but
+# nothing else in this tree is asking for a second version — which is also why
+# the window above can move the requirement to 0.7.13 with no resolver conflict,
+# where GT-4a's attempt to add a crate pinned at =0.7.11 was refused outright.
+
+[patch.crates-io]
+# The RFC 025 window's one row (the requirement above carries the window's terms
+# and its exit). The path is relative to THIS manifest, so it resolves the same
+# from the main checkout and from a worktree beside it; the revision it lands on
+# is siblings.lock.json's `truffle` entry, which preflight verifies on every
+# gate. A path patch without that pin is what makes a green verify unreplayable
+# — the finding that created the machinery in the first place (cb652e0a).
+truffle-core = { path = "../truffle-rfc025/crates/truffle-core" }

@@ -22,7 +22,7 @@
         "runtime": "node scripts/siblings.mjs stamp"
       }
     ],
-    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "default": ["{projectRoot}/**/*", "sharedGlobals", "siblings"],
     "production": [
       "default",
       "!{projectRoot}/**/*.test.{js,jsx,mjs,cjs,ts,tsx}",

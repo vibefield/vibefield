@@ -68,7 +68,50 @@ let package = Package(
     // inherited. EL8 unchanged: `0.7.12` is field-native's `truffle-core` pin
     // and the revision `Package.resolved` already carries — the manifests are
     // the authority for both.
-    .package(url: "https://github.com/vibecook-dev/truffle.git", exact: "0.7.12"),
+    //
+    // **ERRATUM (2026-09-16).** That last sentence describes a state this file
+    // no longer has: field-native's pin is `=0.7.13` and Package.resolved
+    // carries no truffle row at all. Both are the window below, and its whole
+    // point is that the two planes still ride ONE revision — the rule the
+    // sentence states is intact; the numbers it quotes are not. The manifests
+    // remain the authority, which is why this correction is here and not only
+    // in a ledger.
+    //
+    // RFC 025 PETITION WINDOW (2026-09-16, B0) — truffle is a PATH package for
+    // the duration of the window. The login gate the account foundation needs
+    // is unreleased, so this plane reads it from the SAME checkout the Rust
+    // floor patches in: ../truffle-rfc025 (branch integration/rfc025, crate
+    // version 0.7.13), pinned by revision in the repo's siblings.lock.json and
+    // verified by `pnpm preflight` on every gate. A path package records no
+    // revision, so Package.resolved LOSES its truffle row while the window is
+    // open — that absence is the window's shape, not a missing pin; the lock's
+    // SHA is what makes this plane resolvable twice.
+    //
+    // Why the row points at a SYMLINK rather than at the checkout. A path
+    // package's identity is its DIRECTORY NAME, and `ghosttea` declares
+    // `.package(url: …/truffle.git, exact: "0.7.12")` of its own. Pointed
+    // straight at ../truffle-rfc025 the graph gets TWO packages — identities
+    // `truffle-rfc025` and `truffle` — and SwiftPM refuses outright ("multiple
+    // similar targets 'TailscaleKit', 'Truffle', … appear in package
+    // 'truffle-rfc025' and 'truffle'"), which is the Apple plane's version of
+    // the Arc<Node> type split the cargo pin exists to prevent. Reached through
+    // `.window/truffle`, the identity IS `truffle`, so this root-local package
+    // OVERRIDES ghosttea's remote edge and one truffle serves the whole graph —
+    // `swift package show-dependencies` shows ghosttea's own truffle row
+    // resolving to this very checkout. SwiftPM warns about the URL-vs-path
+    // identity conflict on every resolve and says it will become an error in a
+    // future version; that warning is the cost of the override, and the exit
+    // below is what ends it. A mirror is NOT the alternative: SwiftPM clones a
+    // mirror, so it cannot take a worktree ("cannot clone from local
+    // directory"), and it would honour `exact: 0.7.12` and hand back the
+    // released code the window exists to bypass.
+    //
+    // THE EXIT — when James tags 0.7.14: this row goes back to
+    // `.package(url: "https://github.com/vibecook-dev/truffle.git", exact: "0.7.14")`,
+    // `.window/` is deleted, and `swift package resolve` writes the truffle row
+    // back into Package.resolved. The full list of places that one event
+    // touches is in the root Cargo.toml, above the truffle-core requirement.
+    .package(path: ".window/truffle"),
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.

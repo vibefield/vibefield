@@ -1,5 +1,5 @@
 {
-  "//": "AR-0 sibling mode — machine-coupled checkouts pinned by revision. puppeteer (the agent runtime) and rosetta (agent history) are unpublished, so their packages enter as link: rows in pnpm-workspace.yaml and rosettad is built from source. `pnpm preflight` verifies presence, revision, dirtiness (warn), and that the overrides block agrees with this file; `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift). EXIT (W-D8): replace each link: row with an exact version and delete its entry here.",
+  "//": "AR-0 sibling mode — machine-coupled checkouts pinned by revision. puppeteer (the agent runtime) and rosetta (agent history) are unpublished, so their packages enter as link: rows in pnpm-workspace.yaml and rosettad is built from source; truffle is here for the RFC 025 PETITION WINDOW (2026-09-16) and is consumed three further ways — a cargo [patch.crates-io] row (`patch`), a SwiftPM path package reached through an identity symlink (`swift` — a path package's identity is its directory name, and it has to read `truffle` to override ghosttea's own remote edge), and a Go sidecar built beside field-native (`go`). `pnpm preflight` verifies presence, revision, dirtiness (warn), that the overrides block and the [patch.crates-io] section agree with this file, that the SwiftPM link resolves to the pinned checkout and the kit manifest names it, and that the sidecar is built and fresh (warn); `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift). EXIT — npm (W-D8): replace each link: row with an exact version and delete its entry here. truffle (when 0.7.14 ships): delete the [patch.crates-io] block and the truffle entry here, pin the crate exactly, restore the kit's SwiftPM row to a tag, bump the npm sidecars — Cargo.toml's own comment carries that list.",
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
@@ -22,6 +22,21 @@
       "cargo": {
         "crate": "rosettad",
         "profile": "release"
+      }
+    },
+    "truffle": {
+      "path": "../truffle-rfc025",
+      "sha": "7dd7bd47e040aced0f9e9fff70e85f82ff8d4138",
+      "patch": {
+        "truffle-core": "crates/truffle-core"
+      },
+      "swift": {
+        "manifest": "apps/ios/VibeFieldKit/Package.swift",
+        "link": "apps/ios/VibeFieldKit/.window/truffle"
+      },
+      "go": {
+        "module": "packages/sidecar-slim",
+        "binary": "sidecar-slim"
       }
     }
   }

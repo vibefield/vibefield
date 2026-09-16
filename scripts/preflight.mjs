@@ -8,13 +8,23 @@
 // for two siblings). scripts/siblings.mjs is the one reader of that lock; this
 // file verifies what it says against the checkouts and against the overrides
 // block. A path dependency without a SHA pin makes verify unreplayable.
+//
+// RFC 025 petition window (2026-09-16): truffle rejoins them, and the machinery
+// it seeded now verifies its own two extra shapes — the cargo [patch.crates-io]
+// row (all-or-nothing against the lock, exactly as the npm family rule works)
+// and the Go sidecar built beside field-native (missing or stale WARNs; the
+// floor reports a missing sidecar as Degraded honestly, so it is not a gate).
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import {
+  cargoPatchRows,
+  goSidecar,
   LOCK_FILE,
   linkRow,
+  newestGoSourceMtime,
   newestSourceMtime,
+  patchPath,
   readLock,
   rosettadBinary,
   siblingDir,
@@ -62,7 +72,12 @@ try {
 // @vibecook/ice was absent from this table until 2026-08-16 — the one pin that
 // drags loro-crdt AND strata-ecs behind it was the one nothing here checked.
 const PIN_EXPECTATIONS = [
-  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.12"/m, label: 'truffle-core = "=0.7.12"' },
+  // RFC 025 window (2026-09-16): the requirement names the SIBLING's crate
+  // version, because a [patch.crates-io] row replaces a dependency only when the
+  // patched package's version satisfies it — 0.7.12 here would leave the patch
+  // silently unused and the registry crate in the graph. Cargo.toml's comment
+  // carries the window's terms and its exit.
+  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.13"/m, label: 'truffle-core = "=0.7.13"' },
   {
     file: "pnpm-workspace.yaml",
     re: /"@vibecook\/ice":\s*0\.11\.0/,
@@ -94,6 +109,22 @@ const PIN_EXPECTATIONS = [
     label: '"@vibecook/ghosttea-protocol": 0.11.1',
   },
 ];
+// While the lock declares the truffle sibling, the [patch.crates-io] row that
+// redirects the requirement above at that checkout is part of the pin: without
+// it the exact version is a registry version again and the window is quietly
+// shut. Conditional on the lock entry so that CLOSING the window (delete the
+// entry, delete the row, pin the released version) passes this table rather than
+// fighting it — while OPENING one has to edit the table, which is the ritual the
+// comment above describes. The dynamic half, every patch row backed by a pin and
+// every pin by a row, is the sibling block below.
+if (readLock(root)?.siblings?.truffle !== undefined) {
+  PIN_EXPECTATIONS.push({
+    file: "Cargo.toml",
+    re: /^truffle-core\s*=\s*\{\s*path\s*=\s*"\.\.\/truffle-rfc025\/crates\/truffle-core"\s*\}/m,
+    label:
+      'truffle-core = { path = "../truffle-rfc025/crates/truffle-core" } — the RFC 025 window\'s [patch.crates-io] row, owed while siblings.lock.json declares the truffle sibling',
+  });
+}
 for (const { file, re, label } of PIN_EXPECTATIONS) {
   try {
     const text = readFileSync(resolve(root, file), "utf8");
@@ -180,6 +211,95 @@ for (const { file, re, label } of PIN_EXPECTATIONS) {
         );
       }
     }
+    // The CARGO half of the family rule (RFC 025 window). Every crate a lock
+    // entry declares under `patch` must have a [patch.crates-io] row naming that
+    // exact path, and every row in that section must be backed by such an entry.
+    // All-or-nothing for the same reason the npm family is: a path patch with no
+    // revision behind it makes a green verify unreplayable (the finding that
+    // created this machinery, cb652e0a), and a pin with no patch behind it is a
+    // checkout the build never reads while the docs say it does.
+    const { rows: patchRows, unreadable } = cargoPatchRows(root);
+    for (const line of unreadable) {
+      problems.push(
+        `Cargo.toml [patch.crates-io] carries a row this checker cannot read (\`${line}\`) — keep one row per line so the pin rule can see it`,
+      );
+    }
+    const lockPatches = new Map();
+    for (const [name, entry] of Object.entries(lock.siblings)) {
+      for (const [crate, crateDir] of Object.entries(entry.patch ?? {})) {
+        lockPatches.set(crate, {
+          sibling: name,
+          path: patchPath(entry, crateDir),
+          manifest: resolve(siblingDir(root, entry), crateDir, "Cargo.toml"),
+        });
+      }
+    }
+    for (const [crate, expected] of lockPatches) {
+      const row = patchRows.get(crate);
+      if (row === undefined) {
+        problems.push(
+          `sibling mode: ${LOCK_FILE} patches ${crate} from ${expected.sibling} but Cargo.toml has no [patch.crates-io] row for it (expected path = "${expected.path}") — the pin is declared and the build ignores it`,
+        );
+      } else if (row !== expected.path) {
+        problems.push(
+          `sibling mode: Cargo.toml patches ${crate} with path "${row}" but ${LOCK_FILE} expects "${expected.path}" — the patched path must be INSIDE the pinned checkout`,
+        );
+      } else if (!existsSync(expected.manifest)) {
+        problems.push(
+          `sibling mode: the ${crate} patch path has no manifest at ${expected.manifest} — the crate is not where ${LOCK_FILE} says it is`,
+        );
+      }
+    }
+    for (const [crate, path] of patchRows) {
+      if (lockPatches.has(crate)) continue;
+      problems.push(
+        `sibling family rule: Cargo.toml patches ${crate}${path === null ? "" : ` with path "${path}"`} but no ${LOCK_FILE} entry declares it — a path patch needs a revision pin (\`pnpm siblings:pin\`), never a bare working tree`,
+      );
+    }
+    // The SWIFT half of the window. SwiftPM has no [patch.crates-io] and no
+    // mirror that can take a worktree, so the override is a path package reached
+    // through a SYMLINK whose NAME is the package identity — Package.swift
+    // carries the why. Both halves are derived from the lock rather than spelled
+    // twice: the link must resolve to the pinned checkout, and the manifest must
+    // name it by the path a manifest would use. Without this the Apple plane
+    // would be the one plane with no pin at all: a path package writes no
+    // revision into Package.resolved, which is why that row's ABSENCE is the
+    // window's shape and this entry is where its pin lives.
+    for (const [name, entry] of Object.entries(lock.siblings)) {
+      if (!entry.swift) continue;
+      const dir = siblingDir(root, entry);
+      const link = resolve(root, entry.swift.link);
+      let target = null;
+      try {
+        target = realpathSync(link);
+      } catch {
+        target = null;
+      }
+      if (target === null) {
+        problems.push(
+          `sibling mode: ${name}'s SwiftPM identity link is missing or dangling (${entry.swift.link}) — it is what gives the checkout the package identity the manifest names; recreate it pointing at ${dir}`,
+        );
+      } else if (existsSync(dir) && target !== realpathSync(dir)) {
+        problems.push(
+          `sibling mode: ${name}'s SwiftPM identity link resolves to ${target} but ${LOCK_FILE} pins the checkout at ${dir}`,
+        );
+      }
+      const manifest = resolve(root, entry.swift.manifest);
+      const row = `.package(path: "${relative(dirname(manifest), link)}")`;
+      let text = null;
+      try {
+        text = readFileSync(manifest, "utf8");
+      } catch {
+        problems.push(
+          `sibling mode: could not read ${entry.swift.manifest} (${name}'s SwiftPM window)`,
+        );
+      }
+      if (text !== null && !text.includes(row)) {
+        problems.push(
+          `sibling mode: ${entry.swift.manifest} does not name the window's path package (expected \`${row}\`) — ${LOCK_FILE} declares a SwiftPM window the manifest does not open`,
+        );
+      }
+    }
     const bin = rosettadBinary(root);
     if (bin !== null) {
       if (bin.path === null) {
@@ -195,6 +315,28 @@ for (const { file, re, label } of PIN_EXPECTATIONS) {
         if (newest !== null && statSync(bin.path).mtimeMs < newest) {
           warnings.push(
             `${bin.name}: a Rust source is newer than the built rosettad — run \`pnpm siblings:build\` (a no-op when cargo agrees it is fresh)`,
+          );
+        }
+      }
+    }
+    // The go sibling's binary: the truffle mesh sidecar, built beside
+    // field-native because that is where the floor's resolve_sidecar looks
+    // first. WARN, never FAIL: a floor with no sidecar reports the mesh
+    // UNAVAILABLE/Degraded honestly (the tolerant-reader law), so a missing one
+    // is a degraded dev stack, not a broken tree — and every TS gate runs
+    // without it. `go build` keeps no fingerprint of its own, so the source
+    // mtimes are the freshness question, as they are for cargo above.
+    const sidecar = goSidecar(root);
+    if (sidecar !== null && existsSync(sidecar.moduleDir)) {
+      if (!existsSync(sidecar.path)) {
+        warnings.push(
+          `mesh sidecar not built (${sidecar.path}) — pnpm siblings:build; the floor reports the mesh Degraded until then`,
+        );
+      } else {
+        const newest = newestGoSourceMtime(sidecar.moduleDir);
+        if (newest !== null && statSync(sidecar.path).mtimeMs < newest) {
+          warnings.push(
+            `mesh sidecar stale — pnpm siblings:build (a source in ${sidecar.name}/${sidecar.module} is newer than ${sidecar.path})`,
           );
         }
       }

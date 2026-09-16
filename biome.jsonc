@@ -23,12 +23,24 @@
     // by hand would be undone by the next capture and formatting them IN the
     // capture would be teaching a recorder about biome. The `.trf1` files are
     // binary; the manifest is `JSON.stringify(…, null, 2)`.
+    //
+    // `truffle-rfc025` (RFC 025 window, 2026-09-16): biome FOLLOWS symlinks, and
+    // apps/ios/VibeFieldKit/.window/truffle — the SwiftPM identity link the
+    // window needs — points at a whole other repository. Without this line
+    // `biome check .` walks that checkout and reports ITS lint (readline
+    // imports, napi `any`s): a red gate, and an offer to rewrite a tree this
+    // repo may only read. The pattern names the RESOLVED directory because that
+    // is what biome matches once it has followed the link — a `!apps/ios/…`
+    // pattern on the link's own path matches nothing, and apps/ios/biome.jsonc,
+    // which turns biome off for that subtree, does not reach past a symlink
+    // either. Both were tried. Goes when the window does.
     "includes": [
       "**",
       "!packages/contracts/gen",
       "!fixtures/terminal-perf",
       "!**/vibefield.plugin.json",
-      "!tooling/create-plugin/template"
+      "!tooling/create-plugin/template",
+      "!**/truffle-rfc025"
     ]
   },
   "formatter": {
