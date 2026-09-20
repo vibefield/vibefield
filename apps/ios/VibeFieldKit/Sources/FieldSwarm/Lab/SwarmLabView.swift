@@ -11,8 +11,8 @@ import UIKit
 // pixel. DEBUG only, behind `-vf-swarm-lab`.
 
 /// Which part of the lab a launch argument asks for, so a screenshot run — which
-/// cannot scroll — reaches every page: `-vf-swarm-lab=states:3`, `=light`,
-/// `=field`, `=marks`; bare `-vf-swarm-lab` is the whole lab, scrollable.
+/// cannot scroll — reaches every page: `-vf-swarm-lab=states:3`, `=burn`,
+/// `=light`, `=field`, `=marks`; bare `-vf-swarm-lab` is the whole lab, scrollable.
 public struct LabFocus: Equatable, Sendable {
   public var section: String
   /// 1-based; a grid section shows six stages a page.
@@ -70,6 +70,13 @@ public struct SwarmLabView: View {
             title: "States", lede: "Every drawn state, one body each, at the locked sizes.",
             pages: pages("states", of: stateStages(palette: palette)), columns: 2, cellHeight: 190,
             firstIndex: ((focus?.section == "states" ? focus?.page ?? 1 : 1) - 1) * Self.pageSize)
+        }
+        if shows("burn") {
+          LabGridSection(
+            title: "The burn ladder",
+            lede: "How hard a session is spending, as up to four flames on a fixed absolute ladder of estimated USD per minute — about three times the spend per step, and only as many flames as the rate has lit. Absolute, so one body’s reading means what another’s does.",
+            pages: pages("burn", of: burnStages(palette: palette)), columns: 2, cellHeight: 190,
+            firstIndex: ((focus?.section == "burn" ? focus?.page ?? 1 : 1) - 1) * Self.pageSize)
         }
         if shows("light") {
           LabGridSection(
@@ -283,7 +290,7 @@ private struct LabMarksSurface: UIViewRepresentable {
           tile: candidate.tile, size: 40,
           x: Double(CGFloat(index % columns) * cellWidth + cellWidth / 2),
           y: Double(CGFloat(index / columns) * (cell + caption) + cell / 2),
-          colour: theme.textMain, alpha: candidate.chosen ? 1 : 0.4)
+          colour: theme.ink, alpha: candidate.chosen ? 1 : 0.4)
       }
       return ([], nil, marks)
     }
@@ -310,7 +317,7 @@ private struct LabSurface: UIViewRepresentable {
     let stages = stages
     let cluster = cluster
     let place = place
-    let now = Date()
+    let now = labNow
     let models = stages.map { stage in
       bodyModel(
         BodyModelInput(

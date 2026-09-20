@@ -141,7 +141,7 @@ public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> Age
     // The card fills it from `agent.list` when it opens, and until then the
     // body shows no line rather than a stale one.
     lastAssistantMessage: nil,
-    usage: row.cumulativeTokens.map { AgentUsage(cumulativeTokens: $0) },
+    usage: agentUsage(from: row),
     statusSince: parseWireDate(row.statusSince),
     lastEvidenceAt: parseWireDate(row.lastActivityAt))
 
@@ -197,4 +197,19 @@ public func projectAgentSlices(
     ended += projected.ended
   }
   return AgentFieldProjection(agents: agents, ended: ended)
+}
+
+/// Core's usage as the row carries it: the tokens, and — D-i18 — the USD lane
+/// when fieldd's projection carries one. A coverage word this build has no
+/// case for reads as no coverage at all, which the body draws as the missing
+/// lane; it never invents a price.
+func agentUsage(from row: AgentFieldRow) -> AgentUsage? {
+  guard
+    row.cumulativeTokens != nil || row.costUsd != nil || row.costCoverage != nil || row.costRatePerMin != nil
+  else { return nil }
+  return AgentUsage(
+    cumulativeTokens: row.cumulativeTokens,
+    costUsd: row.costUsd,
+    costCoverage: row.costCoverage.flatMap(AgentCostCoverage.init(rawValue:)),
+    costRatePerMin: row.costRatePerMin)
 }

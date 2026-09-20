@@ -2,10 +2,10 @@ import FieldAgents
 import Foundation
 import SwarmPhysics
 
-// Fixture rows for the design lab — the reference's `lab/fixtures.ts`: every
-// drawn state and every setting worth comparing, as the same `FieldBubble`
-// the field receives, so the lab draws with the production model and
-// renderer and never with a stand-in.
+// Fixture rows for the design lab — the reference's `lab/fixtures.ts` (the
+// one-ink revision): every drawn state and every setting worth comparing, as
+// the same `FieldBubble` the field receives, so the lab draws with the
+// production model and renderer and never with a stand-in.
 
 public struct LabStage: Identifiable, Sendable {
   public var id: String
@@ -13,7 +13,7 @@ public struct LabStage: Identifiable, Sendable {
   public var note: String
   public var bubble: FieldBubble
   public var runningSince: Date?
-  /// A working body's place among the working sessions by tokens, 0..1; the lab sets it by hand.
+  /// A working body's place among the working sessions by estimated USD, 0..1; the lab sets it by hand.
   public var workingShare: Double
   public var focus: Bool
   /// Draw the hold-to-create indicator at this cell instead of a body.
@@ -52,17 +52,19 @@ public enum BurnShape: String, CaseIterable, Sendable {
   }
 }
 
-/// The ledger's history for a rate curve over the last ten minutes: one step per bar.
+/// The ledger's history for a rate curve over the last ten minutes: one bucket
+/// per step, the fixture's tokens priced at a dollar a million.
 public func labUsageHistory(_ shape: BurnShape, total: Double?) -> UsageHistory {
-  let steps = (0..<usageStepCount).map { index in shape.rate(Double(index * 2)) * usageStepMs / 60_000 }
-  // The prompt side carries most of the burn, the completion side a swelling
-  // fraction of it, so the two sides of the chart read differently.
-  let output = steps.enumerated().map { index, tokens in tokens * (0.18 + 0.12 * sin(Double(index) / 2)) }
-  let input = zip(steps, output).map { $0 - $1 }
-  return UsageHistory(total: total, steps: steps, sides: UsageSides(output: output, input: input))
+  let steps = (0..<usageStepCount).map { index in
+    shape.rate(Double(index * 2)) * usageStepMs / 60_000 / 1_000_000
+  }
+  return UsageHistory(total: total, coverage: .complete, steps: steps)
 }
 
-private let labNow = Date(timeIntervalSince1970: 1_789_300_800)  // 2026-09-13T12:00:00Z
+/// The fixtures' clock: every stage is dated against this instant, and the
+/// lab reads its models at it too, so a running terminal's elapsed line says
+/// 1:23 on any day rather than the days since the fixtures were written.
+public let labNow = Date(timeIntervalSince1970: 1_789_300_800)  // 2026-09-13T12:00:00Z
 
 struct LabAgentSpec {
   var id: String
@@ -77,13 +79,22 @@ struct LabAgentSpec {
   var burn: BurnShape?
   var detail: String?
   var blocker: AgentBlockerKind?
+  /// An adapter's human-readable line for the blocker: what the body says first.
+  var blockerDetail: String?
+  /// The question as asked, for a question blocker.
+  var question: String?
   var stale = false
   var active = false
   var mounted = false
   /// The project's dealt sequence plus one, so the lab's eight projects read 1…8.
   var accent = 1
   var message: String?
+  /// The session's total tokens; the bottom figure prices them at a dollar a million.
   var tokens: Double?
+  /// Estimated USD per minute: what the burn ladder reads.
+  var ratePerMin: Double?
+  /// The provider has no pricing lane, so the ladder is drawn unread.
+  var unpriced = false
 }
 
 /// The colours the lab deals: the same walk the field's assembly makes.
@@ -95,17 +106,37 @@ public struct LabPalette: Sendable {
 }
 
 func labAgent(_ spec: LabAgentSpec, palette: LabPalette) -> FieldBubble {
+  let blocker: AgentBlocker? = spec.blocker.map { kind in
+    switch kind {
+    case .permission: AgentBlocker(kind: .permission, detail: spec.blockerDetail, tool: "Bash")
+    case .question: AgentBlocker(kind: .question, detail: spec.blockerDetail, question: spec.question)
+    case .failure: AgentBlocker(kind: .failure, detail: spec.blockerDetail, code: "E_TOOL")
+    }
+  }
+  // A provider with no pricing lane has no ledger either: no total, no rate.
+  let usage: UsageHistory? =
+    spec.unpriced
+    ? nil
+    : spec.burn.map { labUsageHistory($0, total: spec.tokens.map { $0 / 1_000_000 }) }
+      ?? spec.tokens.map {
+        UsageHistory(total: $0 / 1_000_000, coverage: .complete, steps: [Double](repeating: 0, count: usageStepCount))
+      }
   let facet = AgentFacet(
     provider: spec.provider,
     modelName: spec.model,
     branch: spec.branch,
     contextUsedPercent: spec.contextPercent,
     permissions: spec.blocker == .permission ? [AgentPermission(tool: "Bash")] : [],
-    blockerKind: spec.blocker,
+    blocker: blocker,
     effort: spec.effort.map { AgentEffort(value: $0, intent: spec.effortIntent) },
     lastMessage: spec.message,
-    usage: spec.burn.map { labUsageHistory($0, total: spec.tokens) }
-      ?? spec.tokens.map { UsageHistory(total: $0, steps: [Double](repeating: 0, count: usageStepCount)) },
+    // What the burn ladder reads. An unpriced provider has the lane missing
+    // altogether, which is not the same as a rate of zero.
+    monitorUsage: AgentUsage(
+      cumulativeTokens: spec.tokens,
+      costCoverage: spec.unpriced ? .unavailable : .complete,
+      costRatePerMin: spec.unpriced ? nil : (spec.ratePerMin ?? 0)),
+    usage: usage,
     statusSince: labNow.addingTimeInterval(-20),
     lastEvidenceAt: labNow.addingTimeInterval(spec.stale ? -120 : 0))
   let paneColour = palette.pane(spec.accent - 1)
@@ -141,7 +172,8 @@ func labTerminal(_ id: String, project: String, running: Bool) -> FieldBubble {
 public func stateStages(palette: LabPalette) -> [LabStage] {
   var stages: [LabStage] = [
     LabStage(
-      id: "terminal-empty", title: "Terminal, empty", note: "Dashed rim, the folder, \"empty\".",
+      id: "terminal-empty", title: "Terminal, empty",
+      note: "Dashed rim; the folder in the ink, then the name; \"empty\".",
       bubble: labTerminal("t1", project: "voyager", running: false)),
     LabStage(
       id: "terminal-running", title: "Terminal, running",
@@ -149,13 +181,13 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
       bubble: labTerminal("t2", project: "study", running: true), runningSince: labNow.addingTimeInterval(-83)),
     LabStage(
       id: "idle", title: "Agent, idle",
-      note: "Name, model · effort on one line. The ring in the ink when context is known.",
+      note: "The folder in the project’s colour, the name at the title’s weight, model · effort stepped back from it. The gauge climbs from the track’s weight as the context fills.",
       bubble: labAgent(
         LabAgentSpec(id: "a1", project: "ref", status: .idle, model: "Sonnet 5", effort: "medium", contextPercent: 31, accent: 3),
         palette: palette)),
     LabStage(
       id: "idle-unread", title: "Idle, unread",
-      note: "The latest reply on one line with a blue dot: it arrived while another session had the card.",
+      note: "A reply arrived while another session had the card. The reply itself takes the name’s place behind the chat mark, the name moves above it, and the body glows blue in the same carried waves. Nothing follows the model line.",
       bubble: {
         var bubble = labAgent(
           LabAgentSpec(
@@ -165,6 +197,28 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
         bubble.unread = true
         return bubble
       }()),
+    LabStage(
+      id: "idle-unread-silent", title: "Idle, unread, no reply text",
+      note: "Nothing was captured to quote, so the line falls back to the words “new message”.",
+      bubble: {
+        var bubble = labAgent(
+          LabAgentSpec(id: "a2b", project: "ref", status: .idle, model: "Sonnet 5", effort: "medium", contextPercent: 18, accent: 3),
+          palette: palette)
+        bubble.unread = true
+        return bubble
+      }()),
+    LabStage(
+      id: "idle-context-low", title: "Idle, context barely touched",
+      note: "Twelve per cent: the gauge is only just above its track, because it is not yet worth your attention.",
+      bubble: labAgent(
+        LabAgentSpec(id: "a1b", project: "voyager", status: .idle, model: "Sonnet 5", effort: "medium", contextPercent: 12, accent: 5),
+        palette: palette)),
+    LabStage(
+      id: "idle-context-high", title: "Idle, context nearly spent",
+      note: "Ninety-four per cent: the same gauge, at the top of its climb, now the strongest mark on the body.",
+      bubble: labAgent(
+        LabAgentSpec(id: "a1c", project: "voyager", status: .idle, model: "Sonnet 5", effort: "medium", contextPercent: 94, accent: 5),
+        palette: palette)),
     LabStage(
       id: "idle-configured", title: "Idle, effort configured",
       note: "Launch intent, no provider evidence yet: the effort is set in italics.",
@@ -179,7 +233,7 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
         palette: palette)),
     LabStage(
       id: "idle-mounted", title: "Idle, mounted",
-      note: "The pane’s colour as a band a thirtieth of the radius wide outside the rim, the gutter, and nothing beyond it; the project’s colour stays the tag before the name.",
+      note: "The pane’s colour as a band a thirtieth of the radius wide outside the rim, the gutter, and nothing beyond it; the project’s colour stays the folder before the name.",
       bubble: labAgent(
         LabAgentSpec(id: "a5", project: "voyager", status: .idle, model: "Sonnet 5", effort: "medium", contextPercent: 12, mounted: true, accent: 5),
         palette: palette)),
@@ -191,46 +245,48 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
         palette: palette)),
     LabStage(
       id: "working", title: "Agent, working",
-      note: "Branch, name, model · effort; context at the top; the burn bars in the ink, output up and input down about a baseline, with the total below; the mark and the centre light in the accent. The least tokens among the working sessions: 60.",
+      note: "Branch, the folder and name, model · effort; context at the top; the burn ladder in the ink, with the estimated total below; the centre light is the theme’s own ink. The least spend among the working sessions: 60.",
       bubble: labAgent(
         LabAgentSpec(
           id: "w1", project: "puppeteer", status: .working, model: "Fable 5.1", effort: "high", branch: "swarm",
-          contextPercent: 62, burn: .steady, detail: "Editing tokens.css", accent: 1, tokens: 384_000),
+          contextPercent: 62, burn: .steady, detail: "Editing tokens.css", accent: 1, tokens: 384_000, ratePerMin: 0.22),
         palette: palette)),
     LabStage(
       id: "working-hot", title: "Working, hot",
-      note: "A burn climbing to its tallest column and the context past 80%: only the context turns orange; the newest column is the ink.",
+      note: "Burning $72/hr and the context past 80%: four flames, the last at full weight, and the gauge at the top of its climb. Nothing turns a colour — the count and the weight are the alarm.",
       bubble: labAgent(
         LabAgentSpec(
           id: "w2", project: "puppeteer", status: .working, model: "Fable 5.1", effort: "high", branch: "swarm",
-          contextPercent: 88, burn: .blaze, detail: "Delegating to Explore", accent: 1),
+          contextPercent: 88, burn: .blaze, detail: "Delegating to Explore", accent: 1, ratePerMin: 1.2),
         palette: palette)),
     LabStage(
-      id: "working-ease", title: "Working, easing", note: "A burn that is falling; reasoning.",
+      id: "working-ease", title: "Working, easing", note: "A quiet loop at $4.80/hr: one flame, and nothing beside it.",
       bubble: labAgent(
         LabAgentSpec(
           id: "w3", project: "duke", status: .working, model: "Haiku 4.5", effort: "low", branch: "hw3",
-          contextPercent: 55, burn: .ease, detail: "Thinking", accent: 6),
+          contextPercent: 55, burn: .ease, detail: "Thinking", accent: 6, ratePerMin: 0.08),
         palette: palette)),
     LabStage(
       id: "working-quiet", title: "Working, no evidence yet",
-      note: "No usage, no context: the graph rests and both figures read \"--\".",
-      bubble: labAgent(LabAgentSpec(id: "w4", project: "study", status: .working, model: "Sonnet 5", accent: 8), palette: palette)),
+      note: "No usage, no context, no price: one hollow flame — unread, which is not the same as calm — and both figures rest.",
+      bubble: labAgent(
+        LabAgentSpec(id: "w4", project: "study", status: .working, model: "Sonnet 5", accent: 8, unpriced: true),
+        palette: palette)),
     LabStage(
       id: "working-active", title: "Working, the open card",
       note: "Mounted and in front: the pane light and the same body.",
       bubble: labAgent(
         LabAgentSpec(
           id: "w5", project: "jabali", status: .working, model: "Fable 5.1", effort: "max", branch: "editor",
-          contextPercent: 27, burn: .steady, detail: "Writing the reply", active: true, accent: 2),
+          contextPercent: 27, burn: .steady, detail: "Writing the reply", active: true, accent: 2, ratePerMin: 0.3),
         palette: palette)),
     LabStage(
-      id: "working-largest", title: "Working, the most tokens",
-      note: "The most tokens among the working sessions: 80, with the gauge and the gutter thicker in proportion. The rest fall between 60 and 80.",
+      id: "working-largest", title: "Working, the most spend",
+      note: "The most estimated USD among the working sessions: 80, with the gauge and the gutter thicker in proportion. The rest fall between 60 and 80.",
       bubble: labAgent(
         LabAgentSpec(
           id: "w6", project: "puppeteer", status: .working, model: "Fable 5.1", effort: "high", branch: "swarm",
-          contextPercent: 62, burn: .steady, detail: "Editing tokens.css", accent: 1, tokens: 2_400_000),
+          contextPercent: 62, burn: .steady, detail: "Editing tokens.css", accent: 1, tokens: 2_400_000, ratePerMin: 0.62),
         palette: palette),
       workingShare: 1),
     LabStage(
@@ -238,37 +294,38 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
       bubble: labAgent(
         LabAgentSpec(
           id: "w7", project: "duke", status: .working, model: "Haiku 4.5", effort: "low", branch: "hw3",
-          contextPercent: 55, burn: .ease, detail: "Thinking", accent: 6, tokens: 1_200_000),
+          contextPercent: 55, burn: .ease, detail: "Thinking", accent: 6, tokens: 1_200_000, ratePerMin: 0.08),
         palette: palette),
       workingShare: 0.5),
     LabStage(
       id: "blocked-permission", title: "Blocked, permission",
-      note: "Held at the idle size, inverted, flooded by the accent, the latest reply with an orange dot.",
+      note: "The state’s own light. Its ground is that orange carried to the theme’s calm end — down toward black on a dark theme, up toward white on a light one — so the words keep the middle; the light itself rides the annulus at full chroma, in waves carried outward without a pause. Reduce Motion holds them at mid-crest. What it waits on takes the name’s place behind the key: a permission says the tool it wants, its own evidence before any reply’s.",
       bubble: labAgent(
         LabAgentSpec(
           id: "b1", project: "duke", status: .blocked, model: "Haiku 4.5", effort: "low", contextPercent: 40,
           blocker: .permission, accent: 6, message: "May I run pnpm test to check the fix?"),
         palette: palette)),
     LabStage(
-      id: "blocked-question", title: "Blocked, question", note: "Same body; the question it asked.",
+      id: "blocked-question", title: "Blocked, question",
+      note: "A question says the question, as it was asked, ellipsised to the chord.",
       bubble: labAgent(
         LabAgentSpec(
           id: "b2", project: "voyager", status: .blocked, model: "Sonnet 5", effort: "medium", contextPercent: 70,
-          blocker: .question, accent: 5, message: "Which key should the export use, the artist or the album?"),
+          blocker: .question, question: "Which key should the export use, the artist or the album?", accent: 5),
         palette: palette)),
     LabStage(
       id: "blocked-failure", title: "Blocked, failed",
-      note: "A failure with no reply to show: the blocker is named instead.",
+      note: "A failure with nothing else to go on falls back to its code.",
       bubble: labAgent(
         LabAgentSpec(id: "b3", project: "ref", status: .blocked, model: "Sonnet 5", contextPercent: 91, blocker: .failure, accent: 3),
         palette: palette)),
     LabStage(
       id: "blocked-mounted", title: "Blocked, mounted",
-      note: "The flood inside and the band outside; the light joins only while its card is open.",
+      note: "An adapter’s own line for the blocker, which beats both the tool and the reply. The light inside is the state’s orange, the band outside is the pane’s colour, the folder is the project’s: three colours, three owners. The outer light joins only while its card is open.",
       bubble: labAgent(
         LabAgentSpec(
           id: "b4", project: "jabali", status: .blocked, model: "Fable 5.1", effort: "high", contextPercent: 52,
-          blocker: .permission, mounted: true, accent: 2, message: "May I delete the stale build folder?"),
+          blocker: .permission, blockerDetail: "Delete the stale build folder", mounted: true, accent: 2),
         palette: palette)),
     LabStage(
       id: "hold", title: "Hold to create", note: "The indicator at the end of a 520ms hold on empty field.",
@@ -294,7 +351,32 @@ public func stateStages(palette: LabPalette) -> [LabStage] {
   return stages
 }
 
-/// Part II: the pane light, three weights, on the same idle body with its card open.
+/// Part II: the burn ladder, one body per reading, so the steps can be compared.
+public func burnStages(palette: LabPalette) -> [LabStage] {
+  func step(_ id: String, _ title: String, _ note: String, _ ratePerMin: Double?, _ project: String, _ accent: Int) -> LabStage {
+    LabStage(
+      id: id, title: title, note: note,
+      bubble: labAgent(
+        LabAgentSpec(
+          id: id, project: project, status: .working, model: "Fable 5.1", effort: "high", branch: "main",
+          contextPercent: 44, burn: .steady, detail: "Working", accent: accent, tokens: 620_000,
+          ratePerMin: ratePerMin, unpriced: ratePerMin == nil),
+        palette: palette))
+  }
+  return [
+    step("burn-calm", "Calm", "Under five cents a minute: no flames at all. A body with nothing to say says nothing.", 0.02, "ref", 3),
+    step("burn-one", "One flame", "Five cents a minute, $3/hr: one flame, low on its own climb. A working loop on a mid-tier model.", 0.07, "duke", 6),
+    step("burn-two", "Two flames", "Fifteen cents a minute, $9/hr. Steady work.", 0.24, "voyager", 5),
+    step("burn-three", "Three flames", "Forty cents a minute, $24/hr. Long context or high effort.", 0.52, "jabali", 2),
+    step("burn-four", "Four flames", "A dollar a minute, $60/hr. A fan-out worth knowing about.", 1.6, "puppeteer", 1),
+    step(
+      "burn-unpriced", "No price to read",
+      "A provider with no pricing lane: ONE hollow flame. Not four, and not nothing — an absent reading must never look like a calm one.",
+      nil, "study", 8),
+  ]
+}
+
+/// Part III: the pane light, three weights, on the same idle body with its card open.
 public func lightStages(palette: LabPalette) -> [LabStage] {
   func mounted(_ id: String) -> FieldBubble {
     labAgent(
@@ -308,7 +390,7 @@ public func lightStages(palette: LabPalette) -> [LabStage] {
   ]
 }
 
-/// Part III: a settled cluster, the field as it actually looks.
+/// Part IV: a settled cluster, the field as it actually looks.
 public func clusterStages(palette: LabPalette) -> [LabStage] {
   [
     LabStage(id: "c1", title: "", note: "", bubble: labTerminal("c-t1", project: "voyager", running: false)),
@@ -325,7 +407,7 @@ public func clusterStages(palette: LabPalette) -> [LabStage] {
     LabStage(
       id: "c4", title: "", note: "",
       bubble: labAgent(
-        LabAgentSpec(id: "c-w1", project: "puppeteer", status: .working, model: "Fable 5.1", effort: "high", branch: "swarm", contextPercent: 62, burn: .steady, detail: "Editing tokens.css", active: true, accent: 1, tokens: 2_400_000),
+        LabAgentSpec(id: "c-w1", project: "puppeteer", status: .working, model: "Fable 5.1", effort: "high", branch: "swarm", contextPercent: 62, burn: .steady, detail: "Editing tokens.css", active: true, accent: 1, tokens: 2_400_000, ratePerMin: 0.62),
         palette: palette),
       workingShare: 1),
     LabStage(
@@ -336,7 +418,7 @@ public func clusterStages(palette: LabPalette) -> [LabStage] {
     LabStage(
       id: "c6", title: "", note: "",
       bubble: labAgent(
-        LabAgentSpec(id: "c-w2", project: "puppeteer", status: .working, model: "Fable 5.1", effort: "high", branch: "swarm", contextPercent: 27, burn: .blaze, detail: "Delegating", accent: 1, tokens: 384_000),
+        LabAgentSpec(id: "c-w2", project: "puppeteer", status: .working, model: "Fable 5.1", effort: "high", branch: "swarm", contextPercent: 27, burn: .blaze, detail: "Delegating", accent: 1, tokens: 384_000, ratePerMin: 1.4),
         palette: palette),
       workingShare: 0.15),
     LabStage(
@@ -345,7 +427,7 @@ public func clusterStages(palette: LabPalette) -> [LabStage] {
     LabStage(
       id: "c8", title: "", note: "",
       bubble: labAgent(
-        LabAgentSpec(id: "c-w3", project: "duke", status: .working, model: "Haiku 4.5", effort: "low", branch: "hw3", contextPercent: 55, burn: .ease, detail: "Writing the reply", accent: 6, tokens: 1_200_000),
+        LabAgentSpec(id: "c-w3", project: "duke", status: .working, model: "Haiku 4.5", effort: "low", branch: "hw3", contextPercent: 55, burn: .ease, detail: "Writing the reply", accent: 6, tokens: 1_200_000, ratePerMin: 0.09),
         palette: palette),
       workingShare: 0.5),
   ]

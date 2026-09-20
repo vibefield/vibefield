@@ -232,6 +232,32 @@ private func blocker(kind: String) -> JSONValue {
   /// A row with no PTY falls back to the run id rather than to nothing: the
   /// card header's hue is dealt from this and a blank would deal one colour to
   /// every exited body.
+  @Test func theUSDLaneRidesWhenTheRowCarriesItAndIsMissingNotZeroWhenItDoesNot() throws {
+    // Today's wire: tokens only. The lane is absent — no coverage, no rate — and
+    // the body will draw it unread rather than calm.
+    let bare = try #require(agentSnapshot(from: try row(id: "run-usd")))
+    #expect(bare.state?.usage?.cumulativeTokens == 1000)
+    #expect(bare.state?.usage?.costCoverage == nil)
+    #expect(bare.state?.usage?.costUsd == nil)
+    // The day fieldd projects RFC 008's three fields, they reach the model unchanged.
+    let priced = try #require(
+      agentSnapshot(
+        from: try row(
+          id: "run-usd",
+          usage: .object([
+            "cumulativeTokens": .int(1000), "costUsd": .double(1.25), "costCoverage": .string("complete"),
+            "costRatePerMin": .double(0.4),
+          ]))))
+    #expect(priced.state?.usage?.costUsd == 1.25)
+    #expect(priced.state?.usage?.costCoverage == .complete)
+    #expect(priced.state?.usage?.costRatePerMin == 0.4)
+    // A coverage word this build has no case for is tolerated and reads as no coverage.
+    let odd = try #require(
+      agentSnapshot(from: try row(id: "run-usd", usage: .object(["costUsd": .double(2), "costCoverage": .string("estimated")]))))
+    #expect(odd.state?.usage?.costUsd == 2)
+    #expect(odd.state?.usage?.costCoverage == nil)
+  }
+
   @Test func aRowWithNoTerminalStillHasAnAlias() throws {
     let snapshot = try #require(agentSnapshot(from: try row(id: "run-9", terminal: nil)))
     #expect(snapshot.runtimeSessionID == "run-9")

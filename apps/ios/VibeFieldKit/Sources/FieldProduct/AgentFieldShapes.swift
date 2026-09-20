@@ -76,6 +76,12 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
   public let blockers: [AgentFieldBlocker]
   public let cumulativeTokens: Double?
   public let burnRatePerMin: Double?
+  /// RFC 008's USD lane, read tolerantly (D-i18): fieldd's projection does not
+  /// carry it yet, and an absent lane is `unavailable` on the field — one
+  /// hollow flame, never a zero-dollar claim.
+  public let costUsd: Double?
+  public let costCoverage: String?
+  public let costRatePerMin: Double?
   public let contextUsedPercent: Double?
   public let modelId: String?
   public let modelDisplayName: String?
@@ -119,6 +125,9 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
     var usage = object.object("usage")
     cumulativeTokens = usage.double("cumulativeTokens")
     burnRatePerMin = usage.double("burnRatePerMin")
+    costUsd = usage.double("costUsd")
+    costCoverage = usage.string("costCoverage")
+    costRatePerMin = usage.double("costRatePerMin")
     var context = object.object("context")
     contextUsedPercent = context.double("usedPercent")
     var model = object.object("model")
