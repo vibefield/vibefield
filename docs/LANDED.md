@@ -6724,3 +6724,57 @@ The row the orchestrator asked for after UA-P-4's finding A, and one that nearly
 **The window closes on two planes of three (the EL8 event `Cargo.toml`'s exit list scheduled; lane vf-exit, `723cb356`).** Cargo: `truffle-core = "=0.7.14"`, the `[patch.crates-io]` section gone, the eight-place list rewritten as a dated closure note; `cargo tree -i truffle-core` shows the registry crate with field-native its one consumer; `Cargo.lock` moved by three lines (the version plus the `source` and `checksum` a path package never had). npm: the five `@vibecook/truffle-sidecar-*` rows at 0.7.14 (`pnpm-lock.yaml`: 80 lines, every one of them truffle's — no control install needed); `stage-package.mjs` untouched and its decision verified to read `npm`; the built `target/debug/sidecar-slim` retired after the landing, once main's `node_modules` carried npm 0.7.14 and James's `.env` override named it. `siblings.lock.json`'s `truffle` entry keeps ONLY its `swift` block, re-pinned from the integration tip to `9f0d628` — the released `v0.7.14` commit itself, which the sibling checkout `../truffle-rfc025` now sits detached at (its `apple/Sources` byte-identical to the tip the kit was witnessed against); `PIN_EXPECTATIONS` names `=0.7.14` and the patch-row assertion retired with the `patch` key. **SwiftPM could not follow, and the vice has two jaws, both measured:** forward to `exact: "0.7.14"` SwiftPM refuses — "root depends on 'truffle' 0.7.14 … 'ghosttea' 0.10.1 depends on 'truffle' 0.7.12" — because ghosttea's Swift manifest pins truffle exactly at 0.7.12 in every published tag (v0.10.1, v0.11.0, v0.11.1 checked); back to `exact: "0.7.12"` resolves and then does not compile — UA-P-5a taught the kit RFC 025's login API (`MeshConfiguration.loginAllow`, `MeshNode.loginName`, `Peer.loginName`), six errors. So the kit's row stays `.package(path: ".window/truffle")` through the identity symlink, the app workspace's `Package.resolved` stays without a truffle row, biome's `!**/truffle-rfc025` ignore stays with a dated note, and the resolver error and the reasoning are recorded at the source in `Package.swift`. No version divergence rides along: all three planes read 0.7.14, the path package is only how the kit reaches it, and the sibling is the one pin that raises no unpushed warning because it is a published tag. The unblock is one upstream event — a ghosttea Swift release whose `truffleVersion` is 0.7.14 — filed as petition **G28**; the day it lands the row becomes `exact: "0.7.14"`, the symlink and the lock entry go, and the ghosttea pin moves in the same EL8 event. Found on the way: the cargo family rule (every path patch backed by a pin) had lived only in preflight's sibling-mode branch, so registry mode with no lock could carry an unpinned `[patch.crates-io]` row silently — the registry-mode branch carries the rule now, both halves probed; and `@vibefield/plugin-playground`'s "preserves migration … through churn" flapped once under 25-project parallelism (green alone and on a clean re-run — it asserts on a behaviour LOG as a proxy for a fact the line above already checked directly, which is what makes it load-sensitive; a lottery row).
 
 **Gate at `723cb356`** (the lane's run on the identical tree; the orchestrator fast-forwarded without a second run): `pnpm verify` verbatim red ONLY at `@vibefield/field-app:typecheck` — the same three TS2353 errors on `UsageLedgerRecord`, attributed with a control (identical on main's checkout; James's puppeteer tree is dirty across exactly that monitor surface) · every stage after, in order: `pnpm test` 25 projects green · `pnpm test:rust` 21 suites, 263 passed / 0 failed / 8 ignored · `gen:check` clean · `pnpm preflight` OK with three warnings (puppeteer dirty, rosetta dirty, rosettad not built), none truffle · `pnpm siblings` shows truffle with the swift link only · the kit on a simulator created by UDID and deleted after: 806 tests / 150 suites, 0 failures, 0 restarts after a crash, compiled from the sibling at `9f0d628` (one DerivedData clear first: the TailscaleKit xcframework differs between 0.7.12 and 0.7.14 and a stale module fails with "has been modified since the module file was built").
+
+## IOS-7a — the body says one thing at a time: the state line, the folder, the burn ladder, the USD ledger (2026-09-20; `ff9483c1`, lane `ios/swarm-2`)
+
+James: "there are new changes in puppeteer godview app, onboard to those changes and update ios app
+accordingly." The reference's swarm had moved six commits past the revision IOS-6 transcribed
+(`5389449`), two of them past VibeField's own pin: RFC 008 (`a7a0c4e`, live usage as estimated USD)
+and `29ce206` ("the swarm body says one thing at a time", the one-ink revision of 2026-09-16…18 with
+the STATE GLOW tunables of 09-19). `draft/thinking-ios-swarm.md` §10 is the plan. **The model layer
+transcribed:** the project's colour in ONE place (the folder before the name, solid once a state
+line has displaced it); what the body needs from you in the NAME's place behind its mark, the name
+above at the supporting weight; the light is the STATE's (ink · orange · blue), the flood gone; the
+burn ladder (four flames on an absolute scale of USD a minute — 0.05 · 0.15 · 0.4 · 1 — or ONE
+hollow flame where nothing prices the work); the working body sized by its share of USD;
+`SwarmWeight` (one ink at eight weights, `climb`, `onField`); `UsageLedger` as RFC 008's run-keyed
+USD display history (no hold rule, no interpolation, a correction lands in its own bucket);
+`AgentUsage` with the three cost fields and the buckets; `AgentBlocker` with question · tool · code
+(D-i19) and `blockerText` in the reference's order; the ten STATE GLOW parameters; `BurnBars` and
+the bar tag deleted. The mock prices its burn (claude · codex) and leaves grok · acp unpriced.
+**Tests:** the reference's bubble-model, usage-ledger, weight and text-layout rows transcribed.
+
+## IOS-7b — one surface, one ink: the theme, the shaders and the renderer catch up (2026-09-20; `9b92ff2a`)
+
+`FieldPalette` loses the per-tier tokens; `bodySurface` (`--idle-bg`) and `textMain` are the swarm's
+whole greyscale (D-i20). `SwarmTheme` resolves surface · ink · `stateInk` (`readable`, 45% toward
+the ink on a light theme) · `stateGlow` (`vivid` by `stateChroma`, lifted toward white on dark) ·
+`stateGround` (scaled toward black on dark, carried toward white on light), WITH the parameters.
+The shaders: Frame 48 floats (`glowBand`, `glowWave`), Body 40 (`accent` → `core`, the graph gone),
+`F_FLOOD` → `F_WAVES`, the samples buffer gone; the state's light rides the annulus in carried waves
+(Reduce Motion holds mid-crest); the gauge CLIMBS in weight as it goes round and the track is cut
+out under it. The renderer: `emitBurn` (13 pt flames, 3 pt gap, `climb` per slot, the last one
+breathing), the figures in the ink at the secondary weight, `rung` on a coloured ground, seven new
+sprites from the reference's SVG paths. **Findings:** a ternary over two static function references
+and a nested ternary in a float expression each made the Swift type-checker give up ("failed to
+produce diagnostic"); free functions named like the theme's properties shadowed them in `resolve`.
+
+## IOS-7c — the lab shows the new states and the burn ladder; the wire's USD lane decodes tolerantly (2026-09-20; `0c867e1f`, tip `4f9b4d7d`)
+
+The lab gains `idle-unread-silent`, the context-low/high pair, the question as asked, the adapter's
+detail, `working-quiet` unpriced, and a BURN section (`-vf-swarm-lab=burn`); it reads its models at
+the fixtures' own clock (the running terminal said 177 hours on a day a week after the fixtures were
+dated). `field.agents.v1` rows now yield `usage.costUsd` · `costCoverage` · `costRatePerMin` when
+present (D-i18) — absent is the missing lane, one hollow flame, never a calm session; **fieldd does
+not project them yet and the desktop's pin predates RFC 008, so on today's wire every daemon agent is
+unpriced — that projection is the named follow-up, a desktop slice.** **Witnessed:** the kit suite
+verbatim — 815 tests across nine bundles, exit 0, no restarts (13:58); the simulator app build; the
+lab's twenty pages in both themes and the live field over the mock, every drawn state and the ladder's
+six readings. **A finding, not this slice's:** fifteen minutes later two `FieldLinkTests` rows
+(`aRefusedLoginIsAskedAgainOnlyAfterMinutes`, `anUnreachableDoorIsAskedAgainSoon`) went red on their
+five-second real-time wait — and MAIN's own untouched tree fails the first of them at the same
+minute (`-only-testing:FieldMeshTests` on both trees), so it is the host's clock, not the branch;
+the mesh sources this lane touches are one pure function. Those two rows want a movable clock for
+their wait as well as for their schedule. **Owed to a device, still:** the shader compile at first launch, 30 Hz physics under the
+120 Hz blend, the 7 pt type, VoiceOver per body, the tab bar as an obstacle. **Unruled, adopted as
+leans:** D-i18 · D-i19 · D-i20 (§10.2 of the plan).

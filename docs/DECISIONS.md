@@ -101,6 +101,12 @@ laws — users-and-accounts §6**.
   header) · D-i17 no tooltip. **The base branch (§6) RULED 2026-09-13 (James): one merge, the keyboard
   track and the swarm together.** The IOS-3c status correction above is **RESOLVED**: the
   capability/Keychain leg landed as `9b07fc61` (IOS-3c on `ios/keyboard`) and reached main at `09c526ab`.
+- **D-i18…D-i20** — `thinking-ios-swarm.md` §10 (the September catch-up, 2026-09-20). **Adopted as
+  leans, unruled; on `ios/swarm-2` at `4f9b4d7d`.** D-i18 the USD lane decodes tolerantly — absent is
+  `unavailable`, one hollow flame, never a zero-dollar claim; fieldd's projection of costUsd ·
+  costCoverage · costRatePerMin onto `field.agents.v1` is the named door · D-i19 a blocker's evidence
+  rides `AgentBlocker` (question · tool · code; fieldd flattens the tool only today) · D-i20 the
+  per-tier palette tokens retire; the swarm reads `bodySurface` and `textMain` at `SwarmWeight`'s rungs.
 - **AH-0…AH-5** (AH-1a/1b split) — artifact-hub §10. AH-0 design ratified 2026-08-02;
   AH-1a/1b implementation landed at `9f80f0c` (physical second-client proof open);
   AH-2 implementation landed at `9c17c46`; AH-3 desktop runtime landed at `8c07bf4`
