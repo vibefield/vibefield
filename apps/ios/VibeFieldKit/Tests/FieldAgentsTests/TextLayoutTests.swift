@@ -69,14 +69,14 @@ private let label = TextStyle(size: 10, weight: 800, letterSpacing: 0.1, transfo
     #expect(line.textWidth <= 0.84 * 40)
   }
 
-  @Test func reservesRoomForATagAheadOfTheLeadANarrowMarkTakingOnlyItsWidth() {
+  @Test func givesAMarkNarrowerThanItIsTallOnlyItsOwnWidth() {
     let measure: TextMeasure = { text, _ in Double(text.count) * 6 }
+    // The project's folder: a 14pt sprite that takes 11pt of the line.
     let line = CopyLine(
       key: "name", text: "abc", style: TextStyle(size: 12, weight: 800), opacity: 1, tone: .ink,
-      tag: CopyLead(kind: .bar, size: 10, width: 3, gap: 4, tone: .accent),
-      lead: CopyLead(kind: .dot, size: 5, gap: 4))
+      lead: CopyLead(kind: .icon("folder"), size: 14, width: 11, gap: 4, tone: .accent))
     let placed = layoutCopy([line], radius: 60, measure: measure, maxWidthRatio: 0.9).lines[0]
-    #expect(placed.width == 18 + 3 + 4 + 5 + 4)
+    #expect(placed.width == 18 + 11 + 4)
   }
 
   @Test func reservesRoomForALeadMarkAndReportsTheFullWidth() {

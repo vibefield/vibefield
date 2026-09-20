@@ -8,10 +8,11 @@ import SwarmPhysics
 // cannot develop four interpretations of the same row.
 //
 // The numbers are the decided swarm design (proposals record, pass 9; RFC 005
-// locked 2026-09-09): sizes by status, the unread dot before the name, model
-// and effort always shown, the burn bars and the context ring on a working
-// body, the flood on a blocked one, and a hollow for a terminal no agent has
-// claimed.
+// locked 2026-09-09; the one-ink revision of 2026-09-16…18): sizes by status,
+// the folder in the project's colour before the name, model and effort always
+// shown, the burn ladder and the context ring on a working body, the state's
+// own light on a blocked or unread one, and a hollow for a terminal no agent
+// has claimed.
 
 public enum SwarmBodyState: String, Sendable {
   case terminalEmpty = "terminal-empty"
@@ -19,6 +20,51 @@ public enum SwarmBodyState: String, Sendable {
   case idle
   case working
   case blocked
+}
+
+/// The colour of the light inside a body, which is the STATE's and never the
+/// project's (2026-09-16): the theme's own ink while working, orange while
+/// blocked, blue for a reply that arrived unseen. One light, three colours — a
+/// flood in the state's colour would leave the state's own words nowhere to sit.
+public enum SwarmLightTone: String, Equatable, Sendable {
+  case ink
+  case orange
+  case blue
+}
+
+/// The burn ladder (2026-09-17): estimated USD per minute, about three times
+/// the spend per step, so the four flames are even steps on a log scale.
+/// Absolute, not relative to the swarm, so one body's reading means the same as
+/// another's — the chart it replaces was scaled to its own tallest column and
+/// could only say "busier than it was", never "hot".
+public let burnLadder: [Double] = [0.05, 0.15, 0.4, 1]
+
+/// How many of the four flames a rate lights.
+public func burnFlames(costPerMin: Double) -> Int {
+  var lit = 0
+  for step in burnLadder where costPerMin >= step { lit += 1 }
+  return lit
+}
+
+public struct SwarmBurn: Equatable, Sendable {
+  /// 0–4 against the ladder. Zero with a price is a calm session.
+  public var lit: Int
+  /// False where the provider has no pricing lane: the ladder is drawn unread,
+  /// never as calm (RFC 008 — a missing lane is unavailable, not zero dollars).
+  public var priced: Bool
+  public init(lit: Int, priced: Bool) {
+    self.lit = lit
+    self.priced = priced
+  }
+}
+
+/// The burn rate as people price work: by the hour.
+public func formatRatePerHour(_ costPerMin: Double?) -> String {
+  guard let costPerMin else { return "—/hr" }
+  let perHour = costPerMin * 60
+  if perHour >= 10 { return "$\(Int(perHour.rounded()))/hr" }
+  if perHour >= 1 { return String(format: "$%.1f/hr", perHour) }
+  return "\(formatUsd(perHour))/hr"
 }
 
 public struct SwarmFigure: Equatable, Sendable {
@@ -63,23 +109,25 @@ public struct SwarmWatermark: Equatable, Sendable {
 public struct SwarmBodyModel: Equatable, Sendable {
   public var id: String
   public var state: SwarmBodyState
-  /// The three-way reading that picks the body's colours and size.
+  /// The three-way reading that picks the body's size and its draw order.
   public var appearance: AgentVisualStatus
   public var radius: Double
-  /// The project's colour (record §02): the tag before the name, the flood,
-  /// the centre light. nil is the ramp — a bare terminal belongs to no project.
+  /// The project's colour (record §02). It shows in ONE place: the folder
+  /// before the project's name. Nothing else on the body wears it
+  /// (2026-09-16). nil is the ramp — a bare terminal belongs to no project.
   public var accent: SwarmColor?
   public var copy: [CopyLine]
   public var copyMaxWidthRatio: Double
-  /// The context figure on the top chord and the session's total tokens on
-  /// the bottom one, working bodies only.
+  /// Context on the top chord and observed estimated USD on the bottom,
+  /// working bodies only.
   public var figures: SwarmFigures?
   /// The context ring on the rim in the ink, every agent body.
   public var ring: SwarmRing?
-  /// The burn bars' two sides, twenty columns each, oldest first.
-  public var graph: BurnBars?
-  /// Blocked: the accent floods the body from the centre.
-  public var flood: Bool
+  /// How hard this session is burning, as a count on the fixed ladder.
+  /// Working bodies only.
+  public var burn: SwarmBurn?
+  /// The light inside the body, in the state's colour.
+  public var light: SwarmLightTone?
   /// Transparent body with a rim: the unclaimed terminal.
   public var hollow: Bool
   /// The comet sweeping a hollow's rim: a foreground job.
@@ -103,8 +151,8 @@ public struct BodyModelInput: Sendable {
   public var now: Date
   /// When this terminal's foreground job was first seen, for the elapsed line.
   public var runningSince: Date?
-  /// This working session's place among the working sessions by total tokens,
-  /// 0 (the least) to 1 (the most).
+  /// This session's place among working sessions by estimated USD, 0 (the
+  /// least) to 1 (the most).
   public var workingShare: Double
 
   public init(
@@ -131,24 +179,57 @@ public enum SwarmCopyStyle {
   public static let labelInlineItalic = labelInline.italicised()
   public static let command = TextStyle(size: 8, weight: 600)
   public static let branch = TextStyle(size: 7, weight: 500)
-  /// The latest reply, one line.
-  public static let message = TextStyle(size: 8, weight: 500)
-  public static let kind = TextStyle(size: 7, weight: 800, letterSpacing: 0.08, transform: .uppercase)
+  /// The project's name once the state has taken its place above it.
+  public static let projectAbove = TextStyle(size: 7.5, weight: 800, letterSpacing: 0.02)
+  /// What the body waits on, in the name's place: a sentence, not a label, so
+  /// it is set lighter than a name and a size under it to hold as many of its
+  /// words as the chord allows.
+  public static let stateLine = TextStyle(size: 9, weight: 600, letterSpacing: -0.02)
 }
 
-/// The project's tag before the name: a rounded bar in the project's colour,
-/// the name's height, a quarter as wide.
-private func projectTag(_ style: TextStyle) -> CopyLead {
-  let size = (style.size * 0.8).rounded()
-  return CopyLead(kind: .bar, size: size, width: max(2, (size / 4).rounded()), gap: 4, tone: .accent)
+/// The project's folder before its name, in the project's colour: the one
+/// place that colour is used. Drawn a little larger than the type so its
+/// 24-box ink stands at about the name's cap height, with its advance narrowed
+/// to the ink it actually covers.
+///
+/// Where a state line has displaced the name, the folder turns SOLID and keeps
+/// its full strength while the name steps back to a supporting rung: the
+/// project is still which agent this is, but its name is no longer what the
+/// body is telling you (2026-09-18).
+func projectFolder(_ style: TextStyle, solid: Bool = false, tone: CopyTone? = nil) -> CopyLead {
+  let size = (style.size * (solid ? 1.3 : 1.15)).rounded()
+  return CopyLead(
+    kind: .icon(solid ? "folder-solid" : "folder"),
+    size: size,
+    width: (size * 0.75).rounded(),
+    gap: 4,
+    opacity: solid ? SwarmWeight.title : nil,
+    tone: tone ?? .accent)
 }
 
-private func blockerLine(_ kind: AgentBlockerKind) -> String {
+/// The mark a blocker asks with, and the word it falls back to unnamed.
+func blockerMark(_ kind: AgentBlockerKind) -> (icon: String, word: String) {
   switch kind {
-  case .permission: "permission"
-  case .question: "question"
-  case .failure: "failed"
+  case .permission: ("permission", "permission")
+  case .question: ("question", "question")
+  case .failure: ("failure", "failed")
   }
+}
+
+/// What a blocked body says in the name's place: what it is actually waiting
+/// on, in the blocker's OWN evidence before the reply's — the question as
+/// asked, the detail an adapter gave, the tool a permission names, the
+/// failure's code — and only then the latest reply, and only then the bare word.
+func blockerText(_ blocker: AgentBlocker, message: String?) -> String {
+  func trimmed(_ value: String?) -> String? {
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+    return value
+  }
+  if blocker.kind == .question, let asked = trimmed(blocker.question) { return asked }
+  if let detail = trimmed(blocker.detail) { return detail }
+  if blocker.kind == .permission, let tool = blocker.tool, !tool.isEmpty { return tool }
+  if blocker.kind == .failure, let code = blocker.code, !code.isEmpty { return code }
+  return message ?? blockerMark(blocker.kind).word
 }
 
 /// Compact token counts: 820, 8.1k, 24k, 384k, 1.2M, 24M.
@@ -160,7 +241,7 @@ public func formatTokens(_ count: Double) -> String {
   return "\(Int((count / 1_000_000).rounded()))M"
 }
 
-/// Each working session's place among the working sessions by total tokens:
+/// Each working session's place among the working sessions by estimated USD:
 /// 0 for the least, 1 for the most, everything else in between; all 0 when
 /// they tie or there is only one. Terminals without an agent do not count.
 public func workingShares(_ bubbles: [FieldBubble]) -> [String: Double] {
@@ -211,6 +292,14 @@ public func remoteWriteTitle(hostWritable: Bool) -> String {
     : "this host shares read-only — no viewer may type here"
 }
 
+/// What a body needs from the user, in the name's place: its words, the mark
+/// before them, and how a screen reader says it.
+private struct StateLine {
+  var text: String
+  var icon: String
+  var spoken: String
+}
+
 public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
   let bubble = input.bubble
   let parameters = input.parameters
@@ -222,16 +311,25 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
     let running = bubble.status == .working
     let elapsed = running ? formatElapsed(since: input.runningSince, now: input.now) : nil
     var copy: [CopyLine] = [
+      // One line, the folder then the name, as every other body reads. A
+      // terminal belongs to no project, so its folder wears the ink rather
+      // than a colour.
       CopyLine(
-        key: "folder", text: "", style: SwarmCopyStyle.terminalName, opacity: 0.6, tone: .ink,
-        lead: CopyLead(kind: .icon("folder"), size: 14, gap: 0)),
-      CopyLine(key: "name", text: bubble.project, style: SwarmCopyStyle.terminalName, opacity: 1, tone: .ink, gapBefore: 3),
+        key: "name", text: bubble.project, style: SwarmCopyStyle.terminalName, opacity: SwarmWeight.title,
+        tone: .ink, lead: projectFolder(SwarmCopyStyle.terminalName, tone: .ink)),
       running
-        ? CopyLine(key: "command", text: "running", style: SwarmCopyStyle.command, opacity: 0.85, tone: .ink, gapBefore: 3)
-        : CopyLine(key: "sub", text: "empty", style: SwarmCopyStyle.labelStacked, opacity: 0.55, tone: .ink, gapBefore: 3),
+        ? CopyLine(
+          key: "command", text: "running", style: SwarmCopyStyle.command, opacity: SwarmWeight.supporting,
+          tone: .ink, gapBefore: 3)
+        : CopyLine(
+          key: "sub", text: "empty", style: SwarmCopyStyle.labelStacked, opacity: SwarmWeight.supporting,
+          tone: .ink, gapBefore: 3),
     ]
     if let elapsed {
-      copy.append(CopyLine(key: "elapsed", text: elapsed, style: SwarmCopyStyle.labelStacked, opacity: 0.55, tone: .ink, gapBefore: 3))
+      copy.append(
+        CopyLine(
+          key: "elapsed", text: elapsed, style: SwarmCopyStyle.labelStacked, opacity: SwarmWeight.supporting,
+          tone: .ink, gapBefore: 3))
     }
     // A peer's session wears its host on the body — the name and the host's
     // write policy, in both directions — so it cannot be read as one of this
@@ -240,7 +338,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
       copy.append(
         CopyLine(
           key: "host", text: "\(remote.deviceName) · \(remoteWriteLabel(hostWritable: remote.readWrite))",
-          style: SwarmCopyStyle.labelStacked, opacity: 0.7, tone: .ink, gapBefore: 3))
+          style: SwarmCopyStyle.labelStacked, opacity: SwarmWeight.supporting, tone: .ink, gapBefore: 3))
     }
     let status = bubble.status.rawValue
     return SwarmBodyModel(
@@ -253,8 +351,8 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
       copyMaxWidthRatio: 0.9,
       figures: nil,
       ring: nil,
-      graph: nil,
-      flood: false,
+      burn: nil,
+      light: nil,
       hollow: true,
       running: running,
       unread: false,
@@ -271,6 +369,8 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
   }
 
   let appearance = bubble.status
+  // A working body grows with its share of the working sessions' estimated
+  // USD, from the working size for the least to the largest size for the most.
   let radius = bodyRadius(status: appearance, share: input.workingShare, parameters: parameters)
   let model = facet.modelName ?? facet.provider.displayName
   let effort = facet.effort
@@ -281,27 +381,36 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
     key: "model",
     text: effort.map { "\(model) · \($0.value)" } ?? model,
     style: effort?.intent == .configured ? SwarmCopyStyle.labelInlineItalic : SwarmCopyStyle.labelInline,
-    opacity: 0.58,
+    opacity: SwarmWeight.supporting,
     tone: .ink,
     gapBefore: 3)
   let message = latestMessage(facet)
-  let watermarkSprite = facet.provider.rawValue
+  let watermark = SwarmWatermark(sprite: facet.provider.rawValue, opacity: SwarmWeight.watermark)
 
   if appearance == .working {
-    // The UI's ledger, never Core's estimate: the held total and the stepped burn.
+    // The held total is the UI's ledger: corrected USD across a bubble's runs,
+    // cached ones included. The RATE is Core's own live projection over its
+    // rate-eligible window — never a difference of UI snapshots, which a
+    // correction could otherwise turn into new spend.
     let total = facet.usage?.total
+    let liveUsage = facet.monitorUsage
+    let coverage = liveUsage?.costCoverage
+    let priced = coverage == .complete || coverage == .partial
+    let ratePerMin: Double? = priced ? (liveUsage?.costRatePerMin ?? 0) : nil
     var copy: [CopyLine] = []
     if let branch = facet.branch {
       copy.append(
         CopyLine(
-          key: "branch", text: branch, style: SwarmCopyStyle.branch, opacity: 0.67, tone: .ink,
+          key: "branch", text: branch, style: SwarmCopyStyle.branch, opacity: SwarmWeight.supporting, tone: .ink,
           lead: CopyLead(kind: .dot, size: 5, gap: 4, tone: .green)))
     }
     copy.append(
       CopyLine(
-        key: "name", text: bubble.project, style: SwarmCopyStyle.workingName, opacity: 1, tone: .ink,
-        gapBefore: facet.branch == nil ? 0 : 1, tag: projectTag(SwarmCopyStyle.workingName)))
+        key: "name", text: bubble.project, style: SwarmCopyStyle.workingName, opacity: SwarmWeight.title,
+        tone: .ink, gapBefore: facet.branch == nil ? 0 : 1, lead: projectFolder(SwarmCopyStyle.workingName)))
     copy.append(modelLine)
+    let rate = formatRatePerHour(ratePerMin)
+    let partial = facet.usage?.coverage == .partial
     return SwarmBodyModel(
       id: bubble.id,
       state: .working,
@@ -311,54 +420,62 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
       copy: copy,
       copyMaxWidthRatio: 0.8,
       figures: SwarmFigures(
-        top: SwarmFigure(text: percent.map { "\($0)%" } ?? "--", hot: (percent ?? 0) >= 80 && percent != nil, none: percent == nil),
-        bottom: SwarmFigure(text: total.map(formatTokens) ?? "--", hot: false, none: total == nil)),
+        top: SwarmFigure(text: percent.map { "\($0)%" } ?? "--", hot: percent.map { $0 >= 80 } ?? false, none: percent == nil),
+        bottom: SwarmFigure(
+          text: total.map { "~\(formatUsd($0))\(partial ? "+" : "")" } ?? "—", hot: false, none: total == nil)),
       ring: ring,
-      graph: facet.usage.map(burnBars),
-      flood: false,
+      burn: SwarmBurn(lit: ratePerMin.map { burnFlames(costPerMin: $0) } ?? 0, priced: priced),
+      light: .ink,
       hollow: false,
       running: false,
       unread: bubble.unread,
       stale: bubble.stale,
       active: bubble.active,
       linked: bubble.pane?.color,
-      watermark: SwarmWatermark(sprite: watermarkSprite, opacity: 0.16),
+      watermark: watermark,
       blockerKind: nil,
-      accessibilityLabel: accessibilityLabel,
-      title: title)
+      // The flames are the glance; the exact rate is a word away, for a screen
+      // reader and for the card.
+      accessibilityLabel: "\(accessibilityLabel), burning \(rate)",
+      title: "\(title) · \(rate)")
   }
 
-  let kind = appearance == .blocked ? facet.blockerKind : nil
-  // The latest reply, one line, led by a dot: orange for a body that waits on
-  // the user, blue for a reply the user has not looked at. Without a reply the
-  // blocked body names its blocker instead.
-  func reply(_ tone: CopyTone, _ text: String) -> CopyLine {
-    CopyLine(
-      key: "message", text: text, style: SwarmCopyStyle.message, opacity: 0.85, tone: .ink,
-      gapBefore: 3, lineHeight: 1.2, lead: CopyLead(kind: .dot, size: 5, gap: 4, tone: tone))
+  let blocker = appearance == .blocked ? facet.blocker : nil
+  // What the body needs from the user takes the name's place, in its own words
+  // behind its own mark: what a blocker is waiting on, or the reply that
+  // arrived unseen. The project's name moves above it, and nothing follows the
+  // model line (2026-09-16). The state's COLOUR is the body's ground rather
+  // than its words, so those words stay the theme's ink like every other
+  // body's (2026-09-18).
+  let state: StateLine?
+  if let blocker {
+    let text = blockerText(blocker, message: message)
+    let mark = blockerMark(blocker.kind)
+    state = StateLine(text: text, icon: mark.icon, spoken: "\(mark.word): \(text)")
+  } else if appearance == .blocked {
+    state = StateLine(text: message ?? "blocked", icon: "failure", spoken: message ?? "blocked")
+  } else if bubble.unread {
+    state = StateLine(
+      text: message ?? "new message", icon: "message",
+      spoken: message.map { "new message: \($0)" } ?? "new message")
+  } else {
+    state = nil
   }
-  var messageLine: [CopyLine] = []
-  if appearance == .blocked {
-    if let message {
-      messageLine = [reply(.orange, message)]
-    } else {
-      messageLine = [
-        CopyLine(
-          key: "kind", text: kind.map(blockerLine) ?? "blocked", style: SwarmCopyStyle.kind,
-          opacity: 1, tone: .orange, gapBefore: 3)
-      ]
-    }
-  } else if bubble.unread, let message {
-    messageLine = [reply(.blue, message)]
-  }
+  let nameStyle = state == nil ? SwarmCopyStyle.smallName : SwarmCopyStyle.projectAbove
   var copy: [CopyLine] = [
     CopyLine(
-      key: "name", text: bubble.project, style: SwarmCopyStyle.smallName, opacity: 1, tone: .ink,
-      tag: projectTag(SwarmCopyStyle.smallName),
-      lead: bubble.unread && message == nil ? CopyLead(kind: .dot, size: 5, gap: 4, tone: .blue) : nil),
-    modelLine,
+      key: "name", text: bubble.project, style: nameStyle,
+      opacity: state == nil ? SwarmWeight.title : SwarmWeight.supporting, tone: .ink,
+      lead: projectFolder(nameStyle, solid: state != nil))
   ]
-  copy.append(contentsOf: messageLine)
+  if let state {
+    copy.append(
+      CopyLine(
+        key: "state", text: state.text, style: SwarmCopyStyle.stateLine, opacity: SwarmWeight.title, tone: .ink,
+        gapBefore: 2, lineHeight: 1.15, lead: CopyLead(kind: .icon(state.icon), size: 11, width: 8, gap: 3)))
+  }
+  copy.append(modelLine)
+  let light: SwarmLightTone? = appearance == .blocked ? .orange : bubble.unread ? .blue : nil
   return SwarmBodyModel(
     id: bubble.id,
     state: appearance == .blocked ? .blocked : .idle,
@@ -366,19 +483,21 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
     radius: radius,
     accent: bubble.color,
     copy: copy,
-    copyMaxWidthRatio: 0.84,
+    // The state line is the widest thing a small body carries; it gets a
+    // little more of the chord than a name would.
+    copyMaxWidthRatio: state == nil ? 0.84 : 0.86,
     figures: nil,
     ring: ring,
-    graph: nil,
-    flood: appearance == .blocked,
+    burn: nil,
+    light: light,
     hollow: false,
     running: false,
     unread: bubble.unread,
     stale: bubble.stale,
     active: bubble.active,
     linked: bubble.pane?.color,
-    watermark: SwarmWatermark(sprite: watermarkSprite, opacity: appearance == .blocked ? 0.12 : 0.055),
-    blockerKind: kind,
-    accessibilityLabel: accessibilityLabel,
+    watermark: watermark,
+    blockerKind: blocker?.kind,
+    accessibilityLabel: state.map { "\(accessibilityLabel), \($0.spoken)" } ?? accessibilityLabel,
     title: title)
 }

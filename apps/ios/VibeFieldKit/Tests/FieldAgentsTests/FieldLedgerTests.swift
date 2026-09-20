@@ -247,18 +247,21 @@ private func row(
   @Test func joinsTheUsageLedgerAndMarksUnreadAndStaleRows() {
     var assembly = FieldAssembly(tint: .light)
     let working = AgentRuntimeState(
-      activeTurn: true, usage: AgentUsage(cumulativeTokens: 1_000), statusSince: now, lastEvidenceAt: now)
+      activeTurn: true, usage: AgentUsage(cumulativeTokens: 1_000, costUsd: 1, costCoverage: .complete), statusSince: now,
+      lastEvidenceAt: now)
     var rows = assembly.fold([agent("a", project: "p", state: working)], cardSubjectID: nil, nowMs: t0)
-    #expect(rows[0].agent?.usage?.total == 1_000)
+    // The ledger's total is RFC 008's USD, never the tokens.
+    #expect(rows[0].agent?.usage?.total == 1)
+    #expect(rows[0].agent?.usage?.coverage == .complete)
     #expect(rows[0].unread == false)
     #expect(rows[0].stale == false)
     // The turn ends after the row was seen: the reply is unread until its card opens.
     let done = AgentRuntimeState(
-      lastAssistantMessage: "Done.", usage: AgentUsage(cumulativeTokens: 1_400),
+      lastAssistantMessage: "Done.", usage: AgentUsage(cumulativeTokens: 1_400, costUsd: 1.4, costCoverage: .complete),
       statusSince: now.addingTimeInterval(30), lastEvidenceAt: now.addingTimeInterval(30))
     rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: nil, nowMs: t0 + 31_000)
     #expect(rows[0].unread)
-    #expect(rows[0].agent?.usage?.total == 1_400)
+    #expect(rows[0].agent?.usage?.total == 1.4)
     rows = assembly.fold([agent("a", project: "p", state: done)], cardSubjectID: "a", nowMs: t0 + 32_000)
     #expect(rows[0].unread == false)
     // Evidence older than the freshness policy dims the body.

@@ -12,7 +12,8 @@ import SwarmPhysics
 /// permission walls, idle out, and exit, at a pace tuned for watching. Since
 /// IOS-6a it also burns tokens along the reference lab's four shapes, wears a
 /// model and an effort, replies, and asks questions, so every drawn state of
-/// RFC 005 has something honest-shaped to show.
+/// RFC 005 has something honest-shaped to show; since IOS-7a it prices that
+/// burn the way RFC 008 does, and leaves the providers nobody prices unpriced.
 @MainActor
 @Observable
 public final class MockAgentField {
@@ -41,6 +42,12 @@ public final class MockAgentField {
   ]
   private static let efforts: [AgentProvider: String] = [
     .claude: "high", .codex: "medium", .grok: "low",
+  ]
+  /// What the mock charges per million tokens, so the burn ladder has rungs
+  /// to show (RFC 008 prices only claude and codex; a provider with no
+  /// pricing lane is UNAVAILABLE, and the mock leaves grok and acp so).
+  private static let pricesPerMillion: [AgentProvider: Double] = [
+    .claude: 30, .codex: 12,
   ]
   private static let toolTitles = [
     "Bash", "Edit", "Read", "WebFetch", "pnpm verify", "cargo test", "Grep",
@@ -81,6 +88,12 @@ public final class MockAgentField {
     var total: Double = 0
     var input: Double = 0
     var output: Double = 0
+    /// USD per token, or nil for a provider nobody prices.
+    var pricePerToken: Double?
+    var costUsd: Double = 0
+    var ratePerMin: Double = 0
+    /// Core's thirty-second buckets, the current one last.
+    var buckets: [AgentCostBucket] = []
   }
 
   public init(seed: UInt64? = nil, clock: @escaping () -> Date = { .now }) {
@@ -173,7 +186,9 @@ public final class MockAgentField {
       ?? (random(10) < 6 ? .claude : AgentProvider.known[random(AgentProvider.known.count)])
     let id = "mock-session-\(spawnCounter)"
     let shape = burn ?? BurnShape.allCases[random(BurnShape.allCases.count)]
-    burns[id] = Burn(shape: shape, total: state == nil ? 0 : Double(random(400_000)))
+    let price = Self.pricesPerMillion[chosenProvider].map { $0 / 1_000_000 }
+    let total = state == nil ? 0 : Double(random(400_000))
+    burns[id] = Burn(shape: shape, total: total, pricePerToken: price, costUsd: total * (price ?? 0))
     return AgentSnapshot(
       id: id,
       runtimeSessionID: "mock-runtime-\(spawnCounter)-\(UInt32(truncatingIfNeeded: rng.next()))",
@@ -194,6 +209,20 @@ public final class MockAgentField {
     let sample = AgentUsageSample(
       at: clock(), cumulativeTokens: burn.total, inputTokens: burn.input, outputTokens: burn.output)
     usage.samples = Array((usage.samples + [sample]).suffix(40))
+    // The USD lane, as Core projects it: the corrected total, the coverage,
+    // the live rate and the buckets — or the lane missing altogether, which
+    // is not the same as a rate of zero.
+    if burn.pricePerToken != nil {
+      usage.costUsd = burn.costUsd
+      usage.costCoverage = .complete
+      usage.costRatePerMin = burn.ratePerMin
+      usage.costHistory = Array(burn.buckets.suffix(usageStepCount + 1))
+    } else {
+      usage.costUsd = nil
+      usage.costCoverage = .unavailable
+      usage.costRatePerMin = nil
+      usage.costHistory = []
+    }
     next.usage = usage
     return next
   }
@@ -250,10 +279,11 @@ public final class MockAgentField {
             state.permissions = [AgentPermission(tool: tool)]
             state.lastAssistantMessage = chance(0.6) ? "May I run \(tool) to check the fix?" : nil
           } else if chance(0.6) {
-            state.blockers = [AgentBlocker(kind: .question)]
-            state.lastAssistantMessage = Self.questions[random(Self.questions.count)]
+            let question = Self.questions[random(Self.questions.count)]
+            state.blockers = [AgentBlocker(kind: .question, question: question)]
+            state.lastAssistantMessage = question
           } else {
-            state.blockers = [AgentBlocker(kind: .failure, detail: "E_TOOL")]
+            state.blockers = [AgentBlocker(kind: .failure, code: "E_TOOL")]
             state.lastAssistantMessage = nil
           }
         } else if chance(0.07) {
@@ -265,12 +295,25 @@ public final class MockAgentField {
         }
         // The burn: only a working agent spends.
         if var burn = burns[agent.id] {
-          let spent = burn.shape.rate(step: burn.step) * Self.tickSeconds / 60
+          let rate = burn.shape.rate(step: burn.step)
+          let spent = rate * Self.tickSeconds / 60
           let outputShare = 0.18 + 0.12 * sin(burn.step / 2)
           burn.total += spent
           burn.output += spent * outputShare
           burn.input += spent * (1 - outputShare)
           burn.step += Self.tickSeconds / 30
+          if let price = burn.pricePerToken {
+            let cost = spent * price
+            burn.costUsd += cost
+            burn.ratePerMin = rate * price
+            let bucketAt = Date(
+              timeIntervalSince1970: (now.timeIntervalSince1970 / (usageStepMs / 1000)).rounded(.down) * (usageStepMs / 1000))
+            if let last = burn.buckets.last, last.at == bucketAt {
+              burn.buckets[burn.buckets.count - 1].costUsd += cost
+            } else {
+              burn.buckets.append(AgentCostBucket(at: bucketAt, costUsd: cost))
+            }
+          }
           burns[agent.id] = burn
         }
       case .blocked:

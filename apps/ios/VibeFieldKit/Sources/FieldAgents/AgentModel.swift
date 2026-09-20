@@ -85,10 +85,26 @@ public enum AgentBlockerKind: String, Sendable, Codable {
 
 public struct AgentBlocker: Sendable, Equatable, Codable {
   public var kind: AgentBlockerKind
+  /// An adapter's human-readable line for the blocker: what the body says first.
   public var detail: String?
-  public init(kind: AgentBlockerKind, detail: String? = nil) {
+  /// A question blocker's question as asked (the first question's header, else
+  /// its prompt). fieldd's row does not carry it yet; the mock and a later door do.
+  public var question: String?
+  /// The tool a permission names — the one piece of evidence `field.agents.v1`
+  /// flattens onto the row today.
+  public var tool: String?
+  /// A failure's code.
+  public var code: String?
+
+  public init(
+    kind: AgentBlockerKind, detail: String? = nil, question: String? = nil, tool: String? = nil,
+    code: String? = nil
+  ) {
     self.kind = kind
     self.detail = detail
+    self.question = question
+    self.tool = tool
+    self.code = code
   }
 }
 
@@ -126,9 +142,33 @@ public struct AgentUsageSample: Sendable, Equatable, Codable {
   }
 }
 
+/// How much of a run's work Core could price (RFC 008). `unavailable` is a
+/// MISSING pricing lane, never a zero-dollar claim; the ladder is drawn unread.
+public enum AgentCostCoverage: String, Sendable, Codable {
+  case complete
+  case partial
+  case unavailable
+}
+
+/// Corrected spend in one of Core's fixed thirty-second buckets
+/// (`MonitorCostBucket`), including the current bucket.
+public struct AgentCostBucket: Sendable, Equatable, Codable {
+  public var at: Date
+  public var costUsd: Double
+  public init(at: Date, costUsd: Double) {
+    self.at = at
+    self.costUsd = costUsd
+  }
+}
+
 /// Core's usage for a run, in the mirror's own field names (`MonitorUsageState`):
-/// a corrected estimate that every source moves. The field never reads it
-/// directly — `UsageLedger` folds it into the number the screen stands behind.
+/// a corrected estimate that every source moves. The field never reads the
+/// tokens directly — `UsageLedger` folds the USD into the number the screen
+/// stands behind, and the body reads the live rate for the burn ladder.
+///
+/// The cost fields are decoded tolerantly (D-i18): `field.agents.v1` does not
+/// carry them yet and VibeField's puppeteer pin predates RFC 008, so on today's
+/// wire they are absent and the body reads `unavailable` — one hollow flame.
 public struct AgentUsage: Sendable, Equatable, Codable {
   public var cumulativeTokens: Double?
   public var inputTokens: Double?
@@ -137,6 +177,14 @@ public struct AgentUsage: Sendable, Equatable, Codable {
   public var cacheCreationTokens: Double?
   public var reasoningTokens: Double?
   public var samples: [AgentUsageSample]
+  /// Estimated API-equivalent USD for the observed work of this run.
+  public var costUsd: Double?
+  public var costCoverage: AgentCostCoverage?
+  /// Core's own live projection over its rate-eligible window — never a
+  /// difference of UI snapshots.
+  public var costRatePerMin: Double?
+  /// Corrected costs in fixed 30-second buckets, including the current one.
+  public var costHistory: [AgentCostBucket]
 
   public init(
     cumulativeTokens: Double? = nil,
@@ -145,7 +193,11 @@ public struct AgentUsage: Sendable, Equatable, Codable {
     cacheReadTokens: Double? = nil,
     cacheCreationTokens: Double? = nil,
     reasoningTokens: Double? = nil,
-    samples: [AgentUsageSample] = []
+    samples: [AgentUsageSample] = [],
+    costUsd: Double? = nil,
+    costCoverage: AgentCostCoverage? = nil,
+    costRatePerMin: Double? = nil,
+    costHistory: [AgentCostBucket] = []
   ) {
     self.cumulativeTokens = cumulativeTokens
     self.inputTokens = inputTokens
@@ -154,6 +206,10 @@ public struct AgentUsage: Sendable, Equatable, Codable {
     self.cacheCreationTokens = cacheCreationTokens
     self.reasoningTokens = reasoningTokens
     self.samples = samples
+    self.costUsd = costUsd
+    self.costCoverage = costCoverage
+    self.costRatePerMin = costRatePerMin
+    self.costHistory = costHistory
   }
 }
 

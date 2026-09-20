@@ -2,7 +2,7 @@
 ///
 /// Values and names are ported verbatim from the reference
 /// (`packages/views/src/views/swarm/swarm-parameters.ts`, `parametersRevision`
-/// `2026-09-09` — the locked design's defaults) so the two surfaces share one
+/// `2026-09-09` — the locked design's defaults; the STATE GLOW group of 2026-09-19) so the two surfaces share one
 /// feel. Units are Matter.js units: positions in points, time in milliseconds —
 /// keeping the units is what lets the constants carry over unchanged.
 public struct SwarmParameters: Sendable, Equatable {
@@ -36,6 +36,28 @@ public struct SwarmParameters: Sendable, Equatable {
   /// Blocked is held at the idle size: the light says it.
   public var radiusBlocked: Double
 
+  // ── The light a blocked or unread body gives (2026-09-18) ──────────────
+  /// How much more saturated a state colour is as LIGHT than as a label. 1 is the kit's token untouched.
+  public var stateChroma: Double
+  /// A dark theme's ground: the fraction of the light's brightness it keeps.
+  public var stateGroundDark: Double
+  /// A light theme's ground: how far the light is carried toward white.
+  public var stateGroundLight: Double
+  /// A dark theme's glow: how far the light itself is carried toward white.
+  public var stateGlowLift: Double
+  /// The glow's own strength where a wave crests.
+  public var stateGlowStrength: Double
+  /// Where the glow begins, as a fraction of the radius.
+  public var stateGlowInner: Double
+  /// Where it reaches full. Near the rim, so the ramp crosses most of the body.
+  public var stateGlowFull: Double
+  /// Wave crests across the radius.
+  public var stateWaveCount: Double
+  /// Crests passing a second.
+  public var stateWaveSpeed: Double
+  /// How far a trough dims between crests; 0 is a steady glow.
+  public var stateWaveDepth: Double
+
   public init(
     gravityPull: Double = 0.0002,
     restitution: Double = 0,
@@ -48,7 +70,17 @@ public struct SwarmParameters: Sendable, Equatable {
     radiusIdle: Double = 50,
     radiusWorking: Double = 60,
     radiusWorkingMax: Double = 80,
-    radiusBlocked: Double = 50
+    radiusBlocked: Double = 50,
+    stateChroma: Double = 1.22,
+    stateGroundDark: Double = 0.5,
+    stateGroundLight: Double = 0.45,
+    stateGlowLift: Double = 0.55,
+    stateGlowStrength: Double = 0.2,
+    stateGlowInner: Double = 0.11,
+    stateGlowFull: Double = 0.9,
+    stateWaveCount: Double = 1.7,
+    stateWaveSpeed: Double = 1.75,
+    stateWaveDepth: Double = 0.72
   ) {
     self.gravityPull = gravityPull
     self.restitution = restitution
@@ -62,6 +94,16 @@ public struct SwarmParameters: Sendable, Equatable {
     self.radiusWorking = radiusWorking
     self.radiusWorkingMax = radiusWorkingMax
     self.radiusBlocked = radiusBlocked
+    self.stateChroma = stateChroma
+    self.stateGroundDark = stateGroundDark
+    self.stateGroundLight = stateGroundLight
+    self.stateGlowLift = stateGlowLift
+    self.stateGlowStrength = stateGlowStrength
+    self.stateGlowInner = stateGlowInner
+    self.stateGlowFull = stateGlowFull
+    self.stateWaveCount = stateWaveCount
+    self.stateWaveSpeed = stateWaveSpeed
+    self.stateWaveDepth = stateWaveDepth
   }
 
   public static let `default` = SwarmParameters()

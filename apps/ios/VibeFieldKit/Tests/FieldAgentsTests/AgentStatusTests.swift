@@ -77,6 +77,17 @@ import Testing
     #expect(parameters.radiusWorking == 60)
     #expect(parameters.radiusWorkingMax == 80)
     #expect(parameters.radiusBlocked == 50)
+    // The STATE GLOW group (2026-09-19).
+    #expect(parameters.stateChroma == 1.22)
+    #expect(parameters.stateGroundDark == 0.5)
+    #expect(parameters.stateGroundLight == 0.45)
+    #expect(parameters.stateGlowLift == 0.55)
+    #expect(parameters.stateGlowStrength == 0.2)
+    #expect(parameters.stateGlowInner == 0.11)
+    #expect(parameters.stateGlowFull == 0.9)
+    #expect(parameters.stateWaveCount == 1.7)
+    #expect(parameters.stateWaveSpeed == 1.75)
+    #expect(parameters.stateWaveDepth == 0.72)
     // The two stability clamps, applied wherever parameters enter.
     #expect(SwarmParameters(frictionAir: 0.9).effectiveFrictionAir == 0.2)
     #expect(SwarmParameters(frictionAir: -1).effectiveFrictionAir == 0)

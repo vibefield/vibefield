@@ -49,12 +49,10 @@ public enum CopyTone: Equatable, Sendable {
 
 public struct CopyLead: Equatable, Sendable {
   public enum Kind: Equatable, Sendable {
-    /// The unread mark.
+    /// A state mark.
     case dot
     /// A sprite the renderer draws by name.
     case icon(String)
-    /// The project's tag before the name.
-    case bar
   }
 
   public var kind: Kind
@@ -93,13 +91,11 @@ public struct CopyLine: Equatable, Sendable {
   public var gapBefore: Double
   /// Line box height as a multiple of the size; the copy's `line-height: 1.05`.
   public var lineHeight: Double?
-  /// A mark before the lead: the project's bar stands ahead of the unread dot.
-  public var tag: CopyLead?
   public var lead: CopyLead?
 
   public init(
     key: String, text: String, style: TextStyle, opacity: Double, tone: CopyTone,
-    gapBefore: Double = 0, lineHeight: Double? = nil, tag: CopyLead? = nil, lead: CopyLead? = nil
+    gapBefore: Double = 0, lineHeight: Double? = nil, lead: CopyLead? = nil
   ) {
     self.key = key
     self.text = text
@@ -108,7 +104,6 @@ public struct CopyLine: Equatable, Sendable {
     self.tone = tone
     self.gapBefore = gapBefore
     self.lineHeight = lineHeight
-    self.tag = tag
     self.lead = lead
   }
 }
@@ -200,15 +195,14 @@ public func layoutCopy(
     cursor += line.gapBefore
     let y = cursor + height / 2
     cursor += height
-    let leadWidth =
-      (line.tag.map { $0.advance + $0.gap } ?? 0) + (line.lead.map { $0.advance + $0.gap } ?? 0)
+    let leadWidth = line.lead.map { $0.advance + $0.gap } ?? 0
     let available = min(
       maxWidthRatio * radius * 2,
       chordWidth(radius: radius, yTop: y - height / 2, yBottom: y + height / 2) - inset * 2)
     let text = fitText(line.text, line.style, maxWidth: available - leadWidth, measure: measure)
     let textWidth = text.isEmpty ? 0 : measure(text, line.style)
     let width: Double
-    if text.isEmpty, let lead = line.lead, line.tag == nil {
+    if text.isEmpty, let lead = line.lead {
       width = lead.advance
     } else {
       width = textWidth + leadWidth

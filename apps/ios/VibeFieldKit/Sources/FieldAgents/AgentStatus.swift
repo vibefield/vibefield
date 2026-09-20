@@ -29,9 +29,16 @@ public func classifyAgentStatus(_ state: AgentRuntimeState?) -> AgentVisualStatu
 /// The first blocker's kind: a permission outranks the rest, as the monitor
 /// lists it first.
 public func agentBlockerKind(_ state: AgentRuntimeState?) -> AgentBlockerKind? {
+  agentBlocker(state)?.kind
+}
+
+/// The blocker a body speaks for: a pending permission first — its tool is
+/// the evidence the state line quotes — else the first blocker the monitor
+/// listed, evidence and all.
+public func agentBlocker(_ state: AgentRuntimeState?) -> AgentBlocker? {
   guard let state else { return nil }
-  if !state.permissions.isEmpty { return .permission }
-  return state.blockers.first?.kind
+  if let permission = state.permissions.first { return AgentBlocker(kind: .permission, tool: permission.tool) }
+  return state.blockers.first
 }
 
 /// The radius a body takes: the status's, and for a working body its place

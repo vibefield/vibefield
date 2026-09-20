@@ -23,17 +23,18 @@ public struct AgentFacet: Sendable, Equatable {
   /// default — an agent that is not waiting has nothing to answer, and a
   /// terminal bubble has no agent facet at all.
   public let permissions: [AgentPermission]
-  /// Why the agent is blocked, when it is: the copy names it when there is no
-  /// reply to show.
-  public let blockerKind: AgentBlockerKind?
+  /// Why the agent is blocked, when it is, with the evidence the state line
+  /// quotes (the tool, the question, the detail, the code — D-i19).
+  public let blocker: AgentBlocker?
+  public var blockerKind: AgentBlockerKind? { blocker?.kind }
   public let effort: AgentEffort?
   /// The root agent's latest reply; the body shows its first line.
   public let lastMessage: String?
   /// Core's usage, verbatim — the ledger's INPUT, never drawn.
   public let monitorUsage: AgentUsage?
-  /// The UI's own account of the tokens (`UsageLedger`): the held total and
-  /// the burn per step. The body reads this, never `monitorUsage`. Filled at
-  /// assembly.
+  /// The UI's display history of the run's USD (`UsageLedger`): the corrected
+  /// total and the buckets. The body reads this for the total and
+  /// `monitorUsage` for the live rate. Filled at assembly.
   public var usage: UsageHistory?
   public let statusSince: Date?
   public let lastEvidenceAt: Date?
@@ -47,7 +48,7 @@ public struct AgentFacet: Sendable, Equatable {
     branch: String? = nil,
     contextUsedPercent: Double? = nil,
     permissions: [AgentPermission] = [],
-    blockerKind: AgentBlockerKind? = nil,
+    blocker: AgentBlocker? = nil,
     effort: AgentEffort? = nil,
     lastMessage: String? = nil,
     monitorUsage: AgentUsage? = nil,
@@ -61,7 +62,7 @@ public struct AgentFacet: Sendable, Equatable {
     self.branch = branch
     self.contextUsedPercent = contextUsedPercent
     self.permissions = permissions
-    self.blockerKind = blockerKind
+    self.blocker = blocker
     self.effort = effort
     self.lastMessage = lastMessage
     self.monitorUsage = monitorUsage
@@ -191,7 +192,7 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
       // not a default standing in for missing news: a snapshot with no state
       // has not reported yet, and "not reported" is not "waiting".
       permissions: state?.permissions ?? [],
-      blockerKind: status == .blocked ? agentBlockerKind(state) : nil,
+      blocker: status == .blocked ? agentBlocker(state) : nil,
       effort: state?.effort,
       lastMessage: state?.lastAssistantMessage,
       monitorUsage: state?.usage,
@@ -289,8 +290,11 @@ public struct FieldAssembly: Sendable {
   ) -> [FieldBubble] {
     projects = projects.dealing(bubbles.filter { $0.agent != nil }.map(\.project))
     panes = panes.dealing([Self.cardPaneID])
+    // The row's id IS the run (AR-4b), so the ledger's run key is the id; the
+    // native session id does not ride the row, and the reference's fold holds
+    // a run's history across projections without it.
     usage = usage.reconciling(
-      bubbles.map { UsageReading(id: $0.id, usage: $0.agent?.monitorUsage) }, nowMs: nowMs)
+      bubbles.map { UsageReading(id: $0.id, runId: $0.id, usage: $0.agent?.monitorUsage) }, nowMs: nowMs)
     unread = unread.reconciling(
       bubbles.map { bubble in
         UnreadCandidate(
