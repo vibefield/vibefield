@@ -1,6 +1,7 @@
 //! Shared harness for the tests that join a REAL tailnet.
 //!
-//! Every one of them is `#[ignore]`d and gated on `TRUFFLE_TEST_AUTHKEY`: a
+//! Every one of them is `#[ignore]`d and gated on `TRUFFLE_TEST_AUTHKEY` — and
+//! UA-P-4d's foreign-login row additionally on `TRUFFLE_TEST_AUTHKEY_GUEST`: a
 //! network round-trip must not sit inside `pnpm verify`, and a machine without
 //! a key must never be a red build. Run them deliberately:
 //!
@@ -32,11 +33,39 @@ pub const WS_PORT: u16 = 9417;
 
 pub const AUTHKEY_ENV: &str = "TRUFFLE_TEST_AUTHKEY";
 
-/// Read the key from the environment, else from a `.env` walked up from this
-/// crate. A hand parse rather than a dependency: one variable does not justify
-/// adding a crate to a daemon's build graph.
+/// UA-P-4d — THE SECOND TAILNET USER'S KEY, and the whole mechanism of the
+/// foreign-login witness: an auth key names its minter, so a node built with
+/// a key generated while signed in as somebody else registers under THAT
+/// login. One machine, two logins, no second device.
+///
+/// It must be UNTAGGED. A tagged key registers its node under Tailscale's
+/// `tagged-devices` pseudo-user (RFC 025 §3.3), which owns no human login at
+/// all — such a node exercises the gate's "caller has no login" row instead
+/// of its "caller is someone else" row, and fieldd's own capture refuses it
+/// outright (`packages/fieldd/src/link-service.ts`, `login_unavailable`).
+pub const GUEST_AUTHKEY_ENV: &str = "TRUFFLE_TEST_AUTHKEY_GUEST";
+
+/// The account's own key. See [`authkey_named`].
 pub fn authkey() -> Option<String> {
-    if let Ok(k) = std::env::var(AUTHKEY_ENV) {
+    authkey_named(AUTHKEY_ENV)
+}
+
+/// The guest account's key (UA-P-4d). `None` on every machine that has not
+/// minted one, which is most of them — the rows that need it skip loudly.
+pub fn guest_authkey() -> Option<String> {
+    authkey_named(GUEST_AUTHKEY_ENV)
+}
+
+/// Read `name` from the environment, else from a `.env` walked up from this
+/// crate. A hand parse rather than a dependency: two variables do not justify
+/// adding a crate to a daemon's build graph.
+///
+/// The walk starts at THIS crate, so a checkout whose `.env` lives elsewhere
+/// (an agent worktree beside the one holding the file) has no fallback by
+/// design — export the variable in the shell that runs cargo instead of
+/// copying a secret between trees.
+fn authkey_named(name: &str) -> Option<String> {
+    if let Ok(k) = std::env::var(name) {
         if !k.is_empty() {
             return Some(k);
         }
@@ -51,10 +80,10 @@ pub fn authkey() -> Option<String> {
                 if line.is_empty() || line.starts_with('#') {
                     continue;
                 }
-                let Some((name, value)) = line.split_once('=') else {
+                let Some((key_name, value)) = line.split_once('=') else {
                     continue;
                 };
-                if name.trim() == AUTHKEY_ENV {
+                if key_name.trim() == name {
                     let v = value.trim().trim_matches('"').trim_matches('\'');
                     if !v.is_empty() {
                         return Some(v.to_string());
@@ -90,7 +119,14 @@ fn vendored_sidecar_package() -> Option<&'static str> {
 }
 
 /// The binary this workspace PINS, resolved through `apps/desktop`'s own
-/// dependency — the same artifact the packaged app ships (EL8, exact `0.7.12`).
+/// dependency — the same artifact the packaged app ships (EL8, an exact `=`
+/// registry pin).
+///
+/// **Errata (2026-09-20, UA-P-4d).** This line used to name the version here
+/// (`0.7.12`), and it was stale: UA-P-X moved `apps/desktop` to the
+/// protocol-5 sidecar. A version stated in prose is how lockstep quietly
+/// breaks — `apps/desktop/package.json` is the authority, and the resolved
+/// path this function returns is what the probes actually ran.
 pub fn vendored_sidecar() -> Option<PathBuf> {
     let package = vendored_sidecar_package()?;
     let mut dir: Option<&Path> = Some(Path::new(env!("CARGO_MANIFEST_DIR")));
@@ -167,6 +203,23 @@ pub async fn build_node(
     key: &str,
     sidecar: &Path,
 ) -> Node<TailscaleProvider> {
+    try_build_node(app_id, name, state, key, sidecar)
+        .await
+        .expect("node build")
+}
+
+/// The same bring-up, as a `Result` — for a caller that can say something more
+/// useful than `expect("node build")` about WHY it failed. UA-P-4d's guest node
+/// is built from a key a human minted on a second account minutes earlier, so
+/// "expired, single-use and already spent, or from another tailnet" is a far
+/// likelier answer there than anywhere else in this harness.
+pub async fn try_build_node(
+    app_id: &str,
+    name: &str,
+    state: &Path,
+    key: &str,
+    sidecar: &Path,
+) -> Result<Node<TailscaleProvider>, String> {
     NodeBuilder::default()
         .app_id(app_id.to_string())
         .expect("app_id parses")
@@ -179,16 +232,27 @@ pub async fn build_node(
         .ws_port(WS_PORT)
         .build()
         .await
-        .expect("node build")
+        .map_err(|e| e.to_string())
 }
 
 /// UA-P-4 — the same node, GATED on `login_allow` (RFC 025 §3.1). Separate from
 /// `build_node` rather than an extra argument on it because the failure mode is
 /// different and worth naming: a gated node REFUSES TO START against a sidecar
-/// below protocol 5, so a build error here is usually a pin problem (the npm
-/// `@vibecook/truffle-sidecar-*` packages are pre-RFC-025 while the petition
-/// window is open) and not a broken test. Point `FIELD_NATIVE_SIDECAR_PATH` at
-/// the sidecar `pnpm siblings:build` produced.
+/// below protocol 5, so a build error here is usually a pin problem and not a
+/// broken test.
+///
+/// That refusal is also the only protocol-5 ASSERTION a test has: `Node`
+/// publishes no sidecar protocol version anywhere on its public surface, so a
+/// gated node that builds AT ALL is the witness that the sidecar speaks 5.
+///
+/// **Errata (2026-09-20, UA-P-4d).** This note used to add that the npm
+/// `@vibecook/truffle-sidecar-*` packages were pre-RFC-025 "while the petition
+/// window is open", and told the caller to point `FIELD_NATIVE_SIDECAR_PATH` at
+/// the sidecar `pnpm siblings:build` produced. UA-P-X closed the npm half of
+/// that window: `apps/desktop` installs 0.7.14 (protocol 5), so `sidecar()`'s
+/// vendored preference now resolves the RIGHT binary and the override is no
+/// longer needed for a gated node. The window is still open on the SwiftPM
+/// plane only — see CLAUDE.md, which is the authority for the pins.
 pub async fn build_gated_node(
     app_id: &str,
     name: &str,
