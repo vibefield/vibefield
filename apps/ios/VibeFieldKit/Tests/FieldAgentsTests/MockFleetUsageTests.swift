@@ -3,8 +3,8 @@ import Testing
 
 @testable import FieldAgents
 
-@Suite @MainActor struct MockUsageProbeTests {
-  @Test func everyPricedWorkingBodyKeepsATotalThroughTheFold() {
+@Suite @MainActor struct MockFleetUsageTests {
+  @Test func aPricedWorkingBodyKeepsItsTotalThroughTheFoldAndAnUnpricedOneHasNone() {
     let clock = Date(timeIntervalSince1970: 1_789_560_000)
     let mock = MockAgentField(seed: 7, clock: { clock })
     for _ in 0..<3 { mock.advance() }
