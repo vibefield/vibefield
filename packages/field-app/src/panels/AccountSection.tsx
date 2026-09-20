@@ -1,7 +1,14 @@
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
 import { AccentChip, AccentPicker } from "../account/AccentPicker";
-import { linkFace, readableTime, type UserLinkStatus } from "../account/link";
+import {
+  LINK_ACT_LABEL,
+  LINK_ACT_PENDING_LABEL,
+  type LinkBeginStep,
+  linkFace,
+  readableTime,
+  type UserLinkStatus,
+} from "../account/link";
 import { POSTURE_CHOICES, useSyncPosture } from "../account/posture";
 import { UserSwitcher } from "../account/UserSwitcher";
 import { type FieldUserProfile, getHost } from "../host";
@@ -216,10 +223,34 @@ type UnlinkStep =
   | { kind: "unlinking" }
   | { kind: "failed"; reason: string };
 
+/** UA-P-0g — the act, in this page's chrome. One button, because linking is
+ * not the irreversible half: it asks the floor for a node and hands the
+ * browser a sign-in, and the subscription takes the face from there. */
+function LinkAction({ step, onBegin }: { step: LinkBeginStep; onBegin: () => void }): ReactElement {
+  return (
+    <div className="flex flex-col items-end gap-2 pt-2">
+      {step.kind === "failed" && (
+        <div className="text-right text-[12px] text-amber-600 dark:text-amber-400" role="alert">
+          {step.reason}
+        </div>
+      )}
+      <button
+        type="button"
+        className={buttonCls}
+        disabled={step.kind === "pending"}
+        onClick={onBegin}
+      >
+        {step.kind === "pending" ? LINK_ACT_PENDING_LABEL : LINK_ACT_LABEL}
+      </button>
+    </div>
+  );
+}
+
 function LinkBlock(): ReactElement {
   const client = useFielddClient();
   const status = useSubscription<UserLinkStatus>("user.link.subscribe");
   const [step, setStep] = useState<UnlinkStep>({ kind: "idle" });
+  const [beginStep, setBeginStep] = useState<LinkBeginStep>({ kind: "idle" });
 
   // Esc disarms, consistently (DESIGN.md §7).
   useEffect(() => {
@@ -246,6 +277,24 @@ function LinkBlock(): ReactElement {
     }
   };
 
+  /** UA-P-0g — the link act. The answer IS a `UserLinkStatus`, and it is
+   * deliberately NOT applied here: `user.link.subscribe` is the one thing that
+   * moves this face, and a response written into local state could only ever
+   * disagree with it. What this step owns is the two things the subscription
+   * cannot say — that a click is in flight, and that the daemon refused. */
+  const begin = async (): Promise<void> => {
+    setBeginStep({ kind: "pending" });
+    try {
+      await client.request("user.link.begin", {});
+      setBeginStep({ kind: "idle" });
+    } catch (cause) {
+      setBeginStep({
+        kind: "failed",
+        reason: cause instanceof Error ? cause.message : String(cause),
+      });
+    }
+  };
+
   // One reading of the snapshot, shared with the Setup Assistant's pane 4.
   const face = linkFace(status.status, status.status === "live" ? (status.data ?? null) : null);
 
@@ -261,18 +310,46 @@ function LinkBlock(): ReactElement {
         working.
       </div>
     );
-  } else if (face.kind === "mesh-off") {
+  } else if (face.kind === "offline") {
+    // UA-P-0g — the ordinary unlinked desktop, and the whole point of this
+    // slice: before it, this face said the mesh was env-gated and offered
+    // nothing, so a fresh install (or anything that pressed Unlink) could
+    // never link from the UI at all.
     body = (
       <div className="space-y-1">
-        <div className={labelCls}>
-          Mesh networking is off on this device. It is enabled by environment today (
-          <span className="font-mono">FIELD_NATIVE_MESH</span>), so there is nothing to link from
-          here yet.
+        <div className="flex items-center justify-between gap-2">
+          <span className={labelCls}>account</span>
+          <span>not linked</span>
         </div>
-        {face.link !== null && (
+        {face.nodeState !== null && (
+          <div className="flex items-center justify-between gap-2">
+            <span className={labelCls}>node</span>
+            <span>{face.nodeState}</span>
+          </div>
+        )}
+        <div className={labelCls}>
+          This device is offline: no tailnet, no other machines, nothing published. Everything local
+          keeps working. Linking signs you in to Tailscale in your browser.
+        </div>
+        <LinkAction step={beginStep} onBegin={() => void begin()} />
+      </div>
+    );
+  } else if (face.kind === "refused") {
+    // The daemon's own sentence, verbatim — it names the file, or the other
+    // local user, which is the only part that makes the refusal actionable.
+    body = (
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className={labelCls}>account</span>
+          <span className="vf-ui-tone-attention">{face.title}</span>
+        </div>
+        <div className={labelCls}>{face.detail}</div>
+        {face.canBegin ? (
+          <LinkAction step={beginStep} onBegin={() => void begin()} />
+        ) : (
           <div className={labelCls}>
-            A link is on file for {face.link.login ?? "this device"} — it takes effect when the mesh
-            is enabled.
+            Linking is refused until that file is moved aside — this field never overwrites an
+            identity record by guessing.
           </div>
         )}
       </div>
@@ -346,7 +423,8 @@ function LinkBlock(): ReactElement {
         </div>
       </div>
     );
-  } else if (face.kind === "authenticating") {
+  } else if (face.authUrl !== null) {
+    // Capturing, with an address: the node is up and the browser has the ball.
     body = (
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
@@ -370,14 +448,18 @@ function LinkBlock(): ReactElement {
       </div>
     );
   } else {
+    // Capturing, before the node has offered one. Nothing is declared and
+    // nothing is published in this window (UA-P-0a), so the honest line is
+    // what we are waiting on rather than a promise of what comes next.
     body = (
       <div className="space-y-1">
         <div className="flex items-center justify-between gap-2">
           <span className={labelCls}>node</span>
-          <span>{face.nodeState ?? "not linked"}</span>
+          <span>{face.nodeState ?? "starting"}</span>
         </div>
         <div className={labelCls}>
-          No account linked yet. When the node offers a sign-in address it appears here.
+          Linking: asking the tailnet who this node is. The sign-in address appears here as soon as
+          the node offers one.
         </div>
       </div>
     );

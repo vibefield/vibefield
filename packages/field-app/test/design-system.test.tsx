@@ -236,6 +236,16 @@ describe("design system page", () => {
     await choose("connect", "linked");
     expect(frame("connect").textContent).toContain("Linked as james@example.com");
 
+    // UA-P-0g — the lab reaches the refusals and the act itself, through the
+    // production derivation: the adapter hands `linkFace` a wire snapshot, so a
+    // posture the catalog can show is one the shipping surfaces can show.
+    await choose("connect", "already linked");
+    expect(frame("connect").textContent).toContain('the local user "Work" is already linked');
+    await choose("connect", "offline");
+    expect(frame("connect").textContent).toContain("Not linked yet");
+    await choose("connect", "Link Tailscale account");
+    expect(frame("connect").textContent).toContain("Linking…");
+
     await choose("posture", "unavailable");
     expect(frame("posture").textContent).toContain("This daemon is not reporting preferences");
   });

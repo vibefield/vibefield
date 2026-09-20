@@ -1,7 +1,7 @@
 import { SegmentedControl } from "@vibefield/design-kit";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import type { AccentSlot } from "../account/AccentPicker";
-import type { LinkFace } from "../account/link";
+import { type LinkBeginStep, type LinkFace, linkFace } from "../account/link";
 import type { SyncPosture, SyncPostureControl } from "../account/posture";
 import {
   OnboardingConnectPaneView,
@@ -18,7 +18,20 @@ import { WizardShellView } from "../boot/onboarding/wizard-ui";
 
 const noop = (): void => undefined;
 
-const CONNECT_STATES = ["sign in", "linked", "idle", "loading", "mesh off", "unavailable"] as const;
+/** UA-P-0g — every posture `user.link.subscribe` can report, including the
+ * three refusals the daemon writes a sentence for. `mesh off` is gone with the
+ * face it named. */
+const CONNECT_STATES = [
+  "offline",
+  "capturing",
+  "sign in",
+  "linked",
+  "corrupt link",
+  "tagged node",
+  "already linked",
+  "loading",
+  "unavailable",
+] as const;
 type ConnectState = (typeof CONNECT_STATES)[number];
 
 const POSTURE_STATES = ["automatic", "opt-in", "loading", "unavailable", "write error"] as const;
@@ -197,24 +210,33 @@ function FieldPreview(): ReactElement {
 }
 
 function ConnectPreview(): ReactElement {
-  const [state, setState] = useState<ConnectState>("sign in");
+  const [state, setState] = useState<ConnectState>("offline");
+  // The act's in-flight beat is the one thing the snapshot cannot carry, so the
+  // adapter answers the click the way the wizard's own wrapper does — and no
+  // further: there is no daemon here to finish or refuse it.
+  const [beginStep, setBeginStep] = useState<LinkBeginStep>({ kind: "idle" });
   return (
     <OnboardingFrame
       index="04"
       label="Connect devices"
-      note="Every honest mesh/link face"
+      note="Every posture the daemon reports"
       state="connect"
       controls={
         <SegmentedControl
           options={CONNECT_STATES}
           value={state}
-          onChange={setState}
+          onChange={(next) => {
+            setBeginStep({ kind: "idle" });
+            setState(next);
+          }}
           label="Connect pane state"
         />
       }
     >
       <OnboardingConnectPaneView
         face={connectFace(state)}
+        beginStep={beginStep}
+        onBeginLink={() => setBeginStep({ kind: "pending" })}
         onContinue={noop}
         onSkip={noop}
         onBack={noop}
@@ -325,38 +347,85 @@ function OnboardingFrame({
   );
 }
 
+/** The adapter supplies what a HOST supplies — the wire snapshot — and the
+ * production derivation turns it into a face. Building `LinkFace` values here
+ * directly would have been a second reader of the same subscription, free to
+ * drift from `linkFace` the moment a posture is added. */
 function connectFace(state: ConnectState): LinkFace {
+  const linkRecord = {
+    login: "james@example.com",
+    tailnet: "studio.ts.net",
+    linkedAt: "2026-08-05T19:24:00.000Z",
+  };
   switch (state) {
+    case "offline":
+      return linkFace("live", {
+        link: null,
+        meshEnabled: false,
+        nodeState: null,
+        authUrl: null,
+        linkState: "offline",
+        linkDetail: null,
+      });
+    case "capturing":
+      return linkFace("live", {
+        link: null,
+        meshEnabled: true,
+        nodeState: "Starting",
+        authUrl: null,
+        linkState: "capturing",
+        linkDetail: null,
+      });
     case "sign in":
-      return {
-        kind: "authenticating",
-        authUrl: "https://login.tailscale.com/a/vibefield-preview",
+      return linkFace("live", {
+        link: null,
+        meshEnabled: true,
         nodeState: "NeedsLogin",
-      };
+        authUrl: "https://login.tailscale.com/a/vibefield-preview",
+        linkState: "capturing",
+        linkDetail: null,
+      });
     case "linked":
-      return {
-        kind: "linked",
-        link: {
-          login: "james@example.com",
-          tailnet: "studio.ts.net",
-          linkedAt: "2026-08-05T19:24:00.000Z",
-        },
+      return linkFace("live", {
+        link: linkRecord,
+        meshEnabled: true,
         nodeState: "Running",
-      };
-    case "idle":
-      return { kind: "idle", nodeState: "Starting" };
+        authUrl: null,
+        linkState: "linked",
+        linkDetail: null,
+      });
+    case "corrupt link":
+      return linkFace("live", {
+        link: null,
+        meshEnabled: false,
+        nodeState: null,
+        authUrl: null,
+        linkState: "link_corrupt",
+        linkDetail:
+          "link.json is present but unusable: ~/Library/Application Support/VibeField/users/1/fieldd/link.json",
+      });
+    case "tagged node":
+      return linkFace("live", {
+        link: null,
+        meshEnabled: false,
+        nodeState: null,
+        authUrl: null,
+        linkState: "login_unavailable",
+        linkDetail: "the tailnet has no user for this node (a tagged node cannot link)",
+      });
+    case "already linked":
+      return linkFace("live", {
+        link: null,
+        meshEnabled: false,
+        nodeState: null,
+        authUrl: null,
+        linkState: "login_already_linked",
+        linkDetail:
+          'the local user "Work" is already linked to this tailscale account; unlink it first',
+      });
     case "loading":
-      return { kind: "loading" };
-    case "mesh off":
-      return {
-        kind: "mesh-off",
-        link: {
-          login: "james@example.com",
-          tailnet: "studio.ts.net",
-          linkedAt: "2026-08-05T19:24:00.000Z",
-        },
-      };
+      return linkFace("loading", null);
     case "unavailable":
-      return { kind: "unavailable" };
+      return linkFace("error", null);
   }
 }

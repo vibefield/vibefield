@@ -1,8 +1,14 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
-import { FielddProvider, useSubscription } from "@vibefield/fieldd-client/react";
+import { FielddProvider, useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
 import type { AccentSlot } from "../../account/AccentPicker";
-import { hasLink, linkFace, type UserLinkStatus } from "../../account/link";
+import {
+  hasLink,
+  type LinkBeginStep,
+  type LinkFace,
+  linkFace,
+  type UserLinkStatus,
+} from "../../account/link";
 import { useSyncPosture } from "../../account/posture";
 import { type FieldUserProfile, getHost } from "../../host";
 import type { BootOnboarding } from "../machine";
@@ -242,7 +248,7 @@ function WizardBody({
 
     case "connect":
       return shell(
-        <OnboardingConnectPaneView
+        <ConnectPane
           face={face}
           onBack={onBack}
           onContinue={() => go(linked ? "posture" : endPane)}
@@ -326,6 +332,53 @@ function FieldPane({
       onNameChange={setName}
       onAccentChange={setAccent}
       onSubmit={commit}
+      onBack={onBack}
+    />
+  );
+}
+
+/** Pane 4 — the link, and since UA-P-0g the place it BEGINS. The same act as
+ * Settings → Account: the same method, the same phrase on the button, and the
+ * same rule about where the face comes from — `user.link.subscribe` moves it,
+ * this call never does. Only the in-flight beat and a refusal live here.
+ *
+ * The client rather than the view owns it for the same reason `PosturePane`
+ * below does: `onboarding-views` is the Electron-free surface the catalog
+ * mounts, and a view that reached for a daemon could not be shown there. */
+function ConnectPane({
+  face,
+  onContinue,
+  onSkip,
+  onBack,
+}: {
+  face: LinkFace;
+  onContinue: () => void;
+  onSkip: () => void;
+  onBack: (() => void) | undefined;
+}): ReactElement {
+  const client = useFielddClient();
+  const [step, setStep] = useState<LinkBeginStep>({ kind: "idle" });
+
+  const begin = async (): Promise<void> => {
+    setStep({ kind: "pending" });
+    try {
+      await client.request("user.link.begin", {});
+      setStep({ kind: "idle" });
+    } catch (cause) {
+      setStep({
+        kind: "failed",
+        reason: cause instanceof Error ? cause.message : String(cause),
+      });
+    }
+  };
+
+  return (
+    <OnboardingConnectPaneView
+      face={face}
+      beginStep={step}
+      onBeginLink={() => void begin()}
+      onContinue={onContinue}
+      onSkip={onSkip}
       onBack={onBack}
     />
   );

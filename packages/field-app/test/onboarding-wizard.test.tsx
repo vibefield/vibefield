@@ -44,7 +44,17 @@ const FRESH: FieldUserProfile = {
   onboarded: false,
 };
 
-const NO_LINK = { link: null, meshEnabled: false, nodeState: null, authUrl: null };
+/** An unlinked desktop, as UA-P-0a's daemon reports one: `meshEnabled` is FALSE
+ * because the mesh derives from the link, and the posture word is what says so.
+ * UA-P-0g is where this pane stopped being a dead end for it. */
+const NO_LINK = {
+  link: null,
+  meshEnabled: false,
+  nodeState: null,
+  authUrl: null,
+  linkState: "offline",
+  linkDetail: null,
+};
 const LINKED = {
   link: {
     login: "james@example.com",
@@ -54,7 +64,18 @@ const LINKED = {
   meshEnabled: true,
   nodeState: "running",
   authUrl: null,
+  linkState: "linked",
+  linkDetail: null,
 };
+/** A refusal on the wire, with the daemon's own sentence. */
+const refused = (linkState: string, linkDetail: string): Record<string, unknown> => ({
+  link: null,
+  meshEnabled: false,
+  nodeState: null,
+  authUrl: null,
+  linkState,
+  linkDetail,
+});
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -415,7 +436,12 @@ describe("Setup Assistant", () => {
     host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
     await mount({
       fieldd: client({
-        link: { ...LINKED, link: null, authUrl: "https://login.tailscale.com/a/abc" },
+        link: {
+          ...LINKED,
+          link: null,
+          linkState: "capturing",
+          authUrl: "https://login.tailscale.com/a/abc",
+        },
       }),
       onboarding: onboarding({ color: "accent-2" }),
       onComplete: vi.fn(),
@@ -427,6 +453,118 @@ describe("Setup Assistant", () => {
     expect(anchor?.textContent).toBe("Link Tailscale account");
     expect(anchor?.target).toBe("_blank");
     expect(text()).toContain("Finish signing in in your browser");
+  });
+
+  // UA-P-0g — pane 4 is where the link BEGINS, on the same daemon method and
+  // under the same phrase as Settings → Account. Before this it could only
+  // report a link someone else had already made.
+
+  it("begins the link from pane 4 and sends exactly one begin", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const fieldd = client({ link: NO_LINK });
+    await mount({
+      fieldd,
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    expect(text()).toContain("Connect your devices");
+    expect(text()).toContain("Not linked yet");
+    // ...and the sentence that was false since UA-P-0a is gone with its face.
+    expect(text()).not.toContain("FIELD_NATIVE_MESH");
+
+    await click("Link Tailscale account");
+    expect(fieldd.request).toHaveBeenCalledTimes(1);
+    expect(fieldd.request).toHaveBeenCalledWith("user.link.begin", {});
+  });
+
+  it("renders a refused begin on the pane instead of swallowing it", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    const fieldd = client({ link: NO_LINK });
+    (fieldd.request as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("link.json is present but unusable; move it aside to link again: /x/link.json"),
+    );
+    await mount({
+      fieldd,
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    await click("Link Tailscale account");
+
+    expect(text()).toContain("move it aside to link again: /x/link.json");
+    expect(container?.querySelector('[role="alert"]')).not.toBeNull();
+    // A refusal is not a trap: the pane's other ways out are still there (W3).
+    expect(button("Continue")).not.toBeUndefined();
+    expect(button("Skip")).not.toBeUndefined();
+  });
+
+  it("speaks each refused posture with the daemon's own sentence", async () => {
+    const cases = [
+      {
+        wire: refused(
+          "login_unavailable",
+          "the tailnet has no user for this node (a tagged node cannot link)",
+        ),
+        title: "No tailnet user for this node",
+        act: true,
+      },
+      {
+        wire: refused(
+          "login_already_linked",
+          'the local user "Work" is already linked to this tailscale account; unlink it first',
+        ),
+        title: "Already linked by another user here",
+        act: true,
+      },
+      {
+        wire: refused("link_corrupt", "link.json is present but unusable: /x/link.json"),
+        title: "Link record unreadable",
+        act: false,
+      },
+    ];
+
+    for (const shape of cases) {
+      host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+      await mount({
+        fieldd: client({ link: shape.wire }),
+        onboarding: onboarding({ color: "accent-2" }),
+        onComplete: vi.fn(),
+      });
+
+      expect(text()).toContain(shape.title);
+      expect(text()).toContain(String(shape.wire.linkDetail));
+      // The act is offered only where asking again is a real act: a corrupt
+      // record refuses `begin` by construction until the file is moved aside.
+      const offered = Array.from(container?.querySelectorAll("button") ?? []).some(
+        (candidate) => candidate.textContent?.trim() === "Link Tailscale account",
+      );
+      expect(offered).toBe(shape.act);
+
+      await act(async () => root?.unmount());
+      root = null;
+      container?.remove();
+      container = null;
+    }
+  });
+
+  it("says what capture is waiting on before the node offers an address", async () => {
+    host(vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile));
+    await mount({
+      fieldd: client({
+        link: { ...NO_LINK, meshEnabled: true, nodeState: "Starting", linkState: "capturing" },
+      }),
+      onboarding: onboarding({ color: "accent-2" }),
+      onComplete: vi.fn(),
+    });
+
+    expect(text()).toContain("Asking the tailnet who this node is");
+    // Capture is already running — offering to start it again would be a lie.
+    expect(
+      Array.from(container?.querySelectorAll("button") ?? []).some(
+        (candidate) => candidate.textContent?.trim() === "Link Tailscale account",
+      ),
+    ).toBe(false);
   });
 
   it("holds the pane and says why when the profile write is refused", async () => {
