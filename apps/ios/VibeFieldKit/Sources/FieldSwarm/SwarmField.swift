@@ -49,8 +49,11 @@ public struct SwarmField<Chrome: View>: View {
           .fill(FieldPalette.panelBackground)
           .ignoresSafeArea()
 
+        // The state colours are resolved INTO the theme (the ground and the
+        // glow are one hue at two ends of its range), so the theme follows the
+        // parameters as well as the scheme.
         SwarmSurface(
-          stage: stage, theme: SwarmTheme.resolve(colorScheme), motion: !reduceMotion,
+          stage: stage, theme: SwarmTheme.resolve(colorScheme, parameters: parameters), motion: !reduceMotion,
           isActive: isActive, parameters: parameters, failure: $failure)
 
         if let failure {
@@ -150,6 +153,7 @@ private struct SwarmSurface: UIViewRepresentable {
     var snapshot = SwarmMetalView.SwarmParametersSnapshot()
     snapshot.fillOpacity = parameters.bubbleFillOpacity
     snapshot.glow = SwarmGlow(reach: parameters.glowReach, strength: parameters.glowStrength, breath: parameters.glowBreath)
+    snapshot.stateGlow = SwarmStateGlow(parameters)
     view.parameters = snapshot
   }
 }

@@ -17,8 +17,8 @@ public let spawnDuration = FieldMotion.spawnDuration
 /// Critically damped: about 90% of a size change lands within 300ms.
 let radiusSpringOmega = 16.0
 public let gridPitch = 24.0
-/// The burn graph scrolls: models are refreshed on this cadence even when
-/// nothing else changed.
+/// The burn rate moves on its own: models are refreshed on this cadence even
+/// when nothing else changed.
 let modelRefreshSeconds = 1.0
 
 /// The arrival curve: 0 → 1.2 → 0.96 → 1.035 → 1 over 720ms.

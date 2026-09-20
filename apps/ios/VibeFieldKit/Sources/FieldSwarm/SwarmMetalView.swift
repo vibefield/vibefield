@@ -1,5 +1,6 @@
 import FieldAgents
 import Metal
+import SwarmPhysics
 import MetalKit
 import QuartzCore
 import UIKit
@@ -31,6 +32,8 @@ public final class SwarmMetalView: MTKView {
   public struct SwarmParametersSnapshot: Sendable {
     public var fillOpacity = 0.72
     public var glow = SwarmGlow(reach: 34, strength: 0.8, breath: 0)
+    /// The light a blocked or unread body gives: its shape, and how its waves travel.
+    public var stateGlow = SwarmStateGlow(.default)
     public init() {}
   }
 
@@ -84,7 +87,8 @@ extension SwarmMetalView: MTKViewDelegate {
     renderer.render(
       SwarmFrame(
         time: time - started, motion: motion, fillOpacity: parameters.fillOpacity, gridPitch: gridPitch,
-        glow: parameters.glow, theme: theme, bodies: content.bodies, hold: content.hold, marks: content.marks),
+        glow: parameters.glow, stateGlow: parameters.stateGlow, theme: theme, bodies: content.bodies,
+        hold: content.hold, marks: content.marks),
       pass: pass, drawable: drawable)
   }
 }

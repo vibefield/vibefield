@@ -1,14 +1,16 @@
+import CoreGraphics
 import FieldAgents
 import Foundation
 import Metal
 import QuartzCore
+import SwarmPhysics
 
 // The swarm's renderer — the reference's `gpu/swarm-renderer.ts`: one
 // surface, one render pass, five pipelines in painter's order — field,
-// shadows, bodies, light, type — and one upload of bodies, graph samples and
-// glyph quads per frame. It draws what it is given: positions and sizes belong
-// to the stage, meaning belongs to `SwarmBodyModel`, colour to the theme.
-// Nothing here reads a view.
+// shadows, bodies, light, type — and one upload of bodies and glyph quads per
+// frame. It draws what it is given: positions and sizes belong to the stage,
+// meaning belongs to `SwarmBodyModel`, colour to the theme. Nothing here reads
+// a view.
 
 /// One body as the renderer draws it.
 public struct RenderBody {
@@ -57,6 +59,32 @@ public struct SwarmGlow: Equatable, Sendable {
   }
 }
 
+/// The light a blocked or unread body gives: its shape, and how its waves
+/// travel — the STATE GLOW group of the parameters, as the frame carries it.
+public struct SwarmStateGlow: Equatable, Sendable {
+  public var inner: Double
+  public var full: Double
+  public var strength: Double
+  public var count: Double
+  public var speed: Double
+  public var depth: Double
+
+  public init(inner: Double, full: Double, strength: Double, count: Double, speed: Double, depth: Double) {
+    self.inner = inner
+    self.full = full
+    self.strength = strength
+    self.count = count
+    self.speed = speed
+    self.depth = depth
+  }
+
+  public init(_ parameters: SwarmParameters) {
+    self.init(
+      inner: parameters.stateGlowInner, full: parameters.stateGlowFull, strength: parameters.stateGlowStrength,
+      count: parameters.stateWaveCount, speed: parameters.stateWaveSpeed, depth: parameters.stateWaveDepth)
+  }
+}
+
 /// A mark drawn on its own, for the lab's contact sheet.
 public struct RenderMark {
   public var tile: MarksAtlas.Tile
@@ -95,6 +123,7 @@ public struct SwarmFrame {
   public var fillOpacity: Double
   public var gridPitch: Double
   public var glow: SwarmGlow
+  public var stateGlow: SwarmStateGlow
   public var theme: SwarmTheme
   public var bodies: [RenderBody]
   public var hold: SwarmHold?
@@ -102,13 +131,15 @@ public struct SwarmFrame {
 
   public init(
     time: Double, motion: Bool, fillOpacity: Double, gridPitch: Double = 24, glow: SwarmGlow,
-    theme: SwarmTheme, bodies: [RenderBody], hold: SwarmHold? = nil, marks: [RenderMark] = []
+    stateGlow: SwarmStateGlow = SwarmStateGlow(.default), theme: SwarmTheme, bodies: [RenderBody],
+    hold: SwarmHold? = nil, marks: [RenderMark] = []
   ) {
     self.time = time
     self.motion = motion
     self.fillOpacity = fillOpacity
     self.gridPitch = gridPitch
     self.glow = glow
+    self.stateGlow = stateGlow
     self.theme = theme
     self.bodies = bodies
     self.hold = hold
@@ -120,7 +151,6 @@ public struct SwarmFrame {
 public enum BodyFlags {
   public static let hollow: UInt32 = 1
   public static let running: UInt32 = 2
-  public static let graph: UInt32 = 4
   public static let glow: UInt32 = 8
   public static let rim: UInt32 = 16
   public static let stale: UInt32 = 32
@@ -130,13 +160,11 @@ public enum BodyFlags {
   public static let ring: UInt32 = 1024
   public static let shadow: UInt32 = 2048
   public static let core: UInt32 = 4096
-  public static let flood: UInt32 = 8192
+  public static let waves: UInt32 = 8192
 }
 
-/// Each body's samples: the completion side, then the prompt side.
-let bodySamples = burnBarCount * 2
-let frameFloats = 40
-let bodyFloats = 44
+let frameFloats = 48
+let bodyFloats = 40
 let glyphFloats = 16
 private let initialBodies = 32
 private let initialGlyphs = 2048
@@ -146,67 +174,83 @@ private let framesInFlight = 3
 /// The context figure and the total: one size, the same margin in from the rim.
 let figureStyle = TextStyle(size: 10.5, weight: 800, letterSpacing: 0.02)
 let figureMargin = 7.0
-/// The burn bars keep this much clear of the model line above and of the total below.
+/// The burn row keeps this much clear of the model line above and of the total below.
 let bandMarginTop = 4.0
 let bandMarginBottom = 8.0
+/// The ladder's own geometry: four marks and the gap between them.
+let flameSize = 13.0
+let flameGap = 3.0
 
-/// The ink over a flooded body: whichever of the theme's inks stands furthest
-/// from the accent that fills it, the blocked ink winning ties.
-func floodInk(_ theme: SwarmTheme, fill: SwarmColor, accent: SwarmColor) -> SwarmColor {
-  let flooded = SwarmColor(
-    r: fill.r * 0.1 + accent.r * 0.9, g: fill.g * 0.1 + accent.g * 0.9, b: fill.b * 0.1 + accent.b * 0.9, a: 1)
-  let target = flooded.luminance
-  var best = theme.blocked.text
-  var bestGap = abs(best.luminance - target)
-  for ink in [theme.idle.text, theme.working.text] {
-    let gap = abs(ink.luminance - target)
-    if gap > bestGap + 0.05 {
-      best = ink
-      bestGap = gap
-    }
-  }
-  return best
-}
-
-/// The burn bars' band: from a margin under the model line down to a margin
-/// above the total figure, whatever the radius, so the bars fill that space
-/// (taller on a bigger body). Fractions of the diameter.
-func graphBand(radius: Double, layout: CopyLayout) -> (top: Double, bottom: Double) {
-  let diameter = radius * 2
+/// The burn row's centre, relative to the body's own centre: midway between a
+/// margin under the model line and a margin above the total figure, so the
+/// flames stand where the chart used to, whatever the radius.
+func burnRow(radius: Double, layout: CopyLayout) -> Double {
   let modelLine = layout.lines.first { $0.line.key == "model" }
   let under = modelLine.map { $0.y + $0.height / 2 } ?? layout.bottom
   let top = under + bandMarginTop
   let floor = max(top + 4, radius - figureMargin - figureStyle.size - bandMarginBottom)
-  return (0.5 + top / diameter, 0.5 + floor / diameter)
+  return (top + floor) / 2
 }
 
-/// The colours a body wears for its appearance, and its ink.
-func bodyColours(_ body: RenderBody, theme: SwarmTheme) -> (fill: SwarmColor, ink: SwarmColor, rim: SwarmColor) {
-  switch body.model.appearance {
-  case .working: return (theme.working.bg, theme.working.text, theme.working.border)
-  case .blocked:
-    let ink = body.model.flood ? floodInk(theme, fill: theme.blocked.bg, accent: body.accent) : theme.blocked.text
-    return (theme.blocked.bg, ink, theme.blocked.text)
-  case .idle: return (theme.idle.bg, theme.idle.text, theme.idle.text)
+/// The same colour at another alpha: every rung of the ladder is one ink at a weight.
+func withAlpha(_ colour: SwarmColor, _ alpha: Double) -> SwarmColor {
+  SwarmColor(r: colour.r, g: colour.g, b: colour.b, a: alpha)
+}
+
+/// A light in a STATE's own colour, as against the ink a working body is lit with.
+func isStateLight(_ light: SwarmLightTone?) -> Bool {
+  light == .orange || light == .blue
+}
+
+/// The ground a body wears when it needs the user, or nil for the rest. A
+/// working body's light is the ink itself and fills nothing.
+func stateGround(_ theme: SwarmTheme, _ light: SwarmLightTone?) -> SwarmColor? {
+  switch light {
+  case .orange: theme.stateGround.orange
+  case .blue: theme.stateGround.blue
+  default: nil
   }
 }
 
-/// The 44 floats one body packs into (`packBody` in the reference), pure so
-/// the flags and the layout are testable without a device.
-func packedBody(_ body: RenderBody, frameGlow: SwarmGlow, sampleOffset: Int, band: (top: Double, bottom: Double), theme: SwarmTheme)
-  -> [Float]
-{
+/// The light inside a body: the state's own glow over the ground it sits on,
+/// or the theme's ink for a working body, which is a density and not a colour.
+func lightColour(_ theme: SwarmTheme, _ light: SwarmLightTone?) -> SwarmColor {
+  switch light {
+  case nil: .transparent
+  case .orange: theme.stateGlow.orange
+  case .blue: theme.stateGlow.blue
+  case .ink: withAlpha(theme.ink, workingCoreStrength)
+  }
+}
+
+/// A body's edge is the faintest rung of the ladder; a hollow terminal's
+/// dashed rim and a working body's border earn a little more.
+func rimWeight(_ model: SwarmBodyModel) -> Double {
+  model.hollow ? SwarmWeight.rim : model.appearance == .working ? SwarmWeight.edge : SwarmWeight.hairline
+}
+
+/// The 40 floats one body packs into (`packBody` in the reference), pure so
+/// the flags and the colours are testable without a device.
+func packedBody(_ body: RenderBody, frameGlow: SwarmGlow, theme: SwarmTheme) -> [Float] {
   let model = body.model
-  let colours = bodyColours(body, theme: theme)
+  // One surface, one ink, in both themes (2026-09-18). A body that needs the
+  // user is filled with the state's own colour, and its words are still the
+  // theme's ink — light on dark, dark on light, the same direction every other
+  // body follows.
+  let fill = stateGround(theme, model.light) ?? theme.surface
+  let ink = theme.ink
+  let rim = withAlpha(ink, rimWeight(model))
+  let light = lightColour(theme, model.light)
   var flags: UInt32 = 0
   if model.hollow { flags |= BodyFlags.hollow }
   if model.running { flags |= BodyFlags.running }
-  if model.graph != nil { flags |= BodyFlags.graph }
-  if model.flood { flags |= BodyFlags.flood }
+  if model.light != nil { flags |= BodyFlags.core }
+  // A body that needs the user glows in waves rather than breathing.
+  if isStateLight(model.light) { flags |= BodyFlags.waves }
   // The outer light: only on the body whose pane is the selected one. Every
   // other mounted body wears its colour as the band alone.
   if body.link != nil && model.active { flags |= BodyFlags.glow }
-  if model.appearance == .working && !model.hollow { flags |= BodyFlags.rim | BodyFlags.shadow | BodyFlags.core }
+  if model.appearance == .working && !model.hollow { flags |= BodyFlags.rim | BodyFlags.shadow }
   if model.stale { flags |= BodyFlags.stale }
   if body.link != nil { flags |= BodyFlags.linked }
   if body.focus { flags |= BodyFlags.focus }
@@ -224,18 +268,19 @@ func packedBody(_ body: RenderBody, frameGlow: SwarmGlow, sampleOffset: Int, ban
   data[1] = Float(body.y)
   data[2] = Float(body.radius)
   data[3] = Float(body.scale)
-  rgba(4, colours.fill, body.opacity)
-  rgba(8, colours.ink)
-  rgba(12, body.accent, body.opacity)
-  rgba(16, colours.rim, body.opacity)
+  rgba(4, fill, body.opacity)
+  rgba(8, ink)
+  rgba(12, light, body.opacity)
+  rgba(16, rim, body.opacity)
   data[20] = Float(bitPattern: flags)
-  data[21] = Float(bitPattern: UInt32(sampleOffset))
+  data[21] = 0
   data[22] = 0
   data[23] = 0
   data[24] = Float(model.ring.map { Double($0.percent) / 100 } ?? 0)
-  data[25] = 0
-  data[26] = Float(0.18 * body.opacity)
-  data[27] = 0
+  // The gauge climbs as it goes round; the track behind it stays the faintest rung.
+  data[25] = Float(climb(0))
+  data[26] = Float(SwarmWeight.hairline * body.opacity)
+  data[27] = Float(climb(1))
   let glow = body.glow ?? frameGlow
   data[28] = Float(glow.reach)
   data[29] = Float(glow.strength * body.opacity)
@@ -246,10 +291,6 @@ func packedBody(_ body: RenderBody, frameGlow: SwarmGlow, sampleOffset: Int, ban
   data[34] = model.stale ? 1 : 0
   data[35] = Float(body.opacity)
   rgba(36, body.link ?? .transparent, body.opacity)
-  data[40] = Float(band.top)
-  data[41] = Float(band.bottom)
-  data[42] = 0
-  data[43] = 0
   return data
 }
 
@@ -279,9 +320,17 @@ func packedFrame(_ frame: SwarmFrame, width: Double, height: Double, scale: Doub
   data[22] = Float(frame.hold?.progress ?? 0)
   data[23] = frame.hold == nil ? 0 : 1
   rgba(24, theme.orange)
-  rgba(28, theme.textMuted)
-  rgba(32, theme.panelBg, 0.74)
-  rgba(36, theme.textMain)
+  rgba(28, withAlpha(theme.ink, SwarmWeight.supporting))
+  rgba(32, theme.surface, 0.74)
+  rgba(36, theme.ink)
+  data[40] = Float(frame.stateGlow.inner)
+  data[41] = Float(frame.stateGlow.full)
+  data[42] = Float(frame.stateGlow.strength)
+  data[43] = 0
+  data[44] = Float(frame.stateGlow.count)
+  data[45] = Float(frame.stateGlow.speed)
+  data[46] = Float(frame.stateGlow.depth)
+  data[47] = 0
   return data
 }
 
@@ -298,7 +347,6 @@ public final class SwarmRenderer {
   private struct Buffers {
     var frame: MTLBuffer
     var bodies: MTLBuffer
-    var samples: MTLBuffer
     var glyphs: MTLBuffer
     var bodyCapacity: Int
     var glyphCapacity: Int
@@ -309,7 +357,6 @@ public final class SwarmRenderer {
 
   private var frameData = [Float](repeating: 0, count: frameFloats)
   private var bodyData: [Float] = []
-  private var sampleData: [Float] = []
   private var glyphData: [Float] = []
   private var glyphCount = 0
 
@@ -319,7 +366,6 @@ public final class SwarmRenderer {
       buffers.append(try Self.makeBuffers(gpu.device, bodies: initialBodies, glyphs: initialGlyphs))
     }
     bodyData = [Float](repeating: 0, count: initialBodies * bodyFloats)
-    sampleData = [Float](repeating: 0, count: initialBodies * bodySamples)
     glyphData = [Float](repeating: 0, count: initialGlyphs * glyphFloats)
   }
 
@@ -334,7 +380,6 @@ public final class SwarmRenderer {
     return Buffers(
       frame: try buffer(frameFloats * 4, "swarm frame"),
       bodies: try buffer(bodies * bodyFloats * 4, "swarm bodies"),
-      samples: try buffer(bodies * bodySamples * 4, "swarm samples"),
       glyphs: try buffer(glyphs * glyphFloats * 4, "swarm glyphs"),
       bodyCapacity: bodies,
       glyphCapacity: glyphs)
@@ -413,6 +458,14 @@ public final class SwarmRenderer {
       region.u0, region.v0, region.u1, region.v1, colour, alpha)
   }
 
+  /// A named picture from the sprite table, or nothing for a name the table
+  /// does not know — a mark the reference draws that this build has not
+  /// transcribed is a missing picture, never a crash.
+  private func pushIcon(_ name: String, size: Double, cx: Double, cy: Double, colour: SwarmColor, alpha: Double) {
+    guard let draw = SwarmSprites.icon(name) else { return }
+    pushSprite(gpu.atlas.sprite("icon:\(name)", size: size, draw: draw), cx: cx, cy: cy, colour: colour, alpha: alpha)
+  }
+
   private func pushText(_ text: String, _ style: TextStyle, x: Double, baseline: Double, colour: SwarmColor, alpha: Double) {
     let atlas = gpu.atlas
     let spacing = style.letterSpacing * style.size
@@ -428,21 +481,64 @@ public final class SwarmRenderer {
     }
   }
 
+  /// Words and marks take the readable variant; only the body's light is the
+  /// full hue.
   private func toneColour(_ tone: CopyTone, body: RenderBody, ink: SwarmColor, theme: SwarmTheme) -> SwarmColor {
     switch tone {
-    case .orange: theme.orange
-    case .green: theme.green
-    case .blue: theme.blue
+    case .orange: theme.stateInk.orange
+    case .green: theme.stateInk.green
+    case .blue: theme.stateInk.blue
     case .accent: body.accent
     case .ink: ink
     }
   }
 
-  private func emitBodyText(_ body: RenderBody, ink: SwarmColor, theme: SwarmTheme, time: Double, motion: Bool, layout: CopyLayout) {
+  /// The burn ladder: as many flames as the rate has lit, and no empty slots
+  /// (2026-09-18). A calm session draws nothing at all, which is the honest
+  /// thing for a body with nothing to say. The one exception is a session
+  /// nobody can price: it draws a single hollow flame, because an absent
+  /// reading must never look like a calm one (RFC 008). The last lit flame
+  /// breathes on the newest bucket's rhythm, as the newest column used to. Ink
+  /// only — a colour here would collide with the states' own (record §10).
+  private func emitBurn(
+    _ body: RenderBody, ink: SwarmColor, time: Double, motion: Bool, layout: CopyLayout, dim: Double,
+    rung: (Double) -> Double
+  ) {
+    guard let burn = body.model.burn else { return }
+    let drawn = burn.priced ? burn.lit : 1
+    if drawn == 0 { return }
+    let rowY = body.y + burnRow(radius: body.radius * body.scale, layout: layout)
+    let span = Double(drawn) * flameSize + Double(drawn - 1) * flameGap
+    let breath = motion ? 0.5 - 0.5 * cos(time * 2 * .pi / 1.6 + body.seed) : 0.5
+    for slot in 0..<drawn {
+      let x = body.x - span / 2 + flameSize / 2 + Double(slot) * (flameSize + flameGap)
+      // Each flame climbs the range the gauge climbs: the first sits low, the
+      // fourth reaches the title's own weight, because a body burning that hard
+      // is the most important thing on the stage. The last one breathes.
+      let breathing: Double = slot == burn.lit - 1 ? 0.82 + 0.18 * breath : 1
+      let alpha: Double = burn.priced ? climb(Double(slot) / 3) * breathing : SwarmWeight.absent
+      let draw: (CGContext) -> Void
+      let key: String
+      if burn.priced {
+        draw = SwarmSprites.flame
+        key = "flame"
+      } else {
+        draw = SwarmSprites.flameHollow
+        key = "flame-hollow"
+      }
+      pushSprite(gpu.atlas.sprite(key, size: flameSize, draw: draw), cx: x, cy: rowY, colour: ink, alpha: rung(alpha) * dim)
+    }
+  }
+
+  private func emitBodyText(_ body: RenderBody, theme: SwarmTheme, time: Double, motion: Bool, layout: CopyLayout) {
     let atlas = gpu.atlas
     let model = body.model
+    let ink = theme.ink
     let radius = body.radius * body.scale
     let dim = body.opacity * (model.stale ? 0.58 : 1)
+    // A coloured ground gives the ink less room, so the ladder starts higher on it.
+    let onGround = stateGround(theme, model.light) != nil
+    let rung: (Double) -> Double = { weight in onGround ? onField(weight) : weight }
     if radius < 12 { return }
     if let watermark = model.watermark {
       // The ignition's breath, kept from the DOM: a working mark swells from
@@ -468,46 +564,44 @@ public final class SwarmRenderer {
     }
     for line in layout.lines {
       let colour = toneColour(line.line.tone, body: body, ink: ink, theme: theme)
-      let alpha = line.line.opacity * dim
+      let alpha = rung(line.line.opacity) * dim
       let lineY = body.y + line.y
       var pen = body.x - line.width / 2
-      func mark(_ lead: CopyLead) {
+      if let lead = line.line.lead {
         let leadColour = toneColour(lead.tone ?? line.line.tone, body: body, ink: ink, theme: theme)
-        let leadAlpha = (lead.opacity ?? line.line.opacity) * dim
+        let leadAlpha = rung(lead.opacity ?? line.line.opacity) * dim
         let centreX = pen + lead.advance / 2
         switch lead.kind {
         case .dot:
-          pushSprite(atlas.sprite("dot", size: lead.size, draw: SwarmSprites.dot), cx: centreX, cy: lineY - 0.5, colour: leadColour, alpha: leadAlpha)
-        case .bar:
-          pushSprite(atlas.sprite("bar", size: lead.size, draw: SwarmSprites.bar), cx: centreX, cy: lineY, colour: leadColour, alpha: leadAlpha)
+          pushSprite(
+            atlas.sprite("dot", size: lead.size, draw: SwarmSprites.dot), cx: centreX, cy: lineY - 0.5,
+            colour: leadColour, alpha: leadAlpha)
         case .icon(let name):
-          if name == "folder" {
-            pushSprite(atlas.sprite("icon:folder", size: lead.size, draw: SwarmSprites.folder), cx: centreX, cy: lineY, colour: leadColour, alpha: leadAlpha)
-          }
+          pushIcon(name, size: lead.size, cx: centreX, cy: lineY, colour: leadColour, alpha: leadAlpha)
         }
         pen += lead.advance + lead.gap
       }
-      if let tag = line.line.tag { mark(tag) }
-      if let lead = line.line.lead { mark(lead) }
       if line.text.isEmpty { continue }
       let metrics = atlas.fontMetrics(line.line.style)
       let baseline = lineY + (metrics.ascent - metrics.descent) / 2
       pushText(line.text, line.line.style, x: pen, baseline: baseline, colour: colour, alpha: alpha)
     }
     func figure(_ item: SwarmFigure, centreY: Double) {
-      let colour = item.hot ? theme.orange : ink
-      let alpha = (item.none ? 0.4 : item.hot ? 1 : 0.9) * dim
+      // The gauge's own climb already says a context is nearly spent; the
+      // figure beside it needs no second alarm, and orange now means one thing only.
+      let alpha = rung(item.none ? SwarmWeight.absent : SwarmWeight.secondary) * dim
       let textWidth = atlas.measure(item.text, figureStyle)
       let metrics = atlas.fontMetrics(figureStyle)
       pushText(
         item.text, figureStyle, x: body.x - textWidth / 2,
-        baseline: centreY + (metrics.ascent - metrics.descent) / 2, colour: colour, alpha: alpha)
+        baseline: centreY + (metrics.ascent - metrics.descent) / 2, colour: ink, alpha: alpha)
     }
     // The context figure on the top chord and the total on the bottom one,
-    // under the bars' floor, each the same distance in from the rim.
+    // under the burn row, each the same distance in from the rim.
     let figureInset = figureMargin + figureStyle.size / 2
     if let top = model.figures?.top { figure(top, centreY: body.y - radius + figureInset) }
     if let bottom = model.figures?.bottom { figure(bottom, centreY: body.y + radius - figureInset) }
+    emitBurn(body, ink: ink, time: time, motion: motion, layout: layout, dim: dim, rung: rung)
   }
 
   // MARK: - The frame
@@ -520,7 +614,6 @@ public final class SwarmRenderer {
     let bodyCapacity = max(initialBodies, bodies.count)
     if bodyCapacity * bodyFloats > bodyData.count {
       bodyData = [Float](repeating: 0, count: bodyCapacity * 2 * bodyFloats)
-      sampleData = [Float](repeating: 0, count: bodyCapacity * 2 * bodySamples)
     }
     if frame.motion { heldTime = frame.time }
     let time = heldTime
@@ -529,14 +622,9 @@ public final class SwarmRenderer {
     glyphCount = 0
     for (index, body) in bodies.enumerated() {
       let layout = layout(of: body)
-      let band = graphBand(radius: body.radius * body.scale, layout: layout)
-      let packed = packedBody(body, frameGlow: frame.glow, sampleOffset: index * bodySamples, band: band, theme: theme)
+      let packed = packedBody(body, frameGlow: frame.glow, theme: theme)
       bodyData.replaceSubrange(index * bodyFloats..<(index + 1) * bodyFloats, with: packed)
-      if let graph = body.model.graph {
-        for (column, value) in graph.up.enumerated() { sampleData[index * bodySamples + column] = Float(value) }
-        for (column, value) in graph.down.enumerated() { sampleData[index * bodySamples + burnBarCount + column] = Float(value) }
-      }
-      emitBodyText(body, ink: bodyColours(body, theme: theme).ink, theme: theme, time: time, motion: frame.motion, layout: layout)
+      emitBodyText(body, theme: theme, time: time, motion: frame.motion, layout: layout)
     }
     for mark in frame.marks {
       pushTile(mark.tile, size: mark.size, cx: mark.x, cy: mark.y, colour: mark.colour, alpha: mark.alpha)
@@ -559,7 +647,6 @@ public final class SwarmRenderer {
     frameData.withUnsafeBytes { set.frame.contents().copyMemory(from: $0.baseAddress!, byteCount: frameFloats * 4) }
     if !bodies.isEmpty {
       bodyData.withUnsafeBytes { set.bodies.contents().copyMemory(from: $0.baseAddress!, byteCount: bodies.count * bodyFloats * 4) }
-      sampleData.withUnsafeBytes { set.samples.contents().copyMemory(from: $0.baseAddress!, byteCount: bodies.count * bodySamples * 4) }
     }
     if glyphCount > 0 {
       glyphData.withUnsafeBytes { set.glyphs.contents().copyMemory(from: $0.baseAddress!, byteCount: glyphCount * glyphFloats * 4) }
@@ -579,10 +666,8 @@ public final class SwarmRenderer {
     encoder.label = "swarm"
     encoder.setVertexBuffer(set.frame, offset: 0, index: 0)
     encoder.setVertexBuffer(set.bodies, offset: 0, index: 1)
-    encoder.setVertexBuffer(set.samples, offset: 0, index: 2)
     encoder.setFragmentBuffer(set.frame, offset: 0, index: 0)
     encoder.setFragmentBuffer(set.bodies, offset: 0, index: 1)
-    encoder.setFragmentBuffer(set.samples, offset: 0, index: 2)
     encoder.setRenderPipelineState(gpu.fieldPipeline)
     encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
     if !bodies.isEmpty {

@@ -1,4 +1,4 @@
-// One agent body: fill, the blocked flood, burn bars, rim (working border,
+// One agent body: fill, the state's inner light, rim (working border,
 // hollow dash, running comet), context ring, the pane band, focus ring, and
 // the stale treatment. Every layer is a coverage of the same distance to
 // the rim, so nothing cracks.
@@ -11,7 +11,7 @@ vertex BodyVertex vs(uint vid [[vertex_id]], uint instance [[instance_id]],
 }
 
 fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)]],
-                   device const Body* bodies [[buffer(1)]], device const float* samples [[buffer(2)]]) {
+                   device const Body* bodies [[buffer(1)]]) {
   Body body = bodies[in.index];
   uint flags = body.flags.x;
   float r = body.posRadius.z * body.posRadius.w;
@@ -34,66 +34,41 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
     out = over(out, premul(fill) * inside);
   }
 
-  // Blocked: the accent floods the body from the centre, a gaussian so strong
-  // the circle is nearly the colour, thinning toward the rim so the ring and
-  // the rim still read.
-  if (has(flags, F_FLOOD)) {
-    float reach = r * 1.6;
-    float flood = exp(-(dist * dist) / (reach * reach) * 2.0);
-    out = over(out, premul(float4(body.accent.rgb, 0.95 * body.accent.a)) * flood * inside);
-  }
-
-  // The burn bars: ten minutes of the UI ledger's steps, oldest left, as
-  // rounded columns in the theme's ink either side of a baseline through the
-  // middle of the band under the model line: output up, input down, each side
-  // scaled so its tallest column fills its half of the band. Twenty bars of
-  // thirty seconds, one sample each; the newest is the ink at full strength,
-  // breathing, and never a colour.
-  if (has(flags, F_GRAPH) && inside > 0.0) {
-    float diameter = 2.0 * r;
-    float top = body.graph.x;
-    float bottom = body.graph.y;
-    float bars = float(GRAPH_SAMPLES);
-    float halfSpan = r * BARS_SPAN;
-    float pitch = 2.0 * halfSpan / bars;
-    float half_ = pitch * 0.3;
-    float x01 = clamp((p.x + halfSpan) / (2.0 * halfSpan), 0.0, 0.9999);
-    uint index = uint(floor(x01 * bars));
-    uint first = body.flags.y;
-    uint firstDown = first + GRAPH_SAMPLES;
-    float up = samples[first + index];
-    float down = samples[firstDown + index];
-    float centre = (float(index) + 0.5) * pitch - halfSpan;
-    float baseline = 0.5 * (top + bottom) * diameter - r;
-    float reach = 0.5 * (bottom - top) * diameter - 1.0;
-    // Each side is a column with a semicircular far end, cut flat half a
-    // pixel off the baseline; a silent side keeps a 1.5px stub.
-    float upTop = baseline - max(up * reach, 1.5);
-    float2 qUp = float2(abs(p.x - centre), (upTop + half_) - p.y);
-    float dUp = max(length(max(qUp, float2(0.0))) + min(max(qUp.x, qUp.y), 0.0) - half_, p.y - (baseline - 0.5));
-    float downEnd = baseline + max(down * reach, 1.5);
-    float2 qDown = float2(abs(p.x - centre), p.y - (downEnd - half_));
-    float dDown = max(length(max(qDown, float2(0.0))) + min(max(qDown.x, qDown.y), 0.0) - half_, (baseline + 0.5) - p.y);
-    float barCoverage = max(cov(dUp, frame), cov(dDown, frame)) * step(abs(p.x), halfSpan);
-    bool newest = index == GRAPH_SAMPLES - 1u;
-    float breathe = 0.5 + 0.5 * sin(time * TAU / 1.6 + body.motion.y);
-    float alpha = select(0.45, mix(0.8, 1.0, breathe), newest) * body.motion.w;
-    out = over(out, premul(float4(body.ink.rgb, alpha)) * barCoverage * inside);
-    // The baseline itself, a hairline in the ink across the bars' span.
-    float baselineCoverage = cov(abs(p.y - baseline) - 0.5, frame) * step(abs(p.x), halfSpan);
-    out = over(out, premul(float4(body.ink.rgb, 0.22 * body.motion.w)) * baselineCoverage * inside);
-  }
-
-  // A light at the centre in the accent, breathing with the mark: the one
-  // place the accent shows inside a working body, so it is allowed to be seen.
+  // The one light inside a body. The project's colour is not here — it is the
+  // folder before the name, and nowhere else (2026-09-16).
+  //
+  // A working body BREATHES: a density at its centre in the theme's own ink,
+  // swelling and settling. A body that NEEDS THE USER GLOWS: its ground is the
+  // state's own hue at this theme's calm end, and the state's light rides the
+  // annulus over it in the full chroma, carried outward as wave after wave
+  // (2026-09-18). Motion off holds the waves at their mid-crest, so a still
+  // frame is a lit body and nothing here depends on animation to read. The
+  // STATE GLOW group of the parameters drives every number of it.
   if (has(flags, F_CORE)) {
-    float k = select(0.5, 0.5 - 0.5 * cos(time * TAU / 1.5 + body.motion.y), frame.params.y > 0.5);
-    float reach = r * mix(0.5, 0.78, k);
-    float core = exp(-(dist * dist) / (reach * reach) * 2.0);
-    out = over(out, premul(float4(body.accent.rgb, mix(0.16, 0.34, k) * body.accent.a)) * core * inside);
+    bool moving = frame.params.y > 0.5;
+    if (has(flags, F_WAVES)) {
+      // Waves of the glow are CARRIED outward: a sinusoid in the radius moving
+      // with time, so there is always another behind the one that is leaving
+      // and never a pause. The crest is squared, which narrows the bright bands
+      // and widens the dim ones, the way light ripples actually sit. Every
+      // number is a tunable, and at their tuned values the glow ramps across
+      // nearly the whole body but holds a fifth of its strength, so the copy
+      // sits on the ground rather than in the light.
+      float u = dist / r;
+      float radial = smoothstep(frame.glowBand.x, frame.glowBand.y, u);
+      float carried = sin((u * frame.glowWave.x - time * frame.glowWave.y) * TAU + body.motion.y);
+      float crest = select(0.5, 0.5 + 0.5 * carried, moving);
+      float lit = mix(1.0 - frame.glowWave.z, 1.0, crest * crest);
+      out = over(out, premul(float4(body.core.rgb, radial * lit * frame.glowBand.z * body.core.a)) * inside);
+    } else {
+      float k = select(0.5, 0.5 - 0.5 * cos(time * TAU / 1.5 + body.motion.y), moving);
+      float reach = r * mix(0.5, 0.78, k);
+      float core = exp(-(dist * dist) / (reach * reach) * 2.0);
+      out = over(out, premul(float4(body.core.rgb, mix(0.16, 0.34, k) * body.core.a)) * core * inside);
+    }
   }
 
-  // The rim. A working body wears a 1px border in the working border colour.
+  // The rim. A working body wears a 1px border in the ink at the edge's weight.
   if (has(flags, F_RIM)) {
     out = over(out, premul(body.rim) * cov(abs(d + 0.5) - 0.5, frame));
   }
@@ -117,19 +92,21 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
     }
   }
 
-  // The context ring on the rim: a faint ink track and the gauge, a twelfth
-  // of the radius wide (5px at 60), in the theme's ink at 55% (a mid grey
-  // over either fill) whatever the state (the figure, not the gauge, turns
-  // orange when hot), from twelve o'clock clockwise with round caps, its outer
-  // edge on the rim. On a mounted body the pane-colour gutter sits just
-  // outside it, before the light begins.
+  // The context ring on the rim: a faint ink track and the gauge, a twelfth of
+  // the radius wide (5px at 60), from twelve o'clock clockwise with round
+  // caps, its outer edge on the rim. The gauge CLIMBS as it goes round — its
+  // weight ramps from the track's own to the title's — so a barely-used
+  // context is barely there and a nearly-spent one is the strongest mark on
+  // the body. That climb is the alarm; nothing here turns a colour
+  // (2026-09-18). On a mounted body the pane-colour gutter sits just outside
+  // it, before the light begins.
   if (has(flags, F_RING)) {
     float width = r * GAUGE_WIDTH_RATIO;
     float ringRadius = r - width * 0.5;
     float ringD = dist - ringRadius;
-    float track = stroke(ringD, 1.0, frame);
-    out = over(out, premul(float4(body.ink.rgb, body.ring.z)) * track);
     float fraction = body.ring.x;
+    float gauge = 0.0;
+    float weight = body.ring.y;
     if (fraction > 0.0) {
       float angle = clockwise(p);
       float endAngle = fraction * TAU;
@@ -138,8 +115,18 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
       // Signed distance to the arc with its round caps.
       float arcD = select(1.0e6, abs(ringD), angle <= fraction);
       float shape = min(arcD, min(capStart, capEnd)) - width * 0.5;
-      out = over(out, premul(float4(body.ink.rgb, 0.55 * body.motion.w)) * cov(shape, frame));
+      gauge = cov(shape, frame);
+      // How far round this pixel sits, with the caps folded onto the ends:
+      // past the arc, whichever end is nearer owns it, so neither cap takes
+      // the other's weight.
+      float gap = 1.0 - fraction;
+      float along = select(min(angle, fraction), 0.0, angle > fraction + gap * 0.5);
+      weight = mix(body.ring.y, body.ring.w, clamp(along, 0.0, 1.0));
     }
+    // The track is only the part still to spend: it is cut out under the
+    // gauge, round caps included, so no hairline shows through the filled arc.
+    out = over(out, premul(float4(body.ink.rgb, body.ring.z)) * stroke(ringD, 1.0, frame) * (1.0 - gauge));
+    out = over(out, premul(float4(body.ink.rgb, weight * body.motion.w)) * gauge);
   }
 
   // Mounted in a pane: the body's colour as the gutter band outside the rim;

@@ -4,12 +4,13 @@ import UIKit
 /// The godview monochrome language, made adaptive.
 ///
 /// Every value is DESIGN.md §2.7's instrument palette (the reference's
-/// `--vf-godview-*` tokens), light and dark, plus the reference's blocked pair
-/// and §2.5's two state colours. Status is contrast (idle grey · working
-/// inverted · blocked inverted and flooded by the project's colour); the
-/// hues on the field are the project's (record §02, dealt by `FieldAgents`),
-/// the branch dot's green, the blocked reply's orange and the unread reply's
-/// blue — never a colour that means nothing.
+/// `--vf-godview-*` tokens), light and dark, plus §2.5's two state colours.
+/// Since the one-ink revision (2026-09-18) no state inverts the theme: every
+/// body wears one surface and one ink, and what a body is doing is said by
+/// its marks, its inner light and its size. The hues on the field are the
+/// project's (record §02, dealt by `FieldAgents`, worn by the folder alone),
+/// the branch dot's green, a blocked body's orange and an unread reply's blue
+/// — never a colour that means nothing.
 public enum FieldPalette {
   // Ground & chrome
   public static let monitorBackground = dynamic(light: 0xF7F7F7, dark: 0x0A0A0A)
@@ -21,17 +22,11 @@ public enum FieldPalette {
   public static let gridLine = dynamic(
     light: 0x000000, lightAlpha: 0.022, dark: 0xFFFFFF, darkAlpha: 0.035)
 
-  // Body tiers — status as contrast, never hue (the swarm's `SwarmTheme` reads these)
-  public static let idleBackground = dynamic(light: 0xE5E5E5, dark: 0x2A2A2A)
-  public static let idleText = dynamic(light: 0x666666, dark: 0xAAAAAA)
-  public static let workingBackground = dynamic(light: 0x222222, dark: 0xEEEEEE)
-  public static let workingText = dynamic(light: 0xFFFFFF, dark: 0x111111)
-  public static let workingBorder = dynamic(light: 0x111111, dark: 0xFFFFFF)
-  // The blocked pair is the reference's `--blocked-bg` / `--blocked-text`
-  // (`--vf-card-deep` / the panel in light, the text-main / card-deep in dark):
-  // the same full-contrast inversion the July waiting tier wore.
-  public static let blockedBackground = dynamic(light: 0x000000, dark: 0xFFFFFF)
-  public static let blockedText = dynamic(light: 0xFFFFFF, dark: 0x000000)
+  // The body's surface — ONE, in both themes (2026-09-18): the instrument's
+  // resting body colour (`--idle-bg`), which every agent body now wears. The
+  // inverted working and blocked fills the July field read are gone; the
+  // swarm's ink is `textMain`, at a weight from `SwarmWeight`'s ladder.
+  public static let bodySurface = dynamic(light: 0xE5E5E5, dark: 0x2A2A2A)
 
   // The terminal card surface (the desktop terminal deck's paper)
   public static let terminalBackground = dynamic(light: 0xECE8DC, dark: 0x282C34)
@@ -45,9 +40,9 @@ public enum FieldPalette {
 
   /// The branch-presence dot (`--vf-godview-rain-green`).
   public static let branchGreen = Color(red: 0x4A / 255.0, green: 0xDE / 255.0, blue: 0x80 / 255.0)
-  /// §2.5's orange: the blocked reply's dot, the hot figure, the blocker kind.
+  /// §2.5's orange: a body that waits on the user.
   public static let orange = Color(red: 0xFF / 255.0, green: 0x9F / 255.0, blue: 0x0A / 255.0)
-  /// §2.5's select blue: the unread reply's dot.
+  /// §2.5's select blue: a reply that arrived unseen.
   public static let selectBlue = Color(red: 0x4A / 255.0, green: 0x90 / 255.0, blue: 0xD9 / 255.0)
 
   /// An agent's identity color: the desktop's `hsl(hue 62% 44%)` converted to

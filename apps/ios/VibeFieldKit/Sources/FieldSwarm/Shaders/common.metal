@@ -1,5 +1,6 @@
 // Shared by every swarm pipeline; the renderer prepends this to each shader.
-// A transcription of the reference's `common.wgsl` (puppeteer views, RFC 005):
+// A transcription of the reference's `common.wgsl` (puppeteer views, RFC 005;
+// the one-ink revision of 2026-09-18):
 //
 // All geometry is in points with y down, the same space the physics and the
 // touch use; the screen scale only enters through `cov`, the one-pixel box
@@ -25,6 +26,10 @@ struct Frame {
   float4 holdRim;
   float4 holdFill;
   float4 holdInk;
+  // the state glow's shape: where it begins, where it is full, its strength, unused
+  float4 glowBand;
+  // and its motion: crests across the radius, crests a second, trough depth, unused
+  float4 glowWave;
 };
 
 struct Body {
@@ -32,24 +37,23 @@ struct Body {
   float4 posRadius;
   float4 fill;
   float4 ink;
-  float4 accent;
+  // the inner light's colour — the STATE's, never the project's (see body.metal)
+  float4 core;
   float4 rim;
-  // x: flag bits, y: first sample of this body's graph (output side, then input side), z/w unused
+  // x: flag bits; y/z/w unused
   uint4 flags;
-  // context ring: fraction 0..1, unused, track alpha, unused
+  // context ring: fraction 0..1, the weight it starts its climb at, the track's
+  // weight, the weight a full ring would reach
   float4 ring;
   // the outer light: reach (points), strength, breath (0..1), phase seed
   float4 glow;
   // spawn time (s), phase seed, stale mix (0/1), opacity
   float4 motion;
   float4 link;
-  // the burn bars' band as fractions of the diameter: top (full intensity), bottom (none)
-  float4 graph;
 };
 
 constant uint F_HOLLOW = 1u;
 constant uint F_RUNNING = 2u;
-constant uint F_GRAPH = 4u;
 constant uint F_GLOW = 8u;
 constant uint F_RIM = 16u;
 constant uint F_STALE = 32u;
@@ -59,17 +63,14 @@ constant uint F_RING_HOT = 512u;
 constant uint F_RING = 1024u;
 constant uint F_SHADOW = 2048u;
 constant uint F_CORE = 4096u;
-constant uint F_FLOOD = 8192u;
+constant uint F_WAVES = 8192u;
 
 constant float TAU = 6.28318530718;
+
 // The context gauge's width and the light's gutter follow the body's radius:
 // 5px and 2px on the 60px working body, thicker on a bigger one.
 constant float GAUGE_WIDTH_RATIO = 5.0 / 60.0;
 constant float LIGHT_GUTTER_RATIO = 2.0 / 60.0;
-// The burn bars span this much of the diameter, centred, so they stay clear of the rim.
-constant float BARS_SPAN = 0.56;
-// Per side; a body's samples are the output side then the input side.
-constant uint GRAPH_SAMPLES = 20u;
 
 static inline bool has(uint flags, uint bit) {
   return (flags & bit) != 0u;
