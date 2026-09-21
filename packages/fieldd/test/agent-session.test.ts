@@ -52,6 +52,7 @@ import type {
 } from "@vibecook/puppeteer-runtime";
 import {
   AGENT_FIELD,
+  AGENT_MONITOR_SCHEMA_VERSION,
   AgentFieldRow,
   type AgentListResult,
   type AgentProvidersResult,
@@ -1953,7 +1954,10 @@ describe.skipIf(!REAL_AGENT)(
           schemaVersion: live.monitor?.schemaVersion,
         })}`,
       );
-      expect(live.monitor?.schemaVersion).toBe(2);
+      // The contract's version, never a literal: upstream bumped the monitor
+      // schema to 3 and this opt-in row kept asserting AR-3's 2 for as long as
+      // the gate could not see it.
+      expect(live.monitor?.schemaVersion).toBe(AGENT_MONITOR_SCHEMA_VERSION);
       expect(["idle", "working", "blocked"]).toContain(live.status);
       const record = await poll(async () => {
         const r = readRecord(dataDir, runId);

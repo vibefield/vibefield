@@ -1,4 +1,4 @@
-import type { UsageLedgerRecord } from "@vibecook/puppeteer-views";
+import type { UsageLedgerRecord, UsageRunRecord } from "@vibecook/puppeteer-views";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createUsageHistoryCache } from "../src/godview/monitor/usage-history-cache";
 
@@ -9,8 +9,23 @@ import { createUsageHistoryCache } from "../src/godview/monitor/usage-history-ca
 // else. Everything here is therefore about degrading quietly: a garbage
 // partition, a blocked one and an empty save all have to leave the live
 // ledgers alone rather than reach a component that was drawing a bubble.
+//
+// AR-5-1 moved the record to independently observed USD RUNS, which gave this
+// cache a second obligation: `exportUsage` hands it only the LIVE run, so the
+// merge is per run and a correction wins by revision, and a version 1
+// document — token series, not dollars — is never read back at all.
 
 const KEY = "vf-test-usage-history";
+
+function run(runId: string, overrides: Partial<UsageRunRecord> = {}): UsageRunRecord {
+  return {
+    runId,
+    costUsd: 1.5,
+    coverage: "complete",
+    buckets: [{ at: "2026-09-13T09:59:30.000Z", costUsd: 1.5 }],
+    ...overrides,
+  };
+}
 
 function record(
   providerId: string,
@@ -18,11 +33,11 @@ function record(
   overrides: Partial<UsageLedgerRecord> = {},
 ): UsageLedgerRecord {
   return {
+    currency: "USD",
     providerId,
     nativeSessionId,
     savedAt: "2026-09-13T10:00:00.000Z",
-    boundary: 100,
-    total: { held: 1_000, snapshots: [0, 400, 1_000] },
+    runs: [run("run-1")],
     ...overrides,
   };
 }
@@ -42,7 +57,9 @@ describe("the usage history cache", () => {
     // opaque id and one conversation's burn must never be shown for another's.
     const cache = createUsageHistoryCache(KEY);
     const codex = record("codex", "session-1");
-    const claude = record("claude", "session-1", { total: { held: 5, snapshots: [5] } });
+    const claude = record("claude", "session-1", {
+      runs: [run("run-2", { costUsd: 0.05, buckets: [] })],
+    });
     await cache.save([codex, claude]);
     await expect(
       cache.load({ providerId: "codex", nativeSessionId: "session-1" }),
@@ -66,13 +83,81 @@ describe("the usage history cache", () => {
     await cache.save([record("codex", "a"), record("codex", "b")]);
     const moved = record("codex", "a", {
       savedAt: "2026-09-13T11:00:00.000Z",
-      total: { held: 9_000, snapshots: [1_000, 9_000] },
+      runs: [run("run-1", { costUsd: 9 })],
     });
     await cache.save([moved]);
     await expect(cache.load({ providerId: "codex", nativeSessionId: "a" })).resolves.toEqual(moved);
     await expect(cache.load({ providerId: "codex", nativeSessionId: "b" })).resolves.toEqual(
       record("codex", "b"),
     );
+  });
+
+  it("keeps every earlier run — the live export is one run, not the whole history", async () => {
+    // `exportUsage` emits the conversation's LIVE run alone, so a save that
+    // replaced the record would discard the spend of every run before it and a
+    // resumed bubble would open holding only its latest leg.
+    const cache = createUsageHistoryCache(KEY);
+    await cache.save([record("codex", "a", { runs: [run("run-1", { costUsd: 2 })] })]);
+    await cache.save([
+      record("codex", "a", {
+        savedAt: "2026-09-13T11:00:00.000Z",
+        runs: [run("run-2", { costUsd: 3 })],
+      }),
+    ]);
+    const stored = await cache.load({ providerId: "codex", nativeSessionId: "a" });
+    expect(stored?.runs.map((entry) => entry.runId)).toEqual(["run-1", "run-2"]);
+    expect(stored?.runs.map((entry) => entry.costUsd)).toEqual([2, 3]);
+    expect(stored?.savedAt).toBe("2026-09-13T11:00:00.000Z");
+  });
+
+  it("a correction stands: a delayed snapshot of the same run never undoes it", async () => {
+    // Two Godview windows share this partition. The one holding the older
+    // revision may save last, and its stale number must not win.
+    const cache = createUsageHistoryCache(KEY);
+    await cache.save([
+      record("codex", "a", {
+        savedAt: "2026-09-13T11:00:00.000Z",
+        runs: [run("run-1", { revision: 7, costUsd: 9 })],
+      }),
+    ]);
+    await cache.save([
+      record("codex", "a", {
+        savedAt: "2026-09-13T12:00:00.000Z",
+        runs: [run("run-1", { revision: 3, costUsd: 1 })],
+      }),
+    ]);
+    await expect(cache.load({ providerId: "codex", nativeSessionId: "a" })).resolves.toMatchObject({
+      savedAt: "2026-09-13T12:00:00.000Z",
+      runs: [run("run-1", { revision: 7, costUsd: 9 })],
+    });
+    // …while the same run at a LATER revision is exactly what may replace it.
+    await cache.save([
+      record("codex", "a", {
+        savedAt: "2026-09-13T13:00:00.000Z",
+        runs: [run("run-1", { revision: 8, costUsd: 4 })],
+      }),
+    ]);
+    await expect(cache.load({ providerId: "codex", nativeSessionId: "a" })).resolves.toMatchObject({
+      runs: [run("run-1", { revision: 8, costUsd: 4 })],
+    });
+  });
+
+  it("bounds one conversation's runs as well, and the oldest fall off", async () => {
+    // A conversation resumed forever accumulates runs, and the only failure
+    // mode of a full partition here is a silent throw.
+    const cache = createUsageHistoryCache(KEY);
+    for (let index = 0; index < 55; index += 1) {
+      await cache.save([
+        record("codex", "a", {
+          savedAt: new Date(Date.parse("2026-09-13T10:00:00.000Z") + index * 60_000).toISOString(),
+          runs: [run(`run-${index}`)],
+        }),
+      ]);
+    }
+    const stored = await cache.load({ providerId: "codex", nativeSessionId: "a" });
+    expect(stored?.runs).toHaveLength(50);
+    expect(stored?.runs.at(0)?.runId).toBe("run-5");
+    expect(stored?.runs.at(-1)?.runId).toBe("run-54");
   });
 
   it("saving nothing is harmless: the cache it already holds is untouched", async () => {
@@ -98,8 +183,13 @@ describe("the usage history cache", () => {
     for (const bad of [
       "not json at all",
       "null",
-      '{"version":2,"records":[]}',
-      '{"version":1,"records":"nope"}',
+      // A version 1 document is the TOKEN ledger AR-5-1 replaced. Reading one
+      // back would open a resumed bubble showing token counts as dollars.
+      '{"version":1,"records":[{"providerId":"codex","nativeSessionId":"a",' +
+        '"savedAt":"2026-09-13T10:00:00.000Z","boundary":100,' +
+        '"total":{"held":1000,"snapshots":[0,1000]}}]}',
+      '{"version":3,"records":[]}',
+      '{"version":2,"records":"nope"}',
       "[]",
     ]) {
       localStorage.setItem(KEY, bad);
