@@ -1054,7 +1054,7 @@
         color: var(--amber);
       }
 
-      .status-key {
+      .legend {
         display: flex;
         flex-wrap: wrap;
         gap: 14px;
@@ -1067,7 +1067,7 @@
         font-size: 12.5px;
       }
 
-      .status-key span {
+      .legend span {
         display: inline-flex;
         gap: 7px;
         align-items: baseline;
@@ -1105,10 +1105,10 @@
           <div class="stat"><strong>3</strong><span>enforced import walls</span></div>
           <div class="stat"><strong>12</strong><span>agent test suites</span></div>
         </div>
-        <div class="status-key">
-          <span><span class="badge tone-built">Built</span> in the code at the revisions below</span>
-          <span><span class="badge tone-designed">Designed</span> ruled and specified, not in code</span>
-          <span><span class="badge tone-owed">Owed</span> named on the roadmap, not designed in detail</span>
+        <div class="legend" aria-label="Status legend">
+          <span><span class="badge tone-built">BUILT</span> in the code at the stated revision, cited.</span>
+          <span><span class="badge tone-designed">DESIGNED</span> ruled and specified, not in code, cited.</span>
+          <span><span class="badge tone-owed">OWED</span> named on the roadmap, not designed in detail.</span>
         </div>
       </header>
       <div class="layout">
@@ -2223,23 +2223,23 @@
             <div class="source-grid">
               <a class="source-link" href="architecture.html">
                 <strong>vibe-field · docs/agent-plane/architecture.html</strong>
-                <span>The umbrella: ownership law, the three-repository system diagram, the seams, the walls, the data domains, lockstep, lifetimes and the index of every document.</span>
+                <span>The umbrella: the ownership law, the system diagram across three repositories, the seams, the walls, the data domains, the identity spine, the laws, lifetimes, performance, status, and the map of every document.</span>
               </a>
               <a class="source-link" href="api.html">
                 <strong>vibe-field · docs/agent-plane/api.html</strong>
-                <span>The doors: conventions, the catalogue of <code>agent.*</code>, <code>agents.*</code>, <code>index.*</code> and the agent-relevant <code>terminal.*</code>, the mesh store, and each door mapped to the upstream API it wraps.</span>
+                <span>The doors: the conventions (contracts, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of agent.*, agents.*, index.* and the agent-relevant terminal.*, the mesh store, each door mapped to the upstream API it wraps, and versioning.</span>
               </a>
               <a class="source-link" href="../AGENT_PLANE.md">
                 <strong>vibe-field · docs/AGENT_PLANE.md</strong>
-                <span>The Markdown hub listing every agent-plane document across all three repositories and what each governs.</span>
+                <span>The hub: every page of the agent plane in three repositories, with what each governs and how to update them.</span>
               </a>
               <a class="source-link" href="https://github.com/vibefield/puppeteer/blob/main/docs/host-integration.html">
                 <strong>puppeteer · docs/host-integration.html</strong>
-                <span>The embedding seam written for any host: <code>AgentHost</code>, the runtime construction ports, the monitor schema and its versioning promise, the view ports, lifetimes and the environment contract.</span>
+                <span>Hosting puppeteer: the embedding seam for any host — the AgentHost contract and its ingress half, constructing the runtime, what a host may import, the monitor contract and its versioning, the views' ports, distribution and profiles from the host's seat, continuity across host restarts, and the two reference hosts.</span>
               </a>
               <a class="source-link" href="https://github.com/vibefield/rosetta/blob/main/docs/daemon-api.html">
                 <strong>rosetta · docs/daemon-api.html</strong>
-                <span>rosettad's process model and supervision, enrollment and consent by construction, the readiness vocabulary, the HTTP and WebSocket surface, auth today and RO-1.</span>
+                <span>rosettad for a host: the process model and supervision, enrollment and consent, the readiness vocabulary, the wire, the TypeScript client, identity across the seam, access control today and RO-1, versioning, and the two reference hosts.</span>
               </a>
             </div>
           </section>

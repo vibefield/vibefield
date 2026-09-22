@@ -1054,7 +1054,7 @@
         color: var(--amber);
       }
 
-      .status-key {
+      .legend {
         display: flex;
         flex-wrap: wrap;
         gap: 14px;
@@ -1067,7 +1067,7 @@
         font-size: 12.5px;
       }
 
-      .status-key span {
+      .legend span {
         display: inline-flex;
         gap: 7px;
         align-items: baseline;
@@ -1106,10 +1106,10 @@
           <div class="stat"><strong>11</strong><span>audited mutations</span></div>
           <div class="stat"><strong>0</strong><span>that federate</span></div>
         </div>
-        <div class="status-key">
-          <span><span class="badge tone-built">Built</span> in the code at the revisions below</span>
-          <span><span class="badge tone-designed">Designed</span> ruled and specified, not in code</span>
-          <span><span class="badge tone-owed">Owed</span> named on the roadmap, not designed in detail</span>
+        <div class="legend" aria-label="Status legend">
+          <span><span class="badge tone-built">BUILT</span> in the code at the stated revision, cited.</span>
+          <span><span class="badge tone-designed">DESIGNED</span> ruled and specified, not in code, cited.</span>
+          <span><span class="badge tone-owed">OWED</span> named on the roadmap, not designed in detail.</span>
         </div>
       </header>
       <div class="layout">
@@ -1304,6 +1304,103 @@
               expiring and revocable by generation; the durable shared write secret that used to answer
               the same question was deleted rather than fenced.
             </p>
+
+            <figure>
+              <div class="diagram">
+                <svg viewBox="0 0 1180 380" role="img" aria-labelledby="door-path-title" style="font-family: Source Sans 3, sans-serif">
+                  <title id="door-path-title">
+                    A door's path and the ticketed byte route. The renderer calls a product-surface method over
+                    JSON-RPC; product-api.ts checks the registry row's scope and its local locality; the service makes
+                    the upstream call, puppeteer's runtime in the same process or rosettad over loopback. Beside it,
+                    fieldd mints one ticket and the terminal frames travel between the renderer and the cell without it.
+                  </title>
+                  <defs>
+                    <marker id="door-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)" />
+                    </marker>
+                    <marker id="door-arrow-copper" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--copper)" />
+                    </marker>
+                    <marker id="door-arrow-copper-back" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                      <path d="M 10 0 L 0 5 L 10 10 z" fill="var(--copper)" />
+                    </marker>
+                  </defs>
+
+                  <text x="16" y="24" fill="var(--blue)" font-size="13" font-weight="600">Control — JSON on the product API</text>
+                  <text x="740" y="24" fill="var(--copper)" font-size="13" font-weight="600">Bytes — the ticketed route (EL2)</text>
+                  <line x1="726" y1="10" x2="726" y2="372" stroke="var(--line)" stroke-dasharray="3 4" />
+
+                  <!-- the door's path -->
+                  <rect x="30" y="48" width="250" height="54" rx="10" fill="var(--paper-2)" stroke="var(--line)" />
+                  <rect x="30" y="48" width="250" height="4" rx="2" fill="var(--purple)" />
+                  <text x="46" y="76" fill="var(--purple)" font-size="15" font-weight="600">Renderer</text>
+                  <text x="46" y="94" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">field-app</text>
+                  <text x="300" y="72" fill="var(--muted)" font-size="12">JSON-RPC, one call per act</text>
+                  <text x="300" y="92" fill="var(--faint)" font-size="11" font-family="JetBrains Mono, monospace">agent.session.spawn · index.search</text>
+                  <path d="M 155 102 V 136" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#door-arrow)" />
+
+                  <rect x="30" y="140" width="250" height="76" rx="10" fill="var(--paper)" stroke="var(--line-strong)" />
+                  <rect x="30" y="140" width="250" height="4" rx="2" fill="var(--blue)" />
+                  <text x="46" y="168" fill="var(--blue)" font-size="15" font-weight="600">The door</text>
+                  <text x="46" y="188" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">methods.ts</text>
+                  <text x="46" y="206" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">product-api.ts</text>
+                  <text x="300" y="166" fill="var(--muted)" font-size="12">surface product, scope checked</text>
+                  <text x="300" y="186" fill="var(--muted)" font-size="12">locality local, read on every call</text>
+                  <text x="300" y="206" fill="var(--faint)" font-size="11">a peer-fieldd principal is refused outright</text>
+                  <path d="M 155 216 V 250" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#door-arrow)" />
+
+                  <rect x="30" y="254" width="250" height="58" rx="10" fill="var(--paper-2)" stroke="var(--line)" />
+                  <rect x="30" y="254" width="250" height="4" rx="2" fill="var(--blue)" />
+                  <text x="46" y="282" fill="var(--blue)" font-size="15" font-weight="600">fieldd service</text>
+                  <text x="46" y="300" fill="var(--muted)" font-size="10" font-family="JetBrains Mono, monospace">agent-runtime.ts · agent-index.ts</text>
+
+                  <path d="M 284 272 H 430" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#door-arrow)" />
+                  <path d="M 284 296 H 360 V 338 H 430" fill="none" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#door-arrow)" />
+
+                  <rect x="436" y="246" width="264" height="52" rx="10" fill="var(--paper-2)" stroke="var(--line)" />
+                  <rect x="436" y="246" width="264" height="4" rx="2" fill="var(--copper)" />
+                  <text x="452" y="272" fill="var(--copper)" font-size="13" font-weight="600">puppeteer</text>
+                  <text x="452" y="290" fill="var(--muted)" font-size="11">AgentRuntime, in the same process</text>
+
+                  <rect x="436" y="312" width="264" height="52" rx="10" fill="var(--paper-2)" stroke="var(--line)" />
+                  <rect x="436" y="312" width="264" height="4" rx="2" fill="var(--teal)" />
+                  <text x="452" y="338" fill="var(--teal)" font-size="13" font-weight="600">rosetta</text>
+                  <text x="452" y="356" fill="var(--muted)" font-size="11">rosettad, loopback HTTP — GET /api/search</text>
+
+                  <!-- the ticketed byte route -->
+                  <rect x="752" y="48" width="200" height="58" rx="10" fill="var(--paper-2)" stroke="var(--line)" />
+                  <rect x="752" y="48" width="200" height="4" rx="2" fill="var(--purple)" />
+                  <text x="768" y="76" fill="var(--purple)" font-size="15" font-weight="600">Renderer</text>
+                  <text x="768" y="96" fill="var(--muted)" font-size="11">the WebGPU terminal runtime</text>
+
+                  <rect x="990" y="48" width="170" height="76" rx="10" fill="var(--paper)" stroke="var(--line-strong)" />
+                  <rect x="990" y="48" width="170" height="4" rx="2" fill="var(--blue)" />
+                  <text x="1006" y="76" fill="var(--blue)" font-size="15" font-weight="600">fieldd</text>
+                  <text x="1006" y="94" fill="var(--muted)" font-size="11">one RPC, then nothing</text>
+                  <text x="1006" y="112" fill="var(--faint)" font-size="10" font-family="JetBrains Mono, monospace">terminal.openTicket</text>
+                  <path d="M 956 78 H 986" stroke="var(--teal)" stroke-width="1.4" marker-end="url(#door-arrow)" />
+
+                  <path d="M 852 110 V 254" stroke="var(--copper)" stroke-width="1.6" marker-end="url(#door-arrow-copper)" marker-start="url(#door-arrow-copper-back)" />
+                  <text x="872" y="150" fill="var(--copper)" font-size="12">the frames, both ways</text>
+                  <text x="872" y="172" fill="var(--muted)" font-size="11">over the cell's own socket</text>
+                  <text x="872" y="192" fill="var(--faint)" font-size="11" font-family="JetBrains Mono, monospace">transportGrant · attachGrant</text>
+                  <text x="872" y="216" fill="var(--muted)" font-size="11">fieldd is not on this path</text>
+
+                  <rect x="752" y="258" width="200" height="58" rx="10" fill="var(--paper-2)" stroke="var(--line)" />
+                  <rect x="752" y="258" width="200" height="4" rx="2" fill="var(--copper)" />
+                  <text x="768" y="286" fill="var(--copper)" font-size="15" font-weight="600">agent cell</text>
+                  <text x="768" y="306" fill="var(--muted)" font-size="11">the session's own cell</text>
+                  <text x="752" y="340" fill="var(--faint)" font-size="11">A mint is never idempotent; a keyless cell answers UNAVAILABLE.</text>
+                </svg>
+              </div>
+              <figcaption>
+                One door and one byte route at vibe-field <code>b7ebb444</code>. Left: a product-surface
+                call, the registry row's scope and its <code>local</code> locality read in
+                <code>product-api.ts</code>, the service, and the upstream call it wraps — puppeteer's
+                runtime in the same process, rosettad over loopback. Right: the other plane, where fieldd
+                mints one ticket and sees none of the frames.
+              </figcaption>
+            </figure>
 
             <h3>Audit</h3>
             <p class="section-note">
@@ -1822,23 +1919,23 @@
             <div class="source-grid">
               <a class="source-link" href="architecture.html">
                 <strong>vibe-field · docs/agent-plane/architecture.html</strong>
-                <span>The umbrella: ownership law, the three-repository system diagram, the seams, the walls, the data domains, lockstep, lifetimes and the index of every document.</span>
+                <span>The umbrella: the ownership law, the system diagram across three repositories, the seams, the walls, the data domains, the identity spine, the laws, lifetimes, performance, status, and the map of every document.</span>
               </a>
               <a class="source-link" href="system.html">
                 <strong>vibe-field · docs/agent-plane/system.html</strong>
-                <span>Aggregation and integration: fieldd's agent services and their graph, the floor's agent cell, the mirror and the fold, the field projection to the phone, the data domains and the enforced walls.</span>
+                <span>Aggregation and integration in VibeField: fieldd's agent services and their graph, the floor's agent cell, the mirror and the fold, the field projection to the phone, history and enrollment, the data domains and layout, the walls as enforced, and the sequences.</span>
               </a>
               <a class="source-link" href="../AGENT_PLANE.md">
                 <strong>vibe-field · docs/AGENT_PLANE.md</strong>
-                <span>The Markdown hub listing every agent-plane document across all three repositories and what each governs.</span>
+                <span>The hub: every page of the agent plane in three repositories, with what each governs and how to update them.</span>
               </a>
               <a class="source-link" href="https://github.com/vibefield/puppeteer/blob/main/docs/host-integration.html">
                 <strong>puppeteer · docs/host-integration.html</strong>
-                <span>The embedding seam written for any host: <code>AgentHost</code>, the runtime construction ports, the monitor schema and its versioning promise, the view ports, lifetimes and the environment contract.</span>
+                <span>Hosting puppeteer: the embedding seam for any host — the AgentHost contract and its ingress half, constructing the runtime, what a host may import, the monitor contract and its versioning, the views' ports, distribution and profiles from the host's seat, continuity across host restarts, and the two reference hosts.</span>
               </a>
               <a class="source-link" href="https://github.com/vibefield/rosetta/blob/main/docs/daemon-api.html">
                 <strong>rosetta · docs/daemon-api.html</strong>
-                <span>rosettad's process model and supervision, enrollment and consent by construction, the readiness vocabulary, the HTTP and WebSocket surface, auth today and RO-1.</span>
+                <span>rosettad for a host: the process model and supervision, enrollment and consent, the readiness vocabulary, the wire, the TypeScript client, identity across the seam, access control today and RO-1, versioning, and the two reference hosts.</span>
               </a>
             </div>
           </section>
