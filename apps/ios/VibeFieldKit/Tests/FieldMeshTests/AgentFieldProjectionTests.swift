@@ -10,6 +10,11 @@ import Testing
 /// real goldens in `FieldProductTests`. What is under test here is the FOLD —
 /// what a row becomes once the field has it — so the rows are written for the
 /// fold's questions and named after them.
+///
+/// **Correction (2026-09-22, AC-5):** "this bundle has no fixture resources"
+/// stopped being true at UA-P-5, which copied `device-slice.valid.json` in; the
+/// catalog suite at the bottom of this file reads a second golden,
+/// `agent-catalog.valid.json`. The rows stay hand-built for the reason above.
 private func rowJSON(
   id: String,
   kind: String = "claude",
@@ -308,28 +313,30 @@ private func blocker(kind: String) -> JSONValue {
     #expect(projection.agents.map(\.provider.rawValue) == ["claude", "hermes", "opencode"])
   }
 
-  /// The letter rule, clause for clause with `AgentIcon.tsx`'s `agentMark`:
-  /// the one override first, then the id's first character uppercased, then
-  /// `?` for an id with no characters at all.
+  /// The letter rule (`AgentIcon.tsx`'s `agentMark`): the id's first character
+  /// uppercased, then `?` for an id with no characters at all. The reference's
+  /// one override, `acp → A`, is the rule's own answer.
+  ///
+  /// WHICH agents never fall back to it is no longer a list here (AC-5): the
+  /// swarm asks its atlas (`FieldSwarmTests`), the card asks its glyph catalog
+  /// (`FieldHomeTests`).
   @Test func theLetterRuleIsTheReferences() {
     #expect(AgentProvider.acp.markLetter == "A")
     #expect(AgentProvider(rawValue: "hermes").markLetter == "H")
     #expect(AgentProvider(rawValue: "opencode").markLetter == "O")
     #expect(AgentProvider(rawValue: "kimi").markLetter == "K")
     #expect(AgentProvider(rawValue: "").markLetter == "?")
-    // The three with drawn marks never fall back.
-    for provider in [AgentProvider.claude, .codex, .grok] {
-      #expect(provider.hasDrawnMark)
-    }
-    #expect(!AgentProvider.acp.hasDrawnMark)
-    #expect(!AgentProvider(rawValue: "hermes").hasDrawnMark)
   }
 
-  /// An unfamiliar provider is called what the wire called it — the only
-  /// honest name there is.
-  @Test func anUnfamiliarProviderIsNamedByItsId() {
-    #expect(AgentProvider.claude.displayName == "Claude")
-    #expect(AgentProvider(rawValue: "hermes").displayName == "hermes")
+  /// An agent is called what its desktop's CATALOG calls it (AC-D9) — and with
+  /// no catalog, what the wire called it, the only honest name there is.
+  @Test func anAgentIsNamedByTheCatalogAndByItsIdWithoutOne() throws {
+    let catalog = AgentCatalog(
+      try AgentCatalogResult(json: try MeshFixture.json("agent-catalog.valid")))
+    #expect(AgentProvider.claude.displayName(in: catalog) == "Claude Code")
+    #expect(AgentProvider(rawValue: "kimi").displayName(in: catalog) == "Kimi Code")
+    #expect(AgentProvider.claude.displayName(in: .empty) == "claude")
+    #expect(AgentProvider(rawValue: "zed").displayName(in: catalog) == "zed")
   }
 
   @Test func endedRunsAreCountedSoAnEmptyBoardAndAGraveyardReadDifferently() throws {
@@ -364,6 +371,21 @@ private func blocker(kind: String) -> JSONValue {
     #expect(projectAgentSlices([first, second], now: now).agents.map(\.id) == ["a", "b", "c"])
   }
 
+  /// AC-D9 — each board is named by ITS desktop's catalog, by device id; a
+  /// device with none is folded with none, and its bodies are their raw ids.
+  @Test func eachBoardIsNamedByItsOwnDesktopsCatalog() throws {
+    let published: Int64 = 1_757_808_000_000
+    let now = Date(timeIntervalSince1970: Double(published + 1000) / 1000)
+    let named = try sliceOf(rows: [rowJSON(id: "a")], device: "dev-a", published: published)
+    let bare = try sliceOf(rows: [rowJSON(id: "b")], device: "dev-b", published: published)
+    let catalog = AgentCatalog(entries: [
+      AgentCatalogEntry(id: .claude, label: "Claude Code", status: "supported")
+    ])
+    let agents = projectAgentSlices([named, bare], now: now, catalogs: ["dev-a": catalog]).agents
+    #expect(agents.map(\.id) == ["a", "b"])
+    #expect(agents.map { $0.catalogEntry?.label } == ["Claude Code", nil])
+  }
+
   private func sliceOf(
     rows: [JSONValue], device: String = "dev-01HQ8ZK4M7", published: Int64
   ) throws -> AgentFieldSlice {
@@ -376,5 +398,65 @@ private func blocker(kind: String) -> JSONValue {
         "revision": .int(1),
         "rows": .array(rows),
       ]))
+  }
+}
+
+/// AC-5 — the catalog golden through the real reader and the real fold: bytes
+/// → `AgentCatalogResult` → `AgentCatalog` → a named field. What a catalog
+/// decides is what a PHONE may list; it never decides what a field may show.
+@Suite struct AgentCatalogFoldTests {
+  private func golden() throws -> AgentCatalog {
+    AgentCatalog(try AgentCatalogResult(json: try MeshFixture.json("agent-catalog.valid")))
+  }
+
+  @Test func theGoldenFoldsIntoTheCatalogAPhoneLists() throws {
+    let catalog = try golden()
+    #expect(catalog.entries.count == 10)
+    #expect(catalog.entries.first?.label == "Claude Code")
+    // AC-D7's protocol agent keeps itself off the phone; the nine vendors stay,
+    // in the catalog's own order.
+    #expect(
+      catalog.phoneRoster.map(\.id.rawValue) == [
+        "claude", "codex", "grok", "kimi", "opencode", "hermes", "antigravity", "copilot", "pi",
+      ])
+    #expect(catalog.entry(for: .acp)?.onPhone == false)
+    #expect(catalog.entry(for: .acp)?.mark == "acp")
+    #expect(catalog.entry(for: .codex)?.mark == "codex")
+  }
+
+  /// Every row is named by the catalog it was folded with — and an id the
+  /// catalog never decided on still draws, as its raw id (R4).
+  @Test func aBoardIsNamedByItsCatalogAndAnUnknownIdStillDraws() throws {
+    let projection = projectAgentField(
+      rows: [
+        try row(id: "a", kind: "claude"), try row(id: "b", kind: "hermes"),
+        try row(id: "c", kind: "zed"),
+      ],
+      catalog: try golden())
+    #expect(projection.agents.map(\.id) == ["a", "b", "c"])
+    #expect(projection.agents.map { $0.catalogEntry?.label } == ["Claude Code", "Hermes", nil])
+    let unknown = try #require(fieldBubble(from: projection.agents[2])?.agent)
+    #expect(unknown.providerName == "zed")
+    #expect(unknown.markKey == "zed")
+  }
+
+  /// R4 on the phone's own terms: ACP is off the phone's LISTS, and a desktop's
+  /// ACP session still draws on the FIELD, named and lettered.
+  @Test func aDesktopOnlyAgentsSessionStillDraws() throws {
+    let catalog = try golden()
+    let snapshot = try #require(
+      agentSnapshot(from: try row(id: "acp-run", kind: "acp"), catalog: catalog))
+    let facet = try #require(fieldBubble(from: snapshot)?.agent)
+    #expect(facet.providerName == "ACP")
+    #expect(facet.markKey == "acp")
+    #expect(!catalog.phoneRoster.contains { $0.id == .acp })
+  }
+
+  /// No catalog is the state an older desktop leaves, and it changes nothing
+  /// the field already did: every body draws by its raw id.
+  @Test func noCatalogIsTheRawIdEverywhere() throws {
+    let snapshot = try #require(agentSnapshot(from: try row(id: "r", kind: "claude")))
+    #expect(snapshot.catalogEntry == nil)
+    #expect(fieldBubble(from: snapshot)?.agent?.providerName == "claude")
   }
 }

@@ -70,7 +70,10 @@ struct LabAgentSpec {
   var id: String
   var project: String
   var status: AgentVisualStatus
-  var provider: AgentProvider = .claude
+  /// FIXTURE (AC-5): every lab body is a Claude session — the specs' models are
+  /// Claude's — so it wears that mark. A fixture is where a literal agent id may
+  /// live outside the catalog, and R23b allow-lists this file as one.
+  var provider = AgentProvider(rawValue: "claude")
   var model: String?
   var effort: String?
   var effortIntent: AgentEffortIntent = .observed

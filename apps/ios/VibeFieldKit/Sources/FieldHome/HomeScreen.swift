@@ -916,10 +916,11 @@ public struct HomeScreen: View {
     #if DEBUG
       // The fixture answers in place of a feed this phone does not have yet.
       // It sits INSIDE the derivation rather than beside it, so the row cannot
-      // be wiped by the next honest re-derivation.
-      if demoInputChips {
+      // be wiped by the next honest re-derivation. It asks K-D4's own table for
+      // an agent whose dialog is typed, rather than naming one here (R23b).
+      if demoInputChips, let typed = FieldInput.typedDialogAgents.first {
         return FieldInput.replyChips(
-          provider: .claude, permissions: [AgentPermission(tool: "Bash")])
+          provider: typed, permissions: [AgentPermission(tool: "Bash")])
       }
     #endif
     guard let agent = bubble?.agent else { return [] }

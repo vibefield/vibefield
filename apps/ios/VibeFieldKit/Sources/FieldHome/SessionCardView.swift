@@ -150,7 +150,7 @@ struct SessionCardView<Terminal: View>: View {
   /// looks from here.
   private func subtitle(_ bubble: FieldBubble) -> String {
     if let agent = bubble.agent {
-      let model = agent.modelName ?? agent.provider.displayName
+      let model = agent.modelName ?? agent.providerName
       return "\(model)  ·  \(statusWords(bubble))"
     }
     return bubble.detail

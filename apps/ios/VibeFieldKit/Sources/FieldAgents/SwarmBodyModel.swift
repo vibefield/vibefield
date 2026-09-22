@@ -97,7 +97,9 @@ public struct SwarmRing: Equatable, Sendable {
 }
 
 public struct SwarmWatermark: Equatable, Sendable {
-  /// The provider mark's id in the atlas.
+  /// The key the mark atlas is read by: the catalog's mark key for the agent
+  /// (its id unless the catalog row names another). A key with no tile wears
+  /// its letter.
   public var sprite: String
   public var opacity: Double
   public init(sprite: String, opacity: Double) {
@@ -372,7 +374,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
   // A working body grows with its share of the working sessions' estimated
   // USD, from the working size for the least to the largest size for the most.
   let radius = bodyRadius(status: appearance, share: input.workingShare, parameters: parameters)
-  let model = facet.modelName ?? facet.provider.displayName
+  let model = facet.modelName ?? facet.providerName
   let effort = facet.effort
   let ring = percent.map { SwarmRing(percent: max(0, min(100, $0)), hot: $0 >= 80) }
   let accessibilityLabel = "\(bubble.project), \(model), \(appearance.rawValue): \(bubble.detail), \(contextLabel)"
@@ -385,7 +387,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
     tone: .ink,
     gapBefore: 3)
   let message = latestMessage(facet)
-  let watermark = SwarmWatermark(sprite: facet.provider.rawValue, opacity: SwarmWeight.watermark)
+  let watermark = SwarmWatermark(sprite: facet.markKey, opacity: SwarmWeight.watermark)
 
   if appearance == .working {
     // The held total is the UI's ledger: corrected USD across a bubble's runs,

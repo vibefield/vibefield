@@ -15,9 +15,26 @@ struct ReplyChipsTests {
   /// answer, so the row is absent rather than empty.
   @Test("no pending permission, no chips — for every vendor")
   func nothingPendingIsNoChips() {
-    for provider in AgentProvider.known {
+    for provider in [AgentProvider.claude, .codex, .grok, .acp, AgentProvider(rawValue: "hermes")] {
       #expect(replyChips(provider: provider, permissions: []).isEmpty)
     }
+  }
+
+  /// K-D4's table, pinned by id (AC-5). The vendor branch this file tests used
+  /// to hide behind `AgentProvider.claude`, a static no literal lint could see
+  /// through; it is an explicit table now, allow-listed by R23b as the kit's one
+  /// vendor-keyed behaviour table, and THIS row is its record: adding an agent
+  /// to the typed transport is a change here, on purpose, never a side effect.
+  @Test("the typed transport names exactly the agents K-D4 rules")
+  func theTypedTransportIsATableOfOne() {
+    #expect(typedDialogAgents == [.claude])
+  }
+
+  /// An agent this build has never heard of gets the structured transport's
+  /// answer — no chips — because we do not know what its TUI prints.
+  @Test("an unfamiliar agent waiting on a permission gets no chips")
+  func anUnfamiliarAgentGetsNoChips() {
+    #expect(replyChips(provider: AgentProvider(rawValue: "zed"), permissions: bash).isEmpty)
   }
 
   /// Claude's own TUI is drawing `1. Yes / 2. Yes, and don't ask again / 3. No`

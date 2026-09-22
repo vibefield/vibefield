@@ -187,6 +187,17 @@ public final class FieldLink {
   /// report of a mesh that is finally scoped.
   public private(set) var foreignDoors: [String: String] = [:]
 
+  /// AC-D9 — VibeField's agent catalog, as this phone's desktops have told it:
+  /// every door's answer to `agent.catalog`, merged in device order, the first
+  /// desktop's row kept where two name one agent. It is what a list on the
+  /// phone reads (`phoneRoster`); the FIELD is named per desktop in the fold,
+  /// each board by its own door's answer first.
+  ///
+  /// Empty is a state, never a breakage: nothing is connected yet, or every
+  /// desktop is a build from before the door (it answers NOT_FOUND). The field
+  /// draws exactly as it did then — every agent as its raw id and its letter.
+  public private(set) var catalog: AgentCatalog = .empty
+
   /// Whether anything at all is being heard. `false` with `desktops` non-empty
   /// is the honest "they are there and saying nothing" that a blank field must
   /// never be mistaken for.
@@ -232,6 +243,13 @@ public final class FieldLink {
   /// Devices with a subscribe in flight. Set synchronously, so a burst cannot
   /// walk past the slot that is only filled after the await.
   @ObservationIgnored private var arming: Set<String> = []
+  /// AC-D9 — each door's own answer to `agent.catalog`, by device id, cached
+  /// for the connection it arrived on and dropped with the door.
+  @ObservationIgnored private var catalogs: [String: AgentCatalog] = [:]
+  /// Devices whose CURRENT connection has been asked for its catalog. Set
+  /// synchronously like `arming`, and cleared whenever the client leaves
+  /// `ready`, so the next hello — a new connection — is asked afresh.
+  @ObservationIgnored private var catalogAsked: Set<String> = []
   /// One timer per live board, at its own `expiresAt`. Expiry is TIME, and the
   /// reconcile is edge-triggered — a publisher that goes quiet sends no edge,
   /// so without these the board stayed on the field and the door was never
@@ -376,6 +394,9 @@ public final class FieldLink {
     arming.removeAll()
     doorBoards.removeAll()
     found.removeAll()
+    catalogs.removeAll()
+    catalogAsked.removeAll()
+    catalog = .empty
     devices.unsubscribe()
     boards.unsubscribe()
     desktops = []
@@ -586,6 +607,9 @@ public final class FieldLink {
       // state, and the sweep is the only thing that would notice.
       if clients[deviceId] != nil {
         armDoorSubscription(deviceId)
+        // The same clock for the catalog: a no-op once this connection has an
+        // answer, and the retry for one a deadline or a dropped frame cost.
+        askForCatalog(deviceId)
         continue
       }
       if let deadline = entry.askAgainAt, deadline > at { continue }
@@ -776,6 +800,8 @@ public final class FieldLink {
     expiryTimers.removeValue(forKey: deviceId)?.cancel()
     arming.remove(deviceId)
     doorBoards.removeValue(forKey: deviceId)
+    catalogAsked.remove(deviceId)
+    if catalogs.removeValue(forKey: deviceId) != nil { mergeCatalogs() }
   }
 
   /// Watch one client's state so the chip is honest, the account verdict is
@@ -807,6 +833,7 @@ public final class FieldLink {
         }
         self.armDoorSubscription(deviceId)
         self.askForDeviceRow(deviceId)
+        self.askForCatalog(deviceId)
         self.refreshDesktops()
         self.refold()
         self.trackClient(deviceId)
@@ -850,6 +877,91 @@ public final class FieldLink {
         self.note("\(deviceId) did not answer device.list: \(MeshModel.shortReason(error))")
       }
     }
+  }
+
+  /// AC-D9 — the desktop's agent catalog, asked once per CONNECTION.
+  ///
+  /// The desktop is the authority and this phone may be a build behind it, so
+  /// an agent's name comes over the wire, never out of a table compiled in
+  /// here. Asked at every hello — a desktop that was upgraded while the socket
+  /// was down may have decided something new — kept until the next, and
+  /// dropped with the door. The same door plumbing and the same posture as
+  /// `device.list`: what is missing without it is a nicety, never a state.
+  ///
+  /// A desktop without the door — a build from before AC-3, which answers
+  /// `NOT_FOUND` — is not a failure of anything: its agents draw exactly as
+  /// they always did, by their raw ids and their letters, and a note says why.
+  /// A failure that asking again could fix (the door's own `retryable`: a
+  /// deadline on a slow radio, a socket that dropped) keeps whatever the last
+  /// connection said and is asked again on the sweep's clock; one that could
+  /// not — the door refused, or answered something this build cannot read —
+  /// leaves this desktop with no catalog and is not asked again on this
+  /// connection.
+  ///
+  /// "A new connection" is one this link SAW the client leave `ready` for. A
+  /// re-dial quick enough to go unobserved keeps the answer it has — the same
+  /// desktop — and a desktop that was upgraded was gone for as long as its
+  /// daemon took to restart, which the client spends `reconnecting`.
+  private func askForCatalog(_ deviceId: String) {
+    guard let client = clients[deviceId] else { return }
+    guard case .ready = client.state else {
+      catalogAsked.remove(deviceId)
+      return
+    }
+    guard !catalogAsked.contains(deviceId) else { return }
+    catalogAsked.insert(deviceId)
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      do {
+        let result = try await client.call(
+          "agent.catalog", params: AgentCatalogParams.phone.json, as: AgentCatalogResult.self)
+        guard self.started, self.clients[deviceId] === client else { return }
+        for dropped in result.droppedRows {
+          self.note("\(deviceId) sent a catalog row that did not read: \(dropped)")
+        }
+        self.setCatalog(AgentCatalog(result), for: deviceId)
+      } catch {
+        guard self.started, self.clients[deviceId] === client else { return }
+        if (error as? FieldProductError)?.retryable == true {
+          self.catalogAsked.remove(deviceId)
+          self.note(
+            "\(deviceId) did not answer agent.catalog: \(MeshModel.shortReason(error)) — asking again")
+        } else {
+          self.setCatalog(nil, for: deviceId)
+          self.note(
+            "\(deviceId) has no agent catalog for this phone: \(MeshModel.shortReason(error))"
+              + " — its agents are named by their ids")
+        }
+      }
+    }
+  }
+
+  /// One door's catalog, recorded — and the field renamed by it.
+  private func setCatalog(_ value: AgentCatalog?, for deviceId: String) {
+    if let value {
+      catalogs[deviceId] = value
+    } else {
+      catalogs.removeValue(forKey: deviceId)
+    }
+    mergeCatalogs()
+    refold()
+  }
+
+  /// The phone's catalog: every door's, in device order, the first kept where
+  /// two desktops name one agent. Assigned only when it changed, so a sweep
+  /// that re-merges the same answer wakes nothing that observes it.
+  private func mergeCatalogs() {
+    let merged = catalogs.sorted { $0.key < $1.key }
+      .reduce(AgentCatalog.empty) { $0.backed(by: $1.value) }
+    if merged != catalog { catalog = merged }
+  }
+
+  /// The catalog one desktop's rows are named by: its OWN door's answer first,
+  /// then what the phone's other desktops said (a desktop a build behind has no
+  /// door, and its agents are the same agents), else nothing — the raw id.
+  private func desktopCatalog(for deviceId: String) -> AgentCatalog {
+    guard let own = catalogs[deviceId] else { return catalog }
+    return own.backed(by: catalog)
   }
 
   /// The board over the door.
@@ -1030,14 +1142,19 @@ public final class FieldLink {
       }
     }
 
-    let projection = projectAgentSlices(slices, now: now())
+    // Each board named by its own desktop's catalog (AC-D9), resolved here once
+    // per fold so the projection stays a pure function of what it is handed.
+    var catalogsByDevice: [String: AgentCatalog] = [:]
+    for slice in slices { catalogsByDevice[slice.deviceId] = desktopCatalog(for: slice.deviceId) }
+    let projection = projectAgentSlices(slices, now: now(), catalogs: catalogsByDevice)
     var merged = projection.agents
     var seen = Set(merged.map(\.id))
 
     for deviceId in doorOnly {
       guard let board = doorBoards[deviceId] else { continue }
       let rows = board.order.compactMap { board.rows[$0] }
-      let fromDoor = projectAgentField(rows: rows, device: deviceId)
+      let fromDoor = projectAgentField(
+        rows: rows, device: deviceId, catalog: desktopCatalog(for: deviceId))
       for agent in fromDoor.agents where !seen.contains(agent.id) {
         merged.append(agent)
         seen.insert(agent.id)
