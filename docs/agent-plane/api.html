@@ -1521,7 +1521,7 @@
                   <tr><td><span class="route">agents.setActive</span></td><td><p><code>AgentsSetActiveParams</code> → <code>AgentsSetActiveResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>nothing — the one distribution choice VibeField owns, written to <code>distribution.json</code></p></td><td><p><code>agent-provider</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.profiles.list</span></td><td><p><code>AgentsProfilesListParams</code> → <code>AgentsProfilesListResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.profiles()</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.profiles.create</span></td><td><p><code>AgentsProfilesCreateParams</code> → <code>AgentsProfilesCreateResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.createProfile()</code> + <code>profileObservationRoot()</code></p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agents.profiles.delete</span></td><td><p><code>AgentsProfilesDeleteParams</code> → <code>AgentsProfilesDeleteResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.removeProfile()</code></p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-owed">Untested live</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.delete</span></td><td><p><code>AgentsProfilesDeleteParams</code> → <code>AgentsProfilesDeleteResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.removeProfile()</code></p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-owed">Owed</span><p>untested under a live run</p></td></tr>
                   <tr><td><span class="route">agents.profiles.verify</span></td><td><p><code>AgentsProfilesVerifyParams</code> → <code>AgentsProfilesVerifyResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.verifyProfile()</code> — native evidence, not a claim</p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.profiles.login</span></td><td><p><code>AgentsProfilesLoginParams</code> → <code>AgentsProfilesLoginResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.startProfileLogin()</code> in a PTY on this device</p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.usage</span></td><td><p><code>—</code> → <code>AgentAccountUsageBatch</code></p></td><td><p><code>agent.usage</code></p></td><td><p>yes</p></td><td><p><code>createAccountUsageMonitor()</code>, projected field by field</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
@@ -1574,7 +1574,7 @@
 
             <h3 id="cat-terminal">terminal.* — the agent-relevant subset</h3>
             <p class="section-note">
-              The terminal family is not the agent plane's, but four of its rows are how an agent's pane
+              The terminal family is not the agent plane's, but five of its rows are how an agent's pane
               reaches a screen. All carry <code>terminal.attach</code> and all are <code>local</code>: a
               remote terminal is reached by routing the call, never by federating its bytes.
             </p>
@@ -1586,7 +1586,7 @@
                   <tr><td><span class="route">terminal.create</span></td><td><p><code>TerminalCreateOpenResult</code></p></td><td><p>no</p></td><td><p>The atomic birth-plus-ticket, so a spawn mounts without a second inventory round trip.</p></td></tr>
                   <tr><td><span class="route">terminal.renewAttach</span></td><td><p><code>TerminalRenewAttachResult</code></p></td><td><p>yes</p></td><td><p>A compare-and-set on the generation the caller holds, idempotent by request id, so a retried renewal returns the grant it already got.</p></td></tr>
                   <tr><td><span class="route">terminal.terminate</span></td><td><p>—</p></td><td><p>yes</p></td><td><p>Closes an agent's pane. Idempotent by intent: terminating an already-exited session is the normal race when the ladder and a click converge.</p></td></tr>
-                  <tr><td><span class="route">terminal.list · sessions · roster · get</span></td><td><p>inventories</p></td><td><p>yes</p></td><td><p>Three different projections for three readers. The fold joins against the inventory; the roster is the UI's view and carries no placement.</p></td></tr>
+                  <tr><td><span class="route">terminal.list · sessions · roster · get</span></td><td><p>inventories</p></td><td><p>yes</p></td><td><p>Four doors over three projections for three readers, with <code>get</code> answering one row. The fold joins against the inventory; the roster is the UI's view and carries no placement.</p></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1758,7 +1758,7 @@
                   instead. The integrator's path is not the documented one, which is worth knowing before
                   reading that page as a description of this system.
                 </p>
-                <span class="badge tone-built">Built, other path</span>
+                <span class="badge tone-built">Built</span>
               </div>
               <div class="card">
                 <h3>index.openTicket</h3>
