@@ -6826,3 +6826,92 @@ James invited a second account to the tailnet (a plain Member cannot generate a 
 **How it was built and reviewed.** Four writing lanes plus seven read-only diggers (puppeteer docs, upstream imports, rosetta docs and code, the ledger, the design corpus, the reference hosts, the code truth), a read-only reviewer with four citation checkers (about 300 checks across the five pages: 105 puppeteer citations exact, ~115/120 VibeField claims, every rosetta citation exact, 246 links and 58 anchors clean), and a family pass that changed chrome only with body badge counts unchanged. Every lane verified relayed facts against the code before publishing and refused what did not hold — the shared brief's own errors were caught this way (no `AGENT_KINDS` exists; the walls run under `pnpm preflight`, not `check:deps`; `@rosetta/protocol` enters through two files as types and a version constant while fieldd dials six GET routes; `index.openTicket` is designed only; the vibe-field GitHub slug is `vibefield/vibefield`; the rosetta asset URL is correctly `<blake3>.<ext>`; two dated version notes were not errors). Findings for the product, recorded on the pages: puppeteer documents seven of the ~75 symbols VibeField imports and has no host page; approvals are not wrapped at all and `submitPrompt` is test-only (AR-6's true scope); fieldd is read-only and poll-only against rosettad, six of 24 routes, no WebSocket — the observe service's live half has no host consumer outside rosetta's own app (AR-8's true scope); rosettad has no authentication of any kind and no SIGTERM handler; the agent PTY's environment is the host's composition with nothing upstream enforcing the strip; a host's error text does not survive a failed spawn; the monitor's version constant does not cover the views' port types; AR-L1's two named violations are closed in code. The refactor slate (the deck monolith, `useMonitorAgents`, `agent-runtime.ts`'s four concerns, `daemon.ts`'s inline registrations) is recorded as OWED on system.html.
 
 **Gate.** Docs only, no build input touched; `pnpm verify` not run for this landing (main's last green verify is AR-5-1 `d4e60d8d`, and the three docs commits since do not change it).
+
+## AC — the agent catalog (2026-09-22)
+
+**The question (James):** does VibeField have a single source of control on the agents it supports?
+It did not — puppeteer composed ten providers behind five uncross-checked lists, rosetta registered
+nine kinds in one Rust registry, VibeField joined them at runtime by native layout root with no
+tripwire between the siblings, three spellings of one agent on the surfaces, no tiers and no place
+to record a decision (`draft/thinking-ar-agent-catalog.md` §1). **The ruling:** "deciding what agent to
+support is a decision to make, maintain, track" — a HAND-MAINTAINED catalog, verified by the gate
+(AC-D1…AC-D11; the DECISIONS row is owed, see AC-6 below). Six slices, one day, one linear chain on main:
+
+- **AC-1 `5f09ef2b`** — `packages/contracts/src/agent-catalog.ts`: `AGENT_CATALOG`, ten rows in display order,
+  each a decision (`status`, the two seam ids, the layout root both siblings must spell alike, `offers`,
+  `surfaces`, `admitted`, `decision`); STRICT row schema, tolerant wire form; the readers; two generated
+  projections under `gen:check` (`gen/agent-catalog.json` for preflight, `fixtures/agent-catalog.valid.json`
+  for the phone); the `agent.catalog` door row; the dated erratum in `agent-index.ts`'s header. Contracts
+  27 files / 499 rows.
+- **docs `7f2978be` + `2f9298a5`** — the three agent-plane pages linted red (biome lints HTML: `aria-label` on
+  plain divs), found by AC-1's gate — the docs wave had landed them with a link check, not the gate.
+- **AC-3 `e9733df4`** (+ `9cf86be7` typecheck fixups, `190932ed` the wire opened) — fieldd answers from the catalog:
+  `agent.providers` iterates the visible rows (status, offers, OUR label, the index's state where history is
+  offered, `available`/`resumable` as this device's facts); `agent.catalog {surface?}`; typed refusals
+  (no row NOT_FOUND, a row not offering the capability PRECONDITION_FAILED `unsupported-agent`) on spawn,
+  personas, update, setActive; resume and the login pane need the agent VISIBLE; releases and usage
+  enumerate only offering rows; the executables map over catalog ids (the sibling's closed kind union
+  gone from fieldd); `kindFor` reads the row and the roll call WITNESSES (`fieldd.agents.catalog_drift`
+  withholds); AC-D8 — a daemon refusal at start (`unknown agent kind`) retires the refused roots with
+  `refused: {at, detail}` and the supervisor's own retry brings the index up (kill-matrix row: a hermes
+  persona enrolled with no daemon configured, subtracted at the scripted daemon's refusal, the reconcile
+  unable to re-add it); `index.*` rows carry `agent`. `status`/`history` are OPEN strings on the wire
+  (AC-4's finding: a closed enum refused a whole list on one unknown word). Eight agent suites green.
+- **DEV `c5804e6a`** — the dev runner leaked the shell's `FIELDD_ROSETTAD_BIN` into Electron's env past a null
+  resolver (`electron-stack.test.mjs:118` red on every lane's gate — the briefed command and CI export it);
+  found by AC-2's gate; `unset` when the resolver names none, 97/98 → 98/98.
+- **AC-1 erratum `5931ee9d`** — R23's FIRST run on the real pins: antigravity claimed personas; puppeteer's
+  antigravity adapter declares `support: { supported: false }` (a port is not the capability). `personas:
+  false`, evidence in the row.
+- **AC-2 `4b5c552a`** — `scripts/check-agent-catalog.mjs`: `--self-test` (a rotten fixture per FAIL class),
+  `--enforce` (the puppeteer half through fieldd's dependency edge under `node --import tsx`, reading the
+  adapter's support declaration for personas and the observation root along fieldd's own `kindFor` path;
+  the rosetta half through `rosettad discover --json --home <empty>`), `--literals` (R23b over
+  `packages/*/src` and the kit's `Sources`, an allow-list where a stale entry is itself a FAIL); wired
+  into `pnpm preflight` after the walls (`--require-rosetta` under CI) and into `pnpm siblings:pin`;
+  `pnpm catalog:check`. On the landed tree: "10 catalog row(s) honoured by both pins, 0 warning(s)"; 17
+  mutants killed; witnessed live: preflight lifts R23's WARN, `CI=true` with no rosettad FAILs, a red
+  self-test blocks R23, `siblings:pin` goes green and red with the lock bytes unchanged.
+- **AC-4 `c82369ac`** — the deck's picker (`GodviewMonitor`'s native `<select>` in the views InstrumentBar):
+  its rules in ONE pure module (`godview/monitor/provider-picker.ts`); the badge is the option's word
+  ("Grok · Preview"); SPAWN absent for a deprecated row or `offers.spawn` false, the views' create gesture
+  refused out loud; the history state beside the picker on the deck's one degraded rule; labels door →
+  `catalogEntry(id)?.label` → id; unknown status/history words drawn as sent, never refused. ONE NEW VERB,
+  flagged to James: a persona select where `offers.personas` and a managed persona exist (default = today's
+  request). Pre-existing bug fixed: `.vf-godview-bar-select` lacked `-webkit-app-region: no-drag`
+  (unclickable in the hiddenInset window since AR-5; not witnessed live). `godview-provider-picker.test.tsx`
+  20 rows, 14 mutation probes; `smoke:godview` green. OWED: the per-pane `resumable` gate (the pane's
+  RESUME shows for every exited agent), the design catalog's specimen adapter for the picker's states,
+  the both-themes screenshot, the live badge witness on the landed stack.
+- **AC-5 `e6383ff0`** — the phone: FieldProduct decodes `agent.catalog` tolerantly (status raw, unknown fields
+  named, an unreadable row dropped and named); FieldLink asks `{surface: "phone"}` at every hello,
+  caches per connection like `device.list`, drops it with the door, exposes the merged catalog and a
+  `phoneRoster` without ACP; each desktop's rows name its own agents first; a NOT_FOUND desktop leaves the
+  field as before. `AgentModel.swift` names no agent (the four statics, `known`, the label switch, the
+  `acp→A` override gone); the atlas test asserts its keys ⊆ the mirrored fixture and prints `["acp"]` as
+  the candidate without a tile; the card asks its asset catalog for a drawn mark. Kit suite 852 tests /
+  157 suites (pristine 816 / 150), exit 0, no restarts, by UDID. FINDING — a LIVE AR-L1 exception:
+  `ReplyChips` branched on `.claude` (K-D4) through the old static, invisible to a literal lint (the
+  literal in one file, the branch in another); now an explicit one-literal table with a test, allow-listed;
+  the real fix — the field row's blocker carrying its transport — is OWED. Without a catalog (an older
+  desktop, the DEBUG fleet) a body with no model name reads its raw id, the honest fallback.
+- **integration `eb995886` + `2fdacc92`** — R23b's allow-list moved to AC-5's files (ReplyChips, MockAgentField,
+  the swarm lab fixtures; AgentModel retired); the kit's three fixture mirrors follow the erratum.
+- **AC-6 (this commit)** — the fold: this entry, the ROADMAP's AR row, CLAUDE.md's law bullet, the hub,
+  dated notes on the umbrella and the doors pages (`agent.catalog` in the catalogue, 4 walls), the acp
+  row's decision text ("spawn and resume only" — the pin implements resume), the design doc's §13
+  (dev-local). OWED: the `docs/DECISIONS.md` row for AC-D1…AC-D11 and the D3 addendum — the file is under
+  James's live edit in the main checkout, so this commit leaves it alone; the row's text is in the design
+  doc's §13 and §10 and lands with his next DECISIONS commit.
+
+**Gate:** `pnpm verify` verbatim on the AC-6 tip; its tail is appended below by the follow-up commit. Along the
+way: two environmental reds every lane hit before the fixes above (the docs lint, the dev-runner leak); a
+worktree needs `target` symlinked to its cargo target dir (the fieldd test setup looks at the fixed path
+`<checkout>/target/debug/field-native`); with three lanes compiling the whole TS graph flaked at vitest's
+5 s timeout and two Rust rows (fd exhaustion, the PTY fence) at load 300–600 — every red passed alone,
+and the claim is the quiet-host run.
+
+**Upstream asks (non-blocking):** PU-16 (capabilities and the observation root as data on the descriptor),
+RO-9 (`rosettad adapters --json`); PU-3/RO-3 (vocabulary convergence) now optional. **Lanes:** the gate,
+the deck and the phone by Opus builders on worktrees `vf-ac2/4/5`; AC-1/AC-3/the integration/the fold by
+the orchestrator; every lane report's findings are in the entries above.

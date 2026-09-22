@@ -961,7 +961,7 @@
         <div class="stats">
           <div class="stat"><strong>3</strong><span>repositories, one product</span></div>
           <div class="stat"><strong>9</strong><span>seams named in section 4</span></div>
-          <div class="stat"><strong>3</strong><span>walls (R20 · R21 · R22)</span></div>
+          <div class="stat"><strong>4</strong><span>walls (R20 · R21 · R22 · R23)</span></div>
           <div class="stat"><strong>3</strong><span>data domains: device · user · login</span></div>
         </div>
         <div class="legend">
@@ -1154,6 +1154,14 @@
               <code>AgentKind</code> and <code>AgentProviderId</code> in
               <code>packages/contracts/src/agent-index.ts</code>: two open validated strings, not enumerations and not a
               mapping. If a document tells you to look up a kind in a registry, the document is stale.
+              <p>
+                <strong>Update 2026-09-22 (AC-1…AC-6, LANDED §AC).</strong> The symbol now exists and it is not an alias
+                table: <code>AGENT_CATALOG</code> in <code>packages/contracts/src/agent-catalog.ts</code> DECIDES which agents
+                VibeField supports — one hand-maintained row per agent (our label, <code>status</code>, puppeteer's provider id
+                and rosetta's kind as seam columns, the layout root, <code>offers</code>, <code>surfaces</code>, the decision
+                trail), held to both pins by wall R23 at preflight (AC-D1…AC-D11). The session join is unchanged; the roll call
+                is the witness; the wire grammar stays open. <span class="badge tone-built">Built</span>
+              </p>
             </div>
           </section>
 
@@ -2476,7 +2484,7 @@
                   </tr>
                   <tr>
                     <td>Walls</td>
-                    <td><p><code>scripts/check-import-boundaries.mjs</code> (rules R20–R22 and the two door lists) · <code>scripts/preflight.mjs</code> · <code>package.json</code> scripts · <code>siblings.lock.json</code> · <code>pnpm-workspace.yaml</code></p></td>
+                    <td><p><code>scripts/check-import-boundaries.mjs</code> (rules R20–R22 and the two door lists) · <code>scripts/check-agent-catalog.mjs</code> (wall R23 — every catalog row held to both pins — and R23b, no agent id literal in product code; AC-2, 2026-09-22) · <code>scripts/preflight.mjs</code> · <code>package.json</code> scripts · <code>siblings.lock.json</code> · <code>pnpm-workspace.yaml</code></p></td>
                   </tr>
                   <tr>
                     <td>Data domains</td>

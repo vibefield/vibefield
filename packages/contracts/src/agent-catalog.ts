@@ -287,7 +287,7 @@ export const AGENT_CATALOG = [
     surfaces: { desktop: true, phone: true },
   },
   {
-    // 2026-09-22 AC-D7: `preview`, spawn only, desktop only. ACP is a PROTOCOL,
+    // 2026-09-22 AC-D7: `preview`, spawn and resume only, desktop only. ACP is a PROTOCOL,
     // not a vendor — how an unlisted agent attaches at all — with no on-disk
     // ledger for rosetta to index and no distribution or profiles port in the
     // pin. Alternative recorded in the slate: `declined`.
@@ -307,7 +307,7 @@ export const AGENT_CATALOG = [
     },
     mark: "acp",
     admitted: "2026-09-22",
-    decision: "AC-D7 — preview, spawn only: a protocol, not a vendor; no ledger, no personas",
+    decision: "AC-D7 — preview, spawn and resume only: a protocol, not a vendor; no ledger, no personas",
     surfaces: { desktop: true, phone: false },
   },
 ] as const satisfies readonly AgentCatalogEntry[];
