@@ -1114,7 +1114,7 @@
                 <h3>Both name agent kinds</h3>
                 <p>
                   puppeteer's provider ids (<code>claude</code>, <code>kimi</code>) and rosetta's runtime kinds
-                  (<code>claude-code</code>, <code>kimi-code</code>) disagree in two places and agree in the other eight.
+                  (<code>claude-code</code>, <code>kimi-code</code>) disagree in two places, agree in seven, and one puppeteer provider (<code>acp</code>) has no rosetta counterpart at all — ten provider ids against nine adapter crates.
                   This is not resolved by a table: the join is the native session id, and the persona-to-kind join is
                   data at the seam.
                 </p>
@@ -1731,7 +1731,7 @@
                     <td>
                       <p>
                         The provider. An <em>open</em> validated string in both directions, used for grouping and
-                        display. The two repositories disagree on two of ten spellings; nothing gates on it.
+                        display. The two repositories disagree on two spellings, and puppeteer's <code>acp</code> has no rosetta kind; nothing gates on it.
                       </p>
                     </td>
                     <td>
