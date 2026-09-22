@@ -112,6 +112,11 @@ export const IndexRetiredRuntime = z
     label: z.string().min(1).max(64).optional(),
     profile_id: AgentProfileId.optional(),
     retired_at: z.string(),
+    /** AC-D8 — the daemon REFUSED this root at start (`unknown agent kind`:
+     * a catalog/daemon skew) and fieldd subtracted it so the index could come
+     * up. VibeField-only; the row is re-enrolled by the ready-time reconcile
+     * once a daemon's roll call names the kind again. */
+    refused: z.object({ at: z.string(), detail: z.string().max(512) }).optional(),
   })
   .passthrough();
 export type IndexRetiredRuntime = z.infer<typeof IndexRetiredRuntime>;
@@ -270,6 +275,8 @@ export const IndexEnrollmentSummary = z
           label: z.string().optional(),
           profileId: AgentProfileId.optional(),
           retiredAt: z.string(),
+          /** AC-D8 — set when the daemon refused the root rather than the user retiring it */
+          refused: z.object({ at: z.string(), detail: z.string() }).optional(),
         })
         .passthrough(),
     ),

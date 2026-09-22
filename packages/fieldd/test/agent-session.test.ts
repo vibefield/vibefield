@@ -68,6 +68,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 import {
   killDaemonTree,
   nativeBinPath,
@@ -340,6 +341,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     rosettadHome: home,
     vibefieldRoot: root,
     agentSearchPath: bin,
+    agentCatalog: SCRIPTED_CATALOG,
     agentProviders: (builtin) => [
       ...builtin,
       scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined),

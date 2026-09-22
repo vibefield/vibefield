@@ -11,7 +11,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
-import type { BuiltinExecutableAgentKind } from "@vibecook/puppeteer-builtin-providers";
+import type { BuiltinProviderOptions } from "@vibecook/puppeteer-builtin-providers";
 import { createBuiltinProviders } from "@vibecook/puppeteer-builtin-providers";
 import type {
   AgentContinuation,
@@ -41,7 +41,12 @@ import {
   type SpawnAgentResult,
 } from "@vibecook/puppeteer-runtime";
 import {
+  AGENT_CATALOG,
   AGENT_DISTRIBUTION_FORMAT,
+  type AgentCapability,
+  type AgentCatalogEntry,
+  type AgentCatalogReaders,
+  type AgentCatalogResult,
   type AgentDistributionRecord,
   AgentDistributionRecord as AgentDistributionRecordSchema,
   type AgentInstall,
@@ -51,12 +56,14 @@ import {
   type AgentMonitorMirror,
   type AgentPersona,
   type AgentProfileFailure,
+  type AgentProviderSummary,
   type AgentProvidersResult,
   type AgentResumeParams,
   type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
   type AgentSpawnResult,
+  type AgentSurface,
   type AgentsInstallsResult,
   type AgentsProfilesCreateParams,
   type AgentsProfilesCreateResult,
@@ -71,6 +78,7 @@ import {
   type AgentsSetActiveResult,
   type AgentsUpdateResult,
   type AgentUpdateReceipt,
+  createAgentCatalogReaders,
   LAYOUT,
   type TerminalInfo,
 } from "@vibefield/contracts";
@@ -87,6 +95,7 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
+import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
@@ -342,6 +351,10 @@ export interface AgentRuntimeServiceOptions {
   deviceId?: () => string;
   /** test seam: compose providers beside (or instead of) puppeteer's built-ins */
   providers?: (builtin: AgentProvider[]) => AgentProvider[];
+  /** AC-3 test seam: the catalog (default: THE table, `AGENT_CATALOG`) — a
+   * test composes rows for its scripted provider beside the real ones, which
+   * is how the catalog's rules are exercised without a vendor literal */
+  catalog?: readonly AgentCatalogEntry[];
   /** the daemon's environment the agent allow-list reads from (default process.env) */
   environment?: NodeJS.ProcessEnv;
   /** the OS user's home: puppeteer's default cwd and the `~` fold. Default os.homedir() */
@@ -437,6 +450,8 @@ interface ExitedEntry {
 /** AR-4b — a record whose PTY the boot's first inventory did not list: held
  * for one grace, attached if the PTY appears (a cell that had not published
  * yet), stamped as an unknown exit if it does not. */
+type AgentHistoryState = NonNullable<AgentProviderSummary["history"]>;
+
 interface AwaitingBoot {
   record: AgentSessionRecord;
   deadline: number;
@@ -449,6 +464,8 @@ export class AgentRuntimeService {
    * family's: the composed providers are the built-ins plus whatever the
    * `providers` seam adds, and `spawn` takes any composed id. */
   readonly runtime: AgentRuntime;
+  /** AC-3 — the catalog's readers: the truth of what is offered here */
+  private readonly catalog: AgentCatalogReaders;
   private readonly host: AgentHost;
   private readonly terminalHost: TerminalAgentHost | null;
   private readonly distribution: DistributionRecordStore | null;
@@ -534,18 +551,24 @@ export class AgentRuntimeService {
       });
       this.host = this.terminalHost;
     }
+    this.catalog = createAgentCatalogReaders(opts.catalog ?? AGENT_CATALOG);
     // The active executable per provider is bound at construction (RFC 006's
     // `executables`; puppeteer's own PUPPETEER_<KIND>_BIN convention is its
     // fallback). A `setActive` therefore reaches spawns from the next boot —
-    // stated at the door's contract.
-    const executables: Partial<Record<BuiltinExecutableAgentKind, string>> = {};
+    // stated at the door's contract. AC-3: over CATALOG ids (the record's keys
+    // are catalog ids by AC-D2), so fieldd no longer names the sibling's closed
+    // kind union; a record entry for an id the catalog never decided on stays
+    // where it is and is ignored.
+    const executables: Record<string, string> = {};
     if (this.distribution !== null) {
       for (const [provider, entry] of Object.entries(this.distribution.read().providers)) {
-        if (entry.activeExecutable !== undefined)
-          executables[provider as BuiltinExecutableAgentKind] = entry.activeExecutable;
+        if (entry.activeExecutable !== undefined && this.catalog.entry(provider) !== undefined)
+          executables[provider] = entry.activeExecutable;
       }
     }
-    const builtin = createBuiltinProviders({ executables });
+    const builtin = createBuiltinProviders({
+      executables: executables as BuiltinProviderOptions["executables"],
+    });
     const runtimeOptions: AgentRuntimeOptions = {
       host: this.host,
       defaultCwd: this.home,
@@ -578,6 +601,18 @@ export class AgentRuntimeService {
     // createBuiltinAgentRuntime's own two steps, spelled out because it does
     // not thread `executables` through to the providers.
     this.runtime = createAgentRuntime(runtimeOptions);
+    // AC-3 — the catalog is the truth of support: a provider the runtime
+    // composes with no visible row is never offered. A `declined` row makes
+    // that silent (a decision); no row at all is a decision owed — wall R23
+    // says so at the gate, this says so at boot.
+    for (const descriptor of this.runtime.providers()) {
+      if (this.catalog.entry(descriptor.id) !== undefined) continue;
+      this.logger.warn(
+        "fieldd.agents.uncatalogued",
+        "Composed provider has no catalog row; not offered (a decision is owed)",
+        { provider: descriptor.id },
+      );
+    }
     // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
     this.unsubscribeMonitor.push(
       this.runtime.onMonitorState((state) => this.onMonitorState(state)),
@@ -607,9 +642,14 @@ export class AgentRuntimeService {
 
   // ── managed sessions (AR-3) ──
 
-  /** What one can spawn AS here: every composed provider, whether an install
-   * resolved for it, whether its adapter resumes, and its personas. */
+  /** What one can spawn AS here — the CATALOG's visible rows (AC-3), each
+   * decorated with this device's facts: whether an install resolved for it
+   * (`available`), whether its adapter resumes AND the row offers it
+   * (`resumable`), the index's state for it where the row offers history,
+   * and its personas. A provider the runtime composes with no visible row is
+   * absent; a row the runtime does not compose is listed unavailable. */
   async providers(): Promise<AgentProvidersResult> {
+    const composed = new Set(this.runtime.providers().map((p) => p.id));
     const launch = new Map(this.runtime.launchProviders().map((p) => [p.id, p]));
     let installs: readonly AgentInstallation[] = [];
     try {
@@ -621,26 +661,111 @@ export class AgentRuntimeService {
     }
     const ids = await this.opts.index.runtimeIdsByRoot();
     const profiles = await this.runtime.profiles();
-    const providers = [];
-    for (const descriptor of this.runtime.providers()) {
+    const history = await this.historyStates();
+    const providers: AgentProviderSummary[] = [];
+    for (const row of this.catalog.visible("desktop")) {
       const personas: AgentPersona[] = [];
       for (const profile of profiles) {
-        if (profile.provider === descriptor.id) personas.push(await this.project(profile, ids));
+        if (profile.provider === row.id) personas.push(await this.project(profile, ids));
       }
+      const state = history.get(row.id);
       providers.push({
-        id: descriptor.id,
-        label: descriptor.label,
-        available: installs.some((install) => install.provider === descriptor.id),
-        resumable: launch.get(descriptor.id)?.resume === true,
+        id: row.id,
+        label: row.label,
+        available: composed.has(row.id) && installs.some((install) => install.provider === row.id),
+        resumable: row.offers.resume && launch.get(row.id)?.resume === true,
         personas,
+        status: row.status,
+        offers: row.offers,
+        ...(state !== undefined ? { history: state } : {}),
+        ...(row.mark !== undefined ? { mark: row.mark } : {}),
       });
     }
     return { providers };
   }
 
+  /** agent.catalog — the visible rows for the caller's surface (AC-3;
+   * `declined` never leaves fieldd). */
+  visibleCatalog(surface?: AgentSurface): AgentCatalogResult {
+    return { catalog: this.catalog.visible(surface) };
+  }
+
+  /** AC-3 — the runtime surface the usage service reads, with the catalog's
+   * word applied: only providers whose row offers usage are polled. */
+  usageRuntime(): AccountUsageRuntime {
+    const runtime = this.runtime;
+    return {
+      accountUsageProviders: () =>
+        runtime.accountUsageProviders().filter((p) => this.catalog.isOffered(p.id, "usage")),
+      accountUsage: runtime.accountUsage.bind(runtime),
+      onAccountUsage: runtime.onAccountUsage.bind(runtime),
+      onProfilesChanged: runtime.onProfilesChanged.bind(runtime),
+      profiles: runtime.profiles.bind(runtime),
+    };
+  }
+
+  /** AC-3 — the index's state per agent that offers history: `unavailable`
+   * while the daemon is not ready or its roll call disagrees with the catalog
+   * on the kind (the skew AC-D8 subtracts at start); `indexed` when the
+   * record consents to the kind or enrolls a root of it; else `unindexed`. */
+  private async historyStates(): Promise<ReadonlyMap<string, AgentHistoryState>> {
+    const out = new Map<string, AgentHistoryState>();
+    const ready = (this.opts.supervisor?.health().phase ?? "unconfigured") === "ready";
+    const witness = ready ? await this.opts.index.kindsByLayoutRoot() : new Map<string, string>();
+    const record = this.opts.index.record();
+    for (const row of this.catalog.visible()) {
+      if (!row.offers.history || row.seams.rosetta === null || row.layoutRoot === null) continue;
+      const kind = row.seams.rosetta.kind;
+      if (!ready || witness.get(row.layoutRoot) !== kind) {
+        out.set(row.id, "unavailable");
+        continue;
+      }
+      const named =
+        record.enabled_kinds.includes(kind) || record.runtimes.some((rt) => rt.kind === kind);
+      out.set(row.id, named ? "indexed" : "unindexed");
+    }
+    return out;
+  }
+
+  /** AC-3 — the catalog's word on an id before a door acts: no row is
+   * NOT_FOUND (no such agent here); a row that does not offer the capability
+   * is PRECONDITION_FAILED `{reason: "unsupported-agent", status}`. */
+  private requireOffered(provider: string, capability: AgentCapability): AgentCatalogEntry {
+    const row = this.catalog.entry(provider);
+    if (row === undefined) {
+      throw new RpcCallError("NOT_FOUND", `no agent ${provider} in the catalog`, false, {
+        provider,
+        reason: "unsupported-agent",
+      });
+    }
+    if (!this.catalog.isOffered(provider, capability)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${row.label} is ${row.status} here and does not offer ${capability}`,
+        false,
+        { provider, reason: "unsupported-agent", status: row.status, capability },
+      );
+    }
+    return row;
+  }
+
+  /** AC-3 — a door that CONTINUES something (a resume, a login) needs the
+   * agent visible, not offered: a deprecated agent's sessions still resume. */
+  private requireVisible(provider: string, act: string): void {
+    if (this.catalog.isVisible(provider)) return;
+    const row = this.catalog.entry(provider);
+    throw new RpcCallError(
+      "PRECONDITION_FAILED",
+      `${row?.label ?? provider} is ${row?.status ?? "not in the catalog"} here; cannot ${act}`,
+      false,
+      { provider, reason: "unsupported-agent", status: row?.status ?? "no-row" },
+    );
+  }
+
   /** A managed session born in a PTY on this device's floor. The answer is
    * the fold's row at birth and the routed ticket the pane mounts. */
   async spawn(params: AgentSpawnParams, principal: GrantPrincipal): Promise<AgentSpawnResult> {
+    this.requireOffered(params.provider, "spawn");
     const terminals = this.requireTerminals();
     const cwd = params.cwd ?? this.home;
     const identity = this.newIdentity();
@@ -670,6 +795,7 @@ export class AgentRuntimeService {
         runtimeRunId: params.runtimeRunId,
       });
     }
+    this.requireVisible(record.provider, "resume it");
     // AR-4b — a record already continued into another run is not continued
     // again: two runs on one native conversation is the state a resume must
     // never make, and the successor is the one to resume
@@ -854,6 +980,7 @@ export class AgentRuntimeService {
         profileId: params.profileId,
       });
     }
+    this.requireVisible(profile.provider, "log its persona in");
     const result = await this.runtime.startProfileLogin({
       profileId: params.profileId,
       cwd: params.cwd ?? this.home,
@@ -1035,6 +1162,7 @@ export class AgentRuntimeService {
    * the joined kind. An enrollment that cannot happen now (daemon down, kind
    * unknown to the roll call) leaves the persona indexed later, not failed. */
   async createPersona(params: AgentsProfilesCreateParams): Promise<AgentsProfilesCreateResult> {
+    this.requireOffered(params.provider, "personas");
     const created = await this.runtime.createProfile({
       providerId: params.provider,
       label: params.label,
@@ -1190,7 +1318,10 @@ export class AgentRuntimeService {
     const providers =
       params.provider !== undefined
         ? [params.provider]
-        : this.runtime.distributionProviders().map((p) => p.id);
+        : this.runtime
+            .distributionProviders()
+            .map((p) => p.id)
+            .filter((id) => this.catalog.isOffered(id, "distribution"));
     const results = await Promise.all(
       providers.map((providerId) =>
         this.runtime.checkReleases({
@@ -1212,6 +1343,7 @@ export class AgentRuntimeService {
    * the updater (minutes): the lock is the users file's, shared by every
    * fieldd on this device, and its deadline is short by law. */
   async update(provider: string): Promise<AgentsUpdateResult> {
+    this.requireOffered(provider, "distribution");
     const store = this.requireMachineScope();
     const receipt = await this.runtime.updateInstallation({ providerId: provider });
     await store.mutate((record) => {
@@ -1229,6 +1361,7 @@ export class AgentRuntimeService {
   /** Record which of the provider's installs new spawns use (from the next
    * boot: the runtime binds it at construction). */
   async setActive(params: AgentsSetActiveParams): Promise<AgentsSetActiveResult> {
+    this.requireOffered(params.provider, "distribution");
     const store = this.requireMachineScope();
     const installations = await this.runtime.inspectInstallations({
       providerId: params.provider,
@@ -2505,21 +2638,41 @@ export class AgentRuntimeService {
     return { kind, dataRoot: observationRoot, label: profile.label, profileId: profile.id };
   }
 
-  /** rosetta's kind for a puppeteer provider: the provider's native layout
-   * root, folded to `~/…`, looked up on the roll call. */
+  /** rosetta's kind for a catalog id (AC-3): the row's seam column. The roll
+   * call is the WITNESS, not the source — when the daemon is ready and its
+   * roll call spells the row's layout root under a different kind (or not at
+   * all), the enrollment is withheld and the drift is logged, because the
+   * daemon would refuse the file at its next start. While the daemon is not
+   * ready there is no witness and the catalog's word stands, which is what
+   * lets a persona be enrolled before the index's first ready; a refusal at
+   * that start is AC-D8's business (agent-index.ts). */
   private async kindFor(provider: string): Promise<string | undefined> {
-    const kinds = await this.opts.index.kindsByLayoutRoot();
-    if (kinds.size === 0) return undefined;
-    const native = (await this.runtime.profiles(provider)).find((p) => p.kind === "native-default");
-    if (native === undefined) return undefined;
-    const layoutRoot = await this.runtime.profileObservationRoot(native.id);
-    const kind = layoutRoot === undefined ? undefined : kinds.get(this.tilde(layoutRoot));
-    if (kind === undefined) {
+    const row = this.catalog.entry(provider);
+    const kind = row?.seams.rosetta?.kind;
+    if (row === undefined || kind === undefined || row.layoutRoot === null) {
       this.logger.info(
         "fieldd.agents.kind_unresolved",
-        "Provider's layout root is not on the index's roll call; personas of it are not indexed",
-        { provider, ...(layoutRoot !== undefined ? { layoutRoot: this.tilde(layoutRoot) } : {}) },
+        "Provider offers no history in the catalog; personas of it are not indexed",
+        { provider },
       );
+      return undefined;
+    }
+    const witness = await this.opts.index.kindsByLayoutRoot();
+    if (witness.size > 0) {
+      const daemonKind = witness.get(row.layoutRoot);
+      if (daemonKind !== kind) {
+        this.logger.warn(
+          "fieldd.agents.catalog_drift",
+          "The daemon's roll call disagrees with the catalog on this agent's kind; not enrolled",
+          {
+            provider,
+            layoutRoot: row.layoutRoot,
+            catalogKind: kind,
+            daemonKind: daemonKind ?? null,
+          },
+        );
+        return undefined;
+      }
     }
     return kind;
   }

@@ -42,6 +42,7 @@ import WebSocket from "ws";
 import type { FielddDaemon } from "../src/index";
 import { type AccountUsageRuntime, AccountUsageService, bootstrap } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 import { productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
 import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
@@ -255,6 +256,7 @@ async function setup(options: { profiles?: boolean; realAgent?: boolean } = {}):
     controlPort: 0,
     dataPort: 0,
     // the built-ins are REPLACED (see the file header): no real account is read
+    agentCatalog: SCRIPTED_CATALOG,
     agentProviders: (builtin) => (options.realAgent === true ? builtin : [scripted.provider]),
     agentUsage: { refreshMs: REFRESH_MS, tickMs: TICK_MS },
     terminalBirthWaitMs: 300,

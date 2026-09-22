@@ -293,48 +293,94 @@ export const AGENT_CATALOG = [
 
 // ── readers (pure; the table is data) ──
 
+/** The readers over ONE table. Production reads `AGENT_CATALOG`; a test seam
+ * composes a table of its own beside a scripted provider (AC-3's
+ * `AgentRuntimeServiceOptions.catalog`), which is how fieldd's catalog rules
+ * are exercised without naming a vendor in a test's assertions. */
+export interface AgentCatalogReaders {
+  readonly table: readonly AgentCatalogEntry[];
+  /** the row for an id, or undefined — an id never decided on */
+  entry(id: string): AgentCatalogEntry | undefined;
+  /** the catalog id rosetta's kind maps to (unique by the table's invariant),
+   * or undefined — the kind is then shown by its wire spelling, never selectable */
+  idForKind(kind: string): string | undefined;
+  /** rosetta's kind for a catalog id, or undefined (no rosetta seam, or no row) */
+  kindFor(id: string): string | undefined;
+  /** whether a surface may START something as this agent — the status admits
+   * it (`supported` | `preview`) and, when named, the row claims the capability */
+  isOffered(id: string, capability?: AgentCapability): boolean;
+  /** whether a surface may CONTINUE something as this agent: a deprecated row
+   * still resumes its existing sessions (AC-D3) */
+  isVisible(id: string): boolean;
+  /** the rows a surface sees, in display order — `declined` never leaves
+   * fieldd; `surface` applies the row's own visibility */
+  visible(surface?: AgentSurface): AgentCatalogEntry[];
+}
+
+export function createAgentCatalogReaders(
+  table: readonly AgentCatalogEntry[],
+): AgentCatalogReaders {
+  const offered = AGENT_OFFERED_STATUSES as readonly string[];
+  const shown = AGENT_VISIBLE_STATUSES as readonly string[];
+  const entry = (id: string) => table.find((row) => row.id === id);
+  return {
+    table,
+    entry,
+    idForKind: (kind) => table.find((row) => row.seams.rosetta?.kind === kind)?.id,
+    kindFor: (id) => entry(id)?.seams.rosetta?.kind,
+    isOffered: (id, capability) => {
+      const row = entry(id);
+      if (row === undefined || !offered.includes(row.status)) return false;
+      return capability === undefined ? true : row.offers[capability];
+    },
+    isVisible: (id) => {
+      const row = entry(id);
+      return row !== undefined && shown.includes(row.status);
+    },
+    visible: (surface) =>
+      table.filter(
+        (row) => shown.includes(row.status) && (surface === undefined || row.surfaces[surface]),
+      ),
+  };
+}
+
+/** The readers over THE table — what product code imports. */
+export const AGENT_CATALOG_READERS: AgentCatalogReaders = createAgentCatalogReaders(AGENT_CATALOG);
+
 export const AGENT_CATALOG_IDS: readonly string[] = AGENT_CATALOG.map((row) => row.id);
 
 /** The row for an id, or undefined — an id this build never decided on. */
 export function catalogEntry(id: string): AgentCatalogEntry | undefined {
-  return AGENT_CATALOG.find((row) => row.id === id);
+  return AGENT_CATALOG_READERS.entry(id);
 }
 
 /** The catalog id rosetta's kind maps to (unique by the table's invariant),
  * or undefined — the kind is then shown by its wire spelling, never selectable. */
 export function catalogIdForKind(kind: string): string | undefined {
-  return AGENT_CATALOG.find((row) => row.seams.rosetta?.kind === kind)?.id;
+  return AGENT_CATALOG_READERS.idForKind(kind);
 }
 
 /** rosetta's kind for a catalog id, or undefined (no rosetta seam, or no row). */
 export function kindForCatalogId(id: string): string | undefined {
-  return catalogEntry(id)?.seams.rosetta?.kind;
+  return AGENT_CATALOG_READERS.kindFor(id);
 }
 
 /** Whether a surface may START something as this agent — the status admits
  * it (`supported` | `preview`) and, when named, the row claims the capability. */
 export function isOffered(id: string, capability?: AgentCapability): boolean {
-  const row = catalogEntry(id);
-  if (row === undefined) return false;
-  if (!(AGENT_OFFERED_STATUSES as readonly string[]).includes(row.status)) return false;
-  return capability === undefined ? true : row.offers[capability];
+  return AGENT_CATALOG_READERS.isOffered(id, capability);
 }
 
 /** Whether a surface may CONTINUE something as this agent: a deprecated row
  * still resumes its existing sessions (AC-D3). */
 export function isVisible(id: string): boolean {
-  const row = catalogEntry(id);
-  return row !== undefined && (AGENT_VISIBLE_STATUSES as readonly string[]).includes(row.status);
+  return AGENT_CATALOG_READERS.isVisible(id);
 }
 
 /** The rows a surface sees, in display order — `declined` never leaves fieldd;
  * `surface` applies the row's own visibility (a protocol agent is desktop-only). */
 export function visibleCatalog(surface?: AgentSurface): AgentCatalogEntry[] {
-  return AGENT_CATALOG.filter(
-    (row) =>
-      (AGENT_VISIBLE_STATUSES as readonly string[]).includes(row.status) &&
-      (surface === undefined || row.surfaces[surface]),
-  );
+  return AGENT_CATALOG_READERS.visible(surface);
 }
 
 // ── the `agent.catalog` door ──

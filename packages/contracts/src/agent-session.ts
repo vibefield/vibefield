@@ -286,14 +286,14 @@ export const AgentProviderSummary = z
     available: z.boolean(),
     resumable: z.boolean(),
     personas: z.array(AgentPersona),
-    // AC-1 (thinking-ar-agent-catalog.md) — the row's decision and its claims,
-    // so a picker badges `preview`/`deprecated` and hides verbs the row does
-    // not offer; `history` is the index's state for this agent on this device
-    // (`unavailable` = the daemon is down or lacks the kind). Optional in AC-1
-    // (the door still answers from puppeteer's composed list); AC-3 answers
-    // from the catalog and makes all three required.
-    status: AgentCatalogStatus.optional(),
-    offers: AgentOffers.optional(),
+    // AC-1/AC-3 (thinking-ar-agent-catalog.md) — the row's decision and its
+    // claims, so a picker badges `preview`/`deprecated` and hides verbs the
+    // row does not offer. The door answers FROM the catalog since AC-3, so
+    // both are required; `history` is present only where the row offers it —
+    // the index's state for this agent on this device (`unavailable` = the
+    // daemon is down, or its registry disagrees with the catalog on the kind).
+    status: AgentCatalogStatus,
+    offers: AgentOffers,
     history: z.enum(["indexed", "unindexed", "unavailable"]).optional(),
     /** presentation key for the mark atlases (the row's `mark`, default `id`) */
     mark: z.string().min(1).optional(),

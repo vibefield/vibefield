@@ -25,7 +25,10 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type AgentCatalogEntry,
+  type AgentCatalogResult,
   type AgentDistributionRecord,
+  type AgentProvidersResult,
   type AgentsInstallsResult,
   type AgentsProfilesCreateResult,
   type AgentsProfilesDeleteResult,
@@ -34,15 +37,18 @@ import {
   type AgentsReleasesResult,
   type AgentsSetActiveResult,
   type AgentsUpdateResult,
+  type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   type IndexStatus,
   LAYOUT,
   SOCKETS,
+  visibleCatalog,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { catalogWith } from "./agent-catalog-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -87,6 +93,8 @@ async function setup(
     machine?: boolean;
     /** a registry written BEFORE boot (puppeteer's snapshot shape) */
     profiles?: { version: 1; profiles: unknown[] };
+    /** AC-3: the catalog the doors answer from (default: THE table) */
+    catalog?: readonly AgentCatalogEntry[];
   } = {},
 ): Promise<{ root: string; dataDir: string; bin: string; daemon: FielddDaemon }> {
   const root = mkdtempSync(join(tmpdir(), "vf-agents-"));
@@ -116,6 +124,7 @@ async function setup(
     ...(config.real ? {} : { rosettadSpawn: fakeSpawner(config.mode ?? "ok") }),
     rosettadHome: home,
     ...(config.machine === false ? {} : { vibefieldRoot: root }),
+    ...(config.catalog !== undefined ? { agentCatalog: config.catalog } : {}),
     agentSearchPath: bin,
     agentFetch: fakeFetch,
   });
@@ -693,3 +702,162 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
     }, 120_000);
   },
 );
+
+describe("the catalog (AC-3) — the doors answer from the table, the roll call witnesses", () => {
+  const NONE = {
+    spawn: false,
+    resume: false,
+    reattach: false,
+    history: false,
+    usage: false,
+    distribution: false,
+    personas: false,
+  };
+
+  it("agent.providers lists the catalog's visible rows — the decision, the claims, our label, the index's state — in the table's order", async () => {
+    const { daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agent.spawn"], "c1");
+    const { providers } = (await win.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.map((p) => p.id)).toEqual(visibleCatalog("desktop").map((r) => r.id));
+    const claude = providers.find((p) => p.id === "claude");
+    // the label is the catalog's, the fake claude on the search path resolves,
+    // the fake's roll call spells ~/.claude as claude-code and nothing is
+    // consented yet: indexable, not indexed
+    expect(claude).toMatchObject({
+      label: "Claude Code",
+      status: "supported",
+      available: true,
+      resumable: true,
+      history: "unindexed",
+    });
+    expect(claude?.offers.reattach).toBe(true);
+    // the fake's roll call has no ~/.pi: the catalog offers history for pi
+    // and the daemon cannot witness it — unavailable, said out loud
+    expect(providers.find((p) => p.id === "pi")).toMatchObject({
+      status: "preview",
+      available: false,
+      history: "unavailable",
+    });
+    // a protocol row: spawn only, no history state at all
+    const acp = providers.find((p) => p.id === "acp");
+    expect(acp).toMatchObject({ status: "preview" });
+    expect(acp?.offers.history).toBe(false);
+    expect(acp).not.toHaveProperty("history");
+    expect(JSON.stringify(providers)).not.toContain("/");
+  });
+
+  it("agent.catalog answers the visible rows for the surface; the phone never sees the protocol row; a declined row never leaves fieldd; it reads on agent.observe", async () => {
+    const { daemon } = await setup({
+      catalog: catalogWith("grok", {
+        status: "declined",
+        offers: NONE,
+        surfaces: { desktop: false, phone: false },
+      }),
+    });
+    await ready(daemon);
+    const win = await window(daemon, ["agent.observe"], "c2");
+    const all = (await win.call("agent.catalog", {})) as AgentCatalogResult;
+    expect(all.catalog.some((r) => r.id === "grok")).toBe(false);
+    expect(all.catalog.some((r) => r.id === "acp")).toBe(true);
+    expect(all.catalog.every((r) => r.status !== "declined")).toBe(true);
+    const phone = (await win.call("agent.catalog", { surface: "phone" })) as AgentCatalogResult;
+    expect(phone.catalog.some((r) => r.id === "acp")).toBe(false);
+    expect(phone.catalog.map((r) => r.id)).toEqual(
+      all.catalog.filter((r) => r.surfaces.phone).map((r) => r.id),
+    );
+    const bad = await win.callErr("agent.catalog", { surface: "tv" });
+    expect(bad.data?.kind).toBe("PRECONDITION_FAILED");
+    const denied = await window(daemon, ["agents.manage"], "c2b");
+    expect((await denied.callErr("agent.catalog", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
+    // and agent.providers no longer offers what the catalog declined
+    const spawner = await window(daemon, ["agent.spawn"], "c2c");
+    const { providers } = (await spawner.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.some((p) => p.id === "grok")).toBe(false);
+  });
+
+  it("a door refuses typed what the catalog does not offer: no row is NOT_FOUND, a declined row PRECONDITION_FAILED {reason: unsupported-agent}, a row without personas refuses profiles.create", async () => {
+    const { daemon } = await setup({
+      catalog: catalogWith("claude", {
+        status: "declined",
+        offers: NONE,
+        surfaces: { desktop: false, phone: false },
+      }),
+    });
+    await ready(daemon);
+    const win = await window(daemon, ALL, "c3");
+    const nobody = await win.callErr("agent.spawn", { provider: "nobody" });
+    expect(nobody.data?.kind).toBe("NOT_FOUND");
+    const declined = await win.callErr("agent.spawn", { provider: "claude" });
+    expect(declined.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(declined.data?.details).toMatchObject({
+      reason: "unsupported-agent",
+      status: "declined",
+    });
+    const persona = await win.callErr("agents.profiles.create", {
+      provider: "acp",
+      label: "Nope",
+    });
+    expect(persona.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(persona.data?.details).toMatchObject({
+      reason: "unsupported-agent",
+      capability: "personas",
+    });
+    const active = await win.callErr("agents.setActive", {
+      provider: "claude",
+      executable: "/nowhere/claude",
+    });
+    expect(active.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(active.data?.details).toMatchObject({ reason: "unsupported-agent" });
+  });
+
+  it("index.discoveries and the runtimes carry the catalog id for the daemon's kind; a kind no row maps is shown by its wire kind alone", async () => {
+    const { daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ALL, "c4");
+    const { discoveries } = (await win.call("index.discoveries", {})) as IndexDiscoveriesResult;
+    expect(discoveries.find((d) => d.kind === "claude-code")?.agent).toBe("claude");
+    expect(discoveries.find((d) => d.kind === "codex")?.agent).toBe("codex");
+    await win.call("index.enroll", { kinds: ["claude-code"] });
+    await ready(daemon);
+    const status = (await win.call("index.status", {})) as IndexStatus;
+    const runtime = status.runtimes.find((r) => r.kind === "claude-code");
+    expect(runtime?.agent).toBe("claude");
+  });
+
+  it("AC-D8 — a persona enrolled with no daemon configured is subtracted when the daemon refuses its kind at start; the index comes up; the refusal is on the record", async () => {
+    // boot 1: no index daemon at all — the catalog's word stands, no witness
+    const first = await setup({ rosettadBin: "" });
+    expect(first.daemon.health().rosettad.phase).toBe("unconfigured");
+    const win = await window(first.daemon, ALL, "c5");
+    const { persona } = (await win.call("agents.profiles.create", {
+      provider: "hermes",
+      label: "Ghost",
+    })) as AgentsProfilesCreateResult;
+    expect(persona.runtimeId).toBeUndefined();
+    expect(readRecord(first.dataDir).runtimes).toEqual([
+      expect.objectContaining({ kind: "hermes", profile_id: persona.profileId }),
+    ]);
+    await first.daemon.stop();
+    // boot 2: the scripted daemon does not register hermes and refuses the
+    // file at start (exit 2, "unknown agent kind") — fieldd subtracts the
+    // root, restarts the daemon, and it comes up
+    const second = await setupAt(first.root, {});
+    await until(() => second.daemon.health().rosettad.phase === "ready", 15_000);
+    const record = readRecord(second.dataDir);
+    expect(record.runtimes.some((rt) => rt.kind === "hermes")).toBe(false);
+    const retired = record.retired?.find((rt) => rt.kind === "hermes");
+    expect(retired?.profile_id).toBe(persona.profileId);
+    expect(retired?.refused?.detail).toContain("unknown agent kind");
+    const win2 = await window(second.daemon, ALL, "c5b");
+    const status = (await win2.call("index.status", {})) as IndexStatus;
+    expect(status.enrollment.retired.find((r) => r.kind === "hermes")?.refused).toBeDefined();
+    const { providers } = (await win2.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.find((p) => p.id === "hermes")).toMatchObject({ history: "unavailable" });
+    // the ready-time reconcile cannot re-add it: the roll call does not
+    // spell ~/.hermes, so the daemon stays up and the record stays subtracted
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(second.daemon.health().rosettad.phase).toBe("ready");
+    expect(readRecord(second.dataDir).runtimes.some((rt) => rt.kind === "hermes")).toBe(false);
+  });
+});

@@ -6,11 +6,13 @@ import {
   AGENT_CAPABILITIES,
   AGENT_CATALOG,
   AGENT_CATALOG_IDS,
+  AGENT_CATALOG_READERS,
   AgentCatalogEntry,
   AgentCatalogResult,
   AgentProviderSummary,
   catalogEntry,
   catalogIdForKind,
+  createAgentCatalogReaders,
   isOffered,
   isVisible,
   kindForCatalogId,
@@ -130,22 +132,65 @@ describe("the agent catalog (AC-1)", () => {
     });
   });
 
-  it("agent.providers rows carry the decision and its claims, optional until AC-3", () => {
-    const row = AgentProviderSummary.parse({
+  it("agent.providers rows carry the decision and its claims (required since AC-3); history only where offered", () => {
+    const bare = {
       id: "claude",
       label: "Claude Code",
       available: true,
       resumable: true,
       personas: [],
-    });
-    expect(row.status).toBeUndefined();
+    };
+    expect(() => AgentProviderSummary.parse(bare)).toThrow();
     const decided = AgentProviderSummary.parse({
-      ...row,
+      ...bare,
       status: "supported",
       offers: catalogEntry("claude")?.offers,
       history: "indexed",
     });
-    expect(decided.offers?.reattach).toBe(true);
-    expect(() => AgentProviderSummary.parse({ ...row, status: "someday" })).toThrow();
+    expect(decided.offers.reattach).toBe(true);
+    const protocol = AgentProviderSummary.parse({
+      ...bare,
+      id: "acp",
+      status: "preview",
+      offers: catalogEntry("acp")?.offers,
+    });
+    expect(protocol.history).toBeUndefined();
+    expect(() => AgentProviderSummary.parse({ ...decided, status: "someday" })).toThrow();
+  });
+
+  it("the readers factory answers over its own table; the named readers are the factory over THE table", () => {
+    const readers = createAgentCatalogReaders([
+      {
+        ...rows[0],
+        id: "x",
+        seams: { puppeteer: { provider: "x" }, rosetta: { kind: "x-kind" } },
+        layoutRoot: "~/.x",
+      },
+      {
+        ...rows[0],
+        id: "y",
+        status: "declined",
+        seams: { puppeteer: { provider: "y" }, rosetta: null },
+        layoutRoot: null,
+        offers: {
+          spawn: false,
+          resume: false,
+          reattach: false,
+          history: false,
+          usage: false,
+          distribution: false,
+          personas: false,
+        },
+        surfaces: { desktop: false, phone: false },
+      },
+    ]);
+    expect(readers.idForKind("x-kind")).toBe("x");
+    expect(readers.kindFor("x")).toBe("x-kind");
+    expect(readers.isOffered("x", "spawn")).toBe(true);
+    expect(readers.isOffered("y")).toBe(false);
+    expect(readers.isVisible("y")).toBe(false);
+    expect(readers.visible().map((r) => r.id)).toEqual(["x"]);
+    expect(readers.entry("claude")).toBeUndefined();
+    expect(AGENT_CATALOG_READERS.table).toBe(AGENT_CATALOG);
   });
 });

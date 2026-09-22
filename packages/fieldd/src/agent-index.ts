@@ -11,7 +11,11 @@ import type {
 } from "@rosetta/protocol";
 import {
   AbsoluteDataRoot,
+  AGENT_CATALOG,
+  type AgentCatalogEntry,
+  type AgentCatalogReaders,
   AgentKind,
+  createAgentCatalogReaders,
   type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   IndexEnrollmentRecord as IndexEnrollmentRecordSchema,
@@ -38,7 +42,11 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
-import { ROSETTAD_UNCONFIGURED, type RosettadSupervisor } from "./rosettad-supervisor";
+import {
+  ROSETTAD_UNCONFIGURED,
+  type RosettadState,
+  type RosettadSupervisor,
+} from "./rosettad-supervisor";
 
 // The agent index through fieldd (AR-1; thinking-ar-data-topology.md
 // AR-D17/D18/D19): the enrollment RECORD this user's consent lives in, and the
@@ -167,6 +175,7 @@ export class EnrollmentStore {
         ...(rt.label !== undefined ? { label: rt.label } : {}),
         ...(rt.profile_id !== undefined ? { profileId: rt.profile_id } : {}),
         retiredAt: rt.retired_at,
+        ...(rt.refused !== undefined ? { refused: rt.refused } : {}),
       })),
       updatedAt: r.updated_at ?? null,
     };
@@ -249,7 +258,10 @@ export class EnrollmentStore {
 
   /** Retire a managed root: watch off, rows kept, the persona still named
    * (AR-D19). Purge is a separate act (RO-8). */
-  retireRuntime(row: { kind: string; data_root: string }): boolean {
+  retireRuntime(
+    row: { kind: string; data_root: string },
+    refused?: { at: string; detail: string },
+  ): boolean {
     const at = this.record.runtimes.findIndex((rt) => sameRuntime(rt, row));
     if (at === -1) return false;
     const [entry] = this.record.runtimes.splice(at, 1);
@@ -258,6 +270,9 @@ export class EnrollmentStore {
       {
         ...(entry as IndexEnrollmentRecord["runtimes"][number]),
         retired_at: this.now().toISOString(),
+        // AC-D8 — the daemon's refusal, kept so the summary can say why the
+        // persona is not indexed; absent when the user retired it
+        ...(refused !== undefined ? { refused } : {}),
       },
     ];
     this.touch();
@@ -341,8 +356,18 @@ export interface IndexServiceOptions {
   expectedProtocolVersion: number;
   fetchFn?: typeof fetch;
   requestTimeoutMs?: number;
+  /** AC-3 test seam: the catalog (default: THE table) — the kind → id column */
+  catalog?: readonly AgentCatalogEntry[];
+  now?: () => Date;
   logger?: Logger;
 }
+
+/** AC-D8 — the daemon's refusal of an enrolled root at start, as rosettad and
+ * the scripted daemon both word it (`enroll.rs`: `--enroll <file>: runtime #N
+ * (kind "<k>", data_root "<root>"): unknown agent kind`). The root is printed
+ * `{:?}`-quoted, so a backslash escape is admitted and unescaped below. */
+const REFUSED_KIND_RE =
+  /runtime #\d+ \(kind "(?<kind>[^"]+)", data_root "(?<root>(?:[^"\\]|\\.)*)"\): unknown agent kind/g;
 
 /** The `index.*` doors' service: reads fold the daemon's answers with the
  * record; mutations rewrite the record, publish it, and restart the daemon
@@ -381,11 +406,72 @@ export class IndexService {
   private rollCall: { pid: number | null; kinds: ReadonlyMap<string, string> } | null = null;
   /** the tolerant reader's logging half: `<shape>.<key>` said once, ever */
   private readonly seenUnknownFields = new Set<string>();
+  /** AC-3 — the catalog's readers (the kind → id column for the projections) */
+  private readonly catalog: AgentCatalogReaders;
+  private readonly now: () => Date;
+  private readonly onTransition: ((state: RosettadState) => void) | null;
 
   constructor(private readonly opts: IndexServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
     this.fetchFn = opts.fetchFn ?? fetch.bind(globalThis);
     this.timeoutMs = opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.catalog = createAgentCatalogReaders(opts.catalog ?? AGENT_CATALOG);
+    this.now = opts.now ?? (() => new Date());
+    // AC-D8 — a daemon that refuses the record at start (`unknown agent kind`:
+    // the catalog names a kind this daemon's registry lacks, a skew the gate
+    // cannot see past a FIELDD_ROSETTAD_BIN override) is not left failing:
+    // the refused roots are subtracted from `runtimes[]` — kept as retired
+    // rows carrying the refusal — and the daemon is started again. The
+    // ready-time reconcile cannot re-add them: it joins through the roll
+    // call, which never names a kind the daemon does not register.
+    // (a unit seam may stub the supervisor with `health()` alone: no
+    // transitions to watch, nothing to subtract)
+    if (opts.supervisor !== null && typeof opts.supervisor.on === "function") {
+      this.onTransition = (state) => {
+        if (state.phase === "restarting" || state.phase === "failed")
+          this.subtractRefused(state.detail, state.phase);
+      };
+      opts.supervisor.on("transition", this.onTransition);
+    } else {
+      this.onTransition = null;
+    }
+  }
+
+  /** Stop listening to the daemon (the daemon's shutdown). */
+  dispose(): void {
+    if (this.onTransition !== null) this.opts.supervisor?.off("transition", this.onTransition);
+  }
+
+  private subtractRefused(detail: string | null, phase: "restarting" | "failed"): void {
+    if (detail === null) return;
+    let changed = false;
+    for (const match of detail.matchAll(REFUSED_KIND_RE)) {
+      const kind = match.groups?.kind;
+      const quoted = match.groups?.root;
+      if (kind === undefined || quoted === undefined) continue;
+      let dataRoot: string;
+      try {
+        dataRoot = JSON.parse(`"${quoted}"`) as string;
+      } catch {
+        dataRoot = quoted;
+      }
+      const refusal = { at: this.now().toISOString(), detail: match[0].slice(0, 512) };
+      if (!this.opts.store.retireRuntime({ kind, data_root: dataRoot }, refusal)) continue;
+      changed = true;
+      this.logger.warn(
+        "fieldd.index.enrollment_refused",
+        "The daemon refused an enrolled root at start; subtracted so the index can come up",
+        { kind, dataRoot, detail: refusal.detail },
+      );
+    }
+    if (!changed) return;
+    this.opts.store.publish();
+    // `restarting` = the supervisor's own bounded retry is already scheduled
+    // and launches with the rewritten record — a second launch from here would
+    // race it. `failed` = the intensity window closed; the restart affordance
+    // is the only way up, and this is the daemon's own act, deferred past the
+    // supervisor's bookkeeping for this transition.
+    if (phase === "failed") setTimeout(() => void this.opts.supervisor?.requestRestart(), 0);
   }
 
   /** The honest picture: the folded phase, the daemon projection, the record,
@@ -441,6 +527,11 @@ export class IndexService {
     return {
       discoveries: census.discoveries.map((row) => ({
         kind: row.kind,
+        // AC-3 — the catalog id for the kind; absent when no row maps it (shown
+        // by its wire kind, never selectable)
+        ...(this.catalog.idForKind(row.kind) !== undefined
+          ? { agent: this.catalog.idForKind(row.kind) }
+          : {}),
         dataRoot: row.data_root,
         installed: row.installed,
         files: Number(row.files),
@@ -576,9 +667,11 @@ export class IndexService {
       ? known.watched
       : this.opts.store.snapshot().enabled_kinds.includes(row.kind);
     const label = enrolled ? (known.label ?? row.label ?? undefined) : undefined;
+    const agent = this.catalog.idForKind(row.kind);
     return {
       runtimeId: row.id,
       kind: row.kind,
+      ...(agent !== undefined ? { agent } : {}),
       provenance: enrolled ? "enrolled" : "discovered",
       // a discovered root is the layout's `~` form; an enrolled root's path
       // stays inside fieldd (the persona is named by profileId)
