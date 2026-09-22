@@ -1076,8 +1076,10 @@
                     </td>
                     <td>
                       <p>
-                        Any vendor's file format, argv grammar or hook protocol — <strong>AR-L1: VibeField knows no
-                        vendor.</strong>
+                        Any vendor's file format, argv grammar or hook protocol — <strong>AR-L1 (a law
+                        CANDIDATE): VibeField knows no vendor.</strong> Defined in
+                        <code>draft/thinking-ar-agent-plane.md</code> §1 and carried here; see the Laws section for
+                        what is actually enforced.
                       </p>
                     </td>
                     <td>
@@ -1311,8 +1313,21 @@
                         <code>{accepted: false, reason: 'human-input-conflict'}</code>. The adapter owns the whole launch
                         recipe; the host composes the environment policy, finds a cell and execs.
                       </p>
+                      <p>
+                        The same file carries the half that makes a <em>daemon</em> host possible:
+                        <code>HostIngress {port?, token?, onBound?}</code> and <code>BoundIngress {port, token}</code>.
+                        An adapter that binds a loopback endpoint mints it ephemeral by default; a host that outlives
+                        its own process needs that endpoint pinnable and reported, so it can persist
+                        <code>{port, token}</code> beside the session and hand them back to
+                        <code>attachSession</code> after a restart. <code>onBound</code> fires BEFORE the process
+                        launches, which is what lets the record be durable before there is anything to lose. This is
+                        the half AR-4 implements.
+                      </p>
                     </td>
-                    <td><span class="badge tone-built">Built</span><p>AR-3 <code>6b5e1612</code></p></td>
+                    <td>
+                      <span class="badge tone-built">Built</span>
+                      <p>AR-3 <code>6b5e1612</code>; the ingress half AR-4 <code>ba1a1eab</code> (PU-1 upstream)</p>
+                    </td>
                   </tr>
                   <tr>
                     <td><span class="route">runtime construction ports</span></td>
@@ -1375,25 +1390,32 @@
                     <td><span class="badge tone-built">Built</span><p>AR-5 <code>fe6b3d0a</code></p></td>
                   </tr>
                   <tr>
-                    <td><span class="route">the rosetta protocol client</span></td>
+                    <td><span class="route">generated wire types, a version constant, six REST routes</span></td>
                     <td><span class="badge tone-rosetta">rosetta</span></td>
                     <td><span class="badge tone-vibefield">fieldd</span></td>
                     <td>
                       <p>
                         <code>@rosetta/protocol</code> (rosetta <code>clients/ts</code>)<br />
-                        <code>packages/fieldd/src/agent-index.ts</code>, <code>rosettad-supervisor.ts</code>,
-                        <code>index.ts</code>
+                        <code>packages/fieldd/src/agent-index.ts</code> · <code>daemon.ts</code>
                       </p>
                     </td>
                     <td>
                       <p>
-                        Row and response types (<code>SessionRow</code>, <code>RuntimeRow</code>,
-                        <code>StatusResponse</code>, <code>DiscoveriesResponse</code>) and the protocol version. Only
-                        fieldd imports it at runtime; the renderer's wall admits it but the renderer reads projections
-                        through fieldd's doors instead.
+                        Narrower than "a client library", and worth naming exactly. Exactly TWO files import the
+                        package: <code>agent-index.ts</code> takes seven generated response types as
+                        <code>import type</code> (<code>StatusResponse</code>, <code>RuntimesResponse</code>,
+                        <code>DiscoveriesResponse</code>, <code>RuntimeRow</code>, <code>RuntimeBackfill</code>,
+                        <code>RuntimeIngestStatus</code>, <code>DaemonStatus</code>), and <code>daemon.ts</code> takes
+                        the <code>PROTOCOL_VERSION</code> constant from the package's DOM-free
+                        <code>/protocol-version</code> subpath. Nothing imports the hand-written
+                        <code>RosettaClient</code>: every call is a plain <code>GET</code> through one helper, with
+                        <code>redirect: "error"</code>, a timeout, and the daemon's
+                        <code>x-rosetta-protocol-version</code> header compared against the pinned constant before a
+                        body is read. Six routes in total — status, runtimes, discoveries, search, sessions by native
+                        id, and one session. No WebSocket, no assets, no timeline.
                       </p>
                     </td>
-                    <td><span class="badge tone-built">Built</span><p>AR-0 / AR-1</p></td>
+                    <td><span class="badge tone-built">Built</span><p>AR-0 / AR-1; search at AR-5</p></td>
                   </tr>
                   <tr>
                     <td><span class="route">the enrollment record</span></td>
@@ -1638,13 +1660,24 @@
                     <td>
                       <p>
                         The content-free field projection, replicated to the user's other devices through the truffle
-                        store. Content never rides it; a tap fetches through a door.
+                        store. Content never rides it; a tap fetches through a door. That the projection is
+                        content-free is GM-D4's ruling (built at MF-1), and it is a separate decision from who may
+                        read it.
                       </p>
                     </td>
                     <td>
                       <p>
-                        Each device's fieldd publishes its own slice. Since RFC 025 the node is scoped to the tailscale
-                        login, so a foreign login is refused at the gate rather than admitted to the store.
+                        Each device's fieldd publishes its own slice. Who receives it was ruled by UA-P-D2 and built at
+                        UA-P-4: a linked desktop builds its mesh node with
+                        <code>login_allow = [the account's login]</code>, so the provider reports as peers only nodes
+                        whose owner's login matches.
+                      </p>
+                      <p>
+                        <strong>The gate is per NODE, not per store</strong>, and deliberately so — a per-store
+                        allow-list would leave the connection open to a foreign login for every other namespace. Two
+                        files carry it: <code>packages/fieldd/src/mesh-bus.ts</code> and
+                        <code>packages/field-native/src/services/mesh.rs</code>, where the scope is a build-time fact,
+                        so promoting a node from capture to linked rebuilds it rather than relabelling it.
                       </p>
                     </td>
                   </tr>
@@ -1822,11 +1855,33 @@
               </div>
             </div>
             <div class="callout foundation">
-              <strong>The one law this plane added.</strong> <em>AR-L1 — VibeField knows no vendor.</em> No file format,
-              no argv grammar, no hook protocol and no resume flag lives in this repository. Vendor evidence has two
-              homes upstream and none here. It is enforced as an import rule (R20/R22) plus a grep tripwire on vendor
-              path names, and it is the reason the persona-to-kind join is data at the seam rather than a table in
-              <code>registries.ts</code>.
+              <strong>The one law this plane added, and it is still a candidate.</strong> <em>AR-L1 — VibeField knows
+              no vendor.</em> No file format, no argv grammar, no hook protocol and no resume flag lives in this
+              repository; vendor evidence has two homes upstream and none here. It is the reason the persona-to-kind
+              join is data at the seam rather than a table.
+            </div>
+            <div class="callout warning">
+              <strong>Read AR-L1's status precisely, because three things about it are easy to overstate.</strong>
+              <strong>It has no decision row.</strong> <code>docs/DECISIONS.md</code> contains no <code>AR-L</code> id
+              at all, and its only other main-tracked mention is a passing clause in <code>docs/LANDED.md</code> under
+              AR-3. The definition lives in <code>draft/thinking-ar-agent-plane.md</code> §1, which is on the
+              <code>dev-local</code> branch, so this page is the first main-tracked statement of it — a law candidate
+              carried into <code>docs/</code>, not a ratified law.
+              <strong>Half its enforcement is designed, not built.</strong> The import rule is real: R20 and R22 make
+              an adapter import fail the gate. The companion grep tripwire the design asks for — no
+              <code>~/.claude</code>, no <code>--resume</code>, no hook path names under <code>packages/*</code> — does
+              not exist in any script or test at this revision
+              (<span class="badge tone-designed">Designed</span>, <code>thinking-ar-agent-plane.md</code> §12).
+              <strong>Its two named violations are both closed.</strong> §1 names "the iOS model's hardcoded four
+              vendors and the monitor's <code>AgentKind</code> union" as the last two, and neither survives: the
+              renderer's <code>packages/field-app/src/godview/monitor/facet-types.ts</code> now declares
+              <code>export type AgentKind = string</code> under the comment "The union of four this used to be was the
+              last vendor enumeration in the renderer (AR-L1)", and the phone's
+              <code>apps/ios/VibeFieldKit/Sources/FieldAgents/AgentModel.swift</code> makes
+              <code>AgentProvider</code> a non-failable <code>RawRepresentable</code> struct under the comment
+              "AR-L1: no vendor is enumerated here", where the four named constants are, in its own words, "the ones
+              with a MARK, not the ones that exist". What remains is vendor names in demo fixtures and icon asset
+              filenames. The corpus paragraph naming them is stale; the code that closed them cites the law by id.
             </div>
           </section>
 
