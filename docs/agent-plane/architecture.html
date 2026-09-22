@@ -1,0 +1,2510 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="The agent plane across three repositories: puppeteer owns the managed run, rosetta owns this device's agent history, VibeField owns custody, composition, policy and presentation. Ownership, seams, walls, data domains, the identity spine, lifetimes and the documentation map."
+    />
+    <title>The Agent Plane Across Three Repositories</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&amp;family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f6f2;
+        --paper: #ffffff;
+        --paper-2: #f1f0eb;
+        --ink: #202328;
+        --muted: #666c73;
+        --faint: #8c9197;
+        --line: #dcd9d1;
+        --line-strong: #c8c4ba;
+        --copper: #9f4c28;
+        --copper-bg: rgba(159, 76, 40, 0.09);
+        --teal: #176b61;
+        --teal-bg: rgba(23, 107, 97, 0.09);
+        --blue: #355b8c;
+        --blue-bg: rgba(53, 91, 140, 0.09);
+        --purple: #6b4f8f;
+        --purple-bg: rgba(107, 79, 143, 0.09);
+        --amber: #8a6418;
+        --amber-bg: rgba(138, 100, 24, 0.1);
+        --red: #a13f45;
+        --red-bg: rgba(161, 63, 69, 0.09);
+        --shadow: 0 10px 35px rgba(35, 38, 43, 0.055);
+        --code-bg: #20242a;
+        --code-ink: #e7e5df;
+        --code-muted: #aeb4bc;
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #15171a;
+        --paper: #1d2024;
+        --paper-2: #25292e;
+        --ink: #e8e6e0;
+        --muted: #a1a6ad;
+        --faint: #838991;
+        --line: #34383e;
+        --line-strong: #464b52;
+        --copper: #da815a;
+        --copper-bg: rgba(218, 129, 90, 0.12);
+        --teal: #63b7a9;
+        --teal-bg: rgba(99, 183, 169, 0.12);
+        --blue: #83a8da;
+        --blue-bg: rgba(131, 168, 218, 0.12);
+        --purple: #b69adc;
+        --purple-bg: rgba(182, 154, 220, 0.12);
+        --amber: #d2ad58;
+        --amber-bg: rgba(210, 173, 88, 0.12);
+        --red: #df858a;
+        --red-bg: rgba(223, 133, 138, 0.12);
+        --shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+        --code-bg: #101216;
+        --code-ink: #e8e6df;
+        --code-muted: #9ca4ae;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          color-scheme: dark;
+          --bg: #15171a;
+          --paper: #1d2024;
+          --paper-2: #25292e;
+          --ink: #e8e6e0;
+          --muted: #a1a6ad;
+          --faint: #838991;
+          --line: #34383e;
+          --line-strong: #464b52;
+          --copper: #da815a;
+          --copper-bg: rgba(218, 129, 90, 0.12);
+          --teal: #63b7a9;
+          --teal-bg: rgba(99, 183, 169, 0.12);
+          --blue: #83a8da;
+          --blue-bg: rgba(131, 168, 218, 0.12);
+          --purple: #b69adc;
+          --purple-bg: rgba(182, 154, 220, 0.12);
+          --amber: #d2ad58;
+          --amber-bg: rgba(210, 173, 88, 0.12);
+          --red: #df858a;
+          --red-bg: rgba(223, 133, 138, 0.12);
+          --shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+          --code-bg: #101216;
+          --code-ink: #e8e6df;
+          --code-muted: #9ca4ae;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 28px;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+        font-size: 15.5px;
+        line-height: 1.58;
+      }
+
+      a {
+        color: var(--teal);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      code,
+      pre,
+      .mono {
+        font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+      }
+
+      code:not(pre code) {
+        padding: 0.08em 0.32em;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--paper-2);
+        font-size: 0.84em;
+      }
+
+      .shell {
+        width: min(1460px, 100%);
+        margin: 0 auto;
+        padding: 42px 28px 90px;
+      }
+
+      .hero {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+      }
+
+      .hero-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex: none;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .eyebrow {
+        color: var(--copper);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        text-wrap: balance;
+      }
+
+      h1 {
+        margin: 10px 0 9px;
+        font-family: Spectral, Georgia, serif;
+        font-size: clamp(36px, 5vw, 56px);
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        line-height: 1.04;
+      }
+
+      .subtitle {
+        max-width: 78ch;
+        margin: 0;
+        color: var(--muted);
+        font-size: 17px;
+      }
+
+      .theme-button,
+      .reference-link {
+        padding: 8px 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 13px;
+        line-height: 1.4;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .theme-button:hover,
+      .reference-link:hover {
+        border-color: var(--line-strong);
+        color: var(--ink);
+      }
+
+      .pipeline {
+        margin-top: 24px;
+        padding: 14px 17px;
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+        color: var(--muted);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .pipeline b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .pipeline .native {
+        color: var(--copper);
+      }
+
+      .pipeline .contract {
+        color: var(--blue);
+      }
+
+      .pipeline .product {
+        color: var(--teal);
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .stat {
+        padding: 13px 15px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: color-mix(in srgb, var(--paper) 76%, transparent);
+      }
+
+      .stat strong {
+        display: block;
+        font-family: Spectral, Georgia, serif;
+        font-size: 25px;
+        font-weight: 600;
+        line-height: 1;
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 34px;
+        align-items: start;
+      }
+
+      .toc {
+        position: sticky;
+        top: 20px;
+        max-height: calc(100vh - 40px);
+        padding: 16px;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .toc-title {
+        margin: 0 0 9px;
+        color: var(--faint);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .toc a {
+        display: block;
+        padding: 5px 7px;
+        border-radius: 5px;
+        color: var(--muted);
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      .toc a:hover {
+        background: var(--paper-2);
+        color: var(--ink);
+      }
+
+      main {
+        min-width: 0;
+      }
+
+      section {
+        margin-bottom: 64px;
+      }
+
+      h2 {
+        margin: 0 0 7px;
+        font-family: Spectral, Georgia, serif;
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+      }
+
+      h3 {
+        margin: 28px 0 8px;
+        font-family: Spectral, Georgia, serif;
+        font-size: 21px;
+        font-weight: 600;
+      }
+
+      h4 {
+        margin: 18px 0 5px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .section-note {
+        max-width: 84ch;
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+
+      .section-note .mono,
+      .callout .mono,
+      .card .mono,
+      .contract-row .mono {
+        overflow-wrap: anywhere;
+      }
+
+      .callout {
+        margin: 18px 0;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--teal);
+        border-radius: 8px;
+        background: var(--teal-bg);
+        color: var(--muted);
+      }
+
+      .callout strong {
+        color: var(--ink);
+      }
+
+      .callout.warning {
+        border-left-color: var(--amber);
+        background: var(--amber-bg);
+      }
+
+      .callout.foundation {
+        border-left-color: var(--blue);
+        background: var(--blue-bg);
+      }
+
+      .callout.boundary {
+        border-left-color: var(--red);
+        background: var(--red-bg);
+      }
+
+      pre {
+        position: relative;
+        margin: 14px 0;
+        padding: 38px 19px 17px;
+        overflow-x: auto;
+        border-radius: 9px;
+        background: var(--code-bg);
+        color: var(--code-ink);
+        font-size: 12.5px;
+        line-height: 1.65;
+        tab-size: 2;
+      }
+
+      pre code {
+        white-space: pre;
+      }
+
+      pre .comment {
+        color: var(--code-muted);
+      }
+
+      .copy-button {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        padding: 4px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #ccd2da;
+        font-family: 'Source Sans 3', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      .copy-button:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .diagram {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .diagram svg {
+        display: block;
+        width: 100%;
+        min-width: 980px;
+        height: auto;
+      }
+
+      figure {
+        margin: 20px 0;
+      }
+
+      figcaption {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        min-width: 0;
+        padding: 17px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .card h3 {
+        margin: 0 0 6px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 14px;
+        overflow-wrap: anywhere;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .card ul {
+        margin: 10px 0 0;
+        padding-left: 19px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .card li + li {
+        margin-top: 5px;
+      }
+
+      .signature {
+        margin: 8px 0 7px;
+        color: var(--teal);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11.5px;
+        font-weight: 500;
+        overflow-wrap: anywhere;
+      }
+
+      .badge,
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 4px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9.5px;
+        font-weight: 600;
+        line-height: 1.5;
+        white-space: nowrap;
+      }
+
+      .badge {
+        padding: 2px 7px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .chip {
+        padding: 2px 6px;
+        background: var(--paper-2);
+        color: var(--muted);
+      }
+
+      .tone-native {
+        background: var(--copper-bg);
+        color: var(--copper);
+      }
+
+      .tone-contract {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .tone-runtime {
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+
+      .tone-product {
+        background: var(--purple-bg);
+        color: var(--purple);
+      }
+
+      .tone-support {
+        background: var(--amber-bg);
+        color: var(--amber);
+      }
+
+      .tone-boundary {
+        background: var(--red-bg);
+        color: var(--red);
+      }
+
+      /* Owner tones — one per repository, used wherever a row names an owner. */
+      .tone-puppeteer {
+        background: var(--copper-bg);
+        color: var(--copper);
+      }
+
+      .tone-rosetta {
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+
+      .tone-vibefield {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      /* Status legend — every claim on this page wears one. */
+      .tone-built {
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+
+      .tone-designed {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .tone-owed {
+        background: var(--amber-bg);
+        color: var(--amber);
+      }
+
+      .ownership-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 11px 0 0;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .cards + .table-wrap,
+      .table-wrap + .table-wrap {
+        margin-top: 18px;
+      }
+
+      table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+        font-size: 13.5px;
+      }
+
+      th {
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line);
+        color: var(--faint);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+
+      td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      td:first-child {
+        white-space: nowrap;
+      }
+
+      td p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      td code {
+        overflow-wrap: anywhere;
+      }
+
+      .reference-table {
+        min-width: 600px;
+      }
+
+      .reference-table td:first-child {
+        white-space: normal;
+        width: 26%;
+      }
+
+      .route {
+        color: var(--ink);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .native-type {
+        color: var(--muted);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+      }
+
+      .flow-list {
+        display: grid;
+        gap: 10px;
+        margin: 18px 0;
+        counter-reset: flow;
+      }
+
+      .flow-step {
+        position: relative;
+        display: grid;
+        grid-template-columns: 32px minmax(0, 1fr);
+        gap: 11px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+      }
+
+      .flow-step::before {
+        counter-increment: flow;
+        content: counter(flow);
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--teal-bg);
+        color: var(--teal);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .flow-step strong {
+        display: block;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+      }
+
+      .flow-step p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .tree-note {
+        display: inline-block;
+        color: var(--code-muted);
+      }
+
+      .contract-list {
+        display: grid;
+        gap: 9px;
+      }
+
+      .contract-row {
+        display: grid;
+        grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.6fr);
+        gap: 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+      }
+
+      .contract-row strong {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+      }
+
+      .contract-row p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .contract-caption {
+        margin: 18px 0 0;
+        color: var(--faint);
+        font-size: 12px;
+      }
+
+      .source-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+        gap: 10px;
+      }
+
+      .source-link {
+        display: block;
+        padding: 13px 15px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        text-decoration: none;
+        overflow-wrap: anywhere;
+      }
+
+      .source-link strong {
+        display: block;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+      }
+
+      .source-link span {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .source-link:hover {
+        border-color: var(--teal);
+      }
+
+      .reference-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 18px 0;
+      }
+
+      .reference-nav a {
+        padding: 7px 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--muted);
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      .reference-nav a:hover,
+      .reference-nav a:focus-visible {
+        border-color: var(--teal);
+        color: var(--teal);
+      }
+
+      .reference-nav a[aria-current='page'] {
+        border-color: var(--teal);
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+
+      footer {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding-top: 19px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 980px) {
+        .layout {
+          display: block;
+        }
+
+        .toc {
+          position: relative;
+          top: auto;
+          display: flex;
+          gap: 3px;
+          margin-bottom: 32px;
+          overflow-x: auto;
+          white-space: nowrap;
+        }
+
+        .toc-title {
+          display: none;
+        }
+
+        .toc a {
+          flex: none;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .shell {
+          padding: 28px 16px 64px;
+        }
+
+        .hero-top {
+          display: block;
+        }
+
+        .hero-actions {
+          margin-top: 14px;
+        }
+
+        .stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .contract-row {
+          grid-template-columns: 1fr;
+          gap: 5px;
+        }
+
+        h2 {
+          font-size: 26px;
+        }
+      }
+
+      @media print {
+        :root {
+          color-scheme: light;
+          --bg: #fff;
+          --paper: #fff;
+          --paper-2: #f5f5f2;
+          --ink: #16181b;
+          --muted: #51555b;
+          --line: #d3d0c8;
+          --shadow: none;
+        }
+
+        .theme-button,
+        .reference-link,
+        .toc,
+        .copy-button,
+        .reference-nav {
+          display: none !important;
+        }
+
+        .layout {
+          display: block;
+        }
+
+        .card,
+        .flow-step {
+          break-inside: avoid;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero" id="top">
+        <div class="hero-top">
+          <div>
+            <div class="eyebrow">Agent plane · vibe-field</div>
+            <h1>The agent plane across three repositories</h1>
+            <p class="subtitle">
+              One product, three owners. puppeteer owns the managed run; rosetta owns this device's agent history;
+              VibeField owns custody, composition, policy and presentation, and knows no vendor. This page is the
+              umbrella: the ownership law, the seams between the three, the walls that enforce them, and the index of
+              every document that governs a part of it.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <button class="theme-button" id="theme-toggle" type="button" aria-label="Toggle color theme">Theme</button>
+          </div>
+        </div>
+        <nav class="reference-nav" aria-label="Agent plane library">
+          <a href="architecture.html" aria-current="page">Umbrella</a><a href="system.html">Aggregation &amp; integration</a
+          ><a href="api.html">The doors</a><a href="../AGENT_PLANE.md">Hub</a>
+        </nav>
+        <div class="pipeline" aria-label="Plane summary">
+          <b class="native">field-native</b> — PTY custody → <b class="product">fieldd</b> — composition and policy →
+          <b class="contract">contracts</b> — the door table → <b>Godview · the phone</b>
+        </div>
+        <div class="stats" aria-label="Plane summary">
+          <div class="stat"><strong>3</strong><span>repositories, one product</span></div>
+          <div class="stat"><strong>9</strong><span>seams named in section 4</span></div>
+          <div class="stat"><strong>3</strong><span>walls (R20 · R21 · R22)</span></div>
+          <div class="stat"><strong>3</strong><span>data domains: device · user · login</span></div>
+        </div>
+      </header>
+      <div class="layout">
+        <nav class="toc" aria-label="Contents">
+          <p class="toc-title">Contents</p>
+          <a href="#answer">The answer in one paragraph</a><a href="#ownership">Ownership</a
+          ><a href="#system">System diagram</a><a href="#seams">Seams</a><a href="#walls">Walls</a
+          ><a href="#domains">Data domains</a><a href="#spine">Identity spine</a><a href="#laws">Laws that bind the plane</a
+          ><a href="#lifetimes">Lifetimes and failure domains</a><a href="#performance">Performance</a
+          ><a href="#status">Status</a><a href="#map">The documentation map</a><a href="#sources">Source map</a>
+        </nav>
+        <main>
+          <section id="answer">
+            <h2>The answer in one paragraph</h2>
+            <p class="section-note">
+              The agent plane is everything between a user asking for an agent and that agent's work being visible,
+              controllable and searchable — on this device and on the user's other devices. It is built from three
+              repositories, three planes and one spine.
+              <strong>puppeteer</strong> is the managed-session runtime: it runs <em>inside</em> fieldd, because its host
+              contract is two methods that fieldd already implements over field-native's terminal authority, and because
+              approvals and prompts want in-process latency. <strong>rosetta</strong> is the agent data plane: a separate
+              <code>rosettad</code> process per user root, supervised by fieldd, reached the way every VibeField data
+              plane is reached — control through fieldd, bulk and streams through a ticketed direct route.
+              <strong>VibeField</strong> composes the two at the native session id and owns policy, custody, federation
+              and presentation. The two upstream repositories were designed against each other before VibeField
+              consumed either; this plane keeps both of their choices and adds only the joints.
+            </p>
+            <div class="callout foundation">
+              <strong>Revisions this page describes.</strong> vibe-field <code>b7ebb444</code> · puppeteer
+              <code>2f5ce002</code> · rosetta <code>e8d907ab</code>. Every <span class="badge tone-built">Built</span>
+              claim below was read in the code at those revisions and cites its file. A
+              <span class="badge tone-designed">Designed</span> claim is ruled and specified but not in code, and cites
+              its design document and decision id. An <span class="badge tone-owed">Owed</span> claim is named on the
+              roadmap and not designed in detail. Nothing here states an intention in the present tense.
+            </div>
+            <div class="callout warning">
+              <strong>Two of the three repositories are machine-coupled checkouts, not registry packages.</strong>
+              puppeteer and rosetta are unpublished, so this repository consumes them as sibling checkouts pinned by
+              revision in <code>siblings.lock.json</code>: puppeteer's packages and rosetta's TypeScript client enter as
+              <code>link:</code> rows in <code>pnpm-workspace.yaml</code>, and <code>rosettad</code> is built from the
+              rosetta checkout and reaches fieldd as <code>FIELDD_ROSETTAD_BIN</code>. The exit is a version edit
+              (<span class="badge tone-designed">Designed</span> — W-D8, <code>draft/thinking-ar-sibling-workbench.md</code>
+              §3).
+            </div>
+          </section>
+
+          <section id="ownership">
+            <h2>Ownership</h2>
+            <p class="section-note">
+              The ownership law is the first thing to read and the last thing to break. It is stated in
+              <code>draft/thinking-ar-agent-plane.md</code> §1 and it is what every wall, every seam and every naming
+              decision below exists to preserve. Read the middle column as hard as the left one: what a repository must
+              never know is the load-bearing half.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr>
+                    <th>Repository</th>
+                    <th>Owns</th>
+                    <th>Must never know</th>
+                    <th>Where that is enforced</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <span class="badge tone-puppeteer">puppeteer</span>
+                      <p class="native-type">TypeScript, in fieldd's process</p>
+                    </td>
+                    <td>
+                      <p>
+                        One <code>Agent</code> per managed run: lifecycle, adapter-owned live semantics (hooks, OTLP,
+                        transcript tail, app-server and ACP protocols), guarded control, workspaces, own-action records,
+                        the monitor projection, and the split-phase launch recipe.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        PTYs — it borrows a host. The desktop. Other devices. History search.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        By construction: <code>AgentHost</code> is the only way it reaches a terminal
+                        (<code>puppeteer/packages/core/src/host.ts</code>), and its presentation packages depend on zod
+                        and each other only.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="badge tone-rosetta">rosetta</span>
+                      <p class="native-type">Rust, <code>rosettad</code> per user root</p>
+                    </td>
+                    <td>
+                      <p>
+                        Every agent's on-disk history on this device — including sessions nobody managed — as an
+                        append-only raw ledger plus a disposable canonical projection; full-text search; the live
+                        transcript tail with resumable stamps; consent over which runtimes enroll.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Process liveness. Control. VibeField. puppeteer.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        By its own layer rule (<code>rosetta/docs/ARCHITECTURE.md</code> §2: "L3 never parses agent
+                        files; L1 never knows what a session view is") and by its row shape — a session row carries no
+                        PID and no liveness.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="badge tone-vibefield">vibe-field</span>
+                      <p class="native-type">this repository</p>
+                    </td>
+                    <td>
+                      <p>
+                        Custody (PTYs and mesh in field-native), composition and policy in fieldd (the spine join,
+                        tickets, approvals routing, claims, federation, consent brokerage), and presentation (the
+                        Godview deck, the canvas, History, the phone).
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Any vendor's file format, argv grammar or hook protocol — <strong>AR-L1: VibeField knows no
+                        vendor.</strong>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Walls R20/R21/R22 in <code>scripts/check-import-boundaries.mjs</code>, run under
+                        <code>pnpm preflight</code>; the adapter packages are never importable and never
+                        <code>link:</code> rows.
+                      </p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <h3>The two deliberate overlaps</h3>
+            <p class="section-note">
+              An ownership law with no overlap would be a lie about this system. Two exist, both on purpose.
+            </p>
+            <div class="cards">
+              <div class="card">
+                <h3>Both tail transcripts</h3>
+                <p>
+                  puppeteer's live runtime is independent of any semantic database by design (its RFC 003: hooks remain
+                  lifecycle truth, and transcript failure cannot end a live process). rosetta ingests the same files for
+                  history. The cost is two bounded readers per file; the dividend is that the control room never waits
+                  on the index.
+                </p>
+                <div class="ownership-row">
+                  <span class="badge tone-built">Built</span><span class="chip">thinking-ar-agent-plane §1</span>
+                </div>
+              </div>
+              <div class="card">
+                <h3>Both name agent kinds</h3>
+                <p>
+                  puppeteer's provider ids (<code>claude</code>, <code>kimi</code>) and rosetta's runtime kinds
+                  (<code>claude-code</code>, <code>kimi-code</code>) disagree in two places and agree in the other eight.
+                  This is not resolved by a table: the join is the native session id, and the persona-to-kind join is
+                  data at the seam.
+                </p>
+                <div class="ownership-row">
+                  <span class="badge tone-built">Built</span><span class="chip">AR-2 · thinking-ar-agent-plane §17.1 E15</span>
+                </div>
+              </div>
+            </div>
+            <div class="callout boundary">
+              <strong>Correction worth carrying.</strong> Earlier drafts of this design specified one alias table in
+              <code>packages/contracts/src/registries.ts</code> named <code>AGENT_KINDS</code>, and some downstream
+              prose still cites it. <strong>No such symbol exists in the tree at <code>b7ebb444</code></strong> — AR-D3
+              was revised on 2026-09-12 so that the join is the native session id alone
+              (<code>thinking-ar-agent-plane.md</code> §17.2), and AR-2 landed the persona-to-kind join as data at the
+              seam with no table (<code>docs/DECISIONS.md</code>, the AR-D15…D22 row). What contracts does carry is
+              <code>AgentKind</code> and <code>AgentProviderId</code> in
+              <code>packages/contracts/src/agent-index.ts</code>: two open validated strings, not enumerations and not a
+              mapping. If a document tells you to look up a kind in a registry, the document is stale.
+            </div>
+          </section>
+
+          <section id="system">
+            <h2>System diagram</h2>
+            <p class="section-note">
+              One picture of the whole plane: the processes, who lives inside whom, and which traffic takes which route.
+              The three owners are tinted — <span class="badge tone-vibefield">vibe-field</span>
+              <span class="badge tone-puppeteer">puppeteer</span> <span class="badge tone-rosetta">rosetta</span> — and
+              every box names a real process, package or file.
+            </p>
+            <figure>
+              <div class="diagram">
+                <svg viewBox="0 0 1150 660" role="img" aria-labelledby="plane-map-title" style="font-family: 'Source Sans 3', sans-serif">
+                  <title id="plane-map-title">
+                    The agent plane: the Electron shell and the phone read fieldd's product API; puppeteer's runtime is
+                    in fieldd's process; field-native owns the PTY the vendor CLI runs in; rosettad indexes the
+                    transcripts that CLI writes; terminal frames and hook posts bypass fieldd entirely.
+                  </title>
+                  <defs>
+                    <marker id="arw-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--teal)" />
+                    </marker>
+                    <marker id="arw-copper" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--copper)" />
+                    </marker>
+                    <marker id="arw-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--purple)" />
+                    </marker>
+                    <marker id="arw-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--blue)" />
+                    </marker>
+                  </defs>
+
+                  <!-- Electron shell -->
+                  <rect x="54" y="48" width="606" height="92" rx="10" fill="var(--paper-2)" stroke="var(--line)" />
+                  <rect x="54" y="48" width="606" height="4" rx="2" fill="var(--blue)" />
+                  <text x="72" y="82" fill="var(--blue)" font-size="15" font-weight="600">Electron shell</text>
+                  <text x="72" y="104" fill="var(--muted)" font-size="12.5">packages/electron-shell — main · preload · renderer host</text>
+                  <text x="72" y="124" fill="var(--muted)" font-size="12.5">packages/field-app — the Godview deck, the monitor views, the terminal runtime</text>
+
+                  <!-- Phone -->
+                  <rect x="704" y="48" width="422" height="92" rx="10" fill="var(--paper-2)" stroke="var(--line)" />
+                  <rect x="704" y="48" width="422" height="4" rx="2" fill="var(--blue)" />
+                  <text x="722" y="82" fill="var(--blue)" font-size="15" font-weight="600">iPhone companion</text>
+                  <text x="722" y="104" fill="var(--muted)" font-size="12.5">apps/ios — the field on Metal</text>
+                  <text x="722" y="124" fill="var(--muted)" font-size="12.5">reads the mesh store; taps route to a cell</text>
+
+                  <!-- fieldd -->
+                  <rect x="54" y="180" width="606" height="200" rx="10" fill="var(--paper)" stroke="var(--line)" />
+                  <rect x="54" y="180" width="606" height="4" rx="2" fill="var(--blue)" />
+                  <text x="72" y="212" fill="var(--blue)" font-size="15" font-weight="600">fieldd — product truth, one per user root</text>
+                  <text x="72" y="234" fill="var(--muted)" font-size="12.5">agent-host · agent-runtime · agent-index · agent-sessions · agent-field · rosettad-supervisor</text>
+                  <rect x="74" y="248" width="566" height="114" rx="8" fill="var(--copper-bg)" stroke="var(--copper)" stroke-opacity="0.45" />
+                  <text x="92" y="276" fill="var(--copper)" font-size="14" font-weight="600">puppeteer AgentRuntime — in-process</text>
+                  <text x="92" y="298" fill="var(--muted)" font-size="12.5">builtin-providers · ten adapters · the monitor projection</text>
+                  <text x="92" y="318" fill="var(--muted)" font-size="12.5">adapter-owned loopback listeners (hooks · OTLP · app-server)</text>
+                  <text x="92" y="340" fill="var(--muted)" font-size="12.5">every byte it would keep under ~/.puppeteer is injected from this user's root</text>
+
+                  <!-- mesh -->
+                  <rect x="704" y="180" width="422" height="140" rx="10" fill="var(--paper)" stroke="var(--line)" />
+                  <rect x="704" y="180" width="422" height="4" rx="2" fill="var(--blue)" />
+                  <text x="722" y="212" fill="var(--blue)" font-size="15" font-weight="600">truffle mesh — field-native</text>
+                  <text x="722" y="236" fill="var(--muted)" font-size="12.5">field.agents.v1 — the content-free field projection</text>
+                  <text x="722" y="256" fill="var(--muted)" font-size="12.5">scoped to the tailscale login since RFC 025</text>
+                  <text x="722" y="284" fill="var(--muted)" font-size="12.5">replication · catch-up on join · removal on leave</text>
+                  <text x="722" y="304" fill="var(--muted)" font-size="12.5">no fieldd in the phone's read path</text>
+
+                  <!-- rosettad -->
+                  <rect x="704" y="360" width="422" height="260" rx="10" fill="var(--paper)" stroke="var(--line)" />
+                  <rect x="704" y="360" width="422" height="4" rx="2" fill="var(--teal)" />
+                  <text x="722" y="392" fill="var(--teal)" font-size="15" font-weight="600">rosettad — agent history, one per user root</text>
+                  <text x="722" y="416" fill="var(--muted)" font-size="12.5">a fieldd-supervised child; the ledger outlives it</text>
+                  <text x="722" y="440" fill="var(--muted)" font-size="12.5">L3 service — REST /api/* · WS /ws/meta · /ws/sessions/{id}</text>
+                  <text x="722" y="460" fill="var(--muted)" font-size="12.5">L2 adapters + normalizer — capture, parse, normalize</text>
+                  <text x="722" y="480" fill="var(--muted)" font-size="12.5">L1 ground truth — dev-time evidence, no production code</text>
+                  <text x="722" y="508" fill="var(--muted)" font-size="12.5">binds 127.0.0.1:0 — the origin is the secret (no auth, RO-1)</text>
+                  <text x="722" y="532" fill="var(--muted)" font-size="12.5">serve --db &lt;user root&gt;/index/rosetta.db --enroll &lt;record&gt;</text>
+                  <text x="722" y="556" fill="var(--muted)" font-size="12.5">--json readiness · --announce into a fieldd-private directory</text>
+                  <text x="722" y="588" fill="var(--faint)" font-size="12">consent by construction: a managed root is enrolled, never discovered</text>
+
+                  <!-- field-native -->
+                  <rect x="54" y="420" width="606" height="200" rx="10" fill="var(--paper)" stroke="var(--line)" />
+                  <rect x="54" y="420" width="606" height="4" rx="2" fill="var(--copper)" />
+                  <text x="72" y="452" fill="var(--copper)" font-size="15" font-weight="600">field-native — the floor, outlives fieldd</text>
+                  <text x="72" y="472" fill="var(--muted)" font-size="12.5">TerminalUnit supervises field-terminal-host cells, one per workload class</text>
+                  <rect x="74" y="488" width="272" height="116" rx="8" fill="var(--paper-2)" stroke="var(--line)" />
+                  <text x="90" y="514" fill="var(--ink)" font-size="13" font-weight="600">agent cell</text>
+                  <text x="90" y="536" fill="var(--muted)" font-size="12">every managed agent's PTY</text>
+                  <rect x="90" y="548" width="240" height="42" rx="6" fill="var(--paper)" stroke="var(--line-strong)" stroke-dasharray="3 3" />
+                  <text x="104" y="574" fill="var(--muted)" font-size="12">the vendor CLI — a PTY child</text>
+                  <rect x="366" y="488" width="274" height="116" rx="8" fill="var(--paper-2)" stroke="var(--line)" />
+                  <text x="382" y="514" fill="var(--ink)" font-size="13" font-weight="600">interactive cell</text>
+                  <text x="382" y="536" fill="var(--muted)" font-size="12">the user's own panes</text>
+                  <text x="382" y="558" fill="var(--muted)" font-size="12">a re-attach only ever adopts</text>
+                  <text x="382" y="576" fill="var(--muted)" font-size="12">an agent-cell PTY (AR-4b)</text>
+
+                  <!-- shell to fieldd: control -->
+                  <path d="M 200 140 V 176" stroke="var(--teal)" stroke-width="1.5" marker-end="url(#arw-teal)" />
+                  <text x="212" y="164" fill="var(--teal)" font-size="11.5">control JSON — the product API</text>
+
+                  <!-- fieldd to floor: mgmt -->
+                  <path d="M 200 380 V 416" stroke="var(--blue)" stroke-width="1.5" marker-end="url(#arw-blue)" />
+                  <text x="212" y="404" fill="var(--blue)" font-size="11.5">management JSON-RPC — spawnTerminal, automateTerminal</text>
+
+                  <!-- agent cell to shell: terminal frames (bypasses fieldd) -->
+                  <path d="M 74 530 H 26 V 94 H 50" stroke="var(--copper)" stroke-width="1.5" fill="none" marker-end="url(#arw-copper)" />
+                  <text transform="rotate(-90 16 330)" x="16" y="330" fill="var(--copper)" font-size="11.5" text-anchor="middle">terminal frames — ticketed direct, never through fieldd (EL2)</text>
+
+                  <!-- CLI to puppeteer: adapter-private loopback -->
+                  <path d="M 90 569 H 42 V 300 H 70" stroke="var(--purple)" stroke-width="1.5" fill="none" stroke-dasharray="5 3" marker-end="url(#arw-purple)" />
+                  <text transform="rotate(-90 36 440)" x="36" y="440" fill="var(--purple)" font-size="11" text-anchor="middle">hooks · OTLP — adapter-private, bearer</text>
+
+                  <!-- fieldd to mesh -->
+                  <path d="M 660 250 H 700" stroke="var(--blue)" stroke-width="1.5" marker-end="url(#arw-blue)" />
+                  <text x="600" y="242" fill="var(--blue)" font-size="11.5" text-anchor="end">publishes the field slice</text>
+
+                  <!-- phone to mesh -->
+                  <path d="M 915 140 V 176" stroke="var(--blue)" stroke-width="1.5" marker-end="url(#arw-blue)" />
+                  <text x="927" y="164" fill="var(--blue)" font-size="11.5">reads the store</text>
+
+                  <!-- fieldd to rosettad: control -->
+                  <path d="M 660 330 H 682 V 420 H 700" stroke="var(--teal)" stroke-width="1.5" fill="none" marker-end="url(#arw-teal)" />
+                  <text x="600" y="322" fill="var(--teal)" font-size="11.5" text-anchor="end">loopback HTTP/WS — fieldd is the sole client today</text>
+
+                  <!-- CLI transcripts to rosettad -->
+                  <path d="M 330 578 H 700" stroke="var(--teal)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arw-teal)" />
+                  <text x="512" y="570" fill="var(--teal)" font-size="11.5" text-anchor="middle">the vendor's own transcript files on disk</text>
+                </svg>
+              </div>
+              <figcaption>
+                The agent plane at vibe-field <code>b7ebb444</code>, puppeteer <code>2f5ce002</code>, rosetta
+                <code>e8d907ab</code>. Solid lines are live routes in the code; dashed lines are traffic that never
+                touches VibeField's JSON control plane. The renderer's direct route to <code>rosettad</code> is
+                <em>not</em> drawn, because it is not built: fieldd is still the daemon's only client, and the
+                <span class="badge tone-designed">Designed</span> ticketed route waits on RO-1.
+              </figcaption>
+            </figure>
+          </section>
+
+          <section id="seams">
+            <h2>Seams</h2>
+            <p class="section-note">
+              A seam is a place where one repository's code meets another's under a named interface. There are nine.
+              For each: who owns the interface, who implements it, the file on each side, what crosses, and whether it
+              is built. The rule that makes the triad replaceable is that every joint below is a contract, never an
+              import of internals — puppeteer sits behind <code>AgentHost</code> and the monitor schema, rosetta behind
+              a versioned protocol and a ticket door.
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Seam</th>
+                    <th>Interface owner</th>
+                    <th>Implementer</th>
+                    <th>File on each side</th>
+                    <th>What crosses</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="route">AgentHost</span></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>puppeteer/packages/core/src/host.ts</code><br />
+                        <code>packages/fieldd/src/agent-host.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Two methods. <code>spawnTerminal(spec)</code> returns the host's routing id;
+                        <code>automateTerminal(id, operation)</code> submits one semantic input, ordered atomically
+                        against accepted human input, and may answer
+                        <code>{accepted: false, reason: 'human-input-conflict'}</code>. The adapter owns the whole launch
+                        recipe; the host composes the environment policy, finds a cell and execs.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>AR-3 <code>6b5e1612</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">runtime construction ports</span></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>@vibecook/puppeteer-builtin-providers</code> (<code>createBuiltinProviders</code>)<br />
+                        <code>packages/fieldd/src/agent-runtime.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Everything puppeteer would otherwise keep under <code>~/.puppeteer</code>, injected from this
+                        user's root: the profile registry, the managed profile roots, update transcripts, the creation
+                        registry and the own-action recorder. fieldd owns every byte, puppeteer every schema.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>AR-2 <code>f9f04763</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">monitor mirror + golden</span></td>
+                    <td><span class="badge tone-vibefield">contracts</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/agent-session.ts</code><br />
+                        <code>packages/fieldd/test/agent-monitor-pin.test.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        <code>AgentMonitorMirror</code>: the fields fieldd's own logic reads, with
+                        <code>.passthrough()</code> carrying every other field verbatim. Because contracts imports
+                        nothing but zod it cannot import puppeteer's schema, so the mirror is pinned by a golden taken
+                        from puppeteer's own fixture at the pinned revision. <code>status</code> is an open string here:
+                        a fourth upstream value must fold to <code>unknown</code>, never fail the parse.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>AR-3; schema version 3</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the views ports</span></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span></td>
+                    <td><span class="badge tone-vibefield">field-app</span></td>
+                    <td>
+                      <p>
+                        <code>@vibecook/puppeteer-views</code> (<code>HistoryPort</code>, <code>AccountUsagePort</code>)<br />
+                        <code>packages/field-app/src/godview/monitor/remote-door.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        A view is a pure function of monitor state, palette and parameters. Every rosetta-dependent
+                        feature goes through an injected port, so the views dial nothing: puppeteer's own Godview
+                        supplies an announce-file reader, VibeField supplies adapters over fieldd's doors. No ticket was
+                        needed for either — the daemon's origin never leaves fieldd.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>AR-5 <code>fe6b3d0a</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the rosetta protocol client</span></td>
+                    <td><span class="badge tone-rosetta">rosetta</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>@rosetta/protocol</code> (rosetta <code>clients/ts</code>)<br />
+                        <code>packages/fieldd/src/agent-index.ts</code>, <code>rosettad-supervisor.ts</code>,
+                        <code>index.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Row and response types (<code>SessionRow</code>, <code>RuntimeRow</code>,
+                        <code>StatusResponse</code>, <code>DiscoveriesResponse</code>) and the protocol version. Only
+                        fieldd imports it at runtime; the renderer's wall admits it but the renderer reads projections
+                        through fieldd's doors instead.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>AR-0 / AR-1</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the enrollment record</span></td>
+                    <td><span class="badge tone-vibefield">VibeField</span></td>
+                    <td><span class="badge tone-rosetta">rosettad</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/agent-index.ts</code><br />
+                        rosetta <code>serve --enroll FILE</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        One file, two readers. <code>users/&lt;fuid&gt;/index/enrollment.json</code> is VibeField's
+                        truth for what this user consented to and which persona maps to which runtime; the same bytes
+                        are the daemon's <code>--enroll</code> input, and rosetta ignores the keys only VibeField reads.
+                        With the file present it is authoritative, so consent can be revoked and not only added.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>AR-1 <code>c7fe5fda</code>; RO-2c upstream</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the contracts door table</span></td>
+                    <td><span class="badge tone-vibefield">contracts</span></td>
+                    <td><span class="badge tone-vibefield">fieldd + every client</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/methods.ts</code><br />
+                        <code>packages/contracts/src/registries.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Every VibeField-owned wire shape, as a zod schema, with each method carrying its surface, scope,
+                        idempotency and locality. The <code>agent.*</code>, <code>agents.*</code> and
+                        <code>index.*</code> rows are the agent plane's whole public surface; the doors page catalogues
+                        them.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>AR-1; locality enforced at AR-4b</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the field projection</span></td>
+                    <td><span class="badge tone-vibefield">contracts</span></td>
+                    <td><span class="badge tone-vibefield">fieldd + apps/ios</span></td>
+                    <td>
+                      <p>
+                        <code>packages/fieldd/src/agent-field.ts</code>, <code>agent-field-publisher.ts</code><br />
+                        <code>packages/contracts/src/agent-field.ts</code> (<code>STORES.AGENT_FIELD</code>)
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        The fold's rows with their content removed, plus the revision machinery that lets an idle board
+                        cost nothing. Two carriers for the same projection: the mesh store
+                        <code>field.agents.v1</code>, and <code>agent.subscribe {projection: "field"}</code> for a
+                        reader that prefers to dial. Mesh-down is a normal state — the slice is simply not written.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>MF-1</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the routed terminal</span></td>
+                    <td><span class="badge tone-vibefield">field-native</span></td>
+                    <td><span class="badge tone-vibefield">apps/ios</span></td>
+                    <td>
+                      <p>
+                        <code>packages/field-native/src/services/terminal.rs</code><br />
+                        <code>apps/ios</code> — <code>FieldRoutedTerminal</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        A phone's tap on an agent's row becomes a routed client of a cell's own door — two legs on the
+                        node's session, grants and byte credits, never a byte through fieldd.
+                      </p>
+                    </td>
+                    <td><span class="badge tone-built">Built</span><p>TM <code>bbe551a5</code></p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="contract-caption">
+              Two seams named in the design are deliberately absent from this table because they are not built: the
+              renderer's ticketed direct route to <code>rosettad</code> (waits on RO-1) and the native ingress relay
+              that would let a managed session survive a fieldd <em>upgrade</em> rather than only a restart (AR-D6's v2
+              lever). Both appear under Status.
+            </p>
+          </section>
+
+          <section id="walls">
+            <h2>Walls</h2>
+            <p class="section-note">
+              The ownership law would be prose without these. Three rules in
+              <code>scripts/check-import-boundaries.mjs</code> decide which package may import which sibling, and they
+              have been <code>enforce: true</code> from birth. Their descriptions are quoted verbatim.
+            </p>
+            <div class="contract-list">
+              <div class="contract-row">
+                <strong>R20</strong>
+                <p>
+                  "fieldd imports puppeteer only through its runtime door (runtime · builtin-providers · core · record)
+                  + @rosetta/protocol — never an adapter or native-observation". The rule's own comment gives the
+                  reason: "an adapter import is a product branching on a provider, and native-observation is the
+                  adapters' private half. Tests may reach further (puppeteer-testing); production may not."
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>R21</strong>
+                <p>
+                  "field-app imports puppeteer only through its view door (core · monitor · react · views) +
+                  @rosetta/protocol — never runtime, providers, record, an adapter, or native-observation". The
+                  renderer sees the agent <em>view</em> and never the runtime: spawning, providers and recording are
+                  fieldd's.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>R22</strong>
+                <p>
+                  "no puppeteer or rosetta import outside packages/fieldd and packages/field-app (D2: the runtime lives
+                  in fieldd; A4/R10 elsewhere)". Contracts stays dependency-free, plugins see only the SDK, Electron
+                  main carries no product logic, and the spine libraries never learn what an agent is.
+                </p>
+              </div>
+            </div>
+            <h3>Two rules that are not import rules</h3>
+            <div class="cards">
+              <div class="card">
+                <h3>contracts is dependency-free</h3>
+                <p>
+                  <code>packages/contracts</code> is the zero-dependency root of the graph, imported from the renderer,
+                  from workers and from Node daemons alike. It is why the monitor mirror is a mirror and not a re-export
+                  — and why the golden fixture exists at all.
+                </p>
+              </div>
+              <div class="card">
+                <h3>only direct imports are sibling rows</h3>
+                <p>
+                  In <code>pnpm-workspace.yaml</code>'s fenced sibling block, a package gets a <code>link:</code> row
+                  only if VibeField imports it directly; transitive edges resolve inside the sibling's own tree.
+                  Adapters are never rows and never imports. The lock names six puppeteer packages and one rosetta
+                  client.
+                </p>
+              </div>
+            </div>
+            <div class="callout warning">
+              <strong>Where the walls actually run, and one thing they do not yet match.</strong> The checker is invoked
+              by <code>scripts/preflight.mjs</code> — once as <code>--self-test</code> (it proves each rule still fires
+              on a synthetic violation) and once as <code>--enforce</code> — so the walls are part of
+              <code>pnpm verify</code> through <code>pnpm preflight</code>, its first step.
+              <code>pnpm check:deps</code> is a different script (<code>scripts/check-single-copy.mjs</code>) and does
+              not run them.
+            </div>
+            <div class="callout">
+              <strong>One package the wall admits and the lock does not name.</strong> R21's door list includes
+              <code>@vibecook/puppeteer-react</code>, but <code>siblings.lock.json</code> has no row for it and neither
+              does the fenced sibling block. That is correct, and the two comments explaining it were written a day
+              apart and no longer agree. R21's own comment is the older one: it says the row "waits on the react-peer
+              answer". <code>pnpm-workspace.yaml</code>'s block carries the answer, dated 2026-09-13 — a
+              <code>link:</code> row cannot promise its React peer resolves to this tree's copy, so the renderer's build
+              and test configuration de-duplicate React to this tree, <code>check:deps</code> asserts the sibling's
+              React version is ours, and a test renders a package component with hooks, where two Reacts would throw.
+              That is what admitted the views package, and "the puppeteer-react contract it extends stays transitive,
+              never a row." Read the workspace file, not the rule comment.
+            </div>
+          </section>
+
+          <section id="domains">
+            <h2>Data domains</h2>
+            <p class="section-note">
+              Three scopes, and one principle that decides all of them: <strong>ownership by construction decides
+              consent by construction.</strong> A root under the user's partition is that user's by construction, so it
+              is enrolled in that user's index automatically and never appears on a roll call. A root outside it is the
+              operating-system user's, so every VibeField user's daemon discovers it and each consents separately —
+              isolation over de-duplication.
+            </p>
+            <pre><code>&lt;VibeField root&gt;/                          <span class="comment">ONE per OS user on a device</span>
+  users.json · users.json.lock · layout.json
+  machine/                                  <span class="comment">AR-D15 — the ONE exception to "all state under the user"</span>
+    agents/
+      distribution.json                     <span class="comment">MACHINE_DISTRIBUTION_FILE — active executable per provider,</span>
+                                            <span class="comment">release channel, network opt-in, update receipts</span>
+      updates/                              <span class="comment">MACHINE_UPDATES_DIR — puppeteer's 0600 update transcripts</span>
+  users/&lt;fuid&gt;/                             <span class="comment">the partition root (UA-D1)</span>
+    agents/                                 <span class="comment">AGENTS_DIR</span>
+      profiles.json                         <span class="comment">AGENT_PROFILES_FILE — puppeteer's registry, fieldd's store (0600)</span>
+      roots/&lt;provider&gt;/&lt;uuid&gt;/               <span class="comment">AGENT_ROOTS_DIR — managed profile roots, 0700</span>
+      sessions/ · sessions.key              <span class="comment">AGENT_SESSIONS_DIR — signed records; never a transcript, never a credential</span>
+      runs/                                 <span class="comment">AGENT_RUNS_DIR — puppeteer's durable claims, in fieldd's custody</span>
+    index/                                  <span class="comment">INDEX_DIR — rosetta, one daemon per user</span>
+      rosetta.db (+ ledger · assets · search)
+      daemons/                              <span class="comment">INDEX_DAEMONS_DIR — fieldd's PRIVATE announce dir, not rosetta's shared one</span>
+      enrollment.json                       <span class="comment">INDEX_ENROLLMENT_FILE — the consent record AND rosettad's --enroll input</span>
+~/.claude · ~/.codex · ~/.pi · …            <span class="comment">the OS user's own vendor roots — discovered, then consented to</span></code></pre>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr>
+                    <th>Domain</th>
+                    <th>What lives there</th>
+                    <th>Who may write it</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>device</strong><p class="native-type">&lt;root&gt;/machine/agents/</p></td>
+                    <td>
+                      <p>
+                        Exactly one thing: agent distribution. Which executable is active per provider, the release
+                        channel, the network opt-in, the last check and the last update receipt. It exists because
+                        installs are operating-system-user-global by nature and VibeField owns nothing there but a
+                        choice and a preference.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        One writer: the <em>attached</em> user's fieldd, under the root lock every fieldd on the device
+                        already shares, publishing atomically. Resident fieldds watch the file and refresh. An
+                        active-executable flip reaches new spawns only — a running session keeps its binary.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><strong>user</strong><p class="native-type">users/&lt;fuid&gt;/</p></td>
+                    <td>
+                      <p>
+                        Personas and their roots, session records and run claims, and the whole index: the daemon's
+                        database, its ledger and the enrollment record. Ingestion is isolated per user, so two VibeField
+                        users on one machine each index the shared vendor roots into their own database.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        That user's fieldd. Session records are signed with a key in the same directory, so a same-uid
+                        file dropped into the sessions directory is set aside rather than trusted — without that, a
+                        dropped file could terminate a live PTY.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><strong>login-scoped mesh</strong><p class="native-type">field.agents.v1</p></td>
+                    <td>
+                      <p>
+                        The content-free field projection, replicated to the user's other devices through the truffle
+                        store. Content never rides it; a tap fetches through a door.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        Each device's fieldd publishes its own slice. Since RFC 025 the node is scoped to the tailscale
+                        login, so a foreign login is refused at the gate rather than admitted to the store.
+                      </p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout">
+              <strong>A ruling still open on this domain.</strong> GM-D10 asks what audience
+              <code>field.agents.v1</code> may have: truffle admits by hostname prefix with no per-store authorization,
+              so the store's readers are every node on the tailnet, and the branch, model, effort, blocker tool name and
+              label are on that wire today. The absolute cwd was already reduced to a folder basename at no product
+              cost. The three options and the lean are recorded in <code>docs/DECISIONS.md</code>; the ruling is
+              James's.
+            </div>
+          </section>
+
+          <section id="spine">
+            <h2>Identity spine</h2>
+            <p class="section-note">
+              Three repositories, three vocabularies, one triangle:
+              <code>projectId ⊃ sessionId = agentId</code>. Everything joins on the native session id, and nothing joins
+              on anything else. Learn this table and most confusion about the plane dissolves.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr>
+                    <th>Word</th>
+                    <th>What it identifies</th>
+                    <th>Where it is spelled</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="route">sessionId</span></td>
+                    <td>
+                      <p>
+                        <strong>The spine.</strong> The vendor's own native session id — the one identifier all three
+                        repositories can independently observe, which is exactly why it is the join key.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        puppeteer <code>Agent.info.nativeSession.id</code> · rosetta
+                        <code>SessionRow.native_session_id</code> · VibeField <code>SessionSummary.sessionId</code>
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">kind</span></td>
+                    <td>
+                      <p>
+                        The provider. An <em>open</em> validated string in both directions, used for grouping and
+                        display. The two repositories disagree on two of ten spellings; nothing gates on it.
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        <code>AgentKind</code> and <code>AgentProviderId</code> in
+                        <code>packages/contracts/src/agent-index.ts</code> — two grammars, deliberately identical, so a
+                        value that passes one passes the other.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">runtimeSessionId</span></td>
+                    <td>
+                      <p>
+                        The <em>floor's</em> routing id for a PTY. Never the spine. It is what
+                        <code>spawnTerminal</code> returns and what <code>automateTerminal</code> addresses.
+                      </p>
+                    </td>
+                    <td><p><code>puppeteer/packages/core/src/host.ts</code>; VibeField's terminal contracts</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">runId · runtimeRunId</span></td>
+                    <td>
+                      <p>
+                        puppeteer's per-run id, paired with <code>runtimeEpoch</code>. A re-attach raises the epoch; a
+                        row's identity in the deck is its run.
+                      </p>
+                    </td>
+                    <td><p><code>AgentMonitorMirror.runtimeRunId</code> / <code>.runtimeEpoch</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">profileId</span></td>
+                    <td>
+                      <p>
+                        A persona — VibeField's word for a puppeteer account profile. One native data root per account,
+                        bound at launch through the provider's own root variable. A launch selection, never a security
+                        boundary.
+                      </p>
+                    </td>
+                    <td><p><code>agents.profiles.*</code>; roots under <code>AGENT_ROOTS_DIR</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">fuid</span></td>
+                    <td><p>A local VibeField user — the partition root every per-user path hangs from.</p></td>
+                    <td><p><code>users/&lt;fuid&gt;/</code>; the users registry</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">login</span></td>
+                    <td><p>The tailscale login the account is bound to, and since RFC 025 the mesh node's scope.</p></td>
+                    <td><p>the account gate; <code>field.agents.v1</code>'s scope</p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout boundary">
+              <strong>Never join on a namespace.</strong> <code>NativeSessionRef.namespace</code>
+              (<code>claude-native-hook</code>, <code>codex:app-server</code>, …) is adapter <em>evidence</em> — it
+              says how the id was observed, not what the agent is. Joining on it silently splits one session into
+              several.
+            </div>
+          </section>
+
+          <section id="laws">
+            <h2>Laws that bind the plane</h2>
+            <p class="section-note">
+              These are VibeField's own laws, from <code>draft/design-00-architecture.md</code>, applied to the agent
+              plane specifically. They are the reason several obvious-looking shortcuts are not taken.
+            </p>
+            <div class="cards">
+              <div class="card">
+                <h3>EL2 — bytes never ride JSON-RPC</h3>
+                <p>
+                  Control-rate JSON rides the product API; high-rate or bulk traffic rides a ticketed direct route.
+                  Applied here: terminal frames go from the floor's cell to the renderer's terminal runtime and never
+                  transit fieldd; monitor deltas coalesce to at most one frame per tick per connection; and rosetta's
+                  inline images, which are content-addressed bytes, are why the history data plane must be direct rather
+                  than proxied.
+                </p>
+                <div class="ownership-row">
+                  <span class="badge tone-built">Built</span><span class="chip">frames, fold</span>
+                  <span class="badge tone-designed">Designed</span><span class="chip">the history route</span>
+                </div>
+              </div>
+              <div class="card">
+                <h3>EL7 — same-uid agents are the adversary</h3>
+                <p>
+                  An agent PTY is born with a clean, allow-listed environment; <code>FIELD_*</code> and
+                  <code>FIELDD_*</code> are stripped, and daemon secrets never enter an agent environment. Session
+                  records are signed, and only agent-cell PTYs are ever re-adopted. The same law is why the daemon's
+                  announcement moved into a fieldd-private directory: <code>rosettad</code> has no authentication, so
+                  its loopback origin <em>is</em> the secret, and an announcement in a shared per-user directory would
+                  be a beacon every same-uid process could read.
+                </p>
+                <div class="ownership-row">
+                  <span class="badge tone-built">Built</span><span class="chip">AR-3 · AR-0r · AR-4b</span>
+                  <span class="badge tone-owed">Owed</span><span class="chip">RO-1 upstream</span>
+                </div>
+              </div>
+              <div class="card">
+                <h3>Tolerant reader</h3>
+                <p>
+                  Inbound parsing is <code>.passthrough()</code> with unknown-field logging, and degraded states surface
+                  as <code>UNAVAILABLE {service, state, progress}</code> — honest states, never blanks. The index's
+                  readiness projects straight into that shape, so a user sees "backfilling" with progress rather than an
+                  empty History.
+                </p>
+                <div class="ownership-row"><span class="badge tone-built">Built</span></div>
+              </div>
+              <div class="card">
+                <h3>EL8 / EL9 — lockstep for a triad</h3>
+                <p>
+                  Version moves are deliberate events, never drift. <code>siblings.lock.json</code> pins both sibling
+                  checkouts by revision; <code>pnpm preflight</code> fails on a missing checkout or a revision that is
+                  not the pin and warns on a dirty tree; <code>pnpm siblings:pin</code> is the upgrade act, and it gets
+                  its own ledger entry. Goldens generated from the pinned version make an upstream wire change a red
+                  gate here rather than a runtime surprise.
+                </p>
+                <div class="ownership-row">
+                  <span class="badge tone-built">Built</span><span class="chip">AR-0 · AR-5-0 · AR-5-1</span>
+                </div>
+              </div>
+            </div>
+            <div class="callout foundation">
+              <strong>The one law this plane added.</strong> <em>AR-L1 — VibeField knows no vendor.</em> No file format,
+              no argv grammar, no hook protocol and no resume flag lives in this repository. Vendor evidence has two
+              homes upstream and none here. It is enforced as an import rule (R20/R22) plus a grep tripwire on vendor
+              path names, and it is the reason the persona-to-kind join is data at the seam rather than a table in
+              <code>registries.ts</code>.
+            </div>
+          </section>
+
+          <section id="lifetimes">
+            <h2>Lifetimes and failure domains</h2>
+            <p class="section-note">
+              The two-plane law says field-native outlives fieldd outlives the shell. The agent plane adds a third
+              ceiling and is honest about it in the interface rather than promising more than it keeps.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr>
+                    <th>What</th>
+                    <th>Ceiling</th>
+                    <th>Owner</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>History</strong><p class="native-type">transcripts, tool records, images</p></td>
+                    <td><p>Forever — an append-only compressed ledger, replayable and user-inspectable. The canonical projection beside it is disposable and rebuildable.</p></td>
+                    <td><span class="badge tone-rosetta">rosetta</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>The PTY and the agent process</strong></td>
+                    <td><p>Daemon lifetime — the floor's. They die with field-native, and the interface says so.</p></td>
+                    <td><span class="badge tone-vibefield">field-native</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Managed observation and control</strong></td>
+                    <td><p>A fieldd restart, survived by re-attaching. The resting state is the re-attach; resume-when-idle is the fallback where an adapter cannot rebind.</p></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span> in <span class="badge tone-vibefield">fieldd</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <h3>How the re-attach works, and what it costs</h3>
+            <p class="section-note">
+              puppeteer's own recovery is resume-respawn, and an adapter's hook endpoint is ephemeral and baked into the
+              launched process's environment — so after the host dies, a running agent would be posting into a void.
+              The fix is that the host gets a say over that endpoint.
+            </p>
+            <div class="flow-list">
+              <div class="flow-step">
+                <div></div>
+                <div>
+                  <strong>the host pins the ingress</strong>
+                  <p>
+                    Every birth names a creation request — puppeteer's durable claim, in fieldd's custody under the
+                    user's runs directory. The adapter reports the bound <code>{port, token}</code> before the process
+                    launches, and that rides in the signed session record beside the claim id.
+                  </p>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div></div>
+                <div>
+                  <strong>a graceful stop releases rather than closes</strong>
+                  <p>
+                    A detaching dispose releases the runs without marking the claims terminal, keeps the process's
+                    staged settings file and drains the bridge so in-flight posts complete. Deleting those staged files
+                    on detach was a real defect: it lost a starting process, and after a successful re-attach the hook
+                    rail executed a script that no longer existed.
+                  </p>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div></div>
+                <div>
+                  <strong>the next boot re-attaches at the next epoch</strong>
+                  <p>
+                    fieldd reads its signed records at the first terminal inventory and attaches by identity — same
+                    provider, claim, terminal, native id. Identity is validated <em>before</em> the provider takes the
+                    port. A run already managed answers unbound; a stale epoch is refused naming the claim's own epoch.
+                    Only agent-cell PTYs are candidates.
+                  </p>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div></div>
+                <div>
+                  <strong>what does not re-attach becomes honest</strong>
+                  <p>
+                    Only one adapter attaches today; the others answer <code>ATTACH_UNSUPPORTED</code> and ride
+                    resume-when-idle, which respawns at a turn boundary rather than mid-turn. A row that cannot do
+                    either sits PENDING with a visible reason and a verb, never a blank and never a fake.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <h3>What the user sees when each process dies</h3>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Dies</th><th>Survives</th><th>What the interface says</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>the shell</strong></td>
+                    <td><p>Everything. fieldd is resident; PTYs, agents and monitors are untouched.</p></td>
+                    <td><p>Nothing changes. Reopening is a re-snapshot.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>fieldd</strong></td>
+                    <td><p>PTYs, agents, and rosetta's ledger. The daemon it supervises restarts with it.</p></td>
+                    <td><p>Managed rows re-attach at the next inventory. Pending managed approvals are dropped, not faked. History pauses for seconds.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>rosettad</strong></td>
+                    <td><p>Live state, PTYs, everything managed — the dividend of keeping the live runtime independent of the index.</p></td>
+                    <td><p>History and transcript faces show <code>UNAVAILABLE</code> with the phase. Badges and approvals are unaffected. The supervisor restarts with backoff, and stops with a restart affordance rather than spinning.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>field-native</strong></td>
+                    <td><p>rosetta, fieldd.</p></td>
+                    <td><p>Sessions die honestly; the runtime publishes host exit evidence and monitors freeze, then clear.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>an agent CLI</strong></td>
+                    <td><p>All daemons.</p></td>
+                    <td><p>An exit is published; rosetta sees the final records; the row offers resume by continuation.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>an adapter helper</strong></td>
+                    <td><p>The agent itself.</p></td>
+                    <td><p>That session's observation level degrades. Observation failure never synthesizes process death.</p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout warning">
+              <strong>The ceiling that is still a ceiling.</strong> A fieldd <em>upgrade</em> is not a restart the
+              re-attach can always win: a rebind must beat the vendor's hook timeout. The
+              <span class="badge tone-designed">Designed</span> answer is AR-D6's second shape — a generic,
+              protocol-agnostic, bearer-authenticated loopback relay in field-native, injected through the adapter's
+              existing factory seam, with a bounded buffer while no fieldd is attached. It puts what must outlive fieldd
+              where the two-plane law says it lives. It is not built, and nothing in the plane waits on it.
+            </div>
+          </section>
+
+          <section id="performance">
+            <h2>Performance — where the cost lands</h2>
+            <p class="section-note">
+              Budgets first, then the measurements the ledger actually records. Numbers below are quoted from the
+              document or ledger entry named in the last column; none is estimated here.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Path</th><th>Budget or measurement</th><th>Source</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>agent token → the deck</td>
+                    <td><p>Budget: under 50 ms. The chain is puppeteer's coalesce plus the fold's tick plus one loopback frame.</p></td>
+                    <td><p>design-03 §4.6</p></td>
+                  </tr>
+                  <tr>
+                    <td>monitor coalesce</td>
+                    <td><p>16 ms. fieldd constructs the runtime with <code>monitorCoalesceMs: PUBLISH_TICK_MS</code>, overriding upstream's 100 ms default so the two ticks agree.</p></td>
+                    <td><p><code>packages/fieldd/src/agent-runtime.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td>fold publication</td>
+                    <td><p>One frame per tick per subscriber, trailing edge (PF5).</p></td>
+                    <td><p><code>agent-runtime.ts</code>; the field projection's revision machinery</p></td>
+                  </tr>
+                  <tr>
+                    <td>watch event → transcript frame</td>
+                    <td><p>Budget: p99 under 20 ms — rosetta's own CI budget, adopted as a row here.</p></td>
+                    <td><p>rosetta <code>docs/ARCHITECTURE.md</code> §7</p></td>
+                  </tr>
+                  <tr>
+                    <td>warm search</td>
+                    <td><p>Budget: p99 under 50 ms.</p></td>
+                    <td><p>rosetta <code>docs/ARCHITECTURE.md</code> §7</p></td>
+                  </tr>
+                  <tr>
+                    <td>cold ingest to readiness</td>
+                    <td>
+                      <p>
+                        Measured 2026-09-12: roughly 13–16 s to full readiness on a 317 MB two-runtime corpus at about
+                        1.6 GB resident. The earlier nine-runtime organic corpus measured 52–78 s at 2.4–3.6 GB peak.
+                        This is why the daemon is its own process and runs only after consent, with progress on the
+                        status surface.
+                      </p>
+                    </td>
+                    <td><p>rosetta ARCHITECTURE (cold progress); thinking-ar-agent-plane §17.1 E14</p></td>
+                  </tr>
+                  <tr>
+                    <td>the deck, opening</td>
+                    <td>
+                      <p>
+                        Measured at the current pin: cold open 1894 ms, warm 78 ms; 60 frames at p50 16.6 ms and p95
+                        17.4 ms.
+                      </p>
+                    </td>
+                    <td><p><code>docs/LANDED.md</code> §AR-5-1 (<code>pnpm smoke:godview</code>)</p></td>
+                  </tr>
+                  <tr>
+                    <td>the mesh store to a phone</td>
+                    <td><p>Measured on a real tailnet pair: store convergence 28 ms, round trip p99 0.56 ms.</p></td>
+                    <td><p><code>docs/DECISIONS.md</code> GM-D4's probe gate</p></td>
+                  </tr>
+                  <tr>
+                    <td>descriptors per managed session</td>
+                    <td>
+                      <p>
+                        Roughly a hook listener, a telemetry route and a transcript reader inside fieldd, against a
+                        256-descriptor soft limit on macOS and the floor's measured 24 + 5N.
+                      </p>
+                    </td>
+                    <td><p>thinking-ar-agent-plane §11</p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout">
+              <strong>Two costs accepted on purpose.</strong> Duplicate tailing — puppeteer and rosetta each read the
+              same transcript file — is bounded and accepted, because the dividend is that the control room never blocks
+              on the index. Per-user duplication of native ingest is accepted for the same kind of reason: isolation
+              over de-duplication, and a one-user machine pays nothing. A de-duplication lever exists for later, but
+              never for lifecycle truth.
+            </div>
+          </section>
+
+          <section id="status">
+            <h2>Status</h2>
+            <p class="section-note">
+              Rung by rung. The AR track has been in flight since 2026-09-12; the ledger entry named on each row is the
+              authority, and every date and revision below is copied from it.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Rung</th><th>What it is</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>AR-0 · AR-0r</strong></td>
+                    <td><p>The three-repo workbench: both siblings pinned by revision, the walls, the rosettad supervisor with its kill matrix, and the review's fixes — including moving the daemon's announcement into a fieldd-private directory.</p></td>
+                    <td><span class="badge tone-built">Built</span><p><code>ba717474</code> · <code>ac065747</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-1</strong></td>
+                    <td><p>The index doors and the enrollment record; the layout segments; the two local-only scopes. Witnessed against the real daemon.</p></td>
+                    <td><span class="badge tone-built">Built</span><p><code>c7fe5fda</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-2</strong></td>
+                    <td><p>puppeteer's first import: one runtime per fieldd with registry, roots and transcripts injected; the management doors; the persona path; the machine scope under the root lock.</p></td>
+                    <td><span class="badge tone-built">Built</span><p><code>f9f04763</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-3</strong></td>
+                    <td><p>The host over the floor, the fold, the four doors, the continuation persisted per managed session, the renderer's mock module deleted. A real vendor CLI alive and idle in a PTY on the agent cell.</p></td>
+                    <td><span class="badge tone-built">Built</span><p><code>6b5e1612</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-4 · AR-4b</strong></td>
+                    <td><p>Stable ingress: the durable claim and pinned ingress in every record, a releasing stop, the re-attach at the next boot. Then six reviewers' fixes — signed records, the agent-cell rule, the claim as the epoch's authority, and the locality column enforced for all 131 local rows.</p></td>
+                    <td><span class="badge tone-built">Built</span><p><code>ba1a1eab</code> · <code>8c0725a5</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-5 · AR-5b · AR-5-1</strong></td>
+                    <td><p>The views port: the deck's views became a package behind two injected ports, with fieldd's usage and search doors under them. Then the review's fixes, then the pin move that brought isolated usage accounting and costs in dollars onto the wire.</p></td>
+                    <td><span class="badge tone-built">Built</span><p><code>fe6b3d0a</code> · <code>5bb79329</code> · <code>d4e60d8d</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-6</strong></td>
+                    <td><p>Approvals and prompts. Two transports: structured, where an adapter offers a decision path and fieldd resolves with real ids; and terminal, where the verdict is the user in the authentic pane or an epoch-gated automated keystroke that is rejected on human conflict. The send box is pane-only. The stop verb already landed inside MF-1.</p></td>
+                    <td><span class="badge tone-designed">Designed</span><p>AR-D8; build order §16; after Phase 0 and AG-1</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-7</strong></td>
+                    <td><p>The mandatory shim gateway. Typing an agent's name in one of our panes must produce a managed session: a gateway failure is a refusal or a retry with a message, never an unmanaged exec.</p></td>
+                    <td><span class="badge tone-designed">Designed</span><p>AR-D10 amended; PU-9 upstream</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-8</strong></td>
+                    <td><p>The History view as spine content, not a plugin — the ingested tier's home, behind the ticketed direct route.</p></td>
+                    <td><span class="badge tone-designed">Designed</span><p>AR-D9 amended; gated on RO-1</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>RO-1</strong></td>
+                    <td><p>Upstream: a bearer token plus a configurable origin allow-list on <code>rosettad</code>. Until it lands, fieldd is the daemon's sole client, the direct plane does not ship, and two products cannot share one daemon. The hardcoded origin already in the daemon's allow-list is the evidence the knob is small.</p></td>
+                    <td><span class="badge tone-owed">Owed</span><p>thinking-ar-agent-plane §4, §17.3</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>PU-12</strong></td>
+                    <td><p>Upstream: the provider version is not persisted on a session, so after a host restart a re-attached session's usage rail reads unverified.</p></td>
+                    <td><span class="badge tone-owed">Owed</span><p>ROADMAP, the AR row</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>D-i18</strong></td>
+                    <td><p>The phone's projection of the cost fields. The desktop already carries them — the mirror passes them through at the same schema version — but the field slice is a separate content-free projection, so the phone's burn ladder is on estimated dollars until fieldd projects the real ones.</p></td>
+                    <td><span class="badge tone-owed">Owed</span><p><code>docs/LANDED.md</code> §AR-5-1</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>the Agents settings section</strong></td>
+                    <td><p>The login pane's door is live; there is no interface in front of it. Also owed: <code>deletePersona</code> under a live run is untested, because the scripted provider has no profile service.</p></td>
+                    <td><span class="badge tone-owed">Owed</span><p>ROADMAP, the AR row</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>W-D8 — the publication exit</strong></td>
+                    <td><p>Sibling mode ends as a version edit: each <code>link:</code> row becomes an exact version and the lock entry is deleted. The walls and the family rule stay. It executes when both siblings publish.</p></td>
+                    <td><span class="badge tone-designed">Designed</span><p>thinking-ar-sibling-workbench §3</p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="map">
+            <h2>The documentation map</h2>
+            <p class="section-note">
+              Every document that governs a part of the agent plane, in all three repositories, with what it governs
+              and whether it is current. The Markdown hub at <code>docs/AGENT_PLANE.md</code> carries the same index in
+              a form that survives a terminal; this is its rendered half. Links across repositories point at GitHub
+              because a relative path cannot resolve between checkouts.
+            </p>
+            <div class="callout foundation">
+              <strong>The update rule.</strong> A change to a seam updates the page that <em>owns</em> that seam first,
+              then this page's table. A falsified claim gets a dated correction at its source, never only downstream in
+              a ledger. Anything specified but not built stays in the design corpus with a status legend — it does not
+              get promoted to the present tense by arriving here.
+            </div>
+
+            <h3>The family — five pages written as one set</h3>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Page</th><th>Repository and path</th><th>Governs</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>The agent plane across three repositories</strong><p class="native-type">this page</p></td>
+                    <td><span class="badge tone-vibefield">vibe-field</span><p><code>docs/agent-plane/architecture.html</code></p></td>
+                    <td><p>The umbrella: ownership law, the system diagram, the seams, the walls, the data domains, the identity spine, lockstep, lifetimes, status, and this index.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Aggregation and integration in VibeField</strong></td>
+                    <td><span class="badge tone-vibefield">vibe-field</span><p><a href="system.html"><code>docs/agent-plane/system.html</code></a></p></td>
+                    <td><p>fieldd's agent services and their dependency graph, the floor's agent cell, the fold, the field projection to the phone, the deck's injected ports, the enrollment path, the machine and user layout, the module map, sequence diagrams.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>The doors — API design of the agent plane</strong></td>
+                    <td><span class="badge tone-vibefield">vibe-field</span><p><a href="api.html"><code>docs/agent-plane/api.html</code></a></p></td>
+                    <td><p>Door conventions and the catalogue: <code>agent.*</code>, <code>agents.*</code>, <code>index.*</code> and the agent-relevant terminal rows, the mesh store, and each door mapped to the upstream API it wraps.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Hosting puppeteer — the embedding seam</strong></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span><p><a href="https://github.com/vibefield/puppeteer/blob/main/docs/host-integration.html"><code>docs/host-integration.html</code></a></p></td>
+                    <td><p>The generic host contract for <em>any</em> host: <code>AgentHost</code>, the runtime construction ports, what a host may import, the monitor schema and its versioning promise, the views' injected ports, lifetimes, the environment contract.</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>rosettad — the daemon protocol and embedding seam</strong></td>
+                    <td><span class="badge tone-rosetta">rosetta</span><p><a href="https://github.com/vibefield/rosetta/blob/main/docs/daemon-api.html"><code>docs/daemon-api.html</code></a></p></td>
+                    <td><p>Process model and supervision, enrollment and consent, the readiness vocabulary, the HTTP and WebSocket surface, the TypeScript client contract, authentication today and RO-1, tickets, versioning.</p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>puppeteer — the agent runtime</h3>
+            <p class="section-note">
+              Its own map is <code>docs/README.md</code>, which sorts documents by whether they are authoritative. The
+              descriptions below are that file's.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Document</th><th>Governs</th><th>Standing</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><code>docs/architecture.html</code></td>
+                    <td><p>The top-level visual guide to foundations, layers, repository ownership, conventions and public contracts. Its "Package map and allowed edges" is the upstream twin of this page's walls.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/rfcs/004-layered-agent-runtime.md</code></td>
+                    <td><p>The repository-wide layer and dependency model, including the adapter boundary: provider ids are open and opaque, and behavior must never branch on them.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/rfcs/001…003</code></td>
+                    <td><p>001 the evidence accumulator, three-state monitor, lifecycle, retention and privacy contract. 002 category event schemas and adapter service ownership. 003 live semantic observation assigned to adapters — the reason the runtime does not depend on any semantic database.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/rfcs/006</code> · <code>007</code> · <code>008</code></td>
+                    <td><p>006 agent distribution and account profiles, with the observation-root addendum this plane asked for. 007 find an agent by what was said, through an external history daemon. 008 live usage cost — the source of the dollar figures now on the wire.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/rfcs/005-godview-webgpu-swarm.md</code></td>
+                    <td><p>The swarm on WebGPU — the visual model VibeField's deck and the phone's field both render.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/agent-api.html</code></td>
+                    <td><p>The Agent API and event-flow reference.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/agent-monitor.html</code></td>
+                    <td><p>The monitor system diagram and the React and deck interface reference — the schema the mirror mirrors.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/agent-management-api.html</code></td>
+                    <td><p>Provider management, account profiles and quota usage, including native service contracts.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/agent-aggregation-api.html</code></td>
+                    <td><p>History and search from the runtime's side: native-session joins, external-daemon ownership and protocol compatibility.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/guides/</code></td>
+                    <td><p>Three developer guides: the end-to-end provider adaptation workflow, evidence ownership and promotion, and the normalization workbench.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/archive/</code> · <code>draft/</code></td>
+                    <td><p>Archive preserves rationale for archaeology and is not an implementation contract. <code>draft/</code> holds unfinished vendor adaptation plans and audits.</p></td>
+                    <td><span class="badge tone-support">historical / in flight</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>rosetta — agent history</h3>
+            <p class="section-note">
+              rosetta has no index file in <code>docs/</code>; <code>ARCHITECTURE.md</code> is the entry point and the
+              rest hang off it. Several files are measurement notes rather than contracts, and are marked so.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Document</th><th>Governs</th><th>Standing</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><code>docs/ARCHITECTURE.md</code></td>
+                    <td><p>The whole engine: the three layers and the rule each obeys, the ground-truth pipeline, the normalizer, the service provider (one daemon, loopback HTTP and WebSocket), storage, the performance playbook, the workspace layout, and the open decisions.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/canonical-model.html</code></td>
+                    <td><p>The canonical entities — including the session row that carries the native session id this whole plane joins on, and carries no PID and no liveness.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/ingest-engine.html</code></td>
+                    <td><p>Crate responsibilities and the required readiness vocabulary — the phases fieldd projects into honest states.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/ingest-pipeline.html</code> · <code>ingest-timeline.html</code></td>
+                    <td><p>How evidence becomes rows, and how a timeline is assembled and paged.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/message-schema-matrix.html</code></td>
+                    <td><p>What every adapter's message shapes normalize to — the matrix a new vendor is measured against.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/ADAPTER_AUDIT.md</code> · <code>INGEST_ISSUES.md</code></td>
+                    <td><p>Per-adapter coverage and the open ingestion defects.</p></td>
+                    <td><span class="badge tone-support">working notes</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/COLD_INGEST_IO_FLOOR.md</code> · <code>INGEST_PERFORMANCE_REVIEW_2026-09-06.md</code> · <code>codex-session-weight.html</code> · <code>message-payload-weight.html</code></td>
+                    <td><p>Measurement notes behind the cost numbers this page quotes. Dated evidence, not contracts.</p></td>
+                    <td><span class="badge tone-support">measurement</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/FILE_VIEWER_MINIMAP.md</code></td>
+                    <td><p>A viewer feature note from rosetta's own application.</p></td>
+                    <td><span class="badge tone-support">working notes</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>docs/groundtruth/</code></td>
+                    <td><p>Layer 1's finished product: one canonical evidence file plus a generated report per captured agent. Dev-time evidence; it runs no production code.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>vibe-field — this repository</h3>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Document</th><th>Governs</th><th>Standing</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><a href="../../CLAUDE.md"><code>CLAUDE.md</code></a></td>
+                    <td><p>The laws in condensed form, the workspace taxonomy, the sibling mode and the commands. Main-tracked.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><a href="../ROADMAP.md"><code>docs/ROADMAP.md</code></a></td>
+                    <td><p>Now and next, rewritten in place at each milestone. The AR row is where this plane's next rung is named.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><a href="../LANDED.md"><code>docs/LANDED.md</code></a></td>
+                    <td><p>The append-only ledger, one entry per landed slice. Every <code>## AR-</code> entry is this plane's build history with its revision and its witness.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><a href="../DECISIONS.md"><code>docs/DECISIONS.md</code></a></td>
+                    <td><p>The decision index. Status flips here; definitions stay in their owning document. The AR-D1…D14 and AR-D15…D22 rows carry this plane's rulings and their amendments.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>draft/thinking-ar-agent-plane.md</code></td>
+                    <td><p>The triad design and the source of the ownership law, the planes table, the identity spine, the durability ceilings and the cross-repo asks. Section 17 is the re-verification delta. Ratified 2026-09-12.</p></td>
+                    <td><span class="badge tone-contract">dev-local branch</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>draft/thinking-ar-data-topology.md</code></td>
+                    <td><p>The data topology: consent by construction, the machine scope, personas as profiles, and the rules that decide who writes what. Ratified 2026-09-12.</p></td>
+                    <td><span class="badge tone-contract">dev-local branch</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>draft/thinking-ar-sibling-workbench.md</code></td>
+                    <td><p>The three-repo workbench: the link mechanism, the pin, the walls, the build and the exit.</p></td>
+                    <td><span class="badge tone-contract">dev-local branch</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>draft/thinking-ar-views-port.md</code> · <code>thinking-ar-approvals-prompts.md</code></td>
+                    <td><p>The views port as built, and the approvals design AR-6 will run.</p></td>
+                    <td><span class="badge tone-contract">dev-local branch</span></td>
+                  </tr>
+                  <tr>
+                    <td><code>draft/design-00…design-04</code></td>
+                    <td><p>The governing specification, in authority order: architecture and the laws, contracts, daemons, the Electron application, aggregation. The agent plane defers to these for mechanics.</p></td>
+                    <td><span class="badge tone-contract">dev-local branch</span></td>
+                  </tr>
+                  <tr>
+                    <td><a href="../../DESIGN.md"><code>DESIGN.md</code></a> · <a href="../UI_SYSTEM.md"><code>docs/UI_SYSTEM.md</code></a></td>
+                    <td><p>Art direction, and where that direction lives in code. Any view in this plane defers to them for look and feel.</p></td>
+                    <td><span class="badge tone-runtime">current</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="sources">
+            <h2>Source map</h2>
+            <p class="section-note">
+              Where each section's claims were read, at the revisions named in the first callout.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Section</th><th>Files</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td>Ownership</td>
+                    <td><p><code>draft/thinking-ar-agent-plane.md</code> §1 · <code>packages/contracts/src/agent-index.ts</code> · rosetta <code>docs/ARCHITECTURE.md</code> §2 · puppeteer <code>packages/core/src/host.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td>System diagram</td>
+                    <td><p><code>packages/fieldd/src/{agent-runtime,agent-host,agent-index,agent-field-publisher,rosettad-supervisor}.ts</code> · <code>packages/field-native/src/services/terminal.rs</code> · <code>draft/thinking-ar-agent-plane.md</code> §3, §4</p></td>
+                  </tr>
+                  <tr>
+                    <td>Seams</td>
+                    <td><p><code>packages/fieldd/src/agent-host.ts</code> · <code>agent-runtime.ts</code> · <code>agent-sessions.ts</code> · <code>packages/contracts/src/agent-session.ts</code> · <code>packages/field-app/src/godview/monitor/remote-door.ts</code> · <code>packages/fieldd/test/agent-monitor-pin.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td>Walls</td>
+                    <td><p><code>scripts/check-import-boundaries.mjs</code> (rules R20–R22 and the two door lists) · <code>scripts/preflight.mjs</code> · <code>package.json</code> scripts · <code>siblings.lock.json</code> · <code>pnpm-workspace.yaml</code></p></td>
+                  </tr>
+                  <tr>
+                    <td>Data domains</td>
+                    <td><p><code>packages/contracts/src/registries.ts</code> (the layout segments and <code>STORES.AGENT_FIELD</code>) · <code>draft/thinking-ar-data-topology.md</code> §2, §3</p></td>
+                  </tr>
+                  <tr>
+                    <td>Identity spine</td>
+                    <td><p><code>draft/thinking-ar-agent-plane.md</code> §5 and §17.2 · <code>packages/contracts/src/agent-index.ts</code> · <code>packages/contracts/src/agent-session.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td>Laws</td>
+                    <td><p><code>CLAUDE.md</code> §Laws · <code>draft/design-00-architecture.md</code> · <code>packages/fieldd/src/agent-host.ts</code> (the environment strip) · <code>docs/LANDED.md</code> §AR-0r</p></td>
+                  </tr>
+                  <tr>
+                    <td>Lifetimes</td>
+                    <td><p><code>draft/thinking-ar-agent-plane.md</code> §9, §10 · <code>packages/fieldd/src/rosettad-supervisor.ts</code> · <code>docs/LANDED.md</code> §AR-4, §AR-4b</p></td>
+                  </tr>
+                  <tr>
+                    <td>Performance</td>
+                    <td><p><code>packages/fieldd/src/agent-runtime.ts</code> (<code>PUBLISH_TICK_MS</code>) · <code>draft/thinking-ar-agent-plane.md</code> §11, §17.1 · <code>docs/LANDED.md</code> §AR-5-1 · <code>docs/DECISIONS.md</code> GM-D4</p></td>
+                  </tr>
+                  <tr>
+                    <td>Status</td>
+                    <td><p><code>docs/LANDED.md</code> every <code>## AR-</code> entry · <code>docs/ROADMAP.md</code> the AR row · <code>docs/DECISIONS.md</code> the AR-D rows</p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>Related pages</h3>
+            <div class="source-grid">
+              <a class="source-link" href="system.html">
+                <strong>vibe-field · docs/agent-plane/system.html</strong>
+                <span>Aggregation and integration: fieldd's agent services, the fold, the field projection, the module map, sequence diagrams.</span>
+              </a>
+              <a class="source-link" href="api.html">
+                <strong>vibe-field · docs/agent-plane/api.html</strong>
+                <span>The doors: conventions and the catalogue of every agent-plane method, each mapped to the upstream API it wraps.</span>
+              </a>
+              <a class="source-link" href="https://github.com/vibefield/puppeteer/blob/main/docs/host-integration.html">
+                <strong>puppeteer · docs/host-integration.html</strong>
+                <span>The embedding seam, written for any host: AgentHost, the construction ports, the monitor schema, the views' ports, lifetimes.</span>
+              </a>
+              <a class="source-link" href="https://github.com/vibefield/rosetta/blob/main/docs/daemon-api.html">
+                <strong>rosetta · docs/daemon-api.html</strong>
+                <span>The daemon protocol and embedding seam: process model, enrollment, readiness, the HTTP and WebSocket surface, the client, authentication.</span>
+              </a>
+              <a class="source-link" href="../AGENT_PLANE.md">
+                <strong>vibe-field · docs/AGENT_PLANE.md</strong>
+                <span>The hub: the same index in Markdown, plus the rule for keeping these pages true.</span>
+              </a>
+            </div>
+          </section>
+        </main>
+      </div>
+      <footer>
+        The umbrella for the agent plane. Ownership, seams and walls are contracts; everything marked Designed or Owed
+        is not in the code. Read at vibe-field <code>b7ebb444</code>, puppeteer <code>2f5ce002</code>, rosetta
+        <code>e8d907ab</code>. Reference date: 2026-09-22.
+      </footer>
+    </div>
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const themeButton = document.getElementById('theme-toggle');
+        let storedTheme;
+        try {
+          storedTheme = localStorage.getItem('vibefield-agent-plane-theme');
+        } catch {
+          storedTheme = undefined;
+        }
+        if (storedTheme === 'light' || storedTheme === 'dark') root.dataset.theme = storedTheme;
+
+        themeButton.addEventListener('click', () => {
+          const current = root.dataset.theme;
+          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const next = current === 'dark' || (!current && systemDark) ? 'light' : 'dark';
+          root.dataset.theme = next;
+          try {
+            localStorage.setItem('vibefield-agent-plane-theme', next);
+          } catch {
+            // File URLs may not expose persistent storage; the in-page theme still changes.
+          }
+        });
+
+        document.querySelectorAll('pre').forEach((pre) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'copy-button';
+          button.textContent = 'Copy';
+          button.addEventListener('click', async () => {
+            const code = pre.querySelector('code')?.textContent ?? pre.textContent;
+            try {
+              await navigator.clipboard.writeText(code);
+              button.textContent = 'Copied';
+              window.setTimeout(() => (button.textContent = 'Copy'), 1200);
+            } catch {
+              button.textContent = 'Select text';
+            }
+          });
+          pre.appendChild(button);
+        });
+      })();
+    </script>
+  </body>
+</html>
