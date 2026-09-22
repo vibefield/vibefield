@@ -136,8 +136,16 @@ const FIELDD_DOOR = {
 // literal someone adds to that file.
 const R23B_ALLOW = [
   {
-    file: "apps/ios/VibeFieldKit/Sources/FieldAgents/AgentModel.swift",
-    why: "the phone's own provider roster and label switch — AC-5 replaces it with the agent.catalog door (AC-D9)",
+    file: "apps/ios/VibeFieldKit/Sources/FieldInput/ReplyChips.swift",
+    why: "an explicit one-literal table: the reply chips' transport keyed by provider (K-D4) — a LIVE AR-L1 exception AC-5 made explicit and tested; retire it when the field row's blocker carries its transport (owed)",
+  },
+  {
+    file: "apps/ios/VibeFieldKit/Sources/FieldAgents/MockAgentField.swift",
+    why: "the DEBUG fleet's fixture ids: seeded demo agents in a fixed order, never compared to a live row",
+  },
+  {
+    file: "apps/ios/VibeFieldKit/Sources/FieldSwarm/Lab/SwarmLabFixtures.swift",
+    why: "the swarm design lab's fixture ids (-vf-swarm-lab, D-i15): fixture data behind a debug flag",
   },
   {
     file: "apps/ios/VibeFieldKit/Sources/FieldSwarm/MarksAtlas.swift",
