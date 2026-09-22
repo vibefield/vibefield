@@ -369,6 +369,11 @@ export interface IndexServiceOptions {
 const REFUSED_KIND_RE =
   /runtime #\d+ \(kind "(?<kind>[^"]+)", data_root "(?<root>(?:[^"\\]|\\.)*)"\): unknown agent kind/g;
 
+/** AC-3 — the projections' `agent` column: present only when a catalog row maps the kind. */
+function agentColumn(agent: string | undefined): { agent?: string } {
+  return agent === undefined ? {} : { agent };
+}
+
 /** The `index.*` doors' service: reads fold the daemon's answers with the
  * record; mutations rewrite the record, publish it, and restart the daemon
  * when something changed. Auditing is the caller's (the daemon wraps the
@@ -428,8 +433,7 @@ export class IndexService {
     // transitions to watch, nothing to subtract)
     if (opts.supervisor !== null && typeof opts.supervisor.on === "function") {
       this.onTransition = (state) => {
-        if (state.phase === "restarting" || state.phase === "failed")
-          this.subtractRefused(state.detail, state.phase);
+        if (state.phase === "restarting" || state.phase === "failed") this.subtractRefused(state);
       };
       opts.supervisor.on("transition", this.onTransition);
     } else {
@@ -442,10 +446,15 @@ export class IndexService {
     if (this.onTransition !== null) this.opts.supervisor?.off("transition", this.onTransition);
   }
 
-  private subtractRefused(detail: string | null, phase: "restarting" | "failed"): void {
-    if (detail === null) return;
+  private subtractRefused(state: RosettadState): void {
+    // the refusal lines in full (the supervisor keeps them whole because the
+    // failure detail's per-line tail cuts a real root off before the reason),
+    // then the detail itself for a supervisor that carries none
+    const text = [...(state.enrollRefusals ?? []), state.detail ?? ""].join("\n");
+    if (!text.includes("unknown agent kind")) return;
+    const phase = state.phase;
     let changed = false;
-    for (const match of detail.matchAll(REFUSED_KIND_RE)) {
+    for (const match of text.matchAll(REFUSED_KIND_RE)) {
       const kind = match.groups?.kind;
       const quoted = match.groups?.root;
       if (kind === undefined || quoted === undefined) continue;
@@ -529,9 +538,7 @@ export class IndexService {
         kind: row.kind,
         // AC-3 — the catalog id for the kind; absent when no row maps it (shown
         // by its wire kind, never selectable)
-        ...(this.catalog.idForKind(row.kind) !== undefined
-          ? { agent: this.catalog.idForKind(row.kind) }
-          : {}),
+        ...agentColumn(this.catalog.idForKind(row.kind)),
         dataRoot: row.data_root,
         installed: row.installed,
         files: Number(row.files),
@@ -667,11 +674,10 @@ export class IndexService {
       ? known.watched
       : this.opts.store.snapshot().enabled_kinds.includes(row.kind);
     const label = enrolled ? (known.label ?? row.label ?? undefined) : undefined;
-    const agent = this.catalog.idForKind(row.kind);
     return {
       runtimeId: row.id,
       kind: row.kind,
-      ...(agent !== undefined ? { agent } : {}),
+      ...agentColumn(this.catalog.idForKind(row.kind)),
       provenance: enrolled ? "enrolled" : "discovered",
       // a discovered root is the layout's `~` form; an enrolled root's path
       // stays inside fieldd (the persona is named by profileId)

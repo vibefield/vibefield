@@ -72,7 +72,19 @@ export interface RosettadState extends RosettadHealth {
   origin: string | null;
   /** the announce file (`--announce`, fieldd's private dir); null until ready */
   announce: string | null;
+  /** AC-D8 — the daemon's enrollment refusals from the generation's stderr, IN
+   * FULL: `--enroll <file>: runtime #N (kind "k", data_root "r"): <reason>`.
+   * The failure `detail` keeps a 256-char tail per line, which cuts a real
+   * path off before the reason; the index service reads these instead. Never
+   * projected to a client (the path is inside). Empty while nothing refused. */
+  enrollRefusals: readonly string[];
 }
+
+const NO_REFUSALS: readonly string[] = Object.freeze([]);
+/** refusal lines kept per generation, each bounded — a daemon that prints one
+ * per runtime says the whole file before it exits */
+const ENROLL_REFUSAL_LINES = 32;
+const ENROLL_REFUSAL_CHARS = 4_096;
 
 export const ROSETTAD_UNCONFIGURED: RosettadHealth = Object.freeze({
   phase: "unconfigured",
@@ -175,6 +187,8 @@ interface Generation {
   greeting: string;
   stderrLine: string;
   stderrTail: string[];
+  /** AC-D8 — the `--enroll …` refusal lines, in full (see RosettadState) */
+  enrollRefusals: string[];
   startupTimer: NodeJS.Timeout | null;
   stableTimer: NodeJS.Timeout | null;
   killTimer: NodeJS.Timeout | null;
@@ -275,6 +289,7 @@ export class RosettadSupervisor extends EventEmitter {
     pid: null,
     announce: null,
     protocolVersion: null,
+    enrollRefusals: NO_REFUSALS,
   };
   private readonly t: RosettadTimings;
   private readonly logger: Logger;
@@ -547,6 +562,7 @@ export class RosettadSupervisor extends EventEmitter {
       phase: this.generations === 0 ? "starting" : "restarting",
       origin: null,
       announce: null,
+      enrollRefusals: NO_REFUSALS,
     });
     const args = [
       "serve",
@@ -587,6 +603,7 @@ export class RosettadSupervisor extends EventEmitter {
       greeting: "",
       stderrLine: "",
       stderrTail: [],
+      enrollRefusals: [],
       startupTimer: null,
       stableTimer: null,
       killTimer: null,
@@ -616,6 +633,9 @@ export class RosettadSupervisor extends EventEmitter {
         origin: null,
         announce: null,
         detail,
+        ...(generation.enrollRefusals.length > 0
+          ? { enrollRefusals: [...generation.enrollRefusals] }
+          : {}),
       });
       generation.settle(null);
       void this.terminate(generation);
@@ -649,6 +669,9 @@ export class RosettadSupervisor extends EventEmitter {
         pid: null,
         announce: null,
         detail: `${generation.failure ?? exitDetail}${tail}`,
+        ...(generation.enrollRefusals.length > 0
+          ? { enrollRefusals: [...generation.enrollRefusals] }
+          : {}),
       });
       this.scheduleRetry();
     };
@@ -717,6 +740,7 @@ export class RosettadSupervisor extends EventEmitter {
           detail: null,
           announce: typeof ready.announce === "string" ? ready.announce : null,
           protocolVersion: this.opts.expectedProtocolVersion,
+          enrollRefusals: NO_REFUSALS,
         });
         generation.settle(origin);
         generation.stableTimer = setTimeout(() => {
@@ -744,6 +768,13 @@ export class RosettadSupervisor extends EventEmitter {
         this.logger.info("fieldd.rosettad.stderr", "rosettad stderr", { line: line.slice(0, 512) });
         generation.stderrTail.push(line.slice(0, 256));
         if (generation.stderrTail.length > STDERR_TAIL_LINES) generation.stderrTail.shift();
+        // AC-D8 — a refusal names a root, and a real root is longer than the
+        // tail's line budget: keep the daemon's `--enroll` lines whole
+        if (line.startsWith("--enroll ")) {
+          generation.enrollRefusals.push(line.slice(0, ENROLL_REFUSAL_CHARS));
+          if (generation.enrollRefusals.length > ENROLL_REFUSAL_LINES)
+            generation.enrollRefusals.shift();
+        }
       }
       // an unterminated line keeps only its tail — never a growing buffer
       if (generation.stderrLine.length > 4_096) {
