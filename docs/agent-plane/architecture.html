@@ -591,6 +591,22 @@
         color: var(--amber);
       }
 
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin: 18px 0 0;
+        padding: 13px 16px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        font-size: 13px;
+      }
+
+      .legend span {
+        color: var(--muted);
+      }
+
       .ownership-row {
         display: flex;
         flex-wrap: wrap;
@@ -948,6 +964,11 @@
           <div class="stat"><strong>3</strong><span>walls (R20 · R21 · R22)</span></div>
           <div class="stat"><strong>3</strong><span>data domains: device · user · login</span></div>
         </div>
+        <div class="legend" aria-label="Status legend">
+          <span><span class="badge tone-built">BUILT</span> in the code at the stated revision, cited.</span>
+          <span><span class="badge tone-designed">DESIGNED</span> ruled and specified, not in code, cited.</span>
+          <span><span class="badge tone-owed">OWED</span> named on the roadmap, not designed in detail.</span>
+        </div>
       </header>
       <div class="layout">
         <nav class="toc" aria-label="Contents">
@@ -1283,7 +1304,7 @@
               a versioned protocol and a ticket door.
             </p>
             <div class="table-wrap">
-              <table>
+              <table class="reference-table">
                 <thead>
                   <tr>
                     <th>Seam</th>
@@ -2490,23 +2511,23 @@
             <div class="source-grid">
               <a class="source-link" href="system.html">
                 <strong>vibe-field · docs/agent-plane/system.html</strong>
-                <span>Aggregation and integration: fieldd's agent services, the fold, the field projection, the module map, sequence diagrams.</span>
+                <span>Aggregation and integration in VibeField: fieldd's agent services and their graph, the floor's agent cell, the mirror and the fold, the field projection to the phone, history and enrollment, the data domains and layout, the walls as enforced, and the sequences.</span>
               </a>
               <a class="source-link" href="api.html">
                 <strong>vibe-field · docs/agent-plane/api.html</strong>
-                <span>The doors: conventions and the catalogue of every agent-plane method, each mapped to the upstream API it wraps.</span>
+                <span>The doors: the conventions (contracts, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of agent.*, agents.*, index.* and the agent-relevant terminal.*, the mesh store, each door mapped to the upstream API it wraps, and versioning.</span>
               </a>
               <a class="source-link" href="https://github.com/vibefield/puppeteer/blob/main/docs/host-integration.html">
                 <strong>puppeteer · docs/host-integration.html</strong>
-                <span>The embedding seam, written for any host: AgentHost, the construction ports, the monitor schema, the views' ports, lifetimes.</span>
+                <span>Hosting puppeteer: the embedding seam for any host — the AgentHost contract and its ingress half, constructing the runtime, what a host may import, the monitor contract and its versioning, the views' ports, distribution and profiles from the host's seat, continuity across host restarts, and the two reference hosts.</span>
               </a>
               <a class="source-link" href="https://github.com/vibefield/rosetta/blob/main/docs/daemon-api.html">
                 <strong>rosetta · docs/daemon-api.html</strong>
-                <span>The daemon protocol and embedding seam: process model, enrollment, readiness, the HTTP and WebSocket surface, the client, authentication.</span>
+                <span>rosettad for a host: the process model and supervision, enrollment and consent, the readiness vocabulary, the wire, the TypeScript client, identity across the seam, access control today and RO-1, versioning, and the two reference hosts.</span>
               </a>
               <a class="source-link" href="../AGENT_PLANE.md">
                 <strong>vibe-field · docs/AGENT_PLANE.md</strong>
-                <span>The hub: the same index in Markdown, plus the rule for keeping these pages true.</span>
+                <span>The hub: every page of the agent plane in three repositories, with what each governs and how to update them.</span>
               </a>
             </div>
           </section>
