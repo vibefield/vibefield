@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ZodTypeAny } from "zod";
+import { AgentCatalogResult } from "../src/agent-catalog";
 import {
   AgentFieldDelta,
   AgentFieldSlice,
@@ -204,6 +205,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-spawn": AgentSpawnResult,
   "agent-list": AgentListResult,
   "agent-providers": AgentProvidersResult,
+  // AC-1 — the catalog as `agent.catalog` answers it (the whole table; the
+  // phone's kit mirrors this file byte for byte).
+  "agent-catalog": AgentCatalogResult,
   "agents-profiles-login": AgentsProfilesLoginResult,
   // AR-5d — the usage column's feed: one batch with three states beside the
   // honest empty one the door answers before the first refresh.

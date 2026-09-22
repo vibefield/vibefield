@@ -42,6 +42,15 @@ describe("agent.* registry rows (AR-3)", () => {
         locality: "local",
         subscription: false,
       },
+      // AC-1 — the catalog: read-only and content-free, so it reads on
+      // `agent.observe` like `agent.list` (thinking-ar-agent-catalog.md §5.1).
+      {
+        method: "agent.catalog",
+        scope: "agent.observe",
+        idempotent: true,
+        locality: "local",
+        subscription: false,
+      },
       {
         method: "agent.spawn",
         scope: "agent.spawn",

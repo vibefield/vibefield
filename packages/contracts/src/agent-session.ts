@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentCatalogStatus, AgentOffers } from "./agent-catalog";
 import { AgentPersona, AgentProfileId, AgentProviderId } from "./agent-index";
 import { TerminalCreateOpenResult } from "./terminal-pipeline";
 
@@ -280,10 +281,22 @@ export type AgentSessionRecord = z.infer<typeof AgentSessionRecord>;
 export const AgentProviderSummary = z
   .object({
     id: AgentProviderId,
+    /** the catalog's label (AC-D4: ours, not the adapter's descriptor) */
     label: z.string().min(1),
     available: z.boolean(),
     resumable: z.boolean(),
     personas: z.array(AgentPersona),
+    // AC-1 (thinking-ar-agent-catalog.md) — the row's decision and its claims,
+    // so a picker badges `preview`/`deprecated` and hides verbs the row does
+    // not offer; `history` is the index's state for this agent on this device
+    // (`unavailable` = the daemon is down or lacks the kind). Optional in AC-1
+    // (the door still answers from puppeteer's composed list); AC-3 answers
+    // from the catalog and makes all three required.
+    status: AgentCatalogStatus.optional(),
+    offers: AgentOffers.optional(),
+    history: z.enum(["indexed", "unindexed", "unavailable"]).optional(),
+    /** presentation key for the mark atlases (the row's `mark`, default `id`) */
+    mark: z.string().min(1).optional(),
   })
   .passthrough();
 export type AgentProviderSummary = z.infer<typeof AgentProviderSummary>;
