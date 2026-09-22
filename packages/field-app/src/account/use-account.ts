@@ -1,5 +1,5 @@
 import { useSubscription } from "@vibefield/fieldd-client/react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { type FieldUserFace, type FieldUserProfile, getHost } from "../host";
 import { shownFaces } from "./faces";
 import { type LinkFace, linkFace, type UserLinkStatus } from "./link";
@@ -48,6 +48,30 @@ export function accountChanged(): void {
   for (const listener of listeners) listener();
 }
 
+/** A count that moves each time `accountChanged()` is said — the re-read
+ * trigger for any surface that keeps its own reading of the roster (the
+ * Account page's user list), not only the snapshot below. */
+export function useAccountGeneration(): number {
+  const [generation, setGeneration] = useState(0);
+  useEffect(() => {
+    const bump = (): void => setGeneration((n) => n + 1);
+    listeners.add(bump);
+    return () => {
+      listeners.delete(bump);
+    };
+  }, []);
+  return generation;
+}
+
+/** "Couldn't switch to Work — a user switch is already in flight." The head
+ * of a refusal plus main's own words (the preload hands them back unwrapped).
+ * The Me menu and the head of Settings say a refused switch this way. */
+export function refusalSentence(head: string, cause: unknown): string {
+  const reason = cause instanceof Error ? cause.message : String(cause);
+  const trimmed = reason.trim().replace(/\.$/u, "");
+  return trimmed.length > 0 ? `${head} — ${trimmed}.` : `${head}.`;
+}
+
 function linkDetail(face: LinkFace): { detail: string; isLogin: boolean; canLink: boolean } {
   switch (face.kind) {
     case "linked":
@@ -70,23 +94,27 @@ function linkDetail(face: LinkFace): { detail: string; isLogin: boolean; canLink
 
 type Roster = { attachedUserId: string | null; users: FieldUserProfile[] };
 
+/** The last roster a snapshot read through this host — what a newly mounted
+ * one (Settings, opening) starts from while it re-reads, so the head never
+ * draws the no-account fallback and then swaps itself out. Keyed by the host
+ * object, which lives as long as the window: a switch reloads it. */
+let lastRead: { host: object; roster: Roster } | null = null;
+
 export function useAccountSnapshot(): AccountSnapshot {
   const host = getHost();
   const usersList = host.usersList;
   const usersUpdate = host.usersUpdate;
   const [roster, setRoster] = useState<
     { kind: "loading" } | { kind: "ready"; roster: Roster } | { kind: "none" } | { kind: "failed" }
-  >(usersList === undefined && usersUpdate === undefined ? { kind: "none" } : { kind: "loading" });
-  const [generation, setGeneration] = useState(0);
+  >(() =>
+    usersList === undefined && usersUpdate === undefined
+      ? { kind: "none" }
+      : lastRead !== null && lastRead.host === host
+        ? { kind: "ready", roster: lastRead.roster }
+        : { kind: "loading" },
+  );
+  const generation = useAccountGeneration();
   const link = useSubscription<UserLinkStatus>("user.link.subscribe");
-
-  const reread = useCallback(() => setGeneration((n) => n + 1), []);
-  useEffect(() => {
-    listeners.add(reread);
-    return () => {
-      listeners.delete(reread);
-    };
-  }, [reread]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +129,7 @@ export function useAccountSnapshot(): AccountSnapshot {
     if (read === null) return;
     void read.then(
       (next) => {
+        lastRead = { host, roster: next };
         if (!cancelled) setRoster({ kind: "ready", roster: next });
       },
       () => {
@@ -111,7 +140,7 @@ export function useAccountSnapshot(): AccountSnapshot {
       cancelled = true;
     };
     // `generation` is the re-read trigger; the doors themselves are stable.
-  }, [usersList, usersUpdate, generation]);
+  }, [host, usersList, usersUpdate, generation]);
 
   if (roster.kind !== "ready") {
     return {

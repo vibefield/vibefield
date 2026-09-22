@@ -3,6 +3,7 @@ import { type ReactElement, useEffect, useState } from "react";
 import { type FieldUserFace, type FieldUserProfile, type FieldUserRoster, getHost } from "../host";
 import { buttonCls, labelCls, SettingsSection } from "../panels/settings-ui";
 import { shownFaces } from "./faces";
+import { useAccountGeneration } from "./use-account";
 
 // The user switcher (UA-5; spec §6.3) — the Account page's roster, and the only
 // place in the product where one user hands this window to another.
@@ -45,6 +46,9 @@ export function UserSwitcher(): ReactElement {
   );
   const [pressed, setPressed] = useState<Pressed>({ kind: "none" });
   const [actionError, setActionError] = useState<string | null>(null);
+  // A face or name written on this page (or anywhere in this window) re-reads
+  // the list, so the current user's row changes with the Face row above it.
+  const generation = useAccountGeneration();
 
   useEffect(() => {
     if (usersList === undefined) return;
@@ -63,7 +67,8 @@ export function UserSwitcher(): ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [usersList]);
+    // `generation` is the re-read trigger (`accountChanged`).
+  }, [usersList, generation]);
 
   /** One shape for both reloading acts: disable, fire, and only ever hear back
    * about a REFUSAL — a resolution means the window is already on its way out.

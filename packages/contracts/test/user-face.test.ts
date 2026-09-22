@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dealFace,
   effectiveFaces,
+  emojiProblem,
   FACE_DECK,
   faceKey,
   faceProblem,
@@ -102,6 +103,25 @@ describe("faceProblem", () => {
     }
   });
 
+  it("judges a ZWJ sequence by its base: a refused face cannot be joined back in", () => {
+    const fireOnFire = "\u{1F525}\u200D\u{1F525}";
+    expect(faceProblem({ emoji: fireOnFire }, "me", roster)).toMatch(/already means something/);
+    // A refused glyph as a TAIL names something else: a black cat, a lime, a phoenix.
+    for (const emoji of [
+      "\u{1F408}\u200D⬛",
+      "\u{1F34B}\u200D\u{1F7E9}",
+      "\u{1F426}\u200D\u{1F525}",
+    ]) {
+      expect(faceProblem({ emoji }, "me", roster), emoji).toBeNull();
+    }
+  });
+
+  it("refuses the heart suit, the hollow circle, and the other media and sync marks", () => {
+    for (const emoji of ["♥️", "♥", "⭕", "⏯️", "\u{1F503}"]) {
+      expect(faceProblem({ emoji }, "me", roster), emoji).toMatch(/already means something/);
+    }
+  });
+
   it("counts a DEALT face as worn, so choosing never re-deals somebody else", () => {
     const withFaceless = [...roster, user("sandbox", 3, "Sandbox")];
     const dealt = effectiveFaces(withFaceless).get("sandbox")?.face.emoji ?? "";
@@ -111,7 +131,42 @@ describe("faceProblem", () => {
   });
 });
 
+describe("isSingleEmoji", () => {
+  it("takes a keycap, a skin tone on a base that takes one, and a family of four", () => {
+    for (const emoji of [
+      "1\uFE0F\u20E3",
+      "#\u20E3",
+      "✋\u{1F3FD}",
+      "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}",
+    ]) {
+      expect(isSingleEmoji(emoji), emoji).toBe(true);
+    }
+  });
+
+  it("refuses a tone on a face that takes none, a chain past four, and a reserved code point", () => {
+    expect(isSingleEmoji("\u{1F98A}\u{1F3FD}")).toBe(false); // a fox beside a swatch
+    expect(isSingleEmoji(Array(5).fill("\u{1F98A}").join("\u200D"))).toBe(false);
+    expect(isSingleEmoji("\u{1FAFF}")).toBe(false); // Extended_Pictographic, unassigned: tofu
+  });
+});
+
+describe("emojiProblem", () => {
+  it("is faceProblem's roster-free half, in the same words", () => {
+    expect(emojiProblem("J")).toBe("A face is a single emoji.");
+    expect(emojiProblem("\u{1F525}")).toBe(
+      "\u{1F525} already means something in VibeField, so it can't be a face.",
+    );
+    expect(emojiProblem(" \u{1F427} ")).toBeNull();
+  });
+});
+
 describe("normalizeFaceEmoji", () => {
+  it("drops a text-presentation selector and completes a bare keycap", () => {
+    expect(normalizeFaceEmoji("☁\uFE0E")).toBe("☁\uFE0F");
+    expect(normalizeFaceEmoji("1\u20E3")).toBe("1\uFE0F\u20E3");
+    expect(normalizeFaceEmoji("1\uFE0F\u20E3")).toBe("1\uFE0F\u20E3");
+  });
+
   it("adds the emoji selector to a lone text-default pictograph, and nothing else", () => {
     expect(normalizeFaceEmoji("☁")).toBe("☁\uFE0F");
     expect(normalizeFaceEmoji(" 🦊 ")).toBe("🦊");

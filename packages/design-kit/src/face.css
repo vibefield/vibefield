@@ -67,7 +67,7 @@
 .vf-face[data-frame="coin"] {
   border-radius: 50%;
   box-shadow: var(--vf-face-coin-shadow);
-  transition: transform 160ms ease;
+  transition: transform 180ms var(--vf-ease-lift);
 }
 
 .vf-face-rim,
@@ -144,10 +144,12 @@
   transform: scale(1.05);
 }
 
-/* M6 — the lift halves; nothing that travels is added. */
+/* M6 — the lift halves and its spring becomes ease-out; nothing that
+   travels is added. */
 @media (prefers-reduced-motion: reduce) {
   .vf-face,
   .vf-face-figure {
     transition-duration: 90ms;
+    transition-timing-function: ease-out;
   }
 }

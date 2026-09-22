@@ -2,7 +2,7 @@ import { FACE_DECK } from "@vibefield/contracts/user-face";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useState } from "react";
 import type { FieldUserFace } from "../host";
-import { faceKey, isSingleEmoji, normalizeFaceEmoji } from "./faces";
+import { emojiProblem, faceKey, normalizeFaceEmoji } from "./faces";
 import "./FacePicker.css";
 
 // The face picker (UA-D17; DESIGN.md §2.8), shared by the Account page and the
@@ -56,8 +56,11 @@ export function FacePicker({
       setTypedProblem(null);
       return;
     }
-    if (!isSingleEmoji(candidate)) {
-      setTypedProblem("A face is a single emoji.");
+    // Main's own sentences (not one emoji; one that already means something
+    // here), said in place — before pane 2 draws it at 112px as your face.
+    const problem = emojiProblem(candidate);
+    if (problem !== null) {
+      setTypedProblem(problem);
       return;
     }
     const wornBy = held.get(faceKey(candidate));

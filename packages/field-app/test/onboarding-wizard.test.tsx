@@ -2,7 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { dealFace } from "@vibefield/contracts/user-face";
+import { dealFace, effectiveFaces } from "@vibefield/contracts/user-face";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
-import { type FieldHost, type FieldUserProfile, setHost } from "../src/host";
+import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
 
 // UA-3w — the Setup Assistant (spec §6). The cases that matter are the ones
 // where the wizard must NOT behave like a form: it is entered from durable
@@ -101,15 +101,50 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function host(usersUpdate: NonNullable<FieldHost["usersUpdate"]> | null): void {
+function host(
+  usersUpdate: NonNullable<FieldHost["usersUpdate"]> | null,
+  extra: Partial<FieldHost> = {},
+): void {
   setHost({
     logger: noopLogger,
     getConnection: async () => ({ port: 1, token: "test" }),
     onPrepareClose: () => () => undefined,
     completeClose: () => undefined,
     ...(usersUpdate === null ? {} : { usersUpdate }),
+    ...extra,
   });
 }
+
+/** A roster door whose one read lands only when the test says so. */
+function lateRoster(): {
+  usersList: () => Promise<FieldUserRoster>;
+  land: (users: FieldUserProfile[]) => Promise<void>;
+} {
+  let resolve: (roster: FieldUserRoster) => void = () => undefined;
+  const read = new Promise<FieldUserRoster>((settle) => {
+    resolve = settle;
+  });
+  return {
+    usersList: () => read,
+    land: async (users) => {
+      await act(async () => {
+        resolve({ attachedUserId: FRESH.userId, users });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    },
+  };
+}
+
+/** Another user on the machine, already wearing `emoji`. */
+const wearing = (emoji: string): FieldUserProfile => ({
+  userId: "01K0000000000000000000000B",
+  fuid: 2,
+  name: "Work",
+  face: { emoji },
+  resident: true,
+  onboarded: true,
+});
 
 /** The product half. `link: undefined` makes `user.link.subscribe` REJECT,
  * which is what a daemon without the UA-3 method actually does. */
@@ -258,6 +293,9 @@ describe("Setup Assistant", () => {
 
     // 5 — Ready: one beat, then the durable write, and only then the release.
     expect(text()).toContain("Welcome to your field, James");
+    // ...and where Settings went, said once (DESIGN.md §8): a face does not
+    // say "settings" the way the gear did.
+    expect(text()).toContain("Your face in the bottom-left corner opens Settings — so does");
     expect(onComplete).not.toHaveBeenCalled();
     await tick(READY_BEAT_MS);
     expect(updates).toEqual([
@@ -265,6 +303,59 @@ describe("Setup Assistant", () => {
       { onboarded: true },
     ]);
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-deals the proposal against the roster when it lands, if nobody picked", async () => {
+    const roster = lateRoster();
+    host(
+      vi.fn(
+        async (params: Record<string, unknown>) => ({ ...FRESH, ...params }) as FieldUserProfile,
+      ),
+      { usersList: roster.usersList },
+    );
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await click("Get started");
+    // Somebody else already wears the face dealt against nobody.
+    const users = [FRESH, wearing(DEALT)];
+    await roster.land(users);
+    const redealt = effectiveFaces(users).get(FRESH.userId)?.face.emoji;
+    expect(redealt).not.toBe(DEALT);
+    expect(container?.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(
+      `james, ${redealt}`,
+    );
+  });
+
+  it("keeps a face picked before the roster lands — a late read never re-deals a choice", async () => {
+    const roster = lateRoster();
+    host(
+      vi.fn(
+        async (params: Record<string, unknown>) => ({ ...FRESH, ...params }) as FieldUserProfile,
+      ),
+      { usersList: roster.usersList },
+    );
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await click("Get started");
+    await click("Change face…");
+    const picked = DEALT === "🐧" ? "🦉" : "🐧";
+    await act(async () => {
+      container?.querySelector<HTMLInputElement>(`input[aria-label="${picked}"]`)?.click();
+    });
+    // The roster arrives after the pick, holding someone who wears the deal.
+    await roster.land([FRESH, wearing(DEALT)]);
+    expect(
+      container?.querySelector<HTMLInputElement>(`input[aria-label="${picked}"]`)?.checked,
+    ).toBe(true);
+    expect(container?.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(
+      `james, ${picked}`,
+    );
   });
 
   it("asks a migrated field two things, not five", async () => {

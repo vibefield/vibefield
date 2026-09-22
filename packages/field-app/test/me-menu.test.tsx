@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { effectiveFaces } from "@vibefield/contracts/user-face";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement, type ReactElement, useState } from "react";
@@ -159,11 +160,54 @@ describe("MeMenuView", () => {
 
   it("folds on Esc even when the pointer opened it and focus never left the face", async () => {
     const spies = await mountView();
-    await act(async () => face().click()); // a pointer click: detail 1 in a real browser
     face().focus();
+    // A real pointer click carries detail >= 1. happy-dom's click() sends 0 —
+    // the keyboard path, which moves focus into the menu — so dispatch the
+    // pointer's own.
+    await act(async () => {
+      face().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    });
+    expect(face().getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(face());
     await key(document.body, "Escape");
     expect(spies.onOpenChange).toHaveBeenLastCalledWith(false);
     expect(document.activeElement).toBe(face());
+  });
+
+  it("gives focus back to the face when something else folds it (⌘,, the tray)", async () => {
+    const props = {
+      me: ME,
+      others: OTHERS,
+      onOpenSettings: vi.fn(),
+      onOpenAccount: vi.fn(),
+      onLink: vi.fn(),
+      onOpenChange: vi.fn(),
+    };
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => root?.render(createElement(MeMenuView, { ...props, open: true })));
+    item("Settings…")?.focus();
+    expect(document.activeElement).toBe(item("Settings…"));
+    // Folded from outside, the rows go inert; Settings will record the face.
+    await act(async () => root?.render(createElement(MeMenuView, { ...props, open: false })));
+    expect(document.activeElement).toBe(face());
+  });
+
+  it("leaves focus to Tab when Tab folds it", async () => {
+    await mountView();
+    face().focus();
+    await key(face(), "ArrowUp");
+    const settings = item("Settings…");
+    expect(document.activeElement).toBe(settings);
+    await key(settings as HTMLElement, "Tab");
+    expect(face().getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).not.toBe(face());
+  });
+
+  it("names your row without a stray comma while the link is still loading", async () => {
+    await mountView({ me: { ...ME, detail: "" } }, true);
+    expect(item("James")?.getAttribute("aria-label")).toBe("James — account settings");
   });
 
   it("goes into the menu on an arrow from the face, opening it first", async () => {
@@ -319,7 +363,16 @@ describe("MeMenu (controller)", () => {
       request: vi.fn(),
     }) as unknown as FielddClient;
 
-  async function mountController(onOpenSettings = vi.fn()): Promise<typeof onOpenSettings> {
+  async function mountController(
+    onOpenSettings = vi.fn(),
+    {
+      open = false,
+      onOpenChange = () => undefined,
+    }: {
+      open?: boolean;
+      onOpenChange?: (open: boolean) => void;
+    } = {},
+  ): Promise<typeof onOpenSettings> {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -328,7 +381,7 @@ describe("MeMenu (controller)", () => {
         createElement(
           FielddProvider,
           { client: fieldd() },
-          createElement(MeMenu, { open: false, onOpenChange: () => undefined, onOpenSettings }),
+          createElement(MeMenu, { open, onOpenChange, onOpenSettings }),
         ),
       );
       await Promise.resolve();
@@ -337,29 +390,71 @@ describe("MeMenu (controller)", () => {
     return onOpenSettings;
   }
 
+  const USERS = [
+    { userId: "me", fuid: 1, name: "James", resident: true, onboarded: true },
+    {
+      userId: "work",
+      fuid: 2,
+      name: "Work",
+      face: { emoji: "🐙" },
+      resident: true,
+      onboarded: true,
+    },
+  ];
+
   it("draws the attached user's face from the roster, dealt when none is written", async () => {
-    baseHost({
-      usersList: vi.fn(async () => ({
-        attachedUserId: "me",
-        users: [
-          { userId: "me", fuid: 1, name: "James", resident: true, onboarded: true },
-          {
-            userId: "work",
-            fuid: 2,
-            name: "Work",
-            face: { emoji: "🐙" },
-            resident: true,
-            onboarded: true,
-          },
-        ],
-      })),
-    });
+    baseHost({ usersList: vi.fn(async () => ({ attachedUserId: "me", users: USERS })) });
     await mountController();
     const button = container?.querySelector<HTMLButtonElement>(".vf-me-face");
     expect(button?.getAttribute("aria-label")).toBe("James: account menu");
-    // Dealt, and never the face another user already wears (I-2).
-    expect(button?.textContent?.length).toBeGreaterThan(0);
-    expect(button?.textContent).not.toBe("🐙");
+    // The machine's own deal against everyone — the face main would write —
+    // and so never the face another user already wears (I-2).
+    const dealt = effectiveFaces(USERS).get("me")?.face.emoji;
+    expect(dealt).not.toBe("🐙");
+    expect(button?.textContent).toBe(dealt);
+  });
+
+  it("says a refused switch where the act was, and reopens to say it", async () => {
+    const onOpenChange = vi.fn();
+    baseHost({
+      usersList: vi.fn(async () => ({ attachedUserId: "me", users: USERS })),
+      usersSwitch: vi.fn(async () => {
+        throw new Error("a user switch is already in flight");
+      }),
+    });
+    await mountController(vi.fn(), { open: true, onOpenChange });
+    await act(async () => {
+      item("Work")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const words = "Couldn't switch to Work — a user switch is already in flight.";
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    expect(container?.querySelector(".vf-me-notice")?.textContent).toBe(words);
+    expect(container?.querySelector('[role="status"]')?.textContent).toBe(words);
+  });
+
+  it("starts from the last roster read on this host, so a new mount never blinks", async () => {
+    let reads = 0;
+    baseHost({
+      usersList: vi.fn(() => {
+        reads += 1;
+        // The second mount's own read never lands: only the last read can
+        // be what it draws.
+        return reads === 1
+          ? Promise.resolve({ attachedUserId: "me", users: USERS })
+          : new Promise<never>(() => undefined);
+      }),
+    });
+    await mountController();
+    expect(container?.querySelector(".vf-me-face")).not.toBeNull();
+    await act(async () => root?.unmount());
+    container?.remove();
+    await mountController();
+    expect(reads).toBe(2);
+    expect(container?.querySelector(".vf-me-face")?.getAttribute("aria-label")).toBe(
+      "James: account menu",
+    );
   });
 
   it("keeps a way into Settings on a host with no account door at all", async () => {

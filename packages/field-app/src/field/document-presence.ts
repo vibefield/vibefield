@@ -11,7 +11,7 @@ import { getRendererLogger } from "../logging";
  * string at every receiver, whatever the receiver's theme, and draws white
  * label text on it — so the token is read at attach time, never sent as a
  * `var()`. A mid grey is what holds on both grounds and under white text. */
-export const PRESENCE_INK_FALLBACK = "#636366";
+export const PRESENCE_INK_FALLBACK = "#68686b";
 
 export function presenceColor(): string {
   if (typeof document !== "undefined") {
@@ -25,7 +25,10 @@ export function presenceColor(): string {
 
 /** "🦊 James" — the label a peer's cursor carries: the face first, so whose
  * cursor it is reads at a glance, and the name after it (I-4). A user with no
- * written face yet wears the machine's deal, as everywhere else. */
+ * written face is dealt against themselves alone — this has the profile, not
+ * the roster — which differs from the corner's deal only in the moment before
+ * main's silent deal lands; boot and switch both start it before this window
+ * reads its profile, so in practice the face is written by then. */
 export function presenceName(profile: FieldUserProfile): string {
   const name = profile.name.trim();
   if (name.length === 0) return "";

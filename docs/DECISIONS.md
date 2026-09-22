@@ -29,7 +29,7 @@ PP1–PP6 + EL1–EL10 — design-00 §2 (**EL3 AMENDED 2026-08-05**, UA-D4: one
 *user-on-device*) · A1–A8 axioms + PF1–PF8 performance laws — design-03 · C-1…C-7 widget
 constitution — 03·A (CI-gated) · NF-L1…L3 custody laws — native-floor §1 · M1–M5 contract
 milestones — design-01 §11 (M1+M2 implemented, green cross-language) · **W1–W6 onboarding
-laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: `face`, not `color`).
+laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: `face` — a legacy `color` still counts as answered).
 
 ## Spec decision namespaces
 

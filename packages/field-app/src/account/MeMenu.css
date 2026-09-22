@@ -110,6 +110,7 @@
 
 .vf-me-row,
 .vf-me-eyebrow,
+.vf-me-notice,
 .vf-me-separator {
   opacity: 0;
   transform: translateY(4px);
@@ -121,6 +122,7 @@
 
 .vf-me[data-open] .vf-me-row,
 .vf-me[data-open] .vf-me-eyebrow,
+.vf-me[data-open] .vf-me-notice,
 .vf-me[data-open] .vf-me-separator {
   opacity: 1;
   transform: none;
@@ -225,6 +227,15 @@
   height: 6px;
   border-radius: 50%;
   background: var(--vf-orange);
+}
+
+/* A refusal from main (a switch, a new user), said where the act was — at the
+   top of the menu, in words, until the menu folds (I-5: state stays in words). */
+.vf-me-notice {
+  padding: 8px 14px 6px 12px;
+  color: var(--vf-orange);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .vf-me-eyebrow {
@@ -368,10 +379,12 @@
 
   .vf-me-row,
   .vf-me-eyebrow,
+  .vf-me-notice,
   .vf-me-separator,
   .vf-me-you,
   .vf-me[data-open] .vf-me-row,
   .vf-me[data-open] .vf-me-eyebrow,
+  .vf-me[data-open] .vf-me-notice,
   .vf-me[data-open] .vf-me-separator,
   .vf-me[data-open] .vf-me-you {
     opacity: 1;

@@ -37,8 +37,10 @@ export function applyProfileUpdate(
   if (record === undefined) throw new Error("the attached user vanished from users.json");
   let face: UserFace | undefined;
   if (params.face !== undefined) {
-    // Stored the way it renders: a lone text-default pictograph gains U+FE0F.
-    face = { ...params.face, emoji: normalizeFaceEmoji(params.face.emoji) };
+    // Stored the way it renders (`normalizeFaceEmoji`), and merged over the
+    // stored face, so a key a newer build keeps there survives this build's
+    // write (UA-D10: a version-skewed writer drops no newer field).
+    face = { ...record.face, ...params.face, emoji: normalizeFaceEmoji(params.face.emoji) };
     const problem = faceProblem(face, userId, file.users);
     if (problem !== null) throw new Error(problem);
   }
@@ -56,25 +58,14 @@ export function applyProfileUpdate(
   return record;
 }
 
-/** UA-D17, W6 as amended: the silent deal. A user who finished setup before
- * faces existed (onboarded, no face) is given the face the machine already
- * SHOWS for them, so a pre-v0.3 user is never sent back into the wizard for one.
- * It never deals for a user still in setup: pane 2 owns that write, and W6
- * reads an absent face as "pane 2 not yet passed". Returns the face written, or
- * null when none was owed.
- *
- * Writing a user's effective face moves nobody else's deal. The faces dealt
- * before it in `effectiveFaces`' pass never wanted it, and the ones after it
- * already held it. So the write redraws nothing, which is what makes it safe to
- * leave unawaited. It leaves a legacy `color` where it is: this is main's repair,
- * not the user's profile write. */
 /** EVERY onboarded face-less user's owed face, dealt in one pass against the
  * faces the machine shows BEFORE any is written — so nobody's face moves when
  * the deal lands, and no set-up user is left face-less for a later release to
  * drift (a user who frees a face moves the deal of every face-less user whose
  * deck walk passes it). After this, only users still in setup are dealt on the
  * fly, and theirs are proposals until pane 2 writes one. Returns what it wrote,
- * by user id. */
+ * by user id. Like the single-user rule below, it leaves a legacy `color`
+ * where it is: this is main's repair, not the user's own face write. */
 export function applyOwedFaces(file: UsersFile): Map<string, UserFace> {
   const shown = effectiveFaces(file.users);
   const written = new Map<string, UserFace>();
@@ -90,6 +81,20 @@ export function applyOwedFaces(file: UsersFile): Map<string, UserFace> {
   return written;
 }
 
+/** UA-D17, W6 as amended: the silent deal for ONE user — the rule
+ * `applyOwedFaces` applies to every owed user at an attach, kept whole for the
+ * tests that pin its property. A user who finished setup before
+ * faces existed (onboarded, no face) is given the face the machine already
+ * SHOWS for them, so a pre-v0.3 user is never sent back into the wizard for one.
+ * It never deals for a user still in setup: pane 2 owns that write, and W6
+ * reads an absent face as "pane 2 not yet passed". Returns the face written, or
+ * null when none was owed.
+ *
+ * Writing a user's effective face moves nobody else's deal. The faces dealt
+ * before it in `effectiveFaces`' pass never wanted it, and the ones after it
+ * already held it. So the write redraws nothing, which is what makes it safe to
+ * leave unawaited. It leaves a legacy `color` where it is: this is main's repair,
+ * not the user's profile write. */
 export function applyOwedFace(file: UsersFile, userId: string): UserFace | null {
   const record = file.users.find((user) => user.userId === userId);
   if (record === undefined || !record.onboarded || record.face !== undefined) return null;

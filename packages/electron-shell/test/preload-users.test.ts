@@ -169,6 +169,30 @@ describe("preload profile door: the face (UA-7)", () => {
     );
   });
 
+  it("unwraps every users verb, whatever Error class main threw", async () => {
+    // The §3.3 lock refuses with a UsersError, whose name rides the wrapper.
+    const locked =
+      "another VibeField process is using this data folder (pid 42, mutate). Quit it and try again.";
+    const wrapped = (channel: string, inner: string): Error =>
+      new Error(`Error invoking remote method '${channel}': ${inner}`);
+
+    stub.invoke.mockRejectedValueOnce(wrapped(IPC_CHANNELS.usersCreate, `UsersError: ${locked}`));
+    await expect(usersCreate()({})).rejects.toMatchObject({ message: locked });
+
+    stub.invoke.mockRejectedValueOnce(
+      wrapped(IPC_CHANNELS.usersSwitch, "Error: a user switch is already in flight"),
+    );
+    await expect(usersSwitch()({ userId: RECORD.userId })).rejects.toMatchObject({
+      message: "a user switch is already in flight",
+    });
+
+    stub.invoke.mockRejectedValueOnce(wrapped(IPC_CHANNELS.usersList, `UsersError: ${locked}`));
+    await expect(usersList()()).rejects.toMatchObject({ message: locked });
+
+    stub.invoke.mockRejectedValueOnce(wrapped(IPC_CHANNELS.usersUpdate, `UsersError: ${locked}`));
+    await expect(usersUpdate()({ name: "Work" })).rejects.toMatchObject({ message: locked });
+  });
+
   it("leaves a rejection it does not recognise exactly as it came", async () => {
     stub.invoke.mockRejectedValueOnce(new Error("the renderer went away"));
     await expect(usersUpdate()({ name: "Work" })).rejects.toThrow(/^the renderer went away$/u);

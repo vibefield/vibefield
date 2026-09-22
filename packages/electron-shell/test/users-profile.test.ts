@@ -133,6 +133,15 @@ describe("applyProfileUpdate: the users:update applier", () => {
     expect(record.face).toEqual({ emoji: "🦊", frame: "coin" });
   });
 
+  it("keeps a key a newer build stored on the face — a skewed writer drops nothing (UA-D10)", () => {
+    const file = roster(
+      user(1, "James", { face: { emoji: "🦊", futureFaceField: "survives" } }),
+      user(2, "Work"),
+    );
+    const record = applyProfileUpdate(file, "user-1", { face: { emoji: "🐧", frame: "coin" } });
+    expect(record.face).toEqual({ emoji: "🐧", frame: "coin", futureFaceField: "survives" });
+  });
+
   it("a name-only update leaves the face and the legacy accent alone", () => {
     // W6 reads `color` as "pane 2 was answered once" while the face is absent,
     // so only a FACE write may drop it.

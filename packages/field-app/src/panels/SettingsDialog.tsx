@@ -111,6 +111,9 @@ export interface SettingsAccountHead {
   /** Absent: this host cannot switch, so the faces are shown, not offered. */
   readonly onSwitch?: ((userId: string) => void) | undefined;
   readonly busy?: boolean;
+  /** A switch main refused, in its words — shown under the faces until the
+   * next attempt, so a click never just does nothing. */
+  readonly notice?: string | null | undefined;
 }
 
 function AccountHead({
@@ -122,7 +125,7 @@ function AccountHead({
   current: boolean;
   onOpenAccount: () => void;
 }): ReactElement {
-  const { me, others, onSwitch, busy = false } = account;
+  const { me, others, onSwitch, busy = false, notice = null } = account;
   return (
     <div className="vf-settings-account">
       {/* The dialog is still "Settings" to assistive tech; the card is its head. */}
@@ -133,7 +136,7 @@ function AccountHead({
         type="button"
         className={`vf-settings-account-card ${faceLiftHostClass}`}
         aria-current={current ? "page" : undefined}
-        aria-label={`${me.name}, ${me.detail} — account settings`}
+        aria-label={`${me.name}${me.detail.length > 0 ? `, ${me.detail}` : ""} — account settings`}
         onClick={onOpenAccount}
       >
         <UserFaceView emoji={me.face.emoji} frame={me.face.frame} size={40} seed={me.userId} />
@@ -181,6 +184,11 @@ function AccountHead({
             );
           })}
         </div>
+      )}
+      {notice !== null && (
+        <p className="vf-settings-account-notice" role="alert">
+          {notice}
+        </p>
       )}
     </div>
   );

@@ -93,8 +93,10 @@
   --vf-coin-sheen: rgb(255 255 255 / 30%);
   /* A presence cursor's wire colour: the SENDER resolves it and every peer
      draws it as sent, whatever their theme — so one neutral that holds on
-     both grounds and under ICE's white label text, never the theme's ink. */
-  --vf-presence-ink: #636366;
+     both grounds and under ICE's white label text, never the theme's ink:
+     3.2:1 on the dark ground, 3.1:1 on dark chrome, 5.3:1 on the light
+     ground, 5.5:1 under the white label. */
+  --vf-presence-ink: #68686b;
 
   /* Domain content colors. These are stable card identities, not app state. */
   --vf-note-surface: #f6e7a9;

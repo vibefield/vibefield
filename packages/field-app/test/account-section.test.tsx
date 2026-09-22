@@ -139,6 +139,18 @@ async function mount(fieldd: FielddClient): Promise<void> {
 
 const text = (): string => container?.textContent ?? "";
 
+/** Enough microtask turns for a write's promise chain to settle. */
+const flush = async (): Promise<void> => {
+  for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+};
+
+/** Type into a React-controlled input the way a keyboard does: through the
+ * native value setter, then the input event React listens for. */
+const typeInto = (input: HTMLInputElement, value: string): void => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
 /** The one phrase for the act, found the way a person finds it: by its label. */
 const linkAct = (): HTMLButtonElement | undefined =>
   Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
@@ -246,6 +258,73 @@ describe("AccountSection", () => {
       await Promise.resolve();
     });
     expect(text()).toContain("Work already wears 🐧 on this machine.");
+  });
+
+  it("keeps the deck live through a write, and writes only the latest waiting choice", async () => {
+    const writes: unknown[] = [];
+    let release = (): void => undefined;
+    host(
+      vi.fn(async (params: Record<string, unknown>) => {
+        if (Object.keys(params).length === 0) return PROFILE;
+        writes.push(params);
+        // The first write is held until the test lets it go.
+        if (writes.length === 1) {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        }
+        return { ...PROFILE, ...params };
+      }),
+    );
+    await mount(client({ link: OFFLINE }));
+    await act(async () => changeFace()?.click());
+    const cell = (emoji: string): HTMLInputElement | null | undefined =>
+      container?.querySelector<HTMLInputElement>(`input[aria-label="${emoji}"]`);
+    await act(async () => {
+      cell("🐧")?.click();
+      await flush();
+    });
+    // A write in flight disables nothing: a disabled radio cannot hold the
+    // focus an arrow key just moved to it.
+    expect(cell("🐼")?.disabled).toBe(false);
+    await act(async () => {
+      cell("🐼")?.click();
+      await flush();
+    });
+    await act(async () => {
+      cell("🦉")?.click();
+      await flush();
+    });
+    expect(cell("🦉")?.checked).toBe(true); // the choice shows at once
+    await act(async () => {
+      release();
+      await flush();
+    });
+    // 🐼 was overtaken while it waited, so it is never written.
+    expect(writes).toEqual([{ face: { emoji: "🐧" } }, { face: { emoji: "🦉" } }]);
+    expect(container?.querySelector('[role="img"][aria-label="James, 🦉"]')).not.toBeNull();
+  });
+
+  it("refuses a typed face that already means something, in place and before any write", async () => {
+    const usersUpdate = vi.fn(async (params: Record<string, unknown>) => ({
+      ...PROFILE,
+      ...params,
+    }));
+    host(usersUpdate);
+    await mount(client({ link: OFFLINE }));
+    await act(async () => changeFace()?.click());
+    const input = container?.querySelector<HTMLInputElement>('input[aria-label="Any emoji"]');
+    await act(async () => {
+      if (input) typeInto(input, "🔥");
+    });
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
+      "🔥 already means something in VibeField, so it can't be a face.",
+    );
+    // Only the profile read reached main.
+    expect(usersUpdate.mock.calls.every(([params]) => Object.keys(params).length === 0)).toBe(true);
   });
 
   it("survives a daemon with no link method and says so", async () => {
@@ -539,6 +618,31 @@ describe("AccountSection users switcher", () => {
     // ...and everyone else is one click away, named by what the click does.
     expect(row("Work")).not.toBeNull();
     expect(row("Work")?.disabled).toBe(false);
+  });
+
+  it("re-reads the list when a face is written on the same page", async () => {
+    let face = PROFILE.face;
+    host(
+      vi.fn(async (params: Record<string, unknown>) => {
+        if (params.face !== undefined) face = params.face as typeof face;
+        return { ...PROFILE, face };
+      }),
+      {
+        list: vi.fn(async () => ({
+          attachedUserId: PROFILE.userId,
+          users: [{ ...PROFILE, face }, OTHER],
+        })),
+      },
+    );
+    await mount(withLink());
+    expect(container?.querySelector('[aria-current="true"]')?.textContent).toContain("🦊");
+    await act(async () => changeFace()?.click());
+    await act(async () => {
+      container?.querySelector<HTMLInputElement>('input[aria-label="🐧"]')?.click();
+      await flush();
+    });
+    // The current user's row changes with the Face row above it.
+    expect(container?.querySelector('[aria-current="true"]')?.textContent).toContain("🐧");
   });
 
   it("switches on one click and leaves the pressed control disabled for the reload", async () => {

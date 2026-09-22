@@ -425,11 +425,14 @@ export function OnboardingReadyPaneView({
   flag,
   onRetry,
   onContinueAnyway,
+  settingsChord = "⌘,",
 }: {
   profileName: string;
   flag: OnboardingCompletionFlag;
   onRetry: () => void;
   onContinueAnyway: () => void;
+  /** The Settings chord as this platform spells it. */
+  settingsChord?: string;
 }): ReactElement {
   return (
     <WizardPane
@@ -452,7 +455,15 @@ export function OnboardingReadyPaneView({
         if (flag.kind === "failed") onRetry();
       }}
     >
-      {flag.kind === "failed" && <CompletionFailure reason={flag.reason} />}
+      {flag.kind === "failed" ? (
+        <CompletionFailure reason={flag.reason} />
+      ) : (
+        // DESIGN.md §8's discoverability, said once: a face does not say
+        // "settings" the way the gear it replaced did.
+        <p className={`mt-2 ${factCls}`}>
+          Your face in the bottom-left corner opens Settings — so does {settingsChord}.
+        </p>
+      )}
     </WizardPane>
   );
 }

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createCanvasEngine } from "@vibecook/ice";
 import type { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { describe, expect, it } from "vitest";
@@ -42,6 +44,15 @@ describe("document presence composition", () => {
     // value: a real colour, never a var() a peer in another theme can't read.
     expect(presenceColor()).toBe(PRESENCE_INK_FALLBACK);
     expect(presenceColor()).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+
+  it("falls back to exactly the token's value, so the two cannot drift apart", () => {
+    const tokens = readFileSync(join(process.cwd(), "../design-kit/src/tokens.css"), "utf8");
+    const declared = [...tokens.matchAll(/--vf-presence-ink:\s*([^;]+);/gu)].map((m) =>
+      m[1]?.trim(),
+    );
+    // One value, in both themes: the sender resolves it for every receiver.
+    expect(declared).toEqual([PRESENCE_INK_FALLBACK]);
   });
 
   it("labels the cursor with the face, then the name", () => {

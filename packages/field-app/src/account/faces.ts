@@ -1,9 +1,8 @@
 import {
   effectiveFaces,
+  emojiProblem,
   type FaceLike,
   faceKey,
-  faceProblem,
-  isSingleEmoji,
   normalizeFaceEmoji,
 } from "@vibefield/contracts/user-face";
 import type { FieldUserFace, FieldUserProfile } from "../host";
@@ -65,16 +64,6 @@ export function heldFaces(
   return held;
 }
 
-/** Why `emoji` cannot be this user's face, in the sentence main would refuse
- * with — or null. Asked before a write so the picker can say it in place. */
-export function faceProblemFor(
-  emoji: string,
-  userId: string,
-  users: readonly FieldUserProfile[],
-): string | null {
-  return faceProblem({ emoji: normalizeFaceEmoji(emoji) }, userId, users);
-}
-
 /** "James, 🦊" — the accessible name for a face that stands without its name
  * beside it (I-4: the name makes it certain, and where there is no room for
  * it, it goes in the accessible name). */
@@ -82,4 +71,4 @@ export function faceLabel(name: string, face: FieldUserFace): string {
   return `${name}, ${face.emoji}`;
 }
 
-export { faceKey, isSingleEmoji, normalizeFaceEmoji };
+export { emojiProblem, faceKey, normalizeFaceEmoji };

@@ -148,8 +148,11 @@ const godviewState = new PreloadGodviewStateBridge((issueCount) => {
  * '<channel>': Error: <message>`: main replies with the error's `toString()` and
  * `invoke` rewraps it (Electron #24427, verified in 43.1.1's own bundle). A users
  * refusal is a SENTENCE the page shows as written, e.g. "Work already wears 🐙 on
- * this machine." (UA-7), so the bridge hands back the handler's own words. */
-const REMOTE_ERROR_PREFIX = /^Error invoking remote method '[^']*': (?:Error: )?/u;
+ * this machine." (UA-7), so the bridge hands back the handler's own words —
+ * whichever Error class threw them: a `UsersError` from the §3.3 lock ("another
+ * VibeField process is using this data folder…") is a sentence too. Every
+ * users verb goes through it. */
+const REMOTE_ERROR_PREFIX = /^Error invoking remote method '[^']*': (?:[A-Za-z]*Error: )?/u;
 
 async function invokeInHandlerWords(channel: string, payload: unknown): Promise<unknown> {
   try {
@@ -214,7 +217,7 @@ contextBridge.exposeInMainWorld("vibefield", {
    * one read behind both the Account switcher and the tray submenu, so they
    * cannot disagree about who is current. */
   usersList: async (): Promise<UsersListSnapshot> =>
-    UsersListSnapshot.parse(await ipcRenderer.invoke(IPC_CHANNELS.usersList, {})),
+    UsersListSnapshot.parse(await invokeInHandlerWords(IPC_CHANNELS.usersList, {})),
   /** UA-5 — mint user N under the §3.3 lock, then ATTACH to it. Identity is not
    * decided here: the mint only needs to exist, and the reloaded window runs
    * the Setup Assistant's second-user variant (§6.2) to ask for a name.
@@ -226,14 +229,14 @@ contextBridge.exposeInMainWorld("vibefield", {
    * and gate nothing else on the answer. The reload IS the feedback. */
   usersCreate: async (params: UsersCreateParams): Promise<UserRecord> =>
     UserRecordSchema.parse(
-      await ipcRenderer.invoke(IPC_CHANNELS.usersCreate, UsersCreateParams.parse(params)),
+      await invokeInHandlerWords(IPC_CHANNELS.usersCreate, UsersCreateParams.parse(params)),
     ),
   /** UA-5 — re-target the attachment to an existing user and reload (UA-D15).
    * Switching to the user already attached is main's no-op, not this bridge's
    * business. Same reload race as `usersCreate` — see it for the rule. */
   usersSwitch: async (params: UsersSwitchParams): Promise<UserRecord> =>
     UserRecordSchema.parse(
-      await ipcRenderer.invoke(IPC_CHANNELS.usersSwitch, UsersSwitchParams.parse(params)),
+      await invokeInHandlerWords(IPC_CHANNELS.usersSwitch, UsersSwitchParams.parse(params)),
     ),
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {

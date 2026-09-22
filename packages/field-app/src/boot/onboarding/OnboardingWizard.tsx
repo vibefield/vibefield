@@ -1,6 +1,6 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider, useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
-import { type ReactElement, useEffect, useState } from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 import { faceOf, heldFaces } from "../../account/faces";
 import {
   hasLink,
@@ -269,6 +269,7 @@ function WizardBody({
           flag={flag}
           onRetry={() => setAttempt((n) => n + 1)}
           onContinueAnyway={() => onComplete(profile)}
+          settingsChord={getHost().platform === "darwin" ? "⌘," : "Ctrl+,"}
         />,
       );
 
@@ -307,7 +308,9 @@ function FieldPane({
   // against everyone, so it is never a face somebody else already wears.
   const [roster, setRoster] = useState<readonly FieldUserProfile[]>([]);
   const [face, setFace] = useState<FieldUserFace>(() => faceOf(profile, []));
-  const [chosen, setChosen] = useState(profile.face !== undefined);
+  // A ref, not state: the roster read below closes over it once, and must see
+  // a choice made while it was in flight rather than the value at entry.
+  const chosen = useRef(profile.face !== undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [writing, setWriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -320,7 +323,7 @@ function FieldPane({
       (snapshot) => {
         if (cancelled) return;
         setRoster(snapshot.users);
-        if (!chosen) setFace(faceOf(profile, snapshot.users));
+        if (!chosen.current) setFace(faceOf(profile, snapshot.users));
       },
       () => undefined,
     );
@@ -363,7 +366,7 @@ function FieldPane({
       error={error}
       onNameChange={setName}
       onFaceChange={(next) => {
-        setChosen(true);
+        chosen.current = true;
         setFace(next);
       }}
       onPickerToggle={() => setPickerOpen((open) => !open)}

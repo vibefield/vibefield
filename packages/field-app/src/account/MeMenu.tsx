@@ -12,7 +12,12 @@ import {
 } from "react";
 import { roundButtonCls } from "../field/theme-constants";
 import { getHost } from "../host";
-import { type AccountMe, type AccountPerson, useAccountSnapshot } from "./use-account";
+import {
+  type AccountMe,
+  type AccountPerson,
+  refusalSentence,
+  useAccountSnapshot,
+} from "./use-account";
 import "./MeMenu.css";
 
 // The Me menu (UA-D19; DESIGN.md §8 "The Me menu") — the owner's face in the
@@ -34,7 +39,7 @@ export interface MeMenuViewProps {
   others: readonly AccountPerson[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Settings… — and ⌘, — open Settings where it last was. */
+  /** Settings… opens Settings on General, as ⌘, does. */
   onOpenSettings: () => void;
   /** Your name and login open Settings → Account. */
   onOpenAccount: () => void;
@@ -48,6 +53,9 @@ export interface MeMenuViewProps {
   busy?: boolean;
   /** The Settings chord as this platform spells it. */
   shortcut?: string;
+  /** A switch or new user main refused, in its words: said at the top of the
+   * menu (and to assistive tech) until the menu next folds. */
+  notice?: string | null;
   className?: string;
 }
 
@@ -91,6 +99,7 @@ export function MeMenuView({
   onNewUser,
   busy = false,
   shortcut = "⌘,",
+  notice = null,
   className = "",
 }: MeMenuViewProps): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -99,6 +108,9 @@ export function MeMenuView({
   const [panelHeight, setPanelHeight] = useState(SEED);
   /** Opened from the keyboard: land focus on the nearest item once it shows. */
   const focusOnOpen = useRef(false);
+  /** Folding because Tab is leaving: focus is on its way somewhere else. */
+  const tabbingOut = useRef(false);
+  const wasOpen = useRef(open);
   const waiting = others.reduce((sum, person) => sum + person.waiting, 0);
 
   // The panel's open height is its content's, measured — the rows are real
@@ -159,6 +171,25 @@ export function MeMenuView({
     };
   }, [open, onOpenChange]);
 
+  // Folded from OUTSIDE while focus was on a row — ⌘, or the tray's
+  // Settings… — the rows go inert, so focus comes back to the face first.
+  // Settings records what had focus as it opens and returns it there on close.
+  // A click outside moves focus itself, after this; Tab is left alone.
+  useLayoutEffect(() => {
+    const folded = wasOpen.current && !open;
+    wasOpen.current = open;
+    if (!folded) return;
+    if (tabbingOut.current) {
+      tabbingOut.current = false;
+      return;
+    }
+    const active = document.activeElement;
+    const panel = rootRef.current?.querySelector(".vf-me-panel");
+    if (active instanceof HTMLElement && panel?.contains(active)) {
+      faceRef.current?.focus({ preventScroll: true });
+    }
+  }, [open]);
+
   const focusNearest = (): void => {
     rootRef.current
       ?.querySelector<HTMLElement>("[data-me-nearest]")
@@ -178,6 +209,7 @@ export function MeMenuView({
     else if (event.key === "End") move(list.length - 1);
     else if (event.key === "Tab") {
       // The menu pattern: Tab leaves, and the menu goes with it.
+      tabbingOut.current = true;
       onOpenChange(false);
     }
   };
@@ -196,6 +228,20 @@ export function MeMenuView({
   // bottom (nearest first), so they are assigned after the list is known.
   type Row = { key: string; node: (delay: number) => ReactElement };
   const rows: Row[] = [];
+  if (notice !== null) {
+    rows.push({
+      key: "notice",
+      node: (delay) => (
+        <div
+          className="vf-me-notice"
+          role="presentation"
+          style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
+        >
+          {notice}
+        </div>
+      ),
+    });
+  }
   if (others.length > 0) {
     rows.push({
       key: "eyebrow",
@@ -389,7 +435,7 @@ export function MeMenuView({
             role="menuitem"
             className="vf-me-you"
             tabIndex={-1}
-            aria-label={`${me.name}, ${me.detail} — account settings`}
+            aria-label={`${me.name}${me.detail.length > 0 ? `, ${me.detail}` : ""} — account settings`}
             onClick={() => act(onOpenAccount)}
           >
             <span className="vf-me-you-name">{me.name}</span>
@@ -410,6 +456,10 @@ export function MeMenuView({
           {waiting}
         </span>
       )}
+      {/* The notice row is presentation inside a menu; this says it aloud. */}
+      <span className="sr-only" role="status">
+        {notice ?? ""}
+      </span>
     </div>
   );
 }
@@ -433,7 +483,16 @@ export function MeMenu({
 }): ReactElement | null {
   const account = useAccountSnapshot();
   const [busy, setBusy] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
   const host = getHost();
+  // Folding the menu clears a refusal: it is said once, where the act was.
+  const onMenuOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) setRefusal(null);
+      onOpenChange(next);
+    },
+    [onOpenChange],
+  );
   if (account.me === null) {
     if (account.status === "loading") return null;
     return (
@@ -451,10 +510,16 @@ export function MeMenu({
 
   // THE RELOAD IS THE FEEDBACK (host.ts): switch and create re-target this
   // window and reload it, so nothing waits on their promises — only a refusal
-  // comes back, and it un-busies the corner.
-  const fireAndForget = (run: () => Promise<unknown>): void => {
+  // comes back. It un-busies the corner and reopens the menu with main's
+  // words at the top, so a click never just does nothing.
+  const fireAndForget = (head: string, run: () => Promise<unknown>): void => {
     setBusy(true);
-    void run().catch(() => setBusy(false));
+    setRefusal(null);
+    void run().catch((cause: unknown) => {
+      setBusy(false);
+      setRefusal(refusalSentence(head, cause));
+      onOpenChange(true);
+    });
   };
 
   return (
@@ -462,7 +527,7 @@ export function MeMenu({
       me={account.me}
       others={account.others}
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={onMenuOpenChange}
       onOpenSettings={() => onOpenSettings("general")}
       onOpenAccount={() => onOpenSettings("account")}
       onLink={() => onOpenSettings("account")}
@@ -470,7 +535,11 @@ export function MeMenu({
         account.canSwitch && host.usersSwitch !== undefined
           ? (userId) => {
               const usersSwitch = host.usersSwitch;
-              if (usersSwitch !== undefined) fireAndForget(() => usersSwitch({ userId }));
+              const name =
+                account.others.find((other) => other.userId === userId)?.name ?? "that user";
+              if (usersSwitch !== undefined) {
+                fireAndForget(`Couldn't switch to ${name}`, () => usersSwitch({ userId }));
+              }
             }
           : undefined
       }
@@ -478,11 +547,14 @@ export function MeMenu({
         account.canCreate && host.usersCreate !== undefined
           ? () => {
               const usersCreate = host.usersCreate;
-              if (usersCreate !== undefined) fireAndForget(() => usersCreate({}));
+              if (usersCreate !== undefined) {
+                fireAndForget("Couldn't add a user", () => usersCreate({}));
+              }
             }
           : undefined
       }
       busy={busy}
+      notice={refusal}
       {...(shortcut !== undefined ? { shortcut } : {})}
       {...(className !== undefined ? { className } : {})}
     />

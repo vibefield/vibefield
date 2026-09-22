@@ -13,7 +13,7 @@ import {
 import type { DesktopShellState, SettingsUndoResult, ShellPlatform } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { lazy, type ReactElement, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useAccountSnapshot } from "../account/use-account";
+import { refusalSentence, useAccountSnapshot } from "../account/use-account";
 import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { getHost } from "../host";
 import { AccountSection } from "./AccountSection";
@@ -164,6 +164,7 @@ export function SettingsPanel({
   // Me menu makes, so the corner and the head never disagree.
   const account = useAccountSnapshot();
   const [switching, setSwitching] = useState(false);
+  const [switchRefusal, setSwitchRefusal] = useState<string | null>(null);
   const usersSwitch = getHost().usersSwitch;
   const accountHead: SettingsAccountHead | undefined =
     account.me === null
@@ -178,14 +179,22 @@ export function SettingsPanel({
           },
           others: account.others,
           busy: switching,
+          notice: switchRefusal,
           // THE RELOAD IS THE FEEDBACK (host.ts): a switch re-targets this
-          // window and reloads it, so only a refusal ever comes back.
+          // window and reloads it, so only a refusal ever comes back — and it
+          // is said under the faces, in main's words.
           onSwitch:
             usersSwitch === undefined
               ? undefined
               : (userId) => {
+                  const name =
+                    account.others.find((other) => other.userId === userId)?.name ?? "that user";
                   setSwitching(true);
-                  void usersSwitch({ userId }).catch(() => setSwitching(false));
+                  setSwitchRefusal(null);
+                  void usersSwitch({ userId }).catch((cause: unknown) => {
+                    setSwitching(false);
+                    setSwitchRefusal(refusalSentence(`Couldn't switch to ${name}`, cause));
+                  });
                 },
         };
   const handledDiagnosticsRequest = useRef(diagnosticsRequest);

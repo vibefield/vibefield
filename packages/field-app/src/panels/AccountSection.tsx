@@ -1,6 +1,6 @@
 import { UserFaceView } from "@vibefield/design-kit/face";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
-import { type ReactElement, useEffect, useState } from "react";
+import { type ReactElement, useEffect, useRef, useState } from "react";
 import { FacePicker } from "../account/FacePicker";
 import { faceLabel, faceOf, heldFaces } from "../account/faces";
 import {
@@ -61,6 +61,13 @@ export function AccountSection({
   const [writing, setWriting] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The face just chosen, shown while its write is in flight; null = the
+  // stored one. And the writes themselves, one at a time (`chooseFace`).
+  const [faceDraft, setFaceDraft] = useState<FieldUserFace | null>(null);
+  const faceWrites = useRef<{ inFlight: boolean; next: FieldUserFace | null }>({
+    inFlight: false,
+    next: null,
+  });
   // UA-D17 — who else is here decides which faces are free (I-2). Read once,
   // and again after every write, through the roster door the switcher uses.
   const [roster, setRoster] = useState<readonly FieldUserProfile[]>([]);
@@ -124,6 +131,28 @@ export function AccountSection({
     } finally {
       setWriting(false);
     }
+  };
+
+  /** Every choice writes (UA-D17), and writes never overlap: a choice made
+   * while one is in flight waits, and only the LATEST waiting one is written.
+   * The deck stays enabled throughout — disabling it would drop focus from the
+   * radio an arrow key just moved to, since a disabled control cannot hold it,
+   * and a keyboard user would get one step per trip back into the deck. */
+  const chooseFace = (next: FieldUserFace): void => {
+    setFaceDraft(next);
+    const queue = faceWrites.current;
+    queue.next = next;
+    if (queue.inFlight) return;
+    queue.inFlight = true;
+    void (async () => {
+      while (queue.next !== null) {
+        const face = queue.next;
+        queue.next = null;
+        await write({ face });
+      }
+      queue.inFlight = false;
+      setFaceDraft(null);
+    })();
   };
 
   const current = profile.kind === "ready" ? profile.profile : null;
@@ -199,11 +228,10 @@ export function AccountSection({
         {pickerOpen && face !== null && current !== null && (
           <div className="pt-3">
             <FacePicker
-              value={face}
+              value={faceDraft ?? face}
               held={heldFaces(roster, current.userId)}
-              disabled={!editable}
               name="vf-account-face"
-              onChange={(next) => void write({ face: next })}
+              onChange={chooseFace}
             />
           </div>
         )}

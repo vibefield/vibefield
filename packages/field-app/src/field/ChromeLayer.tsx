@@ -29,6 +29,7 @@ import { ZoomPill } from "../hud/ZoomPill";
 import { SettingsPanel } from "../panels";
 import { ThemeToggleButton } from "../ThemeToggleButton";
 import type { MagnetGridGlyph } from "./canvas-appearance";
+import { useMeMenuYields, useSettingsChord } from "./me-menu-wiring";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
 import { fabCls } from "./theme-constants";
 import { useMagnetGridGlyph } from "./use-magnet-grid-glyph";
@@ -195,19 +196,17 @@ export function ChromeLayer({
     [closeSidePanel, onDocsOpenChange, onTrayOpenChange, setShowSettings],
   );
 
-  useEffect(() => {
-    if (
-      meOpen &&
-      (trayOpen ||
-        docsOpen ||
-        showSettings ||
-        paletteOpen ||
-        godviewOpen ||
-        sidePanelSurfaceId !== null)
-    ) {
-      setMeOpen(false);
-    }
-  }, [meOpen, trayOpen, docsOpen, showSettings, paletteOpen, godviewOpen, sidePanelSurfaceId]);
+  const foldMe = useCallback(() => setMeOpen(false), []);
+  useMeMenuYields(
+    meOpen,
+    trayOpen ||
+      docsOpen ||
+      showSettings ||
+      paletteOpen ||
+      godviewOpen ||
+      sidePanelSurfaceId !== null,
+    foldMe,
+  );
 
   // Expanded focus surfaces remain exclusive. The Artifact panel itself is
   // non-modal, so this arbitration does not recede or hold the canvas.
@@ -328,22 +327,10 @@ export function ChromeLayer({
     return () => window.removeEventListener("keydown", onKey);
   }, [closeSidePanel, onTrayOpenChange, onDocsOpenChange, setShowSettings]);
 
-  // ⌘, / Ctrl+, — Settings from anywhere (DESIGN.md §8, the Me menu). The gear
-  // this replaced said "settings" by being one; a face does not, so the chord
-  // carries the discoverability the icon used to. It toggles, like ⌘K.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "," || (!e.metaKey && !e.ctrlKey) || e.altKey || e.shiftKey) return;
-      e.preventDefault();
-      if (showSettings) {
-        setShowSettings(false);
-        return;
-      }
-      openSettings("general");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [openSettings, setShowSettings, showSettings]);
+  // ⌘, / Ctrl+, — Settings from anywhere (DESIGN.md §8, the Me menu).
+  const openGeneralSettings = useCallback(() => openSettings("general"), [openSettings]);
+  const closeSettings = useCallback(() => setShowSettings(false), [setShowSettings]);
+  useSettingsChord(showSettings, openGeneralSettings, closeSettings);
 
   // ECS devtools while the button is active (v1's EcsDevtools panel slot).
   // The FACADE goes in (not ce.engine): the strata observer's durable tab
@@ -430,10 +417,11 @@ export function ChromeLayer({
       {/* UA-D19 — the owner's face, where the Settings gear was: the account's
           one door, and the menu grows out of it (DESIGN.md §8). Placed so the
           40px face sits exactly where the 40px gear did — Godview does not
-          move. */}
+          move. Open, the menu grows over Godview's button (z-50, later in the
+          DOM), so it stands one step above it. */}
       <div
         data-hud-flight="bottom-left"
-        className="hud-flight no-drag absolute bottom-[14px] left-[14px] z-50"
+        className={`hud-flight no-drag absolute bottom-[14px] left-[14px] ${meOpen ? "z-[51]" : "z-50"}`}
       >
         <MeMenu
           open={meOpen}
@@ -488,8 +476,8 @@ export function ChromeLayer({
         />
       )}
 
-      {/* hud.panel (§8.4): the bottom-anchored panel area, above the settings
-          fab and clear of the centered tray. Empty → invisible (host null). */}
+      {/* hud.panel (§8.4): the bottom-anchored panel area, above the Me menu's
+          face and Godview, clear of the centered tray. Empty → invisible (host null). */}
       <div
         data-hud-flight="bottom-left"
         className="hud-flight pointer-events-none absolute bottom-20 left-4 z-40 flex w-72 max-w-[80vw] flex-col"

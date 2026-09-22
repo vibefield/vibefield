@@ -111,6 +111,24 @@ describe("SettingsDialog head (UA-D19)", () => {
     expect(onSwitch).toHaveBeenCalledWith("01J9B7Q2MXC5D8F3G6H9J2K4N7");
   });
 
+  it("says a refused switch under the faces, in main's words", async () => {
+    await mount({
+      ...ACCOUNT(),
+      notice: "Couldn't switch to Work — a user switch is already in flight.",
+    });
+    expect(container?.querySelector('.vf-settings-account-notice[role="alert"]')?.textContent).toBe(
+      "Couldn't switch to Work — a user switch is already in flight.",
+    );
+  });
+
+  it("names the card without a stray comma while the link is still loading", async () => {
+    const account = ACCOUNT();
+    await mount({ ...account, me: { ...account.me, detail: "" } });
+    expect(container?.querySelector(".vf-settings-account-card")?.getAttribute("aria-label")).toBe(
+      "James — account settings",
+    );
+  });
+
   it("without an account keeps the gear head and the Account item", async () => {
     await mount(undefined);
     expect(container?.querySelector(".vf-settings-account-card")).toBeNull();

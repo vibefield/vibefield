@@ -1,4 +1,4 @@
-import { UserFaceView } from "@vibefield/design-kit/face";
+import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import type { CSSProperties, ReactElement } from "react";
 import { FACE_LADDER, FIXTURE_ME, FIXTURE_OTHERS } from "../account-fixtures";
 import { Section, Specimen } from "../catalog-ui";
@@ -71,7 +71,7 @@ export function FoundationsSection(): ReactElement {
               <span className="vf-ds-face-ladder-label">{label}</span>
               <div className="vf-ds-face-rungs">
                 {FACE_LADDER.map((size) => (
-                  <figure key={size} className="vf-ds-face-rung vf-face-host">
+                  <figure key={size} className={`vf-ds-face-rung ${faceLiftHostClass}`}>
                     <UserFaceView
                       emoji={person.face.emoji}
                       frame={frame}

@@ -6,10 +6,12 @@
 // How a face LOOKS is the design kit's (`@vibefield/design-kit/face`).
 //
 // Deliberately free of runtime imports — even of `./users` — so boot-reachable
-// code (the Setup Assistant) can take it through the `./user-face` subpath
-// without pulling zod or the rest of the wire package into the splash. The
-// shapes below are STRUCTURAL: a parsed `UserRecord` and the renderer's host
-// profile both satisfy them.
+// code (the Setup Assistant) can take it through the `./user-face` subpath and
+// add nothing of the wire package to the splash for faces. (The splash already
+// reaches zod by older routes — fieldd-client's version stamp, the posture
+// read — so the saving waits on those; UA-7's own imports stay on leaf entries,
+// which ui-system-boundaries pins.) The shapes below are STRUCTURAL: a parsed
+// `UserRecord` and the renderer's host profile both satisfy them.
 
 /** A face as far as the policy cares: the emoji, and the frame whose absence
  * means sticker. `UserFace` (users.ts) is the wire schema for it. */
@@ -117,6 +119,7 @@ const REFUSED = [
   "🔻",
   // hearts
   "❤️",
+  "♥️",
   "🧡",
   "💛",
   "💚",
@@ -152,6 +155,7 @@ const REFUSED = [
   "☑️",
   "✔️",
   "❌",
+  "⭕",
   "❎",
   "✖️",
   "⚠️",
@@ -160,10 +164,12 @@ const REFUSED = [
   "⏳",
   "⌛",
   "⏸️",
+  "⏯️",
   "▶️",
   "⏹️",
   "⏺️",
   "🔄",
+  "🔃",
   "❗",
   "❕",
   "❓",
@@ -181,26 +187,48 @@ export function faceKey(emoji: string): string {
 
 const REFUSED_KEYS: ReadonlySet<string> = new Set(REFUSED.map(faceKey));
 
+/** A ZWJ sequence is judged by its BASE. Fire joined to fire is still fire,
+ * while a refused glyph joined as a tail names something else: 🐈 + ⬛ is a
+ * black cat, 🍋 + 🟩 a lime, 🐦 + 🔥 a phoenix. */
 export function isRefusedFace(emoji: string): boolean {
-  return REFUSED_KEYS.has(faceKey(emoji));
+  const key = faceKey(emoji);
+  return REFUSED_KEYS.has(key) || REFUSED_KEYS.has(key.split("\u200D")[0] ?? key);
 }
 
-/** One emoji: a pictograph with its optional presentation selector and skin
- * tone, optionally joined to more by ZWJ (👩‍🚀, 🐻‍❄️). Letters, digits, flags,
- * two emoji side by side and text around one are all refused — a face is ONE
- * form (I-1). */
-const SINGLE_EMOJI =
-  /^\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{Emoji_Modifier}?(?:\u200D\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{Emoji_Modifier}?)*$/u;
+/** One emoji, because a face is ONE form (I-1): a pictograph with its optional
+ * presentation selector and, on a base that takes one, a skin tone, joined by
+ * ZWJ to at most three more (the longest RGI sequences, the families, join
+ * four); or a keycap. Each pictograph must be an ASSIGNED emoji —
+ * Extended_Pictographic also covers code points reserved for future ones, which
+ * draw as tofu. Letters, digits, flags, two emoji side by side and text around
+ * one are all refused. A shorter chain that is not an RGI sequence still passes
+ * and draws as its parts side by side: telling needs Unicode's sequence list,
+ * which the policy does not carry. */
+const KEYCAP = /^[0-9#*]\uFE0F?\u20E3$/u;
+const JOINED_PART = /^(\p{Extended_Pictographic})[\uFE0E\uFE0F]?(\p{Emoji_Modifier})?$/u;
+const MAX_JOINED_PARTS = 4;
 
 export function isSingleEmoji(value: string): boolean {
-  return SINGLE_EMOJI.test(value);
+  if (KEYCAP.test(value)) return true;
+  const parts = value.split("\u200D");
+  if (parts.length > MAX_JOINED_PARTS) return false;
+  return parts.every((part) => {
+    const match = JOINED_PART.exec(part);
+    if (match === null) return false;
+    const [, base = "", tone] = match;
+    if (!/\p{Emoji}/u.test(base)) return false;
+    return tone === undefined || /\p{Emoji_Modifier_Base}/u.test(base);
+  });
 }
 
-/** Store what renders as an emoji: a lone text-default pictograph (☁, ✈)
- * gains U+FE0F, so it draws in colour rather than as a glyph from the text
- * font. Everything else is kept exactly as the user chose it. */
+/** Store what renders as an emoji. A text-presentation selector (U+FE0E) is
+ * dropped — a face is never the text font's glyph — and a lone text-default
+ * pictograph (☁, ✈) or a bare keycap gains U+FE0F, so it draws in colour.
+ * Everything else is kept exactly as the user chose it. */
 export function normalizeFaceEmoji(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/\uFE0E/g, "");
+  const keycap = /^([0-9#*])\u20E3$/u.exec(trimmed);
+  if (keycap !== null) return `${keycap[1]}\uFE0F\u20E3`;
   const chars = [...trimmed];
   if (chars.length === 1 && !/\p{Emoji_Presentation}/u.test(trimmed)) return `${trimmed}\uFE0F`;
   return trimmed;
@@ -262,6 +290,19 @@ export function effectiveFaces(users: readonly FaceHolder[]): Map<string, Effect
   return out;
 }
 
+/** Why `emoji` can never be anybody's face — not one emoji, or one that
+ * already means something here — in the words the page shows; null when it
+ * could be. The part of `faceProblem` that needs no roster, so the picker can
+ * say it in place before anything is written. */
+export function emojiProblem(emoji: string): string | null {
+  const trimmed = emoji.trim();
+  if (!isSingleEmoji(trimmed)) return "A face is a single emoji.";
+  if (isRefusedFace(trimmed)) {
+    return `${trimmed} already means something in VibeField, so it can't be a face.`;
+  }
+  return null;
+}
+
 /** Why `face` cannot be `userId`'s, in words a person can act on — or null.
  * "Held" counts every other user's EFFECTIVE face, dealt ones included, so
  * TAKING a face never re-deals somebody else's. RELEASING one can: a face-less
@@ -275,10 +316,8 @@ export function faceProblem(
   users: readonly (FaceHolder & { readonly name: string })[],
 ): string | null {
   const emoji = face.emoji.trim();
-  if (!isSingleEmoji(emoji)) return "A face is a single emoji.";
-  if (isRefusedFace(emoji)) {
-    return `${emoji} already means something in VibeField, so it can't be a face.`;
-  }
+  const problem = emojiProblem(emoji);
+  if (problem !== null) return problem;
   const shown = effectiveFaces(users);
   for (const user of users) {
     if (user.userId === userId) continue;

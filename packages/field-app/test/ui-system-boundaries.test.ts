@@ -55,8 +55,33 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account)/m,
     );
+  });
+
+  it("keeps the face's own styling free of colour literals of any spelling (UA-7)", () => {
+    // The one colour a face carries is its emoji's (DESIGN.md §2.8, I-1).
+    for (const stylesheet of [
+      source("account/FacePicker.css"),
+      source("account/MeMenu.css"),
+      readFileSync(join(PACKAGE_ROOT, "../design-kit/src/face.css"), "utf8"),
+    ]) {
+      expect(stylesheet).not.toMatch(/#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|lab|lch)\(/i);
+    }
+  });
+
+  it("keeps UA-7's boot-reachable modules on leaf entries, never a barrel", () => {
+    // The Setup Assistant mounts these, so they take the kit's and the face
+    // policy's leaf entries (`/face`, `/primitives`, `/user-face`).
+    for (const module of [
+      "account/FacePicker.tsx",
+      "account/faces.ts",
+      "account/use-account.ts",
+      "boot/onboarding/onboarding-views.tsx",
+      "boot/onboarding/OnboardingWizard.tsx",
+    ]) {
+      expect(source(module), module).not.toMatch(/from "@vibefield\/(?:contracts|design-kit)";/);
+    }
   });
 
   it("keeps the terminal mirror's fixture an ADAPTER, never a replica (TP-S2)", () => {
