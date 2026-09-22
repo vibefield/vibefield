@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentCatalogStatus, AgentOffers } from "./agent-catalog";
+import { AgentOffers } from "./agent-catalog";
 import { AgentPersona, AgentProfileId, AgentProviderId } from "./agent-index";
 import { TerminalCreateOpenResult } from "./terminal-pipeline";
 
@@ -292,9 +292,14 @@ export const AgentProviderSummary = z
     // both are required; `history` is present only where the row offers it —
     // the index's state for this agent on this device (`unavailable` = the
     // daemon is down, or its registry disagrees with the catalog on the kind).
-    status: AgentCatalogStatus,
+    // Both OPEN strings on the wire (tolerant reader; AC-4's finding: a closed
+    // enum here made one unknown word refuse the whole list and the picker
+    // read "no providers"). The known vocabularies are `AgentCatalogStatus`
+    // and `AGENT_HISTORY_STATES`; a reader treats a word outside them as
+    // "not offered" / "unknown", never as an error.
+    status: z.string().min(1).max(32),
     offers: AgentOffers,
-    history: z.enum(["indexed", "unindexed", "unavailable"]).optional(),
+    history: z.string().min(1).max(32).optional(),
     /** presentation key for the mark atlases (the row's `mark`, default `id`) */
     mark: z.string().min(1).optional(),
   })

@@ -49,6 +49,7 @@ import {
   type AgentCatalogResult,
   type AgentDistributionRecord,
   AgentDistributionRecord as AgentDistributionRecordSchema,
+  type AgentHistoryState,
   type AgentInstall,
   type AgentInterruptParams,
   type AgentInterruptResult,
@@ -450,8 +451,6 @@ interface ExitedEntry {
 /** AR-4b — a record whose PTY the boot's first inventory did not list: held
  * for one grace, attached if the PTY appears (a cell that had not published
  * yet), stamped as an unknown exit if it does not. */
-type AgentHistoryState = NonNullable<AgentProviderSummary["history"]>;
-
 interface AwaitingBoot {
   record: AgentSessionRecord;
   deadline: number;

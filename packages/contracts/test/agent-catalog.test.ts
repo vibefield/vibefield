@@ -118,8 +118,12 @@ describe("the agent catalog (AC-1)", () => {
     expect((parsed.catalog[0] as Record<string, unknown>).someday).toBe(
       "a field this build never heard of",
     );
-    // …while the TABLE is strict (an unknown key in the source is a typo)
+    // a status this build never heard of rides the wire too…
+    const future = AgentCatalogResult.parse({ catalog: [{ ...rows[0], status: "someday" }] });
+    expect(future.catalog[0]?.status).toBe("someday");
+    // …while the TABLE is strict (an unknown key or status in the source is a typo)
     expect(() => AgentCatalogEntry.parse({ ...rows[0], someday: 1 })).toThrow();
+    expect(() => AgentCatalogEntry.parse({ ...rows[0], status: "someday" })).toThrow();
   });
 
   it("agent.catalog is a product door on agent.observe, local like agent.list", () => {
@@ -155,7 +159,11 @@ describe("the agent catalog (AC-1)", () => {
       offers: catalogEntry("acp")?.offers,
     });
     expect(protocol.history).toBeUndefined();
-    expect(() => AgentProviderSummary.parse({ ...decided, status: "someday" })).toThrow();
+    // OPEN on the wire (tolerant reader): a word this build never heard of is
+    // carried, not a refusal of the whole list (AC-4's finding)
+    expect(AgentProviderSummary.parse({ ...decided, status: "someday" }).status).toBe("someday");
+    expect(AgentProviderSummary.parse({ ...decided, history: "someday" }).history).toBe("someday");
+    expect(() => AgentProviderSummary.parse({ ...decided, status: "" })).toThrow();
   });
 
   it("the readers factory answers over its own table; the named readers are the factory over THE table", () => {

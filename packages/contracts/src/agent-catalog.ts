@@ -50,6 +50,13 @@ import { AgentKind, AgentProviderId } from "./agent-index";
 export const AgentCatalogStatus = z.enum(["supported", "preview", "deprecated", "declined"]);
 export type AgentCatalogStatus = z.infer<typeof AgentCatalogStatus>;
 
+/** The index's state for an agent on a device (`AgentProviderSummary.history`):
+ * `indexed` (the record consents to the kind or enrolls a root of it),
+ * `unindexed` (daemon ready, nothing named), `unavailable` (daemon not ready,
+ * or its registry disagrees with the catalog on the kind). Open on the wire. */
+export const AGENT_HISTORY_STATES = ["indexed", "unindexed", "unavailable"] as const;
+export type AgentHistoryState = (typeof AGENT_HISTORY_STATES)[number];
+
 /** Statuses a surface may START a session or a persona under. */
 export const AGENT_OFFERED_STATUSES = ["supported", "preview"] as const;
 /** Statuses a surface SHOWS (a deprecated agent's sessions and history stay). */
@@ -126,8 +133,14 @@ export const AgentCatalogEntry = z
   .strict();
 export type AgentCatalogEntry = z.infer<typeof AgentCatalogEntry>;
 
-/** The wire form of a row (`agent.catalog`, the kit's fixture): tolerant. */
-export const AgentCatalogEntryWire = AgentCatalogEntry.passthrough();
+/** The wire form of a row (`agent.catalog`, the kit's fixture): tolerant — an
+ * unknown key rides through, and `status` is an OPEN string (a status this
+ * build never heard of, from a newer desktop over the link, is carried and
+ * treated as not offered — never a refusal of the whole list; AC-4's finding). */
+export const AgentCatalogEntryWire = AgentCatalogEntry.extend({
+  status: z.string().min(1).max(32),
+}).passthrough();
+export type AgentCatalogEntryWire = z.infer<typeof AgentCatalogEntryWire>;
 
 // ── THE TABLE — one row per decision, in display order ──
 
