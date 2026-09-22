@@ -34,6 +34,13 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   into `tokens.css`, and **the catalog mounts the shipping view with a fixture adapter,
   never a copy of its markup or CSS**. `packages/field-app/test/ui-system-boundaries.test.ts`
   enforces both, so a replica fails the gate rather than a review.
+- **`docs/AGENT_PLANE.md` indexes the agent plane** (main-tracked, added 2026-09-22): the three-repo
+  system — puppeteer (the agent runtime, in fieldd) · rosetta (agent history, `rosettad` per user
+  root) · this repo (custody, policy, presentation). Its umbrella page
+  `docs/agent-plane/architecture.html` carries the ownership law (AR-L1: VibeField knows no vendor),
+  the seams, the walls R20–R22, the data domains and the status legend; `system.html` the
+  aggregation and `api.html` the doors. Read it before touching a seam: a seam change updates the
+  page that OWNS the seam first, then the umbrella's table.
 
 ## Workspace taxonomy (the per-package map is README.md §Monorepo layout)
 

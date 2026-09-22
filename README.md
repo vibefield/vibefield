@@ -27,7 +27,7 @@ a private mesh across machines, and an iPhone companion.
 | `examples/plugins/widgetlab` | the 18-widget parity pack — dev/reference plugin, staged as demo boot content |
 | `apps/desktop` | packaging-only: delegating scripts + the electron dep; no application source lives here — the native helpers' sources do (`native/macos/live-surface-capture` the SCK helper · `native/macos/screenshot-helper` the Swift screenshot helper · `native/windows/screenshot-helper` its Rust twin, an own-workspace crate) with their build/test/verify scripts under `packaging/` |
 | `apps/ios` | the iPhone companion — thin xcodeproj over the `VibeFieldKit` SPM package (FieldHome · FieldAgents · FieldMesh · FieldTerminal · FieldDesign · SwarmPhysics). Deliberately outside `pnpm verify` (the gate must not require Xcode); its gate is the `xcodebuild` commands in `apps/ios/README.md` |
-| `docs/` | the main-tracked corpus: `ROADMAP.md` (now/next) · `LANDED.md` (append-only history) · `DECISIONS.md` (decision index) · `UI_SYSTEM.md` (where `DESIGN.md` lives in code) |
+| `docs/` | the main-tracked corpus: `ROADMAP.md` (now/next) · `LANDED.md` (append-only history) · `DECISIONS.md` (decision index) · `UI_SYSTEM.md` (where `DESIGN.md` lives in code) · `AGENT_PLANE.md` + `agent-plane/` (the three-repo agent plane) |
 | `tooling/dev-runner` | repo-owned desktop development supervisor: Vite HMR, watched process builds, safe Electron/daemon restarts, native/codegen refresh, and Nx affected typechecks |
 | `services/push-relay` | *(planned)* the one cloud hop — open-source APNs wake-hint relay |
 
@@ -110,6 +110,11 @@ faster catalog-only loop on port 5174 when native behavior and live app preview 
 real product, survives a product reload, clears when Studio closes, and keeps fieldd operational.
 Ownership and contribution rules live in
 [`docs/UI_SYSTEM.md`](docs/UI_SYSTEM.md).
+
+The agent plane — puppeteer (the agent runtime), rosetta (agent history) and this repository, as one
+system — is indexed by [`docs/AGENT_PLANE.md`](docs/AGENT_PLANE.md), whose umbrella page
+[`docs/agent-plane/architecture.html`](docs/agent-plane/architecture.html) carries the ownership law,
+the seams and the walls.
 
 Design docs live in `draft/` — local-only, tracked on the `dev-local` branch
 (`pnpm commit-draft` snapshots them; the branch is never pushed).
