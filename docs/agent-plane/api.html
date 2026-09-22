@@ -1,0 +1,1858 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="API design of VibeField's agent plane: door conventions (zod-first contracts, tolerant reader, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of every agent, agents, index and agent-relevant terminal door, the field.agents.v1 mesh store, and each door mapped to the puppeteer or rosetta surface it wraps."
+    />
+    <title>The doors — API design of the agent plane</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&amp;family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f6f2;
+        --paper: #ffffff;
+        --paper-2: #f1f0eb;
+        --ink: #202328;
+        --muted: #666c73;
+        --faint: #8c9197;
+        --line: #dcd9d1;
+        --line-strong: #c8c4ba;
+        --copper: #9f4c28;
+        --copper-bg: rgba(159, 76, 40, 0.09);
+        --teal: #176b61;
+        --teal-bg: rgba(23, 107, 97, 0.09);
+        --blue: #355b8c;
+        --blue-bg: rgba(53, 91, 140, 0.09);
+        --purple: #6b4f8f;
+        --purple-bg: rgba(107, 79, 143, 0.09);
+        --amber: #8a6418;
+        --amber-bg: rgba(138, 100, 24, 0.1);
+        --red: #a13f45;
+        --red-bg: rgba(161, 63, 69, 0.09);
+        --shadow: 0 10px 35px rgba(35, 38, 43, 0.055);
+        --code-bg: #20242a;
+        --code-ink: #e7e5df;
+        --code-muted: #aeb4bc;
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #15171a;
+        --paper: #1d2024;
+        --paper-2: #25292e;
+        --ink: #e8e6e0;
+        --muted: #a1a6ad;
+        --faint: #838991;
+        --line: #34383e;
+        --line-strong: #464b52;
+        --copper: #da815a;
+        --copper-bg: rgba(218, 129, 90, 0.12);
+        --teal: #63b7a9;
+        --teal-bg: rgba(99, 183, 169, 0.12);
+        --blue: #83a8da;
+        --blue-bg: rgba(131, 168, 218, 0.12);
+        --purple: #b69adc;
+        --purple-bg: rgba(182, 154, 220, 0.12);
+        --amber: #d2ad58;
+        --amber-bg: rgba(210, 173, 88, 0.12);
+        --red: #df858a;
+        --red-bg: rgba(223, 133, 138, 0.12);
+        --shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+        --code-bg: #101216;
+        --code-ink: #e8e6df;
+        --code-muted: #9ca4ae;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          color-scheme: dark;
+          --bg: #15171a;
+          --paper: #1d2024;
+          --paper-2: #25292e;
+          --ink: #e8e6e0;
+          --muted: #a1a6ad;
+          --faint: #838991;
+          --line: #34383e;
+          --line-strong: #464b52;
+          --copper: #da815a;
+          --copper-bg: rgba(218, 129, 90, 0.12);
+          --teal: #63b7a9;
+          --teal-bg: rgba(99, 183, 169, 0.12);
+          --blue: #83a8da;
+          --blue-bg: rgba(131, 168, 218, 0.12);
+          --purple: #b69adc;
+          --purple-bg: rgba(182, 154, 220, 0.12);
+          --amber: #d2ad58;
+          --amber-bg: rgba(210, 173, 88, 0.12);
+          --red: #df858a;
+          --red-bg: rgba(223, 133, 138, 0.12);
+          --shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+          --code-bg: #101216;
+          --code-ink: #e8e6df;
+          --code-muted: #9ca4ae;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 28px;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+        font-size: 15.5px;
+        line-height: 1.58;
+      }
+
+      a {
+        color: var(--teal);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      code,
+      pre,
+      .mono {
+        font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+      }
+
+      code:not(pre code) {
+        padding: 0.08em 0.32em;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--paper-2);
+        font-size: 0.84em;
+      }
+
+      .shell {
+        width: min(1460px, 100%);
+        margin: 0 auto;
+        padding: 42px 28px 90px;
+      }
+
+      .hero {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+      }
+
+      .hero-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex: none;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .eyebrow {
+        color: var(--copper);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        text-wrap: balance;
+      }
+
+      h1 {
+        margin: 10px 0 9px;
+        font-family: Spectral, Georgia, serif;
+        font-size: clamp(36px, 5vw, 56px);
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        line-height: 1.04;
+      }
+
+      .subtitle {
+        max-width: 78ch;
+        margin: 0;
+        color: var(--muted);
+        font-size: 17px;
+      }
+
+      .theme-button,
+      .reference-link {
+        padding: 8px 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 13px;
+        line-height: 1.4;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .theme-button:hover,
+      .reference-link:hover {
+        border-color: var(--line-strong);
+        color: var(--ink);
+      }
+
+      .pipeline {
+        margin-top: 24px;
+        padding: 14px 17px;
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+        color: var(--muted);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .pipeline b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .pipeline .native {
+        color: var(--copper);
+      }
+
+      .pipeline .contract {
+        color: var(--blue);
+      }
+
+      .pipeline .product {
+        color: var(--teal);
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .stat {
+        padding: 13px 15px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: color-mix(in srgb, var(--paper) 76%, transparent);
+      }
+
+      .stat strong {
+        display: block;
+        font-family: Spectral, Georgia, serif;
+        font-size: 25px;
+        font-weight: 600;
+        line-height: 1;
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 34px;
+        align-items: start;
+      }
+
+      .toc {
+        position: sticky;
+        top: 20px;
+        max-height: calc(100vh - 40px);
+        padding: 16px;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .toc-title {
+        margin: 0 0 9px;
+        color: var(--faint);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .toc a {
+        display: block;
+        padding: 5px 7px;
+        border-radius: 5px;
+        color: var(--muted);
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      .toc a:hover {
+        background: var(--paper-2);
+        color: var(--ink);
+      }
+
+      .toc .sub-link {
+        padding-left: 18px;
+        font-size: 12px;
+      }
+
+      main {
+        min-width: 0;
+      }
+
+      section {
+        margin-bottom: 64px;
+      }
+
+      h2 {
+        margin: 0 0 7px;
+        font-family: Spectral, Georgia, serif;
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+      }
+
+      h3 {
+        margin: 28px 0 8px;
+        font-family: Spectral, Georgia, serif;
+        font-size: 21px;
+        font-weight: 600;
+      }
+
+      h4 {
+        margin: 18px 0 5px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .section-note {
+        max-width: 84ch;
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+
+      .section-note .mono,
+      .callout .mono,
+      .card .mono,
+      .api-card .mono,
+      .decision-card .mono,
+      .contract-row .mono {
+        overflow-wrap: anywhere;
+      }
+
+      .callout {
+        margin: 18px 0;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--teal);
+        border-radius: 8px;
+        background: var(--teal-bg);
+        color: var(--muted);
+      }
+
+      .callout strong {
+        color: var(--ink);
+      }
+
+      .callout.warning {
+        border-left-color: var(--amber);
+        background: var(--amber-bg);
+      }
+
+      .callout.foundation {
+        border-left-color: var(--blue);
+        background: var(--blue-bg);
+      }
+
+      pre {
+        position: relative;
+        margin: 14px 0;
+        padding: 17px 19px;
+        overflow-x: auto;
+        border-radius: 9px;
+        background: var(--code-bg);
+        color: var(--code-ink);
+        font-size: 12.5px;
+        line-height: 1.65;
+        tab-size: 2;
+      }
+
+      pre .comment {
+        color: var(--code-muted);
+      }
+
+      .copy-button {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        padding: 4px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #ccd2da;
+        font-family: 'Source Sans 3', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      .copy-button:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .diagram {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .diagram svg {
+        display: block;
+        width: 100%;
+        min-width: 980px;
+        height: auto;
+      }
+
+      figcaption {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .cards,
+      .api-grid,
+      .decision-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 14px;
+      }
+
+      .card,
+      .api-card,
+      .decision-card {
+        min-width: 0;
+        padding: 17px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .card h3,
+      .api-card h3,
+      .decision-card h3 {
+        margin: 0 0 6px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 14px;
+      }
+
+      .card p,
+      .api-card p,
+      .decision-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .card ul,
+      .api-card ul,
+      .decision-card ul,
+      .layer-body ul {
+        margin: 10px 0 0;
+        padding-left: 19px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .card li + li,
+      .api-card li + li,
+      .decision-card li + li,
+      .layer-body li + li {
+        margin-top: 5px;
+      }
+
+      .signature {
+        margin: 8px 0 7px;
+        color: var(--teal);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11.5px;
+        font-weight: 500;
+        overflow-wrap: anywhere;
+      }
+
+      .badge,
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 4px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9.5px;
+        font-weight: 600;
+        line-height: 1.5;
+        white-space: nowrap;
+      }
+
+      .badge {
+        padding: 2px 7px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .chip {
+        padding: 2px 6px;
+        background: var(--paper-2);
+        color: var(--muted);
+      }
+
+      .tone-native {
+        background: var(--copper-bg);
+        color: var(--copper);
+      }
+
+      .tone-contract {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .tone-runtime {
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+
+      .tone-product {
+        background: var(--purple-bg);
+        color: var(--purple);
+      }
+
+      .tone-support {
+        background: var(--amber-bg);
+        color: var(--amber);
+      }
+
+      .tone-boundary {
+        background: var(--red-bg);
+        color: var(--red);
+      }
+
+      .layer-stack {
+        display: grid;
+        gap: 11px;
+        margin: 20px 0;
+      }
+
+      .layer-card {
+        display: grid;
+        grid-template-columns: 74px minmax(0, 1fr) auto;
+        gap: 15px;
+        align-items: center;
+        padding: 15px 17px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .layer-number {
+        color: var(--faint);
+        font-family: Spectral, Georgia, serif;
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1;
+      }
+
+      .layer-number small {
+        display: block;
+        margin-bottom: 4px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 8.5px;
+        font-weight: 600;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .layer-card h3 {
+        margin: 0;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 14px;
+      }
+
+      .layer-card p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .layer-detail {
+        display: grid;
+        grid-template-columns: 88px minmax(0, 1fr);
+        gap: 18px;
+        margin: 18px 0 34px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+      }
+
+      .layer-marker {
+        position: sticky;
+        top: 20px;
+        align-self: start;
+        padding: 12px 9px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        color: var(--faint);
+        font-family: Spectral, Georgia, serif;
+        font-size: 25px;
+        font-weight: 600;
+        text-align: center;
+      }
+
+      .layer-marker small {
+        display: block;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 8px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .layer-body > h3 {
+        margin-top: 0;
+      }
+
+      .ownership-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 11px 0 0;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+        font-size: 13.5px;
+      }
+
+      th {
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line);
+        color: var(--faint);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+
+      td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      td:first-child {
+        white-space: nowrap;
+      }
+
+      td p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .route {
+        color: var(--ink);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .native-type {
+        color: var(--muted);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+      }
+
+      .flow-list {
+        display: grid;
+        gap: 10px;
+        margin: 18px 0;
+        counter-reset: flow;
+      }
+
+      .flow-step {
+        position: relative;
+        display: grid;
+        grid-template-columns: 32px minmax(0, 1fr);
+        gap: 11px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+      }
+
+      .flow-step::before {
+        counter-increment: flow;
+        content: counter(flow);
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--teal-bg);
+        color: var(--teal);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .flow-step strong {
+        display: block;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+      }
+
+      .flow-step p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .tree-note {
+        display: inline-block;
+        color: var(--code-muted);
+      }
+
+      .contract-list {
+        display: grid;
+        gap: 9px;
+      }
+
+      .contract-row {
+        display: grid;
+        grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.6fr);
+        gap: 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+      }
+
+      .contract-row strong {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+      }
+
+      .contract-row p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      footer {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding-top: 19px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 980px) {
+        .layout {
+          display: block;
+        }
+
+        .toc {
+          position: relative;
+          top: auto;
+          display: flex;
+          gap: 3px;
+          margin-bottom: 32px;
+          overflow-x: auto;
+          white-space: nowrap;
+        }
+
+        .toc-title,
+        .toc .sub-link {
+          display: none;
+        }
+
+        .toc a {
+          flex: none;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .shell {
+          padding: 28px 16px 64px;
+        }
+
+        .hero-top {
+          display: block;
+        }
+
+        .hero-actions {
+          margin-top: 14px;
+        }
+
+        .stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .layer-card {
+          grid-template-columns: 52px minmax(0, 1fr);
+        }
+
+        .layer-card > .badge {
+          display: none;
+        }
+
+        .layer-detail {
+          display: block;
+        }
+
+        .layer-marker {
+          position: static;
+          width: 72px;
+          margin-bottom: 12px;
+        }
+
+        .contract-row {
+          grid-template-columns: 1fr;
+          gap: 5px;
+        }
+
+        h2 {
+          font-size: 26px;
+        }
+      }
+
+      @media print {
+        :root {
+          color-scheme: light;
+          --bg: #fff;
+          --paper: #fff;
+          --paper-2: #f5f5f2;
+          --ink: #16181b;
+          --muted: #51555b;
+          --line: #d3d0c8;
+          --shadow: none;
+        }
+
+        .theme-button,
+        .reference-link,
+        .toc,
+        .copy-button {
+          display: none !important;
+        }
+
+        .layout {
+          display: block;
+        }
+
+        .layer-detail,
+        .card,
+        .api-card,
+        .decision-card,
+        .flow-step {
+          break-inside: avoid;
+        }
+
+        .layer-marker {
+          position: static;
+        }
+      }
+
+      .reference-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 18px 0;
+      }
+      .reference-nav a {
+        padding: 7px 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--muted);
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .reference-nav a:hover,
+      .reference-nav a:focus-visible {
+        border-color: var(--teal);
+        color: var(--teal);
+      }
+      .reference-nav a[aria-current='page'] {
+        border-color: var(--teal);
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+      @media print {
+        .reference-nav {
+          display: none;
+        }
+      }
+
+      figure {
+        margin: 20px 0;
+      }
+      .cards {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+      }
+      .card h3,
+      td code {
+        overflow-wrap: anywhere;
+      }
+      .reference-table {
+        min-width: 600px;
+      }
+      .reference-table td:first-child {
+        white-space: normal;
+        width: 30%;
+      }
+      .cards + .table-wrap,
+      .table-wrap + .table-wrap {
+        margin-top: 18px;
+      }
+      .source-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+        gap: 10px;
+      }
+      .source-link {
+        display: block;
+        padding: 13px 15px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        text-decoration: none;
+        overflow-wrap: anywhere;
+      }
+      .source-link strong {
+        display: block;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+      }
+      .source-link span {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .source-link:hover {
+        border-color: var(--teal);
+      }
+      details.contract-details {
+        margin: 18px 0;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+      }
+      details.contract-details summary {
+        cursor: pointer;
+        color: var(--teal);
+        font-weight: 600;
+      }
+      .toc a[aria-current='location'] {
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+      .contract-caption {
+        margin: 18px 0 0;
+        color: var(--faint);
+        font-size: 12px;
+      }
+      pre {
+        padding-top: 38px;
+      }
+      pre code {
+        white-space: pre;
+      }
+      .scope-label {
+        display: inline-block;
+        margin-bottom: 10px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+    
+      .tone-puppeteer {
+        background: var(--copper-bg);
+        color: var(--copper);
+      }
+
+      .tone-rosetta {
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+
+      .tone-vibefield {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .tone-built {
+        background: var(--teal-bg);
+        color: var(--teal);
+      }
+
+      .tone-designed {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .tone-owed {
+        background: var(--amber-bg);
+        color: var(--amber);
+      }
+
+      .status-key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin: 16px 0 0;
+        padding: 12px 15px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+
+      .status-key span {
+        display: inline-flex;
+        gap: 7px;
+        align-items: baseline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero" id="top">
+        <div class="hero-top">
+          <div>
+            <div class="eyebrow">Agent plane · vibe-field</div>
+            <h1>The doors</h1>
+            <p class="subtitle">
+              API design of the agent plane: how a VibeField door is declared, scoped, bounded and
+              audited; the catalogue of every <code>agent.*</code>, <code>agents.*</code> and
+              <code>index.*</code> row with the upstream surface it wraps; and what the siblings expose
+              that no door reaches yet.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <button class="theme-button" id="theme-toggle" type="button" aria-label="Toggle color theme">Theme</button>
+          </div>
+        </div>
+        <nav class="reference-nav" aria-label="Agent plane library">
+          <a href="architecture.html">The agent plane</a><a href="system.html">System</a
+          ><a href="api.html" aria-current="page">Doors</a><a href="../AGENT_PLANE.md">Index</a>
+        </nav>
+        <div class="pipeline" aria-label="Door anatomy">
+          <b class="contract">zod schema</b> → <b>registry row</b> (surface · scope · locality ·
+          idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
+        </div>
+        <div class="stats" aria-label="Catalogue summary">
+          <div class="stat"><strong>23</strong><span>agent-plane doors</span></div>
+          <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
+          <div class="stat"><strong>11</strong><span>audited mutations</span></div>
+          <div class="stat"><strong>0</strong><span>that federate</span></div>
+        </div>
+        <div class="status-key">
+          <span><span class="badge tone-built">Built</span> in the code at the revisions below</span>
+          <span><span class="badge tone-designed">Designed</span> ruled and specified, not in code</span>
+          <span><span class="badge tone-owed">Owed</span> named on the roadmap, not designed in detail</span>
+        </div>
+      </header>
+      <div class="layout">
+        <nav class="toc" aria-label="Contents">
+          <p class="toc-title">Contents</p>
+          <a href="#conventions">Conventions</a><a href="#catalogue">Catalogue</a
+          ><a href="#cat-agent" class="sub-link">agent.*</a><a href="#cat-agents" class="sub-link">agents.*</a
+          ><a href="#cat-index" class="sub-link">index.*</a><a href="#cat-terminal" class="sub-link">terminal.*</a
+          ><a href="#store">The mesh store</a><a href="#upstream">The upstream map</a
+          ><a href="#versioning">Versioning and compatibility</a
+          ><a href="#sources">Source map &amp; related pages</a>
+        </nav>
+        <main>
+          <section id="conventions">
+            <h2>Conventions</h2>
+            <p class="section-note">
+              A VibeField door is not a function that happens to be reachable. It is a row in a registry,
+              a zod schema, a scope, a locality class and — when it mutates — an audit record. Each of
+              those is checked somewhere other than the handler, which is what makes the set of doors a
+              reviewable surface rather than a growing pile.
+            </p>
+
+            <h3>Contracts first, and dependency-free</h3>
+            <p class="section-note">
+              Every VibeField-owned wire shape is a zod schema in <code>packages/contracts</code>. That
+              package has no dependencies, because it is imported from every environment — the renderer,
+              workers and the Node daemons — and the Rust side is generated from it. Ports, scopes,
+              stores, layout segments and environment prefixes come from <code>registries.ts</code>;
+              nothing is spelled literally at a call site.
+            </p>
+            <p class="section-note">
+              One thing the agent plane deliberately does <em>not</em> put in a registry is the vendors.
+              An agent kind and a provider id are open strings with a grammar and no enumeration, because
+              the registries belong to the siblings and are read at the seam. There is no alias table:
+              the join between rosetta's kind and puppeteer's provider is data in the enrollment record,
+              ruled that way when the slate was ratified.
+            </p>
+
+            <h3>The registry row</h3>
+            <p class="section-note">
+              <code>packages/contracts/src/methods.ts</code> declares every method with four columns, and
+              a registry lint rejects an unclassified method — an unregistered method does not ship.
+            </p>
+            <div class="contract-list">
+              <div class="contract-row">
+                <strong>surface</strong>
+                <p>
+                  <code>product</code> · <code>mgmt</code> · <code>mcp</code> · <code>push</code>. Every
+                  agent-plane door is <code>product</code>.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>scope</strong>
+                <p>
+                  The required grant, or <code>null</code> for any authenticated principal. The grant
+                  lives on the connection; a missing scope is <code>FORBIDDEN_SCOPE</code> naming what
+                  was required.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>idempotent</strong>
+                <p>
+                  Whether a retry is safe by construction. It is a claim about the door's semantics, not
+                  about transport: <code>index.enroll</code> is idempotent because it is declarative, and
+                  <code>agent.interrupt</code> is not because a second interrupt acts on a run that may
+                  have moved on.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>locality</strong>
+                <p>
+                  <code>local</code> · <code>sync</code> · <code>replicate</code> · <code>stream</code> ·
+                  <code>federate</code> · <code>native-plane</code>. Every agent-plane door is
+                  <code>local</code>.
+                </p>
+              </div>
+            </div>
+            <div class="callout foundation">
+              <strong>Locality is enforced, and it was not always.</strong> The column had no consumer
+              from the day it was declared, so every method declared local federated in fact. Since
+              2026-09-13 <code>product-api.ts</code> reads it twice on every call: a
+              <code>local</code> method is refused outright for a <code>peer-fieldd</code> principal
+              whatever the tailnet preset granted, and a <code>device</code> parameter naming a foreign
+              machine is refused before the forwarder is reached. The agent doors — a spawn, a resume
+              that terminates a PTY — were the first methods declared local to walk into that gap. A
+              peer's agent is reached by routing the call to its own device, never by federating this
+              one.
+            </div>
+
+            <h3>The tolerant reader</h3>
+            <p class="section-note">
+              Inbound parsing is <code>.passthrough()</code> with unknown-field logging. A shape that
+              arrives with more than the contract names keeps the extra fields verbatim; a shape that
+              arrives with less, or wrong, produces an honest degraded state rather than a blank. The
+              monitor mirror is the sharpest case: every level of it is a passthrough, which is precisely
+              why upstream can add cost fields at the same schema version and they reach a renderer
+              without a contract edit.
+            </p>
+
+            <h3>Errors, and the honest state</h3>
+            <p class="section-note">
+              Eleven kinds, each mapped to a JSON-RPC code in the server-defined range, declared once in
+              <code>packages/contracts/src/errors.ts</code>: <code>UNAUTHORIZED</code>,
+              <code>FORBIDDEN_SCOPE</code>, <code>NOT_FOUND</code>, <code>CONFLICT</code>,
+              <code>PRECONDITION_FAILED</code>, <code>UNAVAILABLE</code>,
+              <code>AUDIT_UNAVAILABLE</code>, <code>TIMEOUT</code>, <code>INCOMPATIBLE</code>,
+              <code>RESOURCE_EXHAUSTED</code> and <code>INTERNAL</code>. Each carries a
+              <code>retryable</code> flag, so a caller never has to infer one from the text.
+            </p>
+            <p class="section-note">
+              <code>UNAVAILABLE</code> is the one that carries structure:
+              <code>{service, state, progress?, device?}</code>. The <code>state</code> is a named word a
+              UI can draw honestly rather than a sentence it must parse. The agent plane's states in the
+              code today are <code>no-terminal-host</code> (the floor is not available to this daemon),
+              <code>session_cap</code>, <code>transport_not_landed</code> (a floor serving no terminal
+              doors — a half ticket is never minted), and the index phases the
+              <code>index.*</code> doors answer from. The rule behind them: a degraded service says what
+              it is doing, never nothing.
+            </p>
+            <div class="callout">
+              <strong>An option that cannot be honoured is refused, not ignored.</strong>
+              <code>agent.subscribe</code> rejects <code>minIntervalMs</code> on the full projection with
+              <code>PRECONDITION_FAILED</code>, because a caller that asked for a cadence and silently
+              got the desktop's 16 ms tick would have no way to learn it had asked the wrong question.
+            </div>
+
+            <h3>Subscriptions</h3>
+            <p class="section-note">
+              A subscription answers a snapshot on open and frames thereafter, over the same wire shape as
+              a local subscription even when it is proxied. Three rules bound them.
+            </p>
+            <div class="cards">
+              <div class="card">
+                <h3>State transfer, never edges</h3>
+                <p>
+                  The full agent subscription emits whole <code>AgentListResult</code> frames. A client
+                  that missed one is not wrong, only behind.
+                </p>
+              </div>
+              <div class="card">
+                <h3>One frame per tick, trailing edge</h3>
+                <p>
+                  16 ms for the fold and the usage feed, deliberately shared so a subscriber to both sees
+                  one frame of each per tick rather than two cadences. A change is never dropped, only
+                  delayed to the next window.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Revisions, and re-subscribe on a gap</h3>
+                <p>
+                  The field projection's deltas apply on top of a named <code>since</code>. A client whose
+                  revision is not that one has lost a frame and re-subscribes for a fresh snapshot. There
+                  is no ack protocol — the tolerant reader's own rule.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Bounded per connection</h3>
+                <p>
+                  32 subscriptions per connection. A subscription is work the daemon does every tick for
+                  as long as the socket lives, so one <code>agent.observe</code> holder in a loop could
+                  otherwise buy the whole tick budget. Past the bound the caller gets
+                  <code>RESOURCE_EXHAUSTED</code> and keeps everything it already had.
+                </p>
+              </div>
+            </div>
+
+            <h3>Tickets, because bytes do not ride JSON-RPC</h3>
+            <p class="section-note">
+              EL2 splits the planes: control-rate JSON goes through the product API, and high-rate or
+              bulk data goes over a ticketed direct socket that the daemon is not in. A terminal's frames
+              are the agent plane's data plane, and they go from the cell to the renderer's WebGPU
+              terminal runtime without transiting fieldd.
+            </p>
+            <p class="section-note">
+              <code>terminal.openTicket</code> and <code>terminal.create</code> mint
+              <code>TerminalOpenTicket</code> — <code>{route, endpoints, transportGrant,
+              attachGrant}</code> — for the session's <em>own</em> cell. Three properties are worth
+              stating because each was once otherwise. A mint is never idempotent: every one is a fresh
+              audited grant. A keyless or doorless cell answers <code>UNAVAILABLE</code> rather than a
+              half ticket. And which endpoint shape a caller gets — loopback for a window, the tailnet
+              shape for a WhoIs-verified self peer — is decided by its principal at mint time and by
+              nothing on the wire. The right to type is a claim inside the grant, per client, per session,
+              expiring and revocable by generation; the durable shared write secret that used to answer
+              the same question was deleted rather than fenced.
+            </p>
+
+            <h3>Audit</h3>
+            <p class="section-note">
+              Every mutating agent-plane door runs its effect inside
+              <code>audit.required(ctx, mutation, effect, describeOutcome)</code>, so the record is
+              written around the act rather than after it, and the outcome names what actually happened.
+              Eleven doors are audited, over five target kinds.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Target kind</th><th>Actions</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="route">agent-session</span></td><td><p><code>agent.session.spawn</code> · <code>agent.session.resume</code> · <code>agent.session.interrupt</code></p></td></tr>
+                  <tr><td><span class="route">agent-persona</span></td><td><p><code>agents.profiles.create</code> · <code>.delete</code> · <code>.verify</code> · <code>.login</code></p></td></tr>
+                  <tr><td><span class="route">agent-provider</span></td><td><p><code>agents.update</code> · <code>agents.set_active</code></p></td></tr>
+                  <tr><td><span class="route">index</span></td><td><p><code>index.enroll</code></p></td></tr>
+                  <tr><td><span class="route">index-runtime</span></td><td><p><code>index.retire</code></p></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="section-note">
+              Two acts in that ledger have no caller at the door. A re-attach at boot and a
+              resume-when-idle are the daemon's own mutations of a person's session, and they are written
+              through the audit service's system-actor entry for exactly that reason.
+            </p>
+          </section>
+
+          <section id="catalogue">
+            <h2>Catalogue</h2>
+            <p class="section-note">
+              Twenty-three doors, all on the product surface, all <code>local</code>. The scope column is
+              the consent the caller had to be granted; the columns after it say what the door does with
+              it.
+            </p>
+
+            <h3 id="cat-agent">agent.* — managed sessions and the fold</h3>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Wraps upstream</th><th>Status</th><th>Witness</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="route">agent.providers</span></td>
+                    <td><p><code>—</code> → <code>AgentProvidersResult</code></p></td>
+                    <td><p><code>agent.spawn</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p><code>runtime.providers()</code>, <code>launchProviders()</code>, <code>distributionProviders()</code></p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-runtime.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.spawn</span></td>
+                    <td><p><code>AgentSpawnParams</code> → <code>AgentSpawnResult</code></p></td>
+                    <td><p><code>agent.spawn</code></p></td>
+                    <td><p>no</p></td>
+                    <td><p><code>runtime.spawn()</code> over <code>AgentHost.spawnTerminal</code>; the claim from <code>createFileCreationRequestRegistry</code></p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-session.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.resume</span></td>
+                    <td><p><code>AgentResumeParams</code> (a run id, never a terminal id) → <code>AgentSpawnResult</code></p></td>
+                    <td><p><code>agent.spawn</code></p></td>
+                    <td><p>no</p></td>
+                    <td><p><code>runtime.resume()</code> with the record's opaque continuation</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-session.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.interrupt</span></td>
+                    <td><p><code>AgentInterruptParams</code> → <code>AgentInterruptResult</code> (a discriminated union on <code>accepted</code>)</p></td>
+                    <td><p><code>agent.control</code></p></td>
+                    <td><p>no</p></td>
+                    <td><p><code>AgentHost.automateTerminal</code>, the interrupt operation</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-session.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.list</span></td>
+                    <td><p><code>—</code> → <code>AgentListResult</code></p></td>
+                    <td><p><code>agent.observe</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>the fold — a join, not a passthrough</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-runtime.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.subscribe</span></td>
+                    <td><p><code>AgentSubscribeParams</code> → <code>AgentListResult</code> frames, or <code>AgentFieldSnapshot</code> + <code>AgentFieldDelta</code></p></td>
+                    <td><p><code>agent.observe</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p><code>runtime.onMonitorState / onMonitorRemoved / onMonitorNotification</code></p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-field-daemon.test.ts</code></p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="contract-caption">
+              <code>agent.resume</code> rides <code>agent.spawn</code> although it terminates a live PTY,
+              and the exception is stated at the row rather than left to be discovered: the PTY it ends is
+              always the record's own, resolved through the record fieldd signed when it spawned that run.
+              If agent cells ever adopt a PTY the record did not mint, the named upgrade is that resume
+              also asks for <code>terminal.attach</code>.
+            </p>
+
+            <h3 id="cat-agents">agents.* — distribution, personas, account usage</h3>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Wraps upstream</th><th>Audited</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><span class="route">agents.installs</span></td><td><p><code>AgentsInstallsParams</code> → <code>AgentsInstallsResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p><code>runtime.inspectInstallations()</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.releases</span></td><td><p><code>AgentsReleasesParams</code> → <code>AgentsReleasesResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p><code>runtime.checkReleases()</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.update</span></td><td><p><code>AgentsUpdateParams</code> → <code>AgentsUpdateResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>no</p></td><td><p><code>runtime.updateInstallation()</code> — the vendor's own updater</p></td><td><p><code>agent-provider</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.setActive</span></td><td><p><code>AgentsSetActiveParams</code> → <code>AgentsSetActiveResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>nothing — the one distribution choice VibeField owns, written to <code>distribution.json</code></p></td><td><p><code>agent-provider</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.list</span></td><td><p><code>AgentsProfilesListParams</code> → <code>AgentsProfilesListResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.profiles()</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.create</span></td><td><p><code>AgentsProfilesCreateParams</code> → <code>AgentsProfilesCreateResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.createProfile()</code> + <code>profileObservationRoot()</code></p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.delete</span></td><td><p><code>AgentsProfilesDeleteParams</code> → <code>AgentsProfilesDeleteResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.removeProfile()</code></p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-owed">Untested live</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.verify</span></td><td><p><code>AgentsProfilesVerifyParams</code> → <code>AgentsProfilesVerifyResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.verifyProfile()</code> — native evidence, not a claim</p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.login</span></td><td><p><code>AgentsProfilesLoginParams</code> → <code>AgentsProfilesLoginResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.startProfileLogin()</code> in a PTY on this device</p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.usage</span></td><td><p><code>—</code> → <code>AgentAccountUsageBatch</code></p></td><td><p><code>agent.usage</code></p></td><td><p>yes</p></td><td><p><code>createAccountUsageMonitor()</code>, projected field by field</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.usage.subscribe</span></td><td><p><code>—</code> → full batches</p></td><td><p><code>agent.usage</code></p></td><td><p>yes</p></td><td><p>the monitor's pushes, on the adapter's cadence</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="contract-caption">
+              Three scopes, not one, and the split is the consent argument. <code>agents.manage</code>
+              mutates machine-scope distribution and even its reads name executable paths, so it is
+              local-only and plugin-ineligible. Personas ride <code>agent.spawn</code> because a persona is
+              what one spawns as. <code>agent.usage</code> is separate from <code>agent.observe</code>
+              because a reading is the account's billing state and costs a credentialed vendor call — a
+              plugin that asked to watch the fold must not thereby make fieldd spend the user's token.
+            </p>
+            <p class="contract-caption">
+              <code>agents.usage</code> answers an honest empty batch before the first reading lands, never
+              a wait and never a throw. Both usage doors answer the projection and nothing else — a key
+              upstream adds that this projection has no word for is logged once and dropped, never
+              forwarded blind.
+            </p>
+
+            <h3 id="cat-index">index.* — the transcript index</h3>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead>
+                  <tr><th>Door</th><th>Params → result</th><th>Scope</th><th>Idem</th><th>Wraps upstream</th><th>Audited</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><span class="route">index.discoveries</span></td><td><p><code>—</code> → <code>IndexDiscoveriesResult</code></p></td><td><p><code>index.read</code></p></td><td><p>yes</p></td><td><p><code>GET /api/discoveries</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">index.status</span></td><td><p><code>—</code> → <code>IndexStatus</code></p></td><td><p><code>index.read</code></p></td><td><p>yes</p></td><td><p><code>GET /api/status</code> + <code>GET /api/runtimes</code>, folded with the supervisor's phase</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">index.sessions</span></td><td><p><code>IndexSessionsParams</code> → <code>IndexSessionsResult</code></p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>GET /api/sessions?native_session_id=…</code>, <code>GET /api/sessions/{id}</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">index.search</span></td><td><p><code>IndexSearchParams</code> → <code>IndexSearchResult</code></p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>GET /api/search?q=…</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">index.enroll</span></td><td><p><code>IndexEnrollParams</code> → <code>IndexMutationResult</code></p></td><td><p><code>index.manage</code></p></td><td><p>yes</p></td><td><p>writes <code>enrollment.json</code>, restarts the daemon when it changed — never a route</p></td><td><p><code>index</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">index.retire</span></td><td><p><code>IndexRetireParams</code> → <code>IndexMutationResult</code></p></td><td><p><code>index.manage</code></p></td><td><p>yes</p></td><td><p>the same file; the runtime's rows are kept</p></td><td><p><code>index-runtime</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="contract-caption">
+              <code>index.read</code> buys the roll call. <code>index.search</code> buys a query over every
+              consented transcript, which is a different consent, so the two content doors were moved off
+              the census scope rather than inheriting it. <code>index.manage</code> is local-only because
+              consent is an act of the person at this device. Every answer is a projection: the daemon's
+              loopback origin never crosses this surface, and an enrolled root's path stays inside fieldd.
+            </p>
+            <p class="contract-caption">
+              <code>index.enroll</code> is idempotent by being declarative — it names the complete consented
+              set, so the same set twice writes nothing and restarts nothing.
+            </p>
+
+            <h3 id="cat-terminal">terminal.* — the agent-relevant subset</h3>
+            <p class="section-note">
+              The terminal family is not the agent plane's, but four of its rows are how an agent's pane
+              reaches a screen. All carry <code>terminal.attach</code> and all are <code>local</code>: a
+              remote terminal is reached by routing the call, never by federating its bytes.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Door</th><th>Result</th><th>Idem</th><th>Why the agent plane needs it</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="route">terminal.openTicket</span></td><td><p><code>TerminalOpenTicket</code></p></td><td><p><strong>no</strong></p></td><td><p>The mint for an existing session — how a fold row's <code>terminal.runtimeSessionId</code> becomes a mounted pane. Every mint is a fresh audited grant.</p></td></tr>
+                  <tr><td><span class="route">terminal.create</span></td><td><p><code>TerminalCreateOpenResult</code></p></td><td><p>no</p></td><td><p>The atomic birth-plus-ticket, so a spawn mounts without a second inventory round trip.</p></td></tr>
+                  <tr><td><span class="route">terminal.renewAttach</span></td><td><p><code>TerminalRenewAttachResult</code></p></td><td><p>yes</p></td><td><p>A compare-and-set on the generation the caller holds, idempotent by request id, so a retried renewal returns the grant it already got.</p></td></tr>
+                  <tr><td><span class="route">terminal.terminate</span></td><td><p>—</p></td><td><p>yes</p></td><td><p>Closes an agent's pane. Idempotent by intent: terminating an already-exited session is the normal race when the ladder and a click converge.</p></td></tr>
+                  <tr><td><span class="route">terminal.list · sessions · roster · get</span></td><td><p>inventories</p></td><td><p>yes</p></td><td><p>Three different projections for three readers. The fold joins against the inventory; the roster is the UI's view and carries no placement.</p></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <h4>The account precondition</h4>
+            <p class="section-note">
+              <code>user.link.*</code> is not an agent door, but nothing on the mesh works before it: the
+              tailscale login the account is bound to is what scopes the store and gates the node. A
+              desktop that is not linked publishes no agent field and admits no peer. The account surface
+              is documented with the account foundation, not here.
+            </p>
+          </section>
+
+          <section id="store">
+            <h2>The mesh store</h2>
+            <p class="section-note">
+              <code>field.agents.v1</code> is the agent plane's second carrier — the same field rows the
+              door serves, replicated by the mesh so a phone gets every desktop's board with no fieldd in
+              its read path. One slice per device, keyed by the publisher's authenticated device id.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="route">v</span></td><td><p>literal <code>1</code></p></td></tr>
+                  <tr><td><span class="route">deviceId</span></td><td><p>the publishing device's mesh identity — the slice key's own value</p></td></tr>
+                  <tr><td><span class="route">publishedAt · expiresAt</span></td><td><p>the honesty clause. A live publisher pushes <code>expiresAt</code> forward on a heartbeat; a graceful stop publishes empty rows with the clock already past, so a desktop that died fades rather than haunting every phone.</p></td></tr>
+                  <tr><td><span class="route">revision</span></td><td><p>the board's own counter, which orders frames</p></td></tr>
+                  <tr><td><span class="route">rows</span></td><td><p><code>AgentFieldRow[]</code> — identity, status and clocks, liveness, blocker shapes, two usage numbers, a context percentage, model and effort, the folder name, the terminal join</p></td></tr>
+                  <tr><td><span class="route">omitted</span></td><td><p>how many rows the byte cap left out, absent when the board is whole. The door is never capped; only the slice is.</p></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <h3>The revision rule</h3>
+            <p class="section-note">
+              A row's revision bumps if and only if its <em>projected</em> JSON changed — never with the
+              mirror's own revision. That single rule is what makes an idle board free: a working agent's
+              mirror revises many times a second on usage samples and freshness stamps, and none of it
+              reaches the mesh. The counter is a change stamp and not an ordering; it restarts at 1 when a
+              run leaves the board and returns, so a reader applies every upsert it is given and never
+              compares one row's revision with another's.
+            </p>
+            <h3>What the phone never receives</h3>
+            <p class="section-note">
+              The assistant's last message, a blocker's input, questions or detail, the session title, the
+              mirror itself, the absolute working-directory path, and every cost field. The first five are
+              content, and content reaches a phone on tap through <code>agent.list</code> and the verbs,
+              where the person asked for it. The path was removed because it carried the OS username and
+              the shape of a person's disk to every node the store reaches. The cost fields are simply not
+              projected yet — the field row's <code>usage</code> is rebuilt from exactly
+              <code>cumulativeTokens</code> and <code>burnRatePerMin</code>.
+              <span class="badge tone-owed">Owed</span>
+            </p>
+            <div class="callout foundation">
+              <strong>Login scope is a transport guarantee, and not a licence to stop thinking.</strong>
+              The store's audience is the tailscale login: a gated node reports only same-login peers, the
+              hello refuses a foreign login with a close code before revealing an identity block, and a
+              slice is applied only under its sender's authenticated device id. VibeField still holds two
+              rules of its own on top. No secret rides a slice — a published product endpoint is a locator
+              and the route secret is added on forward, proved by a test that greps the published bytes.
+              And the tailnet's own peer registry is the authority on who exists: a slice may describe a
+              device the registry lists, never add one.
+            </div>
+          </section>
+
+          <section id="upstream">
+            <h2>The upstream map</h2>
+            <p class="section-note">
+              Every door above wraps something, or deliberately wraps nothing. These two tables are the
+              whole of what VibeField asks of its siblings today.
+            </p>
+
+            <h3>puppeteer</h3>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Upstream surface</th><th>VibeField door or seam</th></tr></thead>
+                <tbody>
+                  <tr><td><p><code>createAgentRuntime(options)</code> · <code>createBuiltinProviders({executables})</code></p></td><td><p><code>AgentRuntimeService</code>'s constructor — one runtime per fieldd</p></td></tr>
+                  <tr><td><p><code>AgentHost</code>: <code>spawnTerminal</code>, <code>automateTerminal</code></p></td><td><p><code>agent-host.ts</code> over the floor's agent cell</p></td></tr>
+                  <tr><td><p><code>buildAgentEnvironment()</code></p></td><td><p><code>agentEnvironment()</code>, with VibeField's passthrough beneath and the EL7 strip last</p></td></tr>
+                  <tr><td><p><code>runtime.spawn</code> · <code>resume</code> · <code>attach</code> · <code>agent(id)</code> · <code>handleProcessExit</code></p></td><td><p><code>agent.spawn</code>, <code>agent.resume</code>, the boot re-attach, the exit backstop</p></td></tr>
+                  <tr><td><p><code>onMonitorState</code> · <code>onMonitorRemoved</code> · <code>onMonitorNotification</code> · <code>monitorState</code></p></td><td><p>the fold, through <code>AgentMonitorMirror</code></p></td></tr>
+                  <tr><td><p><code>createFileCreationRequestRegistry</code> (<code>CreationRequestRegistry</code>)</p></td><td><p><code>users/&lt;fuid&gt;/agents/runs/</code> — puppeteer owns every byte</p></td></tr>
+                  <tr><td><p><code>ProfileStore</code> · <code>parseProfileRegistrySnapshot</code> · <code>createProfile</code> · <code>removeProfile</code> · <code>verifyProfile</code> · <code>startProfileLogin</code> · <code>profiles</code> · <code>profileObservationRoot</code></p></td><td><p>the five <code>agents.profiles.*</code> doors and the enrollment join</p></td></tr>
+                  <tr><td><p><code>inspectInstallations</code> · <code>checkReleases</code> · <code>updateInstallation</code> · <code>distributionProviders</code></p></td><td><p><code>agents.installs</code>, <code>.releases</code>, <code>.update</code>; transcripts under the machine scope</p></td></tr>
+                  <tr><td><p><code>createAccountUsageMonitor</code> · <code>AccountUsageBatch</code></p></td><td><p><code>agents.usage</code> and its subscription, through the EL7 projection</p></td></tr>
+                  <tr><td><p><code>HistoryPort</code> · <code>AccountUsagePort</code> (<code>puppeteer-views</code>)</p></td><td><p><code>packages/field-app/src/godview/monitor/doors.ts</code> — adapters over fieldd's doors; the views dial nothing</p></td></tr>
+                  <tr><td><p><code>dispose({detach})</code></p></td><td><p>a graceful stop releases the runs; the PTYs and claims survive</p></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>rosetta</h3>
+            <p class="section-note">
+              The shape of this dependency is worth stating plainly, because it is easy to assume
+              otherwise: VibeField does not use a rosetta client object. It imports response
+              <em>types</em> from <code>@rosetta/protocol</code> in one file, the
+              <code>PROTOCOL_VERSION</code> constant in one other, and dials the routes with its own fetch
+              over the loopback origin the supervisor keeps private.
+            </p>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>rosettad route</th><th>VibeField door</th><th>Types read</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="route">GET /api/status</span></td><td><p><code>index.status</code>; also the search-health fold</p></td><td><p><code>StatusResponse</code>, <code>DaemonStatus</code></p></td></tr>
+                  <tr><td><span class="route">GET /api/discoveries</span></td><td><p><code>index.discoveries</code></p></td><td><p><code>DiscoveriesResponse</code></p></td></tr>
+                  <tr><td><span class="route">GET /api/runtimes</span></td><td><p><code>index.status</code></p></td><td><p><code>RuntimesResponse</code>, <code>RuntimeRow</code>, <code>RuntimeIngestStatus</code>, <code>RuntimeBackfill</code></p></td></tr>
+                  <tr><td><span class="route">GET /api/sessions</span>, <span class="route">/api/sessions/{id}</span></td><td><p><code>index.sessions</code></p></td><td><p>parsed against VibeField's own schemas, never cast</p></td></tr>
+                  <tr><td><span class="route">GET /api/search</span></td><td><p><code>index.search</code></p></td><td><p>same</p></td></tr>
+                  <tr><td><span class="route">--enroll FILE</span> (a CLI flag, not a route)</td><td><p><code>index.enroll</code> / <code>index.retire</code> write the file and restart the daemon</p></td><td><p>format 1, validated the way rosetta validates it</p></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>What is not wrapped</h3>
+            <p class="section-note">
+              Naming the gaps is the point of this section. Each one below is a real upstream surface with
+              no VibeField caller at these revisions.
+            </p>
+            <div class="cards">
+              <div class="card">
+                <h3>Prompt submission</h3>
+                <p>
+                  puppeteer's <code>Agent.submitPrompt(submission) → Promise&lt;PromptReceipt&gt;</code>
+                  exists and has no caller here. The send box is ruled pane-only and is AR-6.
+                </p>
+                <span class="badge tone-designed">Designed</span>
+              </div>
+              <div class="card">
+                <h3>Approvals</h3>
+                <p>
+                  The fold reports blockers; nothing answers one. <code>agent.control</code> was minted
+                  with the spawn trio and had no door until <code>agent.interrupt</code>, which steers a
+                  run rather than deciding for it. Two approval transports are ruled; neither is built.
+                </p>
+                <span class="badge tone-designed">Designed</span>
+              </div>
+              <div class="card">
+                <h3>rosetta's transcript stream</h3>
+                <p>
+                  rosettad serves <code>/ws/sessions/{id}</code>, <code>/ws/meta</code> and
+                  <code>/ws/collaboration/{id}</code>. fieldd opens no WebSocket to it at all. The direct
+                  data plane waits on RO-1, rosetta's authentication.
+                </p>
+                <span class="badge tone-designed">Designed</span>
+              </div>
+              <div class="card">
+                <h3>rosetta's assets, timelines and projects</h3>
+                <p>
+                  Of twenty-one HTTP routes, VibeField dials five. Untouched: the seven-route timeline
+                  family, the four project routes, <code>/api/assets/{name}</code>,
+                  <code>/api/ingest/boost</code> and <code>/api/runtimes/enable</code> — the last one
+                  deliberately, since the enrollment file is authoritative.
+                </p>
+                <span class="badge tone-owed">Owed</span>
+              </div>
+              <div class="card">
+                <h3>The History view</h3>
+                <p>
+                  Ruled as spine content, behind RO-1, as AR-8. What exists is the find sheet over the
+                  <code>index.*</code> doors.
+                </p>
+                <span class="badge tone-designed">Designed</span>
+              </div>
+              <div class="card">
+                <h3>The Agents settings section</h3>
+                <p>
+                  The persona login door is live and has no UI. Named on the roadmap's AR row, not
+                  designed in detail.
+                </p>
+                <span class="badge tone-owed">Owed</span>
+              </div>
+            </div>
+          </section>
+
+          <section id="versioning">
+            <h2>Versioning and compatibility</h2>
+            <p class="section-note">
+              Two siblings, pinned by revision, with one generation number between them. The compatibility
+              story is not a policy document — it is a pin, a constant and a golden, and a gate that fails
+              when they disagree.
+            </p>
+            <div class="layer-stack">
+              <div class="layer-card">
+                <div class="layer-number"><small>pin</small>1</div>
+                <div>
+                  <h3>siblings.lock.json</h3>
+                  <p>
+                    puppeteer and rosetta enter as sibling checkouts pinned by revision, with
+                    <code>link:</code> rows in the workspace. <code>pnpm preflight</code> fails on a
+                    missing checkout or a revision that is not the pin, and
+                    <code>pnpm siblings:pin</code> is the deliberate upgrade event.
+                  </p>
+                </div>
+                <span class="badge tone-vibefield">EL8</span>
+              </div>
+              <div class="layer-card">
+                <div class="layer-number"><small>gen</small>2</div>
+                <div>
+                  <h3>AGENT_MONITOR_SCHEMA_VERSION</h3>
+                  <p>
+                    <code>3</code> at these revisions, declared in
+                    <code>packages/contracts/src/agent-session.ts</code> and asserted equal to puppeteer's
+                    own constant by <code>packages/fieldd/test/agent-monitor-pin.test.ts</code>.
+                  </p>
+                </div>
+                <span class="badge tone-puppeteer">upstream</span>
+              </div>
+              <div class="layer-card">
+                <div class="layer-number"><small>fix</small>3</div>
+                <div>
+                  <h3>The golden</h3>
+                  <p>
+                    <code>packages/contracts/fixtures/agent-monitor-state.valid.json</code> — puppeteer's
+                    own monitor fixture. The gate asserts it is of the current generation and that the
+                    mirror parses it.
+                  </p>
+                </div>
+                <span class="badge tone-vibefield">gate</span>
+              </div>
+            </div>
+            <h3>What passes, and what breaks</h3>
+            <div class="contract-list">
+              <div class="contract-row">
+                <strong>An added field passes</strong>
+                <p>
+                  The mirror is a passthrough at every level, so a new upstream field reaches a renderer
+                  without a contract edit. The cost fields did exactly that: added at the same schema
+                  version 3 with no generation bump, and the pin gate stayed green because nothing it
+                  checks had moved.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>A generation bump is caught</strong>
+                <p>
+                  A bump at the pinned revision fails the pin test until the mirror is re-read against the
+                  new shape, the golden regenerated and the constant moved — the deliberate event, never a
+                  silent drift.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>A rename without a bump is not caught there</strong>
+                <p>
+                  The mirror is a passthrough by law, so a renamed field passes the gate. Drift in the
+                  fields fieldd actually reads surfaces at runtime as
+                  <code>fieldd.agents.monitor_shape_drift</code>, logged once per run, with the row
+                  surviving at <code>status: unknown</code>. This is a stated limit, not an oversight.
+                </p>
+              </div>
+            </div>
+            <h3>The worked example: the 2026-09-21 usage-ledger break</h3>
+            <p class="section-note">
+              When the puppeteer pin moved to <code>2f5ce002</code>, three breaks came with it and only one
+              was visible. A fixture tripped three type errors, which typecheck found. A stale test
+              expectation had been red since AR-3 behind an opt-in row the ordinary gate never runs. The
+              third was silent: upstream's export changed to hand the store only the conversation's live
+              run, which upstream's own host answers with a per-run merge that preserves corrections by
+              revision — while VibeField's renderer-local cache still replaced the whole record. Nothing in
+              the type system could see it, and the symptom would have been a resumed conversation quietly
+              losing every earlier run's observed spend.
+            </p>
+            <div class="callout warning">
+              <strong>The lesson the pin gate cannot teach.</strong> A clean typecheck across a pin move
+              says the shapes still line up. It says nothing about a rule that is mirrored on both sides of
+              the seam, where upstream changing its half silently desynchronises yours. Recorded in
+              <code>docs/LANDED.md</code> §AR-5-1; the cache now merges by run id with revision precedence
+              and writes a versioned document so a pre-USD record is dropped on read rather than shown as
+              dollars.
+            </div>
+          </section>
+
+          <section id="sources">
+            <h2>Source map &amp; related pages</h2>
+            <h3>Source map</h3>
+            <div class="table-wrap">
+              <table class="reference-table">
+                <thead><tr><th>Concern</th><th>File</th></tr></thead>
+                <tbody>
+                  <tr><td><p>The method registry: surface, scope, idempotency, locality — and the reasoning per row</p></td><td><span class="route">packages/contracts/src/methods.ts</span></td></tr>
+                  <tr><td><p>Scopes, tailnet presets, stores, <code>LAYOUT</code>, mesh and per-connection limits</p></td><td><span class="route">packages/contracts/src/registries.ts</span></td></tr>
+                  <tr><td><p>The error taxonomy and the <code>UNAVAILABLE</code> detail shape</p></td><td><span class="route">packages/contracts/src/errors.ts</span></td></tr>
+                  <tr><td><p>The monitor mirror, session summary, terminal join; the schema generation</p></td><td><span class="route">packages/contracts/src/agent-session.ts</span></td></tr>
+                  <tr><td><p>The field row, the subscription params, the snapshot/delta and slice shapes</p></td><td><span class="route">packages/contracts/src/agent-field.ts</span></td></tr>
+                  <tr><td><p>The enrollment record and the <code>index.*</code> wire shapes</p></td><td><span class="route">packages/contracts/src/agent-index.ts</span></td></tr>
+                  <tr><td><p>The account-usage projection shapes</p></td><td><span class="route">packages/contracts/src/agent-usage.ts</span></td></tr>
+                  <tr><td><p>The ticket: route, endpoints, transport and attach grants</p></td><td><span class="route">packages/contracts/src/terminal-pipeline.ts</span></td></tr>
+                  <tr><td><p>Scope check, locality enforcement, the device routing rule, subscription budget</p></td><td><span class="route">packages/fieldd/src/product-api.ts</span></td></tr>
+                  <tr><td><p>All 23 agent-plane registrations and their audit wrappers</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span> (lines ~1194–1530)</td></tr>
+                  <tr><td><p>The services behind them</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts · agent-index.ts · agent-usage.ts · agent-field.ts</span></td></tr>
+                  <tr><td><p>The ticket mint and the agent spawn path</p></td><td><span class="route">packages/fieldd/src/terminal-service.ts</span></td></tr>
+                  <tr><td><p>The view-port adapters over the doors</p></td><td><span class="route">packages/field-app/src/godview/monitor/doors.ts</span></td></tr>
+                  <tr><td><p>The monitor generation gate and its golden</p></td><td><span class="route">packages/fieldd/test/agent-monitor-pin.test.ts</span> · <span class="route">packages/contracts/fixtures/agent-monitor-state.valid.json</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <h3>Related pages</h3>
+            <div class="source-grid">
+              <a class="source-link" href="architecture.html">
+                <strong>vibe-field · docs/agent-plane/architecture.html</strong>
+                <span>The umbrella: ownership law, the three-repository system diagram, the seams, the walls, the data domains, lockstep, lifetimes and the index of every document.</span>
+              </a>
+              <a class="source-link" href="system.html">
+                <strong>vibe-field · docs/agent-plane/system.html</strong>
+                <span>Aggregation and integration: fieldd's agent services and their graph, the floor's agent cell, the mirror and the fold, the field projection to the phone, the data domains and the enforced walls.</span>
+              </a>
+              <a class="source-link" href="../AGENT_PLANE.md">
+                <strong>vibe-field · docs/AGENT_PLANE.md</strong>
+                <span>The Markdown hub listing every agent-plane document across all three repositories and what each governs.</span>
+              </a>
+              <a class="source-link" href="https://github.com/vibefield/puppeteer/blob/main/docs/host-integration.html">
+                <strong>puppeteer · docs/host-integration.html</strong>
+                <span>The embedding seam written for any host: <code>AgentHost</code>, the runtime construction ports, the monitor schema and its versioning promise, the view ports, lifetimes and the environment contract.</span>
+              </a>
+              <a class="source-link" href="https://github.com/vibefield/rosetta/blob/main/docs/daemon-api.html">
+                <strong>rosetta · docs/daemon-api.html</strong>
+                <span>rosettad's process model and supervision, enrollment and consent by construction, the readiness vocabulary, the HTTP and WebSocket surface, auth today and RO-1.</span>
+              </a>
+            </div>
+          </section>
+          <footer>
+            <p>
+              Agent plane · vibe-field. Written against vibe-field <code>b7ebb444</code>, puppeteer
+              <code>2f5ce002</code>, rosetta <code>e8d907ab</code>. The registry is the authority on a
+              door's scope and locality; where this page and
+              <code>packages/contracts/src/methods.ts</code> disagree, the registry is right and this page
+              is a bug.
+            </p>
+          </footer>
+        </main>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const themeButton = document.getElementById('theme-toggle');
+        let storedTheme;
+        try {
+          storedTheme = localStorage.getItem('vibefield-agent-plane-theme');
+        } catch {
+          storedTheme = undefined;
+        }
+        if (storedTheme === 'light' || storedTheme === 'dark') root.dataset.theme = storedTheme;
+
+        themeButton.addEventListener('click', () => {
+          const current = root.dataset.theme;
+          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const next = current === 'dark' || (!current && systemDark) ? 'light' : 'dark';
+          root.dataset.theme = next;
+          try {
+            localStorage.setItem('vibefield-agent-plane-theme', next);
+          } catch {
+            // File URLs may not expose persistent storage; the in-page theme still changes.
+          }
+        });
+
+        document.querySelectorAll('pre').forEach((pre) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'copy-button';
+          button.textContent = 'Copy';
+          button.addEventListener('click', async () => {
+            const code = pre.querySelector('code')?.textContent ?? pre.textContent;
+            try {
+              await navigator.clipboard.writeText(code);
+              button.textContent = 'Copied';
+              window.setTimeout(() => (button.textContent = 'Copy'), 1200);
+            } catch {
+              button.textContent = 'Select text';
+            }
+          });
+          pre.appendChild(button);
+        });
+      })();
+    </script>
+  </body>
+</html>
