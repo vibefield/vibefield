@@ -104,9 +104,35 @@ const ROWS: readonly AgentSessionSummary[] = [
     createdAt: "2026-09-12T10:00:02.000Z",
   }),
 ];
+// AC-3 — a providers row carries the catalog's decision and claims
+const OFFERS = {
+  spawn: true,
+  resume: true,
+  reattach: false,
+  history: true,
+  usage: true,
+  distribution: true,
+  personas: true,
+};
 const PROVIDERS: readonly AgentProviderSummary[] = [
-  { id: "claude", label: "Claude", available: true, resumable: true, personas: [] },
-  { id: "pi", label: "Pi", available: false, resumable: true, personas: [] },
+  {
+    id: "claude",
+    label: "Claude",
+    available: true,
+    resumable: true,
+    personas: [],
+    status: "supported",
+    offers: OFFERS,
+  },
+  {
+    id: "pi",
+    label: "Pi",
+    available: false,
+    resumable: true,
+    personas: [],
+    status: "preview",
+    offers: { ...OFFERS, usage: false },
+  },
 ];
 const pane = (id: string, cwd = "/project/scratch"): SessionSummary =>
   ({ id, exited: false, createdAtMs: 5, cwd, title: "zsh" }) as SessionSummary;

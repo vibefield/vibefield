@@ -159,15 +159,17 @@ describe("the agent catalog (AC-1)", () => {
   });
 
   it("the readers factory answers over its own table; the named readers are the factory over THE table", () => {
+    // the first row, typed as a row (an indexed access is `| undefined`)
+    const base = AgentCatalogEntry.parse(AGENT_CATALOG[0]);
     const readers = createAgentCatalogReaders([
       {
-        ...rows[0],
+        ...base,
         id: "x",
         seams: { puppeteer: { provider: "x" }, rosetta: { kind: "x-kind" } },
         layoutRoot: "~/.x",
       },
       {
-        ...rows[0],
+        ...base,
         id: "y",
         status: "declined",
         seams: { puppeteer: { provider: "y" }, rosetta: null },
