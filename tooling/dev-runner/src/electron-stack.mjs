@@ -78,7 +78,13 @@ export function createElectronStack({
       // it into the desktop process would turn Electron itself into Node — and
       // on Windows an inherited variant spelling is the same variable, which is
       // why removal is case-insensitive there.
-      unset: ["ELECTRON_RUN_AS_NODE"],
+      // AC (2026-09-22): the child's rosettad is the RESOLVER's decision, never
+      // the launching shell's — a developer's exported FIELDD_ROSETTAD_BIN would
+      // otherwise ride process.env past a resolver that said "none" (or, worse,
+      // an empty string the comment above forbids) and fieldd would point at a
+      // binary the runner never chose. When the resolver names one it is set
+      // above; when it does not, the inherited variable is removed.
+      unset: ["ELECTRON_RUN_AS_NODE", ...(rosettadBin === null ? ["FIELDD_ROSETTAD_BIN"] : [])],
     });
 
     const next = spawnProcess(
