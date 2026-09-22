@@ -1322,7 +1322,7 @@
                     <td><span class="route">agent-runtime.ts</span><br /><span class="native-type">2,667 lines</span></td>
                     <td><p>Builds puppeteer's runtime, owns the fold, the personas, distribution, the re-attach and resume-when-idle.</p></td>
                     <td><p><code>agent-host</code>, <code>agent-sessions</code>, <code>agent-index</code>, <code>rosettad-supervisor</code>, <code>terminal-service</code></p></td>
-                    <td><p><code>@vibecook/puppeteer-runtime</code> (<code>createAgentRuntime</code>, <code>createFileCreationRequestRegistry</code>, <code>parseProfileRegistrySnapshot</code>) · <code>-builtin-providers</code> · <code>-core</code> types</p></td>
+                    <td><p><code>createAgentRuntime</code> called directly, not through <code>createBuiltinAgentRuntime</code> (which forwards only two options and does not thread <code>executables</code> to the providers). fieldd passes <code>host</code>, <code>defaultCwd</code>, <code>providers</code>, <code>creationRegistry</code>, <code>profiles {store, rootsDirectory}</code>, <code>distribution {transcriptsDirectory, fetch?, searchPath?}</code>, <code>monitorCoalesceMs</code> and <code>onError</code>. Also <code>createBuiltinProviders({executables})</code> and <code>createFileCreationRequestRegistry</code>.</p></td>
                     <td><p><code>agent-runtime.test.ts</code>, <code>agent-session.test.ts</code></p></td>
                   </tr>
                   <tr>
@@ -1478,8 +1478,12 @@
             </p>
             <h4>EL7 at the seam</h4>
             <p class="section-note">
-              An agent PTY is born with a clean environment: a fixed passthrough allow-list from the
-              daemon's own environment (fifteen POSIX keys, plus fifteen more folded by case on win32),
+              The environment is <strong>fieldd's composition</strong>, not the adapter's and not
+              puppeteer's. <code>buildAgentEnvironment</code> is a policy layer fieldd calls from inside
+              its own <code>spawnTerminal</code>; the adapter's <code>spec.env</code> is a set of asks,
+              not a grant; and the EL7 strip is fieldd's duty, because fieldd is the only party that
+              knows what a daemon secret looks like. An agent PTY is born with a clean environment: a
+              fixed passthrough allow-list from the daemon's own environment (fifteen POSIX keys, plus fifteen more folded by case on win32),
               then puppeteer's own policy for what a vendor TUI needs, then the adapter's
               <code>spec.env</code> layered last among the allowed. The strip runs
               <em>after</em> all three — every <code>FIELD_*</code> and <code>FIELDD_*</code> key is
@@ -1492,6 +1496,18 @@
               is only acted on when its HMAC verifies against this user root's key and the PTY it names
               is one the floor still lists as an agent-cell session. A same-uid adversary dropping a
               file into <code>agents/sessions/</code> cannot point fieldd at a terminal it never spawned.
+            </div>
+            <div class="callout warning">
+              <strong>The floor's refusal would otherwise be lost.</strong> When
+              <code>spawnTerminal</code> throws, puppeteer folds it into a flat session failure —
+              <code>AGENT_SESSION_CREATE_FAILED</code>, with the generic text
+              <code>agent session creation failed: &lt;agent&gt;</code>
+              (<code>packages/runtime/src/runtime.ts</code>). That code says a session did not start and
+              nothing about why. So <code>agent-host.ts</code> keeps the floor's own typed error in
+              <code>lastRefusal()</code>, cleared by the next attempt, and the door answers with that
+              instead: the session cap, a missing executable, or
+              <code>UNAVAILABLE {service: "agents", state: "no-terminal-host"}</code>. A host that did
+              not keep it would leave a person reading one sentence for every possible cause.
             </div>
           </section>
 
@@ -1586,7 +1602,8 @@
               A phone must not receive the fold. A working agent's mirror revises many times a second at
               2–5 KB per row, and the desktop reads that over a loopback socket without caring. The
               field projection is the same board with its content removed — roughly 300–500 B per row —
-              and it travels two ways from one shape.
+              and it travels two ways from one shape. The hybrid was ruled as GM-D4: the store carries a
+              content-free projection, and content rides the door on tap.
             </p>
             <div class="cards">
               <div class="card">
@@ -1719,6 +1736,18 @@
               a scraped banner, and a daemon that keeps dying stops being restarted and says
               <code>failed</code> with a restart affordance rather than spinning.
             </p>
+            <pre><code>rosettad serve --db &lt;user root&gt;/index/rosetta.db \
+  --addr 127.0.0.1:0 --json \
+  --announce --announce-dir &lt;user root&gt;/index/daemons \
+  --home &lt;the OS user's home&gt; \
+  --enroll &lt;user root&gt;/index/enrollment.json</code></pre>
+            <p class="section-note">
+              Four of those flags are the seam. <code>--addr 127.0.0.1:0</code> and <code>--json</code>
+              make the origin ephemeral and the readiness structured; <code>--announce-dir</code> points
+              the daemon at a fieldd-private directory rather than rosetta's shared one;
+              <code>--home</code> is the discovery scan root; and <code>--enroll</code> is the consent
+              record, written before the spawn.
+            </p>
             <h3>Consent by construction</h3>
             <p class="section-note">
               <code>users/&lt;fuid&gt;/index/enrollment.json</code> is both VibeField's truth about what
@@ -1842,14 +1871,16 @@
             <h3>The device domain — the one exception</h3>
             <p class="section-note">
               Installs are OS-user-global by nature, so agent distribution is the single named exception
-              to "all product state under the user". <code>machine/agents/distribution.json</code> holds
+              to "all product state under the user" (AR-D15, with AR-D16 making the record root-locked).
+              One naming caution for anyone citing the topology document: its numbered rules are R1–R7 and
+              its decision slate is AR-D15–AR-D22. They are different series. <code>machine/agents/distribution.json</code> holds
               what VibeField actually owns there — the active executable per provider, the release-check
               preferences, the last update receipt — and <code>machine/agents/updates/</code> holds
               puppeteer's opaque update transcripts. Nothing else enters <code>machine/</code> without a
               new decision.
             </p>
             <div class="callout">
-              <strong>One writer at a time, and reads are always current.</strong> The record is
+              <strong>One writer at a time, and reads are always current (rule R6).</strong> The record is
               read-modify-written under the root lock every fieldd on the device shares, and published by
               atomic rename. An unchanged record is not rewritten. Reads re-read the file every time, so a
               resident fieldd's "refresh" is simply the next read and no watcher is needed. A daemon booted
@@ -2149,6 +2180,14 @@
           <section id="sources">
             <h2>Source map &amp; related pages</h2>
             <h3>Source map</h3>
+            <div class="callout warning">
+              <strong>Two governing design documents carry stale rows for these services, flagged at
+              their own source.</strong> <code>design-01-contracts.md</code>'s <code>agent.*</code> row
+              describes a runtime retired in September 2026, and <code>design-02-daemons.md</code> §3.2
+              still gives the agent and index services storage columns naming that runtime and its
+              index. Both predate the sibling runtimes. Read them for the door conventions and the
+              layering law, never for what the agent services hold — the files below are the authority.
+            </div>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead><tr><th>Concern</th><th>File</th></tr></thead>

@@ -1229,6 +1229,15 @@
               <code>index.*</code> doors answer from. The rule behind them: a degraded service says what
               it is doing, never nothing.
             </p>
+            <div class="callout warning">
+              <strong>An upstream error code can be less honest than the one beneath it.</strong> When
+              fieldd's host throws, puppeteer folds the throw into a flat
+              <code>AGENT_SESSION_CREATE_FAILED</code> whose text is
+              <code>agent session creation failed: &lt;agent&gt;</code>. That is one sentence for a
+              session cap, a missing executable and an absent floor alike. So the host keeps the floor's
+              own typed error in <code>lastRefusal()</code> and the door answers with that — the reason
+              a VibeField door's error is not simply whatever the runtime handed back.
+            </div>
             <div class="callout">
               <strong>An option that cannot be honoured is refused, not ignored.</strong>
               <code>agent.subscribe</code> rejects <code>minIntervalMs</code> on the full projection with
@@ -1576,9 +1585,11 @@
             <p class="section-note">
               The shape of this dependency is worth stating plainly, because it is easy to assume
               otherwise: VibeField does not use a rosetta client object. It imports response
-              <em>types</em> from <code>@rosetta/protocol</code> in one file, the
-              <code>PROTOCOL_VERSION</code> constant in one other, and dials the routes with its own fetch
-              over the loopback origin the supervisor keeps private.
+              <em>types</em> from <code>@rosetta/protocol</code> in one file (seven generated response
+              types), the <code>PROTOCOL_VERSION</code> constant (<code>20</code>) in one other, and
+              dials the routes with its own fetch over the loopback origin the supervisor keeps private.
+              rosettad's router registers 24 routes — 21 under <code>/api/</code> and 3 WebSocket routes
+              under <code>/ws/</code>. fieldd fetches six of them and opens no WebSocket at all.
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -1604,16 +1615,21 @@
                 <h3>Prompt submission</h3>
                 <p>
                   puppeteer's <code>Agent.submitPrompt(submission) → Promise&lt;PromptReceipt&gt;</code>
-                  exists and has no caller here. The send box is ruled pane-only and is AR-6.
+                  has no product caller: zero occurrences under <code>packages/fieldd/src</code> and
+                  <code>packages/field-app/src</code>. It is exercised only in fieldd's own
+                  <code>agent-session.test.ts</code>, so the seam is proven and unused. The send box is
+                  ruled pane-only and is AR-6.
                 </p>
                 <span class="badge tone-designed">Designed</span>
               </div>
               <div class="card">
                 <h3>Approvals</h3>
                 <p>
-                  The fold reports blockers; nothing answers one. <code>agent.control</code> was minted
-                  with the spawn trio and had no door until <code>agent.interrupt</code>, which steers a
-                  run rather than deciding for it. Two approval transports are ruled; neither is built.
+                  The fold reports blockers; nothing answers one. puppeteer's permission schemas and
+                  its permission runtime state have <em>zero</em> occurrences in VibeField, source or
+                  test. <code>agent.control</code> was minted with the spawn trio and had no door until
+                  <code>agent.interrupt</code>, which steers a run rather than deciding for it. Two
+                  transports are ruled — structured resolution and the authentic pane; neither is built.
                 </p>
                 <span class="badge tone-designed">Designed</span>
               </div>
@@ -1629,12 +1645,32 @@
               <div class="card">
                 <h3>rosetta's assets, timelines and projects</h3>
                 <p>
-                  Of twenty-one HTTP routes, VibeField dials five. Untouched: the seven-route timeline
+                  Of rosettad's 24 routes, VibeField dials six. Untouched: the seven-route timeline
                   family, the four project routes, <code>/api/assets/{name}</code>,
                   <code>/api/ingest/boost</code> and <code>/api/runtimes/enable</code> — the last one
                   deliberately, since the enrollment file is authoritative.
                 </p>
                 <span class="badge tone-owed">Owed</span>
+              </div>
+              <div class="card">
+                <h3>The documented monitor entry point</h3>
+                <p>
+                  puppeteer's monitor page leads with <code>observeMonitor()</code> as the per-consumer
+                  streaming surface. VibeField has no caller for it and uses the runtime's fan-out
+                  instead. The integrator's path is not the documented one, which is worth knowing before
+                  reading that page as a description of this system.
+                </p>
+                <span class="badge tone-built">Built, other path</span>
+              </div>
+              <div class="card">
+                <h3>index.openTicket</h3>
+                <p>
+                  The designed door for rosetta's direct plane, answering
+                  <code>{baseUrl, token, protocolVersion}</code> so a renderer could stream transcripts
+                  and fetch assets without fieldd in the path. It is in no registry and no handler; it
+                  arrives with RO-1.
+                </p>
+                <span class="badge tone-designed">Designed</span>
               </div>
               <div class="card">
                 <h3>The History view</h3>
@@ -1681,9 +1717,12 @@
                 <div>
                   <h3>AGENT_MONITOR_SCHEMA_VERSION</h3>
                   <p>
-                    <code>3</code> at these revisions, declared in
-                    <code>packages/contracts/src/agent-session.ts</code> and asserted equal to puppeteer's
-                    own constant by <code>packages/fieldd/test/agent-monitor-pin.test.ts</code>.
+                    <code>3</code> at these revisions — it was <code>2</code> when the fold first landed
+                    — declared in <code>packages/contracts/src/agent-session.ts</code> and asserted equal
+                    to puppeteer's own constant by
+                    <code>packages/fieldd/test/agent-monitor-pin.test.ts</code>. It versions core's
+                    monitor projection <em>only</em>, not the view packages' port types, which is why the
+                    change below could move a shape without touching this number.
                   </p>
                 </div>
                 <span class="badge tone-puppeteer">upstream</span>
@@ -1730,21 +1769,24 @@
                 </p>
               </div>
             </div>
-            <h3>The worked example: the 2026-09-21 usage-ledger break</h3>
+            <h3>The worked example: the usage-ledger change of 2026-09-17</h3>
             <p class="section-note">
-              When the puppeteer pin moved to <code>2f5ce002</code>, three breaks came with it and only one
-              was visible. A fixture tripped three type errors, which typecheck found. A stale test
+              The change landed upstream on 2026-09-17 as <code>a7a0c4e</code>, "display and persist
+              observed USD costs". VibeField took it on 2026-09-21 when the pin moved to
+              <code>2f5ce002</code>, and three breaks arrived with it — only one of them visible. A fixture tripped three type errors, which typecheck found. A stale test
               expectation had been red since AR-3 behind an opt-in row the ordinary gate never runs. The
               third was silent: upstream's export changed to hand the store only the conversation's live
               run, which upstream's own host answers with a per-run merge that preserves corrections by
               revision — while VibeField's renderer-local cache still replaced the whole record. Nothing in
               the type system could see it, and the symptom would have been a resumed conversation quietly
-              losing every earlier run's observed spend.
+              losing every earlier run's observed spend. The generation was correctly left alone
+              throughout: the changed types are the views package's, which this number does not cover.
             </p>
             <div class="callout warning">
               <strong>The lesson the pin gate cannot teach.</strong> A clean typecheck across a pin move
               says the shapes still line up. It says nothing about a rule that is mirrored on both sides of
-              the seam, where upstream changing its half silently desynchronises yours. Recorded in
+              the seam, where upstream changing its half silently desynchronises yours. A change can
+              type-check, keep its generation legitimately, and still mean something else. Recorded in
               <code>docs/LANDED.md</code> §AR-5-1; the cache now merges by run id with revision precedence
               and writes a versioned document so a pre-USD record is dropped on read rather than shown as
               dollars.
