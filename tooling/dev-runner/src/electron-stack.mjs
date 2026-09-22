@@ -6,23 +6,34 @@ import { buildChildEnv } from "./env.mjs";
 import { terminateChild } from "./processes.mjs";
 import { readDevProduct, stopVerifiedDevProduct } from "./product.mjs";
 
-/** The launching shell's explicit choice wins; otherwise the sibling lock's
- * rosettad, when `pnpm siblings:build` has produced it. Read once per runner
- * process — the answer cannot change under a running dev session without a
- * rebuild, and the cargo metadata call behind it is not free on a restart. */
-let rosettadBinMemo;
-function defaultResolveRosettadBin() {
-  if (rosettadBinMemo !== undefined) return rosettadBinMemo;
-  const explicit = process.env["FIELDD_ROSETTAD_BIN"];
-  if (explicit !== undefined && explicit !== "") {
-    rosettadBinMemo = explicit;
-    return rosettadBinMemo;
-  }
+/** The sibling lock's rosettad when `pnpm siblings:build` has produced it,
+ * else null. */
+function lockRosettadBin() {
   const built = rosettadBinary();
-  rosettadBinMemo =
-    built?.path !== null && built?.path !== undefined && existsSync(built.path) ? built.path : null;
-  return rosettadBinMemo;
+  return built?.path !== null && built?.path !== undefined && existsSync(built.path)
+    ? built.path
+    : null;
 }
+
+/** fieldd's rosettad, asked at every Electron launch. The launching shell's
+ * explicit choice wins, and that read is the only one memoized — a running
+ * process's own environment cannot change under it. The lock's build is asked
+ * afresh each launch (siblings.mjs already caches the cargo metadata behind
+ * it), so a `pnpm siblings:build` mid-session reaches fieldd at the next
+ * launch; a memoized "none" used to keep fieldd unconfigured until the runner
+ * itself restarted (AC-7). */
+export function createRosettadBinResolver({ env = process.env, lookup = lockRosettadBin } = {}) {
+  let explicit;
+  return () => {
+    if (explicit === undefined) {
+      const value = env["FIELDD_ROSETTAD_BIN"];
+      explicit = value !== undefined && value !== "" ? value : null;
+    }
+    return explicit ?? lookup();
+  };
+}
+
+const defaultResolveRosettadBin = createRosettadBinResolver();
 
 export function createElectronStack({
   paths,
