@@ -194,7 +194,7 @@
         "history": true,
         "usage": true,
         "distribution": true,
-        "personas": true
+        "personas": false
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",

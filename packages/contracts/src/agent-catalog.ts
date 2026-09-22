@@ -241,12 +241,20 @@ export const AGENT_CATALOG = [
   {
     // 2026-09-22 AC-D6: `preview`. Its layout root is not a dotdir of its own
     // name — the root column exists so nobody has to remember that.
+    // Erratum 2026-09-22 (AC-2, wall R23's first run): NO `personas`. The pin's
+    // profiles port declares `support.supported: false` — Antigravity ships no
+    // login, so "a managed root can be allocated but never onboarded, so hosts
+    // must not offer one" (puppeteer adapter-antigravity profiles.ts) — and
+    // puppeteer's onboarding refuses createProfile for it. A profiles PORT is
+    // not the capability; the table had read the port list. `history` is not a
+    // persona's: rosetta discovers the native root, and a user consents to the
+    // kind through `index.enroll` (fieldd's enabled_kinds).
     id: "antigravity",
     label: "Antigravity",
     status: "preview",
     seams: { puppeteer: { provider: "antigravity" }, rosetta: { kind: "antigravity" } },
     layoutRoot: "~/.gemini/antigravity-cli",
-    offers: OFFERS_FULL,
+    offers: { ...OFFERS_FULL, personas: false },
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
