@@ -25,7 +25,9 @@
 //
 // Usage: node scripts/siblings.mjs <status|pin|stamp|build|bin>
 //   status  print each sibling's path, HEAD, pin, and dirtiness (never fails)
-//   pin     record every sibling's current HEAD in siblings.lock.json
+//   pin     record every sibling's current HEAD in siblings.lock.json, build
+//           rosettad at it (a no-op when fresh), then prove the agent catalog
+//           against the new pins (wall R23, the rosetta half REQUIRED)
 //   stamp   one line naming each sibling's HEAD + a hash of its working-tree
 //           state — the Nx `sharedGlobals` runtime input
 //   build   every sibling's binary: `cargo build --release -p <crate>` in the
@@ -283,17 +285,37 @@ export function stamp(root = REPO_ROOT) {
 
 const targetDirCache = new Map();
 
+/** The environment every cargo call into a sibling runs under: the caller's,
+ * minus a target-directory override. A lane exports CARGO_TARGET_DIR for ITS
+ * OWN workspace (field-native, the fieldd suite's cargo); inherited here it
+ * would move the sibling's build too — `cargo metadata` would name a directory
+ * the sibling's build never wrote, and every reader of the lock's rosettad
+ * (preflight, the dev runner, wall R23) would call the binary missing, or read
+ * another one. The sibling's build is where its OWN configuration puts it, so
+ * both spellings of the override (CARGO_TARGET_DIR, CARGO_BUILD_TARGET_DIR)
+ * are removed — case-insensitively on win32, where the environment is. */
+export function siblingCargoEnv(base = process.env, platform = process.platform) {
+  const env = { ...base };
+  const dropped = new Set(["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"]);
+  for (const key of Object.keys(env)) {
+    if (dropped.has(platform === "win32" ? key.toUpperCase() : key)) delete env[key];
+  }
+  return env;
+}
+
 /** Where cargo puts artifacts for the checkout — asked of cargo itself, so the
  * sibling's own `.cargo/config.toml` `target-dir` (rosetta keeps its target on
- * the SSD that way, gitignored) is honoured rather than guessed. Null when
- * cargo cannot answer (not installed, checkout missing). Cached per process:
- * the dev runner asks on every Electron restart. */
+ * the SSD that way, gitignored) is honoured rather than guessed, and a lane's
+ * override is not (`siblingCargoEnv`). Null when cargo cannot answer (not
+ * installed, checkout missing). Cached per process: the dev runner asks on
+ * every Electron restart. */
 export function cargoTargetDir(dir) {
   if (targetDirCache.has(dir)) return targetDirCache.get(dir);
   let result = null;
   try {
     const meta = execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
       cwd: dir,
+      env: siblingCargoEnv(),
       stdio: ["ignore", "pipe", "ignore"],
       maxBuffer: 64 * 1024 * 1024,
     });
@@ -523,6 +545,22 @@ function pin(root) {
   // maintainer's next act is a row (or an amended one) in
   // packages/contracts/src/agent-catalog.ts, then
   // `pnpm --filter @vibefield/contracts gen:schema`.
+  //
+  // rosettad is built FIRST (AC-7): the rosetta half asks the lock's own
+  // build, and the build on disk predates the pin whenever rosetta moved — a
+  // kind the new revision registers, or a data_root it moved, would be
+  // invisible to it, and the pin would pass on the old registry. cargo decides
+  // freshness itself, so an unmoved rosetta costs a no-op build.
+  console.log(
+    "siblings:pin: building rosettad at the new pin before wall R23 (a no-op when cargo finds it fresh)",
+  );
+  const built = buildCargo(root);
+  if (built !== null && built !== 0) {
+    console.error(
+      `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, but rosettad did not build at them — wall R23 not run (its rosetta half would read a binary that predates the pin); fix the build and re-run pnpm siblings:pin`,
+    );
+    return 1;
+  }
   const gate = spawnSync(
     process.execPath,
     [
@@ -563,8 +601,10 @@ function buildCargo(root) {
   }
   const args = ["build", `--${entry.cargo.profile ?? "release"}`, "-p", entry.cargo.crate];
   console.log(`siblings:build: cargo ${args.join(" ")}  (in ${bin.dir})`);
-  // rustup picks the sibling's own rust-toolchain.toml from the cwd.
-  const run = spawnSync("cargo", args, { cwd: bin.dir, stdio: "inherit" });
+  // rustup picks the sibling's own rust-toolchain.toml from the cwd; the build
+  // lands where `cargo metadata` said it would, because both run under the
+  // same environment (`siblingCargoEnv`: no lane target-dir override).
+  const run = spawnSync("cargo", args, { cwd: bin.dir, stdio: "inherit", env: siblingCargoEnv() });
   if (run.status !== 0) return run.status ?? 1;
   if (!existsSync(bin.path)) {
     console.error(`siblings:build FAIL: cargo succeeded but ${bin.path} does not exist`);

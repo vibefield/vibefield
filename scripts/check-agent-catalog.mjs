@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 // Wall R23 — "the catalog is honoured by the pins" — and R23b, the literal lint
-// (thinking-ar-agent-catalog.md §4, AC-2; AC-D5, AC-D10, AC-D11 RULED 2026-09-22).
+// (thinking-ar-agent-catalog.md §4, AC-2; AC-D5, AC-D10, AC-D11 RULED 2026-09-22;
+// hardened by AC-7 the same day, after two reviews of AC-2).
 //
 // The agent catalog (`packages/contracts/src/agent-catalog.ts`) is a table of
 // DECISIONS typed by hand: which agents VibeField offers, under which name, with
 // which capabilities. A hand-typed table drifts; one proved against the pinned
 // siblings at every preflight cannot. This script is that proof. It reads the
 // generated projection `packages/contracts/gen/agent-catalog.json` — never the
-// TypeScript (a root .mjs must not import it) — and holds every row to BOTH pins:
+// TypeScript (a root .mjs must not import it) — after checking the sha256 of
+// `src/agent-catalog.ts` the projection records against the source on disk (a
+// projection generated from another source is STALE, and judged by nobody), and
+// holds every row to BOTH pins:
 //
 //   the puppeteer half (§4.1) — `createBuiltinProviders()` from the pinned
 //     checkout, resolved THROUGH FIELDD'S OWN DEPENDENCY EDGE (createRequire from
@@ -20,11 +24,15 @@
 //     (agent-runtime.ts: `runtime.profiles(id)` → the native-default profile →
 //     `runtime.profileObservationRoot`) and folded to `~/…` as fieldd's `tilde`
 //     folds it.
-//   the rosetta half (§4.2) — the pinned rosettad (FIELDD_ROSETTAD_BIN when the
-//     launching shell names one, else the lock's build — the same resolution the
-//     dev runner hands fieldd) run as `discover --json --home <empty dir>`: one
-//     `{event:"discovery", agent, dataRoot, …}` line per registered adapter,
-//     whether or not the root exists (witnessed at e8d907ab: nine lines, exit 0).
+//   the rosetta half (§4.2) — the LOCK's rosettad (`rosettadBinary()`: the cargo
+//     sibling's own build, cargo asked without a lane's CARGO_TARGET_DIR) run as
+//     `discover --json --home <empty dir>`: one `{event:"discovery", agent,
+//     dataRoot, …}` line per registered adapter, whether or not the root exists
+//     (witnessed at e8d907ab: nine lines, exit 0). Under --require-rosetta that
+//     build is the ONLY binary asked — a FIELDD_ROSETTAD_BIN resolving to any
+//     other file is a FAIL naming both. A daily run honours the variable (the
+//     dev runner hands fieldd the same one) with a WARN when it is not the
+//     lock's build.
 //
 // The puppeteer sibling ships TypeScript source (`exports` → ./src/index.ts,
 // with `.js` specifiers Node's own type stripping cannot resolve), so that half
@@ -37,12 +45,24 @@
 // under the same scrub. Constructing the runtime spawns nothing — providers are
 // objects, the profile store here is in memory, and the host refuses every call.
 //
+// A missing counterpart is judged by what the row CLAIMS, never by its status
+// (§6's lifecycle): a provider the pin no longer composes, or a kind rosetta no
+// longer registers, is a FAIL only when the row claims a capability that needs
+// it — a removed provider's row stays as a record (`declined`, or a
+// `deprecated` row whose history still indexes). And a root is proved by the
+// pin that HAS one: a provider composed without a profiles port has no native
+// root, so rosetta's data_root alone proves that row's layoutRoot.
+//
 // Verdicts (§4.1 / §4.2), each a FAIL unless marked:
-//   pin-compose     a row's seams.puppeteer.provider is not composed by the pin
-//   pin-claim       a row claims a capability the pin does not implement (AC-D5)
-//   pin-root        a row's layoutRoot ≠ the pin's folded native observation root
+//   pin-compose     the pin does not compose a row's provider AND the row
+//                   claims a capability only puppeteer supplies
+//   pin-claim       a row claims a capability the pin does not implement
+//                   (AC-D5), or claims one with no puppeteer seam at all
+//   pin-root        a row's layoutRoot ≠ the pin's folded native observation
+//                   root (only where the pin has a root)
 //   pin-undecided   the pin composes a provider no row decides on
-//   kind-registered a row's seams.rosetta.kind is not in rosetta's registry
+//   kind-registered rosetta does not register a row's kind AND the row claims
+//                   history
 //   kind-root       a row's layoutRoot ≠ the kind's registered data_root
 //   kind-undecided  rosetta registers a kind no row decides on
 //   history-seam    a row claims history with no rosetta seam (a table fact:
@@ -51,30 +71,54 @@
 //   unverified      WARN — no rosettad to ask (AC-D10); a FAIL under
 //                   --require-rosetta, which `pnpm siblings:pin` passes and
 //                   preflight passes in CI, where the workflow builds the binary
-//   stale           WARN, --require-rosetta only — the rosettad is older than a
-//                   source in its checkout, so it may predate the new pin
-// plus the checker's own honesty: a malformed projection (catalog-shape) or a
-// half that could not run (pin-probe, kind-probe) is red, never a silent pass.
+//   bin-foreign     WARN — FIELDD_ROSETTAD_BIN is not the lock's build; a FAIL
+//                   under --require-rosetta
+//   stale           WARN, --require-rosetta only — the lock's rosettad is older
+//                   than a source in its checkout, so it may predate the pin
+//                   (`pnpm siblings:pin` builds first; CI and hand runs see it)
+// plus the checker's own honesty: a malformed projection (catalog-shape), a
+// stale one (catalog-stale), or a half that could not run (pin-probe,
+// kind-probe) is red, never a silent pass. A class not registered in CLASSES
+// cannot be emitted at all.
 //
 // R23b (--literals, §4.3; AC-D11): no string literal equal to a catalog id or a
-// rosetta kind in `packages/*/src/**/*.{ts,tsx}` or
-// `apps/ios/VibeFieldKit/Sources/**/*.swift`, outside the catalog itself and the
-// ALLOW-LIST below (each entry justified). AR-L1's teeth: a table of names is not
-// a licence to branch on one. Comments and test files are out of scope; the
+// rosetta kind in the product trees (R23B_TREES — packages/*/src,
+// plugins/*/src, examples/plugins/*/src, apps/*/src as TS/TSX;
+// apps/ios/VibeFieldKit/Sources and apps/ios/App as Swift), outside the catalog
+// itself and the ALLOW-LIST below: each entry justified and holding an EXACT
+// literal count, so a new literal in an allowed file is as red as one anywhere
+// else. AR-L1's teeth: a table of names is not a licence to branch on one.
+// Comments and test files are out of scope, and symlinked directories and files
+// are never walked (a committed symlink once walked another checkout). The
 // matcher lexes string tokens and compares them EXACTLY — no fuzzy patterns.
+// OUT OF SCOPE BY CONSTRUCTION: an agent named as an IDENTIFIER (a TS object key
+// or enum member, a Swift `case claude` or `.claude`) is no string token; review
+// and the catalog's readers own that shape, this lint cannot see it.
 //
-// Usage: node scripts/check-agent-catalog.mjs [--enforce [--require-rosetta]] [--literals] [--self-test]
-//   --enforce          the real catalog against the real pins; exit 1 on any FAIL
-//   --require-rosetta  (with --enforce) a missing rosettad FAILs instead of WARNing
-//   --literals         R23b over the product sources; exit 1 on any FAIL
-//   --self-test        rotten fixtures must produce exactly the expected
-//                      verdicts, one per FAIL class — else the checker is broken
+// The checker's own tripwire: the self-test drives the verdicts, the readers,
+// the lexers, the walk and BOTH drivers (runEnforce / runLiterals, end to end
+// over rotten projections and canned facts) through fixtures, and --enforce and
+// --literals run it in-process FIRST, refusing to judge while it is red.
+//
+// Usage: node scripts/check-agent-catalog.mjs [--self-test] [--enforce [--require-rosetta]] [--literals]
+//        node scripts/check-agent-catalog.mjs --help
+//   --enforce          R23: the real catalog against the real pins
+//   --require-rosetta  (implies --enforce) only the lock's rosettad may answer,
+//                      and a missing one FAILs instead of WARNing
+//   --literals         R23b over the product trees
+//   --self-test        print the checker's own fixtures (every mode runs them)
+//   --help             this text — alone; beside a mode it exits 2, never 0 unrun
+// Exit: 0 pass · 1 any FAIL, or a red self-test · 2 a usage error.
 // Output: `FAIL R23…` lines on stderr, `WARN R23…` lines on stdout (preflight
-// lifts the WARN lines into its own report), a facts table, a summary line.
+// lifts the WARN lines into its own report — a child's output embedded in a
+// message is indented, so the child's own WARN lines are never lifted as R23's),
+// a facts table, a summary line.
 // Node >=22 ESM, builtins only.
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -82,6 +126,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -94,6 +139,7 @@ const SCRIPT = fileURLToPath(import.meta.url);
 const REPO_ROOT = resolve(dirname(SCRIPT), "..");
 const CATALOG_JSON = "packages/contracts/gen/agent-catalog.json";
 const CATALOG_SOURCE = "packages/contracts/src/agent-catalog.ts";
+const REGENERATE = "pnpm --filter @vibefield/contracts gen:schema";
 
 /** The capabilities a row may claim (contracts' AGENT_CAPABILITIES, which the
  * projection's `offers` keys must match exactly). */
@@ -106,8 +152,7 @@ const CAPABILITIES = [
   "distribution",
   "personas",
 ];
-/** The puppeteer port that implements each capability — `history` is
- * rosetta's, so it has none here. */
+/** The puppeteer port that implements each puppeteer-owned capability. */
 const PORT_FOR = {
   spawn: "createSession",
   resume: "launch.provider.resume",
@@ -116,6 +161,34 @@ const PORT_FOR = {
   distribution: "distribution",
   personas: "profiles",
 };
+/** The capabilities rosetta supplies: a claim to one needs a rosetta seam
+ * (history-seam) and a kind the pin registers (kind-registered). */
+const ROSETTA_CAPABILITIES = ["history"];
+
+/** Every capability is owned by exactly one sibling, and every owned name is a
+ * capability. A capability owned by neither would be claimable and proved by
+ * nobody — so the table refuses to load rather than pass it. */
+function capabilityOwnershipProblems(capabilities, portFor, rosettaOwned) {
+  const problems = [];
+  for (const c of capabilities) {
+    const owners = (Object.hasOwn(portFor, c) ? 1 : 0) + (rosettaOwned.includes(c) ? 1 : 0);
+    if (owners === 0) {
+      problems.push(`\`${c}\` has no owner — add it to PORT_FOR or ROSETTA_CAPABILITIES`);
+    } else if (owners > 1) {
+      problems.push(`\`${c}\` is owned twice — PORT_FOR and ROSETTA_CAPABILITIES both name it`);
+    }
+  }
+  for (const c of [...Object.keys(portFor), ...rosettaOwned]) {
+    if (!capabilities.includes(c)) problems.push(`\`${c}\` is owned but is not a capability`);
+  }
+  return problems;
+}
+{
+  const problems = capabilityOwnershipProblems(CAPABILITIES, PORT_FOR, ROSETTA_CAPABILITIES);
+  if (problems.length > 0) {
+    throw new Error(`check-agent-catalog: the capability table is broken: ${problems.join("; ")}`);
+  }
+}
 const PUPPETEER_CAPABILITIES = Object.keys(PORT_FOR);
 const STATUSES = new Set(["supported", "preview", "deprecated", "declined"]);
 /** A row under these statuses is being OFFERED, so an unclaimed port on it is a
@@ -130,31 +203,76 @@ const FIELDD_DOOR = {
   runtime: "@vibecook/puppeteer-runtime",
 };
 
+/** Every class a finding may carry; `fail()` and `warn()` refuse any other, so
+ * a new verdict cannot ship unnamed. The VERDICT classes are the ones judge()
+ * derives from the table and the facts — the self-test demands a rotten row
+ * provoking each, so a new one cannot ship untested either. */
+const VERDICT_CLASSES = [
+  "pin-compose",
+  "pin-claim",
+  "pin-root",
+  "pin-undecided",
+  "kind-registered",
+  "kind-root",
+  "kind-undecided",
+  "history-seam",
+];
+const CLASSES = new Set([
+  ...VERDICT_CLASSES,
+  "candidate",
+  "unverified",
+  "bin-foreign",
+  "stale",
+  "pin-probe",
+  "kind-probe",
+  "catalog-shape",
+  "catalog-stale",
+  "literal",
+  "allow-count",
+]);
+
 // R23b's allow-list: files that may carry an agent id as a string literal, each
-// with its reason. A stale entry (the file is gone, or no longer holds a literal)
-// is itself a FAIL — an entry that allows nothing would silently allow the next
-// literal someone adds to that file.
+// with its reason and the EXACT number of literals it allows. Any other count is
+// a FAIL: more is a new literal (a decision, not a free ride on the entry), fewer
+// is a spare allowance that would absorb the next literal silently (at zero,
+// retire the entry).
 const R23B_ALLOW = [
   {
     file: "apps/ios/VibeFieldKit/Sources/FieldInput/ReplyChips.swift",
+    count: 1,
     why: "an explicit one-literal table: the reply chips' transport keyed by provider (K-D4) — a LIVE AR-L1 exception AC-5 made explicit and tested; retire it when the field row's blocker carries its transport (owed)",
   },
   {
     file: "apps/ios/VibeFieldKit/Sources/FieldAgents/MockAgentField.swift",
+    count: 4,
     why: "the DEBUG fleet's fixture ids: seeded demo agents in a fixed order, never compared to a live row",
   },
   {
     file: "apps/ios/VibeFieldKit/Sources/FieldSwarm/Lab/SwarmLabFixtures.swift",
+    count: 1,
     why: "the swarm design lab's fixture ids (-vf-swarm-lab, D-i15): fixture data behind a debug flag",
   },
   {
     file: "apps/ios/VibeFieldKit/Sources/FieldSwarm/MarksAtlas.swift",
+    count: 29,
     why: "the mark atlas: build-time glyph tiles keyed by provider id — presentation; AC-5 keys it by the mirrored catalog fixture",
   },
   {
     file: "packages/field-app/src/design-system/PaneFramePreview.tsx",
+    count: 6,
     why: "the design catalog's fixture adapter (docs/UI_SYSTEM.md): sample agent.subscribe rows fed to the shipping pane frame — fixture data, never compared",
   },
+];
+
+/** The trees R23b lexes, relative to the repo root (`*` is one directory
+ * level; a tree that does not exist is skipped — apps/desktop has no src). */
+const R23B_TREES = [
+  { glob: "packages/*/src", pattern: /\.tsx?$/ },
+  { glob: "plugins/*/src", pattern: /\.tsx?$/ },
+  { glob: "examples/plugins/*/src", pattern: /\.tsx?$/ },
+  { glob: "apps/*/src", pattern: /\.tsx?$/ },
+  { glob: "apps/ios/VibeFieldKit/Sources", pattern: /\.swift$/ },
+  { glob: "apps/ios/App", pattern: /\.swift$/ },
 ];
 
 // --- the catalog projection --------------------------------------------------
@@ -214,7 +332,23 @@ function validateCatalog(json) {
   return { rows, problems };
 }
 
-function loadCatalog(path = join(REPO_ROOT, CATALOG_JSON)) {
+/** sha256 of a source, LF-normalised — gen-catalog.ts's digest, byte for byte. */
+function sourceDigest(path) {
+  return createHash("sha256")
+    .update(readFileSync(path, "utf8").replace(/\r\n/g, "\n"))
+    .digest("hex");
+}
+
+/** Read the projection, prove it was generated from the source on disk, and
+ * shape-check it. Returns `{ rows, problems, stale }`: `stale` is null or the
+ * sentence a maintainer acts on (a `catalog-stale` FAIL). With either, the
+ * verdicts are not computed — a table the source no longer says proves
+ * nothing, and judging the last generated one would answer the wrong question
+ * about the row just edited. */
+function loadCatalog(
+  path = join(REPO_ROOT, CATALOG_JSON),
+  sourcePath = join(REPO_ROOT, CATALOG_SOURCE),
+) {
   let json;
   try {
     json = JSON.parse(readFileSync(path, "utf8"));
@@ -222,20 +356,43 @@ function loadCatalog(path = join(REPO_ROOT, CATALOG_JSON)) {
     return {
       rows: [],
       problems: [
-        `${relative(REPO_ROOT, path)} is missing or unparseable (${error.message}) — regenerate it: pnpm --filter @vibefield/contracts gen:schema`,
+        `${relative(REPO_ROOT, path)} is missing or unparseable (${error.message}) — regenerate it: ${REGENERATE}`,
       ],
+      stale: null,
     };
   }
-  return validateCatalog(json);
+  let stale = null;
+  let digest = null;
+  try {
+    digest = sourceDigest(sourcePath);
+  } catch (error) {
+    stale = `projection stale — cannot read ${CATALOG_SOURCE} to compare (${error.message})`;
+  }
+  const recorded = json?.source?.sha256;
+  if (digest !== null && recorded !== digest) {
+    stale = `projection stale — run ${REGENERATE} (${CATALOG_JSON} ${
+      typeof recorded === "string"
+        ? `was generated from source ${recorded.slice(0, 12)}…; ${CATALOG_SOURCE} on disk is ${digest.slice(0, 12)}…`
+        : "records no source digest"
+    })`;
+  }
+  return { ...validateCatalog(json), stale };
 }
 
 // --- verdicts (pure: the catalog × the facts → findings) ----------------------
 
 /** A finding: its level, its verdict class, the thing it is about (a row id, a
  * provider, a kind, a file:line), and the sentence a maintainer acts on. */
-const fail = (cls, subject, message) => ({ level: "FAIL", cls, subject, message });
-const warn = (cls, subject, message) => ({ level: "WARN", cls, subject, message });
+function finding(level, cls, subject, message) {
+  if (!CLASSES.has(cls)) {
+    throw new Error(`check-agent-catalog: finding class \`${cls}\` is not registered in CLASSES`);
+  }
+  return { level, cls, subject, message };
+}
+const fail = (cls, subject, message) => finding("FAIL", cls, subject, message);
+const warn = (cls, subject, message) => finding("WARN", cls, subject, message);
 const spell = (root) => (root === null ? "none" : `\`${root}\``);
+const quoted = (names) => names.map((name) => `\`${name}\``).join(", ");
 
 /** The puppeteer half's verdicts. `facts.providers[]` is what the probe read:
  * `{ id, label, ports: {<capability>: bool}, profilesPort, root, rootVia }`. */
@@ -244,29 +401,34 @@ function judgePuppeteer(rows, facts) {
   const composed = new Map(facts.providers.map((p) => [p.id, p]));
   for (const row of rows) {
     const provider = row.seams.puppeteer?.provider ?? null;
+    const claims = PUPPETEER_CAPABILITIES.filter((c) => row.offers[c]);
     if (provider === null) {
-      for (const c of PUPPETEER_CAPABILITIES) {
-        if (row.offers[c]) {
-          findings.push(
-            fail(
-              "pin-claim",
-              row.id,
-              `the catalog claims \`${c}\` for \`${row.id}\`; the row has no puppeteer seam`,
-            ),
-          );
-        }
+      for (const c of claims) {
+        findings.push(
+          fail(
+            "pin-claim",
+            row.id,
+            `the catalog claims \`${c}\` for \`${row.id}\`; the row has no puppeteer seam`,
+          ),
+        );
       }
       continue;
     }
     const pin = composed.get(provider);
     if (pin === undefined) {
-      findings.push(
-        fail(
-          "pin-compose",
-          row.id,
-          `\`${row.id}\`: the pin does not compose \`${provider}\` (seams.puppeteer.provider)`,
-        ),
-      );
+      // §6: a provider removed upstream keeps its row as a RECORD — declined,
+      // or deprecated while its history still indexes — and the seam column
+      // stays as the historical fact it is. Only a claim the pin would have to
+      // supply makes the absence a failure.
+      if (claims.length > 0) {
+        findings.push(
+          fail(
+            "pin-compose",
+            row.id,
+            `\`${row.id}\`: the pin does not compose \`${provider}\` (seams.puppeteer.provider), yet the row claims ${quoted(claims)} — drop the claims (a removed provider's row stays as a record) or restore the provider`,
+          ),
+        );
+      }
       continue;
     }
     for (const c of PUPPETEER_CAPABILITIES) {
@@ -292,17 +454,21 @@ function judgePuppeteer(rows, facts) {
       }
     }
     // The root is the JOIN fact: it binds only a row that joins (a rosetta seam,
-    // or a root it names). A protocol row with neither has nothing to spell.
-    if (row.seams.rosetta !== null || row.layoutRoot !== null) {
-      if (row.layoutRoot !== pin.root) {
-        findings.push(
-          fail(
-            "pin-root",
-            row.id,
-            `\`${row.id}\`: layoutRoot ${spell(row.layoutRoot)} ≠ the pin's native observation root ${spell(pin.root)} — both siblings must spell one root`,
-          ),
-        );
-      }
+    // or a root it names), and only where the pin HAS a root — a provider
+    // composed without a profiles port spells none, and rosetta's data_root
+    // alone then proves the row's layoutRoot (kind-root).
+    if (
+      pin.root !== null &&
+      (row.seams.rosetta !== null || row.layoutRoot !== null) &&
+      row.layoutRoot !== pin.root
+    ) {
+      findings.push(
+        fail(
+          "pin-root",
+          row.id,
+          `\`${row.id}\`: layoutRoot ${spell(row.layoutRoot)} ≠ the pin's native observation root ${spell(pin.root)} — both siblings must spell one root`,
+        ),
+      );
     }
   }
   const decided = new Set(rows.map((row) => row.seams.puppeteer?.provider).filter(Boolean));
@@ -320,18 +486,24 @@ function judgePuppeteer(rows, facts) {
   return findings;
 }
 
-/** The rows' own history claims — a table fact, so it holds with or without a
+/** The rows' own rosetta claims — a table fact, so it holds with or without a
  * rosettad to ask (also a contracts-test invariant; stated at the gate too). */
 function judgeHistorySeams(rows) {
-  return rows
-    .filter((row) => row.offers.history && row.seams.rosetta === null)
-    .map((row) =>
-      fail(
-        "history-seam",
-        row.id,
-        `the catalog claims \`history\` for \`${row.id}\`; the row has no rosetta seam`,
-      ),
-    );
+  const findings = [];
+  for (const row of rows) {
+    if (row.seams.rosetta !== null) continue;
+    for (const c of ROSETTA_CAPABILITIES) {
+      if (!row.offers[c]) continue;
+      findings.push(
+        fail(
+          "history-seam",
+          row.id,
+          `the catalog claims \`${c}\` for \`${row.id}\`; the row has no rosetta seam`,
+        ),
+      );
+    }
+  }
+  return findings;
 }
 
 /** The rosetta half's verdicts. `facts` is `{ kinds: Map<kind, dataRoot> }`. */
@@ -340,14 +512,19 @@ function judgeRosetta(rows, facts) {
   for (const row of rows) {
     const kind = row.seams.rosetta?.kind ?? null;
     if (kind === null) continue;
+    const claims = ROSETTA_CAPABILITIES.filter((c) => row.offers[c]);
     if (!facts.kinds.has(kind)) {
-      findings.push(
-        fail(
-          "kind-registered",
-          row.id,
-          `\`${row.id}\`: rosetta's pin registers no kind \`${kind}\` — rosettad would refuse to start on an enrollment naming it`,
-        ),
-      );
+      // As on the puppeteer side: a kind rosetta no longer registers is a
+      // record on a row that claims nothing of it; a claim makes it a failure.
+      if (claims.length > 0) {
+        findings.push(
+          fail(
+            "kind-registered",
+            row.id,
+            `\`${row.id}\`: rosetta's pin registers no kind \`${kind}\`, yet the row claims ${quoted(claims)} — rosettad would refuse to start on an enrollment naming it`,
+          ),
+        );
+      }
       continue;
     }
     const dataRoot = facts.kinds.get(kind);
@@ -360,14 +537,16 @@ function judgeRosetta(rows, facts) {
         ),
       );
     }
-    if (!row.offers.history && OFFERED.has(row.status)) {
-      findings.push(
-        warn(
-          "candidate",
-          row.id,
-          `candidate: \`${row.id}\` could offer \`history\` — rosetta registers kind \`${kind}\``,
-        ),
-      );
+    for (const c of ROSETTA_CAPABILITIES) {
+      if (!row.offers[c] && OFFERED.has(row.status)) {
+        findings.push(
+          warn(
+            "candidate",
+            row.id,
+            `candidate: \`${row.id}\` could offer \`${c}\` — rosetta registers kind \`${kind}\``,
+          ),
+        );
+      }
     }
   }
   const decided = new Set(rows.map((row) => row.seams.rosetta?.kind).filter(Boolean));
@@ -529,7 +708,17 @@ function scrubbedEnv(home) {
   return env;
 }
 
-const tail = (text, lines = 12) => (text ?? "").trim().split("\n").slice(-lines).join("\n");
+/** The last lines of a child's output, each indented two spaces. Embedded in a
+ * FAIL message, a child's own `WARN …` line must never reach column 0, where
+ * preflight — which lifts every `WARN ` line from both streams — would report
+ * it as R23's. */
+const tail = (text, lines = 12) =>
+  (text ?? "")
+    .trim()
+    .split("\n")
+    .slice(-lines)
+    .map((line) => `  ${line}`)
+    .join("\n");
 
 /** Run the probe child and read its facts, or `{ ok: false, cls: "pin-probe" }`. */
 function readPuppeteerFacts() {
@@ -586,20 +775,89 @@ function readPuppeteerFacts() {
 
 // --- the rosetta half -----------------------------------------------------------
 
-/** The rosettad this run asks, by the dev runner's rule
- * (tooling/dev-runner/src/electron-stack.mjs): the launching shell's
- * FIELDD_ROSETTAD_BIN wins, else the lock's cargo sibling's build. */
-function resolveRosettad() {
-  const explicit = process.env.FIELDD_ROSETTAD_BIN;
-  if (explicit !== undefined && explicit !== "") {
-    return { path: explicit, from: "FIELDD_ROSETTAD_BIN" };
-  }
-  const built = rosettadBinary(REPO_ROOT);
+/** The lock's rosettad: the cargo sibling's own build, where its OWN
+ * configuration puts it (siblings.mjs asks cargo without a lane's
+ * CARGO_TARGET_DIR). `path` is null when the lock names no cargo sibling or
+ * cargo cannot resolve the target directory; `from` says why, or where. */
+function lockRosettad(root = REPO_ROOT) {
+  const built = rosettadBinary(root);
   if (built === null) return { path: null, from: "siblings.lock.json names no cargo sibling" };
   if (built.path === null) {
     return { path: null, from: `cargo cannot resolve ${built.name}'s target directory` };
   }
   return { path: built.path, from: `${built.name}'s build (pnpm siblings:build)` };
+}
+
+const realpathOrNull = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
+};
+
+/** Which rosettad this run asks, and what the choice itself finds (pure: the
+ * caller supplies the variable, the lock's build and a realpath). Under
+ * --require-rosetta the answer is the LOCK's build, always — siblings:pin and
+ * CI prove the PIN's registry, never a shell's — and a FIELDD_ROSETTAD_BIN
+ * resolving to any other file is a FAIL naming both. A daily run honours the
+ * variable (the dev runner hands fieldd the same one) with a WARN when it is
+ * not the lock's build; a variable naming no file is left to the UNVERIFIED
+ * warning, which says exactly that. */
+function chooseRosettad({ explicit, lock, requireRosetta, realpath = realpathOrNull }) {
+  const named = explicit !== undefined && explicit !== "";
+  const real = named ? realpath(explicit) : null;
+  const lockReal = lock.path === null ? null : realpath(lock.path);
+  if (!named || (real !== null && real === lockReal)) {
+    return { path: lock.path, from: lock.from, findings: [] };
+  }
+  const lockSpelled =
+    lock.path === null
+      ? `none — ${lock.from}`
+      : lockReal === null
+        ? `${lock.path}, not built`
+        : lock.path;
+  if (requireRosetta) {
+    return {
+      path: lock.path,
+      from: lock.from,
+      findings: [
+        fail(
+          "bin-foreign",
+          "rosettad",
+          `FIELDD_ROSETTAD_BIN names ${explicit}${real === null ? " (no such file)" : ""}, not the lock's build (${lockSpelled}) — --require-rosetta proves the catalog against the pin's own rosettad only: unset FIELDD_ROSETTAD_BIN (pnpm siblings:build makes the lock's build)`,
+        ),
+      ],
+    };
+  }
+  return {
+    path: explicit,
+    from: "FIELDD_ROSETTAD_BIN",
+    findings:
+      real === null
+        ? []
+        : [
+            warn(
+              "bin-foreign",
+              "rosettad",
+              `FIELDD_ROSETTAD_BIN (${explicit}) is not the lock's build (${lockSpelled}) — this run read THAT binary's registry, which need not be the pin's`,
+            ),
+          ],
+  };
+}
+
+/** The pin-time staleness warning (pure): the rosettad asked is older than a
+ * source in its checkout, so it may predate the revision just pinned. mtimes
+ * are all a binary without a version flag offers, so it stays a WARN — cargo
+ * may decline to rebuild for a file it does not compile, and a FAIL no build
+ * can clear would be a trap. */
+function staleNote({ bin, binMtimeMs, newestSourceMs, sibling }) {
+  if (newestSourceMs === null || binMtimeMs >= newestSourceMs) return null;
+  return warn(
+    "stale",
+    "rosettad",
+    `rosettad (${bin}) is older than a source in ${sibling} — this run read THAT build's registry; if the pin moved rosetta, run \`pnpm siblings:build\` and re-run`,
+  );
 }
 
 /** `rosettad discover --json` output → Map<kind, dataRoot>. Tolerant of other
@@ -635,35 +893,34 @@ function parseDiscover(stdout) {
   return kinds;
 }
 
-/** The pinned binary's registry, or why there is none. `requireRosetta` adds the
- * pin-time staleness warning: a binary older than the checkout's sources may
- * predate the revision just pinned (mtimes are all a binary without a version
- * flag offers, so it stays a warning — cargo may decline to rebuild a file it
- * does not compile, and a FAIL no build can clear would be a trap). */
-function readRosettaFacts({ requireRosetta = false } = {}) {
-  const bin = resolveRosettad();
+/** The chosen rosettad's registry, or why there is none. Every return carries
+ * `notes`: what the choice found (bin-foreign) and, under --require-rosetta,
+ * the staleness warning — findings that must reach the report whether or not
+ * the half then runs. */
+function readRosettaFacts({
+  requireRosetta = false,
+  env = process.env,
+  lock = lockRosettad(),
+} = {}) {
+  const bin = chooseRosettad({ explicit: env.FIELDD_ROSETTAD_BIN, lock, requireRosetta });
+  const notes = [...bin.findings];
   if (bin.path === null || !existsSync(bin.path)) {
     const why =
       bin.from === "FIELDD_ROSETTAD_BIN"
         ? `FIELDD_ROSETTAD_BIN names no file: ${bin.path}`
         : `rosettad is not built — pnpm siblings:build: ${bin.path ?? bin.from}`;
-    return { ok: false, cls: "unverified", message: `rosetta half UNVERIFIED (${why})` };
+    return { ok: false, cls: "unverified", message: `rosetta half UNVERIFIED (${why})`, notes };
   }
-  const notes = [];
   if (requireRosetta) {
-    const lock = readLock(REPO_ROOT);
-    const entry = Object.entries(lock?.siblings ?? {}).find(([, e]) => e.cargo);
+    const entry = Object.entries(readLock(REPO_ROOT)?.siblings ?? {}).find(([, e]) => e.cargo);
     if (entry !== undefined) {
-      const newest = newestSourceMtime(siblingDir(REPO_ROOT, entry[1]));
-      if (newest !== null && statSync(bin.path).mtimeMs < newest) {
-        notes.push(
-          warn(
-            "stale",
-            "rosettad",
-            `rosettad (${bin.path}) is older than a source in ${entry[0]} — this run read THAT build's registry; if the pin moved rosetta, run \`pnpm siblings:build\` and re-run`,
-          ),
-        );
-      }
+      const note = staleNote({
+        bin: bin.path,
+        binMtimeMs: statSync(bin.path).mtimeMs,
+        newestSourceMs: newestSourceMtime(siblingDir(REPO_ROOT, entry[1])),
+        sibling: entry[0],
+      });
+      if (note !== null) notes.push(note);
     }
   }
   const scratch = realpathSync(mkdtempSync(join(tmpdir(), "vf-catalog-kinds-")));
@@ -679,12 +936,13 @@ function readRosettaFacts({ requireRosetta = false } = {}) {
         ok: false,
         cls: "kind-probe",
         message: `${bin.path} discover --json ${run.error?.code === "ETIMEDOUT" ? "did not finish in 60 s" : `exited ${run.status ?? run.signal ?? run.error?.message}`} — a present binary that cannot answer is red (rebuild: pnpm siblings:build)\n${tail(run.stderr)}`,
+        notes,
       };
     }
     try {
       return { ok: true, bin: bin.path, kinds: parseDiscover(run.stdout), notes };
     } catch (error) {
-      return { ok: false, cls: "kind-probe", message: `${bin.path}: ${error.message}` };
+      return { ok: false, cls: "kind-probe", message: `${bin.path}: ${error.message}`, notes };
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });
@@ -697,7 +955,8 @@ const IDENT = /[A-Za-z0-9_$]/;
 // After these a `/` opens a regex literal (the usual heuristic, narrowed for
 // TSX: `<`, `>` and `}` are left out, because `</a>` and `size={12} />` put a
 // slash after them and treating the rest of the line as a regex would hide a
-// literal on it).
+// literal on it). The arrow `=>` is the exception to `>`: an arrow's body never
+// starts with a division, so a `/` there is a regex (lexed as the token "=>").
 const REGEX_AFTER_CHAR = new Set([..."(,=:[!&|?{;+-*%~^"]);
 const REGEX_AFTER_WORD = new Set([
   "return",
@@ -719,8 +978,9 @@ const REGEX_AFTER_WORD = new Set([
 /** Every complete, substitution-free string literal in a TS/TSX source, with
  * its line: `"…"`, `'…'`, and a template with no `${}`. Comments are skipped; a
  * regex literal is stepped over; a quote that does not close on its line (JSX
- * text's apostrophe) is dropped. A lexer, not a parser — enough to compare
- * tokens exactly. */
+ * text's apostrophe, or a quote inside a regex read as division) is no string,
+ * and lexing resumes right AFTER it, so a literal later on the line is still
+ * seen. A lexer, not a parser — enough to compare tokens exactly. */
 function tsStringLiterals(source) {
   const found = [];
   const n = source.length;
@@ -789,11 +1049,12 @@ function tsStringLiterals(source) {
     }
     if (c === '"' || c === "'") {
       let j = i + 1;
+      let continued = 0; // line continuations inside the string, counted only if it closes
       let closed = false;
       while (j < n) {
         const d = source[j];
         if (d === "\\") {
-          if (source[j + 1] === "\n") line += 1;
+          if (source[j + 1] === "\n") continued += 1;
           j += 2;
           continue;
         }
@@ -804,14 +1065,15 @@ function tsStringLiterals(source) {
         if (d === "\n") break;
         j += 1;
       }
-      if (closed) {
-        found.push({ line, value: source.slice(i + 1, j) });
-        i = j + 1;
-      } else {
-        i = j;
-      }
       prevChar = c;
       prevWord = "";
+      if (closed) {
+        found.push({ line, value: source.slice(i + 1, j) });
+        line += continued;
+        i = j + 1;
+      } else {
+        i += 1; // no string: resume right after the quote
+      }
       continue;
     }
     if (c === "`") {
@@ -821,7 +1083,10 @@ function tsStringLiterals(source) {
     }
     if (
       c === "/" &&
-      (prevChar === "" || REGEX_AFTER_CHAR.has(prevChar) || REGEX_AFTER_WORD.has(prevWord))
+      (prevChar === "" ||
+        prevChar === "=>" ||
+        REGEX_AFTER_CHAR.has(prevChar) ||
+        REGEX_AFTER_WORD.has(prevWord))
     ) {
       let j = i + 1;
       let inClass = false;
@@ -872,17 +1137,33 @@ function tsStringLiterals(source) {
         depth -= 1;
       }
     }
-    prevChar = c;
+    prevChar = c === ">" && source[i - 1] === "=" ? "=>" : c;
     prevWord = "";
     i += 1;
   }
   return found;
 }
 
-/** Every complete single-line string literal in a Swift source (`"…"` and raw
- * `#"…"#`), with its line. Comments (nested, as Swift nests them) are skipped;
- * a multi-line `"""` string is stepped over — its value always holds a newline,
- * so it can never equal an id. */
+/** A Swift multi-line string's value, as Swift reads it: the lines BETWEEN the
+ * delimiter lines, each without the closing delimiter's indentation — the
+ * delimiters' own line breaks are not part of it, so a body whose one line
+ * reads `claude` IS the string "claude". Null for a body Swift would refuse
+ * (no line break, or a closing delimiter that is not alone on its line). */
+function swiftMultilineValue(body) {
+  const lines = body.split("\n").map((l) => l.replace(/\r$/, ""));
+  if (lines.length < 2) return null;
+  const indent = lines[lines.length - 1];
+  if (!/^[ \t]*$/.test(indent)) return null;
+  return lines
+    .slice(1, -1)
+    .map((l) => (l.startsWith(indent) ? l.slice(indent.length) : l.trimStart()))
+    .join("\n");
+}
+
+/** Every complete string literal in a Swift source (`"…"`, raw `#"…"#`, and
+ * multi-line `"""…"""` with its Swift value), with its line — a multi-line one
+ * at its first content line. Comments (nested, as Swift nests them) are
+ * skipped. */
 function swiftStringLiterals(source) {
   const found = [];
   const n = source.length;
@@ -928,6 +1209,8 @@ function swiftStringLiterals(source) {
         const close = `"""${"#".repeat(hashes)}`;
         let k = source.indexOf(close, j + 3);
         if (k === -1) k = n;
+        const value = swiftMultilineValue(source.slice(j + 3, k));
+        if (value !== null) found.push({ line: line + 1, value });
         for (let m = i; m < k; m += 1) if (source[m] === "\n") line += 1;
         i = k + close.length;
         continue;
@@ -965,6 +1248,8 @@ function isTestPath(relPath) {
   return relPath.split("/").some((seg) => seg === "test" || seg === "tests" || seg === "__tests__");
 }
 
+/** Every file under `dir` matching `pattern`. A symlinked directory or file is
+ * never followed: a Dirent reports a link as neither directory nor file. */
 function walkFiles(dir, pattern, out = []) {
   let entries;
   try {
@@ -981,6 +1266,39 @@ function walkFiles(dir, pattern, out = []) {
   return out;
 }
 
+/** One tree glob (`*` = one directory level) → the directories that exist
+ * under `root`, never reached through a symlink. */
+function expandTree(root, glob) {
+  let dirs = [root];
+  for (const segment of glob.split("/")) {
+    const next = [];
+    for (const dir of dirs) {
+      if (segment === "*") {
+        let entries = [];
+        try {
+          entries = readdirSync(dir, { withFileTypes: true });
+        } catch {
+          entries = [];
+        }
+        for (const entry of entries) {
+          if (entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules") {
+            next.push(join(dir, entry.name));
+          }
+        }
+      } else {
+        const candidate = join(dir, segment);
+        try {
+          if (lstatSync(candidate).isDirectory()) next.push(candidate);
+        } catch {
+          // absent: this tree has no such directory
+        }
+      }
+    }
+    dirs = next;
+  }
+  return dirs;
+}
+
 /** The ids R23b forbids: every catalog id and every seam's own spelling. */
 function literalIds(rows) {
   const ids = new Set();
@@ -992,25 +1310,20 @@ function literalIds(rows) {
   return ids;
 }
 
-/** Scan `root`'s product sources for id literals. Returns the hits outside the
- * allow-list, the count each allow-list entry absorbed, and the entries that
- * allow nothing (stale). */
-function scanLiterals(root, ids, allow) {
-  const files = [];
-  let packages = [];
-  try {
-    packages = readdirSync(join(root, "packages"), { withFileTypes: true });
-  } catch {
-    packages = [];
+/** Scan `root`'s product trees for id literals. Returns the hits outside the
+ * allow-list, the count each allow-list entry absorbed, and how many files were
+ * lexed. */
+function scanLiterals(root, ids, allow, trees = R23B_TREES) {
+  const files = new Set();
+  for (const tree of trees) {
+    for (const dir of expandTree(root, tree.glob)) {
+      for (const file of walkFiles(dir, tree.pattern)) files.add(file);
+    }
   }
-  for (const pkg of packages) {
-    if (pkg.isDirectory()) walkFiles(join(root, "packages", pkg.name, "src"), /\.tsx?$/, files);
-  }
-  walkFiles(join(root, "apps", "ios", "VibeFieldKit", "Sources"), /\.swift$/, files);
   const allowed = new Map(allow.map((entry) => [entry.file, 0]));
   const hits = [];
   let scanned = 0;
-  for (const abs of files) {
+  for (const abs of [...files].sort()) {
     const rel = relative(root, abs).split(sep).join("/");
     // An ambient `.d.ts` stays in: a literal TYPE naming an agent is the same
     // enumeration a literal value is.
@@ -1026,11 +1339,10 @@ function scanLiterals(root, ids, allow) {
       else hits.push({ file: rel, line, value });
     }
   }
-  const stale = allow.filter((entry) => allowed.get(entry.file) === 0);
-  return { hits, allowed, stale, scanned };
+  return { hits, allowed, scanned };
 }
 
-function judgeLiterals(scan, root) {
+function judgeLiterals(scan, allow, root) {
   const findings = scan.hits.map((hit) =>
     fail(
       "literal",
@@ -1038,34 +1350,39 @@ function judgeLiterals(scan, root) {
       `${hit.file}:${hit.line} "${hit.value}" — an agent id literal in product code; read the catalog (catalogEntry, isOffered, visibleCatalog, …) instead (AR-L1)`,
     ),
   );
-  for (const entry of scan.stale) {
-    findings.push(
-      fail(
-        "allow-stale",
-        entry.file,
-        existsSync(join(root, entry.file))
-          ? `allow-list entry ${entry.file} holds no agent id literal any more — retire the entry (an entry that allows nothing would allow the next literal silently)`
-          : `allow-list entry ${entry.file} names a file that does not exist — retire or correct it`,
-      ),
-    );
+  for (const entry of allow) {
+    const found = scan.allowed.get(entry.file) ?? 0;
+    let problem = null;
+    if (!existsSync(join(root, entry.file))) {
+      problem = `names a file that does not exist — retire or correct it`;
+    } else if (!Number.isInteger(entry.count) || entry.count < 1) {
+      problem = `carries count ${entry.count} — an entry states the exact number of literals it allows (at least 1; one allowing none is retired)`;
+    } else if (found > entry.count) {
+      problem = `allows ${entry.count} agent id literal(s) and the file holds ${found} — a new literal in an allowed file is still a decision: read the catalog instead, or raise the count with its reason`;
+    } else if (found < entry.count) {
+      problem = `allows ${entry.count} agent id literal(s) and the file holds ${found} — lower the count${found === 0 ? " (to none: retire the entry)" : ""}, so the spare allowance cannot absorb the next literal silently`;
+    }
+    if (problem !== null) {
+      findings.push(fail("allow-count", entry.file, `allow-list entry ${entry.file} ${problem}`));
+    }
   }
   return findings;
 }
 
 // --- reporting -----------------------------------------------------------------
 
-function emit(findings, wall) {
+function emit(findings, wall, out = console) {
   for (const f of findings) {
-    if (f.level === "WARN") console.log(`WARN ${wall}: ${f.message}`);
+    if (f.level === "WARN") out.log(`WARN ${wall}: ${f.message}`);
   }
   for (const f of findings) {
-    if (f.level === "FAIL") console.error(`FAIL ${wall}: ${f.message}`);
+    if (f.level === "FAIL") out.error(`FAIL ${wall}: ${f.message}`);
   }
 }
 
-function printPuppeteerFacts(facts) {
+function printPuppeteerFacts(facts, out = console) {
   if (!facts.ok) return;
-  console.log(
+  out.log(
     `R23 puppeteer pin — ${facts.providers.length} provider(s) composed (${FIELDD_DOOR.providers} through fieldd's edge, under tsx):`,
   );
   for (const p of facts.providers) {
@@ -1074,44 +1391,59 @@ function printPuppeteerFacts(facts) {
       p.rootVia === "port"
         ? "  (profiles port declares support false: no native-default profile; root read from the port)"
         : "";
-    console.log(`  ${p.id.padEnd(12)} ${ports.padEnd(52)} ${p.root ?? "—"}${via}`);
+    out.log(`  ${p.id.padEnd(12)} ${ports.padEnd(52)} ${p.root ?? "—"}${via}`);
   }
 }
 
-function printRosettaFacts(facts) {
+function printRosettaFacts(facts, out = console) {
   if (!facts.ok) return;
-  console.log(
+  out.log(
     `R23 rosetta pin — ${facts.kinds.size} kind(s) registered (${facts.bin} discover --json):`,
   );
   for (const [kind, dataRoot] of [...facts.kinds].sort(([a], [b]) => a.localeCompare(b))) {
-    console.log(`  ${kind.padEnd(12)} ${dataRoot}`);
+    out.log(`  ${kind.padEnd(12)} ${dataRoot}`);
   }
 }
 
-function runEnforce({ requireRosetta }) {
-  const { rows, problems } = loadCatalog();
-  if (problems.length > 0) {
-    const findings = problems.map((p) =>
-      fail("catalog-shape", "catalog", `${CATALOG_JSON} is malformed: ${p}`),
-    );
-    emit(findings, "R23");
-    console.error(`check-agent-catalog: FAIL — the projection cannot be judged [--enforce]`);
+/** The projection's own failures (malformed, stale) as findings. */
+function projectionFindings({ problems, stale }) {
+  return [
+    ...problems.map((p) => fail("catalog-shape", "catalog", `${CATALOG_JSON} is malformed: ${p}`)),
+    ...(stale === null ? [] : [fail("catalog-stale", "catalog", stale)]),
+  ];
+}
+
+/** R23, one run. Every input is a parameter so the self-test drives this very
+ * function end to end over a rotten projection and canned facts. */
+function runEnforce({
+  requireRosetta = false,
+  root = REPO_ROOT,
+  readPuppeteer = readPuppeteerFacts,
+  readRosetta = readRosettaFacts,
+  out = console,
+} = {}) {
+  const loaded = loadCatalog(join(root, CATALOG_JSON), join(root, CATALOG_SOURCE));
+  const unjudged = projectionFindings(loaded);
+  if (unjudged.length > 0) {
+    emit(unjudged, "R23", out);
+    out.error("check-agent-catalog: FAIL — the projection cannot be judged [--enforce]");
     return 1;
   }
-  const puppeteer = readPuppeteerFacts();
-  const rosetta = readRosettaFacts({ requireRosetta });
-  printPuppeteerFacts(puppeteer);
-  printRosettaFacts(rosetta);
+  const { rows } = loaded;
+  const puppeteer = readPuppeteer();
+  const rosetta = readRosetta({ requireRosetta });
+  printPuppeteerFacts(puppeteer, out);
+  printRosettaFacts(rosetta, out);
   const findings = [
     ...judge(rows, puppeteer, rosetta, { requireRosetta }),
     ...(rosetta.notes ?? []),
   ];
-  emit(findings, "R23");
+  emit(findings, "R23", out);
   const failures = findings.filter((f) => f.level === "FAIL").length;
   const warnings = findings.length - failures;
   const mode = `--enforce${requireRosetta ? " --require-rosetta" : ""}`;
   if (failures > 0) {
-    console.error(
+    out.error(
       `check-agent-catalog: FAIL — ${failures} failure(s), ${warnings} warning(s) over ${rows.length} catalog row(s) [${mode}]`,
     );
     return 1;
@@ -1119,52 +1451,55 @@ function runEnforce({ requireRosetta }) {
   const honoured = rosetta.ok
     ? "honoured by both pins"
     : "honoured by the puppeteer pin — the rosetta half UNVERIFIED";
-  console.log(
+  out.log(
     `check-agent-catalog: pass — ${rows.length} catalog row(s) ${honoured}, ${warnings} warning(s) [${mode}]`,
   );
   return 0;
 }
 
-function runLiterals() {
-  const { rows, problems } = loadCatalog();
-  if (problems.length > 0) {
-    emit(
-      problems.map((p) => fail("catalog-shape", "catalog", `${CATALOG_JSON} is malformed: ${p}`)),
-      "R23b",
-    );
-    console.error("check-agent-catalog: FAIL — no ids to lint for [--literals]");
+/** R23b, one run — parameterised like runEnforce, for the same reason. */
+function runLiterals({ root = REPO_ROOT, allow = R23B_ALLOW, out = console } = {}) {
+  const loaded = loadCatalog(join(root, CATALOG_JSON), join(root, CATALOG_SOURCE));
+  const unjudged = projectionFindings(loaded);
+  if (unjudged.length > 0) {
+    emit(unjudged, "R23b", out);
+    out.error("check-agent-catalog: FAIL — no ids to lint for [--literals]");
     return 1;
   }
-  const ids = literalIds(rows);
-  const scan = scanLiterals(REPO_ROOT, ids, R23B_ALLOW);
-  console.log(
-    `R23b — ${scan.scanned} product source(s) lexed for ${ids.size} agent id(s) (packages/*/src, apps/ios/VibeFieldKit/Sources):`,
+  const ids = literalIds(loaded.rows);
+  const scan = scanLiterals(root, ids, allow);
+  out.log(
+    `R23b — ${scan.scanned} product source(s) lexed for ${ids.size} agent id(s) (${R23B_TREES.map((t) => t.glob).join(", ")}):`,
   );
-  for (const entry of R23B_ALLOW) {
-    console.log(
-      `  allow-listed  ${entry.file} (${scan.allowed.get(entry.file)} literal(s)) — ${entry.why}`,
+  for (const entry of allow) {
+    out.log(
+      `  allow-listed  ${entry.file} (${scan.allowed.get(entry.file)} of ${entry.count} literal(s)) — ${entry.why}`,
     );
   }
-  const findings = judgeLiterals(scan, REPO_ROOT);
-  emit(findings, "R23b");
+  const findings = judgeLiterals(scan, allow, root);
+  emit(findings, "R23b", out);
   if (findings.length > 0) {
-    console.error(
-      `check-agent-catalog: FAIL — ${scan.hits.length} literal(s) outside the catalog and the allow-list, ${scan.stale.length} stale allow-list entr(ies) [--literals]`,
+    const counts = findings.filter((f) => f.cls === "allow-count").length;
+    out.error(
+      `check-agent-catalog: FAIL — ${scan.hits.length} literal(s) outside the catalog and the allow-list, ${counts} allow-list entr(ies) off their count [--literals]`,
     );
     return 1;
   }
-  console.log(
+  out.log(
     "check-agent-catalog: pass — no agent id literal outside the catalog and the allow-list [--literals]",
   );
   return 0;
 }
 
 // --- self-test ------------------------------------------------------------------
-// Rotten fixtures through the SAME functions --enforce and --literals use. Every
-// FAIL class the verdicts can produce is provoked exactly once by one rotten
-// catalog; the clean counterpart must produce nothing; the readers (ports, the
-// root, the fold, the discover parser, the projection's shape check, the lexers)
-// are each held to fixtures. Nothing here touches a sibling or the network.
+// Rotten fixtures through the SAME functions --enforce and --literals use, and
+// the two drivers end to end. Every VERDICT class is provoked by the rotten
+// catalog (the provoked set is derived from the fixture and compared with
+// VERDICT_CLASSES, never counted by hand); the clean counterpart produces
+// nothing; the readers (ports, the root, the fold, the discover parser, the
+// binary choice, the staleness note, the embedded tail, the capability table,
+// the projection's shape and source digest, the lexers, the walk) are each held
+// to fixtures. Nothing here touches a sibling or the network.
 
 function row(id, overrides = {}) {
   const offers = Object.fromEntries(CAPABILITIES.map((c) => [c, false]));
@@ -1197,8 +1532,9 @@ function pinned(id, ports, root = null, extra = {}) {
 
 const FULL = ["spawn", "resume", "reattach", "usage", "distribution", "personas"];
 
-function selfTestVerdicts(check) {
-  const puppeteer = {
+/** The canned puppeteer pin the verdict fixtures and the enforce driver share. */
+function fixturePuppeteer() {
+  return {
     ok: true,
     providers: [
       pinned("alpha", FULL, "~/.alpha"),
@@ -1209,18 +1545,31 @@ function selfTestVerdicts(check) {
         profilesPort: true,
         rootVia: "port",
       }),
+      // composed WITHOUT a profiles port: no native root to spell
+      pinned("nu", ["spawn"]),
     ],
   };
-  const rosetta = {
+}
+
+/** The canned rosetta registry: the rotten catalog's, or the clean one's. */
+function fixtureRosetta({ clean = false } = {}) {
+  return {
     ok: true,
+    bin: "fixture",
+    notes: [],
     kinds: new Map([
       ["alpha-code", "~/.alpha"],
-      ["beta", "~/.beta-data"],
-      ["eps", "~/.eps-history"],
+      ["beta", clean ? "~/.beta" : "~/.beta-data"],
+      ["eps", clean ? "~/.eps" : "~/.eps-history"],
       ["zeta", "~/.zeta"],
+      ["xi", "~/.xi"],
+      ["nu", "~/.nu"],
     ]),
   };
-  const rotten = [
+}
+
+function rottenCatalog() {
+  return [
     // clean: every claim implemented, both roots agree
     row("alpha", {
       status: "supported",
@@ -1243,7 +1592,7 @@ function selfTestVerdicts(check) {
     }),
     // history-seam: history with no rosetta seam
     row("gamma", { offers: { spawn: true, history: true } }),
-    // pin-compose: the pin composes no `ghost`
+    // pin-compose: the pin composes no `ghost`, and the row claims spawn
     row("ghost", { offers: { spawn: true } }),
     // pin-root: the row takes rosetta's spelling, the pin spells another;
     // candidate WARN: the pin implements distribution, the row does not claim it
@@ -1252,68 +1601,126 @@ function selfTestVerdicts(check) {
       layoutRoot: "~/.eps-history",
       offers: { spawn: true, resume: true, history: true },
     }),
-    // kind-registered: rosetta registers no `omega`
+    // kind-registered: rosetta registers no `omega`, and the row claims history
     row("omega", {
       seams: { puppeteer: null, rosetta: { kind: "omega" } },
       layoutRoot: "~/.omega",
       offers: { history: true },
     }),
+    // pin-claim: a puppeteer capability claimed with no puppeteer seam at all
+    row("iota", { seams: { puppeteer: null, rosetta: null }, offers: { spawn: true } }),
+    // §6 — a provider REMOVED upstream keeps its row as a record:
+    //   declined, both counterparts gone, claiming nothing → nothing
+    row("lam", {
+      status: "declined",
+      seams: { puppeteer: { provider: "lam" }, rosetta: { kind: "lam" } },
+      layoutRoot: "~/.lam",
+      surfaces: { desktop: false, phone: false },
+    }),
+    //   deprecated, still claiming resume the pin can no longer supply → pin-compose
+    row("mu", { status: "deprecated", offers: { resume: true } }),
+    //   deprecated, the provider gone, history still indexed by a registered kind → nothing
+    row("xi", {
+      status: "deprecated",
+      seams: { puppeteer: { provider: "xi" }, rosetta: { kind: "xi" } },
+      layoutRoot: "~/.xi",
+      offers: { history: true },
+    }),
+    // composed without a profiles port (the pin has no root): rosetta's
+    // data_root alone proves the layoutRoot → nothing
+    row("nu", {
+      seams: { puppeteer: { provider: "nu" }, rosetta: { kind: "nu" } },
+      layoutRoot: "~/.nu",
+      offers: { spawn: true, history: true },
+    }),
     // (no row for `delta` → pin-undecided; none for `zeta` → kind-undecided)
   ];
-  const expected = [
-    "FAIL pin-claim beta",
-    "FAIL kind-root beta",
-    "FAIL history-seam gamma",
-    "FAIL pin-compose ghost",
-    "FAIL pin-root eps",
-    "WARN candidate eps",
-    "FAIL kind-registered omega",
-    "FAIL pin-undecided delta",
-    "FAIL kind-undecided zeta",
-  ];
-  const got = judge(rotten, puppeteer, rosetta).map((f) => `${f.level} ${f.cls} ${f.subject}`);
-  check(
-    "a rotten catalog produces exactly one finding per FAIL class (+ the one candidate WARN)",
-    JSON.stringify([...got].sort()) === JSON.stringify([...expected].sort()),
-    `got ${JSON.stringify(got)}`,
-  );
-  const classes = got.filter((g) => g.startsWith("FAIL")).map((g) => g.split(" ")[1]);
-  check(
-    "…and every verdict class is covered, none twice",
-    new Set(classes).size === classes.length && classes.length === 8,
-    `classes ${JSON.stringify(classes)}`,
-  );
-  const cited = judge(rotten, puppeteer, rosetta).find((f) => f.cls === "pin-root")?.message ?? "";
-  check(
-    "a root mismatch names both spellings",
-    cited.includes("`~/.eps-history`") && cited.includes("`~/.eps`"),
-    cited,
-  );
+}
 
-  const cleanKinds = new Map([
-    ["alpha-code", "~/.alpha"],
-    ["beta", "~/.beta"],
-    ["eps", "~/.eps"],
-    ["zeta", "~/.zeta"],
-  ]);
-  const clean = [
-    rotten[0],
-    { ...rotten[1], offers: { ...rotten[1].offers, reattach: false } },
-    { ...rotten[2], offers: { ...rotten[2].offers, history: false } },
+const ROTTEN_EXPECTED = [
+  "FAIL pin-claim beta",
+  "FAIL kind-root beta",
+  "FAIL history-seam gamma",
+  "FAIL pin-compose ghost",
+  "FAIL pin-root eps",
+  "WARN candidate eps",
+  "FAIL kind-registered omega",
+  "FAIL pin-claim iota",
+  "FAIL pin-compose mu",
+  "FAIL pin-undecided delta",
+  "FAIL kind-undecided zeta",
+];
+
+/** The rotten catalog with every rot removed: the same pins find nothing. */
+function cleanCatalog() {
+  const rotten = new Map(rottenCatalog().map((r) => [r.id, r]));
+  const without = (id, capability) => ({
+    ...rotten.get(id),
+    offers: { ...rotten.get(id).offers, [capability]: false },
+  });
+  return [
+    rotten.get("alpha"),
+    without("beta", "reattach"),
+    without("gamma", "history"),
     row("delta", {
       status: "declined",
       layoutRoot: null,
       offers: {},
       surfaces: { desktop: false, phone: false },
     }),
-    { ...rotten[4], layoutRoot: "~/.eps", offers: { ...rotten[4].offers, distribution: true } },
+    {
+      ...rotten.get("eps"),
+      layoutRoot: "~/.eps",
+      offers: { ...rotten.get("eps").offers, distribution: true },
+    },
     row("zeta", {
       seams: { puppeteer: null, rosetta: { kind: "zeta" } },
       layoutRoot: "~/.zeta",
       offers: { history: true },
     }),
+    rotten.get("lam"),
+    without("mu", "resume"),
+    rotten.get("xi"),
+    rotten.get("nu"),
   ];
-  const cleanFindings = judge(clean, puppeteer, { ok: true, kinds: cleanKinds });
+}
+
+function selfTestVerdicts(check) {
+  const puppeteer = fixturePuppeteer();
+  const rosetta = fixtureRosetta();
+  const rotten = rottenCatalog();
+  const findings = judge(rotten, puppeteer, rosetta);
+  const got = findings.map((f) => `${f.level} ${f.cls} ${f.subject}`);
+  check(
+    "a rotten catalog produces exactly the expected findings — no more, no fewer",
+    JSON.stringify([...got].sort()) === JSON.stringify([...ROTTEN_EXPECTED].sort()),
+    `got ${JSON.stringify(got)}`,
+  );
+  const provoked = new Set(
+    ROTTEN_EXPECTED.filter((g) => g.startsWith("FAIL ")).map((g) => g.split(" ")[1]),
+  );
+  const unprovoked = VERDICT_CLASSES.filter((cls) => !provoked.has(cls));
+  check(
+    "…and the fixture provokes every VERDICT class (derived from the fixture, compared with the registry)",
+    unprovoked.length === 0,
+    `no rotten row provokes ${JSON.stringify(unprovoked)}`,
+  );
+  const cited = findings.find((f) => f.cls === "pin-root")?.message ?? "";
+  check(
+    "a root mismatch names both spellings",
+    cited.includes("`~/.eps-history`") && cited.includes("`~/.eps`"),
+    cited,
+  );
+  const removed = findings.find((f) => f.cls === "pin-compose" && f.subject === "mu")?.message;
+  check(
+    "a removed provider is red only for what the row still claims, and the message names it",
+    (removed ?? "").includes("`resume`") &&
+      !findings.some((f) => ["lam", "xi", "nu"].includes(f.subject)),
+    `${removed} | ${JSON.stringify(findings.filter((f) => ["lam", "xi", "nu"].includes(f.subject)))}`,
+  );
+
+  const clean = cleanCatalog();
+  const cleanFindings = judge(clean, puppeteer, fixtureRosetta({ clean: true }));
   check(
     "the same pins against a clean catalog produce nothing (a declined row is a decision)",
     cleanFindings.length === 0,
@@ -1368,9 +1775,17 @@ function selfTestVerdicts(check) {
   );
   check(
     "a half that could not run is red, never a quiet pass",
-    broken.filter((f) => f.level === "FAIL").length === 2,
+    JSON.stringify(broken.filter((f) => f.level === "FAIL").map((f) => f.cls)) ===
+      JSON.stringify(["pin-probe", "kind-probe"]),
     JSON.stringify(broken),
   );
+  let unregistered = false;
+  try {
+    fail("made-up", "x", "a class nobody named");
+  } catch {
+    unregistered = true;
+  }
+  check("a finding class not registered in CLASSES cannot be emitted", unregistered, "accepted");
 }
 
 async function selfTestReaders(check) {
@@ -1440,16 +1855,22 @@ async function selfTestReaders(check) {
   );
 
   const folds = [
-    tilde("/h/.claude", "/h", "/"),
+    tilde("/h/.agent-one", "/h", "/"),
     tilde("/h", "/h", "/"),
-    tilde("/h/.local/share/opencode", "/h", "/"),
-    tilde("/hx/.claude", "/h", "/"),
-    tilde("C:\\Users\\j\\.codex", "C:\\Users\\j", "\\"),
+    tilde("/h/.local/share/agent-two", "/h", "/"),
+    tilde("/hx/.agent-one", "/h", "/"),
+    tilde("C:\\Users\\j\\.agent-three", "C:\\Users\\j", "\\"),
   ];
   check(
     "the fold is fieldd's tilde (a prefix impostor is not home)",
     JSON.stringify(folds) ===
-      JSON.stringify(["~/.claude", "~", "~/.local/share/opencode", "/hx/.claude", "~/.codex"]),
+      JSON.stringify([
+        "~/.agent-one",
+        "~",
+        "~/.local/share/agent-two",
+        "/hx/.agent-one",
+        "~/.agent-three",
+      ]),
     JSON.stringify(folds),
   );
 
@@ -1484,6 +1905,90 @@ async function selfTestReaders(check) {
     JSON.stringify([...kinds]),
   );
 
+  // The binary choice (AC-7): the pin's registry is the lock's build's.
+  const realpaths = {
+    "/lock/rosettad": "/real/rosettad",
+    "/alias/rosettad": "/real/rosettad",
+    "/lane/rosettad": "/lane/rosettad",
+  };
+  const lock = { path: "/lock/rosettad", from: "rosetta's build (pnpm siblings:build)" };
+  const pick = (explicit, requireRosetta) =>
+    chooseRosettad({
+      explicit,
+      lock,
+      requireRosetta,
+      realpath: (p) => realpaths[p] ?? null,
+    });
+  const brief = (choice) =>
+    `${choice.path}|${choice.findings.map((f) => `${f.level} ${f.cls}`).join(",")}`;
+  const choices = [
+    brief(pick(undefined, false)),
+    brief(pick("", true)),
+    brief(pick("/alias/rosettad", true)),
+    brief(pick("/lane/rosettad", true)),
+    brief(pick("/gone/rosettad", true)),
+    brief(pick("/lane/rosettad", false)),
+    brief(pick("/gone/rosettad", false)),
+  ];
+  const foreign = pick("/lane/rosettad", true).findings[0]?.message ?? "";
+  check(
+    "the binary choice: --require-rosetta asks the lock's build only (a foreign FIELDD_ROSETTAD_BIN is a FAIL naming both); a daily run honours it with a WARN",
+    JSON.stringify(choices) ===
+      JSON.stringify([
+        "/lock/rosettad|",
+        "/lock/rosettad|",
+        "/lock/rosettad|",
+        "/lock/rosettad|FAIL bin-foreign",
+        "/lock/rosettad|FAIL bin-foreign",
+        "/lane/rosettad|WARN bin-foreign",
+        "/gone/rosettad|",
+      ]) &&
+      foreign.includes("/lane/rosettad") &&
+      foreign.includes("/lock/rosettad"),
+    `${JSON.stringify(choices)} | ${foreign}`,
+  );
+
+  const stale = [
+    staleNote({ bin: "/b", binMtimeMs: 1, newestSourceMs: 2, sibling: "s" }),
+    staleNote({ bin: "/b", binMtimeMs: 2, newestSourceMs: 2, sibling: "s" }),
+    staleNote({ bin: "/b", binMtimeMs: 2, newestSourceMs: null, sibling: "s" }),
+  ];
+  check(
+    "the staleness note: a build older than a source in its checkout WARNs; a fresh one, or no sources, says nothing",
+    stale[0]?.level === "WARN" &&
+      stale[0]?.cls === "stale" &&
+      stale[1] === null &&
+      stale[2] === null,
+    JSON.stringify(stale),
+  );
+
+  const embedded = `FAIL R23: ${
+    fail("kind-probe", "rosettad", `rosettad exited 1\n${tail("WARN the daemon's own line\nboom")}`)
+      .message
+  }`.split("\n");
+  check(
+    "a child's output embedded in a FAIL message is indented, so preflight never lifts its WARN lines as R23's",
+    embedded.length === 3 &&
+      embedded.slice(1).every((l) => l.startsWith("  ")) &&
+      !embedded.some((l) => l.startsWith("WARN ")),
+    JSON.stringify(embedded),
+  );
+
+  check(
+    "the capability table: every capability owned by exactly one sibling (and a broken table is named three ways)",
+    capabilityOwnershipProblems(CAPABILITIES, PORT_FOR, ROSETTA_CAPABILITIES).length === 0 &&
+      capabilityOwnershipProblems([...CAPABILITIES, "sandbox"], PORT_FOR, ROSETTA_CAPABILITIES)
+        .length === 1 &&
+      capabilityOwnershipProblems(CAPABILITIES, { ...PORT_FOR, history: "x" }, ROSETTA_CAPABILITIES)
+        .length === 1 &&
+      capabilityOwnershipProblems(
+        CAPABILITIES,
+        { ...PORT_FOR, teleport: "x" },
+        ROSETTA_CAPABILITIES,
+      ).length === 1,
+    "the ownership check disagrees with its fixtures",
+  );
+
   const good = { catalog: [row("alpha"), row("beta")] };
   const shapes = [
     validateCatalog(good).problems.length,
@@ -1516,6 +2021,9 @@ function selfTestLiterals(check) {
       "const t = `alpha`; const u = `${a}alpha`; const v = `x${`beta`}`;",
       '<Mark agent="gamma" size={12} /> <p>Don\'t</p>',
       'const e = size / 2; const f = "alpha-code";',
+      '<p>Don\'t</p> <Mark agent="alpha" />',
+      '(s) => /["\']/.test(s) || s === "alpha"',
+      "const k = (s) => /'/.test(s); const m = 'beta';",
     ].join("\n"),
   ).map((l) => `${l.line}:${l.value}`);
   const tsExpected = [
@@ -1528,9 +2036,12 @@ function selfTestLiterals(check) {
     "6:beta",
     "7:gamma",
     "8:alpha-code",
+    "9:alpha",
+    "10:alpha",
+    "11:beta",
   ];
   check(
-    "the TS lexer: literals kept, comments/templates-with-substitutions/regexes/JSX apostrophes handled",
+    "the TS lexer: literals kept; comments, templates with substitutions, regexes (after `=>` too) and unclosed quotes (JSX apostrophes) handled without losing the rest of the line",
     JSON.stringify(tsFound) === JSON.stringify(tsExpected),
     JSON.stringify(tsFound),
   );
@@ -1542,11 +2053,26 @@ function selfTestLiterals(check) {
       'let m = """',
       "alpha",
       '""" ; let z = "delta"',
+      '  let n = """',
+      "    beta",
+      '    """',
+      '  let o = #"""',
+      '  a "gamma" line',
+      '  """#',
     ].join("\n"),
   ).map((l) => `${l.line}:${l.value}`);
   check(
-    "the Swift lexer: nested comments, raw strings, escapes, multi-line strings stepped over",
-    JSON.stringify(swiftFound) === JSON.stringify(["1:alpha", "2:gamma", '3:a\\"q', "6:delta"]),
+    "the Swift lexer: nested comments, raw strings, escapes, multi-line strings lexed to their Swift value",
+    JSON.stringify(swiftFound) ===
+      JSON.stringify([
+        "1:alpha",
+        "2:gamma",
+        '3:a\\"q',
+        "5:alpha",
+        "6:delta",
+        "8:beta",
+        '11:a "gamma" line',
+      ]),
     JSON.stringify(swiftFound),
   );
 
@@ -1563,62 +2089,193 @@ function selfTestLiterals(check) {
       "packages/demo/lib/out-of-scope.ts": 'export const r = "alpha";\n',
       "packages/contracts/src/agent-catalog.ts": 'export const row = { id: "alpha" };\n',
       "packages/demo/src/presentation.ts": 'export const MARKS = { alpha: "alpha" };\n',
+      "packages/demo/src/grew.ts": 'export const MARKS = ["alpha", "gamma"];\n',
       "packages/demo/src/used-to-hold-one.ts": "export const nothing = 0;\n",
       "apps/ios/VibeFieldKit/Sources/Demo/Roster.swift":
         'switch id { case "beta-kind": break } // "alpha"\n',
+      "apps/ios/App/Main.swift": 'let first = "gamma"\n',
+      "apps/demo/src/cli.ts": 'export const d = "alpha";\n',
       "plugins/demo/src/elsewhere.ts": 'export const r = "alpha";\n',
+      "plugins/demo/test/elsewhere.ts": 'export const r = "alpha";\n',
+      "examples/plugins/demo/src/sample.tsx": 'export const S = () => <Mark agent="gamma" />;\n',
+      "tooling/demo/src/out-of-scope.ts": 'export const r = "alpha";\n',
+      "elsewhere/linked.ts": 'export const r = "alpha";\n',
     };
     for (const [file, body] of Object.entries(files)) {
       mkdirSync(dirname(join(tmp, file)), { recursive: true });
       writeFileSync(join(tmp, file), body);
     }
+    // A symlinked directory inside a product tree must never be walked (a
+    // committed symlink once walked another checkout). A junction on win32,
+    // which needs no privilege; the type is ignored elsewhere.
+    let linked = true;
+    try {
+      symlinkSync(
+        join(tmp, "elsewhere"),
+        join(tmp, "packages", "demo", "src", "linked"),
+        "junction",
+      );
+    } catch {
+      linked = false;
+    }
     const allow = [
-      { file: "packages/demo/src/presentation.ts", why: "fixture" },
-      { file: "packages/demo/src/used-to-hold-one.ts", why: "fixture" },
-      { file: "packages/demo/src/gone.ts", why: "fixture" },
+      { file: "packages/demo/src/presentation.ts", count: 1, why: "fixture" },
+      { file: "packages/demo/src/grew.ts", count: 1, why: "fixture" },
+      { file: "packages/demo/src/used-to-hold-one.ts", count: 1, why: "fixture" },
+      { file: "packages/demo/src/gone.ts", count: 1, why: "fixture" },
     ];
     const ids = literalIds([
       row("alpha", { seams: { puppeteer: { provider: "alpha" }, rosetta: { kind: "beta-kind" } } }),
       row("gamma"),
     ]);
     const scan = scanLiterals(tmp, ids, allow);
-    const findings = judgeLiterals(scan, tmp).map((f) => `${f.cls} ${f.subject}`);
+    const findings = judgeLiterals(scan, allow, tmp).map((f) => `${f.cls} ${f.subject}`);
     const expected = [
       "literal packages/demo/src/branch.ts:1",
       "literal packages/demo/src/kind.tsx:1",
       "literal packages/demo/src/deep/fixtures/row.ts:1",
       "literal apps/ios/VibeFieldKit/Sources/Demo/Roster.swift:1",
-      "allow-stale packages/demo/src/used-to-hold-one.ts",
-      "allow-stale packages/demo/src/gone.ts",
+      "literal apps/ios/App/Main.swift:1",
+      "literal apps/demo/src/cli.ts:1",
+      "literal plugins/demo/src/elsewhere.ts:1",
+      "literal examples/plugins/demo/src/sample.tsx:1",
+      "allow-count packages/demo/src/grew.ts",
+      "allow-count packages/demo/src/used-to-hold-one.ts",
+      "allow-count packages/demo/src/gone.ts",
     ];
     check(
-      "the lint: product literals red; comments, tests, other trees and the catalog out of scope; allow-list absorbs, stale entries red",
-      JSON.stringify([...findings].sort()) === JSON.stringify([...expected].sort()) &&
-        scan.allowed.get("packages/demo/src/presentation.ts") === 1,
-      JSON.stringify(findings),
+      "the lint: every product tree in scope; comments, tests, other trees, symlinks and the catalog out; each allow-list entry held to its exact count",
+      linked &&
+        JSON.stringify([...findings].sort()) === JSON.stringify([...expected].sort()) &&
+        scan.allowed.get("packages/demo/src/presentation.ts") === 1 &&
+        scan.allowed.get("packages/demo/src/grew.ts") === 2,
+      `${linked ? "" : "(could not create the symlink) "}${JSON.stringify(findings)}`,
     );
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
 }
 
-async function runSelfTest() {
-  let ok = true;
-  const check = (name, passed, detail) => {
-    console.log(`  ${passed ? "PASS" : "FAIL"}  ${name}`);
-    if (!passed) {
-      console.log(`        ${detail}`);
-      ok = false;
-    }
+/** Both drivers end to end, over a scratch root holding a catalog source and a
+ * projection generated "from" it: what the exit code says is what the self-test
+ * asserts, so a driver that ignored its own findings cannot pass. */
+function selfTestDrivers(check) {
+  const tmp = mkdtempSync(join(tmpdir(), "vf-catalog-drivers-"));
+  const capture = () => {
+    const lines = [];
+    const push = (text) => lines.push(...String(text).split("\n"));
+    return { lines, out: { log: push, error: push } };
+  };
+  try {
+    const source = join(tmp, CATALOG_SOURCE);
+    const projection = join(tmp, CATALOG_JSON);
+    mkdirSync(dirname(source), { recursive: true });
+    mkdirSync(dirname(projection), { recursive: true });
+    writeFileSync(source, "export const AGENT_CATALOG = [] as const; // the self-test's source\n");
+    const digest = sourceDigest(source);
+    const project = (catalog, sha256 = digest) =>
+      writeFileSync(
+        projection,
+        `${JSON.stringify({ source: { file: "src/agent-catalog.ts", sha256 }, catalog }, null, 2)}\n`,
+      );
+    const enforce = (clean) => {
+      const { lines, out } = capture();
+      const status = runEnforce({
+        root: tmp,
+        readPuppeteer: fixturePuppeteer,
+        readRosetta: () => fixtureRosetta({ clean }),
+        out,
+      });
+      return { status, lines };
+    };
+
+    project(rottenCatalog());
+    const rotten = enforce(false);
+    check(
+      "the enforce driver: a rotten projection over canned pins exits 1 and says why",
+      rotten.status === 1 &&
+        rotten.lines.some((l) => l.startsWith("FAIL R23: `ghost`")) &&
+        rotten.lines.some((l) => l.startsWith("check-agent-catalog: FAIL")),
+      `exit ${rotten.status}: ${JSON.stringify(rotten.lines.slice(-3))}`,
+    );
+    project(cleanCatalog());
+    const clean = enforce(true);
+    check(
+      "…and a clean projection over the same pins exits 0",
+      clean.status === 0 && clean.lines.some((l) => l.startsWith("check-agent-catalog: pass")),
+      `exit ${clean.status}: ${JSON.stringify(clean.lines.slice(-3))}`,
+    );
+    project(cleanCatalog(), "0".repeat(64));
+    const stale = enforce(true);
+    writeFileSync(projection, `${JSON.stringify({ catalog: cleanCatalog() })}\n`);
+    const unsourced = enforce(true);
+    check(
+      "…and a projection generated from another source (or recording none) exits 1 unjudged: projection stale",
+      [stale, unsourced].every(
+        (run) =>
+          run.status === 1 &&
+          run.lines.some((l) => l.includes(`projection stale — run ${REGENERATE}`)) &&
+          !run.lines.some((l) => l.startsWith("R23 puppeteer pin")),
+      ),
+      `exit ${stale.status}/${unsourced.status}: ${JSON.stringify([...stale.lines, ...unsourced.lines])}`,
+    );
+
+    project(cleanCatalog());
+    const hit = join(tmp, "packages", "demo", "src", "hit.ts");
+    mkdirSync(dirname(hit), { recursive: true });
+    writeFileSync(hit, 'export const on = (id: string) => id === "alpha";\n');
+    const literals = () => {
+      const { lines, out } = capture();
+      return { status: runLiterals({ root: tmp, allow: [], out }), lines };
+    };
+    const red = literals();
+    rmSync(hit);
+    const green = literals();
+    check(
+      "the literals driver: an id literal exits 1 naming its file:line; without it, exit 0",
+      red.status === 1 &&
+        red.lines.some((l) => l.includes("packages/demo/src/hit.ts:1")) &&
+        green.status === 0,
+      `exit ${red.status}/${green.status}: ${JSON.stringify([...red.lines, ...green.lines])}`,
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/** Every fixture. Verbose prints each check (--self-test); otherwise only a
+ * failure's lines and one summary line — the form every mode runs first. */
+async function runSelfTest({ verbose = true } = {}) {
+  let passed = 0;
+  let failed = 0;
+  const check = (name, ok, detail) => {
+    if (ok) passed += 1;
+    else failed += 1;
+    if (verbose || !ok) console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`);
+    if (!ok) console.log(`        ${detail}`);
   };
   selfTestVerdicts(check);
   await selfTestReaders(check);
   selfTestLiterals(check);
-  console.log(ok ? "\nself-test: all passed" : "\nself-test: FAILURES present");
-  return ok;
+  selfTestDrivers(check);
+  if (verbose)
+    console.log(failed === 0 ? "\nself-test: all passed" : "\nself-test: FAILURES present");
+  else if (failed === 0) console.log(`R23 self-test: ${passed} check(s) passed`);
+  else console.log(`R23 self-test: ${failed} of ${passed + failed} check(s) FAILED`);
+  return failed === 0;
 }
 
 // --- entry ---------------------------------------------------------------------
+
+const USAGE = [
+  "usage: node scripts/check-agent-catalog.mjs [--self-test] [--enforce [--require-rosetta]] [--literals]",
+  "       node scripts/check-agent-catalog.mjs --help",
+  "  --enforce          prove every catalog row against the pinned puppeteer and rosetta (R23)",
+  "  --require-rosetta  implies --enforce: only the lock's rosettad may answer, and a missing one FAILs (siblings:pin, CI — AC-D10)",
+  "  --literals         no agent id literal in the product trees outside the allow-list (R23b)",
+  "  --self-test        print the checker's own fixtures (every mode runs them first)",
+  "  --help             this text, alone",
+].join("\n");
 
 if (process.argv[1] && resolve(process.argv[1]) === SCRIPT) {
   const args = process.argv.slice(2);
@@ -1630,28 +2287,44 @@ if (process.argv[1] && resolve(process.argv[1]) === SCRIPT) {
   const has = (flag) => args.includes(flag);
   // An argument this script does not know is refused, never ignored: a caller's
   // typo (`--enforc`) would otherwise select no mode and exit 0 — a gate that
-  // passes without having run.
+  // passes without having run. `--help` beside a mode is the same trap.
   const known = new Set(["--enforce", "--require-rosetta", "--literals", "--self-test", "--help"]);
   const unknown = args.filter((arg) => !known.has(arg));
   if (unknown.length > 0) {
     console.error(`check-agent-catalog: unknown argument(s): ${unknown.join(" ")} (see --help)`);
     process.exit(2);
   }
-  if (has("--help") || args.length === 0) {
-    console.log(
-      "usage: node scripts/check-agent-catalog.mjs [--enforce [--require-rosetta]] [--literals] [--self-test]\n" +
-        "  --enforce          prove every catalog row against the pinned puppeteer and rosetta (R23)\n" +
-        "  --require-rosetta  with --enforce: a missing rosettad FAILs (siblings:pin, CI — AC-D10)\n" +
-        "  --literals         no agent id literal in product sources outside the allow-list (R23b)\n" +
-        "  --self-test        rotten fixtures must produce exactly the expected verdicts",
-    );
-    process.exit(args.length === 0 ? 2 : 0);
+  if (has("--help")) {
+    if (args.length > 1) {
+      console.error(
+        "check-agent-catalog: --help runs alone — beside a mode it would exit 0 without having run it",
+      );
+      process.exit(2);
+    }
+    console.log(USAGE);
+    process.exit(0);
   }
-  if (has("--self-test")) process.exit((await runSelfTest()) ? 0 : 1);
+  if (args.length === 0) {
+    console.log(USAGE);
+    process.exit(2);
+  }
+  const enforce = has("--enforce") || has("--require-rosetta");
+  const literals = has("--literals");
+  // The walls' lesson (preflight.mjs, 2026-07-23): a broken checker's green is
+  // no green. The self-test runs FIRST, in this process, whatever the mode, so
+  // no caller (preflight, siblings:pin, catalog:check, a hand) reaches a
+  // verdict through a checker whose own fixtures are red.
+  const selfTestOk = await runSelfTest({ verbose: has("--self-test") });
+  if (!selfTestOk) {
+    if (enforce || literals) {
+      console.error(
+        "check-agent-catalog: FAIL — the checker's own self-test is red (above); R23/R23b not run",
+      );
+    }
+    process.exit(1);
+  }
   let status = 0;
-  if (has("--enforce") || has("--require-rosetta")) {
-    status = Math.max(status, runEnforce({ requireRosetta: has("--require-rosetta") }));
-  }
-  if (has("--literals")) status = Math.max(status, runLiterals());
+  if (enforce) status = Math.max(status, runEnforce({ requireRosetta: has("--require-rosetta") }));
+  if (literals) status = Math.max(status, runLiterals());
   process.exit(status);
 }
