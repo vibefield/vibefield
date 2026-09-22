@@ -516,6 +516,28 @@ function pin(root) {
     }
   }
   writeFileSync(join(root, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`);
+  // Wall R23 (AC-2; thinking-ar-agent-catalog.md §6): a pin is the upgrade event
+  // at which a catalog decision is owed, so the catalog is proved against the
+  // new pins here, with the rosetta half REQUIRED (AC-D10). A red KEEPS the new
+  // SHAs — the pin did move — and exits 1 so the event is loud: the
+  // maintainer's next act is a row (or an amended one) in
+  // packages/contracts/src/agent-catalog.ts, then
+  // `pnpm --filter @vibefield/contracts gen:schema`.
+  const gate = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(new URL("./check-agent-catalog.mjs", import.meta.url)),
+      "--enforce",
+      "--require-rosetta",
+    ],
+    { cwd: root, stdio: "inherit" },
+  );
+  if (gate.status !== 0) {
+    console.error(
+      `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, and wall R23 is red above — settle what it names before relying on them (a missing decision is a row in packages/contracts/src/agent-catalog.ts; declined is a decision)`,
+    );
+    return 1;
+  }
   return 0;
 }
 

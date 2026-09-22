@@ -14,7 +14,7 @@
 // row (all-or-nothing against the lock, exactly as the npm family rule works)
 // and the Go sidecar built beside field-native (missing or stale WARNs; the
 // floor reports a missing sidecar as Degraded honestly, so it is not a gate).
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import {
@@ -383,6 +383,50 @@ try {
   problems.push(
     "import-boundary walls failed (node scripts/check-import-boundaries.mjs --enforce)",
   );
+}
+
+// --- wall R23: the agent catalog is honoured by the pins (AC-2) --------------
+// thinking-ar-agent-catalog.md §4. The walls' shape, the walls' lesson: the
+// self-test must pass on its rotten fixtures before --enforce may speak, since
+// a broken checker's green is no green. --enforce proves every catalog row
+// against the pinned puppeteer (through fieldd's R20 door) and the pinned
+// rosettad's registry; --literals is R23b (no agent id literal in product
+// code). Its WARN lines are lifted into this report. The rosetta half WARNs
+// UNVERIFIED without a built rosettad (AC-D10) and is REQUIRED in CI — the
+// workflow builds the binary and exports FIELDD_ROSETTAD_BIN before this runs —
+// as it is at `pnpm siblings:pin`, which passes the same flag itself.
+{
+  const inCi = ["true", "1"].includes(String(process.env.CI ?? "").toLowerCase());
+  const catalog = (args) => {
+    const run = spawnSync(process.execPath, ["scripts/check-agent-catalog.mjs", ...args], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    const output = `${run.stdout ?? ""}${run.stderr ?? ""}`;
+    for (const line of output.split("\n")) {
+      if (line.startsWith("WARN ")) warnings.push(line.slice("WARN ".length));
+    }
+    if (run.status !== 0) {
+      if (output.trim()) console.error(output.trim());
+      return false;
+    }
+    return true;
+  };
+  if (!catalog(["--self-test"])) {
+    problems.push(
+      "agent-catalog self-test failed (node scripts/check-agent-catalog.mjs --self-test) — wall R23 not run",
+    );
+  } else {
+    const enforce = ["--enforce", ...(inCi ? ["--require-rosetta"] : [])];
+    for (const args of [enforce, ["--literals"]]) {
+      if (!catalog(args)) {
+        problems.push(
+          `agent catalog wall R23 failed (node scripts/check-agent-catalog.mjs ${args.join(" ")})`,
+        );
+      }
+    }
+  }
 }
 
 // --- installed desktop identity ---------------------------------------------
