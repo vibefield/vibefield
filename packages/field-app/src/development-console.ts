@@ -184,6 +184,21 @@ export interface GodviewMonitorFacts {
   usageTiles: number;
   /** AR-5: `open` · `closed` — the find sheet, the chord's witness. */
   findSheet: string;
+  /**
+   * AC-4: the provider picker as the bar draws it — each listed row's id with
+   * its badge word (null where the row carries none: `supported`, or a daemon
+   * before AC-3 that decides nothing), the chosen row, whether SPAWN is offered
+   * for it, the history state beside it (null when there is nothing to say),
+   * and how many identities the persona choice offers (0 = no control drawn).
+   * The ids are the door's own answer, never a list typed in the renderer.
+   */
+  picker: {
+    rows: Array<{ id: string; badge: string | null }>;
+    selected: string | null;
+    spawn: boolean;
+    history: string | null;
+    personas: number;
+  };
 }
 
 export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {

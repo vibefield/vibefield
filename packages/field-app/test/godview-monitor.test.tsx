@@ -48,6 +48,7 @@ import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentProviderSummary, AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
+import { providerOptionText } from "../src/godview/monitor/provider-picker";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
@@ -685,10 +686,15 @@ describe("the monitor stage", () => {
     // the chrome chose the first AVAILABLE provider
     const select = host.querySelector<HTMLSelectElement>('select[aria-label="Agent provider"]');
     expect(select?.value).toBe("claude");
-    expect([...(select?.options ?? [])].map((option) => option.textContent)).toEqual([
-      "Claude",
-      "Pi (not installed)",
-    ]);
+    // The rows in the door's order, each in the picker's own words. The badge
+    // rules are godview-provider-picker.test.tsx's to pin; this row holds for
+    // a door before AC-3 (no decision: "Pi (not installed)") and after it (pi
+    // a preview row: "Pi · Preview (not installed)") alike.
+    expect([...(select?.options ?? [])].map((option) => option.textContent)).toEqual(
+      PROVIDERS.map(providerOptionText),
+    );
+    expect(select?.options[0]?.textContent).toBe("Claude");
+    expect(select?.options[1]?.textContent).toMatch(/^Pi\b.*\(not installed\)$/);
 
     const create = host.querySelector<HTMLButtonElement>(".vf-monitor-list-new");
     await act(async () => create?.click());

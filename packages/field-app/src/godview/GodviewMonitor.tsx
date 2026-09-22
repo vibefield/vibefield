@@ -18,6 +18,7 @@ import {
   type ReactElement,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -26,6 +27,14 @@ import {
 import { emitGodviewMonitorMarker } from "../development-console";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
+import {
+  personaChoices,
+  providerBadge,
+  providerHistoryClaim,
+  providerOptionText,
+  providerPickerLabel,
+  providerStartsSessions,
+} from "./monitor/provider-picker";
 import type { MonitorDoor } from "./monitor/remote-door";
 import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
 import {
@@ -165,6 +174,8 @@ export function GodviewMonitor({
     providers,
     selectedProviderId,
     selectProvider,
+    selectedPersonaId,
+    selectPersona,
     spawn,
     acknowledgement,
     clearAcknowledgement,
@@ -173,8 +184,26 @@ export function GodviewMonitor({
     door,
     ...(panes ? { panes } : {}),
   });
+  const selectedProvider = providers.find((p) => p.id === selectedProviderId);
+  // AC-4 — the chosen row's decision, read for the bar (and the marker) from
+  // ONE module (`provider-picker.ts`), the same one the spawn verb asks.
+  const selectedLabel =
+    selectedProvider === undefined ? undefined : providerPickerLabel(selectedProvider);
+  const historyClaim =
+    selectedProvider === undefined ? null : providerHistoryClaim(selectedProvider);
+  const personas = selectedProvider === undefined ? [] : personaChoices(selectedProvider);
+  const persona = personas.find(
+    (choice) => choice.value !== "" && choice.value === selectedPersonaId,
+  );
+  // A row that starts no new session (deprecated, or one that denies `spawn`)
+  // has no SPAWN: the verb is withdrawn, not dimmed, because nothing the user
+  // does on this device brings it back — the face of the picker says why.
+  // With no row chosen the control stays, disabled, exactly as before.
+  const offersSpawn = selectedProvider === undefined || providerStartsSessions(selectedProvider);
   const chromeRef = useRef<HTMLDivElement>(null);
   const claimsRef = useRef<HTMLDivElement>(null);
+  /** The picker's history state, which describes the picker (AC-4). */
+  const historyId = useId();
   const [findOpen, setFindOpen] = useState(false);
   /** What the swarm is painting with, read off its own element (AR-5). */
   const [swarmRenderer, setSwarmRenderer] = useState("none");
@@ -300,8 +329,29 @@ export function GodviewMonitor({
       swarmRenderer,
       usageTiles,
       findSheet: findOpen ? "open" : "closed",
+      picker: {
+        rows: providers.map((provider) => ({ id: provider.id, badge: providerBadge(provider) })),
+        selected: selectedProviderId,
+        spawn: offersSpawn,
+        history: historyClaim,
+        personas: personas.length,
+      },
     });
-  }, [agents, view.id, sources, swarmRenderer, usageTiles, findOpen]);
+    // the picker's facts ride on primitives (and the door's own list), never
+    // on the per-render arrays derived from them
+  }, [
+    agents,
+    view.id,
+    sources,
+    swarmRenderer,
+    usageTiles,
+    findOpen,
+    providers,
+    selectedProviderId,
+    offersSpawn,
+    historyClaim,
+    personas.length,
+  ]);
 
   const closeFind = useCallback((): void => setFindOpen(false), []);
 
@@ -339,7 +389,6 @@ export function GodviewMonitor({
   }, [selectNextStatus]);
 
   const MonitorView = view.Component;
-  const selectedProvider = providers.find((p) => p.id === selectedProviderId);
 
   return (
     <>
@@ -347,7 +396,11 @@ export function GodviewMonitor({
           the view marks and the theme switch right, and in the trailing slot
           VibeField's own tools — the birth (AR-3: the provider list is fieldd's
           answer, the spawn lands in the active pane; an uninstalled provider is
-          listed and said to be so rather than hidden) and the surface lab. */}
+          listed and said to be so rather than hidden) and the surface lab.
+          AC-4: each row says the catalog's decision in its own text, the
+          chosen row's history state follows the picker in the deck's degraded
+          idiom, and the persona choice and SPAWN appear only where the row
+          claims them. */}
       <InstrumentBar
         counts={counts}
         onSelectStatus={selectNextStatus}
@@ -366,32 +419,58 @@ export function GodviewMonitor({
             <select
               className="vf-godview-bar-select"
               aria-label="Agent provider"
+              {...(historyClaim !== null ? { "aria-describedby": historyId } : {})}
               value={selectedProviderId ?? ""}
               disabled={providers.length === 0}
               onChange={(event) => selectProvider(event.currentTarget.value)}
             >
               {providers.length === 0 ? <option value="">no providers</option> : null}
               {providers.map((provider) => (
-                <option key={provider.id} value={provider.id}>
-                  {provider.available ? provider.label : `${provider.label} (not installed)`}
+                <option
+                  key={provider.id}
+                  value={provider.id}
+                  {...(provider.status !== undefined ? { "data-status": provider.status } : {})}
+                >
+                  {providerOptionText(provider)}
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              className="vf-godview-bar-control vf-godview-spawn"
-              disabled={door === null || selectedProvider === undefined}
-              title={
-                selectedProvider === undefined
-                  ? "no agent provider is available on this device"
-                  : selectedProvider.available
-                    ? `spawn ${selectedProvider.label} in the active pane`
-                    : `${selectedProvider.label} is not installed on this device`
-              }
-              onClick={() => void spawn()}
-            >
-              SPAWN
-            </button>
+            {historyClaim !== null ? (
+              <span id={historyId} className="vf-godview-provider-history">
+                {historyClaim}
+              </span>
+            ) : null}
+            {personas.length > 0 ? (
+              <select
+                className="vf-godview-bar-select"
+                aria-label="Agent persona"
+                value={selectedPersonaId}
+                onChange={(event) => selectPersona(event.currentTarget.value)}
+              >
+                {personas.map((choice) => (
+                  <option key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {offersSpawn ? (
+              <button
+                type="button"
+                className="vf-godview-bar-control vf-godview-spawn"
+                disabled={door === null || selectedProvider === undefined}
+                title={
+                  selectedProvider === undefined
+                    ? "no agent provider is available on this device"
+                    : selectedProvider.available
+                      ? `spawn ${selectedLabel}${persona ? ` as ${persona.label}` : ""} in the active pane`
+                      : `${selectedLabel} is not installed on this device`
+                }
+                onClick={() => void spawn()}
+              >
+                SPAWN
+              </button>
+            ) : null}
             <BarControl
               mark="find"
               label="FIND"

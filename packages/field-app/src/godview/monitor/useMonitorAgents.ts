@@ -36,6 +36,13 @@ import {
   type ProjectLedger,
   saveProjectLedger,
 } from "./project-ledger";
+import {
+  defaultProviderId,
+  newSessionRefusal,
+  personaChoices,
+  providerListed,
+  providerPickerLabel,
+} from "./provider-picker";
 import { type MonitorDoor, remoteRowId } from "./remote-door";
 import { useRemoteSessionField } from "./remote-session-field";
 import type { MonitorActions, MonitorAgent } from "./types";
@@ -142,10 +149,16 @@ export interface MonitorAgentsResult {
   /** How many rows each source contributed, so the stage can scope its claims
    * to the right ones (GT-D17) rather than labeling the whole field. */
   sources: MonitorSourceCounts;
-  /** What the chrome can spawn as, and which of them is chosen. */
+  /** What the chrome can spawn as, and which of them is chosen. Only the rows
+   * the picker lists (`providerListed`): a `declined` row is not offered. */
   providers: readonly AgentProviderSummary[];
   selectedProviderId: string | null;
   selectProvider(id: string): void;
+  /** AC-4 — the persona a new session is born as: a `profileId` from the
+   * chosen row's `personaChoices`, or "" for the native default (the spawn
+   * then carries no `profileId`). Reset to "" whenever the provider changes. */
+  selectedPersonaId: string;
+  selectPersona(profileId: string): void;
   /** Spawn the chosen provider into the active pane — the chrome's own verb;
    * `createAt` is the same act from a view's gesture. */
   spawn(): Promise<void>;
@@ -264,6 +277,7 @@ export function useMonitorAgents({
   const [links, setLinks] = useState<ReadonlyMap<string, RemoteLink>>(() => new Map());
   const [providers, setProviders] = useState<readonly AgentProviderSummary[]>([]);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [selectedPersonaId, setSelectedPersonaId] = useState("");
 
   /** THE FOLD, from the window's one subscription (AR-6 §4.1, built at GT-6).
    * This hook used to own `agent.subscribe` itself; the stream moved up to
@@ -274,6 +288,9 @@ export function useMonitorAgents({
 
   // What one can spawn as, asked once per door. A door that cannot answer
   // leaves the list empty and the spawn control says so; nothing is invented.
+  // AC-4: the rows the catalog does not offer are not listed, and the first
+  // choice is a row that starts sessions (`defaultProviderId`) — so a deck
+  // never opens with SPAWN withdrawn while an offered agent was on the list.
   useEffect(() => {
     if (door === null) {
       setProviders([]);
@@ -282,12 +299,13 @@ export function useMonitorAgents({
     let alive = true;
     void door
       .providers()
-      .then((list) => {
+      .then((answered) => {
         if (!alive) return;
+        const list = answered.filter(providerListed);
         setProviders(list);
         setSelectedProviderId((current) => {
           if (current !== null && list.some((p) => p.id === current)) return current;
-          return list.find((p) => p.available)?.id ?? list[0]?.id ?? null;
+          return defaultProviderId(list);
         });
       })
       .catch(() => {
@@ -738,37 +756,66 @@ export function useMonitorAgents({
     [attachRemote, mountLocal],
   );
 
-  /** The birth (AR-3): the chrome's chosen provider, into the active pane. */
+  const selectedProvider = providers.find((p) => p.id === selectedProviderId);
+  /** The persona a spawn would actually carry: the one chosen while it is
+   * still among the row's choices, else the native default. What the persona
+   * control shows and what the door is sent are the same value by
+   * construction — a persona that vanished from the list cannot ride along. */
+  const personaId =
+    selectedProvider !== undefined &&
+    personaChoices(selectedProvider).some((choice) => choice.value === selectedPersonaId)
+      ? selectedPersonaId
+      : "";
+
+  /** The birth (AR-3): the chrome's chosen provider, into the active pane.
+   * AC-4 — only where the row offers a new session: a deprecated agent (or
+   * one that denies `spawn`) is refused HERE, before the door is asked, and
+   * the refusal is said, because the views' own create gesture reaches this
+   * verb too and cannot be withdrawn. */
   const spawn = useCallback(async (): Promise<void> => {
     if (door === null) {
       announce("no agent can be spawned yet — the deck has no connection");
       return;
     }
-    const provider = providers.find((p) => p.id === selectedProviderId);
+    const provider = selectedProvider;
     if (provider === undefined) {
       announce("no agent provider is available on this device");
       return;
     }
-    if (!provider.available) {
-      announce(`${provider.label} is not installed on this device`);
+    const refusal = newSessionRefusal(provider);
+    if (refusal !== null) {
+      announce(refusal);
       return;
     }
-    const outcome = await door.spawn({ provider: provider.id });
+    const label = providerPickerLabel(provider);
+    if (!provider.available) {
+      announce(`${label} is not installed on this device`);
+      return;
+    }
+    const outcome = await door.spawn({
+      provider: provider.id,
+      ...(personaId !== "" ? { profileId: personaId } : {}),
+    });
     if (outcome.state === "no-pane") {
       announce("no pane to spawn into — open one in the deck first");
       return;
     }
     if (outcome.state === "failed") {
-      announce(`${provider.label} could not be spawned — ${outcome.reason}`);
+      announce(`${label} could not be spawned — ${outcome.reason}`);
       return;
     }
     announce(`${outcome.label} spawned in the active pane`);
-  }, [announce, door, providers, selectedProviderId]);
+  }, [announce, door, selectedProvider, personaId]);
 
   const createAt = useCallback((): Promise<void> => spawn(), [spawn]);
 
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
-  const selectProvider = useCallback((id: string) => setSelectedProviderId(id), []);
+  const selectProvider = useCallback((id: string) => {
+    setSelectedProviderId(id);
+    // A persona belongs to one provider: a new choice starts at its default.
+    setSelectedPersonaId("");
+  }, []);
+  const selectPersona = useCallback((profileId: string) => setSelectedPersonaId(profileId), []);
   const actions = useMemo<MonitorActions>(() => ({ select, createAt }), [createAt, select]);
   const sources = useMemo<MonitorSourceCounts>(
     () => ({
@@ -795,6 +842,8 @@ export function useMonitorAgents({
     providers,
     selectedProviderId,
     selectProvider,
+    selectedPersonaId: personaId,
+    selectPersona,
     spawn,
     acknowledgement,
     clearAcknowledgement,
