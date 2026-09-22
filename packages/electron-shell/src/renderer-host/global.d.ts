@@ -29,9 +29,19 @@ interface BridgeUserRecord {
   userId: string;
   fuid: number;
   name: string;
+  /** UA-D17 — absent until pane 2 is passed, or a pre-v0.3 user's first
+   * attach deals one. */
+  face?: BridgeUserFace;
+  /** @deprecated the pre-v0.3 accent; W6 reads its presence, nothing draws it. */
   color?: string;
   resident: boolean;
   onboarded: boolean;
+}
+
+/** UA-D17 — one emoji; an absent frame is a sticker. */
+interface BridgeUserFace {
+  emoji: string;
+  frame?: "sticker" | "coin";
 }
 
 declare global {
@@ -53,26 +63,19 @@ declare global {
       /** UA-3 — one door, two verbs: empty params READ the current record. */
       usersUpdate(params: {
         name?: string;
-        color?: string;
+        face?: BridgeUserFace;
         resident?: boolean;
         onboarded?: boolean;
-      }): Promise<{
-        userId: string;
-        fuid: number;
-        name: string;
-        color?: string;
-        resident: boolean;
-        onboarded: boolean;
-      }>;
+      }): Promise<BridgeUserRecord>;
       /** UA-5 — the roster plus main's live attachment. */
       usersList(): Promise<{
         attachedUserId: string | null;
         users: BridgeUserRecord[];
       }>;
-      /** UA-5 — mint, then attach. Both fields optional: the reloaded window's
-       * Setup Assistant is where identity is decided. RELOAD RACE — see
-       * `usersSwitch`. */
-      usersCreate(params: { name?: string; color?: string }): Promise<BridgeUserRecord>;
+      /** UA-5 — mint, then attach. The name is optional and the face is never
+       * minted: the reloaded window's Setup Assistant is where identity is
+       * decided (UA-D17). RELOAD RACE — see `usersSwitch`. */
+      usersCreate(params: { name?: string }): Promise<BridgeUserRecord>;
       /** UA-5 — re-target the attachment and reload (UA-D15). This promise may
        * resolve, or may be torn down with the context it would resolve into;
        * callers fire-and-forget and gate nothing on it beyond disabling the

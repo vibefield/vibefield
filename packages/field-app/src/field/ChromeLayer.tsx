@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { MeMenu } from "../account/MeMenu";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { GodviewOverlay, GodviewToggle, useGodviewOpen } from "../godview";
 import { getHost } from "../host";
@@ -102,6 +103,9 @@ export function ChromeLayer({
 }): ReactElement {
   const { showSettings, setShowSettings, showEcs } = chrome;
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // UA-D19 — the Me menu. One of the expanded surfaces: opening it folds the
+  // others, and any of them opening folds it (DESIGN.md §8).
+  const [meOpen, setMeOpen] = useState(false);
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
   const sidePanelSurfaces = useVisiblePluginSurfaces("hud.side-panel");
@@ -161,6 +165,49 @@ export function ChromeLayer({
       setSidePanelSurfaceId(null);
     }
   }, [sidePanelSurfaceId, sidePanelSurfaces]);
+
+  /** Settings, on the page asked for — the Me menu's Settings… and ⌘, open
+   * General; its name row and its Link… open Account (UA-D19). */
+  const openSettings = useCallback(
+    (page: "general" | "account") => {
+      setShellPresentation((state) => ({ ...state, target: page }));
+      onTrayOpenChange(false);
+      onDocsOpenChange(false);
+      setPaletteOpen(false);
+      closeSidePanel(false);
+      setMeOpen(false);
+      setShowSettings(true);
+    },
+    [closeSidePanel, onDocsOpenChange, onTrayOpenChange, setShowSettings],
+  );
+
+  const onMeOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        onTrayOpenChange(false);
+        onDocsOpenChange(false);
+        setPaletteOpen(false);
+        closeSidePanel(false);
+        setShowSettings(false);
+      }
+      setMeOpen(open);
+    },
+    [closeSidePanel, onDocsOpenChange, onTrayOpenChange, setShowSettings],
+  );
+
+  useEffect(() => {
+    if (
+      meOpen &&
+      (trayOpen ||
+        docsOpen ||
+        showSettings ||
+        paletteOpen ||
+        godviewOpen ||
+        sidePanelSurfaceId !== null)
+    ) {
+      setMeOpen(false);
+    }
+  }, [meOpen, trayOpen, docsOpen, showSettings, paletteOpen, godviewOpen, sidePanelSurfaceId]);
 
   // Expanded focus surfaces remain exclusive. The Artifact panel itself is
   // non-modal, so this arbitration does not recede or hold the canvas.
@@ -281,6 +328,23 @@ export function ChromeLayer({
     return () => window.removeEventListener("keydown", onKey);
   }, [closeSidePanel, onTrayOpenChange, onDocsOpenChange, setShowSettings]);
 
+  // ⌘, / Ctrl+, — Settings from anywhere (DESIGN.md §8, the Me menu). The gear
+  // this replaced said "settings" by being one; a face does not, so the chord
+  // carries the discoverability the icon used to. It toggles, like ⌘K.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "," || (!e.metaKey && !e.ctrlKey) || e.altKey || e.shiftKey) return;
+      e.preventDefault();
+      if (showSettings) {
+        setShowSettings(false);
+        return;
+      }
+      openSettings("general");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openSettings, setShowSettings, showSettings]);
+
   // ECS devtools while the button is active (v1's EcsDevtools panel slot).
   // The FACADE goes in (not ce.engine): the strata observer's durable tab
   // tracks docs.current() live only through it. The handle also rides the
@@ -363,39 +427,21 @@ export function ChromeLayer({
 
       <WidgetTray ce={ce} registry={registry} open={trayOpen} onOpenChange={onTrayOpenChange} />
 
-      <button
-        type="button"
-        onClick={() => {
-          setShellPresentation((state) => ({ ...state, target: "general" }));
-          setShowSettings((open) => {
-            const next = !open;
-            if (next) {
-              onTrayOpenChange(false);
-              onDocsOpenChange(false);
-              setPaletteOpen(false);
-              closeSidePanel(false);
-            }
-            return next;
-          });
-        }}
+      {/* UA-D19 — the owner's face, where the Settings gear was: the account's
+          one door, and the menu grows out of it (DESIGN.md §8). Placed so the
+          40px face sits exactly where the 40px gear did — Godview does not
+          move. */}
+      <div
         data-hud-flight="bottom-left"
-        className={`hud-flight ${fabCls(showSettings)} bottom-4 left-4`}
-        title="Settings"
+        className="hud-flight no-drag absolute bottom-[14px] left-[14px] z-50"
       >
-        <svg
-          aria-hidden="true"
-          className="h-5 w-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.55v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.86-2.86.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-1.5-1H2.5V10h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06L6.56 4.2l.06.06A1.7 1.7 0 0 0 8.5 4.6a1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 18.9 9a1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
-        </svg>
-      </button>
+        <MeMenu
+          open={meOpen}
+          onOpenChange={onMeOpenChange}
+          onOpenSettings={openSettings}
+          shortcut={getHost().platform === "darwin" ? "⌘," : "Ctrl+,"}
+        />
+      </div>
       <GodviewToggle active={godviewOpen} />
       <button
         type="button"
@@ -434,6 +480,7 @@ export function ChromeLayer({
           appearanceControlledByStudio={appearanceControlledByStudio}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
+          initialPage={shellPresentation.target === "account" ? "account" : "general"}
           onClose={() => {
             setShellPresentation((state) => ({ ...state, target: "general" }));
             setShowSettings(false);

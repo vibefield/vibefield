@@ -1,9 +1,9 @@
 import { IPC_CHANNELS } from "@vibefield/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The users door as the PAGE sees it (UA-3/UA-5). The sibling preload bridges
-// are plain classes with their own tests; these three verbs live directly on
-// the exposed object, so the only way to test them is to capture what
+// The users door as the PAGE sees it (UA-3/UA-5/UA-7). The sibling preload
+// bridges are plain classes with their own tests; these four verbs live directly
+// on the exposed object, so the only way to test them is to capture what
 // `exposeInMainWorld` was handed. `electron` is mocked the way security.test.ts
 // and close.test.ts mock it — this package's existing pattern, not a new
 // harness.
@@ -44,6 +44,8 @@ const bridge = (): Record<string, unknown> => {
   return stub.exposed;
 };
 
+const usersUpdate = (): ((params: unknown) => Promise<unknown>) =>
+  bridge().usersUpdate as (params: unknown) => Promise<unknown>;
 const usersList = (): (() => Promise<unknown>) => bridge().usersList as () => Promise<unknown>;
 const usersCreate = (): ((params: unknown) => Promise<unknown>) =>
   bridge().usersCreate as (params: unknown) => Promise<unknown>;
@@ -54,7 +56,7 @@ const RECORD = {
   userId: "01J8ZQ7W9K3M5N7P9R1T3V5X7Z",
   fuid: 2,
   name: "Work",
-  color: "accent-5",
+  face: { emoji: "🐙", frame: "coin" },
   resident: true,
   onboarded: false,
   createdAt: "2026-08-05T09:00:00.000Z",
@@ -130,5 +132,53 @@ describe("preload users door", () => {
     await expect(usersSwitch()({ userId: "" })).rejects.toThrow();
     await expect(usersSwitch()({})).rejects.toThrow();
     expect(stub.invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("preload profile door: the face (UA-7)", () => {
+  beforeEach(() => {
+    stub.invoke.mockReset();
+  });
+
+  it("writes a face and answers with the whole record", async () => {
+    stub.invoke.mockResolvedValueOnce(RECORD);
+
+    await expect(usersUpdate()({ face: { emoji: "🐙", frame: "coin" } })).resolves.toEqual(RECORD);
+    expect(stub.invoke).toHaveBeenCalledWith(IPC_CHANNELS.usersUpdate, {
+      face: { emoji: "🐙", frame: "coin" },
+    });
+  });
+
+  it("throws at the call site on a face with no emoji or an unknown frame", async () => {
+    await expect(usersUpdate()({ face: { emoji: "" } })).rejects.toThrow();
+    await expect(usersUpdate()({ face: { emoji: "🐙", frame: "halo" } })).rejects.toThrow();
+    expect(stub.invoke).not.toHaveBeenCalled();
+  });
+
+  it("hands the page main's refusal in main's own words", async () => {
+    // Electron 43's exact wrapping: main replies with the error's toString(),
+    // and invoke rethrows it under a channel prefix.
+    stub.invoke.mockRejectedValueOnce(
+      new Error(
+        `Error invoking remote method '${IPC_CHANNELS.usersUpdate}': Error: Work already wears 🐙 on this machine.`,
+      ),
+    );
+
+    await expect(usersUpdate()({ face: { emoji: "🐙" } })).rejects.toThrow(
+      /^Work already wears 🐙 on this machine\.$/u,
+    );
+  });
+
+  it("leaves a rejection it does not recognise exactly as it came", async () => {
+    stub.invoke.mockRejectedValueOnce(new Error("the renderer went away"));
+    await expect(usersUpdate()({ name: "Work" })).rejects.toThrow(/^the renderer went away$/u);
+  });
+
+  it("tolerates a legacy colour in the answer and never needs one", async () => {
+    const { face: _face, ...legacy } = RECORD;
+    stub.invoke.mockResolvedValueOnce({ ...legacy, color: "accent-5" });
+
+    await expect(usersUpdate()({})).resolves.toMatchObject({ name: "Work", color: "accent-5" });
+    expect(stub.invoke).toHaveBeenCalledWith(IPC_CHANNELS.usersUpdate, {});
   });
 });

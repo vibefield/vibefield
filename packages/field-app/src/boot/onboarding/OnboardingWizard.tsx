@@ -1,7 +1,7 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider, useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
-import type { AccentSlot } from "../../account/AccentPicker";
+import { faceOf, heldFaces } from "../../account/faces";
 import {
   hasLink,
   type LinkBeginStep,
@@ -10,7 +10,8 @@ import {
   type UserLinkStatus,
 } from "../../account/link";
 import { useSyncPosture } from "../../account/posture";
-import { type FieldUserProfile, getHost } from "../../host";
+import { accountChanged } from "../../account/use-account";
+import { type FieldUserFace, type FieldUserProfile, getHost } from "../../host";
 import type { BootOnboarding } from "../machine";
 import {
   type OnboardingCompletionFlag,
@@ -113,12 +114,14 @@ function WizardBody({
   const face = linkFace(link.status, link.status === "live" ? (link.data ?? null) : null);
   const linked = hasLink(face);
 
-  // W6 — the entry pane is DERIVED. A record with no color never finished pane
-  // 2, so the wizard starts at the top; a record with one did, so it resumes at
-  // the first thing still unanswered. "The top" is variant-specific: a second
-  // user starts AT pane 2, because the field it is joining needs no welcome.
+  // W6 — the entry pane is DERIVED. A record with no face never finished pane
+  // 2 (mint never writes one — UA-D17), so the wizard starts at the top; a
+  // record with one did, so it resumes at the first thing still unanswered. A
+  // pre-v0.3 record's `color` proves the same thing: that user answered pane 2
+  // before faces existed. "The top" is variant-specific: a second user starts
+  // AT pane 2, because the field it is joining needs no welcome.
   const [pane, setPane] = useState<Pane | null>(() =>
-    profile.color === undefined
+    profile.face === undefined && profile.color === undefined
       ? migrated
         ? "welcome-back"
         : secondUser
@@ -298,11 +301,34 @@ function FieldPane({
   onDone: (updated: FieldUserProfile) => void;
 }): ReactElement {
   const [name, setName] = useState(profile.name);
-  // Preselected, so Continue always writes both fields — and so `color`'s
-  // presence is a trustworthy "pane 2 was completed" fact for W6.
-  const [accent, setAccent] = useState<AccentSlot | string>(profile.color ?? "accent-1");
+  // The machine's deal, preselected (UA-D17) — so Continue always writes a
+  // face, and so `face`'s presence is a trustworthy "pane 2 was completed"
+  // fact for W6. Dealt against this user alone until the roster arrives, then
+  // against everyone, so it is never a face somebody else already wears.
+  const [roster, setRoster] = useState<readonly FieldUserProfile[]>([]);
+  const [face, setFace] = useState<FieldUserFace>(() => faceOf(profile, []));
+  const [chosen, setChosen] = useState(profile.face !== undefined);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [writing, setWriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const usersList = getHost().usersList;
+    if (usersList === undefined) return;
+    let cancelled = false;
+    void usersList().then(
+      (snapshot) => {
+        if (cancelled) return;
+        setRoster(snapshot.users);
+        if (!chosen) setFace(faceOf(profile, snapshot.users));
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+    // Once, on entry: a later choice must never be re-dealt underneath the user.
+  }, []);
 
   const commit = (): void => {
     if (writing) return;
@@ -315,8 +341,11 @@ function FieldPane({
     const trimmed = name.trim();
     setWriting(true);
     setError(null);
-    void usersUpdate({ name: trimmed.length > 0 ? trimmed : profile.name, color: accent })
-      .then((updated) => onDone(updated))
+    void usersUpdate({ name: trimmed.length > 0 ? trimmed : profile.name, face })
+      .then((updated) => {
+        accountChanged();
+        onDone(updated);
+      })
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : String(cause));
         setWriting(false);
@@ -326,11 +355,18 @@ function FieldPane({
   return (
     <OnboardingFieldPaneView
       name={name}
-      accent={accent}
+      face={face}
+      seed={profile.userId}
+      held={heldFaces(roster, profile.userId)}
+      pickerOpen={pickerOpen}
       writing={writing}
       error={error}
       onNameChange={setName}
-      onAccentChange={setAccent}
+      onFaceChange={(next) => {
+        setChosen(true);
+        setFace(next);
+      }}
+      onPickerToggle={() => setPickerOpen((open) => !open)}
       onSubmit={commit}
       onBack={onBack}
     />

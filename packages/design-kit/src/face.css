@@ -1,0 +1,153 @@
+/* The face (DESIGN.md §2.8). One drawing of a user for every surface.
+ *
+ * Geometry arrives as custom properties projected from face.tsx (size, tilt,
+ * edge width, shadow offsets); every colour is a §2.8 token. Nothing here is
+ * a person's colour — there is no such thing (I-1). */
+
+.vf-face {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--vf-face-size);
+  height: var(--vf-face-size);
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", var(--vf-font-sans);
+  font-style: normal;
+  line-height: 1;
+  vertical-align: middle;
+  user-select: none;
+  isolation: isolate;
+}
+
+.vf-face-figure {
+  display: block;
+  transform-origin: 50% 50%;
+}
+
+/* Emoji glyphs sit a touch high in their em box; this centres the figure. */
+.vf-face-glyph {
+  display: block;
+  transform: translateY(0.035em);
+}
+
+/* ---- the sticker: the emoji is its own frame ---------------------------- */
+
+.vf-face[data-frame="sticker"] {
+  filter: drop-shadow(
+    0 var(--vf-face-shadow-y) var(--vf-face-shadow-blur) var(--vf-sticker-shadow)
+  );
+  transition: filter 180ms var(--vf-ease-lift);
+}
+
+.vf-face[data-frame="sticker"] .vf-face-figure {
+  font-size: calc(var(--vf-face-size) * 0.86);
+  filter: var(--vf-face-die);
+  transform: rotate(var(--vf-face-tilt));
+  transition: transform 180ms var(--vf-ease-lift);
+}
+
+/* Held, like a card (§7): the host's hover or focus lifts it, and so does an
+   explicit hold (the Me menu's face while its menu is open). */
+.vf-face-host:hover .vf-face[data-frame="sticker"][data-lift],
+.vf-face-host:focus-visible .vf-face[data-frame="sticker"][data-lift],
+.vf-face[data-frame="sticker"][data-lift][data-held] {
+  filter: drop-shadow(
+    0 var(--vf-face-shadow-y-held) var(--vf-face-shadow-blur-held) var(--vf-sticker-shadow)
+  );
+}
+
+.vf-face-host:hover .vf-face[data-frame="sticker"][data-lift] .vf-face-figure,
+.vf-face-host:focus-visible .vf-face[data-frame="sticker"][data-lift] .vf-face-figure,
+.vf-face[data-frame="sticker"][data-lift][data-held] .vf-face-figure {
+  transform: rotate(var(--vf-face-tilt-held)) scale(1.07);
+}
+
+/* ---- the coin: the same emoji, minted ------------------------------------ */
+
+.vf-face[data-frame="coin"] {
+  border-radius: 50%;
+  box-shadow: var(--vf-face-coin-shadow);
+  transition: transform 160ms ease;
+}
+
+.vf-face-rim,
+.vf-face-field,
+.vf-face-light {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.vf-face-rim {
+  inset: 0;
+  background: var(--vf-coin-rim);
+  box-shadow:
+    inset 0 1px 0 var(--vf-coin-bevel-light),
+    inset 0 -1px 0 var(--vf-coin-bevel-dark);
+}
+
+.vf-face-field {
+  inset: var(--vf-face-rim-width);
+  background: var(--vf-coin-field);
+  box-shadow: var(--vf-face-coin-inset);
+}
+
+.vf-face[data-frame="coin"] .vf-face-figure {
+  position: relative;
+  font-size: calc(var(--vf-face-size) * var(--vf-face-figure-scale));
+  filter: var(--vf-face-relief);
+}
+
+.vf-face-marks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.vf-face-reed {
+  fill: none;
+  stroke: var(--vf-coin-reed);
+}
+
+.vf-face-bead {
+  fill: var(--vf-coin-ink);
+  fill-opacity: 0.7;
+}
+
+.vf-face-legend {
+  fill: var(--vf-coin-ink);
+  font-family: var(--vf-font-sans);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.vf-face-light {
+  inset: 0;
+  background: radial-gradient(ellipse 70% 42% at 50% 6%, var(--vf-coin-sheen), transparent 70%);
+}
+
+/* From 72px the light follows the pointer across the coin. */
+.vf-face[data-light] .vf-face-light {
+  background: radial-gradient(
+    circle at var(--vf-face-light-x, 50%) var(--vf-face-light-y, 8%),
+    var(--vf-coin-sheen),
+    transparent 58%
+  );
+}
+
+.vf-face-host:hover .vf-face[data-frame="coin"],
+.vf-face-host:focus-visible .vf-face[data-frame="coin"],
+.vf-face[data-frame="coin"][data-held] {
+  transform: scale(1.05);
+}
+
+/* M6 — the lift halves; nothing that travels is added. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-face,
+  .vf-face-figure {
+    transition-duration: 90ms;
+  }
+}

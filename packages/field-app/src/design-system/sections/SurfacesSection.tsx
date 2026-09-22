@@ -10,6 +10,7 @@ import { SidePanelFrame } from "../../hud/SidePanelStage";
 import { MagnetGridSection } from "../../panels/MagnetGridSection";
 import { SettingsDialog, type SettingsPage } from "../../panels/SettingsDialog";
 import { buttonCls, SettingsRow, SettingsSection, SettingsSwitch } from "../../panels/settings-ui";
+import { FIXTURE_ME, FIXTURE_OTHERS_WAITING } from "../account-fixtures";
 import { CommandPalettePreview } from "../CommandPalettePreview";
 import { Section, Specimen } from "../catalog-ui";
 
@@ -42,6 +43,11 @@ export function SurfacesSection({
             historyBusy={false}
             undoAvailable={false}
             redoAvailable={false}
+            account={{
+              me: FIXTURE_ME,
+              others: FIXTURE_OTHERS_WAITING,
+              onSwitch: () => undefined,
+            }}
           >
             {settingsPage === "appearance" ? (
               <SettingsSection

@@ -1,14 +1,19 @@
 import { createCanvasEngine } from "@vibecook/ice";
 import type { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { describe, expect, it } from "vitest";
-import { attachDocumentPresence, presenceColor } from "../src/field/document-presence";
+import {
+  attachDocumentPresence,
+  PRESENCE_INK_FALLBACK,
+  presenceColor,
+  presenceName,
+} from "../src/field/document-presence";
 import type { FieldUserProfile } from "../src/host";
 
 const PROFILE: FieldUserProfile = {
   userId: "usr_01",
   fuid: 4,
   name: "James",
-  color: "accent-2",
+  face: { emoji: "🦊" },
   resident: true,
   onboarded: true,
 };
@@ -32,9 +37,27 @@ class RoomLane {
 }
 
 describe("document presence composition", () => {
-  it("resolves the account accent to a portable wire color", () => {
-    expect(presenceColor(PROFILE)).toBe("#ec4899");
-    expect(presenceColor({ ...PROFILE, color: "oklch(60% 0.2 20)" })).toBe("oklch(60% 0.2 20)");
+  it("draws every cursor in the one neutral ink — a person has no colour (UA-D17)", () => {
+    // jsdom resolves no custom properties, so the wire gets the token's own
+    // value: a real colour, never a var() a peer in another theme can't read.
+    expect(presenceColor()).toBe(PRESENCE_INK_FALLBACK);
+    expect(presenceColor()).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+
+  it("labels the cursor with the face, then the name", () => {
+    expect(presenceName(PROFILE)).toBe("🦊 James");
+    // A pre-v0.3 profile (an accent, no face yet) wears the machine's deal.
+    const legacy: FieldUserProfile = {
+      userId: PROFILE.userId,
+      fuid: PROFILE.fuid,
+      name: PROFILE.name,
+      color: "accent-2",
+      resident: true,
+      onboarded: true,
+    };
+    expect(presenceName(legacy)).toMatch(/^\S+ James$/u);
+    expect(presenceName(legacy)).not.toContain("accent");
+    expect(presenceName({ ...PROFILE, name: "   " })).toBe("");
   });
 
   it("keeps outbound wired through ICE detach, then removes both transport directions", () => {

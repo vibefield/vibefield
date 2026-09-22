@@ -40,10 +40,16 @@ const PROFILE = {
   userId: "01J8ZQ7W9K3M5N7P9R1T3V5X7Z",
   fuid: 1,
   name: "James",
-  color: "accent-3",
+  face: { emoji: "🦊" },
   resident: true,
   onboarded: true,
 };
+
+/** The Face row's act, found by its words. */
+const changeFace = (): HTMLButtonElement | undefined =>
+  Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+    (button) => button.textContent?.trim() === "Change…",
+  );
 
 /** An unlinked desktop, as UA-P-0a's daemon reports one: `meshEnabled` is
  * FALSE because the mesh derives from the link, and the posture word is what
@@ -156,8 +162,10 @@ describe("AccountSection", () => {
     const name = container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]');
     expect(name?.value).toBe("James");
     expect(name?.disabled).toBe(false);
-    const accent = container?.querySelector<HTMLInputElement>('input[aria-label="accent-3"]');
-    expect(accent?.checked).toBe(true);
+    // UA-D17 — the profile shows a face, never a colour, and says whose it is.
+    expect(container?.querySelector('[role="img"][aria-label="James, 🦊"]')).not.toBeNull();
+    expect(changeFace()?.disabled).toBe(false);
+    expect(text()).not.toContain("accent");
     expect(text()).toContain("user 1");
   });
 
@@ -169,11 +177,8 @@ describe("AccountSection", () => {
     expect(name?.disabled).toBe(true);
     const residency = container?.querySelector<HTMLButtonElement>('[role="switch"]');
     expect(residency?.disabled).toBe(true);
-    const accents = container?.querySelectorAll<HTMLInputElement>(
-      '[role="radiogroup"][aria-label="Accent color"] input[type="radio"]',
-    );
-    expect(accents).toHaveLength(8);
-    expect(Array.from(accents ?? []).every((chip) => chip.disabled)).toBe(true);
+    // No profile, no face to change — and the button says so by being inert.
+    expect(changeFace()?.disabled).toBe(true);
     expect(text()).toContain("no supervisor bridge");
     expect(text()).toContain("Residency is a supervisor setting");
 
@@ -183,6 +188,64 @@ describe("AccountSection", () => {
     );
     expect(posture).toHaveLength(2);
     expect(posture?.[0]?.disabled).toBe(false);
+  });
+
+  it("changes the face through the picker, and greys the one another user wears", async () => {
+    const writes: unknown[] = [];
+    const usersUpdate = vi.fn(async (params: Record<string, unknown>) => {
+      writes.push(params);
+      return { ...PROFILE, ...params };
+    });
+    host(usersUpdate, {
+      list: vi.fn(async () => ({
+        attachedUserId: PROFILE.userId,
+        users: [
+          PROFILE,
+          {
+            userId: "01K0000000000000000000000B",
+            fuid: 2,
+            name: "Work",
+            face: { emoji: "🐙" },
+            resident: true,
+            onboarded: true,
+          },
+        ],
+      })),
+    });
+    await mount(client({ link: OFFLINE }));
+    await act(async () => changeFace()?.click());
+
+    const worn = container?.querySelector<HTMLInputElement>('input[aria-label="🐙, worn by Work"]');
+    expect(worn?.disabled).toBe(true);
+    expect(container?.querySelector<HTMLInputElement>('input[aria-label="🦊"]')?.checked).toBe(
+      true,
+    );
+
+    await act(async () => {
+      container?.querySelector<HTMLInputElement>('input[aria-label="🐧"]')?.click();
+      await Promise.resolve();
+    });
+    // Only the face moves; an absent frame stays absent (a sticker).
+    expect(writes.at(-1)).toEqual({ face: { emoji: "🐧" } });
+    expect(container?.querySelector('[role="img"][aria-label="James, 🐧"]')).not.toBeNull();
+  });
+
+  it("says main's refusal of a face in its own words", async () => {
+    let read = true;
+    host(
+      vi.fn(async (params: Record<string, unknown>) => {
+        if (read && Object.keys(params).length === 0) return PROFILE;
+        read = false;
+        throw new Error("Work already wears 🐧 on this machine.");
+      }),
+    );
+    await mount(client({ link: OFFLINE }));
+    await act(async () => changeFace()?.click());
+    await act(async () => {
+      container?.querySelector<HTMLInputElement>('input[aria-label="🐧"]')?.click();
+      await Promise.resolve();
+    });
+    expect(text()).toContain("Work already wears 🐧 on this machine.");
   });
 
   it("survives a daemon with no link method and says so", async () => {
@@ -430,6 +493,8 @@ const OTHER = {
   userId: "01K0000000000000000000000B",
   fuid: 2,
   name: "Work",
+  // A pre-v0.3 user, never attached since: an accent and no face. The roster
+  // draws the machine's deal for them, never the accent.
   color: "accent-5",
   resident: true,
   onboarded: true,
@@ -460,7 +525,9 @@ describe("AccountSection users switcher", () => {
     );
     await mount(withLink());
 
-    expect(usersList).toHaveBeenCalledTimes(1);
+    // Two reads of one roster: the switcher's, and the profile's — which needs
+    // to know the faces other users wear before it can offer the picker (I-2).
+    expect(usersList).toHaveBeenCalledTimes(2);
     expect(text()).toContain("Users");
     expect(text()).toContain("Work");
 

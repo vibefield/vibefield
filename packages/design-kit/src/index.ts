@@ -9,6 +9,15 @@ export {
 // runtime @vibecook/ice/r3f import reaches three/R3F, and this barrel stays
 // GL-free by construction so a boot-reachable import can never pull the 3D
 // world (2026-08-28; the 2026-08-10 splash-bundle incident's class).
+export {
+  FACE_THRESHOLDS,
+  faceLiftHostClass,
+  faceTilt,
+  stickerEdgePx,
+  type UserFaceFrame,
+  UserFaceView,
+  type UserFaceViewProps,
+} from "./face";
 export { previewBackground, setPreviewBackground } from "./preview";
 export {
   EmptyState,

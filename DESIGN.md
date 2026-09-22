@@ -131,6 +131,10 @@ orange · `waiting`/`idle` muted (text ramp, no hue) · `done` muted with green 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
 #06B6D4 · #8B5CF6 · #EF4444 · #3B82F6`. Tint recipe: body fill at 12% (`{hex}1F`),
 hairline at ~35%, label at full. These group and label; they never signal state.
+**Users are not among them (2026-09-22, UA-D17):** a person is known by a face (§2.8), never a
+colour. An accent on a user collided with the project inks and with §2.5 — measured in OKLCH,
+three of the eight slots sat within 3° of green, orange and red, and one inside the band
+withheld for `--vf-select`.
 
 ### 2.7 Godview instrument palette
 
@@ -146,6 +150,74 @@ the general chrome palette.
 | idle body / text | `#E5E5E5 / #666666` | `#2A2A2A / #AAAAAA` |
 | working body / text | `#222222 / #FFFFFF` | `#EEEEEE / #111111` |
 | terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
+
+### 2.8 Identity — the face
+
+**A user is known by form, never by hue (UA-D17, ratified 2026-09-22).** One emoji per user,
+framed as a **sticker** (the default) or a **coin** (the user's own choice). The product gives
+a person no colour: hue belongs to projects (the project ink) and to state (§2.5). Five rules
+decide every surface a user appears on:
+
+| Rule | Law |
+|---|---|
+| **I-1 Form, not hue** | No dot, no tint, no coloured ring, no accent slot. The only colour a face carries is the emoji its user chose. |
+| **I-2 The field, not the person** | Two users of one person must never look alike: a machine never deals one emoji to two of its users, and every sticker sits at its own angle. |
+| **I-3 A neutral ground** | The face sits on the chrome's own materials — no disc, no plate, no wash taken from the emoji. |
+| **I-4 The name makes it certain** | The face is an index. The name sits beside it wherever there is room, and in the accessible name where there isn't. |
+| **I-5 State stays in words** | Linked, offline and "2 waiting" are written beside the face (a count badge at most), never painted onto it. |
+
+**The sticker** (default): the emoji is its own frame. Figure at 86% of the box. A die-cut
+border in paper white **in both themes** (`--vf-sticker-edge`) — the white edge is what reads
+as a sticker; knocked out in dark it becomes an emoji with a halo — at 3.2% of the size,
+rounded (1px at 16px, 5px at 144px), with a 1px cut line beyond it at black/12
+(`--vf-sticker-cut`), which is what holds a white edge on white chrome. The border is the
+glyph's alpha dilated, **thresholded first** (slope 4, intercept −2): an emoji bitmap's faint
+corner pixels otherwise dilate into grey squares, visible only on a dark ground. iOS dilates
+with `CIMorphologyMaximum`. Shadow `0 3% 4.5%` of the size at black/22 (dark /50). **Tilt**,
+from 40px up: ±2–5°, stable per user — `h = FNV-1a(userId)`, magnitude `2 + h mod 4` degrees,
+sign from bit 7 — a second colourless persona cue (I-2); below 40px every sticker sits
+straight so rows line up. Hover lifts it to 1.07×, the shadow to `0 7% 9%`, the tilt relaxed
+to 35%, on `--vf-ease-lift` (180ms) — held, like a card (§7).
+
+**The coin** (by choice — then the frame itself tells personas apart: a fox sticker at home, a
+minted octopus at work). Pewter. The figure at 58% of the box (66% at 20px and below), raised
+with a small drop shadow off a field sunk by an inset shadow; rim 8.5% of the size (15% once
+the legend shows); the coin throws `0 5% 12%` + `0 1.2% 2.5%` of its size (black /16 + /6,
+dark /50 + /30). Its detail switches on by size: **beading** — the §2.1 dots, in the coin's
+ink — from 44px · **reeding**, 112 ridges, from 56px · it **catches the light**, a highlight
+that follows the pointer, from 72px · the **legend**, name · tailnet engraved round the rim,
+from 96px. Never a user number: nobody knows theirs, and the tailnet is what tells two "JAMES"
+coins apart. A coin neither tilts nor lifts; it scales 1.05× on hover. Tokens
+`--vf-coin-rim` · `-field` · `-ink` · `-reed`, plus the light and shade that
+make it metal (`-inset` · `-shadow` · `-shadow-contact` · `-relief` · `-bevel-light` ·
+`-bevel-dark` · `-sheen`):
+
+| Pewter | Light | Dark |
+|---|---|---|
+| rim (conic, from 210°) | `#FBFBFD · #C4C4CA 16% · #F1F1F4 33% · #B6B6BD 52% · #F4F4F7 70% · #C0C0C6 86%` | `#77777D · #36363B · #646469 · #2A2A2F · #68686E · #34343A` (same stops) |
+| field (radial at 34% 28%) | `#FFFFFF · #ECECF0 58% · #D5D5DB` | `#5B5B61 · #3A3A3F 58% · #27272B` |
+| ink — beading, legend | `#1C1C1E` /52 | `#F5F5F7` /52 |
+| reeding | black /16 | black /35 |
+
+**Dealing.** The machine deals each new user an emoji no other local user holds, from a deck
+of 48 that read at 16px on both grounds — animals first, then plants and objects
+(`contracts/src/user-face.ts`); each user starts at their id's hash, so nobody is always
+the fox. The Setup Assistant shows the deal pre-filled, and Change… opens the face picker
+(the frame switch over a four-row deck, or any single emoji typed in); a face another user
+wears stays in the deck, greyed and named. Refused as faces, because they already mean
+something here: flat colours and hearts · 🔥 (the swarm's burn ladder) · 📁 · the state marks
+· 🔗. The face and the name are to travel with the login (UA-D18) — *gated (2026-09-22): the
+settings doc does not replicate yet, so today a face is this machine's, as the accent was.*
+
+**Where it appears, at what size.** The Me menu (§8): 40px in the corner, 26px in its rows ·
+the Settings head: 40px, other users 24px · Settings → Account: 48px, rows 28px · Setup
+Assistant pane 2: 112px, so a coin shows its legend · the tray: the emoji leads the item's
+label for both frames — a native menu draws no frame, and at menu size a coin reads as its
+emoji · document presence: the face leads the cursor's label ("🦊 James"), and every cursor
+is `--vf-presence-ink` (`#636366`). *Corrected 2026-09-22 (UA-7): this said the cursor is
+drawn in ink. It cannot be — ICE paints the SENDER'S colour at every receiver, whatever the
+receiver's theme, with white label text on it — so the colour that is nobody's is one
+neutral grey that holds on both grounds and under white text.*
 
 ---
 
@@ -337,6 +409,44 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   flickers with routine traffic. The title carries the words, numbers, and the
   last-exchange time. Explorer tiles append the honest sync word to their time caption
   ("· syncing", "· waiting on 3", "· peer offline") only when there is one.
+- **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
+  face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
+  it, `hud.panel` above both) and is the account's one door. A 44px button holds the 40px face
+  (§2.8). Around it sits a 56px circle — `--vf-press` on hover, invisible otherwise — and
+  **that circle is the menu**: a click grows it (M1) on `--vf-ease-island` 600ms into a
+  256px-wide panel in island material (§5) with the island shadow and a hairline, its corners
+  28px so the arc stays concentric with the face. **The face never moves** (M2): the panel
+  opens up and to the right around it, so the second click lands on the same face and folds it
+  away. It reads bottom-up, nearest first: *you* (the name and login beside the face; clicking
+  them opens Settings → Account) · Settings… `⌘,` · Link Tailscale account… (only while
+  unlinked) · New user… · then, under a "Switch to" eyebrow, the other users — a 26px face,
+  the name, the tailnet as one mono word, and "N waiting" in words after a 6px orange dot. A
+  machine with one user shows no switch list. Faces and row icons share one 44px column
+  centred on the owner's face. **Choreography** (§6's constants): the glass fades in over
+  160ms plain `ease`; the name and login reveal 140ms behind the shape (240ms `ease`); rows
+  fade and rise 4px nearest-first, 160ms + 26ms per row (cap 400ms); the face stays lifted
+  while open. **Closing reverses it** (M4): the content goes in 120ms, the shape folds from
+  80ms over 600ms, and the glass fades as it reaches the face. Return/Space opens it with
+  focus on the nearest item; arrows move; Esc, a second click or a click outside folds it and
+  returns focus to the face. It is a menu, not a sheet — no dim, no recede — but it is one of
+  the spine's expanded surfaces: opening it folds the tray or the docs explorer, and they fold
+  it. Reduced motion: a 120ms fade at full size (M6).
+  **Settings stays the centred dialog, headed by you.** Settings… (or `⌘,` from anywhere)
+  opens it while the menu folds. The sidebar's head is the account card — the 40px face, the
+  name, the login; it opens the Account page — in place of the gear tile and the word
+  "Settings"; the other users sit under it as 24px faces; and the Account nav group is gone,
+  because the head is the account.
+  **Waiting, offline.** A resident user's waiting agents (UA-D3) show as a §2.5 orange count
+  *beside* the owner's face (top-right, ringed 2px in the ground), never on it (I-5); it fades
+  as the menu opens and the words take over in that user's row. An unlinked user reads
+  "offline · not linked" in words — the ordinary first-run state, never red (UA-P-D1).
+  **Discoverability**, because a face does not say "settings": the tooltip ("James ·
+  Account"), `⌘,`, the tray's Settings…, and the Setup Assistant's last pane saying it once.
+  *As built (UA-7, 2026-09-22):* `⌘,` did not exist before this — the app menu's `appMenu`
+  role carries no Settings item — so it is bound where `⌘K` is, and toggles. The waiting
+  count has no feed yet (main does not watch other users' pairs; spec v0.3 §12): the view
+  draws it when handed one. A window with no account door (a browser harness) keeps the
+  plain Settings button, so the corner is never a dead end.
 - **The loading veil** (B4): a full-window chrome frost (`white/60 + backdrop-blur-xl`,
   dark `#171717/60`) while a doc loads — centered thin bar (`3px × 220px`, colorless
   fill: loading is not a §2.5 state) over an 11px/50% lowercase stage label
@@ -488,6 +598,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   Top-row slots (all inside the 52px drag strip, all `no-drag`): breadcrumbs left
   (`left-24`, clearing the traffic lights) · **the file pill center** · the right chrome
   cluster anchored `top-4 right-4` (zoom pill · theme FAB · Artifact FAB outermost).
+  **Bottom-left (2026-09-22, UA-D19):** the Me menu — the owner's face, §8 — then Godview,
+  with the `hud.panel` slot above them; the Settings gear retires into the menu and `⌘,`.
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.

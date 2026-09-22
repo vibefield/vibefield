@@ -13,13 +13,15 @@ import {
 import type { DesktopShellState, SettingsUndoResult, ShellPlatform } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { lazy, type ReactElement, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useAccountSnapshot } from "../account/use-account";
 import type { MagnetGridGlyph } from "../field/canvas-appearance";
+import { getHost } from "../host";
 import { AccountSection } from "./AccountSection";
 import { DesktopSection } from "./DesktopSection";
 import { MagnetGridSection } from "./MagnetGridSection";
 import { MeshSection } from "./MeshSection";
 import { PluginsSection } from "./PluginsSection";
-import { SettingsDialog, type SettingsPage } from "./SettingsDialog";
+import { type SettingsAccountHead, SettingsDialog, type SettingsPage } from "./SettingsDialog";
 import { SystemSection } from "./SystemSection";
 import {
   buttonCls,
@@ -51,6 +53,9 @@ interface SettingsPanelProps {
   appearanceControlledByStudio?: boolean;
   diagnosticsRequest?: number;
   diagnosticsInitiallyOpen?: boolean;
+  /** The page to open on when diagnostics was not asked for — the Me menu
+   * opens Account from its name row (UA-D19). */
+  initialPage?: SettingsPage;
   onClose: () => void;
 }
 
@@ -150,13 +155,42 @@ export function SettingsPanel({
   appearanceControlledByStudio = false,
   diagnosticsRequest = 0,
   diagnosticsInitiallyOpen = false,
+  initialPage = "general",
   onClose,
 }: SettingsPanelProps): ReactElement {
   const client = useFielddClient();
   const dialogRef = useRef<HTMLDivElement>(null);
+  // UA-D19 — Settings is headed by whoever it belongs to. The same reading the
+  // Me menu makes, so the corner and the head never disagree.
+  const account = useAccountSnapshot();
+  const [switching, setSwitching] = useState(false);
+  const usersSwitch = getHost().usersSwitch;
+  const accountHead: SettingsAccountHead | undefined =
+    account.me === null
+      ? undefined
+      : {
+          me: {
+            userId: account.me.userId,
+            name: account.me.name,
+            face: account.me.face,
+            detail: account.me.detail,
+            detailIsLogin: account.me.detailIsLogin,
+          },
+          others: account.others,
+          busy: switching,
+          // THE RELOAD IS THE FEEDBACK (host.ts): a switch re-targets this
+          // window and reloads it, so only a refusal ever comes back.
+          onSwitch:
+            usersSwitch === undefined
+              ? undefined
+              : (userId) => {
+                  setSwitching(true);
+                  void usersSwitch({ userId }).catch(() => setSwitching(false));
+                },
+        };
   const handledDiagnosticsRequest = useRef(diagnosticsRequest);
   const [activePage, setActivePage] = useState<SettingsPage>(
-    diagnosticsInitiallyOpen ? "diagnostics" : "general",
+    diagnosticsInitiallyOpen ? "diagnostics" : initialPage,
   );
   const [historyBusy, setHistoryBusy] = useState(false);
   const [undoAvailable, setUndoAvailable] = useState(true);
@@ -604,6 +638,7 @@ export function SettingsPanel({
         undoAvailable={undoAvailable}
         redoAvailable={redoAvailable}
         historyNote={historyNote}
+        account={accountHead}
       >
         {pageContent}
       </SettingsDialog>

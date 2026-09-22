@@ -166,3 +166,52 @@ describe("the Switch User submenu (UA-5)", () => {
     expect(sub.every((s) => s.click === undefined)).toBe(true);
   });
 });
+
+describe("the face in the tray (UA-7)", () => {
+  // DESIGN.md §2.8: the emoji leads the item's label, and the name sits beside
+  // it (I-4). A native menu draws no frame, so only the emoji travels.
+  const faced = [
+    { userId: "01AAA", name: "James", face: "🦊", attached: true },
+    { userId: "01BBB", name: "Work", face: "🐙", attached: false },
+  ];
+
+  it("leads the user row with the attached user's face", () => {
+    const menu = buildTrayMenu(snapshot({ userName: "James", userFace: "🦊" }), actions(), "linux");
+    expect(byId(menu, "user")).toMatchObject({ label: "🦊 James", enabled: false });
+  });
+
+  it("keeps the old label when no face travels (older callers)", () => {
+    const menu = buildTrayMenu(snapshot({ userName: "James" }), actions(), "linux");
+    expect(byId(menu, "user").label).toBe("User: James");
+  });
+
+  it("a face alone shows no row: the name is what the row is for", () => {
+    const menu = buildTrayMenu(snapshot({ userFace: "🦊" }), actions(), "linux");
+    expect(menu.some((item) => item.id === "user")).toBe(false);
+  });
+
+  it("leads every Switch User row with that user's face", () => {
+    const acts = { ...actions(), switchUser: vi.fn(), newUser: vi.fn() };
+    const menu = buildTrayMenu(
+      snapshot({ userName: "James", userFace: "🦊", users: faced }),
+      acts,
+      "darwin",
+    );
+    const sub = byId(menu, "switch-user").submenu ?? [];
+    expect(sub.slice(0, 2).map((s) => s.label)).toEqual(["🦊 James", "🐙 Work"]);
+    // the face changes the words, never the behaviour
+    expect(sub[0]).toMatchObject({ checked: true, enabled: false });
+    sub[1]?.click?.();
+    expect(acts.switchUser).toHaveBeenCalledWith("01BBB");
+  });
+
+  it("a row without a face is the bare name", () => {
+    const acts = { ...actions(), switchUser: vi.fn() };
+    const menu = buildTrayMenu(
+      snapshot({ users: [{ userId: "01CCC", name: "Lab", attached: false }] }),
+      acts,
+      "darwin",
+    );
+    expect(byId(menu, "switch-user").submenu?.[0]?.label).toBe("Lab");
+  });
+});

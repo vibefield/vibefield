@@ -435,11 +435,55 @@
   text-underline-offset: 2px;
 }
 
-.vf-ds-accent-control {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+/* The face picker's specimen: a face beside it, the way both of its hosts
+   show one. */
+.vf-ds-face-picker-demo {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+/* DESIGN.md §2.8 — both frames on the size ladder, every threshold between
+   two rungs. */
+.vf-ds-face-ladders {
+  display: grid;
+  gap: 24px;
+}
+
+.vf-ds-face-ladder {
+  display: grid;
   gap: 12px;
+}
+
+.vf-ds-face-ladder-label {
+  color: var(--vf-ds-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vf-ds-face-rungs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.vf-ds-face-rung {
+  display: flex;
+  margin: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-ds-face-rung figcaption {
+  color: var(--vf-ds-faint);
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .vf-ds-status-list {

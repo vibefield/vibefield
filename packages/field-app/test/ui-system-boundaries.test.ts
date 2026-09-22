@@ -166,6 +166,9 @@ describe("UI system ownership boundaries", () => {
       "LoadingVeilView",
       "NavigationBreadcrumbsView",
       "SettingsDialog",
+      "MeMenuView",
+      "FacePicker",
+      "UserFaceView",
       "WidgetTrayFrame",
       "WidgetTrayToolSwitcherView",
       "ZoomPillView",
@@ -241,7 +244,8 @@ describe("UI system ownership boundaries", () => {
 
   it("keeps colocated production CSS on semantic tokens", () => {
     for (const stylesheet of [
-      "account/AccentPicker.css",
+      "account/FacePicker.css",
+      "account/MeMenu.css",
       "boot/boot.css",
       "boot/onboarding/wizard-ui.css",
       "cursor/overlay.css",

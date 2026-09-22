@@ -1,6 +1,8 @@
+import { UserFaceView } from "@vibefield/design-kit/face";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
-import { AccentChip, AccentPicker } from "../account/AccentPicker";
+import { FacePicker } from "../account/FacePicker";
+import { faceLabel, faceOf, heldFaces } from "../account/faces";
 import {
   LINK_ACT_LABEL,
   LINK_ACT_PENDING_LABEL,
@@ -11,7 +13,8 @@ import {
 } from "../account/link";
 import { POSTURE_CHOICES, useSyncPosture } from "../account/posture";
 import { UserSwitcher } from "../account/UserSwitcher";
-import { type FieldUserProfile, getHost } from "../host";
+import { accountChanged } from "../account/use-account";
+import { type FieldUserFace, type FieldUserProfile, getHost } from "../host";
 import {
   buttonCls,
   fieldCls,
@@ -50,12 +53,32 @@ export function AccountSection({
   // Same shape as every other host capability (DiagnosticsSection:187): read it
   // once, and let `undefined` mean "this build cannot do that" out loud.
   const usersUpdate = getHost().usersUpdate;
+  const usersList = getHost().usersList;
   const [profile, setProfile] = useState<ProfileState>(
     usersUpdate === undefined ? { kind: "unavailable" } : { kind: "loading" },
   );
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // UA-D17 — who else is here decides which faces are free (I-2). Read once,
+  // and again after every write, through the roster door the switcher uses.
+  const [roster, setRoster] = useState<readonly FieldUserProfile[]>([]);
+  const [rosterGeneration, setRosterGeneration] = useState(0);
+
+  useEffect(() => {
+    if (usersList === undefined) return;
+    let cancelled = false;
+    void usersList().then(
+      (snapshot) => {
+        if (!cancelled) setRoster(snapshot.users);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [usersList, rosterGeneration]);
 
   // An EMPTY update is the read (host.ts): the seam answers with the whole
   // record, so asking it to change nothing is how this page learns the user it
@@ -81,7 +104,7 @@ export function AccountSection({
 
   const write = async (params: {
     name?: string;
-    color?: string;
+    face?: FieldUserFace;
     resident?: boolean;
   }): Promise<void> => {
     if (usersUpdate === undefined) return;
@@ -91,6 +114,10 @@ export function AccountSection({
       const updated = await usersUpdate(params);
       setProfile({ kind: "ready", profile: updated });
       setNameDraft(null);
+      setRosterGeneration((n) => n + 1);
+      // The corner and the head of Settings re-read: the face changes there
+      // the moment it changes here.
+      accountChanged();
       onSettingsChanged?.(false);
     } catch (cause) {
       setWriteError(cause instanceof Error ? cause.message : String(cause));
@@ -102,7 +129,9 @@ export function AccountSection({
   const current = profile.kind === "ready" ? profile.profile : null;
   const editable = current !== null && !writing;
   const name = nameDraft ?? current?.name ?? "";
-  const accent = current?.color ?? null;
+  // A user with no written face is SHOWN with the machine's deal (UA-D17) —
+  // the same one pane 2 proposes and main's silent deal would write.
+  const face: FieldUserFace | null = current === null ? null : faceOf(current, roster);
 
   const commitName = (): void => {
     const next = name.trim();
@@ -117,7 +146,7 @@ export function AccountSection({
     <div className="space-y-4">
       <SettingsSection
         title="Profile"
-        description="Your name and color on this machine. They travel with this device's user, not with the mesh."
+        description="Your name and face on this machine. They stay on this machine for now — once settings sync between your devices, they will follow your login."
       >
         <SettingsRow
           title="Name"
@@ -143,19 +172,41 @@ export function AccountSection({
         </SettingsRow>
 
         <SettingsRow
-          title="Color"
-          description="An accent for this user. It tints where you appear, and never signals state."
-          align="start"
+          title="Face"
+          description="How this machine shows you: in the corner, at the head of Settings, and in the tray. One emoji — a sticker, or a coin if you would rather look issued."
         >
-          <div className="flex flex-col items-end gap-2">
-            <AccentPicker
-              value={accent}
+          <div className="flex items-center gap-3">
+            {face !== null && current !== null && (
+              <UserFaceView
+                emoji={face.emoji}
+                frame={face.frame}
+                size={48}
+                seed={current.userId}
+                label={faceLabel(current.name, face)}
+              />
+            )}
+            <button
+              type="button"
+              className={buttonCls}
               disabled={!editable}
-              onSelect={(slot) => void write({ color: slot })}
-            />
-            <AccentChip accent={accent} label={name} />
+              aria-expanded={pickerOpen}
+              onClick={() => setPickerOpen((open) => !open)}
+            >
+              {pickerOpen ? "Done" : "Change…"}
+            </button>
           </div>
         </SettingsRow>
+        {pickerOpen && face !== null && current !== null && (
+          <div className="pt-3">
+            <FacePicker
+              value={face}
+              held={heldFaces(roster, current.userId)}
+              disabled={!editable}
+              name="vf-account-face"
+              onChange={(next) => void write({ face: next })}
+            />
+          </div>
+        )}
 
         {current !== null && (
           <div className={`pt-2 ${labelCls}`}>
@@ -166,7 +217,7 @@ export function AccountSection({
         {profile.kind === "unavailable" && (
           <div className={`pt-2 ${labelCls}`}>
             Profile editing needs the desktop shell — this window has no supervisor bridge, so your
-            name and color cannot be changed from here.
+            name and face cannot be changed from here.
           </div>
         )}
         {profile.kind === "failed" && (

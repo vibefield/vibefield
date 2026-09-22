@@ -16,13 +16,45 @@
   display: flex;
   width: 100%;
   height: 100%;
-  align-items: center;
+  /* SAFE centring: a pane taller than the shell (pane 2 with its face picker
+     open, UA-D17) overflows downward only. Plain centring overflows both ways
+     inside a scroller, and the half above the top edge — the pane's title —
+     can never be scrolled to. */
+  align-items: safe center;
   justify-content: center;
   overflow-y: auto;
 }
 
 .vf-wizard-pane {
   animation: vf-wizard-in 320ms var(--vf-ease-island) both;
+}
+
+/* Pane 2 (UA-D17): the dealt face beside the name — the sticker's one big
+   moment, and the whole of "who this field is" in one glance. */
+.vf-wizard-identity {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.vf-wizard-face {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 132px;
+}
+
+@media (max-width: 520px) {
+  .vf-wizard-identity {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vf-wizard-face {
+    width: auto;
+  }
 }
 
 .vf-wizard-stage-check {

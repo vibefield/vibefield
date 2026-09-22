@@ -144,6 +144,22 @@ const godviewState = new PreloadGodviewStateBridge((issueCount) => {
     }),
   );
 });
+/** A rejected `ipcMain.handle` reaches the page as `Error invoking remote method
+ * '<channel>': Error: <message>`: main replies with the error's `toString()` and
+ * `invoke` rewraps it (Electron #24427, verified in 43.1.1's own bundle). A users
+ * refusal is a SENTENCE the page shows as written, e.g. "Work already wears 🐙 on
+ * this machine." (UA-7), so the bridge hands back the handler's own words. */
+const REMOTE_ERROR_PREFIX = /^Error invoking remote method '[^']*': (?:Error: )?/u;
+
+async function invokeInHandlerWords(channel: string, payload: unknown): Promise<unknown> {
+  try {
+    return await ipcRenderer.invoke(channel, payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(message.replace(REMOTE_ERROR_PREFIX, ""));
+  }
+}
+
 const platform = ShellPlatform.parse(
   process.platform === "darwin" || process.platform === "win32" || process.platform === "linux"
     ? process.platform
@@ -185,12 +201,13 @@ contextBridge.exposeInMainWorld("vibefield", {
   submitRendererLogs: (serializedBatch: string): boolean => logging.submit(serializedBatch),
   getConnection: async (): Promise<WindowConnection> =>
     WindowConnection.parse(await ipcRenderer.invoke(IPC_CHANNELS.windowBootstrap)),
-  /** UA-3 — the Account page's profile write (name/color/resident/onboarded).
+  /** UA-3 — the Account page's profile write (name/face/resident/onboarded).
    * Validated both directions; main owns users.json and refuses empty or
-   * unregistered-sender updates. */
+   * unregistered-sender updates. UA-7: a face main refuses (another user's, a
+   * refused emoji, not one emoji) rejects with main's sentence, unwrapped. */
   usersUpdate: async (params: UsersUpdateParams): Promise<UserRecord> =>
     UserRecordSchema.parse(
-      await ipcRenderer.invoke(IPC_CHANNELS.usersUpdate, UsersUpdateParams.parse(params)),
+      await invokeInHandlerWords(IPC_CHANNELS.usersUpdate, UsersUpdateParams.parse(params)),
     ),
   /** UA-5 — the roster read: every user on this machine plus main's LIVE
    * attachment (never `lastAttached`, which is only the next-boot hint). The

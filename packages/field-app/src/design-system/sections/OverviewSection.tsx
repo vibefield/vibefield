@@ -41,7 +41,7 @@ export function OverviewSection({
       </div>
       <div className="vf-ds-hero-facts">
         <HeroFact value="3" label="surface families" />
-        <HeroFact value="8" label="accent slots" />
+        <HeroFact value="2" label="face frames" />
         <HeroFact value="22" label="card radius" suffix="px" />
         <HeroFact value="1" label="shared inventory" />
       </div>

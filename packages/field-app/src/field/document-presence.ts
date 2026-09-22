@@ -1,30 +1,35 @@
 import type { CanvasEngine } from "@vibecook/ice";
 import type { DocLaneClient } from "@vibefield/fieldd-client/doclane";
+import { faceOf } from "../account/faces";
 import type { FieldUserProfile } from "../host";
 import { getRendererLogger } from "../logging";
 
-const ACCENT_HEX: Readonly<Record<string, string>> = Object.freeze({
-  "accent-1": "#6366f1",
-  "accent-2": "#ec4899",
-  "accent-3": "#22c55e",
-  "accent-4": "#f59e0b",
-  "accent-5": "#06b6d4",
-  "accent-6": "#8b5cf6",
-  "accent-7": "#ef4444",
-  "accent-8": "#3b82f6",
-});
+/** UA-D17 — a person has no colour, so a presence cursor is not tinted by who
+ * it is: every peer's arrow and label are the one neutral `--vf-presence-ink`
+ * (DESIGN.md §2.8), and the FACE in the label says whose it is. It must be a
+ * real colour on the wire — ICE's remote-cursor reflector paints the SENDER'S
+ * string at every receiver, whatever the receiver's theme, and draws white
+ * label text on it — so the token is read at attach time, never sent as a
+ * `var()`. A mid grey is what holds on both grounds and under white text. */
+export const PRESENCE_INK_FALLBACK = "#636366";
 
-/** Resolve the supervisor-owned accent into a portable wire color. CSS custom
- * property names are local UI vocabulary; remote peers need the actual color. */
-export function presenceColor(profile: FieldUserProfile): string {
-  const declared = profile.color;
-  if (declared !== undefined && ACCENT_HEX[declared] === undefined) return declared;
-  const slot = declared ?? `accent-${(Math.abs(profile.fuid) % 8) + 1}`;
+export function presenceColor(): string {
   if (typeof document !== "undefined") {
-    const live = getComputedStyle(document.documentElement).getPropertyValue(`--vf-${slot}`).trim();
+    const live = getComputedStyle(document.documentElement)
+      .getPropertyValue("--vf-presence-ink")
+      .trim();
     if (live.length > 0) return live;
   }
-  return ACCENT_HEX[slot] ?? ACCENT_HEX["accent-1"]!;
+  return PRESENCE_INK_FALLBACK;
+}
+
+/** "🦊 James" — the label a peer's cursor carries: the face first, so whose
+ * cursor it is reads at a glance, and the name after it (I-4). A user with no
+ * written face yet wears the machine's deal, as everywhere else. */
+export function presenceName(profile: FieldUserProfile): string {
+  const name = profile.name.trim();
+  if (name.length === 0) return "";
+  return `${faceOf(profile, []).emoji} ${name}`;
 }
 
 /** Attach transport-free ICE presence to the already-authenticated doc lane.
@@ -37,7 +42,7 @@ export function attachDocumentPresence(opts: {
   docId: string;
 }): () => void {
   const { ce, lane, profile, docId } = opts;
-  const name = profile.name.trim();
+  const name = presenceName(profile);
   if (name.length === 0) {
     getRendererLogger()
       .child({ component: "presence", docId })
@@ -50,7 +55,7 @@ export function attachDocumentPresence(opts: {
   const log = getRendererLogger().child({ component: "presence", docId });
   const detachPresence = ce.docs.attachPresence({
     name,
-    color: presenceColor(profile),
+    color: presenceColor(),
     onFault: (where, error) => {
       log.warn("renderer.presence.ice_fault", "ICE contained a presence transport fault", {
         where,

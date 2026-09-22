@@ -1,6 +1,6 @@
 import { SegmentedControl } from "@vibefield/design-kit";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
-import type { AccentSlot } from "../account/AccentPicker";
+import { faceKey } from "../account/faces";
 import { type LinkBeginStep, type LinkFace, linkFace } from "../account/link";
 import type { SyncPosture, SyncPostureControl } from "../account/posture";
 import {
@@ -15,6 +15,8 @@ import {
   OnboardingWelcomePaneView,
 } from "../boot/onboarding/onboarding-views";
 import { WizardShellView } from "../boot/onboarding/wizard-ui";
+import type { FieldUserFace } from "../host";
+import { FIXTURE_ME, FIXTURE_OTHERS } from "./account-fixtures";
 
 const noop = (): void => undefined;
 
@@ -177,11 +179,12 @@ export function OnboardingPreview({
 function FieldPreview(): ReactElement {
   const [state, setState] = useState<FieldState>("ready");
   const [name, setName] = useState("James");
-  const [accent, setAccent] = useState<AccentSlot>("accent-6");
+  const [face, setFace] = useState<FieldUserFace>(FIXTURE_ME.face);
+  const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <OnboardingFrame
       index="02"
-      label="Name and color"
+      label="Name and face"
       note="The one mandatory decision"
       state="field"
       controls={
@@ -195,15 +198,19 @@ function FieldPreview(): ReactElement {
     >
       <OnboardingFieldPaneView
         name={name}
-        accent={accent}
+        face={face}
+        seed={FIXTURE_ME.userId}
+        held={new Map(FIXTURE_OTHERS.map((person) => [faceKey(person.face.emoji), person.name]))}
+        pickerOpen={pickerOpen}
         writing={state === "saving"}
         error={state === "error" ? "The profile service refused this write." : null}
         onNameChange={setName}
-        onAccentChange={setAccent}
+        onFaceChange={setFace}
+        onPickerToggle={() => setPickerOpen((open) => !open)}
         onSubmit={noop}
         onBack={noop}
         autoFocus={false}
-        accentName="vf-design-onboarding-accent"
+        pickerName="vf-design-onboarding-face"
       />
     </OnboardingFrame>
   );

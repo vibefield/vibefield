@@ -1,0 +1,381 @@
+/* The Me menu (UA-D19; DESIGN.md §8 "The Me menu"). One element changes role:
+ * the 56px seed around the owner's face grows into the menu on the island's
+ * curve (M1), and the face never moves (M2). Tokens only.
+ *
+ * Choreography, open: the shape 600ms island · the glass 160ms ease · the
+ * name and login 140ms behind the shape · rows nearest-first, 160ms + 26ms per
+ * row (cap 400ms), 240ms each. Closing reverses it (M4): content out in 120ms,
+ * the shape folds from 80ms over 600ms, the glass fades as it reaches the face.
+ */
+
+.vf-me {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.vf-me-face {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.vf-me-face:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* ---- the shape: the seed at rest, the menu when open --------------------- */
+
+.vf-me-panel {
+  position: absolute;
+  z-index: 2;
+  bottom: -6px;
+  left: -6px;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border-radius: 28px;
+  background-color: transparent;
+  box-shadow: 0 8px 30px transparent;
+  pointer-events: none;
+  transition:
+    width 600ms var(--vf-ease-island) 80ms,
+    height 600ms var(--vf-ease-island) 80ms,
+    box-shadow 600ms var(--vf-ease-island) 80ms,
+    background-color 160ms ease;
+}
+
+/* The island material, on its own layer so the glass can fade on its own beat
+   while the shape travels (§5: surface /80 + blur, hairline). */
+.vf-me-panel::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 80%, transparent);
+  box-shadow: inset 0 0 0 1px var(--vf-hairline);
+  content: "";
+  opacity: 0;
+  backdrop-filter: blur(24px);
+  transition: opacity 160ms ease 440ms;
+}
+
+/* The seed: point at the face and the circle that becomes the menu shows. */
+.vf-me:not([data-open]) .vf-me-face:hover ~ .vf-me-panel {
+  background-color: var(--vf-hairline);
+}
+
+.vf-me[data-open] .vf-me-panel {
+  width: var(--vf-me-width);
+  height: var(--vf-me-height);
+  box-shadow: var(--vf-shadow-island);
+  pointer-events: auto;
+  transition:
+    width 600ms var(--vf-ease-island),
+    height 600ms var(--vf-ease-island),
+    box-shadow 600ms var(--vf-ease-island),
+    background-color 160ms ease;
+}
+
+.vf-me[data-open] .vf-me-panel::before {
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+
+.vf-me-menu {
+  position: absolute;
+  inset: 0;
+}
+
+.vf-me-list {
+  position: absolute;
+  bottom: 56px;
+  left: 0;
+  display: flex;
+  width: var(--vf-me-width);
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 6px 0;
+}
+
+/* ---- rows ------------------------------------------------------------------ */
+
+.vf-me-row,
+.vf-me-eyebrow,
+.vf-me-separator {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.vf-me[data-open] .vf-me-row,
+.vf-me[data-open] .vf-me-eyebrow,
+.vf-me[data-open] .vf-me-separator {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 240ms ease var(--vf-me-delay, 160ms),
+    transform 240ms ease var(--vf-me-delay, 160ms),
+    background-color 120ms ease;
+}
+
+.vf-me-row {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 0 0;
+  border: 0;
+  border-radius: 12px;
+  color: var(--vf-text-primary);
+  background: none;
+  font: 500 13px / 1.3 var(--vf-font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-me-row--person {
+  min-height: 40px;
+}
+
+.vf-me-row:hover,
+.vf-me-row:focus-visible {
+  background-color: var(--vf-hairline);
+  outline: none;
+}
+
+.vf-me-row:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--vf-select);
+}
+
+.vf-me-row:disabled {
+  color: var(--vf-text-faint);
+  cursor: default;
+}
+
+.vf-me-row:disabled:hover {
+  background-color: transparent;
+}
+
+.vf-me[data-busy] .vf-me-row {
+  cursor: progress;
+}
+
+/* Faces and row icons share one 44px column, centred on the owner's face. */
+.vf-me-slot {
+  display: grid;
+  width: 44px;
+  flex: none;
+  place-items: center;
+}
+
+.vf-me-icon {
+  color: var(--vf-text-secondary);
+}
+
+.vf-me-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.vf-me-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-me-row-end {
+  display: inline-flex;
+  margin-left: auto;
+  padding-left: 8px;
+  align-items: center;
+  gap: 6px;
+  color: var(--vf-text-secondary);
+  font-size: 11.5px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.vf-me-kbd {
+  color: var(--vf-text-tertiary);
+  font: 500 11px var(--vf-font-sans);
+  letter-spacing: 0.02em;
+}
+
+.vf-me-waiting-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+}
+
+.vf-me-eyebrow {
+  padding: 8px 12px 4px;
+  color: var(--vf-text-tertiary);
+  font: 500 10.5px / 1.3 var(--vf-font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-me-separator {
+  height: 1px;
+  flex: none;
+  margin: 4px 10px;
+  border: 0;
+  background: var(--vf-hairline-strong);
+}
+
+/* ---- you: beside the face, which never moves -------------------------------- */
+
+.vf-me-you {
+  position: absolute;
+  bottom: 6px;
+  left: 50px;
+  display: flex;
+  width: calc(var(--vf-me-width) - 56px);
+  height: 44px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 28px 0 6px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateX(-6px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.vf-me[data-open] .vf-me-you {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 240ms ease 140ms,
+    transform 240ms ease 140ms,
+    background-color 120ms ease;
+}
+
+.vf-me-you:hover,
+.vf-me-you:focus-visible {
+  background-color: var(--vf-hairline);
+  outline: none;
+}
+
+.vf-me-you:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--vf-select);
+}
+
+.vf-me-you-name,
+.vf-me-you-detail {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-me-you-name {
+  color: var(--vf-text-primary);
+  font: 500 14px / 1.25 var(--vf-font-sans);
+}
+
+.vf-me-you-detail {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.vf-me-you-chevron {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--vf-text-faint);
+  font-size: 16px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+/* ---- another user is waiting: a count BESIDE the face, never on it (I-5) --- */
+
+.vf-me-badge {
+  position: absolute;
+  z-index: 4;
+  top: -4px;
+  right: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--vf-state-on-attention);
+  background: var(--vf-orange);
+  box-shadow: 0 0 0 2px var(--vf-canvas-bg);
+  font: 600 11px / 20px var(--vf-font-sans);
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.vf-me[data-open] .vf-me-badge {
+  opacity: 0;
+}
+
+/* M6 — the morph becomes a fade: the menu appears whole, in 120ms. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-me-panel {
+    width: var(--vf-me-width);
+    height: var(--vf-me-height);
+    box-shadow: var(--vf-shadow-island);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 120ms ease,
+      visibility 0s linear 120ms;
+  }
+
+  .vf-me-panel::before {
+    opacity: 1;
+    transition: none;
+  }
+
+  .vf-me[data-open] .vf-me-panel {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 120ms ease;
+  }
+
+  .vf-me-row,
+  .vf-me-eyebrow,
+  .vf-me-separator,
+  .vf-me-you,
+  .vf-me[data-open] .vf-me-row,
+  .vf-me[data-open] .vf-me-eyebrow,
+  .vf-me[data-open] .vf-me-separator,
+  .vf-me[data-open] .vf-me-you {
+    opacity: 1;
+    transform: none;
+    transition: background-color 60ms ease;
+  }
+}

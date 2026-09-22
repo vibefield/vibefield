@@ -1,6 +1,8 @@
+import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import { type ReactElement, useEffect, useState } from "react";
-import { type FieldUserProfile, type FieldUserRoster, getHost } from "../host";
+import { type FieldUserFace, type FieldUserProfile, type FieldUserRoster, getHost } from "../host";
 import { buttonCls, labelCls, SettingsSection } from "../panels/settings-ui";
+import { shownFaces } from "./faces";
 
 // The user switcher (UA-5; spec §6.3) — the Account page's roster, and the only
 // place in the product where one user hands this window to another.
@@ -10,7 +12,7 @@ import { buttonCls, labelCls, SettingsSection } from "../panels/settings-ui";
 // reload) belongs to main; what this owns is the roster, an honest "current"
 // marker, and saying so when the bridge is not there. It sits beside the other
 // UA-3 account pieces but borrows the panels module's chrome — so unlike
-// AccentPicker it must never be pulled into the boot bundle.
+// FacePicker it must never be pulled into the boot bundle.
 //
 // THE RELOAD IS THE FEEDBACK (host.ts): switch and create re-target this window
 // and reload it, so their promises may resolve into a dying context or never
@@ -96,6 +98,7 @@ export function UserSwitcher(): ReactElement {
       </div>
     );
   } else {
+    const faces = shownFaces(roster.roster.users);
     body = (
       <>
         <ul className="flex flex-col gap-0.5">
@@ -103,6 +106,7 @@ export function UserSwitcher(): ReactElement {
             <li key={user.userId}>
               <UserRow
                 user={user}
+                face={faces.get(user.userId)?.face ?? { emoji: "🦊" }}
                 current={user.userId === roster.roster.attachedUserId}
                 disabled={usersSwitch === undefined || busy}
                 onSwitch={() => {
@@ -168,29 +172,21 @@ export function UserSwitcher(): ReactElement {
  * instead, because "current" here IS the selection. */
 function UserRow({
   user,
+  face: shown,
   current,
   disabled,
   onSwitch,
 }: {
   user: FieldUserProfile;
+  /** UA-D17 — written or dealt; a person is known by a face, never a colour. */
+  face: FieldUserFace;
   current: boolean;
   disabled: boolean;
   onSwitch: () => void;
 }): ReactElement {
   const face = (
     <>
-      <span
-        aria-hidden="true"
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{
-          // §2.6 accent slots by name. A user with no color yet is muted, not
-          // assigned one on their behalf.
-          background:
-            user.color === undefined
-              ? "color-mix(in srgb, currentColor 30%, transparent)"
-              : `var(--vf-${user.color})`,
-        }}
-      />
+      <UserFaceView emoji={shown.emoji} frame={shown.frame} size={28} seed={user.userId} />
       <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-5 text-black/80 dark:text-white/80">
         {user.name}
       </span>
@@ -204,7 +200,7 @@ function UserRow({
     return (
       <div
         aria-current="true"
-        className="vf-ui-selection-ring flex items-center gap-2.5 rounded-[12px] px-3 py-2.5"
+        className="vf-ui-selection-ring flex items-center gap-2.5 rounded-[12px] px-3 py-2"
       >
         {face}
       </div>
@@ -218,7 +214,7 @@ function UserRow({
       aria-label={`Switch to ${user.name}`}
       disabled={disabled}
       onClick={onSwitch}
-      className="flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2.5 text-left transition-[background-color,transform] hover:bg-black/[0.03] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:hover:bg-white/[0.05]"
+      className={`${faceLiftHostClass} flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 text-left transition-[background-color,transform] hover:bg-black/[0.03] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:hover:bg-white/[0.05]`}
     >
       {face}
     </button>

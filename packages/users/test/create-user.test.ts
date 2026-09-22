@@ -16,6 +16,7 @@ import {
 // climbs, extras ride the passthrough (the wizard's setupVariant is a UI
 // concern the store stays agnostic to), and the UA-D9 budget refuses BEFORE
 // any directory exists, naming the socket and leaving users.json untouched.
+// UA-7: the mint writes no face and no colour (W6). Pane 2 writes the face.
 
 const mkRoot = (): string => mkdtempSync(join(tmpdir(), "vf-create-"));
 
@@ -26,12 +27,11 @@ describe("UA-5 — createUser", () => {
     const { user } = await createUser(
       root,
       {},
-      { name: "Work", color: "accent-5", extras: { setupVariant: "second-user" } },
+      { name: "Work", extras: { setupVariant: "second-user" } },
     );
 
     expect(user.fuid).toBe(2);
     expect(user.name).toBe("Work");
-    expect(user.color).toBe("accent-5");
     expect(user.resident).toBe(true);
     expect(user.onboarded).toBe(false);
     expect(existsSync(userRootFor(root, user))).toBe(true);
@@ -41,6 +41,18 @@ describe("UA-5 — createUser", () => {
     expect(onDisk?.users).toHaveLength(2);
     const written = JSON.parse(readFileSync(usersFilePath(root), "utf8"));
     expect(written.users[1].setupVariant).toBe("second-user");
+  });
+
+  it("mints no face and no colour, so the wizard's pane 2 still has its question (W6)", async () => {
+    const root = mkRoot();
+    mintLockedUsersFile(root);
+    const { user } = await createUser(root, {}, { name: "Work" });
+
+    expect(user.face).toBeUndefined();
+    expect(user.color).toBeUndefined();
+    const written = JSON.parse(readFileSync(usersFilePath(root), "utf8"));
+    expect(Object.keys(written.users[1])).not.toContain("face");
+    expect(Object.keys(written.users[1])).not.toContain("color");
   });
 
   it("never reuses a fuid across sequential creates", async () => {
