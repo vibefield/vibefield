@@ -1661,7 +1661,9 @@
               off is not a boundary. What makes it safe is upstream: a node built with
               <code>login_allow</code> reports only same-login peers, the hello refuses a foreign login
               before revealing an identity block, and a slice is applied only under its sender's
-              authenticated device id. VibeField still fuses the roster against the tailnet's own peer
+              authenticated device id. The gate is <strong>per node, not per store</strong>, and
+              deliberately so: a per-store allow-list would leave the connection itself open to a foreign
+              login for every other namespace on it. VibeField still fuses the roster against the tailnet's own peer
               registry — a slice may describe a device the registry lists, never add one.
             </div>
             <figure>
@@ -1898,7 +1900,10 @@
             <h2>Layering and the walls</h2>
             <p class="section-note">
               Three rules in <code>scripts/check-import-boundaries.mjs</code> keep the sibling surface
-              narrow, all three enforced (the gate exits non-zero). They are import rules, so they bind
+              narrow, all three enforced. They run inside <code>pnpm preflight</code>, which proves the
+              checker against its own synthetic fixtures (<code>--self-test</code>) before gating the tree
+              (<code>--enforce</code>) — and preflight is the first step of <code>pnpm verify</code>, so a
+              wall break stops the gate before a typecheck is attempted. They are import rules, so they bind
               what a plane <em>may</em> reach, not what it happens to use today.
             </p>
             <figure>
