@@ -74,7 +74,7 @@ Its own map is `docs/README.md`, which sorts documents by whether they are autho
 
 ### rosetta — agent history
 
-`docs/` has no index file; `ARCHITECTURE.md` is the entry point and the rest hang off it.
+`docs/README.md` (added 2026-09-22 on the `docs/daemon-api` branch) is the index, in the shape of puppeteer's; `ARCHITECTURE.md` is the living entry point and the rest hang off it.
 
 - `docs/ARCHITECTURE.md` — the three layers and the rule each obeys, ground truth, the normalizer, the service provider (one daemon, loopback HTTP/WS), storage, the performance playbook, the workspace layout, the open decisions. **current**
 - `docs/canonical-model.html` — the canonical entities, including the session row carrying `native_session_id` and no liveness. **current**
