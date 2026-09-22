@@ -275,8 +275,11 @@ export const IndexEnrollmentSummary = z
           label: z.string().optional(),
           profileId: AgentProfileId.optional(),
           retiredAt: z.string(),
-          /** AC-D8 — set when the daemon refused the root rather than the user retiring it */
-          refused: z.object({ at: z.string(), detail: z.string() }).optional(),
+          /** AC-D8 — set when the daemon refused the root rather than the user
+           * retiring it: WHEN and the daemon's reason (`unknown agent kind`) —
+           * never its line, which names the root (this projection carries no
+           * paths). The record keeps the line. */
+          refused: z.object({ at: z.string(), reason: z.string() }).optional(),
         })
         .passthrough(),
     ),

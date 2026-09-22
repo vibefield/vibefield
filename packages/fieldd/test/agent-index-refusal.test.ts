@@ -100,6 +100,31 @@ describe("AC-D8 — the daemon's refusal is read in full and subtracts the root"
     index.dispose();
   });
 
+  it("the real daemon's line, prefixed `rosettad: ` and with a decomposed accent spelled the `{:?}` way, is read and unescaped", async () => {
+    const { dir, events, index, transition, record, store } = setup();
+    // a second root whose path holds a combining accent (macOS keeps José as
+    // Jose + U+0301); rosettad prints it as `Jose\u{301}`
+    const accented = join(dir, "users", "Jose\u0301", "agents", "roots", "hermes", "r2");
+    mkdirSync(accented, { recursive: true });
+    store.enrollRuntime({
+      kind: "hermes",
+      dataRoot: accented,
+      label: "Accent",
+      profileId: "hermes:2",
+    });
+    store.publish();
+    expect(record().runtimes).toHaveLength(2);
+    const printed = accented.replace("Jose\u0301", "Jose\\u{301}");
+    const line = `rosettad: --enroll x: runtime #2 (kind "hermes", data_root "${printed}"): unknown agent kind`;
+    events.emit("transition", transition({ enrollRefusals: [line] }));
+    const after = record();
+    expect(after.runtimes.map((rt) => rt.profile_id)).toEqual(["hermes:1"]);
+    expect(after.retired?.find((rt) => rt.profile_id === "hermes:2")?.refused?.detail).toContain(
+      "unknown agent kind",
+    );
+    index.dispose();
+  });
+
   it("the truncated failure detail alone is not enough on a real path — the reason was cut off — and nothing is subtracted", async () => {
     const { events, index, transition, record } = setup();
     events.emit("transition", transition({ enrollRefusals: [] }));

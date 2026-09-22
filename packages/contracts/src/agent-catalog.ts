@@ -410,7 +410,11 @@ export function visibleCatalog(surface?: AgentSurface): AgentCatalogEntry[] {
 /** agent.catalog — the visible rows for the caller's surface (absent = all
  * visible rows). Read-only, content-free, `agent.observe`. */
 export const AgentCatalogParams = z
-  .object({ surface: z.enum(["desktop", "phone"]).optional() })
+  .object({
+    /** OPEN on an inbound door (tolerant reader): a surface word this build
+     * never heard of is answered with every visible row, never refused */
+    surface: z.string().min(1).max(32).optional(),
+  })
   .passthrough();
 export type AgentCatalogParams = z.infer<typeof AgentCatalogParams>;
 

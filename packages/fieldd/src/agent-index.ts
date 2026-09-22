@@ -175,7 +175,9 @@ export class EnrollmentStore {
         ...(rt.label !== undefined ? { label: rt.label } : {}),
         ...(rt.profile_id !== undefined ? { profileId: rt.profile_id } : {}),
         retiredAt: rt.retired_at,
-        ...(rt.refused !== undefined ? { refused: rt.refused } : {}),
+        ...(rt.refused !== undefined
+          ? { refused: { at: rt.refused.at, reason: refusalReason(rt.refused.detail) } }
+          : {}),
       })),
       updatedAt: r.updated_at ?? null,
     };
@@ -369,6 +371,41 @@ export interface IndexServiceOptions {
 const REFUSED_KIND_RE =
   /runtime #\d+ \(kind "(?<kind>[^"]+)", data_root "(?<root>(?:[^"\\]|\\.)*)"\): unknown agent kind/g;
 
+/** AC-D8 — the daemon's reason from its refusal line (`… (kind "k", data_root
+ * "r"): <reason>`), for the projection: the path stays in the record. A line
+ * with no such clause is said generically rather than copied. */
+function refusalReason(detail: string): string {
+  const at = detail.lastIndexOf("): ");
+  return at === -1
+    ? "refused by the daemon"
+    : detail.slice(at + 3).trim() || "refused by the daemon";
+}
+
+/** AC-D8 — Rust's `{:?}` spelling of a string, undone: `\u{HEX}` (a decomposed
+ * accent on macOS is one), `\x..`, `\n`/`\r`/`\t`/`\0` and the quoted `\"`,
+ * `\'`, `\\`. JSON.parse cannot read `\u{…}`. */
+function unescapeRustDebug(quoted: string): string {
+  return quoted.replace(
+    /\\(u\{([0-9a-fA-F]{1,6})\}|x([0-9a-fA-F]{2})|[\s\S])/g,
+    (_m, whole: string, hex6?: string, hex2?: string) => {
+      if (hex6 !== undefined) return String.fromCodePoint(Number.parseInt(hex6, 16));
+      if (hex2 !== undefined) return String.fromCharCode(Number.parseInt(hex2, 16));
+      switch (whole) {
+        case "n":
+          return "\n";
+        case "r":
+          return "\r";
+        case "t":
+          return "\t";
+        case "0":
+          return "\0";
+        default:
+          return whole;
+      }
+    },
+  );
+}
+
 /** AC-3 — the projections' `agent` column: present only when a catalog row maps the kind. */
 function agentColumn(agent: string | undefined): { agent?: string } {
   return agent === undefined ? {} : { agent };
@@ -458,12 +495,7 @@ export class IndexService {
       const kind = match.groups?.kind;
       const quoted = match.groups?.root;
       if (kind === undefined || quoted === undefined) continue;
-      let dataRoot: string;
-      try {
-        dataRoot = JSON.parse(`"${quoted}"`) as string;
-      } catch {
-        dataRoot = quoted;
-      }
+      const dataRoot = unescapeRustDebug(quoted);
       const refusal = { at: this.now().toISOString(), detail: match[0].slice(0, 512) };
       if (!this.opts.store.retireRuntime({ kind, data_root: dataRoot }, refusal)) continue;
       changed = true;

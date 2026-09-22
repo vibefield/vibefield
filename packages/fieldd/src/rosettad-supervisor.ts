@@ -81,6 +81,10 @@ export interface RosettadState extends RosettadHealth {
 }
 
 const NO_REFUSALS: readonly string[] = Object.freeze([]);
+/** rosettad prints every top-level error as `rosettad: <message>` (main.rs), and
+ * the enrollment message begins `--enroll <file>: …`; the scripted daemon prints
+ * the same shape. Anchored so a chatty line elsewhere cannot pose as one. */
+const ENROLL_LINE = /^(?:rosettad: )?--enroll /;
 /** refusal lines kept per generation, each bounded — a daemon that prints one
  * per runtime says the whole file before it exits */
 const ENROLL_REFUSAL_LINES = 32;
@@ -770,7 +774,7 @@ export class RosettadSupervisor extends EventEmitter {
         if (generation.stderrTail.length > STDERR_TAIL_LINES) generation.stderrTail.shift();
         // AC-D8 — a refusal names a root, and a real root is longer than the
         // tail's line budget: keep the daemon's `--enroll` lines whole
-        if (line.startsWith("--enroll ")) {
+        if (ENROLL_LINE.test(line)) {
           generation.enrollRefusals.push(line.slice(0, ENROLL_REFUSAL_CHARS));
           if (generation.enrollRefusals.length > ENROLL_REFUSAL_LINES)
             generation.enrollRefusals.shift();

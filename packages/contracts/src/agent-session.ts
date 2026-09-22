@@ -292,13 +292,17 @@ export const AgentProviderSummary = z
     // both are required; `history` is present only where the row offers it —
     // the index's state for this agent on this device (`unavailable` = the
     // daemon is down, or its registry disagrees with the catalog on the kind).
-    // Both OPEN strings on the wire (tolerant reader; AC-4's finding: a closed
-    // enum here made one unknown word refuse the whole list and the picker
-    // read "no providers"). The known vocabularies are `AgentCatalogStatus`
-    // and `AGENT_HISTORY_STATES`; a reader treats a word outside them as
-    // "not offered" / "unknown", never as an error.
-    status: z.string().min(1).max(32),
-    offers: AgentOffers,
+    // The catalog's decision and its claims — fieldd ALWAYS sends both since
+    // AC-3 (it answers from the catalog), and a READER keeps them optional:
+    // a newer shell adopts a running older daemon in production (the
+    // `leave-running` policy), and a row without them must draw as before —
+    // no badge, no persona control — never blank the list (the review's
+    // finding). `status` and `history` are OPEN strings (a closed enum made
+    // one unknown word refuse the whole list); the known vocabularies are
+    // `AgentCatalogStatus` and `AGENT_HISTORY_STATES`; a word outside them
+    // reads as "not offered" / "unknown", never as an error.
+    status: z.string().min(1).max(32).optional(),
+    offers: AgentOffers.optional(),
     history: z.string().min(1).max(32).optional(),
     /** presentation key for the mark atlases (the row's `mark`, default `id`) */
     mark: z.string().min(1).optional(),

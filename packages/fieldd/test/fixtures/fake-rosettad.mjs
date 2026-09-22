@@ -109,8 +109,10 @@ if (enrollPath !== undefined) {
   }
   const runtimes = Array.isArray(parsed.runtimes) ? parsed.runtimes : [];
   runtimes.forEach((spec, i) => {
+    // the real daemon's shape: main.rs prints every top-level error as
+    // `rosettad: <message>`, and the message begins `--enroll <file>: …`
     const entry = (message) =>
-      `--enroll ${enrollPath}: runtime #${i + 1} (kind ${JSON.stringify(spec.kind)}, data_root ${JSON.stringify(spec.data_root)}): ${message}\n`;
+      `rosettad: --enroll ${enrollPath}: runtime #${i + 1} (kind ${JSON.stringify(spec.kind)}, data_root ${JSON.stringify(spec.data_root)}): ${message}\n`;
     if (!KNOWN.has(spec.kind)) {
       process.stderr.write(entry("unknown agent kind"));
       process.exit(2);

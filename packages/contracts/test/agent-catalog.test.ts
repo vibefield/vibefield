@@ -136,7 +136,7 @@ describe("the agent catalog (AC-1)", () => {
     });
   });
 
-  it("agent.providers rows carry the decision and its claims (required since AC-3); history only where offered", () => {
+  it("agent.providers rows carry the decision and its claims — always sent, optional to a reader (an adopted older daemon); history only where offered", () => {
     const bare = {
       id: "claude",
       label: "Claude Code",
@@ -144,14 +144,15 @@ describe("the agent catalog (AC-1)", () => {
       resumable: true,
       personas: [],
     };
-    expect(() => AgentProviderSummary.parse(bare)).toThrow();
+    // an older daemon's row still parses: no decision, no claims, drawn as before
+    expect(AgentProviderSummary.parse(bare).status).toBeUndefined();
     const decided = AgentProviderSummary.parse({
       ...bare,
       status: "supported",
       offers: catalogEntry("claude")?.offers,
       history: "indexed",
     });
-    expect(decided.offers.reattach).toBe(true);
+    expect(decided.offers?.reattach).toBe(true);
     const protocol = AgentProviderSummary.parse({
       ...bare,
       id: "acp",

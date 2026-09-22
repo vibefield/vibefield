@@ -488,6 +488,8 @@ export class AgentRuntimeService {
   private readonly byTerminal = new Map<string, string>();
   /** the FIRST inventory of this boot is the re-attach; once */
   private reattachStarted = false;
+  /** AC-3 — pending runs whose idle resume was withheld, said once each */
+  private readonly idleWithheld = new Set<string>();
   /** puppeteer's durable claims — the authority on a run's epoch (AR-4b) */
   private readonly claims: CreationRequestRegistry;
   /** records whose PTY the first inventory lacked, within their grace */
@@ -685,8 +687,32 @@ export class AgentRuntimeService {
 
   /** agent.catalog — the visible rows for the caller's surface (AC-3;
    * `declined` never leaves fieldd). */
-  visibleCatalog(surface?: AgentSurface): AgentCatalogResult {
-    return { catalog: this.catalog.visible(surface) };
+  visibleCatalog(surface?: string): AgentCatalogResult {
+    // an OPEN word on the wire (tolerant reader): a surface this build never
+    // heard of gets every visible row rather than a refusal
+    const known: AgentSurface | undefined =
+      surface === "desktop" || surface === "phone" ? surface : undefined;
+    return { catalog: this.catalog.visible(known) };
+  }
+
+  /** AC-D4 — our label for a session row: the catalog's, else the adapter's. */
+  private labelFor(provider: string, fallback: string): string {
+    return this.catalog.entry(provider)?.label ?? fallback;
+  }
+
+  /** AC-3 — a row of an agent the catalog does not show continues nothing:
+   * its `continuation.resumable` says so, the way `agent.resume` would. */
+  private withCatalogWord(row: AgentSessionSummary): AgentSessionSummary {
+    const label = this.labelFor(row.kind, row.label);
+    const visible = this.catalog.isVisible(row.kind);
+    if (label === row.label && (visible || row.continuation === undefined)) return row;
+    return {
+      ...row,
+      label,
+      ...(row.continuation !== undefined && !visible
+        ? { continuation: { ...row.continuation, resumable: false } }
+        : {}),
+    };
   }
 
   /** AC-3 — the runtime surface the usage service reads, with the catalog's
@@ -1303,16 +1329,37 @@ export class AgentRuntimeService {
   /** A FRESH inspection (the vendor's version command runs per candidate) with
    * the machine record's choice folded over puppeteer's own `active`. */
   async installs(provider?: string): Promise<AgentsInstallsResult> {
-    const installations = await this.runtime.inspectInstallations({
-      ...(provider !== undefined ? { providerId: provider } : {}),
-      refresh: true,
-    });
+    // AC-3 — an agent the catalog does not show has no installs here: a
+    // `declined` id never leaves fieldd, and no vendor command runs for it
+    if (provider !== undefined && !this.catalog.isVisible(provider)) return { installs: [] };
+    const installations = (
+      await this.runtime.inspectInstallations({
+        ...(provider !== undefined ? { providerId: provider } : {}),
+        refresh: true,
+      })
+    ).filter((install) => this.catalog.isVisible(install.provider));
     return { installs: this.projectInstalls(installations, this.distribution?.read()) };
   }
 
   /** The agent's own oracle always; the declared network detectors only when
    * this call or the provider's recorded preference says so. */
   async releases(params: AgentsReleasesParams): Promise<AgentsReleasesResult> {
+    // AC-3 — an explicit provider the catalog does not offer distribution for
+    // is answered as this door's honest failure row, and the vendor's oracle
+    // and the network detectors never run for it
+    if (params.provider !== undefined && !this.catalog.isOffered(params.provider, "distribution")) {
+      const row = this.catalog.entry(params.provider);
+      return {
+        releases: [
+          {
+            provider: params.provider,
+            status: "unsupported",
+            message: `${row?.label ?? params.provider} is ${row?.status ?? "not in the catalog"} here and offers no distribution`,
+            retryable: false,
+          },
+        ],
+      };
+    }
     const record = this.distribution?.read();
     const providers =
       params.provider !== undefined
@@ -2008,6 +2055,20 @@ export class AgentRuntimeService {
       this.armPending(entry);
       return;
     }
+    // AC-3 — the daemon's own act follows the same word as the human's door:
+    // an agent the catalog does not show is not continued at idle; the row
+    // stays pending, said once, and a later catalog can pick it up
+    if (!this.catalog.isVisible(entry.record.provider)) {
+      if (!this.idleWithheld.has(runtimeRunId)) {
+        this.idleWithheld.add(runtimeRunId);
+        this.logger.warn(
+          "fieldd.agents.resume_when_idle_withheld",
+          "A pending managed session is not resumed at idle: the catalog does not show its agent",
+          { runtimeRunId, provider: entry.record.provider },
+        );
+      }
+      return;
+    }
     try {
       await this.track(this.replacePending(entry, undefined, "idle"));
     } catch (error) {
@@ -2324,16 +2385,18 @@ export class AgentRuntimeService {
         record: { persisted: true, resumable: this.resumableNow(exited.record), exited: true },
       });
     }
-    return summarizeExitedRecord({
-      record: exited.record,
-      label:
-        this.runtime.providers().find((p) => p.id === exited.record.provider)?.label ??
-        exited.record.provider,
-      device: this.opts.deviceId?.() ?? "local",
-      terminalSessionId: exited.terminalSessionId,
-      terminal: exited.terminal,
-      since: exited.since,
-    });
+    return this.withCatalogWord(
+      summarizeExitedRecord({
+        record: exited.record,
+        label:
+          this.runtime.providers().find((p) => p.id === exited.record.provider)?.label ??
+          exited.record.provider,
+        device: this.opts.deviceId?.() ?? "local",
+        terminalSessionId: exited.terminalSessionId,
+        terminal: exited.terminal,
+        since: exited.since,
+      }),
+    );
   }
 
   /** Whether `agent.resume` would take this record right now: it exists and no
@@ -2344,16 +2407,18 @@ export class AgentRuntimeService {
   }
 
   private summarizePending(entry: PendingEntry): AgentSessionSummary {
-    return summarizePending({
-      record: entry.record,
-      label:
-        this.runtime.providers().find((p) => p.id === entry.record.provider)?.label ??
-        entry.record.provider,
-      device: this.opts.deviceId?.() ?? "local",
-      terminal: entry.terminal,
-      reason: entry.reason,
-      since: entry.since,
-    });
+    return this.withCatalogWord(
+      summarizePending({
+        record: entry.record,
+        label:
+          this.runtime.providers().find((p) => p.id === entry.record.provider)?.label ??
+          entry.record.provider,
+        device: this.opts.deviceId?.() ?? "local",
+        terminal: entry.terminal,
+        reason: entry.reason,
+        since: entry.since,
+      }),
+    );
   }
 
   private onMonitorState(state: AgentMonitorState): void {
@@ -2524,24 +2589,26 @@ export class AgentRuntimeService {
     } catch {
       // a disposed adapter has no level to report
     }
-    return summarizeManaged({
-      info: entry.info,
-      monitor: entry.mirror,
-      observationLevel,
-      device: this.opts.deviceId?.() ?? "local",
-      terminal: overrides?.terminal ?? entry.terminal,
-      hosted: overrides?.hosted ?? !entry.exiting,
-      record: overrides?.record ?? {
-        persisted: true,
-        resumable: false,
-        ...(entry.reattached ? { reattached: true } : {}),
-      },
-      replaced: entry.replaced,
-      createdAt: entry.createdAt,
-      stateChangedAt: entry.stateChangedAt,
-      lastActivityAt: entry.lastActivityAt,
-      title: entry.title,
-    });
+    return this.withCatalogWord(
+      summarizeManaged({
+        info: entry.info,
+        monitor: entry.mirror,
+        observationLevel,
+        device: this.opts.deviceId?.() ?? "local",
+        terminal: overrides?.terminal ?? entry.terminal,
+        hosted: overrides?.hosted ?? !entry.exiting,
+        record: overrides?.record ?? {
+          persisted: true,
+          resumable: false,
+          ...(entry.reattached ? { reattached: true } : {}),
+        },
+        replaced: entry.replaced,
+        createdAt: entry.createdAt,
+        stateChangedAt: entry.stateChangedAt,
+        lastActivityAt: entry.lastActivityAt,
+        title: entry.title,
+      }),
+    );
   }
 
   private publish(): void {
@@ -2656,13 +2723,20 @@ export class AgentRuntimeService {
       );
       return undefined;
     }
-    const witness = await this.opts.index.kindsByLayoutRoot();
-    if (witness.size > 0) {
+    // ready ⇒ the roll call must witness the row (an empty roll call while
+    // ready is an unanswered census, and an enrollment on the catalog's word
+    // alone could re-add a root the daemon refused); not ready ⇒ no witness
+    // exists and the catalog's word stands
+    const ready = (this.opts.supervisor?.health().phase ?? "unconfigured") === "ready";
+    if (ready) {
+      const witness = await this.opts.index.kindsByLayoutRoot();
       const daemonKind = witness.get(row.layoutRoot);
       if (daemonKind !== kind) {
         this.logger.warn(
           "fieldd.agents.catalog_drift",
-          "The daemon's roll call disagrees with the catalog on this agent's kind; not enrolled",
+          witness.size === 0
+            ? "The daemon is ready but its roll call did not answer; not enrolled until it does"
+            : "The daemon's roll call disagrees with the catalog on this agent's kind; not enrolled",
           {
             provider,
             layoutRoot: row.layoutRoot,

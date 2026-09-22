@@ -731,7 +731,7 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
       resumable: true,
       history: "unindexed",
     });
-    expect(claude?.offers.reattach).toBe(true);
+    expect(claude?.offers?.reattach).toBe(true);
     // the fake's roll call has no ~/.pi: the catalog offers history for pi
     // and the daemon cannot witness it — unavailable, said out loud
     expect(providers.find((p) => p.id === "pi")).toMatchObject({
@@ -742,7 +742,7 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     // a protocol row: spawn only, no history state at all
     const acp = providers.find((p) => p.id === "acp");
     expect(acp).toMatchObject({ status: "preview" });
-    expect(acp?.offers.history).toBe(false);
+    expect(acp?.offers?.history).toBe(false);
     expect(acp).not.toHaveProperty("history");
     expect(JSON.stringify(providers)).not.toContain("/");
   });
@@ -766,7 +766,10 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     expect(phone.catalog.map((r) => r.id)).toEqual(
       all.catalog.filter((r) => r.surfaces.phone).map((r) => r.id),
     );
-    const bad = await win.callErr("agent.catalog", { surface: "tv" });
+    // an OPEN surface word: one this build never heard of gets every visible row
+    const tv = (await win.call("agent.catalog", { surface: "tv" })) as AgentCatalogResult;
+    expect(tv.catalog.map((r) => r.id)).toEqual(all.catalog.map((r) => r.id));
+    const bad = await win.callErr("agent.catalog", { surface: "" });
     expect(bad.data?.kind).toBe("PRECONDITION_FAILED");
     const denied = await window(daemon, ["agents.manage"], "c2b");
     expect((await denied.callErr("agent.catalog", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
@@ -851,7 +854,11 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     expect(retired?.refused?.detail).toContain("unknown agent kind");
     const win2 = await window(second.daemon, ALL, "c5b");
     const status = (await win2.call("index.status", {})) as IndexStatus;
-    expect(status.enrollment.retired.find((r) => r.kind === "hermes")?.refused).toBeDefined();
+    // the projection says WHEN and WHY, never the root (no paths leave fieldd)
+    expect(status.enrollment.retired.find((r) => r.kind === "hermes")?.refused).toMatchObject({
+      reason: "unknown agent kind",
+    });
+    expect(JSON.stringify(status)).not.toContain(second.dataDir);
     const { providers } = (await win2.call("agent.providers", {})) as AgentProvidersResult;
     expect(providers.find((p) => p.id === "hermes")).toMatchObject({ history: "unavailable" });
     // the ready-time reconcile cannot re-add it: the roll call does not
