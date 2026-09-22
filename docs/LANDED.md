@@ -6915,3 +6915,17 @@ and the claim is the quiet-host run.
 RO-9 (`rosettad adapters --json`); PU-3/RO-3 (vocabulary convergence) now optional. **Lanes:** the gate,
 the deck and the phone by Opus builders on worktrees `vf-ac2/4/5`; AC-1/AC-3/the integration/the fold by
 the orchestrator; every lane report's findings are in the entries above.
+
+**The gate, verbatim, on `c18239f5` (2026-09-22T21:03Z, load 83): `pnpm verify` → `=== exit=0`.** Its tail, condensed from the log:
+
+```
+preflight OK (2 warning(s))
+check-single-copy: ok — one copy each of loro-crdt@1.13.8, @vibecook/ice@0.11.0, @vibecook/strata-ecs@0.13.0, react@19.2
+ios fixtures: 45 copies identical to packages/contracts/fixtures
+Checked 1343 files in 2s. No fixes applied.
+cargo test: 21 suites ok, 0 failed
+ok     docs         7 file(s) written to /Users/jamesyong/Projects/project100/vf-ac5/docs/plugin-authoring
+=== exit=0 2026-09-22T21:08:17Z
+```
+
+Runs 1–4 on content-identical trees were red only on load rows, each green alone on the same tree (3× for the TM-2 attach-join row, which the gate lane also saw flake on the base): `spawn.test.ts` readiness, `agent-field-daemon.test.ts` TM-2, `doc-manager.test.ts` (5 s), `sanitize.test.ts`, `service-drain.test.ts`, `resource_governance.rs` fd exhaustion, `tp_activation.rs` the PTY fence.
