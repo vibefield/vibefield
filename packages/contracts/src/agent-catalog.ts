@@ -307,7 +307,8 @@ export const AGENT_CATALOG = [
     },
     mark: "acp",
     admitted: "2026-09-22",
-    decision: "AC-D7 — preview, spawn and resume only: a protocol, not a vendor; no ledger, no personas",
+    decision:
+      "AC-D7 — preview, spawn and resume only: a protocol, not a vendor; no ledger, no personas",
     surfaces: { desktop: true, phone: false },
   },
 ] as const satisfies readonly AgentCatalogEntry[];
