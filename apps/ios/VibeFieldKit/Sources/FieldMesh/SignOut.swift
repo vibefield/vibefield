@@ -20,19 +20,29 @@ import Foundation
 public struct SignOutSweep: Sendable {
   public let login: String?
   public let stateDirectory: URL?
+  /// The directory the node's state lived under before IOS-4i's rename
+  /// (`truffle/ghosttea-terminal`). `FieldTruffleRuntime.resolvedStateDirectory`
+  /// MOVES it into an absent current directory at the next launch, so a
+  /// legacy directory that survived a failed migration would bring its keys
+  /// back after a sign-out that removed only the current one. Both go.
+  public let legacyStateDirectory: URL?
 
   public struct Report: Equatable, Sendable {
     public var removed: [String] = []
   }
 
-  public init(login: String?, stateDirectory: URL?) {
+  public init(login: String?, stateDirectory: URL?, legacyStateDirectory: URL? = nil) {
     self.login = login
     self.stateDirectory = stateDirectory
+    self.legacyStateDirectory = legacyStateDirectory
   }
 
   /// The defaults keys that belong to the person and survive a sign-out —
-  /// named so a test can prove each one is still there afterwards.
-  public static let kept: [String] = ["vf.input.snippets", "vf.input.clipboardHistory"]
+  /// named so a test can prove each one is still there afterwards: the
+  /// terminal appearance, the snippets, the clipboard history.
+  public static let kept: [String] = [
+    "fieldterminal.appearance.v1", "vf.input.snippets", "vf.input.clipboardHistory",
+  ]
 
   @discardableResult
   public func run(defaults: UserDefaults = .standard, fileManager: FileManager = .default) -> Report {
@@ -40,6 +50,11 @@ public struct SignOutSweep: Sendable {
     if let stateDirectory, fileManager.fileExists(atPath: stateDirectory.path) {
       if (try? fileManager.removeItem(at: stateDirectory)) != nil {
         report.removed.append("node state")
+      }
+    }
+    if let legacyStateDirectory, fileManager.fileExists(atPath: legacyStateDirectory.path) {
+      if (try? fileManager.removeItem(at: legacyStateDirectory)) != nil {
+        report.removed.append("legacy node state")
       }
     }
     if let login, !login.isEmpty {

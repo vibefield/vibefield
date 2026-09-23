@@ -85,6 +85,9 @@ public final class MeshModel {
   /// Where the remembered login lives, for the reads here and the sign-out at
   /// IOS-8d. Nil where the device has no state directory to keep one in.
   @ObservationIgnored private let stateDirectory: URL?
+  /// The pre-rename directory a sign-out must also remove (see `SignOutSweep`);
+  /// nil under an injected state directory, which has no legacy sibling.
+  @ObservationIgnored private let legacyStateDirectory: URL?
 
   @ObservationIgnored private var runtime: FieldTruffleRuntime?
   @ObservationIgnored private var eventsTask: Task<Void, Never>?
@@ -99,6 +102,9 @@ public final class MeshModel {
   public init(stateDirectory: URL? = nil) {
     self.stateDirectory =
       stateDirectory ?? FieldTruffleRuntime.defaultStateDirectory(appID: FieldMeshContract.appID)
+    legacyStateDirectory =
+      stateDirectory == nil
+      ? FieldTruffleRuntime.defaultStateDirectory(appID: FieldTruffleRuntime.legacyGhostteaAppID) : nil
     rememberedLogin = self.stateDirectory.map(AccountLoginStore.init(stateDirectory:))?.read()
   }
 
@@ -192,7 +198,7 @@ public final class MeshModel {
     tailnetDomain = nil
     // The account facts are facts about a RUNNING node, so they go with it.
     // The remembered login on disk does NOT — leaving the mesh is not signing
-    // out, and what an account switch forgets is UA-P-D4's, which is open.
+    // out; `signOut()` is (IOS-8d, AP-D4).
     loginName = nil
     isGatedOnAccount = false
     accountNote = nil
@@ -211,7 +217,9 @@ public final class MeshModel {
   /// The next CONNECT is a fresh node and a fresh Tailscale sign-in; there
   /// is no switch, because a phone holds one account at a time.
   public func signOut() {
-    let sweep = SignOutSweep(login: rememberedLogin ?? loginName, stateDirectory: stateDirectory)
+    let sweep = SignOutSweep(
+      login: rememberedLogin ?? loginName, stateDirectory: stateDirectory,
+      legacyStateDirectory: legacyStateDirectory)
     lastLoginURL = nil
     loginPage = nil
     rememberedLogin = nil
@@ -345,8 +353,10 @@ public final class MeshModel {
   /// What the person sees is the mesh chip going through `…` once.
   ///
   /// **It clears nothing.** An account switch re-gates the mesh and leaves
-  /// every store, ledger and preference exactly where it was — what a phone
-  /// forgets when the account changes is UA-P-D4, which is open and James's.
+  /// every store, ledger and preference exactly where it was. Forgetting is
+  /// `signOut()`'s (IOS-8d, AP-D4 — UA-P-D4's lean, implemented 2026-09-23):
+  /// a deliberate act of the person's, never a side effect of a login
+  /// arriving on a live node.
   private func regateIfNeeded() async {
     guard let runtime, !regating else { return }
     let step = await runtime.accountStep()

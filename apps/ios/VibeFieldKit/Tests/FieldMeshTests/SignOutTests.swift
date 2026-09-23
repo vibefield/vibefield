@@ -49,6 +49,11 @@ struct SignOutTests {
   func theSweep() throws {
     let directory = try scratchDirectory()
     try seedNodeState(at: directory, login: "alice@corp.com")
+    // A legacy directory that survived a failed migration would bring its keys
+    // back at the next launch; the sweep takes it too.
+    let legacy = directory.deletingLastPathComponent().appendingPathComponent("vf-signout-legacy-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
+    try Data("old-key".utf8).write(to: legacy.appendingPathComponent("tailscaled.state"))
     let defaults = scratchDefaults()
     DesktopMemory(defaults: defaults).record(
       [FieldDesktop(deviceId: "a", name: "studio", platform: nil, state: .ready, feed: .door)], login: "alice@corp.com")
@@ -59,15 +64,18 @@ struct SignOutTests {
     for key in SignOutSweep.kept { defaults.set(Data("mine".utf8), forKey: key) }
     defaults.set("dark", forKey: "vf.terminal.appearance.test")
 
-    let report = SignOutSweep(login: "alice@corp.com", stateDirectory: directory).run(defaults: defaults)
+    let report = SignOutSweep(login: "alice@corp.com", stateDirectory: directory, legacyStateDirectory: legacy)
+      .run(defaults: defaults)
 
-    #expect(report.removed == ["node state", "desktops", "face", "project ledger"])
+    #expect(report.removed == ["node state", "legacy node state", "desktops", "face", "project ledger"])
     #expect(!FileManager.default.fileExists(atPath: directory.path))
+    #expect(!FileManager.default.fileExists(atPath: legacy.path))
     #expect(DesktopMemory(defaults: defaults).remembered(for: "alice@corp.com").isEmpty)
     #expect(AccountFaceStore(defaults: defaults).face(for: "alice@corp.com") == nil)
     #expect(AccountFaceStore(defaults: defaults).face(for: "bob@corp.com") == UserFace(emoji: "🐙"))
     #expect(defaults.object(forKey: UserDefaultsProjectLedgerStore.defaultKey) == nil)
     for key in SignOutSweep.kept { #expect(defaults.data(forKey: key) == Data("mine".utf8)) }
+    #expect(SignOutSweep.kept.contains("fieldterminal.appearance.v1"))
     #expect(defaults.string(forKey: "vf.terminal.appearance.test") == "dark")
   }
 

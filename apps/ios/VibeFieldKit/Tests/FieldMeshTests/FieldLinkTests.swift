@@ -1473,3 +1473,47 @@ enum MeshFixture {
     var description: String { "fixture `\(name).json` is not in the FieldMeshTests bundle" }
   }
 }
+
+// MARK: - IOS-8c: who the desktop serves
+
+/// A self desktop whose hello NAMES its user (UA-2's ULID), as every fieldd
+/// since UA-2 does.
+private let namingDoor: LinkDoor.Script = { method, id, _ in
+  switch method {
+  case "system.hello":
+    return [
+      frame(
+        id: id,
+        JSONValue.object([
+          "contractsVersion": .string("0.1.0"), "serverKind": .string("fieldd"),
+          "grantedScopes": .array([.string("agent.read"), .string("terminal.attach")]),
+          "userId": .string("01J8F2ZQ9K3M4N5P6Q7R8S9T0V"),
+        ]))
+    ]
+  case "device.list": return [frame(id: id, deviceListResult([deviceRow(name: "studio")]))]
+  default: return []
+  }
+}
+
+/// IOS-8c — the hello's user id rides the desktop row. It is the seed the
+/// account corner's face is dealt from until the door carries the face
+/// itself (AP-D3), and it was decoded since UA-2 and read by nothing.
+@Suite("the hello's user id rides the desktop row")
+@MainActor
+struct FieldLinkUserIdTests {
+  @Test func theRowSaysWhoTheDesktopServes() async throws {
+    let (link, _, _, _) = try await standingLink(script: namingDoor)
+    defer { link.stop() }
+    try await waitUntil("the door to be ready") { link.desktops.first?.state == .ready }
+    try await waitUntil("the user id") {
+      link.desktops.first?.userId == "01J8F2ZQ9K3M4N5P6Q7R8S9T0V"
+    }
+  }
+
+  @Test func aDaemonThatNamesNobodyLeavesItAbsent() async throws {
+    let (link, _, _, _) = try await standingLink()
+    defer { link.stop() }
+    try await waitUntil("the door to be ready") { link.desktops.first?.state == .ready }
+    #expect(link.desktops.first?.userId == nil)
+  }
+}

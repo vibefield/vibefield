@@ -104,13 +104,11 @@ public enum AccountStep: Equatable, Sendable {
   /// This device is signed into a DIFFERENT tailscale account than the one
   /// the gate names. Record the new login and restart gated on it.
   ///
-  /// **It clears nothing.** What a phone forgets when the account changes —
-  /// the ledger, the slices, the faces, and what of it is the person's rather
-  /// than the field's — is UA-P-D4, and D4 is open and James's
-  /// (`draft/thinking-ua-phone-account.md` §6). This lane deliberately builds
-  /// no sign-out, no switch act and no clearing rule: re-gating is what keeps
-  /// the mesh honest about WHO, and forgetting is a separate decision that
-  /// has not been made.
+  /// **It clears nothing.** Re-gating is what keeps the mesh honest about
+  /// WHO; forgetting — the ledger, the remembered desktops, the face, the
+  /// keys — is the SIGN-OUT act (IOS-8d, AP-D4: UA-P-D4's lean, implemented
+  /// 2026-09-23 as `MeshModel.signOut` and `SignOutSweep`), a separate act of
+  /// the person's that a login arriving on a live node never performs.
   case regate(String)
 
   /// The login a step names, if it names one.
