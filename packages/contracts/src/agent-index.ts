@@ -705,11 +705,13 @@ export const AgentInstall = z
   .passthrough();
 export type AgentInstall = z.infer<typeof AgentInstall>;
 
-/** `agents.installs` — every provider's classified installs (a fresh
- * inspection: the vendor's own version command runs per candidate), or one
- * provider's. */
+/** `agents.installs` — every provider's classified installs, or one
+ * provider's. The default answers the inventory fieldd read when it started
+ * (or since: an update re-reads its own provider) — a page opens on it at
+ * once. `refresh: true` reads the Mac again: the vendor's own version command
+ * runs per candidate, which takes seconds, so it is an act a person asks for. */
 export const AgentsInstallsParams = z
-  .object({ provider: AgentProviderId.optional() })
+  .object({ provider: AgentProviderId.optional(), refresh: z.boolean().optional() })
   .passthrough();
 export type AgentsInstallsParams = z.infer<typeof AgentsInstallsParams>;
 

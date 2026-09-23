@@ -99,6 +99,8 @@ interface Script {
     | { status: "unavailable"; provider: string; message: string; retryable: boolean };
   update?: (options: UpdateInstallationOptions) => Promise<UpdateReceipt>;
   nativeUpdateCheck?: boolean;
+  /** sees every inventory read the service asks for (and may fail it) */
+  onInspect?: (options: { providerId?: string; refresh?: boolean }) => void;
 }
 
 function scriptedRuntime(script: Script): AgentRuntime {
@@ -114,10 +116,12 @@ function scriptedRuntime(script: Script): AgentRuntime {
         nativeUpdateCheck: script.nativeUpdateCheck ?? false,
       },
     ],
-    inspectInstallations: async (options) =>
-      script.installs.filter(
+    inspectInstallations: async (options) => {
+      script.onInspect?.(options ?? {});
+      return script.installs.filter(
         (entry) => options?.providerId === undefined || entry.provider === options.providerId,
-      ),
+      );
+    },
     checkReleases: async ({ network }) => (script.checks ?? (() => check()))(network === true),
     planUpdate: async ({ executable }) =>
       script.plan?.(executable ?? "") ?? {
@@ -207,6 +211,39 @@ describe("the output a person reads while an update runs", () => {
     expect(output.length).toBeLessThanOrEqual(AGENT_OPERATION_OUTPUT_BYTES);
     expect(output.startsWith("x".repeat(99))).toBe(true);
     expect(displayTail("short\n")).toEqual({ output: "short", truncated: false });
+  });
+});
+
+describe("the inventory — read at boot, answered at once, read again when a person asks", () => {
+  it("answers installs from puppeteer's inventory, and reads the Mac again only on refresh", async () => {
+    const reads: Array<{ providerId?: string; refresh?: boolean }> = [];
+    const { distribution } = service({
+      installs: [install()],
+      onInspect: (options) => reads.push(options),
+    });
+    await distribution.installs();
+    await distribution.installs("claude", { refresh: true });
+    expect(reads).toEqual([{ refresh: false }, { providerId: "claude", refresh: true }]);
+  });
+
+  it("warms the inventory once at boot, and a read that fails there degrades nothing", async () => {
+    const reads: Array<{ providerId?: string; refresh?: boolean }> = [];
+    const { distribution } = service({
+      installs: [install()],
+      onInspect: (options) => reads.push(options),
+    });
+    distribution.warm();
+    await vi.waitFor(() => expect(reads).toEqual([{}]));
+
+    const failing = service({
+      installs: [install()],
+      onInspect: () => {
+        throw new Error("a version command hung");
+      },
+    });
+    // an unhandled rejection would fail this run; the service says it and moves on
+    failing.distribution.warm();
+    await new Promise((resolve) => setTimeout(resolve, 10));
   });
 });
 

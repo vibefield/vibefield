@@ -94,6 +94,8 @@ async function setup(
     machine?: boolean;
     /** a registry written BEFORE boot (puppeteer's snapshot shape) */
     profiles?: { version: 1; profiles: unknown[] };
+    /** boot as the product's daemon does: read the agents' installs at boot */
+    warm?: boolean;
   } = {},
 ): Promise<{ root: string; dataDir: string; bin: string; daemon: FielddDaemon }> {
   const root = mkdtempSync(join(tmpdir(), "vf-agents-"));
@@ -125,6 +127,7 @@ async function setup(
     ...(config.machine === false ? {} : { vibefieldRoot: root }),
     agentSearchPath: bin,
     agentFetch: fakeFetch,
+    ...(config.warm === true ? { agentInventoryWarm: true, logRoot: join(root, "logs") } : {}),
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
   return { root, dataDir, bin, daemon };
@@ -621,6 +624,15 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
     });
     // the adapter's line for the install, whichever the machine's settings name
     expect(["stable", "preview"]).toContain(fake?.releaseChannel);
+    // the answer above is fieldd's boot inventory; `refresh` reads the Mac again
+    const reread = (await win.call("agents.installs", {
+      provider: "claude",
+      refresh: true,
+    })) as AgentsInstallsResult;
+    expect(reread.installs.some((i) => i.executable === join(bin, "claude"))).toBe(true);
+    expect(
+      (await win.callErr("agents.installs", { provider: "claude", refresh: "yes" })).data?.kind,
+    ).toBe("PRECONDITION_FAILED");
   }, 20_000);
 
   it("agents.releases keeps what a network check learned in the machine record, and `cached` answers from it without reaching anything", async () => {
@@ -715,6 +727,24 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
       service: "shell",
       state: "no-shell-provider",
     });
+  }, 20_000);
+
+  it("the product's daemon reads the installs at boot, in the background; an embedded one never runs a machine's agents unasked", async () => {
+    const product = await setup({ warm: true });
+    await ready(product.daemon);
+    const log = join(product.root, "logs", "system", "fieldd.ndjson");
+    const warmed = (): Record<string, unknown> | undefined =>
+      (existsSync(log) ? readFileSync(log, "utf8") : "")
+        .split("\n")
+        .filter((line) => line.includes('"fieldd.agents.inventory_warm"'))
+        .map((line) => JSON.parse(line) as Record<string, unknown>)[0];
+    await until(() => warmed() !== undefined, 10_000);
+    // the scripted claude on the private search path was read
+    expect(JSON.stringify(warmed())).toMatch(/"installs":[1-9]/u);
+
+    const embedded = await setup();
+    await ready(embedded.daemon);
+    expect(existsSync(join(embedded.root, "logs"))).toBe(false);
   }, 20_000);
 
   it("agents.update.stop: says when nothing is running, is audited, and needs agents.manage", async () => {

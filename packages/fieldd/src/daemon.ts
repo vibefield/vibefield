@@ -216,6 +216,12 @@ export interface FielddConfig {
    * fetch the release detectors use. Production: the process PATH, global fetch. */
   agentSearchPath?: string;
   agentFetch?: typeof fetch;
+  /** AR-S1c — read the agents' installs in the background once boot has
+   * committed (every agent's version command: seconds), so Settings → Agents
+   * and the deck's launcher answer at once. bin.ts — the product — sets it;
+   * an embedded or unit daemon does not, so it never runs a machine's agents
+   * unasked. */
+  agentInventoryWarm?: boolean;
   /** AR-3 test seam: compose providers beside (or instead of) puppeteer's
    * built-ins — a scripted adapter that spawns through the real host. */
   agentProviders?: AgentRuntimeServiceOptions["providers"];
@@ -1331,8 +1337,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("agents.installs", async (_ctx, params) => {
       const parsed = AgentsInstallsParams.safeParse(params ?? {});
       if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider? }", false);
-      return await agents.distribution.installs(parsed.data.provider);
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider?, refresh? }", false);
+      return await agents.distribution.installs(parsed.data.provider, {
+        refresh: parsed.data.refresh === true,
+      });
     });
     api.register("agents.releases", async (_ctx, params) => {
       const parsed = AgentsReleasesParams.safeParse(params ?? {});
@@ -3828,6 +3836,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // provider that cannot be read degrades its own row (an honest state with
     // the adapter's sentence), never the daemon.
     agentUsage.start();
+    // AR-S1c — boot has committed: the agents' installs are read now, in the
+    // background (every agent's version command, seconds), so Settings →
+    // Agents and the deck's launcher answer at once. Never a boot gate; the
+    // product's daemon only (see `agentInventoryWarm`).
+    if (config.agentInventoryWarm === true) agents.distribution.warm();
     // AR-0 — boot has committed: the index daemon starts now, in the
     // background. Readiness is a health transition, never a boot gate: a
     // missing or broken rosettad degrades the index, not the daemon.

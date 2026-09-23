@@ -128,6 +128,8 @@ async function main(): Promise<void> {
     ...(nativePid !== undefined ? { nativePid } : {}),
     ...(spawnNative !== undefined ? { nativeSpawner: spawnNative } : {}),
     ...(rosettadBin !== undefined ? { rosettadBin } : {}),
+    // AR-S1c — this is the product's daemon: read the agents' installs at boot.
+    agentInventoryWarm: true,
     ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),
     ...(userId !== undefined ? { userId } : {}),
     onFatal: (reason) => {

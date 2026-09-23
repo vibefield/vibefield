@@ -20,11 +20,13 @@ import { agentShelf, receiptNotice } from "./agents-model";
 
 // The Agents settings section's controller (the design record's R1, pass 16).
 //
-// Reads: `agent.providers` (labels, personas), `agents.installs` (a fresh
-// inspection, each install with what Update would run), `agents.releases
-// {cached}` (the check the machine record kept — this page NEVER checks on its
-// own, AR-D22) and `agents.operations.subscribe` (an update's own output as it
-// runs). Acts: Check for updates (`agents.releases {network}`), Update
+// Reads: `agent.providers` (labels, personas), `agents.installs` (the
+// inventory fieldd read at launch — each install with what Update would run),
+// `agents.releases {cached}` (the check the machine record kept — this page
+// NEVER checks on its own, AR-D22) and `agents.operations.subscribe` (an
+// update's own output as it runs); all of it answers at once. Acts: Check for
+// updates (the Mac read again — `agents.installs {refresh}`, every agent's
+// version command — then `agents.releases {network}` about it), Update
 // (`agents.update`) and Stop (`agents.update.stop`), Show in Finder
 // (`agents.reveal`). No optimistic state (the P5 law, as PluginUpdates keeps
 // it): after an act the section reads again, and an update ends when its
@@ -101,48 +103,56 @@ export function AgentsSection({
     openRef.current = open;
   }, [open]);
 
-  /** Read the doors again; answers what was applied (null: superseded or refused). */
-  const load = useCallback(async (): Promise<Answers | null> => {
-    const turn = ++loads.current;
-    const check = checks.current;
-    try {
-      const [providers, inventory, releases] = await Promise.all([
-        client.request("agent.providers", {}).then((r) => AgentProvidersResult.parse(r).providers),
-        client.request("agents.installs", {}).then((r) => AgentsInstallsResult.parse(r)),
-        client
-          .request("agents.releases", { cached: true })
-          .then((r) => AgentsReleasesResult.parse(r)),
-      ]);
-      if (!mounted.current || turn !== loads.current) return null;
-      answered.current = true;
-      const applied: Answers = {
-        providers,
-        installs: inventory.installs,
-        // an older daemon does not say; its update door answers for itself
-        machineScope: inventory.machineScope ?? true,
-        releases,
-      };
-      setAnswers((current) =>
-        check === checks.current || current === null
-          ? applied
-          : { ...applied, releases: current.releases },
-      );
-      setUnavailable(null);
-      return applied;
-    } catch (cause) {
-      if (!mounted.current || turn !== loads.current) return null;
-      // A read that fails after one answered keeps what is shown and says why.
-      if (answered.current) {
-        setNotice({
-          tone: "error",
-          text: refusalSentence("The agents couldn't be read again", cause),
-        });
-      } else {
-        setUnavailable(unavailableWords(cause));
+  /** Read the doors again — from fieldd's inventory, or with `refresh`, from
+   * the Mac itself; answers what was applied (null: superseded or refused). */
+  const load = useCallback(
+    async (refresh = false): Promise<Answers | null> => {
+      const turn = ++loads.current;
+      const check = checks.current;
+      try {
+        const [providers, inventory, releases] = await Promise.all([
+          client
+            .request("agent.providers", {})
+            .then((r) => AgentProvidersResult.parse(r).providers),
+          client
+            .request("agents.installs", refresh ? { refresh: true } : {})
+            .then((r) => AgentsInstallsResult.parse(r)),
+          client
+            .request("agents.releases", { cached: true })
+            .then((r) => AgentsReleasesResult.parse(r)),
+        ]);
+        if (!mounted.current || turn !== loads.current) return null;
+        answered.current = true;
+        const applied: Answers = {
+          providers,
+          installs: inventory.installs,
+          // an older daemon does not say; its update door answers for itself
+          machineScope: inventory.machineScope ?? true,
+          releases,
+        };
+        setAnswers((current) =>
+          check === checks.current || current === null
+            ? applied
+            : { ...applied, releases: current.releases },
+        );
+        setUnavailable(null);
+        return applied;
+      } catch (cause) {
+        if (!mounted.current || turn !== loads.current) return null;
+        // A read that fails after one answered keeps what is shown and says why.
+        if (answered.current) {
+          setNotice({
+            tone: "error",
+            text: refusalSentence("The agents couldn't be read again", cause),
+          });
+        } else {
+          setUnavailable(unavailableWords(cause));
+        }
+        return null;
       }
-      return null;
-    }
-  }, [client]);
+    },
+    [client],
+  );
 
   useEffect(() => {
     void load();
@@ -255,25 +265,42 @@ export function AgentsSection({
     row?.querySelector<HTMLElement>(".vf-agents-row-open")?.focus();
   }, [open]);
 
+  // Look again reads the Mac itself: an agent installed since launch appears.
   const rescan = async (): Promise<void> => {
     setRescanning(true);
     setNotice(null);
-    await load();
+    await load(true);
     if (mounted.current) setRescanning(false);
   };
 
   // Check for updates is the one act that reaches the network (AR-D22): the
-  // agents' own oracles and the release feeds each adapter declares.
+  // Mac read again first — versions an agent's own updater moved since launch
+  // — then the agents' own oracles and the release feeds each adapter
+  // declares, judged against that inventory.
   const check = async (): Promise<void> => {
     setChecking(true);
     setNotice(null);
     try {
+      const inventory = AgentsInstallsResult.parse(
+        await client.request("agents.installs", { refresh: true }),
+      );
       const releases = AgentsReleasesResult.parse(
         await client.request("agents.releases", { network: true }),
       );
+      // Both land together; a read begun before them must not undo them.
+      loads.current += 1;
       checks.current += 1;
       if (mounted.current) {
-        setAnswers((current) => (current === null ? current : { ...current, releases }));
+        setAnswers((current) =>
+          current === null
+            ? current
+            : {
+                ...current,
+                installs: inventory.installs,
+                machineScope: inventory.machineScope ?? current.machineScope,
+                releases,
+              },
+        );
       }
     } catch (cause) {
       if (mounted.current) {

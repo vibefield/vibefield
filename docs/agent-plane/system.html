@@ -2148,7 +2148,9 @@
                   <p>
                     puppeteer classifies what is installed and learns what releases exist. Both name executable
                     paths on this machine, which is why the reads sit on the same local-only management scope as
-                    the writes. Each install carries the command Update would run (<code>planUpdate</code>, the
+                    the writes. fieldd reads the installs once at boot, in the background (every agent's version
+                    command takes seconds), and answers from that inventory; an update re-reads its own provider,
+                    and <code>{refresh: true}</code> — Check for updates, Look again — reads the Mac again. Each install carries the command Update would run (<code>planUpdate</code>, the
                     recipe the runner itself resolves), and a check says which release the install's own updater
                     would take — on the release line its adapter maps (<code>releaseChannel</code>) — and when.
                   </p>

@@ -431,6 +431,8 @@ describe("AgentsSection — the shelf", () => {
   it("opens on the check the machine record kept, and never checks on its own", async () => {
     const f = fake(doors());
     await mountSection(f);
+    // the inventory fieldd read at launch, and the check the record kept: nothing runs
+    expect(f.calls("agents.installs")).toEqual([{}]);
     expect(f.calls("agents.releases")).toEqual([{ cached: true }]);
     expect(text()).toContain("Claude Code");
     expect(text()).toContain("2.2.0 → 2.3.0");
@@ -460,6 +462,8 @@ describe("AgentsSection — the shelf", () => {
     );
     await mountSection(f);
     await click(button("Check for updates"));
+    // the Mac read again first, then the release feeds asked about it
+    expect(f.calls("agents.installs")).toEqual([{}, { refresh: true }]);
     expect(f.calls("agents.releases")).toEqual([{ cached: true }, { network: true }]);
     expect(text()).toContain("everything current");
     expect(hasButton("Update Claude Code")).toBe(false);
@@ -531,7 +535,7 @@ describe("AgentsSection — the shelf", () => {
     await mountSection(f);
     expect(text()).toContain("No coding agents on this Mac yet");
     await click(button("Look again"));
-    expect(f.calls("agents.installs")).toHaveLength(2);
+    expect(f.calls("agents.installs")).toEqual([{}, { refresh: true }]);
   });
 
   it("tells a window without agents.manage so, with no retry to press", async () => {

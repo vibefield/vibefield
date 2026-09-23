@@ -180,13 +180,19 @@ export class AgentDistributionService {
     return this.opts.store !== null;
   }
 
-  /** A FRESH inspection (the vendor's version command runs per candidate) with
-   * the machine record's choice folded over puppeteer's own `active`, and what
-   * Update would run for each install — named before anyone presses it. */
-  async installs(provider?: string): Promise<AgentsInstallsResult> {
+  /** The installs with the machine record's choice folded over puppeteer's
+   * own `active`, and what Update would run for each — named before anyone
+   * presses it. The inventory is the one read at boot (`warm`) or since: an
+   * update re-reads its own provider, so a page opens on it at once;
+   * `refresh` reads the Mac again (the vendor's version command per
+   * candidate — seconds, so only when a person asks). */
+  async installs(
+    provider?: string,
+    options: { refresh?: boolean } = {},
+  ): Promise<AgentsInstallsResult> {
     const installations = await this.opts.runtime.inspectInstallations({
       ...(provider !== undefined ? { providerId: provider } : {}),
-      refresh: true,
+      refresh: options.refresh === true,
     });
     const plans = await Promise.all(
       installations.map((install) => this.plan(install.provider, install.executable)),
@@ -198,6 +204,29 @@ export class AgentDistributionService {
       },
     );
     return { installs, machineScope: this.hasMachineScope() };
+  }
+
+  /** Read the Mac's installs in the background, once, when fieldd starts: the
+   * Agents page and the deck's launcher then answer from puppeteer's inventory
+   * instead of each running every agent's version command. A read that fails
+   * degrades nothing — the doors read again on demand. */
+  warm(): void {
+    const started = Date.now();
+    this.opts.runtime.inspectInstallations({}).then(
+      (installations) =>
+        this.opts.logger.info("fieldd.agents.inventory_warm", "Agent installs read at boot", {
+          installs: installations.length,
+          ms: Date.now() - started,
+        }),
+      (error: unknown) =>
+        this.opts.logger.warn(
+          "fieldd.agents.inventory_warm_failed",
+          "Agent installs could not be read at boot",
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        ),
+    );
   }
 
   /** The agent's own oracle always; the declared network detectors only when
