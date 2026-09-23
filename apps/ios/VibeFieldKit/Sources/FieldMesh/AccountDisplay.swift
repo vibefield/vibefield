@@ -25,7 +25,7 @@ public enum AccountDisplay {
   /// The word beside a desktop the link lists. The full sentence stays
   /// `MeshDisplay.linkLine`; this is what fits at the end of a 44 pt row.
   ///
-  /// `isHearing` for the same reason `FieldHomeModel.linkFace` takes it: a
+  /// `isHearing` for the reason the retired IOS-4e link face took it: a
   /// desktop that answered and has sent no board is "there and saying
   /// nothing", and a corner that stayed silent over it would be the blank the
   /// corpus forbids wearing a healthy face.

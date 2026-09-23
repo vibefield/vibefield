@@ -61,6 +61,10 @@ public struct HomeScreen: View {
   /// IOS-8d — Sign out asks first: it is the one act in the menu that is
   /// destructive, and the sentence says what goes and what stays.
   @State private var signOutPending = false
+  #if DEBUG
+    /// `-vf-demo-account=<state>`: the corner's inputs, stamped (IOS-8e).
+    @State private var demoAccount: FieldHomeModel.AccountFace?
+  #endif
   @State private var settingsSheetOpen = false
   @State private var discoveryPolling = false
   @State private var attachment: TerminalAttachment?
@@ -280,6 +284,17 @@ public struct HomeScreen: View {
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
           accountMenuOpen = true
           mesh.connect()
+        }
+        // IOS-8e — the corner's states, photographed. The decision is the
+        // shipping one over invented inputs; `-vf-demo-account-open` grows the
+        // menu, which a headless run could not tap.
+        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(AccountFixtures.argument) }) {
+          let state = String(argument.dropFirst(AccountFixtures.argument.count).drop(while: { $0 == "=" }))
+          demoAccount = AccountFixtures.face(named: state)
+          if demoAccount == nil { print("unknown account fixture:", state) }
+          if ProcessInfo.processInfo.arguments.contains(AccountFixtures.openArgument) {
+            accountMenuOpen = true
+          }
         }
         // `-vf-demo-remote` stands a FAKE peer up so the remote bubble's own
         // rendering — the prompt glyph, the machine in the eyebrow, no
@@ -1065,13 +1080,9 @@ public struct HomeScreen: View {
   /// type-check. See the `.onChange` that reads it.
   private var linkDesktops: [FieldDesktop] { link?.desktops ?? [] }
 
-  /// What the corner says about the doors (IOS-4e). Named for the same reason
-  /// as the property above: the chrome is inside `body`'s type-checking
-  /// budget, and the decision belongs in `FieldHomeModel` where it is tested
-  /// without a simulator.
-  private var linkFace: FieldHomeModel.LinkFace {
-    FieldHomeModel.linkFace(desktops: linkDesktops, isHearing: link?.isHearing ?? false)
-  }
+  // RETIRED 2026-09-23 (IOS-8e): `linkFace`, the corner's token and line about
+  // the doors (IOS-4e). Its facts are the account menu's rows and the dot now
+  // (`FieldHomeModel.accountFace`, `AccountDisplay.desktopWord`).
 
   // MARK: - IOS-8b: the account corner
 
@@ -1080,6 +1091,9 @@ public struct HomeScreen: View {
   /// account's memory (IOS-8c); a signed-in corner is the plain circle only
   /// until a door has said who you are.
   private var accountFace: FieldHomeModel.AccountFace {
+    #if DEBUG
+      if let demoAccount { return demoAccount }
+    #endif
     _ = identityEpoch
     let account = accountLogin
     return FieldHomeModel.accountFace(
@@ -1125,7 +1139,10 @@ public struct HomeScreen: View {
   /// The tilt's seed: the login, so the face sits at one angle on every
   /// launch of this account.
   private var accountSeed: String {
-    mesh.loginName ?? mesh.rememberedLogin ?? ""
+    #if DEBUG
+      if demoAccount != nil { return AccountFixtures.login }
+    #endif
+    return mesh.loginName ?? mesh.rememberedLogin ?? ""
   }
 
   /// IOS-8d — the sign-out itself: the card and the link go first (a session
