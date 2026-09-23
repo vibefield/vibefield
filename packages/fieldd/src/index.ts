@@ -1,6 +1,13 @@
 // @vibefield/fieldd — the product-plane daemon (design-02 §3).
 
 export {
+  AgentDistributionService,
+  type AgentDistributionServiceOptions,
+  DistributionRecordStore,
+  displayTail,
+  stripTerminalControls,
+} from "./agent-distribution";
+export {
   AGENT_ENV_PASSTHROUGH,
   type AgentEnvironmentRequest,
   agentEnvironment,
@@ -20,7 +27,6 @@ export {
   AgentRuntimeService,
   type AgentRuntimeServiceOptions,
   createProfileStore,
-  DistributionRecordStore,
   noTerminalHost,
 } from "./agent-runtime";
 export {

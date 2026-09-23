@@ -1101,7 +1101,7 @@
         </div>
         <div class="stats" aria-label="Page summary">
           <div class="stat"><strong>8</strong><span>fieldd agent services</span></div>
-          <div class="stat"><strong>23</strong><span>agent-plane doors</span></div>
+          <div class="stat"><strong>25</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>3</strong><span>enforced import walls</span></div>
           <div class="stat"><strong>12</strong><span>agent test suites</span></div>
         </div>
@@ -1385,23 +1385,24 @@
             </p>
             <div class="cards">
               <div class="card">
-                <h3>agent-runtime.ts holds four concerns</h3>
+                <h3>agent-runtime.ts holds three concerns</h3>
                 <p>
                   <code>createProfileStore</code> (puppeteer's registry in fieldd's custody),
-                  <code>DistributionRecordStore</code> (the machine scope under the root lock),
-                  <code>AgentRuntimeService</code> (the runtime, the fold, personas, sessions,
-                  distribution) and the reconcile. The service class alone spans lines 447–2,590 and
-                  carries five in-memory maps, four timers and three entry kinds
-                  (<code>ManagedEntry</code>, <code>PendingEntry</code>, <code>ExitedEntry</code>).
+                  <code>AgentRuntimeService</code> (the runtime, the fold, personas, sessions) and the
+                  reconcile. The service class alone spans lines 367–2,406 and carries five in-memory
+                  maps, four timers and three entry kinds (<code>ManagedEntry</code>,
+                  <code>PendingEntry</code>, <code>ExitedEntry</code>). The first cut landed 2026-09-22:
+                  distribution — <code>DistributionRecordStore</code> and the doors' service — is
+                  <code>agent-distribution.ts</code>.
                 </p>
                 <span class="badge tone-owed">Owed</span>
               </div>
               <div class="card">
                 <h3>daemon.ts registers every door inline</h3>
                 <p>
-                  108 registrations in one file — 96 <code>api.register</code> and 12
-                  <code>api.registerSubscription</code> — of which 23 are the agent plane's. The
-                  handlers are thin, but the file is 3,937 lines and a door's contract, its audit
+                  110 registrations in one file — 97 <code>api.register</code> and 13
+                  <code>api.registerSubscription</code> — of which 25 are the agent plane's. The
+                  handlers are thin, but the file is 3,967 lines and a door's contract, its audit
                   wrapper and its service call are read three screens apart.
                 </p>
                 <span class="badge tone-owed">Owed</span>
@@ -2147,7 +2148,20 @@
                   <p>
                     puppeteer classifies what is installed and learns what releases exist. Both name executable
                     paths on this machine, which is why the reads sit on the same local-only management scope as
-                    the writes.
+                    the writes. Each install carries the command Update would run (<code>planUpdate</code>, the
+                    recipe the runner itself resolves), and a check says which release the install's own updater
+                    would take — on the release line its adapter maps (<code>releaseChannel</code>) — and when.
+                  </p>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div>
+                  <strong>A check is kept; a page never checks on its own</strong>
+                  <p>
+                    A check that consulted anything is kept in <code>distribution.json</code> under the root
+                    lock. <code>agents.releases {cached: true}</code> runs nothing and answers that record,
+                    re-judged against the installs as they are now, so Settings opens on "checked 09:41:20"
+                    and the network is reached only when someone presses Check for updates (AR-D22).
                   </p>
                 </div>
               </div>
@@ -2155,9 +2169,11 @@
                 <div>
                   <strong><code>agents.update</code> runs the vendor's updater</strong>
                   <p>
-                    An update is an attended act. Its transcript is opaque and lands under
-                    <code>machine/agents/updates/</code> at 0600; a daemon with no machine scope refuses before
-                    a transcript could be opened.
+                    An update is an attended act, one per provider at a time. Its transcript is opaque and lands
+                    under <code>machine/agents/updates/</code> at 0600; a daemon with no machine scope refuses
+                    before a transcript could be opened. While it runs, its output rides
+                    <code>agents.operations.subscribe</code> — ANSI-stripped, the last 16 KiB, whole snapshots at
+                    the tick, display text that is never parsed; the receipt is the outcome.
                   </p>
                 </div>
               </div>
@@ -2179,6 +2195,16 @@
                   </p>
                 </div>
               </div>
+              <div class="flow-step">
+                <div>
+                  <strong><code>agents.reveal</code> shows an install in Finder</strong>
+                  <p>
+                    fieldd reveals only a path its own inventory holds, never one a caller spells, through the
+                    shell provider's internal <code>shell.revealPath</code>. With no desktop shell attached it
+                    refuses <code>UNAVAILABLE {service: shell}</code>.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -2197,7 +2223,8 @@
               <table class="reference-table">
                 <thead><tr><th>Concern</th><th>File</th></tr></thead>
                 <tbody>
-                  <tr><td><p>The runtime, the fold, personas, distribution, the re-attach</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts</span></td></tr>
+                  <tr><td><p>The runtime, the fold, personas, the re-attach</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts</span></td></tr>
+                  <tr><td><p>Distribution: the machine record, installs and their update plans, kept checks, updates and their output, reveal</p></td><td><span class="route">packages/fieldd/src/agent-distribution.ts</span></td></tr>
                   <tr><td><p>puppeteer's <code>AgentHost</code> over the floor; the environment policy and the EL7 strip</p></td><td><span class="route">packages/fieldd/src/agent-host.ts</span></td></tr>
                   <tr><td><p>Signed session records; <code>mirrorOf</code>, <code>foldStatus</code>, the summarizers</p></td><td><span class="route">packages/fieldd/src/agent-sessions.ts</span></td></tr>
                   <tr><td><p>The enrollment record and the <code>index.*</code> service</p></td><td><span class="route">packages/fieldd/src/agent-index.ts</span></td></tr>
@@ -2207,7 +2234,7 @@
                   <tr><td><p>One rosettad generation per user root</p></td><td><span class="route">packages/fieldd/src/rosettad-supervisor.ts</span></td></tr>
                   <tr><td><p>The cells, the inventory, the ticket mint, the agent spawn path</p></td><td><span class="route">packages/fieldd/src/terminal-service.ts</span></td></tr>
                   <tr><td><p>Scope and locality enforcement on every door</p></td><td><span class="route">packages/fieldd/src/product-api.ts</span></td></tr>
-                  <tr><td><p>The door registrations (108, of which 23 are the agent plane's)</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span></td></tr>
+                  <tr><td><p>The door registrations (110, of which 25 are the agent plane's)</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span></td></tr>
                   <tr><td><p>The login-scope constant and its ceiling</p></td><td><span class="route">packages/fieldd/src/mesh-bus.ts</span></td></tr>
                   <tr><td><p>The terminal unit that supervises the cells</p></td><td><span class="route">packages/field-native/src/services/terminal.rs</span></td></tr>
                   <tr><td><p>The mirror, summary, field and index wire shapes</p></td><td><span class="route">packages/contracts/src/agent-session.ts · agent-field.ts · agent-index.ts · agent-usage.ts</span></td></tr>

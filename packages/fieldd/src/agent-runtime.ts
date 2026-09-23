@@ -22,7 +22,6 @@ import type {
   BoundIngress,
   HostIngress,
   ProfileFailure,
-  UpdateReceipt,
 } from "@vibecook/puppeteer-core";
 import {
   type Agent,
@@ -41,10 +40,6 @@ import {
   type SpawnAgentResult,
 } from "@vibecook/puppeteer-runtime";
 import {
-  AGENT_DISTRIBUTION_FORMAT,
-  type AgentDistributionRecord,
-  AgentDistributionRecord as AgentDistributionRecordSchema,
-  type AgentInstall,
   type AgentInterruptParams,
   type AgentInterruptResult,
   type AgentListResult,
@@ -57,7 +52,6 @@ import {
   type AgentSessionSummary,
   type AgentSpawnParams,
   type AgentSpawnResult,
-  type AgentsInstallsResult,
   type AgentsProfilesCreateParams,
   type AgentsProfilesCreateResult,
   type AgentsProfilesDeleteResult,
@@ -65,17 +59,15 @@ import {
   type AgentsProfilesLoginParams,
   type AgentsProfilesLoginResult,
   type AgentsProfilesVerifyResult,
-  type AgentsReleasesParams,
-  type AgentsReleasesResult,
-  type AgentsSetActiveParams,
-  type AgentsSetActiveResult,
-  type AgentsUpdateResult,
-  type AgentUpdateReceipt,
   LAYOUT,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
-import { withUsersLock } from "@vibefield/users";
+import {
+  AgentDistributionService,
+  DistributionRecordStore,
+  type RevealPath,
+} from "./agent-distribution";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
 import type { EnrollRuntimeSpec, IndexService } from "./agent-index";
 import {
@@ -196,81 +188,6 @@ export function createProfileStore(opts: { path: string; logger: Logger }): Prof
   };
 }
 
-function emptyDistributionRecord(now: () => Date): AgentDistributionRecord {
-  return { format: AGENT_DISTRIBUTION_FORMAT, providers: {}, updatedAt: now().toISOString() };
-}
-
-/** `machine/agents/distribution.json` (AR-D16): read tolerantly by anyone,
- * written by ONE writer at a time under the root lock (R6), published
- * atomically. Reads re-read the file every time — a resident fieldd's
- * "refresh" is simply the next read; no watcher is needed to be current. */
-export class DistributionRecordStore {
-  constructor(private readonly opts: { rootReal: string; now: () => Date; logger: Logger }) {}
-
-  path(): string {
-    return join(this.opts.rootReal, ...LAYOUT.MACHINE_DISTRIBUTION_FILE);
-  }
-
-  updatesDir(): string {
-    return join(this.opts.rootReal, ...LAYOUT.MACHINE_UPDATES_DIR);
-  }
-
-  read(): AgentDistributionRecord {
-    let text: string;
-    try {
-      text = readFileSync(this.path(), "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT")
-        return emptyDistributionRecord(this.opts.now);
-      throw error;
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = undefined;
-    }
-    const record = AgentDistributionRecordSchema.safeParse(parsed);
-    if (record.success) return record.data;
-    const aside = `${this.path()}.unreadable-${Date.now()}`;
-    this.opts.logger.error(
-      "fieldd.agents.distribution_unreadable",
-      "Distribution record is unreadable; set aside, starting from an empty record",
-      undefined,
-      { aside, issue: record.error.issues[0]?.message ?? "invalid json" },
-    );
-    try {
-      renameSync(this.path(), aside);
-    } catch {
-      // the next publish overwrites it
-    }
-    return emptyDistributionRecord(this.opts.now);
-  }
-
-  /** Read-modify-write under the root lock. `fn` returns whether it changed
-   * anything; unchanged records are not rewritten. */
-  async mutate(
-    fn: (record: AgentDistributionRecord) => boolean,
-  ): Promise<{ changed: boolean; record: AgentDistributionRecord }> {
-    return await withUsersLock(this.opts.rootReal, "mutate", {}, () => {
-      const record = this.read();
-      const changed = fn(record);
-      if (changed) {
-        record.updatedAt = this.opts.now().toISOString();
-        this.publish(record);
-      }
-      return { changed, record };
-    });
-  }
-
-  private publish(record: AgentDistributionRecord): void {
-    mkdirSync(dirname(this.path()), { recursive: true, mode: 0o700 });
-    const tmp = `${this.path()}.${process.pid}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
-    durableRenameSync(tmp, this.path());
-  }
-}
-
 /** A host that lends no terminal: the typed refusal an embedded or unit
  * daemon answers with (AR-2's posture, kept for the seams that build the
  * service without a floor). Production lends the floor (`agent-host.ts`). */
@@ -350,6 +267,9 @@ export interface AgentRuntimeServiceOptions {
   searchPath?: string;
   /** test seam: the fetch release detectors use (default: global fetch) */
   fetchFn?: typeof fetch;
+  /** Show in Finder: the shell provider's internal door, LATE-BOUND (the
+   * daemon builds this service before its api); absent or null = no shell */
+  revealPath?: () => RevealPath | null;
   /** AR-4 — the ledger's system-actor entry for the daemon's own acts;
    * absent = the acts are logged, not audited (unit seams) */
   audit?: SystemAudit;
@@ -451,7 +371,10 @@ export class AgentRuntimeService {
   readonly runtime: AgentRuntime;
   private readonly host: AgentHost;
   private readonly terminalHost: TerminalAgentHost | null;
-  private readonly distribution: DistributionRecordStore | null;
+  /** the machine record (AR-D16); null = no machine scope */
+  private readonly distributionRecord: DistributionRecordStore | null;
+  /** the `agents.*` distribution doors (agent-distribution.ts) */
+  readonly distribution: AgentDistributionService;
   private readonly records: SessionRecordStore;
   private readonly rootsDir: string;
   private readonly home: string;
@@ -511,7 +434,7 @@ export class AgentRuntimeService {
     });
     this.idleAfterMs = opts.resumeWhenIdle?.afterMs ?? RESUME_IDLE_AFTER_MS;
     this.pollMs = opts.resumeWhenIdle?.pollMs ?? RESUME_POLL_MS;
-    this.distribution =
+    this.distributionRecord =
       opts.vibefieldRoot === null
         ? null
         : new DistributionRecordStore({
@@ -539,8 +462,8 @@ export class AgentRuntimeService {
     // fallback). A `setActive` therefore reaches spawns from the next boot —
     // stated at the door's contract.
     const executables: Partial<Record<BuiltinExecutableAgentKind, string>> = {};
-    if (this.distribution !== null) {
-      for (const [provider, entry] of Object.entries(this.distribution.read().providers)) {
+    if (this.distributionRecord !== null) {
+      for (const [provider, entry] of Object.entries(this.distributionRecord.read().providers)) {
         if (entry.activeExecutable !== undefined)
           executables[provider as BuiltinExecutableAgentKind] = entry.activeExecutable;
       }
@@ -561,8 +484,8 @@ export class AgentRuntimeService {
       distribution: {
         // puppeteer's default is ~/.puppeteer/updates; without a machine scope
         // the update door refuses before a transcript could be opened
-        ...(this.distribution !== null
-          ? { transcriptsDirectory: this.distribution.updatesDir() }
+        ...(this.distributionRecord !== null
+          ? { transcriptsDirectory: this.distributionRecord.updatesDir() }
           : {}),
         ...(opts.fetchFn !== undefined ? { fetch: opts.fetchFn } : {}),
         ...(opts.searchPath !== undefined ? { searchPath: opts.searchPath } : {}),
@@ -578,6 +501,13 @@ export class AgentRuntimeService {
     // createBuiltinAgentRuntime's own two steps, spelled out because it does
     // not thread `executables` through to the providers.
     this.runtime = createAgentRuntime(runtimeOptions);
+    this.distribution = new AgentDistributionService({
+      runtime: this.runtime,
+      store: this.distributionRecord,
+      revealPath: opts.revealPath ?? (() => null),
+      now: this.now,
+      logger: this.logger,
+    });
     // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
     this.unsubscribeMonitor.push(
       this.runtime.onMonitorState((state) => this.onMonitorState(state)),
@@ -602,7 +532,7 @@ export class AgentRuntimeService {
 
   /** Whether the doors that write the machine scope can. */
   hasMachineScope(): boolean {
-    return this.distribution !== null;
+    return this.distributionRecord !== null;
   }
 
   // ── managed sessions (AR-3) ──
@@ -1171,89 +1101,6 @@ export class AgentRuntimeService {
     return { persona: await this.project(fresh, ids) };
   }
 
-  // ── distribution ──
-
-  /** A FRESH inspection (the vendor's version command runs per candidate) with
-   * the machine record's choice folded over puppeteer's own `active`. */
-  async installs(provider?: string): Promise<AgentsInstallsResult> {
-    const installations = await this.runtime.inspectInstallations({
-      ...(provider !== undefined ? { providerId: provider } : {}),
-      refresh: true,
-    });
-    return { installs: this.projectInstalls(installations, this.distribution?.read()) };
-  }
-
-  /** The agent's own oracle always; the declared network detectors only when
-   * this call or the provider's recorded preference says so. */
-  async releases(params: AgentsReleasesParams): Promise<AgentsReleasesResult> {
-    const record = this.distribution?.read();
-    const providers =
-      params.provider !== undefined
-        ? [params.provider]
-        : this.runtime.distributionProviders().map((p) => p.id);
-    const results = await Promise.all(
-      providers.map((providerId) =>
-        this.runtime.checkReleases({
-          providerId,
-          network: params.network === true || record?.providers[providerId]?.network === true,
-        }),
-      ),
-    );
-    return {
-      releases: results.flatMap((result) => [
-        ...result.releases.map((release) => ({ ...release })),
-        ...result.failures.map((failure) => ({ ...failure })),
-      ]),
-    };
-  }
-
-  /** The vendor's own updater, then the receipt into the machine record. The
-   * root lock is held for the record's read-modify-write only, never across
-   * the updater (minutes): the lock is the users file's, shared by every
-   * fieldd on this device, and its deadline is short by law. */
-  async update(provider: string): Promise<AgentsUpdateResult> {
-    const store = this.requireMachineScope();
-    const receipt = await this.runtime.updateInstallation({ providerId: provider });
-    await store.mutate((record) => {
-      record.providers[provider] = { ...record.providers[provider], lastUpdate: receipt };
-      return true;
-    });
-    this.logger.info("fieldd.agents.updated", "Agent update ran", {
-      provider,
-      status: receipt.status,
-      ...(receipt.exitCode !== undefined ? { exitCode: receipt.exitCode } : {}),
-    });
-    return { receipt: projectReceipt(receipt) };
-  }
-
-  /** Record which of the provider's installs new spawns use (from the next
-   * boot: the runtime binds it at construction). */
-  async setActive(params: AgentsSetActiveParams): Promise<AgentsSetActiveResult> {
-    const store = this.requireMachineScope();
-    const installations = await this.runtime.inspectInstallations({
-      providerId: params.provider,
-      refresh: true,
-    });
-    const chosen = installations.find(
-      (i) => i.executable === params.executable || i.realPath === params.executable,
-    );
-    if (chosen === undefined) {
-      throw new RpcCallError(
-        "NOT_FOUND",
-        `no ${params.provider} install at ${params.executable}`,
-        false,
-        { provider: params.provider, executable: params.executable },
-      );
-    }
-    const { changed, record } = await store.mutate((r) => {
-      const current = r.providers[params.provider];
-      if (current?.activeExecutable === chosen.executable) return false;
-      r.providers[params.provider] = { ...current, activeExecutable: chosen.executable };
-      return true;
-    });
-    return { changed, installs: this.projectInstalls(installations, record) };
-  }
-
   // ── the reconcile (R4) ──
 
   /** Every daemon ready re-applies the record to the personas: a managed
@@ -1301,6 +1148,7 @@ export class AgentRuntimeService {
     this.disposed = true;
     if (this.onTransition !== null) this.opts.supervisor?.off("transition", this.onTransition);
     for (const unsubscribe of this.unsubscribeMonitor) unsubscribe();
+    this.distribution.dispose();
     if (this.publishTimer !== null) {
       clearTimeout(this.publishTimer);
       this.publishTimer = null;
@@ -2555,38 +2403,6 @@ export class AgentRuntimeService {
       ...(runtimeId !== undefined ? { runtimeId } : {}),
     };
   }
-
-  private projectInstalls(
-    installations: readonly AgentInstallation[],
-    record: AgentDistributionRecord | undefined,
-  ): AgentInstall[] {
-    // per provider: the record's choice when it names one of the installs,
-    // else puppeteer's own resolution
-    const chosen = new Map<string, string>();
-    for (const install of installations) {
-      const active = record?.providers[install.provider]?.activeExecutable;
-      if (active !== undefined && (install.executable === active || install.realPath === active))
-        chosen.set(install.provider, install.realPath);
-    }
-    return installations.map((install) => ({
-      ...install,
-      active: chosen.has(install.provider)
-        ? chosen.get(install.provider) === install.realPath
-        : install.active,
-    }));
-  }
-
-  private requireMachineScope(): DistributionRecordStore {
-    if (this.distribution === null) {
-      throw new RpcCallError(
-        "UNAVAILABLE",
-        "this daemon has no machine scope (no VibeField root above its user root); agent distribution is read-only here",
-        false,
-        { service: "agents", state: "no-machine-scope" },
-      );
-    }
-    return this.distribution;
-  }
 }
 
 /** puppeteer's workspace request for a resumed run (Godview's own rule): a
@@ -2636,19 +2452,6 @@ function failureToError(failure: ProfileFailure): RpcCallError {
     default:
       return new RpcCallError("PRECONDITION_FAILED", failure.message, false, details);
   }
-}
-
-/** The contract's receipt: the outcome, never the transcript path or the
- * before/after inspections (those stay in the machine record). */
-function projectReceipt(receipt: UpdateReceipt): AgentUpdateReceipt {
-  return {
-    provider: receipt.provider,
-    status: receipt.status,
-    startedAt: receipt.startedAt,
-    finishedAt: receipt.finishedAt,
-    ...(receipt.exitCode !== undefined ? { exitCode: receipt.exitCode } : {}),
-    ...(receipt.message !== undefined ? { message: receipt.message } : {}),
-  };
 }
 
 function within(parent: string, child: string): boolean {

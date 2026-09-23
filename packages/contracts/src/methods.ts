@@ -1286,6 +1286,27 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // The Agents settings section (2026-09-23). Two more rows on the same
+  // local-only `agents.manage`: the running and last-finished distribution
+  // act per provider with the vendor command's own output (display text,
+  // never parsed — the receipt is the outcome), and Show in Finder for a path
+  // fieldd's own inventory holds (the renderer names an install, never a path).
+  // Neither mutates: the subscription is a read, a reveal changes nothing.
+  defineMethod({
+    surface: "product",
+    method: "agents.operations.subscribe",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.reveal",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   // Personas are per USER-on-device (AR-D20): puppeteer profiles whose roots
   // are the agent data folders, enrolled in this user's index by construction
   // (AR-D18). Decided with AR-1 (the topology left it open): they ride

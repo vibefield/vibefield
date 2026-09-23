@@ -12,6 +12,7 @@
 @import "./styles/base.css";
 @import "./styles/utilities.css";
 @import "./panels/settings.css";
+@import "./panels/agents/agents-settings.css";
 @import "./godview/godview.css";
 @import "./godview/deck-zoom.css";
 @import "@vibecook/puppeteer-views/styles/views.css";

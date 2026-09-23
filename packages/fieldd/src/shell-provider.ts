@@ -17,6 +17,8 @@ import {
   type ShellProviderResolveResult,
   ShellRendererRequestReplacementParams,
   ShellRendererRequestReplacementResult,
+  ShellRevealPathParams,
+  ShellRevealPathResult,
   ShellSurfacesEnumerateParams,
   ShellSurfacesEnumerateResult,
   ShellSurfacesMintParams,
@@ -30,6 +32,7 @@ import {
 import { RpcCallError } from "./native-link";
 
 const OPEN_EXTERNAL_DEADLINE_MS = 5_000;
+const REVEAL_PATH_DEADLINE_MS = 5_000;
 const RENDERER_REPLACEMENT_REQUEST_DEADLINE_MS = 2_000;
 
 export interface ShellProviderTransport {
@@ -94,6 +97,13 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
     input: ShellSurfacesReleaseParams,
     output: ShellSurfacesReleaseResult,
     deadlineMs: SURFACE_AUTHORITY_LIMITS.RELEASE_DEADLINE_MS,
+  },
+  // The Agents settings section's Show in Finder (internal; the agent
+  // distribution service dispatches it for a path its own inventory holds).
+  "shell.revealPath": {
+    input: ShellRevealPathParams,
+    output: ShellRevealPathResult,
+    deadlineMs: REVEAL_PATH_DEADLINE_MS,
   },
 };
 

@@ -17,6 +17,7 @@ import {
   AgentsProfilesLoginParams,
   AgentsProfilesVerifyParams,
   AgentsReleasesParams,
+  AgentsRevealParams,
   AgentsSetActiveParams,
   AgentsUpdateParams,
   AppPreferenceSetParams,
@@ -525,6 +526,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // device service is constructed after the api.
   let terminalsRef: TerminalService | null = null;
   let devicesForAgents: DeviceService | null = null;
+  // Show in Finder reaches Electron main through the shell provider, which
+  // the api owns — built later in this boot, so bound through a ref too.
+  let shellForAgents: ProductApi | null = null;
   const agents = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
@@ -532,6 +536,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     supervisor: rosettad,
     terminals: () => terminalsRef,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    revealPath: () => {
+      const shell = shellForAgents;
+      if (shell === null || !shell.revealPathAvailable()) return null;
+      return async (path) => {
+        await shell.revealPath({ path });
+      };
+    },
     ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
     ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
@@ -1094,6 +1105,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       getLinkedLogin: () => links.status().link?.login ?? null,
     });
     diagnosticsService.register(api);
+    shellForAgents = api;
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
 
     api.register("shell.dialog.pickFolder", async (ctx, params) => {
@@ -1319,13 +1331,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const parsed = AgentsInstallsParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { provider? }", false);
-      return await agents.installs(parsed.data.provider);
+      return await agents.distribution.installs(parsed.data.provider);
     });
     api.register("agents.releases", async (_ctx, params) => {
       const parsed = AgentsReleasesParams.safeParse(params ?? {});
       if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider?, network? }", false);
-      return await agents.releases(parsed.data);
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { provider?, network?, cached? }",
+          false,
+        );
+      return await agents.distribution.releases(parsed.data);
     });
     api.register("agents.update", async (ctx, params) => {
       const parsed = AgentsUpdateParams.safeParse(params);
@@ -1337,7 +1353,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           action: "agents.update",
           target: { kind: "agent-provider", id: parsed.data.provider },
         },
-        () => agents.update(parsed.data.provider),
+        () => agents.distribution.update(parsed.data.provider),
         (result) => ({
           attrs: {
             status: result.receipt.status,
@@ -1357,9 +1373,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           target: { kind: "agent-provider", id: parsed.data.provider },
           attrs: { executable: parsed.data.executable },
         },
-        () => agents.setActive(parsed.data),
+        () => agents.distribution.setActive(parsed.data),
         (result) => ({ attrs: { changed: result.changed } }),
       );
+    });
+    // The Agents settings section: an update's own output while it runs
+    // (whole snapshots at the tick — display text, the receipt is the
+    // outcome), and Show in Finder for a path fieldd's inventory holds. Both
+    // are reads; neither is audited (a reveal changes nothing).
+    api.registerSubscription("agents.operations.subscribe", (_ctx, _params, emit) => {
+      const dispose = agents.distribution.subscribeOperations((snapshot) => emit(snapshot));
+      return { snapshot: agents.distribution.operationsSnapshot(), dispose };
+    });
+    api.register("agents.reveal", async (_ctx, params) => {
+      const parsed = AgentsRevealParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider, executable }", false);
+      return await agents.distribution.reveal(parsed.data);
     });
     // AR-3 — managed sessions (agent-runtime.ts, the fold). A spawn and a
     // resume are audited like a terminal birth (attempt-before-effect; the

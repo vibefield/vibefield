@@ -11,6 +11,8 @@ import {
   ShellRendererRequestReplacementParams,
   type ShellRendererRequestReplacementResult,
   ShellRendererRequestReplacementResult as ShellRendererRequestReplacementResultSchema,
+  ShellRevealPathParams,
+  ShellRevealPathResult,
   ShellSurfacesEnumerateParams,
   type ShellSurfacesEnumerateResult,
   ShellSurfacesEnumerateResult as ShellSurfacesEnumerateResultSchema,
@@ -42,6 +44,9 @@ export interface ShellProviderNative {
     options: OpenDialogOptions,
   ): Promise<{ canceled: boolean; filePaths: string[] }>;
   openExternal(url: string): Promise<void>;
+  /** Show a path in the OS file manager (Electron's `shell.showItemInFolder`).
+   * fieldd has already proven the path is one of its own inventoried installs. */
+  revealPath(path: string): void;
   captureArtifactPreview(
     params: ShellWebContentsCaptureArtifactPreviewParams,
     signal: AbortSignal,
@@ -288,6 +293,11 @@ export class RecoveringShellProvider {
       const params = ShellOpenExternalParams.parse(call.params);
       await this.native.openExternal(params.url);
       return ShellOpenExternalResult.parse({ opened: true });
+    }
+    if (call.method === "shell.revealPath") {
+      const params = ShellRevealPathParams.parse(call.params);
+      this.native.revealPath(params.path);
+      return ShellRevealPathResult.parse({ revealed: true });
     }
     if (call.method === "shell.webcontents.captureArtifactPreview") {
       const params = ShellWebContentsCaptureArtifactPreviewParams.parse(call.params);

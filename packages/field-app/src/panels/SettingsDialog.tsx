@@ -1,5 +1,5 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
-import type { ReactElement, ReactNode, RefObject } from "react";
+import { type ReactElement, type ReactNode, type RefObject, useEffect, useRef } from "react";
 import type { FieldUserFace } from "../host";
 import { labelCls } from "./settings-ui";
 
@@ -8,6 +8,7 @@ export type SettingsPage =
   | "general"
   | "appearance"
   | "canvas"
+  | "agents"
   | "plugins"
   | "mesh"
   | "terminal"
@@ -18,7 +19,17 @@ interface PageMeta {
   id: SettingsPage;
   label: string;
   description: string;
-  icon: "person" | "sliders" | "sun" | "canvas" | "plugin" | "mesh" | "terminal" | "pulse" | "code";
+  icon:
+    | "person"
+    | "sliders"
+    | "sun"
+    | "canvas"
+    | "agents"
+    | "plugin"
+    | "mesh"
+    | "terminal"
+    | "pulse"
+    | "code";
 }
 
 const PAGES: readonly PageMeta[] = [
@@ -45,6 +56,12 @@ const PAGES: readonly PageMeta[] = [
     label: "Canvas",
     description: "Navigation, snapping, and live card behavior.",
     icon: "canvas",
+  },
+  {
+    id: "agents",
+    label: "Agents",
+    description: "Installed once on this Mac and shared by every agent profile.",
+    icon: "agents",
   },
   {
     id: "plugins",
@@ -81,7 +98,7 @@ const PAGES: readonly PageMeta[] = [
 const NAV_GROUPS: ReadonlyArray<{ label: string; pages: readonly SettingsPage[] }> = [
   { label: "Account", pages: ["account"] },
   { label: "Preferences", pages: ["general", "appearance", "canvas"] },
-  { label: "Workspace", pages: ["plugins", "mesh", "terminal"] },
+  { label: "Workspace", pages: ["agents", "plugins", "mesh", "terminal"] },
   { label: "Support", pages: ["diagnostics", "advanced"] },
 ];
 
@@ -114,6 +131,16 @@ export interface SettingsAccountHead {
   /** A switch main refused, in its words — shown under the faces until the
    * next attempt, so a click never just does nothing. */
   readonly notice?: string | null | undefined;
+}
+
+/** A page below a settings page — one agent's page under Agents. The header
+ * names it and offers the way back; the nav keeps its parent current. */
+export interface SettingsSubpage {
+  readonly title: string;
+  readonly description: string;
+  /** the back button's accessible name ("Back to Agents") */
+  readonly backLabel: string;
+  readonly onBack: () => void;
 }
 
 function AccountHead({
@@ -226,6 +253,16 @@ function PageIcon({ name }: { name: PageMeta["icon"] }): ReactElement {
       </svg>
     );
   }
+  if (name === "agents") {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <circle cx="10" cy="10.5" r="2.7" />
+        <circle cx="4.6" cy="5.6" r="1.7" />
+        <circle cx="15.4" cy="5.6" r="1.7" />
+        <circle cx="10" cy="16.6" r="1.4" />
+      </svg>
+    );
+  }
   if (name === "plugin") {
     return (
       <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -289,6 +326,7 @@ export function SettingsDialog({
   redoAvailable,
   historyNote = null,
   account,
+  subpage = null,
   dialogRef,
   className = "",
   children,
@@ -304,6 +342,8 @@ export function SettingsDialog({
   historyNote?: string | null;
   /** UA-D19 — the account at the head of Settings; see `SettingsAccountHead`. */
   account?: SettingsAccountHead | undefined;
+  /** A page below the active one (see `SettingsSubpage`); null at the page itself. */
+  subpage?: SettingsSubpage | null | undefined;
   dialogRef?: RefObject<HTMLDivElement | null>;
   className?: string;
   children: ReactNode;
@@ -311,6 +351,12 @@ export function SettingsDialog({
   const currentPage = PAGE_BY_ID.get(activePage) ?? PAGES[0]!;
   const navGroups =
     account === undefined ? NAV_GROUPS : NAV_GROUPS.filter((group) => group.label !== "Account");
+  // A new page or subpage opens at its top.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const subpageTitle = subpage?.title ?? null;
+  useEffect(() => {
+    if (scrollerRef.current !== null) scrollerRef.current.scrollTop = 0;
+  }, [activePage, subpageTitle]);
   return (
     <div
       ref={dialogRef}
@@ -392,11 +438,32 @@ export function SettingsDialog({
 
       <main className="flex min-h-0 min-w-0 flex-col">
         <header className="flex min-h-[76px] shrink-0 items-center justify-between gap-4 border-b border-black/5 px-8 dark:border-white/10">
-          <div className="min-w-0 py-3">
-            <h1 className="truncate text-[17px] font-semibold tracking-[-0.025em] text-black/90 dark:text-white/90">
-              {currentPage.label}
-            </h1>
-            <p className={`truncate ${labelCls}`}>{currentPage.description}</p>
+          <div className="flex min-w-0 items-center gap-3 py-3">
+            {subpage !== null && (
+              <button
+                type="button"
+                aria-label={subpage.backLabel}
+                title={subpage.backLabel}
+                className="vf-settings-back flex h-9 w-9 flex-none items-center justify-center rounded-full bg-black/[0.045] text-black/45 transition-[background-color,color,transform] hover:bg-black/[0.08] hover:text-black active:scale-95 dark:bg-white/[0.08] dark:text-white/45 dark:hover:bg-white/[0.13] dark:hover:text-white"
+                onClick={subpage.onBack}
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                  className="h-4 w-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.6]"
+                >
+                  <path d="m12 4.5-5.5 5.5 5.5 5.5" />
+                </svg>
+              </button>
+            )}
+            <div className="min-w-0">
+              <h1 className="truncate text-[17px] font-semibold tracking-[-0.025em] text-black/90 dark:text-white/90">
+                {subpage?.title ?? currentPage.label}
+              </h1>
+              <p className={`truncate ${labelCls}`}>
+                {subpage?.description ?? currentPage.description}
+              </p>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <div className="vf-settings-history flex items-center rounded-full bg-black/[0.045] p-1 dark:bg-white/[0.08]">
@@ -445,7 +512,7 @@ export function SettingsDialog({
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+        <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
           {historyNote !== null && (
             <div
               aria-live="polite"

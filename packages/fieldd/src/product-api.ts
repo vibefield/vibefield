@@ -242,6 +242,21 @@ export class ProductApi extends EventEmitter {
     return this.shellProvider.provides("shell.webcontents.captureArtifactPreview");
   }
 
+  /** Show a path in the OS file manager — internal, like the capture door:
+   * only fieldd's agent distribution service enters, for a path its own
+   * inventory holds, with an explicit fieldd caller. */
+  revealPath(
+    params: import("@vibefield/contracts").ShellRevealPathParams,
+  ): Promise<import("@vibefield/contracts").ShellRevealPathResult> {
+    return this.shellProvider.callInternal("shell.revealPath", params) as Promise<
+      import("@vibefield/contracts").ShellRevealPathResult
+    >;
+  }
+
+  revealPathAvailable(): boolean {
+    return this.shellProvider.provides("shell.revealPath");
+  }
+
   // DT-1 — the SurfaceService's typed doors to the main-side authority. Like
   // the capture door, these are deliberately not ProductAPI methods: only the
   // fieldd service enters, with an explicit fieldd caller (policy — scopes,

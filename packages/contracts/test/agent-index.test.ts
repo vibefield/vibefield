@@ -49,6 +49,15 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       { method: "agents.releases", scope: "agents.manage", idempotent: true, locality: "local" },
       { method: "agents.update", scope: "agents.manage", idempotent: false, locality: "local" },
       { method: "agents.setActive", scope: "agents.manage", idempotent: true, locality: "local" },
+      // The Agents settings section — reads on the same local-only scope: an
+      // update's own output while it runs, and Show in Finder for an install
+      {
+        method: "agents.operations.subscribe",
+        scope: "agents.manage",
+        idempotent: true,
+        locality: "local",
+      },
+      { method: "agents.reveal", scope: "agents.manage", idempotent: true, locality: "local" },
       { method: "agents.profiles.list", scope: "agent.spawn", idempotent: true, locality: "local" },
       {
         method: "agents.profiles.create",
@@ -88,15 +97,18 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
     ]);
   });
 
-  it("none of the rows federates or admits a guest; only the usage feed subscribes", () => {
+  it("none of the rows federates or admits a guest; only the usage and operations feeds subscribe", () => {
     for (const m of METHODS.filter(
       (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),
     )) {
       expect(m.locality, m.method).toBe("local");
       expect(m.guestOk ?? false, m.method).toBe(false);
       // AR-5d widened this family by exactly one subscription (the usage
-      // column's feed); every other row stays a one-shot call.
-      expect(m.subscription ?? false, m.method).toBe(m.method === "agents.usage.subscribe");
+      // column's feed), the Agents settings section by one more (an update's
+      // output while it runs); every other row stays a one-shot call.
+      expect(m.subscription ?? false, m.method).toBe(
+        m.method === "agents.usage.subscribe" || m.method === "agents.operations.subscribe",
+      );
     }
   });
 

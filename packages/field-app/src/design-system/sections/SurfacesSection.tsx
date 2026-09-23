@@ -8,9 +8,15 @@ import type { MagnetGridGlyph } from "../../field/canvas-appearance";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { SidePanelFrame } from "../../hud/SidePanelStage";
 import { MagnetGridSection } from "../../panels/MagnetGridSection";
-import { SettingsDialog, type SettingsPage } from "../../panels/SettingsDialog";
+import {
+  SettingsDialog,
+  type SettingsPage,
+  type SettingsSubpage,
+} from "../../panels/SettingsDialog";
 import { buttonCls, SettingsRow, SettingsSection, SettingsSwitch } from "../../panels/settings-ui";
+import { AgentsSettingsPreview } from "../AgentsSettingsPreview";
 import { FIXTURE_ME, FIXTURE_OTHERS_WAITING } from "../account-fixtures";
+import { AGENTS_FIXTURE_STATES, type AgentsFixtureState } from "../agents-fixtures";
 import { CommandPalettePreview } from "../CommandPalettePreview";
 import { Section, Specimen } from "../catalog-ui";
 
@@ -23,6 +29,9 @@ export function SurfacesSection({
 }): ReactElement {
   const [settingsOn, setSettingsOn] = useState(true);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
+  // A press on a nav item returns to that page's top (the Agents shelf).
+  const [settingsVisit, setSettingsVisit] = useState(0);
+  const [settingsSubpage, setSettingsSubpage] = useState<SettingsSubpage | null>(null);
   return (
     <Section
       id="surfaces"
@@ -36,7 +45,10 @@ export function SurfacesSection({
           <SettingsDialog
             className="vf-ds-settings-dialog"
             activePage={settingsPage}
-            onSelectPage={setSettingsPage}
+            onSelectPage={(page) => {
+              setSettingsPage(page);
+              setSettingsVisit((visit) => visit + 1);
+            }}
             onClose={() => undefined}
             onUndo={() => undefined}
             onRedo={() => undefined}
@@ -48,6 +60,7 @@ export function SurfacesSection({
               others: FIXTURE_OTHERS_WAITING,
               onSwitch: () => undefined,
             }}
+            subpage={settingsPage === "agents" ? settingsSubpage : null}
           >
             {settingsPage === "appearance" ? (
               <SettingsSection
@@ -79,6 +92,12 @@ export function SurfacesSection({
               </SettingsSection>
             ) : settingsPage === "canvas" ? (
               <MagnetGridSection glyph={magnetGridGlyph} onGlyphChange={onMagnetGridGlyphChange} />
+            ) : settingsPage === "agents" ? (
+              <AgentsSettingsPreview
+                key={settingsVisit}
+                state="installed"
+                onSubpage={setSettingsSubpage}
+              />
             ) : (
               <UnavailableState
                 compact
@@ -88,6 +107,10 @@ export function SurfacesSection({
             )}
           </SettingsDialog>
         </div>
+      </Specimen>
+
+      <Specimen title="Agents settings" source="panels/agents/AgentsSection.tsx" bleed>
+        <AgentsSettingsSpecimen />
       </Specimen>
 
       <div className="vf-ds-grid vf-ds-grid-2">
@@ -126,6 +149,41 @@ export function SurfacesSection({
         </Specimen>
       </div>
     </Section>
+  );
+}
+
+/** Every production state of the Agents section in the shipping dialog; the
+ * rows open their agent's page, and the header's back button returns. */
+function AgentsSettingsSpecimen(): ReactElement {
+  const [state, setState] = useState<AgentsFixtureState>("installed");
+  const [subpage, setSubpage] = useState<SettingsSubpage | null>(null);
+  return (
+    <div className="vf-ds-settings-stage vf-ds-agents-stage" data-agents-settings-catalog="">
+      <div className="vf-ds-production-statebar">
+        <span>Production state</span>
+        <UiSegmentedControl
+          options={AGENTS_FIXTURE_STATES}
+          value={state}
+          onChange={setState}
+          label="Agents settings state"
+        />
+      </div>
+      <SettingsDialog
+        className="vf-ds-settings-dialog"
+        activePage="agents"
+        onSelectPage={() => undefined}
+        onClose={() => undefined}
+        onUndo={() => undefined}
+        onRedo={() => undefined}
+        historyBusy={false}
+        undoAvailable={false}
+        redoAvailable={false}
+        account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
+        subpage={subpage}
+      >
+        <AgentsSettingsPreview key={state} state={state} onSubpage={setSubpage} />
+      </SettingsDialog>
+    </div>
   );
 }
 

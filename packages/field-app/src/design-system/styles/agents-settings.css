@@ -1,0 +1,8 @@
+/* The Agents settings specimen: the settings stage, with room above the
+   dialog for the production-state bar. Specimen styles only — the section's
+   own rules live beside it in panels/agents/agents-settings.css. */
+
+.vf-ds-settings-stage.vf-ds-agents-stage {
+  position: relative;
+  padding-top: 72px;
+}

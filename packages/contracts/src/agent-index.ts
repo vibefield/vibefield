@@ -661,6 +661,20 @@ export const AgentsProfilesVerifyResult = z
   .passthrough();
 export type AgentsProfilesVerifyResult = z.infer<typeof AgentsProfilesVerifyResult>;
 
+/** What an update of one install would run (puppeteer `UpdatePlan`,
+ * projected): the recipe's kind and the vendor's own command as argv — the
+ * exact command the Update button runs, named before anyone presses it — or,
+ * for a manual recipe, the vendor's instructions in their own words. */
+export const AgentUpdatePlan = z
+  .object({
+    /** puppeteer's recipe kind (`native-self-update` · `npm-global` · `brew` · `manual`), open */
+    kind: z.string().min(1),
+    command: z.array(z.string()).optional(),
+    instructions: z.string().optional(),
+  })
+  .passthrough();
+export type AgentUpdatePlan = z.infer<typeof AgentUpdatePlan>;
+
 /** One classified install (puppeteer `InstalledAgent`, mirrored — every
  * field native evidence) plus VibeField's one choice: whether it is the
  * ACTIVE executable new spawns use (AR-D16, `machine/agents/distribution.json`). */
@@ -675,7 +689,14 @@ export const AgentInstall = z
     location: z.string().optional(),
     autoUpdate: z.enum(["enabled", "disabled", "unknown"]),
     channel: z.string().optional(),
+    /** which declared release line the install's own updater follows, as the
+     * ADAPTER maps its vendor's setting (`stable` · `preview`, open); absent =
+     * the adapter could not tell, and puppeteer compares against stable */
+    releaseChannel: z.string().optional(),
     active: z.boolean(),
+    /** what Update would run for this install; absent when the plan could not
+     * be formed (the adapter's honest failure is logged, never guessed at) */
+    update: AgentUpdatePlan.optional(),
   })
   .passthrough();
 export type AgentInstall = z.infer<typeof AgentInstall>;
@@ -688,7 +709,15 @@ export const AgentsInstallsParams = z
   .passthrough();
 export type AgentsInstallsParams = z.infer<typeof AgentsInstallsParams>;
 
-export const AgentsInstallsResult = z.object({ installs: z.array(AgentInstall) }).passthrough();
+export const AgentsInstallsResult = z
+  .object({
+    installs: z.array(AgentInstall),
+    /** whether this daemon holds the machine scope the update and active-
+     * executable doors write (false: an embedded or unit daemon — the installs
+     * still answer, but nothing updates from here). Absent from older daemons. */
+    machineScope: z.boolean().optional(),
+  })
+  .passthrough();
 export type AgentsInstallsResult = z.infer<typeof AgentsInstallsResult>;
 
 /** A release fact (puppeteer `ReleaseSnapshot`, mirrored), or the honest
@@ -718,14 +747,37 @@ export type AgentReleaseFailure = z.infer<typeof AgentReleaseFailure>;
 
 /** `agents.releases` — the agent's own oracle always; the declared network
  * detectors only when THIS call says so or the provider's recorded preference
- * does (AR-D22: release checks are attended acts; the default reaches nothing). */
+ * does (AR-D22: release checks are attended acts; the default reaches nothing).
+ * `cached: true` runs NOTHING — no oracle, no network — and answers the last
+ * check the machine record kept, re-judged against the installs as they are
+ * now, so a page can open on "checked 09:41:20" without checking on its own. */
 export const AgentsReleasesParams = z
-  .object({ provider: AgentProviderId.optional(), network: z.boolean().optional() })
+  .object({
+    provider: AgentProviderId.optional(),
+    network: z.boolean().optional(),
+    cached: z.boolean().optional(),
+  })
   .passthrough();
 export type AgentsReleasesParams = z.infer<typeof AgentsReleasesParams>;
 
+/** The one update a provider's ACTIVE install would take (puppeteer
+ * `ReleaseCheckResult.available`): the newest release on the line its own
+ * updater follows, when newer. Absent for a provider = current, or unknown. */
+export const AgentAvailableUpdate = z
+  .object({ provider: AgentProviderId, channel: z.string(), version: z.string().min(1) })
+  .passthrough();
+export type AgentAvailableUpdate = z.infer<typeof AgentAvailableUpdate>;
+
 export const AgentsReleasesResult = z
-  .object({ releases: z.array(z.union([AgentRelease, AgentReleaseFailure])) })
+  .object({
+    releases: z.array(z.union([AgentRelease, AgentReleaseFailure])),
+    available: z.array(AgentAvailableUpdate).optional(),
+    /** when each provider in the answer was checked — a cached answer's own
+     * time, never implied fresh; a provider never checked is absent */
+    checked: z
+      .array(z.object({ provider: AgentProviderId, at: z.string() }).passthrough())
+      .optional(),
+  })
   .passthrough();
 export type AgentsReleasesResult = z.infer<typeof AgentsReleasesResult>;
 
@@ -763,6 +815,51 @@ export const AgentsSetActiveResult = z
   .passthrough();
 export type AgentsSetActiveResult = z.infer<typeof AgentsSetActiveResult>;
 
+/** The bound on an operation's kept output: the vendor command's last words
+ * are what a person reads while it runs; the whole transcript stays 0600
+ * under `machine/agents/updates/`, never on this wire. */
+export const AGENT_OPERATION_OUTPUT_BYTES = 16 * 1024;
+
+/** One distribution act in flight or just finished on this device — today an
+ * update (`agents.update`) — with the vendor command's own output as it runs:
+ * display text, ANSI-stripped, the last `AGENT_OPERATION_OUTPUT_BYTES`, NEVER
+ * parsed (RFC 006: the outcome is the receipt's re-inspection). */
+export const AgentOperation = z
+  .object({
+    provider: AgentProviderId,
+    /** `update` today; an open word so a later act (an install) is a value, not a break */
+    kind: z.string().min(1),
+    state: z.enum(["running", "finished"]),
+    startedAt: z.string(),
+    finishedAt: z.string().optional(),
+    output: z.string(),
+    /** earlier output was dropped to keep the tail bounded */
+    truncated: z.boolean(),
+    receipt: AgentUpdateReceipt.optional(),
+  })
+  .passthrough();
+export type AgentOperation = z.infer<typeof AgentOperation>;
+
+/** `agents.operations.subscribe` — the running and last-finished operation per
+ * provider; whole snapshots (state transfer, never edges), coalesced to the
+ * tick. Kept in fieldd's memory only: a restart forgets the output, and the
+ * receipt the machine record kept is the durable fact. */
+export const AgentsOperationsResult = z
+  .object({ operations: z.array(AgentOperation) })
+  .passthrough();
+export type AgentsOperationsResult = z.infer<typeof AgentsOperationsResult>;
+
+/** `agents.reveal` — show one of a provider's installs in the OS file manager.
+ * Names the install the way `agents.installs` answered it; fieldd reveals only
+ * a path its own inventory holds, never a path a caller spells. */
+export const AgentsRevealParams = z
+  .object({ provider: AgentProviderId, executable: z.string().min(1) })
+  .passthrough();
+export type AgentsRevealParams = z.infer<typeof AgentsRevealParams>;
+
+export const AgentsRevealResult = z.object({ revealed: z.literal(true) }).passthrough();
+export type AgentsRevealResult = z.infer<typeof AgentsRevealResult>;
+
 // ── the distribution record (`machine/agents/distribution.json`, AR-D15/D16) ──
 //
 // The only machine-scope product state (UA-D1's one named exception): installs
@@ -782,6 +879,9 @@ export const AgentDistributionProvider = z
     /** release checks may reach the network (attended; off by default) */
     network: z.boolean().optional(),
     lastCheckedAt: z.string().optional(),
+    /** the rows the last check learned (releases and honest failures), kept so
+     * a page opens on them without checking again (AR-D22) */
+    lastReleases: z.array(z.union([AgentRelease, AgentReleaseFailure])).optional(),
     lastUpdate: AgentUpdateReceipt.optional(),
   })
   .passthrough();

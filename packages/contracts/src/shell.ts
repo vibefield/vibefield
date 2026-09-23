@@ -241,6 +241,10 @@ export const SHELL_INTERNAL_PROVIDER_METHODS = [
   "shell.surfaces.enumerate",
   "shell.surfaces.mint",
   "shell.surfaces.release",
+  // The Agents settings section — show a path in the OS file manager. Internal:
+  // only fieldd's agent service dispatches it, for a path its own inventory
+  // holds; no caller hands main a path to reveal.
+  "shell.revealPath",
 ] as const;
 export const SHELL_PROVIDER_METHODS = [
   ...SHELL_CLIENT_PROVIDER_METHODS,
@@ -267,16 +271,25 @@ export const ShellDialogPickFolderParams = z
   .passthrough();
 export type ShellDialogPickFolderParams = z.infer<typeof ShellDialogPickFolderParams>;
 
+/** An absolute path on this desktop: POSIX, a drive, or UNC; never a NUL. */
+function isAbsoluteDesktopPath(path: string): boolean {
+  return (
+    !path.includes("\0") &&
+    (path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\/]+[\\/]/.test(path))
+  );
+}
+
 const ShellAbsoluteFolderPath = z
   .string()
   .min(1)
   .max(4096)
-  .refine(
-    (path) =>
-      !path.includes("\0") &&
-      (path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\/]+[\\/]/.test(path)),
-    "expected an absolute desktop folder path",
-  );
+  .refine(isAbsoluteDesktopPath, "expected an absolute desktop folder path");
+
+const ShellAbsolutePath = z
+  .string()
+  .min(1)
+  .max(4096)
+  .refine(isAbsoluteDesktopPath, "expected an absolute desktop path");
 
 export const ShellDialogPickFolderResult = z.union([
   z.object({ canceled: z.literal(true) }).passthrough(),
@@ -325,6 +338,13 @@ export type ShellOpenExternalParams = z.infer<typeof ShellOpenExternalParams>;
 
 export const ShellOpenExternalResult = z.object({ opened: z.literal(true) }).passthrough();
 export type ShellOpenExternalResult = z.infer<typeof ShellOpenExternalResult>;
+
+/** An absolute path on this device, as fieldd's own inventory named it. */
+export const ShellRevealPathParams = z.object({ path: ShellAbsolutePath }).passthrough();
+export type ShellRevealPathParams = z.infer<typeof ShellRevealPathParams>;
+
+export const ShellRevealPathResult = z.object({ revealed: z.literal(true) }).passthrough();
+export type ShellRevealPathResult = z.infer<typeof ShellRevealPathResult>;
 
 /** The exact root-authority form returned by an AH Truffle listener. The
  * ArtifactService additionally proves this is the local intent's own last

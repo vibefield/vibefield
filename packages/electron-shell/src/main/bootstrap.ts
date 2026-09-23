@@ -346,15 +346,17 @@ async function mint(
     // its own panes — agent.spawn (births, personas, the login pane),
     // agent.observe (the fold), agent.control (reserved for AR-6's approvals
     // and prompts, minted now so the scope set is the slice's, not a drip).
-    // agents.manage (the machine-scope distribution record, native.admin
-    // posture) is deliberately NOT here until the Agents settings section.
+    // The Agents settings section (2026-09-22) is spine code too, so the
+    // window now holds agents.manage — the machine-scope distribution record,
+    // native.admin posture, local-only, in no plugin eligibility table: the
+    // installs, the release checks a person asks for, the vendor's own
+    // updater and its output, Show in Finder.
     // AR-5e: index.read is the find sheet's status foot; AR-5b split the
     // sheet's CONTENT reads onto index.search (the sessions the live runs
     // join to, and the search itself) and the usage column's readings onto
     // agent.usage — both local-only and plugin-ineligible, held by the
     // window because the monitor is spine code. index.manage (consent — the
-    // roll call's checkboxes) stays out with agents.manage until the Agents
-    // settings section.
+    // roll call's checkboxes) stays out until a surface asks for consent.
     scopes: [
       "doc.read",
       "doc.write",
@@ -374,6 +376,7 @@ async function mint(
       "index.read",
       "index.search",
       "agent.usage",
+      "agents.manage",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

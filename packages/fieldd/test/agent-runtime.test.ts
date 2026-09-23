@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import {
   type AgentDistributionRecord,
   type AgentsInstallsResult,
+  type AgentsOperationsResult,
   type AgentsProfilesCreateResult,
   type AgentsProfilesDeleteResult,
   type AgentsProfilesListResult,
@@ -56,12 +57,18 @@ const fakeSpawner = (mode: string): typeof spawn =>
       env: { ...process.env, FAKE_ROSETTAD_MODE: mode },
     })) as unknown as typeof spawn;
 
-/** the vendor's stable release text, and nothing else, reachable */
+/** the vendor's stable and latest release texts, and nothing else, reachable;
+ * every request counted, so a door that must not reach the network can say so */
+let fetches = 0;
 const fakeFetch: typeof fetch = async (input) => {
+  fetches += 1;
   const url =
     typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   if (url === "https://downloads.claude.ai/claude-code-releases/stable") {
     return new Response("2.2.0\n", { status: 200 });
+  }
+  if (url === "https://downloads.claude.ai/claude-code-releases/latest") {
+    return new Response("2.3.0\n", { status: 200 });
   }
   return new Response("not here", { status: 404 });
 };
@@ -457,6 +464,8 @@ async function setupAt(
   return { dataDir, daemon };
 }
 
+// Each row boots a daemon and spawns the scripted agent (a fresh inspection runs its
+// version command): the budget the other daemon-spawning rows carry, for a loaded gate.
 describe("distribution (AR-2) — native evidence in, the one machine-scope record out", () => {
   it("agents.installs lists the scripted claude on the private search path — classified from its banner, active by puppeteer's rule — and a window needs agents.manage", async () => {
     const { bin, daemon } = await setup();
@@ -480,7 +489,7 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
 
     const denied = await window(daemon, ["agent.spawn"], "d1b");
     expect((await denied.callErr("agents.installs", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
-  });
+  }, 20_000);
 
   it("agents.setActive records the choice in machine/agents/distribution.json (0600, under the root lock); installs reflects it; an unknown executable is NOT_FOUND; the same choice again changes nothing", async () => {
     const { root, bin, dataDir, daemon } = await setup();
@@ -517,7 +526,7 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
     });
     expect(missing.data?.kind).toBe("NOT_FOUND");
     expect(auditText(dataDir)).toContain('"agents.set_active"');
-  });
+  }, 20_000);
 
   it("without a VibeField root above the user root there is no machine scope: installs still answer, setActive and update refuse UNAVAILABLE {service:agents, state:no-machine-scope}", async () => {
     const { bin, daemon } = await setup({ machine: false });
@@ -538,7 +547,7 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
         state: "no-machine-scope",
       });
     }
-  });
+  }, 20_000);
 
   it("agents.update runs the vendor's own updater (the scripted `update`), keeps a 0600 transcript under machine/agents/updates, and records the receipt", async () => {
     const { root, dataDir, daemon } = await setup();
@@ -561,7 +570,7 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
       status: "already-current",
     });
     expect(auditText(dataDir)).toContain('"agents.update"');
-  });
+  }, 20_000);
 
   it("agents.releases: the network is an attended act — off, the detectors are silent; on, the vendor's stable line is a release and unreachable detectors are honest failures", async () => {
     const { daemon } = await setup();
@@ -595,7 +604,117 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
     expect(unknown.releases).toEqual([
       expect.objectContaining({ provider: "nope", status: "unsupported" }),
     ]);
-  });
+  }, 20_000);
+
+  it("agents.installs names what Update would run: the adapter's recipe for the scripted standalone claude, as argv", async () => {
+    const { bin, daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agents.manage"], "d6");
+    const { installs } = (await win.call("agents.installs", {
+      provider: "claude",
+    })) as AgentsInstallsResult;
+    const fake = installs.find((i) => i.executable === join(bin, "claude"));
+    expect(fake?.update).toEqual({
+      kind: "native-self-update",
+      command: [join(bin, "claude"), "update"],
+    });
+    // the adapter's line for the install, whichever the machine's settings name
+    expect(["stable", "preview"]).toContain(fake?.releaseChannel);
+  }, 20_000);
+
+  it("agents.releases keeps what a network check learned in the machine record, and `cached` answers from it without reaching anything", async () => {
+    const { root, daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agents.manage"], "d7");
+    const { installs } = (await win.call("agents.installs", {
+      provider: "claude",
+    })) as AgentsInstallsResult;
+    const line = installs.find((i) => i.provider === "claude" && i.active)?.releaseChannel;
+
+    // before any check: the honest empty answer, and nothing fetched
+    const before = fetches;
+    const empty = (await win.call("agents.releases", { cached: true })) as AgentsReleasesResult;
+    expect(empty).toMatchObject({ releases: [], available: [], checked: [] });
+    expect(fetches).toBe(before);
+
+    const checked = (await win.call("agents.releases", {
+      provider: "claude",
+      network: true,
+    })) as AgentsReleasesResult;
+    expect(checked.checked).toEqual([{ provider: "claude", at: expect.any(String) }]);
+    // the one update the install's own updater would take: stable 2.2.0 or latest 2.3.0
+    expect(checked.available).toEqual([
+      line === "stable"
+        ? { provider: "claude", channel: "stable", version: "2.2.0" }
+        : { provider: "claude", channel: "preview", version: "2.3.0" },
+    ]);
+    const kept = readDistribution(root).providers.claude;
+    expect(kept?.lastCheckedAt).toBe(checked.checked?.[0]?.at);
+    expect(kept?.lastReleases).toContainEqual(
+      expect.objectContaining({ channel: "stable", version: "2.2.0" }),
+    );
+
+    const afterCheck = fetches;
+    const cached = (await win.call("agents.releases", { cached: true })) as AgentsReleasesResult;
+    expect(fetches).toBe(afterCheck);
+    expect(cached.checked).toEqual(checked.checked);
+    expect(cached.available).toEqual(checked.available);
+    expect(cached.releases).toEqual(checked.releases);
+  }, 20_000);
+
+  it("agents.operations.subscribe carries the vendor updater's own output while it runs, then the receipt", async () => {
+    const { daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agents.manage"], "d8");
+    const sub = (await win.call("agents.operations.subscribe", {})) as {
+      subId: string;
+      snapshot: AgentsOperationsResult;
+    };
+    expect(sub.snapshot).toEqual({ operations: [] });
+    const { receipt } = (await win.call("agents.update", {
+      provider: "claude",
+    })) as AgentsUpdateResult;
+    expect(receipt.status).toBe("already-current");
+    const last = (): AgentsOperationsResult | undefined =>
+      win.notifications
+        .filter((n) => n.params.subId === sub.subId)
+        .map((n) => n.params.payload as AgentsOperationsResult)
+        .at(-1);
+    await until(() => last()?.operations[0]?.state === "finished", 4_000);
+    expect(last()?.operations[0]).toMatchObject({
+      provider: "claude",
+      kind: "update",
+      state: "finished",
+      output: expect.stringContaining("fake claude: nothing to update"),
+      truncated: false,
+      receipt: { provider: "claude", status: "already-current" },
+    });
+    // a window without the management scope cannot watch it
+    const denied = await window(daemon, ["agent.spawn"], "d8b");
+    expect((await denied.callErr("agents.operations.subscribe", {})).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+  }, 20_000);
+
+  it("agents.reveal: never a path the inventory does not hold; with no desktop shell attached it says so", async () => {
+    const { bin, daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agents.manage"], "d9");
+    const missing = await win.callErr("agents.reveal", {
+      provider: "claude",
+      executable: "/etc/passwd",
+    });
+    expect(missing.data?.kind).toBe("NOT_FOUND");
+    const unattached = await win.callErr("agents.reveal", {
+      provider: "claude",
+      executable: join(bin, "claude"),
+    });
+    expect(unattached.data?.kind).toBe("UNAVAILABLE");
+    expect(unattached.data?.details).toMatchObject({
+      service: "shell",
+      state: "no-shell-provider",
+    });
+  }, 20_000);
 });
 
 // The real binary (`pnpm siblings:build`; FIELDD_ROSETTAD_BIN=$(node scripts/siblings.mjs bin)):

@@ -1,0 +1,343 @@
+/* The Agents settings section (the design record's R1, pass 16). Controls are
+   the design kit's own (vf-ui-button, vf-ui-empty-state, vf-ui-inline-notice);
+   this file owns only the shelf's rows, the agent's page hero and the update's
+   output. Tokens only — no palette of its own (DESIGN.md §2, UI_SYSTEM.md). */
+
+.vf-agents {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── the shelf ── */
+
+.vf-agents-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -8px;
+}
+
+/* One installed agent: its mark, its name (the row's door — the whole row is
+   the target through the name's stretched hit area), one fact line, at most
+   one act, and the chevron that says there is a page below. */
+.vf-agents-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto 14px;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px;
+  border-radius: 12px;
+  transition: background-color 150ms ease;
+}
+
+.vf-agents-row + .vf-agents-row::before {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  left: 48px;
+  height: 1px;
+  background: var(--vf-hairline);
+  content: "";
+}
+
+.vf-agents-row:hover:not(.vf-agents-row--placeholder) {
+  background: color-mix(in srgb, var(--vf-foreground) 4%, transparent);
+}
+
+.vf-agents-row:hover + .vf-agents-row::before,
+.vf-agents-row:hover::before {
+  opacity: 0;
+}
+
+.vf-agents-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--vf-text-primary);
+  background: var(--vf-fill);
+}
+
+.vf-agents-mark--row {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 16px;
+}
+
+.vf-agents-mark--hero {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  font-size: 30px;
+}
+
+.vf-agents-row-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.vf-agents-row-open {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  color: var(--vf-text-primary);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* The name is the door; its hit area is the whole row. */
+.vf-agents-row-open::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+}
+
+.vf-agents-row-open:focus-visible {
+  outline: none;
+}
+
+.vf-agents-row-open:focus-visible::after {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+
+.vf-agents-row-fact {
+  overflow: hidden;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Acts sit above the row's stretched door. */
+.vf-agents-row-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-agents-chevron {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--vf-text-faint);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.vf-agents-row--placeholder {
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.vf-agents-placeholder {
+  display: block;
+  width: min(220px, 60%);
+  height: 10px;
+  border-radius: 999px;
+  background: var(--vf-fill);
+}
+
+.vf-agents-foot {
+  margin: 0 4px;
+}
+
+.vf-agents-retry {
+  display: flex;
+  justify-content: center;
+}
+
+.vf-agents-empty {
+  border: 1px solid var(--vf-hairline);
+  border-radius: 18px;
+}
+
+.vf-agents-glyph {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+/* ── one agent's page ── */
+
+.vf-agents-hero {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 4px 0;
+}
+
+.vf-agents-hero-text {
+  min-width: 0;
+}
+
+.vf-agents-hero-name {
+  margin: 0;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-agents-hero-fact {
+  margin: 2px 0 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+}
+
+.vf-agents-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+}
+
+/* "Up to date": the state's own mark, green (§2.5), beside plain words. */
+.vf-agents-check {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--vf-green);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.vf-agents-value {
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  text-align: right;
+}
+
+/* A second line under a path, in the description's own type. */
+.vf-agents-line {
+  display: block;
+}
+
+/* A path or command wraps at its spaces first, and inside a word only when
+   the word alone is wider than the line. */
+.vf-agents-path {
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* The release notes open in the browser: a kit button that says so. */
+.vf-agents-link-button {
+  gap: 6px;
+  text-decoration: none;
+}
+
+.vf-agents-outward {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+/* ── the update's own output ── */
+
+.vf-agents-output {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 14px;
+  background: var(--vf-chrome-solid);
+}
+
+.dark .vf-agents-output {
+  background: var(--vf-field-surface);
+}
+
+.vf-agents-output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vf-hairline);
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+}
+
+.vf-agents-output-command {
+  overflow: hidden;
+  font-family: var(--vf-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-agents-output-state {
+  flex: none;
+}
+
+.vf-agents-output-text {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px 12px 12px;
+  color: var(--vf-text-secondary);
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.vf-agents-output-details > summary {
+  padding: 8px 12px;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.vf-agents-output-details:not([open]) .vf-agents-output-hide,
+.vf-agents-output-details[open] .vf-agents-output-show {
+  display: none;
+}
+
+.vf-agents-output-details > summary:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -2px;
+}
+
+.vf-agents-output-note {
+  margin: 0;
+  padding: 0 12px 8px;
+}
+
+.vf-agents-output-receipt {
+  margin: 0 12px 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-agents-row {
+    transition-duration: 0ms;
+  }
+}

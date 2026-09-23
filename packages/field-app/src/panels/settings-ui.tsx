@@ -12,22 +12,35 @@ export const buttonCls = uiButtonClass;
 export function SettingsSection({
   title,
   description,
+  action,
   children,
   className = "",
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
+  /** A section-level act beside the title — a button, never a bare link (pass 16). */
+  action?: ReactNode;
   children: ReactNode;
   className?: string;
 }): ReactElement {
+  const heading = (
+    <>
+      <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-black/85 dark:text-white/85">
+        {title}
+      </h3>
+      {description !== undefined && <p className={`mt-0.5 ${labelCls}`}>{description}</p>}
+    </>
+  );
   return (
     <section className={`${borderCls} ${className}`}>
-      <div className="mb-3">
-        <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-black/85 dark:text-white/85">
-          {title}
-        </h3>
-        {description !== undefined && <p className={`mt-0.5 ${labelCls}`}>{description}</p>}
-      </div>
+      {action === undefined ? (
+        <div className="mb-3">{heading}</div>
+      ) : (
+        <div className="mb-3 flex items-center justify-between gap-4">
+          <div className="min-w-0">{heading}</div>
+          <div className="flex shrink-0 items-center gap-2">{action}</div>
+        </div>
+      )}
       {children}
     </section>
   );

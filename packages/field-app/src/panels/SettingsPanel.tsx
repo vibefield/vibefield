@@ -17,11 +17,17 @@ import { refusalSentence, useAccountSnapshot } from "../account/use-account";
 import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { getHost } from "../host";
 import { AccountSection } from "./AccountSection";
+import { AgentsSection } from "./agents/AgentsSection";
 import { DesktopSection } from "./DesktopSection";
 import { MagnetGridSection } from "./MagnetGridSection";
 import { MeshSection } from "./MeshSection";
 import { PluginsSection } from "./PluginsSection";
-import { type SettingsAccountHead, SettingsDialog, type SettingsPage } from "./SettingsDialog";
+import {
+  type SettingsAccountHead,
+  SettingsDialog,
+  type SettingsPage,
+  type SettingsSubpage,
+} from "./SettingsDialog";
 import { SystemSection } from "./SystemSection";
 import {
   buttonCls,
@@ -201,6 +207,14 @@ export function SettingsPanel({
   const [activePage, setActivePage] = useState<SettingsPage>(
     diagnosticsInitiallyOpen ? "diagnostics" : initialPage,
   );
+  // A page below Agents (one agent's page) names itself in the header; a
+  // press on a nav item — the current one included — returns to the page.
+  const [agentsSubpage, setAgentsSubpage] = useState<SettingsSubpage | null>(null);
+  const [pageRequest, setPageRequest] = useState(0);
+  const selectPage = useCallback((page: SettingsPage): void => {
+    setActivePage(page);
+    setPageRequest((request) => request + 1);
+  }, []);
   const [historyBusy, setHistoryBusy] = useState(false);
   const [undoAvailable, setUndoAvailable] = useState(true);
   const [redoAvailable, setRedoAvailable] = useState(true);
@@ -537,6 +551,10 @@ export function SettingsPanel({
         </SettingsSection>
       </div>
     );
+  } else if (activePage === "agents") {
+    pageContent = (
+      <AgentsSection platform={platform} rootRequest={pageRequest} onSubpage={setAgentsSubpage} />
+    );
   } else if (activePage === "plugins") {
     pageContent = (
       <PluginsSection settingsRevision={settingsRevision} onSettingsChanged={markSettingsChanged} />
@@ -639,7 +657,7 @@ export function SettingsPanel({
       <SettingsDialog
         dialogRef={dialogRef}
         activePage={activePage}
-        onSelectPage={setActivePage}
+        onSelectPage={selectPage}
         onClose={onClose}
         onUndo={() => void runHistory("undo")}
         onRedo={() => void runHistory("redo")}
@@ -648,6 +666,7 @@ export function SettingsPanel({
         redoAvailable={redoAvailable}
         historyNote={historyNote}
         account={accountHead}
+        subpage={activePage === "agents" ? agentsSubpage : null}
       >
         {pageContent}
       </SettingsDialog>

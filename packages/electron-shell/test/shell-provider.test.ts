@@ -77,6 +77,7 @@ function call(
   method:
     | "shell.dialog.pickFolder"
     | "shell.openExternal"
+    | "shell.revealPath"
     | "shell.webcontents.captureArtifactPreview"
     | "shell.renderer.requestReplacement",
   params: unknown,
@@ -101,6 +102,7 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
     parentWindow: vi.fn(() => parent),
     showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
     openExternal: vi.fn(async () => undefined),
+    revealPath: vi.fn(),
     captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
     requestRendererReplacement: vi.fn(() => ({ requested: true })),
     enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),
@@ -139,6 +141,7 @@ describe("RecoveringShellProvider", () => {
         parentWindow: () => fakeWindow(),
         showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
         openExternal: vi.fn(async () => undefined),
+        revealPath: vi.fn(),
         captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
         requestRendererReplacement: vi.fn(() => ({ requested: true })),
         enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),
@@ -177,6 +180,34 @@ describe("RecoveringShellProvider", () => {
         },
       }),
     );
+    provider.dispose();
+  });
+
+  it("reveals the exact path fieldd named in the file manager, and refuses a relative one", async () => {
+    const { client, native, provider } = await fixture();
+    const path = "/Users/test/.local/bin/claude";
+    client.emit(
+      "shell.provider.call",
+      call("shell-revealabcdefghij", "shell.revealPath", { path }),
+    );
+    await vi.waitFor(() => expect(native.revealPath).toHaveBeenCalledWith(path));
+    await vi.waitFor(() =>
+      expect(client.requests.at(-1)).toEqual({
+        method: "shell.provider.resolve",
+        params: { callId: "shell-revealabcdefghij", outcome: { result: { revealed: true } } },
+      }),
+    );
+    client.emit(
+      "shell.provider.call",
+      call("shell-revealrelativexx", "shell.revealPath", { path: "bin/claude" }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests.at(-1)).toMatchObject({
+        method: "shell.provider.resolve",
+        params: { callId: "shell-revealrelativexx", outcome: { error: expect.anything() } },
+      }),
+    );
+    expect(native.revealPath).toHaveBeenCalledTimes(1);
     provider.dispose();
   });
 
@@ -368,6 +399,7 @@ describe("RecoveringShellProvider", () => {
       parentWindow: () => fakeWindow(),
       showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
       openExternal: vi.fn(async () => undefined),
+      revealPath: vi.fn(),
       captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
       requestRendererReplacement: vi.fn(() => ({ requested: true })),
       enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),

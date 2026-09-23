@@ -892,6 +892,7 @@ async function main(
         parentWindow: () => BrowserWindow.getFocusedWindow() ?? registry.primary(),
         showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
         openExternal: (url) => shell.openExternal(url),
+        revealPath: (path) => shell.showItemInFolder(path),
         captureArtifactPreview: (params, signal) => artifactPreviewCapture.capture(params, signal),
         requestRendererReplacement: ({ rendererParticipant }) => ({
           requested: windowRendererBoundary?.requestReplacement(rendererParticipant) === true,
