@@ -239,6 +239,10 @@ let package = Package(
       resources: [.process("Resources")]
     ),
     .testTarget(name: "SwarmPhysicsTests", dependencies: ["SwarmPhysics"]),
+    // The face (IOS-8a, DESIGN.md §2.8): the deal, the hash, the tilt and the
+    // edge pinned to goldens computed from the contracts' own TypeScript, and
+    // the die-cut witnessed on pixels.
+    .testTarget(name: "FieldDesignTests", dependencies: ["FieldDesign"]),
     .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
     .testTarget(
       name: "FieldProductTests",
