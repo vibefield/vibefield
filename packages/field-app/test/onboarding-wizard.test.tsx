@@ -136,6 +136,30 @@ function lateRoster(): {
   };
 }
 
+/** The machine's first user, set up — who a second user's chooser offers. */
+const OWNER: FieldUserProfile = {
+  userId: "01K0000000000000000000000A",
+  fuid: 1,
+  name: "James",
+  face: { emoji: "🦊" },
+  resident: true,
+  onboarded: true,
+};
+/** The second user this window is setting up. */
+const SECOND: FieldUserProfile = { ...FRESH, fuid: 2, setupVariant: "second-user" };
+
+/** A chooser tile, found by what it does. */
+const tile = (label: string): HTMLButtonElement | null =>
+  container?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ?? null;
+
+/** Let a roster read land. */
+async function settle(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 /** Another user on the machine, already wearing `emoji`. */
 const wearing = (emoji: string): FieldUserProfile => ({
   userId: "01K0000000000000000000000B",
@@ -252,9 +276,8 @@ describe("Setup Assistant", () => {
     expect(container?.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(
       `james, ${DEALT}`,
     );
-    // The picker is one click away, never in the way.
-    expect(container?.querySelector('[role="radiogroup"][aria-label="Face"]')).toBeNull();
-    await click("Change face…");
+    // The picker is already open beside the name — the whole pane fits its
+    // shell, so there is nothing to open and nothing to scroll to.
     const deck = container?.querySelectorAll<HTMLInputElement>(
       '[role="radiogroup"][aria-label="Face"] input',
     );
@@ -343,7 +366,6 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
     await click("Get started");
-    await click("Change face…");
     const picked = DEALT === "🐧" ? "🦉" : "🐧";
     await act(async () => {
       container?.querySelector<HTMLInputElement>(`input[aria-label="${picked}"]`)?.click();
@@ -409,7 +431,9 @@ describe("Setup Assistant", () => {
     );
     expect(text()).not.toContain("Your field now lives in a user");
     expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
-    // Nothing to go back to, so nothing offers to.
+    expect(text()).toContain("New user");
+    // No roster door on this host, so no chooser to go back to — and nothing
+    // offers to.
     expect(
       Array.from(container?.querySelectorAll("button") ?? []).some(
         (candidate) => candidate.textContent?.trim() === "Back",
@@ -428,6 +452,75 @@ describe("Setup Assistant", () => {
     expect(text()).not.toContain("Welcome to your field");
     expect(updates).toEqual([{ name: "james", face: DEALT_FACE }, { onboarded: true }]);
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes a second user's Back to the users chooser, and Continue setup back again", async () => {
+    const usersSwitch = vi.fn(async () => OWNER);
+    host(
+      vi.fn(
+        async (params: Record<string, unknown>) => ({ ...SECOND, ...params }) as FieldUserProfile,
+      ),
+      {
+        usersList: async () => ({ attachedUserId: SECOND.userId, users: [OWNER, SECOND] }),
+        usersSwitch,
+      },
+    );
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding({ fuid: 2, setupVariant: "second-user" }),
+      onComplete: vi.fn(),
+    });
+    expect(text()).toContain("New user");
+
+    // The user being set up already exists, so Back means: choose who to enter.
+    await click("Back");
+    await settle();
+    expect(text()).toContain("Choose a user");
+    expect(tile("Open James's field")).not.toBeNull();
+    expect(tile("Continue setting up james")?.textContent).toContain("Setting up");
+
+    await click("Continue setup");
+    expect(container?.querySelector('input[aria-label="Your name"]')).not.toBeNull();
+
+    // Choosing another user switches this window to them — the reload is the
+    // feedback, so the tile says so and everything else waits.
+    await click("Back");
+    await settle();
+    await act(async () => {
+      tile("Open James's field")?.click();
+      await Promise.resolve();
+    });
+    expect(usersSwitch).toHaveBeenCalledWith({ userId: OWNER.userId });
+    expect(tile("Open James's field")?.textContent).toContain("Opening…");
+    expect(tile("Continue setting up james")?.disabled).toBe(true);
+  });
+
+  it("says a refused switch on the chooser, in main's words, and gives the tiles back", async () => {
+    host(
+      vi.fn(async () => SECOND),
+      {
+        usersList: async () => ({ attachedUserId: SECOND.userId, users: [OWNER, SECOND] }),
+        usersSwitch: vi.fn(async () => {
+          throw new Error("a user switch is already in flight");
+        }),
+      },
+    );
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding({ fuid: 2, setupVariant: "second-user" }),
+      onComplete: vi.fn(),
+    });
+    await click("Back");
+    await settle();
+    await act(async () => {
+      tile("Open James's field")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
+      "Couldn't open James's field — a user switch is already in flight.",
+    );
+    expect(tile("Open James's field")?.disabled).toBe(false);
   });
 
   it("resumes a second user from users.json the same way as any other (W6)", async () => {

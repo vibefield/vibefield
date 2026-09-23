@@ -8,7 +8,8 @@
   gap: 10px;
 }
 
-.vf-face-picker[data-disabled] {
+.vf-face-picker[data-disabled],
+.vf-face-picker-choices[data-disabled] {
   opacity: 0.45;
   pointer-events: none;
 }
@@ -24,9 +25,10 @@
   gap: 10px;
 }
 
-/* Four rows of deck, then it scrolls — edge-faded, no scrollbar (§8) — so the
-   picker keeps pane 2 close to one screen. The inner padding keeps the selected
-   cell's ring inside the scroller's clip. */
+/* Four rows of deck (three in Setup's pane 2), then it scrolls — edge-faded,
+   no scrollbar (§8) — with the next row peeking under the fade, so there is
+   visibly more. The inner padding keeps the selected cell's ring inside the
+   scroller's clip. */
 .vf-face-picker-deck {
   display: grid;
   max-height: 176px;
@@ -38,11 +40,20 @@
   scrollbar-width: none;
 }
 
+.vf-face-picker-deck[data-rows="3"] {
+  max-height: 136px;
+}
+
 .vf-face-picker-deck::-webkit-scrollbar {
   display: none;
 }
 
+/* Positioned, so each cell's visually hidden radio stays inside the deck's own
+   scroll clip — an absolute input escapes to the nearest positioned ancestor
+   and stretches whatever scrolls around the deck (pane 2's shell grew by the
+   deck's hidden rows). */
 .vf-face-picker-cell {
+  position: relative;
   display: grid;
   height: 36px;
   place-items: center;
@@ -87,6 +98,23 @@
   background: transparent;
 }
 
+/* Setup's pane 2: the deck's name, and the typed face beside it on one row. */
+.vf-face-picker-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.vf-face-picker-label {
+  color: var(--vf-text-tertiary);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .vf-face-picker-any {
   display: flex;
   align-items: center;
@@ -119,6 +147,13 @@
 
 .vf-face-picker-any-input::placeholder {
   opacity: 0.35;
+}
+
+/* On the deck's label row (pane 2), the typed face is compact. */
+.vf-face-picker-head .vf-face-picker-any-input {
+  width: 60px;
+  height: 28px;
+  font-size: 16px;
 }
 
 .vf-face-picker-problem {

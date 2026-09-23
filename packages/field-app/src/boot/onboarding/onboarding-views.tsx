@@ -1,6 +1,6 @@
-import { UserFaceView } from "@vibefield/design-kit/face";
+import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import type { ReactElement } from "react";
-import { FacePicker } from "../../account/FacePicker";
+import { FaceDeck, FaceFrameSwitch } from "../../account/FacePicker";
 import { faceLabel } from "../../account/faces";
 import {
   LINK_ACT_LABEL,
@@ -88,20 +88,21 @@ export function OnboardingWelcomeBackPaneView({
 
 /** Pane 2 (UA-D17) — the name, and the face the machine dealt before the pane
  * opened. Still one decision (W1: who this field is) and one mandatory field
- * (W2: the name): the face is never blank, so Continue never waits on it. */
+ * (W2: the name): the face is never blank, so Continue never waits on it. The
+ * picker is already open — the frame switch under the face, the deck beside the
+ * name — and the whole pane fits its shell (DESIGN.md §2.8). */
 export function OnboardingFieldPaneView({
   name,
   face,
   seed,
   held,
-  pickerOpen,
   writing,
   error,
   onNameChange,
   onFaceChange,
-  onPickerToggle,
   onSubmit,
   onBack,
+  eyebrow = "Your field",
   autoFocus = true,
   pickerName = "vf-wizard-face",
 }: {
@@ -111,22 +112,22 @@ export function OnboardingFieldPaneView({
   seed: string;
   /** Faces other users on this machine wear (`faceKey` → name). */
   held: ReadonlyMap<string, string>;
-  pickerOpen: boolean;
   writing: boolean;
   error: string | null;
   onNameChange: (name: string) => void;
   onFaceChange: (face: FieldUserFace) => void;
-  onPickerToggle: () => void;
   onSubmit: () => void;
   onBack: (() => void) | undefined;
+  /** "New user" for a second user on this machine (§6.2). */
+  eyebrow?: string;
   autoFocus?: boolean;
   pickerName?: string;
 }): ReactElement {
   return (
     <WizardPane
-      eyebrow="Your field"
+      eyebrow={eyebrow}
       title="What should this field call you?"
-      voice="A name and a face for this machine's user. The face was dealt to you — both are yours to change later."
+      voice="A name and a face — both yours to change later in Settings."
       onSubmit={onSubmit}
       actions={
         <>
@@ -137,29 +138,27 @@ export function OnboardingFieldPaneView({
         </>
       }
     >
-      <div className="flex flex-col gap-4">
-        <div className="vf-wizard-identity">
-          <div className="vf-wizard-face">
-            {/* The sticker's one big moment — or, for a coin, its engraving. */}
-            <UserFaceView
-              emoji={face.emoji}
-              frame={face.frame}
-              size={112}
-              seed={seed}
-              label={faceLabel(name.trim().length > 0 ? name.trim() : "You", face)}
-              legend={face.frame === "coin" ? name.trim() : undefined}
-            />
-            <button
-              type="button"
-              className={quietCls}
-              aria-expanded={pickerOpen}
-              disabled={writing}
-              onClick={onPickerToggle}
-            >
-              {pickerOpen ? "Done" : "Change face…"}
-            </button>
-          </div>
-          <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="vf-wizard-identity">
+        <div className="vf-wizard-face">
+          {/* The sticker's one big moment — or, for a coin, its engraving. */}
+          <UserFaceView
+            emoji={face.emoji}
+            frame={face.frame}
+            size={96}
+            seed={seed}
+            label={faceLabel(name.trim().length > 0 ? name.trim() : "You", face)}
+            legend={face.frame === "coin" ? name.trim() : undefined}
+          />
+          <FaceFrameSwitch
+            value={face}
+            onChange={onFaceChange}
+            disabled={writing}
+            size="small"
+            className="vf-wizard-frames"
+          />
+        </div>
+        <div className="vf-wizard-identity-fields">
+          <label className="flex min-w-0 flex-col gap-1.5">
             <span className={eyebrowCls}>Name</span>
             <input
               type="text"
@@ -168,21 +167,100 @@ export function OnboardingFieldPaneView({
               disabled={writing}
               autoFocus={autoFocus}
               onChange={(event) => onNameChange(event.target.value)}
-              className="h-11 rounded-[12px] border border-black/10 bg-white px-3.5 text-[15px] text-black/85 outline-none transition-[border-color,box-shadow] placeholder:text-black/30 focus:border-black/25 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] motion-reduce:transition-none disabled:opacity-45 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:shadow-[0_0_0_3px_rgba(255,255,255,0.07)]"
+              className="h-10 rounded-[12px] border border-black/10 bg-white px-3.5 text-[15px] text-black/85 outline-none transition-[border-color,box-shadow] placeholder:text-black/30 focus:border-black/25 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] motion-reduce:transition-none disabled:opacity-45 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:shadow-[0_0_0_3px_rgba(255,255,255,0.07)]"
             />
           </label>
-        </div>
-        {pickerOpen && (
-          <FacePicker
+          <FaceDeck
             value={face}
             held={held}
+            onChange={onFaceChange}
             disabled={writing}
             name={pickerName}
-            onChange={onFaceChange}
+            rows={3}
+            label="Face"
           />
-        )}
-        {error !== null && <WizardError reason={`That did not save. ${error}`} />}
+        </div>
       </div>
+      {error !== null && <WizardError reason={`That did not save. ${error}`} />}
+    </WizardPane>
+  );
+}
+
+/** One user as the chooser shows them. */
+export interface OnboardingChooserUser {
+  readonly userId: string;
+  readonly name: string;
+  readonly face: FieldUserFace;
+  /** The user this window is setting up. */
+  readonly current: boolean;
+  /** Said only when there is something to say: "Setting up", "Not set up yet". */
+  readonly detail?: string | undefined;
+}
+
+/** The users chooser (§6.2; DESIGN.md §8) — Back from a new user's first pane.
+ * By then that user exists, so going back means choosing who to enter: another
+ * user's tile switches this window to them, this user's carries on setting up. */
+export function OnboardingUsersPaneView({
+  users,
+  opening,
+  error,
+  onChoose,
+  onContinue,
+}: {
+  /** Null while the roster is read. */
+  users: readonly OnboardingChooserUser[] | null;
+  /** The user being switched to — the window is about to reload. */
+  opening: string | null;
+  error: string | null;
+  onChoose: (userId: string) => void;
+  onContinue: () => void;
+}): ReactElement {
+  return (
+    <WizardPane
+      eyebrow="Users"
+      title="Choose a user"
+      voice="Each user has their own field on this machine. Open one, or carry on setting up the new one."
+      onSubmit={onContinue}
+      actions={
+        <button type="submit" className={primaryCls} disabled={opening !== null}>
+          Continue setup
+        </button>
+      }
+    >
+      {users === null ? (
+        <p className={factCls}>Reading the users on this machine…</p>
+      ) : (
+        <ul className="vf-wizard-users" aria-label="Users on this machine">
+          {users.map((user) => (
+            <li key={user.userId}>
+              <button
+                type="button"
+                className={`vf-wizard-user ${faceLiftHostClass}`}
+                aria-current={user.current ? "true" : undefined}
+                aria-label={
+                  user.current ? `Continue setting up ${user.name}` : `Open ${user.name}'s field`
+                }
+                disabled={opening !== null}
+                onClick={() => onChoose(user.userId)}
+              >
+                <UserFaceView
+                  emoji={user.face.emoji}
+                  frame={user.face.frame}
+                  size={56}
+                  seed={user.userId}
+                />
+                <span className="vf-wizard-user-name">{user.name}</span>
+                {(opening === user.userId || user.detail !== undefined) && (
+                  <span className="vf-wizard-user-detail">
+                    {opening === user.userId ? "Opening…" : user.detail}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error !== null && <WizardError reason={error} />}
     </WizardPane>
   );
 }

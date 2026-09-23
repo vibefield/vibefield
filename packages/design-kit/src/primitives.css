@@ -242,6 +242,18 @@
     box-shadow 300ms var(--vf-ease-island);
 }
 
+/* §8 — the small size: a switch inside a composition rather than heading one. */
+.vf-ui-segmented[data-size="small"] {
+  gap: 2px;
+  padding: 2px;
+}
+
+.vf-ui-segmented[data-size="small"] button {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
 .vf-ui-segmented button[aria-pressed="true"] {
   border-color: var(--vf-hairline);
   color: var(--vf-foreground);

@@ -4,6 +4,7 @@ import { faceKey } from "../account/faces";
 import { type LinkBeginStep, type LinkFace, linkFace } from "../account/link";
 import type { SyncPosture, SyncPostureControl } from "../account/posture";
 import {
+  type OnboardingChooserUser,
   OnboardingConnectPaneView,
   OnboardingDerivingPaneView,
   OnboardingFieldPaneView,
@@ -11,6 +12,7 @@ import {
   OnboardingPosturePaneView,
   OnboardingReadyPaneView,
   OnboardingSettingUpPaneView,
+  OnboardingUsersPaneView,
   OnboardingWelcomeBackPaneView,
   OnboardingWelcomePaneView,
 } from "../boot/onboarding/onboarding-views";
@@ -39,8 +41,29 @@ type ConnectState = (typeof CONNECT_STATES)[number];
 const POSTURE_STATES = ["automatic", "opt-in", "loading", "unavailable", "write error"] as const;
 type PostureState = (typeof POSTURE_STATES)[number];
 
-const FIELD_STATES = ["ready", "saving", "error"] as const;
+const FIELD_STATES = ["fresh", "second user", "saving", "error"] as const;
 type FieldState = (typeof FIELD_STATES)[number];
+
+const CHOOSER_STATES = ["ready", "opening", "refused", "reading"] as const;
+type ChooserState = (typeof CHOOSER_STATES)[number];
+
+/** The chooser's users: this machine's, plus the new one being set up. */
+const CHOOSER_USERS: readonly OnboardingChooserUser[] = [
+  { userId: FIXTURE_ME.userId, name: FIXTURE_ME.name, face: FIXTURE_ME.face, current: false },
+  ...FIXTURE_OTHERS.map((person) => ({
+    userId: person.userId,
+    name: person.name,
+    face: person.face,
+    current: false,
+  })),
+  {
+    userId: "01JB0000000000000000000NEW",
+    name: "jamesyong3",
+    face: { emoji: "🦉" },
+    current: true,
+    detail: "Setting up",
+  },
+];
 
 const COMPLETION_FAILURE = {
   kind: "failed" as const,
@@ -158,6 +181,8 @@ export function OnboardingPreview({
             />
           </OnboardingFrame>
 
+          <ChooserPreview />
+
           <OnboardingFrame
             index="A5"
             label="Second-user write refused"
@@ -176,11 +201,43 @@ export function OnboardingPreview({
   );
 }
 
+function ChooserPreview(): ReactElement {
+  const [state, setState] = useState<ChooserState>("ready");
+  const workId = FIXTURE_OTHERS[0]?.userId ?? null;
+  return (
+    <OnboardingFrame
+      index="A6"
+      label="Choose a user"
+      note="Back from a new user's first pane"
+      state="users"
+      controls={
+        <SegmentedControl
+          options={CHOOSER_STATES}
+          value={state}
+          onChange={setState}
+          label="Users chooser state"
+        />
+      }
+    >
+      <OnboardingUsersPaneView
+        users={state === "reading" ? null : CHOOSER_USERS}
+        opening={state === "opening" ? workId : null}
+        error={
+          state === "refused"
+            ? "Couldn't open Work's field — a user switch is already in flight."
+            : null
+        }
+        onChoose={noop}
+        onContinue={noop}
+      />
+    </OnboardingFrame>
+  );
+}
+
 function FieldPreview(): ReactElement {
-  const [state, setState] = useState<FieldState>("ready");
+  const [state, setState] = useState<FieldState>("fresh");
   const [name, setName] = useState("James");
   const [face, setFace] = useState<FieldUserFace>(FIXTURE_ME.face);
-  const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <OnboardingFrame
       index="02"
@@ -201,13 +258,12 @@ function FieldPreview(): ReactElement {
         face={face}
         seed={FIXTURE_ME.userId}
         held={new Map(FIXTURE_OTHERS.map((person) => [faceKey(person.face.emoji), person.name]))}
-        pickerOpen={pickerOpen}
         writing={state === "saving"}
         error={state === "error" ? "The profile service refused this write." : null}
         onNameChange={setName}
         onFaceChange={setFace}
-        onPickerToggle={() => setPickerOpen((open) => !open)}
         onSubmit={noop}
+        eyebrow={state === "second user" ? "New user" : "Your field"}
         onBack={noop}
         autoFocus={false}
         pickerName="vf-design-onboarding-face"

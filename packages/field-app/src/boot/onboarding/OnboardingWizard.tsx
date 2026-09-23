@@ -1,7 +1,7 @@
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider, useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useRef, useState } from "react";
-import { faceOf, heldFaces } from "../../account/faces";
+import { faceOf, heldFaces, shownFaces } from "../../account/faces";
 import {
   hasLink,
   type LinkBeginStep,
@@ -10,8 +10,13 @@ import {
   type UserLinkStatus,
 } from "../../account/link";
 import { useSyncPosture } from "../../account/posture";
-import { accountChanged } from "../../account/use-account";
-import { type FieldUserFace, type FieldUserProfile, getHost } from "../../host";
+import { accountChanged, refusalSentence } from "../../account/use-account";
+import {
+  type FieldUserFace,
+  type FieldUserProfile,
+  type FieldUserRoster,
+  getHost,
+} from "../../host";
 import type { BootOnboarding } from "../machine";
 import {
   type OnboardingCompletionFlag,
@@ -22,6 +27,7 @@ import {
   OnboardingPosturePaneView,
   OnboardingReadyPaneView,
   OnboardingSettingUpPaneView,
+  OnboardingUsersPaneView,
   OnboardingWelcomeBackPaneView,
   OnboardingWelcomePaneView,
 } from "./onboarding-views";
@@ -71,7 +77,10 @@ type Pane =
   /** The second-user variant's end (§6.2) — the same durable write Ready makes,
    * without the pause or the greeting. Not a sixth question: a terminal state
    * that only has a face if the write is refused. */
-  | "finishing";
+  | "finishing"
+  /** The users chooser (§6.2; DESIGN.md §8) — where a second user's Back leads.
+   * By then this user exists, so going back means choosing who to enter. */
+  | "users";
 
 export function OnboardingWizard({
   client,
@@ -162,6 +171,12 @@ function WizardBody({
     setHistory((stack) => stack.slice(0, -1));
   };
   const canGoBack = history.length > 0;
+  // A second user's first pane has nowhere earlier to go, and the user it is
+  // setting up already exists — so its Back opens the chooser instead, and the
+  // chooser's "Continue setup" returns to the pane it was opened from.
+  const host = getHost();
+  const canChooseUser =
+    secondUser && host.usersList !== undefined && host.usersSwitch !== undefined;
 
   // Pane 3 auto-advances: it reports work that is already done, so it is a
   // beat, not a gate.
@@ -219,7 +234,7 @@ function WizardBody({
     return shell(<OnboardingDerivingPaneView />);
   }
 
-  const onBack = canGoBack ? back : undefined;
+  const onBack = canGoBack ? back : canChooseUser ? () => go("users") : undefined;
 
   switch (pane) {
     case "welcome":
@@ -233,6 +248,7 @@ function WizardBody({
         <FieldPane
           profile={profile}
           usersUpdate={usersUpdate}
+          eyebrow={secondUser ? "New user" : "Your field"}
           onBack={onBack}
           onDone={(updated) => {
             setProfile(updated);
@@ -273,6 +289,9 @@ function WizardBody({
         />,
       );
 
+    case "users":
+      return shell(<UsersPane profile={profile} onContinue={back} />);
+
     case "finishing":
       // §6.2 — a successful write is gone before anyone could read a greeting,
       // so this state's only real face is the refusal. The passing case still
@@ -293,11 +312,13 @@ function WizardBody({
 function FieldPane({
   profile,
   usersUpdate,
+  eyebrow,
   onBack,
   onDone,
 }: {
   profile: FieldUserProfile;
   usersUpdate: ReturnType<typeof getHost>["usersUpdate"];
+  eyebrow: string;
   onBack: (() => void) | undefined;
   onDone: (updated: FieldUserProfile) => void;
 }): ReactElement {
@@ -311,7 +332,6 @@ function FieldPane({
   // A ref, not state: the roster read below closes over it once, and must see
   // a choice made while it was in flight rather than the value at entry.
   const chosen = useRef(profile.face !== undefined);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [writing, setWriting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -361,7 +381,6 @@ function FieldPane({
       face={face}
       seed={profile.userId}
       held={heldFaces(roster, profile.userId)}
-      pickerOpen={pickerOpen}
       writing={writing}
       error={error}
       onNameChange={setName}
@@ -369,9 +388,87 @@ function FieldPane({
         chosen.current = true;
         setFace(next);
       }}
-      onPickerToggle={() => setPickerOpen((open) => !open)}
       onSubmit={commit}
       onBack={onBack}
+      eyebrow={eyebrow}
+    />
+  );
+}
+
+/** The users chooser's controller: the roster, and the switch. Choosing another
+ * user re-targets this window and reloads it (UA-D15) — the reload is the
+ * feedback, so only a refusal comes back, said on the pane in main's words.
+ * Choosing the user being set up is "Continue setup". */
+function UsersPane({
+  profile,
+  onContinue,
+}: {
+  profile: FieldUserProfile;
+  onContinue: () => void;
+}): ReactElement {
+  const host = getHost();
+  const usersList = host.usersList;
+  const [roster, setRoster] = useState<FieldUserRoster | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (usersList === undefined) return;
+    let cancelled = false;
+    void usersList().then(
+      (snapshot) => {
+        if (!cancelled) setRoster(snapshot);
+      },
+      (cause: unknown) => {
+        if (!cancelled)
+          setError(refusalSentence("The users on this machine could not be read", cause));
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [usersList]);
+
+  const faces = roster === null ? null : shownFaces(roster.users);
+  const users =
+    roster === null
+      ? null
+      : [...roster.users]
+          .sort((a, b) => a.fuid - b.fuid)
+          .map((user) => ({
+            userId: user.userId,
+            name: user.name,
+            face: faces?.get(user.userId)?.face ?? faceOf(user, roster.users),
+            current: user.userId === profile.userId,
+            detail:
+              user.userId === profile.userId
+                ? "Setting up"
+                : user.onboarded
+                  ? undefined
+                  : "Not set up yet",
+          }));
+
+  return (
+    <OnboardingUsersPaneView
+      users={users}
+      opening={opening}
+      error={error}
+      onContinue={onContinue}
+      onChoose={(userId) => {
+        if (userId === profile.userId) {
+          onContinue();
+          return;
+        }
+        const usersSwitch = host.usersSwitch;
+        if (usersSwitch === undefined || opening !== null) return;
+        const name = roster?.users.find((user) => user.userId === userId)?.name ?? "that user";
+        setOpening(userId);
+        setError(null);
+        void usersSwitch({ userId }).catch((cause: unknown) => {
+          setOpening(null);
+          setError(refusalSentence(`Couldn't open ${name}'s field`, cause));
+        });
+      }}
     />
   );
 }

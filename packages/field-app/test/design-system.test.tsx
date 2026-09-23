@@ -147,7 +147,7 @@ describe("design system page", () => {
       container?.querySelectorAll(
         '[data-onboarding-preview] button[aria-label="Switch to light mode"]',
       ),
-    ).toHaveLength(11);
+    ).toHaveLength(12);
 
     const filePill = container?.querySelector<HTMLElement>("[data-file-pill]");
     expect(filePill?.dataset.filePillOpen).toBe("false");
@@ -183,7 +183,7 @@ describe("design system page", () => {
     expect(container?.querySelector(".vf-navigation-breadcrumbs__trail")).not.toBeNull();
     expect(container?.querySelector(".vf-settings-dialog")).not.toBeNull();
     expect(container?.querySelector(".vf-widget-tray")).not.toBeNull();
-    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(11);
+    expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(12);
     for (const state of [
       "welcome",
       "field",
@@ -194,12 +194,13 @@ describe("design system page", () => {
       "deriving",
       "welcome-back",
       "finishing",
+      "users",
       "ready-failed",
       "finishing-failed",
     ]) {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
-    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(11);
+    expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(12);
     expect(container?.querySelector(".vf-zoom-pill")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
