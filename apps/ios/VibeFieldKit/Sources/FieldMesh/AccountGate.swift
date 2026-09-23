@@ -162,6 +162,10 @@ public struct AccountLoginStore: Sendable {
     try Data(login.utf8).write(to: url, options: .atomic)
   }
 
-  // Deliberately no `clear()`. Forgetting an account is UA-P-D4 and D4 is
-  // open — see `AccountStep.regate`.
+  /// Forget the login (IOS-8d, AP-D4 — UA-P-D4's lean, implemented): the
+  /// sign-out act. Absent is not an error; there is nothing to forget.
+  public func clear() throws {
+    guard FileManager.default.fileExists(atPath: url.path) else { return }
+    try FileManager.default.removeItem(at: url)
+  }
 }

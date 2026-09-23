@@ -202,6 +202,40 @@ public final class MeshModel {
     }
   }
 
+  /// IOS-8d (AP-D4) — sign out: leave the mesh, forget this account's login
+  /// and the node's keys, and clear what the field taught this phone. The
+  /// sweep runs AFTER the node has stopped — a state directory removed under
+  /// a running node is not a sign-out — and the observable account facts go
+  /// at once, so the corner never draws a face it is about to forget.
+  ///
+  /// The next CONNECT is a fresh node and a fresh Tailscale sign-in; there
+  /// is no switch, because a phone holds one account at a time.
+  public func signOut() {
+    let sweep = SignOutSweep(login: rememberedLogin ?? loginName, stateDirectory: stateDirectory)
+    lastLoginURL = nil
+    loginPage = nil
+    rememberedLogin = nil
+    loginName = nil
+    tailnetDomain = nil
+    isGatedOnAccount = false
+    accountNote = nil
+    peers = []
+    guard let runtime else {
+      sweep.run()
+      state = .off
+      return
+    }
+    state = .stopping
+    eventsTask?.cancel()
+    eventsTask = nil
+    self.runtime = nil
+    Task {
+      await runtime.stop()
+      sweep.run()
+      if state == .stopping { state = .off }
+    }
+  }
+
   /// Safari sheet dismissed — ask the node to re-check its auth state.
   public func loginSheetDismissed() {
     loginPage = nil

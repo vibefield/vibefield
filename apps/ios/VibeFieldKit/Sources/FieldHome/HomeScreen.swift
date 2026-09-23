@@ -58,6 +58,9 @@ public struct HomeScreen: View {
   @State private var desktopMemory = DesktopMemory()
   @State private var faceStore = AccountFaceStore()
   @State private var identityEpoch = 0
+  /// IOS-8d — Sign out asks first: it is the one act in the menu that is
+  /// destructive, and the sentence says what goes and what stays.
+  @State private var signOutPending = false
   @State private var settingsSheetOpen = false
   @State private var discoveryPolling = false
   @State private var attachment: TerminalAttachment?
@@ -201,6 +204,18 @@ public struct HomeScreen: View {
     // IOS-8c — every listing teaches the account's memory: which desktops it
     // has, and — from the first door that answers with a user id — its face.
     .onChange(of: linkDesktops) { rememberAccount() }
+    // IOS-8d — on the stage for the type-checker's sake, like the cover above.
+    .confirmationDialog(
+      "Sign out of \(accountLogin ?? "this account")?", isPresented: $signOutPending,
+      titleVisibility: .visible
+    ) {
+      Button("Sign out", role: .destructive) { signOut() }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text(
+        "This phone forgets your Tailscale sign-in, your desktops and your face. "
+          + "Appearance, snippets and clipboard history stay.")
+    }
   }
 
   @ViewBuilder
@@ -226,7 +241,10 @@ public struct HomeScreen: View {
         accountMenuOpen = false
         settingsSheetOpen = true
       },
-      onSignOut: { accountMenuOpen = false },
+      onSignOut: {
+        accountMenuOpen = false
+        signOutPending = true
+      },
       onConnection: { act in
         accountMenuOpen = false
         performConnection(act)
@@ -1108,6 +1126,20 @@ public struct HomeScreen: View {
   /// launch of this account.
   private var accountSeed: String {
     mesh.loginName ?? mesh.rememberedLogin ?? ""
+  }
+
+  /// IOS-8d — the sign-out itself: the card and the link go first (a session
+  /// card over a mesh that is leaving is a card about nothing), then the
+  /// model's own sweep, then the ledger's in-memory copy, so the field draws
+  /// no colour the sweep has already forgotten.
+  private func signOut() {
+    selection = nil
+    closeCard()
+    closeLink()
+    mesh.signOut()
+    assembly.projects = .empty
+    refold()
+    identityEpoch += 1
   }
 
   /// The connection's act, as the menu offers it — what the mesh sheet's one

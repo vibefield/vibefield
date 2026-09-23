@@ -147,10 +147,14 @@ public enum ProjectLedgerCodec {
 }
 
 public struct UserDefaultsProjectLedgerStore: ProjectLedgerStoring {
+  /// The ledger's key, named so a sign-out (IOS-8d) can clear it: the
+  /// colours dealt to one account's projects do not greet the next.
+  public static let defaultKey = "vibefield.ios.project-ledger.v1"
+
   private let suite: String?
   private let key: String
 
-  public init(suite: String? = nil, key: String = "vibefield.ios.project-ledger.v1") {
+  public init(suite: String? = nil, key: String = defaultKey) {
     self.suite = suite
     self.key = key
   }
