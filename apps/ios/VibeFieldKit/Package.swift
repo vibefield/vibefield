@@ -24,6 +24,7 @@ let package = Package(
     .library(name: "FieldInput", targets: ["FieldInput"]),
     .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
+    .library(name: "FieldHistory", targets: ["FieldHistory"]),
   ],
   dependencies: [
     // The Ghosttea Apple stack (terminal + Truffle mesh). Exact pin — EL8:
@@ -229,12 +230,20 @@ let package = Package(
       resources: [.copy("Shaders"), .copy("Resources/marks.png")],
       linkerSettings: [.linkedFramework("Metal"), .linkedFramework("MetalKit")]
     ),
-    // The home screen: the field's composition, bubble chrome, session card.
+    // The History tab (IOS-9b, H-D4): the ledger, a project, a session's
+    // document and search — chrome family only, over VALUES (`HistoryCorpus`)
+    // that today only the mock fills (`-vf-mock`) and the index reads will.
+    // Takes FieldDesign for the tokens and FieldAgents for the dealt project
+    // colour; names no mesh and no Ghosttea product, so the tab's decisions
+    // (`FieldHistoryModel`) test without a simulator.
+    .target(name: "FieldHistory", dependencies: ["FieldDesign", "FieldAgents"]),
+    // The home screen: the field's composition, bubble chrome, session card —
+    // and since IOS-9a the tab bar the two views stand under.
     .target(
       name: "FieldHome",
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
-        "FieldSwarm",
+        "FieldSwarm", "FieldHistory",
       ],
       resources: [.process("Resources")]
     ),
@@ -288,5 +297,8 @@ let package = Package(
     // poll, the card's ended face, the double attach) that no other target
     // could have caught.
     .testTarget(name: "FieldHomeTests", dependencies: ["FieldHome"]),
+    // The History tab's DECISIONS (H-D4): ranking, the scope line, the search's
+    // matching and counts, where a hit lands, the stepper's ring.
+    .testTarget(name: "FieldHistoryTests", dependencies: ["FieldHistory"]),
   ]
 )

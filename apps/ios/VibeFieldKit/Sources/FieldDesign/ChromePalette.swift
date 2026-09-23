@@ -214,6 +214,22 @@ public enum ChromePalette {
   /// `--vf-red`: failed / destructive.
   public static let red = solid(0xFF453A)
 
+  // MARK: - Paper (the History tab, IOS-9b)
+
+  /// The record's `--vf-chrome-solid`: the History screens' ground — white
+  /// paper, `#1C1C1E` at night (§2.2's chrome material, opaque here because a
+  /// reading surface is a page, not a pane of glass).
+  public static let paper = dynamic(light: 0xFFFFFF, dark: 0x1C1C1E)
+  /// `--vf-fill`: the prompt panel, a stat card, a live row, a pressed row.
+  public static let fill = dynamic(light: 0xF2F2F7, dark: 0xFFFFFF, darkAlpha: 0.08)
+  /// `--vf-text-faint` — the ramp's last step (30% light, 32% dark): a path,
+  /// a time, a group head.
+  public static let inkFaint = dynamic(light: 0x1C1C1E, lightAlpha: 0.30, dark: 0xFFFFFF, darkAlpha: 0.32)
+  /// `--vf-hairline-strong`: the rules between turns.
+  public static let ruleStrong = dynamic(light: 0x000000, lightAlpha: 0.10, dark: 0xFFFFFF, darkAlpha: 0.14)
+  /// A search hit's mark: the term, on a wash of the select hue.
+  public static let markWash = dynamic(light: 0x4A90D9, lightAlpha: 0.18, dark: 0x4A90D9, darkAlpha: 0.30)
+
   // MARK: - Construction
 
   private static func dynamic(
