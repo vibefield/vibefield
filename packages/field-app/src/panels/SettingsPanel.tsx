@@ -14,6 +14,7 @@ import type { DesktopShellState, SettingsUndoResult, ShellPlatform } from "@vibe
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { lazy, type ReactElement, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { refusalSentence, useAccountSnapshot } from "../account/use-account";
+import { leaveFor } from "../boot/switch";
 import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { getHost } from "../host";
 import { AccountSection } from "./AccountSection";
@@ -188,16 +189,21 @@ export function SettingsPanel({
           notice: switchRefusal,
           // THE RELOAD IS THE FEEDBACK (host.ts): a switch re-targets this
           // window and reloads it, so only a refusal ever comes back — and it
-          // is said under the faces, in main's words.
+          // is said under the faces, in main's words. The switch (DESIGN.md
+          // §8) carries the pressed face and asks main once it has converged.
           onSwitch:
             usersSwitch === undefined
               ? undefined
-              : (userId) => {
-                  const name =
-                    account.others.find((other) => other.userId === userId)?.name ?? "that user";
+              : (userId, from) => {
+                  const person = account.others.find((other) => other.userId === userId);
+                  const name = person?.name ?? "that user";
                   setSwitching(true);
                   setSwitchRefusal(null);
-                  void usersSwitch({ userId }).catch((cause: unknown) => {
+                  void leaveFor(
+                    person === undefined ? null : { userId, name, face: person.face },
+                    from ?? null,
+                    () => usersSwitch({ userId }),
+                  ).catch((cause: unknown) => {
                     setSwitching(false);
                     setSwitchRefusal(refusalSentence(`Couldn't switch to ${name}`, cause));
                   });

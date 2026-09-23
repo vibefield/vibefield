@@ -108,7 +108,8 @@ describe("SettingsDialog head (UA-D19)", () => {
     expect(other?.textContent).toContain("🐙");
     expect(other?.querySelector(".vf-settings-account-waiting")?.textContent).toBe("2");
     await act(async () => other?.click());
-    expect(onSwitch).toHaveBeenCalledWith("01J9B7Q2MXC5D8F3G6H9J2K4N7");
+    // The pressed face rides along: the switch carries it (DESIGN.md §8).
+    expect(onSwitch).toHaveBeenCalledWith("01J9B7Q2MXC5D8F3G6H9J2K4N7", other);
   });
 
   it("says a refused switch under the faces, in main's words", async () => {

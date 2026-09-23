@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { leaveFor } from "../boot/switch";
 import { roundButtonCls } from "../field/theme-constants";
 import { getHost } from "../host";
 import {
@@ -46,8 +47,9 @@ export interface MeMenuViewProps {
   /** Link Tailscale account… (offered only while unlinked) — the link block
    * lives on the Account page, so this opens it there. */
   onLink: () => void;
-  /** Absent: this host cannot switch, and the rows say nothing false. */
-  onSwitch?: ((userId: string) => void) | undefined;
+  /** Absent: this host cannot switch, and the rows say nothing false. `from`
+   * is the row that was pressed — the switch carries its face (§8). */
+  onSwitch?: ((userId: string, from?: Element) => void) | undefined;
   onNewUser?: (() => void) | undefined;
   /** A switch or create is in flight: the window is about to reload. */
   busy?: boolean;
@@ -267,7 +269,10 @@ export function MeMenuView({
             tabIndex={-1}
             style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
             aria-label={`Switch to ${person.name}${person.waiting > 0 ? `, ${person.waiting} waiting` : ""}`}
-            onClick={() => act(() => onSwitch?.(person.userId))}
+            onClick={(event) => {
+              const from = event.currentTarget;
+              act(() => onSwitch?.(person.userId, from));
+            }}
           >
             <span className="vf-me-slot">
               <UserFaceView
@@ -386,6 +391,8 @@ export function MeMenuView({
         ref={faceRef}
         type="button"
         className={`vf-me-face ${faceLiftHostClass}`}
+        // Where a switch's face comes home (DESIGN.md §8 "The switch").
+        data-vf-switch-home={me.userId}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`${me.name}: account menu${waiting > 0 ? `, ${waiting} waiting in another user` : ""}`}
@@ -511,7 +518,8 @@ export function MeMenu({
   // THE RELOAD IS THE FEEDBACK (host.ts): switch and create re-target this
   // window and reload it, so nothing waits on their promises — only a refusal
   // comes back. It un-busies the corner and reopens the menu with main's
-  // words at the top, so a click never just does nothing.
+  // words at the top, so a click never just does nothing. Both leave through
+  // the switch (DESIGN.md §8), which asks main once its frame has converged.
   const fireAndForget = (head: string, run: () => Promise<unknown>): void => {
     setBusy(true);
     setRefusal(null);
@@ -533,12 +541,18 @@ export function MeMenu({
       onLink={() => onOpenSettings("account")}
       onSwitch={
         account.canSwitch && host.usersSwitch !== undefined
-          ? (userId) => {
+          ? (userId, from) => {
               const usersSwitch = host.usersSwitch;
-              const name =
-                account.others.find((other) => other.userId === userId)?.name ?? "that user";
+              const person = account.others.find((other) => other.userId === userId);
+              const name = person?.name ?? "that user";
               if (usersSwitch !== undefined) {
-                fireAndForget(`Couldn't switch to ${name}`, () => usersSwitch({ userId }));
+                fireAndForget(`Couldn't switch to ${name}`, () =>
+                  leaveFor(
+                    person === undefined ? null : { userId, name, face: person.face },
+                    from ?? null,
+                    () => usersSwitch({ userId }),
+                  ),
+                );
               }
             }
           : undefined
@@ -548,7 +562,9 @@ export function MeMenu({
           ? () => {
               const usersCreate = host.usersCreate;
               if (usersCreate !== undefined) {
-                fireAndForget("Couldn't add a user", () => usersCreate({}));
+                fireAndForget("Couldn't add a user", () =>
+                  leaveFor(null, null, () => usersCreate({})),
+                );
               }
             }
           : undefined

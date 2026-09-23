@@ -20,6 +20,7 @@ type MeState = (typeof ME_STATES)[number];
 
 import { FilePillPreview } from "../FilePillPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
+import { SwitchPreview } from "../SwitchPreview";
 
 export function ChromeSection({
   dark,
@@ -197,6 +198,15 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           Your face, where the Settings gear was. The circle around it grows into the menu on the
           island curve, and your face never moves — click it again to fold the menu back.
+        </p>
+      </Specimen>
+
+      <Specimen title="The switch" source="boot/SwitchScene.tsx · DESIGN.md §8" bleed>
+        <SwitchPreview />
+        <p className="vf-ds-stage-caption">
+          Open your face and choose another user. The field defocuses as the splash rises wearing
+          their face; the window reloads under that exact frame; then the new field comes into focus
+          as the face flies home to the corner. "Refused" plays it back.
         </p>
       </Specimen>
     </Section>

@@ -1,5 +1,6 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import { type ReactElement, useEffect, useState } from "react";
+import { leaveFor } from "../boot/switch";
 import { type FieldUserFace, type FieldUserProfile, type FieldUserRoster, getHost } from "../host";
 import { buttonCls, labelCls, SettingsSection } from "../panels/settings-ui";
 import { shownFaces } from "./faces";
@@ -18,8 +19,8 @@ import { useAccountGeneration } from "./use-account";
 // THE RELOAD IS THE FEEDBACK (host.ts): switch and create re-target this window
 // and reload it, so their promises may resolve into a dying context or never
 // settle at all. Nothing here waits for one. The pressed control disables and
-// the window goes away underneath it — no spinner, because a spinner would be
-// a promise about a page that will not be here to keep it.
+// the switch (DESIGN.md §8) carries the window away — no spinner, because a
+// spinner would be a promise about a page that will not be here to keep it.
 
 /** How the roster reads. `unavailable` is a host without the UA-5 door — an
  * older shell, or a browser harness — which is a FACT, not a failure. */
@@ -114,10 +115,13 @@ export function UserSwitcher(): ReactElement {
                 face={faces.get(user.userId)?.face ?? { emoji: "🦊" }}
                 current={user.userId === roster.roster.attachedUserId}
                 disabled={usersSwitch === undefined || busy}
-                onSwitch={() => {
+                onSwitch={(from) => {
                   if (usersSwitch === undefined) return;
+                  const face = faces.get(user.userId)?.face ?? { emoji: "🦊" };
                   fireAndForget({ kind: "switch", userId: user.userId }, () =>
-                    usersSwitch({ userId: user.userId }),
+                    leaveFor({ userId: user.userId, name: user.name, face }, from, () =>
+                      usersSwitch({ userId: user.userId }),
+                    ),
                   );
                 }}
               />
@@ -153,7 +157,7 @@ export function UserSwitcher(): ReactElement {
             if (usersCreate === undefined) return;
             // No name is asked for here. The mint only has to exist; the
             // reloaded window's Setup Assistant is where identity is decided.
-            fireAndForget({ kind: "create" }, () => usersCreate({}));
+            fireAndForget({ kind: "create" }, () => leaveFor(null, null, () => usersCreate({})));
           }}
         >
           New user…
@@ -187,7 +191,8 @@ function UserRow({
   face: FieldUserFace;
   current: boolean;
   disabled: boolean;
-  onSwitch: () => void;
+  /** `from` is this row — the switch carries its face (DESIGN.md §8). */
+  onSwitch: (from: Element) => void;
 }): ReactElement {
   const face = (
     <>
@@ -218,7 +223,7 @@ function UserRow({
       // The row is a face; the button says what pressing it DOES (§9).
       aria-label={`Switch to ${user.name}`}
       disabled={disabled}
-      onClick={onSwitch}
+      onClick={(event) => onSwitch(event.currentTarget)}
       className={`${faceLiftHostClass} flex w-full items-center gap-2.5 rounded-[12px] px-3 py-2 text-left transition-[background-color,transform] hover:bg-black/[0.03] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--vf-select)] disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none dark:hover:bg-white/[0.05]`}
     >
       {face}

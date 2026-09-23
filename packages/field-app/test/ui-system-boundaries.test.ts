@@ -182,7 +182,8 @@ describe("UI system ownership boundaries", () => {
     const mirror = source("design-system/TerminalMirrorPreview.tsx");
     const picker = source("design-system/TerminalSessionPickerPreview.tsx");
     const paneFrame = source("design-system/PaneFramePreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}`;
+    const switchScene = source("design-system/SwitchPreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${switchScene}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -192,6 +193,7 @@ describe("UI system ownership boundaries", () => {
       "NavigationBreadcrumbsView",
       "SettingsDialog",
       "MeMenuView",
+      "SwitchSceneView",
       "FacePicker",
       "UserFaceView",
       "WidgetTrayFrame",

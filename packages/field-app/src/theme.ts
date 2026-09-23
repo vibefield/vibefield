@@ -18,6 +18,17 @@ function stamp(dark: boolean): void {
   root.setAttribute("data-theme", dark ? "dark" : "light");
 }
 
+/** Stamp the stored theme before the first render: the splash's first frame —
+ * and the switch's held frame, which the window before a reload converged on
+ * in this same theme — must never paint in the other one. */
+export function stampInitialTheme(): void {
+  try {
+    stamp(initialDark());
+  } catch {
+    // No storage or media queries here: the first render stamps it instead.
+  }
+}
+
 export function useTheme(): { dark: boolean; toggle: () => void } {
   const [dark, setDark] = useState(initialDark);
   useEffect(() => {

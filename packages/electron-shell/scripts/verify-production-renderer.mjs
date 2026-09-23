@@ -55,6 +55,17 @@ if (leaks.length > 0) {
   throw new Error(`production renderer contains development UI:\n  ${leaks.join("\n  ")}`);
 }
 
+// DESIGN.md §8 "The switch": a packaged reload shows the new page's bare
+// ground unless its entry is render-blocking (render-blocking-entry.ts).
+const entryTags = readFileSync(join(rendererRoot, "index.html"), "utf8").match(
+  /<script type="module"[^>]*>/g,
+);
+if (entryTags?.length !== 1 || !entryTags[0].includes('blocking="render"')) {
+  throw new Error(
+    `production renderer entry must be one render-blocking module script, found: ${entryTags?.join(" ") ?? "none"}`,
+  );
+}
+
 const bytes = files.reduce((total, file) => total + statSync(file).size, 0);
 process.stdout.write(
   `production UI boundary OK — ${files.length} files, ${bytes.toLocaleString("en-US")} bytes; Studio, Design System catalog, and perf lab absent\n`,

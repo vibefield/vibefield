@@ -247,8 +247,10 @@ describe("MeMenuView", () => {
     expect(spies.onOpenChange).toHaveBeenLastCalledWith(false);
 
     await act(async () => face().click());
-    await act(async () => item("Work")?.click());
-    expect(spies.onSwitch).toHaveBeenCalledWith("01J9B7Q2MXC5D8F3G6H9J2K4N7");
+    const work = item("Work");
+    await act(async () => work?.click());
+    // The pressed row rides along: the switch carries its face (DESIGN.md §8).
+    expect(spies.onSwitch).toHaveBeenCalledWith("01J9B7Q2MXC5D8F3G6H9J2K4N7", work);
 
     await act(async () => face().click());
     await act(async () => item("James")?.click());

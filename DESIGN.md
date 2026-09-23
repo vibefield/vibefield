@@ -224,7 +224,8 @@ settings doc does not replicate yet, so today a face is this machine's, as the a
 **Where it appears, at what size.** The Me menu (§8): 40px in the corner, 26px in its rows ·
 the Settings head: 40px, other users 24px · Settings → Account: 48px, rows 28px · Setup
 Assistant pane 2: 96px, the smallest size whose coin shows its legend · the Setup users chooser:
-56px · the tray: the emoji leads the item's
+56px · the switch (§8): 128px at the centre of the window while it changes hands, a coin
+engraving the name · the tray: the emoji leads the item's
 label for both frames — a native menu draws no frame, and at menu size a coin reads as its
 emoji · document presence: the face leads the cursor's label ("🦊 James"), and every cursor
 is `--vf-presence-ink` (`#68686B`). *Corrected 2026-09-22 (UA-7): this said the cursor is
@@ -467,7 +468,8 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   count has no feed yet (main does not watch other users' pairs; spec v0.3 §12): the view
   draws it when handed one. A window with no account door (a browser harness) keeps the
   plain Settings button, so the corner is never a dead end. The rows name no tailnet: nothing
-  yet carries another user's link. A refusal (a switch or a new user main will not do) reopens
+  yet carries another user's link. Another user's row, like New user…, leaves through the switch
+  (below). A refusal (a switch or a new user main will not do) reopens
   the menu with main's sentence at its top, in words, until it folds. Open, the menu stands one
   z-step above Godview's button, which it grows over. Under reduced motion the seed circle's
   hover fill does not show — the panel waits at full size, invisible.
@@ -477,7 +479,7 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   four to a row: the 56px face (§2.8), the name, and one tertiary line only where there is
   something to say — "Setting up" on the user this window is setting up, "Not set up yet" on
   another unfinished one. A tile is a button: another user's switches the window to them (the
-  window reloads; a refusal is said on the pane, in main's words), this user's goes back to
+  switch, below, carries the tile's face; a refusal is said on the pane, in main's words), this user's goes back to
   pane 2, as does the primary action, "Continue setup". Tiles rest bare, take the §7 fill step
   on hover and the select ring on focus, and lift their face like any face host; it is the
   wizard's own glass, so nothing dims. There is no delete here: a user once created stays
@@ -497,12 +499,47 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   NOT late (there is nothing behind it yet) and NOT frost (nothing to frost).
   Unavailable is honest voice (§9): the stage line becomes the plain reason and a
   ghost "Retry" appears — no apology, no spinner theater.
+  *As built (2026-09-22, the switch):* its first frame is painted synchronously, with the
+  theme stamped before it and the product entry render-blocking, so no bare or wrong-theme
+  ground ever shows ahead of it. In the switch's dress (below) the wordmark gives way to the
+  arriving user's face, the eyebrow "Switching to" and their name.
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms
   `--vf-ease-island` (a breath, not a zoom). Fires once, fully warm. Reduced motion:
   fade only. Doc SWITCHES stay the loading veil's business — the splash exists only
   at boot.
+- **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
+  so the transition is two halves that meet on one frame — the boot splash wearing the face of
+  the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
+  §2.8) and travels to the centre of the window, growing to 128px, on `--vf-ease-island`
+  560ms; the row's own face goes with it (M1), so there is never a second copy. Behind it the
+  window defocuses: a backdrop blur climbs to 40px in 360ms `ease-out` while the stage recedes
+  to `scale(0.98)` on the island curve (M5 — the engine freezes, since this covers the window),
+  and from 120ms the splash's own ground — `--vf-canvas-bg` and the §2.1 dots — rises over it
+  in 360ms `ease` until the field is gone. The words follow 200ms behind the face (240ms
+  `ease`, rising 6px): the eyebrow "Switching to", the name in the Setup headline's type (28px
+  light), and the splash's bar and stage line as the splash begins them — "waking the daemon",
+  the bar at rest — because waking that user's pair is what main does next. The face is set
+  down before the frame converges at 600ms, and only then is main asked. **The seam.** The
+  window you leave converges on exactly the frame the window you enter paints first, so the
+  reload happens under an identical picture. *Measured 2026-09-22:* Chromium holds the old
+  frame through an `http:` reload until the new page paints content, but not through a
+  `vibefield-app:` one — there the bare ground shows for as long as the boot script runs —
+  hence the render-blocking entry above. **Arriving.** The new window opens on that frame and
+  runs its real stages on the bar. At the reveal the words go first (120ms `ease`); from 80ms
+  the face, lifted again, travels home to the Me menu's corner on the island curve (600ms),
+  shrinking to 40px along its way (M4), and hands over to the corner's own face as it lands
+  (120ms, over an identical face); the ground falls away in 420ms `ease` and the blur lifts off
+  the new field in 560ms `ease` while the canvas settles (the reveal's own `0.99 → 1`). A user
+  not set up yet arrives in Setup, and the face lands on pane 2's. **Refused.** Main's refusal
+  plays the leaving backwards — the face goes back to its row, the ground falls, the blur
+  lifts, the stage comes forward — and the refusal is said where it always is (the Me menu,
+  the Settings head, the Account page, the chooser). **New user…** leaves the same way to the
+  plain splash, the wordmark and no face, because that is exactly how a new user's window
+  begins. Nothing here is theater: no spinner, and the bar moves on real progress only.
+  Reduced motion (M6): no travel, blur or recede — the face and the words fade in place
+  (120ms), the ground rises in 180ms and falls in 120ms.
 - **Empty / degraded states**: a state is rendered, never blank space — dashed-hairline
   pill for drop affordances ("Release here to put it back"), progress with numbers
   ("index rebuilding · 42%"), placeholder faces for missing plugins (A6/A8). Empty

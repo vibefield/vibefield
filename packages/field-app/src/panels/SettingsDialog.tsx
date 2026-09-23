@@ -125,8 +125,9 @@ export interface SettingsAccountHead {
     /** Agents waiting in that user (no feed yet — spec v0.3 §12). */
     readonly waiting?: number;
   }[];
-  /** Absent: this host cannot switch, so the faces are shown, not offered. */
-  readonly onSwitch?: ((userId: string) => void) | undefined;
+  /** Absent: this host cannot switch, so the faces are shown, not offered.
+   * `from` is the face that was pressed — the switch carries it (§8). */
+  readonly onSwitch?: ((userId: string, from?: Element) => void) | undefined;
   readonly busy?: boolean;
   /** A switch main refused, in its words — shown under the faces until the
    * next attempt, so a click never just does nothing. */
@@ -194,7 +195,7 @@ function AccountHead({
                 title={`Switch to ${other.name}`}
                 aria-label={`Switch to ${other.name}${waiting > 0 ? `, ${waiting} waiting` : ""}`}
                 disabled={onSwitch === undefined || busy}
-                onClick={() => onSwitch?.(other.userId)}
+                onClick={(event) => onSwitch?.(other.userId, event.currentTarget)}
               >
                 <UserFaceView
                   emoji={other.face.emoji}

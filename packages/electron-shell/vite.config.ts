@@ -9,6 +9,7 @@ import {
   SINGLETON_CHUNK_PREFIX,
   singletonInputs,
 } from "./src/vite/host-singletons";
+import { renderBlockingEntry } from "./src/vite/render-blocking-entry";
 
 const rendererRoot = join(import.meta.dirname, "src", "renderer-host");
 const repoRoot = join(import.meta.dirname, "..", "..");
@@ -57,6 +58,9 @@ export default defineConfig(({ mode }) => ({
     tailwindcss(),
     react(),
     ...(mode === "design" || mode === "live-surfaces-lab" ? [] : [hostSingletons()]),
+    // DESIGN.md §8 "The switch": the product document's first frame is its
+    // entry's synchronous render, never the bare ground ahead of it.
+    renderBlockingEntry(),
   ],
   resolve: {
     alias: [{ find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],

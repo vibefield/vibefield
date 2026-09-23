@@ -3,9 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <title>VibeField</title>
+    <!-- Render-blocking (DESIGN.md §8 "The switch"): the first frame this
+         document paints is the one its entry renders synchronously — the boot
+         splash, or a switch's held frame — never the bare ground ahead of it.
+         Chromium holds the old frame through a reload of an http: page until
+         the new one paints, but not of a vibefield-app: one. -->
+    <script type="module" blocking="render" src="./index.ts"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.ts"></script>
   </body>
 </html>

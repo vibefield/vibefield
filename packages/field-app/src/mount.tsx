@@ -1,4 +1,5 @@
 import { FielddClient } from "@vibefield/fieldd-client";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type { AppearanceOverrideSource } from "./appearance";
 import { BootRoot } from "./boot/BootRoot";
@@ -7,6 +8,7 @@ import { type FieldHost, setHost } from "./host";
 import { setRendererLogger } from "./logging";
 import { mountFrameStatsOverlay } from "./perf/frame-stats-overlay";
 import type { ProductPresentationContextReporter } from "./presentation-context";
+import { stampInitialTheme } from "./theme";
 import "./tw.css";
 
 // The window IS the field (2026-07-21, James): no app bar, no tabs — chrome
@@ -59,18 +61,26 @@ export function mountFieldApp(opts: {
     })();
   });
 
-  // synchronous first paint (ESR §5.4.2) — no await before this render
-  createRoot(opts.container).render(
-    <BootRoot
-      machine={machine}
-      {...(opts.appearanceOverrideSource === undefined
-        ? {}
-        : { appearanceOverrideSource: opts.appearanceOverrideSource })}
-      {...(opts.onPresentationContextChange === undefined
-        ? {}
-        : { onPresentationContextChange: opts.onPresentationContextChange })}
-    />,
-  );
+  // synchronous first paint (ESR §5.4.2) — no await before this render, the
+  // theme stamped ahead of it, and the render FLUSHED: the product entry is
+  // render-blocking, so the first frame this window paints is this one. That
+  // is the switch's seam (DESIGN.md §8): the window a switch left converged on
+  // exactly the frame drawn here, so the reload between them never shows.
+  stampInitialTheme();
+  const root = createRoot(opts.container);
+  flushSync(() => {
+    root.render(
+      <BootRoot
+        machine={machine}
+        {...(opts.appearanceOverrideSource === undefined
+          ? {}
+          : { appearanceOverrideSource: opts.appearanceOverrideSource })}
+        {...(opts.onPresentationContextChange === undefined
+          ? {}
+          : { onPresentationContextChange: opts.onPresentationContextChange })}
+      />,
+    );
+  });
   requestAnimationFrame(() => {
     performance.mark("vf:renderer:first-frame");
     machine.start();

@@ -18,6 +18,7 @@ import {
   getHost,
 } from "../../host";
 import type { BootOnboarding } from "../machine";
+import { leaveFor } from "../switch";
 import {
   type OnboardingCompletionFlag,
   OnboardingConnectPaneView,
@@ -396,9 +397,9 @@ function FieldPane({
 }
 
 /** The users chooser's controller: the roster, and the switch. Choosing another
- * user re-targets this window and reloads it (UA-D15) — the reload is the
- * feedback, so only a refusal comes back, said on the pane in main's words.
- * Choosing the user being set up is "Continue setup". */
+ * user re-targets this window and reloads it (UA-D15) — the switch (DESIGN.md
+ * §8) carries the tile's face across, so only a refusal comes back, said on
+ * the pane in main's words. Choosing the user being set up is "Continue setup". */
 function UsersPane({
   profile,
   onContinue,
@@ -454,17 +455,22 @@ function UsersPane({
       opening={opening}
       error={error}
       onContinue={onContinue}
-      onChoose={(userId) => {
+      onChoose={(userId, from) => {
         if (userId === profile.userId) {
           onContinue();
           return;
         }
         const usersSwitch = host.usersSwitch;
         if (usersSwitch === undefined || opening !== null) return;
-        const name = roster?.users.find((user) => user.userId === userId)?.name ?? "that user";
+        const chosen = users?.find((user) => user.userId === userId);
+        const name = chosen?.name ?? "that user";
         setOpening(userId);
         setError(null);
-        void usersSwitch({ userId }).catch((cause: unknown) => {
+        void leaveFor(
+          chosen === undefined ? null : { userId, name, face: chosen.face },
+          from ?? null,
+          () => usersSwitch({ userId }),
+        ).catch((cause: unknown) => {
           setOpening(null);
           setError(refusalSentence(`Couldn't open ${name}'s field`, cause));
         });

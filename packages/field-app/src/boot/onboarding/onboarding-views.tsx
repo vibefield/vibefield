@@ -139,7 +139,8 @@ export function OnboardingFieldPaneView({
       }
     >
       <div className="vf-wizard-identity">
-        <div className="vf-wizard-face">
+        {/* Where a switch's face lands when it arrives in Setup (DESIGN.md §8). */}
+        <div className="vf-wizard-face" data-vf-switch-home={seed}>
           {/* The sticker's one big moment — or, for a coin, its engraving. */}
           <UserFaceView
             emoji={face.emoji}
@@ -212,7 +213,8 @@ export function OnboardingUsersPaneView({
   /** The user being switched to — the window is about to reload. */
   opening: string | null;
   error: string | null;
-  onChoose: (userId: string) => void;
+  /** `from` is the tile that was pressed — the switch carries its face (§8). */
+  onChoose: (userId: string, from?: Element) => void;
   onContinue: () => void;
 }): ReactElement {
   return (
@@ -241,7 +243,7 @@ export function OnboardingUsersPaneView({
                   user.current ? `Continue setting up ${user.name}` : `Open ${user.name}'s field`
                 }
                 disabled={opening !== null}
-                onClick={() => onChoose(user.userId)}
+                onClick={(event) => onChoose(user.userId, event.currentTarget)}
               >
                 <UserFaceView
                   emoji={user.face.emoji}

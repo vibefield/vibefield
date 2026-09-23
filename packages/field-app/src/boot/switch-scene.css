@@ -1,0 +1,247 @@
+/* The switch (DESIGN.md §8 "The switch"). One layer over the whole window:
+ * a frost that defocuses whatever is under it, the splash's own ground, and a
+ * column — the face, the words, the splash's bar and stage line.
+ *
+ * The step lives on the root (`data-step`), set by the view in a layout
+ * effect. The rules WITHOUT a step are the held frame — the frame both windows
+ * share — so a first frame painted before any step is set is already it. Every
+ * duration arrives as a custom property projected from SWITCH_MOTION
+ * (switch.ts): the doc, the timers and these transitions are one set of
+ * numbers. */
+
+.vf-switch {
+  position: fixed;
+  inset: 0;
+  /* Over Godview's instrument panel (1000), under the tray's drag proxy. */
+  z-index: 1100;
+}
+
+/* The catalog stages it inside a specimen instead of over the window — over
+   the specimen's own chrome, as it stands over the window's. */
+.vf-switch[data-contained] {
+  position: absolute;
+  z-index: 10;
+}
+
+.vf-switch-frost,
+.vf-switch-ground,
+.vf-switch-column {
+  position: absolute;
+  inset: 0;
+}
+
+.vf-switch-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vf-switch-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vf-switch-face {
+  display: grid;
+  width: var(--vf-switch-face-size);
+  height: var(--vf-switch-face-size);
+  margin-bottom: 20px;
+  place-items: center;
+  transform-origin: 50% 50%;
+}
+
+.vf-switch-words {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.vf-switch-name {
+  max-width: min(80vw, 28rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-switch-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---- held: the frame both windows share -------------------------------- */
+
+.vf-switch-frost {
+  backdrop-filter: none;
+}
+
+.vf-switch-ground {
+  opacity: 1;
+}
+
+.vf-switch-face {
+  opacity: 1;
+  transform: none;
+}
+
+.vf-switch-words,
+.vf-switch-status {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- leaving: the window defocuses and the splash rises over it --------- */
+
+.vf-switch[data-step="from"] .vf-switch-frost {
+  backdrop-filter: blur(0px);
+}
+
+.vf-switch[data-step="from"] .vf-switch-ground {
+  opacity: 0;
+}
+
+.vf-switch[data-step="from"] .vf-switch-face {
+  transform: var(--vf-switch-origin, none);
+}
+
+.vf-switch[data-step="from"] :is(.vf-switch-words, .vf-switch-status) {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.vf-switch[data-step="to"] .vf-switch-frost {
+  backdrop-filter: blur(var(--vf-switch-blur));
+  transition: backdrop-filter var(--vf-switch-blur-in) ease-out;
+}
+
+.vf-switch[data-step="to"] .vf-switch-ground {
+  transition: opacity var(--vf-switch-ground-in) ease var(--vf-switch-ground-delay);
+}
+
+.vf-switch[data-step="to"] .vf-switch-face {
+  transition: transform var(--vf-switch-travel) var(--vf-ease-island);
+}
+
+.vf-switch[data-step="to"] :is(.vf-switch-words, .vf-switch-status) {
+  transition:
+    opacity var(--vf-switch-words-in) ease var(--vf-switch-words-delay),
+    transform var(--vf-switch-words-in) ease var(--vf-switch-words-delay);
+}
+
+/* ---- returning and revealing: from the held frame, the frost takes its blur
+   back first, under a ground that is still opaque ------------------------- */
+
+.vf-switch:is([data-step="return-from"], [data-step="reveal-from"]) .vf-switch-frost {
+  backdrop-filter: blur(var(--vf-switch-blur));
+}
+
+.vf-switch:is([data-step="return"], [data-step="reveal"]) :is(.vf-switch-words, .vf-switch-status) {
+  opacity: 0;
+  transition: opacity var(--vf-switch-words-out) ease;
+}
+
+/* Refused: the leaving, backwards — the face goes back to its row. */
+.vf-switch[data-step="return"] .vf-switch-frost {
+  backdrop-filter: blur(0px);
+  transition: backdrop-filter var(--vf-switch-return-blur-out) ease var(--vf-switch-home-delay);
+}
+
+.vf-switch[data-step="return"] .vf-switch-ground {
+  opacity: 0;
+  transition: opacity var(--vf-switch-return-ground-out) ease var(--vf-switch-home-delay);
+}
+
+.vf-switch[data-step="return"] .vf-switch-face {
+  opacity: 0;
+  transform: var(--vf-switch-origin, none);
+  transition:
+    transform var(--vf-switch-travel) var(--vf-ease-island) var(--vf-switch-home-delay),
+    opacity var(--vf-switch-handover) ease var(--vf-switch-return-landed);
+}
+
+/* Arriving: the field is let through, the face goes home to the corner. */
+.vf-switch[data-step="reveal"] {
+  pointer-events: none;
+}
+
+.vf-switch[data-step="reveal"] .vf-switch-frost {
+  backdrop-filter: blur(0px);
+  transition: backdrop-filter var(--vf-switch-blur-out) ease var(--vf-switch-home-delay);
+}
+
+.vf-switch[data-step="reveal"] .vf-switch-ground {
+  opacity: 0;
+  transition: opacity var(--vf-switch-ground-out) ease var(--vf-switch-home-delay);
+}
+
+.vf-switch[data-step="reveal"] .vf-switch-face {
+  opacity: 0;
+  transform: var(--vf-switch-home, none);
+  transition:
+    transform var(--vf-switch-home-travel) var(--vf-ease-island) var(--vf-switch-home-delay),
+    opacity var(--vf-switch-handover) ease var(--vf-switch-home-landed);
+}
+
+/* Nowhere to land (the row is gone, the corner never came): a cancelled ghost
+   may fade (M4) — it settles a little and goes with the ground. */
+.vf-switch[data-homeless]:is([data-step="return"], [data-step="reveal"]) .vf-switch-face {
+  transform: scale(0.92);
+  transition:
+    transform var(--vf-switch-ground-out) ease var(--vf-switch-home-delay),
+    opacity var(--vf-switch-ground-out) ease var(--vf-switch-home-delay);
+}
+
+/* ---- M6: no travel, no blur, no recede — fades in place. Each rule outranks
+   every step's (and the homeless ghost's) by one attribute and by order. --- */
+
+.vf-switch[data-reduced][data-step] .vf-switch-frost {
+  backdrop-filter: none;
+  transition: none;
+}
+
+.vf-switch[data-reduced][data-step] .vf-switch-face {
+  transform: none;
+}
+
+.vf-switch[data-reduced][data-step="from"] .vf-switch-face {
+  opacity: 0;
+}
+
+.vf-switch[data-reduced][data-step="from"] :is(.vf-switch-words, .vf-switch-status) {
+  transform: none;
+}
+
+.vf-switch[data-reduced][data-step="to"] .vf-switch-ground {
+  transition: opacity var(--vf-switch-reduced-ground-in) ease-out;
+}
+
+.vf-switch[data-reduced][data-step="to"] :is(.vf-switch-face, .vf-switch-words, .vf-switch-status) {
+  transition: opacity var(--vf-switch-reduced-fade) ease;
+}
+
+.vf-switch[data-reduced]:is([data-step="return"], [data-step="reveal"]) .vf-switch-ground {
+  transition: opacity var(--vf-switch-reduced-ground-out) ease-out;
+}
+
+.vf-switch[data-reduced]:is([data-step="return"], [data-step="reveal"])
+  :is(.vf-switch-face, .vf-switch-words, .vf-switch-status) {
+  opacity: 0;
+  transition: opacity var(--vf-switch-reduced-fade) ease;
+}
+
+/* ---- the face while the traveller holds its place ---------------------- */
+
+/* The row the face left: it went with the traveller (M1), so no second copy. */
+[data-vf-switch-origin] {
+  visibility: hidden;
+}
+
+/* The corner the face is flying to shows its own face once the traveller is
+   on it — never two faces at once. */
+[data-vf-switch-landing] [data-vf-switch-home] .vf-face {
+  visibility: hidden;
+}

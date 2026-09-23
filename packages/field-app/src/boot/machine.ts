@@ -111,6 +111,10 @@ export interface BootMachine {
   completeOnboarding(profile?: FieldUserProfile): void;
 }
 
+/** The splash's first words — and the switch's, whose leaving window says
+ * them before main wakes the other user's pair (DESIGN.md §8 "The switch"). */
+export const FIRST_STAGE = "waking the daemon";
+
 const FRAME_BUDGET_MS = 24; // 60Hz + scheduling slack
 const STABLE_FRAMES = 10;
 const STABILITY_CAP_MS = 1_000;
@@ -124,7 +128,7 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
   let view: BootView = {
     phase: "requesting-bootstrap",
     unavailable: null,
-    stage: "waking the daemon",
+    stage: FIRST_STAGE,
     progress: null,
     degradedReveal: false,
   };
@@ -223,12 +227,12 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
       }
 
       if (conn === null) {
-        patch({ phase: "requesting-bootstrap", stage: "waking the daemon" });
+        patch({ phase: "requesting-bootstrap", stage: FIRST_STAGE });
         conn = await deps.host.getConnection();
         mark("vf:renderer:fieldd-ready");
       }
       if (client === null) {
-        patch({ phase: "connecting-fieldd", stage: "waking the daemon" });
+        patch({ phase: "connecting-fieldd", stage: FIRST_STAGE });
         client = deps.makeClient(conn);
       }
       if (mod === null) {

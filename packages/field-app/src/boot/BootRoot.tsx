@@ -9,6 +9,9 @@ import type { AppearanceOverrideSource } from "../appearance";
 import type { ProductPresentationContextReporter } from "../presentation-context";
 import type { BootMachine, BootView } from "./machine";
 import { OnboardingWizard } from "./onboarding/OnboardingWizard";
+import { SwitchLayer } from "./SwitchScene";
+import { SplashFace } from "./splash-parts";
+import { isSwitchCovering, SWITCH_MOTION, useSwitchState } from "./switch";
 import "./boot.css";
 
 // BootRoot (ESR §5.4.2): the splash is the app's first face (DESIGN.md §8 —
@@ -23,8 +26,22 @@ import "./boot.css";
 // releases the hold the ordinary stages return underneath it and the reveal
 // happens exactly as it always does — which is W5 in mechanism: the wizard
 // hands back to the real boot and ends inside the field, not at a door.
+//
+// The switch (DESIGN.md §8) borrows it once per user change. The window being
+// left draws its scene over everything — the field recedes and freezes under
+// it — and converges on the splash wearing the next user's face; the window
+// that reload opens paints that same frame first and stands the plain splash
+// down until its reveal sends the face home.
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 export function BootRoot({
   machine,
@@ -39,17 +56,36 @@ export function BootRoot({
   const ready = machine.ready;
   const revealed = view.phase === "interactive";
   const [settled, setSettled] = useState(false);
+  const switching = useSwitchState();
+  const covered = isSwitchCovering(switching);
+  // An arrival revealed straight into the field retires the plain splash: the
+  // switch's scene WAS this boot's splash. Into Setup it does not — the plain
+  // splash returns under the wizard's hand-back like any boot's.
+  const [splashRetired, setSplashRetired] = useState(false);
+  useEffect(() => {
+    if (switching.kind === "arriving" && switching.phase === "revealing" && revealed) {
+      setSplashRetired(true);
+    }
+  }, [switching, revealed]);
 
   useEffect(() => {
     if (!revealed) return;
     const t = setTimeout(() => setSettled(true), 600); // outlive the 560ms settle
     return () => clearTimeout(t);
   }, [revealed]);
+
+  // The stage recedes under a switch it is leaving (M5), and comes forward
+  // again while a refused one plays back; the transform lives only that long,
+  // for the settle's reason below.
+  const returning = switching.kind === "leaving" && switching.phase === "returning";
+  const recede = !prefersReducedMotion() && (covered || returning);
   return (
     <>
       {ready !== null && (
         <div
           className="absolute inset-0 motion-reduce:transition-none"
+          // Nothing under a switch can be reached: it is leaving.
+          inert={covered}
           // The settle transform exists ONLY while settling: a persistent
           // transform creates a stacking context that flattens the whole app
           // BELOW the z-40 .app-drag strip — every click in the top 52px died
@@ -57,12 +93,17 @@ export function BootRoot({
           // body-level stacking returns: the pill's no-drag hole punches
           // through the drag strip again.
           style={
-            settled
-              ? undefined
-              : {
+            !settled
+              ? {
                   transform: revealed ? "scale(1)" : "scale(0.99)",
                   transition: `transform 560ms ${EASE}`,
                 }
+              : recede
+                ? {
+                    transform: covered ? `scale(${SWITCH_MOTION.recede})` : "scale(1)",
+                    transition: `transform 600ms ${EASE}`,
+                  }
+                : undefined
           }
         >
           <ready.mod.FielddProvider client={ready.client}>
@@ -79,16 +120,21 @@ export function BootRoot({
         </div>
       )}
       {view.phase === "onboarding" && machine.client !== null && machine.onboarding !== null ? (
-        <BootGround>
+        <BootGround inert={covered}>
           <OnboardingWizard
             client={machine.client}
             onboarding={machine.onboarding}
             onComplete={machine.completeOnboarding}
           />
         </BootGround>
-      ) : (
+      ) : switching.kind === "arriving" || splashRetired ? null : (
         <Splash view={view} onRetry={machine.retry} />
       )}
+      <SwitchLayer
+        boot={view}
+        ready={revealed || view.phase === "onboarding"}
+        onRetry={machine.retry}
+      />
     </>
   );
 }
@@ -99,16 +145,19 @@ export function BootRoot({
 function BootGround({
   className = "",
   ariaHidden = false,
+  inert = false,
   children,
 }: {
   className?: string;
   ariaHidden?: boolean;
+  inert?: boolean;
   children: ReactNode;
 }): ReactElement {
   return (
     <div
       className={`vf-splash absolute inset-0 z-[120] flex items-center justify-center ${className}`}
       aria-hidden={ariaHidden}
+      inert={inert}
     >
       {children}
     </div>
@@ -125,8 +174,6 @@ function Splash({ view, onRetry }: { view: BootView; onRetry: () => void }): Rea
   }, [revealed]);
   if (!mounted) return null;
 
-  const failed = view.unavailable;
-  const progress = view.progress;
   return (
     <BootGround
       className={`transition-opacity duration-[240ms] ease-out ${
@@ -134,47 +181,7 @@ function Splash({ view, onRetry }: { view: BootView; onRetry: () => void }): Rea
       }`}
       ariaHidden={revealed}
     >
-      <div className="flex flex-col items-center gap-3">
-        <div className="mb-1 text-[13px] font-medium text-black/50 dark:text-white/50">
-          VibeField
-        </div>
-        <div
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          {...(progress !== null ? { "aria-valuenow": Math.round(progress * 100) } : {})}
-          aria-label="Starting VibeField"
-          className="h-[3px] w-[220px] overflow-hidden rounded-full bg-black/10 dark:bg-white/15"
-        >
-          <div
-            className="h-full rounded-full bg-black/70 dark:bg-white/80"
-            style={{
-              width: `${Math.round((progress ?? 0.06) * 100)}%`,
-              transition: `width 240ms ${EASE}`,
-            }}
-          />
-        </div>
-        {failed === null ? (
-          <div className="text-[11px] font-medium text-black/50 dark:text-white/50">
-            {view.stage}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            <div className="text-[11px] font-medium text-black/50 dark:text-white/50">
-              {failed.reason}
-            </div>
-            {failed.retryable && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="h-7 rounded-full bg-black/5 px-3 text-[12px] font-medium text-black/70 transition-colors hover:bg-black/10 active:scale-95 dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      <SplashFace status={view} onRetry={onRetry} />
     </BootGround>
   );
 }

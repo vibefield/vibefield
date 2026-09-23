@@ -92,7 +92,9 @@ export function CardsSection(): ReactElement {
   );
 }
 
-function WidgetCard({ kind }: { kind: "weather" | "terminal" | "note" | "market" }) {
+/** Catalog content: a committed widget surface, also the field the switch
+ * specimen defocuses. */
+export function WidgetCard({ kind }: { kind: "weather" | "terminal" | "note" | "market" }) {
   if (kind === "weather") {
     return (
       <article className="vf-ds-widget-card is-weather" style={{ background: WEATHER_GRADIENT }}>

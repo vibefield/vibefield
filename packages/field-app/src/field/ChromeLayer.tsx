@@ -15,6 +15,7 @@ import {
   useState,
 } from "react";
 import { MeMenu } from "../account/MeMenu";
+import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { GodviewOverlay, GodviewToggle, useGodviewOpen } from "../godview";
 import { getHost } from "../host";
@@ -273,6 +274,10 @@ export function ChromeLayer({
   // whole. Thaw drops the input banked behind the overlay and resumes on a
   // clamped dt, so nothing teleports.
   useFrameFreeze(ce, godviewOpen, "godview");
+  // The switch covers the window too (DESIGN.md §8): the field it leaves is
+  // frozen whole under the frost, and thaws if a refused switch hands it back.
+  const switchCovering = isSwitchCovering(useSwitchState());
+  useFrameFreeze(ce, switchCovering, "user-switch");
   useEffect(() => {
     if (docsOpen || showSettings) ce.ops.cancelActiveGestures();
   }, [docsOpen, showSettings, ce]);
