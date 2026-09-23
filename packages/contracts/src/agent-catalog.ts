@@ -133,12 +133,17 @@ export const AgentCatalogEntry = z
   .strict();
 export type AgentCatalogEntry = z.infer<typeof AgentCatalogEntry>;
 
-/** The wire form of a row (`agent.catalog`, the kit's fixture): tolerant — an
- * unknown key rides through, and `status` is an OPEN string (a status this
- * build never heard of, from a newer desktop over the link, is carried and
- * treated as not offered — never a refusal of the whole list; AC-4's finding). */
+/** The wire form of a row (`agent.catalog`, the kit's fixture): tolerant AT
+ * EVERY DEPTH — an unknown key rides through on the row and inside `offers`
+ * and `surfaces`, a capability or surface this build never heard of is
+ * carried and one it knows but the sender lacks reads as unclaimed, and
+ * `status` is an OPEN string (a status this build never heard of, from a
+ * newer desktop over the link, is carried and treated as not offered — never
+ * a refusal of the whole list; AC-4's finding). */
 export const AgentCatalogEntryWire = AgentCatalogEntry.extend({
   status: z.string().min(1).max(32),
+  offers: AgentOffers.partial().passthrough(),
+  surfaces: AgentSurfaces.partial().passthrough(),
 }).passthrough();
 export type AgentCatalogEntryWire = z.infer<typeof AgentCatalogEntryWire>;
 
@@ -305,7 +310,6 @@ export const AGENT_CATALOG = [
       distribution: false,
       personas: false,
     },
-    mark: "acp",
     admitted: "2026-09-22",
     decision:
       "AC-D7 — preview, spawn and resume only: a protocol, not a vendor; no ledger, no personas",

@@ -4,6 +4,7 @@ import {
   AgentCatalogStatus,
   type AgentOffers,
   type AgentPersona,
+  type AgentProviderSummary,
   catalogEntry,
 } from "@vibefield/contracts";
 
@@ -53,7 +54,9 @@ export interface PickerRow {
   available: boolean;
   personas: readonly AgentPersona[];
   status?: string | undefined;
-  offers?: AgentOffers | undefined;
+  /** the contract's own shape — partial to a reader (a key this build adds
+   * later is one an older daemon's row lacks), absent = not claimed */
+  offers?: AgentProviderSummary["offers"];
   history?: string | undefined;
 }
 

@@ -1065,6 +1065,50 @@ export function GodviewDeck({
         );
         return run;
       },
+      // AC-4 (the review) — the providers' answer follows the index daemon:
+      // fieldd's health stream carries its phase and generation, and a change
+      // in either is when the history state and the persona list may have
+      // moved. The snapshot only primes the comparison; a frame that repeats
+      // the same generation says nothing.
+      indexChanges: (listener) => {
+        let cancelled = false;
+        let unsubscribe: (() => void) | null = null;
+        let seen: string | null = null;
+        const generation = (payload: unknown): string => {
+          const rosettad = (payload as { rosettad?: { phase?: unknown; pid?: unknown } } | null)
+            ?.rosettad;
+          return `${String(rosettad?.phase)}:${String(rosettad?.pid)}`;
+        };
+        const watch = (payload: unknown): void => {
+          const key = generation(payload);
+          if (seen === null) {
+            seen = key;
+            return;
+          }
+          if (key === seen) return;
+          seen = key;
+          listener();
+        };
+        void fieldd
+          .subscribe("system.health.subscribe", {}, (payload) => {
+            if (!cancelled) watch(payload);
+          })
+          .then((subscription) => {
+            if (cancelled) {
+              subscription.unsubscribe();
+              return;
+            }
+            unsubscribe = subscription.unsubscribe;
+            watch(subscription.snapshot);
+          })
+          // a health stream that cannot be opened leaves the picker asked
+          // once, as before — nothing here is a state the deck draws
+          .catch(() => undefined);
+        return () => {
+          cancelled = true;
+          unsubscribe?.();
+        };
+      },
     };
     async function mountLocalNow(
       sessionId: string,

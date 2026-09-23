@@ -47,9 +47,12 @@ private let acpRow = AgentCatalogEntry(
     let unsaid = AgentCatalogEntry(id: .grok, label: "Grok", status: "preview")
     let catalog = AgentCatalog(entries: [claudeRow, acpRow, unsaid, codexRow])
     #expect(catalog.phoneRoster.map(\.id) == [.claude, .grok, .codex])
-    // …and the row is still there to NAME the agent: a desktop's ACP session
-    // draws on the field with its catalog label (R4).
+    // …and a row that IS in a catalog still names its agent. A phone's own
+    // catalog has no ACP row (the door drops it for the surface), and a
+    // desktop's ACP session is then named by the label its field row carries
+    // (`displayName(with:orLabel:)`, the facet suite below).
     #expect(AgentProvider.acp.displayName(in: catalog) == "ACP")
+    #expect(AgentProvider.acp.displayName(with: nil, orLabel: "ACP") == "ACP")
   }
 
   /// AC-D3's word is carried raw; a status this build has no case for is kept
@@ -105,8 +108,28 @@ private let acpRow = AgentCatalogEntry(
     #expect(facet.markKey == "claude")
   }
 
-  /// No row — an older desktop, the scripted fleet, an id no catalog decided
-  /// on — is the raw id for a name and the id for a mark: it still draws.
+  /// No row, but the row's own word: a desktop from before the door stamps
+  /// the adapter's label, and a phone names the body by it — never the raw
+  /// id where a producer said a name (the review's finding).
+  @Test func withoutARowTheFacetIsNamedByItsRowsOwnWord() throws {
+    let snapshot = AgentSnapshot(
+      id: "run-3", runtimeSessionID: "pty-3", provider: AgentProvider(rawValue: "hermes"),
+      label: "Hermes", project: "vibe-field", state: AgentRuntimeState())
+    let facet = try #require(fieldBubble(from: snapshot)?.agent)
+    #expect(facet.catalogEntry == nil)
+    #expect(facet.label == "Hermes")
+    #expect(facet.providerName == "Hermes")
+    #expect(facet.markKey == "hermes")
+    // the catalog's row outranks the row's word where both exist
+    let decided = AgentSnapshot(
+      id: "run-4", runtimeSessionID: "pty-4", provider: .claude, label: "Claude",
+      project: "vibe-field", state: AgentRuntimeState(), catalogEntry: claudeRow)
+    #expect(fieldBubble(from: decided)?.agent?.providerName == "Claude Code")
+  }
+
+  /// No row and no word — the scripted fleet, an id no catalog decided on and
+  /// no producer named — is the raw id for a name and the id for a mark: it
+  /// still draws.
   @Test func withoutARowTheFacetIsItsRawId() throws {
     let snapshot = AgentSnapshot(
       id: "run-2", runtimeSessionID: "pty-2", provider: AgentProvider(rawValue: "hermes"),

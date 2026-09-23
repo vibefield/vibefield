@@ -94,7 +94,7 @@ describe("AC-D8 — the daemon's refusal is read in full and subtracts the root"
     expect(after.runtimes).toEqual([]);
     expect(after.retired?.[0]).toMatchObject({ kind: "hermes", profile_id: "hermes:1" });
     expect(after.retired?.[0]?.refused?.detail).toContain("unknown agent kind");
-    expect(after.retired?.[0]?.refused?.at).toMatch(/^\d{4}-/);
+    expect(after.retired?.[0]?.retired_at).toMatch(/^\d{4}-/);
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(requestRestart).not.toHaveBeenCalled();
     index.dispose();
@@ -125,6 +125,41 @@ describe("AC-D8 — the daemon's refusal is read in full and subtracts the root"
     index.dispose();
   });
 
+  it("a record write that fails inside the daemon's exit handler (a full disk) does not escape the emit — the subtraction stands in memory and is written at the next refusal", async () => {
+    const { events, requestRestart, index, refusal, transition, record, store } = setup();
+    const failing = vi.spyOn(store, "publish").mockImplementationOnce(() => {
+      throw new Error("ENOSPC: no space left on device");
+    });
+    // a throw here would leave the supervisor's `exited()` — the child's exit
+    // listener — and end fieldd; the emit must return
+    expect(() =>
+      events.emit("transition", transition({ phase: "restarting", enrollRefusals: [refusal] })),
+    ).not.toThrow();
+    expect(failing).toHaveBeenCalledTimes(1);
+    expect(store.snapshot().runtimes).toEqual([]); // in memory
+    expect(record().runtimes).toHaveLength(1); // on disk, still
+    // the retry launches with the old file, the daemon refuses again: the
+    // same line retires nothing new, and the owed write happens now
+    events.emit("transition", transition({ phase: "failed", enrollRefusals: [refusal] }));
+    expect(record().runtimes).toEqual([]);
+    expect(record().retired?.[0]?.refused?.detail).toContain("unknown agent kind");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(requestRestart).toHaveBeenCalledTimes(1);
+    index.dispose();
+  });
+
+  it("the owed restart's launch failing is the supervisor's own honest word, never an unhandled rejection", async () => {
+    const { events, requestRestart, index, refusal, transition, record } = setup();
+    requestRestart.mockRejectedValueOnce(new Error("EBUSY: an orphan's directory is in use"));
+    events.emit("transition", transition({ phase: "failed", enrollRefusals: [refusal] }));
+    expect(record().runtimes).toEqual([]);
+    // vitest fails the run on an unhandled rejection: reaching the assertion
+    // below after the deferred launch rejected is the witness
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requestRestart).toHaveBeenCalledTimes(1);
+    index.dispose();
+  });
+
   it("the truncated failure detail alone is not enough on a real path — the reason was cut off — and nothing is subtracted", async () => {
     const { events, index, transition, record } = setup();
     events.emit("transition", transition({ enrollRefusals: [] }));
@@ -140,6 +175,39 @@ describe("AC-D8 — the daemon's refusal is read in full and subtracts the root"
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(requestRestart).toHaveBeenCalledTimes(1);
     index.dispose();
+  });
+
+  it("the supervisor's real order — `restarting` subtracts, then `failed` arrives with the SAME consumed lines — still asks the one owed restart; a `ready` in between cancels it", async () => {
+    const { events, requestRestart, index, refusal, transition, record } = setup();
+    events.emit("transition", transition({ phase: "restarting", enrollRefusals: [refusal] }));
+    expect(record().runtimes).toEqual([]);
+    // the retry window closes: the same lines ride the `failed` state, nothing
+    // new to retire — the restart is owed all the same, once
+    events.emit("transition", transition({ phase: "failed", enrollRefusals: [refusal] }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(requestRestart).toHaveBeenCalledTimes(1);
+    events.emit("transition", transition({ phase: "failed", enrollRefusals: [refusal] }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(requestRestart).toHaveBeenCalledTimes(1);
+    index.dispose();
+    // a generation that came up clears the debt: a later window closing with
+    // stale lines asks nothing
+    const fresh = setup();
+    fresh.events.emit(
+      "transition",
+      fresh.transition({ phase: "restarting", enrollRefusals: [fresh.refusal] }),
+    );
+    fresh.events.emit(
+      "transition",
+      fresh.transition({ phase: "ready", detail: null, enrollRefusals: [] }),
+    );
+    fresh.events.emit(
+      "transition",
+      fresh.transition({ phase: "failed", enrollRefusals: [fresh.refusal] }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(fresh.requestRestart).not.toHaveBeenCalled();
+    fresh.index.dispose();
   });
 
   it("a refusal for a root the record does not name changes nothing; a `ready` transition is ignored; dispose stops listening", async () => {

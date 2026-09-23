@@ -480,6 +480,46 @@ describe("the picker on the monitor stage", () => {
     expect(historyState(host)?.textContent).toBe("history unavailable");
   });
 
+  it("asks the door again when it says the index moved: the history state and the persona list follow the daemon, and the choice made survives", async () => {
+    // the review's finding: providers() was asked once per door, and the
+    // history state and the persona list are live daemon facts
+    let listener: (() => void) | null = null;
+    let answer: readonly AgentProviderSummary[] = [
+      row(CLAUDE, { history: "unavailable", personas: [] }),
+      row(PI, { available: true }),
+    ];
+    const door: FakeDoor = {
+      ...fakeDoor([]),
+      providers: vi.fn(async () => answer),
+      indexChanges: vi.fn((fn: () => void) => {
+        listener = fn;
+        return () => {
+          listener = null;
+        };
+      }),
+    };
+    const host = await mountPicker(door);
+    expect(door.providers).toHaveBeenCalledTimes(1);
+    expect(historyState(host)?.textContent).toBe("history unavailable");
+    expect(personaSelect(host)).toBeNull();
+    // the user picks pi meanwhile…
+    await choose(providerSelect(host), "pi");
+    // …the daemon comes up: claude's history is indexed and its persona is back
+    answer = [CLAUDE, row(PI, { available: true })];
+    await act(async () => {
+      listener?.();
+    });
+    expect(door.providers).toHaveBeenCalledTimes(2);
+    expect(providerSelect(host).value).toBe("pi"); // the choice survives
+    await choose(providerSelect(host), "claude");
+    expect(historyState(host)).toBeNull();
+    expect(personaSelect(host)).not.toBeNull();
+    // the dispose reaches the door's subscription when the deck goes
+    act(() => root?.unmount());
+    root = null;
+    expect(listener).toBeNull();
+  });
+
   it("carries a newer daemon's unknown status on the stage — its own word, no SPAWN, the gesture refused", async () => {
     const door = fakeDoor([
       CLAUDE,

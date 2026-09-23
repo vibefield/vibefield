@@ -332,7 +332,9 @@ export function GodviewMonitor({
       picker: {
         rows: providers.map((provider) => ({ id: provider.id, badge: providerBadge(provider) })),
         selected: selectedProviderId,
-        spawn: offersSpawn,
+        // the marker says what the bar DRAWS: a verb a person can use, not
+        // the "no provider chosen" case that only announces a refusal
+        spawn: selectedProvider !== undefined && providerStartsSessions(selectedProvider),
         history: historyClaim,
         personas: personas.length,
       },

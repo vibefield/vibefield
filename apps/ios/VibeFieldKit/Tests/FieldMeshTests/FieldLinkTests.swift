@@ -65,11 +65,12 @@ private func deviceSlice(name: String, url: String?) -> JSONValue {
   return .object(fields)
 }
 
-private func boardRow(id: String, status: String = "working", kind: String = "claude") -> JSONValue
-{
+private func boardRow(
+  id: String, status: String = "working", kind: String = "claude", label: String = "Claude Code"
+) -> JSONValue {
   .object([
     "runtimeRunId": .string(id), "revision": .int(1), "kind": .string(kind),
-    "label": .string("Claude Code"), "tier": .string("managed"),
+    "label": .string(label), "tier": .string("managed"),
     "device": .string("dev-studio"), "status": .string(status),
     "statusSince": .string("2026-09-13T18:42:11.000Z"),
     "stateChangedAt": .string("2026-09-13T18:42:11.000Z"),
@@ -1537,16 +1538,39 @@ private func countedLink(
 private let idleSchedule = FieldDiscoverySchedule(
   notThisAccount: .seconds(300), unreachable: .seconds(30), tick: .seconds(120))
 
-/// The subscribe answer every row below uses: one Claude run and one agent a
-/// catalog may or may not have decided on.
+/// The subscribe answer every row below uses: one Claude run, one agent a
+/// catalog may or may not have decided on, and one ACP run — a row the door
+/// keeps off a phone's catalog (AC-D7). Every row carries the label the
+/// desktop stamped, as fieldd's field rows do.
 private func catalogBoard(_ id: Int64) -> String {
   frame(
     id: id,
     .object([
       "subId": .string("s1"),
       "snapshot": snapshotFrame(
-        revision: 1, rows: [boardRow(id: "run-1"), boardRow(id: "run-2", kind: "zed")]),
+        revision: 1,
+        rows: [
+          boardRow(id: "run-1"), boardRow(id: "run-2", kind: "zed", label: "Zed"),
+          boardRow(id: "run-3", kind: "acp", label: "ACP"),
+        ]),
     ]))
+}
+
+/// The golden as the door answers a PHONE: the rows whose `surfaces.phone` is
+/// not false — what fieldd's `visible("phone")` sends (its own test pins that
+/// the protocol row never reaches a phone).
+private func phoneCatalog(_ golden: JSONValue) -> JSONValue {
+  guard case .object(var fields) = golden, case .array(let rows)? = fields["catalog"] else {
+    return golden
+  }
+  fields["catalog"] = .array(
+    rows.filter { row in
+      guard case .object(let r) = row, case .object(let s)? = r["surfaces"],
+        case .bool(false)? = s["phone"]
+      else { return true }
+      return false
+    })
+  return .object(fields)
 }
 
 /// Generous ceilings: these rows wait on real socket turns, and a host at a
@@ -1558,7 +1582,8 @@ private let catalogWait: Duration = .seconds(20)
 @Suite struct FieldLinkCatalogTests {
   /// AC-D9 whole: the link asks the door for the catalog AS A PHONE once the
   /// hello lands, the phone's lists read it, and the field is named by it — a
-  /// row the catalog decided on by its label, one it did not by its raw id.
+  /// row the catalog decided on by its label, one it did not (or one the door
+  /// keeps off the phone: ACP) by the label its field row carries.
   @Test func theDoorsCatalogNamesTheField() async throws {
     let golden = try MeshFixture.json("agent-catalog.valid")
     let (link, _, door, _) = await countedLink(script: { method, id, params in
@@ -1566,7 +1591,7 @@ private let catalogWait: Duration = .seconds(20)
       case "system.hello": return [frame(id: id, ack)]
       case "agent.catalog":
         #expect(params == .object(["surface": .string("phone")]))
-        return [frame(id: id, golden)]
+        return [frame(id: id, phoneCatalog(golden))]
       case "agent.subscribe": return [catalogBoard(id)]
       default: return []
       }
@@ -1574,13 +1599,17 @@ private let catalogWait: Duration = .seconds(20)
     defer { link.stop() }
 
     try await waitUntil("the named field", timeout: catalogWait) {
-      link.agents.count == 2 && link.agents.first?.catalogEntry != nil
+      link.agents.count == 3 && link.agents.first?.catalogEntry != nil
     }
-    #expect(link.agents.map { $0.catalogEntry?.label } == ["Claude Code", nil])
-    #expect(link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == ["Claude Code", "zed"])
-    #expect(link.catalog.entries.count == 10)
-    // The door here ignores `surface` and sends ACP anyway; the phone's own
-    // list still leaves it out (AC-D7), and its sessions would still draw.
+    #expect(link.agents.map { $0.catalogEntry?.label } == ["Claude Code", nil, nil])
+    #expect(
+      link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == [
+        "Claude Code", "Zed", "ACP",
+      ])
+    // The door answered the phone WITHOUT the protocol row (AC-D7): the
+    // phone's lists never offer it, and the desktop's ACP session still drew,
+    // named by the label its row carries.
+    #expect(link.catalog.entries.count == 9)
     #expect(link.catalog.phoneRoster.count == 9)
     #expect(!link.catalog.phoneRoster.contains { $0.id.rawValue == "acp" })
     #expect(await door.latest?.methods.filter { $0 == "agent.catalog" }.count == 1)
@@ -1604,7 +1633,7 @@ private let catalogWait: Duration = .seconds(20)
     defer { link.stop() }
 
     try await waitUntil("an unnamed field and the ask", timeout: catalogWait) {
-      link.agents.count == 2 && tally.asks == 1
+      link.agents.count == 3 && tally.asks == 1
     }
     // PIN THE PRECONDITION: the bodies are on the field and nothing names them.
     #expect(link.agents.allSatisfy { $0.catalogEntry == nil })
@@ -1636,10 +1665,15 @@ private let catalogWait: Duration = .seconds(20)
     try await waitUntil("the fallback note", timeout: catalogWait) {
       link.notes.contains { $0.contains("has no agent catalog for this phone") }
     }
-    try await waitUntil("both bodies", timeout: catalogWait) { link.agents.count == 2 }
+    try await waitUntil("the bodies", timeout: catalogWait) { link.agents.count == 3 }
     #expect(link.catalog.isEmpty)
     #expect(link.agents.allSatisfy { $0.catalogEntry == nil })
-    #expect(link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == ["claude", "zed"])
+    // named by the word each row carries — such a desktop stamps its
+    // adapter's own — never blanked to the raw id
+    #expect(
+      link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == [
+        "Claude Code", "Zed", "ACP",
+      ])
     #expect(link.desktops.first?.state == .ready)
     #expect(link.desktops.first?.feed == .door)
 
@@ -1737,5 +1771,36 @@ private let catalogWait: Duration = .seconds(20)
     await mesh.emit(.left(studio))
     try await waitUntil("the catalog gone", timeout: catalogWait) { link.catalog.isEmpty }
     #expect(link.desktops.isEmpty)
+  }
+
+  /// A desktop that drops off the ONLINE list (a sleep: truffle keeps the peer
+  /// in its snapshot as `online: false` and never says `left`) takes its
+  /// bodies off the field too — the sweep that forgets it refolds, not only
+  /// the `.left` path (the review's finding: the sweep returned before its
+  /// refold when nothing else was due, and the vanished desktop's bodies
+  /// stayed, named by a catalog the link no longer held).
+  @Test func aDesktopThatGoesOfflineTakesItsBodiesOffTheField() async throws {
+    let golden = try MeshFixture.json("agent-catalog.valid")
+    let (link, mesh, _, _) = await countedLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.catalog": return [frame(id: id, golden)]
+      case "agent.subscribe": return [catalogBoard(id)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("the named field", timeout: catalogWait) {
+      link.agents.count == 3 && !link.catalog.isEmpty
+    }
+    let asleepStudio = FieldStorePeer(
+      id: studio.id, deviceId: studio.deviceId, online: false, hostname: studio.hostname,
+      tailnetIPs: studio.tailnetIPs)
+    await mesh.set(peers: [asleepStudio])
+    await mesh.emit(.upsert(asleepStudio))
+    try await waitUntil("the field emptied", timeout: catalogWait) { link.agents.isEmpty }
+    #expect(link.desktops.isEmpty)
+    #expect(link.catalog.isEmpty)
   }
 }

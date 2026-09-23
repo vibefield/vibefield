@@ -317,6 +317,12 @@ public struct AgentSnapshot: Identifiable, Sendable, Equatable {
   /// The runtime alias; the card header still derives a hue from it (D-i16).
   public let runtimeSessionID: String
   public var provider: AgentProvider
+  /// The producer's own word for the agent on this row — the field row's
+  /// `label` (fieldd stamps the catalog's since AC-3; a desktop from before
+  /// it stamps the adapter's own). The name's fallback when no catalog row
+  /// reaches this phone for the id (`AgentFacet.providerName`). nil for the
+  /// scripted fleet, which has no producer.
+  public var label: String?
   /// Folder-name project label, the bubble's headline — and, until IOS-4
   /// hands the workspace root over, the key the project's colour is dealt by.
   public var project: String
@@ -341,6 +347,7 @@ public struct AgentSnapshot: Identifiable, Sendable, Equatable {
     id: String,
     runtimeSessionID: String,
     provider: AgentProvider,
+    label: String? = nil,
     project: String,
     state: AgentRuntimeState? = nil,
     createdAt: Date = .now,
@@ -350,6 +357,7 @@ public struct AgentSnapshot: Identifiable, Sendable, Equatable {
     self.id = id
     self.runtimeSessionID = runtimeSessionID
     self.provider = provider
+    self.label = label
     self.project = project
     self.state = state
     self.createdAt = createdAt

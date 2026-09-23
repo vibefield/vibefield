@@ -124,6 +124,23 @@ describe("the agent catalog (AC-1)", () => {
     // …while the TABLE is strict (an unknown key or status in the source is a typo)
     expect(() => AgentCatalogEntry.parse({ ...rows[0], someday: 1 })).toThrow();
     expect(() => AgentCatalogEntry.parse({ ...rows[0], status: "someday" })).toThrow();
+    // tolerant at every depth (the review's finding): a capability or a surface
+    // this build never heard of rides inside `offers`/`surfaces`, and one this
+    // build knows but the sender lacks reads as unclaimed — never a refusal
+    const deeper = AgentCatalogResult.parse({
+      catalog: [
+        {
+          ...rows[0],
+          offers: { spawn: true, fork: true },
+          surfaces: { desktop: true, watch: true },
+        },
+      ],
+    });
+    const skewedRow = deeper.catalog[0];
+    expect(skewedRow?.offers).toMatchObject({ spawn: true, fork: true });
+    expect(skewedRow?.offers.history).toBeUndefined();
+    expect(skewedRow?.surfaces).toMatchObject({ desktop: true, watch: true });
+    expect(() => AgentCatalogEntry.parse({ ...rows[0], offers: { spawn: true } })).toThrow();
   });
 
   it("agent.catalog is a product door on agent.observe, local like agent.list", () => {
@@ -165,6 +182,15 @@ describe("the agent catalog (AC-1)", () => {
     expect(AgentProviderSummary.parse({ ...decided, status: "someday" }).status).toBe("someday");
     expect(AgentProviderSummary.parse({ ...decided, history: "someday" }).history).toBe("someday");
     expect(() => AgentProviderSummary.parse({ ...decided, status: "" })).toThrow();
+    // …and `offers` is tolerant at its own depth: a capability an older daemon
+    // lacks is unclaimed, one a newer daemon adds rides through
+    const skewed = AgentProviderSummary.parse({
+      ...decided,
+      offers: { spawn: true, fork: true },
+    });
+    expect(skewed.offers?.spawn).toBe(true);
+    expect(skewed.offers?.history).toBeUndefined();
+    expect((skewed.offers as Record<string, unknown>).fork).toBe(true);
   });
 
   it("the readers factory answers over its own table; the named readers are the factory over THE table", () => {

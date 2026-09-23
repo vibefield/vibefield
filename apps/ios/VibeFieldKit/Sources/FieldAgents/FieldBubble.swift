@@ -10,6 +10,9 @@ import Foundation
 /// What an agent bubble knows that a terminal cannot.
 public struct AgentFacet: Sendable, Equatable {
   public let provider: AgentProvider
+  /// The producer's word for the agent, as the snapshot carried it — see
+  /// `AgentSnapshot.label`.
+  public let label: String?
   public let modelName: String?
   public let branch: String?
   public let contextUsedPercent: Double?
@@ -46,8 +49,8 @@ public struct AgentFacet: Sendable, Equatable {
   public let catalogEntry: AgentCatalogEntry?
 
   /// What this agent is called on every surface: the catalog's label (AC-D4),
-  /// else the raw id.
-  public var providerName: String { provider.displayName(with: catalogEntry) }
+  /// else the label its row carries, else the raw id.
+  public var providerName: String { provider.displayName(with: catalogEntry, orLabel: label) }
   /// The key its mark is drawn by in both atlases — the swarm's tiles and the
   /// card's glyphs: the catalog's `mark` (the id unless the row names another),
   /// else the id.
@@ -55,6 +58,7 @@ public struct AgentFacet: Sendable, Equatable {
 
   public init(
     provider: AgentProvider,
+    label: String? = nil,
     modelName: String? = nil,
     branch: String? = nil,
     contextUsedPercent: Double? = nil,
@@ -70,6 +74,7 @@ public struct AgentFacet: Sendable, Equatable {
     catalogEntry: AgentCatalogEntry? = nil
   ) {
     self.provider = provider
+    self.label = label
     self.modelName = modelName
     self.branch = branch
     self.contextUsedPercent = contextUsedPercent
@@ -198,6 +203,7 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
     createdAt: snapshot.createdAt,
     agent: AgentFacet(
       provider: snapshot.provider,
+      label: snapshot.label,
       modelName: state?.modelName,
       branch: state?.branch,
       contextUsedPercent: state?.contextUsedPercent,

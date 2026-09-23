@@ -616,11 +616,18 @@ public final class FieldLink {
       if let url = entry.doorURL { due.append((deviceId, url)) }
     }
 
+    var forgot = false
     for deviceId in found.keys where !live.contains(deviceId) {
       forget(deviceId: deviceId)
+      forgot = true
     }
 
     refreshDesktops()
+    // A desktop that dropped off the online list (a sleep: truffle says
+    // `online: false`, never `left`) went through `closeDoor`, which dropped
+    // its board and its catalog — the field must follow NOW, not at the next
+    // probe's refold, which the early return below may never reach.
+    if forgot { refold() }
 
     guard !due.isEmpty else { return }
     let probe = self.probe
@@ -733,6 +740,7 @@ public final class FieldLink {
 
   private func forget(deviceId: String) {
     closeDoor(to: deviceId)
+    if catalogs.removeValue(forKey: deviceId) != nil { mergeCatalogs() }
     found.removeValue(forKey: deviceId)
     endpointRefusals.removeValue(forKey: deviceId)
     foreignDoors.removeValue(forKey: deviceId)
@@ -800,8 +808,13 @@ public final class FieldLink {
     expiryTimers.removeValue(forKey: deviceId)?.cancel()
     arming.remove(deviceId)
     doorBoards.removeValue(forKey: deviceId)
+    // The desktop's catalog OUTLIVES its door: a closed door (a probe that
+    // failed, a gated node) leaves that desktop's store-bus board drawn, and
+    // the names on those bodies come from this catalog — dropping it here
+    // turned "Claude Code" into "claude" until the door reopened. It is
+    // re-asked when the door reopens (`catalogAsked` is cleared) and dropped
+    // only when the desktop itself is forgotten (`forget(deviceId:)`).
     catalogAsked.remove(deviceId)
-    if catalogs.removeValue(forKey: deviceId) != nil { mergeCatalogs() }
   }
 
   /// Watch one client's state so the chip is honest, the account verdict is
@@ -889,8 +902,9 @@ public final class FieldLink {
   /// `device.list`: what is missing without it is a nicety, never a state.
   ///
   /// A desktop without the door — a build from before AC-3, which answers
-  /// `NOT_FOUND` — is not a failure of anything: its agents draw exactly as
-  /// they always did, by their raw ids and their letters, and a note says why.
+  /// `NOT_FOUND` — is not a failure of anything: its agents are named by the
+  /// label their field rows carry (the adapter's own word, from such a
+  /// desktop) and lettered by their ids, and a note says why.
   /// A failure that asking again could fix (the door's own `retryable`: a
   /// deadline on a slow radio, a socket that dropped) keeps whatever the last
   /// connection said and is asked again on the sweep's clock; one that could
@@ -930,7 +944,7 @@ public final class FieldLink {
           self.setCatalog(nil, for: deviceId)
           self.note(
             "\(deviceId) has no agent catalog for this phone: \(MeshModel.shortReason(error))"
-              + " — its agents are named by their ids")
+              + " — its agents are named by their rows")
         }
       }
     }
@@ -958,7 +972,8 @@ public final class FieldLink {
 
   /// The catalog one desktop's rows are named by: its OWN door's answer first,
   /// then what the phone's other desktops said (a desktop a build behind has no
-  /// door, and its agents are the same agents), else nothing — the raw id.
+  /// door, and its agents are the same agents), else nothing — the row's own
+  /// label names the body then.
   private func desktopCatalog(for deviceId: String) -> AgentCatalog {
     guard let own = catalogs[deviceId] else { return catalog }
     return own.backed(by: catalog)

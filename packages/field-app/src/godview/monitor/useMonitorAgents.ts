@@ -48,6 +48,11 @@ import { useRemoteSessionField } from "./remote-session-field";
 import type { MonitorActions, MonitorAgent } from "./types";
 import { createUsageHistoryCache } from "./usage-history-cache";
 
+/** AC-4 — while the index says `unavailable` for a listed agent, the
+ * providers are asked again on this clock: the daemon's census lands behind
+ * its ready line with no health transition to say so. */
+const HISTORY_REASK_MS = 20_000;
+
 /**
  * Core's usage state, rebuilt from the mirror's row. The projection rides
  * the door verbatim (AR-D4), so every aggregate Core wrote is there under
@@ -286,33 +291,53 @@ export function useMonitorAgents({
   const localField = useAgentFold();
   const remoteField = useRemoteSessionField({ door });
 
-  // What one can spawn as, asked once per door. A door that cannot answer
-  // leaves the list empty and the spawn control says so; nothing is invented.
-  // AC-4: the rows the catalog does not offer are not listed, and the first
-  // choice is a row that starts sessions (`defaultProviderId`) — so a deck
-  // never opens with SPAWN withdrawn while an offered agent was on the list.
+  // What one can spawn as, asked per door — and again whenever the door
+  // says the index moved (AC-4, the review: the history state and the persona
+  // list are live daemon facts; a persona create bounces the daemon, and the
+  // answer asked once kept a state from a daemon that was gone). A door that
+  // cannot answer leaves the list empty and the spawn control says so;
+  // nothing is invented. AC-4: the rows the catalog does not offer are not
+  // listed, and the first choice is a row that starts sessions
+  // (`defaultProviderId`) — so a deck never opens with SPAWN withdrawn while
+  // an offered agent was on the list; a choice already made survives a
+  // re-ask while its row is still listed.
   useEffect(() => {
     if (door === null) {
       setProviders([]);
+      setSelectedProviderId(null);
       return;
     }
     let alive = true;
-    void door
-      .providers()
-      .then((answered) => {
-        if (!alive) return;
-        const list = answered.filter(providerListed);
-        setProviders(list);
-        setSelectedProviderId((current) => {
-          if (current !== null && list.some((p) => p.id === current)) return current;
-          return defaultProviderId(list);
+    let degraded = false;
+    const ask = (): void => {
+      void door
+        .providers()
+        .then((answered) => {
+          if (!alive) return;
+          const list = answered.filter(providerListed);
+          degraded = list.some((p) => p.history === "unavailable");
+          setProviders(list);
+          setSelectedProviderId((current) => {
+            if (current !== null && list.some((p) => p.id === current)) return current;
+            return defaultProviderId(list);
+          });
+        })
+        .catch(() => {
+          if (!alive) return;
+          degraded = false;
+          setProviders([]);
+          setSelectedProviderId(null);
         });
-      })
-      .catch(() => {
-        if (alive) setProviders([]);
-      });
+    };
+    ask();
+    const stop = door.indexChanges?.(ask);
+    const clock = setInterval(() => {
+      if (degraded) ask();
+    }, HISTORY_REASK_MS);
     return () => {
       alive = false;
+      stop?.();
+      clearInterval(clock);
     };
   }, [door]);
 

@@ -52,6 +52,13 @@ export interface MonitorDoor {
   /** AR-5 — the account-usage readings the usage column draws
    * (`agents.usage` + its subscription), adapted to the views' port. */
   usage: AccountUsagePort;
+  /** AC-4 (the review) — the door says when its `providers()` answer may
+   * have moved: the index daemon's phase or generation changed (a persona
+   * create bounces it; it comes up; it fails). The history state and the
+   * persona list are LIVE daemon facts, and a picker that asked once kept
+   * both from a daemon that was gone. Optional: a door without it is asked
+   * once, as before. Returns the dispose. */
+  indexChanges?(listener: () => void): () => void;
 }
 
 /** AR-4 — a mount that takes a PTY's place: the run was resumed into a new

@@ -316,6 +316,11 @@ const LOGIN_TIMEOUT_MS = 10 * 60_000;
  * the inventory before the new run is born — two processes on one native
  * session is the one thing a resume must never make. */
 const RESUME_IDLE_AFTER_MS = 30_000;
+/** AC-3 — how long an enrollment waits for a ready daemon's first census
+ * (the roll call fills in behind the ready line); the ready-time reconcile
+ * and a persona create both wait, a door that only reports waits briefly */
+const ROLL_CALL_WAIT_MS = 30_000;
+const HISTORY_STATE_WAIT_MS = 3_000;
 const RESUME_POLL_MS = 5_000;
 const REPLACE_GRACE_MS = 5_000;
 /** AR-4b — the idle poll backs off while the index cannot answer (doubling
@@ -679,7 +684,6 @@ export class AgentRuntimeService {
         status: row.status,
         offers: row.offers,
         ...(state !== undefined ? { history: state } : {}),
-        ...(row.mark !== undefined ? { mark: row.mark } : {}),
       });
     }
     return { providers };
@@ -721,22 +725,35 @@ export class AgentRuntimeService {
     const runtime = this.runtime;
     return {
       accountUsageProviders: () =>
-        runtime.accountUsageProviders().filter((p) => this.catalog.isOffered(p.id, "usage")),
+        runtime
+          .accountUsageProviders()
+          .filter((p) => this.catalog.isOffered(p.id, "usage"))
+          .map((p) => ({ ...p, label: this.labelFor(p.id, p.label) })),
       accountUsage: runtime.accountUsage.bind(runtime),
-      onAccountUsage: runtime.onAccountUsage.bind(runtime),
+      // a push from a provider the row does not offer usage for is dropped
+      // here — the monitor was never given that provider, and a push it
+      // cannot file would be a thrown-at warning per push
+      onAccountUsage: (listener) =>
+        runtime.onAccountUsage((provider, result) => {
+          if (this.catalog.isOffered(provider.id, "usage")) listener(provider, result);
+        }),
       onProfilesChanged: runtime.onProfilesChanged.bind(runtime),
       profiles: runtime.profiles.bind(runtime),
     };
   }
 
   /** AC-3 — the index's state per agent that offers history: `unavailable`
-   * while the daemon is not ready or its roll call disagrees with the catalog
-   * on the kind (the skew AC-D8 subtracts at start); `indexed` when the
-   * record consents to the kind or enrolls a root of it; else `unindexed`. */
+   * while the daemon is not ready, its census has not answered within a short
+   * wait (it fills in behind the ready line), or its roll call disagrees with
+   * the catalog on the kind (the skew AC-D8 subtracts at start); `indexed`
+   * when the record consents to the kind or enrolls a root of it; else
+   * `unindexed`. */
   private async historyStates(): Promise<ReadonlyMap<string, AgentHistoryState>> {
     const out = new Map<string, AgentHistoryState>();
     const ready = (this.opts.supervisor?.health().phase ?? "unconfigured") === "ready";
-    const witness = ready ? await this.opts.index.kindsByLayoutRoot() : new Map<string, string>();
+    const witness = ready
+      ? await this.opts.index.kindsByLayoutRoot({ waitMs: HISTORY_STATE_WAIT_MS })
+      : new Map<string, string>();
     const record = this.opts.index.record();
     for (const row of this.catalog.visible()) {
       if (!row.offers.history || row.seams.rosetta === null || row.layoutRoot === null) continue;
@@ -1437,7 +1454,9 @@ export class AgentRuntimeService {
 
   /** Every daemon ready re-applies the record to the personas: a managed
    * persona the record does not name yet (created while the daemon was down,
-   * or before this fieldd) is enrolled now under the kind the roll call joins.
+   * or before this fieldd) is enrolled now under the catalog's kind, with the
+   * roll call as witness (`kindFor` waits for the census the daemon publishes
+   * behind its ready line).
    * Serialized; a change publishes and bounces the daemon ONCE — the ready
    * that follows finds nothing to do. */
   reconcile(): Promise<void> {
@@ -2704,48 +2723,59 @@ export class AgentRuntimeService {
     return { kind, dataRoot: observationRoot, label: profile.label, profileId: profile.id };
   }
 
-  /** rosetta's kind for a catalog id (AC-3): the row's seam column. The roll
-   * call is the WITNESS, not the source — when the daemon is ready and its
-   * roll call spells the row's layout root under a different kind (or not at
-   * all), the enrollment is withheld and the drift is logged, because the
-   * daemon would refuse the file at its next start. While the daemon is not
-   * ready there is no witness and the catalog's word stands, which is what
-   * lets a persona be enrolled before the index's first ready; a refusal at
-   * that start is AC-D8's business (agent-index.ts). */
+  /** rosetta's kind for a catalog id (AC-3): the row's seam column, with the
+   * roll call as WITNESS — the daemon is ready and spells the row's layout
+   * root under that kind. The witness is mandatory: the catalog is the SOURCE
+   * of the kind, the roll call the proof this daemon registers it, and an
+   * enrollment written on the catalog's word alone would be refused at the
+   * daemon's next start. So while the daemon is not ready, or its census has
+   * not answered within the wait (it fills in behind the ready line), or it
+   * spells the root under another kind (or not at all), nothing is enrolled:
+   * the persona is indexed at the next ready's reconcile (R4) and the drift
+   * is logged. AC-D8 (agent-index.ts) stays for the record that outlives its
+   * binary — a daemon swapped under an enrolled kind. */
   private async kindFor(provider: string): Promise<string | undefined> {
     const row = this.catalog.entry(provider);
     const kind = row?.seams.rosetta?.kind;
-    if (row === undefined || kind === undefined || row.layoutRoot === null) {
+    if (
+      row === undefined ||
+      kind === undefined ||
+      row.layoutRoot === null ||
+      !row.offers.history ||
+      !this.catalog.isVisible(provider)
+    ) {
       this.logger.info(
         "fieldd.agents.kind_unresolved",
-        "Provider offers no history in the catalog; personas of it are not indexed",
-        { provider },
+        "The catalog shows no history for this agent; personas of it are not indexed",
+        { provider, ...(row !== undefined ? { status: row.status } : {}) },
       );
       return undefined;
     }
-    // ready ⇒ the roll call must witness the row (an empty roll call while
-    // ready is an unanswered census, and an enrollment on the catalog's word
-    // alone could re-add a root the daemon refused); not ready ⇒ no witness
-    // exists and the catalog's word stands
     const ready = (this.opts.supervisor?.health().phase ?? "unconfigured") === "ready";
-    if (ready) {
-      const witness = await this.opts.index.kindsByLayoutRoot();
-      const daemonKind = witness.get(row.layoutRoot);
-      if (daemonKind !== kind) {
-        this.logger.warn(
-          "fieldd.agents.catalog_drift",
-          witness.size === 0
-            ? "The daemon is ready but its roll call did not answer; not enrolled until it does"
-            : "The daemon's roll call disagrees with the catalog on this agent's kind; not enrolled",
-          {
-            provider,
-            layoutRoot: row.layoutRoot,
-            catalogKind: kind,
-            daemonKind: daemonKind ?? null,
-          },
-        );
-        return undefined;
-      }
+    if (!ready) {
+      this.logger.info(
+        "fieldd.agents.kind_unwitnessed",
+        "The index daemon is not ready; the persona is enrolled at its next ready",
+        { provider, phase: this.opts.supervisor?.health().phase ?? "unconfigured" },
+      );
+      return undefined;
+    }
+    const witness = await this.opts.index.kindsByLayoutRoot({ waitMs: ROLL_CALL_WAIT_MS });
+    const daemonKind = witness.get(row.layoutRoot);
+    if (daemonKind !== kind) {
+      this.logger.warn(
+        "fieldd.agents.catalog_drift",
+        witness.size === 0
+          ? "The daemon is ready but its roll call did not answer in time; not enrolled until it does"
+          : "The daemon's roll call disagrees with the catalog on this agent's kind; not enrolled",
+        {
+          provider,
+          layoutRoot: row.layoutRoot,
+          catalogKind: kind,
+          daemonKind: daemonKind ?? null,
+        },
+      );
+      return undefined;
     }
     return kind;
   }

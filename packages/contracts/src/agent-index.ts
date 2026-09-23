@@ -114,9 +114,14 @@ export const IndexRetiredRuntime = z
     retired_at: z.string(),
     /** AC-D8 — the daemon REFUSED this root at start (`unknown agent kind`:
      * a catalog/daemon skew) and fieldd subtracted it so the index could come
-     * up. VibeField-only; the row is re-enrolled by the ready-time reconcile
-     * once a daemon's roll call names the kind again. */
-    refused: z.object({ at: z.string(), detail: z.string().max(512) }).optional(),
+     * up; `retired_at` is when. The daemon's line, kept whole here (it names
+     * the root — this file never leaves fieldd). VibeField-only; the row is
+     * re-enrolled by the ready-time reconcile once a daemon's roll call names
+     * the kind again. */
+    refused: z
+      .object({ detail: z.string().max(512) })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type IndexRetiredRuntime = z.infer<typeof IndexRetiredRuntime>;
@@ -276,10 +281,10 @@ export const IndexEnrollmentSummary = z
           profileId: AgentProfileId.optional(),
           retiredAt: z.string(),
           /** AC-D8 — set when the daemon refused the root rather than the user
-           * retiring it: WHEN and the daemon's reason (`unknown agent kind`) —
-           * never its line, which names the root (this projection carries no
-           * paths). The record keeps the line. */
-          refused: z.object({ at: z.string(), reason: z.string() }).optional(),
+           * retiring it (`retiredAt` is when): the daemon's reason (`unknown
+           * agent kind`) — never its line, which names the root (this
+           * projection carries no paths). The record keeps the line. */
+          refused: z.object({ reason: z.string() }).passthrough().optional(),
         })
         .passthrough(),
     ),

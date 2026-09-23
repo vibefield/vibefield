@@ -163,6 +163,10 @@ public func agentSnapshot(
     // when there is one, because that is what a card will attach to (IOS-4c).
     runtimeSessionID: row.terminal?.runtimeSessionId ?? row.runtimeRunId,
     provider: provider,
+    // The producer's word for the agent (the catalog's label from an AC-3
+    // desktop, the adapter's from an older one): the name when no catalog row
+    // reaches this phone for the id. An empty label is no word.
+    label: row.label.isEmpty ? nil : row.label,
     // The wire now sends the FOLDER (MF-1i), so there is nothing left to
     // reduce: `folderName` was doing the basename work the producer does now,
     // and running it again on a name that is already one would only find new

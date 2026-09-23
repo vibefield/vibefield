@@ -40,10 +40,22 @@ import Testing
     #expect(claude.phone == true)
     #expect(claude.unknownFields == ["admitted", "decision", "layoutRoot", "offers", "seams"])
 
-    // AC-D7: the protocol agent names its mark and keeps itself off the phone.
+    // AC-D7: the protocol agent keeps itself off the phone. Its `mark` is
+    // absent too since the review (it equalled the id, the contract's own
+    // default) — a row that DOES name one is read as sent:
     let acp = try #require(result.catalog.last)
-    #expect(acp.mark == "acp")
+    #expect(acp.mark == nil)
     #expect(acp.phone == false)
+    let named = try AgentCatalogResult(
+      json: .object([
+        "catalog": .array([
+          .object([
+            "id": .string("claude-next"), "label": .string("Claude Next"),
+            "status": .string("preview"), "mark": .string("claude"),
+          ])
+        ])
+      ]))
+    #expect(named.catalog.first?.mark == "claude")
   }
 
   /// AC-D3's word is carried RAW: a status a newer desktop adds is a row, not a

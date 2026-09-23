@@ -18,6 +18,7 @@ import Testing
 private func rowJSON(
   id: String,
   kind: String = "claude",
+  label: String = "Claude Code",
   status: String = "idle",
   alive: Bool = true,
   pending: String? = nil,
@@ -37,7 +38,7 @@ private func rowJSON(
     "runtimeRunId": .string(id),
     "revision": .int(1),
     "kind": .string(kind),
-    "label": .string("Claude Code"),
+    "label": .string(label),
     "tier": .string("managed"),
     "device": .string("dev-01HQ8ZK4M7"),
     "status": .string(status),
@@ -63,6 +64,7 @@ private func rowJSON(
 private func row(
   id: String,
   kind: String = "claude",
+  label: String = "Claude Code",
   status: String = "idle",
   alive: Bool = true,
   pending: String? = nil,
@@ -80,7 +82,8 @@ private func row(
 ) throws -> AgentFieldRow {
   try AgentFieldRow(
     json: rowJSON(
-      id: id, kind: kind, status: status, alive: alive, pending: pending, blockers: blockers,
+      id: id, kind: kind, label: label, status: status, alive: alive, pending: pending,
+      blockers: blockers,
       folder: folder, branch: branch, model: model, effort: effort, usage: usage,
       context: context,
       terminal: terminal, lastActivityAt: lastActivityAt))
@@ -425,38 +428,47 @@ private func blocker(kind: String) -> JSONValue {
   }
 
   /// Every row is named by the catalog it was folded with — and an id the
-  /// catalog never decided on still draws, as its raw id (R4).
+  /// catalog never decided on still draws (R4), named by the word its row
+  /// carries (the producer's label; the wire reader refuses a row without one,
+  /// so the raw id names only a snapshot no row built — the facet suite).
   @Test func aBoardIsNamedByItsCatalogAndAnUnknownIdStillDraws() throws {
     let projection = projectAgentField(
       rows: [
-        try row(id: "a", kind: "claude"), try row(id: "b", kind: "hermes"),
-        try row(id: "c", kind: "zed"),
+        try row(id: "a", kind: "claude"), try row(id: "b", kind: "hermes", label: "Hermes"),
+        try row(id: "c", kind: "zed", label: "Zed"),
       ],
       catalog: try golden())
     #expect(projection.agents.map(\.id) == ["a", "b", "c"])
     #expect(projection.agents.map { $0.catalogEntry?.label } == ["Claude Code", "Hermes", nil])
+    #expect(projection.agents.map(\.label) == ["Claude Code", "Hermes", "Zed"])
     let unknown = try #require(fieldBubble(from: projection.agents[2])?.agent)
-    #expect(unknown.providerName == "zed")
+    #expect(unknown.providerName == "Zed")
     #expect(unknown.markKey == "zed")
   }
 
-  /// R4 on the phone's own terms: ACP is off the phone's LISTS, and a desktop's
-  /// ACP session still draws on the FIELD, named and lettered.
+  /// R4 on the phone's own terms: ACP is off the phone's LISTS — the door
+  /// answers a phone WITHOUT the row (AC-D7, `surfaces.phone`) — and a
+  /// desktop's ACP session still draws on the FIELD, named by the label its
+  /// row carries (the desktop's catalog stamped it) and lettered by its id.
   @Test func aDesktopOnlyAgentsSessionStillDraws() throws {
-    let catalog = try golden()
+    let phones = AgentCatalog(entries: try golden().phoneRoster)
+    #expect(phones.entry(for: .acp) == nil)
     let snapshot = try #require(
-      agentSnapshot(from: try row(id: "acp-run", kind: "acp"), catalog: catalog))
+      agentSnapshot(from: try row(id: "acp-run", kind: "acp", label: "ACP"), catalog: phones))
+    #expect(snapshot.catalogEntry == nil)
     let facet = try #require(fieldBubble(from: snapshot)?.agent)
     #expect(facet.providerName == "ACP")
     #expect(facet.markKey == "acp")
-    #expect(!catalog.phoneRoster.contains { $0.id == .acp })
   }
 
   /// No catalog is the state an older desktop leaves, and it changes nothing
-  /// the field already did: every body draws by its raw id.
-  @Test func noCatalogIsTheRawIdEverywhere() throws {
-    let snapshot = try #require(agentSnapshot(from: try row(id: "r", kind: "claude")))
-    #expect(snapshot.catalogEntry == nil)
-    #expect(fieldBubble(from: snapshot)?.agent?.providerName == "claude")
+  /// the field already did: every body draws by the word its row carries —
+  /// such a desktop stamps the adapter's own label.
+  @Test func noCatalogNamesByTheRowsOwnWord() throws {
+    let older = try #require(
+      agentSnapshot(from: try row(id: "r", kind: "claude", label: "Claude")))
+    #expect(older.catalogEntry == nil)
+    #expect(older.label == "Claude")
+    #expect(fieldBubble(from: older)?.agent?.providerName == "Claude")
   }
 }

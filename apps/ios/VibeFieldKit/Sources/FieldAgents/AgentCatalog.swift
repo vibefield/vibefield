@@ -13,10 +13,12 @@ import Foundation
 // desktop, which is the authority; the phone may be a build behind it.
 //
 // THE TOLERANT READER STANDS (R4). An id with no row — an older desktop with no
-// `agent.catalog` door, or a newer peer's agent this desktop never decided on —
-// still draws: its raw id is its name and its letter is its mark. What it never
-// becomes is a row a picker offers, because an offer is a decision and none is
-// known.
+// `agent.catalog` door, a newer peer's agent this desktop never decided on, or
+// a row the door keeps off this surface (ACP, AC-D7) — still draws: the label
+// its field row carries is its name (fieldd stamps the catalog's since AC-3; an
+// older desktop stamps the adapter's), its raw id when the row carries none,
+// and its letter is its mark. What it never becomes is a row a picker offers,
+// because an offer is a decision and none is known.
 
 /// One row of the catalog, as the field uses it.
 public struct AgentCatalogEntry: Sendable, Equatable, Identifiable {
@@ -60,7 +62,8 @@ public struct AgentCatalog: Sendable, Equatable {
   }
 
   /// No catalog: nothing asked yet, or a desktop from before the door. Not a
-  /// broken state — every agent still draws, as its raw id and its letter.
+  /// broken state — every agent still draws, by the word its row carries and
+  /// its letter.
   public static let empty = AgentCatalog(entries: [])
 
   public var isEmpty: Bool { entries.isEmpty }
@@ -89,11 +92,16 @@ public struct AgentCatalog: Sendable, Equatable {
 }
 
 extension AgentProvider {
-  /// What a surface calls this agent, given what its catalog said about it: the
-  /// label (AC-D4), else the raw id — the only honest name without one.
-  public func displayName(with entry: AgentCatalogEntry?) -> String {
-    guard let entry, entry.id == self else { return rawValue }
-    return entry.label
+  /// What a surface calls this agent: its catalog row's label (AC-D4), else
+  /// the label the producer stamped on its field row (`orLabel`: fieldd's is
+  /// the catalog's since AC-3, an older desktop's the adapter's own — and a
+  /// desktop's ACP session reaches a phone this way, the door keeping that row
+  /// off the phone's catalog), else the raw id — the only honest name left.
+  public func displayName(with entry: AgentCatalogEntry?, orLabel label: String? = nil) -> String
+  {
+    if let entry, entry.id == self { return entry.label }
+    if let label, !label.isEmpty { return label }
+    return rawValue
   }
 
   /// The same, looked up in a whole catalog.
