@@ -102,6 +102,13 @@ export interface FieldUserProfile {
   userId: string;
   fuid: number;
   name: string;
+  /** UA-D17 — the user's face. Absent until the Setup Assistant's pane 2 is
+   * passed (W6), or for a pre-v0.3 user until main deals one on their first
+   * attach; a face-less user is DRAWN with `effectiveFaces`' deal, never as a
+   * blank. */
+  face?: FieldUserFace;
+  /** @deprecated the pre-v0.3 accent slot. W6 reads its presence as "pane 2
+   * was answered once"; nothing draws it (UA-D17 — a person has no colour). */
   color?: string;
   resident: boolean;
   onboarded: boolean;
@@ -111,6 +118,13 @@ export interface FieldUserProfile {
    * the tolerant reader carries it through untouched. Typed `string` because a
    * future writer may say something this build has never heard of. */
   setupVariant?: string;
+}
+
+/** UA-D17 — a face as the host carries it: one emoji, and a frame whose
+ * absence means sticker. Structurally the contract's `UserFace`. */
+export interface FieldUserFace {
+  emoji: string;
+  frame?: "sticker" | "coin";
 }
 
 /** UA-5 — the machine's roster as `usersList` answers it. `attachedUserId` is
@@ -142,7 +156,10 @@ export interface FieldHost {
    * and says so rather than pretending it can write. */
   readonly usersUpdate?: (params: {
     name?: string;
-    color?: string;
+    /** UA-D17 — main refuses a face another user wears, a refused emoji, or
+     * more than one grapheme, and the refusal's message is the sentence to
+     * show (`faceProblem`). */
+    face?: FieldUserFace;
     resident?: boolean;
     /** The §6 completion flag (UA-3w). Written ONCE, by the wizard's last pane,
      * and only after everything it promised to record actually landed. */
@@ -162,7 +179,7 @@ export interface FieldHost {
    * both as normal. Fire and forget: disable the control that was pressed and
    * gate nothing else on the answer, because the reload IS the feedback. There
    * is no success state to render; only a REJECTION is worth a face. */
-  readonly usersCreate?: (params: { name?: string; color?: string }) => Promise<FieldUserProfile>;
+  readonly usersCreate?: (params: { name?: string }) => Promise<FieldUserProfile>;
   /** UA-5 — attach to an existing user (UA-D15). Switching to the user already
    * attached is main's no-op. Same reload race as `usersCreate`. */
   readonly usersSwitch?: (params: { userId: string }) => Promise<FieldUserProfile>;

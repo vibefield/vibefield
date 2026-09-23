@@ -32,4 +32,5 @@ export * from "./shell";
 export * from "./terminal";
 export * from "./terminal-pipeline";
 export * from "./terminal-pipeline-machines";
+export * from "./user-face";
 export * from "./users";

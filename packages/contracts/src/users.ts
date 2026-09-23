@@ -12,10 +12,29 @@ import { z } from "zod";
 export const USERS_FILE_VERSION = 1;
 export const LAYOUT_VERSION = 2;
 
-/** One user on this machine. Deliberately machine-local, supervisor-written,
- * non-converging (spec §3.3): `name`/`color`/`resident`/`onboarded` are THIS
- * machine's view of the user, unlike D29′ user-scope settings which ride the
- * user's own mesh. `color` is a DESIGN.md accent slot name, never a hex. */
+/** UA-D17 (spec v0.3) — a user is known by a face, never a colour: one emoji,
+ * framed as a sticker (the default; an absent `frame` means sticker) or a coin
+ * (the user's own choice). The look is DESIGN.md §2.8; the deck, the refusal
+ * list and the deal are `user-face.ts`. */
+export const UserFaceFrame = z.enum(["sticker", "coin"]);
+export type UserFaceFrame = z.infer<typeof UserFaceFrame>;
+
+export const UserFace = z
+  .object({
+    /** One emoji grapheme — a ZWJ sequence or a keycap counts as one. The
+     * writer validates it (`faceProblem`); the reader only bounds it. */
+    emoji: z.string().min(1).max(32),
+    frame: UserFaceFrame.optional(),
+  })
+  .passthrough();
+export type UserFace = z.infer<typeof UserFace>;
+
+/** One user on this machine. Supervisor-written and machine-local today (spec
+ * §3.3): `name`/`face`/`resident`/`onboarded` are THIS machine's view of the
+ * user. UA-D18 moves `name` and `face` into the user-scope settings doc so they
+ * travel with the login — GATED: the settings doc does not replicate yet
+ * (`fieldd/src/settings-doc.ts`), so until it does these fields are the only
+ * copy, not a cache. */
 export const UserRecord = z
   .object({
     /** 26-char Crockford ULID — THE durable root identity; the tailscale link
@@ -25,6 +44,13 @@ export const UserRecord = z
      * the sun_path budget forbids ULID-named directories). Never reused. */
     fuid: z.number().int().positive(),
     name: z.string().min(1),
+    /** UA-D17 — absent until the Setup Assistant's pane 2 is passed (W6), and
+     * for a pre-v0.3 user until main's silent deal on their first attach. A
+     * face-less user is SHOWN with `effectiveFaces`' deal, never a blank. */
+    face: UserFace.optional(),
+    /** @deprecated the pre-v0.3 accent slot name. Tolerated and never rendered:
+     * W6 reads its presence as "pane 2 was answered once", and the first
+     * profile write that sets a face drops it. */
     color: z.string().optional(),
     /** Keep the pair running when not attached (UA-D3; default true — V3). */
     resident: z.boolean(),
@@ -120,7 +146,9 @@ export type UserLinkStatus = z.infer<typeof UserLinkStatus>;
 export const UsersUpdateParams = z
   .object({
     name: z.string().min(1).max(120).optional(),
-    color: z.string().min(1).max(64).optional(),
+    /** UA-D17 — main refuses a face another user on this machine already
+     * wears, a refused emoji, or more than one grapheme (`faceProblem`). */
+    face: UserFace.optional(),
     resident: z.boolean().optional(),
     onboarded: z.boolean().optional(),
   })
@@ -138,13 +166,13 @@ export const UsersListSnapshot = z
   .passthrough();
 export type UsersListSnapshot = z.infer<typeof UsersListSnapshot>;
 
-/** UA-5 — `users:create`: mint user N under the §3.3 lock, then attach. Both
- * fields optional — the wizard's second-user variant is where identity is
- * actually decided (§6.2); the mint only needs to exist. */
+/** UA-5 — `users:create`: mint user N under the §3.3 lock, then attach. The
+ * name is optional and the face is never minted (UA-D17): the wizard's
+ * second-user variant is where identity is actually decided (§6.2), and its
+ * pane 2 shows the dealt face before it writes one. */
 export const UsersCreateParams = z
   .object({
     name: z.string().min(1).max(120).optional(),
-    color: z.string().min(1).max(64).optional(),
   })
   .passthrough();
 export type UsersCreateParams = z.infer<typeof UsersCreateParams>;

@@ -83,7 +83,9 @@ export function registerWindowBootstrap(
  * fieldd never writes it); the sender gate is bootstrap's and the payload is
  * schema-validated before it may touch anything. One door, two verbs: an
  * update with no recognized fields is an honest READ of the current record —
- * no lock, no write — which is how the page loads the profile it edits. */
+ * no lock, no write — which is how the page loads the profile it edits.
+ * UA-7: `face` replaced `color` among the recognized fields. A `color` from an
+ * older page is unrecognized now, so on its own it reads. */
 export function registerUsersUpdate(
   registry: WindowRegistry,
   handlers: {
@@ -99,7 +101,7 @@ export function registerUsersUpdate(
     const params = UsersUpdateParams.parse(raw);
     const empty =
       params.name === undefined &&
-      params.color === undefined &&
+      params.face === undefined &&
       params.resident === undefined &&
       params.onboarded === undefined;
     if (empty) return handlers.read();

@@ -9,6 +9,7 @@ import {
   DESKTOP_APP_ID,
   type DesktopShellState,
   DesktopShellState as DesktopShellStateSchema,
+  effectiveFaces,
   IPC_CHANNELS,
   PluginModuleResolution,
   type ScreenshotCaptureResult,
@@ -101,8 +102,9 @@ import { RecoveringShellProvider } from "./shell-provider";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
-import type { TrayLinkState } from "./tray-model";
+import type { TrayLinkState, TraySnapshot } from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
+import { applyProfileUpdate, dealOwedFace } from "./users-profile";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
 
@@ -968,6 +970,8 @@ async function main(
   // mutates under the §3.3 lock, and refreshes the tray label in step.
   // UA-5: the handlers read `attached` at CALL time — a switch re-targets
   // them without re-registration.
+  // UA-7: the record rules are `applyProfileUpdate`'s (users-profile.ts). A
+  // refused face throws its sentence out of the lock with nothing written.
   registerUsersUpdate(
     registry,
     {
@@ -980,22 +984,20 @@ async function main(
         return record;
       },
       apply: async (params) => {
+        // The user the page asked about, read once: a switch landing while
+        // this waits on the lock must not re-aim the write at the next user.
+        const userId = attached.userId;
         const updated = await mutateUsersFile(attached.rootReal, {}, (file) => {
-          const record = file.users.find((u) => u.userId === attached.userId);
-          if (record === undefined) {
-            throw new Error("the attached user vanished from users.json");
-          }
-          if (params.name !== undefined) record.name = params.name;
-          if (params.color !== undefined) record.color = params.color;
-          if (params.resident !== undefined) record.resident = params.resident;
-          if (params.onboarded !== undefined) record.onboarded = params.onboarded;
+          applyProfileUpdate(file, userId, params);
         });
-        const record = updated.users.find((u) => u.userId === attached.userId);
+        const record = updated.users.find((u) => u.userId === userId);
         if (record === undefined) {
           throw new Error("the attached user vanished from users.json");
         }
-        if (params.name !== undefined) {
-          trayController?.update({ userName: record.name, users: rosterFor() });
+        // A face write can move a face-less user's deal onto the face this user
+        // just gave up, so the whole roster redraws, not just this row.
+        if (params.name !== undefined || params.face !== undefined) {
+          trayController?.update(trayUsers());
         }
         return record;
       },
@@ -1004,13 +1006,33 @@ async function main(
   );
 
   // ---- UA-5 — attach/switch (UA-D15) and the roster surface ----
-  const rosterFor = (): { userId: string; name: string; attached: boolean }[] => {
-    const file = readUsersFile(attached.rootReal);
-    return (file?.users ?? []).map((u) => ({
-      userId: u.userId,
-      name: u.name,
-      attached: u.userId === attached.userId,
-    }));
+  /** UA-7: every user carries the face the machine SHOWS for them, i.e. the
+   * written face or `effectiveFaces`' deal. It is the same policy the page
+   * reads, so the tray and the Account page agree about who wears what. */
+  const rosterFor = (): NonNullable<TraySnapshot["users"]>[number][] => {
+    const users = readUsersFile(attached.rootReal)?.users ?? [];
+    const faces = effectiveFaces(users);
+    return users.map((u) => {
+      const face = faces.get(u.userId)?.face.emoji;
+      return {
+        userId: u.userId,
+        name: u.name,
+        ...(face !== undefined ? { face } : {}),
+        attached: u.userId === attached.userId,
+      };
+    });
+  };
+  /** The tray's user chrome from ONE roster read (UA-7): the user row is the
+   * attached user's own entry in the list the Switch User submenu draws, so the
+   * row and the submenu cannot disagree about a name or a face. */
+  const trayUsers = (): Pick<TraySnapshot, "userName" | "userFace" | "users"> => {
+    const users = rosterFor();
+    const self = users.find((u) => u.attached);
+    return {
+      userName: self?.name ?? attached.name,
+      ...(self?.face !== undefined ? { userFace: self.face } : {}),
+      users,
+    };
   };
   /** Attach = build-before-break: the target pair must answer ensure() before
    * anything detaches; a failed spawn/adopt leaves the current user whole
@@ -1060,7 +1082,12 @@ async function main(
           { error: String(error) },
         );
       });
-      trayController?.update({ userName: target.name, users: rosterFor() });
+      // UA-7 (W6 as amended): the silent deal, switch half; the boot half sits
+      // beside ensureUsersRoot. Called after the hint so the hint's 200ms lock
+      // budget never waits behind it. Never awaited: the face the deal writes
+      // is the face already shown, so nothing waits on it or redraws for it.
+      void dealOwedFace(attached.rootReal, target.userId, { logger });
+      trayController?.update(trayUsers());
       logger.info("desktop.users.attached", "The shell re-targeted to another user", {
         userId: target.userId,
         fuid: target.fuid,
@@ -1077,9 +1104,9 @@ async function main(
       {},
       {
         ...(params.name !== undefined ? { name: params.name } : {}),
-        ...(params.color !== undefined ? { color: params.color } : {}),
         // the reloaded window runs the wizard's §6.2 second-user variant —
-        // identity is decided THERE, the mint only needs to exist
+        // identity is decided THERE, the mint only needs to exist (and it
+        // mints no face: pane 2 shows the deal and writes it, UA-D17)
         extras: { setupVariant: "second-user" },
       },
     );
@@ -1522,8 +1549,7 @@ async function main(
       link: observedLink,
       evidence: evidenceMonitor.current(),
       update: { kind: "idle" },
-      userName: attached.name,
-      users: rosterFor(),
+      ...trayUsers(),
       backgroundShell: true,
       // Preference truth belongs to fieldd's D29′ settings document. Starting
       // absent avoids flashing a status item a returning user explicitly hid;
@@ -1687,6 +1713,13 @@ if (!hasInstanceLock) {
       await backfillMigratedSetupVariant(ensured.rootReal, ensured.user.userId, {
         onEvent: (event, message, attrs) => usersLogger.info(event, message, attrs),
       });
+      // UA-7 (W6 as amended): the silent deal, boot half; `attachUser` holds
+      // the switch half. A user who finished setup before faces existed gets
+      // the face the machine already shows them, written down, and is never
+      // sent back into the wizard for it. Unlike the backfill it is NOT
+      // awaited: the face it writes is the one already shown, so the boot has
+      // nothing to wait for, and a held lock must not hold the window.
+      void dealOwedFace(ensured.rootReal, ensured.user.userId, { logger: usersLogger });
     }
     if (ensured.migrated || ensured.created) {
       usersLogger.info(

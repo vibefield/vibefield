@@ -1,5 +1,7 @@
+import { UserFaceView } from "@vibefield/design-kit/face";
 import type { ReactElement } from "react";
-import { AccentChip, AccentPicker, type AccentSlot } from "../../account/AccentPicker";
+import { FacePicker } from "../../account/FacePicker";
+import { faceLabel } from "../../account/faces";
 import {
   LINK_ACT_LABEL,
   LINK_ACT_PENDING_LABEL,
@@ -8,6 +10,7 @@ import {
   readableTime,
 } from "../../account/link";
 import { POSTURE_CHOICES, type SyncPostureControl } from "../../account/posture";
+import type { FieldUserFace } from "../../host";
 import {
   eyebrowCls,
   factCls,
@@ -83,34 +86,47 @@ export function OnboardingWelcomeBackPaneView({
   );
 }
 
+/** Pane 2 (UA-D17) — the name, and the face the machine dealt before the pane
+ * opened. Still one decision (W1: who this field is) and one mandatory field
+ * (W2: the name): the face is never blank, so Continue never waits on it. */
 export function OnboardingFieldPaneView({
   name,
-  accent,
+  face,
+  seed,
+  held,
+  pickerOpen,
   writing,
   error,
   onNameChange,
-  onAccentChange,
+  onFaceChange,
+  onPickerToggle,
   onSubmit,
   onBack,
   autoFocus = true,
-  accentName = "vf-wizard-accent",
+  pickerName = "vf-wizard-face",
 }: {
   name: string;
-  accent: AccentSlot | string;
+  face: FieldUserFace;
+  /** The user id — the sticker's tilt. */
+  seed: string;
+  /** Faces other users on this machine wear (`faceKey` → name). */
+  held: ReadonlyMap<string, string>;
+  pickerOpen: boolean;
   writing: boolean;
   error: string | null;
   onNameChange: (name: string) => void;
-  onAccentChange: (accent: AccentSlot) => void;
+  onFaceChange: (face: FieldUserFace) => void;
+  onPickerToggle: () => void;
   onSubmit: () => void;
   onBack: (() => void) | undefined;
   autoFocus?: boolean;
-  accentName?: string;
+  pickerName?: string;
 }): ReactElement {
   return (
     <WizardPane
       eyebrow="Your field"
       title="What should this field call you?"
-      voice="A name and a color for this machine's user. Both are yours to change later."
+      voice="A name and a face for this machine's user. The face was dealt to you — both are yours to change later."
       onSubmit={onSubmit}
       actions={
         <>
@@ -122,29 +138,49 @@ export function OnboardingFieldPaneView({
       }
     >
       <div className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1.5">
-          <span className={eyebrowCls}>Name</span>
-          <input
-            type="text"
-            aria-label="Your name"
-            value={name}
-            disabled={writing}
-            autoFocus={autoFocus}
-            onChange={(event) => onNameChange(event.target.value)}
-            className="h-11 rounded-[12px] border border-black/10 bg-white px-3.5 text-[15px] text-black/85 outline-none transition-[border-color,box-shadow] placeholder:text-black/30 focus:border-black/25 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] motion-reduce:transition-none disabled:opacity-45 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:shadow-[0_0_0_3px_rgba(255,255,255,0.07)]"
-          />
-        </label>
-        <div className="flex flex-col gap-2">
-          <span className={eyebrowCls}>Color</span>
-          <AccentPicker
-            value={accent}
-            disabled={writing}
-            name={accentName}
-            className="flex flex-wrap gap-2"
-            onSelect={onAccentChange}
-          />
-          <AccentChip accent={accent} label={name} className="self-start" />
+        <div className="vf-wizard-identity">
+          <div className="vf-wizard-face">
+            {/* The sticker's one big moment — or, for a coin, its engraving. */}
+            <UserFaceView
+              emoji={face.emoji}
+              frame={face.frame}
+              size={112}
+              seed={seed}
+              label={faceLabel(name.trim().length > 0 ? name.trim() : "You", face)}
+              legend={face.frame === "coin" ? name.trim() : undefined}
+            />
+            <button
+              type="button"
+              className={quietCls}
+              aria-expanded={pickerOpen}
+              disabled={writing}
+              onClick={onPickerToggle}
+            >
+              {pickerOpen ? "Done" : "Change face…"}
+            </button>
+          </div>
+          <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <span className={eyebrowCls}>Name</span>
+            <input
+              type="text"
+              aria-label="Your name"
+              value={name}
+              disabled={writing}
+              autoFocus={autoFocus}
+              onChange={(event) => onNameChange(event.target.value)}
+              className="h-11 rounded-[12px] border border-black/10 bg-white px-3.5 text-[15px] text-black/85 outline-none transition-[border-color,box-shadow] placeholder:text-black/30 focus:border-black/25 focus:shadow-[0_0_0_3px_rgba(0,0,0,0.05)] motion-reduce:transition-none disabled:opacity-45 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-white/25 dark:focus:shadow-[0_0_0_3px_rgba(255,255,255,0.07)]"
+            />
+          </label>
         </div>
+        {pickerOpen && (
+          <FacePicker
+            value={face}
+            held={held}
+            disabled={writing}
+            name={pickerName}
+            onChange={onFaceChange}
+          />
+        )}
         {error !== null && <WizardError reason={`That did not save. ${error}`} />}
       </div>
     </WizardPane>
@@ -389,11 +425,14 @@ export function OnboardingReadyPaneView({
   flag,
   onRetry,
   onContinueAnyway,
+  settingsChord = "⌘,",
 }: {
   profileName: string;
   flag: OnboardingCompletionFlag;
   onRetry: () => void;
   onContinueAnyway: () => void;
+  /** The Settings chord as this platform spells it. */
+  settingsChord?: string;
 }): ReactElement {
   return (
     <WizardPane
@@ -416,7 +455,15 @@ export function OnboardingReadyPaneView({
         if (flag.kind === "failed") onRetry();
       }}
     >
-      {flag.kind === "failed" && <CompletionFailure reason={flag.reason} />}
+      {flag.kind === "failed" ? (
+        <CompletionFailure reason={flag.reason} />
+      ) : (
+        // DESIGN.md §8's discoverability, said once: a face does not say
+        // "settings" the way the gear it replaced did.
+        <p className={`mt-2 ${factCls}`}>
+          Your face in the bottom-left corner opens Settings — so does {settingsChord}.
+        </p>
+      )}
     </WizardPane>
   );
 }

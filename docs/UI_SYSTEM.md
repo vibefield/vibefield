@@ -33,6 +33,8 @@ The catalog currently mounts these shipping views directly:
 - FilePill, navigation breadcrumbs, ZoomPill, WidgetTray frame/tool switcher
 - command palette, settings dialog, side-panel frame, and loading veil
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
+- the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
+  both face frames at every size, and the face picker
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and FilePill receives a fixture document manager; their DOM, interaction

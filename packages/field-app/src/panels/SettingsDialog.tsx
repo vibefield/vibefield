@@ -1,4 +1,6 @@
+import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import type { ReactElement, ReactNode, RefObject } from "react";
+import type { FieldUserFace } from "../host";
 import { labelCls } from "./settings-ui";
 
 export type SettingsPage =
@@ -84,6 +86,113 @@ const NAV_GROUPS: ReadonlyArray<{ label: string; pages: readonly SettingsPage[] 
 ];
 
 const PAGE_BY_ID = new Map(PAGES.map((page) => [page.id, page]));
+
+/** UA-D19 — the head of Settings when the account is known: the card that
+ * replaces the gear tile and the word "Settings", and the other users as faces
+ * under it. With it, the Account nav group folds away — the head IS the
+ * account. Without it (a browser harness, an older shell) the dialog keeps its
+ * gear head and the Account item, so the page is never unreachable. */
+export interface SettingsAccountHead {
+  readonly me: {
+    readonly userId: string;
+    readonly name: string;
+    readonly face: FieldUserFace;
+    /** The login, or the link state in words ("offline · not linked"). */
+    readonly detail: string;
+    readonly detailIsLogin?: boolean;
+  };
+  readonly others: readonly {
+    readonly userId: string;
+    readonly name: string;
+    readonly face: FieldUserFace;
+    /** Agents waiting in that user (no feed yet — spec v0.3 §12). */
+    readonly waiting?: number;
+  }[];
+  /** Absent: this host cannot switch, so the faces are shown, not offered. */
+  readonly onSwitch?: ((userId: string) => void) | undefined;
+  readonly busy?: boolean;
+  /** A switch main refused, in its words — shown under the faces until the
+   * next attempt, so a click never just does nothing. */
+  readonly notice?: string | null | undefined;
+}
+
+function AccountHead({
+  account,
+  current,
+  onOpenAccount,
+}: {
+  account: SettingsAccountHead;
+  current: boolean;
+  onOpenAccount: () => void;
+}): ReactElement {
+  const { me, others, onSwitch, busy = false, notice = null } = account;
+  return (
+    <div className="vf-settings-account">
+      {/* The dialog is still "Settings" to assistive tech; the card is its head. */}
+      <span id="vf-settings-title" className="sr-only">
+        Settings
+      </span>
+      <button
+        type="button"
+        className={`vf-settings-account-card ${faceLiftHostClass}`}
+        aria-current={current ? "page" : undefined}
+        aria-label={`${me.name}${me.detail.length > 0 ? `, ${me.detail}` : ""} — account settings`}
+        onClick={onOpenAccount}
+      >
+        <UserFaceView emoji={me.face.emoji} frame={me.face.frame} size={40} seed={me.userId} />
+        <span className="vf-settings-account-text">
+          <span className="vf-settings-account-name">{me.name}</span>
+          {me.detail.length > 0 && (
+            <span
+              className={`vf-settings-account-detail${me.detailIsLogin === true ? " vf-ui-mono" : ""}`}
+            >
+              {me.detail}
+            </span>
+          )}
+        </span>
+        <span className="vf-settings-account-chevron" aria-hidden="true">
+          ›
+        </span>
+      </button>
+      {others.length > 0 && (
+        <div className="vf-settings-account-others">
+          <span className="vf-settings-account-eyebrow">Switch</span>
+          {others.map((other) => {
+            const waiting = other.waiting ?? 0;
+            return (
+              <button
+                key={other.userId}
+                type="button"
+                className={`vf-settings-account-other ${faceLiftHostClass}`}
+                title={`Switch to ${other.name}`}
+                aria-label={`Switch to ${other.name}${waiting > 0 ? `, ${waiting} waiting` : ""}`}
+                disabled={onSwitch === undefined || busy}
+                onClick={() => onSwitch?.(other.userId)}
+              >
+                <UserFaceView
+                  emoji={other.face.emoji}
+                  frame={other.face.frame}
+                  size={24}
+                  seed={other.userId}
+                />
+                {waiting > 0 && (
+                  <span className="vf-settings-account-waiting tabular-nums" aria-hidden="true">
+                    {waiting}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {notice !== null && (
+        <p className="vf-settings-account-notice" role="alert">
+          {notice}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function PageIcon({ name }: { name: PageMeta["icon"] }): ReactElement {
   if (name === "person") {
@@ -179,6 +288,7 @@ export function SettingsDialog({
   undoAvailable,
   redoAvailable,
   historyNote = null,
+  account,
   dialogRef,
   className = "",
   children,
@@ -192,11 +302,15 @@ export function SettingsDialog({
   undoAvailable: boolean;
   redoAvailable: boolean;
   historyNote?: string | null;
+  /** UA-D19 — the account at the head of Settings; see `SettingsAccountHead`. */
+  account?: SettingsAccountHead | undefined;
   dialogRef?: RefObject<HTMLDivElement | null>;
   className?: string;
   children: ReactNode;
 }): ReactElement {
   const currentPage = PAGE_BY_ID.get(activePage) ?? PAGES[0]!;
+  const navGroups =
+    account === undefined ? NAV_GROUPS : NAV_GROUPS.filter((group) => group.label !== "Account");
   return (
     <div
       ref={dialogRef}
@@ -208,27 +322,35 @@ export function SettingsDialog({
       className={`vf-settings-dialog grid h-[min(84vh,760px)] min-h-[540px] w-[min(94vw,1080px)] grid-cols-[224px_minmax(0,1fr)] overflow-hidden rounded-[22px] outline-none ${className}`.trim()}
     >
       <aside className="vf-settings-sidebar flex min-h-0 flex-col border-r border-black/5 p-3 dark:border-white/10">
-        <div className="flex h-[58px] items-center gap-2.5 px-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-black text-white shadow-sm dark:bg-white dark:text-black">
-            <svg
-              viewBox="0 0 20 20"
-              aria-hidden="true"
-              className="h-4 w-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.6]"
+        {account !== undefined ? (
+          <AccountHead
+            account={account}
+            current={activePage === "account"}
+            onOpenAccount={() => onSelectPage("account")}
+          />
+        ) : (
+          <div className="flex h-[58px] items-center gap-2.5 px-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-black text-white shadow-sm dark:bg-white dark:text-black">
+              <svg
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+                className="h-4 w-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.6]"
+              >
+                <circle cx="10" cy="10" r="2.3" />
+                <path d="M15.8 11.8a1.3 1.3 0 0 0 .3 1.4l.1.1-2.3 2.3-.1-.1a1.3 1.3 0 0 0-1.4-.3 1.3 1.3 0 0 0-.8 1.2v.2H8.4v-.2a1.3 1.3 0 0 0-.8-1.2 1.3 1.3 0 0 0-1.4.3l-.1.1-2.3-2.3.1-.1a1.3 1.3 0 0 0 .3-1.4A1.3 1.3 0 0 0 3 11H2.8V8H3a1.3 1.3 0 0 0 1.2-.8 1.3 1.3 0 0 0-.3-1.4l-.1-.1 2.3-2.3.1.1a1.3 1.3 0 0 0 1.4.3A1.3 1.3 0 0 0 8.4 3v-.2h3.2V3a1.3 1.3 0 0 0 .8 1.2 1.3 1.3 0 0 0 1.4-.3l.1-.1 2.3 2.3-.1.1a1.3 1.3 0 0 0-.3 1.4 1.3 1.3 0 0 0 1.2.8h.2v3H17a1.3 1.3 0 0 0-1.2.8Z" />
+              </svg>
+            </span>
+            <span
+              id="vf-settings-title"
+              className="vf-settings-sidebar-title text-[15px] font-semibold tracking-[-0.02em] text-black/85 dark:text-white/90"
             >
-              <circle cx="10" cy="10" r="2.3" />
-              <path d="M15.8 11.8a1.3 1.3 0 0 0 .3 1.4l.1.1-2.3 2.3-.1-.1a1.3 1.3 0 0 0-1.4-.3 1.3 1.3 0 0 0-.8 1.2v.2H8.4v-.2a1.3 1.3 0 0 0-.8-1.2 1.3 1.3 0 0 0-1.4.3l-.1.1-2.3-2.3.1-.1a1.3 1.3 0 0 0 .3-1.4A1.3 1.3 0 0 0 3 11H2.8V8H3a1.3 1.3 0 0 0 1.2-.8 1.3 1.3 0 0 0-.3-1.4l-.1-.1 2.3-2.3.1.1a1.3 1.3 0 0 0 1.4.3A1.3 1.3 0 0 0 8.4 3v-.2h3.2V3a1.3 1.3 0 0 0 .8 1.2 1.3 1.3 0 0 0 1.4-.3l.1-.1 2.3 2.3-.1.1a1.3 1.3 0 0 0-.3 1.4 1.3 1.3 0 0 0 1.2.8h.2v3H17a1.3 1.3 0 0 0-1.2.8Z" />
-            </svg>
-          </span>
-          <span
-            id="vf-settings-title"
-            className="vf-settings-sidebar-title text-[15px] font-semibold tracking-[-0.02em] text-black/85 dark:text-white/90"
-          >
-            Settings
-          </span>
-        </div>
+              Settings
+            </span>
+          </div>
+        )}
 
         <nav className="min-h-0 flex-1 overflow-y-auto py-2" aria-label="Settings categories">
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label} className="mb-4 last:mb-0">
               <div className="vf-settings-nav-group mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-black/30 dark:text-white/30">
                 {group.label}

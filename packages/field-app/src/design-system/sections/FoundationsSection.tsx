@@ -1,4 +1,6 @@
+import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import type { CSSProperties, ReactElement } from "react";
+import { FACE_LADDER, FIXTURE_ME, FIXTURE_OTHERS } from "../account-fixtures";
 import { Section, Specimen } from "../catalog-ui";
 
 const SURFACE_COLORS = [
@@ -49,10 +51,40 @@ export function FoundationsSection(): ReactElement {
         </Specimen>
       </div>
 
-      <Specimen title="Organizational accents" source="AccentPicker.tsx">
+      <Specimen title="Organizational accents" source="design-kit/tokens.css · DESIGN.md §2.6">
         <div className="vf-ds-accent-line">
           {ACCENT_COLORS.map((color) => (
             <ColorSwatch key={color.token} {...color} compact />
+          ))}
+        </div>
+      </Specimen>
+
+      <Specimen title="Faces" source="design-kit/face.tsx · DESIGN.md §2.8">
+        <div className="vf-ds-face-ladders">
+          {(
+            [
+              { frame: "sticker", label: "Sticker · the default", person: FIXTURE_ME },
+              { frame: "coin", label: "Coin · by choice", person: FIXTURE_OTHERS[0] ?? FIXTURE_ME },
+            ] as const
+          ).map(({ frame, label, person }) => (
+            <div key={frame} className="vf-ds-face-ladder">
+              <span className="vf-ds-face-ladder-label">{label}</span>
+              <div className="vf-ds-face-rungs">
+                {FACE_LADDER.map((size) => (
+                  <figure key={size} className={`vf-ds-face-rung ${faceLiftHostClass}`}>
+                    <UserFaceView
+                      emoji={person.face.emoji}
+                      frame={frame}
+                      size={size}
+                      seed={person.userId}
+                      legend={frame === "coin" ? `${person.name} · example-org` : undefined}
+                      label={`${person.name}, ${person.face.emoji}, ${size}px`}
+                    />
+                    <figcaption>{size}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </Specimen>

@@ -41,6 +41,17 @@ describe("UsersFile (golden vector)", () => {
     expect(republished.users[0].name).toBe("renamed");
   });
 
+  it("reads a face and a legacy accent side by side (v0.3, UA-D17)", () => {
+    const file = UsersFile.parse(JSON.parse(raw));
+    // user 1 is the pre-v0.3 shape W6 must still read; user 2 wears a face,
+    // and a field a later build adds to the face survives a round trip too.
+    expect(file.users[0]?.color).toBe("accent-3");
+    expect(file.users[0]?.face).toBeUndefined();
+    expect(file.users[1]?.face).toMatchObject({ emoji: "🐙", frame: "coin" });
+    const republished = JSON.parse(JSON.stringify(UsersFile.parse(file)));
+    expect(republished.users[1].face.futureFaceField).toBe("survives too");
+  });
+
   it("refuses structural corruption", () => {
     expect(() =>
       UsersFile.parse({ version: 2, nextFuid: 1, lastAttached: null, users: [] }),

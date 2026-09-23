@@ -61,6 +61,147 @@
   }
 }
 
+/* UA-D19 — Settings, headed by you. The account card replaces the gear tile and
+   the wordmark; the other users sit under it as faces. The card is the Account
+   page's door, so its current state is the nav's own selected fill. */
+.vf-settings-account {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 4px;
+}
+
+.vf-settings-account-card {
+  display: flex;
+  width: 100%;
+  min-height: 58px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.vf-settings-account-card:hover,
+.vf-settings-account-card[aria-current="page"] {
+  background: var(--vf-chrome-surface-hover);
+}
+
+.vf-settings-account-card:active {
+  transform: scale(0.98);
+}
+
+.vf-settings-account-card:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -2px;
+}
+
+.vf-settings-account-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.vf-settings-account-name,
+.vf-settings-account-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-settings-account-name {
+  color: var(--vf-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.vf-settings-account-detail {
+  color: var(--vf-text-tertiary);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.vf-settings-account-chevron {
+  color: var(--vf-text-faint);
+  font-size: 16px;
+}
+
+.vf-settings-account-others {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 6px;
+}
+
+.vf-settings-account-notice {
+  margin: 0;
+  padding: 0 8px 8px;
+  color: var(--vf-orange);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.vf-settings-account-eyebrow {
+  margin-right: 4px;
+  color: var(--vf-text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-settings-account-other {
+  position: relative;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+}
+
+.vf-settings-account-other:hover {
+  background: var(--vf-chrome-surface-hover);
+}
+
+.vf-settings-account-other:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -2px;
+}
+
+.vf-settings-account-other:disabled {
+  cursor: default;
+}
+
+.vf-settings-account-waiting {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: var(--vf-state-on-attention);
+  background: var(--vf-orange);
+  box-shadow: 0 0 0 2px var(--vf-chrome-solid);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
 @keyframes vf-settings-dialog-in {
   from {
     opacity: 0;
@@ -84,8 +225,17 @@
   .vf-settings-sidebar-title,
   .vf-settings-nav-group,
   .vf-settings-nav-label,
-  .vf-settings-sidebar-note {
+  .vf-settings-sidebar-note,
+  .vf-settings-account-text,
+  .vf-settings-account-chevron,
+  .vf-settings-account-others {
     display: none;
+  }
+
+  .vf-settings-account-card {
+    min-height: 52px;
+    justify-content: center;
+    padding: 6px 0;
   }
 
   .vf-settings-nav-item {

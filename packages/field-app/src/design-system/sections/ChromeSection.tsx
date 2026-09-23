@@ -1,11 +1,23 @@
+import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useMemo, useState } from "react";
+import { MeMenuView } from "../../account/MeMenu";
 import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../../field/canvas-appearance";
 import { roundButtonCls } from "../../field/theme-constants";
 import { NavigationBreadcrumbsView } from "../../hud/NavigationBreadcrumbs";
 import { WidgetTrayFrame, WidgetTrayToolSwitcherView } from "../../hud/WidgetTray";
 import { ZoomPillView } from "../../hud/ZoomPill";
 import { ThemeToggleButton } from "../../ThemeToggleButton";
+import {
+  FIXTURE_ME,
+  FIXTURE_ME_OFFLINE,
+  FIXTURE_OTHERS,
+  FIXTURE_OTHERS_WAITING,
+} from "../account-fixtures";
 import { Icon, type IconName, Section, Specimen } from "../catalog-ui";
+
+const ME_STATES = ["Three users", "Waiting", "One user · offline"] as const;
+type MeState = (typeof ME_STATES)[number];
+
 import { FilePillPreview } from "../FilePillPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
 
@@ -23,6 +35,9 @@ export function ChromeSection({
   const [trayTool, setTrayTool] = useState<"select" | "pan" | "connect">("select");
   const [trayCategory, setTrayCategory] = useState("All");
   const [zoom, setZoom] = useState(100);
+  const [meOpen, setMeOpen] = useState(false);
+  const [meSpecimenOpen, setMeSpecimenOpen] = useState(true);
+  const [meState, setMeState] = useState<MeState>("Three users");
   const groundGrid = useMemo(
     () => defaultCanvasGridConfig(dark, magnetGridGlyph),
     [dark, magnetGridGlyph],
@@ -31,6 +46,7 @@ export function ChromeSection({
   const openDocs = (): void => {
     setDocsOpen((open) => !open);
     setTrayOpen(false);
+    setMeOpen(false);
   };
 
   return (
@@ -81,7 +97,10 @@ export function ChromeSection({
             open={trayOpen}
             onOpenChange={(nextOpen) => {
               setTrayOpen(nextOpen);
-              if (nextOpen) setDocsOpen(false);
+              if (nextOpen) {
+                setDocsOpen(false);
+                setMeOpen(false);
+              }
             }}
             toolbar={
               <>
@@ -118,10 +137,66 @@ export function ChromeSection({
               </div>
             </div>
           </WidgetTrayFrame>
+
+          <div className="vf-ds-demo-me">
+            <MeMenuView
+              me={FIXTURE_ME}
+              others={FIXTURE_OTHERS}
+              open={meOpen}
+              onOpenChange={(nextOpen) => {
+                setMeOpen(nextOpen);
+                if (nextOpen) {
+                  setDocsOpen(false);
+                  setTrayOpen(false);
+                }
+              }}
+              onOpenSettings={() => undefined}
+              onOpenAccount={() => undefined}
+              onLink={() => undefined}
+              onSwitch={() => undefined}
+              onNewUser={() => undefined}
+            />
+          </div>
         </div>
         <p className="vf-ds-stage-caption">
-          The document pill and tray are interactive. Open one to inspect its morph and mutual focus
-          behavior.
+          The document pill, the tray and your face are interactive. Open one to inspect its morph
+          and the rule that only one of them is open at a time.
+        </p>
+      </Specimen>
+
+      <Specimen title="Me menu" source="account/MeMenu.tsx · DESIGN.md §8" bleed>
+        <div className="vf-ds-me-stage">
+          <div className="vf-ds-me-controls">
+            <SegmentedControl
+              options={ME_STATES}
+              value={meState}
+              onChange={setMeState}
+              label="Account state"
+            />
+          </div>
+          <div className="vf-ds-demo-me">
+            <MeMenuView
+              me={meState === "One user · offline" ? FIXTURE_ME_OFFLINE : FIXTURE_ME}
+              others={
+                meState === "One user · offline"
+                  ? []
+                  : meState === "Waiting"
+                    ? FIXTURE_OTHERS_WAITING
+                    : FIXTURE_OTHERS
+              }
+              open={meSpecimenOpen}
+              onOpenChange={setMeSpecimenOpen}
+              onOpenSettings={() => undefined}
+              onOpenAccount={() => undefined}
+              onLink={() => undefined}
+              onSwitch={() => undefined}
+              onNewUser={() => undefined}
+            />
+          </div>
+        </div>
+        <p className="vf-ds-stage-caption">
+          Your face, where the Settings gear was. The circle around it grows into the menu on the
+          island curve, and your face never moves — click it again to fold the menu back.
         </p>
       </Specimen>
     </Section>

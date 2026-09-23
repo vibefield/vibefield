@@ -2,7 +2,9 @@ import type { ShellCommand } from "@vibefield/contracts";
 
 export interface ShellPresentationState {
   readonly diagnosticsRequest: number;
-  readonly target: "general" | "diagnostics";
+  /** Which page Settings opens on. `account` is the Me menu's name row and its
+   * Link… act (UA-D19); `general` is Settings… and ⌘,. */
+  readonly target: "general" | "diagnostics" | "account";
 }
 
 export const INITIAL_SHELL_PRESENTATION: ShellPresentationState = {

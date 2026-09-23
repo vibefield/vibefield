@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./card-appearance": "./src/card-appearance.ts",
+    "./face": "./src/face.tsx",
     "./gl": "./src/gl.ts",
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",

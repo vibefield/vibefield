@@ -78,6 +78,35 @@
   gap: 8px;
 }
 
+/* UA-D19 — the Me menu's corner, staged where the product puts it: the 44px
+   face box 14px in, so the face sits where the old 40px gear did. */
+.vf-ds-demo-me {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  z-index: 6;
+}
+
+.vf-ds-me-stage {
+  position: relative;
+  height: 420px;
+  overflow: hidden;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-me-controls {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 7;
+}
+
 .vf-ds-widget-tiles {
   display: grid;
   grid-template-columns: 1fr 2fr 1fr;
@@ -1162,10 +1191,6 @@
   .vf-ds-pill-layout {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .vf-ds-accent-control {
-    align-items: flex-start;
   }
 
   .vf-ds-field-stage {

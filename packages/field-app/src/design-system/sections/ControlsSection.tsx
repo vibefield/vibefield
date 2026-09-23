@@ -1,8 +1,11 @@
 import { SegmentedControl as UiSegmentedControl } from "@vibefield/design-kit";
+import { UserFaceView } from "@vibefield/design-kit/face";
 import { type ReactElement, type ReactNode, useState } from "react";
-import { AccentChip, AccentPicker, type AccentSlot } from "../../account/AccentPicker";
+import { FacePicker } from "../../account/FacePicker";
+import { faceKey } from "../../account/faces";
 import { primaryCls, quietCls } from "../../boot/onboarding/wizard-ui";
 import { roundButtonCls } from "../../field/theme-constants";
+import type { FieldUserFace } from "../../host";
 import {
   buttonCls,
   fieldCls,
@@ -10,12 +13,18 @@ import {
   SettingsPill,
   SettingsSwitch,
 } from "../../panels/settings-ui";
+import { FIXTURE_ME, FIXTURE_OTHERS } from "../account-fixtures";
 import { Icon, Section, Specimen } from "../catalog-ui";
+
+/** Faces the fixture's other users wear — greyed and named in the picker. */
+const HELD_FIXTURE: ReadonlyMap<string, string> = new Map(
+  FIXTURE_OTHERS.map((person) => [faceKey(person.face.emoji), person.name]),
+);
 
 export function ControlsSection(): ReactElement {
   const [enabled, setEnabled] = useState(true);
   const [segment, setSegment] = useState("Select");
-  const [accent, setAccent] = useState<AccentSlot>("accent-1");
+  const [face, setFace] = useState<FieldUserFace>(FIXTURE_ME.face);
   const [range, setRange] = useState(42);
 
   return (
@@ -149,7 +158,7 @@ export function ControlsSection(): ReactElement {
         </Specimen>
       </div>
 
-      <Specimen title="Pills, accents & links" source="AccentPicker.tsx · settings-ui.tsx">
+      <Specimen title="Pills & links" source="settings-ui.tsx">
         <div className="vf-ds-pill-layout">
           <div className="vf-ds-pill-group">
             <SettingsPill>Loro-backed</SettingsPill>
@@ -160,15 +169,21 @@ export function ControlsSection(): ReactElement {
               Open logs
             </a>
           </div>
-          <div className="vf-ds-accent-control">
-            <AccentPicker
-              value={accent}
-              name="vf-design-accent"
-              onSelect={setAccent}
-              className="flex flex-wrap gap-2"
-            />
-            <AccentChip accent={accent} label="James’s field" />
-          </div>
+        </div>
+      </Specimen>
+
+      <Specimen title="Face picker" source="account/FacePicker.tsx · DESIGN.md §2.8">
+        {/* The picker draws no face of its own — its hosts already show the
+            face it edits — so the specimen stages one beside it, as they do. */}
+        <div className="vf-ds-face-picker-demo">
+          <UserFaceView
+            emoji={face.emoji}
+            frame={face.frame}
+            size={56}
+            seed={FIXTURE_ME.userId}
+            label={`${FIXTURE_ME.name}, ${face.emoji}`}
+          />
+          <FacePicker value={face} held={HELD_FIXTURE} onChange={setFace} name="vf-design-face" />
         </div>
       </Specimen>
     </Section>

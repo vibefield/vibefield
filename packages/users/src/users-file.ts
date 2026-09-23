@@ -317,7 +317,6 @@ export function assertUserRootBudget(
 
 export interface CreateUserOptions {
   name?: string;
-  color?: string;
   now?: () => number;
   /** extra passthrough fields minted onto the record (e.g. the wizard's
    * `setupVariant: "second-user"` — a UI concern the store stays agnostic to) */
@@ -327,7 +326,9 @@ export interface CreateUserOptions {
 /** UA-5 — mint user N under the §3.3 lock. `nextFuid` allocates and never
  * reuses; `onboarded` starts false so the reloaded window runs the §6.2
  * wizard variant; the user root directory is created after publish (the
- * mintLockedUsersFile ordering). */
+ * mintLockedUsersFile ordering). UA-7: it mints no face (W6). The machine's
+ * deal is a proposal pane 2 shows, and pane 2 is what writes it; an absent face
+ * is how W6 knows pane 2 has not been passed. */
 export async function createUser(
   rootReal: string,
   deps: UsersLockDeps,
@@ -341,7 +342,6 @@ export async function createUser(
       userId: ulid(at),
       fuid: f.nextFuid,
       name: opts.name ?? defaultUserName(),
-      ...(opts.color !== undefined ? { color: opts.color } : {}),
       resident: true,
       onboarded: false,
       createdAt: new Date(at).toISOString(),

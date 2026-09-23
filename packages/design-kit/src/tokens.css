@@ -63,6 +63,41 @@
   --vf-accent-7: #ef4444;
   --vf-accent-8: #3b82f6;
 
+  /* §2.8 Identity — the face (UA-D17). A person gets no colour: these are the
+     sticker's paper and the coin's pewter, neutral by construction. The edge
+     is paper in BOTH themes (the white edge is what reads as a sticker); only
+     the shadows and the metal darken. Gradients live here because they are the
+     metal itself, not a use site's choice. */
+  --vf-sticker-edge: #ffffff;
+  --vf-sticker-cut: rgb(0 0 0 / 12%);
+  --vf-sticker-shadow: rgb(0 0 0 / 22%);
+  --vf-coin-rim: conic-gradient(
+    from 210deg,
+    #fbfbfd,
+    #c4c4ca 16%,
+    #f1f1f4 33%,
+    #b6b6bd 52%,
+    #f4f4f7 70%,
+    #c0c0c6 86%,
+    #fbfbfd
+  );
+  --vf-coin-field: radial-gradient(circle at 34% 28%, #ffffff, #ececf0 58%, #d5d5db);
+  --vf-coin-ink: rgb(28 28 30 / 52%);
+  --vf-coin-reed: rgb(0 0 0 / 16%);
+  --vf-coin-inset: rgb(0 0 0 / 22%);
+  --vf-coin-shadow: rgb(0 0 0 / 16%);
+  --vf-coin-shadow-contact: rgb(0 0 0 / 6%);
+  --vf-coin-relief: rgb(0 0 0 / 25%);
+  --vf-coin-bevel-light: rgb(255 255 255 / 50%);
+  --vf-coin-bevel-dark: rgb(0 0 0 / 16%);
+  --vf-coin-sheen: rgb(255 255 255 / 30%);
+  /* A presence cursor's wire colour: the SENDER resolves it and every peer
+     draws it as sent, whatever their theme — so one neutral that holds on
+     both grounds and under ICE's white label text, never the theme's ink:
+     3.2:1 on the dark ground, 3.1:1 on dark chrome, 5.3:1 on the light
+     ground, 5.5:1 under the white label. */
+  --vf-presence-ink: #68686b;
+
   /* Domain content colors. These are stable card identities, not app state. */
   --vf-note-surface: #f6e7a9;
   --vf-note-ink: #3a3524;
@@ -199,6 +234,25 @@
   --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 40%);
   --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 40%);
+
+  /* §2.8 the face — the paper stays white; the pewter darkens with the room */
+  --vf-sticker-shadow: rgb(0 0 0 / 50%);
+  --vf-coin-rim: conic-gradient(
+    from 210deg,
+    #77777d,
+    #36363b 16%,
+    #646469 33%,
+    #2a2a2f 52%,
+    #68686e 70%,
+    #34343a 86%,
+    #77777d
+  );
+  --vf-coin-field: radial-gradient(circle at 34% 28%, #5b5b61, #3a3a3f 58%, #27272b);
+  --vf-coin-ink: rgb(245 245 247 / 52%);
+  --vf-coin-reed: rgb(0 0 0 / 35%);
+  --vf-coin-inset: rgb(0 0 0 / 42%);
+  --vf-coin-shadow: rgb(0 0 0 / 50%);
+  --vf-coin-shadow-contact: rgb(0 0 0 / 30%);
 
   /* §7 Interactive states — reviewed neutral glow/rim on dark */
   --ic-glow-color: 110, 110, 110;

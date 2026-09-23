@@ -18,8 +18,13 @@
       "fuid": 2,
       "name": "acme",
       "resident": true,
-      "onboarded": false,
-      "createdAt": "2026-08-05T07:30:00.000Z"
+      "onboarded": true,
+      "createdAt": "2026-08-05T07:30:00.000Z",
+      "face": {
+        "emoji": "🐙",
+        "frame": "coin",
+        "futureFaceField": "survives too"
+      }
     }
   ],
   "futureTopLevel": { "alsoSurvives": true }

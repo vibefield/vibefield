@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { dealFace, effectiveFaces } from "@vibefield/contracts/user-face";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -9,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BootRoot } from "../src/boot/BootRoot";
 import type { BootMachine, BootOnboarding, BootView } from "../src/boot/machine";
 import { OnboardingWizard } from "../src/boot/onboarding/OnboardingWizard";
-import { type FieldHost, type FieldUserProfile, setHost } from "../src/host";
+import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
 
 // UA-3w — the Setup Assistant (spec §6). The cases that matter are the ones
 // where the wizard must NOT behave like a form: it is entered from durable
@@ -43,6 +44,11 @@ const FRESH: FieldUserProfile = {
   resident: true,
   onboarded: false,
 };
+
+/** UA-D17 — the face the machine deals this user before pane 2 opens: the
+ * contract's own deal, against nobody (the harness host has no roster door). */
+const DEALT = dealFace(FRESH.userId, []);
+const DEALT_FACE = { emoji: DEALT, frame: "sticker" } as const;
 
 /** An unlinked desktop, as UA-P-0a's daemon reports one: `meshEnabled` is FALSE
  * because the mesh derives from the link, and the posture word is what says so.
@@ -95,15 +101,50 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function host(usersUpdate: NonNullable<FieldHost["usersUpdate"]> | null): void {
+function host(
+  usersUpdate: NonNullable<FieldHost["usersUpdate"]> | null,
+  extra: Partial<FieldHost> = {},
+): void {
   setHost({
     logger: noopLogger,
     getConnection: async () => ({ port: 1, token: "test" }),
     onPrepareClose: () => () => undefined,
     completeClose: () => undefined,
     ...(usersUpdate === null ? {} : { usersUpdate }),
+    ...extra,
   });
 }
+
+/** A roster door whose one read lands only when the test says so. */
+function lateRoster(): {
+  usersList: () => Promise<FieldUserRoster>;
+  land: (users: FieldUserProfile[]) => Promise<void>;
+} {
+  let resolve: (roster: FieldUserRoster) => void = () => undefined;
+  const read = new Promise<FieldUserRoster>((settle) => {
+    resolve = settle;
+  });
+  return {
+    usersList: () => read,
+    land: async (users) => {
+      await act(async () => {
+        resolve({ attachedUserId: FRESH.userId, users });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    },
+  };
+}
+
+/** Another user on the machine, already wearing `emoji`. */
+const wearing = (emoji: string): FieldUserProfile => ({
+  userId: "01K0000000000000000000000B",
+  fuid: 2,
+  name: "Work",
+  face: { emoji },
+  resident: true,
+  onboarded: true,
+});
 
 /** The product half. `link: undefined` makes `user.link.subscribe` REJECT,
  * which is what a daemon without the UA-3 method actually does. */
@@ -185,7 +226,7 @@ async function tick(ms: number): Promise<void> {
 }
 
 describe("Setup Assistant", () => {
-  it("walks a fresh install: name and accent, the real stages, a named skip, then the flag", async () => {
+  it("walks a fresh install: name and face, the real stages, a named skip, then the flag", async () => {
     const updates: unknown[] = [];
     const usersUpdate = vi.fn(async (params: Record<string, unknown>) => {
       updates.push(params);
@@ -205,13 +246,23 @@ describe("Setup Assistant", () => {
     // 2 — the mandatory core: a name, PRE-FILLED (W2).
     const name = container?.querySelector<HTMLInputElement>('input[aria-label="Your name"]');
     expect(name?.value).toBe("james");
+    // The face was dealt before the pane opened (UA-D17): it is already on
+    // screen, so Continue always writes one — which is what makes `face` a
+    // trustworthy "pane 2 happened" fact for W6.
+    expect(container?.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(
+      `james, ${DEALT}`,
+    );
+    // The picker is one click away, never in the way.
+    expect(container?.querySelector('[role="radiogroup"][aria-label="Face"]')).toBeNull();
+    await click("Change face…");
+    const deck = container?.querySelectorAll<HTMLInputElement>(
+      '[role="radiogroup"][aria-label="Face"] input',
+    );
+    expect(deck?.length).toBeGreaterThan(40);
     expect(
-      container?.querySelectorAll('[role="radiogroup"][aria-label="Accent color"] input'),
-    ).toHaveLength(8);
-    // accent-1 is preselected, so Continue always writes a color — which is
-    // what makes `color` a trustworthy "pane 2 happened" fact for W6.
-    const first = container?.querySelector<HTMLInputElement>('input[aria-label="accent-1"]');
-    expect(first?.checked).toBe(true);
+      container?.querySelector<HTMLInputElement>(`input[aria-label="${DEALT}"]`)?.checked,
+    ).toBe(true);
+    const other = DEALT === "🐧" ? "🦉" : "🐧";
 
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(
@@ -222,10 +273,10 @@ describe("Setup Assistant", () => {
       name?.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      container?.querySelector<HTMLInputElement>('input[aria-label="accent-3"]')?.click();
+      container?.querySelector<HTMLInputElement>(`input[aria-label="${other}"]`)?.click();
     });
     await click("Continue");
-    expect(updates).toEqual([{ name: "James", color: "accent-3" }]);
+    expect(updates).toEqual([{ name: "James", face: { emoji: other, frame: "sticker" } }]);
 
     // 3 — setting up: the stages this boot really passed, and no bar (W4).
     expect(text()).toContain("waking the daemon");
@@ -242,10 +293,69 @@ describe("Setup Assistant", () => {
 
     // 5 — Ready: one beat, then the durable write, and only then the release.
     expect(text()).toContain("Welcome to your field, James");
+    // ...and where Settings went, said once (DESIGN.md §8): a face does not
+    // say "settings" the way the gear did.
+    expect(text()).toContain("Your face in the bottom-left corner opens Settings — so does");
     expect(onComplete).not.toHaveBeenCalled();
     await tick(READY_BEAT_MS);
-    expect(updates).toEqual([{ name: "James", color: "accent-3" }, { onboarded: true }]);
+    expect(updates).toEqual([
+      { name: "James", face: { emoji: other, frame: "sticker" } },
+      { onboarded: true },
+    ]);
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-deals the proposal against the roster when it lands, if nobody picked", async () => {
+    const roster = lateRoster();
+    host(
+      vi.fn(
+        async (params: Record<string, unknown>) => ({ ...FRESH, ...params }) as FieldUserProfile,
+      ),
+      { usersList: roster.usersList },
+    );
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await click("Get started");
+    // Somebody else already wears the face dealt against nobody.
+    const users = [FRESH, wearing(DEALT)];
+    await roster.land(users);
+    const redealt = effectiveFaces(users).get(FRESH.userId)?.face.emoji;
+    expect(redealt).not.toBe(DEALT);
+    expect(container?.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(
+      `james, ${redealt}`,
+    );
+  });
+
+  it("keeps a face picked before the roster lands — a late read never re-deals a choice", async () => {
+    const roster = lateRoster();
+    host(
+      vi.fn(
+        async (params: Record<string, unknown>) => ({ ...FRESH, ...params }) as FieldUserProfile,
+      ),
+      { usersList: roster.usersList },
+    );
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding(),
+      onComplete: vi.fn(),
+    });
+    await click("Get started");
+    await click("Change face…");
+    const picked = DEALT === "🐧" ? "🦉" : "🐧";
+    await act(async () => {
+      container?.querySelector<HTMLInputElement>(`input[aria-label="${picked}"]`)?.click();
+    });
+    // The roster arrives after the pick, holding someone who wears the deal.
+    await roster.land([FRESH, wearing(DEALT)]);
+    expect(
+      container?.querySelector<HTMLInputElement>(`input[aria-label="${picked}"]`)?.checked,
+    ).toBe(true);
+    expect(container?.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(
+      `james, ${picked}`,
+    );
   });
 
   it("asks a migrated field two things, not five", async () => {
@@ -316,7 +426,7 @@ describe("Setup Assistant", () => {
     // run gets is never shown to the second user.
     await tick(0);
     expect(text()).not.toContain("Welcome to your field");
-    expect(updates).toEqual([{ name: "james", color: "accent-1" }, { onboarded: true }]);
+    expect(updates).toEqual([{ name: "james", face: DEALT_FACE }, { onboarded: true }]);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
@@ -327,7 +437,7 @@ describe("Setup Assistant", () => {
         updates.push(params);
         return {
           ...FRESH,
-          color: "accent-2",
+          face: { emoji: "🐙" },
           setupVariant: "second-user",
           ...params,
         } as FieldUserProfile;
@@ -336,12 +446,12 @@ describe("Setup Assistant", () => {
     const onComplete = vi.fn();
     await mount({
       fieldd: client({ link: NO_LINK }),
-      onboarding: onboarding({ color: "accent-2", setupVariant: "second-user" }),
+      onboarding: onboarding({ face: { emoji: "🐙" }, setupVariant: "second-user" }),
       onComplete,
     });
 
-    // A color on the record means pane 2 completed — the derivation does not
-    // care which variant asked it.
+    // A face on the record means pane 2 completed (UA-D17) — the derivation does
+    // not care which variant asked it.
     expect(text()).toContain("Connect your devices");
     expect(container?.querySelector('input[aria-label="Your name"]')).toBeNull();
 
@@ -392,8 +502,8 @@ describe("Setup Assistant", () => {
       onComplete: vi.fn(),
     });
 
-    // A color on the record means pane 2 completed, and no link means pane 4
-    // is the first thing still unanswered.
+    // A pre-v0.3 record's accent means pane 2 was answered before faces
+    // existed, and no link means pane 4 is the first thing still unanswered.
     expect(text()).toContain("Connect your devices");
     expect(text()).not.toContain(
       "Manage all your agents and compose your agentic workflow in one place.",
@@ -611,7 +721,7 @@ describe("Setup Assistant", () => {
     });
     expect(button("Continue").disabled).toBe(false);
     await click("Continue");
-    expect(updates).toEqual([{ name: "james", color: "accent-1" }]);
+    expect(updates).toEqual([{ name: "james", face: DEALT_FACE }]);
   });
 
   it("never claims to be finished on a flag write it could not land", async () => {
@@ -701,6 +811,13 @@ describe("Setup Assistant", () => {
     expect(WIZARD_CSS).toContain("vf-wizard-fade");
     // Every animated control carries the escape hatch too (M6).
     expect(button("Get started").className).toContain("motion-reduce:transition-none");
+  });
+
+  it("centres the shell safely, so a tall pane never loses its title above the fold", () => {
+    // Pane 2 with its face picker open (UA-D17) is taller than a small shell.
+    // Plain centring inside a scroller overflows both ways, and the top half
+    // can never be scrolled to; `safe` sends the overflow downward only.
+    expect(WIZARD_CSS).toMatch(/\.vf-wizard-shell-content \{[^}]*align-items: safe center;/);
   });
 
   it("puts every wizard pane on the shared rounded glass surface", async () => {

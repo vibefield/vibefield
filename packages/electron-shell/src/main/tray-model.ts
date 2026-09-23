@@ -14,10 +14,18 @@ export interface TraySnapshot {
   /** UA-2 — the attached user's display name; absent hides the row (older
    * callers, tests). UA-3's Account section renames it live. */
   readonly userName?: string;
-  /** UA-5 — the roster behind the Switch User submenu; absent hides it. */
+  /** UA-7 — the attached user's face, which leads the user row (UA-D17). It is
+   * the EFFECTIVE face: the one written, or the machine's deal for a user who
+   * has none yet, so a pre-v0.3 user is never a bare name. Only the emoji
+   * travels, because a native menu draws no frame (DESIGN.md §2.8). Absent keeps
+   * the `User:` label (older callers, tests). */
+  readonly userFace?: string;
+  /** UA-5 — the roster behind the Switch User submenu; absent hides it. UA-7:
+   * each user's effective face leads their row, as it leads the user row. */
   readonly users?: ReadonlyArray<{
     readonly userId: string;
     readonly name: string;
+    readonly face?: string;
     readonly attached: boolean;
   }>;
   readonly backgroundShell: boolean;
@@ -69,6 +77,12 @@ function serviceStatus(snapshot: TraySnapshot): string {
     case "unavailable":
       return "Field service: Unavailable";
   }
+}
+
+/** UA-7 — who a row names: the face leads and the name makes it certain
+ * (DESIGN.md §2.8, I-4). With no face it is the name alone. */
+function userLabel(name: string, face: string | undefined): string {
+  return face === undefined ? name : `${face} ${name}`;
 }
 
 function availability(platform: TrayPlatform, enabled: boolean): Pick<TrayMenuItem, "enabled"> {
@@ -144,7 +158,10 @@ export function buildTrayMenu(
       ? [
           {
             id: "user",
-            label: `User: ${snapshot.userName}`,
+            label:
+              snapshot.userFace === undefined
+                ? `User: ${snapshot.userName}`
+                : userLabel(snapshot.userName, snapshot.userFace),
             ...availability(platform, false),
           },
         ]
@@ -162,7 +179,7 @@ export function buildTrayMenu(
                 (u): TrayMenuItem => ({
                   id: `switch-user-${u.userId}`,
                   type: "checkbox",
-                  label: u.name,
+                  label: userLabel(u.name, u.face),
                   checked: u.attached,
                   enabled: actionable && !u.attached,
                   ...(actionable && !u.attached
