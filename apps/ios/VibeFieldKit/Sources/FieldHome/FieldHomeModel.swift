@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldMesh
 import FieldTerminal
 import SwiftUI
@@ -236,5 +237,152 @@ enum FieldHomeModel {
     sessionSharesWrites
       ? "you can type here"
       : "view only — this session is shared read-only"
+  }
+
+  // MARK: - The account corner (IOS-8b)
+
+  /// The corner's whole answer (AP-D1…D7): which face it wears, whether it
+  /// wears the dot, what stands beside the face when the menu is open, which
+  /// rows the menu holds and which act it offers. Every word is
+  /// `MeshDisplay`'s or `AccountDisplay`'s; this decides WHICH.
+  struct AccountFace: Equatable {
+    enum Control: Equatable {
+      /// Not signed in and no node: the corner is the act.
+      case signIn
+      /// Signed in, and no desktop has said who you are yet: a plain circle,
+      /// never a face to take back.
+      case blank
+      case face(UserFace)
+    }
+
+    /// The connection's own act, as a row in the menu — what the mesh sheet's
+    /// one button used to be.
+    enum ConnectionAct: Equatable {
+      case connect
+      case signIn
+      case disconnect
+    }
+
+    struct DesktopRow: Equatable, Identifiable {
+      let id: String
+      let name: String
+      let word: String?
+      let wantsTheUser: Bool
+    }
+
+    var control: Control
+    /// The dot (AP-D7): the mesh needs the person, or a desktop does.
+    var wantsAttention: Bool
+    /// The name beside the face; the login stands in until a desktop names you.
+    var name: String
+    /// Under the name: the account line while up, the connection's word otherwise.
+    var detail: String?
+    var detailIsLogin: Bool
+    var detailWantsAttention: Bool
+    /// The orange words at the top of the menu, when the mesh needs the person.
+    var notice: String?
+    var desktops: [DesktopRow]
+    var othersLine: String?
+    var connectionAct: ConnectionAct?
+    var canSignOut: Bool
+  }
+
+  /// A desktop this account has seen and the tailnet does not list right now
+  /// (AP-D6): a row that says `asleep`.
+  struct AsleepDesktop: Equatable {
+    let deviceId: String
+    let name: String
+  }
+
+  static func accountFace(
+    meshState: MeshModel.State,
+    rememberedLogin: String?,
+    login: String?,
+    domain: String?,
+    name: String?,
+    face: UserFace?,
+    desktops: [FieldDesktop],
+    asleep: [AsleepDesktop],
+    foreignDoors: Int,
+    isHearing: Bool
+  ) -> AccountFace {
+    let live = (login?.isEmpty ?? true) ? nil : login
+    let remembered = (rememberedLogin?.isEmpty ?? true) ? nil : rememberedLogin
+    // The account this phone is signed in as: the node's own report first,
+    // then what the phone remembers from the last sign-in.
+    let account = live ?? remembered
+    let nodeStanding: Bool =
+      switch meshState {
+      case .off, .failed: false
+      case .starting, .needsLogin, .needsMachineAuth, .up, .stopping: true
+      }
+
+    let control: AccountFace.Control
+    if let face {
+      control = .face(face)
+    } else if account != nil || nodeStanding {
+      control = .blank
+    } else {
+      control = .signIn
+    }
+
+    let wantsAttention =
+      MeshDisplay.chipWantsAttention(state: meshState) || MeshDisplay.chipWantsAttention(desktops: desktops)
+
+    // The line under the name. Up: the account line (UA-P-5a's, word for
+    // word) — unless the login is already standing in for the name, in which
+    // case the domain half alone, so the login is not said twice. Otherwise
+    // the connection's own word.
+    let shownName = name ?? account ?? ""
+    let detail: String?
+    let detailIsLogin: Bool
+    let detailWantsAttention: Bool
+    if meshState == .up {
+      let loginForLine = (name == nil && live != nil) ? nil : live
+      detail = MeshDisplay.accountLine(login: loginForLine, domain: domain)
+      detailIsLogin = loginForLine != nil
+      detailWantsAttention = false
+    } else {
+      detail = AccountDisplay.connectionDetail(state: meshState)
+      detailIsLogin = false
+      detailWantsAttention =
+        switch meshState {
+        case .needsLogin, .needsMachineAuth, .failed: true
+        case .off, .starting, .up, .stopping: false
+        }
+    }
+
+    // The rows: what the link lists, in its order, then what the phone
+    // remembers and the tailnet does not list — asleep, by name.
+    var rows: [AccountFace.DesktopRow] = desktops.map { desktop in
+      let word = AccountDisplay.desktopWord(desktop, isHearing: isHearing)
+      return .init(id: desktop.deviceId, name: desktop.name, word: word.word, wantsTheUser: word.wantsTheUser)
+    }
+    let listed = Set(desktops.map(\.deviceId))
+    rows += asleep
+      .filter { !listed.contains($0.deviceId) }
+      .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+      .map { .init(id: $0.deviceId, name: $0.name, word: AccountDisplay.asleep, wantsTheUser: false) }
+
+    let act: AccountFace.ConnectionAct? =
+      switch meshState {
+      case .off, .failed: account != nil ? .connect : nil
+      case .needsLogin: .signIn
+      case .up, .needsMachineAuth: .disconnect
+      case .starting, .stopping: nil
+      }
+
+    return AccountFace(
+      control: control,
+      wantsAttention: wantsAttention,
+      name: shownName,
+      detail: detail,
+      detailIsLogin: detailIsLogin,
+      detailWantsAttention: detailWantsAttention,
+      notice: AccountDisplay.notice(state: meshState),
+      desktops: rows,
+      othersLine: AccountDisplay.othersLine(count: foreignDoors),
+      connectionAct: act,
+      canSignOut: account != nil)
   }
 }

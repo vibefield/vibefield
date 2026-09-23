@@ -77,6 +77,14 @@ public final class MeshModel {
   /// A standing account note — why the gate could not be recorded, when it
   /// could not. Absent is the ordinary case.
   public private(set) var accountNote: String?
+  /// IOS-8b — the login this phone REMEMBERS (`account.login` beside truffle's
+  /// state), whether or not a node is running. The corner asks "who is this
+  /// phone signed in as" before CONNECT, and the answer was on disk all along;
+  /// `loginName` above is the running node's report and goes with the node.
+  public private(set) var rememberedLogin: String?
+  /// Where the remembered login lives, for the reads here and the sign-out at
+  /// IOS-8d. Nil where the device has no state directory to keep one in.
+  @ObservationIgnored private let stateDirectory: URL?
 
   @ObservationIgnored private var runtime: FieldTruffleRuntime?
   @ObservationIgnored private var eventsTask: Task<Void, Never>?
@@ -86,7 +94,13 @@ public final class MeshModel {
   /// other would leave a node nobody holds.
   @ObservationIgnored private var regating = false
 
-  public init() {}
+  /// `stateDirectory` names the node's state for a test on a scratch
+  /// directory; the app passes nothing and gets truffle's own.
+  public init(stateDirectory: URL? = nil) {
+    self.stateDirectory =
+      stateDirectory ?? FieldTruffleRuntime.defaultStateDirectory(appID: FieldMeshContract.appID)
+    rememberedLogin = self.stateDirectory.map(AccountLoginStore.init(stateDirectory:))?.read()
+  }
 
   public var isRunning: Bool { runtime != nil && state != .stopping }
 
@@ -214,11 +228,13 @@ public final class MeshModel {
     do {
       let runtime = try await FieldTruffleRuntime.start(
         deviceName: UIDevice.current.name,
+        stateDirectory: stateDirectory,
         onAuthRequired: { [weak self] url in
           self?.lastLoginURL = url
           self?.loginPage = LoginPage(url: url)
         })
       self.runtime = runtime
+      if let gated = runtime.gatedLogin { rememberedLogin = gated }
       await applyCurrentPhase()
       await refreshPeers()
       eventsTask = Task { [weak self] in
@@ -300,7 +316,9 @@ public final class MeshModel {
   private func regateIfNeeded() async {
     guard let runtime, !regating else { return }
     let step = await runtime.accountStep()
-    guard step.login != nil else { return }
+    guard let login = step.login else { return }
+    // The runtime wrote it before answering; the observable copy follows.
+    rememberedLogin = login
     regating = true
     defer { regating = false }
 

@@ -49,7 +49,9 @@ public struct HomeScreen: View {
   /// the field's current view of it — one that a four-second discovery hiccup
   /// can withdraw while the terminal below is still rendering frames.
   @State private var cardBubble: FieldBubble?
-  @State private var meshSheetOpen = false
+  /// IOS-8b — the account corner's menu, grown from the face. Folded by a
+  /// tap anywhere else, by any act it offers, and by an arriving login page.
+  @State private var accountMenuOpen = false
   @State private var settingsSheetOpen = false
   @State private var discoveryPolling = false
   @State private var attachment: TerminalAttachment?
@@ -194,39 +196,40 @@ public struct HomeScreen: View {
 
   @ViewBuilder
   private var chrome: some View {
-    // The mesh's corner, and under it the field's own leg (IOS-4e). The chip
-    // carries both tokens because they are one subject — whether this phone
-    // reaches the desktops, and whether the doors behind that reach have
-    // anything to say — and the line under it names the desktop the second
-    // token is about. Both are physics obstacles, so the swarm nestles around
-    // the words rather than under them.
-    VStack(alignment: .leading, spacing: 6) {
-      MeshChip(
-        state: mesh.state,
-        peerCount: mesh.peers.count,
-        linkToken: linkFace.token,
-        linkWantsAttention: linkFace.wantsAttention
-      ) {
-        meshSheetOpen = true
-      }
-      .swarmObstacle()
-
-      if let line = linkFace.line {
-        LinkLine(text: line, wantsAttention: linkFace.wantsAttention)
-          .swarmObstacle()
-      }
+    // IOS-8b — the corner is the account (AP-D1). The face at the bottom-left
+    // replaces the mesh chip, the line under it and the mesh sheet: what the
+    // chip said about reach and what the line said about the doors are rows
+    // inside the menu now, and the one thing that still needs the person is a
+    // dot beside the face. While the menu stands, a tap anywhere else folds
+    // it — this layer sits above the field and catches the tap before the
+    // field's own gesture can spend it on a hold.
+    if accountMenuOpen {
+      Color.clear
+        .contentShape(Rectangle())
+        .onTapGesture { accountMenuOpen = false }
     }
-    // The house curve at the opacity band's own duration (DESIGN.md §6): a
-    // door refusing is real news and may fade in, and nothing here moves on
-    // routine traffic — every one of these states is an event.
-    .animation(FieldMotion.ease(0.24), value: linkFace)
-    .padding(.leading, 14)
-    .padding(.top, 6)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    AccountCornerView(
+      face: accountFace,
+      isOpen: accountMenuOpen,
+      seed: accountSeed,
+      onToggle: { accountMenuOpen.toggle() },
+      onSettings: {
+        accountMenuOpen = false
+        settingsSheetOpen = true
+      },
+      onSignOut: { accountMenuOpen = false },
+      onConnection: { act in
+        accountMenuOpen = false
+        performConnection(act)
+      }
+    )
+    .padding(.leading, 16)
+    .padding(.bottom, 16)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-    // The second chrome corner, mirroring the mesh chip: both are physics
-    // obstacles, so the swarm flows around the whole top edge rather than
-    // hiding under one side of it.
+    // The other chrome corner. A physics obstacle like the account corner, so
+    // the swarm flows around both rather than hiding under either. It moves
+    // to the session card's `···` at IOS-8g.
     FieldChip(label: "TERMINAL") { settingsSheetOpen = true }
       .swarmObstacle()
       .padding(.trailing, 14)
@@ -248,7 +251,7 @@ public struct HomeScreen: View {
         // Headless smoke hooks (the GhostteaApp pattern: opt-in automation,
         // Debug-only): drive flows a simulator run can't tap into.
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
-          meshSheetOpen = true
+          accountMenuOpen = true
           mesh.connect()
         }
         // `-vf-demo-remote` stands a FAKE peer up so the remote bubble's own
@@ -632,21 +635,16 @@ public struct HomeScreen: View {
     }
     // RETIRED 2026-09-14 (TM-3): the write-key sheet, which took a pasted
     // capability or asked the desktop for one. Both doors are deleted.
-    .sheet(isPresented: $meshSheetOpen) {
-      MeshSheet(model: mesh)
-        .presentationDetents([.fraction(0.45), .medium])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(40)
-        .fieldGlassSheet()
-    }
-    // The Tailscale login page. One presenter at root: an arriving login
-    // closes the mesh sheet first, so the sheets never contend.
+    // RETIRED 2026-09-23 (IOS-8b): the mesh sheet. Its status sentence, its
+    // account line, its one act and its roster are the account menu's now.
+    // The Tailscale login page. One presenter at root: an arriving login folds
+    // the account menu first, so the page never rises under an open menu.
     .onChange(of: mesh.loginPage) {
-      if mesh.loginPage != nil { meshSheetOpen = false }
+      if mesh.loginPage != nil { accountMenuOpen = false }
     }
     .sheet(
       item: Binding(
-        get: { meshSheetOpen ? nil : mesh.loginPage },
+        get: { mesh.loginPage },
         set: { page in if page == nil { mesh.loginSheetDismissed() } })
     ) { page in
       SafariView(url: page.url)
@@ -1046,6 +1044,41 @@ public struct HomeScreen: View {
   /// without a simulator.
   private var linkFace: FieldHomeModel.LinkFace {
     FieldHomeModel.linkFace(desktops: linkDesktops, isHearing: link?.isHearing ?? false)
+  }
+
+  // MARK: - IOS-8b: the account corner
+
+  /// The corner's whole answer, decided in `FieldHomeModel` where it is tested
+  /// without a simulator. The face and the remembered desktops arrive at
+  /// IOS-8c; until then a signed-in corner is the plain circle.
+  private var accountFace: FieldHomeModel.AccountFace {
+    FieldHomeModel.accountFace(
+      meshState: mesh.state,
+      rememberedLogin: mesh.rememberedLogin,
+      login: mesh.loginName,
+      domain: mesh.tailnetDomain,
+      name: nil,
+      face: nil,
+      desktops: linkDesktops,
+      asleep: [],
+      foreignDoors: link?.foreignDoors.count ?? 0,
+      isHearing: link?.isHearing ?? false)
+  }
+
+  /// The tilt's seed: the login, so the face sits at one angle on every
+  /// launch of this account.
+  private var accountSeed: String {
+    mesh.loginName ?? mesh.rememberedLogin ?? ""
+  }
+
+  /// The connection's act, as the menu offers it — what the mesh sheet's one
+  /// button did, by the same three verbs on the same model.
+  private func performConnection(_ act: FieldHomeModel.AccountFace.ConnectionAct) {
+    switch act {
+    case .connect: mesh.connect()
+    case .signIn: mesh.requestLogin()
+    case .disconnect: mesh.disconnect()
+    }
   }
 
   // RETIRED 2026-09-14 (TM-3, TM-D3): `collectWriteGrants`,
