@@ -46,7 +46,10 @@ export type SignInState =
   /** its login pane is open */
   | "signing-in"
   /** nothing has been read for it yet */
-  | "unread";
+  | "unread"
+  /** its agent signs in in this folder but never says who: whether and as
+   * whom is the agent's own login's to know, and the row says only that */
+  | "unverifiable";
 
 /** One agent inside one profile. */
 export interface ProfileAgentRow {
@@ -67,8 +70,10 @@ export interface ProfilesContext {
   providers: readonly AgentProviderSummary[];
   installs: readonly AgentInstall[];
   usage: readonly AgentAccountUsageEntry[];
-  /** providers whose adapter can sign in here and say who (the feed's `signIn`) */
+  /** providers whose adapter can run a sign-in in a folder (the feed's `signIn`) */
   signIn: readonly string[];
+  /** of those, the ones whose adapter reads back who signed in (`identity`) */
+  identity: readonly string[];
   /** providers whose adapter signs a folder out with the vendor's command */
   signOut: readonly string[];
   /** fieldd is reading This Mac's sign-ins now */
@@ -81,6 +86,7 @@ export function emptyProfilesContext(feed?: AgentsProfileSetsListResult | null):
     installs: [],
     usage: [],
     signIn: feed?.signIn ?? [],
+    identity: feed?.identity ?? [],
     signOut: feed?.signOut ?? [],
     reading: feed?.reading ?? false,
   };
@@ -125,8 +131,10 @@ function usageFor(
 export function signInState(
   persona: AgentPersona,
   usage: AgentAccountUsageEntry | undefined,
+  readsIdentity = true,
 ): SignInState {
   if (persona.signingIn !== undefined) return "signing-in";
+  if (!readsIdentity) return "unverifiable";
   const identity = persona.identity;
   if (identity === undefined) return "unread";
   if (!identity.loggedIn) return "signed-out";
@@ -145,7 +153,7 @@ export function whoWords(persona: AgentPersona): string | undefined {
 
 export function agentRow(context: ProfilesContext, persona: AgentPersona): ProfileAgentRow {
   const usage = usageFor(context, persona);
-  const state = signInState(persona, usage);
+  const state = signInState(persona, usage, context.identity.includes(persona.provider));
   const who = whoWords(persona);
   const email = persona.identity?.email ?? persona.identity?.organization;
   const fact =
@@ -159,7 +167,9 @@ export function agentRow(context: ProfilesContext, persona: AgentPersona): Profi
           ? "Not signed in"
           : state === "expired"
             ? `Sign-in expired${email !== undefined ? ` · ${email}` : ""}`
-            : (who ?? "Signed in");
+            : state === "unverifiable"
+              ? "Doesn't say who is signed in"
+              : (who ?? "Signed in");
   return {
     provider: persona.provider,
     label: agentLabel(context, persona.provider),
@@ -173,14 +183,12 @@ export function agentRow(context: ProfilesContext, persona: AgentPersona): Profi
 
 export function profilePage(set: AgentProfileSet, context: ProfilesContext): ProfilePageModel {
   const here = installed(context);
-  // This Mac lists the agents signed in to their own folders (and one whose
-  // login pane is open); a profile lists every sign-in it holds, whatever
-  // state it is in — a place shows what is in it.
+  // This Mac lists every installed agent in its own folder, whatever that
+  // folder's sign-in says (and one whose login pane is open); a profile lists
+  // every sign-in it holds, whatever state it is in — a place shows what is in it.
   const rows = set.personas
     .filter((persona) =>
-      set.kind === "native"
-        ? persona.signingIn !== undefined || persona.identity?.loggedIn === true
-        : true,
+      set.kind === "native" ? here.has(persona.provider) || persona.signingIn !== undefined : true,
     )
     .map((persona) => agentRow(context, persona));
   const inProfile = new Set(rows.map((row) => row.provider));
@@ -226,7 +234,7 @@ export function emptyProfileWords(set: AgentProfileSet): { title: string; descri
     title: `No agents ${inOnWords(set)} yet`,
     description:
       set.kind === "native"
-        ? "Sign in here, or in the agent's own terminal, and it appears. To keep work and personal apart, make another agent profile."
+        ? "An agent you install appears here, in its own folder. To keep work and personal apart, make another agent profile."
         : `Add an agent and sign in. It gets its own folder in ${set.label}; your other profiles stay as they are.`,
   };
 }
@@ -255,7 +263,7 @@ export function deleteWords(page: ProfilePageModel): {
         ? `Deletes ${name}’s folder and the ${plural(rows.length, "sign-in")} in it.`
         : `Deletes ${name}’s folder. Nothing is signed in there.`,
     question: `Delete ${name}?`,
-    what: `Its folder, ${set.folder ?? "its folder"}, is deleted${
+    what: `${set.folder !== undefined ? `Its folder, ${set.folder},` : "Its folder"} is deleted${
       names.length > 0 ? `, with the sign-ins for ${listWords(names)}` : ""
     }. Sessions running under ${name} stop first. Your subscriptions themselves aren’t touched.`,
   };

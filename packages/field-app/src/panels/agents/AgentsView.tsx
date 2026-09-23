@@ -302,6 +302,8 @@ export interface AgentPageViewProps {
   /** AR-S2 — the profiles this agent is signed in under (the profiles feed's
    * sign-ins for it), each a door to that sign-in's page */
   signedIn?: ReadonlyArray<{ set: AgentProfileSet; row: ProfileAgentRow }> | undefined;
+  /** the profiles feed has not answered yet: nothing can be said either way */
+  signedInReading?: boolean | undefined;
   onUpdate: () => void;
   onStop: () => void;
   onReveal: (executable: string) => void;
@@ -317,6 +319,7 @@ export function AgentPageView({
   revealLabel = "Show in Finder",
   stopping = false,
   signedIn = [],
+  signedInReading = false,
   onUpdate,
   onStop,
   onReveal,
@@ -448,7 +451,11 @@ export function AgentPageView({
         title="Signed in under"
         description="Each is its own sign-in, kept in its profile."
       >
-        {signedIn.length === 0 ? (
+        {signedInReading ? (
+          <p className={`vf-agents-none ${labelCls}`} role="status">
+            Reading…
+          </p>
+        ) : signedIn.length === 0 ? (
           <p className={`vf-agents-none ${labelCls}`}>Not signed in under any agent profile yet.</p>
         ) : (
           <div className="vf-agents-list">

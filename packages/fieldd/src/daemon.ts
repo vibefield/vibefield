@@ -1359,8 +1359,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return await agents.profiles.sets();
     });
     api.registerSubscription("agents.profileSets.subscribe", async (_ctx, _params, emit) => {
+      // The snapshot first: a frame emitted before the reply names a
+      // subscription the client does not know yet, and would be dropped; and a
+      // read that throws leaves no subscriber behind. What changed while it was
+      // read arrives as the next frame.
+      const snapshot = await agents.profiles.sets();
       const dispose = agents.profiles.subscribe((frame) => emit(frame));
-      return { snapshot: await agents.profiles.sets(), dispose };
+      agents.profiles.publish();
+      return { snapshot, dispose };
     });
     api.register("agents.profileSets.create", async (ctx, params) => {
       const parsed = AgentsProfileSetsCreateParams.safeParse(params);

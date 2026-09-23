@@ -207,6 +207,7 @@ export const FIXTURE_PROFILES_CONTEXT: ProfilesContext = {
   installs: [install("claude", "2.3.0"), install("codex", "0.154.0"), install("grok", "1.0.41")],
   usage: USAGE,
   signIn: ["claude", "codex", "grok"],
+  identity: ["claude", "codex"],
   signOut: ["claude"],
   reading: false,
 };

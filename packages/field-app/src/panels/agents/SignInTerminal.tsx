@@ -58,6 +58,10 @@ export function SignInTerminal({
   const [born, setBorn] = useState<{ sessionId: string; session: SessionSummary } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // Adopted again whenever the pool's runtime is REPLACED (`generation`): a
+  // warm that failed after this adoption disposes the runtime the session was
+  // registered in, and the card would otherwise wait on it forever.
+  const generation = pool.generation;
   useEffect(() => {
     try {
       prewarmTerminalPool(client);
@@ -66,7 +70,7 @@ export function SignInTerminal({
     } catch (cause) {
       setProblem(cause instanceof Error ? cause.message : String(cause));
     }
-  }, [client, terminal]);
+  }, [client, terminal, generation]);
 
   useTerminalSessionViews(born === null ? [] : [born.sessionId], "live");
 

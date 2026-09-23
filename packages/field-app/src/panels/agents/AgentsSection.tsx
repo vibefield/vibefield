@@ -412,6 +412,7 @@ export function AgentsSection({
           revealLabel={revealLabel}
           stopping={stopping === openItem.provider}
           signedIn={signedIn}
+          signedInReading={profiles === null}
           onUpdate={() => void update(openItem.provider)}
           onStop={() => void stop(openItem.provider)}
           onReveal={(executable) => void reveal(openItem.provider, executable)}

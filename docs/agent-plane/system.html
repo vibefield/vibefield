@@ -2175,14 +2175,18 @@
                 <div>
                   <strong>Sign out — at once, and finished when its sessions end (AR-D25)</strong>
                   <p>
-                    <code>agents.profiles.delete</code> retires the sign-in now: it leaves its profile and new
-                    spawns, and the sessions already running under it keep going. When none runs — at once,
-                    when the last one exits, or at the boot after the re-attach — fieldd finishes it: the
-                    vendor's own sign-out where the credential lives outside the root (Claude Code's Keychain
-                    item is keyed on the root's path, so deleting the folder alone would leave it behind), the
-                    index runtime retired with its rows kept, the sign-in unregistered, its root deleted. A
-                    reconcile racing the finish must not re-enroll it, which is why the service tracks the
-                    ones it is finishing explicitly. In This Mac a sign-out is the vendor's own command in the
+                    <code>agents.profiles.delete</code> ends a login pane open on the sign-in, then retires it:
+                    it leaves its profile and new spawns, and the sessions already running under it keep going.
+                    When none runs — at once, when the last one exits, or at the boot after the re-attach —
+                    fieldd finishes it, each step only once the one before it held: the vendor's own sign-out
+                    where the credential lives outside the root (Claude Code's Keychain item is keyed on the
+                    root's path, so deleting the folder alone would leave it behind — a sign-out that did not
+                    take keeps the root for the next try), the root deleted, the sign-in unregistered, the index
+                    runtime retired with its rows kept. "Runs under it" counts attached and pending sessions,
+                    login panes, creations in flight, and — until the floor has answered and the re-attach has
+                    run — every un-exited record. A reconcile racing the finish must not re-enroll it, which is
+                    why the service tracks the ones it is finishing explicitly; a sweep-driven finish is in the
+                    ledger as the system actor. In This Mac a sign-out is the vendor's own command in the
                     agent's own folder, which is never deleted.
                   </p>
                 </div>
@@ -2191,12 +2195,15 @@
                 <div>
                   <strong>Delete a profile — its sessions stop first</strong>
                   <p>
-                    <code>agents.profileSets.delete</code> stops every session running under the profile (the
-                    floor's ladder, asked again until the floor no longer lists them), finishes each of its
-                    sign-ins the same way, unregisters the set and deletes its folder — only ever a directory
-                    under this user's <code>agents/profiles/</code>, or an adopted root under
-                    <code>agents/roots/</code>, never a provider's own. This Mac and the default are refused:
-                    make another profile the default first.
+                    <code>agents.profileSets.delete</code> retires the profile's sign-ins, stops every session and
+                    login pane under it (the floor's ladder, the terminate asked again until the floor has placed
+                    each) and waits until they are gone — if any remains, nothing is deleted and the delete is
+                    refused, retryable, its sign-ins signed out and finished as their sessions end. Then the
+                    vendors' sign-outs (a failure refuses the same way), the set unregistered, and its folder
+                    deleted — only ever a path of the exact shape fieldd allocates, resolved and never through a
+                    symlink: <code>agents/profiles/&lt;set&gt;</code>, a sign-in root inside it, or an adopted root
+                    <code>agents/roots/&lt;provider&gt;/&lt;uuid&gt;</code>, never a provider's own. This Mac and the
+                    default are refused: make another profile the default first.
                   </p>
                 </div>
               </div>
@@ -2211,6 +2218,12 @@
                   </p>
                 </div>
               </div>
+            </div>
+            <div class="callout">
+              <strong>Every agent that signs in in a folder can be added.</strong> Claude Code and Codex also say
+              who signed in; the others (Grok, Kimi, Copilot, OpenCode, Hermes, Pi) run their own login in the
+              folder and say nothing more, so their rows say exactly that, and a sign-out claims only what the
+              adapter established about where the credential lives. This Mac lists every installed agent.
             </div>
             <div class="callout">
               <strong>This Mac's sign-ins are read, never stored.</strong> HOME decides them, so fieldd asks

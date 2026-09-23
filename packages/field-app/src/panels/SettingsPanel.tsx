@@ -235,9 +235,15 @@ export function SettingsPanel({
   // press on a nav item — the current one included — returns to the page.
   const [agentsSubpage, setAgentsSubpage] = useState<SettingsSubpage | null>(null);
   const [pageRequest, setPageRequest] = useState(0);
+  // an agent's app page asked for from elsewhere (a profile's app row); a nav
+  // press is a plain visit, so it drops any such ask and the page opens on its list
+  const [agentOpenRequest, setAgentOpenRequest] = useState<{ provider: string; n: number } | null>(
+    null,
+  );
   const selectPage = useCallback((page: SettingsPage): void => {
     setActivePage(page);
     setPageRequest((request) => request + 1);
+    setAgentOpenRequest(null);
   }, []);
   // AR-S2 — Agent Profiles: the feed the sidebar lists on every page, the
   // profile page that is open, and the hops between an agent's app page and
@@ -252,9 +258,6 @@ export function SettingsPanel({
     set: "native",
   });
   const [profilesSubpage, setProfilesSubpage] = useState<SettingsSubpage | null>(null);
-  const [agentOpenRequest, setAgentOpenRequest] = useState<{ provider: string; n: number } | null>(
-    null,
-  );
   const openProfiles = useCallback((route: ProfilesRoute): void => {
     setProfilesRoute(route);
     setActivePage("profiles");

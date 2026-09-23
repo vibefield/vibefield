@@ -200,9 +200,10 @@ function scriptedProfiles(): ProfileService {
     bindingEnvironment: (profile: AgentProfile): Record<string, string> =>
       profile.kind === "managed" ? { SCRIPTED_HOME: profile.dataRoot } : {},
     observationRoot: (profile: AgentProfile) => profile.dataRoot,
+    // returns at once, unless a row asks for a login that stays open
     loginInvocation: (_profile, options) => ({
       command: "/bin/sh",
-      args: ["-c", "exit 0"],
+      args: ["-c", process.env["SCRIPTED_LOGIN"] ?? "exit 0"],
       cwd: options.cwd,
     }),
     async verify() {
@@ -367,13 +368,25 @@ async function setup(config: SetupConfig): Promise<Box> {
   // the login pane and the identity read (it resolves the executable from
   // this variable at construction); the real-agent block leaves it unset so
   // the vendor's own binary is launched.
-  const previous = process.env["PUPPETEER_CLAUDE_BIN"];
-  if (config.realAgent) delete process.env["PUPPETEER_CLAUDE_BIN"];
-  else process.env["PUPPETEER_CLAUDE_BIN"] = join(bin, "claude");
-  cleanup.push(() => {
-    if (previous === undefined) delete process.env["PUPPETEER_CLAUDE_BIN"];
-    else process.env["PUPPETEER_CLAUDE_BIN"] = previous;
-  });
+  // Codex, the other adapter that reads who is signed in, is pinned to a path
+  // that does not exist, so no row can run a developer's own codex; the fake
+  // claude keeps This Mac's signed-out mark in the test's own folder.
+  const pins: Record<string, string | undefined> = config.realAgent
+    ? { PUPPETEER_CLAUDE_BIN: undefined }
+    : {
+        PUPPETEER_CLAUDE_BIN: join(bin, "claude"),
+        PUPPETEER_CODEX_BIN: join(bin, "no-real-codex"),
+        FAKE_CLAUDE_STATE_DIR: bin,
+      };
+  for (const [name, value] of Object.entries(pins)) {
+    const previous = process.env[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+    cleanup.push(() => {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    });
+  }
   const sessions: ScriptedSession[] = restart?.sessions ?? [];
   const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
@@ -1072,7 +1085,8 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     const out = (await win.call("agents.profiles.delete", {
       profileId: work.profileId,
     })) as AgentsProfilesDeleteResult;
-    expect(out).toEqual({ deleted: false, waiting: 1 });
+    // the scripted adapter never said where it keeps a credential: nothing is claimed past the folder
+    expect(out).toEqual({ deleted: false, waiting: 1, credential: "unknown" });
     const listed = (await win.call("agents.profileSets.list", {})) as AgentsProfileSetsListResult;
     expect(listed.sets.find((set) => set.id === work.set)?.personas).toEqual([]);
     const refused = await win.callErr("agent.spawn", {
@@ -1158,6 +1172,44 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
       runtimeRunId: spawned.session.runtimeRunId,
     });
     expect(refused.data?.kind).toBe("NOT_FOUND");
+  }, 60_000);
+
+  it("a sign-out ends a login still open on that sign-in before its folder goes", async () => {
+    process.env["SCRIPTED_LOGIN"] = "sleep 60";
+    cleanup.push(() => {
+      delete process.env["SCRIPTED_LOGIN"];
+    });
+    const { daemon, dataDir } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "ap4");
+    const work = await signedIn(win, dataDir, "Work");
+    const login = (await win.call("agents.profiles.login", {
+      profileId: work.profileId,
+    })) as AgentsProfilesLoginResult;
+    const paneId = login.terminal.sessionId;
+    // the feed says the sign-in is open, for as long as the pane lives
+    const open = await poll(async () => {
+      const { sets } = (await win.call(
+        "agents.profileSets.list",
+        {},
+      )) as AgentsProfileSetsListResult;
+      const persona = sets
+        .find((set) => set.id === work.set)
+        ?.personas.find((p) => p.profileId === work.profileId);
+      return persona?.signingIn !== undefined ? persona.signingIn : undefined;
+    }, 15_000);
+    expect(open.sessionId).toBe(paneId);
+
+    const out = (await win.call("agents.profiles.delete", {
+      profileId: work.profileId,
+    })) as AgentsProfilesDeleteResult;
+    // the login was not a session to wait for: it ended, and the sign-in is gone
+    expect(out).toMatchObject({ deleted: true });
+    expect(existsSync(work.root)).toBe(false);
+    // and its pane leaves the floor
+    await poll(async () => {
+      const { terminals } = (await win.call("terminal.list", {})) as { terminals: TerminalInfo[] };
+      return terminals.some((row) => row.sessionId === paneId) ? undefined : true;
+    }, 15_000);
   }, 60_000);
 });
 

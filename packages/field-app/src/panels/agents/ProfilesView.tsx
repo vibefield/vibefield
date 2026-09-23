@@ -2,6 +2,7 @@ import {
   AgentIcon,
   PROFILE_GLYPHS,
   ProfileGlyph,
+  profileGlyphName,
   suggestProfileGlyph,
 } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
@@ -231,8 +232,12 @@ export function MenuButton({
       if (wrap.current !== null && !wrap.current.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("pointerdown", away);
-    // the first item takes focus as the menu opens
-    wrap.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
+    // the first item takes focus as the menu opens — or, with nothing to pick,
+    // the menu itself, so Escape closes the menu and never the Settings sheet
+    (
+      wrap.current?.querySelector<HTMLElement>("[role=menuitem]") ??
+      wrap.current?.querySelector<HTMLElement>("[role=menu]")
+    )?.focus();
     return () => document.removeEventListener("pointerdown", away);
   }, [open]);
 
@@ -283,6 +288,7 @@ export function MenuButton({
           id={menuId}
           role="menu"
           aria-label={heading ?? label}
+          tabIndex={-1}
           className={`vf-profiles-menu vf-profiles-menu--${align}`}
           onKeyDown={onMenuKey}
         >
@@ -376,7 +382,7 @@ export function GlyphPopUp({
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const listId = useId();
-  const current = set.glyph ?? "star";
+  const current = profileGlyphName(set.glyph);
 
   useEffect(() => {
     if (!open) return;
@@ -493,9 +499,13 @@ export function ConfirmRow({
   const [armed, setArmed] = useState(false);
   const act = useRef<HTMLButtonElement>(null);
   const arm = useRef<HTMLButtonElement>(null);
+  const wasArmed = useRef(false);
   const questionId = useId();
   useEffect(() => {
     if (armed) act.current?.focus();
+    // disarmed (Cancel, Escape): focus goes back to the button that armed it
+    else if (wasArmed.current) arm.current?.focus();
+    wasArmed.current = armed;
   }, [armed]);
   useEffect(() => {
     if (disabled) setArmed(false);
@@ -564,7 +574,11 @@ export interface ProfilePageViewProps {
   onAdd: (provider: string) => void;
   onOpenAgent: (provider: string) => void;
   onSignIn: (provider: string) => void;
-  onRename: (label: string) => void;
+  /** end a sign-in whose terminal this page does not show (opened elsewhere,
+   * or before the page was left); absent, a signing-in row offers nothing */
+  onCancelSignIn?: ((provider: string) => void) | undefined;
+  /** answers whether the name was taken (a refused one is put back) */
+  onRename: (label: string) => Promise<boolean> | undefined;
   onGlyph: (glyph: string) => void;
   onMakeDefault: () => void;
   onReveal: () => void;
@@ -581,6 +595,7 @@ export function ProfilePageView({
   onAdd,
   onOpenAgent,
   onSignIn,
+  onCancelSignIn,
   onRename,
   onGlyph,
   onMakeDefault,
@@ -656,6 +671,9 @@ export function ProfilePageView({
                 busy={busy}
                 onOpen={() => onOpenAgent(row.provider)}
                 onSignIn={() => onSignIn(row.provider)}
+                onCancelSignIn={
+                  onCancelSignIn === undefined ? undefined : () => onCancelSignIn(row.provider)
+                }
               />
             ))}
           </div>
@@ -668,9 +686,7 @@ export function ProfilePageView({
             <NameField
               value={set.label}
               disabled={busy === "name"}
-              onCommit={(label) => {
-                if (label !== set.label) onRename(label);
-              }}
+              onCommit={(label) => (label !== set.label ? onRename(label) : undefined)}
             />
           </SettingsRow>
         )}
@@ -747,12 +763,14 @@ function ProfileAgentRowView({
   busy,
   onOpen,
   onSignIn,
+  onCancelSignIn,
 }: {
   row: ProfileAgentRow;
   now?: Date | undefined;
   busy: string | null;
   onOpen: () => void;
   onSignIn: () => void;
+  onCancelSignIn?: (() => void) | undefined;
 }): ReactElement {
   const factId = `vf-profiles-fact-${row.persona.profileId}`;
   const lines = usageLines(row.usage, now ?? new Date());
@@ -771,6 +789,12 @@ function ProfileAgentRowView({
     action = (
       <UiButton onClick={onSignIn} disabled={busy !== null} aria-label={`Sign in to ${row.label}`}>
         Sign in
+      </UiButton>
+    );
+  } else if (row.state === "signing-in" && onCancelSignIn !== undefined) {
+    action = (
+      <UiButton onClick={onCancelSignIn} aria-label={`Cancel ${row.label}'s sign-in`}>
+        Cancel sign-in
       </UiButton>
     );
   }
@@ -816,17 +840,29 @@ function NameField({
 }: {
   value: string;
   disabled: boolean;
-  onCommit: (label: string) => void;
+  /** answers whether the name was taken; a refused one is put back */
+  onCommit: (label: string) => Promise<boolean> | undefined;
 }): ReactElement {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  // the last name sent: Return and then leaving the field send it once
+  const sent = useRef(value);
+  useEffect(() => {
+    sent.current = value;
+    setDraft(value);
+  }, [value]);
   const commit = (): void => {
     const label = draft.trim();
     if (label.length === 0) {
       setDraft(value);
       return;
     }
-    onCommit(label);
+    if (label === sent.current) return;
+    sent.current = label;
+    void onCommit(label)?.then((taken) => {
+      if (taken) return;
+      sent.current = value;
+      setDraft(value);
+    });
   };
   return (
     <input
@@ -867,6 +903,8 @@ export interface ProfileAgentPageViewProps {
   signIn?: ReactNode;
   revealLabel?: string | undefined;
   onSignIn: () => void;
+  /** end a sign-in whose terminal this page does not show; absent, nothing */
+  onCancelSignIn?: (() => void) | undefined;
   onReveal: () => void;
   onSignOut: () => void;
   onOpenApp: () => void;
@@ -883,6 +921,7 @@ export function ProfileAgentPageView({
   signIn,
   revealLabel = "Show in Finder",
   onSignIn,
+  onCancelSignIn,
   onReveal,
   onSignOut,
   onOpenApp,
@@ -900,11 +939,15 @@ export function ProfileAgentPageView({
       : row.fact;
   const words = signOutWords(set, row.label);
   const act =
-    row.state === "signing-in" ? null : (
+    row.state === "signing-in" ? (
+      onCancelSignIn === undefined ? null : (
+        <UiButton onClick={onCancelSignIn}>Cancel sign-in</UiButton>
+      )
+    ) : (
       <UiButton onClick={onSignIn} disabled={busy !== null}>
         {row.state === "signed-in"
           ? "Switch account…"
-          : row.state === "expired"
+          : row.state === "expired" || row.state === "unverifiable"
             ? "Sign in again"
             : "Sign in"}
       </UiButton>
@@ -1097,6 +1140,8 @@ export function SignInCard({
   cancelling?: boolean;
   children: ReactNode;
 }): ReactElement {
+  const cancel = useRef<HTMLButtonElement>(null);
+  const hintId = useId();
   return (
     <section className="vf-profiles-signin" aria-label={`${agentLabel} sign-in`}>
       <div className="vf-agents-output vf-profiles-signin-card">
@@ -1106,11 +1151,35 @@ export function SignInCard({
           </span>
           <span className="vf-agents-output-state">closes when the sign-in is known</span>
         </header>
-        <div className="vf-profiles-signin-body">{children}</div>
+        {/* The terminal takes every key, Tab and Escape included, so a login can
+            use them; Shift-Tab (which no login asks for) is the way back out,
+            caught before the terminal sees it. */}
+        <div
+          className="vf-profiles-signin-body"
+          aria-describedby={hintId}
+          onKeyDownCapture={(event) => {
+            if (
+              event.key === "Tab" &&
+              event.shiftKey &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.altKey
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              cancel.current?.focus();
+            }
+          }}
+        >
+          {children}
+        </div>
+        <span id={hintId} className="sr-only">
+          Shift-Tab leaves the terminal.
+        </span>
       </div>
       <div className="vf-profiles-signin-row">
         <span className={labelCls}>{note}</span>
-        <UiButton onClick={onCancel} disabled={cancelling}>
+        <UiButton ref={cancel} onClick={onCancel} disabled={cancelling}>
           {cancelling ? "Cancelling…" : "Cancel"}
         </UiButton>
       </div>

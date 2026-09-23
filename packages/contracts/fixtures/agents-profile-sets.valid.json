@@ -49,6 +49,7 @@
     }
   ],
   "signIn": ["claude", "codex", "grok"],
+  "identity": ["claude", "codex"],
   "signOut": ["claude"],
   "reading": false
 }

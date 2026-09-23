@@ -1,6 +1,7 @@
 import {
   AgentAccountUsageBatch,
   type AgentInstall,
+  type AgentPersona,
   type AgentProfileSet,
   type AgentProviderSummary,
   AgentProvidersResult,
@@ -11,6 +12,7 @@ import {
   AgentsProfileSetsSetResult,
   AgentsProfilesCreateResult,
   AgentsProfilesDeleteResult,
+  AgentsProfilesListResult,
   AgentsProfilesLoginResult,
   type ShellPlatform,
   type TerminalCreateOpenResult,
@@ -41,11 +43,19 @@ import { SignInTerminal } from "./SignInTerminal";
 // (`agents.profiles.create` · `.login` · `.delete`), Show in Finder. No
 // optimistic state: every act lands through the profiles feed.
 //
-// A sign-in runs in a terminal on the page that asked for it. It closes when
-// the feed stops saying the persona is signing in (fieldd verified it from the
-// provider's own status surface when the pane ended). Cancel ends the pane; a
-// sign-in the Add menu created and nobody finished is removed again, so a
-// cancelled add adds nothing.
+// A sign-in runs in a terminal on the page that asked for it, one at a time.
+// It closes when fieldd says its pane has ended — and, for an agent that says
+// who signed in, once that has been read (fieldd reads it as the pane ends).
+// Cancel ends the pane; a sign-in the Add menu created and nobody finished is
+// removed again, so a cancelled add adds nothing. Leaving the page does NOT
+// end it: a browser-based login can still finish, and the row it belongs to
+// offers Cancel wherever it is shown next.
+
+/** How long a closed sign-in waits for the identity read before it says so. */
+const IDENTITY_WAIT_MS = 15_000;
+/** How long before a login the feed never showed open is asked after directly
+ * (one that ends inside a single feed frame is never seen open). */
+const UNSEEN_CHECK_MS = 3_000;
 
 export type ProfilesRoute =
   | { kind: "profile"; set: string }
@@ -62,11 +72,13 @@ interface SignIn {
   /** made by the Add menu just now: cancelled unfinished, it is removed again */
   fresh: boolean;
   cancelled: boolean;
-  /** the feed has said it is signing in (so its disappearance means done) */
-  seen: boolean;
-  /** when the login was asked for: an identity read after it also means done
-   * (a login quick enough to end inside one feed frame is never seen) */
+  /** asked for at (before the request): an identity read after it is this login's */
   startedAt: number;
+  /** the feed has shown this login open — until then a frame without it
+   * says nothing (a sign-in just made, a frame read before the pane was) */
+  seen: boolean;
+  /** its pane has ended (the feed no longer names it) */
+  ended: boolean;
 }
 
 export function ProfilesSection({
@@ -101,6 +113,16 @@ export function ProfilesSection({
   const [now, setNow] = useState(() => pinnedNow ?? new Date());
   const mounted = useRef(true);
   const root = useRef<HTMLDivElement>(null);
+  // acts in flight, by key: a second press of the same act does nothing
+  const inFlight = useRef(new Set<string>());
+  // the sign-in, as the acts see it between renders (one at a time)
+  const signInRef = useRef<SignIn | null>(null);
+  signInRef.current = signIn;
+  // the profiles and sign-ins the feed has shown: only one that WAS there and
+  // went away closes its page (a profile just made is not in the feed yet)
+  const seen = useRef(new Set<string>());
+  // a route change this page made itself keeps the notice it just set
+  const keepNotice = useRef(false);
 
   useEffect(() => {
     mounted.current = true;
@@ -151,6 +173,7 @@ export function ProfilesSection({
       installs,
       usage,
       signIn: feed?.signIn ?? [],
+      identity: feed?.identity ?? [],
       signOut: feed?.signOut ?? [],
       reading: feed?.reading ?? false,
     }),
@@ -184,49 +207,105 @@ export function ProfilesSection({
   }, [subpageKey, onSubpage, backToProfile]);
   useEffect(() => () => onSubpage(null), [onSubpage]);
 
-  // A page whose profile (or sign-in) went away closes to where it lived.
+  // A page whose profile (or sign-in) went away closes to where it lived —
+  // only once it has been seen: a profile just made is a frame away.
   useEffect(() => {
     if (feed === null) return;
-    if (route.kind === "profile" && set === undefined) onLeave();
-    if (route.kind === "agent" && set === undefined) onLeave();
-    if (route.kind === "agent" && set !== undefined && persona === undefined) {
+    for (const candidate of feed.sets) {
+      seen.current.add(candidate.id);
+      for (const member of candidate.personas)
+        seen.current.add(`${candidate.id}:${member.provider}`);
+    }
+    if (route.kind === "new") return;
+    if (set === undefined) {
+      if (seen.current.has(route.set)) onLeave();
+      return;
+    }
+    if (
+      route.kind === "agent" &&
+      persona === undefined &&
+      seen.current.has(`${route.set}:${route.provider}`)
+    ) {
       onRoute({ kind: "profile", set: route.set });
     }
   }, [feed, route, set, persona, onLeave, onRoute]);
 
-  // Focus follows the page: its title when it opens.
+  // Focus follows the page: its title when it opens. A plain visit clears the
+  // last page's notice; a move this page made itself keeps the one it set.
   const routeKey =
     route.kind === "new"
       ? "new"
       : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}`;
   useEffect(() => {
     root.current?.querySelector<HTMLElement>("[data-agents-page-title]")?.focus();
-    setNotice(null);
+    if (keepNotice.current) keepNotice.current = false;
+    else setNotice(null);
   }, [routeKey]);
 
-  // The sign-in closes when the feed stops saying the persona is signing in.
+  const labelOf = (provider: string): string =>
+    providers.find((p) => p.id === provider)?.label ?? provider;
+  const revealLabel = platform === "darwin" ? "Show in Finder" : "Show in folder";
+
+  // The sign-in closes when its pane has ended: at once for an agent that
+  // never says who, and — for one that does — once fieldd has read who (it
+  // reads as the pane ends), or after a wait that says it could not.
   useEffect(() => {
     if (signIn === null || feed === null) return;
     const current = feed.sets
       .flatMap((candidate) => candidate.personas)
       .find((candidate) => candidate.profileId === signIn.profileId);
-    if (current?.signingIn !== undefined) {
+    const open = current?.signingIn?.sessionId === signIn.terminal.sessionId;
+    if (open) {
       if (!signIn.seen) setSignIn({ ...signIn, seen: true });
       return;
     }
+    if (!signIn.seen) return;
+    const readsIdentity = feed.identity.includes(signIn.provider);
     const readSince =
       current?.identity !== undefined &&
       Date.parse(current.identity.verifiedAt) >= signIn.startedAt;
-    // the feed's first frame about this login is a tick away
-    if (!signIn.seen && !readSince) return;
-    const done = signIn;
-    setSignIn(null);
-    setCancelling(false);
-    const label = providers.find((p) => p.id === done.provider)?.label ?? done.provider;
-    if (current?.identity?.loggedIn === true) {
-      setNotice({ tone: "neutral", text: `Signed in to ${label}.` });
+    // a cancelled one has nothing to wait for
+    if (readsIdentity && !readSince && current !== undefined && !signIn.cancelled) {
+      if (!signIn.ended) setSignIn({ ...signIn, ended: true });
       return;
     }
+    finishSignIn(signIn, current);
+  });
+  // a login the feed never showed open is asked after directly: gone means ended
+  const unseen = signIn !== null && !signIn.seen ? signIn : null;
+  useEffect(() => {
+    if (unseen === null) return;
+    const timer = setTimeout(() => {
+      void client
+        .request("agents.profiles.list", { provider: unseen.provider })
+        .then((answer) => {
+          const open = AgentsProfilesListResult.safeParse(answer).data?.personas.some(
+            (candidate) => candidate.signingIn?.sessionId === unseen.terminal.sessionId,
+          );
+          if (open !== false || signInRef.current !== unseen) return;
+          const known = { ...unseen, seen: true };
+          signInRef.current = known;
+          setSignIn(known);
+        })
+        .catch(() => undefined);
+    }, UNSEEN_CHECK_MS);
+    return () => clearTimeout(timer);
+  }, [unseen, client]);
+  // an identity read that never comes still closes the card, and says so
+  const waiting = signIn?.ended === true ? signIn : null;
+  useEffect(() => {
+    if (waiting === null) return;
+    const timer = setTimeout(() => {
+      if (signInRef.current === waiting) finishSignIn(waiting, undefined);
+    }, IDENTITY_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [waiting]);
+
+  function finishSignIn(done: SignIn, current: AgentPersona | undefined): void {
+    setSignIn(null);
+    signInRef.current = null;
+    setCancelling(false);
+    const label = labelOf(done.provider);
     if (done.fresh && done.cancelled) {
       // a cancelled add adds nothing: the empty sign-in goes again
       void client.request("agents.profiles.delete", { profileId: done.profileId }).catch(() => {
@@ -234,24 +313,31 @@ export function ProfilesSection({
       });
       return;
     }
-    if (current !== undefined) {
+    if (done.cancelled) return;
+    if (current?.identity?.loggedIn === true) {
+      setNotice({ tone: "neutral", text: `Signed in to ${label}.` });
+    } else if (feed?.identity.includes(done.provider) === false) {
+      setNotice({
+        tone: "neutral",
+        text: `${label}'s sign-in finished. ${label} doesn't say which account it used.`,
+      });
+    } else {
       setNotice({
         tone: "attention",
         text: `The sign-in ended before ${label} said who is signed in. Sign in again when you're ready.`,
       });
     }
-  }, [feed, signIn, client, providers]);
+  }
 
-  const labelOf = (provider: string): string =>
-    providers.find((p) => p.id === provider)?.label ?? provider;
-  const revealLabel = platform === "darwin" ? "Show in Finder" : "Show in folder";
-
-  /** Run one act; a refusal is said in the act's own words. */
+  /** Run one act; a refusal is said in the act's own words. The busy mark is
+   * the act's own: another act finishing never clears it. */
   const act = async <T,>(
     key: string,
     failure: string,
     run: () => Promise<T>,
   ): Promise<T | null> => {
+    if (inFlight.current.has(key)) return null;
+    inFlight.current.add(key);
     setBusy(key);
     setNotice(null);
     try {
@@ -260,7 +346,8 @@ export function ProfilesSection({
       if (mounted.current) setNotice({ tone: "error", text: refusalSentence(failure, cause) });
       return null;
     } finally {
-      if (mounted.current) setBusy(null);
+      inFlight.current.delete(key);
+      if (mounted.current) setBusy((current) => (current === key ? null : current));
     }
   };
 
@@ -271,6 +358,17 @@ export function ProfilesSection({
     at: "profile" | "agent",
     fresh: boolean,
   ): Promise<void> => {
+    const open = signInRef.current;
+    if (open !== null) {
+      setNotice({
+        tone: "attention",
+        text: `Finish or cancel the sign-in to ${labelOf(open.provider)} first.`,
+      });
+      if (fresh)
+        void client.request("agents.profiles.delete", { profileId }).catch(() => undefined);
+      return;
+    }
+    const startedAt = Date.now();
     const answer = await act(
       `add:${provider}`,
       `Couldn't start ${labelOf(provider)}'s sign-in`,
@@ -284,8 +382,17 @@ export function ProfilesSection({
         void client.request("agents.profiles.delete", { profileId }).catch(() => undefined);
       return;
     }
-    if (!mounted.current) return;
-    setSignIn({
+    if (!mounted.current) {
+      // the page was left before its terminal could show: nobody would see
+      // this login, so it ends here, and an Add's empty sign-in goes with it
+      void client
+        .request("terminal.terminate", { sessionId: answer.terminal.sessionId })
+        .catch(() => undefined)
+        .then(() => (fresh ? client.request("agents.profiles.delete", { profileId }) : undefined))
+        .catch(() => undefined);
+      return;
+    }
+    const opened: SignIn = {
       profileId,
       provider,
       set: setId,
@@ -293,9 +400,12 @@ export function ProfilesSection({
       terminal: answer.terminal,
       fresh,
       cancelled: false,
+      startedAt,
       seen: false,
-      startedAt: Date.now(),
-    });
+      ended: false,
+    };
+    signInRef.current = opened;
+    setSignIn(opened);
   };
 
   const add = async (provider: string): Promise<void> => {
@@ -304,6 +414,13 @@ export function ProfilesSection({
       // This Mac: the agent's own folder, signed in with its own login
       const own = set.personas.find((candidate) => candidate.provider === provider);
       if (own !== undefined) await startSignIn(own.profileId, provider, set.id, "profile", false);
+      return;
+    }
+    if (signInRef.current !== null) {
+      setNotice({
+        tone: "attention",
+        text: `Finish or cancel the sign-in to ${labelOf(signInRef.current.provider)} first.`,
+      });
       return;
     }
     const made = await act(`add:${provider}`, `Couldn't add ${labelOf(provider)}`, async () =>
@@ -315,11 +432,14 @@ export function ProfilesSection({
   };
 
   const cancelSignIn = async (): Promise<void> => {
-    if (signIn === null) return;
+    const open = signInRef.current;
+    if (open === null) return;
     setCancelling(true);
-    setSignIn({ ...signIn, cancelled: true });
+    const cancelled = { ...open, cancelled: true };
+    signInRef.current = cancelled;
+    setSignIn(cancelled);
     try {
-      await client.request("terminal.terminate", { sessionId: signIn.terminal.sessionId });
+      await client.request("terminal.terminate", { sessionId: open.terminal.sessionId });
     } catch (cause) {
       if (mounted.current) {
         setCancelling(false);
@@ -328,13 +448,27 @@ export function ProfilesSection({
     }
   };
 
-  const update = async (key: string, params: Record<string, unknown>): Promise<void> => {
-    if (set === undefined) return;
-    await act(key, `Couldn't change ${set.label}`, async () =>
+  /** A sign-in this page does not show (opened elsewhere, or before the page
+   * was left): its row ends it by the pane the feed names. */
+  const cancelFromRow = (provider: string): void => {
+    const target = set?.personas.find((candidate) => candidate.provider === provider);
+    const sessionId = target?.signingIn?.sessionId;
+    if (sessionId === undefined) return;
+    void act(`cancel:${provider}`, "Couldn't cancel the sign-in", () =>
+      client.request("terminal.terminate", { sessionId }),
+    );
+  };
+  const heldProvider =
+    signIn !== null && set !== undefined && signIn.set === set.id ? signIn.provider : null;
+
+  const update = async (key: string, params: Record<string, unknown>): Promise<boolean> => {
+    if (set === undefined) return false;
+    const done = await act(key, `Couldn't change ${set.label}`, async () =>
       AgentsProfileSetsSetResult.parse(
         await client.request("agents.profileSets.update", { set: set.id, ...params }),
       ),
     );
+    return done !== null;
   };
 
   const remove = async (): Promise<void> => {
@@ -369,17 +503,9 @@ export function ProfilesSection({
       ),
     );
     if (done === null || !mounted.current) return;
+    keepNotice.current = true;
     onRoute({ kind: "profile", set: set.id });
-    const waiting = done.waiting ?? 0;
-    setNotice({
-      tone: "neutral",
-      text:
-        waiting > 0
-          ? `Signed out of ${label} in ${set.label}. The ${plural(waiting, "session")} running under it keep going; its folder goes when they end.`
-          : set.kind === "native"
-            ? `Signed out of ${label} on ${set.label}.`
-            : `Signed out of ${label} in ${set.label}.`,
-    });
+    setNotice({ tone: "neutral", text: signedOutWords(done, label, set) });
   };
 
   const create = async (profile: {
@@ -417,6 +543,8 @@ export function ProfilesSection({
     );
   };
 
+  // one sign-in at a time: while one runs, nothing else starts another
+  const signInBusy = signIn !== null ? `add:${signIn.provider}` : null;
   let body: ReactElement | null = null;
   if (route.kind === "new") {
     body = (
@@ -433,17 +561,22 @@ export function ProfilesSection({
     );
     body = (
       <ProfileAgentPageView
+        // a different agent or profile is a different page: nothing armed carries over
+        key={`${set.id}:${row.provider}`}
         set={set}
         row={row}
         appVersion={install?.version}
         canSignOut={set.kind === "managed" || context.signOut.includes(row.provider)}
         now={now}
         notice={notice}
-        busy={busy}
+        busy={busy ?? signInBusy}
         signIn={card("agent")}
         revealLabel={revealLabel}
         onSignIn={() =>
           void startSignIn(row.persona.profileId, row.provider, set.id, "agent", false)
+        }
+        onCancelSignIn={
+          heldProvider === row.provider ? undefined : () => cancelFromRow(row.provider)
         }
         onReveal={() => void reveal(row.provider)}
         onSignOut={() => void signOut()}
@@ -453,10 +586,11 @@ export function ProfilesSection({
   } else if (page !== undefined) {
     body = (
       <ProfilePageView
+        key={page.set.id}
         page={page}
         now={now}
         notice={notice}
-        busy={busy ?? (signIn !== null ? `add:${signIn.provider}` : null)}
+        busy={busy ?? signInBusy}
         signIn={card("profile")}
         revealLabel={revealLabel}
         onAdd={(provider) => void add(provider)}
@@ -467,7 +601,10 @@ export function ProfilesSection({
             void startSignIn(target.profileId, provider, page.set.id, "profile", false);
           }
         }}
-        onRename={(label) => void update("name", { label })}
+        onCancelSignIn={(provider) => {
+          if (provider !== heldProvider) cancelFromRow(provider);
+        }}
+        onRename={(label) => update("name", { label })}
         onGlyph={(glyph) => void update("glyph", { glyph })}
         onMakeDefault={() => void update("default", { default: true })}
         onReveal={() => void reveal()}
@@ -480,4 +617,22 @@ export function ProfilesSection({
       {body}
     </div>
   );
+}
+
+/** What a sign-out did, in words: it waits for its sessions, and what it
+ * does to the credential is what the agent itself has said. */
+function signedOutWords(
+  done: { deleted: boolean; waiting?: number | undefined; credential?: string | undefined },
+  label: string,
+  set: AgentProfileSet,
+): string {
+  const where = set.kind === "native" ? `on ${set.label}` : `in ${set.label}`;
+  const waiting = done.waiting ?? 0;
+  const first =
+    waiting > 0
+      ? `Signed out of ${label} ${where}. The ${plural(waiting, "session")} running under it keep going; its folder goes when they end.`
+      : `Signed out of ${label} ${where}.`;
+  return done.credential === "unknown" && set.kind === "managed"
+    ? `${first} ${label} doesn't say where it keeps its sign-in, so only its folder is removed.`
+    : first;
 }

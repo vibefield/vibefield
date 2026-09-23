@@ -139,6 +139,8 @@ function feed(sets: AgentProfileSet[], over: Partial<AgentsProfileSetsListResult
   return {
     sets,
     signIn: ["claude", "codex", "grok"],
+    // grok signs in, but never says who
+    identity: ["claude", "codex"],
     signOut: ["claude"],
     reading: false,
     ...over,
@@ -183,7 +185,7 @@ describe("the profiles model", () => {
     usage: USAGE,
   };
 
-  it("a profile lists every sign-in it holds; This Mac only the agents signed in to their own folders", () => {
+  it("a profile lists every sign-in it holds; This Mac every installed agent in its own folder", () => {
     const work = profilePage(WORK, context);
     expect(work.rows.map((row) => [row.label, row.fact])).toEqual([
       ["Claude Code", "Max · kim@work.example"],
@@ -193,9 +195,26 @@ describe("the profiles model", () => {
     expect(work.addable.map((agent) => agent.label)).toEqual(["Codex", "Grok"]);
 
     const mac = profilePage(NATIVE, context);
-    expect(mac.rows.map((row) => row.label)).toEqual(["Claude Code"]);
-    expect(mac.facts).toBe("1 agent · each in its own folder · default for new sessions");
+    // signed in or not: each is there, in its own folder
+    expect(mac.rows.map((row) => [row.label, row.fact])).toEqual([
+      ["Claude Code", "Max · me@home.example"],
+      ["Codex", "Not signed in"],
+    ]);
+    expect(mac.facts).toBe("2 agents · each in its own folder · default for new sessions");
     expect(mac.inOn).toBe("on This Mac");
+  });
+
+  it("offers every agent that signs in, and says of one that never says who only that", () => {
+    const grok = persona({
+      profileId: "p-grok",
+      provider: "grok",
+      folder: "~/…/profiles/work/grok-1a2b3c4d",
+    });
+    const withGrok = profilePage(set({ id: "work", personas: [WORK_CLAUDE, grok] }), context);
+    const row = withGrok.rows.find((candidate) => candidate.provider === "grok");
+    expect(row).toMatchObject({ state: "unverifiable", fact: "Doesn't say who is signed in" });
+    // and a profile without it offers it in Add agent… like any other
+    expect(profilePage(WORK, context).addable.map((agent) => agent.provider)).toContain("grok");
   });
 
   it("says what deleting takes, and why the default cannot go", () => {
@@ -550,7 +569,14 @@ describe("a profile's page", () => {
     const signing = { ...codex, signingIn: { sessionId: "login-1", since: READ } };
     await section.render({ feed: feed([NATIVE, { ...WORK, personas: [WORK_CLAUDE, signing] }]) });
     expect(container?.querySelector("[data-signin-terminal]")).not.toBeNull();
-    const done = { ...codex, identity: signedIn("kim@work.example", "Pro") };
+    // the pane ends, then fieldd reads who signed in: the card waits for that read
+    const ended = { ...codex, identity: signedIn("old@work.example", "Pro") };
+    await section.render({ feed: feed([NATIVE, { ...WORK, personas: [WORK_CLAUDE, ended] }]) });
+    expect(container?.querySelector("[data-signin-terminal]")).not.toBeNull();
+    const done = {
+      ...codex,
+      identity: { ...signedIn("kim@work.example", "Pro"), verifiedAt: new Date().toISOString() },
+    };
     await section.render({ feed: feed([NATIVE, { ...WORK, personas: [WORK_CLAUDE, done] }]) });
     expect(container?.querySelector("[data-signin-terminal]")).toBeNull();
     expect(text()).toContain("Signed in to Codex.");
@@ -685,6 +711,135 @@ describe("a new profile", () => {
       { label: "Client demo", glyph: "rocket" },
     ]);
     expect(section.onRoute).toHaveBeenCalledWith({ kind: "profile", set: "client-demo" });
+  });
+});
+
+describe("Agent Profiles, from the review (AR-S2b)", () => {
+  it("a profile just made is not left before the feed has it: Create profile lands on its page", async () => {
+    const f = fake(doors());
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "client-demo" },
+    });
+    // the route names a profile the feed has not shown yet — not a deleted one
+    expect(section.onLeave).not.toHaveBeenCalled();
+    // one the feed HAD shown and no longer does is where leaving is right
+    await section.render({ route: { kind: "profile", set: "work" } });
+    await section.render({ feed: feed([NATIVE]) });
+    expect(section.onLeave).toHaveBeenCalled();
+  });
+
+  it("says a sign-out's outcome on the page it lands on, with what it does to the credential", async () => {
+    const grok = persona({
+      profileId: "p-grok",
+      provider: "grok",
+      folder: "~/…/profiles/work/grok-1a2b3c4d",
+    });
+    const withGrok = set({ id: "work", personas: [WORK_CLAUDE, grok] });
+    const f = fake(
+      doors({ "agents.profiles.delete": () => ({ deleted: true, credential: "unknown" }) }),
+    );
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, withGrok]),
+      route: { kind: "agent", set: "work", provider: "grok" },
+    });
+    await click(button("Sign out…"));
+    await click(button("Sign out"));
+    expect(section.onRoute).toHaveBeenCalledWith({ kind: "profile", set: "work" });
+    // the page the panel moves to keeps the notice this act just set
+    await section.render({ route: { kind: "profile", set: "work" } });
+    expect(text()).toContain("Signed out of Grok in Work.");
+    expect(text()).toContain(
+      "Grok doesn't say where it keeps its sign-in, so only its folder is removed.",
+    );
+  });
+
+  it("never carries an armed confirm to another profile's page", async () => {
+    const personal = set({ id: "personal", label: "Personal", glyph: "house" });
+    const f = fake(doors());
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, WORK, personal]),
+      route: { kind: "profile", set: "work" },
+    });
+    await click(button("Delete…"));
+    expect(text()).toContain("Delete Work?");
+    await section.render({ route: { kind: "profile", set: "personal" } });
+    expect(text()).not.toContain("Delete Personal?");
+    expect(hasButton("Delete…")).toBe(true);
+  });
+
+  it("runs one sign-in at a time", async () => {
+    const codex = persona({ profileId: "p-codex", provider: "codex" });
+    const grok = persona({ profileId: "p-grok", provider: "grok" });
+    const f = fake(
+      doors({
+        "agents.profiles.create": (params) => ({
+          persona: params.provider === "codex" ? codex : grok,
+        }),
+        "agents.profiles.login": (params) => ({
+          persona: params.profileId === "p-codex" ? codex : grok,
+          terminal: ticket(`login-${String(params.profileId)}`),
+        }),
+      }),
+    );
+    await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" },
+    });
+    await click(button("Add agent…"));
+    await click(button("Codex"));
+    // while it runs, Add agent… is not offered again
+    expect(button("Add agent…").disabled).toBe(true);
+    expect(f.calls("agents.profiles.login")).toHaveLength(1);
+  });
+
+  it("sends a name once, and puts it back when it is refused", async () => {
+    let refuse = true;
+    const f = fake(
+      doors({
+        "agents.profileSets.update": (params) => {
+          if (refuse) throw new Error("taken");
+          return { set: { ...WORK, ...params, id: "work" } };
+        },
+      }),
+    );
+    await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" },
+    });
+    const field = container?.querySelector<HTMLInputElement>('input[aria-label="Profile name"]');
+    if (!field) throw new Error("no name field");
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(field, "Office");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+    await act(async () => field.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    await settle();
+    // Return and then leaving the field send it once
+    expect(f.calls("agents.profileSets.update")).toEqual([{ set: "work", label: "Office" }]);
+    // refused: the field shows the name the profile still has
+    expect(field.value).toBe("Work");
+    refuse = false;
+  });
+
+  it("offers Cancel on a sign-in this page does not show, and ends it by the pane the feed names", async () => {
+    const signing = persona({
+      profileId: "p-codex",
+      provider: "codex",
+      signingIn: { sessionId: "login-elsewhere", since: READ },
+    });
+    const f = fake(doors({ "terminal.terminate": () => ({ terminated: true }) }));
+    await mountSection(f.client, {
+      feed: feed([NATIVE, set({ id: "work", personas: [WORK_CLAUDE, signing] })]),
+      route: { kind: "profile", set: "work" },
+    });
+    await click(button("Cancel Codex's sign-in"));
+    expect(f.calls("terminal.terminate")).toEqual([{ sessionId: "login-elsewhere" }]);
   });
 });
 

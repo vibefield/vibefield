@@ -220,6 +220,11 @@ const LOGIN_TIMEOUT_MS = 10 * 60_000;
 /** AR-S2 — how long a stop waits for a just-born session to be placed on its
  * cell before it can be terminated by id */
 const STOP_PLACEMENT_WAIT_MS = 3_000;
+/** How long a stop waits for what it stopped to be GONE — longer than the
+ * floor's ladder (interrupt → 2s → SIGTERM → 2s → SIGKILL) plus the
+ * inventory's lag, with room for a loaded machine. A delete never removes a
+ * folder a process still runs in. */
+const STOP_EXIT_WAIT_MS = 12_000;
 /** AR-4 — resume-when-idle. A pending run (a live PTY this boot could not
  * re-attach to) is resumed into a new run once the index says its
  * conversation has been still for `RESUME_IDLE_AFTER_MS`, asked every
@@ -412,8 +417,23 @@ export class AgentRuntimeService implements PersonaSessions {
   >();
   /** MF-1g — every login pane this daemon opened, until its PTY is reaped.
    * The agent class is `keep-until-explicit-close` now, so a login pane's
-   * husk needs an explicit end where the old class gave it one for free. */
-  private readonly loginPanes = new Set<string>();
+   * husk needs an explicit end where the old class gave it one for free.
+   * AR-S2 — with the persona it signs in: a login pane is a session under
+   * that persona (its sign-in lands in the root) for as long as it lives,
+   * past the verification's timeout. */
+  private readonly loginPanes = new Map<string, { profileId: string; since: string }>();
+  /** AR-S2 — creations in flight (a spawn or resume puppeteer has not
+   * answered yet), by token, with the persona they named; null = none named,
+   * so the default set decides and it may be any. */
+  private readonly creating = new Map<number, string | null>();
+  private creationSeq = 0;
+  /** AR-S2 — the boot's re-attach has run on an observed floor: until then an
+   * un-exited record may be a live PTY no map holds yet. */
+  private reattachDone = false;
+  /** AR-D25 — the personas a row may still be continued under (registered,
+   * not signed out), refreshed on every profiles change: rows are summarized
+   * synchronously. */
+  private activePersonas = new Set<string>();
   private readonly subscribers = new Set<(rows: AgentListResult) => void>();
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
@@ -520,9 +540,12 @@ export class AgentRuntimeService implements PersonaSessions {
       userRoot: opts.userRoot,
       home: this.home,
       revealPath: opts.revealPath ?? (() => null),
+      ...(opts.audit !== undefined ? { audit: opts.audit } : {}),
       now: this.now,
       logger: this.logger,
     });
+    this.unsubscribeMonitor.push(this.runtime.onProfilesChanged(() => void this.refreshPersonas()));
+    void this.refreshPersonas();
     // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
     this.unsubscribeMonitor.push(
       this.runtime.onMonitorState((state) => this.onMonitorState(state)),
@@ -593,16 +616,18 @@ export class AgentRuntimeService implements PersonaSessions {
     const terminals = this.requireTerminals();
     const cwd = params.cwd ?? this.home;
     const identity = this.newIdentity();
-    const result = await this.runtime.spawn({
-      agent: params.provider,
-      cwd,
-      ...(params.title !== undefined ? { title: params.title } : {}),
-      ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
-      creationRequestId: identity.creationRequestId,
-      ingress: identity.ingress,
+    const entry = await this.creation(params.profileId ?? null, async () => {
+      const result = await this.runtime.spawn({
+        agent: params.provider,
+        cwd,
+        ...(params.title !== undefined ? { title: params.title } : {}),
+        ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
+        creationRequestId: identity.creationRequestId,
+        ingress: identity.ingress,
+      });
+      if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
+      return this.enter(result, { cwd, title: params.title, ...identity.launched() });
     });
-    if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
-    const entry = this.enter(result, { cwd, title: params.title, ...identity.launched() });
     return this.ticketed(entry, principal, terminals);
   }
 
@@ -638,6 +663,16 @@ export class AgentRuntimeService implements PersonaSessions {
     }
     const pending = this.pending.get(record.runtimeRunId);
     if (pending !== undefined) {
+      // AR-D25 — the replacement ends the running PTY first, and a signed-out
+      // account starts nothing: refused before anything is ended
+      if (!this.personaActive(record.profileId)) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "the account this session runs under is signed out; it keeps running until it ends",
+          false,
+          { runtimeRunId: record.runtimeRunId, state: "signed-out" },
+        );
+      }
       const entry = await this.track(this.replacePending(pending, params.cwd, "manual"));
       return this.ticketed(entry, principal, terminals);
     }
@@ -692,6 +727,10 @@ export class AgentRuntimeService implements PersonaSessions {
    * nothing comes back for them, so their end is the floor's ladder. */
   private async reapLoginPane(sessionId: string): Promise<void> {
     if (!this.loginPanes.delete(sessionId)) return;
+    // the persona is no longer signing in (a frame says so), and a sign-out
+    // that waited on this pane can finish
+    this.profiles.publish();
+    void this.profiles.sweep();
     const terminals = this.opts.terminals?.() ?? null;
     if (terminals === null) return;
     await this.reapHusk(sessionId, terminals);
@@ -821,12 +860,9 @@ export class AgentRuntimeService implements PersonaSessions {
       LOGIN_TIMEOUT_MS,
     );
     timer.unref();
-    this.logins.set(result.runtimeSessionId, {
-      profileId: params.profileId,
-      timer,
-      since: this.now().toISOString(),
-    });
-    this.loginPanes.add(result.runtimeSessionId);
+    const since = this.now().toISOString();
+    this.logins.set(result.runtimeSessionId, { profileId: params.profileId, timer, since });
+    this.loginPanes.set(result.runtimeSessionId, { profileId: params.profileId, since });
     this.profiles.publish();
     this.logger.info("fieldd.agents.login_started", "Persona login pane opened", {
       profileId: params.profileId,
@@ -992,12 +1028,17 @@ export class AgentRuntimeService implements PersonaSessions {
 
   // ── the sessions a persona holds (PersonaSessions, for agent-profiles.ts) ──
 
-  /** Sessions still running under any of these personas: attached, pending,
-   * held for the boot's grace, or recorded mid-attach (AR-4b — in neither
-   * map, its record naming a PTY the floor still lists). An exited run is
-   * not one, whatever pane it left behind. */
+  /** Sessions still running under any of these personas — anything that
+   * could still write into their roots: attached, pending, held for the
+   * boot's grace, recorded mid-attach (AR-4b — in neither map, its record
+   * naming a PTY the floor still lists), a login pane open on one, and a
+   * creation in flight that named one or named none (the default set decides
+   * those). Before the floor has answered and the boot's re-attach has run,
+   * every un-exited record under them counts: it may be a live PTY no map
+   * holds yet. An exited run is not one, whatever pane it left behind. */
   liveUnder(profileIds: ReadonlySet<string>): number {
-    const under = (id: string | undefined): boolean => id !== undefined && profileIds.has(id);
+    const under = (id: string | null | undefined): boolean =>
+      id !== undefined && id !== null && profileIds.has(id);
     const counted = new Set<string>();
     for (const entry of this.managed.values()) {
       if (!entry.exiting && under(entry.info.profileId)) counted.add(entry.info.terminalSessionId);
@@ -1011,20 +1052,39 @@ export class AgentRuntimeService implements PersonaSessions {
         counted.add(waiting.record.terminalSessionId ?? runtimeRunId);
       }
     }
+    for (const [sessionId, pane] of this.loginPanes) {
+      if (under(pane.profileId)) counted.add(sessionId);
+    }
+    for (const [token, profileId] of this.creating) {
+      if (profileId === null || under(profileId)) counted.add(`creating:${token}`);
+    }
     const terminals = this.opts.terminals?.() ?? null;
-    if (terminals !== null) {
-      for (const record of this.records.list()) {
-        const id = record.terminalSessionId;
-        if (!under(record.profileId) || record.exited !== undefined || id === undefined) continue;
-        if (!counted.has(id) && this.listed(terminals, id)) counted.add(id);
-      }
+    const observed =
+      terminals !== null && terminals.observation() !== undefined && this.reattachDone;
+    for (const record of this.records.list()) {
+      const id = record.terminalSessionId;
+      if (!under(record.profileId) || record.exited !== undefined) continue;
+      if (!observed) counted.add(id ?? record.runtimeRunId);
+      else if (id !== undefined && !counted.has(id) && this.listed(terminals, id)) counted.add(id);
     }
     return counted.size;
   }
 
-  /** Stop every session under these personas — the floor's ladder; each
-   * exit closes its run the ordinary way — and drop their records. */
-  async stopUnder(profileIds: ReadonlySet<string>): Promise<number> {
+  /** Stop every session under these personas — the floor's ladder, login
+   * panes included; each exit closes its run the ordinary way — and wait for
+   * them to be GONE. `remaining` is what still runs at the deadline (or what
+   * could not be known: an unobserved floor); only when nothing does are
+   * their records dropped, so a stop that did not take leaves everything as
+   * it was for the caller to refuse on. */
+  async stopUnder(
+    profileIds: ReadonlySet<string>,
+  ): Promise<{ stopped: number; remaining: number }> {
+    const deadline = Date.now() + STOP_EXIT_WAIT_MS;
+    // a creation in flight is stopped with the rest once it is born
+    while ([...this.creating.values()].some((id) => id === null || profileIds.has(id))) {
+      if (Date.now() >= deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     const terminals = this.opts.terminals?.() ?? null;
     const under = (id: string | undefined): boolean => id !== undefined && profileIds.has(id);
     const targets = new Set<string>();
@@ -1035,6 +1095,9 @@ export class AgentRuntimeService implements PersonaSessions {
       const id = entry.record.terminalSessionId;
       if (under(entry.record.profileId) && id !== undefined) targets.add(id);
     }
+    for (const [sessionId, pane] of this.loginPanes) {
+      if (under(pane.profileId)) targets.add(sessionId);
+    }
     // AR-4b — a run mid-attach is in neither map: the records name its PTY
     for (const record of this.records.list()) {
       const id = record.terminalSessionId;
@@ -1043,27 +1106,60 @@ export class AgentRuntimeService implements PersonaSessions {
     }
     let stopped = 0;
     if (terminals !== null) {
-      for (const id of targets) {
-        try {
-          if (await this.terminateLive(terminals, id)) stopped += 1;
-        } catch (error) {
-          this.logger.warn(
-            "fieldd.agents.persona_session_stop_failed",
-            "A persona's session could not be terminated",
-            { error: error instanceof Error ? error.message : String(error) },
-          );
-        }
-      }
+      await Promise.all(
+        [...targets].map(async (id) => {
+          try {
+            if (await this.terminateLive(terminals, id)) stopped += 1;
+          } catch (error) {
+            this.logger.warn(
+              "fieldd.agents.persona_session_stop_failed",
+              "A persona's session could not be terminated",
+              { error: error instanceof Error ? error.message : String(error) },
+            );
+          }
+        }),
+      );
     }
-    this.forgetUnder(profileIds);
-    return stopped;
+    // gone means gone: the floor no longer lists them and the fold has closed them
+    let remaining = this.liveUnder(profileIds);
+    while (remaining > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      remaining = this.liveUnder(profileIds);
+    }
+    if (remaining === 0) this.forgetUnder(profileIds);
+    return { stopped, remaining };
+  }
+
+  /** End the login panes open on these personas and wait for them to go: a
+   * sign-out takes the root the login would write its credential into. */
+  async endLogins(profileIds: ReadonlySet<string>): Promise<void> {
+    const panes = [...this.loginPanes].filter(([, pane]) => profileIds.has(pane.profileId));
+    const terminals = this.opts.terminals?.() ?? null;
+    if (panes.length === 0 || terminals === null) return;
+    const deadline = Date.now() + STOP_EXIT_WAIT_MS;
+    await Promise.all(
+      panes.map(async ([sessionId]) => {
+        try {
+          await this.terminateLive(terminals, sessionId);
+        } catch (error) {
+          this.logger.warn("fieldd.agents.login_stop_failed", "A login pane could not be ended", {
+            sessionId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }),
+    );
+    while (panes.some(([sessionId]) => this.loginPanes.has(sessionId)) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
 
   /** Terminate a session this fold holds as live. One born a moment ago may
    * not be in the floor's inventory yet, and an op on an unplaced session is
    * routed to the interactive cell, which does not know it (`terminated:
-   * false`) — so an unplaced one is retried once the inventory lists it. A
-   * listed session that still answers false had already exited. */
+   * false`) — so the terminate is asked again once the inventory has PLACED
+   * it. A listed session that still answers false had already exited. The
+   * exit itself is the caller's to wait for. */
   private async terminateLive(terminals: TerminalService, sessionId: string): Promise<boolean> {
     const deadline = Date.now() + STOP_PLACEMENT_WAIT_MS;
     for (;;) {
@@ -1084,12 +1180,50 @@ export class AgentRuntimeService implements PersonaSessions {
     }
   }
 
-  /** The persona's open login pane. */
+  /** The persona's open login pane — for as long as the pane lives. */
   signingIn(profileId: string): { sessionId: string; since: string } | undefined {
-    for (const [sessionId, login] of this.logins) {
-      if (login.profileId === profileId) return { sessionId, since: login.since };
+    for (const [sessionId, pane] of this.loginPanes) {
+      if (pane.profileId === profileId) return { sessionId, since: pane.since };
     }
     return undefined;
+  }
+
+  /** A spawn or resume in flight, counted under the persona it named (or as
+   * possibly any, when the default set decides) until the fold holds it or it
+   * failed — then whatever waited on it may finish. */
+  private async creation<T>(profileId: string | null, work: () => Promise<T>): Promise<T> {
+    const token = ++this.creationSeq;
+    this.creating.set(token, profileId);
+    try {
+      return await work();
+    } finally {
+      this.creating.delete(token);
+      void this.profiles.sweep();
+    }
+  }
+
+  /** Whether a row under this persona may still be continued: none named
+   * (the agent's own folder), or registered and not signed out. */
+  private personaActive(profileId: string | undefined): boolean {
+    return profileId === undefined || this.activePersonas.has(profileId);
+  }
+
+  private async refreshPersonas(): Promise<void> {
+    try {
+      const profiles = await this.runtime.profiles();
+      const active = new Set(
+        profiles.filter((profile) => profile.retiredAt === undefined).map((profile) => profile.id),
+      );
+      const changed =
+        active.size !== this.activePersonas.size ||
+        [...active].some((id) => !this.activePersonas.has(id));
+      this.activePersonas = active;
+      if (changed) this.publish();
+    } catch (error) {
+      this.logger.warn("fieldd.agents.personas_unread", "The personas could not be read", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /** Tear the runtime down — and RELEASE the runs rather than close them
@@ -1309,17 +1443,19 @@ export class AgentRuntimeService implements PersonaSessions {
     };
     const cwd = cwdOverride ?? record.cwd;
     const identity = this.newIdentity();
-    const result = await this.runtime.resume({
-      continuation,
-      cwd,
-      ...(record.title !== undefined ? { title: record.title } : {}),
-      ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
-      workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
-      creationRequestId: identity.creationRequestId,
-      ingress: identity.ingress,
+    return this.creation(record.profileId ?? null, async () => {
+      const result = await this.runtime.resume({
+        continuation,
+        cwd,
+        ...(record.title !== undefined ? { title: record.title } : {}),
+        ...(record.profileId !== undefined ? { profile: record.profileId } : {}),
+        workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
+        creationRequestId: identity.creationRequestId,
+        ingress: identity.ingress,
+      });
+      if (isSessionFailure(result)) throw this.sessionFailureToError(result, record.provider);
+      return this.enter(result, { cwd, title: record.title, ...identity.launched(), replaced });
     });
-    if (isSessionFailure(result)) throw this.sessionFailureToError(result, record.provider);
-    return this.enter(result, { cwd, title: record.title, ...identity.launched(), replaced });
   }
 
   // ── internals: the re-attach (AR-4) ──
@@ -1339,6 +1475,7 @@ export class AgentRuntimeService implements PersonaSessions {
           error: error instanceof Error ? error.message : String(error),
         },
       );
+      this.reattachDone = true;
       return;
     }
     for (const record of records) {
@@ -1384,6 +1521,7 @@ export class AgentRuntimeService implements PersonaSessions {
     }
     // AR-D25 — a persona signed out while its sessions ran is finished once
     // none does; after a restart this is the first moment that is known
+    this.reattachDone = true;
     void this.profiles.sweep();
   }
 
@@ -1682,6 +1820,10 @@ export class AgentRuntimeService implements PersonaSessions {
       this.armPending(entry);
       return;
     }
+    // AR-D25 — the replacement would end this PTY and resume under an account
+    // that is signed out, which starts nothing: the session keeps running
+    // until it ends, as its sign-out promised, and is not polled again
+    if (!this.personaActive(entry.record.profileId)) return;
     try {
       await this.track(this.replacePending(entry, undefined, "idle"));
     } catch (error) {
@@ -1849,6 +1991,7 @@ export class AgentRuntimeService implements PersonaSessions {
           exited: { at: now, exitCode: null, signal: null, reason: "replace-failed" },
           updatedAt: now,
         });
+        if (record.profileId !== undefined) void this.profiles.sweep();
         throw error;
       }
       // the old record names its successor
@@ -1996,7 +2139,12 @@ export class AgentRuntimeService implements PersonaSessions {
       return this.summarize(exited.entry, {
         hosted: true,
         terminal: exited.terminal ?? exited.entry.terminal,
-        record: { persisted: true, resumable: this.resumableNow(exited.record), exited: true },
+        record: {
+          persisted: true,
+          resumable:
+            this.resumableNow(exited.record) && this.personaActive(exited.record.profileId),
+          exited: true,
+        },
       });
     }
     return summarizeExitedRecord({
@@ -2008,6 +2156,7 @@ export class AgentRuntimeService implements PersonaSessions {
       terminalSessionId: exited.terminalSessionId,
       terminal: exited.terminal,
       since: exited.since,
+      resumable: this.resumableNow(exited.record) && this.personaActive(exited.record.profileId),
     });
   }
 
@@ -2030,6 +2179,7 @@ export class AgentRuntimeService implements PersonaSessions {
       terminal: entry.terminal,
       reason: entry.reason,
       since: entry.since,
+      resumable: this.personaActive(entry.record.profileId),
     });
   }
 
@@ -2093,6 +2243,7 @@ export class AgentRuntimeService implements PersonaSessions {
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
+    if (entry.info.profileId !== undefined) void this.profiles.sweep();
     this.publish();
   }
 

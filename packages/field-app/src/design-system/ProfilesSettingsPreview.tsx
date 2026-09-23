@@ -102,7 +102,7 @@ export function ProfilesSettingsPreview({
       onAdd={inert}
       onOpenAgent={inert}
       onSignIn={inert}
-      onRename={inert}
+      onRename={() => undefined}
       onGlyph={inert}
       onMakeDefault={inert}
       onReveal={inert}

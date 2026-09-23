@@ -94,12 +94,22 @@ afterEach(async () => {
  * claude, and nothing here can run the developer's real agent (AR-S2: This
  * Mac's identities are read at a product boot). */
 function pinClaude(bin: string): void {
-  const previous = process.env["PUPPETEER_CLAUDE_BIN"];
-  process.env["PUPPETEER_CLAUDE_BIN"] = join(bin, "claude");
-  cleanup.push(() => {
-    if (previous === undefined) delete process.env["PUPPETEER_CLAUDE_BIN"];
-    else process.env["PUPPETEER_CLAUDE_BIN"] = previous;
-  });
+  // Codex is the other adapter that reads who is signed in (its app-server);
+  // a machine with a brew codex would otherwise have it run against the
+  // developer's own ~/.codex. A path that does not exist fails that read fast.
+  const pins: Record<string, string> = {
+    PUPPETEER_CLAUDE_BIN: join(bin, "claude"),
+    PUPPETEER_CODEX_BIN: join(bin, "no-real-codex"),
+    FAKE_CLAUDE_STATE_DIR: bin,
+  };
+  for (const [name, value] of Object.entries(pins)) {
+    const previous = process.env[name];
+    process.env[name] = value;
+    cleanup.push(() => {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    });
+  }
 }
 
 async function setup(
@@ -389,7 +399,8 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
     const deleted = (await win.call("agents.profiles.delete", {
       profileId: persona.profileId,
     })) as AgentsProfilesDeleteResult;
-    expect(deleted).toEqual({ deleted: true });
+    // Claude keeps its credential outside the folder: the vendor's own sign-out took it
+    expect(deleted).toEqual({ deleted: true, credential: "signed-out" });
     expect(existsSync(root)).toBe(false);
     // the profile is still there, empty: signing out leaves the place
     expect(existsSync(folder)).toBe(true);
@@ -508,9 +519,15 @@ describe("Agent Profiles (AR-S2) — puppeteer's profile sets, one folder each u
     // an embedded daemon reads no identity on its own (a status command is the vendor's)
     expect(claude?.identity).toBeUndefined();
     expect(listed.reading).toBe(false);
-    // the Add menu's candidates: the adapters that sign in AND say who (pi says no one)
-    expect(listed.signIn).toEqual(expect.arrayContaining(["claude", "codex"]));
-    expect(listed.signIn).not.toContain("pi");
+    // the Add menu's candidates: every adapter that can sign in in a folder —
+    // pi, grok, kimi included — and, apart, the ones that can also say WHO
+    expect(listed.signIn).toEqual(
+      expect.arrayContaining(["claude", "codex", "grok", "kimi", "pi"]),
+    );
+    expect(listed.signIn).not.toContain("antigravity");
+    expect(listed.identity).toEqual(expect.arrayContaining(["claude", "codex"]));
+    expect(listed.identity).not.toContain("pi");
+    expect(listed.identity).not.toContain("grok");
     // This Mac's sign-outs: only where the vendor's own command signs a folder out
     expect(listed.signOut).toContain("claude");
     expect(listed.signOut).not.toContain("codex");

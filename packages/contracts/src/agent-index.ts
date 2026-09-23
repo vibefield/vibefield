@@ -678,7 +678,16 @@ export type AgentsProfilesCreateResult = z.infer<typeof AgentsProfilesCreateResu
  * the vendor's own command in the agent's own folder, which is never deleted;
  * a provider without one is refused (PRECONDITION_FAILED). */
 export const AgentsProfilesDeleteResult = z
-  .object({ deleted: z.boolean(), waiting: z.number().int().nonnegative().optional() })
+  .object({
+    deleted: z.boolean(),
+    waiting: z.number().int().nonnegative().optional(),
+    /** What the sign-out does to the credential, from the adapter's own
+     * declaration: `signed-out` — the vendor's command removes it (run now, or
+     * when the sessions end); `in-folder` — it lives in the folder that goes;
+     * `unknown` — where the agent keeps it is not established, so the folder
+     * going is all that is claimed. */
+    credential: z.enum(["signed-out", "in-folder", "unknown"]).optional(),
+  })
   .passthrough();
 export type AgentsProfilesDeleteResult = z.infer<typeof AgentsProfilesDeleteResult>;
 
@@ -722,8 +731,10 @@ export type AgentProfileSet = z.infer<typeof AgentProfileSet>;
 
 /** `agents.profileSets.list` and every `agents.profileSets.subscribe` frame
  * (full snapshots at the tick). `signIn` names the providers whose adapter
- * can run a sign-in here AND read back who signed in — the "Add agent…"
- * menu's candidates before installs are joined. `signOut` names those whose
+ * can run a sign-in in a folder here — the "Add agent…" menu's candidates
+ * before installs are joined. `identity` names those whose adapter can also
+ * read back WHO signed in; a sign-in of any other is known to be there, never
+ * whose it is, so a page says exactly that. `signOut` names those whose
  * adapter signs a folder out with the vendor's own command: a sign-in in a
  * profile can always be signed out (its folder goes), one in This Mac only
  * where that command exists. `reading` is true while fieldd is reading the
@@ -738,6 +749,7 @@ export const AgentsProfileSetsListResult = z
   .object({
     sets: z.array(AgentProfileSet),
     signIn: z.array(AgentProviderId),
+    identity: z.array(AgentProviderId),
     signOut: z.array(AgentProviderId),
     reading: z.boolean(),
   })

@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { AgentProfile, ProfileFailure } from "@vibecook/puppeteer-core";
 import type { AgentRuntime, ProfileSetInfo } from "@vibecook/puppeteer-runtime";
 import {
@@ -22,6 +22,7 @@ import {
 import type { Logger } from "@vibefield/logging";
 import type { RevealPath } from "./agent-distribution";
 import type { EnrollRuntimeSpec, IndexService } from "./agent-index";
+import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 
 // AGENT PROFILES (AR-S2; AR-D23…D25) — the doors behind Settings → Agent
@@ -66,15 +67,24 @@ import { RpcCallError } from "./native-link";
 const PUBLISH_TICK_MS = 16;
 /** vendor status commands at once while This Mac's identities are read */
 const IDENTITY_READ_CONCURRENCY = 3;
+/** the only folder names fieldd ever allocates, and so the only ones it deletes */
+const SET_FOLDER = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
+const SIGN_IN_FOLDER = /^[a-z0-9][a-z0-9-]{0,62}-[0-9a-f]{8}$/;
+const LEGACY_PROVIDER_FOLDER = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const LEGACY_ROOT_FOLDER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** What the profiles need from the fold (agent-runtime.ts owns the sessions). */
 export interface PersonaSessions {
   /** Sessions still running under any of these personas: attached, pending
    * (alive, unobserved), or recorded mid-attach. */
   liveUnder(profileIds: ReadonlySet<string>): number;
-  /** Stop every session under these personas (the floor's ladder); answers
-   * how many were asked to stop. Their records go with them. */
-  stopUnder(profileIds: ReadonlySet<string>): Promise<number>;
+  /** Stop every session under these personas (the floor's ladder, login
+   * panes included) and wait for them to be gone: `stopped` were asked to
+   * stop, `remaining` still run (or could not be known) at the deadline.
+   * Their records go only when nothing remains. */
+  stopUnder(profileIds: ReadonlySet<string>): Promise<{ stopped: number; remaining: number }>;
+  /** End the login panes open on these personas, and wait for them to go. */
+  endLogins(profileIds: ReadonlySet<string>): Promise<void>;
   /** Drop the records of sessions under these personas: nothing could resume
    * into a root that is gone. */
   forgetUnder(profileIds: ReadonlySet<string>): void;
@@ -92,9 +102,19 @@ export interface AgentProfileServiceOptions {
   home: string;
   /** Show in Finder, late-bound; null = no shell provider */
   revealPath: () => RevealPath | null;
+  /** the ledger's system-actor entry: a sign-out finished after its sessions
+   * ended is the daemon's own act on a person's data; absent = logged only */
+  audit?: <T>(
+    mutation: AuditMutation,
+    effect: () => Promise<T>,
+    describe?: (value: T) => AuditMutationOutcome,
+  ) => Promise<T>;
   now: () => Date;
   logger: Logger;
 }
+
+/** What a sign-out does to an agent's credential, from its adapter. */
+type CredentialClaim = "signed-out" | "in-folder" | "unknown";
 
 export class AgentProfileService {
   /** puppeteer's `rootsDirectory`: every set's folder is allocated here */
@@ -105,6 +125,10 @@ export class AgentProfileService {
   /** personas mid-removal: the reconcile a retire's bounce wakes must not
    * re-enroll one it still finds in the registry */
   private readonly deleting = new Set<string>();
+  /** profiles mid-delete: nothing new is signed in to them */
+  private readonly deletingSets = new Set<string>();
+  /** frames are read asynchronously; only the newest read is emitted */
+  private frameSeq = 0;
   private reconciling: Promise<void> | null = null;
   private sweeping: Promise<void> | null = null;
   private sweepAgain = false;
@@ -133,6 +157,7 @@ export class AgentProfileService {
     return {
       sets,
       signIn: this.signInProviders(),
+      identity: this.identityProviders(),
       signOut: this.opts.runtime
         .profileProviders()
         .filter((provider) => provider.support.signOut === true)
@@ -152,8 +177,11 @@ export class AgentProfileService {
     if (this.disposed || this.subscribers.size === 0 || this.publishTimer !== null) return;
     this.publishTimer = setTimeout(() => {
       this.publishTimer = null;
+      const seq = ++this.frameSeq;
       void this.sets().then(
         (frame) => {
+          // a read that an older one overtook is stale: the newer was emitted
+          if (this.disposed || seq !== this.frameSeq) return;
           for (const emit of this.subscribers) {
             try {
               emit(frame);
@@ -228,7 +256,9 @@ export class AgentProfileService {
   }
 
   /** The record's P7 act: stop the sessions running under the profile, sign
-   * every sign-in in it out, unregister it, delete its folder. */
+   * every sign-in in it out, unregister it, delete its folder. In that order,
+   * and each step only once the one before it held: nothing is deleted while
+   * a process still runs in the folder or a vendor's sign-out failed. */
   async deleteSet(setId: string): Promise<AgentsProfileSetsDeleteResult> {
     const info = await this.requireSet(setId);
     if (info.set.kind !== "managed") {
@@ -247,37 +277,79 @@ export class AgentProfileService {
         { set: setId, reason: "default" },
       );
     }
-    // every account the set holds — a retired one still waiting on its
-    // sessions included: they stop now, like the rest
-    const accounts = (await this.opts.runtime.profiles()).filter(
-      (profile) => profile.kind === "managed" && profile.set === setId,
-    );
-    const ids = new Set(accounts.map((profile) => profile.id));
-    for (const id of ids) this.deleting.add(id);
+    if (this.deletingSets.has(setId)) {
+      throw new RpcCallError("PRECONDITION_FAILED", `${info.set.label} is being deleted`, true, {
+        set: setId,
+        state: "deleting",
+      });
+    }
+    this.deletingSets.add(setId);
+    // every account the set holds, a retired one still waiting included
+    const members = () =>
+      this.opts.runtime
+        .profiles()
+        .then((profiles) =>
+          profiles.filter((profile) => profile.kind === "managed" && profile.set === setId),
+        );
+    let ids = new Set<string>();
     try {
-      const stopped = await this.opts.sessions.stopUnder(ids);
-      // the vendor's own sign-out needs the registry entry, so it goes first
-      for (const account of accounts) await this.signOutNatively(account);
+      // 1. out of new work first: no spawn, resume or login lands in it while it goes
+      for (const account of await members()) {
+        if (account.retiredAt !== undefined) continue;
+        const retired = await this.opts.runtime.retireProfile(account.id);
+        if (isFailure(retired)) throw failureToError(retired);
+      }
+      const accounts = await members();
+      ids = new Set(accounts.map((profile) => profile.id));
+      for (const id of ids) this.deleting.add(id);
+      // 2. the sessions stop, and are GONE before anything is deleted
+      const { stopped, remaining } = await this.opts.sessions.stopUnder(ids);
+      if (remaining > 0) {
+        throw new RpcCallError(
+          "UNAVAILABLE",
+          `${remaining} session${remaining === 1 ? "" : "s"} under ${info.set.label} did not stop; nothing was deleted. Its sign-ins are signed out and finish when those sessions end.`,
+          true,
+          { service: "agents", state: "sessions-running", set: setId, remaining },
+        );
+      }
+      // 3. the vendors' own sign-outs, which need the registry entries
+      for (const account of accounts) {
+        const outcome = await this.signOutNatively(account);
+        if (outcome.failed !== undefined) {
+          throw new RpcCallError(
+            "UNAVAILABLE",
+            `${outcome.failed} Nothing was deleted; try again.`,
+            true,
+            { service: "agents", state: "sign-out-failed", set: setId, provider: account.provider },
+          );
+        }
+      }
+      // 4. unregister — what the registry removed is what goes, a sign-in
+      // added since the list above included
       const removed = await this.opts.runtime.removeProfileSet(setId);
       if (isFailure(removed)) throw failureToError(removed);
-      this.opts.sessions.forgetUnder(ids);
-      await this.retireIndex(accounts);
-      const directory = info.set.directory;
+      const gone = new Set(removed.profiles.map((profile) => profile.id));
+      for (const id of gone) this.deleting.add(id);
+      this.opts.sessions.forgetUnder(gone);
+      await this.retireIndex(removed.profiles);
+      // 5. the folder, and any adopted root that sat outside it
+      const directory = removed.set.directory ?? info.set.directory;
       if (directory !== undefined) this.deleteOwned(directory);
-      // an account adopted from before sets keeps its root where it was
-      for (const account of accounts) {
+      for (const account of removed.profiles) {
         if (directory === undefined || !within(directory, account.dataRoot)) {
           this.deleteOwned(account.dataRoot);
         }
       }
+      for (const id of gone) ids.add(id);
       this.logger.info("fieldd.agents.profile_deleted", "Agent profile deleted", {
         set: setId,
-        signIns: accounts.length,
+        signIns: removed.profiles.length,
         stopped,
       });
       return { deleted: true, stopped };
     } finally {
       for (const id of ids) this.deleting.delete(id);
+      this.deletingSets.delete(setId);
     }
   }
 
@@ -343,6 +415,12 @@ export class AgentProfileService {
    * enrollment that cannot happen now (daemon down, kind unknown to the roll
    * call) leaves the persona indexed later, not failed. */
   async createPersona(params: AgentsProfilesCreateParams): Promise<AgentsProfilesCreateResult> {
+    if (this.deletingSets.has(params.set)) {
+      throw new RpcCallError("PRECONDITION_FAILED", "that profile is being deleted", false, {
+        set: params.set,
+        state: "deleting",
+      });
+    }
     const created = await this.opts.runtime.createProfile({
       providerId: params.provider,
       set: params.set,
@@ -355,19 +433,23 @@ export class AgentProfileService {
 
   /** SIGN OUT (AR-D25). A managed sign-in is retired now and finished when no
    * session runs under it; This Mac's is signed out by the vendor's own
-   * command in the agent's own folder, which is never deleted. */
+   * command in the agent's own folder, which is never deleted. A login pane
+   * open on it is ended first: the sign-out takes the root that login would
+   * write into. `credential` says what the sign-out does to the credential. */
   async signOut(profileId: string): Promise<AgentsProfilesDeleteResult> {
     const profile = await this.requirePersona(profileId);
+    const credential = this.credentialClaim(profile.provider);
+    await this.opts.sessions.endLogins(new Set([profileId]));
     if (profile.kind !== "managed") {
       const outcome = await this.opts.runtime.signOutProfile(profileId);
-      if (isFailure(outcome)) throw failureToError(outcome);
-      // what the vendor's command left is the next identity read
+      // what the vendor's command left is the next identity read, either way
       await this.verifyQuietly(profileId);
+      if (isFailure(outcome)) throw failureToError(outcome);
       this.logger.info("fieldd.agents.native_signed_out", "Signed out of an agent's own folder", {
         profileId,
         provider: profile.provider,
       });
-      return { deleted: true };
+      return { deleted: true, credential: "signed-out" };
     }
     if (profile.retiredAt === undefined) {
       const retired = await this.opts.runtime.retireProfile(profileId);
@@ -378,16 +460,22 @@ export class AgentProfileService {
       this.logger.info(
         "fieldd.agents.persona_signing_out",
         "Sign-in retired; waiting for its sessions",
-        {
-          profileId,
-          provider: profile.provider,
-          waiting,
-        },
+        { profileId, provider: profile.provider, waiting },
       );
-      return { deleted: false, waiting };
+      return { deleted: false, waiting, credential };
     }
-    await this.finish(profile);
-    return { deleted: true };
+    const failed = await this.finish(profile);
+    if (failed !== undefined) {
+      // the sign-in is out of its profile and out of new work; its folder and
+      // the credential stay until the vendor's sign-out works (the next sweep)
+      throw new RpcCallError("UNAVAILABLE", `${failed} Its folder is kept until it works.`, true, {
+        service: "agents",
+        state: "sign-out-failed",
+        profileId,
+        provider: profile.provider,
+      });
+    }
+    return { deleted: true, credential };
   }
 
   /** Re-read the identity from the provider's own status surface; the result
@@ -427,8 +515,35 @@ export class AgentProfileService {
               !this.deleting.has(profile.id),
           );
           for (const profile of retired) {
+            if (this.disposed) break;
             if (this.opts.sessions.liveUnder(new Set([profile.id])) > 0) continue;
-            await this.finish(profile);
+            // one sign-in's trouble never holds the others back
+            try {
+              await this.audited(
+                {
+                  action: "agents.profiles.finish",
+                  target: { kind: "agent-persona", id: profile.id },
+                  attrs: {
+                    provider: profile.provider,
+                    ...(profile.set !== undefined ? { set: profile.set } : {}),
+                  },
+                },
+                () => this.finish(profile),
+                (failed) =>
+                  failed === undefined
+                    ? { outcome: "succeeded" }
+                    : { outcome: "failed", attrs: { reason: "sign-out-failed" } },
+              );
+            } catch (error) {
+              this.logger.warn(
+                "fieldd.agents.finish_failed",
+                "A signed-out sign-in was not finished",
+                {
+                  profileId: profile.id,
+                  error: error instanceof Error ? error.message : String(error),
+                },
+              );
+            }
           }
         } while (this.sweepAgain && !this.disposed);
       } catch (error) {
@@ -466,7 +581,8 @@ export class AgentProfileService {
             error: error instanceof Error ? error.message : String(error),
           });
         }
-        const readable = new Set(this.signInProviders());
+        if (this.disposed) return;
+        const readable = new Set(this.identityProviders());
         const natives = (await this.opts.runtime.profiles()).filter(
           (profile) =>
             profile.kind === "native-default" &&
@@ -482,6 +598,15 @@ export class AgentProfileService {
           agents: natives.length,
           ms: Date.now() - started,
         });
+      } catch (error) {
+        // callers fire and forget (the boot warm, a refresh): a runtime that
+        // stopped mid-read or a registry that cannot be read is a warning, never
+        // an unhandled rejection that ends the daemon
+        if (!this.disposed) {
+          this.logger.warn("fieldd.agents.identities_unread", "This Mac's sign-ins were not read", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       } finally {
         this.reading = null;
         this.publish();
@@ -503,7 +628,12 @@ export class AgentProfileService {
       try {
         const specs: EnrollRuntimeSpec[] = [];
         for (const profile of await this.opts.runtime.profiles()) {
-          if (profile.kind !== "managed" || this.deleting.has(profile.id)) continue;
+          if (
+            profile.kind !== "managed" ||
+            profile.retiredAt !== undefined ||
+            this.deleting.has(profile.id)
+          )
+            continue;
           const spec = await this.enrollmentSpecFor(profile);
           if (spec !== undefined) specs.push(spec);
         }
@@ -592,12 +722,27 @@ export class AgentProfileService {
     };
   }
 
-  /** The providers whose adapter can run a sign-in AND read back who signed in. */
+  /** The providers whose adapter can run a sign-in in a folder here. */
   private signInProviders(): string[] {
+    return this.opts.runtime
+      .profileProviders()
+      .filter((provider) => provider.support.supported)
+      .map((provider) => provider.id);
+  }
+
+  /** Of those, the ones whose adapter reads back WHO signed in. */
+  private identityProviders(): string[] {
     return this.opts.runtime
       .profileProviders()
       .filter((provider) => provider.support.supported && provider.support.identity !== "none")
       .map((provider) => provider.id);
+  }
+
+  /** What signing an agent out does to its credential, as its adapter says. */
+  private credentialClaim(providerId: string): CredentialClaim {
+    const support = this.opts.runtime.profileProviders().find((p) => p.id === providerId)?.support;
+    if (support?.signOut === true) return "signed-out";
+    return support?.credential === "root" ? "in-folder" : "unknown";
   }
 
   /** puppeteer's absolute path in the `~` spelling (`~/.claude`). */
@@ -632,31 +777,44 @@ export class AgentProfileService {
     return profile;
   }
 
-  /** The end of a sign-in: the vendor's sign-out, the registry, the index,
-   * the root — the registry before the retire, because the retire's bounce
-   * wakes the reconcile, which must find no persona to re-enroll. */
-  private async finish(profile: AgentProfile): Promise<void> {
+  /** The end of a sign-in: the vendor's sign-out, the root, the records, the
+   * registry, the index — each only once the step before it held. A vendor
+   * sign-out that failed where the credential lives outside the root keeps
+   * everything (retired) for the next sweep; a root that could not be deleted
+   * keeps the registry entry, so nothing forgets a folder still on disk. The
+   * registry goes before the index retire, because the retire's bounce wakes
+   * the reconcile, which must find no persona to re-enroll. Answers why it
+   * stopped, or undefined when the sign-in is gone. */
+  private async finish(profile: AgentProfile): Promise<string | undefined> {
     this.deleting.add(profile.id);
     try {
-      await this.signOutNatively(profile);
+      const outcome = await this.signOutNatively(profile);
+      if (outcome.failed !== undefined) return outcome.failed;
+      this.deleteOwned(profile.dataRoot);
       this.opts.sessions.forgetUnder(new Set([profile.id]));
       await this.opts.runtime.removeProfile(profile.id);
       await this.retireIndex([profile]);
-      this.deleteOwned(profile.dataRoot);
       this.logger.info("fieldd.agents.persona_signed_out", "Sign-in finished and removed", {
         profileId: profile.id,
         provider: profile.provider,
         ...(profile.set !== undefined ? { set: profile.set } : {}),
+        credential: outcome.claim,
       });
+      return undefined;
     } finally {
       this.deleting.delete(profile.id);
     }
   }
 
-  /** The vendor's own sign-out before a root goes; a refusal is logged, never
-   * fatal — the root is still deleted, and what may remain (a Keychain item)
-   * is named in the log for a person to clear. */
-  private async signOutNatively(profile: AgentProfile): Promise<void> {
+  /** The vendor's own sign-out before a root goes. Where the adapter keeps
+   * the credential outside the root (a keychain item keyed on its path), a
+   * sign-out that did not take is a FAILURE: deleting the root would leave a
+   * live credential nothing could ever sign out again. Elsewhere the root's
+   * deletion is the sign-out — or, where the adapter never said, all that
+   * can be claimed. */
+  private async signOutNatively(
+    profile: AgentProfile,
+  ): Promise<{ claim: CredentialClaim; failed?: string }> {
     let outcome: Awaited<ReturnType<AgentRuntime["signOutProfile"]>>;
     try {
       outcome = await this.opts.runtime.signOutProfile(profile.id);
@@ -667,13 +825,35 @@ export class AgentProfileService {
         retryable: true,
       };
     }
-    if (isFailure(outcome)) {
-      this.logger.warn(
-        "fieldd.agents.native_sign_out_failed",
-        "The agent's own sign-out did not run; a credential kept outside the folder may remain",
-        { profileId: profile.id, provider: profile.provider, status: outcome.status },
-      );
+    if (!isFailure(outcome)) {
+      return {
+        claim: outcome.ran ? "signed-out" : outcome.credential === "root" ? "in-folder" : "unknown",
+      };
     }
+    this.logger.warn(
+      "fieldd.agents.native_sign_out_failed",
+      "The agent's own sign-out did not complete; its folder and credential are kept",
+      { profileId: profile.id, provider: profile.provider, status: outcome.status },
+    );
+    return {
+      claim: "signed-out",
+      failed: `${this.labelOf(profile.provider)}'s own sign-out did not complete (${outcome.message}).`,
+    };
+  }
+
+  private labelOf(providerId: string): string {
+    return (
+      this.opts.runtime.profileProviders().find((p) => p.id === providerId)?.label ?? providerId
+    );
+  }
+
+  /** The daemon's own act, in the ledger as the system actor when there is one. */
+  private audited<T>(
+    mutation: AuditMutation,
+    effect: () => Promise<T>,
+    describe: (value: T) => AuditMutationOutcome,
+  ): Promise<T> {
+    return this.opts.audit === undefined ? effect() : this.opts.audit(mutation, effect, describe);
   }
 
   /** Watch off, rows kept, the persona still named (AR-D19). */
@@ -715,24 +895,58 @@ export class AgentProfileService {
     if (specs.length > 0) await this.opts.index.enrollRuntimes(specs);
   }
 
-  /** Delete a directory ONLY if it is one fieldd allocated for this user: a
-   * profile folder or a sign-in root under `agents/profiles/`, or a root
-   * adopted from `agents/roots/`. Never a provider's own folder. */
+  /** Delete a directory ONLY if it is one fieldd allocated for this user, by
+   * its exact shape: a profile folder `agents/profiles/<set>`, a sign-in root
+   * `agents/profiles/<set>/<provider>-<8 hex>`, or a root adopted from
+   * `agents/roots/<provider>/<uuid>` — resolved, and never through a symlink,
+   * so a tampered registry path (`profiles/.`, `profiles/work/..`) can never
+   * name the container or anything beyond it. Never a provider's own folder.
+   * A folder that is already gone is fine; one that could not be deleted
+   * throws, so its owner keeps it registered. */
   private deleteOwned(path: string): void {
-    const owned =
-      (within(this.profilesDir, path) && path !== this.profilesDir) ||
-      (within(this.legacyRootsDir, path) && path !== this.legacyRootsDir);
-    if (!owned) {
+    const target = resolve(path);
+    if (!this.ownedShape(target)) {
       this.logger.warn(
         "fieldd.agents.persona_root_kept",
         "A folder outside this user's profiles; left in place",
-        {
-          folder: this.tilde(path),
-        },
+        { folder: this.tilde(target) },
       );
       return;
     }
-    rmSync(path, { recursive: true, force: true });
+    if (!existsSync(target)) return;
+    if (lstatSync(target).isSymbolicLink() || !this.ownedShape(realpathSync(target), true)) {
+      this.logger.warn(
+        "fieldd.agents.persona_root_kept",
+        "A profile folder that resolves elsewhere; left in place",
+        { folder: this.tilde(target) },
+      );
+      return;
+    }
+    rmSync(target, { recursive: true, force: true });
+  }
+
+  /** Whether a resolved path has one of the shapes fieldd allocates. `real`
+   * compares against the containers' real paths (a VibeField root reached
+   * through a symlink is still ours; a folder that leaves it is not). */
+  private ownedShape(target: string, real = false): boolean {
+    const container = (dir: string) => (real && existsSync(dir) ? realpathSync(dir) : resolve(dir));
+    const inProfiles = relative(container(this.profilesDir), target);
+    if (inProfiles !== "" && !inProfiles.startsWith("..") && !isAbsolute(inProfiles)) {
+      const parts = inProfiles.split(sep);
+      if (parts.length === 1) return SET_FOLDER.test(parts[0]!);
+      if (parts.length === 2) return SET_FOLDER.test(parts[0]!) && SIGN_IN_FOLDER.test(parts[1]!);
+      return false;
+    }
+    const inLegacy = relative(container(this.legacyRootsDir), target);
+    if (inLegacy !== "" && !inLegacy.startsWith("..") && !isAbsolute(inLegacy)) {
+      const parts = inLegacy.split(sep);
+      return (
+        parts.length === 2 &&
+        LEGACY_PROVIDER_FOLDER.test(parts[0]!) &&
+        LEGACY_ROOT_FOLDER.test(parts[1]!)
+      );
+    }
+    return false;
   }
 
   private async verifyQuietly(profileId: string): Promise<void> {
