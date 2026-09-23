@@ -400,7 +400,16 @@ try {
 // `pnpm siblings:pin`, which passes the same flag itself.
 {
   const inCi = ["true", "1"].includes(String(process.env.CI ?? "").toLowerCase());
-  const args = ["--enforce", ...(inCi ? ["--require-rosetta"] : []), "--literals"];
+  // The lock's rosettad as this preflight already resolved it above (siblings.mjs
+  // caches cargo's answer per process), handed over so the checker does not
+  // ask cargo a second time.
+  const lockRosettad = rosettadBinary(root)?.path ?? null;
+  const args = [
+    "--enforce",
+    ...(inCi ? ["--require-rosetta"] : []),
+    ...(lockRosettad === null ? [] : ["--rosettad", lockRosettad]),
+    "--literals",
+  ];
   const run = spawnSync(process.execPath, ["scripts/check-agent-catalog.mjs", ...args], {
     cwd: root,
     encoding: "utf8",
@@ -412,8 +421,16 @@ try {
   }
   if (run.status !== 0) {
     if (output.trim()) console.error(output.trim());
+    // A spawn that failed or a checker killed by a signal prints nothing of its
+    // own: say which, never a bare red.
+    const how =
+      run.error !== undefined
+        ? `could not run: ${run.error.message}`
+        : run.signal !== null
+          ? `killed by ${run.signal}`
+          : `exit ${run.status}; the report above names the part — the checker's own self-test, the projection, R23 or R23b`;
     problems.push(
-      `agent catalog walls R23/R23b failed (node scripts/check-agent-catalog.mjs ${args.join(" ")}) — the report above names the part: the checker's own self-test, the projection, R23 or R23b`,
+      `agent catalog walls R23/R23b failed (node scripts/check-agent-catalog.mjs ${args.join(" ")}) — ${how}`,
     );
   }
 }

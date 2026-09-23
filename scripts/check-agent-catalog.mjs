@@ -105,6 +105,9 @@
 //   --enforce          R23: the real catalog against the real pins
 //   --require-rosetta  (implies --enforce) only the lock's rosettad may answer,
 //                      and a missing one FAILs instead of WARNing
+//   --rosettad <path>  (with --enforce) the lock's rosettad as the caller already
+//                      resolved it — preflight and siblings:pin pass it, so this
+//                      script does not ask cargo a second time
 //   --literals         R23b over the product trees
 //   --self-test        print the checker's own fixtures (every mode runs them)
 //   --help             this text — alone; beside a mode it exits 2, never 0 unrun
@@ -1317,9 +1320,21 @@ function literalIds(rows) {
   return ids;
 }
 
+/** R23b's raw-text pre-filter: a NECESSARY condition, never a verdict. Every
+ * literal the lexers can report equal to an id is spelled in the source as the
+ * id between two quotes (both lexers take a single-line literal's raw inner
+ * text, escapes and all) or, in Swift, as a multi-line string's lone content
+ * line (its value is de-indented, so the id stands alone on its line). A file
+ * matching neither cannot hold an id literal, and is read but not lexed. */
+function quotedIdPattern(ids, swift) {
+  const alternatives = [...ids].map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const quoted = `["'\`](?:${alternatives})["'\`]`;
+  return new RegExp(swift ? `${quoted}|^[ \\t]*(?:${alternatives})[ \\t]*$` : quoted, "m");
+}
+
 /** Scan `root`'s product trees for id literals. Returns the hits outside the
- * allow-list, the count each allow-list entry absorbed, and how many files were
- * lexed. */
+ * allow-list, the count each allow-list entry absorbed, how many files were
+ * read and how many of them the pre-filter sent to a lexer. */
 function scanLiterals(root, ids, allow, trees = R23B_TREES) {
   const files = new Set();
   for (const tree of trees) {
@@ -1329,7 +1344,10 @@ function scanLiterals(root, ids, allow, trees = R23B_TREES) {
   }
   const allowed = new Map(allow.map((entry) => [entry.file, 0]));
   const hits = [];
+  const patterns =
+    ids.size === 0 ? null : { ts: quotedIdPattern(ids, false), swift: quotedIdPattern(ids, true) };
   let scanned = 0;
+  let lexed = 0;
   for (const abs of [...files].sort()) {
     const rel = relative(root, abs).split(sep).join("/");
     // An ambient `.d.ts` stays in: a literal TYPE naming an agent is the same
@@ -1337,16 +1355,17 @@ function scanLiterals(root, ids, allow, trees = R23B_TREES) {
     if (rel === CATALOG_SOURCE || isTestPath(rel)) continue;
     scanned += 1;
     const source = readFileSync(abs, "utf8");
-    const literals = rel.endsWith(".swift")
-      ? swiftStringLiterals(source)
-      : tsStringLiterals(source);
+    const swift = rel.endsWith(".swift");
+    if (patterns === null || !(swift ? patterns.swift : patterns.ts).test(source)) continue;
+    lexed += 1;
+    const literals = swift ? swiftStringLiterals(source) : tsStringLiterals(source);
     for (const { line, value } of literals) {
       if (!ids.has(value)) continue;
       if (allowed.has(rel)) allowed.set(rel, allowed.get(rel) + 1);
       else hits.push({ file: rel, line, value });
     }
   }
-  return { hits, allowed, scanned };
+  return { hits, allowed, scanned, lexed };
 }
 
 function judgeLiterals(scan, allow, root) {
@@ -1424,6 +1443,7 @@ function projectionFindings({ problems, stale }) {
  * function end to end over a rotten projection and canned facts. */
 function runEnforce({
   requireRosetta = false,
+  lock,
   root = REPO_ROOT,
   readPuppeteer = readPuppeteerFacts,
   readRosetta = readRosettaFacts,
@@ -1438,7 +1458,7 @@ function runEnforce({
   }
   const { rows } = loaded;
   const puppeteer = readPuppeteer();
-  const rosetta = readRosetta({ requireRosetta });
+  const rosetta = readRosetta({ requireRosetta, ...(lock === undefined ? {} : { lock }) });
   printPuppeteerFacts(puppeteer, out);
   printRosettaFacts(rosetta, out);
   const findings = [
@@ -1476,7 +1496,7 @@ function runLiterals({ root = REPO_ROOT, allow = R23B_ALLOW, out = console } = {
   const ids = literalIds(loaded.rows);
   const scan = scanLiterals(root, ids, allow);
   out.log(
-    `R23b — ${scan.scanned} product source(s) lexed for ${ids.size} agent id(s) (${R23B_TREES.map((t) => t.glob).join(", ")}):`,
+    `R23b — ${scan.scanned} product source(s) read, ${scan.lexed} lexed (the rest quote no id) for ${ids.size} agent id(s) (${R23B_TREES.map((t) => t.glob).join(", ")}):`,
   );
   for (const entry of allow) {
     out.log(
@@ -2118,6 +2138,7 @@ function selfTestLiterals(check) {
       "apps/ios/VibeFieldKit/Sources/Demo/Roster.swift":
         'switch id { case "beta-kind": break } // "alpha"\n',
       "apps/ios/App/Main.swift": 'let first = "gamma"\n',
+      "apps/ios/App/Multi.swift": 'let m = """\n    gamma\n    """\n',
       "apps/demo/src/cli.ts": 'export const d = "alpha";\n',
       "plugins/demo/src/elsewhere.ts": 'export const r = "alpha";\n',
       "plugins/demo/test/elsewhere.ts": 'export const r = "alpha";\n',
@@ -2160,6 +2181,7 @@ function selfTestLiterals(check) {
       "literal packages/demo/src/deep/fixtures/row.ts:1",
       "literal apps/ios/VibeFieldKit/Sources/Demo/Roster.swift:1",
       "literal apps/ios/App/Main.swift:1",
+      "literal apps/ios/App/Multi.swift:2",
       "literal apps/demo/src/cli.ts:1",
       "literal plugins/demo/src/elsewhere.ts:1",
       "literal examples/plugins/demo/src/sample.tsx:1",
@@ -2168,11 +2190,12 @@ function selfTestLiterals(check) {
       "allow-count packages/demo/src/gone.ts",
     ];
     check(
-      "the lint: every product tree in scope; comments, tests, other trees, symlinks and the catalog out; each allow-list entry held to its exact count",
+      "the lint: every product tree in scope; comments, tests, other trees, symlinks and the catalog out; each allow-list entry held to its exact count; the pre-filter skips only files quoting no id",
       linked &&
         JSON.stringify([...findings].sort()) === JSON.stringify([...expected].sort()) &&
         scan.allowed.get("packages/demo/src/presentation.ts") === 1 &&
-        scan.allowed.get("packages/demo/src/grew.ts") === 2,
+        scan.allowed.get("packages/demo/src/grew.ts") === 2 &&
+        scan.lexed < scan.scanned,
       `${linked ? "" : "(could not create the symlink) "}${JSON.stringify(findings)}`,
     );
   } finally {
@@ -2296,17 +2319,39 @@ const USAGE = [
   "       node scripts/check-agent-catalog.mjs --help",
   "  --enforce          prove every catalog row against the pinned puppeteer and rosetta (R23)",
   "  --require-rosetta  implies --enforce: only the lock's rosettad may answer, and a missing one FAILs (siblings:pin, CI — AC-D10)",
+  "  --rosettad <path>  with --enforce: the lock's rosettad as the caller resolved it (no second cargo metadata)",
   "  --literals         no agent id literal in the product trees outside the allow-list (R23b)",
   "  --self-test        print the checker's own fixtures (every mode runs them first)",
   "  --help             this text, alone",
 ].join("\n");
 
 if (process.argv[1] && resolve(process.argv[1]) === SCRIPT) {
-  const args = process.argv.slice(2);
-  if (args[0] === "--probe-puppeteer") {
+  const argv = process.argv.slice(2);
+  if (argv[0] === "--probe-puppeteer") {
     // the tsx child (readPuppeteerFacts): never invoked by hand
-    await probePuppeteer(args[1]);
+    await probePuppeteer(argv[1]);
     process.exit(0);
+  }
+  // `--rosettad <path>` (or `--rosettad=<path>`) is the one option with a value:
+  // the lock's rosettad as the caller already resolved it (preflight and
+  // siblings:pin hold it), so --enforce does not ask cargo a second time.
+  // FIELDD_ROSETTAD_BIN keeps its meaning beside it, and under
+  // --require-rosetta it must still BE this build.
+  const args = [];
+  let rosettad;
+  for (let k = 0; k < argv.length; k += 1) {
+    const arg = argv[k];
+    if (arg === "--rosettad" || arg.startsWith("--rosettad=")) {
+      const value = arg === "--rosettad" ? argv[k + 1] : arg.slice("--rosettad=".length);
+      if (arg === "--rosettad") k += 1;
+      if (value === undefined || value === "" || value.startsWith("--")) {
+        console.error("check-agent-catalog: --rosettad takes a path (see --help)");
+        process.exit(2);
+      }
+      rosettad = value;
+      continue;
+    }
+    args.push(arg);
   }
   const has = (flag) => args.includes(flag);
   // An argument this script does not know is refused, never ignored: a caller's
@@ -2319,7 +2364,7 @@ if (process.argv[1] && resolve(process.argv[1]) === SCRIPT) {
     process.exit(2);
   }
   if (has("--help")) {
-    if (args.length > 1) {
+    if (argv.length > 1) {
       console.error(
         "check-agent-catalog: --help runs alone — beside a mode it would exit 0 without having run it",
       );
@@ -2334,6 +2379,12 @@ if (process.argv[1] && resolve(process.argv[1]) === SCRIPT) {
   }
   const enforce = has("--enforce") || has("--require-rosetta");
   const literals = has("--literals");
+  if (rosettad !== undefined && !enforce) {
+    console.error(
+      "check-agent-catalog: --rosettad names the lock's rosettad for --enforce — without it, it selects nothing",
+    );
+    process.exit(2);
+  }
   // The walls' lesson (preflight.mjs, 2026-07-23): a broken checker's green is
   // no green. The self-test runs FIRST, in this process, whatever the mode, so
   // no caller (preflight, siblings:pin, catalog:check, a hand) reaches a
@@ -2348,7 +2399,13 @@ if (process.argv[1] && resolve(process.argv[1]) === SCRIPT) {
     process.exit(1);
   }
   let status = 0;
-  if (enforce) status = Math.max(status, runEnforce({ requireRosetta: has("--require-rosetta") }));
+  if (enforce) {
+    const lock =
+      rosettad === undefined
+        ? undefined
+        : { path: rosettad, from: "the lock's build, as the caller resolved it (--rosettad)" };
+    status = Math.max(status, runEnforce({ requireRosetta: has("--require-rosetta"), lock }));
+  }
   if (literals) status = Math.max(status, runLiterals());
   process.exit(status);
 }

@@ -561,18 +561,29 @@ function pin(root) {
     );
     return 1;
   }
+  // The lock's rosettad as buildCargo just resolved it (cached per process),
+  // handed over so the checker does not ask cargo a second time.
+  const lockRosettad = rosettadBinary(root)?.path ?? null;
   const gate = spawnSync(
     process.execPath,
     [
       fileURLToPath(new URL("./check-agent-catalog.mjs", import.meta.url)),
       "--enforce",
       "--require-rosetta",
+      ...(lockRosettad === null ? [] : ["--rosettad", lockRosettad]),
     ],
     { cwd: root, stdio: "inherit" },
   );
   if (gate.status !== 0) {
+    // A spawn that failed or a checker killed by a signal printed nothing above.
+    const how =
+      gate.error !== undefined
+        ? `could not run (${gate.error.message})`
+        : gate.signal !== null
+          ? `was killed by ${gate.signal}`
+          : "is red above";
     console.error(
-      `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, and wall R23 is red above — settle what it names before relying on them (a missing decision is a row in packages/contracts/src/agent-catalog.ts; declined is a decision)`,
+      `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, and wall R23 ${how} — settle it before relying on them (a missing decision is a row in packages/contracts/src/agent-catalog.ts; declined is a decision)`,
     );
     return 1;
   }
