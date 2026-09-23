@@ -1,5 +1,4 @@
 import FieldDesign
-import FieldSwarm
 import SwiftUI
 
 /// The account corner (IOS-8b, AP-D1/D5): the owner's face in a 50 pt glass
@@ -12,10 +11,20 @@ import SwiftUI
 /// face and folds it away. It reads bottom-up, nearest first: you · your
 /// desktops · Settings… · the connection's act · Sign out farthest from the
 /// thumb. Not signed in, the corner is the act — `Sign in` in the same glass,
-/// words only, because the tab bar's capsule will begin 85 pt from the edge.
+/// words only.
 ///
 /// Every word is `FieldHomeModel.accountFace`'s; this draws what it is handed.
-/// The whole thing is a swarm obstacle, open or closed.
+///
+/// **Where it stands (IOS-9a, measured, a delta from the page).** The page
+/// drew the face at the bottom-left as the search circle's mirror, with the
+/// tab capsule centred. iOS 26's real bar with a search role puts the capsule
+/// at the LEFT margin and the search circle at the right, so the bottom-left
+/// is the capsule's, and a face there sits on the Field tab. The corner
+/// therefore stands beside the search circle — the two round tools together
+/// at the right, the tabs at the left — and the menu grows up and to the
+/// LEFT of a face that never moves. Its closed glass is the system's where
+/// the phone has it (Liquid Glass on 26, `liquidGlassCircle`; the chrome
+/// family's recipe below), and the tab bar's band is the swarm obstacle.
 struct AccountCornerView: View {
   let face: FieldHomeModel.AccountFace
   let isOpen: Bool
@@ -57,29 +66,28 @@ struct AccountCornerView: View {
         .frame(height: Self.circle)
     }
     .buttonStyle(.plain)
-    .background { ChromeMaterial.glass(radius: Self.circle / 2, shadow: ChromeShadow.card) }
+    .liquidGlassCapsule()
     .accessibilityLabel("Sign in with Tailscale")
-    .swarmObstacle()
   }
 
   // MARK: - The face, and the menu it grows into
 
   private var menu: some View {
-    VStack(alignment: .leading, spacing: 0) {
+    VStack(alignment: .trailing, spacing: 0) {
       if isOpen {
         rows
           .frame(width: Self.menuWidth, alignment: .leading)
           .transition(.opacity)
       }
       HStack(alignment: .center, spacing: 0) {
-        faceButton
         if isOpen {
           youRow
-            .transition(.opacity.combined(with: .offset(x: -6)))
+            .transition(.opacity.combined(with: .offset(x: 6)))
         }
+        faceButton
       }
     }
-    .frame(width: isOpen ? Self.menuWidth : Self.circle, alignment: .bottomLeading)
+    .frame(width: isOpen ? Self.menuWidth : Self.circle, alignment: .bottomTrailing)
     .background { panel }
     .clipShape(RoundedRectangle(cornerRadius: Self.circle / 2, style: .continuous))
     .background {
@@ -105,16 +113,19 @@ struct AccountCornerView: View {
       }
     }
     .animation(reduceMotion ? .easeInOut(duration: 0.12) : Self.grow, value: isOpen)
-    .swarmObstacle()
   }
 
   /// Solid chrome when open (§8, James: "do not make it transparent"); the
-  /// card's glass when it is only the circle.
+  /// system's glass when it is only the circle — Liquid Glass on iOS 26, the
+  /// chrome family's recipe before it.
   @ViewBuilder
   private var panel: some View {
     ZStack {
-      ChromeMaterial.glass(radius: Self.circle / 2, shadow: nil)
+      Color.clear
+        .frame(width: Self.circle, height: Self.circle)
+        .liquidGlassCircle(shadow: nil)
         .opacity(isOpen ? 0 : 1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
       RoundedRectangle(cornerRadius: Self.circle / 2, style: .continuous)
         .fill(ChromePalette.menuSurface)
         .overlay {
@@ -150,30 +161,26 @@ struct AccountCornerView: View {
 
   /// You, beside the face: the name, and the login line or the connection's
   /// word under it. Tapping it opens Settings — the account's own page, when
-  /// the phone has one; today the settings sheet.
+  /// the phone has one; today the settings sheet. It stands to the LEFT of the
+  /// face (the face is the panel's bottom-right corner), so the words read
+  /// toward it and no chevron sits between them.
   private var youRow: some View {
     Button(action: onSettings) {
-      HStack(spacing: 0) {
-        VStack(alignment: .leading, spacing: 1) {
-          Text(face.name.isEmpty ? "You" : face.name)
-            .font(ChromeType.sans(15, .medium))
-            .foregroundStyle(ChromePalette.ink)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(face.name.isEmpty ? "You" : face.name)
+          .font(ChromeType.sans(15, .medium))
+          .foregroundStyle(ChromePalette.ink)
+          .lineLimit(1)
+        if let detail = face.detail {
+          Text(detail)
+            .font(face.detailIsLogin ? ChromeType.mono(11) : ChromeType.sans(11.5))
+            .foregroundStyle(face.detailWantsAttention ? ChromePalette.attention : ChromePalette.inkTertiary)
             .lineLimit(1)
-          if let detail = face.detail {
-            Text(detail)
-              .font(face.detailIsLogin ? ChromeType.mono(11) : ChromeType.sans(11.5))
-              .foregroundStyle(face.detailWantsAttention ? ChromePalette.attention : ChromePalette.inkTertiary)
-              .lineLimit(1)
-              .truncationMode(.middle)
-          }
+            .truncationMode(.middle)
         }
-        Spacer(minLength: 6)
-        Image(systemName: "chevron.right")
-          .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(ChromePalette.placeholder)
       }
-      .padding(.leading, 8)
-      .padding(.trailing, 14)
+      .padding(.leading, 14)
+      .padding(.trailing, 8)
       .frame(width: Self.menuWidth - Self.circle, height: Self.circle, alignment: .leading)
       .contentShape(Rectangle())
     }

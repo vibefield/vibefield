@@ -58,6 +58,11 @@ struct SessionCardView<Terminal: View>: View {
   /// word, which is the honest way to say it while the words are busy.
   let cooled: Bool
   let onAttach: () -> Void
+  /// IOS-8g — the terminal's appearance sheet, from the card's own `···`:
+  /// the TERMINAL chip that stood in the field's top-right corner moved here,
+  /// because what it opens is about the terminal this card holds, and the
+  /// field's corners are the account's and the tab bar's now.
+  let onSettings: () -> Void
   /// IOS-4c — why this agent's card has no terminal, in the host's words
   /// (`AgentTerminalFace.note`). nil where the ordinary invitation already
   /// says it, or where there is nothing honest to say.
@@ -140,10 +145,36 @@ struct SessionCardView<Terminal: View>: View {
             .foregroundStyle(FieldPalette.textFaint)
         }
       }
+
+      moreMenu
     }
     .padding(.horizontal, 18)
     .padding(.top, 22)
     .padding(.bottom, 14)
+  }
+
+  /// The card's `···` (IOS-8g): the acts about this card's terminal. One
+  /// today — the appearance sheet the TERMINAL chip used to open — in the
+  /// godview voice the card speaks, on the system's own menu.
+  private var moreMenu: some View {
+    Menu {
+      Button {
+        onSettings()
+      } label: {
+        Label("Terminal appearance…", systemImage: "paintpalette")
+      }
+    } label: {
+      Text("···")
+        .font(FieldType.mono(11, .heavy))
+        .foregroundStyle(FieldPalette.textMuted)
+        .frame(width: 30, height: 26)
+        .background(RoundedRectangle(cornerRadius: 6).fill(FieldPalette.panelBackground.opacity(0.8)))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+        .contentShape(Rectangle())
+    }
+    .menuStyle(.button)
+    .buttonStyle(.plain)
+    .accessibilityLabel("More")
   }
 
   /// The line under the name: what is thinking, or which machine and how it
@@ -349,12 +380,13 @@ extension SessionCardView where Terminal == EmptyView {
     bubble: FieldBubble?,
     listed: Bool = true,
     statusNote: String? = nil,
-    onAttach: @escaping () -> Void
+    onAttach: @escaping () -> Void,
+    onSettings: @escaping () -> Void = {}
   ) {
     self.init(
       bubble: bubble, listed: listed, isAttached: false,
       statusNote: statusNote, statusDetail: nil,
-      statusActions: [], cooled: false, onAttach: onAttach
+      statusActions: [], cooled: false, onAttach: onAttach, onSettings: onSettings
     ) {
       EmptyView()
     }

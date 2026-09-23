@@ -1,5 +1,6 @@
 import FieldAgents
 import FieldDesign
+import FieldHistory
 import FieldInput
 import FieldMesh
 import FieldSwarm
@@ -61,11 +62,33 @@ public struct HomeScreen: View {
   /// IOS-8d — Sign out asks first: it is the one act in the menu that is
   /// destructive, and the sentence says what goes and what stays.
   @State private var signOutPending = false
+  // --- IOS-9a: the two tabs and the search pill (D-i10 A) -----------------
+  /// Which tab stands: the field, History, or the search role's own tab.
+  @State private var selectedTab: AppTab = .field
+  /// The History tab's stack and its landed search, shared with the search
+  /// tab so a hit can land across the switch.
+  @State private var history = HistoryRouter()
+  /// The tab bar's band — the bottom inset it takes, remembered at its
+  /// largest, so the swarm keeps clear of the bar and the field's bounds do
+  /// not jump when the bar folds under the account menu.
+  @State private var tabBarBand: CGFloat = 0
+  #if DEBUG
+    /// `-vf-mock`: the whole phone over invented facts and no tailnet (IOS-9d).
+    @State private var mock: MockAccount?
+    /// `-vf-mock-search=<query>`: the search tab opened on a query, which a
+    /// headless run could not type.
+    @State private var mockSearch: String = ""
+  #endif
+  // --- end IOS-9a ----------------------------------------------------------
   #if DEBUG
     /// `-vf-demo-account=<state>`: the corner's inputs, stamped (IOS-8e).
     @State private var demoAccount: FieldHomeModel.AccountFace?
   #endif
   @State private var settingsSheetOpen = false
+  /// IOS-8g — the same sheet, presented from the session card's `···`: the
+  /// root is behind the card while it is up, and a second presentation from
+  /// the same presenter is a sheet that never appears.
+  @State private var cardSettingsOpen = false
   @State private var discoveryPolling = false
   @State private var attachment: TerminalAttachment?
   /// Latched for the width of the directory lookup. `isAttached` hides the
@@ -130,7 +153,23 @@ public struct HomeScreen: View {
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.scenePhase) private var scenePhase
 
-  public init() {}
+  public init() {
+    // IOS-9a — the Field tab's count is §2.5's orange (the agents waiting on
+    // the person, never decorative); the system's badge is red by default,
+    // and the appearance proxies are the only doors to its colour. Set before
+    // the TabView exists, because a proxy reaches only the views made after
+    // it. Both proxies are set because iOS 26's bar reads the appearance
+    // object where the classic bar read the item.
+    let attention = UIColor(ChromePalette.attention)
+    UITabBarItem.appearance().badgeColor = attention
+    let appearance = UITabBarAppearance()
+    appearance.configureWithDefaultBackground()
+    for layout in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
+      layout.normal.badgeBackgroundColor = attention
+      layout.selected.badgeBackgroundColor = attention
+    }
+    UITabBar.appearance().standardAppearance = appearance
+  }
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
   ///
@@ -224,52 +263,168 @@ public struct HomeScreen: View {
 
   @ViewBuilder
   private var chrome: some View {
-    // IOS-8b — the corner is the account (AP-D1). The face at the bottom-left
-    // replaces the mesh chip, the line under it and the mesh sheet: what the
-    // chip said about reach and what the line said about the doors are rows
-    // inside the menu now, and the one thing that still needs the person is a
-    // dot beside the face. While the menu stands, a tap anywhere else folds
-    // it — this layer sits above the field and catches the tap before the
-    // field's own gesture can spend it on a hold.
-    if accountMenuOpen {
-      Color.clear
-        .contentShape(Rectangle())
-        .onTapGesture { accountMenuOpen = false }
-    }
-    AccountCornerView(
-      face: accountFace,
-      isOpen: accountMenuOpen,
-      seed: accountSeed,
-      onToggle: { accountMenuOpen.toggle() },
-      onSettings: {
-        accountMenuOpen = false
-        settingsSheetOpen = true
-      },
-      onSignOut: {
-        accountMenuOpen = false
-        signOutPending = true
-      },
-      onConnection: { act in
-        accountMenuOpen = false
-        performConnection(act)
-      }
-    )
-    .padding(.leading, 16)
-    .padding(.bottom, 16)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-
-    // The other chrome corner. A physics obstacle like the account corner, so
-    // the swarm flows around both rather than hiding under either. It moves
-    // to the session card's `···` at IOS-8g.
-    FieldChip(label: "TERMINAL") { settingsSheetOpen = true }
+    // IOS-9a — the tab bar's band. The field extends under the bar (the
+    // system's glass shows the ground through it), and this invisible
+    // obstacle is what keeps the bodies out of the bar's row — the account
+    // corner and the search circle included, since both stand in it. It is
+    // the largest inset the bar has taken, so it holds while the bar folds.
+    Color.clear
+      .frame(maxWidth: .infinity)
+      .frame(height: tabBarBand)
       .swarmObstacle()
-      .padding(.trailing, 14)
-      .padding(.top, 6)
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+      .allowsHitTesting(false)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    // RETIRED 2026-09-23 (IOS-8g): the TERMINAL chip in the top-right. What it
+    // opened is the session card's `···` now; the field's corners are the
+    // account's and the tab bar's.
+  }
+
+  // MARK: - IOS-9a: the two tabs, the search pill, and the corner beside them
+
+  /// The system's tab bar (D-i10 A): Field · History, and the search role as
+  /// its own circle. The account corner rides OVER the whole TabView rather
+  /// than inside a tab, because it is the search circle's mirror — one glass
+  /// circle at each end of the bar — and because an overlay above the bar's
+  /// own view is what makes a tap on it land on the face and not on the bar.
+  private var tabs: some View {
+    TabView(selection: $selectedTab) {
+      Tab(value: AppTab.field) {
+        fieldTab
+      } label: {
+        Label {
+          Text("Field")
+        } icon: {
+          Image("tab-field", bundle: .module)
+        }
+      }
+      .badge(waitingCount)
+      Tab("History", systemImage: "clock.arrow.circlepath", value: AppTab.history) {
+        historyTab
+      }
+      Tab(value: AppTab.search, role: .search) {
+        searchTab
+      }
+    }
+    .modifier(TabBarChrome(router: history))
+    .tint(ChromePalette.ink)
+    .overlay(alignment: .bottomTrailing) { accountOverlay }
+  }
+
+  /// The field, extended under the bar. The bar's inset is read here and
+  /// remembered at its largest (`tabBarBand`): the chrome slot turns it into
+  /// the obstacle band, so hiding the bar under the account menu moves no body.
+  private var fieldTab: some View {
+    GeometryReader { geo in
+      stage
+        .ignoresSafeArea(.container, edges: .bottom)
+        .onChange(of: geo.safeAreaInsets.bottom, initial: true) { _, inset in
+          tabBarBand = max(tabBarBand, inset)
+        }
+    }
+    .toolbarVisibility(accountMenuOpen ? .hidden : .visible, for: .tabBar)
+  }
+
+  private var historyTab: some View {
+    HistoryLedgerView(corpus: historyCorpus, standing: historyStanding, router: history, tabBarHidden: accountMenuOpen)
+  }
+
+  private var searchTab: some View {
+    HistorySearchView(corpus: historyCorpus, standing: historyStanding, query: mockSearchQuery, tabBarHidden: accountMenuOpen) {
+      landing, query in
+      // A hit lands in the OTHER tab: the router pushes where it lives, and
+      // the switch follows.
+      history.land(landing, query: query)
+      selectedTab = .history
+    }
+  }
+
+  /// IOS-8b — the corner is the account (AP-D1). The face replaces the mesh
+  /// chip, the line under it and the mesh sheet: what the chip said about
+  /// reach and what the line said about the doors are rows inside the menu
+  /// now, and the one thing that still needs the person is a dot beside the
+  /// face. While the menu stands, a tap anywhere else folds it — this layer
+  /// sits above everything and catches the tap before the field's own gesture
+  /// can spend it on a hold. The bar folds while the menu stands (the page's
+  /// rule: an expanded surface folds its neighbours) and returns as it closes.
+  ///
+  /// IOS-9a — it stands beside the search circle, in the bar's row (see
+  /// `AccountCornerView`'s note on where, and `AppTabs` for the measure), and
+  /// steps aside where the row is spoken for: on the search tab, where the
+  /// circle becomes the field and the whole row is the search's, and while
+  /// the match stepper rides the bar, which widens the capsule to the circle.
+  private var accountOverlay: some View {
+    ZStack(alignment: .bottomTrailing) {
+      if accountMenuOpen {
+        Color.clear
+          .contentShape(Rectangle())
+          .ignoresSafeArea()
+          .onTapGesture { setAccountMenu(open: false) }
+      }
+      if cornerShowing {
+        AccountCornerView(
+          face: accountFace,
+          isOpen: accountMenuOpen,
+          seed: accountSeed,
+          onToggle: { setAccountMenu(open: !accountMenuOpen) },
+          onSettings: {
+            setAccountMenu(open: false)
+            settingsSheetOpen = true
+          },
+          onSignOut: {
+            setAccountMenu(open: false)
+            signOutPending = true
+          },
+          onConnection: { act in
+            setAccountMenu(open: false)
+            performConnection(act)
+          }
+        )
+        .padding(.trailing, AppTabs.cornerInset)
+        .padding(.bottom, AppTabs.cornerLift)
+        .transition(.opacity)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+    .animation(FieldMotion.ease(0.25), value: cornerShowing)
+  }
+
+  private var cornerShowing: Bool { selectedTab != .search && !history.stepperShowing }
+
+  /// One curve for the menu's grow and the bar's fold, so they move together.
+  private func setAccountMenu(open: Bool) {
+    withAnimation(AccountCornerView.grow) { accountMenuOpen = open }
+  }
+
+  /// The Field tab's orange count (§2.5): the agents waiting on the person.
+  private var waitingCount: Int { bubbles.filter { $0.status == .blocked }.count }
+
+  /// What History reads. Today: the mock's corpus, or nothing — the index
+  /// reads (H-1) are owed, and the tab says so in words rather than drawing
+  /// an empty ledger.
+  private var historyCorpus: HistoryCorpus? {
+    #if DEBUG
+      if mock != nil { return .mock }
+    #endif
+    return nil
+  }
+
+  private var historyStanding: FieldHistoryModel.DesktopStanding {
+    #if DEBUG
+      if let mock { return mock.desktopIsUp ? .connected : .asleep }
+    #endif
+    return .asleep
+  }
+
+  private var mockSearchQuery: String {
+    #if DEBUG
+      return mockSearch
+    #else
+      return ""
+    #endif
   }
 
   public var body: some View {
-    stage
+    tabs
       .background(FieldPalette.panelBackground.ignoresSafeArea())
     .onAppear {
       assembly.projects = projectStore.load()
@@ -284,6 +439,40 @@ public struct HomeScreen: View {
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
           accountMenuOpen = true
           mesh.connect()
+        }
+        // IOS-9d — `-vf-mock`: the whole phone over invented facts and no
+        // tailnet. The account is `MockAccount`'s (signed in, 🦊, studio up
+        // and mini asleep; every act in the corner moves its standing), the
+        // field is the scripted fleet, History is the records' corpus and
+        // search runs over it. `-vf-mock-tab=history|search` opens a tab,
+        // `-vf-mock-open` grows the corner's menu, `-vf-mock-signed-out`
+        // starts on the `Sign in` pill, `-vf-mock-search=<q>` fills the search
+        // field, and `-vf-mock-landed` lands the second hit of the first group.
+        if ProcessInfo.processInfo.arguments.contains(MockAccount.argument), mock == nil {
+          let account = MockAccount()
+          if ProcessInfo.processInfo.arguments.contains("-vf-mock-signed-out") { account.standing = .signedOut }
+          if ProcessInfo.processInfo.arguments.contains("-vf-mock-off") { account.standing = .off }
+          mock = account
+          mockActive = true
+          feed.start()
+          if let tab = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-tab=") }) {
+            switch tab.dropFirst("-vf-mock-tab=".count) {
+            case "history": selectedTab = .history
+            case "search": selectedTab = .search
+            default: selectedTab = .field
+            }
+          }
+          if let search = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
+            mockSearch = String(search.dropFirst("-vf-mock-search=".count))
+          }
+          if ProcessInfo.processInfo.arguments.contains("-vf-mock-landed"), let group = HistoryCorpus.mock.hits.first,
+            group.rows.count > 1
+          {
+            let query = mockSearch.isEmpty ? "badge" : mockSearch
+            history.land(FieldHistoryModel.landing(for: group.rows[1], in: group, corpus: .mock), query: query)
+            selectedTab = .history
+          }
+          if ProcessInfo.processInfo.arguments.contains("-vf-mock-open") { accountMenuOpen = true }
         }
         // IOS-8e — the corner's states, photographed. The decision is the
         // shipping one over invented inputs; `-vf-demo-account-open` grows the
@@ -682,7 +871,7 @@ public struct HomeScreen: View {
     // The Tailscale login page. One presenter at root: an arriving login folds
     // the account menu first, so the page never rises under an open menu.
     .onChange(of: mesh.loginPage) {
-      if mesh.loginPage != nil { accountMenuOpen = false }
+      if mesh.loginPage != nil { setAccountMenu(open: false) }
     }
     .sheet(
       item: Binding(
@@ -834,9 +1023,19 @@ public struct HomeScreen: View {
       statusActions: attachmentActions,
       cooled: attachment?.banner?.coolsTerminal ?? false,
       onAttach: { if let bubble { beginAttachment(to: bubble) } },
+      onSettings: { cardSettingsOpen = true },
       terminalReason: cardTerminalFace.note
     ) {
       liveTerminal(title: bubble?.project)
+    }
+    // IOS-8g — the appearance sheet, from the card's `···`, on the card's own
+    // presenter (the root is behind this sheet).
+    .sheet(isPresented: $cardSettingsOpen) {
+      settingsSheet
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(40)
+        .fieldGlassSheet()
     }
     // --- IOS-5a: the card rides the bottom safe area, above the keyboard ---
     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -1093,6 +1292,7 @@ public struct HomeScreen: View {
   private var accountFace: FieldHomeModel.AccountFace {
     #if DEBUG
       if let demoAccount { return demoAccount }
+      if let mock { return mock.face }
     #endif
     _ = identityEpoch
     let account = accountLogin
@@ -1140,7 +1340,7 @@ public struct HomeScreen: View {
   /// launch of this account.
   private var accountSeed: String {
     #if DEBUG
-      if demoAccount != nil { return AccountFixtures.login }
+      if demoAccount != nil || mock != nil { return AccountFixtures.login }
     #endif
     return mesh.loginName ?? mesh.rememberedLogin ?? ""
   }
@@ -1150,6 +1350,15 @@ public struct HomeScreen: View {
   /// model's own sweep, then the ledger's in-memory copy, so the field draws
   /// no colour the sweep has already forgotten.
   private func signOut() {
+    #if DEBUG
+      // The mock forgets nothing on disk: its account is a value, and the
+      // sign-out is the standing moving.
+      if let mock {
+        mock.signOut()
+        setAccountMenu(open: false)
+        return
+      }
+    #endif
     selection = nil
     closeCard()
     closeLink()
@@ -1162,6 +1371,12 @@ public struct HomeScreen: View {
   /// The connection's act, as the menu offers it — what the mesh sheet's one
   /// button did, by the same three verbs on the same model.
   private func performConnection(_ act: FieldHomeModel.AccountFace.ConnectionAct) {
+    #if DEBUG
+      if let mock {
+        mock.perform(act)
+        return
+      }
+    #endif
     switch act {
     case .connect: mesh.connect()
     case .signIn: mesh.requestLogin()
