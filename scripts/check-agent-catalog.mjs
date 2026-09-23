@@ -29,10 +29,10 @@
 //     `discover --json --home <empty dir>`: one `{event:"discovery", agent,
 //     dataRoot, …}` line per registered adapter, whether or not the root exists
 //     (witnessed at e8d907ab: nine lines, exit 0). Under --require-rosetta that
-//     build is the ONLY binary asked — a FIELDD_ROSETTAD_BIN resolving to any
-//     other file is a FAIL naming both. A daily run honours the variable (the
-//     dev runner hands fieldd the same one) with a WARN when it is not the
-//     lock's build.
+//     build is the ONLY binary asked — a FIELDD_ROSETTAD_BIN naming any other
+//     file (by device and inode, never by spelling) is a FAIL naming both. A
+//     daily run honours the variable (the dev runner hands fieldd the same one)
+//     with a WARN when it is not the lock's build.
 //
 // The puppeteer sibling ships TypeScript source (`exports` → ./src/index.ts,
 // with `.js` specifiers Node's own type stripping cannot resolve), so that half
@@ -118,6 +118,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -788,33 +789,39 @@ function lockRosettad(root = REPO_ROOT) {
   return { path: built.path, from: `${built.name}'s build (pnpm siblings:build)` };
 }
 
-const realpathOrNull = (path) => {
+/** A file's identity, for "is this the lock's binary": device and inode — a
+ * symlink, a hard link and a differently-cased spelling on a case-insensitive
+ * volume all name ONE file — else the native realpath where a filesystem
+ * reports no inode; null when nothing is there. Node's JS realpathSync keeps
+ * the caller's letter case, so it cannot answer this question. */
+function fileIdentity(path) {
   try {
-    return realpathSync(path);
+    const stat = statSync(path, { bigint: true });
+    return stat.ino !== 0n ? `${stat.dev}:${stat.ino}` : `path:${realpathSync.native(path)}`;
   } catch {
     return null;
   }
-};
+}
 
 /** Which rosettad this run asks, and what the choice itself finds (pure: the
- * caller supplies the variable, the lock's build and a realpath). Under
+ * caller supplies the variable, the lock's build and a file identity). Under
  * --require-rosetta the answer is the LOCK's build, always — siblings:pin and
  * CI prove the PIN's registry, never a shell's — and a FIELDD_ROSETTAD_BIN
- * resolving to any other file is a FAIL naming both. A daily run honours the
+ * naming any other file is a FAIL naming both. A daily run honours the
  * variable (the dev runner hands fieldd the same one) with a WARN when it is
  * not the lock's build; a variable naming no file is left to the UNVERIFIED
  * warning, which says exactly that. */
-function chooseRosettad({ explicit, lock, requireRosetta, realpath = realpathOrNull }) {
+function chooseRosettad({ explicit, lock, requireRosetta, identify = fileIdentity }) {
   const named = explicit !== undefined && explicit !== "";
-  const real = named ? realpath(explicit) : null;
-  const lockReal = lock.path === null ? null : realpath(lock.path);
-  if (!named || (real !== null && real === lockReal)) {
+  const id = named ? identify(explicit) : null;
+  const lockId = lock.path === null ? null : identify(lock.path);
+  if (!named || (id !== null && id === lockId)) {
     return { path: lock.path, from: lock.from, findings: [] };
   }
   const lockSpelled =
     lock.path === null
       ? `none — ${lock.from}`
-      : lockReal === null
+      : lockId === null
         ? `${lock.path}, not built`
         : lock.path;
   if (requireRosetta) {
@@ -825,7 +832,7 @@ function chooseRosettad({ explicit, lock, requireRosetta, realpath = realpathOrN
         fail(
           "bin-foreign",
           "rosettad",
-          `FIELDD_ROSETTAD_BIN names ${explicit}${real === null ? " (no such file)" : ""}, not the lock's build (${lockSpelled}) — --require-rosetta proves the catalog against the pin's own rosettad only: unset FIELDD_ROSETTAD_BIN (pnpm siblings:build makes the lock's build)`,
+          `FIELDD_ROSETTAD_BIN names ${explicit}${id === null ? " (no such file)" : ""}, not the lock's build (${lockSpelled}) — --require-rosetta proves the catalog against the pin's own rosettad only: unset FIELDD_ROSETTAD_BIN (pnpm siblings:build makes the lock's build)`,
         ),
       ],
     };
@@ -834,7 +841,7 @@ function chooseRosettad({ explicit, lock, requireRosetta, realpath = realpathOrN
     path: explicit,
     from: "FIELDD_ROSETTAD_BIN",
     findings:
-      real === null
+      id === null
         ? []
         : [
             warn(
@@ -1906,10 +1913,10 @@ async function selfTestReaders(check) {
   );
 
   // The binary choice (AC-7): the pin's registry is the lock's build's.
-  const realpaths = {
-    "/lock/rosettad": "/real/rosettad",
-    "/alias/rosettad": "/real/rosettad",
-    "/lane/rosettad": "/lane/rosettad",
+  const identities = {
+    "/lock/rosettad": "1:42",
+    "/alias/rosettad": "1:42",
+    "/lane/rosettad": "1:7",
   };
   const lock = { path: "/lock/rosettad", from: "rosetta's build (pnpm siblings:build)" };
   const pick = (explicit, requireRosetta) =>
@@ -1917,7 +1924,7 @@ async function selfTestReaders(check) {
       explicit,
       lock,
       requireRosetta,
-      realpath: (p) => realpaths[p] ?? null,
+      identify: (p) => identities[p] ?? null,
     });
   const brief = (choice) =>
     `${choice.path}|${choice.findings.map((f) => `${f.level} ${f.cls}`).join(",")}`;
@@ -1947,6 +1954,23 @@ async function selfTestReaders(check) {
       foreign.includes("/lock/rosettad"),
     `${JSON.stringify(choices)} | ${foreign}`,
   );
+
+  const scratch = mkdtempSync(join(tmpdir(), "vf-catalog-identity-"));
+  try {
+    const one = join(scratch, "rosettad");
+    const other = join(scratch, "other");
+    writeFileSync(one, "a binary\n");
+    writeFileSync(other, "a binary\n");
+    linkSync(one, join(scratch, "hard-link"));
+    const ids = [one, join(scratch, "hard-link"), other, join(scratch, "absent")].map(fileIdentity);
+    check(
+      "the file identity: two spellings of one file are one binary, a copy is another, an absent one is none",
+      ids[0] !== null && ids[0] === ids[1] && ids[2] !== ids[0] && ids[3] === null,
+      JSON.stringify(ids),
+    );
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 
   const stale = [
     staleNote({ bin: "/b", binMtimeMs: 1, newestSourceMs: 2, sibling: "s" }),
