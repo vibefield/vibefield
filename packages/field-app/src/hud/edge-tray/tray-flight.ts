@@ -5,6 +5,14 @@
  * One element and CSS transitions (M3 — a stalled compositor still ends in
  * the end state, and the timer below is the worst case). Reduced motion (M6):
  * the ghost fades at the notch and never travels.
+ *
+ * Two things the first live capture taught (2026-09-23): the result lands
+ * while the helper's overlay has just left the screen and the window may not
+ * be visible yet — so the flight WAITS for the document to be visible (with a
+ * bound) rather than running unseen; and the end state is set after a forced
+ * reflow, not on an animation frame, because a window that is occluded or
+ * has not painted yet fires no frames and the ghost would be removed by the
+ * settle timer before it ever moved.
  */
 export interface FlightRect {
   readonly left: number;
@@ -17,10 +25,13 @@ export const FLIGHT_MS = 560;
 const FLIGHT_SETTLE_MS = 640;
 const FADE_MS = 160;
 const GHOST_START_WIDTH = 120;
+/** How long a landing waits for the window to become visible before flying anyway. */
+export const FLIGHT_VISIBILITY_WAIT_MS = 1500;
 
 /** Where the ghost starts: the capture's bounds mapped into this window when
- * they fall inside it, else the window's centre. Bounds are screen points;
- * the window's own screen origin maps them. PURE. */
+ * they fall inside it, else the window's centre. Bounds are top-left screen
+ * points (the helper converts from Cocoa); the window's own screen origin maps
+ * them. PURE. */
 export function flightStart(
   bounds: {
     readonly x: number;
@@ -65,6 +76,29 @@ export function flightStart(
   };
 }
 
+/** Resolves once the document is visible, or after `maxWaitMs` regardless. */
+export function whenVisible(
+  doc: Document,
+  maxWaitMs: number = FLIGHT_VISIBILITY_WAIT_MS,
+): Promise<void> {
+  if (doc.visibilityState !== "hidden") return Promise.resolve();
+  const view = doc.defaultView;
+  return new Promise<void>((resolve) => {
+    let done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      doc.removeEventListener("visibilitychange", onChange);
+      resolve();
+    };
+    const onChange = (): void => {
+      if (doc.visibilityState !== "hidden") finish();
+    };
+    doc.addEventListener("visibilitychange", onChange);
+    view?.setTimeout(finish, maxWaitMs);
+  });
+}
+
 export interface FlightOptions {
   readonly from: FlightRect;
   /** the notch's rect in viewport coordinates */
@@ -76,13 +110,15 @@ export interface FlightOptions {
 }
 
 /** Runs the flight; resolves when the ghost has arrived and been removed. */
-export function flyToNotch(options: FlightOptions): Promise<void> {
+export async function flyToNotch(options: FlightOptions): Promise<void> {
   const { from, to, host } = options;
-  const ghost = host.ownerDocument.createElement("div");
+  const doc = host.ownerDocument;
+  await whenVisible(doc);
+  const ghost = doc.createElement("div");
   ghost.className = "vf-edge-tray__ghost";
   ghost.setAttribute("aria-hidden", "true");
   if (options.imageUrl !== null) {
-    const img = host.ownerDocument.createElement("img");
+    const img = doc.createElement("img");
     img.src = options.imageUrl;
     img.alt = "";
     img.draggable = false;
@@ -107,6 +143,7 @@ export function flyToNotch(options: FlightOptions): Promise<void> {
       ghost.remove();
       resolve();
     };
+    ghost.addEventListener("transitionend", finish, { once: true });
     if (options.reducedMotion) {
       ghost.dataset.reduced = "true";
       ghost.style.left = `${toCenterX - from.width / 2}px`;
@@ -114,12 +151,9 @@ export function flyToNotch(options: FlightOptions): Promise<void> {
       ghost.style.width = `${from.width}px`;
       ghost.style.height = `${from.height}px`;
       host.appendChild(ghost);
-      ghost.addEventListener("transitionend", finish, { once: true });
-      host.ownerDocument.defaultView?.setTimeout(finish, FADE_MS + 80);
-      // next frame: the fade
-      requestFrame(host, () => {
-        ghost.dataset.arrived = "true";
-      });
+      doc.defaultView?.setTimeout(finish, FADE_MS + 80);
+      settle(ghost);
+      ghost.dataset.arrived = "true";
       return;
     }
     ghost.style.left = `${from.left}px`;
@@ -127,21 +161,18 @@ export function flyToNotch(options: FlightOptions): Promise<void> {
     ghost.style.width = `${from.width}px`;
     ghost.style.height = `${from.height}px`;
     host.appendChild(ghost);
-    ghost.addEventListener("transitionend", finish, { once: true });
-    host.ownerDocument.defaultView?.setTimeout(finish, FLIGHT_SETTLE_MS);
-    requestFrame(host, () => {
-      ghost.dataset.arrived = "true";
-      ghost.style.translate = `${dx}px ${dy}px`;
-      ghost.style.scale = String(endScale);
-    });
+    doc.defaultView?.setTimeout(finish, FLIGHT_SETTLE_MS);
+    // The start state is committed by a forced reflow, so the end state below
+    // is a transition from it — no animation frame needed, and none may come.
+    settle(ghost);
+    ghost.dataset.arrived = "true";
+    ghost.style.translate = `${dx}px ${dy}px`;
+    ghost.style.scale = String(endScale);
   });
 }
 
-function requestFrame(host: HTMLElement, fn: () => void): void {
-  const view = host.ownerDocument.defaultView;
-  if (view?.requestAnimationFrame !== undefined) {
-    view.requestAnimationFrame(() => view.requestAnimationFrame(fn));
-  } else {
-    fn();
-  }
+/** Force the element's current style to be computed and committed. */
+function settle(el: HTMLElement): void {
+  void el.getBoundingClientRect();
+  void el.offsetWidth;
 }

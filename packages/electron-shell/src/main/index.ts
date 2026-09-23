@@ -90,6 +90,7 @@ import {
   resolvePackagedResources,
 } from "./resources";
 import { registerShellSchemes } from "./scheme-registration";
+import { installScreenshotChord } from "./screenshot-chord";
 import {
   installCsp,
   installNavigationPolicy,
@@ -1503,6 +1504,11 @@ async function main(
           // accelerator can express one. Installed per window and dies with its
           // webContents, so it cannot outlive what it toggles.
           installGodviewDoubleShift(window.webContents, toggleGodview);
+          // ⌃⌘A — above the page too (SNAP-3): the canvas keymap's ⌘A select-all
+          // swallows the menu accelerator, so the chord is taken here first.
+          if (resources.screenshotHelperPath !== null) {
+            installScreenshotChord(window.webContents, takeScreenshot);
+          }
           installNavigationPolicy(window, MODE);
           installDurableClose(
             window,

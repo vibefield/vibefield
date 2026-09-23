@@ -305,12 +305,21 @@ describe("ClipboardTray — the grammar", () => {
         y: 332,
         toJSON: () => ({}),
       }) as DOMRect;
-    act(() => host.emit(OK));
+    // the flight first waits for the document to be visible (a resolved tick here)
+    await act(async () => {
+      host.emit(OK);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     const ghost = document.body.querySelector(".vf-edge-tray__ghost") as HTMLElement;
     expect(ghost).not.toBeNull();
     expect(ghost.querySelector("img")?.getAttribute("src")).toBe(
       "vibefield-still://stills/vibefield-still-0007.png",
     );
+    // the end state is committed synchronously after a forced reflow — no animation frame needed
+    expect(ghost.dataset.arrived).toBe("true");
+    expect(ghost.style.translate).not.toBe("");
+    expect(ghost.style.scale).not.toBe("");
     expect(store.snapshot()).toHaveLength(0);
     await act(async () => {
       vi.advanceTimersByTime(700);
