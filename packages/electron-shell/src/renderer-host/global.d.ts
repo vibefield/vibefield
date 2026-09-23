@@ -94,6 +94,9 @@ declare global {
        * typed error). */
       screenshot: {
         capture(): Promise<ScreenshotCaptureResult>;
+        /** SNAP-3 — the result of a capture MAIN ran (the View menu's item);
+         * the latest is retained until the renderer subscribes. */
+        onResult(handler: (result: ScreenshotCaptureResult) => void): () => void;
       };
       diagnostics: {
         query(query: DiagnosticLogQueryV1): Promise<DiagnosticLogSnapshotV1>;

@@ -198,4 +198,27 @@ export type ScreenshotCaptureResult = z.infer<typeof ScreenshotCaptureResult>;
 
 /** renderer → main. Empty today; tolerant so a later `{ mode }` is additive. */
 export const ScreenshotCaptureRequest = z.object({}).passthrough();
+
+/** SNAP-3 — the shell-owned scheme a retained still is SHOWN through. The
+ * renderer's CSP admits no file access and EL2 keeps bytes off JSON-RPC, so a
+ * still reaches an `<img>` by a scheme main serves from its own retained
+ * list, by basename — the page never names a path. The spelling is wire
+ * truth: the CSP, the scheme registration, the handler and the URL a tile
+ * shows all read it here. */
+export const SCREENSHOT_STILL_SCHEME = "vibefield-still";
+/** The ONLY host the still scheme serves. */
+export const SCREENSHOT_STILL_HOST = "stills";
+export const SCREENSHOT_STILL_ORIGIN = `${SCREENSHOT_STILL_SCHEME}://${SCREENSHOT_STILL_HOST}`;
+
+/** The final component of a still path under either slash convention (the
+ * contract admits both) — the name the scheme matches a request against. */
+export function screenshotStillBasename(path: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return cut < 0 ? path : path.slice(cut + 1);
+}
+
+/** The URL a renderer shows a retained still through. PURE. */
+export function screenshotStillUrl(path: string): string {
+  return `${SCREENSHOT_STILL_ORIGIN}/${encodeURIComponent(screenshotStillBasename(path))}`;
+}
 export type ScreenshotCaptureRequest = z.infer<typeof ScreenshotCaptureRequest>;

@@ -67,6 +67,8 @@ const INVENTORY = [
       "Widget tile",
       "Put-back affordance",
       "Me menu",
+      "Edge notch",
+      "Clipboard tray",
     ],
   },
   {

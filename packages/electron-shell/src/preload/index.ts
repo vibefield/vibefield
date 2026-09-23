@@ -30,6 +30,7 @@ import {
   type PreloadReceivedSharedTexture,
 } from "./live-surfaces";
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
+import { PreloadScreenshotResultBridge } from "./screenshot-result";
 import { PreloadShellCommandBridge } from "./shell-commands";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
@@ -126,6 +127,24 @@ const shellCommands = new PreloadShellCommandBridge((issueCount) => {
     }),
   );
 });
+const screenshotResults = new PreloadScreenshotResultBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.screenshot_result_rejected",
+          msg: "Preload rejected a malformed screenshot result",
+          component: "preload.screenshot",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
 const godviewState = new PreloadGodviewStateBridge((issueCount) => {
   logging.submit(
     JSON.stringify({
@@ -187,6 +206,9 @@ sharedTexture.setSharedTextureReceiver(async (received, ...args) => {
 });
 ipcRenderer.on(IPC_CHANNELS.shellCommand, (_event, raw: unknown) => {
   shellCommands.accept(raw);
+});
+ipcRenderer.on(IPC_CHANNELS.screenshotResult, (_event, raw: unknown) => {
+  screenshotResults.accept(raw);
 });
 ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
   desktopState.accept(raw);
@@ -300,6 +322,11 @@ contextBridge.exposeInMainWorld("vibefield", {
           ScreenshotCaptureRequest.parse({}),
         ),
       ),
+    /** SNAP-3 — the View menu's capture, told to the page that holds the
+     * still; validated at this boundary, the latest retained until the
+     * renderer's one handler exists. */
+    onResult: (handler: (result: ScreenshotCaptureResult) => void): (() => void) =>
+      screenshotResults.subscribe(handler),
   },
   diagnostics: {
     query: (query: unknown) => diagnostics.query(query),

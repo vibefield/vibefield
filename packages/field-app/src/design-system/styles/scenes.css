@@ -132,6 +132,30 @@
   z-index: 7;
 }
 
+/* The edge trays' stage: the window's two edges brought together, the canvas
+   between them; the shipping tray view mounts with fixture stills. */
+.vf-ds-edge-stage {
+  position: relative;
+  height: 560px;
+  overflow: hidden;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 22px 22px;
+}
+
+.vf-ds-edge-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--vf-hairline);
+}
+
 .vf-ds-widget-tiles {
   display: grid;
   grid-template-columns: 1fr 2fr 1fr;

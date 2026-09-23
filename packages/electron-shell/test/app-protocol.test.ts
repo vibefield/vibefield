@@ -103,7 +103,7 @@ describe("registerShellSchemes", () => {
     // survives it. The count is the assertion; the rows are the inventory.
     expect(stub.registerCalls).toBe(1);
     expect(stub.privileged.map((entry) => entry.scheme).sort()).toEqual(
-      [APP_SCHEME, "vibefield-plugin"].sort(),
+      [APP_SCHEME, "vibefield-plugin", "vibefield-still"].sort(),
     );
     expect(registered).toBeDefined();
   });
@@ -113,7 +113,8 @@ describe("registerShellSchemes", () => {
     expect(rows.find((r) => r.scheme === APP_SCHEME)?.privileges).toEqual({
       ...APP_SCHEME_PRIVILEGES,
     });
-    expect(rows).toHaveLength(2);
+    // SNAP-3 added the still scheme as the third row (see still-protocol.test.ts).
+    expect(rows).toHaveLength(3);
   });
 
   it("declares standard and secure — §8.2's two required privileges", () => {

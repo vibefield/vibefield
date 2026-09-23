@@ -1,3 +1,4 @@
+import { screenshotStillUrl } from "@vibefield/contracts";
 import {
   type AppearanceOverrideSource,
   mountFieldApp,
@@ -97,6 +98,8 @@ export function mountProductHost(
       usersCreate: (params) => window.vibefield.usersCreate(params),
       usersSwitch: (params) => window.vibefield.usersSwitch(params),
       screenshotCapture: () => window.vibefield.screenshot.capture(),
+      onScreenshotResult: (handler) => window.vibefield.screenshot.onResult(handler),
+      screenshotStillUrl: (path) => screenshotStillUrl(path),
       onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),
       completeClose: (result) => window.vibefield.completeClose(result),
       onShellCommand: (handler) => window.vibefield.onShellCommand(handler),

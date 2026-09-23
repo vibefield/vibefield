@@ -742,4 +742,10 @@ export const IPC_CHANNELS = {
    * menu's Take Screenshot item asks main for the SAME capture, so neither
    * door holds an opinion the other cannot see. */
   screenshotCapture: "vibefield:screenshot:capture",
+  /** main → renderer event: ScreenshotCaptureResult — the answer to a capture
+   * MAIN ran on the page's behalf (the View menu's item, its accelerator). A
+   * renderer that asked through `screenshotCapture` already holds its own
+   * answer; this is how the other door stops being invisible to the page that
+   * will hold the still (SNAP-3, the clipboard tray). */
+  screenshotResult: "vibefield:screenshot:result",
 } as const;
