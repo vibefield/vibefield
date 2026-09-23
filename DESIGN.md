@@ -211,10 +211,10 @@ make it metal (`-inset` · `-shadow` · `-shadow-contact` · `-relief` · `-beve
 of 48 that read at 16px on both grounds — animals first, then plants and objects
 (`contracts/src/user-face.ts`); each user starts at their id's hash, so nobody is always
 the fox. Unique for up to 48 users, the deck's size: a 49th gets its starting face back,
-honest and never a blank. The Setup Assistant shows the deal pre-filled, and Change… (pane 2:
-Change face…) opens the face picker
-(the frame switch over a four-row deck, or any single emoji typed in); a face another user
-wears stays in the deck, greyed and named. Refused as faces, because they already mean
+honest and never a blank. Setup pane 2 shows the deal beside the name with the picker already
+open and whole inside the shell — the frame switch (small) under the face, a three-row deck and
+any single emoji typed in beside it; on the Account page, Change… opens the same picker over a
+four-row deck. A face another user wears stays in the deck, greyed and named. Refused as faces, because they already mean
 something here: flat colours and hearts · 🔥 (the swarm's burn ladder) · 📁 · the state marks
 · 🔗. A joined sequence is judged by its base — fire joined to fire is still fire, while 🐈 + ⬛
 is a black cat — and a typed face is refused in place, in main's words, before anything is
@@ -223,7 +223,8 @@ settings doc does not replicate yet, so today a face is this machine's, as the a
 
 **Where it appears, at what size.** The Me menu (§8): 40px in the corner, 26px in its rows ·
 the Settings head: 40px, other users 24px · Settings → Account: 48px, rows 28px · Setup
-Assistant pane 2: 112px, so a coin shows its legend · the tray: the emoji leads the item's
+Assistant pane 2: 96px, the smallest size whose coin shows its legend · the Setup users chooser:
+56px · the tray: the emoji leads the item's
 label for both frames — a native menu draws no frame, and at menu size a coin reads as its
 emoji · document presence: the face leads the cursor's label ("🦊 James"), and every cursor
 is `--vf-presence-ink` (`#68686B`). *Corrected 2026-09-22 (UA-7): this said the cursor is
@@ -397,7 +398,8 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   it is not a warning banner or a green reachability promise.
 - **Segmented control**: full-round track in `--vf-fill`, sliding solid thumb
   (white / `#2C2C2E`, hairline + `shadow-sm`), 300ms island ease; labels 13px medium,
-  active full-opacity, rest `/50`.
+  active full-opacity, rest `/50`. A **small** size (26px thumb, 11px labels) for a switch that
+  sits inside a composition rather than heading a section — the face's Sticker / Coin in Setup.
 - **Chips / category pills**: full-round, `--vf-fill` resting; active = **inverted solid**
   (black-on-light / white-on-dark) with `shadow-md`; `active:scale-95`.
 - **Status badge** (`StateBadge`, 03·A C-7): dot or pill in §2.5 color + label; always
@@ -469,6 +471,17 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   the menu with main's sentence at its top, in words, until it folds. Open, the menu stands one
   z-step above Godview's button, which it grows over. Under reduced motion the seed circle's
   hover fill does not show — the panel waits at full size, invisible.
+- **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
+  opens it, because that user already exists by then — the chooser is where you choose who to
+  enter instead. Eyebrow "Users", one line of voice, then every user on this machine as a tile,
+  four to a row: the 56px face (§2.8), the name, and one tertiary line only where there is
+  something to say — "Setting up" on the user this window is setting up, "Not set up yet" on
+  another unfinished one. A tile is a button: another user's switches the window to them (the
+  window reloads; a refusal is said on the pane, in main's words), this user's goes back to
+  pane 2, as does the primary action, "Continue setup". Tiles rest bare, take the §7 fill step
+  on hover and the select ring on focus, and lift their face like any face host; it is the
+  wizard's own glass, so nothing dims. There is no delete here: a user once created stays
+  (spec §11 — archival is a non-goal), and a half-made one says so in its tile.
 - **The loading veil** (B4): a full-window chrome frost (`white/60 + backdrop-blur-xl`,
   dark `#171717/60`) while a doc loads — centered thin bar (`3px × 220px`, colorless
   fill: loading is not a §2.5 state) over an 11px/50% lowercase stage label

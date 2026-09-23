@@ -29,32 +29,109 @@
   animation: vf-wizard-in 320ms var(--vf-ease-island) both;
 }
 
-/* Pane 2 (UA-D17): the dealt face beside the name — the sticker's one big
-   moment, and the whole of "who this field is" in one glance. */
+/* Pane 2 (UA-D17; DESIGN.md §2.8): the dealt face with its frame switch under
+   it, and beside them the name and the deck — "who this field is" in one
+   glance, the picker already open, the whole pane inside the shell. */
 .vf-wizard-identity {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: start;
   gap: 24px;
 }
 
 .vf-wizard-face {
   display: flex;
-  flex: none;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  width: 132px;
+  gap: 14px;
+  padding-top: 6px;
+}
+
+.vf-wizard-frames {
+  width: 100%;
+}
+
+.vf-wizard-identity-fields {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
 }
 
 @media (max-width: 520px) {
   .vf-wizard-identity {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .vf-wizard-face {
-    width: auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    padding-top: 0;
   }
+
+  .vf-wizard-frames {
+    width: 136px;
+  }
+}
+
+/* The users chooser (§6.2; DESIGN.md §8): every user as a tile, four to a row.
+   Bare at rest; the §7 fill step on hover, the select ring on focus. */
+.vf-wizard-users {
+  display: grid;
+  max-height: 232px;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 2px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.vf-wizard-user {
+  display: flex;
+  width: 100%;
+  min-height: 108px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 6px 10px;
+  border: 0;
+  border-radius: var(--vf-radius-control);
+  color: var(--vf-foreground);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.vf-wizard-user:hover:not(:disabled) {
+  background: var(--vf-hairline);
+}
+
+.vf-wizard-user:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 1px;
+}
+
+.vf-wizard-user:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.vf-wizard-user-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-wizard-user-detail {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .vf-wizard-stage-check {
@@ -76,6 +153,10 @@
 @media (prefers-reduced-motion: reduce) {
   .vf-wizard-pane {
     animation: vf-wizard-fade 160ms ease both;
+  }
+
+  .vf-wizard-user {
+    transition-duration: 60ms;
   }
 
   @keyframes vf-wizard-fade {

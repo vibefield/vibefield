@@ -204,6 +204,7 @@ describe("UI system ownership boundaries", () => {
       "OnboardingPosturePaneView",
       "OnboardingReadyPaneView",
       "OnboardingSettingUpPaneView",
+      "OnboardingUsersPaneView",
       "OnboardingWelcomeBackPaneView",
       "OnboardingWelcomePaneView",
       "WizardShellView",

@@ -85,16 +85,23 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   label,
+  size = "regular",
   className = "",
 }: {
   options: readonly T[];
   value: T;
   onChange: (value: T) => void;
   label: string;
+  /** `small` (DESIGN.md §8): a switch inside a composition, not heading one. */
+  size?: "regular" | "small";
   className?: string;
 }): ReactElement {
   return (
-    <fieldset className={`vf-ui-segmented ${className}`.trim()} aria-label={label}>
+    <fieldset
+      className={`vf-ui-segmented ${className}`.trim()}
+      aria-label={label}
+      data-size={size === "small" ? "small" : undefined}
+    >
       {options.map((option) => (
         <button
           key={option}
