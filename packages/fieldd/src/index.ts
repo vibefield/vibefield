@@ -5,7 +5,6 @@ export {
   type AgentDistributionServiceOptions,
   DistributionRecordStore,
   displayTail,
-  stripTerminalControls,
 } from "./agent-distribution";
 export {
   AGENT_ENV_PASSTHROUGH,
@@ -153,6 +152,7 @@ export {
   type ServiceProviderHandlers,
   ServiceRegistry,
 } from "./service-registry";
+export { renderTerminalText } from "./terminal-text";
 export {
   type TokenGrant,
   type TokenMintOptions,

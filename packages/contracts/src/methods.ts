@@ -1286,12 +1286,13 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
-  // The Agents settings section (2026-09-23). Two more rows on the same
+  // The Agents settings section (2026-09-22). Three more rows on the same
   // local-only `agents.manage`: the running and last-finished distribution
   // act per provider with the vendor command's own output (display text,
-  // never parsed — the receipt is the outcome), and Show in Finder for a path
-  // fieldd's own inventory holds (the renderer names an install, never a path).
-  // Neither mutates: the subscription is a read, a reveal changes nothing.
+  // never parsed — the receipt is the outcome), Show in Finder for a path
+  // fieldd's own inventory holds (the renderer names an install, never a
+  // path), and Stop for a running update. The first two are reads; a stop ends
+  // a process tree and is audited. Stopping twice is stopping once.
   defineMethod({
     surface: "product",
     method: "agents.operations.subscribe",
@@ -1303,6 +1304,13 @@ export const METHODS: MethodDef[] = [
   defineMethod({
     surface: "product",
     method: "agents.reveal",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.update.stop",
     scope: "agents.manage",
     idempotent: true,
     locality: "local",

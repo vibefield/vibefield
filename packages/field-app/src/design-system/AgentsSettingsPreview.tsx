@@ -33,6 +33,7 @@ export function AgentsSettingsPreview({
         machineScope
         now={FIXTURE_AGENTS_NOW}
         onUpdate={inert}
+        onStop={inert}
         onReveal={inert}
       />
     );

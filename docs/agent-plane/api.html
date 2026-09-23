@@ -1101,9 +1101,9 @@
           idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
         </div>
         <div class="stats" aria-label="Catalogue summary">
-          <div class="stat"><strong>25</strong><span>agent-plane doors</span></div>
+          <div class="stat"><strong>26</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
-          <div class="stat"><strong>11</strong><span>audited mutations</span></div>
+          <div class="stat"><strong>12</strong><span>audited mutations</span></div>
           <div class="stat"><strong>0</strong><span>that federate</span></div>
         </div>
         <div class="legend" aria-label="Status legend">
@@ -1415,7 +1415,7 @@
                 <tbody>
                   <tr><td><span class="route">agent-session</span></td><td><p><code>agent.session.spawn</code> · <code>agent.session.resume</code> · <code>agent.session.interrupt</code></p></td></tr>
                   <tr><td><span class="route">agent-persona</span></td><td><p><code>agents.profiles.create</code> · <code>.delete</code> · <code>.verify</code> · <code>.login</code></p></td></tr>
-                  <tr><td><span class="route">agent-provider</span></td><td><p><code>agents.update</code> · <code>agents.set_active</code></p></td></tr>
+                  <tr><td><span class="route">agent-provider</span></td><td><p><code>agents.update</code> · <code>agents.set_active</code> · <code>agents.update.stop</code></p></td></tr>
                   <tr><td><span class="route">index</span></td><td><p><code>index.enroll</code></p></td></tr>
                   <tr><td><span class="route">index-runtime</span></td><td><p><code>index.retire</code></p></td></tr>
                 </tbody>
@@ -1517,9 +1517,10 @@
                 <tbody>
                   <tr><td><span class="route">agents.installs</span></td><td><p><code>AgentsInstallsParams</code> → <code>AgentsInstallsResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p><code>runtime.inspectInstallations()</code>, and <code>runtime.planUpdate()</code> per install — the command Update would run, named before anyone presses it; <code>machineScope</code> says whether the writing doors can</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.releases</span></td><td><p><code>AgentsReleasesParams</code> → <code>AgentsReleasesResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p><code>runtime.checkReleases()</code>; a check that consulted anything is kept in <code>distribution.json</code>, and <code>{cached: true}</code> runs nothing and answers that, re-judged against today's installs. <code>available</code> is the one release each install's own updater would take; <code>checked</code> says when</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agents.update</span></td><td><p><code>AgentsUpdateParams</code> → <code>AgentsUpdateResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>no</p></td><td><p><code>runtime.updateInstallation({onOutput})</code> — the vendor's own updater, its output onto the operations feed; one per provider at a time (a second is <code>CONFLICT</code>)</p></td><td><p><code>agent-provider</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.update</span></td><td><p><code>AgentsUpdateParams</code> → <code>AgentsUpdateResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>no</p></td><td><p><code>runtime.updateInstallation({onOutput, signal})</code> — the vendor's own updater, unattended (no stdin, no terminal), its output onto the operations feed; one per provider at a time (a second is <code>CONFLICT</code>)</p></td><td><p><code>agent-provider</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.setActive</span></td><td><p><code>AgentsSetActiveParams</code> → <code>AgentsSetActiveResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>nothing — the one distribution choice VibeField owns, written to <code>distribution.json</code></p></td><td><p><code>agent-provider</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agents.operations.subscribe</span></td><td><p><code>—</code> → <code>AgentsOperationsResult</code>, whole snapshots at the tick</p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>the updater's <code>onOutput</code>: ANSI-stripped display text, the last <code>AGENT_OPERATION_OUTPUT_BYTES</code>, never parsed — the receipt is the outcome; memory only</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.operations.subscribe</span></td><td><p><code>—</code> → <code>AgentsOperationsResult</code>, whole snapshots at the tick</p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>the updater's <code>onOutput</code>, rendered the way a terminal would show it (redraws land, escapes drop out), the last <code>AGENT_OPERATION_OUTPUT_BYTES</code>, never parsed — the receipt is the outcome; memory only</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.update.stop</span></td><td><p><code>AgentsUpdateStopParams</code> → <code>AgentsUpdateStopResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>the update's <code>signal</code> — the updater's whole process group, SIGTERM then SIGKILL; the receipt is marked <code>stopped</code></p></td><td><p><code>agent-provider</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.reveal</span></td><td><p><code>AgentsRevealParams</code> → <code>AgentsRevealResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>nothing upstream — a path fieldd's own inventory holds, shown through the shell provider's internal <code>shell.revealPath</code>; no shell attached is <code>UNAVAILABLE {service: shell}</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.profiles.list</span></td><td><p><code>AgentsProfilesListParams</code> → <code>AgentsProfilesListResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.profiles()</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.profiles.create</span></td><td><p><code>AgentsProfilesCreateParams</code> → <code>AgentsProfilesCreateResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.createProfile()</code> + <code>profileObservationRoot()</code></p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
@@ -1786,7 +1787,7 @@
                   Settings → Agents, the shared half of the design record's R1 (pass 16): the shelf of
                   installed agents, Check for updates, Update with the vendor updater's own output, and each
                   agent's page — version, install, other installs, Show in Finder, the profiles it is signed
-                  in under. Built 2026-09-22 on the six <code>agents.*</code> distribution doors above.
+                  in under. Built 2026-09-22 on the seven <code>agents.*</code> distribution doors above; a running update can be stopped.
                 </p>
                 <span class="badge tone-built">Built</span>
               </div>
@@ -1920,7 +1921,7 @@
                   <tr><td><p>The account-usage projection shapes</p></td><td><span class="route">packages/contracts/src/agent-usage.ts</span></td></tr>
                   <tr><td><p>The ticket: route, endpoints, transport and attach grants</p></td><td><span class="route">packages/contracts/src/terminal-pipeline.ts</span></td></tr>
                   <tr><td><p>Scope check, locality enforcement, the device routing rule, subscription budget</p></td><td><span class="route">packages/fieldd/src/product-api.ts</span></td></tr>
-                  <tr><td><p>All 25 agent-plane registrations and their audit wrappers</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span> (lines ~1206–1542)</td></tr>
+                  <tr><td><p>All 26 agent-plane registrations and their audit wrappers</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span> (lines ~1207–1559)</td></tr>
                   <tr><td><p>The services behind them</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts · agent-index.ts · agent-usage.ts · agent-field.ts</span></td></tr>
                   <tr><td><p>The ticket mint and the agent spawn path</p></td><td><span class="route">packages/fieldd/src/terminal-service.ts</span></td></tr>
                   <tr><td><p>The view-port adapters over the doors</p></td><td><span class="route">packages/field-app/src/godview/monitor/doors.ts</span></td></tr>

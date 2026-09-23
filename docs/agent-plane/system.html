@@ -1101,7 +1101,7 @@
         </div>
         <div class="stats" aria-label="Page summary">
           <div class="stat"><strong>8</strong><span>fieldd agent services</span></div>
-          <div class="stat"><strong>25</strong><span>agent-plane doors</span></div>
+          <div class="stat"><strong>26</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>3</strong><span>enforced import walls</span></div>
           <div class="stat"><strong>12</strong><span>agent test suites</span></div>
         </div>
@@ -1400,8 +1400,8 @@
               <div class="card">
                 <h3>daemon.ts registers every door inline</h3>
                 <p>
-                  110 registrations in one file — 97 <code>api.register</code> and 13
-                  <code>api.registerSubscription</code> — of which 25 are the agent plane's. The
+                  111 registrations in one file — 98 <code>api.register</code> and 13
+                  <code>api.registerSubscription</code> — of which 26 are the agent plane's. The
                   handlers are thin, but the file is 3,967 lines and a door's contract, its audit
                   wrapper and its service call are read three screens apart.
                 </p>
@@ -2171,9 +2171,12 @@
                   <p>
                     An update is an attended act, one per provider at a time. Its transcript is opaque and lands
                     under <code>machine/agents/updates/</code> at 0600; a daemon with no machine scope refuses
-                    before a transcript could be opened. While it runs, its output rides
-                    <code>agents.operations.subscribe</code> — ANSI-stripped, the last 16 KiB, whole snapshots at
-                    the tick, display text that is never parsed; the receipt is the outcome.
+                    before a transcript could be opened. It runs unattended — no stdin, no controlling terminal —
+                    and <code>agents.update.stop</code> ends its whole process group. While it runs, its output rides
+                    <code>agents.operations.subscribe</code>, rendered the way a terminal would show it (a spinner
+                    settles, escapes drop out), the last 16 KiB, whole snapshots at the tick, display text that is
+                    never parsed; the receipt is the outcome, and an updater that exits cleanly without moving the
+                    version reads <code>unchanged</code>, never "already current".
                   </p>
                 </div>
               </div>
@@ -2224,7 +2227,7 @@
                 <thead><tr><th>Concern</th><th>File</th></tr></thead>
                 <tbody>
                   <tr><td><p>The runtime, the fold, personas, the re-attach</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts</span></td></tr>
-                  <tr><td><p>Distribution: the machine record, installs and their update plans, kept checks, updates and their output, reveal</p></td><td><span class="route">packages/fieldd/src/agent-distribution.ts</span></td></tr>
+                  <tr><td><p>Distribution: the machine record, installs and their update plans, kept checks, updates, their output and stop, reveal</p></td><td><span class="route">packages/fieldd/src/agent-distribution.ts</span> · <span class="route">terminal-text.ts</span> (the output as a terminal shows it)</td></tr>
                   <tr><td><p>puppeteer's <code>AgentHost</code> over the floor; the environment policy and the EL7 strip</p></td><td><span class="route">packages/fieldd/src/agent-host.ts</span></td></tr>
                   <tr><td><p>Signed session records; <code>mirrorOf</code>, <code>foldStatus</code>, the summarizers</p></td><td><span class="route">packages/fieldd/src/agent-sessions.ts</span></td></tr>
                   <tr><td><p>The enrollment record and the <code>index.*</code> service</p></td><td><span class="route">packages/fieldd/src/agent-index.ts</span></td></tr>
@@ -2234,7 +2237,7 @@
                   <tr><td><p>One rosettad generation per user root</p></td><td><span class="route">packages/fieldd/src/rosettad-supervisor.ts</span></td></tr>
                   <tr><td><p>The cells, the inventory, the ticket mint, the agent spawn path</p></td><td><span class="route">packages/fieldd/src/terminal-service.ts</span></td></tr>
                   <tr><td><p>Scope and locality enforcement on every door</p></td><td><span class="route">packages/fieldd/src/product-api.ts</span></td></tr>
-                  <tr><td><p>The door registrations (110, of which 25 are the agent plane's)</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span></td></tr>
+                  <tr><td><p>The door registrations (111, of which 26 are the agent plane's)</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span></td></tr>
                   <tr><td><p>The login-scope constant and its ceiling</p></td><td><span class="route">packages/fieldd/src/mesh-bus.ts</span></td></tr>
                   <tr><td><p>The terminal unit that supervises the cells</p></td><td><span class="route">packages/field-native/src/services/terminal.rs</span></td></tr>
                   <tr><td><p>The mirror, summary, field and index wire shapes</p></td><td><span class="route">packages/contracts/src/agent-session.ts · agent-field.ts · agent-index.ts · agent-usage.ts</span></td></tr>

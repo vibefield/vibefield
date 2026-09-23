@@ -13,9 +13,10 @@ import {
   type AgentShelfItem,
   autoUpdateWords,
   checkedWords,
-  commandWords,
+  elapsedWords,
   methodWords,
   personaWords,
+  planCommandWords,
   receiptWords,
   shelfCheckedLine,
   updaterWords,
@@ -295,7 +296,10 @@ export interface AgentPageViewProps {
   now?: Date | undefined;
   /** the file manager's name on this platform ("Show in Finder" on macOS) */
   revealLabel?: string | undefined;
+  /** a Stop was asked for and the updater has not ended yet */
+  stopping?: boolean | undefined;
   onUpdate: () => void;
+  onStop: () => void;
   onReveal: (executable: string) => void;
 }
 
@@ -306,7 +310,9 @@ export function AgentPageView({
   notice = null,
   now,
   revealLabel = "Show in Finder",
+  stopping = false,
   onUpdate,
+  onStop,
   onReveal,
 }: AgentPageViewProps): ReactElement {
   const { install } = item;
@@ -324,7 +330,13 @@ export function AgentPageView({
           <p className="vf-agents-hero-fact tabular-nums">{versionLine(install)}</p>
         </div>
         <div className="vf-agents-hero-action">
-          <HeroAction item={item} machineScope={machineScope} onUpdate={onUpdate} />
+          <HeroAction
+            item={item}
+            machineScope={machineScope}
+            stopping={stopping}
+            onUpdate={onUpdate}
+            onStop={onStop}
+          />
         </div>
       </header>
 
@@ -335,7 +347,7 @@ export function AgentPageView({
       )}
 
       {item.operation !== undefined && (
-        <UpdateOutput operation={item.operation} command={plan?.command} now={now} />
+        <UpdateOutput item={item} operation={item.operation} now={now} />
       )}
 
       <SettingsSection
@@ -386,8 +398,8 @@ export function AgentPageView({
           description={
             plan === undefined ? (
               "No update command is known for this install"
-            ) : plan.command !== undefined ? (
-              <span className="vf-agents-path">{commandWords(plan.command)}</span>
+            ) : planCommandWords(plan) !== undefined ? (
+              <span className="vf-agents-path">{planCommandWords(plan)}</span>
             ) : (
               (plan.instructions ?? "The vendor's own instructions")
             )
@@ -478,12 +490,26 @@ function latestWords(
 function HeroAction({
   item,
   machineScope,
+  stopping,
   onUpdate,
+  onStop,
 }: {
   item: AgentShelfItem;
   machineScope: boolean;
+  stopping: boolean;
   onUpdate: () => void;
+  onStop: () => void;
 }): ReactElement | null {
+  // While the updater runs, the page's one act is Stop — an update can run
+  // long (a large fetch, a service drained). Before its first frame and while
+  // its version is read back, there is nothing to stop yet.
+  if (item.operation?.state === "running") {
+    return (
+      <UiButton onClick={onStop} disabled={stopping} aria-label={`Stop updating ${item.label}`}>
+        {stopping ? "Stopping…" : "Stop"}
+      </UiButton>
+    );
+  }
   if (item.updating) return <UiButton disabled>Updating…</UiButton>;
   if (canUpdate(item, machineScope) && item.available !== undefined) {
     return (
@@ -504,18 +530,20 @@ function HeroAction({
 }
 
 /** The vendor updater's own output — display text, never parsed (RFC 006) —
- * open while it runs, folded under its outcome once it has finished. */
+ * open while it runs with how long it has been running, folded under its
+ * outcome once it has finished. */
 function UpdateOutput({
+  item,
   operation,
-  command,
   now,
 }: {
+  item: AgentShelfItem;
   operation: AgentOperation;
-  command: readonly string[] | undefined;
   now?: Date | undefined;
 }): ReactElement {
   const running = operation.state === "running";
-  const heading = command === undefined ? "Update" : commandWords(command);
+  const plan = item.install.update;
+  const heading = (plan === undefined ? undefined : planCommandWords(plan)) ?? "Update";
   const text =
     operation.output.length > 0 ? operation.output : running ? "Waiting for output…" : "No output.";
   const pre = (
@@ -523,14 +551,15 @@ function UpdateOutput({
       {text}
     </pre>
   );
-  const receipt = operation.receipt === undefined ? undefined : receiptWords(operation.receipt);
+  const receipt =
+    operation.receipt === undefined ? undefined : receiptWords(operation.receipt, item);
   return (
     <section className="vf-agents-output" aria-label="Update output">
       <header className="vf-agents-output-head">
         <span className="vf-agents-output-command">{heading}</span>
         <span className="vf-agents-output-state" role="status">
           {running
-            ? "Running…"
+            ? `Running · ${elapsedWords(operation.startedAt, now ?? new Date())}`
             : operation.finishedAt !== undefined
               ? `Finished ${checkedWords(operation.finishedAt, now)}`
               : "Finished"}

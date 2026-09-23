@@ -664,12 +664,16 @@ export type AgentsProfilesVerifyResult = z.infer<typeof AgentsProfilesVerifyResu
 /** What an update of one install would run (puppeteer `UpdatePlan`,
  * projected): the recipe's kind and the vendor's own command as argv — the
  * exact command the Update button runs, named before anyone presses it — or,
- * for a manual recipe, the vendor's instructions in their own words. */
+ * for an install script, the script's URL (fetched over https and run with
+ * bash, as its vendor documents), or, for a manual recipe, the vendor's
+ * instructions in their own words. */
 export const AgentUpdatePlan = z
   .object({
-    /** puppeteer's recipe kind (`native-self-update` · `npm-global` · `brew` · `manual`), open */
+    /** puppeteer's recipe kind (`native-self-update` · `npm-global` · `brew` ·
+     * `installer-script` · `manual`), open */
     kind: z.string().min(1),
     command: z.array(z.string()).optional(),
+    url: z.string().optional(),
     instructions: z.string().optional(),
   })
   .passthrough();
@@ -785,15 +789,23 @@ export const AgentsUpdateParams = z.object({ provider: AgentProviderId }).passth
 export type AgentsUpdateParams = z.infer<typeof AgentsUpdateParams>;
 
 /** puppeteer `UpdateReceipt`, mirrored: the vendor's own updater ran (or
- * could not); the transcript stays under `machine/agents/updates/`. */
+ * could not); the transcript stays under `machine/agents/updates/`.
+ * `unchanged` = the updater exited 0 and the version did not move — current,
+ * or an updater that declined; a reader that knows of a newer release says
+ * which. `already-current` is kept for receipts written before `unchanged`. */
 export const AgentUpdateReceipt = z
   .object({
     provider: AgentProviderId,
-    status: z.enum(["updated", "already-current", "failed", "unsupported"]),
+    status: z.enum(["updated", "unchanged", "already-current", "failed", "unsupported"]),
     startedAt: z.string(),
     finishedAt: z.string(),
     exitCode: z.number().int().optional(),
     message: z.string().optional(),
+    /** the install's version before and after, as re-inspected — never the updater's claim */
+    fromVersion: z.string().optional(),
+    toVersion: z.string().optional(),
+    /** the person stopped it (`agents.update.stop`) */
+    stopped: z.boolean().optional(),
   })
   .passthrough();
 export type AgentUpdateReceipt = z.infer<typeof AgentUpdateReceipt>;
@@ -848,6 +860,16 @@ export const AgentsOperationsResult = z
   .object({ operations: z.array(AgentOperation) })
   .passthrough();
 export type AgentsOperationsResult = z.infer<typeof AgentsOperationsResult>;
+
+/** `agents.update.stop` — stop the update running for a provider: its whole
+ * process tree, SIGTERM then SIGKILL (an update can run long — a large fetch,
+ * a service drained). The update's own call then answers its receipt, marked
+ * `stopped`. `stopped: false` = nothing was running. */
+export const AgentsUpdateStopParams = z.object({ provider: AgentProviderId }).passthrough();
+export type AgentsUpdateStopParams = z.infer<typeof AgentsUpdateStopParams>;
+
+export const AgentsUpdateStopResult = z.object({ stopped: z.boolean() }).passthrough();
+export type AgentsUpdateStopResult = z.infer<typeof AgentsUpdateStopResult>;
 
 /** `agents.reveal` — show one of a provider's installs in the OS file manager.
  * Names the install the way `agents.installs` answered it; fieldd reveals only

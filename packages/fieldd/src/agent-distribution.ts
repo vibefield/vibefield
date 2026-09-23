@@ -31,6 +31,7 @@ import {
   type AgentsSetActiveParams,
   type AgentsSetActiveResult,
   type AgentsUpdateResult,
+  type AgentsUpdateStopResult,
   type AgentUpdatePlan,
   type AgentUpdateReceipt,
   LAYOUT,
@@ -38,6 +39,7 @@ import {
 import { durableRenameSync, type Logger } from "@vibefield/logging";
 import { withUsersLock } from "@vibefield/users";
 import { RpcCallError } from "./native-link";
+import { renderTerminalText } from "./terminal-text";
 
 // AGENT DISTRIBUTION (AR-2; AR-D15/D16/D22; the Agents settings section,
 // 2026-09-22): the installs puppeteer classifies, the release facts it learns,
@@ -154,9 +156,11 @@ interface OperationEntry {
   provider: string;
   kind: string;
   state: AgentOperation["state"];
+  /** ends the updater's whole process tree (`agents.update.stop`) */
+  controller: AbortController;
   startedAt: string;
   finishedAt?: string;
-  /** ANSI-stripped output, capped at OPERATION_RAW_BYTES from the end */
+  /** the updater's own bytes, escapes and all (rendered at projection), the last OPERATION_RAW_BYTES */
   raw: string;
   dropped: boolean;
   receipt?: AgentUpdateReceipt;
@@ -264,6 +268,7 @@ export class AgentDistributionService {
       provider,
       kind: "update",
       state: "running",
+      controller: new AbortController(),
       startedAt: this.opts.now().toISOString(),
       raw: "",
       dropped: false,
@@ -274,6 +279,7 @@ export class AgentDistributionService {
     try {
       receipt = await this.opts.runtime.updateInstallation({
         providerId: provider,
+        signal: operation.controller.signal,
         onOutput: (chunk) => {
           appendOutput(operation, chunk);
           this.publish();
@@ -283,7 +289,7 @@ export class AgentDistributionService {
       this.finish(operation);
       throw error;
     }
-    const projected = projectReceipt(receipt);
+    const projected = projectReceipt(receipt, { stopped: operation.controller.signal.aborted });
     try {
       await store.mutate((record) => {
         record.providers[provider] = { ...record.providers[provider], lastUpdate: receipt };
@@ -298,6 +304,15 @@ export class AgentDistributionService {
       ...(receipt.exitCode !== undefined ? { exitCode: receipt.exitCode } : {}),
     });
     return { receipt: projected };
+  }
+
+  /** Stop the update running for a provider — its whole process tree. Its
+   * own `update` call then settles with the receipt, marked `stopped`. */
+  stop(provider: string): AgentsUpdateStopResult {
+    const operation = this.operations.get(provider);
+    if (operation?.state !== "running") return { stopped: false };
+    operation.controller.abort();
+    return { stopped: true };
   }
 
   /** Record which of the provider's installs new spawns use (from the next
@@ -420,6 +435,9 @@ export class AgentDistributionService {
     }
     if ("status" in outcome) return undefined;
     const { recipe } = outcome;
+    // An install script is named by its URL: the argv around it is the
+    // runner's plumbing (`bash -c 'curl … | bash'`), not what a person reads.
+    if (recipe.kind === "installer-script") return { kind: recipe.kind, url: recipe.url };
     return {
       kind: recipe.kind,
       ...(outcome.argv !== undefined ? { command: outcome.argv } : {}),
@@ -487,9 +505,13 @@ export function projectInstalls(
   }));
 }
 
-/** The contract's receipt: the outcome, never the transcript path or the
- * before/after inspections (those stay in the machine record). */
-export function projectReceipt(receipt: UpdateReceipt): AgentUpdateReceipt {
+/** The contract's receipt: the outcome and the two versions re-inspection
+ * read, never the transcript path or the whole inspections (those stay in the
+ * machine record). `stopped` is this service's own fact: it aborted the run. */
+export function projectReceipt(
+  receipt: UpdateReceipt,
+  facts: { stopped?: boolean } = {},
+): AgentUpdateReceipt {
   return {
     provider: receipt.provider,
     status: receipt.status,
@@ -497,6 +519,9 @@ export function projectReceipt(receipt: UpdateReceipt): AgentUpdateReceipt {
     finishedAt: receipt.finishedAt,
     ...(receipt.exitCode !== undefined ? { exitCode: receipt.exitCode } : {}),
     ...(receipt.message !== undefined ? { message: receipt.message } : {}),
+    ...(receipt.before?.version !== undefined ? { fromVersion: receipt.before.version } : {}),
+    ...(receipt.after?.version !== undefined ? { toVersion: receipt.after.version } : {}),
+    ...(facts.stopped === true ? { stopped: true } : {}),
   };
 }
 
@@ -529,43 +554,27 @@ function projectOperation(operation: OperationEntry): AgentOperation {
 
 // ── the output as a person reads it ──
 //
-// A vendor updater writes for a terminal: colour escapes, cursor moves, and
-// progress bars redrawn in place with carriage returns. The panel is plain
-// text, so the escapes go and each line keeps what a terminal would have left
-// on it. This is DISPLAY — nothing reads meaning from it (RFC 006).
-
-// ESC-introduced sequences: CSI (colour, cursor), OSC (titles, links; BEL- or
-// ST-terminated), and the two-byte escapes; then any other control byte
-// except the three a text panel keeps.
-const ESCAPES =
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping terminal control bytes is the point
-  /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\u001b[@-Z\\-_]/g;
-// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping terminal control bytes is the point
-const CONTROLS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
-
-export function stripTerminalControls(chunk: string): string {
-  return chunk.replace(ESCAPES, "").replace(CONTROLS, "");
-}
+// The raw bytes are kept (bounded) and RENDERED at projection — the way a
+// terminal would have left them on screen (terminal-text.ts) — because a
+// redraw is only a redraw with its cursor moves intact: stripping escapes as
+// they arrive turns a spinner into a wall of frames. This is DISPLAY; nothing
+// reads meaning from it (RFC 006).
 
 function appendOutput(operation: OperationEntry, chunk: string): void {
-  operation.raw += stripTerminalControls(chunk);
+  operation.raw += chunk;
   if (operation.raw.length > OPERATION_RAW_BYTES) {
-    operation.raw = operation.raw.slice(operation.raw.length - OPERATION_RAW_BYTES);
+    const kept = operation.raw.slice(operation.raw.length - OPERATION_RAW_BYTES);
+    // start on a whole line: never inside an escape, never mid-redraw
+    const firstBreak = kept.indexOf("\n");
+    operation.raw = firstBreak === -1 ? kept : kept.slice(firstBreak + 1);
     operation.dropped = true;
   }
 }
 
-/** Each line as a terminal would have left it after its carriage returns (a
- * redraw keeps the last non-empty draw), then the last
- * `AGENT_OPERATION_OUTPUT_BYTES` of it. */
+/** The output as a terminal would show it, then the last
+ * `AGENT_OPERATION_OUTPUT_BYTES` of it, starting on a whole line. */
 export function displayTail(raw: string, dropped = false): { output: string; truncated: boolean } {
-  const lines = raw.replace(/\r\n/g, "\n").split("\n");
-  const drawn = lines.map((line) => {
-    if (!line.includes("\r")) return line;
-    const draws = line.split("\r").filter((draw) => draw.length > 0);
-    return draws.at(-1) ?? "";
-  });
-  let output = drawn.join("\n");
+  let output = renderTerminalText(raw);
   let truncated = dropped;
   if (output.length > AGENT_OPERATION_OUTPUT_BYTES) {
     output = output.slice(output.length - AGENT_OPERATION_OUTPUT_BYTES);

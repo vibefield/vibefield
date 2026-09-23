@@ -22,7 +22,10 @@ import { AgentsSection } from "../src/panels/agents/AgentsSection";
 import {
   agentShelf,
   commandWords,
+  elapsedWords,
+  planCommandWords,
   receiptNotice,
+  receiptWords,
   shelfCheckedLine,
 } from "../src/panels/agents/agents-model";
 import { SettingsDialog, type SettingsSubpage } from "../src/panels/SettingsDialog";
@@ -369,6 +372,57 @@ describe("agents model — the doors' answers, joined", () => {
       "Claude Code updated.",
     );
   });
+
+  it("weighs an updater that moved nothing against what the page knows, and never claims currency without a check", () => {
+    const unchanged = {
+      provider: "kimi",
+      status: "unchanged" as const,
+      startedAt: CHECKED,
+      finishedAt: LATER,
+      exitCode: 0,
+      fromVersion: "0.37.1",
+      toVersion: "0.37.1",
+    };
+    // Kimi 0.37.1's `upgrade` on a native install: exit 0, nothing moved, 2.0.2 on offer
+    expect(
+      receiptWords(unchanged, { available: { version: "2.0.2" }, checkedAt: CHECKED }),
+    ).toEqual({
+      tone: "attention",
+      text: "The updater finished without updating — 2.0.2 is still available. Its output says why.",
+    });
+    expect(receiptWords(unchanged, { checkedAt: CHECKED })).toEqual({
+      tone: "neutral",
+      text: "Already up to date.",
+    });
+    expect(receiptWords(unchanged).text).toBe("The updater finished; 0.37.1 is still installed.");
+    expect(receiptNotice("Kimi", unchanged, { available: { version: "2.0.2" } })).toMatchObject({
+      tone: "attention",
+    });
+    expect(receiptWords({ ...unchanged, status: "updated", toVersion: "2.0.2" }).text).toBe(
+      "Updated to 2.0.2.",
+    );
+    expect(receiptWords({ ...unchanged, status: "failed", stopped: true }).text).toBe(
+      "Stopped before it finished.",
+    );
+    expect(
+      receiptWords({
+        ...unchanged,
+        status: "failed",
+        message: "update command timed out after 45 min",
+      }),
+    ).toEqual({ tone: "error", text: "The update didn't finish: timed out after 45 min." });
+  });
+
+  it("names an install script the way its vendor does, and says how long an update has run", () => {
+    expect(
+      planCommandWords({ kind: "installer-script", url: "https://example.com/install.sh" }),
+    ).toBe("curl -fsSL https://example.com/install.sh | bash");
+    expect(planCommandWords({ kind: "manual", instructions: "by hand" })).toBeUndefined();
+    const start = "2026-09-22T09:00:00.000Z";
+    expect(elapsedWords(start, new Date("2026-09-22T09:00:05.000Z"))).toBe("0:05");
+    expect(elapsedWords(start, new Date("2026-09-22T09:04:12.000Z"))).toBe("4:12");
+    expect(elapsedWords(start, new Date("2026-09-22T10:02:05.000Z"))).toBe("1:02:05");
+  });
 });
 
 // ── the controller ──
@@ -542,13 +596,20 @@ describe("AgentsSection — an agent's page", () => {
     expect(document.activeElement?.classList.contains("vf-agents-row-open")).toBe(true);
   });
 
-  it("shows the vendor updater's own output while it runs", async () => {
-    const f = fake(doors(), [operation()]);
+  it("shows the vendor updater's own output while it runs, how long it has run, and a Stop", async () => {
+    const f = fake(doors({ "agents.update.stop": () => ({ stopped: true }) }), [operation()]);
     await mountSection(f);
     await click(button("Claude Code"));
     expect(text()).toContain("Downloading 2.3.0");
-    expect(text()).toContain("Running…");
-    expect(button("Updating…").disabled).toBe(true);
+    expect(text()).toMatch(/Running · \d+:\d{2}/u);
+    await click(button("Stop updating Claude Code"));
+    expect(f.calls("agents.update.stop")).toEqual([{ provider: "claude" }]);
+    // the stop holds until the updater has ended
+    expect(button("Stop updating Claude Code").textContent).toBe("Stopping…");
+    await f.frame([
+      { ...FINISHED, receipt: { ...FINISHED.receipt!, status: "failed", stopped: true } },
+    ]);
+    expect(text()).toContain("Stopped before it finished.");
   });
 
   it("returns to the shelf when the Agents nav item is pressed again", async () => {

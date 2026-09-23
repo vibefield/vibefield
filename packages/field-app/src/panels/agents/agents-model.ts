@@ -178,11 +178,32 @@ const UPDATER_WORDS: Record<string, string> = {
   "native-self-update": "Its own updater",
   "npm-global": "npm",
   brew: "Homebrew",
+  "installer-script": "Its install script",
   manual: "By hand",
 };
 
 export function updaterWords(kind: string): string {
   return UPDATER_WORDS[kind] ?? kind;
+}
+
+/** What an update runs, the way its vendor tells a person to run it: the
+ * command, or an install script piped to bash (the runner adds only pipefail
+ * and an https-only fetch around it). Undefined for a manual recipe. */
+export function planCommandWords(plan: NonNullable<AgentInstall["update"]>): string | undefined {
+  if (plan.command !== undefined) return commandWords(plan.command);
+  if (plan.url !== undefined) return `curl -fsSL ${plan.url} | bash`;
+  return undefined;
+}
+
+/** "0:42", "4:12", "1:02:05" — how long an update has been running. */
+export function elapsedWords(startedAt: string, now: Date): string {
+  const started = new Date(startedAt).getTime();
+  if (Number.isNaN(started)) return "";
+  const seconds = Math.max(0, Math.floor((now.getTime() - started) / 1000));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = String(seconds % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
 
 /** A command as a person would type it: arguments with spaces or quotes are quoted. */
@@ -222,25 +243,70 @@ export function shelfCheckedLine(items: readonly AgentShelfItem[], now?: Date): 
   return parts.join(" · ");
 }
 
-/** A receipt in words — the outcome, from its status; the provider's own
- * message only where it explains a failure. */
-export function receiptWords(receipt: NonNullable<AgentOperation["receipt"]>): {
+type Receipt = NonNullable<AgentOperation["receipt"]>;
+type Tone = "neutral" | "attention" | "error";
+
+/** What the page knows beside a receipt: the release still on offer for the
+ * install as it is now, and whether any check ever said so. */
+export interface ReceiptContext {
+  available?: { version: string } | undefined;
+  checkedAt?: string | undefined;
+}
+
+/** The runtime's failure reason as a clause ("update command timed out after
+ * 45 min" → "timed out after 45 min"): puppeteer's own words, not the vendor's. */
+function reason(receipt: Receipt): string | undefined {
+  return receipt.message?.replace(/^update command /u, "").replace(/\.$/u, "");
+}
+
+/** A receipt in words — the outcome from its status and the versions
+ * re-inspection read, weighed against what the page knows: an updater that
+ * exited cleanly without moving the version is "up to date" only when no
+ * newer release is known for it. */
+export function receiptWords(
+  receipt: Receipt,
+  context: ReceiptContext = {},
+): {
   text: string;
-  tone: "neutral" | "error";
+  tone: Tone;
 } {
-  if (receipt.status === "updated") return { text: "Updated.", tone: "neutral" };
-  if (receipt.status === "already-current") return { text: "Already up to date.", tone: "neutral" };
+  if (receipt.stopped === true) {
+    return {
+      text:
+        receipt.status === "updated" && receipt.toVersion !== undefined
+          ? `Stopped — after it had installed ${receipt.toVersion}.`
+          : "Stopped before it finished.",
+      tone: "neutral",
+    };
+  }
+  if (receipt.status === "updated") {
+    return {
+      text: receipt.toVersion === undefined ? "Updated." : `Updated to ${receipt.toVersion}.`,
+      tone: "neutral",
+    };
+  }
+  if (receipt.status === "unchanged" || receipt.status === "already-current") {
+    if (context.available !== undefined) {
+      return {
+        text: `The updater finished without updating — ${context.available.version} is still available. Its output says why.`,
+        tone: "attention",
+      };
+    }
+    if (context.checkedAt !== undefined) return { text: "Already up to date.", tone: "neutral" };
+    return {
+      text: `The updater finished; ${receipt.toVersion ?? receipt.fromVersion ?? "the same version"} is still installed.`,
+      tone: "neutral",
+    };
+  }
   if (receipt.status === "unsupported") {
     return {
       text: receipt.message ?? "This install cannot be updated from here.",
       tone: "neutral",
     };
   }
+  const why = reason(receipt);
   return {
-    text:
-      receipt.message === undefined
-        ? "The update didn't finish."
-        : `The update didn't finish: ${receipt.message}.`,
+    text: why === undefined ? "The update didn't finish." : `The update didn't finish: ${why}.`,
     tone: "error",
   };
 }
@@ -249,11 +315,33 @@ export function receiptWords(receipt: NonNullable<AgentOperation["receipt"]>): {
  * row's own change says a success too, so only a failure is loud. */
 export function receiptNotice(
   label: string,
-  receipt: NonNullable<AgentOperation["receipt"]>,
-): { text: string; tone: "neutral" | "error" } {
-  if (receipt.status === "updated") return { text: `${label} updated.`, tone: "neutral" };
-  if (receipt.status === "already-current") {
-    return { text: `${label} was already up to date.`, tone: "neutral" };
+  receipt: Receipt,
+  context: ReceiptContext = {},
+): { text: string; tone: Tone } {
+  if (receipt.stopped === true) return { text: `${label}'s update was stopped.`, tone: "neutral" };
+  if (receipt.status === "updated") {
+    return {
+      text:
+        receipt.toVersion === undefined
+          ? `${label} updated.`
+          : `${label} updated to ${receipt.toVersion}.`,
+      tone: "neutral",
+    };
+  }
+  if (receipt.status === "unchanged" || receipt.status === "already-current") {
+    if (context.available !== undefined) {
+      return {
+        text: `${label}'s updater finished without updating — ${context.available.version} is still available. Its page has the output.`,
+        tone: "attention",
+      };
+    }
+    return {
+      text:
+        context.checkedAt !== undefined
+          ? `${label} was already up to date.`
+          : `${label}'s updater finished; nothing changed.`,
+      tone: "neutral",
+    };
   }
   if (receipt.status === "unsupported") {
     return {
@@ -261,9 +349,9 @@ export function receiptNotice(
       tone: "neutral",
     };
   }
-  const reason = receipt.message === undefined ? "" : `: ${receipt.message.replace(/\.$/u, "")}`;
+  const why = reason(receipt);
   return {
-    text: `${label}'s update didn't finish${reason}. Its page has the updater's output.`,
+    text: `${label}'s update didn't finish${why === undefined ? "" : `: ${why}`}. Its page has the updater's output.`,
     tone: "error",
   };
 }

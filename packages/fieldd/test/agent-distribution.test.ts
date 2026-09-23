@@ -21,9 +21,9 @@ import {
   DistributionRecordStore,
   displayTail,
   type RevealPath,
-  stripTerminalControls,
 } from "../src/agent-distribution";
 import { RpcCallError } from "../src/native-link";
+import { renderTerminalText } from "../src/terminal-text";
 
 // The distribution doors' service against a scripted runtime: what the
 // Agents settings section needs from it — a kept release check re-judged
@@ -157,19 +157,46 @@ const readRecord = (root: string): AgentDistributionRecord =>
   JSON.parse(readFileSync(join(root, ...LAYOUT.MACHINE_DISTRIBUTION_FILE), "utf8"));
 
 describe("the output a person reads while an update runs", () => {
-  it("strips colour, cursor and title escapes and stray control bytes, keeping text and line breaks", () => {
-    expect(stripTerminalControls("\u001b[32mok\u001b[0m\u001b]0;title\u0007 x\u0008y\n")).toBe(
-      "ok xy\n",
-    );
+  it("drops colour, titles and stray control bytes; a backspace overwrites as a terminal's does", () => {
+    expect(renderTerminalText("\u001b[32mok\u001b[0m\u001b]0;title\u0007 x\u0008y\n")).toBe("ok y");
   });
 
   it("keeps what a terminal would have left on a line after its carriage returns", () => {
     expect(displayTail("Downloading 10%\rDownloading 50%\rDownloading 100%\nDone\n").output).toBe(
-      "Downloading 100%\nDone\n",
+      "Downloading 100%\nDone",
     );
     // a trailing return is a redraw that never came: the last draw stands
     expect(displayTail("50%\r100%\r").output).toBe("100%");
-    expect(displayTail("a\r\nb\r\n").output).toBe("a\nb\n");
+    expect(displayTail("a\r\nb\r\n").output).toBe("a\nb");
+  });
+
+  it("settles a spinner that redraws by cursor moves and erases (OpenCode 1.18's upgrade, byte for byte)", () => {
+    const frames = [
+      "\u001b[35m◒\u001b[39m  Upgrading",
+      "\u001b[999D\u001b[J\u001b[35m◐\u001b[39m  Upgrading.",
+      "\u001b[999D\u001b[J\u001b[35m◓\u001b[39m  Upgrading..",
+      "\u001b[999D\u001b[J\u001b[32m◇\u001b[39m  Upgrade complete\n",
+    ];
+    const raw = `\u001b[90m┌\u001b[39m  Upgrade\n${frames.join("")}\u001b[?25h\u001b[90m└\u001b[39m  Done\n`;
+    expect(renderTerminalText(raw)).toBe("┌  Upgrade\n◇  Upgrade complete\n└  Done");
+  });
+
+  it("clears an erased line, and rewrites lines a cursor went back up to", () => {
+    expect(renderTerminalText("progress 10%\r\u001b[2Kdone\n")).toBe("done");
+    expect(renderTerminalText("pull a\npull b\n\u001b[2A\u001b[2Ka ok\n\u001b[2Kb ok\n")).toBe(
+      "a ok\nb ok",
+    );
+    // a sequence cut at the end of what arrived so far draws nothing yet
+    expect(renderTerminalText("half\u001b[3")).toBe("half");
+  });
+
+  it("bounds cursor motion, never text: a hostile move cannot pad a line out, a long line stays whole", () => {
+    const started = Date.now();
+    const moved = renderTerminalText("a\u001b[999999999Cb\u001b[99999999Bc");
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(moved).toBe(`a${" ".repeat(1023)}bc`);
+    const long = "x".repeat(5_000);
+    expect(renderTerminalText(`${long}\n`)).toBe(long);
   });
 
   it("keeps the last lines within the bound, starting on a whole line, and says it dropped some", () => {
@@ -179,7 +206,7 @@ describe("the output a person reads while an update runs", () => {
     expect(truncated).toBe(true);
     expect(output.length).toBeLessThanOrEqual(AGENT_OPERATION_OUTPUT_BYTES);
     expect(output.startsWith("x".repeat(99))).toBe(true);
-    expect(displayTail("short\n")).toEqual({ output: "short\n", truncated: false });
+    expect(displayTail("short\n")).toEqual({ output: "short", truncated: false });
   });
 });
 
@@ -222,6 +249,33 @@ describe("agents.installs — what Update will run, named before anyone presses 
       instructions: "reinstall from the vendor site",
     });
     expect(installs[2]).not.toHaveProperty("update");
+  });
+
+  it("names an install script by its URL, never by the bash plumbing around it", async () => {
+    const { distribution } = service({
+      installs: [install({ provider: "claude" })],
+      plan: (executable) => ({
+        provider: "claude",
+        executable,
+        recipe: {
+          kind: "installer-script",
+          url: "https://example.com/install.sh",
+          env: { EXAMPLE_NO_MODIFY_PATH: "1" },
+        },
+        argv: [
+          "/bin/bash",
+          "-c",
+          "curl … | bash",
+          "puppeteer-update",
+          "https://example.com/install.sh",
+        ],
+      }),
+    });
+    const { installs } = await distribution.installs("claude");
+    expect(installs[0]?.update).toEqual({
+      kind: "installer-script",
+      url: "https://example.com/install.sh",
+    });
   });
 });
 
@@ -316,12 +370,17 @@ describe("agents.update and its operation", () => {
         provider: "claude",
         kind: "update",
         state: "running",
-        output: "Current version: 2.1.266\nInstalling update... 100%\n",
+        output: "Current version: 2.1.266\nInstalling update... 100%",
         truncated: false,
       }),
     );
 
-    finish(receipt());
+    finish(
+      receipt({
+        before: install({ version: "2.1.266" }),
+        after: install({ version: "2.1.270" }),
+      }),
+    );
     const result = await updating;
     expect(result.receipt).toEqual({
       provider: "claude",
@@ -330,6 +389,8 @@ describe("agents.update and its operation", () => {
       finishedAt: "2026-09-23T09:42:30.000Z",
       exitCode: 0,
       message: "updated from 2.1.266 to 2.1.270",
+      fromVersion: "2.1.266",
+      toVersion: "2.1.270",
     });
     expect(result.receipt).not.toHaveProperty("transcriptPath");
     await vi.waitFor(() =>
@@ -340,6 +401,36 @@ describe("agents.update and its operation", () => {
       }),
     );
     expect(readRecord(root).providers["claude"]?.lastUpdate).toMatchObject({ status: "updated" });
+  });
+
+  it("stops a running update through its signal, and marks the receipt stopped; with nothing running, says so", async () => {
+    let signal: AbortSignal | undefined;
+    const { distribution } = service({
+      installs: [install()],
+      update: (given) => {
+        signal = given.signal;
+        return new Promise<UpdateReceipt>((resolve) => {
+          given.signal?.addEventListener("abort", () =>
+            resolve(
+              receipt({ status: "failed", message: "update command stopped before it finished" }),
+            ),
+          );
+        });
+      },
+    });
+    expect(distribution.stop("claude")).toEqual({ stopped: false });
+    const updating = distribution.update("claude");
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    expect(signal?.aborted).toBe(false);
+    expect(distribution.stop("claude")).toEqual({ stopped: true });
+    const { receipt: stopped } = await updating;
+    expect(stopped).toMatchObject({ status: "failed", stopped: true });
+    expect(distribution.operationsSnapshot().operations[0]).toMatchObject({
+      state: "finished",
+      receipt: { stopped: true },
+    });
+    // stopping what already finished stops nothing
+    expect(distribution.stop("claude")).toEqual({ stopped: false });
   });
 
   it("runs one update per provider at a time: a second is a retryable CONFLICT, never two updaters", async () => {

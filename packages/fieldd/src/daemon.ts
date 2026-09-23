@@ -20,6 +20,7 @@ import {
   AgentsRevealParams,
   AgentsSetActiveParams,
   AgentsUpdateParams,
+  AgentsUpdateStopParams,
   AppPreferenceSetParams,
   ArtifactPublishParams,
   ArtifactPublishV2Params,
@@ -1390,6 +1391,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { provider, executable }", false);
       return await agents.distribution.reveal(parsed.data);
+    });
+    // Stop ends the updater's whole process tree — a mutation, so audited;
+    // the update's own call then answers its receipt, marked stopped.
+    api.register("agents.update.stop", async (ctx, params) => {
+      const parsed = AgentsUpdateStopParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.update.stop",
+          target: { kind: "agent-provider", id: parsed.data.provider },
+        },
+        async () => agents.distribution.stop(parsed.data.provider),
+        (result) => ({ attrs: { stopped: result.stopped } }),
+      );
     });
     // AR-3 — managed sessions (agent-runtime.ts, the fold). A spawn and a
     // resume are audited like a terminal birth (attempt-before-effect; the

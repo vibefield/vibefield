@@ -58,6 +58,7 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         locality: "local",
       },
       { method: "agents.reveal", scope: "agents.manage", idempotent: true, locality: "local" },
+      { method: "agents.update.stop", scope: "agents.manage", idempotent: true, locality: "local" },
       { method: "agents.profiles.list", scope: "agent.spawn", idempotent: true, locality: "local" },
       {
         method: "agents.profiles.create",

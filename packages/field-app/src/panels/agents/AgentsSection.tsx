@@ -7,6 +7,7 @@ import {
   AgentsReleasesResult,
   AgentsRevealResult,
   AgentsUpdateResult,
+  AgentsUpdateStopResult,
   type ShellPlatform,
 } from "@vibefield/contracts";
 import { FielddRpcError } from "@vibefield/fieldd-client";
@@ -24,7 +25,8 @@ import { agentShelf, receiptNotice } from "./agents-model";
 // {cached}` (the check the machine record kept — this page NEVER checks on its
 // own, AR-D22) and `agents.operations.subscribe` (an update's own output as it
 // runs). Acts: Check for updates (`agents.releases {network}`), Update
-// (`agents.update`), Show in Finder (`agents.reveal`). No optimistic state (the P5 law, as PluginUpdates keeps
+// (`agents.update`) and Stop (`agents.update.stop`), Show in Finder
+// (`agents.reveal`). No optimistic state (the P5 law, as PluginUpdates keeps
 // it): after an act the section reads again, and an update ends when its
 // version has been read back.
 
@@ -71,6 +73,8 @@ export function AgentsSection({
   const [checking, setChecking] = useState(false);
   const [requested, setRequested] = useState<ReadonlySet<string>>(() => new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const [notice, setNotice] = useState<AgentsNotice | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -97,7 +101,8 @@ export function AgentsSection({
     openRef.current = open;
   }, [open]);
 
-  const load = useCallback(async (): Promise<void> => {
+  /** Read the doors again; answers what was applied (null: superseded or refused). */
+  const load = useCallback(async (): Promise<Answers | null> => {
     const turn = ++loads.current;
     const check = checks.current;
     try {
@@ -108,18 +113,24 @@ export function AgentsSection({
           .request("agents.releases", { cached: true })
           .then((r) => AgentsReleasesResult.parse(r)),
       ]);
-      if (!mounted.current || turn !== loads.current) return;
+      if (!mounted.current || turn !== loads.current) return null;
       answered.current = true;
-      setAnswers((current) => ({
+      const applied: Answers = {
         providers,
         installs: inventory.installs,
         // an older daemon does not say; its update door answers for itself
         machineScope: inventory.machineScope ?? true,
-        releases: check === checks.current || current === null ? releases : current.releases,
-      }));
+        releases,
+      };
+      setAnswers((current) =>
+        check === checks.current || current === null
+          ? applied
+          : { ...applied, releases: current.releases },
+      );
       setUnavailable(null);
+      return applied;
     } catch (cause) {
-      if (!mounted.current || turn !== loads.current) return;
+      if (!mounted.current || turn !== loads.current) return null;
       // A read that fails after one answered keeps what is shown and says why.
       if (answered.current) {
         setNotice({
@@ -129,6 +140,7 @@ export function AgentsSection({
       } else {
         setUnavailable(unavailableWords(cause));
       }
+      return null;
     }
   }, [client]);
 
@@ -164,6 +176,22 @@ export function AgentsSection({
     () => (answers === null ? [] : agentShelf({ ...answers, operations, requested })),
     [answers, operations, requested],
   );
+
+  // A running update says how long it has run: the clock ticks only then.
+  const running = operations.some((operation) => operation.state === "running");
+  useEffect(() => {
+    if (!running) return;
+    setNow(new Date());
+    const tick = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(tick);
+  }, [running]);
+
+  // A stop holds until its updater has ended.
+  useEffect(() => {
+    if (stopping === null) return;
+    const operation = operations.find((candidate) => candidate.provider === stopping);
+    if (operation?.state !== "running") setStopping(null);
+  }, [stopping, operations]);
   const openItem = open === null ? undefined : shelf.find((item) => item.provider === open);
   const labelOf = (provider: string): string =>
     shelf.find((item) => item.provider === provider)?.label ?? provider;
@@ -266,16 +294,37 @@ export function AgentsSection({
         await client.request("agents.update", { provider }),
       );
       // The update ends when its version has been read back.
-      await load();
-      // On the shelf the outcome is said once in words; on the agent's page
-      // the output card carries the receipt itself.
-      if (mounted.current && openRef.current === null) setNotice(receiptNotice(label, receipt));
+      const read = await load();
+      // On the shelf the outcome is said once in words, weighed against the
+      // release still on offer as re-read; the agent's page carries the
+      // receipt in its output card.
+      if (mounted.current && openRef.current === null) {
+        const reread = read === null ? [] : agentShelf({ ...read, operations: [] });
+        const item = reread.find((candidate) => candidate.provider === provider);
+        setNotice(receiptNotice(label, receipt, item ?? {}));
+      }
     } catch (cause) {
       if (mounted.current) {
         setNotice({ tone: "error", text: refusalSentence(`Couldn't update ${label}`, cause) });
       }
     } finally {
       markRequested(provider, false);
+    }
+  };
+
+  const stop = async (provider: string): Promise<void> => {
+    setStopping(provider);
+    try {
+      const { stopped } = AgentsUpdateStopResult.parse(
+        await client.request("agents.update.stop", { provider }),
+      );
+      // nothing was running: the feed already says it ended
+      if (!stopped && mounted.current) setStopping(null);
+    } catch (cause) {
+      if (mounted.current) {
+        setStopping(null);
+        setNotice({ tone: "error", text: refusalSentence("Couldn't stop the update", cause) });
+      }
     }
   };
 
@@ -302,8 +351,11 @@ export function AgentsSection({
           machineScope={machineScope}
           busy={busy}
           notice={notice}
+          now={now}
           revealLabel={revealLabel}
+          stopping={stopping === openItem.provider}
           onUpdate={() => void update(openItem.provider)}
+          onStop={() => void stop(openItem.provider)}
           onReveal={(executable) => void reveal(openItem.provider, executable)}
         />
       ) : (

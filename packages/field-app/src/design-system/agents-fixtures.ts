@@ -203,6 +203,8 @@ function operation(state: AgentOperation["state"]): AgentOperation {
       startedAt: at(9, 42, 5),
       finishedAt: at(9, 42, 31),
       exitCode: 0,
+      fromVersion: "2.2.0",
+      toVersion: "2.3.0",
     },
   };
 }

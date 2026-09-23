@@ -556,7 +556,8 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
     const { receipt } = (await win.call("agents.update", {
       provider: "claude",
     })) as AgentsUpdateResult;
-    expect(receipt).toMatchObject({ provider: "claude", status: "already-current", exitCode: 0 });
+    // the scripted updater exits 0 without moving the version: unchanged, never a claim of currency
+    expect(receipt).toMatchObject({ provider: "claude", status: "unchanged", exitCode: 0 });
     expect(receipt).not.toHaveProperty("transcriptPath");
     const updates = join(root, ...LAYOUT.MACHINE_UPDATES_DIR);
     const transcripts = readdirSync(updates);
@@ -567,7 +568,7 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
     );
     expect(readDistribution(root).providers.claude?.lastUpdate).toMatchObject({
       provider: "claude",
-      status: "already-current",
+      status: "unchanged",
     });
     expect(auditText(dataDir)).toContain('"agents.update"');
   }, 20_000);
@@ -674,7 +675,7 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
     const { receipt } = (await win.call("agents.update", {
       provider: "claude",
     })) as AgentsUpdateResult;
-    expect(receipt.status).toBe("already-current");
+    expect(receipt.status).toBe("unchanged");
     const last = (): AgentsOperationsResult | undefined =>
       win.notifications
         .filter((n) => n.params.subId === sub.subId)
@@ -687,7 +688,7 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
       state: "finished",
       output: expect.stringContaining("fake claude: nothing to update"),
       truncated: false,
-      receipt: { provider: "claude", status: "already-current" },
+      receipt: { provider: "claude", status: "unchanged" },
     });
     // a window without the management scope cannot watch it
     const denied = await window(daemon, ["agent.spawn"], "d8b");
@@ -714,6 +715,20 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
       service: "shell",
       state: "no-shell-provider",
     });
+  }, 20_000);
+
+  it("agents.update.stop: says when nothing is running, is audited, and needs agents.manage", async () => {
+    const { dataDir, daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agents.manage"], "d10");
+    expect(await win.call("agents.update.stop", { provider: "claude" })).toEqual({
+      stopped: false,
+    });
+    expect(auditText(dataDir)).toContain('"agents.update.stop"');
+    const denied = await window(daemon, ["agent.spawn"], "d10b");
+    expect((await denied.callErr("agents.update.stop", { provider: "claude" })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
   }, 20_000);
 });
 
