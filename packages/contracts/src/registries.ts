@@ -624,11 +624,20 @@ export const LAYOUT = {
   INDEX_ENROLLMENT_FILE: ["index", "enrollment.json"],
   /** AR-1 (AR-D18/D20) — this user's personas: puppeteer's profile registry
    * (`ProfileRegistrySnapshot`, through fieldd's injected store) and the
-   * managed roots beneath it (`roots/<provider>/<uuid>/`, 0700 — the agent's
-   * own data folder, bound at spawn through the provider's root variable). A
-   * root under here is managed ⇒ enrolled by construction, never discovered. */
+   * managed roots beneath it (0700 — the agent's own data folder, bound at
+   * spawn through the provider's root variable). A root under here is
+   * managed ⇒ enrolled by construction, never discovered.
+   * AR-S2 (AR-D23/D24) — each Agent Profile (puppeteer's profile set) owns ONE
+   * folder, `profiles/<set>/`, named once from the profile's first name, and
+   * every agent signed in there has its root inside it,
+   * `profiles/<set>/<provider>-<8 hex>/`, allocated exclusively and never
+   * reused: a profile's whole data — each agent's config, history, plugins and
+   * sign-in — is one folder under its user. `roots/` is where AR-1..S1 put
+   * `<provider>/<uuid>/` roots; nothing is allocated there any more, and a
+   * root found there is adopted in place (a root never moves). */
   AGENTS_DIR: ["agents"],
   AGENT_PROFILES_FILE: ["agents", "profiles.json"],
+  AGENT_PROFILE_SETS_DIR: ["agents", "profiles"],
   AGENT_ROOTS_DIR: ["agents", "roots"],
   /** AR-3 — this user's managed-session records: one `<runtimeRunId>.json`
    * (0600) per session fieldd spawned, holding puppeteer's opaque continuation

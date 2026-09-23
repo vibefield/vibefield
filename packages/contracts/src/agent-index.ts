@@ -47,6 +47,14 @@ export const AgentProfileId = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9:._-]*$/);
 export type AgentProfileId = z.infer<typeof AgentProfileId>;
 
+/** puppeteer's profile SET id (`ProfileSetIdSchema`, mirrored) — what the
+ * Settings sidebar calls an Agent Profile. It is also the name of the set's
+ * folder under `agents/profiles/`, so the grammar is a directory name's:
+ * lowercase letters and digits joined by single hyphens, at most 48. The
+ * synthetic native set ("This Mac") is `native`. */
+export const AgentProfileSetId = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/);
+export type AgentProfileSetId = z.infer<typeof AgentProfileSetId>;
+
 // ── the enrollment record (`users/<fuid>/index/enrollment.json`, AR-D17) ──
 //
 // VibeField's truth for "what this user consented to" and "which persona maps
@@ -582,7 +590,13 @@ export type IndexSearchResult = z.infer<typeof IndexSearchResult>;
 /** A persona (puppeteer `AgentProfile`, mirrored WITHOUT `dataRoot` — the
  * path is fieldd's; a client names a persona by id). `identity` is what the
  * provider's own status surface said at the last verify; it never carries a
- * token. `runtimeId` is the index join once the persona's root is enrolled. */
+ * token. `runtimeId` is the index join once the persona's root is enrolled.
+ * AR-S2: a persona is one agent's sign-in inside an Agent Profile (`set`);
+ * `folder` is where its data lives, home-abbreviated, for a person to READ —
+ * display only: Show in Finder names the persona, never the path, and no door
+ * takes a path back. `signingIn` is present while its login pane is open
+ * (the pane's floor session and when it opened), so every window can say so
+ * and the one that opened it can show it. */
 export const AgentPersona = z
   .object({
     profileId: AgentProfileId,
@@ -602,6 +616,9 @@ export const AgentPersona = z
       .passthrough()
       .optional(),
     runtimeId: z.string().optional(),
+    set: AgentProfileSetId.optional(),
+    folder: z.string().optional(),
+    signingIn: z.object({ sessionId: z.string(), since: z.string() }).passthrough().optional(),
   })
   .passthrough();
 export type AgentPersona = z.infer<typeof AgentPersona>;
@@ -609,8 +626,12 @@ export type AgentPersona = z.infer<typeof AgentPersona>;
 export const AgentsProfilesListResult = z.object({ personas: z.array(AgentPersona) }).passthrough();
 export type AgentsProfilesListResult = z.infer<typeof AgentsProfilesListResult>;
 
+/** `agents.profiles.create` — sign an agent into an Agent Profile: its root
+ * is allocated inside the profile's folder (AR-D24) and registered, empty
+ * until the login pane runs. A profile holds one sign-in per agent; the
+ * native set ("This Mac") is the agents' own folders and takes none. */
 export const AgentsProfilesCreateParams = z
-  .object({ provider: AgentProviderId, label: z.string().min(1).max(64) })
+  .object({ set: AgentProfileSetId, provider: AgentProviderId })
   .passthrough();
 export type AgentsProfilesCreateParams = z.infer<typeof AgentsProfilesCreateParams>;
 
@@ -648,9 +669,17 @@ export type AgentProfileFailure = z.infer<typeof AgentProfileFailure>;
 export const AgentsProfilesCreateResult = z.object({ persona: AgentPersona }).passthrough();
 export type AgentsProfilesCreateResult = z.infer<typeof AgentsProfilesCreateResult>;
 
-/** `agents.profiles.delete` — AR-D19: the runtime is retired (rows kept), the
- * profile unregistered, the managed root deleted with its credentials. */
-export const AgentsProfilesDeleteResult = z.object({ deleted: z.boolean() }).passthrough();
+/** `agents.profiles.delete` — SIGN OUT (AR-D25). A managed sign-in leaves its
+ * profile at once, and is FINISHED when no session runs under it any more —
+ * now, or when the last one ends: the vendor's own sign-out where the
+ * credential lives outside the root, the index runtime retired (rows kept,
+ * AR-D19), the root deleted, the persona unregistered. `waiting` counts the
+ * sessions it is waiting on. A native default ("This Mac") is signed out by
+ * the vendor's own command in the agent's own folder, which is never deleted;
+ * a provider without one is refused (PRECONDITION_FAILED). */
+export const AgentsProfilesDeleteResult = z
+  .object({ deleted: z.boolean(), waiting: z.number().int().nonnegative().optional() })
+  .passthrough();
 export type AgentsProfilesDeleteResult = z.infer<typeof AgentsProfilesDeleteResult>;
 
 /** `agents.profiles.verify` — the persona with the identity the provider's own
@@ -660,6 +689,115 @@ export const AgentsProfilesVerifyResult = z
   .object({ persona: AgentPersona, failure: AgentProfileFailure.optional() })
   .passthrough();
 export type AgentsProfilesVerifyResult = z.infer<typeof AgentsProfilesVerifyResult>;
+
+// ── agents.profileSets.* (AR-S2 — Agent Profiles; AR-D23…D25) ──
+//
+// An Agent Profile is puppeteer's profile SET: a named place ("Work") holding
+// at most one sign-in per agent, one folder under this user
+// (`agents/profiles/<set>/`), and a mark. "This Mac" is the synthetic native
+// set — each agent's own folder (`~/.claude`, …), shared by every VibeField
+// user of this Mac because it is the OS user's (UA-D6). One set is the
+// default: a spawn that names no persona runs under the default set's sign-in
+// for its agent, else the agent's own folder. VibeField adds no grouping of
+// its own; these doors mirror the registry.
+
+/** One Agent Profile. `glyph` is an open token the views draw (puppeteer
+ * `ProfileGlyph`); the native set draws the laptop whatever it says.
+ * `folder` is display only (home-abbreviated), like a persona's. `personas`
+ * are its sign-ins — for the native set, every agent's own folder whose
+ * identity has been read, signed in or not. */
+export const AgentProfileSet = z
+  .object({
+    id: AgentProfileSetId,
+    kind: z.enum(["native", "managed"]),
+    label: z.string().min(1).max(64),
+    glyph: z.string().optional(),
+    default: z.boolean(),
+    createdAt: z.string(),
+    folder: z.string().optional(),
+    personas: z.array(AgentPersona),
+  })
+  .passthrough();
+export type AgentProfileSet = z.infer<typeof AgentProfileSet>;
+
+/** `agents.profileSets.list` and every `agents.profileSets.subscribe` frame
+ * (full snapshots at the tick). `signIn` names the providers whose adapter
+ * can run a sign-in here AND read back who signed in — the "Add agent…"
+ * menu's candidates before installs are joined. `signOut` names those whose
+ * adapter signs a folder out with the vendor's own command: a sign-in in a
+ * profile can always be signed out (its folder goes), one in This Mac only
+ * where that command exists. `reading` is true while fieldd is reading the
+ * agents' own folders' identities (This Mac's rows fill in as each lands).
+ * `refresh: true` reads them again. */
+export const AgentsProfileSetsListParams = z
+  .object({ refresh: z.boolean().optional() })
+  .passthrough();
+export type AgentsProfileSetsListParams = z.infer<typeof AgentsProfileSetsListParams>;
+
+export const AgentsProfileSetsListResult = z
+  .object({
+    sets: z.array(AgentProfileSet),
+    signIn: z.array(AgentProviderId),
+    signOut: z.array(AgentProviderId),
+    reading: z.boolean(),
+  })
+  .passthrough();
+export type AgentsProfileSetsListResult = z.infer<typeof AgentsProfileSetsListResult>;
+
+/** A glyph token (puppeteer `ProfileGlyphSchema`, mirrored). */
+export const AgentProfileGlyph = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
+
+/** `agents.profileSets.create` — a new, empty Agent Profile and its folder;
+ * `default: true` also makes it the one new sessions use. */
+export const AgentsProfileSetsCreateParams = z
+  .object({
+    label: z.string().trim().min(1).max(64),
+    glyph: AgentProfileGlyph.optional(),
+    default: z.boolean().optional(),
+  })
+  .passthrough();
+export type AgentsProfileSetsCreateParams = z.infer<typeof AgentsProfileSetsCreateParams>;
+
+export const AgentsProfileSetsSetResult = z.object({ set: AgentProfileSet }).passthrough();
+export type AgentsProfileSetsSetResult = z.infer<typeof AgentsProfileSetsSetResult>;
+
+/** `agents.profileSets.update` — rename (the folder keeps its name: a path
+ * is what a sign-in is keyed on), change the glyph, or make this the default
+ * (`default: true`; there is always exactly one default, so it only ever moves
+ * TO a profile). The native set takes only `default`. */
+export const AgentsProfileSetsUpdateParams = z
+  .object({
+    set: AgentProfileSetId,
+    label: z.string().trim().min(1).max(64).optional(),
+    glyph: AgentProfileGlyph.optional(),
+    default: z.literal(true).optional(),
+  })
+  .passthrough();
+export type AgentsProfileSetsUpdateParams = z.infer<typeof AgentsProfileSetsUpdateParams>;
+
+/** `agents.profileSets.delete` — the record's P7 act: the sessions running
+ * under it stop first (`stopped` counts them), every sign-in in it is signed
+ * out, the profile is unregistered and its folder deleted. Refused for the
+ * native set and for the default (PRECONDITION_FAILED: make another the
+ * default first). */
+export const AgentsProfileSetsDeleteParams = z.object({ set: AgentProfileSetId }).passthrough();
+export type AgentsProfileSetsDeleteParams = z.infer<typeof AgentsProfileSetsDeleteParams>;
+
+export const AgentsProfileSetsDeleteResult = z
+  .object({ deleted: z.boolean(), stopped: z.number().int().nonnegative() })
+  .passthrough();
+export type AgentsProfileSetsDeleteResult = z.infer<typeof AgentsProfileSetsDeleteResult>;
+
+/** `agents.profileSets.reveal` — Show in Finder for a profile's folder, or for
+ * one agent's folder in it (`provider`; in the native set, the agent's own
+ * folder). Named by ids: fieldd resolves the path it holds. */
+export const AgentsProfileSetsRevealParams = z
+  .object({ set: AgentProfileSetId, provider: AgentProviderId.optional() })
+  .passthrough();
+export type AgentsProfileSetsRevealParams = z.infer<typeof AgentsProfileSetsRevealParams>;
+
+export const AgentsProfileSetsRevealResult = z.object({ revealed: z.boolean() }).passthrough();
+export type AgentsProfileSetsRevealResult = z.infer<typeof AgentsProfileSetsRevealResult>;
 
 /** What an update of one install would run (puppeteer `UpdatePlan`,
  * projected): the recipe's kind and the vendor's own command as argv — the

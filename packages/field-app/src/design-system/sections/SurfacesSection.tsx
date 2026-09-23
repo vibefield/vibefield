@@ -7,6 +7,7 @@ import { type ReactElement, useState } from "react";
 import type { MagnetGridGlyph } from "../../field/canvas-appearance";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { SidePanelFrame } from "../../hud/SidePanelStage";
+import { ProfileMark } from "../../panels/agents/ProfilesView";
 import { MagnetGridSection } from "../../panels/MagnetGridSection";
 import {
   SettingsDialog,
@@ -19,6 +20,12 @@ import { FIXTURE_ME, FIXTURE_OTHERS_WAITING } from "../account-fixtures";
 import { AGENTS_FIXTURE_STATES, type AgentsFixtureState } from "../agents-fixtures";
 import { CommandPalettePreview } from "../CommandPalettePreview";
 import { Section, Specimen } from "../catalog-ui";
+import { ProfilesSettingsPreview, profilesPreviewHead } from "../ProfilesSettingsPreview";
+import {
+  FIXTURE_PROFILE_SETS,
+  PROFILES_FIXTURE_STATES,
+  type ProfilesFixtureState,
+} from "../profiles-fixtures";
 
 export function SurfacesSection({
   magnetGridGlyph,
@@ -113,6 +120,10 @@ export function SurfacesSection({
         <AgentsSettingsSpecimen />
       </Specimen>
 
+      <Specimen title="Agent profiles" source="panels/agents/ProfilesSection.tsx" bleed>
+        <ProfilesSettingsSpecimen />
+      </Specimen>
+
       <div className="vf-ds-grid vf-ds-grid-2">
         <Specimen title="Command palette" source="hud/CommandPalette.tsx" darkStage>
           <div className="vf-ds-palette-stage">
@@ -182,6 +193,53 @@ function AgentsSettingsSpecimen(): ReactElement {
         subpage={subpage}
       >
         <AgentsSettingsPreview key={state} state={state} onSubpage={setSubpage} />
+      </SettingsDialog>
+    </div>
+  );
+}
+
+/** Every production state of Agent Profiles in the shipping dialog, the
+ * sidebar's "Agent Profiles" group listing the fixture's places. */
+function ProfilesSettingsSpecimen(): ReactElement {
+  const [state, setState] = useState<ProfilesFixtureState>("profile");
+  const [subpage, setSubpage] = useState<SettingsSubpage | null>(null);
+  const { head, current } = profilesPreviewHead(state);
+  return (
+    <div className="vf-ds-settings-stage vf-ds-agents-stage" data-profiles-settings-catalog="">
+      <div className="vf-ds-production-statebar">
+        <span>Production state</span>
+        <UiSegmentedControl
+          options={PROFILES_FIXTURE_STATES}
+          value={state}
+          onChange={setState}
+          label="Agent profiles state"
+        />
+      </div>
+      <SettingsDialog
+        className="vf-ds-settings-dialog"
+        activePage="profiles"
+        onSelectPage={() => undefined}
+        onClose={() => undefined}
+        onUndo={() => undefined}
+        onRedo={() => undefined}
+        historyBusy={false}
+        undoAvailable={false}
+        redoAvailable={false}
+        account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
+        profiles={{
+          items: FIXTURE_PROFILE_SETS.map((set) => ({
+            id: set.id,
+            label: set.label,
+            mark: <ProfileMark set={set} size={18} />,
+          })),
+          current,
+          onSelect: () => undefined,
+          onNew: () => undefined,
+        }}
+        head={head}
+        subpage={subpage}
+      >
+        <ProfilesSettingsPreview key={state} state={state} onSubpage={setSubpage} />
       </SettingsDialog>
     </div>
   );

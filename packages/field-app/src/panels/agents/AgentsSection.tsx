@@ -4,6 +4,7 @@ import {
   AgentProvidersResult,
   AgentsInstallsResult,
   AgentsOperationsResult,
+  type AgentsProfileSetsListResult,
   AgentsReleasesResult,
   AgentsRevealResult,
   AgentsUpdateResult,
@@ -17,6 +18,7 @@ import { refusalSentence } from "../../account/use-account";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { AgentPageView, type AgentsNotice, AgentsShelfView, agentSubpage } from "./AgentsView";
 import { agentShelf, receiptNotice } from "./agents-model";
+import { emptyProfilesContext, signedInUnder } from "./profiles-model";
 
 // The Agents settings section's controller (the design record's R1, pass 16).
 //
@@ -60,12 +62,20 @@ export function AgentsSection({
   platform = "other",
   rootRequest = 0,
   onSubpage,
+  openRequest = null,
+  profiles = null,
+  onOpenSignIn,
 }: {
   platform?: ShellPlatform;
   /** Bumps when the Agents item in the nav is pressed: back to the shelf. */
   rootRequest?: number;
   /** An agent's page names itself in the dialog's header, with the way back. */
   onSubpage: (subpage: SettingsSubpage | null) => void;
+  /** AR-S2 — open this agent's page (the app row on a sign-in's page asks) */
+  openRequest?: { provider: string; n: number } | null;
+  /** AR-S2 — the profiles feed, for where each agent is signed in */
+  profiles?: AgentsProfileSetsListResult | null;
+  onOpenSignIn?: (set: string, provider: string) => void;
 }): ReactElement {
   const client = useFielddClient();
   const feed = useSubscription<unknown>("agents.operations.subscribe", {});
@@ -241,6 +251,26 @@ export function AgentsSection({
     if (open !== null && answers !== null && openItem === undefined) setOpen(null);
   }, [open, answers, openItem]);
 
+  // A sign-in's page asked for its app: open that agent once it is on the shelf.
+  const handledOpenRequest = useRef(0);
+  useEffect(() => {
+    if (openRequest === null || openRequest.n === handledOpenRequest.current) return;
+    if (!shelf.some((item) => item.provider === openRequest.provider)) return;
+    handledOpenRequest.current = openRequest.n;
+    focusAfter.current = { page: true };
+    setOpen(openRequest.provider);
+  }, [openRequest, shelf]);
+
+  const signedIn = useMemo(() => {
+    if (openItem === undefined || profiles === null) return [];
+    const context = {
+      ...emptyProfilesContext(profiles),
+      providers: answers?.providers ?? [],
+      installs: answers?.installs ?? [],
+    };
+    return signedInUnder(profiles.sets, openItem.provider, context);
+  }, [openItem, profiles, answers]);
+
   const openLabel = openItem?.label;
   useEffect(() => {
     onSubpage(openLabel === undefined ? null : agentSubpage(openLabel, back));
@@ -381,9 +411,11 @@ export function AgentsSection({
           now={now}
           revealLabel={revealLabel}
           stopping={stopping === openItem.provider}
+          signedIn={signedIn}
           onUpdate={() => void update(openItem.provider)}
           onStop={() => void stop(openItem.provider)}
           onReveal={(executable) => void reveal(openItem.provider, executable)}
+          onOpenSignIn={onOpenSignIn}
         />
       ) : (
         <AgentsShelfView

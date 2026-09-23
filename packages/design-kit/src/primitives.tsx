@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactElement, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactElement, ReactNode, Ref } from "react";
 import "./primitives.css";
 
 export const uiLabelClass = "vf-ui-label";
@@ -14,6 +14,10 @@ export function UiButton({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: UiButtonVariant;
+  /** React 19 hands `ref` to a function component as a prop; it reaches the
+   * button with the rest, so a caller can move focus to it (a menu's trigger
+   * on close, a confirm's act when it arms). */
+  ref?: Ref<HTMLButtonElement> | undefined;
 }): ReactElement {
   return (
     <button

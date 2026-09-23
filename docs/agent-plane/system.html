@@ -1100,8 +1100,8 @@
           <b class="contract">contracts</b> doors → <b class="product">deck · phone</b>
         </div>
         <div class="stats" aria-label="Page summary">
-          <div class="stat"><strong>8</strong><span>fieldd agent services</span></div>
-          <div class="stat"><strong>26</strong><span>agent-plane doors</span></div>
+          <div class="stat"><strong>10</strong><span>fieldd agent services</span></div>
+          <div class="stat"><strong>32</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>3</strong><span>enforced import walls</span></div>
           <div class="stat"><strong>12</strong><span>agent test suites</span></div>
         </div>
@@ -1302,7 +1302,7 @@
           <section id="services">
             <h2>fieldd's agent services</h2>
             <p class="section-note">
-              Eight modules under <code>packages/fieldd/src/</code> carry the agent plane. They form a
+              Ten modules under <code>packages/fieldd/src/</code> carry the agent plane. They form a
               shallow graph: the runtime service is the hub, the index service is its consent
               dependency, and everything else hangs off the fold it publishes.
             </p>
@@ -1319,11 +1319,25 @@
                 </thead>
                 <tbody>
                   <tr>
-                    <td><span class="route">agent-runtime.ts</span><br /><span class="native-type">2,667 lines</span></td>
-                    <td><p>Builds puppeteer's runtime, owns the fold, the personas, distribution, the re-attach and resume-when-idle.</p></td>
-                    <td><p><code>agent-host</code>, <code>agent-sessions</code>, <code>agent-index</code>, <code>rosettad-supervisor</code>, <code>terminal-service</code></p></td>
+                    <td><span class="route">agent-runtime.ts</span><br /><span class="native-type">2,329 lines</span></td>
+                    <td><p>Builds puppeteer's runtime, owns the fold, the re-attach and resume-when-idle, and the sessions under a sign-in — counted, stopped or forgotten for the profile service.</p></td>
+                    <td><p><code>agent-host</code>, <code>agent-sessions</code>, <code>agent-index</code>, <code>agent-distribution</code>, <code>agent-profiles</code>, <code>rosettad-supervisor</code>, <code>terminal-service</code></p></td>
                     <td><p><code>createAgentRuntime</code> called directly, not through <code>createBuiltinAgentRuntime</code> (which forwards only two options and does not thread <code>executables</code> to the providers). fieldd passes <code>host</code>, <code>defaultCwd</code>, <code>providers</code>, <code>creationRegistry</code>, <code>profiles {store, rootsDirectory}</code>, <code>distribution {transcriptsDirectory, fetch?, searchPath?}</code>, <code>monitorCoalesceMs</code> and <code>onError</code>. Also <code>createBuiltinProviders({executables})</code> and <code>createFileCreationRequestRegistry</code>.</p></td>
                     <td><p><code>agent-runtime.test.ts</code>, <code>agent-session.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent-profiles.ts</span><br /><span class="native-type">839 lines</span></td>
+                    <td><p>Agent Profiles and their sign-ins (AR-S2): the feed and its subscription, create, rename, the default, delete, Show in Finder; a sign-in's create, its sign-out (retired at once, finished when its sessions end) and This Mac's identities; the persona reconcile.</p></td>
+                    <td><p><code>agent-index</code>, <code>agent-distribution</code> (the reveal port), the fold through <code>PersonaSessions</code></p></td>
+                    <td><p><code>profileSets</code>, <code>createProfileSet</code>, <code>updateProfileSet</code>, <code>setDefaultProfileSet</code>, <code>removeProfileSet</code>, <code>createProfile</code>, <code>retireProfile</code>, <code>signOutProfile</code>, <code>removeProfile</code>, <code>verifyProfile</code>, <code>onProfilesChanged</code></p></td>
+                    <td><p><code>agent-runtime.test.ts</code>, <code>agent-session.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent-distribution.ts</span><br /><span class="native-type">616 lines</span></td>
+                    <td><p>The machine record under the root lock, the installs and their update plans, kept release checks, updates with their output and stop, Show in Finder for an install.</p></td>
+                    <td><p><code>terminal-text</code> (the output as a terminal shows it)</p></td>
+                    <td><p><code>inspectInstallations</code>, <code>planUpdate</code>, <code>checkReleases</code>, <code>availableUpdate</code>, <code>updateInstallation</code></p></td>
+                    <td><p><code>agent-distribution.test.ts</code>, <code>agent-runtime.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent-host.ts</span><br /><span class="native-type">219 lines</span></td>
@@ -1388,12 +1402,14 @@
                 <h3>agent-runtime.ts holds three concerns</h3>
                 <p>
                   <code>createProfileStore</code> (puppeteer's registry in fieldd's custody),
-                  <code>AgentRuntimeService</code> (the runtime, the fold, personas, sessions) and the
-                  reconcile. The service class alone spans lines 367–2,406 and carries five in-memory
-                  maps, four timers and three entry kinds (<code>ManagedEntry</code>,
-                  <code>PendingEntry</code>, <code>ExitedEntry</code>). The first cut landed 2026-09-22:
-                  distribution — <code>DistributionRecordStore</code> and the doors' service — is
-                  <code>agent-distribution.ts</code>.
+                  <code>AgentRuntimeService</code> (the runtime, the fold, sessions) and the re-attach.
+                  The service class alone spans lines 371–2,293 and carries in-memory maps, timers and
+                  three entry kinds (<code>ManagedEntry</code>, <code>PendingEntry</code>,
+                  <code>ExitedEntry</code>). The first cut landed 2026-09-22: distribution —
+                  <code>DistributionRecordStore</code> and the doors' service — is
+                  <code>agent-distribution.ts</code>. The second, 2026-09-23 with AR-S2: the personas,
+                  their reconcile and Agent Profiles are <code>agent-profiles.ts</code>, which reaches the
+                  fold only through <code>PersonaSessions</code>.
                 </p>
                 <span class="badge tone-owed">Owed</span>
               </div>
@@ -1761,8 +1777,9 @@
             </p>
             <p class="section-note">
               The rule that makes this tractable is ownership: a root under
-              <code>users/&lt;fuid&gt;/agents/roots/</code> is <em>managed</em>, so it is enrolled by
-              construction; the OS user's own vendor roots are <em>discovered</em> by every user's
+              <code>users/&lt;fuid&gt;/agents/profiles/</code> — an Agent Profile's folder, or a root
+              AR-1…S1 made under <code>agents/roots/</code>, adopted where it stands — is
+              <em>managed</em>, so it is enrolled by construction; the OS user's own vendor roots are <em>discovered</em> by every user's
               rosettad and consented per user. fieldd validates every managed root the way rosetta does
               before writing, because a refusal at start is a non-zero exit before the daemon binds — and
               the supervisor would retry that into a permanent failure.
@@ -1787,11 +1804,13 @@
                 </p>
               </div>
               <div class="contract-row">
-                <strong>Never: an enrolled root's path</strong>
+                <strong>Shown, never taken back: an Agent Profile's folders</strong>
                 <p>
-                  A persona is named by profile id. Where fieldd keeps its root is fieldd's business. A
-                  session's own working directory does ride <code>index.sessions</code>, as the daemon
-                  reports it.
+                  A persona is named by profile id and a profile by its set id. Since AR-S2 the profiles
+                  feed carries each profile's folder and each sign-in's, home-abbreviated, for a person to
+                  read beside Show in Finder — display only: no door takes a path, and Show in Finder
+                  names ids that fieldd resolves to the paths it holds. A session's own working directory
+                  does ride <code>index.sessions</code>, as the daemon reports it.
                 </p>
               </div>
               <div class="contract-row">
@@ -1828,14 +1847,26 @@
                 <tbody>
                   <tr>
                     <td><span class="route">agents/profiles.json</span></td>
-                    <td><p>puppeteer's profile registry — the personas.</p></td>
-                    <td><p><code>agents.profiles.*</code> via the injected profile store</p></td>
+                    <td><p>puppeteer's profile registry, version 2 — the Agent Profiles (profile sets), which one is the default, and every sign-in with the profile it belongs to. A version-1 file is adopted on load, its sign-ins grouped by label.</p></td>
+                    <td><p><code>agents.profileSets.*</code> and <code>agents.profiles.*</code> via the injected profile store</p></td>
                     <td><p>0600 in a 0700 dir</p></td>
                   </tr>
                   <tr>
+                    <td><span class="route">agents/profiles/&lt;set&gt;/</span></td>
+                    <td><p>One Agent Profile's folder (AR-D24): named once from its first name (<code>work</code>, <code>client-demo</code>, <code>work-2</code> on a clash; <code>native</code> reserved) and never moved by a rename. Deleting the profile deletes it.</p></td>
+                    <td><p><code>agents.profileSets.create</code></p></td>
+                    <td><p>0700</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agents/profiles/&lt;set&gt;/&lt;provider&gt;-&lt;8 hex&gt;/</span></td>
+                    <td><p>One agent's sign-in in that profile: the agent's whole data folder — config, history, plugins and the credential — bound at spawn through the provider's root variable. Allocated exclusively and never reused, because a root's path is what a vendor's keychain entry is keyed on.</p></td>
+                    <td><p><code>agents.profiles.create</code></p></td>
+                    <td><p>0700</p></td>
+                  </tr>
+                  <tr>
                     <td><span class="route">agents/roots/&lt;provider&gt;/&lt;uuid&gt;/</span></td>
-                    <td><p>A persona's own immutable agent data folder, bound at spawn through the provider's root variable.</p></td>
-                    <td><p>the persona create path</p></td>
+                    <td><p>Where AR-1…S1 allocated a persona's root. Nothing is allocated here any more; a root found here is adopted in place, since a root never moves.</p></td>
+                    <td><p>nothing new — read, and deleted by a sign-out</p></td>
                     <td><p>0700</p></td>
                   </tr>
                   <tr>
@@ -2095,49 +2126,97 @@
               go through the audit service's system-actor entry rather than being merely logged.
             </div>
 
-            <h3>(c) Persona create — one act, three effects</h3>
+            <h3>(c) Agent Profiles — a profile is a folder, and a sign-in lives in it</h3>
+            <p class="section-note">
+              An Agent Profile is puppeteer's profile <em>set</em> (AR-D23): a named place holding at most
+              one sign-in per agent, one of them the default. VibeField adds no grouping of its own — the
+              doors mirror the registry — and owns custody: the registry and every profile's folder sit
+              under the user they belong to (AR-D24). This Mac is the synthetic native set, each agent's
+              own folder, the OS user's and therefore the same for every VibeField user of the Mac.
+            </p>
             <div class="flow-list">
               <div class="flow-step">
                 <div>
-                  <strong><code>agents.profiles.create</code></strong>
+                  <strong><code>agents.profileSets.create</code></strong>
                   <p>
-                    Allocates the persona's immutable root under
-                    <code>users/&lt;fuid&gt;/agents/roots/&lt;provider&gt;/&lt;uuid&gt;</code> and registers
-                    the profile in puppeteer's registry, through fieldd's injected store.
+                    puppeteer registers the set and makes its folder,
+                    <code>users/&lt;fuid&gt;/agents/profiles/&lt;set&gt;/</code>, the name taken once from the
+                    profile's first name; fieldd's injected store writes the version-2 registry. A rename
+                    later changes the label everywhere and the folder nowhere.
                   </p>
                 </div>
               </div>
               <div class="flow-step">
                 <div>
-                  <strong>fieldd enrolls the observation root</strong>
+                  <strong><code>agents.profiles.create {set, provider}</code> — one act, three effects</strong>
                   <p>
-                    Not the profile's <code>dataRoot</code> — the root the provider's own layout applies to,
-                    which differs for some providers — filed under the kind rosetta's roll call joins it by,
-                    with the profile id as VibeField's join key.
+                    The sign-in's root is allocated inside the profile's folder,
+                    <code>&lt;provider&gt;-&lt;8 hex&gt;</code>, exclusively and never reused, and registered.
+                    fieldd enrolls the <em>observation</em> root — not the profile's <code>dataRoot</code>: the
+                    root the provider's own layout applies to, which differs for some providers — under the
+                    kind rosetta's roll call joins it by, with the profile id as VibeField's join key. The
+                    record is published and the daemon bounces once; a sign-in made while the index was down
+                    is picked up by the reconcile at the next ready, so the two orders converge.
                   </p>
                 </div>
               </div>
               <div class="flow-step">
                 <div>
-                  <strong>The record is published and the daemon bounces</strong>
+                  <strong>The sign-in runs where it lands</strong>
                   <p>
-                    Start-time scoping means a changed record restarts rosettad once. A persona made while the
-                    index was down is picked up by the reconcile at the next ready, so the two orders converge.
+                    <code>agents.profiles.login</code> opens the vendor's own login in a PTY on this device
+                    with the root bound, and the page shows that terminal (the window's terminal pool, its
+                    third consumer). The feed marks the sign-in <code>signingIn</code> while the pane is open;
+                    its identity is read back when the pane ends, and the page closes it on that.
                   </p>
                 </div>
               </div>
               <div class="flow-step">
                 <div>
-                  <strong>Deleting one reverses all three</strong>
+                  <strong>Sign out — at once, and finished when its sessions end (AR-D25)</strong>
                   <p>
-                    Its sessions are stopped, the runtime is retired with its rows kept, the profile is
-                    unregistered, and the root is deleted with its credentials. A reconcile racing the retire
-                    must not re-enroll a persona mid-deletion, which is why the service tracks deletions
-                    explicitly. <em>Untested under a live run</em> — the scripted provider has no profile
-                    service. <span class="badge tone-owed">Owed</span>
+                    <code>agents.profiles.delete</code> retires the sign-in now: it leaves its profile and new
+                    spawns, and the sessions already running under it keep going. When none runs — at once,
+                    when the last one exits, or at the boot after the re-attach — fieldd finishes it: the
+                    vendor's own sign-out where the credential lives outside the root (Claude Code's Keychain
+                    item is keyed on the root's path, so deleting the folder alone would leave it behind), the
+                    index runtime retired with its rows kept, the sign-in unregistered, its root deleted. A
+                    reconcile racing the finish must not re-enroll it, which is why the service tracks the
+                    ones it is finishing explicitly. In This Mac a sign-out is the vendor's own command in the
+                    agent's own folder, which is never deleted.
                   </p>
                 </div>
               </div>
+              <div class="flow-step">
+                <div>
+                  <strong>Delete a profile — its sessions stop first</strong>
+                  <p>
+                    <code>agents.profileSets.delete</code> stops every session running under the profile (the
+                    floor's ladder, asked again until the floor no longer lists them), finishes each of its
+                    sign-ins the same way, unregisters the set and deletes its folder — only ever a directory
+                    under this user's <code>agents/profiles/</code>, or an adopted root under
+                    <code>agents/roots/</code>, never a provider's own. This Mac and the default are refused:
+                    make another profile the default first.
+                  </p>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div>
+                  <strong>The default decides a spawn that names no one</strong>
+                  <p>
+                    <code>agent.spawn</code> without a persona runs under the default profile's sign-in for
+                    that agent, and in the agent's own folder when the default holds none. Only a spawn
+                    consults it: a resume or a re-attach continues in the account the run was born under,
+                    whatever the default says now.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="callout">
+              <strong>This Mac's sign-ins are read, never stored.</strong> HOME decides them, so fieldd asks
+              each installed agent's own status command — in the product daemon after its boot inventory, on
+              an explicit refresh, and for one agent after its login pane or its sign-out. Never on its own in
+              a test or embedded daemon: those must never run the developer's real agents.
             </div>
 
             <h3>(d) Update — the vendor's own updater, under the root lock</h3>
@@ -2228,7 +2307,8 @@
               <table class="reference-table">
                 <thead><tr><th>Concern</th><th>File</th></tr></thead>
                 <tbody>
-                  <tr><td><p>The runtime, the fold, personas, the re-attach</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts</span></td></tr>
+                  <tr><td><p>The runtime, the fold, the re-attach; the sessions under a sign-in, stopped or waited on</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts</span></td></tr>
+                  <tr><td><p>Agent Profiles and their sign-ins: the feed, create, rename, the default, delete, Show in Finder; sign-in create, sign-out (retire, then finish), This Mac's identities</p></td><td><span class="route">packages/fieldd/src/agent-profiles.ts</span></td></tr>
                   <tr><td><p>Distribution: the machine record, installs and their update plans, kept checks, updates, their output and stop, reveal</p></td><td><span class="route">packages/fieldd/src/agent-distribution.ts</span> · <span class="route">terminal-text.ts</span> (the output as a terminal shows it)</td></tr>
                   <tr><td><p>puppeteer's <code>AgentHost</code> over the floor; the environment policy and the EL7 strip</p></td><td><span class="route">packages/fieldd/src/agent-host.ts</span></td></tr>
                   <tr><td><p>Signed session records; <code>mirrorOf</code>, <code>foldStatus</code>, the summarizers</p></td><td><span class="route">packages/fieldd/src/agent-sessions.ts</span></td></tr>
@@ -2239,7 +2319,7 @@
                   <tr><td><p>One rosettad generation per user root</p></td><td><span class="route">packages/fieldd/src/rosettad-supervisor.ts</span></td></tr>
                   <tr><td><p>The cells, the inventory, the ticket mint, the agent spawn path</p></td><td><span class="route">packages/fieldd/src/terminal-service.ts</span></td></tr>
                   <tr><td><p>Scope and locality enforcement on every door</p></td><td><span class="route">packages/fieldd/src/product-api.ts</span></td></tr>
-                  <tr><td><p>The door registrations (111, of which 26 are the agent plane's)</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span></td></tr>
+                  <tr><td><p>The door registrations (117, of which 32 are the agent plane's)</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span></td></tr>
                   <tr><td><p>The login-scope constant and its ceiling</p></td><td><span class="route">packages/fieldd/src/mesh-bus.ts</span></td></tr>
                   <tr><td><p>The terminal unit that supervises the cells</p></td><td><span class="route">packages/field-native/src/services/terminal.rs</span></td></tr>
                   <tr><td><p>The mirror, summary, field and index wire shapes</p></td><td><span class="route">packages/contracts/src/agent-session.ts · agent-field.ts · agent-index.ts · agent-usage.ts</span></td></tr>

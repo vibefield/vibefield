@@ -13,6 +13,7 @@ import {
   AgentDistributionRecord,
   AgentPersona,
   AgentsInstallsResult,
+  AgentsProfileSetsListResult,
   AgentsProfilesVerifyResult,
   AgentsReleasesResult,
   AgentsUpdateResult,
@@ -205,6 +206,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-list": AgentListResult,
   "agent-providers": AgentProvidersResult,
   "agents-profiles-login": AgentsProfilesLoginResult,
+  // AR-S2 — Agent Profiles: the native set beside a managed one, a sign-in
+  // mid-login, the display folders, the Add menu's candidates.
+  "agents-profile-sets": AgentsProfileSetsListResult,
   // AR-5d — the usage column's feed: one batch with three states beside the
   // honest empty one the door answers before the first refresh.
   "agent-usage": AgentAccountUsageBatch,

@@ -1,0 +1,54 @@
+{
+  "sets": [
+    {
+      "id": "native",
+      "kind": "native",
+      "label": "This Mac",
+      "default": false,
+      "createdAt": "1970-01-01T00:00:00.000Z",
+      "personas": [
+        {
+          "profileId": "claude:native-default",
+          "provider": "claude",
+          "label": "Default",
+          "kind": "native-default",
+          "createdAt": "1970-01-01T00:00:00.000Z",
+          "set": "native",
+          "folder": "~/.claude",
+          "identity": {
+            "loggedIn": true,
+            "email": "kim@example.com",
+            "plan": "max",
+            "verifiedAt": "2026-09-23T09:41:20.000Z",
+            "source": { "kind": "native-status", "stability": "documented" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "kind": "managed",
+      "label": "Work",
+      "glyph": "briefcase",
+      "default": true,
+      "createdAt": "2026-09-23T09:00:00.000Z",
+      "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/work",
+      "personas": [
+        {
+          "profileId": "0b7e2c4d-9a1f-4e58-8c1d-3f2a6b9e7d10",
+          "provider": "codex",
+          "label": "Work",
+          "kind": "managed",
+          "createdAt": "2026-09-23T09:01:00.000Z",
+          "set": "work",
+          "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/work/codex-0b7e2c4d",
+          "signingIn": { "sessionId": "sess_login_1", "since": "2026-09-23T09:01:02.000Z" },
+          "runtimeId": "rt_0b7e2c4d9a1f3e58"
+        }
+      ]
+    }
+  ],
+  "signIn": ["claude", "codex", "grok"],
+  "signOut": ["claude"],
+  "reading": false
+}

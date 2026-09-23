@@ -85,6 +85,44 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: false,
         locality: "local",
       },
+      // AR-S2 — Agent Profiles (puppeteer's profile sets), on the persona
+      // rows' own scope: a profile is what one spawns in
+      {
+        method: "agents.profileSets.list",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+      },
+      {
+        method: "agents.profileSets.subscribe",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+      },
+      {
+        method: "agents.profileSets.create",
+        scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+      },
+      {
+        method: "agents.profileSets.update",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+      },
+      {
+        method: "agents.profileSets.delete",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+      },
+      {
+        method: "agents.profileSets.reveal",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+      },
       // AR-5d — account usage: a READ of the agent plane, so it rides
       // AR-5b: the account's billing state, a credentialed call per reading —
       // its own scope, not the fold's
@@ -106,9 +144,12 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       expect(m.guestOk ?? false, m.method).toBe(false);
       // AR-5d widened this family by exactly one subscription (the usage
       // column's feed), the Agents settings section by one more (an update's
-      // output while it runs); every other row stays a one-shot call.
+      // output while it runs), Agent Profiles by a third (the profiles and
+      // their sign-ins); every other row stays a one-shot call.
       expect(m.subscription ?? false, m.method).toBe(
-        m.method === "agents.usage.subscribe" || m.method === "agents.operations.subscribe",
+        m.method === "agents.usage.subscribe" ||
+          m.method === "agents.operations.subscribe" ||
+          m.method === "agents.profileSets.subscribe",
       );
     }
   });
@@ -128,6 +169,9 @@ describe("LAYOUT — the topology's segments (AR-D15…D18)", () => {
     expect(LAYOUT.INDEX_ENROLLMENT_FILE.at(-1)).toBe("enrollment.json");
     expect(LAYOUT.AGENT_PROFILES_FILE.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
     expect(LAYOUT.AGENT_ROOTS_DIR.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
+    // AR-S2 — each Agent Profile's folder, beside the registry that names it
+    expect(LAYOUT.AGENT_PROFILE_SETS_DIR.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
+    expect(LAYOUT.AGENT_PROFILE_SETS_DIR.at(-1)).toBe("profiles");
   });
 
   it("the machine scope is exactly distribution, and it never re-roots", () => {

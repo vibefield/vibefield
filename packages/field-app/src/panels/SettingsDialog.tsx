@@ -1,5 +1,12 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
-import { type ReactElement, type ReactNode, type RefObject, useEffect, useRef } from "react";
+import {
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useRef,
+} from "react";
 import type { FieldUserFace } from "../host";
 import { labelCls } from "./settings-ui";
 
@@ -9,6 +16,7 @@ export type SettingsPage =
   | "appearance"
   | "canvas"
   | "agents"
+  | "profiles"
   | "plugins"
   | "mesh"
   | "terminal"
@@ -25,6 +33,7 @@ interface PageMeta {
     | "sun"
     | "canvas"
     | "agents"
+    | "profiles"
     | "plugin"
     | "mesh"
     | "terminal"
@@ -62,6 +71,14 @@ const PAGES: readonly PageMeta[] = [
     label: "Agents",
     description: "Installed once on this Mac and shared by every agent profile.",
     icon: "agents",
+  },
+  {
+    // Reached through the "Agent Profiles" group, one item per profile; the
+    // page's head names the profile (`head`), so this line is a fallback.
+    id: "profiles",
+    label: "Agent Profiles",
+    description: "Places you work in, each holding one sign-in per agent.",
+    icon: "profiles",
   },
   {
     id: "plugins",
@@ -134,11 +151,23 @@ export interface SettingsAccountHead {
   readonly notice?: string | null | undefined;
 }
 
+/** AR-S2 — the sidebar's "Agent Profiles" group (the design record's R1: a
+ * profile is a place). One item per profile, This Mac first, each led by its
+ * mark (the caller draws it: the glyph, filled for the default), then "New
+ * profile…". `current` is the profile whose page is open, or "new". */
+export interface SettingsProfilesNav {
+  readonly items: readonly { id: string; label: string; mark: ReactNode }[];
+  readonly current: string | null;
+  readonly onSelect: (id: string) => void;
+  readonly onNew: () => void;
+}
+
 /** A page below a settings page — one agent's page under Agents. The header
  * names it and offers the way back; the nav keeps its parent current. */
 export interface SettingsSubpage {
   readonly title: string;
-  readonly description: string;
+  /** a line under the title; a node, so a profile's page can lead with its mark */
+  readonly description: ReactNode;
   /** the back button's accessible name ("Back to Agents") */
   readonly backLabel: string;
   readonly onBack: () => void;
@@ -222,6 +251,65 @@ function AccountHead({
   );
 }
 
+/** The "Agent Profiles" nav group: every profile as a place, then New profile…
+ * (the add item in the muted ramp, as the record draws it). */
+function ProfilesNavGroup({
+  profiles,
+  active,
+}: {
+  profiles: SettingsProfilesNav;
+  active: boolean;
+}): ReactElement {
+  const itemCls = (selected: boolean, add = false) =>
+    `vf-settings-nav-item flex h-9 w-full items-center gap-2.5 rounded-[10px] px-3 text-left text-[12px] font-medium transition-[background-color,color,transform] active:scale-[0.98] ${
+      selected
+        ? "bg-black/[0.075] text-black dark:bg-white/[0.12] dark:text-white"
+        : add
+          ? "text-black/40 hover:bg-black/[0.04] hover:text-black/70 dark:text-white/40 dark:hover:bg-white/[0.07] dark:hover:text-white/70"
+          : "text-black/50 hover:bg-black/[0.04] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/[0.07] dark:hover:text-white/80"
+    }`;
+  return (
+    <div className="mb-4 last:mb-0" data-settings-profiles="">
+      <div className="vf-settings-nav-group mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-black/30 dark:text-white/30">
+        Agent Profiles
+      </div>
+      <div className="space-y-0.5">
+        {profiles.items.map((item) => {
+          const selected = active && profiles.current === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={selected ? "page" : undefined}
+              aria-label={`${item.label} agent profile`}
+              className={itemCls(selected)}
+              onClick={() => profiles.onSelect(item.id)}
+            >
+              <span className="flex h-[18px] w-[18px] flex-none items-center justify-center">
+                {item.mark}
+              </span>
+              <span className="vf-settings-nav-label truncate">{item.label}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-current={active && profiles.current === "new" ? "page" : undefined}
+          className={itemCls(active && profiles.current === "new", true)}
+          onClick={profiles.onNew}
+        >
+          <span className="h-[18px] w-[18px] flex-none [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-none [&>svg]:stroke-current [&>svg]:[stroke-linecap:round] [&>svg]:[stroke-linejoin:round] [&>svg]:[stroke-width:1.5]">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 4.5v11M4.5 10h11" />
+            </svg>
+          </span>
+          <span className="vf-settings-nav-label truncate">New profile…</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PageIcon({ name }: { name: PageMeta["icon"] }): ReactElement {
   if (name === "person") {
     return (
@@ -261,6 +349,14 @@ function PageIcon({ name }: { name: PageMeta["icon"] }): ReactElement {
         <circle cx="4.6" cy="5.6" r="1.7" />
         <circle cx="15.4" cy="5.6" r="1.7" />
         <circle cx="10" cy="16.6" r="1.4" />
+      </svg>
+    );
+  }
+  if (name === "profiles") {
+    return (
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="3.5" y="5" width="13" height="10" rx="2.5" />
+        <path d="M7 5V3.8M13 5V3.8M7 15v1.2M13 15v1.2" />
       </svg>
     );
   }
@@ -327,6 +423,8 @@ export function SettingsDialog({
   redoAvailable,
   historyNote = null,
   account,
+  profiles,
+  head = null,
   subpage = null,
   dialogRef,
   className = "",
@@ -343,6 +441,10 @@ export function SettingsDialog({
   historyNote?: string | null;
   /** UA-D19 — the account at the head of Settings; see `SettingsAccountHead`. */
   account?: SettingsAccountHead | undefined;
+  /** AR-S2 — the Agent Profiles group (see `SettingsProfilesNav`); absent, no group. */
+  profiles?: SettingsProfilesNav | undefined;
+  /** A page's own title and line when its page meta cannot say it (a profile's name). */
+  head?: { title: string; description: ReactNode } | null | undefined;
   /** A page below the active one (see `SettingsSubpage`); null at the page itself. */
   subpage?: SettingsSubpage | null | undefined;
   dialogRef?: RefObject<HTMLDivElement | null>;
@@ -354,7 +456,7 @@ export function SettingsDialog({
     account === undefined ? NAV_GROUPS : NAV_GROUPS.filter((group) => group.label !== "Account");
   // A new page or subpage opens at its top.
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const subpageTitle = subpage?.title ?? null;
+  const subpageTitle = subpage?.title ?? head?.title ?? null;
   useEffect(() => {
     if (scrollerRef.current !== null) scrollerRef.current.scrollTop = 0;
   }, [activePage, subpageTitle]);
@@ -398,37 +500,42 @@ export function SettingsDialog({
 
         <nav className="min-h-0 flex-1 overflow-y-auto py-2" aria-label="Settings categories">
           {navGroups.map((group) => (
-            <div key={group.label} className="mb-4 last:mb-0">
-              <div className="vf-settings-nav-group mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-black/30 dark:text-white/30">
-                {group.label}
+            <Fragment key={group.label}>
+              <div className="mb-4 last:mb-0">
+                <div className="vf-settings-nav-group mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-black/30 dark:text-white/30">
+                  {group.label}
+                </div>
+                <div className="space-y-0.5">
+                  {group.pages.map((pageId) => {
+                    const page = PAGE_BY_ID.get(pageId);
+                    if (page === undefined) return null;
+                    const selected = page.id === activePage;
+                    return (
+                      <button
+                        key={page.id}
+                        type="button"
+                        aria-current={selected ? "page" : undefined}
+                        aria-label={`${page.label} settings`}
+                        className={`vf-settings-nav-item flex h-9 w-full items-center gap-2.5 rounded-[10px] px-3 text-left text-[12px] font-medium transition-[background-color,color,transform] active:scale-[0.98] ${
+                          selected
+                            ? "bg-black/[0.075] text-black dark:bg-white/[0.12] dark:text-white"
+                            : "text-black/50 hover:bg-black/[0.04] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/[0.07] dark:hover:text-white/80"
+                        }`}
+                        onClick={() => onSelectPage(page.id)}
+                      >
+                        <span className="h-[18px] w-[18px] flex-none [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-none [&>svg]:stroke-current [&>svg]:[stroke-linecap:round] [&>svg]:[stroke-linejoin:round] [&>svg]:[stroke-width:1.5]">
+                          <PageIcon name={page.icon} />
+                        </span>
+                        <span className="vf-settings-nav-label truncate">{page.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="space-y-0.5">
-                {group.pages.map((pageId) => {
-                  const page = PAGE_BY_ID.get(pageId);
-                  if (page === undefined) return null;
-                  const selected = page.id === activePage;
-                  return (
-                    <button
-                      key={page.id}
-                      type="button"
-                      aria-current={selected ? "page" : undefined}
-                      aria-label={`${page.label} settings`}
-                      className={`vf-settings-nav-item flex h-9 w-full items-center gap-2.5 rounded-[10px] px-3 text-left text-[12px] font-medium transition-[background-color,color,transform] active:scale-[0.98] ${
-                        selected
-                          ? "bg-black/[0.075] text-black dark:bg-white/[0.12] dark:text-white"
-                          : "text-black/50 hover:bg-black/[0.04] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/[0.07] dark:hover:text-white/80"
-                      }`}
-                      onClick={() => onSelectPage(page.id)}
-                    >
-                      <span className="h-[18px] w-[18px] flex-none [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-none [&>svg]:stroke-current [&>svg]:[stroke-linecap:round] [&>svg]:[stroke-linejoin:round] [&>svg]:[stroke-width:1.5]">
-                        <PageIcon name={page.icon} />
-                      </span>
-                      <span className="vf-settings-nav-label truncate">{page.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              {group.label === "Workspace" && profiles !== undefined && (
+                <ProfilesNavGroup profiles={profiles} active={activePage === "profiles"} />
+              )}
+            </Fragment>
           ))}
         </nav>
 
@@ -459,10 +566,10 @@ export function SettingsDialog({
             )}
             <div className="min-w-0">
               <h1 className="truncate text-[17px] font-semibold tracking-[-0.025em] text-black/90 dark:text-white/90">
-                {subpage?.title ?? currentPage.label}
+                {subpage?.title ?? head?.title ?? currentPage.label}
               </h1>
               <p className={`truncate ${labelCls}`}>
-                {subpage?.description ?? currentPage.description}
+                {subpage?.description ?? head?.description ?? currentPage.description}
               </p>
             </div>
           </div>

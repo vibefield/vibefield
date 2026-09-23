@@ -1101,9 +1101,9 @@
           idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
         </div>
         <div class="stats" aria-label="Catalogue summary">
-          <div class="stat"><strong>26</strong><span>agent-plane doors</span></div>
+          <div class="stat"><strong>32</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
-          <div class="stat"><strong>12</strong><span>audited mutations</span></div>
+          <div class="stat"><strong>15</strong><span>audited mutations</span></div>
           <div class="stat"><strong>0</strong><span>that federate</span></div>
         </div>
         <div class="legend" aria-label="Status legend">
@@ -1407,14 +1407,15 @@
               Every mutating agent-plane door runs its effect inside
               <code>audit.required(ctx, mutation, effect, describeOutcome)</code>, so the record is
               written around the act rather than after it, and the outcome names what actually happened.
-              Eleven doors are audited, over five target kinds.
+              Fifteen doors are audited, over six target kinds.
             </p>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead><tr><th>Target kind</th><th>Actions</th></tr></thead>
                 <tbody>
                   <tr><td><span class="route">agent-session</span></td><td><p><code>agent.session.spawn</code> · <code>agent.session.resume</code> · <code>agent.session.interrupt</code></p></td></tr>
-                  <tr><td><span class="route">agent-persona</span></td><td><p><code>agents.profiles.create</code> · <code>.delete</code> · <code>.verify</code> · <code>.login</code></p></td></tr>
+                  <tr><td><span class="route">agent-persona</span></td><td><p><code>agents.profiles.create</code> · <code>.delete</code> (a sign-out; <code>waiting</code> in the outcome while sessions run under it) · <code>.verify</code> · <code>.login</code></p></td></tr>
+                  <tr><td><span class="route">agent-profile</span></td><td><p><code>agents.profile_sets.create</code> (the id is made from the name inside the effect, so the outcome names it) · <code>.update</code> · <code>.delete</code> (<code>stopped</code> in the outcome)</p></td></tr>
                   <tr><td><span class="route">agent-provider</span></td><td><p><code>agents.update</code> · <code>agents.set_active</code> · <code>agents.update.stop</code></p></td></tr>
                   <tr><td><span class="route">index</span></td><td><p><code>index.enroll</code></p></td></tr>
                   <tr><td><span class="route">index-runtime</span></td><td><p><code>index.retire</code></p></td></tr>
@@ -1431,7 +1432,7 @@
           <section id="catalogue">
             <h2>Catalogue</h2>
             <p class="section-note">
-              Twenty-three doors, all on the product surface, all <code>local</code>. The scope column is
+              Thirty-two doors, all on the product surface, all <code>local</code>. The scope column is
               the consent the caller had to be granted; the columns after it say what the door does with
               it.
             </p>
@@ -1457,7 +1458,7 @@
                     <td><p><code>AgentSpawnParams</code> → <code>AgentSpawnResult</code></p></td>
                     <td><p><code>agent.spawn</code></p></td>
                     <td><p>no</p></td>
-                    <td><p><code>runtime.spawn()</code> over <code>AgentHost.spawnTerminal</code>; the claim from <code>createFileCreationRequestRegistry</code></p></td>
+                    <td><p><code>runtime.spawn()</code> over <code>AgentHost.spawnTerminal</code>; the claim from <code>createFileCreationRequestRegistry</code>. A spawn that names no persona runs under the default Agent Profile's sign-in for its agent, else the agent's own folder (puppeteer decides, in <code>spawn</code> only — a resume stays in the account it was born under)</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>agent-session.test.ts</code></p></td>
                   </tr>
@@ -1508,7 +1509,7 @@
               also asks for <code>terminal.attach</code>.
             </p>
 
-            <h3 id="cat-agents">agents.* — distribution, personas, account usage</h3>
+            <h3 id="cat-agents">agents.* — distribution, Agent Profiles and their sign-ins, account usage</h3>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead>
@@ -1522,9 +1523,15 @@
                   <tr><td><span class="route">agents.operations.subscribe</span></td><td><p><code>—</code> → <code>AgentsOperationsResult</code>, whole snapshots at the tick</p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>the updater's <code>onOutput</code>, rendered the way a terminal would show it (redraws land, escapes drop out), the last <code>AGENT_OPERATION_OUTPUT_BYTES</code>, never parsed — the receipt is the outcome; memory only</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.update.stop</span></td><td><p><code>AgentsUpdateStopParams</code> → <code>AgentsUpdateStopResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>the update's <code>signal</code> — the updater's whole process group, SIGTERM then SIGKILL; the receipt is marked <code>stopped</code></p></td><td><p><code>agent-provider</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.reveal</span></td><td><p><code>AgentsRevealParams</code> → <code>AgentsRevealResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>nothing upstream — a path fieldd's own inventory holds, shown through the shell provider's internal <code>shell.revealPath</code>; no shell attached is <code>UNAVAILABLE {service: shell}</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agents.profiles.list</span></td><td><p><code>AgentsProfilesListParams</code> → <code>AgentsProfilesListResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.profiles()</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agents.profiles.create</span></td><td><p><code>AgentsProfilesCreateParams</code> → <code>AgentsProfilesCreateResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.createProfile()</code> + <code>profileObservationRoot()</code></p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agents.profiles.delete</span></td><td><p><code>AgentsProfilesDeleteParams</code> → <code>AgentsProfilesDeleteResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.removeProfile()</code></p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-owed">Owed</span><p>untested under a live run</p></td></tr>
+                  <tr><td><span class="route">agents.profileSets.list</span></td><td><p><code>AgentsProfileSetsListParams</code> → <code>AgentsProfileSetsListResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.profileSets()</code> — every Agent Profile, This Mac first, each with its sign-ins and a DISPLAY folder; <code>signIn</code>/<code>signOut</code> from each adapter's <code>support</code>; <code>{refresh: true}</code> reads This Mac's sign-ins again (each agent's own status command) and the answer says <code>reading</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profileSets.subscribe</span></td><td><p><code>—</code> → <code>AgentsProfileSetsListResult</code>, whole snapshots at the tick</p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.onProfilesChanged()</code> — a set made or renamed, a sign-in added or retired, an identity read, a sign-out finishing</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profileSets.create</span></td><td><p><code>AgentsProfileSetsCreateParams</code> → <code>AgentsProfileSetsSetResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.createProfileSet()</code> (+ <code>setDefaultProfileSet()</code> for <code>default: true</code>) — the folder <code>agents/profiles/&lt;set&gt;/</code>, named once from the first name</p></td><td><p><code>agent-profile</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profileSets.update</span></td><td><p><code>AgentsProfileSetsUpdateParams</code> → <code>AgentsProfileSetsSetResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.updateProfileSet()</code> · <code>setDefaultProfileSet()</code> — a rename leaves the folder's name alone (a sign-in is keyed on its path); the default only ever moves TO a profile; This Mac takes only <code>default</code></p></td><td><p><code>agent-profile</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profileSets.delete</span></td><td><p><code>AgentsProfileSetsDeleteParams</code> → <code>AgentsProfileSetsDeleteResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p>the fold stops the sessions under it first (the floor's ladder, <code>stopped</code> counts them), then <code>runtime.removeProfileSet()</code>, each sign-in finished (the vendor's sign-out, the index runtime retired) and the folder deleted; This Mac and the default are refused <code>PRECONDITION_FAILED</code></p></td><td><p><code>agent-profile</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profileSets.reveal</span></td><td><p><code>AgentsProfileSetsRevealParams</code> → <code>AgentsProfileSetsRevealResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p>nothing upstream — a profile's folder, or one agent's in it, named by ids and resolved from the paths fieldd holds, through <code>shell.revealPath</code>; no shell attached is <code>UNAVAILABLE {service: shell}</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.list</span></td><td><p><code>AgentsProfilesListParams</code> → <code>AgentsProfilesListResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p><code>runtime.profiles()</code>, signed-out sign-ins left out</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.create</span></td><td><p><code>AgentsProfilesCreateParams</code> → <code>AgentsProfilesCreateResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.createProfile({providerId, set})</code> — the root allocated inside the profile's folder — + <code>profileObservationRoot()</code>; one sign-in per agent per profile, none in This Mac</p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.profiles.delete</span></td><td><p><code>AgentsProfilesDeleteParams</code> → <code>AgentsProfilesDeleteResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>yes</p></td><td><p>SIGN OUT: <code>runtime.retireProfile()</code> at once (out of its profile, out of new spawns), and when no session runs under it — now, when its last one ends, or at the boot after the re-attach — <code>signOutProfile()</code> (the vendor's own sign-out where the credential lives outside the root) · <code>index.retire</code> · <code>removeProfile()</code> · the root deleted; in This Mac only the vendor's sign-out, in the agent's own folder</p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span><p>witnessed under a live run over the real floor</p></td></tr>
                   <tr><td><span class="route">agents.profiles.verify</span></td><td><p><code>AgentsProfilesVerifyParams</code> → <code>AgentsProfilesVerifyResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.verifyProfile()</code> — native evidence, not a claim</p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.profiles.login</span></td><td><p><code>AgentsProfilesLoginParams</code> → <code>AgentsProfilesLoginResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p><code>runtime.startProfileLogin()</code> in a PTY on this device</p></td><td><p><code>agent-persona</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.usage</span></td><td><p><code>—</code> → <code>AgentAccountUsageBatch</code></p></td><td><p><code>agent.usage</code></p></td><td><p>yes</p></td><td><p><code>createAccountUsageMonitor()</code>, projected field by field</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
@@ -1536,7 +1543,8 @@
               Three scopes, not one, and the split is the consent argument. <code>agents.manage</code>
               mutates machine-scope distribution and even its reads name executable paths, so it is
               local-only and plugin-ineligible. Personas ride <code>agent.spawn</code> because a persona is
-              what one spawns as. <code>agent.usage</code> is separate from <code>agent.observe</code>
+              what one spawns as, and Agent Profiles ride it with them: a profile is where one spawns,
+              its sign-ins run in panes on this device, and its folder never roams. <code>agent.usage</code> is separate from <code>agent.observe</code>
               because a reading is the account's billing state and costs a credentialed vendor call — a
               plugin that asked to watch the fold must not thereby make fieldd spend the user's token.
             </p>
@@ -1674,7 +1682,8 @@
                   <tr><td><p><code>runtime.spawn</code> · <code>resume</code> · <code>attach</code> · <code>agent(id)</code> · <code>handleProcessExit</code></p></td><td><p><code>agent.spawn</code>, <code>agent.resume</code>, the boot re-attach, the exit backstop</p></td></tr>
                   <tr><td><p><code>onMonitorState</code> · <code>onMonitorRemoved</code> · <code>onMonitorNotification</code> · <code>monitorState</code></p></td><td><p>the fold, through <code>AgentMonitorMirror</code></p></td></tr>
                   <tr><td><p><code>createFileCreationRequestRegistry</code> (<code>CreationRequestRegistry</code>)</p></td><td><p><code>users/&lt;fuid&gt;/agents/runs/</code> — puppeteer owns every byte</p></td></tr>
-                  <tr><td><p><code>ProfileStore</code> · <code>parseProfileRegistrySnapshot</code> · <code>createProfile</code> · <code>removeProfile</code> · <code>verifyProfile</code> · <code>startProfileLogin</code> · <code>profiles</code> · <code>profileObservationRoot</code></p></td><td><p>the five <code>agents.profiles.*</code> doors and the enrollment join</p></td></tr>
+                  <tr><td><p><code>ProfileStore</code> · <code>parseProfileRegistrySnapshot</code> (v1 adopted, v2 written) · <code>createProfile</code> · <code>retireProfile</code> · <code>signOutProfile</code> · <code>removeProfile</code> · <code>verifyProfile</code> · <code>startProfileLogin</code> · <code>profiles</code> · <code>profileObservationRoot</code></p></td><td><p>the five <code>agents.profiles.*</code> doors and the enrollment join</p></td></tr>
+                  <tr><td><p><code>profileSets</code> · <code>profileSet</code> · <code>createProfileSet</code> · <code>updateProfileSet</code> · <code>setDefaultProfileSet</code> · <code>removeProfileSet</code> · <code>onProfilesChanged</code> · the default set, which <code>spawn</code> consults when it names no persona</p></td><td><p>the six <code>agents.profileSets.*</code> doors; <code>agent.spawn</code>'s default</p></td></tr>
                   <tr><td><p><code>inspectInstallations</code> · <code>planUpdate</code> · <code>checkReleases</code> · <code>availableUpdate</code> · <code>updateInstallation({onOutput})</code> · <code>distributionProviders</code></p></td><td><p><code>agents.installs</code>, <code>.releases</code> (a kept check re-judged with <code>availableUpdate</code>), <code>.update</code> and the operations feed; transcripts under the machine scope</p></td></tr>
                   <tr><td><p><code>createAccountUsageMonitor</code> · <code>AccountUsageBatch</code></p></td><td><p><code>agents.usage</code> and its subscription, through the EL7 projection</p></td></tr>
                   <tr><td><p><code>HistoryPort</code> · <code>AccountUsagePort</code> (<code>puppeteer-views</code>)</p></td><td><p><code>packages/field-app/src/godview/monitor/doors.ts</code> — adapters over fieldd's doors; the views dial nothing</p></td></tr>
@@ -1794,11 +1803,15 @@
               <div class="card">
                 <h3>Agent Profiles in Settings</h3>
                 <p>
-                  The per-profile half of R1: each profile's sign-ins, usage and extensions, and the login
-                  pane in front of the persona door, which still has no UI. Designed in the record; the
-                  grouping of per-provider personas into one cross-agent profile is not ruled yet.
+                  The per-profile half of R1: the sidebar's Agent Profiles, This Mac first; a profile's
+                  page — its sign-ins with each window's usage on the C1 timeline, Add agent…, name, glyph,
+                  Use for new sessions, its folder, Delete with the two-step confirm; one agent inside a
+                  profile — Switch account…, its folder, Sign out; New agent profile; and the login pane on
+                  the page, in front of the persona door. Built 2026-09-23 on the six
+                  <code>agents.profileSets.*</code> doors and the persona doors, with the grouping in
+                  puppeteer's registry (AR-D23). Extensions per profile wait for their own phase.
                 </p>
-                <span class="badge tone-designed">Designed</span>
+                <span class="badge tone-built">Built</span>
               </div>
             </div>
           </section>

@@ -28,6 +28,9 @@ import {
   type AgentDistributionRecord,
   type AgentsInstallsResult,
   type AgentsOperationsResult,
+  type AgentsProfileSetsDeleteResult,
+  type AgentsProfileSetsListResult,
+  type AgentsProfileSetsSetResult,
   type AgentsProfilesCreateResult,
   type AgentsProfilesDeleteResult,
   type AgentsProfilesListResult,
@@ -85,6 +88,20 @@ afterEach(async () => {
   cleanup = [];
 });
 
+/** The claude adapter's OWN probes (identity reads, sign-in, sign-out)
+ * resolve `claude` from PUPPETEER_CLAUDE_BIN or PATH, not from the install
+ * inventory's private search path — so every row pins it to the scripted
+ * claude, and nothing here can run the developer's real agent (AR-S2: This
+ * Mac's identities are read at a product boot). */
+function pinClaude(bin: string): void {
+  const previous = process.env["PUPPETEER_CLAUDE_BIN"];
+  process.env["PUPPETEER_CLAUDE_BIN"] = join(bin, "claude");
+  cleanup.push(() => {
+    if (previous === undefined) delete process.env["PUPPETEER_CLAUDE_BIN"];
+    else process.env["PUPPETEER_CLAUDE_BIN"] = previous;
+  });
+}
+
 async function setup(
   config: {
     rosettadBin?: string;
@@ -106,6 +123,7 @@ async function setup(
   const bin = join(root, "bin");
   mkdirSync(bin);
   copyFileSync(FAKE_CLAUDE, join(bin, "claude"));
+  pinClaude(bin);
   if (config.profiles !== undefined) {
     mkdirSync(join(dataDir, ...LAYOUT.AGENTS_DIR), { recursive: true });
     writeFileSync(
@@ -223,37 +241,58 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
     expect(err.data?.kind).toBe("FORBIDDEN_SCOPE");
   });
 
-  it("creating a persona allocates its root under AGENT_ROOTS_DIR (0700), persists the registry (0600), enrolls the observation root under the JOINED kind, bounces the daemon, and the persona carries its runtimeId", async () => {
+  it("signing an agent into an Agent Profile allocates its root INSIDE the profile's folder (0700), persists the registry v2 (0600), enrolls the observation root under the JOINED kind, bounces the daemon, and the persona carries its runtimeId", async () => {
     const { dataDir, daemon } = await setup();
     await ready(daemon);
     const firstPid = daemon.health().rosettad.pid;
     const win = await window(daemon, ALL, "p2");
-    const created = (await win.call("agents.profiles.create", {
-      provider: "claude",
+    const { set } = (await win.call("agents.profileSets.create", {
       label: "Work",
+      glyph: "briefcase",
+    })) as AgentsProfileSetsSetResult;
+    expect(set).toMatchObject({ id: "work", kind: "managed", label: "Work", default: false });
+    const folder = join(dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, "work");
+    expect(mode(folder)).toBe(0o700);
+    const created = (await win.call("agents.profiles.create", {
+      set: "work",
+      provider: "claude",
     })) as AgentsProfilesCreateResult;
     const { persona } = created;
-    expect(persona).toMatchObject({ provider: "claude", label: "Work", kind: "managed" });
+    expect(persona).toMatchObject({
+      provider: "claude",
+      label: "Work",
+      kind: "managed",
+      set: "work",
+    });
     expect(persona).not.toHaveProperty("dataRoot");
     expect(persona.runtimeId).toBe("rt-claude-code-enrolled-1");
 
-    // the root: fieldd's directory, puppeteer's allocation
-    const rootsDir = join(dataDir, ...LAYOUT.AGENT_ROOTS_DIR, "claude");
-    expect(readdirSync(rootsDir)).toEqual([persona.profileId]);
-    const root = join(rootsDir, persona.profileId);
+    // the root: inside the profile's folder, named for the agent, never reused
+    const entries = readdirSync(folder);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatch(/^claude-[0-9a-f]{8}$/);
+    const root = join(folder, entries[0] as string);
     expect(mode(root)).toBe(0o700);
-    // the registry: puppeteer's schema, fieldd's custody
+    // nothing is allocated under the AR-1 roots directory any more
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_ROOTS_DIR))).toBe(false);
+    // the registry: puppeteer's schema (version 2 — the sets beside the
+    // sign-ins), fieldd's custody
     const registryPath = join(dataDir, ...LAYOUT.AGENT_PROFILES_FILE);
     expect(mode(registryPath)).toBe(0o600);
     const registry = JSON.parse(readFileSync(registryPath, "utf8"));
-    expect(registry).toMatchObject({ version: 1 });
-    expect(registry.profiles).toHaveLength(1);
-    expect(registry.profiles[0]).toMatchObject({
-      id: persona.profileId,
-      provider: "claude",
-      kind: "managed",
-      dataRoot: root,
+    expect(registry).toMatchObject({
+      version: 2,
+      sets: [{ id: "work", kind: "managed", label: "Work", glyph: "briefcase", directory: folder }],
     });
+    expect(registry.profiles).toEqual([
+      expect.objectContaining({
+        id: persona.profileId,
+        provider: "claude",
+        kind: "managed",
+        dataRoot: root,
+        set: "work",
+      }),
+    ]);
     // the record: the observation root (claude's = the profile root), the
     // kind the roll call joined (`~/.claude` ⇒ claude-code), the persona named
     expect(readRecord(dataDir).runtimes).toEqual([
@@ -273,7 +312,7 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
       }),
     ]);
     expect(JSON.stringify(status)).not.toContain(root);
-    // listed now, with the join
+    // listed now, with the join — and still no path on the persona door
     const listed = (await win.call("agents.profiles.list", {
       provider: "claude",
     })) as AgentsProfilesListResult;
@@ -281,23 +320,38 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
       ["claude:native-default", undefined],
       [persona.profileId, "rt-claude-code-enrolled-1"],
     ]);
-    // audited: the attempt names the provider, the outcome the minted id
+    expect(JSON.stringify(listed)).not.toContain(dataDir);
+    // a profile holds one sign-in per agent; This Mac takes none
+    const twice = await win.callErr("agents.profiles.create", { set: "work", provider: "claude" });
+    expect(twice.data?.kind).toBe("PRECONDITION_FAILED");
+    const native = await win.callErr("agents.profiles.create", {
+      set: "native",
+      provider: "claude",
+    });
+    expect(native.data?.kind).toBe("PRECONDITION_FAILED");
+    const nowhere = await win.callErr("agents.profiles.create", {
+      set: "ghost",
+      provider: "claude",
+    });
+    expect(nowhere.data?.kind).toBe("NOT_FOUND");
+    // audited: the attempt names the provider and the profile, the outcome the minted id
     const audit = auditText(dataDir);
     expect(audit).toContain('"agents.profiles.create"');
+    expect(audit).toContain('"agents.profile_sets.create"');
     expect(audit).toContain(persona.profileId);
     expect(audit).toContain('"indexed":true');
   });
-
-  it("a provider the roll call does not know is created but not indexed (runtimeId absent); verify is honest about an adapter that cannot; unknown and native-default personas are refused typed", async () => {
+  it("a provider the roll call does not know is created but not indexed (runtimeId absent); verify is honest about an adapter that cannot; unknown personas are refused typed", async () => {
     const { dataDir, daemon } = await setup();
     await ready(daemon);
     const win = await window(daemon, ALL, "p3");
     // the fake's roll call lists claude-code and codex only — pi's `~/.pi` is
     // not on it, so the persona exists in the registry and waits for an index
+    await win.call("agents.profileSets.create", { label: "Research" });
     const pid = daemon.health().rosettad.pid;
     const { persona } = (await win.call("agents.profiles.create", {
+      set: "research",
       provider: "pi",
-      label: "Research",
     })) as AgentsProfilesCreateResult;
     expect(persona).toMatchObject({ provider: "pi", kind: "managed", label: "Research" });
     expect(persona.runtimeId).toBeUndefined();
@@ -315,23 +369,20 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
 
     const missing = await win.callErr("agents.profiles.verify", { profileId: "nope" });
     expect(missing.data?.kind).toBe("NOT_FOUND");
-    const notOurs = await win.callErr("agents.profiles.delete", {
-      profileId: "claude:native-default",
-    });
-    expect(notOurs.data?.kind).toBe("PRECONDITION_FAILED");
     const gone = await win.callErr("agents.profiles.delete", { profileId: "nope" });
     expect(gone.data?.kind).toBe("NOT_FOUND");
   });
-
-  it("deleting a persona retires its runtime (rows kept, the record names it retired), unregisters it and deletes its root", async () => {
+  it("signing out of a persona with no session running finishes it at once: the runtime retired (rows kept, the record names it), the persona unregistered, its root deleted — the profile's folder kept", async () => {
     const { dataDir, daemon } = await setup();
     await ready(daemon);
     const win = await window(daemon, ALL, "p4");
+    await win.call("agents.profileSets.create", { label: "Temp" });
     const { persona } = (await win.call("agents.profiles.create", {
+      set: "temp",
       provider: "claude",
-      label: "Temp",
     })) as AgentsProfilesCreateResult;
-    const root = join(dataDir, ...LAYOUT.AGENT_ROOTS_DIR, "claude", persona.profileId);
+    const folder = join(dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, "temp");
+    const root = join(folder, readdirSync(folder)[0] as string);
     expect(existsSync(root)).toBe(true);
     const pid = daemon.health().rosettad.pid;
 
@@ -340,6 +391,8 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
     })) as AgentsProfilesDeleteResult;
     expect(deleted).toEqual({ deleted: true });
     expect(existsSync(root)).toBe(false);
+    // the profile is still there, empty: signing out leaves the place
+    expect(existsSync(folder)).toBe(true);
     const record = readRecord(dataDir);
     expect(record.runtimes).toEqual([]);
     expect(record.retired).toEqual([
@@ -361,12 +414,15 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
     })) as AgentsProfilesListResult;
     expect(listed.personas.map((p) => p.profileId)).toEqual(["claude:native-default"]);
     expect(JSON.parse(readFileSync(join(dataDir, ...LAYOUT.AGENT_PROFILES_FILE), "utf8"))).toEqual({
-      version: 1,
+      version: 2,
+      sets: [expect.objectContaining({ id: "temp", label: "Temp" })],
       profiles: [],
     });
     expect(auditText(dataDir)).toContain('"agents.profiles.delete"');
+    // signed out already: the persona is not there to sign out again
+    const again = await win.callErr("agents.profiles.delete", { profileId: persona.profileId });
+    expect(again.data?.kind).toBe("NOT_FOUND");
   });
-
   it("every daemon ready re-applies the record to the personas (R4): a persona registered before this fieldd existed is enrolled at the first ready, and the ready after that changes nothing", async () => {
     // A SHORT root, like every other row's (AR-5-0): the mock mgmt socket lives
     // at `<root>/users/1/native/run/mgmt.sock`, and under macOS's default
@@ -430,6 +486,200 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
   });
 });
 
+describe("Agent Profiles (AR-S2) — puppeteer's profile sets, one folder each under the user", () => {
+  it("the list: This Mac first (the agents' own folders, the default, no folder of its own), the sign-in-capable providers, no identity read unasked; a window needs agent.spawn", async () => {
+    const { dataDir, daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agent.spawn"], "s1");
+    const listed = (await win.call("agents.profileSets.list", {})) as AgentsProfileSetsListResult;
+    expect(listed.sets.map((set) => [set.id, set.kind, set.default])).toEqual([
+      ["native", "native", true],
+    ]);
+    const native = listed.sets[0]!;
+    expect(native.label).toBe("This Mac");
+    expect(native).not.toHaveProperty("folder");
+    const claude = native.personas.find((p) => p.provider === "claude");
+    // each agent's own folder, printed for a person to read
+    expect(claude).toMatchObject({
+      profileId: "claude:native-default",
+      set: "native",
+      folder: "~/.claude",
+    });
+    // an embedded daemon reads no identity on its own (a status command is the vendor's)
+    expect(claude?.identity).toBeUndefined();
+    expect(listed.reading).toBe(false);
+    // the Add menu's candidates: the adapters that sign in AND say who (pi says no one)
+    expect(listed.signIn).toEqual(expect.arrayContaining(["claude", "codex"]));
+    expect(listed.signIn).not.toContain("pi");
+    // This Mac's sign-outs: only where the vendor's own command signs a folder out
+    expect(listed.signOut).toContain("claude");
+    expect(listed.signOut).not.toContain("codex");
+    expect(JSON.stringify(listed)).not.toContain(dataDir);
+    // nothing on disk yet: listing touches no registry file
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_PROFILES_FILE))).toBe(false);
+
+    const denied = await window(daemon, ["agents.manage"], "s1b");
+    expect((await denied.callErr("agents.profileSets.list", {})).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+  }, 20_000);
+
+  it("refresh reads This Mac's sign-ins with the vendor's own status command (the scripted claude), and the answer says it is reading", async () => {
+    const { daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agent.spawn"], "s2");
+    const first = (await win.call("agents.profileSets.list", {
+      refresh: true,
+    })) as AgentsProfileSetsListResult;
+    expect(first.reading).toBe(true);
+    await untilAsync(async () => {
+      const listed = (await win.call("agents.profileSets.list", {})) as AgentsProfileSetsListResult;
+      const claude = listed.sets[0]?.personas.find((p) => p.provider === "claude");
+      return !listed.reading && claude?.identity?.loggedIn === true;
+    }, 10_000);
+    const listed = (await win.call("agents.profileSets.list", {})) as AgentsProfileSetsListResult;
+    expect(listed.sets[0]?.personas.find((p) => p.provider === "claude")?.identity).toMatchObject({
+      loggedIn: true,
+      email: "persona@example.test",
+      plan: "max",
+    });
+    // only installed agents are asked: nothing but the scripted claude is on this search path
+    expect(
+      listed.sets[0]?.personas.filter((p) => p.identity !== undefined).map((p) => p.provider),
+    ).toEqual(["claude"]);
+  }, 20_000);
+
+  it("create, rename, re-mark and move the default: the folder keeps the name it was made with, the sign-ins and the index take the new one, and there is always exactly one default", async () => {
+    const { dataDir, daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ALL, "s3");
+    const made = (await win.call("agents.profileSets.create", {
+      label: "Client demo",
+      glyph: "flask",
+      default: true,
+    })) as AgentsProfileSetsSetResult;
+    expect(made.set).toMatchObject({
+      id: "client-demo",
+      label: "Client demo",
+      glyph: "flask",
+      default: true,
+      personas: [],
+    });
+    expect(made.set.folder).toMatch(/agents\/profiles\/client-demo$/);
+    const { persona } = (await win.call("agents.profiles.create", {
+      set: "client-demo",
+      provider: "claude",
+    })) as AgentsProfilesCreateResult;
+    // the same name again is a different place with a different folder
+    const again = (await win.call("agents.profileSets.create", {
+      label: "Client demo",
+    })) as AgentsProfileSetsSetResult;
+    expect(again.set.id).toBe("client-demo-2");
+
+    const renamed = (await win.call("agents.profileSets.update", {
+      set: "client-demo",
+      label: "Acme",
+      glyph: "rocket",
+    })) as AgentsProfileSetsSetResult;
+    expect(renamed.set).toMatchObject({ id: "client-demo", label: "Acme", glyph: "rocket" });
+    expect(renamed.set.personas.map((p) => p.label)).toEqual(["Acme"]);
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, "client-demo"))).toBe(true);
+    // the index names the sign-in by the profile's new name
+    expect(readRecord(dataDir).runtimes).toEqual([
+      expect.objectContaining({ label: "Acme", profile_id: persona.profileId }),
+    ]);
+
+    // the default only ever MOVES to a profile
+    const moved = (await win.call("agents.profileSets.update", {
+      set: "native",
+      default: true,
+    })) as AgentsProfileSetsSetResult;
+    expect(moved.set.default).toBe(true);
+    const listed = (await win.call("agents.profileSets.list", {})) as AgentsProfileSetsListResult;
+    expect(listed.sets.filter((set) => set.default).map((set) => set.id)).toEqual(["native"]);
+    // This Mac keeps its name and mark
+    const renameNative = await win.callErr("agents.profileSets.update", {
+      set: "native",
+      label: "Mine",
+    });
+    expect(renameNative.data?.kind).toBe("PRECONDITION_FAILED");
+    const bad = await win.callErr("agents.profileSets.update", {
+      set: "acme",
+      glyph: "Not A Glyph",
+    });
+    expect(bad.data?.kind).toBe("PRECONDITION_FAILED");
+    const audit = auditText(dataDir);
+    expect(audit).toContain('"agents.profile_sets.update"');
+  }, 30_000);
+
+  it("delete: refused for This Mac and for the default; a profile's sign-ins are signed out, the profile unregistered and its folder deleted", async () => {
+    const { dataDir, daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ALL, "s4");
+    await win.call("agents.profileSets.create", { label: "Work", default: true });
+    const { persona } = (await win.call("agents.profiles.create", {
+      set: "work",
+      provider: "claude",
+    })) as AgentsProfilesCreateResult;
+    const folder = join(dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, "work");
+
+    const native = await win.callErr("agents.profileSets.delete", { set: "native" });
+    expect(native.data?.kind).toBe("PRECONDITION_FAILED");
+    const theDefault = await win.callErr("agents.profileSets.delete", { set: "work" });
+    expect(theDefault.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(theDefault.message).toBe(
+      "Work is the default for new sessions. Make another profile the default first.",
+    );
+    await win.call("agents.profileSets.update", { set: "native", default: true });
+    const deleted = (await win.call("agents.profileSets.delete", {
+      set: "work",
+    })) as AgentsProfileSetsDeleteResult;
+    expect(deleted).toEqual({ deleted: true, stopped: 0 });
+    expect(existsSync(folder)).toBe(false);
+    expect(readRecord(dataDir).retired).toEqual([
+      expect.objectContaining({ profile_id: persona.profileId, label: "Work" }),
+    ]);
+    expect(JSON.parse(readFileSync(join(dataDir, ...LAYOUT.AGENT_PROFILES_FILE), "utf8"))).toEqual({
+      version: 2,
+      sets: [],
+      profiles: [],
+    });
+    const gone = await win.callErr("agents.profileSets.delete", { set: "work" });
+    expect(gone.data?.kind).toBe("NOT_FOUND");
+    expect(auditText(dataDir)).toContain('"agents.profile_sets.delete"');
+  }, 30_000);
+
+  it("the subscription carries whole frames as the profiles change; Show in Finder resolves ids and refuses what it cannot show", async () => {
+    const { daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ALL, "s5");
+    const frames = (): AgentsProfileSetsListResult[] =>
+      win.notifications
+        .map((n) => n.params.payload as AgentsProfileSetsListResult | undefined)
+        .filter((payload): payload is AgentsProfileSetsListResult => payload?.sets !== undefined);
+    const subscribed = await win.call("agents.profileSets.subscribe", {});
+    // the first frame is the snapshot: This Mac, before anything was made
+    await until(
+      () => frames().length > 0 || JSON.stringify(subscribed).includes('"native"'),
+      5_000,
+    );
+    await win.call("agents.profileSets.create", { label: "Personal", glyph: "house" });
+    await until(() => frames().some((f) => f.sets.some((set) => set.id === "personal")), 5_000);
+
+    // This Mac has no folder of its own; a profile without a sign-in has one
+    expect((await win.callErr("agents.profileSets.reveal", { set: "native" })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect(
+      (await win.callErr("agents.profileSets.reveal", { set: "personal", provider: "codex" })).data
+        ?.kind,
+    ).toBe("NOT_FOUND");
+    // no desktop shell in a unit daemon: said, never pretended
+    const shell = await win.callErr("agents.profileSets.reveal", { set: "personal" });
+    expect(shell.data?.kind).toBe("UNAVAILABLE");
+  }, 20_000);
+});
+
 /** `setup` at a caller-owned root (the reconcile row plants files first). */
 async function setupAt(
   root: string,
@@ -441,6 +691,7 @@ async function setupAt(
   const bin = join(root, "bin");
   mkdirSync(bin, { recursive: true });
   copyFileSync(FAKE_CLAUDE, join(bin, "claude"));
+  pinClaude(bin);
   if (config.profiles !== undefined) {
     mkdirSync(join(dataDir, ...LAYOUT.AGENTS_DIR), { recursive: true });
     writeFileSync(
@@ -773,22 +1024,23 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
       const { dataDir, daemon } = await setup({ rosettadBin: REAL_BIN as string, real: true });
       await until(() => daemon.health().rosettad.phase === "ready", 30_000);
       const win = await window(daemon, ALL, "live1");
+      await win.call("agents.profileSets.create", { label: "Kim" });
+      await win.call("agents.profileSets.create", { label: "Lab" });
       const claude = (await win.call("agents.profiles.create", {
+        set: "kim",
         provider: "claude",
-        label: "Kim",
       })) as AgentsProfilesCreateResult;
       const pi = (await win.call("agents.profiles.create", {
+        set: "lab",
         provider: "pi",
-        label: "Lab",
       })) as AgentsProfilesCreateResult;
       const record = readRecord(dataDir);
-      const claudeRoot = join(
-        dataDir,
-        ...LAYOUT.AGENT_ROOTS_DIR,
-        "claude",
-        claude.persona.profileId,
-      );
-      const piRoot = join(dataDir, ...LAYOUT.AGENT_ROOTS_DIR, "pi", pi.persona.profileId);
+      const inFolder = (set: string) => {
+        const folder = join(dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, set);
+        return join(folder, readdirSync(folder)[0] as string);
+      };
+      const claudeRoot = inFolder("kim");
+      const piRoot = inFolder("lab");
       expect(record.runtimes).toEqual(
         expect.arrayContaining([
           {

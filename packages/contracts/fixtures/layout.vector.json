@@ -27,6 +27,7 @@
   "INDEX_ENROLLMENT_FILE": ["index", "enrollment.json"],
   "AGENTS_DIR": ["agents"],
   "AGENT_PROFILES_FILE": ["agents", "profiles.json"],
+  "AGENT_PROFILE_SETS_DIR": ["agents", "profiles"],
   "AGENT_ROOTS_DIR": ["agents", "roots"],
   "AGENT_SESSIONS_DIR": ["agents", "sessions"],
   "AGENT_RUNS_DIR": ["agents", "runs"],

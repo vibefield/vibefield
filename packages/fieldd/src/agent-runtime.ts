@@ -5,11 +5,10 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { dirname, join } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
 import type { BuiltinExecutableAgentKind } from "@vibecook/puppeteer-builtin-providers";
 import { createBuiltinProviders } from "@vibecook/puppeteer-builtin-providers";
@@ -18,10 +17,8 @@ import type {
   AgentHost,
   AgentInstallation,
   AgentMonitorState,
-  AgentProfile,
   BoundIngress,
   HostIngress,
-  ProfileFailure,
 } from "@vibecook/puppeteer-core";
 import {
   type Agent,
@@ -52,13 +49,9 @@ import {
   type AgentSessionSummary,
   type AgentSpawnParams,
   type AgentSpawnResult,
-  type AgentsProfilesCreateParams,
-  type AgentsProfilesCreateResult,
-  type AgentsProfilesDeleteResult,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginParams,
   type AgentsProfilesLoginResult,
-  type AgentsProfilesVerifyResult,
   LAYOUT,
   type TerminalInfo,
 } from "@vibefield/contracts";
@@ -69,7 +62,13 @@ import {
   type RevealPath,
 } from "./agent-distribution";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
-import type { EnrollRuntimeSpec, IndexService } from "./agent-index";
+import type { IndexService } from "./agent-index";
+import {
+  AgentProfileService,
+  failureToError,
+  isFailure,
+  type PersonaSessions,
+} from "./agent-profiles";
 import {
   foldStatus,
   mirrorOf,
@@ -90,19 +89,19 @@ import type { TerminalService } from "./terminal-service";
 // from puppeteer's built-in providers with everything it would otherwise keep
 // under `~/.puppeteer` injected from THIS user's root (PU-8: fieldd owns every
 // byte, puppeteer every schema) — the profile registry at
-// `users/<fuid>/agents/profiles.json`, managed roots under
-// `users/<fuid>/agents/roots/<provider>/<uuid>`, update transcripts under the
-// machine scope `machine/agents/updates/`.
+// `users/<fuid>/agents/profiles.json`, every Agent Profile's folder (and the
+// sign-in roots inside it) under `users/<fuid>/agents/profiles/<set>/`, update
+// transcripts under the machine scope `machine/agents/updates/`.
 //
-// The persona path (topology §4 "Persona create"): a persona IS a puppeteer
-// profile; creating one allocates its immutable root and registers it, and
-// fieldd then enrolls the root the provider's OWN layout applies to —
-// `observationRoot(profile)` (PU-7), never `dataRoot`, which differs for pi and
-// OpenCode — in this user's enrollment record under the KIND rosetta's roll
-// call joins it to. Deleting one stops its sessions, retires the runtime
-// (rows kept, AR-D19), unregisters the profile and deletes the root with its
-// credentials. Every daemon ready re-applies the record to the personas (R4),
-// so a persona made while the index was down is indexed at the next ready.
+// The persona path and Agent Profiles (AR-2, AR-S2) live in
+// `agent-profiles.ts`: a persona IS a puppeteer profile, one agent's sign-in
+// inside a profile set; creating one allocates its root in the set's folder
+// and enrolls the root the provider's OWN layout applies to (PU-7). This
+// service is the fold those doors lean on — which sessions run under a
+// persona, stopping them, forgetting their records, the login pane it has
+// open — and it tells them when a session ends, so a signed-out persona is
+// finished once nothing runs under it (AR-D25). Every daemon ready re-applies
+// the record to the personas (R4).
 //
 // The machine scope (AR-D15/D16, R2/R6): `machine/agents/distribution.json` is
 // the ONLY product state outside a user root — which executable new spawns use
@@ -141,10 +140,12 @@ import type { TerminalService } from "./terminal-service";
 // replacement by hand. A record whose PTY did NOT survive is stamped as an
 // unknown exit and resumes from the door like any other.
 //
-// What the doors never carry: a persona's root (a client names a persona by
-// id; where fieldd keeps its root is fieldd's business), the daemon's origin
-// (EL7), an update transcript (opaque, 0600, machine scope), a continuation's
-// state (opaque, persisted, never projected), an agent's argv or environment.
+// What the doors never carry: a persona's root as anything a client could hand
+// back (a client names a persona by id; the profiles feed prints a folder for
+// a person to read, and Show in Finder resolves it from ids), the daemon's
+// origin (EL7), an update transcript (opaque, 0600, machine scope), a
+// continuation's state (opaque, persisted, never projected), an agent's argv
+// or environment.
 
 /** puppeteer's persisted registry (`ProfileRegistrySnapshot` — its schema) in
  * fieldd's custody: 0600, temp + durable rename, the directory 0700. An
@@ -216,6 +217,9 @@ const PUBLISH_TICK_MS = 16;
 const EXIT_GRACE_MS = 1_500;
 /** A login pane left open indefinitely still gets one verification. */
 const LOGIN_TIMEOUT_MS = 10 * 60_000;
+/** AR-S2 — how long a stop waits for a just-born session to be placed on its
+ * cell before it can be terminated by id */
+const STOP_PLACEMENT_WAIT_MS = 3_000;
 /** AR-4 — resume-when-idle. A pending run (a live PTY this boot could not
  * re-attach to) is resumed into a new run once the index says its
  * conversation has been still for `RESUME_IDLE_AFTER_MS`, asked every
@@ -364,7 +368,7 @@ interface AwaitingBoot {
 
 /** The `agents.*`/`agent.*` doors' service, the runtime's owner and the fold.
  * Auditing is the caller's (the daemon wraps the mutations in `audit.required`). */
-export class AgentRuntimeService {
+export class AgentRuntimeService implements PersonaSessions {
   /** puppeteer's runtime — typed as the open surface, not the built-in
    * family's: the composed providers are the built-ins plus whatever the
    * `providers` seam adds, and `spawn` takes any composed id. */
@@ -375,17 +379,14 @@ export class AgentRuntimeService {
   private readonly distributionRecord: DistributionRecordStore | null;
   /** the `agents.*` distribution doors (agent-distribution.ts) */
   readonly distribution: AgentDistributionService;
+  /** Agent Profiles and the persona doors (agent-profiles.ts) */
+  readonly profiles: AgentProfileService;
   private readonly records: SessionRecordStore;
-  private readonly rootsDir: string;
   private readonly home: string;
   private readonly logger: Logger;
   private readonly now: () => Date;
   private readonly onTransition: ((state: RosettadState) => void) | null;
   private readonly unsubscribeMonitor: Array<() => void> = [];
-  private reconciling: Promise<void> | null = null;
-  /** personas mid-deletion: a reconcile racing the retire's bounce must not
-   * re-enroll one it still finds in the registry */
-  private readonly deleting = new Set<string>();
   /** the fold: managed runs by runtimeRunId, the pending ones beside them
    * (AR-4), and the terminal → run index over both */
   private readonly managed = new Map<string, ManagedEntry>();
@@ -405,7 +406,10 @@ export class AgentRuntimeService {
   private readonly idleAfterMs: number;
   private readonly pollMs: number;
   /** login panes awaiting their exit, by the floor's session id */
-  private readonly logins = new Map<string, { profileId: string; timer: NodeJS.Timeout }>();
+  private readonly logins = new Map<
+    string,
+    { profileId: string; timer: NodeJS.Timeout; since: string }
+  >();
   /** MF-1g — every login pane this daemon opened, until its PTY is reaped.
    * The agent class is `keep-until-explicit-close` now, so a login pane's
    * husk needs an explicit end where the old class gave it one for free. */
@@ -418,7 +422,6 @@ export class AgentRuntimeService {
     this.logger = opts.logger ?? createNoopLogger();
     this.now = opts.now ?? (() => new Date());
     this.home = opts.home ?? homedir();
-    this.rootsDir = join(opts.userRoot, ...LAYOUT.AGENT_ROOTS_DIR);
     this.records = new SessionRecordStore({
       dir: join(opts.userRoot, ...LAYOUT.AGENT_SESSIONS_DIR),
       keyPath: join(opts.userRoot, ...LAYOUT.AGENT_SESSIONS_KEY_FILE),
@@ -479,7 +482,9 @@ export class AgentRuntimeService {
           path: join(opts.userRoot, ...LAYOUT.AGENT_PROFILES_FILE),
           logger: this.logger,
         }),
-        rootsDirectory: this.rootsDir,
+        // AR-S2 (AR-D24) — each Agent Profile's folder, and every sign-in's
+        // root inside it, under this user
+        rootsDirectory: join(opts.userRoot, ...LAYOUT.AGENT_PROFILE_SETS_DIR),
       },
       distribution: {
         // puppeteer's default is ~/.puppeteer/updates; without a machine scope
@@ -508,6 +513,16 @@ export class AgentRuntimeService {
       now: this.now,
       logger: this.logger,
     });
+    this.profiles = new AgentProfileService({
+      runtime: this.runtime,
+      index: opts.index,
+      sessions: this,
+      userRoot: opts.userRoot,
+      home: this.home,
+      revealPath: opts.revealPath ?? (() => null),
+      now: this.now,
+      logger: this.logger,
+    });
     // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
     this.unsubscribeMonitor.push(
       this.runtime.onMonitorState((state) => this.onMonitorState(state)),
@@ -522,7 +537,7 @@ export class AgentRuntimeService {
     // R4 — every daemon ready re-applies the record to the personas.
     if (opts.supervisor !== null) {
       this.onTransition = (state) => {
-        if (state.phase === "ready") void this.reconcile();
+        if (state.phase === "ready") void this.profiles.reconcile();
       };
       opts.supervisor.on("transition", this.onTransition);
     } else {
@@ -550,12 +565,16 @@ export class AgentRuntimeService {
       });
     }
     const ids = await this.opts.index.runtimeIdsByRoot();
-    const profiles = await this.runtime.profiles();
+    // a signed-out persona is nobody's to spawn as, though it stays registered
+    // until its sessions end (AR-D25)
+    const profiles = (await this.runtime.profiles()).filter((p) => p.retiredAt === undefined);
     const providers = [];
     for (const descriptor of this.runtime.providers()) {
       const personas: AgentPersona[] = [];
       for (const profile of profiles) {
-        if (profile.provider === descriptor.id) personas.push(await this.project(profile, ids));
+        if (profile.provider === descriptor.id) {
+          personas.push(await this.profiles.project(profile, ids));
+        }
       }
       providers.push({
         id: descriptor.id,
@@ -802,15 +821,23 @@ export class AgentRuntimeService {
       LOGIN_TIMEOUT_MS,
     );
     timer.unref();
-    this.logins.set(result.runtimeSessionId, { profileId: params.profileId, timer });
+    this.logins.set(result.runtimeSessionId, {
+      profileId: params.profileId,
+      timer,
+      since: this.now().toISOString(),
+    });
     this.loginPanes.add(result.runtimeSessionId);
+    this.profiles.publish();
     this.logger.info("fieldd.agents.login_started", "Persona login pane opened", {
       profileId: params.profileId,
       provider: profile.provider,
       sessionId: result.runtimeSessionId,
     });
     return {
-      persona: await this.project(result.profile, await this.opts.index.runtimeIdsByRoot()),
+      persona: await this.profiles.project(
+        result.profile,
+        await this.opts.index.runtimeIdsByRoot(),
+      ),
       terminal: terminals.createOpenResult(principal, born),
     };
   }
@@ -951,192 +978,118 @@ export class AgentRuntimeService {
     if (changed) this.publish();
   }
 
-  // ── personas ──
+  // ── personas (agent-profiles.ts) ──
 
-  async personas(provider?: string): Promise<AgentsProfilesListResult> {
-    const profiles = await this.runtime.profiles(provider);
-    const ids = await this.opts.index.runtimeIdsByRoot();
-    const personas: AgentPersona[] = [];
-    for (const profile of profiles) personas.push(await this.project(profile, ids));
-    return { personas };
+  /** `agents.profiles.list` — kept here for the callers that hold the service. */
+  personas(provider?: string): Promise<AgentsProfilesListResult> {
+    return this.profiles.personas(provider);
   }
 
-  /** Allocate + register (puppeteer), then enroll the observation root under
-   * the joined kind. An enrollment that cannot happen now (daemon down, kind
-   * unknown to the roll call) leaves the persona indexed later, not failed. */
-  async createPersona(params: AgentsProfilesCreateParams): Promise<AgentsProfilesCreateResult> {
-    const created = await this.runtime.createProfile({
-      providerId: params.provider,
-      label: params.label,
-    });
-    if (isFailure(created)) throw failureToError(created);
-    const spec = await this.enrollmentSpecFor(created);
-    if (spec !== undefined) await this.opts.index.enrollRuntimes([spec]);
-    return { persona: await this.project(created, await this.opts.index.runtimeIdsByRoot()) };
+  /** R4 — every daemon ready re-applies the record to the personas. */
+  reconcile(): Promise<void> {
+    return this.profiles.reconcile();
   }
 
-  /** Stop its sessions → unregister → retire → delete the root (topology §4
-   * "Persona delete"; the registry goes before the retire because the
-   * retire's bounce wakes the reconcile, which must find no persona to
-   * re-enroll). The persona's session records go with its root: nothing could
-   * resume into a root that no longer exists. */
-  async deletePersona(profileId: string): Promise<AgentsProfilesDeleteResult> {
-    const profile = await this.runtime.profile(profileId);
-    if (profile === undefined) {
-      throw new RpcCallError("NOT_FOUND", `no persona ${profileId}`, false, { profileId });
+  // ── the sessions a persona holds (PersonaSessions, for agent-profiles.ts) ──
+
+  /** Sessions still running under any of these personas: attached, pending,
+   * held for the boot's grace, or recorded mid-attach (AR-4b — in neither
+   * map, its record naming a PTY the floor still lists). An exited run is
+   * not one, whatever pane it left behind. */
+  liveUnder(profileIds: ReadonlySet<string>): number {
+    const under = (id: string | undefined): boolean => id !== undefined && profileIds.has(id);
+    const counted = new Set<string>();
+    for (const entry of this.managed.values()) {
+      if (!entry.exiting && under(entry.info.profileId)) counted.add(entry.info.terminalSessionId);
     }
-    if (profile.kind !== "managed") {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "the provider's own default root is not a persona VibeField owns; retire its kind through index.retire instead",
-        false,
-        { profileId, kind: profile.kind },
-      );
+    for (const [runtimeRunId, entry] of this.pending) {
+      if (under(entry.record.profileId))
+        counted.add(entry.record.terminalSessionId ?? runtimeRunId);
     }
-    this.deleting.add(profileId);
-    try {
-      // 0. its sessions (AR-3): the floor's ladder, the exit closes the run
-      const terminals = this.opts.terminals?.() ?? null;
-      const owned: Array<{ profileId: string | undefined; terminalSessionId: string | undefined }> =
-        [
-          ...[...this.managed.values()].map((entry) => ({
-            profileId: entry.info.profileId,
-            terminalSessionId: entry.info.terminalSessionId,
-          })),
-          ...[...this.pending.values()].map((entry) => ({
-            profileId: entry.record.profileId,
-            terminalSessionId: entry.record.terminalSessionId,
-          })),
-        ];
-      for (const entry of owned) {
-        if (
-          entry.profileId !== profileId ||
-          entry.terminalSessionId === undefined ||
-          terminals === null
-        )
-          continue;
+    for (const [runtimeRunId, waiting] of this.awaitingBoot) {
+      if (under(waiting.record.profileId)) {
+        counted.add(waiting.record.terminalSessionId ?? runtimeRunId);
+      }
+    }
+    const terminals = this.opts.terminals?.() ?? null;
+    if (terminals !== null) {
+      for (const record of this.records.list()) {
+        const id = record.terminalSessionId;
+        if (!under(record.profileId) || record.exited !== undefined || id === undefined) continue;
+        if (!counted.has(id) && this.listed(terminals, id)) counted.add(id);
+      }
+    }
+    return counted.size;
+  }
+
+  /** Stop every session under these personas — the floor's ladder; each
+   * exit closes its run the ordinary way — and drop their records. */
+  async stopUnder(profileIds: ReadonlySet<string>): Promise<number> {
+    const terminals = this.opts.terminals?.() ?? null;
+    const under = (id: string | undefined): boolean => id !== undefined && profileIds.has(id);
+    const targets = new Set<string>();
+    for (const entry of this.managed.values()) {
+      if (under(entry.info.profileId)) targets.add(entry.info.terminalSessionId);
+    }
+    for (const entry of this.pending.values()) {
+      const id = entry.record.terminalSessionId;
+      if (under(entry.record.profileId) && id !== undefined) targets.add(id);
+    }
+    // AR-4b — a run mid-attach is in neither map: the records name its PTY
+    for (const record of this.records.list()) {
+      const id = record.terminalSessionId;
+      if (!under(record.profileId) || record.exited !== undefined || id === undefined) continue;
+      if (terminals !== null && this.listed(terminals, id)) targets.add(id);
+    }
+    let stopped = 0;
+    if (terminals !== null) {
+      for (const id of targets) {
         try {
-          await terminals.terminate(entry.terminalSessionId);
+          if (await this.terminateLive(terminals, id)) stopped += 1;
         } catch (error) {
           this.logger.warn(
             "fieldd.agents.persona_session_stop_failed",
-            "A persona's session could not be terminated before deletion",
-            { profileId, error: error instanceof Error ? error.message : String(error) },
+            "A persona's session could not be terminated",
+            { error: error instanceof Error ? error.message : String(error) },
           );
         }
       }
-      // AR-4b — a run mid-attach is in neither map: the records name its PTY
-      for (const record of this.records.list()) {
-        if (record.profileId !== profileId) continue;
-        const id = record.terminalSessionId;
-        if (
-          terminals !== null &&
-          record.exited === undefined &&
-          id !== undefined &&
-          !owned.some((entry) => entry.terminalSessionId === id) &&
-          this.listed(terminals, id)
-        ) {
-          try {
-            await terminals.terminate(id);
-          } catch (error) {
-            this.logger.warn(
-              "fieldd.agents.persona_session_stop_failed",
-              "A persona's recorded session could not be terminated before deletion",
-              { profileId, error: error instanceof Error ? error.message : String(error) },
-            );
-          }
-        }
+    }
+    this.forgetUnder(profileIds);
+    return stopped;
+  }
+
+  /** Terminate a session this fold holds as live. One born a moment ago may
+   * not be in the floor's inventory yet, and an op on an unplaced session is
+   * routed to the interactive cell, which does not know it (`terminated:
+   * false`) — so an unplaced one is retried once the inventory lists it. A
+   * listed session that still answers false had already exited. */
+  private async terminateLive(terminals: TerminalService, sessionId: string): Promise<boolean> {
+    const deadline = Date.now() + STOP_PLACEMENT_WAIT_MS;
+    for (;;) {
+      const { terminated } = await terminals.terminate(sessionId);
+      if (terminated) return true;
+      if (this.listed(terminals, sessionId) || Date.now() > deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  /** Drop the records of sessions under these personas: nothing could resume
+   * into a root that is gone. */
+  forgetUnder(profileIds: ReadonlySet<string>): void {
+    for (const record of this.records.list()) {
+      if (record.profileId !== undefined && profileIds.has(record.profileId)) {
         this.records.remove(record.runtimeRunId);
       }
-      // 1. the registry
-      const deleted = await this.runtime.removeProfile(profileId);
-      try {
-        // 2. the index: watch off, rows kept, the persona still named (AR-D19)
-        for (const row of this.opts.index.record().runtimes) {
-          if (row.profile_id === profileId || within(profile.dataRoot, row.data_root)) {
-            await this.opts.index.retireEnrolled({ kind: row.kind, dataRoot: row.data_root });
-          }
-        }
-      } finally {
-        // 3. the root and its credentials — only ever a directory fieldd
-        // allocated; even when the retire could not settle (the daemon then
-        // finds the root gone at its next start and the record retires it)
-        if (within(this.rootsDir, profile.dataRoot) && profile.dataRoot !== this.rootsDir) {
-          rmSync(profile.dataRoot, { recursive: true, force: true });
-        } else {
-          this.logger.warn(
-            "fieldd.agents.persona_root_kept",
-            "Persona root lies outside this user's managed roots; left in place",
-            { profileId },
-          );
-        }
-      }
-      this.logger.info("fieldd.agents.persona_deleted", "Persona deleted", {
-        profileId,
-        provider: profile.provider,
-      });
-      return { deleted };
-    } finally {
-      this.deleting.delete(profileId);
     }
   }
 
-  /** Re-read the identity from the provider's own status surface; the result
-   * is data either way (the adapter's honest failure rides beside the persona). */
-  async verifyPersona(profileId: string): Promise<AgentsProfilesVerifyResult> {
-    const profile = await this.runtime.profile(profileId);
-    if (profile === undefined) {
-      throw new RpcCallError("NOT_FOUND", `no persona ${profileId}`, false, { profileId });
+  /** The persona's open login pane. */
+  signingIn(profileId: string): { sessionId: string; since: string } | undefined {
+    for (const [sessionId, login] of this.logins) {
+      if (login.profileId === profileId) return { sessionId, since: login.since };
     }
-    const outcome = await this.runtime.verifyProfile(profileId);
-    const ids = await this.opts.index.runtimeIdsByRoot();
-    if (isFailure(outcome)) {
-      if (outcome.status === "not-found") throw failureToError(outcome);
-      return {
-        persona: await this.project(profile, ids),
-        failure: { status: outcome.status, message: outcome.message, retryable: outcome.retryable },
-      };
-    }
-    const fresh = (await this.runtime.profile(profileId)) ?? profile;
-    return { persona: await this.project(fresh, ids) };
-  }
-
-  // ── the reconcile (R4) ──
-
-  /** Every daemon ready re-applies the record to the personas: a managed
-   * persona the record does not name yet (created while the daemon was down,
-   * or before this fieldd) is enrolled now under the kind the roll call joins.
-   * Serialized; a change publishes and bounces the daemon ONCE — the ready
-   * that follows finds nothing to do. */
-  reconcile(): Promise<void> {
-    if (this.disposed) return Promise.resolve();
-    this.reconciling ??= (async () => {
-      try {
-        const specs: EnrollRuntimeSpec[] = [];
-        for (const profile of await this.runtime.profiles()) {
-          if (profile.kind !== "managed" || this.deleting.has(profile.id)) continue;
-          const spec = await this.enrollmentSpecFor(profile);
-          if (spec !== undefined) specs.push(spec);
-        }
-        if (specs.length > 0) {
-          this.logger.info(
-            "fieldd.agents.reconcile",
-            "Enrolling personas the record did not name",
-            {
-              count: specs.length,
-            },
-          );
-          await this.opts.index.enrollRuntimes(specs);
-        }
-      } catch (error) {
-        this.logger.warn("fieldd.agents.reconcile_failed", "Persona reconcile did not complete", {
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } finally {
-        this.reconciling = null;
-      }
-    })();
-    return this.reconciling;
+    return undefined;
   }
 
   /** Tear the runtime down — and RELEASE the runs rather than close them
@@ -1149,6 +1102,7 @@ export class AgentRuntimeService {
     if (this.onTransition !== null) this.opts.supervisor?.off("transition", this.onTransition);
     for (const unsubscribe of this.unsubscribeMonitor) unsubscribe();
     this.distribution.dispose();
+    this.profiles.dispose();
     if (this.publishTimer !== null) {
       clearTimeout(this.publishTimer);
       this.publishTimer = null;
@@ -1428,6 +1382,9 @@ export class AgentRuntimeService {
         );
       }
     }
+    // AR-D25 — a persona signed out while its sessions ran is finished once
+    // none does; after a restart this is the first moment that is known
+    void this.profiles.sweep();
   }
 
   /** A record whose PTY the first inventory lacked (AR-4b): the same grace
@@ -1483,6 +1440,7 @@ export class AgentRuntimeService {
         "A managed session's PTY did not survive the restart; its record is stamped",
         { runtimeRunId, provider: record.provider },
       );
+      if (record.profileId !== undefined) void this.profiles.sweep();
     }
   }
 
@@ -1512,7 +1470,7 @@ export class AgentRuntimeService {
       );
       return;
     }
-    if (record.profileId !== undefined && this.deleting.has(record.profileId)) {
+    if (record.profileId !== undefined && this.profiles.isDeleting(record.profileId)) {
       this.logger.info(
         "fieldd.agents.reattach_skipped_deleting",
         "A session record belongs to a persona being deleted; not attached",
@@ -1948,6 +1906,7 @@ export class AgentRuntimeService {
     if (entry.record.terminalSessionId !== undefined)
       this.byTerminal.delete(entry.record.terminalSessionId);
     this.records.stampExit(runtimeRunId, { at: this.now().toISOString(), ...exit });
+    if (entry.record.profileId !== undefined) void this.profiles.sweep();
     this.logger.info("fieldd.agents.session_exited", "Pending managed session's PTY exited", {
       runtimeRunId,
       provider: entry.record.provider,
@@ -2053,10 +2012,12 @@ export class AgentRuntimeService {
   }
 
   /** Whether `agent.resume` would take this record right now: it exists and no
-   * successor has already continued its conversation (AR-4b's one-run law). */
+   * successor has already continued its conversation (AR-4b's one-run law).
+   * A record that is gone — its persona signed out or its profile deleted
+   * (AR-D25), so its root is gone too — resumes nothing, whatever the pane. */
   private resumableNow(record: AgentSessionRecord): boolean {
-    const current = this.records.read(record.runtimeRunId) ?? record;
-    return current.reattach?.state !== "resumed";
+    const current = this.records.read(record.runtimeRunId);
+    return current !== undefined && current.reattach?.state !== "resumed";
   }
 
   private summarizePending(entry: PendingEntry): AgentSessionSummary {
@@ -2179,6 +2140,8 @@ export class AgentRuntimeService {
     // still lists this PTY the deck is showing it, so the row stays (carrying
     // the mirror's last state and the resume verb) until the pane goes.
     this.holdExited(entry);
+    // AR-D25 — the last session of a signed-out persona lets it be finished
+    if (entry.info.profileId !== undefined) void this.profiles.sweep();
     this.logger.info("fieldd.agents.session_exited", "Managed agent session exited", {
       runtimeRunId,
       provider: entry.info.provider.id,
@@ -2220,6 +2183,8 @@ export class AgentRuntimeService {
       how,
       outcome,
     });
+    // the pane is closed whatever the read said: a frame says so
+    this.profiles.publish();
   }
 
   /** MF-1f — `overrides` is how an EXITED-but-hosted row reuses this: the pane
@@ -2325,84 +2290,6 @@ export class AgentRuntimeService {
     const refusal = this.terminalHost?.lastRefusal();
     return refusal ?? fallback;
   }
-
-  // ── internals: personas ──
-
-  /** The enrollment spec for a managed persona, or undefined when it cannot be
-   * enrolled NOW (already named; the daemon is not ready; the provider's layout
-   * root is not on the roll call; the adapter names a root outside the profile).
-   * Creates the observation root when the adapter binds one level inside the
-   * profile root that nothing has written yet (pi). */
-  private async enrollmentSpecFor(profile: AgentProfile): Promise<EnrollRuntimeSpec | undefined> {
-    const observationRoot = await this.runtime.profileObservationRoot(profile.id);
-    if (observationRoot === undefined) return undefined;
-    if (!within(profile.dataRoot, observationRoot)) {
-      this.logger.warn(
-        "fieldd.agents.observation_root_outside_profile",
-        "Adapter names an observation root outside the persona's own root; not enrolled",
-        { profileId: profile.id, provider: profile.provider },
-      );
-      return undefined;
-    }
-    if (this.opts.index.record().runtimes.some((rt) => rt.data_root === observationRoot)) {
-      return undefined;
-    }
-    const kind = await this.kindFor(profile.provider);
-    if (kind === undefined) return undefined;
-    mkdirSync(observationRoot, { recursive: true, mode: 0o700 });
-    return { kind, dataRoot: observationRoot, label: profile.label, profileId: profile.id };
-  }
-
-  /** rosetta's kind for a puppeteer provider: the provider's native layout
-   * root, folded to `~/…`, looked up on the roll call. */
-  private async kindFor(provider: string): Promise<string | undefined> {
-    const kinds = await this.opts.index.kindsByLayoutRoot();
-    if (kinds.size === 0) return undefined;
-    const native = (await this.runtime.profiles(provider)).find((p) => p.kind === "native-default");
-    if (native === undefined) return undefined;
-    const layoutRoot = await this.runtime.profileObservationRoot(native.id);
-    const kind = layoutRoot === undefined ? undefined : kinds.get(this.tilde(layoutRoot));
-    if (kind === undefined) {
-      this.logger.info(
-        "fieldd.agents.kind_unresolved",
-        "Provider's layout root is not on the index's roll call; personas of it are not indexed",
-        { provider, ...(layoutRoot !== undefined ? { layoutRoot: this.tilde(layoutRoot) } : {}) },
-      );
-    }
-    return kind;
-  }
-
-  /** puppeteer's absolute native root in rosetta's spelling (`~/.claude`). */
-  private tilde(path: string): string {
-    const posix = (p: string) => p.split(sep).join("/");
-    if (path === this.home) return "~";
-    return path.startsWith(`${this.home}${sep}`)
-      ? `~/${posix(path.slice(this.home.length + 1))}`
-      : posix(path);
-  }
-
-  private async project(
-    profile: AgentProfile,
-    ids: ReadonlyMap<string, string>,
-  ): Promise<AgentPersona> {
-    const observationRoot = await this.runtime.profileObservationRoot(profile.id);
-    const key =
-      observationRoot === undefined
-        ? undefined
-        : profile.kind === "managed"
-          ? observationRoot
-          : this.tilde(observationRoot);
-    const runtimeId = key === undefined ? undefined : ids.get(key);
-    return {
-      profileId: profile.id,
-      provider: profile.provider,
-      label: profile.label,
-      kind: profile.kind,
-      createdAt: profile.createdAt,
-      ...(profile.identity !== undefined ? { identity: profile.identity } : {}),
-      ...(runtimeId !== undefined ? { runtimeId } : {}),
-    };
-  }
 }
 
 /** puppeteer's workspace request for a resumed run (Godview's own rule): a
@@ -2429,34 +2316,6 @@ function isSessionFailure(
   value: SpawnAgentResult | CreateAgentSessionResult,
 ): value is AgentSessionFailure {
   return "error" in value && typeof (value as { error?: unknown }).error === "object";
-}
-
-function isFailure(value: AgentProfile | ProfileFailure | object): value is ProfileFailure {
-  return "status" in value && typeof (value as { status?: unknown }).status === "string";
-}
-
-function failureToError(failure: ProfileFailure): RpcCallError {
-  const details = {
-    status: failure.status,
-    ...(failure.provider !== undefined ? { provider: failure.provider } : {}),
-  };
-  switch (failure.status) {
-    case "not-found":
-      return new RpcCallError("NOT_FOUND", failure.message, false, details);
-    case "unavailable":
-      return new RpcCallError("UNAVAILABLE", failure.message, failure.retryable, {
-        service: "agents",
-        state: "provider-unavailable",
-        ...details,
-      });
-    default:
-      return new RpcCallError("PRECONDITION_FAILED", failure.message, false, details);
-  }
-}
-
-function within(parent: string, child: string): boolean {
-  const rel = relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
 function canonical(path: string): string {
