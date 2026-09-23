@@ -1002,6 +1002,8 @@
               <span class="badge tone-designed">Designed</span> claim is ruled and specified but not in code, and cites
               its design document and decision id. An <span class="badge tone-owed">Owed</span> claim is named on the
               roadmap and not designed in detail. Nothing here states an intention in the present tense.
+              <em>Update 2026-09-22:</em> the AC notes on this page (LANDED §AC) were read in the code at the
+              AC chain's tip; every other Built claim at <code>b7ebb444</code> as stated.
             </div>
             <div class="callout warning">
               <strong>Two of the three repositories are machine-coupled checkouts, not registry packages.</strong>
@@ -1540,7 +1542,9 @@
             <p class="section-note">
               The ownership law would be prose without these. Three rules in
               <code>scripts/check-import-boundaries.mjs</code> decide which package may import which sibling, and they
-              have been <code>enforce: true</code> from birth. Their descriptions are quoted verbatim.
+              have been <code>enforce: true</code> from birth; the fourth, R23 in
+              <code>scripts/check-agent-catalog.mjs</code> (AC-2, 2026-09-22), holds the catalog to both pins. Their
+              descriptions are quoted verbatim.
             </p>
             <div class="contract-list">
               <div class="contract-row">
