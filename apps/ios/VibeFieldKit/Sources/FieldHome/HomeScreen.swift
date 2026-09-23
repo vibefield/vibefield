@@ -52,6 +52,12 @@ public struct HomeScreen: View {
   /// IOS-8b — the account corner's menu, grown from the face. Folded by a
   /// tap anywhere else, by any act it offers, and by an arriving login page.
   @State private var accountMenuOpen = false
+  /// IOS-8c — what this phone remembers about the account: its desktops and
+  /// its face, by login. Value types over UserDefaults; `identityEpoch` is
+  /// what makes a deal or a new memory redraw the corner.
+  @State private var desktopMemory = DesktopMemory()
+  @State private var faceStore = AccountFaceStore()
+  @State private var identityEpoch = 0
   @State private var settingsSheetOpen = false
   @State private var discoveryPolling = false
   @State private var attachment: TerminalAttachment?
@@ -192,6 +198,9 @@ public struct HomeScreen: View {
     .onChange(of: selection?.id) { refold() }
     .onChange(of: colorScheme) { refold() }
     // --- end IOS-6d
+    // IOS-8c — every listing teaches the account's memory: which desktops it
+    // has, and — from the first door that answers with a user id — its face.
+    .onChange(of: linkDesktops) { rememberAccount() }
   }
 
   @ViewBuilder
@@ -1049,20 +1058,50 @@ public struct HomeScreen: View {
   // MARK: - IOS-8b: the account corner
 
   /// The corner's whole answer, decided in `FieldHomeModel` where it is tested
-  /// without a simulator. The face and the remembered desktops arrive at
-  /// IOS-8c; until then a signed-in corner is the plain circle.
+  /// without a simulator. The face and the remembered desktops come from the
+  /// account's memory (IOS-8c); a signed-in corner is the plain circle only
+  /// until a door has said who you are.
   private var accountFace: FieldHomeModel.AccountFace {
-    FieldHomeModel.accountFace(
+    _ = identityEpoch
+    let account = accountLogin
+    return FieldHomeModel.accountFace(
       meshState: mesh.state,
       rememberedLogin: mesh.rememberedLogin,
       login: mesh.loginName,
       domain: mesh.tailnetDomain,
       name: nil,
-      face: nil,
+      face: account.flatMap { faceStore.face(for: $0) },
       desktops: linkDesktops,
-      asleep: [],
+      asleep: account.map { login in
+        desktopMemory.remembered(for: login).map { .init(deviceId: $0.deviceId, name: $0.name) }
+      } ?? [],
       foreignDoors: link?.foreignDoors.count ?? 0,
       isHearing: link?.isHearing ?? false)
+  }
+
+  /// The account this phone is signed in as: the running node's report,
+  /// else what the phone remembers.
+  private var accountLogin: String? {
+    if let live = mesh.loginName, !live.isEmpty { return live }
+    if let kept = mesh.rememberedLogin, !kept.isEmpty { return kept }
+    return nil
+  }
+
+  /// IOS-8c — record the listing, and deal the face once a door has said who
+  /// this phone's person is. Every desktop the link lists is this account's
+  /// by construction (a foreign one is never listed), so all of them are
+  /// remembered.
+  private func rememberAccount() {
+    guard let login = accountLogin else { return }
+    let listed = linkDesktops
+    if !listed.isEmpty {
+      desktopMemory.record(listed, login: login)
+      identityEpoch += 1
+    }
+    if faceStore.face(for: login) == nil, let userId = listed.compactMap(\.userId).first {
+      faceStore.dealIfNeeded(login: login, userId: userId)
+      identityEpoch += 1
+    }
   }
 
   /// The tilt's seed: the login, so the face sits at one angle on every

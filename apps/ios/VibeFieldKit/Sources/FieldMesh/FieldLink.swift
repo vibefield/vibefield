@@ -55,12 +55,17 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   /// over an empty field with the reason written nowhere. That is the blank
   /// design-00 forbids, and this is the field that carries it to the corner.
   public let fieldRefusal: String?
+  /// IOS-8c — the user this desktop serves, as its door said at hello
+  /// (`HelloAck.userId`, UA-2's ULID). Nil until the door has answered, or
+  /// from a daemon that names none. It is the seed the corner's face is
+  /// dealt from until the door carries the face itself (AP-D3).
+  public let userId: String?
 
   public var id: String { deviceId }
 
   public init(
     deviceId: String, name: String, platform: String?, state: State, feed: FieldFeedSource,
-    publishesTerminalDoors: Bool? = nil, fieldRefusal: String? = nil
+    publishesTerminalDoors: Bool? = nil, fieldRefusal: String? = nil, userId: String? = nil
   ) {
     self.deviceId = deviceId
     self.name = name
@@ -69,6 +74,7 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
     self.feed = feed
     self.publishesTerminalDoors = publishesTerminalDoors
     self.fieldRefusal = fieldRefusal
+    self.userId = userId
   }
 }
 
@@ -263,6 +269,8 @@ public final class FieldLink {
     var info: DeviceInfo?
     /// The field subscription's refusal, in the door's words (UA-P-1d).
     var fieldRefusal: String?
+    /// IOS-8c — the user ULID the door answered hello with.
+    var userId: String?
   }
 
   /// One desktop's board as the door has told it: rows by run id, at a
@@ -796,14 +804,18 @@ public final class FieldLink {
         // stored login has no serve at all — and the phone reads it anyway,
         // because a face that assumes the other plane shipped is a face that
         // lies on the day it has not.
-        if case .ready(let hello) = client.state,
-          case .notThisAccount(let reason) = DoorPolicy.admission(
+        if case .ready(let hello) = client.state {
+          if case .notThisAccount(let reason) = DoorPolicy.admission(
             forGrantedScopes: hello.grantedScopes)
-        {
-          self.apply(.notThisAccount(reason), to: deviceId)
-          self.refreshDesktops()
-          self.refold()
-          return
+          {
+            self.apply(.notThisAccount(reason), to: deviceId)
+            self.refreshDesktops()
+            self.refold()
+            return
+          }
+          // IOS-8c — who this desktop serves. Decoded since UA-2 and read by
+          // nothing until the corner needed a seed for the face.
+          self.found[deviceId]?.userId = hello.userId
         }
         self.armDoorSubscription(deviceId)
         self.askForDeviceRow(deviceId)
@@ -1074,7 +1086,8 @@ public final class FieldLink {
         state: state(of: deviceId, entry: entry),
         feed: feed(of: deviceId),
         publishesTerminalDoors: row?.capabilities?.terminalMesh,
-        fieldRefusal: entry.fieldRefusal)
+        fieldRefusal: entry.fieldRefusal,
+        userId: entry.userId)
     }
   }
 
@@ -1109,7 +1122,8 @@ public final class FieldLink {
         deviceId: desktop.deviceId, name: desktop.name, platform: desktop.platform,
         state: desktop.state, feed: feed(of: desktop.deviceId, doorOnly: doorOnly),
         publishesTerminalDoors: desktop.publishesTerminalDoors,
-        fieldRefusal: desktop.fieldRefusal)
+        fieldRefusal: desktop.fieldRefusal,
+        userId: desktop.userId)
     }
   }
 
