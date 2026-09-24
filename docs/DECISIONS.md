@@ -81,11 +81,17 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   **D-i8** appearance is upstream *data* rendered in our design system, presentation config
   built directly, the config-document machinery deliberately not adopted (escape hatch named) ·
   **D-i9** the viewer owns appearance (`presentationAuthority: .device`) — a desktop's theme
-  never reaches through the mesh to restyle the phone · **D-i10 (ruled 2026-09-13, §11, not yet
-  built)** the phone has two tabs, Field and History, switched by iOS 26's system tab bar — the
+  never reaches through the mesh to restyle the phone · **D-i10 (ruled 2026-09-13, §11; BUILT
+  2026-09-23 at IOS-9a/9b/9e, on main at `ecc3a8bb`)** the phone has two tabs, Field and History, switched by iOS 26's system tab bar — the
   History record's island (launcher · field · stepper) maps onto `Tab(role: .search)`, search
   activation and the bottom accessory; the History view is the rosetta "History in a Pocket"
-  prototype shipped inside this app; the cross-tab act lives on the session, never the tab. **IOS-3a…3e LANDED 2026-08-05/06**
+  prototype shipped inside this app; the cross-tab act lives on the session, never the tab.
+  *Amended 2026-09-23 at IOS-9e (James: "why the account circle is not in left corner, why their size
+  not match, fix them"): the bar is no longer the system's — `TabView`'s bar pins its capsule left once
+  search is a tab and seats nothing before the tabs — so it is composed from the system's Liquid Glass
+  at the system bar's measured metrics: the account circle at the left, the tabs centred, search at the
+  right; the search role, the minimize (a fold) and the stepper as accessory stand, rebuilt (LANDED
+  §IOS-9e).* **IOS-3a…3e LANDED 2026-08-05/06**
   (`f54cb06` · `15dfa4a` · `72929d8` · `feb6dc8`) with the **3r review** (`d36528a`) fixing six
   findings, three of them HIGH and all three in the one module with no test target. **Status
   correction, 2026-08-07:** `72929d8`'s subject claims IOS-3c, but that slice's
@@ -108,6 +114,19 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   costCoverage · costRatePerMin onto `field.agents.v1` is the named door · D-i19 a blocker's evidence
   rides `AgentBlocker` (question · tool · code; fieldd flattens the tool only today) · D-i20 the
   per-tier palette tokens retire; the swarm reads `bodySurface` and `textMain` at `SwarmWeight`'s rungs.
+- **AP-D1…AP-D8** — `thinking-ios-account.md` §2 (the account corner, IOS-8). **AP-D1 RULED 2026-09-23**
+  (James: "each user account binds to one tailscale account … we should do a user account pill at left
+  bottom"): the corner is the account. **AP-D2…AP-D8 adopted as leans and BUILT, on main at
+  `ecc3a8bb`:** D2 the sticker by Core Image · D3 the face dealt once per login from the first self
+  desktop's user ULID until `user.me` (IOS-8f) · D4 sign-out = UA-P-D4's lean (local; no switch) · D5 the
+  menu grows from the face (the page's A) · D6 remembered desktops `asleep` · D7 the dot's two causes (the
+  protocol one waits on History's `index.status`) · D8 the fixtures through the shipping decision.
+- **H-D1…H-D9** — `thinking-ios-history.md` §2 (the History tab). Candidates, unruled. **Built
+  mock-first 2026-09-23 (IOS-9, §7):** H-D4 the `FieldHistory` target (chrome family, decisions in
+  `FieldHistoryModel`, tested) · H-D5 the bar — the system `TabView` at IOS-9a, ours at IOS-9e by
+  James's word (D-i10's amendment) · H-D7 the honest states in the record's words. **H-D8 superseded**
+  by the account corner (AP-D1). **Owed:** H-D1…H-D3 (the door and the five reads), H-D6 (the
+  per-session hand-off), H-D9 files out of v1 stands.
 - **AH-0…AH-5** (AH-1a/1b split) — artifact-hub §10. AH-0 design ratified 2026-08-02;
   AH-1a/1b implementation landed at `9f80f0c` (physical second-client proof open);
   AH-2 implementation landed at `9c17c46`; AH-3 desktop runtime landed at `8c07bf4`
