@@ -283,12 +283,20 @@ function accountWho(account: { account?: string | undefined; email?: string | un
   return account.account ?? account.email;
 }
 
-/** "kim@work.example · Northlight", or undefined when nobody is named. */
+/** "kim@work.example · Northlight", or undefined when nobody is named. An
+ * organisation named after the account itself ("kim@home.example's
+ * Organization", a personal Claude account) adds nothing, so it is left out. */
 export function accountWords(account: AgentPlan["account"]): string | undefined {
   if (account === undefined) return undefined;
   const who = accountWho(account);
   if (who === undefined) return undefined;
-  return [who, account.organization].filter((part) => part !== undefined).join(" · ");
+  const organization = account.organization;
+  const echoes =
+    organization !== undefined &&
+    [account.email, account.account].some(
+      (name) => name !== undefined && organization.toLowerCase().startsWith(name.toLowerCase()),
+    );
+  return organization === undefined || echoes ? who : `${who} · ${organization}`;
 }
 
 /** The cards: every plan the profile runs on whose agents are on its page. */
@@ -576,8 +584,12 @@ export function signInNote(set: AgentProfileSet, label: string): string {
 /** One usage window as the timeline draws it. */
 export interface UsageLine {
   id: string;
-  /** the adapter's own short label ("5H", "7D", "CR" for a credit budget) */
+  /** the adapter's own short label ("5H", "7D", "CR" for a credit budget);
+   * under a heading, the window alone ("7D" beneath "Fable only") */
   label: string;
+  /** the part of the plan it meters when not the whole plan, in the
+   * provider's words (pass 20): lines sharing an id sit under one heading */
+  group?: { id: string; label: string };
   /** used, as a percentage; the fill is clamped at 100, the words are not */
   usedPercent: number;
   /** how much of the window has passed — where "now" sits — when the adapter
@@ -599,49 +611,122 @@ export function isHot(used: number, elapsed: number | undefined): boolean {
   return elapsed > 0 && used > 40 && used / elapsed > 1.05;
 }
 
-/** How far from the fill's head, in the track's percent, the % label reaches:
- * the record's 8, widened so the label clears the line on a narrow track too. */
-const PERCENT_REACH = 12;
+// ── Line · Glow · Halo (pass 22, chosen 2026-09-24) ──
 
-/** Where the % sits (pass 16, `tl16`): inside the fill against its head once
- * the fill can hold it, just after the head before then — and stepped to the
- * free side of the now line whenever the two would touch. `edge` is the percent
- * the label keeps 5px from: its end when inside, its start when outside. */
-export function percentPlace(
-  used: number,
-  elapsed: number | undefined,
-): { inside: boolean; edge: number } {
-  const head = Math.min(100, Math.max(0, used));
-  const inside = head >= 22;
-  if (elapsed === undefined) return { inside, edge: head };
-  const touches = inside
-    ? elapsed < head && elapsed >= head - PERCENT_REACH
-    : elapsed > head && elapsed <= head + PERCENT_REACH;
-  return { inside, edge: touches ? elapsed : head };
+/** The now line: 2 px, its four corners opened into 2 px quarter circles, so
+ * it is the space between two rounded ends that almost touch. */
+export const USAGE_NOW_WIDTH = 2;
+export const USAGE_NOW_FLARE = 2;
+/** How far back from the fill's head the light reaches (the CSS gradient's
+ * 10 px); the figure inside the fill stops 2 px short of it. */
+export const USAGE_GLOW = 10;
+/** The figure's gap from the head, after it, and the line's reach toward the figure. */
+const FIGURE_GAP = 5;
+const LINE_CLEARANCE = 3;
+
+/** The now line's outline in a box `USAGE_NOW_WIDTH + 2 × USAGE_NOW_FLARE`
+ * wide: a bar whose four corners open into quarter circles, meeting the
+ * track's top and bottom edges wider than it runs through the middle — the
+ * space between two rounded ends that almost touch. A `clip-path` path. */
+export function usageNowPath(height: number): string {
+  const w = USAGE_NOW_WIDTH;
+  const r = USAGE_NOW_FLARE;
+  const c = w + 2 * r;
+  const h = height;
+  return `M0 0A${r} ${r} 0 0 1 ${r} ${r}L${r} ${h - r}A${r} ${r} 0 0 1 0 ${h}L${c} ${h}A${r} ${r} 0 0 1 ${r + w} ${h - r}L${r + w} ${r}A${r} ${r} 0 0 1 ${c} 0Z`;
+}
+
+/** Where the % sits, in pixels, and whether the now line gives way to it. */
+export interface UsageFigurePlace {
+  /** the figure's left edge, from the track's start */
+  x: number;
+  /** inside the fill, short of its lit head; otherwise just after the head */
+  inside: boolean;
+  /** the now line comes within 3 px of the figure: its middle gives way
+   * across the digits and its flared ends stay */
+  lineGives: boolean;
+}
+
+/**
+ * Pass 22's halo: the figure keeps its place at the head — inside the fill
+ * when the fill holds it short of the light, else 5 px after the head — and
+ * never moves for the now line. Where the line comes within 3 px of it, the
+ * line gives way instead, so the two can never touch. In pixels, because the
+ * rule it replaces reached 12 points of the track, which a 21 px figure
+ * outgrows on a narrow track (pass 21: 185 of 10,201 used × time pairs put
+ * the line on the figure at 218 px).
+ */
+export function usageFigurePlace(input: {
+  /** the track's width */
+  track: number;
+  /** the figure's width */
+  figure: number;
+  used: number;
+  elapsed?: number | undefined;
+}): UsageFigurePlace {
+  const { track, figure } = input;
+  const head = (track * Math.min(100, Math.max(0, input.used))) / 100;
+  const inner = head - (USAGE_GLOW + 2) - figure;
+  const inside = inner >= 3;
+  // on a track too short for either place the figure stays on the track
+  const x = Math.max(0, Math.min(inside ? inner : head + FIGURE_GAP, track - figure));
+  let lineGives = false;
+  if (input.elapsed !== undefined) {
+    const now = (track * Math.min(100, Math.max(0, input.elapsed))) / 100;
+    const reach = USAGE_NOW_WIDTH / 2 + LINE_CLEARANCE;
+    lineGives = now >= x - reach && now <= x + figure + reach;
+  }
+  return { x, inside, lineGives };
+}
+
+/** A window's own name from its length: "5H", "7D" (what a line under a heading shows). */
+export function usageWindowLabel(minutes: number | undefined): string | undefined {
+  if (minutes === undefined || !Number.isSafeInteger(minutes) || minutes <= 0) return undefined;
+  if (minutes % 1440 === 0) return `${minutes / 1440}D`;
+  if (minutes % 60 === 0) return `${minutes / 60}H`;
+  return `${minutes}M`;
+}
+
+/** A standby allowance (drawn on only once the plan's own limits run out)
+ * stays out of sight until it is in play: some of it used, or one of the
+ * plan's own windows spent (pass 20, PZ2 — as ChatGPT shows Luna Reserve). */
+function inPlay(metric: AgentAccountUsageMetric, all: readonly AgentAccountUsageMetric[]): boolean {
+  const group = metric.group;
+  if (group?.standby !== true) return true;
+  if (all.some((other) => other.group?.id === group.id && other.usedPercent > 0)) return true;
+  return all.some(
+    (other) => other.group === undefined && other.kind !== "budget" && other.usedPercent >= 100,
+  );
 }
 
 export function usageLines(metrics: readonly AgentAccountUsageMetric[], now: Date): UsageLine[] {
-  return metrics.map((metric) => {
-    const resetsAt = metric.resetsAt === undefined ? undefined : new Date(metric.resetsAt);
-    const validReset = resetsAt !== undefined && !Number.isNaN(resetsAt.getTime());
-    let elapsed: number | undefined;
-    if (metric.durationMinutes !== undefined && validReset) {
-      const window = metric.durationMinutes * 60_000;
-      const left = resetsAt.getTime() - now.getTime();
-      elapsed = Math.min(100, Math.max(0, (1 - left / window) * 100));
-    }
-    const budget = metric.kind === "budget";
-    const line: UsageLine = {
-      id: metric.id,
-      label: metric.label,
-      usedPercent: metric.usedPercent,
-      resets: !budget && validReset,
-      hot: isHot(metric.usedPercent, elapsed),
-    };
-    if (elapsed !== undefined) line.elapsedPercent = elapsed;
-    if (validReset && !budget) line.reset = resetWords(resetsAt, now);
-    return line;
-  });
+  return metrics
+    .filter((metric) => inPlay(metric, metrics))
+    .map((metric) => {
+      const resetsAt = metric.resetsAt === undefined ? undefined : new Date(metric.resetsAt);
+      const validReset = resetsAt !== undefined && !Number.isNaN(resetsAt.getTime());
+      let elapsed: number | undefined;
+      if (metric.durationMinutes !== undefined && validReset) {
+        const window = metric.durationMinutes * 60_000;
+        const left = resetsAt.getTime() - now.getTime();
+        elapsed = Math.min(100, Math.max(0, (1 - left / window) * 100));
+      }
+      const budget = metric.kind === "budget";
+      const group = metric.group;
+      const line: UsageLine = {
+        id: metric.id,
+        label:
+          (group !== undefined ? usageWindowLabel(metric.durationMinutes) : undefined) ??
+          metric.label,
+        usedPercent: metric.usedPercent,
+        resets: !budget && validReset,
+        hot: isHot(metric.usedPercent, elapsed),
+      };
+      if (group !== undefined) line.group = { id: group.id, label: group.label };
+      if (elapsed !== undefined) line.elapsedPercent = elapsed;
+      if (validReset && !budget) line.reset = resetWords(resetsAt, now);
+      return line;
+    });
 }
 
 /** "2h 10m" under a day, "Thu 09:00" from a day on (pass 11's time rules). */

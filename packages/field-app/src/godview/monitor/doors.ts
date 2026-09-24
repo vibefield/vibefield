@@ -234,6 +234,16 @@ function toEntry(row: AgentAccountUsageEntry): AccountUsageEntry {
                 : {}),
               ...(metric.startsAt !== undefined ? { startsAt: metric.startsAt } : {}),
               ...(metric.resetsAt !== undefined ? { resetsAt: metric.resetsAt } : {}),
+              // the part of the plan it meters; Core writes standby only as `true`
+              ...(metric.group !== undefined
+                ? {
+                    group: {
+                      id: metric.group.id,
+                      label: metric.group.label,
+                      ...(metric.group.standby === true ? { standby: true as const } : {}),
+                    },
+                  }
+                : {}),
             }),
           ),
           ...(row.credits ? { credits: row.credits } : {}),

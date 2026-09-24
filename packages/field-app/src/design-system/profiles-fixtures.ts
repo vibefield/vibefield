@@ -353,7 +353,11 @@ const USAGE: AgentAccountUsageEntry[] = [
     metrics: [
       window("5h", "5H", 91, 1, 300),
       window("7d", "7D", 38, 70, 10_080),
-      window("7d-opus", "OPUS", 22, 70, 10_080),
+      // a window over part of the plan: a heading in the provider's words (pass 20)
+      {
+        ...window("7d-opus", "OPUS", 22, 70, 10_080),
+        group: { id: "scope:opus", label: "Opus only" },
+      },
     ],
   },
   {
@@ -362,7 +366,15 @@ const USAGE: AgentAccountUsageEntry[] = [
     profileId: "work-codex",
     state: "available",
     fetchedAt: READ,
-    metrics: [window("5h", "5H", 12, 4, 300), window("7d", "7D", 18, 92, 10_080)],
+    metrics: [
+      window("5h", "5H", 12, 4, 300),
+      window("7d", "7D", 18, 92, 10_080),
+      // held in standby and untouched: out of sight until the plan's own limits run out
+      {
+        ...window("reserve", "RESERVE 7D", 0, 160, 10_080),
+        group: { id: "reserve", label: "Luna Reserve", standby: true },
+      },
+    ],
   },
   {
     provider: "claude",

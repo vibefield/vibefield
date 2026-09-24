@@ -54,7 +54,9 @@ const METRIC_KEYS = new Set([
   "durationMinutes",
   "startsAt",
   "resetsAt",
+  "group",
 ]);
+const GROUP_KEYS = new Set(["id", "label", "standby"]);
 const CREDITS_KEYS = new Set(["balance", "hasCredits", "unlimited", "resetCreditsAvailable"]);
 const SNAPSHOT_KEYS = new Set([
   "provider",
@@ -69,11 +71,26 @@ const SOURCE_KEYS = new Set(["kind", "stability"]);
 
 type NoteUnknown = (where: string, value: unknown, known: ReadonlySet<string>) => void;
 
+/** The part of the plan a meter measures: its name and whether it waits in
+ * standby — three named fields, nothing else crosses. */
+function projectGroup(value: unknown, note: NoteUnknown): AgentAccountUsageMetric["group"] {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const group = value as Record<string, unknown>;
+  note("metric.group", group, GROUP_KEYS);
+  if (typeof group["id"] !== "string" || typeof group["label"] !== "string") return undefined;
+  return {
+    id: group["id"],
+    label: group["label"],
+    ...(group["standby"] === true ? { standby: true } : {}),
+  };
+}
+
 function projectMetric(
   metric: Record<string, unknown>,
   note: NoteUnknown,
 ): AgentAccountUsageMetric {
   note("metric", metric, METRIC_KEYS);
+  const group = projectGroup(metric["group"], note);
   return {
     id: String(metric["id"]),
     label: String(metric["label"]),
@@ -85,6 +102,7 @@ function projectMetric(
       : {}),
     ...(typeof metric["startsAt"] === "string" ? { startsAt: metric["startsAt"] } : {}),
     ...(typeof metric["resetsAt"] === "string" ? { resetsAt: metric["resetsAt"] } : {}),
+    ...(group !== undefined ? { group } : {}),
   };
 }
 

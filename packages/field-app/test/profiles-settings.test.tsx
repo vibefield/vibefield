@@ -26,15 +26,18 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type ProfilesRoute, ProfilesSection } from "../src/panels/agents/ProfilesSection";
+import { UsageTimeline } from "../src/panels/agents/ProfilesView";
 import {
+  accountWords,
   deleteWords,
   emptyProfilesContext,
-  percentPlace,
   profilePage,
   resetWords,
   signedInUnder,
   signInLines,
+  usageFigurePlace,
   usageLines,
+  usageWindowLabel,
 } from "../src/panels/agents/profiles-model";
 import { SettingsDialog } from "../src/panels/SettingsDialog";
 
@@ -247,19 +250,164 @@ describe("the profiles model", () => {
     expect(bare[0]!.hot).toBe(true);
   });
 
-  it("keeps the % off the now line: it steps to the line's free side when the two would touch", () => {
-    // outside the fill, the line just past the head: the % starts after the line
-    expect(percentPlace(12, 20)).toEqual({ inside: false, edge: 20 });
-    expect(percentPlace(12, 24)).toEqual({ inside: false, edge: 24 });
-    expect(percentPlace(12, 40)).toEqual({ inside: false, edge: 12 });
-    expect(percentPlace(12, 5)).toEqual({ inside: false, edge: 12 });
-    // inside the fill, the line just before the head: the % ends before the line
-    expect(percentPlace(61, 55)).toEqual({ inside: true, edge: 55 });
-    expect(percentPlace(61, 30)).toEqual({ inside: true, edge: 61 });
-    expect(percentPlace(61, 70)).toEqual({ inside: true, edge: 61 });
-    // no length reported, no line to avoid; over the limit rides the full track
-    expect(percentPlace(44, undefined)).toEqual({ inside: true, edge: 44 });
-    expect(percentPlace(130, 95)).toEqual({ inside: true, edge: 95 });
+  it("keeps the % at the head, in pixels: inside short of the light, else after the head", () => {
+    // James's cards: a 218 px track, a 21 px figure
+    const at = (used: number, elapsed?: number) =>
+      usageFigurePlace({ track: 218, figure: 21, used, elapsed });
+    // 61 %: the fill holds it, 12 px short of the head (the 10 px glow and 2 more)
+    expect(at(61)).toMatchObject({ inside: true, x: 218 * 0.61 - 12 - 21 });
+    // 13 %: too short to hold it — 5 px after the head
+    expect(at(13)).toMatchObject({ inside: false, x: 218 * 0.13 + 5 });
+    // nothing used: the figure starts the track
+    expect(at(0)).toMatchObject({ inside: false, x: 5 });
+    // over the limit rides a full track, inside
+    expect(at(130).inside).toBe(true);
+    // a track too narrow for either place keeps it on the track
+    expect(usageFigurePlace({ track: 20, figure: 21, used: 100 }).x).toBe(0);
+  });
+
+  it("never lets the now line touch the %: within 3 px of it, the line gives way", () => {
+    const at = (used: number, elapsed?: number) =>
+      usageFigurePlace({ track: 218, figure: 21, used, elapsed });
+    // James's two cases (pass 21): the line met the % sign of 18 % and the 6 of 61 %
+    expect(at(18, 30)).toMatchObject({ lineGives: false });
+    expect(at(61, 48.5)).toMatchObject({ inside: true, lineGives: true });
+    // the line just past a head too short to hold the figure: it gives way
+    expect(at(13, 15)).toMatchObject({ inside: false, lineGives: true });
+    // far away, the line is whole; no clock, no line
+    expect(at(2, 37).lineGives).toBe(false);
+    expect(at(90).lineGives).toBe(false);
+    // every used × time pair: a whole line never comes within 3 px of the figure
+    for (let used = 0; used <= 100; used++) {
+      for (let elapsed = 0; elapsed <= 100; elapsed++) {
+        const place = at(used, elapsed);
+        if (place.lineGives) continue;
+        const now = (218 * elapsed) / 100;
+        const clear = now + 1 + 3 <= place.x || now - 1 - 3 >= place.x + 21;
+        expect(clear, `${used} % used, ${elapsed} % of the time`).toBe(true);
+      }
+    }
+  });
+
+  it("names a window under a heading by its length, and keeps a reserve out of sight until it is in play", () => {
+    expect([300, 10_080, 1440, 90].map((minutes) => usageWindowLabel(minutes))).toEqual([
+      "5H",
+      "7D",
+      "1D",
+      "90M",
+    ]);
+    const week = (usedPercent: number) => ({
+      id: "codex:primary:window",
+      label: "7D",
+      kind: "window",
+      usedPercent,
+      durationMinutes: 10_080,
+      resetsAt: new Date(NOW.getTime() + 3 * 24 * 60 * 60_000).toISOString(),
+    });
+    const reserve = (usedPercent: number) => ({
+      id: "gpt-reserve:primary:window",
+      label: "GPT RESERVE 7D",
+      kind: "window",
+      usedPercent,
+      durationMinutes: 10_080,
+      resetsAt: new Date(NOW.getTime() + 6 * 24 * 60 * 60_000).toISOString(),
+      group: { id: "gpt-reserve", label: "Luna Reserve", standby: true },
+    });
+    // untouched, with the week to spare: only the plan's own window
+    expect(usageLines([week(25), reserve(0)], NOW).map((line) => line.label)).toEqual(["7D"]);
+    // the week spent: the reserve comes into sight, under its heading, named by its window
+    const spent = usageLines([week(100), reserve(0)], NOW);
+    expect(spent.map((line) => [line.label, line.group?.label])).toEqual([
+      ["7D", undefined],
+      ["7D", "Luna Reserve"],
+    ]);
+    // some of it used: in sight whatever the week says
+    expect(usageLines([week(40), reserve(3)], NOW)).toHaveLength(2);
+    // a model family is no standby: always shown, headed
+    const fable = usageLines(
+      [
+        {
+          ...week(4),
+          id: "fable",
+          label: "FABLE",
+          group: { id: "scope:fable", label: "Fable only" },
+        },
+      ],
+      NOW,
+    );
+    expect(fable[0]).toMatchObject({
+      label: "7D",
+      group: { id: "scope:fable", label: "Fable only" },
+    });
+  });
+
+  it("says the account once when its organisation is only named after it", () => {
+    expect(
+      accountWords({ email: "kim@home.example", organization: "kim@home.example's Organization" }),
+    ).toBe("kim@home.example");
+    expect(accountWords({ email: "kim@work.example", organization: "Northlight" })).toBe(
+      "kim@work.example · Northlight",
+    );
+    expect(accountWords({ account: "Kim", organization: "kim’s workspace" })).toBe("Kim");
+  });
+
+  it("heads each part of the plan once and draws the line as the space between two rounded ends", async () => {
+    await mount(
+      createElement(UsageTimeline, {
+        label: "Google AI",
+        lines: [
+          {
+            id: "g5",
+            label: "5H",
+            usedPercent: 0,
+            resets: true,
+            hot: false,
+            elapsedPercent: 0,
+            reset: "5h",
+            group: { id: "gemini-models", label: "Gemini models" },
+          },
+          {
+            id: "g7",
+            label: "7D",
+            usedPercent: 0,
+            resets: true,
+            hot: false,
+            elapsedPercent: 0,
+            reset: "Thu 10:49",
+            group: { id: "gemini-models", label: "Gemini models" },
+          },
+          {
+            id: "c5",
+            label: "5H",
+            usedPercent: 61,
+            resets: true,
+            hot: true,
+            elapsedPercent: 48.5,
+            reset: "2h 34m",
+            group: { id: "claude-and-gpt-models", label: "Claude and GPT models" },
+          },
+        ],
+      }),
+    );
+    const headings = [...(container?.querySelectorAll(".vf-profiles-usage-group") ?? [])];
+    expect(headings.map((heading) => heading.textContent)).toEqual([
+      "Gemini models",
+      "Claude and GPT models",
+    ]);
+    // the heading is said in each line's own words, not twice
+    expect(headings.every((heading) => heading.getAttribute("aria-hidden") === "true")).toBe(true);
+    const lines = [...(container?.querySelectorAll("[role=listitem]") ?? [])];
+    expect(lines.map((line) => line.getAttribute("aria-label"))).toEqual([
+      "Gemini models, 5H: 0% used, resets in 5h",
+      "Gemini models, 7D: 0% used, resets in Thu 10:49",
+      "Claude and GPT models, 5H: 61% used, resets in 2h 34m, ahead of pace",
+    ]);
+    // the line: 2 px, its four corners opened into 2 px quarter circles, 6 px where it meets the edges
+    const now = container?.querySelector<HTMLElement>(".vf-profiles-usage-now");
+    expect(now?.style.width).toBe("6px");
+    expect(now?.dataset["outline"]).toBe(
+      "M0 0A2 2 0 0 1 2 2L2 12A2 2 0 0 1 0 14L6 14A2 2 0 0 1 4 12L4 2A2 2 0 0 1 6 0Z",
+    );
   });
 
   it("finds where an agent is signed in, profile by profile", () => {

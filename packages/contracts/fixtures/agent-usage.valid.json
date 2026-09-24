@@ -24,6 +24,19 @@
           "usedPercent": 103.2,
           "durationMinutes": 10080,
           "resetsAt": "2026-09-17T00:00:00.000Z"
+        },
+        {
+          "id": "fable",
+          "label": "FABLE",
+          "description": "Current week (Fable) usage",
+          "kind": "window",
+          "usedPercent": 4,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-17T00:00:00.000Z",
+          "group": {
+            "id": "scope:fable",
+            "label": "Fable only"
+          }
         }
       ],
       "credits": {

@@ -14,6 +14,7 @@ import {
   type ReactNode,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -29,11 +30,14 @@ import {
   type PlanCard,
   type ProfileAgentRow,
   type ProfilePageModel,
-  percentPlace,
   signInLines,
   signOutWords,
+  USAGE_NOW_FLARE,
+  USAGE_NOW_WIDTH,
   type UsageLine,
+  usageFigurePlace,
   usageLines,
+  usageNowPath,
 } from "./profiles-model";
 
 // Agent Profiles' views — controller-free, so the catalog mounts the shipping
@@ -156,12 +160,101 @@ export function profileAgentSubpage(
   };
 }
 
-/* ── the C1 timeline ──────────────────────────────────────────────────────── */
+/* ── the C1 timeline: Line · Glow · Halo (pass 22) ─────────────────────────── */
 
-/** One line per usage window (pass 10, C1): the track is the window's time,
- * the fill is use, the % rides the fill's head, a line marks "now" when the
- * window's length is known, and the reset closes the track. Orange only when
- * ahead of pace (or over, or near the limit when pace is unknown). */
+/** The track's height before it is measured (the stylesheet's 14 px). */
+const TRACK_HEIGHT = 14;
+
+/** One window's line. The figure's place is laid out in pixels, so the
+ * track and the figure are measured, and again whenever either resizes. */
+function UsageLineView({ line }: { line: UsageLine }): ReactElement {
+  const track = useRef<HTMLSpanElement | null>(null);
+  const figure = useRef<HTMLSpanElement | null>(null);
+  const [size, setSize] = useState({ track: 0, figure: 0, height: TRACK_HEIGHT });
+  useLayoutEffect(() => {
+    const trackEl = track.current;
+    const figureEl = figure.current;
+    if (trackEl === null || figureEl === null) return;
+    const measure = () => {
+      const next = {
+        track: trackEl.clientWidth,
+        figure: figureEl.offsetWidth,
+        height: trackEl.clientHeight || TRACK_HEIGHT,
+      };
+      setSize((held) =>
+        held.track === next.track && held.figure === next.figure && held.height === next.height
+          ? held
+          : next,
+      );
+    };
+    measure();
+    if (typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(trackEl);
+    observer.observe(figureEl);
+    return () => observer.disconnect();
+  }, []);
+  const used = Math.min(100, Math.max(0, line.usedPercent));
+  const place = usageFigurePlace({
+    track: size.track,
+    figure: size.figure,
+    used: line.usedPercent,
+    elapsed: line.elapsedPercent,
+  });
+  const nowWidth = USAGE_NOW_WIDTH + 2 * USAGE_NOW_FLARE;
+  const words = `${line.group !== undefined ? `${line.group.label}, ` : ""}${line.label}: ${Math.round(
+    line.usedPercent,
+  )}% used${line.reset !== undefined ? `, resets in ${line.reset}` : ""}${
+    line.hot ? ", ahead of pace" : ""
+  }`;
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a row of the timeline's grid; see UsageTimeline
+    <div
+      role="listitem"
+      aria-label={words}
+      className={`vf-profiles-usage-line${line.hot ? " is-hot" : ""}`}
+    >
+      <span className="vf-profiles-usage-label" aria-hidden="true">
+        {line.label}
+      </span>
+      <span ref={track} className="vf-profiles-usage-track" aria-hidden="true">
+        <span className="vf-profiles-usage-fill" style={{ width: `${used}%` }} />
+        {line.elapsedPercent !== undefined && (
+          // the line is geometry, clipped to its outline, and painted by the stylesheet
+          <span
+            className={`vf-profiles-usage-now${place.lineGives ? " gives" : ""}`}
+            data-outline={usageNowPath(size.height)}
+            style={{
+              left: `calc(${line.elapsedPercent}% - ${nowWidth / 2}px)`,
+              width: nowWidth,
+              height: size.height,
+              clipPath: `path("${usageNowPath(size.height)}")`,
+            }}
+          />
+        )}
+        <span
+          ref={figure}
+          className={`vf-profiles-usage-pct${place.inside ? " is-inside" : ""}`}
+          // before the first measure (and in a layout-free test DOM) the figure waits after the head
+          style={{ left: size.track > 0 ? `${place.x}px` : `calc(${used}% + 5px)` }}
+        >
+          {Math.round(line.usedPercent)}%
+        </span>
+      </span>
+      <span className="vf-profiles-usage-reset tabular-nums" aria-hidden="true">
+        {line.resets && <ResetIcon />}
+        {line.reset ?? ""}
+      </span>
+    </div>
+  );
+}
+
+/** One line per usage window (pass 10, C1; pass 22, Line · Glow · Halo): the
+ * track is the window's time, the fill is use with its head lit, the % rides
+ * the head and never moves for the now line — the line gives way to it — and
+ * the reset closes the track. Windows that meter part of the plan sit under a
+ * heading in the provider's words (pass 20). Orange only when ahead of pace
+ * (or over, or near the limit when pace is unknown). */
 export function UsageTimeline({
   lines,
   label,
@@ -181,50 +274,29 @@ export function UsageTimeline({
       role="list"
       aria-label={`${label} usage`}
     >
-      {lines.map((line) => {
-        const used = Math.min(100, Math.max(0, line.usedPercent));
-        const { inside, edge } = percentPlace(line.usedPercent, line.elapsedPercent);
-        const words = `${line.label}: ${Math.round(line.usedPercent)}% used${
-          line.reset !== undefined ? `, resets in ${line.reset}` : ""
-        }${line.hot ? ", ahead of pace" : ""}`;
+      {lines.map((line, index) => {
+        const group = line.group;
+        const heads = group !== undefined && group.id !== lines[index - 1]?.group?.id;
         return (
-          // biome-ignore lint/a11y/useSemanticElements: a row of the grid above; see there
-          <div
-            key={line.id}
-            role="listitem"
-            aria-label={words}
-            className={`vf-profiles-usage-line${line.hot ? " is-hot" : ""}`}
-          >
-            <span className="vf-profiles-usage-label" aria-hidden="true">
-              {line.label}
-            </span>
-            <span className="vf-profiles-usage-track" aria-hidden="true">
-              <span className="vf-profiles-usage-fill" style={{ width: `${used}%` }} />
-              {line.elapsedPercent !== undefined && (
-                <span
-                  className="vf-profiles-usage-now"
-                  style={{ left: `${line.elapsedPercent}%` }}
-                />
-              )}
-              <span
-                className={`vf-profiles-usage-pct${inside ? " is-inside" : ""}`}
-                style={
-                  inside
-                    ? { right: `calc(${100 - edge}% + 5px)` }
-                    : { left: `calc(${edge}% + 5px)` }
-                }
-              >
-                {Math.round(line.usedPercent)}%
-              </span>
-            </span>
-            <span className="vf-profiles-usage-reset tabular-nums" aria-hidden="true">
-              {line.resets && <ResetIcon />}
-              {line.reset ?? ""}
-            </span>
-          </div>
+          <UsageGroupLine key={line.id} heading={heads ? group.label : undefined} line={line} />
         );
       })}
     </div>
+  );
+}
+
+/** A line, with its group's heading above it when it opens the group. The
+ * heading is said in each line's own words, so it is hidden from the list. */
+function UsageGroupLine({ heading, line }: { heading?: string | undefined; line: UsageLine }) {
+  return (
+    <>
+      {heading !== undefined && (
+        <span className="vf-profiles-usage-group" aria-hidden="true">
+          {heading}
+        </span>
+      )}
+      <UsageLineView line={line} />
+    </>
   );
 }
 

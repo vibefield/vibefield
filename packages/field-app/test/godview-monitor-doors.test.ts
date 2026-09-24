@@ -357,8 +357,14 @@ describe("the usage port over fieldd's account-usage door", () => {
     // about which meter matters.
     const snapshot =
       available?.result.status === "available" ? available.result.snapshot : undefined;
-    expect(snapshot?.metrics.map((metric) => metric.id)).toEqual(["five-hour", "seven-day"]);
+    expect(snapshot?.metrics.map((metric) => metric.id)).toEqual([
+      "five-hour",
+      "seven-day",
+      "fable",
+    ]);
     expect(snapshot?.metrics[1]).toMatchObject({ label: "7D", kind: "window", usedPercent: 103.2 });
+    // the part of the plan a meter measures rides with it, whole
+    expect(snapshot?.metrics[2]?.group).toEqual({ id: "scope:fable", label: "Fable only" });
     // Above 100 is valid for an exceeded budget and is NOT clamped here.
     expect(snapshot?.metrics[1]?.usedPercent).toBeGreaterThan(100);
   });
@@ -436,7 +442,7 @@ describe("the usage port over fieldd's account-usage door", () => {
     // …and the retained numbers keep their OWN age, not the batch's.
     const snapshot = stale?.result.status === "available" ? stale.result.snapshot : undefined;
     expect(snapshot?.fetchedAt).toBe("2026-09-13T12:00:00.000Z");
-    expect(snapshot?.metrics).toHaveLength(2);
+    expect(snapshot?.metrics).toHaveLength(3);
   });
 
   it("keeps a credits-only reading AVAILABLE, credits and all (AR-5b)", () => {

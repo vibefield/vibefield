@@ -80,7 +80,10 @@
   line-height: 18px;
 }
 
-/* ── C1: the window's time is the track, use the fill, "now" a line ── */
+/* ── C1: the window's time is the track, use the fill, "now" a line ──
+   Pass 22 (Line · Glow · Halo): the fill's head is lit, the line is the
+   space between two rounded ends, and the % never moves for it — the line
+   gives way to the %. ── */
 
 .vf-profiles-usage {
   display: grid;
@@ -102,6 +105,23 @@
   letter-spacing: 0.06em;
 }
 
+/* the part of the plan the windows below it meter, in the provider's words (pass 20) */
+.vf-profiles-usage-group {
+  grid-column: 1 / -1;
+  margin: 4px 0 -2px;
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-profiles-usage-group:first-child {
+  margin-top: 0;
+}
+
 .vf-profiles-usage-track {
   position: relative;
   height: 14px;
@@ -110,27 +130,48 @@
   background: color-mix(in srgb, var(--vf-foreground) 7%, transparent);
 }
 
+/* the glow: the fill's last 10 px (USAGE_GLOW) brighten, so its head is lit */
 .vf-profiles-usage-fill {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--vf-foreground) 20%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--vf-foreground) 20%, transparent) 0,
+    color-mix(in srgb, var(--vf-foreground) 20%, transparent) calc(100% - 10px),
+    color-mix(in srgb, var(--vf-foreground) 58%, transparent) 100%
+  );
 }
 
 .vf-profiles-usage-line.is-hot .vf-profiles-usage-fill {
-  background: color-mix(in srgb, var(--vf-orange) 85%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--vf-orange) 85%, transparent) 0,
+    color-mix(in srgb, var(--vf-orange) 85%, transparent) calc(100% - 10px),
+    color-mix(in srgb, var(--vf-orange) 55%, var(--vf-state-on-solid)) 100%
+  );
 }
 
+/* the line's outline is its clip-path (usageNowPath); here, its ink */
 .vf-profiles-usage-now {
   position: absolute;
   top: 0;
-  bottom: 0;
-  width: 2px;
-  margin-left: -1px;
-  background: var(--vf-foreground);
-  opacity: 0.75;
+  background: color-mix(in srgb, var(--vf-foreground) 75%, transparent);
+  pointer-events: none;
 }
 
+/* near the %, the line gives way across the digits' band (9.5 px) and keeps its flared ends */
+.vf-profiles-usage-now.gives {
+  mask-image: linear-gradient(
+    to bottom,
+    var(--vf-foreground) calc(50% - 4.75px),
+    transparent calc(50% - 4.75px),
+    transparent calc(50% + 4.75px),
+    var(--vf-foreground) calc(50% + 4.75px)
+  );
+}
+
+/* its `left` is laid out in pixels (usageFigurePlace) */
 .vf-profiles-usage-pct {
   position: absolute;
   top: 50%;
@@ -139,10 +180,27 @@
   font-size: 9.5px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .vf-profiles-usage-line.is-hot .vf-profiles-usage-pct.is-inside {
   color: var(--vf-state-on-attention);
+}
+
+/* in the dark, white on orange (James, 2026-09-24), edged in a deeper orange so the digits hold */
+.dark .vf-profiles-usage-line.is-hot .vf-profiles-usage-pct.is-inside {
+  --vf-usage-edge: color-mix(in srgb, var(--vf-orange) 82%, var(--vf-foreground-inverse));
+
+  color: var(--vf-state-on-solid);
+  text-shadow:
+    1.5px 0 0 var(--vf-usage-edge),
+    -1.5px 0 0 var(--vf-usage-edge),
+    0 1.5px 0 var(--vf-usage-edge),
+    0 -1.5px 0 var(--vf-usage-edge),
+    1.1px 1.1px 0 var(--vf-usage-edge),
+    -1.1px 1.1px 0 var(--vf-usage-edge),
+    1.1px -1.1px 0 var(--vf-usage-edge),
+    -1.1px -1.1px 0 var(--vf-usage-edge);
 }
 
 .vf-profiles-usage-reset {

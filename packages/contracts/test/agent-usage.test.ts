@@ -58,8 +58,11 @@ describe("the account-usage batch (AR-5d)", () => {
     ]);
     const [available, limited, signedOut] = batch.entries;
     // the reading: two window meters in the adapter's own order, plus credits
-    expect(available?.metrics.map((metric) => metric.label)).toEqual(["5H", "7D"]);
+    expect(available?.metrics.map((metric) => metric.label)).toEqual(["5H", "7D", "FABLE"]);
     expect(available?.metrics[1]?.usedPercent).toBeGreaterThan(100); // an exceeded budget is valid
+    // a meter of part of the plan names that part; the plan's own meters name none
+    expect(available?.metrics[2]?.group).toEqual({ id: "scope:fable", label: "Fable only" });
+    expect(available?.metrics[0]?.group).toBeUndefined();
     expect(available?.credits?.balance).toBe("$12.40"); // the provider's own formatting, verbatim
     expect(available?.profileId).toBe("claude:native-default");
     // the refusals carry a sentence and their retry facts, never metrics

@@ -74,6 +74,18 @@ export const AgentAccountUsageMetric = z
     durationMinutes: z.number().int().positive().optional(),
     startsAt: z.string().optional(),
     resetsAt: z.string().optional(),
+    /** the part of the plan this meter measures when it is not the whole plan
+     * (upstream `AccountUsageMetricGroupSchema`): a model family or an
+     * allowance of its own, named as the provider names it. Meters sharing an
+     * id are one family; `standby` marks an allowance drawn on only after the
+     * plan's own limits run out (a view keeps it out of sight until then) */
+    group: z
+      .object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        standby: z.boolean().optional(),
+      })
+      .optional(),
   })
   .passthrough();
 export type AgentAccountUsageMetric = z.infer<typeof AgentAccountUsageMetric>;

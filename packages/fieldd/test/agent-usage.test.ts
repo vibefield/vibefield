@@ -94,7 +94,14 @@ const available = (provider: string, at: string, usedPercent = 42): AccountUsage
         durationMinutes: 300,
         resetsAt: "2026-09-13T14:00:00.000Z",
       },
-      { id: "seven-day", label: "7D", kind: "window", usedPercent: 12, durationMinutes: 10_080 },
+      {
+        id: "seven-day",
+        label: "7D",
+        kind: "window",
+        usedPercent: 12,
+        durationMinutes: 10_080,
+        group: { id: "reserve", label: "Luna Reserve", standby: true },
+      },
     ],
     credits: { balance: "$12.40", hasCredits: true },
   },
@@ -343,6 +350,15 @@ describe("the account usage doors (AR-5d)", () => {
       usedPercent: 42,
       durationMinutes: 300,
       resetsAt: "2026-09-13T14:00:00.000Z",
+    });
+    // the part of the plan a meter measures crosses whole: its id, its name, its standby
+    expect(entry.metrics[1]).toEqual({
+      id: "seven-day",
+      label: "7D",
+      kind: "window",
+      usedPercent: 12,
+      durationMinutes: 10_080,
+      group: { id: "reserve", label: "Luna Reserve", standby: true },
     });
     expect(entry.credits).toEqual({ balance: "$12.40", hasCredits: true });
     expect(entry.fetchedAt).toBe("2026-09-13T12:00:00.000Z"); // when the DATA was read
