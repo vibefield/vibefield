@@ -26,6 +26,10 @@ public final class HistoryRouter {
 
   public var path: [Route] = []
   public var landed: Landed?
+  /// Whether History's scroll has folded the app's bar to its glyph (IOS-9e,
+  /// the page's minimize). Set by `foldsBar`, read by the bar; the home screen
+  /// opens it again on every push, pop and change of tab.
+  public var barMinimized = false
   /// The session row to ring when a hit lands in a project that holds no
   /// document; cleared once the row has been rung.
   public var rungSession: String?
@@ -34,6 +38,7 @@ public final class HistoryRouter {
 
   /// A hit was tapped: push where it lives and light it.
   public func land(_ landing: FieldHistoryModel.Landing, query: String) {
+    barMinimized = false
     switch landing {
     case .session(let projectId, let sessionId, let ring, let at):
       landed = Landed(query: query, sessionId: sessionId, ring: ring, at: at)

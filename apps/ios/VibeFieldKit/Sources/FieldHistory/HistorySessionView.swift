@@ -40,6 +40,7 @@ struct HistorySessionView: View {
         .padding(.horizontal, HistoryParts.sidePadding)
         .padding(.bottom, 80)
       }
+      .foldsBar(router)
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle(document.title)
       .navigationBarTitleDisplayMode(.inline)

@@ -13,9 +13,9 @@ import SwiftUI
 /// The open Me menu is NOT glass on either OS (§8, James: "do not make it
 /// transparent"); only the closed circle, the pill and the accessory are.
 extension View {
-  /// A round glass control: the account corner's face, the search circle's
-  /// mirror. Interactive on iOS 26, so a touch presses the glass the way the
-  /// system's own circles press.
+  /// A round glass control: the account corner's face, the search circle.
+  /// Interactive on iOS 26, so a touch presses the glass the way the system's
+  /// own circles press.
   @ViewBuilder
   public func liquidGlassCircle(shadow: ChromeShadow? = ChromeShadow.card) -> some View {
     if #available(iOS 26.0, *) {
@@ -25,11 +25,13 @@ extension View {
     }
   }
 
-  /// A glass capsule: the words-only `Sign in` pill, a stepper riding the bar.
+  /// A glass capsule: the tab capsule, the stepper, the search field.
+  /// `interactive: false` for a surface that holds a text field, whose own
+  /// caret is the touch feedback.
   @ViewBuilder
-  public func liquidGlassCapsule(shadow: ChromeShadow? = ChromeShadow.card) -> some View {
+  public func liquidGlassCapsule(shadow: ChromeShadow? = ChromeShadow.card, interactive: Bool = true) -> some View {
     if #available(iOS 26.0, *) {
-      glassEffect(.regular.interactive(), in: .capsule)
+      glassEffect(.regular.interactive(interactive), in: .capsule)
     } else {
       background { ChromeMaterial.glass(radius: ChromeRadius.pill, shadow: shadow) }
     }
@@ -42,6 +44,42 @@ extension View {
       glassEffect(.regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     } else {
       background { ChromeMaterial.glass(radius: radius, shadow: shadow) }
+    }
+  }
+
+  /// Names a glass shape inside a `GlassGroup`, so a shape that leaves and
+  /// one that arrives under the same id MORPH into each other (the search
+  /// circle into the search field; the tab capsule into its folded circle).
+  /// Below iOS 26 there is nothing to morph and it does nothing.
+  @ViewBuilder
+  public func glassID<ID: Hashable & Sendable>(_ id: ID, in namespace: Namespace.ID) -> some View {
+    if #available(iOS 26.0, *) {
+      glassEffectID(id, in: namespace)
+    } else {
+      self
+    }
+  }
+}
+
+/// The glass shapes that stand together — the bar's capsule and circles —
+/// rendered as one group (`GlassEffectContainer` on iOS 26): one sampling pass
+/// for all of them, and the morphs between `glassID`s. `spacing` is where two
+/// shapes begin to melt into one; keep it under the gap between them at rest.
+/// Below iOS 26 the content as it is.
+public struct GlassGroup<Content: View>: View {
+  private let spacing: CGFloat?
+  private let content: Content
+
+  public init(spacing: CGFloat? = nil, @ViewBuilder content: () -> Content) {
+    self.spacing = spacing
+    self.content = content()
+  }
+
+  public var body: some View {
+    if #available(iOS 26.0, *) {
+      GlassEffectContainer(spacing: spacing) { content }
+    } else {
+      content
     }
   }
 }

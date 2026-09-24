@@ -1,58 +1,62 @@
 import FieldDesign
 import SwiftUI
 
-/// The search tab (H-5, D-i10 A): the system's search role — on iOS 26 the
-/// circle beside the tab capsule, which becomes the field at the bottom above
-/// the keyboard; below it, a search bar in the navigation bar. The results are
-/// the tab's own content, never a sheet held over the room: recent searches
-/// while the field is empty, then hits grouped under session heads, the
-/// match set as hierarchy, the foot saying how many.
+/// Search's results (H-5): the tab's own content, never a sheet held over the
+/// room — the scopes pinned at the top (All · Prompts · Replies), recent
+/// searches while the words are empty, then hits grouped under session heads
+/// with the terms marked and the foot saying how many.
+///
+/// The FIELD is not here (IOS-9e): it is the bar's, where the search circle
+/// morphs into it at the bottom above the keyboard — so this view takes the
+/// words and the kind as bindings and never owns a text field of its own.
 public struct HistorySearchView: View {
   let corpus: HistoryCorpus?
   let standing: FieldHistoryModel.DesktopStanding
+  @Binding var query: String
+  @Binding var kind: FieldHistoryModel.SearchKind
   /// A hit was tapped: where it lands. The home screen switches tabs.
   let onLand: (FieldHistoryModel.Landing, String) -> Void
-  let tabBarHidden: Bool
 
   public init(
-    corpus: HistoryCorpus?, standing: FieldHistoryModel.DesktopStanding, query: String = "", tabBarHidden: Bool = false,
-    onLand: @escaping (FieldHistoryModel.Landing, String) -> Void
+    corpus: HistoryCorpus?, standing: FieldHistoryModel.DesktopStanding, query: Binding<String>,
+    kind: Binding<FieldHistoryModel.SearchKind>, onLand: @escaping (FieldHistoryModel.Landing, String) -> Void
   ) {
     self.corpus = corpus
     self.standing = standing
+    _query = query
+    _kind = kind
     self.onLand = onLand
-    self.tabBarHidden = tabBarHidden
-    _query = State(initialValue: query)
   }
 
-  @State private var query: String
-  @State private var kind: FieldHistoryModel.SearchKind = .any
   @Environment(\.colorScheme) private var scheme
 
   public var body: some View {
-    NavigationStack {
-      ScrollView {
-        if let corpus {
-          results(corpus)
-        } else {
-          QuietNote(
-            title: "Search runs on your desktop's index",
-            text: "This build has no search read yet — it lands with the index reads (H-1). The field is the system's; the answers are owed.")
-        }
+    ScrollView {
+      if let corpus {
+        results(corpus)
+      } else {
+        QuietNote(
+          title: "Search runs on your desktop's index",
+          text: "This build has no search read yet — it lands with the index reads (H-1). The field is the bar's; the answers are owed.")
       }
-      .background(ChromePalette.paper.ignoresSafeArea())
-      .navigationTitle("Search")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbarVisibility(tabBarHidden ? .hidden : .visible, for: .tabBar)
-      .searchable(text: $query, prompt: "Search sessions")
-      .searchScopes($kind, activation: .onSearchPresentation) {
-        ForEach(FieldHistoryModel.SearchKind.allCases, id: \.self) { candidate in
-          Text(candidate.label).tag(candidate)
-        }
-      }
-      .modifier(SearchFieldMinimizes())
     }
-    .tint(ChromePalette.ink)
+    .scrollDismissesKeyboard(.interactively)
+    .safeAreaInset(edge: .top, spacing: 0) { scopes }
+    .background(ChromePalette.paper.ignoresSafeArea())
+  }
+
+  /// The kinds, as the system's own segmented control (glass on iOS 26).
+  private var scopes: some View {
+    Picker("Search in", selection: $kind) {
+      ForEach(FieldHistoryModel.SearchKind.allCases, id: \.self) { candidate in
+        Text(candidate.label).tag(candidate)
+      }
+    }
+    .pickerStyle(.segmented)
+    .padding(.horizontal, 16)
+    .padding(.top, 6)
+    .padding(.bottom, 8)
+    .background(ChromePalette.paper)
   }
 
   private func results(_ corpus: HistoryCorpus) -> some View {
@@ -82,7 +86,7 @@ public struct HistorySearchView: View {
         }
       }
     }
-    .padding(.bottom, 60)
+    .padding(.bottom, 24)
   }
 
   private func recent(_ corpus: HistoryCorpus) -> some View {
@@ -194,21 +198,9 @@ public struct HistorySearchView: View {
   }
 }
 
-/// iOS 26: the search field folds back into its circle when the results
-/// scroll (`.minimize`); older systems keep the bar as it is.
-private struct SearchFieldMinimizes: ViewModifier {
-  func body(content: Content) -> some View {
-    if #available(iOS 26.0, *) {
-      content.searchToolbarBehavior(.minimize)
-    } else {
-      content
-    }
-  }
-}
-
-/// The match stepper — the island's third role, ridden on the tab bar as
-/// its bottom accessory (iOS 26; `tabViewBottomAccessory`): the query word,
-/// `2 of 3`, and the two steps.
+/// The match stepper — the island's third role (IOS-9e: a glass capsule the
+/// bar carries above itself, or inline between its circles while folded):
+/// the query word, `2 of 3`, and the two steps.
 public struct HistoryStepperView: View {
   @Bindable var router: HistoryRouter
 

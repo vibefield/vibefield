@@ -28,6 +28,7 @@ struct HistoryProjectView: View {
         }
         .padding(.bottom, 60)
       }
+      .foldsBar(router)
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle(project.name)
       .navigationBarTitleDisplayMode(.inline)

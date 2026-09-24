@@ -11,15 +11,11 @@ public struct HistoryLedgerView: View {
   let corpus: HistoryCorpus?
   let standing: FieldHistoryModel.DesktopStanding
   @Bindable var router: HistoryRouter
-  /// A change of tab bar visibility the home screen asks for (the bar folds
-  /// while the account menu stands).
-  let tabBarHidden: Bool
 
-  public init(corpus: HistoryCorpus?, standing: FieldHistoryModel.DesktopStanding, router: HistoryRouter, tabBarHidden: Bool = false) {
+  public init(corpus: HistoryCorpus?, standing: FieldHistoryModel.DesktopStanding, router: HistoryRouter) {
     self.corpus = corpus
     self.standing = standing
     self.router = router
-    self.tabBarHidden = tabBarHidden
   }
 
   @State private var rank: FieldHistoryModel.Rank = .spend
@@ -34,12 +30,11 @@ public struct HistoryLedgerView: View {
           notBuilt
         }
       }
+      .foldsBar(router)
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle("History")
-      .toolbarVisibility(tabBarHidden ? .hidden : .visible, for: .tabBar)
       .navigationDestination(for: HistoryRouter.Route.self) { route in
         destination(route)
-          .toolbarVisibility(tabBarHidden ? .hidden : .visible, for: .tabBar)
       }
     }
     .tint(ChromePalette.ink)

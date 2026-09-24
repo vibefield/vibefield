@@ -230,6 +230,13 @@ public enum ChromePalette {
   /// A search hit's mark: the term, on a wash of the select hue.
   public static let markWash = dynamic(light: 0x4A90D9, lightAlpha: 0.18, dark: 0x4A90D9, darkAlpha: 0.30)
 
+  // MARK: - The bar (IOS-9e)
+
+  /// The selected tab's pill inside the bar's capsule — measured off iOS 26's
+  /// own tab bar on the simulator: the pill reads black/7% over the light
+  /// glass (251 → 233) and white/14% over the dark (22 → 55).
+  public static let tabPill = dynamic(light: 0x000000, lightAlpha: 0.07, dark: 0xFFFFFF, darkAlpha: 0.14)
+
   // MARK: - Construction
 
   private static func dynamic(

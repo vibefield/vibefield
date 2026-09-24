@@ -62,24 +62,35 @@ public struct HomeScreen: View {
   /// IOS-8d — Sign out asks first: it is the one act in the menu that is
   /// destructive, and the sentence says what goes and what stays.
   @State private var signOutPending = false
-  // --- IOS-9a: the two tabs and the search pill (D-i10 A) -----------------
-  /// Which tab stands: the field, History, or the search role's own tab.
+  // --- IOS-9a/9e: the two tabs, search, and the account in one bar ---------
+  /// Which page stands: the field, History, or search.
   @State private var selectedTab: AppTab = .field
-  /// The History tab's stack and its landed search, shared with the search
-  /// tab so a hit can land across the switch.
+  /// The page search goes back to when it closes.
+  @State private var tabBeforeSearch: AppTab = .field
+  /// The History tab's stack, its landed search and whether its scroll has
+  /// folded the bar — shared with search, so a hit can land across the switch.
   @State private var history = HistoryRouter()
-  /// The tab bar's band — the bottom inset it takes, remembered at its
-  /// largest, so the swarm keeps clear of the bar and the field's bounds do
-  /// not jump when the bar folds under the account menu.
-  @State private var tabBarBand: CGFloat = 0
+  /// Search's words and kind: the bar's field writes them, the page reads them.
+  @State private var searchQuery = ""
+  @State private var searchKind: FieldHistoryModel.SearchKind = .any
+  @FocusState private var searchFocused: Bool
+  /// The home indicator's inset, read with the keyboard ignored: the bar
+  /// rests where iOS 26 rests its own (`AppBar.bottomGap`), and rides the
+  /// keyboard only while search is typing.
+  @State private var homeInset: CGFloat = 34
+  /// The bottom inset WITH the keyboard. Above the home inset only while a
+  /// software keyboard stands — a hardware keyboard (the simulator with the
+  /// Mac's attached, an iPad's) raises none, and the row must stay at rest.
+  @State private var keyboardInset: CGFloat = 0
+  /// The bar's glass morphs (the search circle into the field, the capsule
+  /// into its folded circle) and, apart, the tab pill's slide.
+  @Namespace private var barGlass
+  @Namespace private var tabPill
   #if DEBUG
     /// `-vf-mock`: the whole phone over invented facts and no tailnet (IOS-9d).
     @State private var mock: MockAccount?
-    /// `-vf-mock-search=<query>`: the search tab opened on a query, which a
-    /// headless run could not type.
-    @State private var mockSearch: String = ""
   #endif
-  // --- end IOS-9a ----------------------------------------------------------
+  // --- end IOS-9a/9e -------------------------------------------------------
   #if DEBUG
     /// `-vf-demo-account=<state>`: the corner's inputs, stamped (IOS-8e).
     @State private var demoAccount: FieldHomeModel.AccountFace?
@@ -152,24 +163,9 @@ public struct HomeScreen: View {
   // --- end IOS-5a ---------------------------------------------------------
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  public init() {
-    // IOS-9a — the Field tab's count is §2.5's orange (the agents waiting on
-    // the person, never decorative); the system's badge is red by default,
-    // and the appearance proxies are the only doors to its colour. Set before
-    // the TabView exists, because a proxy reaches only the views made after
-    // it. Both proxies are set because iOS 26's bar reads the appearance
-    // object where the classic bar read the item.
-    let attention = UIColor(ChromePalette.attention)
-    UITabBarItem.appearance().badgeColor = attention
-    let appearance = UITabBarAppearance()
-    appearance.configureWithDefaultBackground()
-    for layout in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
-      layout.normal.badgeBackgroundColor = attention
-      layout.selected.badgeBackgroundColor = attention
-    }
-    UITabBar.appearance().standardAppearance = appearance
-  }
+  public init() {}
 
   /// One stage, two sources, projected by the pure functions in FieldAgents.
   ///
@@ -222,7 +218,10 @@ public struct HomeScreen: View {
       // dressed rows; the chrome slot's obstacles are the field's walls.
       SwarmField(
         bubbles: bubbles,
-        isActive: scenePhase == .active,
+        // IOS-9e — the field draws only while it is the page standing: the
+        // other two keep it alive under them, and a hidden Metal view
+        // rendering at 120 Hz is a battery spent on nobody.
+        isActive: scenePhase == .active && selectedTab == .field,
         onSelect: { bubble in openCard(on: bubble) },
         onCreate: { _ in feed.spawn() }
       ) {
@@ -263,14 +262,14 @@ public struct HomeScreen: View {
 
   @ViewBuilder
   private var chrome: some View {
-    // IOS-9a — the tab bar's band. The field extends under the bar (the
-    // system's glass shows the ground through it), and this invisible
-    // obstacle is what keeps the bodies out of the bar's row — the account
-    // corner and the search circle included, since both stand in it. It is
-    // the largest inset the bar has taken, so it holds while the bar folds.
+    // IOS-9a/9e — the bar's band. The field runs under the bar (its glass
+    // shows the ground through), and this invisible obstacle keeps the bodies
+    // out of the bar's row — the account corner, the capsule and the search
+    // circle all stand in it. It is the bar's resting row, so it holds while
+    // the bar folds under the account menu.
     Color.clear
       .frame(maxWidth: .infinity)
-      .frame(height: tabBarBand)
+      .frame(height: AppBar.band(homeInset: homeInset))
       .swarmObstacle()
       .allowsHitTesting(false)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -279,116 +278,235 @@ public struct HomeScreen: View {
     // account's and the tab bar's.
   }
 
-  // MARK: - IOS-9a: the two tabs, the search pill, and the corner beside them
+  // MARK: - IOS-9e: the pages, and the bar over them
 
-  /// The system's tab bar (D-i10 A): Field · History, and the search role as
-  /// its own circle. The account corner rides OVER the whole TabView rather
-  /// than inside a tab, because it is the search circle's mirror — one glass
-  /// circle at each end of the bar — and because an overlay above the bar's
-  /// own view is what makes a tap on it land on the face and not on the bar.
+  /// Three pages under one bar. `TabView` hosted them until IOS-9e; its bar
+  /// could not seat the account at the left (see `AppBar`), so the pages are
+  /// stacked here and kept alive, the way a TabView keeps its tabs, and the
+  /// bar is ours.
   private var tabs: some View {
-    TabView(selection: $selectedTab) {
-      Tab(value: AppTab.field) {
-        fieldTab
-      } label: {
-        Label {
-          Text("Field")
-        } icon: {
-          Image("tab-field", bundle: .module)
-        }
+    ZStack {
+      fieldTab.page(visible: selectedTab == .field)
+      historyTab.page(visible: selectedTab == .history)
+      searchTab.page(visible: selectedTab == .search)
+    }
+    .overlay { bar }
+    .background {
+      GeometryReader { geo in
+        Color.clear
+          .onAppear { homeInset = geo.safeAreaInsets.bottom }
+          .onChange(of: geo.safeAreaInsets.bottom) { _, inset in homeInset = inset }
       }
-      .badge(waitingCount)
-      Tab("History", systemImage: "clock.arrow.circlepath", value: AppTab.history) {
-        historyTab
-      }
-      Tab(value: AppTab.search, role: .search) {
-        searchTab
+      .ignoresSafeArea(.keyboard)
+    }
+    .background {
+      GeometryReader { geo in
+        Color.clear
+          .onAppear { keyboardInset = geo.safeAreaInsets.bottom }
+          .onChange(of: geo.safeAreaInsets.bottom) { _, inset in keyboardInset = inset }
       }
     }
-    .modifier(TabBarChrome(router: history))
-    .tint(ChromePalette.ink)
-    .overlay(alignment: .bottomTrailing) { accountOverlay }
+    .onChange(of: selectedTab) { _, tab in
+      history.barMinimized = false
+      if tab != .search { searchFocused = false }
+    }
+    // Every push and pop opens the bar again, the way the system's does.
+    .onChange(of: history.path) { history.barMinimized = false }
   }
 
-  /// The field, extended under the bar. The bar's inset is read here and
-  /// remembered at its largest (`tabBarBand`): the chrome slot turns it into
-  /// the obstacle band, so hiding the bar under the account menu moves no body.
+  /// The field, under the bar's glass to the screen's edge.
   private var fieldTab: some View {
-    GeometryReader { geo in
-      stage
-        .ignoresSafeArea(.container, edges: .bottom)
-        .onChange(of: geo.safeAreaInsets.bottom, initial: true) { _, inset in
-          tabBarBand = max(tabBarBand, inset)
-        }
-    }
-    .toolbarVisibility(accountMenuOpen ? .hidden : .visible, for: .tabBar)
+    stage
+      .ignoresSafeArea(.container, edges: .bottom)
   }
 
   private var historyTab: some View {
-    HistoryLedgerView(corpus: historyCorpus, standing: historyStanding, router: history, tabBarHidden: accountMenuOpen)
+    HistoryLedgerView(corpus: historyCorpus, standing: historyStanding, router: history)
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing))
+      }
   }
 
   private var searchTab: some View {
-    HistorySearchView(corpus: historyCorpus, standing: historyStanding, query: mockSearchQuery, tabBarHidden: accountMenuOpen) {
+    HistorySearchView(corpus: historyCorpus, standing: historyStanding, query: $searchQuery, kind: $searchKind) {
       landing, query in
-      // A hit lands in the OTHER tab: the router pushes where it lives, and
-      // the switch follows.
+      // A hit lands in History: the router pushes where it lives, and the
+      // switch follows.
+      searchFocused = false
       history.land(landing, query: query)
       selectedTab = .history
     }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: false))
+    }
   }
 
-  /// IOS-8b — the corner is the account (AP-D1). The face replaces the mesh
-  /// chip, the line under it and the mesh sheet: what the chip said about
-  /// reach and what the line said about the doors are rows inside the menu
-  /// now, and the one thing that still needs the person is a dot beside the
-  /// face. While the menu stands, a tap anywhere else folds it — this layer
-  /// sits above everything and catches the tap before the field's own gesture
-  /// can spend it on a hold. The bar folds while the menu stands (the page's
-  /// rule: an expanded surface folds its neighbours) and returns as it closes.
+  /// The bar (IOS-9e): the account at the left, the tabs at the centre,
+  /// search at the right, all 62 pt of glass on one row (`AppBar`).
   ///
-  /// IOS-9a — it stands beside the search circle, in the bar's row (see
-  /// `AccountCornerView`'s note on where, and `AppTabs` for the measure), and
-  /// steps aside where the row is spoken for: on the search tab, where the
-  /// circle becomes the field and the whole row is the search's, and while
-  /// the match stepper rides the bar, which widens the capsule to the circle.
-  private var accountOverlay: some View {
-    ZStack(alignment: .bottomTrailing) {
+  /// IOS-8b — the corner is the account (AP-D1): the face replaced the mesh
+  /// chip, the line under it and the mesh sheet, and the one thing that still
+  /// needs the person is a dot beside the face. While its menu stands, a tap
+  /// anywhere else folds it — the clear layer below catches the tap before the
+  /// field's own gesture can spend it on a hold — and the rest of the bar
+  /// folds away (the page's rule: an expanded surface folds its neighbours).
+  private var bar: some View {
+    ZStack(alignment: .bottom) {
       if accountMenuOpen {
         Color.clear
           .contentShape(Rectangle())
           .ignoresSafeArea()
           .onTapGesture { setAccountMenu(open: false) }
       }
-      if cornerShowing {
-        AccountCornerView(
-          face: accountFace,
-          isOpen: accountMenuOpen,
-          seed: accountSeed,
-          onToggle: { setAccountMenu(open: !accountMenuOpen) },
-          onSettings: {
-            setAccountMenu(open: false)
-            settingsSheetOpen = true
-          },
-          onSignOut: {
-            setAccountMenu(open: false)
-            signOutPending = true
-          },
-          onConnection: { act in
-            setAccountMenu(open: false)
-            performConnection(act)
-          }
-        )
-        .padding(.trailing, AppTabs.cornerInset)
-        .padding(.bottom, AppTabs.cornerLift)
-        .transition(.opacity)
-      }
+      barRow
+        .padding(.bottom, barTyping ? AppBar.gapAboveKeyboard : AppBar.bottomGap(homeInset: homeInset))
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-    .animation(FieldMotion.ease(0.25), value: cornerShowing)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .ignoresSafeArea(.container, edges: .bottom)
+    .animation(reduceMotion ? .easeInOut(duration: 0.2) : AppBar.motion, value: barState)
   }
 
-  private var cornerShowing: Bool { selectedTab != .search && !history.stepperShowing }
+  @ViewBuilder
+  private var barRow: some View {
+    ZStack(alignment: .bottom) {
+      if selectedTab != .search && !barFolded {
+        accountCorner
+          .padding(.leading, AppBar.margin)
+          .frame(maxWidth: .infinity, alignment: .bottomLeading)
+          .transition(.opacity)
+      }
+      GlassGroup(spacing: AppBar.meltSpacing) {
+        ZStack(alignment: .bottom) {
+          if barStepper {
+            stepper
+          }
+          if selectedTab == .search {
+            SearchBarRow(query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass, onClose: closeSearch)
+              .padding(.horizontal, barTyping ? AppBar.marginTyping : AppBar.margin)
+          } else if !accountMenuOpen {
+            if barFolded {
+              foldedTabs
+                .padding(.leading, AppBar.margin)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+              TabCapsule(selection: $selectedTab, waiting: waitingCount, pill: tabPill)
+                .liquidGlassCapsule()
+                .glassID("tabs", in: barGlass)
+            }
+            searchCircle
+              .padding(.trailing, AppBar.margin)
+              .frame(maxWidth: .infinity, alignment: .trailing)
+          }
+        }
+      }
+    }
+  }
+
+  /// What the bar's animation follows. The account menu is NOT in it: that
+  /// change rides the menu's own curve (`setAccountMenu`), and an implicit
+  /// animation here would override it.
+  private struct BarState: Equatable {
+    var tab: AppTab
+    var folded: Bool
+    var stepper: Bool
+    var typing: Bool
+  }
+
+  private var barState: BarState {
+    BarState(tab: selectedTab, folded: barFolded, stepper: barStepper, typing: barTyping)
+  }
+
+  /// History's scroll has folded the bar to its glyph (the page's minimize).
+  private var barFolded: Bool { selectedTab == .history && history.barMinimized && !accountMenuOpen }
+  /// A landed search is on top: the stepper rides the bar.
+  private var barStepper: Bool { selectedTab == .history && history.stepperShowing && !accountMenuOpen }
+  /// A software keyboard stands under search: the row rides above it at the
+  /// system's typing size. Focus alone is not enough — with a hardware
+  /// keyboard the field is focused and no keyboard rises, and the row stays
+  /// where it rests.
+  private var barTyping: Bool { selectedTab == .search && keyboardInset > homeInset + 40 }
+
+  private var accountCorner: some View {
+    AccountCornerView(
+      face: accountFace,
+      isOpen: accountMenuOpen,
+      seed: accountSeed,
+      onToggle: { setAccountMenu(open: !accountMenuOpen) },
+      onSettings: {
+        setAccountMenu(open: false)
+        settingsSheetOpen = true
+      },
+      onSignOut: {
+        setAccountMenu(open: false)
+        signOutPending = true
+      },
+      onConnection: { act in
+        setAccountMenu(open: false)
+        performConnection(act)
+      }
+    )
+  }
+
+  private var searchCircle: some View {
+    Button(action: openSearch) {
+      Image(systemName: "magnifyingglass")
+        .font(.system(size: AppBar.searchGlyph, weight: .medium))
+        .foregroundStyle(ChromePalette.ink)
+        .frame(width: AppBar.height, height: AppBar.height)
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .liquidGlassCircle()
+    .glassID("search", in: barGlass)
+    .accessibilityLabel("Search")
+  }
+
+  /// The capsule, folded to the standing tab's glyph at the left — where the
+  /// face was; the face folds with it (the page's reading state). A tap opens
+  /// the bar again, as a scroll back up does.
+  private var foldedTabs: some View {
+    Button {
+      history.barMinimized = false
+    } label: {
+      Image(systemName: "clock.arrow.circlepath")
+        .font(.system(size: AppBar.symbolSize, weight: .medium))
+        .foregroundStyle(ChromePalette.ink)
+        .frame(width: AppBar.height, height: AppBar.height)
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .liquidGlassCircle()
+    .glassID("tabs", in: barGlass)
+    .accessibilityLabel("History")
+    .accessibilityHint("Shows the tabs")
+  }
+
+  /// The match stepper: above the bar, or inline between the folded tab and
+  /// the search circle.
+  private var stepper: some View {
+    HistoryStepperView(router: history)
+      .frame(height: barFolded ? AppBar.height : AppBar.stepperHeight)
+      .liquidGlassCapsule()
+      .glassID("stepper", in: barGlass)
+      .padding(.horizontal, barFolded ? AppBar.margin + AppBar.height + AppBar.inlineGap : AppBar.margin)
+      .padding(.bottom, barFolded ? 0 : AppBar.height + AppBar.stepperGap)
+  }
+
+  /// The search circle becomes the field (their shared `glassID`), and the
+  /// keyboard comes up once the field exists to take it.
+  private func openSearch() {
+    if selectedTab != .search { tabBeforeSearch = selectedTab }
+    selectedTab = .search
+    Task {
+      try? await Task.sleep(for: .milliseconds(120))
+      searchFocused = true
+    }
+  }
+
+  private func closeSearch() {
+    searchFocused = false
+    selectedTab = tabBeforeSearch == .search ? .field : tabBeforeSearch
+  }
 
   /// One curve for the menu's grow and the bar's fold, so they move together.
   private func setAccountMenu(open: Bool) {
@@ -415,13 +533,6 @@ public struct HomeScreen: View {
     return .asleep
   }
 
-  private var mockSearchQuery: String {
-    #if DEBUG
-      return mockSearch
-    #else
-      return ""
-    #endif
-  }
 
   public var body: some View {
     tabs
@@ -444,10 +555,11 @@ public struct HomeScreen: View {
         // tailnet. The account is `MockAccount`'s (signed in, 🦊, studio up
         // and mini asleep; every act in the corner moves its standing), the
         // field is the scripted fleet, History is the records' corpus and
-        // search runs over it. `-vf-mock-tab=history|search` opens a tab,
+        // search runs over it. `-vf-mock-tab=history|search` opens a page,
         // `-vf-mock-open` grows the corner's menu, `-vf-mock-signed-out`
-        // starts on the `Sign in` pill, `-vf-mock-search=<q>` fills the search
-        // field, and `-vf-mock-landed` lands the second hit of the first group.
+        // starts on the `Sign in` circle, `-vf-mock-search=<q>` fills the
+        // search field, `-vf-mock-landed` lands the second hit of the first
+        // group, and `-vf-mock-folded` folds the bar as a scroll down would.
         if ProcessInfo.processInfo.arguments.contains(MockAccount.argument), mock == nil {
           let account = MockAccount()
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-signed-out") { account.standing = .signedOut }
@@ -455,24 +567,32 @@ public struct HomeScreen: View {
           mock = account
           mockActive = true
           feed.start()
+          if let search = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
+            searchQuery = String(search.dropFirst("-vf-mock-search=".count))
+          }
           if let tab = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-tab=") }) {
             switch tab.dropFirst("-vf-mock-tab=".count) {
             case "history": selectedTab = .history
-            case "search": selectedTab = .search
+            case "search": openSearch()
             default: selectedTab = .field
             }
-          }
-          if let search = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
-            mockSearch = String(search.dropFirst("-vf-mock-search=".count))
           }
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-landed"), let group = HistoryCorpus.mock.hits.first,
             group.rows.count > 1
           {
-            let query = mockSearch.isEmpty ? "badge" : mockSearch
+            let query = searchQuery.isEmpty ? "badge" : searchQuery
             history.land(FieldHistoryModel.landing(for: group.rows[1], in: group, corpus: .mock), query: query)
             selectedTab = .history
           }
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-open") { accountMenuOpen = true }
+          // After the tab's own change has opened the bar again, or it would
+          // undo the fold the moment it landed.
+          if ProcessInfo.processInfo.arguments.contains("-vf-mock-folded") {
+            Task {
+              try? await Task.sleep(for: .milliseconds(600))
+              history.barMinimized = true
+            }
+          }
         }
         // IOS-8e — the corner's states, photographed. The decision is the
         // shipping one over invented inputs; `-vf-demo-account-open` grows the

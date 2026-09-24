@@ -132,6 +132,30 @@ struct FieldHistoryModelTests {
     #expect(FieldHistoryModel.ribbon(seq: 2, start: 22) != a)
   }
 
+  @Test("a scroll folds the bar after 28 pt down from its highest point and opens it 28 pt back up")
+  func barFold() {
+    // Near the top the bar is always open, whatever it was.
+    #expect(FieldHistoryModel.barFold(minimized: true, anchor: 300, offset: 5) == (false, 5))
+    // Going down from 20: 20 pt is not enough, 29 is.
+    #expect(FieldHistoryModel.barFold(minimized: false, anchor: 20, offset: 40) == (false, 20))
+    #expect(FieldHistoryModel.barFold(minimized: false, anchor: 20, offset: 49) == (true, 49))
+    // Open, going up: the anchor follows the lowest point.
+    #expect(FieldHistoryModel.barFold(minimized: false, anchor: 100, offset: 80) == (false, 80))
+    // Folded, still going down: the anchor follows; back up 20 stays folded, 29 opens.
+    #expect(FieldHistoryModel.barFold(minimized: true, anchor: 200, offset: 250) == (true, 250))
+    #expect(FieldHistoryModel.barFold(minimized: true, anchor: 250, offset: 230) == (true, 250))
+    #expect(FieldHistoryModel.barFold(minimized: true, anchor: 250, offset: 221) == (false, 221))
+  }
+
+  @Test("a landing opens a folded bar")
+  @MainActor
+  func landingOpensTheBar() {
+    let router = HistoryRouter()
+    router.barMinimized = true
+    router.land(.project(projectId: "mille", sessionId: "m2"), query: "badge")
+    #expect(!router.barMinimized)
+  }
+
   @Test("the router lands a hit, walks the ring while the document is on top, and forgets it after")
   @MainActor
   func theRouter() {

@@ -1,30 +1,28 @@
 import FieldDesign
 import SwiftUI
 
-/// The account corner (IOS-8b, AP-D1/D5): the owner's face in a 50 pt glass
-/// circle at the bottom-left, and the menu that grows from it — the desktop's
-/// Me corner (UA-D19, DESIGN.md §8) at touch pitch.
+/// The account corner (IOS-8b, AP-D1/D5): the owner's face in a glass circle
+/// at the bottom-left, and the menu that grows from it — the desktop's Me
+/// corner (UA-D19, DESIGN.md §8) at touch pitch.
 ///
 /// ONE element changes role: the circle around the face IS the menu, grown on
 /// the island's curve into a 276 pt panel of solid chrome, corners concentric
 /// with the circle. The face never moves, so the second tap lands on the same
 /// face and folds it away. It reads bottom-up, nearest first: you · your
 /// desktops · Settings… · the connection's act · Sign out farthest from the
-/// thumb. Not signed in, the corner is the act — `Sign in` in the same glass,
-/// words only.
+/// thumb.
 ///
 /// Every word is `FieldHomeModel.accountFace`'s; this draws what it is handed.
 ///
-/// **Where it stands (IOS-9a, measured, a delta from the page).** The page
-/// drew the face at the bottom-left as the search circle's mirror, with the
-/// tab capsule centred. iOS 26's real bar with a search role puts the capsule
-/// at the LEFT margin and the search circle at the right, so the bottom-left
-/// is the capsule's, and a face there sits on the Field tab. The corner
-/// therefore stands beside the search circle — the two round tools together
-/// at the right, the tabs at the left — and the menu grows up and to the
-/// LEFT of a face that never moves. Its closed glass is the system's where
-/// the phone has it (Liquid Glass on 26, `liquidGlassCircle`; the chrome
-/// family's recipe below), and the tab bar's band is the swarm obstacle.
+/// **Where it stands (IOS-9e).** In the bar's LEFT corner, the search
+/// circle's mirror, at the search circle's size — `circle` IS `AppBar.height`,
+/// and a test pins that. (IOS-9a had put it beside the search circle at 50 pt,
+/// because the system's tab bar gave the left to its capsule; the bar is ours
+/// now and the capsule is centred between the two circles, as the page drew
+/// it.) Its closed glass is the system's where the phone has it (Liquid Glass
+/// on 26, `liquidGlassCircle`; the chrome family's recipe below). Not signed
+/// in, it is the same circle saying `Sign in` under a glyph, like a tab: the
+/// act in words, and never a shape of another size.
 struct AccountCornerView: View {
   let face: FieldHomeModel.AccountFace
   let isOpen: Bool
@@ -36,9 +34,12 @@ struct AccountCornerView: View {
   let onSignOut: () -> Void
   let onConnection: (FieldHomeModel.AccountFace.ConnectionAct) -> Void
 
-  /// The circle's diameter, and the menu's corner radius twice over.
-  static let circle: CGFloat = 50
-  static let faceSize: CGFloat = 34
+  /// The circle's diameter — the bar's row, so the corner and the search
+  /// circle are one size — and the menu's corner radius twice over.
+  static let circle: CGFloat = AppBar.height
+  /// The face inside it: two thirds of the circle, the proportion the 50 pt
+  /// corner wore (34), and over §2.8's 40 pt line, so it tilts.
+  static let faceSize: CGFloat = 42
   static let menuWidth: CGFloat = 276
   /// The island's curve (`--vf-ease-island`, 600 ms) — the menu's grow.
   static let grow: Animation = .timingCurve(0.25, 1, 0.3, 1, duration: 0.6)
@@ -47,7 +48,7 @@ struct AccountCornerView: View {
 
   var body: some View {
     if face.control == .signIn {
-      signInPill
+      signInCircle
     } else {
       menu
     }
@@ -55,39 +56,47 @@ struct AccountCornerView: View {
 
   // MARK: - Not signed in: the corner is the act
 
-  private var signInPill: some View {
+  /// The same circle, saying the act in words under a glyph — the tab items'
+  /// own voice (an icon over a 10 pt label) — so the corner keeps its size
+  /// and place whether or not anyone is signed in.
+  private var signInCircle: some View {
     Button {
       onConnection(.connect)
     } label: {
-      Text("Sign in")
-        .font(ChromeType.sans(15, .medium))
-        .foregroundStyle(ChromePalette.ink)
-        .padding(.horizontal, 16)
-        .frame(height: Self.circle)
+      VStack(spacing: 2) {
+        Image(systemName: "person.crop.circle")
+          .font(.system(size: 21, weight: .medium))
+        Text("Sign in")
+          .font(.system(size: AppBar.labelSize, weight: .semibold))
+          .lineLimit(1)
+      }
+      .foregroundStyle(ChromePalette.ink)
+      .frame(width: Self.circle, height: Self.circle)
+      .contentShape(Circle())
     }
     .buttonStyle(.plain)
-    .liquidGlassCapsule()
+    .liquidGlassCircle()
     .accessibilityLabel("Sign in with Tailscale")
   }
 
   // MARK: - The face, and the menu it grows into
 
   private var menu: some View {
-    VStack(alignment: .trailing, spacing: 0) {
+    VStack(alignment: .leading, spacing: 0) {
       if isOpen {
         rows
           .frame(width: Self.menuWidth, alignment: .leading)
           .transition(.opacity)
       }
       HStack(alignment: .center, spacing: 0) {
+        faceButton
         if isOpen {
           youRow
-            .transition(.opacity.combined(with: .offset(x: 6)))
+            .transition(.opacity.combined(with: .offset(x: -6)))
         }
-        faceButton
       }
     }
-    .frame(width: isOpen ? Self.menuWidth : Self.circle, alignment: .bottomTrailing)
+    .frame(width: isOpen ? Self.menuWidth : Self.circle, alignment: .bottomLeading)
     .background { panel }
     .clipShape(RoundedRectangle(cornerRadius: Self.circle / 2, style: .continuous))
     .background {
@@ -105,9 +114,9 @@ struct AccountCornerView: View {
       if face.wantsAttention && !isOpen {
         Circle()
           .fill(ChromePalette.attention)
-          .frame(width: 9, height: 9)
+          .frame(width: 10, height: 10)
           .overlay { Circle().strokeBorder(ChromePalette.menuSurface, lineWidth: 2) }
-          .padding(3)
+          .padding(5)
           .transition(.opacity)
           .accessibilityHidden(true)
       }
@@ -125,7 +134,7 @@ struct AccountCornerView: View {
         .frame(width: Self.circle, height: Self.circle)
         .liquidGlassCircle(shadow: nil)
         .opacity(isOpen ? 0 : 1)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
       RoundedRectangle(cornerRadius: Self.circle / 2, style: .continuous)
         .fill(ChromePalette.menuSurface)
         .overlay {
@@ -146,7 +155,7 @@ struct AccountCornerView: View {
           // Signed in, and no desktop has said who you are yet: a plain
           // circle, never a face it would have to take back.
           Image(systemName: "person")
-            .font(.system(size: 20, weight: .regular))
+            .font(.system(size: 24, weight: .regular))
             .foregroundStyle(ChromePalette.inkSecondary)
         }
       }
@@ -161,26 +170,30 @@ struct AccountCornerView: View {
 
   /// You, beside the face: the name, and the login line or the connection's
   /// word under it. Tapping it opens Settings — the account's own page, when
-  /// the phone has one; today the settings sheet. It stands to the LEFT of the
-  /// face (the face is the panel's bottom-right corner), so the words read
-  /// toward it and no chevron sits between them.
+  /// the phone has one; today the settings sheet.
   private var youRow: some View {
     Button(action: onSettings) {
-      VStack(alignment: .leading, spacing: 1) {
-        Text(face.name.isEmpty ? "You" : face.name)
-          .font(ChromeType.sans(15, .medium))
-          .foregroundStyle(ChromePalette.ink)
-          .lineLimit(1)
-        if let detail = face.detail {
-          Text(detail)
-            .font(face.detailIsLogin ? ChromeType.mono(11) : ChromeType.sans(11.5))
-            .foregroundStyle(face.detailWantsAttention ? ChromePalette.attention : ChromePalette.inkTertiary)
+      HStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 1) {
+          Text(face.name.isEmpty ? "You" : face.name)
+            .font(ChromeType.sans(15, .medium))
+            .foregroundStyle(ChromePalette.ink)
             .lineLimit(1)
-            .truncationMode(.middle)
+          if let detail = face.detail {
+            Text(detail)
+              .font(face.detailIsLogin ? ChromeType.mono(11) : ChromeType.sans(11.5))
+              .foregroundStyle(face.detailWantsAttention ? ChromePalette.attention : ChromePalette.inkTertiary)
+              .lineLimit(1)
+              .truncationMode(.middle)
+          }
         }
+        Spacer(minLength: 6)
+        Image(systemName: "chevron.right")
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(ChromePalette.placeholder)
       }
-      .padding(.leading, 14)
-      .padding(.trailing, 8)
+      .padding(.leading, 8)
+      .padding(.trailing, 14)
       .frame(width: Self.menuWidth - Self.circle, height: Self.circle, alignment: .leading)
       .contentShape(Rectangle())
     }
@@ -288,7 +301,7 @@ struct AccountMenuRow: View {
       Image(systemName: glyph)
         .font(.system(size: 17, weight: .regular))
         .foregroundStyle(ChromePalette.inkSecondary)
-        .frame(width: AccountCornerView.circle - 6)
+        .frame(width: AccountCornerView.circle - 12)
       Text(label)
         .font(ChromeType.sans(15, .medium))
         .foregroundStyle(ChromePalette.ink)

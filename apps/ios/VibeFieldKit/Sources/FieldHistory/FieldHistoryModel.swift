@@ -229,6 +229,28 @@ public enum FieldHistoryModel {
     return ((at + delta) % count + count) % count
   }
 
+  // MARK: - The bar's fold on scroll (IOS-9e)
+
+  /// Whether a scroll folds the app's bar to its selected glyph — iOS 26's
+  /// `.tabBarMinimizeBehavior(.onScrollDown)`, which the phone's own bar
+  /// reimplements now that the account stands in it. `anchor` follows the
+  /// extreme of the current direction, so the bar folds after `threshold`
+  /// points of travel down from the highest point and opens after `threshold`
+  /// points back up from the lowest; within `top` of the top it is open.
+  public static func barFold(
+    minimized: Bool, anchor: CGFloat, offset: CGFloat, threshold: CGFloat = 28, top: CGFloat = 12
+  ) -> (minimized: Bool, anchor: CGFloat) {
+    if offset <= top { return (false, offset) }
+    if minimized {
+      if offset > anchor { return (true, offset) }
+      if anchor - offset > threshold { return (false, offset) }
+      return (true, anchor)
+    }
+    if offset < anchor { return (false, offset) }
+    if offset - anchor > threshold { return (true, offset) }
+    return (false, anchor)
+  }
+
   // MARK: - The ribbon (a project's 53 weeks)
 
   /// The record's own seeded pattern, so the ribbon a screenshot shows is
