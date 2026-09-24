@@ -178,6 +178,12 @@
   --vf-shadow-sheet: 0 -20px 40px rgb(0 0 0 / 8%);
   --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 8%);
   --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 8%);
+  /* §5 (2026-09-23, edge trays): the side panel's shadow cast the other way, for a
+     panel entering from the LEFT; and the island / edge recipes as drop-shadow
+     filters, for chrome whose silhouette is a path (the notch and its drawer). */
+  --vf-shadow-edge: 20px 0 40px rgb(0 0 0 / 8%);
+  --vf-drop-island: drop-shadow(0 8px 30px rgb(0 0 0 / 8%));
+  --vf-drop-edge: drop-shadow(20px 0 40px rgb(0 0 0 / 8%));
   --vf-shadow-dialog: 0 42px 100px rgb(0 0 0 / 18%), 0 12px 36px rgb(0 0 0 / 10%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 8%);
 
@@ -232,6 +238,9 @@
   --vf-shadow-sheet: 0 -20px 40px rgb(0 0 0 / 40%);
   --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 40%);
   --vf-shadow-side-panel: -20px 0 40px rgb(0 0 0 / 40%);
+  --vf-shadow-edge: 20px 0 40px rgb(0 0 0 / 40%);
+  --vf-drop-island: drop-shadow(0 8px 30px rgb(0 0 0 / 40%));
+  --vf-drop-edge: drop-shadow(20px 0 40px rgb(0 0 0 / 40%));
   --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 40%);
 

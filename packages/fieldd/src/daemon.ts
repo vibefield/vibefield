@@ -11,6 +11,11 @@ import {
   AgentSpawnParams,
   AgentSubscribeParams,
   AgentsInstallsParams,
+  AgentsProfileSetsCreateParams,
+  AgentsProfileSetsDeleteParams,
+  AgentsProfileSetsListParams,
+  AgentsProfileSetsRevealParams,
+  AgentsProfileSetsUpdateParams,
   AgentsProfilesCreateParams,
   AgentsProfilesDeleteParams,
   AgentsProfilesListParams,
@@ -1275,21 +1280,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const parsed = AgentsProfilesListParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { provider? }", false);
-      return await agents.personas(parsed.data.provider);
+      return await agents.profiles.personas(parsed.data.provider);
     });
     api.register("agents.profiles.create", async (ctx, params) => {
       const parsed = AgentsProfilesCreateParams.safeParse(params);
       if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { provider, label }", false);
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, provider }", false);
       return await audit.required(
         ctx,
         {
           // the id is minted inside the effect; the outcome record names it
           action: "agents.profiles.create",
           target: { kind: "agent-persona", id: "pending" },
-          attrs: { provider: parsed.data.provider, label: parsed.data.label },
+          attrs: { provider: parsed.data.provider, set: parsed.data.set },
         },
-        () => agents.createPersona(parsed.data),
+        () => agents.profiles.createPersona(parsed.data),
         (result) => ({
           outcome: "succeeded",
           attrs: {
@@ -1309,8 +1314,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           action: "agents.profiles.delete",
           target: { kind: "agent-persona", id: parsed.data.profileId },
         },
-        () => agents.deletePersona(parsed.data.profileId),
-        (result) => ({ attrs: { deleted: result.deleted } }),
+        // AR-D25 — sign out: retired now, finished when its sessions end
+        () => agents.profiles.signOut(parsed.data.profileId),
+        (result) => ({
+          attrs: {
+            deleted: result.deleted,
+            ...(result.waiting !== undefined ? { waiting: result.waiting } : {}),
+          },
+        }),
       );
     });
     api.register("agents.profiles.verify", async (ctx, params) => {
@@ -1323,7 +1334,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           action: "agents.profiles.verify",
           target: { kind: "agent-persona", id: parsed.data.profileId },
         },
-        () => agents.verifyPersona(parsed.data.profileId),
+        () => agents.profiles.verifyPersona(parsed.data.profileId),
         (result) => ({
           attrs: {
             ...(result.persona.identity !== undefined
@@ -1333,6 +1344,90 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           },
         }),
       );
+    });
+    // AR-S2 — Agent Profiles (agent-profiles.ts): puppeteer's profile sets,
+    // each one folder under this user. The list and its subscription are
+    // reads; create, update and delete are audited; Show in Finder changes
+    // nothing. A delete stops the profile's sessions first.
+    api.register("agents.profileSets.list", async (_ctx, params) => {
+      const parsed = AgentsProfileSetsListParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { refresh? }", false);
+      // a refresh is an ask: This Mac's sign-ins are read again, and the
+      // frames that follow carry them (the answer says `reading`)
+      if (parsed.data.refresh === true) void agents.profiles.readNativeIdentities();
+      return await agents.profiles.sets();
+    });
+    api.registerSubscription("agents.profileSets.subscribe", async (_ctx, _params, emit) => {
+      // The snapshot first: a frame emitted before the reply names a
+      // subscription the client does not know yet, and would be dropped; and a
+      // read that throws leaves no subscriber behind. What changed while it was
+      // read arrives as the next frame.
+      const snapshot = await agents.profiles.sets();
+      const dispose = agents.profiles.subscribe((frame) => emit(frame));
+      agents.profiles.publish();
+      return { snapshot, dispose };
+    });
+    api.register("agents.profileSets.create", async (ctx, params) => {
+      const parsed = AgentsProfileSetsCreateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { label, glyph?, default? }",
+          false,
+        );
+      return await audit.required(
+        ctx,
+        {
+          // the id is made from the name inside the effect; the outcome names it
+          action: "agents.profile_sets.create",
+          target: { kind: "agent-profile", id: "pending" },
+          attrs: { ...(parsed.data.default === true ? { default: true } : {}) },
+        },
+        () => agents.profiles.createSet(parsed.data),
+        (result) => ({ outcome: "succeeded", attrs: { set: result.set.id } }),
+      );
+    });
+    api.register("agents.profileSets.update", async (ctx, params) => {
+      const parsed = AgentsProfileSetsUpdateParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { set, label?, glyph?, default?: true }",
+          false,
+        );
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profile_sets.update",
+          target: { kind: "agent-profile", id: parsed.data.set },
+          attrs: {
+            ...(parsed.data.label !== undefined ? { renamed: true } : {}),
+            ...(parsed.data.glyph !== undefined ? { glyph: parsed.data.glyph } : {}),
+            ...(parsed.data.default === true ? { default: true } : {}),
+          },
+        },
+        () => agents.profiles.updateSet(parsed.data),
+      );
+    });
+    api.register("agents.profileSets.delete", async (ctx, params) => {
+      const parsed = AgentsProfileSetsDeleteParams.safeParse(params);
+      if (!parsed.success) throw new RpcCallError("PRECONDITION_FAILED", "expected { set }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.profile_sets.delete",
+          target: { kind: "agent-profile", id: parsed.data.set },
+        },
+        () => agents.profiles.deleteSet(parsed.data.set),
+        (result) => ({ attrs: { deleted: result.deleted, stopped: result.stopped } }),
+      );
+    });
+    api.register("agents.profileSets.reveal", async (_ctx, params) => {
+      const parsed = AgentsProfileSetsRevealParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, provider? }", false);
+      return await agents.profiles.reveal(parsed.data);
     });
     api.register("agents.installs", async (_ctx, params) => {
       const parsed = AgentsInstallsParams.safeParse(params ?? {});
@@ -3840,7 +3935,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // background (every agent's version command, seconds), so Settings →
     // Agents and the deck's launcher answer at once. Never a boot gate; the
     // product's daemon only (see `agentInventoryWarm`).
-    if (config.agentInventoryWarm === true) agents.distribution.warm();
+    if (config.agentInventoryWarm === true) {
+      agents.distribution.warm();
+      // AR-S2 — and This Mac's sign-ins (each installed agent's own status
+      // command), so Settings → Agent Profiles opens on who is signed in
+      void agents.profiles.readNativeIdentities();
+    }
     // AR-0 — boot has committed: the index daemon starts now, in the
     // background. Readiness is a health transition, never a boot gate: a
     // missing or broken rosettad degrades the index, not the daemon.

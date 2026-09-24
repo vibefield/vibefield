@@ -116,7 +116,9 @@ describe("buildCsp", () => {
 
   it.each(NON_DEV)("%s admits only image loading from custom-port MagicDNS hosts", (mode) => {
     const csp = buildCsp(mode) as string;
-    expect(csp).toContain("img-src 'self' data: https://*.ts.net:*");
+    // SNAP-3: the still scheme is the one other image source — a retained
+    // screenshot, served by main from its own list.
+    expect(csp).toContain("img-src 'self' data: https://*.ts.net:* vibefield-still:");
     expect(csp).not.toContain("frame-src");
     expect(csp).not.toContain("connect-src https://");
   });

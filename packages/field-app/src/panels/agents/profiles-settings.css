@@ -1,0 +1,449 @@
+/* Agent Profiles (the design record's R1, pass 16: profiles are places). The
+   rows, heroes and output card are the Agents page's own (agents-settings.css);
+   this file owns what a profile adds: its glyph, the C1 usage timeline, the
+   menu under "Add agent…", the glyph pickers, the two-step confirm and the
+   sign-in terminal's card. Tokens only (DESIGN.md §2, UI_SYSTEM.md). */
+
+.vf-profiles-glyph {
+  display: block;
+  flex: none;
+}
+
+/* The header line of an agent's page inside a profile: the mark, the name. */
+.vf-profiles-subhead {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* A profile's mark stands on the page's own ground where an agent's sits on a
+   tile: the glyph is the whole mark. */
+.vf-agents-mark--bare {
+  background: transparent;
+}
+
+.vf-profiles-attention {
+  color: var(--vf-orange);
+}
+
+.vf-profiles-plus,
+.vf-profiles-down,
+.vf-profiles-reset {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vf-profiles-plus {
+  width: 13px;
+  height: 13px;
+  margin-left: -2px;
+  stroke-width: 1.7;
+}
+
+.vf-profiles-down {
+  width: 10px;
+  height: 10px;
+  opacity: 0.55;
+  stroke-width: 2;
+}
+
+/* ── a row that carries usage grows to hold it ── */
+
+.vf-profiles-row.has-usage {
+  align-items: start;
+}
+
+.vf-profiles-row.has-usage > .vf-agents-mark,
+.vf-profiles-row.has-usage > .vf-agents-chevron,
+.vf-profiles-row.has-usage > .vf-agents-row-actions {
+  margin-top: 2px;
+}
+
+/* The subscription and the app stand alone in their cards: edge to edge like
+   a list's rows, and the subscription has no page below it, so no chevron. */
+.vf-profiles-subscription,
+.vf-profiles-app > .vf-agents-row {
+  margin: 0 -8px;
+}
+
+.vf-profiles-subscription {
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+}
+
+.vf-profiles-subscription-title {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+/* ── C1: the window's time is the track, use the fill, "now" a line ── */
+
+.vf-profiles-usage {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 70px;
+  gap: 5px 10px;
+  align-items: center;
+  max-width: 470px;
+  margin-top: 8px;
+}
+
+.vf-profiles-usage-line {
+  display: contents;
+}
+
+.vf-profiles-usage-label {
+  color: var(--vf-text-tertiary);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.vf-profiles-usage-track {
+  position: relative;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--vf-foreground) 7%, transparent);
+}
+
+.vf-profiles-usage-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--vf-foreground) 20%, transparent);
+}
+
+.vf-profiles-usage-line.is-hot .vf-profiles-usage-fill {
+  background: color-mix(in srgb, var(--vf-orange) 85%, transparent);
+}
+
+.vf-profiles-usage-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--vf-foreground);
+  opacity: 0.75;
+}
+
+.vf-profiles-usage-pct {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--vf-text-primary);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.vf-profiles-usage-line.is-hot .vf-profiles-usage-pct.is-inside {
+  color: var(--vf-state-on-attention);
+}
+
+.vf-profiles-usage-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vf-text-tertiary);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.vf-profiles-usage-line.is-hot .vf-profiles-usage-reset {
+  color: var(--vf-orange);
+}
+
+.vf-profiles-reset {
+  width: 10px;
+  height: 10px;
+  stroke-width: 1.8;
+}
+
+/* ── a menu under its button: island material, 32px items, Esc closes ── */
+
+.vf-profiles-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.vf-profiles-menu-trigger {
+  gap: 6px;
+}
+
+.vf-profiles-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 14px;
+  background: var(--vf-sheet-surface);
+  box-shadow: var(--vf-shadow-island);
+  text-align: left;
+  backdrop-filter: blur(24px);
+  animation: vf-profiles-menu-in 180ms var(--vf-ease-island);
+}
+
+.vf-profiles-menu--end {
+  right: 0;
+}
+
+.vf-profiles-menu--center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@keyframes vf-profiles-menu-in {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+.vf-profiles-menu-heading {
+  padding: 6px 10px;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+}
+
+.vf-profiles-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--vf-text-primary);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-profiles-menu-item:hover,
+.vf-profiles-menu-item:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--vf-foreground) 6%, transparent);
+}
+
+.vf-profiles-menu-item .vf-agents-mark--row {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.vf-profiles-menu-empty {
+  padding: 12px 10px 10px;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ── the glyph, chosen ── */
+
+.vf-profiles-popup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 11px 0 12px;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 9px;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+
+.dark .vf-profiles-popup {
+  background: var(--vf-field-surface);
+}
+
+.vf-profiles-popup:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--vf-foreground) 22%, transparent);
+}
+
+.vf-profiles-popup:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-profiles-glyph-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 36px);
+  gap: 2px;
+  min-width: 0;
+}
+
+.vf-profiles-glyphs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 250px;
+}
+
+.vf-profiles-glyph-option {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  color: var(--vf-text-primary);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.vf-profiles-glyphs .vf-profiles-glyph-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.vf-profiles-glyph-option:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 6%, transparent);
+}
+
+.vf-profiles-glyph-option[aria-checked="true"],
+.vf-profiles-glyph-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--vf-foreground) 7.5%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--vf-select);
+}
+
+.vf-profiles-glyph-option:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 1px;
+}
+
+.vf-profiles-name {
+  width: 220px;
+}
+
+/* ── the empty profile ── */
+
+.vf-profiles-empty-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1.5px dashed var(--vf-hairline-strong);
+  border-radius: 50%;
+  color: var(--vf-text-tertiary);
+}
+
+/* ── the two-step confirm (P7): the question, what goes, the act, Cancel ── */
+
+.vf-profiles-confirm-box {
+  min-width: 0;
+  margin: 0 0 4px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--vf-hairline);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--vf-foreground) 2%, transparent);
+  animation: vf-profiles-arm 200ms ease-out;
+}
+
+@keyframes vf-profiles-arm {
+  from {
+    opacity: 0;
+    translate: 0 -2px;
+  }
+}
+
+.vf-profiles-confirm-question {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.vf-profiles-confirm-what {
+  max-width: 62ch;
+  margin: 4px 0 0;
+  line-height: 1.45;
+}
+
+.vf-profiles-confirm-acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ── the sign-in terminal, on the page ── */
+
+.vf-profiles-signin {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: vf-profiles-arm 240ms ease-out;
+}
+
+.vf-profiles-signin-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-profiles-signin-body {
+  height: 240px;
+}
+
+.vf-profiles-signin-wait {
+  margin: 0;
+  padding: 12px;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+}
+
+.vf-profiles-signin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+/* ── the new profile's foot ── */
+
+.vf-profiles-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.vf-agents-none {
+  margin: 0;
+  padding: 4px 0 2px;
+}
+
+.vf-profiles-app-version {
+  color: var(--vf-text-tertiary);
+  font-weight: 400;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-profiles-menu,
+  .vf-profiles-confirm-box,
+  .vf-profiles-signin {
+    animation: none;
+  }
+
+  .vf-profiles-popup,
+  .vf-profiles-glyph-option {
+    transition-duration: 0ms;
+  }
+}

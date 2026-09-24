@@ -20,6 +20,7 @@ import type { DocManager, DocManagerState } from "../doc-manager";
 import { GodviewOverlay, GodviewToggle, useGodviewOpen } from "../godview";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
+import { ClipboardTray } from "../hud/edge-tray/EdgeTray";
 import { FilePill } from "../hud/FilePill";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { NavigationBreadcrumbs } from "../hud/NavigationBreadcrumbs";
@@ -405,6 +406,12 @@ export function ChromeLayer({
         windowId={FIELD_WINDOW_ID}
         onClose={() => closeSidePanel(true)}
       />
+
+      {/* The clipboard tray (SNAP-3, DESIGN.md §8 edge trays): the notch at
+          the left edge's mid-height and the drawer behind it. Non-modal like
+          the Artifact panel, and self-governing — its hover, pin and keyboard
+          grammar live in the controller; it joins no exclusivity here. */}
+      <ClipboardTray />
 
       {/* hud.attention (§8.4): the top-right attention stack, below the theme
           fab. pointer-events-none wrapper so an empty slot never blocks the

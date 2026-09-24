@@ -41,7 +41,9 @@ import { fileURLToPath } from "node:url";
 import type {
   AgentAdapterBinding,
   AgentHost,
+  AgentProfile,
   BoundIngress,
+  ProfileService,
   PromptReceipt,
   PromptSubmission,
 } from "@vibecook/puppeteer-core";
@@ -58,6 +60,10 @@ import {
   type AgentProvidersResult,
   AgentSessionRecord,
   type AgentSpawnResult,
+  type AgentsProfileSetsDeleteResult,
+  type AgentsProfileSetsListResult,
+  type AgentsProfilesCreateResult,
+  type AgentsProfilesDeleteResult,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
   LAYOUT,
@@ -176,17 +182,56 @@ function scriptedBinding(
     async dispose() {},
   };
 }
+/** AR-S2 — an account capability for the scripted provider, so a sign-in can
+ * hold a LIVE session: its root is bound through a variable of its own, its
+ * identity is whatever this says, and its native default points nowhere real. */
+function scriptedProfiles(): ProfileService {
+  return {
+    provider: {
+      id: "scripted",
+      label: "Scripted",
+      support: {
+        supported: true,
+        identity: "native-status",
+        sharedSurfaces: [],
+        nativeDefaultRoot: "/nonexistent/.scripted",
+      },
+    },
+    bindingEnvironment: (profile: AgentProfile): Record<string, string> =>
+      profile.kind === "managed" ? { SCRIPTED_HOME: profile.dataRoot } : {},
+    observationRoot: (profile: AgentProfile) => profile.dataRoot,
+    // returns at once, unless a row asks for a login that stays open
+    loginInvocation: (_profile, options) => ({
+      command: "/bin/sh",
+      args: ["-c", process.env["SCRIPTED_LOGIN"] ?? "exit 0"],
+      cwd: options.cwd,
+    }),
+    async verify() {
+      return {
+        loggedIn: true,
+        email: "scripted@example.test",
+        verifiedAt: new Date().toISOString(),
+        source: { kind: "native-status", stability: "documented" },
+      };
+    },
+  };
+}
+
 function scriptedProvider(
   envOut: string,
   sessions: ScriptedSession[],
   attach: { records: ScriptedAttach[] } | undefined,
+  extra: { profiles?: boolean; seen?: Array<AgentProfile | undefined> } = {},
 ): AgentProvider {
   let counter = 0;
   return {
     descriptor: { id: "scripted", label: "Scripted" },
+    ...(extra.profiles === true ? { profiles: scriptedProfiles() } : {}),
     async createSession(options: AgentProviderSessionOptions): Promise<AgentAdapterBinding> {
       const bornAt = Date.now();
       const n = ++counter;
+      // AR-S2 — the account a spawn was bound to, as the runtime resolved it
+      extra.seen?.push(options.profile);
       const out = join(envOut, `session-${n}.env`);
       const typedOut = join(envOut, `session-${n}.typed`);
       // the stable-ingress contract, from the adapter's side: bound, then
@@ -261,6 +306,8 @@ interface Box {
    * stage a record the daemon will still act on (AR-4b: an unsigned or
    * re-written record is set aside, which is a different witness) */
   records: SessionRecordStore;
+  /** AR-S2 — the account each scripted spawn was bound to, in order */
+  seen: Array<AgentProfile | undefined>;
 }
 
 interface SetupConfig {
@@ -274,6 +321,8 @@ interface SetupConfig {
   resumeWhenIdle?: { afterMs: number; pollMs: number };
   /** the fake rosettad's scripted misbehaviour for THIS boot (default `ok`) */
   rosettadMode?: string;
+  /** AR-S2 — give the scripted provider an account capability (sign-ins) */
+  profiles?: boolean;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -319,14 +368,27 @@ async function setup(config: SetupConfig): Promise<Box> {
   // the login pane and the identity read (it resolves the executable from
   // this variable at construction); the real-agent block leaves it unset so
   // the vendor's own binary is launched.
-  const previous = process.env["PUPPETEER_CLAUDE_BIN"];
-  if (config.realAgent) delete process.env["PUPPETEER_CLAUDE_BIN"];
-  else process.env["PUPPETEER_CLAUDE_BIN"] = join(bin, "claude");
-  cleanup.push(() => {
-    if (previous === undefined) delete process.env["PUPPETEER_CLAUDE_BIN"];
-    else process.env["PUPPETEER_CLAUDE_BIN"] = previous;
-  });
+  // Codex, the other adapter that reads who is signed in, is pinned to a path
+  // that does not exist, so no row can run a developer's own codex; the fake
+  // claude keeps This Mac's signed-out mark in the test's own folder.
+  const pins: Record<string, string | undefined> = config.realAgent
+    ? { PUPPETEER_CLAUDE_BIN: undefined }
+    : {
+        PUPPETEER_CLAUDE_BIN: join(bin, "claude"),
+        PUPPETEER_CODEX_BIN: join(bin, "no-real-codex"),
+        FAKE_CLAUDE_STATE_DIR: bin,
+      };
+  for (const [name, value] of Object.entries(pins)) {
+    const previous = process.env[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+    cleanup.push(() => {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    });
+  }
   const sessions: ScriptedSession[] = restart?.sessions ?? [];
+  const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
   const daemon = await bootstrap({
     dataDir,
@@ -342,7 +404,10 @@ async function setup(config: SetupConfig): Promise<Box> {
     agentSearchPath: bin,
     agentProviders: (builtin) => [
       ...builtin,
-      scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined),
+      scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined, {
+        profiles: config.profiles === true,
+        seen,
+      }),
     ],
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
     // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget
@@ -367,6 +432,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     sessionsFile,
     requestLog,
     records,
+    seen,
   };
 }
 
@@ -981,6 +1047,170 @@ const rosettaRow = (nativeSessionId: string, stillForMs: number | null, child = 
       ? null
       : { first_at: Date.now() - stillForMs - 60_000, last_at: Date.now() - stillForMs },
   stream_state: "indexed",
+});
+
+describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins", () => {
+  /** A profile with one scripted sign-in; answers the persona and its root. */
+  async function signedIn(
+    win: WsRpc,
+    dataDir: string,
+    label: string,
+    options: { default?: boolean } = {},
+  ): Promise<{ profileId: string; set: string; folder: string; root: string }> {
+    const made = (await win.call("agents.profileSets.create", {
+      label,
+      ...(options.default === true ? { default: true } : {}),
+    })) as { set: { id: string } };
+    const { persona } = (await win.call("agents.profiles.create", {
+      set: made.set.id,
+      provider: "scripted",
+    })) as AgentsProfilesCreateResult;
+    const folder = join(dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, made.set.id);
+    const root = join(folder, readdirSync(folder)[0] as string);
+    return { profileId: persona.profileId, set: made.set.id, folder, root };
+  }
+
+  it("a sign-out waits for the session running under it: out of its profile and out of new spawns at once, its root kept until the session ends, then finished", async () => {
+    const { daemon, dataDir, envOut, seen } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "ap1");
+    const work = await signedIn(win, dataDir, "Work");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileId: work.profileId,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)?.id).toBe(work.profileId);
+    expect(spawned.session.profileId).toBe(work.profileId);
+
+    const out = (await win.call("agents.profiles.delete", {
+      profileId: work.profileId,
+    })) as AgentsProfilesDeleteResult;
+    // the scripted adapter never said where it keeps a credential: nothing is claimed past the folder
+    expect(out).toEqual({ deleted: false, waiting: 1, credential: "unknown" });
+    const listed = (await win.call("agents.profileSets.list", {})) as AgentsProfileSetsListResult;
+    expect(listed.sets.find((set) => set.id === work.set)?.personas).toEqual([]);
+    const refused = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileId: work.profileId,
+    });
+    expect(refused.data?.kind).toBe("NOT_FOUND");
+    // the session keeps going, and so does its root
+    expect(existsSync(work.root)).toBe(true);
+
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(async () => (existsSync(work.root) ? undefined : true), 15_000);
+    const registry = JSON.parse(readFileSync(join(dataDir, ...LAYOUT.AGENT_PROFILES_FILE), "utf8"));
+    expect(registry.profiles).toEqual([]);
+    // the profile itself stays: a sign-out leaves the place
+    expect(existsSync(work.folder)).toBe(true);
+    // nothing could resume into a root that is gone
+    expect(
+      existsSync(
+        join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR, `${spawned.session.runtimeRunId}.json`),
+      ),
+    ).toBe(false);
+  }, 60_000);
+
+  it("the default profile is where a spawn that names none runs; a resume continues in the account it was born under whatever the default says now", async () => {
+    const { daemon, dataDir, envOut, seen } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "ap2");
+    const work = await signedIn(win, dataDir, "Work", { default: true });
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)?.id).toBe(work.profileId);
+    expect(spawned.session.profileId).toBe(work.profileId);
+    expect(readRecord(dataDir, spawned.session.runtimeRunId).profileId).toBe(work.profileId);
+
+    // the default moves back to This Mac; the run was born under Work
+    await win.call("agents.profileSets.update", { set: "native", default: true });
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(dataDir, spawned.session.runtimeRunId).exited !== undefined ? true : undefined,
+      15_000,
+    );
+    const resumed = (await win.call("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)?.id).toBe(work.profileId);
+    expect(resumed.session.profileId).toBe(work.profileId);
+    // …and a fresh spawn now runs in the agent's own folder
+    await win.call("agent.spawn", { provider: "scripted", cwd: envOut });
+    expect(seen.at(-1)).toBeUndefined();
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+
+  it("deleting a profile stops the sessions running under it first, then deletes its folder", async () => {
+    const { daemon, dataDir, envOut } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "ap3");
+    const work = await signedIn(win, dataDir, "Work");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileId: work.profileId,
+    })) as AgentSpawnResult;
+
+    const deleted = (await win.call("agents.profileSets.delete", {
+      set: work.set,
+    })) as AgentsProfileSetsDeleteResult;
+    expect(deleted).toEqual({ deleted: true, stopped: 1 });
+    expect(existsSync(work.folder)).toBe(false);
+    // the run is over; its pane stays until someone closes it (MF-1f), and
+    // it offers no resume — the sign-in it would continue in is gone
+    const row = await poll(async () => {
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      const found = sessions.find((r) => r.runtimeRunId === spawned.session.runtimeRunId);
+      return found === undefined || found.continuation?.exited === true
+        ? (found ?? null)
+        : undefined;
+    }, 15_000);
+    if (row !== null) expect(row.continuation).toMatchObject({ exited: true, resumable: false });
+    const refused = await win.callErr("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    });
+    expect(refused.data?.kind).toBe("NOT_FOUND");
+  }, 60_000);
+
+  it("a sign-out ends a login still open on that sign-in before its folder goes", async () => {
+    process.env["SCRIPTED_LOGIN"] = "sleep 60";
+    cleanup.push(() => {
+      delete process.env["SCRIPTED_LOGIN"];
+    });
+    const { daemon, dataDir } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "ap4");
+    const work = await signedIn(win, dataDir, "Work");
+    const login = (await win.call("agents.profiles.login", {
+      profileId: work.profileId,
+    })) as AgentsProfilesLoginResult;
+    const paneId = login.terminal.sessionId;
+    // the feed says the sign-in is open, for as long as the pane lives
+    const open = await poll(async () => {
+      const { sets } = (await win.call(
+        "agents.profileSets.list",
+        {},
+      )) as AgentsProfileSetsListResult;
+      const persona = sets
+        .find((set) => set.id === work.set)
+        ?.personas.find((p) => p.profileId === work.profileId);
+      return persona?.signingIn !== undefined ? persona.signingIn : undefined;
+    }, 15_000);
+    expect(open.sessionId).toBe(paneId);
+
+    const out = (await win.call("agents.profiles.delete", {
+      profileId: work.profileId,
+    })) as AgentsProfilesDeleteResult;
+    // the login was not a session to wait for: it ended, and the sign-in is gone
+    expect(out).toMatchObject({ deleted: true });
+    expect(existsSync(work.root)).toBe(false);
+    // and its pane leaves the floor
+    await poll(async () => {
+      const { terminals } = (await win.call("terminal.list", {})) as { terminals: TerminalInfo[] };
+      return terminals.some((row) => row.sessionId === paneId) ? undefined : true;
+    }, 15_000);
+  }, 60_000);
 });
 
 describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {

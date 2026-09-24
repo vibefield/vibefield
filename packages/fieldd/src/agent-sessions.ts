@@ -453,7 +453,7 @@ export function summarizeExitedRecord(input: SummarizeExitedInput): AgentSession
     createdAt: record.createdAt,
     stateChangedAt: record.exited?.at ?? input.since,
     ...(record.title !== undefined ? { title: record.title } : {}),
-    continuation: { persisted: true, resumable: true, exited: true },
+    continuation: { persisted: true, resumable: input.resumable ?? true, exited: true },
   };
 }
 
@@ -468,6 +468,8 @@ export interface SummarizeExitedInput {
   terminal: TerminalInfo | undefined;
   /** when this boot found it */
   since: string;
+  /** AR-D25 — false when the account it ran under is signed out (default true) */
+  resumable?: boolean;
 }
 
 export interface SummarizePendingInput {
@@ -481,6 +483,9 @@ export interface SummarizePendingInput {
   reason: string;
   /** when this boot found it */
   since: string;
+  /** AR-D25 — false when the account it runs under is signed out: it keeps
+   * running until it ends, and nothing continues it (default true) */
+  resumable?: boolean;
 }
 
 /** SessionSummary v2 for a run whose PTY outlived a fieldd that could NOT
@@ -516,7 +521,7 @@ export function summarizePending(input: SummarizePendingInput): AgentSessionSumm
     ...(record.title !== undefined ? { title: record.title } : {}),
     continuation: {
       persisted: true,
-      resumable: true,
+      resumable: input.resumable ?? true,
       pending: "resume-when-idle",
       reason: input.reason,
     },

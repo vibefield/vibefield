@@ -1622,8 +1622,10 @@
       updates/                              <span class="comment">MACHINE_UPDATES_DIR — puppeteer's 0600 update transcripts</span>
   users/&lt;fuid&gt;/                             <span class="comment">the partition root (UA-D1)</span>
     agents/                                 <span class="comment">AGENTS_DIR</span>
-      profiles.json                         <span class="comment">AGENT_PROFILES_FILE — puppeteer's registry, fieldd's store (0600)</span>
-      roots/&lt;provider&gt;/&lt;uuid&gt;/               <span class="comment">AGENT_ROOTS_DIR — managed profile roots, 0700</span>
+      profiles.json                         <span class="comment">AGENT_PROFILES_FILE — puppeteer's registry v2, fieldd's store (0600)</span>
+      profiles/&lt;set&gt;/                       <span class="comment">AGENT_PROFILE_SETS_DIR — one folder per Agent Profile (AR-D24), 0700</span>
+        &lt;provider&gt;-&lt;8 hex&gt;/                 <span class="comment">one agent's sign-in: its whole data folder, never reused, 0700</span>
+      roots/&lt;provider&gt;/&lt;uuid&gt;/              <span class="comment">AGENT_ROOTS_DIR — AR-1…S1 roots, adopted in place; none made now</span>
       sessions/ · sessions.key              <span class="comment">AGENT_SESSIONS_DIR — signed records; never a transcript, never a credential</span>
       runs/                                 <span class="comment">AGENT_RUNS_DIR — puppeteer's durable claims, in fieldd's custody</span>
     index/                                  <span class="comment">INDEX_DIR — rosetta, one daemon per user</span>
@@ -1784,15 +1786,26 @@
                     <td><p><code>AgentMonitorMirror.runtimeRunId</code> / <code>.runtimeEpoch</code></p></td>
                   </tr>
                   <tr>
+                    <td><span class="route">set</span></td>
+                    <td>
+                      <p>
+                        An Agent Profile — puppeteer's profile set (AR-D23): a named place holding at most one sign-in per
+                        agent, one of them the default a spawn that names no one uses. <code>native</code> is This Mac, the
+                        agents' own folders. The id is also its folder's name, made once from its first name.
+                      </p>
+                    </td>
+                    <td><p><code>agents.profileSets.*</code>; folders under <code>AGENT_PROFILE_SETS_DIR</code></p></td>
+                  </tr>
+                  <tr>
                     <td><span class="route">profileId</span></td>
                     <td>
                       <p>
-                        A persona — VibeField's word for a puppeteer account profile. One native data root per account,
-                        bound at launch through the provider's own root variable. A launch selection, never a security
-                        boundary.
+                        A persona — VibeField's word for a puppeteer account profile: one agent's sign-in inside an Agent
+                        Profile. One native data root per sign-in, bound at launch through the provider's own root variable.
+                        A launch selection, never a security boundary.
                       </p>
                     </td>
-                    <td><p><code>agents.profiles.*</code>; roots under <code>AGENT_ROOTS_DIR</code></p></td>
+                    <td><p><code>agents.profiles.*</code>; roots inside their profile's folder (AR-1…S1's under <code>AGENT_ROOTS_DIR</code>, adopted in place)</p></td>
                   </tr>
                   <tr>
                     <td><span class="route">fuid</span></td>
@@ -2204,8 +2217,8 @@
                   </tr>
                   <tr>
                     <td><strong>Agent Profiles in Settings</strong></td>
-                    <td><p>The shared half — Settings → Agents, the shelf, updates and each agent's page — was built 2026-09-22. Owed: the per-profile half, and with it an interface for the login pane's door, which is live with none in front of it. It waits on one ruling: whether one cross-agent profile groups puppeteer's per-provider personas in fieldd or in puppeteer's registry. Also owed: <code>deletePersona</code> under a live run is untested, because the scripted provider has no profile service.</p></td>
-                    <td><span class="badge tone-owed">Owed</span><p>ROADMAP, the AR row</p></td>
+                    <td><p>Built 2026-09-23 (AR-S2), on James's ruling that the cross-agent profile lives in puppeteer's registry (AR-D23): the six <code>agents.profileSets.*</code> doors, one folder per profile under the user (AR-D24), sign-out that waits for its sessions (AR-D25, witnessed under a live run over the real floor), and the Settings pages with the login pane in front of its door. Reviewed the same day (AR-S2b): delete waits for its sessions to be gone and refuses otherwise, login panes count as sessions, a failed vendor sign-out keeps the folder, plain spawns survive an unreadable registry, and every agent that signs in in a folder can be added. Still open: where Grok, Kimi and Copilot keep a credential has not been probed, so for them deleting the sign-in's folder is the whole sign-out and the page says only that; and a sign-in has not yet been run in a real window.</p></td>
+                    <td><span class="badge tone-built">Built</span><p>ROADMAP, the AR row</p></td>
                   </tr>
                   <tr>
                     <td><strong>W-D8 — the publication exit</strong></td>

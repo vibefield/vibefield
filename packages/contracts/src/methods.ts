@@ -1361,6 +1361,59 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // AR-S2 — Agent Profiles (AR-D23…D25): puppeteer's profile SETS, each a
+  // named place holding one sign-in per agent in ONE folder under this user
+  // (`agents/profiles/<set>/`), one of them the default new sessions use. The
+  // same scope and posture as the persona rows beside them — a profile is
+  // what one spawns in, its sign-ins run in panes on THIS device, and its
+  // folder never roams — so `agent.spawn`, local. The mutations are audited;
+  // the list, its subscription (whole snapshots at the tick) and Show in
+  // Finder change nothing. A delete stops the sessions running under the
+  // profile first, so it is idempotent only in the sense that deleting a
+  // deleted profile is refused as NOT_FOUND, never done twice.
+  defineMethod({
+    surface: "product",
+    method: "agents.profileSets.list",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profileSets.subscribe",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profileSets.create",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profileSets.update",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profileSets.delete",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.profileSets.reveal",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
   // Account usage (AR-5d — the usage column's feed): one reading per provider
   // and per registered account, polled by fieldd and pushed as full batches.
   // It is a READ of the agent plane, but not the fold's: a reading is the

@@ -434,9 +434,14 @@ describe("the account usage doors (AR-5d)", () => {
     // credentialed call per provider (the review's probe).
     const { daemon, scripted, script } = await setup({ profiles: true });
     const spawner = await window(daemon, ["agent.spawn"], "u8");
+    // AR-S2 — a sign-in lives in an Agent Profile: make "Work", then sign
+    // the scripted agent into it
+    const work = (await spawner.call("agents.profileSets.create", { label: "Work" })) as {
+      set: { id: string };
+    };
     const created = (await spawner.call("agents.profiles.create", {
+      set: work.set.id,
       provider: "scripted",
-      label: "Work",
     })) as { persona: { profileId: string } };
     const profileId = created.persona.profileId;
     script({ [profileId]: available("scripted", "2026-09-13T13:00:00.000Z", 9) });
@@ -462,9 +467,14 @@ describe("the account usage doors (AR-5d)", () => {
     // the native-default account first: one row, unkeyed
     await batchWhere(win, (b) => b.entries.length > 0);
 
+    // AR-S2 — a sign-in lives in an Agent Profile: make "Work", then sign
+    // the scripted agent into it
+    const work = (await spawner.call("agents.profileSets.create", { label: "Work" })) as {
+      set: { id: string };
+    };
     const created = (await spawner.call("agents.profiles.create", {
+      set: work.set.id,
       provider: "scripted",
-      label: "Work",
     })) as { persona: { profileId: string } };
     const profileId = created.persona.profileId;
     script({

@@ -10,15 +10,32 @@ import {
   widgets,
   writeRuntimeResource,
 } from "@vibecook/ice";
-import type { DesktopShellState, SettingsUndoResult, ShellPlatform } from "@vibefield/contracts";
-import { useFielddClient } from "@vibefield/fieldd-client/react";
-import { lazy, type ReactElement, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+  AgentsProfileSetsListResult,
+  type DesktopShellState,
+  type SettingsUndoResult,
+  type ShellPlatform,
+} from "@vibefield/contracts";
+import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
+import {
+  lazy,
+  type ReactElement,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { refusalSentence, useAccountSnapshot } from "../account/use-account";
 import { leaveFor } from "../boot/switch";
 import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { getHost } from "../host";
 import { AccountSection } from "./AccountSection";
 import { AgentsSection } from "./agents/AgentsSection";
+import { type ProfilesRoute, ProfilesSection } from "./agents/ProfilesSection";
+import { ProfileMark } from "./agents/ProfilesView";
+import { profileNavItems } from "./agents/profiles-model";
 import { DesktopSection } from "./DesktopSection";
 import { MagnetGridSection } from "./MagnetGridSection";
 import { MeshSection } from "./MeshSection";
@@ -27,6 +44,7 @@ import {
   type SettingsAccountHead,
   SettingsDialog,
   type SettingsPage,
+  type SettingsProfilesNav,
   type SettingsSubpage,
 } from "./SettingsDialog";
 import { SystemSection } from "./SystemSection";
@@ -217,10 +235,65 @@ export function SettingsPanel({
   // press on a nav item — the current one included — returns to the page.
   const [agentsSubpage, setAgentsSubpage] = useState<SettingsSubpage | null>(null);
   const [pageRequest, setPageRequest] = useState(0);
+  // an agent's app page asked for from elsewhere (a profile's app row); a nav
+  // press is a plain visit, so it drops any such ask and the page opens on its list
+  const [agentOpenRequest, setAgentOpenRequest] = useState<{ provider: string; n: number } | null>(
+    null,
+  );
   const selectPage = useCallback((page: SettingsPage): void => {
     setActivePage(page);
     setPageRequest((request) => request + 1);
+    setAgentOpenRequest(null);
   }, []);
+  // AR-S2 — Agent Profiles: the feed the sidebar lists on every page, the
+  // profile page that is open, and the hops between an agent's app page and
+  // its sign-ins (the Agents page opens an agent when asked to).
+  const profilesFeed = useSubscription<unknown>("agents.profileSets.subscribe", {});
+  const profileSets = useMemo(() => {
+    const parsed = AgentsProfileSetsListResult.safeParse(profilesFeed.data);
+    return parsed.success ? parsed.data : null;
+  }, [profilesFeed.data]);
+  const [profilesRoute, setProfilesRoute] = useState<ProfilesRoute>({
+    kind: "profile",
+    set: "native",
+  });
+  const [profilesSubpage, setProfilesSubpage] = useState<SettingsSubpage | null>(null);
+  const openProfiles = useCallback((route: ProfilesRoute): void => {
+    setProfilesRoute(route);
+    setActivePage("profiles");
+  }, []);
+  const openAgentApp = useCallback((provider: string): void => {
+    setActivePage("agents");
+    setAgentOpenRequest((current) => ({ provider, n: (current?.n ?? 0) + 1 }));
+  }, []);
+  const profilesNav = useMemo<SettingsProfilesNav | undefined>(() => {
+    if (profileSets === null) return undefined;
+    return {
+      items: profileNavItems(profileSets.sets).map((item) => ({
+        id: item.id,
+        label: item.label,
+        mark: (
+          <ProfileMark
+            set={{ kind: item.kind, glyph: item.glyph, default: item.isDefault }}
+            size={18}
+          />
+        ),
+      })),
+      current: profilesRoute.kind === "new" ? "new" : profilesRoute.set,
+      onSelect: (id) => openProfiles({ kind: "profile", set: id }),
+      onNew: () => openProfiles({ kind: "new" }),
+    };
+  }, [profileSets, profilesRoute, openProfiles]);
+  const profilesHead = useMemo(() => {
+    if (profilesRoute.kind === "new") {
+      return {
+        title: "New agent profile",
+        description: "An empty folder for each agent. Nothing is signed in until you add one.",
+      };
+    }
+    const set = profileSets?.sets.find((candidate) => candidate.id === profilesRoute.set);
+    return set === undefined ? null : { title: set.label, description: "Agent profile" };
+  }, [profileSets, profilesRoute]);
   const [historyBusy, setHistoryBusy] = useState(false);
   const [undoAvailable, setUndoAvailable] = useState(true);
   const [redoAvailable, setRedoAvailable] = useState(true);
@@ -559,7 +632,26 @@ export function SettingsPanel({
     );
   } else if (activePage === "agents") {
     pageContent = (
-      <AgentsSection platform={platform} rootRequest={pageRequest} onSubpage={setAgentsSubpage} />
+      <AgentsSection
+        platform={platform}
+        rootRequest={pageRequest}
+        onSubpage={setAgentsSubpage}
+        openRequest={agentOpenRequest}
+        profiles={profileSets}
+        onOpenSignIn={(set, provider) => openProfiles({ kind: "agent", set, provider })}
+      />
+    );
+  } else if (activePage === "profiles") {
+    pageContent = (
+      <ProfilesSection
+        platform={platform}
+        feed={profileSets}
+        route={profilesRoute}
+        onRoute={openProfiles}
+        onLeave={() => selectPage("agents")}
+        onSubpage={setProfilesSubpage}
+        onOpenApp={openAgentApp}
+      />
     );
   } else if (activePage === "plugins") {
     pageContent = (
@@ -672,7 +764,15 @@ export function SettingsPanel({
         redoAvailable={redoAvailable}
         historyNote={historyNote}
         account={accountHead}
-        subpage={activePage === "agents" ? agentsSubpage : null}
+        profiles={profilesNav}
+        head={activePage === "profiles" ? profilesHead : null}
+        subpage={
+          activePage === "agents"
+            ? agentsSubpage
+            : activePage === "profiles"
+              ? profilesSubpage
+              : null
+        }
       >
         {pageContent}
       </SettingsDialog>

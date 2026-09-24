@@ -1,5 +1,5 @@
 import { AgentIcon } from "@vibecook/puppeteer-views";
-import type { AgentInstall, AgentOperation } from "@vibefield/contracts";
+import type { AgentInstall, AgentOperation, AgentProfileSet } from "@vibefield/contracts";
 import {
   EmptyState,
   InlineNotice,
@@ -15,12 +15,13 @@ import {
   checkedWords,
   elapsedWords,
   methodWords,
-  personaWords,
   planCommandWords,
   receiptWords,
   shelfCheckedLine,
   updaterWords,
 } from "./agents-model";
+import { ProfileMark } from "./ProfilesView";
+import type { ProfileAgentRow } from "./profiles-model";
 
 // The Agents settings section's views — controller-free, so the catalog mounts
 // the shipping composition with a fixture adapter (UI_SYSTEM.md). The design
@@ -298,9 +299,15 @@ export interface AgentPageViewProps {
   revealLabel?: string | undefined;
   /** a Stop was asked for and the updater has not ended yet */
   stopping?: boolean | undefined;
+  /** AR-S2 — the profiles this agent is signed in under (the profiles feed's
+   * sign-ins for it), each a door to that sign-in's page */
+  signedIn?: ReadonlyArray<{ set: AgentProfileSet; row: ProfileAgentRow }> | undefined;
+  /** the profiles feed has not answered yet: nothing can be said either way */
+  signedInReading?: boolean | undefined;
   onUpdate: () => void;
   onStop: () => void;
   onReveal: (executable: string) => void;
+  onOpenSignIn?: ((set: string, provider: string) => void) | undefined;
 }
 
 export function AgentPageView({
@@ -311,9 +318,12 @@ export function AgentPageView({
   now,
   revealLabel = "Show in Finder",
   stopping = false,
+  signedIn = [],
+  signedInReading = false,
   onUpdate,
   onStop,
   onReveal,
+  onOpenSignIn,
 }: AgentPageViewProps): ReactElement {
   const { install } = item;
   const plan = install.update;
@@ -437,26 +447,49 @@ export function AgentPageView({
         ))}
       </SettingsSection>
 
-      {item.personas.length > 0 && (
-        <SettingsSection
-          title="Signed in under"
-          description="Each is its own sign-in, kept in its profile."
-        >
-          {item.personas.map((persona, index) => {
-            const words = personaWords(persona);
-            return (
-              <SettingsRow
-                key={persona.profileId}
-                title={words.name}
-                description={words.detail}
-                divider={index < item.personas.length - 1}
-              >
-                {null}
-              </SettingsRow>
-            );
-          })}
-        </SettingsSection>
-      )}
+      <SettingsSection
+        title="Signed in under"
+        description="Each is its own sign-in, kept in its profile."
+      >
+        {signedInReading ? (
+          <p className={`vf-agents-none ${labelCls}`} role="status">
+            Reading…
+          </p>
+        ) : signedIn.length === 0 ? (
+          <p className={`vf-agents-none ${labelCls}`}>Not signed in under any agent profile yet.</p>
+        ) : (
+          <div className="vf-agents-list">
+            {signedIn.map(({ set, row }) => (
+              <div key={set.id} className="vf-agents-row" data-profile={set.id}>
+                <span className="vf-agents-mark vf-agents-mark--row vf-agents-mark--bare">
+                  <ProfileMark set={set} size={20} />
+                </span>
+                <div className="vf-agents-row-text">
+                  <button
+                    type="button"
+                    className="vf-agents-row-open"
+                    onClick={() => onOpenSignIn?.(set.id, row.provider)}
+                  >
+                    {set.label}
+                  </button>
+                  <span className="vf-agents-row-fact">
+                    {row.state === "expired" ? (
+                      <>
+                        <span className="vf-profiles-attention">Sign-in expired</span>
+                        {row.fact.replace(/^Sign-in expired/u, "")}
+                      </>
+                    ) : (
+                      row.fact
+                    )}
+                  </span>
+                </div>
+                <span />
+                <Chevron />
+              </div>
+            ))}
+          </div>
+        )}
+      </SettingsSection>
 
       <p className={`vf-agents-foot ${labelCls}`}>
         {item.label} is installed once and shared by every profile. Removing it stays with its

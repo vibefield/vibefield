@@ -167,6 +167,7 @@ pub mod layout {
     pub const INDEX_ENROLLMENT_FILE: &[&str] = &["index", "enrollment.json"];
     pub const AGENTS_DIR: &[&str] = &["agents"];
     pub const AGENT_PROFILES_FILE: &[&str] = &["agents", "profiles.json"];
+    pub const AGENT_PROFILE_SETS_DIR: &[&str] = &["agents", "profiles"];
     pub const AGENT_ROOTS_DIR: &[&str] = &["agents", "roots"];
     pub const AGENT_SESSIONS_DIR: &[&str] = &["agents", "sessions"];
     pub const AGENT_RUNS_DIR: &[&str] = &["agents", "runs"];
@@ -209,6 +210,7 @@ pub mod layout {
         ("INDEX_ENROLLMENT_FILE", INDEX_ENROLLMENT_FILE),
         ("AGENTS_DIR", AGENTS_DIR),
         ("AGENT_PROFILES_FILE", AGENT_PROFILES_FILE),
+        ("AGENT_PROFILE_SETS_DIR", AGENT_PROFILE_SETS_DIR),
         ("AGENT_ROOTS_DIR", AGENT_ROOTS_DIR),
         ("AGENT_SESSIONS_DIR", AGENT_SESSIONS_DIR),
         ("AGENT_RUNS_DIR", AGENT_RUNS_DIR),

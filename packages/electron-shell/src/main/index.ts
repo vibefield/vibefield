@@ -90,6 +90,7 @@ import {
   resolvePackagedResources,
 } from "./resources";
 import { registerShellSchemes } from "./scheme-registration";
+import { installScreenshotChord } from "./screenshot-chord";
 import {
   installCsp,
   installNavigationPolicy,
@@ -99,6 +100,7 @@ import {
 import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
 import { RecoveringShellProvider } from "./shell-provider";
+import { installStillProtocol } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
@@ -462,6 +464,19 @@ async function main(
       },
     });
   }
+  // SNAP-3 — the still scheme, in EVERY mode: dev serves the renderer from
+  // Vite, but a screenshot comes from the tool in dev too. It answers a
+  // retained still by basename from the tool's own list, read at request time
+  // (the ring moves), and nothing else on the disk.
+  installStillProtocol({
+    retained: () => screenshotTool?.retainedStills ?? [],
+    onRefusal: (reason, url) => {
+      logger.warn("desktop.security.still_refused", "A still-scheme request was refused", {
+        reason,
+        url,
+      });
+    },
+  });
   installPermissionPolicy(session.defaultSession, (permission) => {
     logger.warn(
       "desktop.security.permission_denied",
@@ -1183,6 +1198,12 @@ async function main(
    * clipboard already holds the still (SNAP-D4). */
   const takeScreenshot = (): void => {
     void captureScreenshot().then(async (result) => {
+      // SNAP-3 — the page that will hold the still is told, whichever door
+      // asked: the IPC door answers its own caller, and this path had none.
+      const target = BrowserWindow.getFocusedWindow() ?? registry.primary();
+      if (target !== null && !target.isDestroyed()) {
+        target.webContents.send(IPC_CHANNELS.screenshotResult, result);
+      }
       if (result.status !== "error" || result.code !== "permission-denied") return;
       const darwin = process.platform === "darwin";
       const { response } = await dialog.showMessageBox({
@@ -1483,6 +1504,11 @@ async function main(
           // accelerator can express one. Installed per window and dies with its
           // webContents, so it cannot outlive what it toggles.
           installGodviewDoubleShift(window.webContents, toggleGodview);
+          // ⌃⌘A — above the page too (SNAP-3): the canvas keymap's ⌘A select-all
+          // swallows the menu accelerator, so the chord is taken here first.
+          if (resources.screenshotHelperPath !== null) {
+            installScreenshotChord(window.webContents, takeScreenshot);
+          }
           installNavigationPolicy(window, MODE);
           installDurableClose(
             window,

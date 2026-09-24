@@ -226,12 +226,15 @@ export class AccountUsageService {
       fetchUsage: (providerId, profileId) => opts.runtime.accountUsage(providerId, profileId),
       // the same registry `agents.profiles.list` reads — a persona is an
       // account, and an account is a row
+      // (a signed-out one waiting on its sessions is nobody's quota to show)
       listProfiles: async () =>
-        (await opts.runtime.profiles()).map((profile) => ({
-          id: profile.id,
-          provider: profile.provider,
-          label: profile.label,
-        })),
+        (await opts.runtime.profiles())
+          .filter((profile) => profile.retiredAt === undefined)
+          .map((profile) => ({
+            id: profile.id,
+            provider: profile.provider,
+            label: profile.label,
+          })),
       publish: (batch) => this.ingestBatch(batch),
       ...(opts.poll?.refreshMs !== undefined ? { refreshMs: opts.poll.refreshMs } : {}),
       ...(opts.poll?.tickMs !== undefined ? { tickMs: opts.poll.tickMs } : {}),

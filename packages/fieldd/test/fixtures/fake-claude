@@ -9,13 +9,29 @@
 # returns at once, so the pane ends and the persona is verified); `auth status
 # --json` is the identity surface the adapter reads afterwards (the documented
 # `loggedIn` boolean and the fields beside it, as probed on Claude Code 2.1).
+# AR-S2: `auth logout` signs a folder out, and `auth status` reads signed out
+# afterwards, as the vendor's does — the adapter confirms a sign-out that way. A
+# bound root (CLAUDE_CONFIG_DIR) keeps the mark inside itself; the agent's own
+# folder keeps it under FAKE_CLAUDE_STATE_DIR when a test names one, and nowhere
+# otherwise: never in the developer's real ~/.claude.
+mark() {
+  if [ -n "$CLAUDE_CONFIG_DIR" ]; then echo "$CLAUDE_CONFIG_DIR/.fake-signed-out"
+  elif [ -n "$FAKE_CLAUDE_STATE_DIR" ]; then echo "$FAKE_CLAUDE_STATE_DIR/native-signed-out"
+  fi
+}
 case "$1" in
   --version) echo "2.1.0 (Claude Code)" ;;
   update) echo "fake claude: nothing to update" ;;
   auth)
     case "$2" in
-      login) echo "fake claude: logged in" ;;
-      status) echo '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"persona@example.test","orgName":"Example Org","subscriptionType":"max"}' ;;
+      login) m=$(mark); [ -n "$m" ] && rm -f "$m"; echo "fake claude: logged in" ;;
+      logout) m=$(mark); [ -n "$m" ] && : > "$m"; echo "fake claude: logged out" ;;
+      status)
+        m=$(mark)
+        if [ -n "$m" ] && [ -f "$m" ]; then echo '{"loggedIn":false}'
+        else echo '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"persona@example.test","orgName":"Example Org","subscriptionType":"max"}'
+        fi
+        ;;
       *) : ;;
     esac
     ;;

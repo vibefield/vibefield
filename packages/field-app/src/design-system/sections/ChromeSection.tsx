@@ -3,6 +3,7 @@ import { type ReactElement, useMemo, useState } from "react";
 import { MeMenuView } from "../../account/MeMenu";
 import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../../field/canvas-appearance";
 import { roundButtonCls } from "../../field/theme-constants";
+import { type EdgeTrayTile, EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
 import { NavigationBreadcrumbsView } from "../../hud/NavigationBreadcrumbs";
 import { WidgetTrayFrame, WidgetTrayToolSwitcherView } from "../../hud/WidgetTray";
 import { ZoomPillView } from "../../hud/ZoomPill";
@@ -17,6 +18,61 @@ import { Icon, type IconName, Section, Specimen } from "../catalog-ui";
 
 const ME_STATES = ["Three users", "Waiting", "One user · offline"] as const;
 type MeState = (typeof ME_STATES)[number];
+
+const TRAY_STATES = ["At rest", "Open", "Pinned", "Empty", "No shell"] as const;
+type TrayState = (typeof TRAY_STATES)[number];
+
+/** A fixture still: an SVG the catalog draws itself, so the tile shows a real
+ * image without a screenshot on disk (the product's stills come through the
+ * shell's `vibefield-still://` scheme, which the catalog does not have). */
+function fixtureStill(label: string, hue: number): string {
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'>` +
+    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${hue} 70% 62%)'/><stop offset='1' stop-color='hsl(${hue + 30} 70% 40%)'/></linearGradient></defs>` +
+    `<rect width='256' height='256' fill='url(#g)'/>` +
+    `<rect x='28' y='40' width='200' height='120' rx='14' fill='rgba(255,255,255,0.22)'/>` +
+    `<text x='40' y='190' font-family='ui-sans-serif' font-size='18' fill='rgba(255,255,255,0.9)'>${label}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+const TRAY_TILES: readonly EdgeTrayTile[] = [
+  {
+    id: "t1",
+    kind: "capture",
+    label: "Screenshot · 1440 × 900",
+    imageUrl: fixtureStill("Godview · swarm", 214),
+    time: "15:04",
+    day: "today",
+    meta: "Screen · on the clipboard",
+  },
+  {
+    id: "t2",
+    kind: "capture",
+    label: "Screenshot · 820 × 512",
+    imageUrl: fixtureStill("Terminal", 28),
+    time: "14:38",
+    day: "today",
+    meta: "Screen · on the clipboard",
+  },
+  {
+    id: "t3",
+    kind: "capture",
+    label: "Screenshot · 1200 × 750",
+    imageUrl: null,
+    time: "22:12",
+    day: "yesterday",
+    meta: "the still is gone from disk",
+  },
+  {
+    id: "t4",
+    kind: "capture",
+    label: "Screenshot · 640 × 400",
+    imageUrl: fixtureStill("Settings", 150),
+    time: "Tue",
+    day: "earlier",
+    meta: "Screen · on the clipboard",
+  },
+];
 
 import { FilePillPreview } from "../FilePillPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
@@ -38,6 +94,15 @@ export function ChromeSection({
   const [zoom, setZoom] = useState(100);
   const [meOpen, setMeOpen] = useState(false);
   const [meSpecimenOpen, setMeSpecimenOpen] = useState(true);
+  const [trayState, setTrayState] = useState<TrayState>("Pinned");
+  const [trayBumped, setTrayBumped] = useState(false);
+  const trayOpenState = trayState !== "At rest";
+  const trayTiles =
+    trayState === "Empty"
+      ? []
+      : trayState === "No shell"
+        ? TRAY_TILES.map((tile) => ({ ...tile, imageUrl: null }))
+        : TRAY_TILES;
   const [meState, setMeState] = useState<MeState>("Three users");
   const groundGrid = useMemo(
     () => defaultCanvasGridConfig(dark, magnetGridGlyph),
@@ -162,6 +227,78 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           The document pill, the tray and your face are interactive. Open one to inspect its morph
           and the rule that only one of them is open at a time.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="Edge trays — the notch and its drawer"
+        source="hud/edge-tray/* · DESIGN.md §8"
+        bleed
+      >
+        <div className="vf-ds-edge-controls">
+          <SegmentedControl
+            options={TRAY_STATES}
+            value={trayState}
+            onChange={setTrayState}
+            label="Tray state"
+          />
+          <button
+            type="button"
+            className={roundButtonCls(false)}
+            aria-label="Play the fly-in's bump"
+            title="Bump the notch — what a landing still does"
+            onClick={() => {
+              setTrayBumped(false);
+              window.setTimeout(() => setTrayBumped(true), 0);
+              window.setTimeout(() => setTrayBumped(false), 460);
+            }}
+          >
+            <Icon name="sparkles" />
+          </button>
+        </div>
+        <div className="vf-ds-edge-stage">
+          <EdgeTrayView
+            side="left"
+            label="Clipboard"
+            open={trayOpenState}
+            pinned={trayState === "Pinned" || trayState === "Empty"}
+            count={trayTiles.length}
+            items={trayTiles}
+            filter=""
+            snap={
+              trayState === "No shell"
+                ? { state: "unavailable", word: "no capture here" }
+                : { state: "ready", word: "snap" }
+            }
+            bumped={trayBumped}
+            hint="Clipboard — hover to open, click to keep open (⌘⇧V)"
+            emptyWord="nothing here yet — take a screenshot and it lands here"
+            onNubClick={() => setTrayState((s) => (s === "Pinned" ? "At rest" : "Pinned"))}
+            onPointerEnter={() => undefined}
+            onPointerLeave={() => undefined}
+            onSnap={() => undefined}
+          />
+          <EdgeTrayView
+            side="right"
+            label="Artifacts"
+            open={false}
+            pinned={false}
+            count={3}
+            items={[]}
+            filter=""
+            snap={null}
+            bumped={false}
+            hint="Artifacts — reserved for the right edge's twin (D-7)"
+            emptyWord="no artifacts yet"
+            onNubClick={() => undefined}
+            onPointerEnter={() => undefined}
+            onPointerLeave={() => undefined}
+          />
+        </div>
+        <p className="vf-ds-stage-caption">
+          The shipping tray view with fixture stills: the notch (N1, 26 × 116) and the drawer (P4,
+          152 wide) are one path in the theme's solid chrome, the drawer's hairline gapped under the
+          notch. The right edge shows the twin at rest, reserved for Artifacts.
         </p>
       </Specimen>
 

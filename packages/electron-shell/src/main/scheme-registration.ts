@@ -1,6 +1,7 @@
 import { protocol } from "electron";
 import { APP_SCHEME, APP_SCHEME_PRIVILEGES } from "./app-protocol";
 import { PLUGIN_SCHEME, PLUGIN_SCHEME_PRIVILEGES } from "./plugin-protocol";
+import { STILL_SCHEME, STILL_SCHEME_PRIVILEGES } from "./still-protocol";
 
 // The ONE `registerSchemesAsPrivileged` call in the process — and the reason
 // this file exists is the P8b-2 regression it retires (probe, 2026-08-13):
@@ -26,6 +27,8 @@ export function shellSchemeRegistrations(): Electron.CustomScheme[] {
   return [
     { scheme: APP_SCHEME, privileges: { ...APP_SCHEME_PRIVILEGES } },
     { scheme: PLUGIN_SCHEME, privileges: { ...PLUGIN_SCHEME_PRIVILEGES } },
+    // SNAP-3 — the still scheme: a retained screenshot by basename, nothing else.
+    { scheme: STILL_SCHEME, privileges: { ...STILL_SCHEME_PRIVILEGES } },
   ];
 }
 

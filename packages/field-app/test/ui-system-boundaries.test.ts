@@ -55,7 +55,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b)/m,
     );
   });
 
@@ -199,6 +199,7 @@ describe("UI system ownership boundaries", () => {
       "WidgetTrayFrame",
       "WidgetTrayToolSwitcherView",
       "ZoomPillView",
+      "EdgeTrayView",
       "OnboardingConnectPaneView",
       "OnboardingDerivingPaneView",
       "OnboardingFieldPaneView",
@@ -259,6 +260,8 @@ describe("UI system ownership boundaries", () => {
     for (const component of [
       "boot/BootRoot.tsx",
       "hud/CommandPalette.tsx",
+      "hud/edge-tray/EdgeTray.tsx",
+      "hud/edge-tray/EdgeTrayView.tsx",
       "hud/FilePill.tsx",
       "hud/LoadingVeil.tsx",
       "hud/WidgetTray.tsx",
@@ -278,6 +281,7 @@ describe("UI system ownership boundaries", () => {
       "boot/onboarding/wizard-ui.css",
       "cursor/overlay.css",
       "hud/CommandPalette.css",
+      "hud/edge-tray/edge-tray.css",
       "hud/FilePill.css",
       "hud/LoadingVeil.css",
       "hud/NavigationBreadcrumbs.css",

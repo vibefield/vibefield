@@ -288,8 +288,15 @@ dark, or hard. The exact recipes (do not eyeball new ones):
 | Island / floating chrome | `0 8px 30px rgba(0,0,0,0.08)` · dark `rgba(0,0,0,0.4)` |
 | Sheet (rises from bottom) | `0 -20px 40px rgba(0,0,0,0.08)` · dark `0.4` |
 | Side panel (enters from right) | `-20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` |
+| Edge tray (enters from the left; 2026-09-23) | `20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` — the side panel's shadow cast the other way; as `drop-shadow()` where the silhouette is a path (`--vf-drop-edge`, and `--vf-drop-island` for the island recipe) |
 | Drag proxy (above everything) | `drop-shadow(0 24px 48px rgba(0,0,0,0.35))` |
 | Tray tile | `drop-shadow(0 10px 18px rgba(0,0,0,0.16))` |
+
+**One exception to "chrome is glass" (2026-09-23, James — the notch):** the edge tray's notch
+and its drawer (§8, edge trays) are OPAQUE solid chrome (`--vf-chrome-solid`, the theme's
+colour), because they belong to the window's edge rather than floating over the field — a
+fixture, not a control; a hardware notch, not a pane of glass. Nothing else in chrome may
+claim it.
 
 **Material tiers** (translucency + backdrop blur — chrome is glass, cards are opaque):
 
@@ -397,6 +404,28 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   the catalog, while errors stay inline with a plain corrective sentence. The confirm step
   carries one `/50` factual line: “Opens on devices connected to this tailnet with Tailscale”;
   it is not a warning banner or a green reachability promise.
+- **Edge trays — the notch and its drawer** (2026-09-23, James; the record is
+  `draft/composer/compact.html` §15–19 and `compact.md` Parts II–IV): a spine-owned tray on the
+  window's LEFT edge — the **clipboard** — with its twin on the right reserved for Artifacts
+  once D-7 is ruled. The **notch** (N1) sits at the edge's mid-height: 26 × 116, one path drawn
+  FROM the wall — a concave fillet of 12 into the edge, a convex face of 14 — in the theme's
+  solid chrome with the strong hairline, the island shadow at rest; the glyph (16px) and the
+  count (9px mono) on the text ramp. Hover widens it 15% from the wall on the island curve;
+  the pin is a 1.5px ring in `--vf-foreground` (§2.3: 1.5px is a selection ring). The
+  **drawer** (P4) is the same path at 152 wide — a fillet of 18 into the window's edge, a face
+  of 22 — from `top-16` to `bottom-20`, opaque solid chrome, the hairline along the whole
+  silhouette and GAPPED under the notch so the two outlines are one line; the edge shadow
+  (§5) when open, cast by the whole. The notch rides the panel's outer edge, so its fillets
+  always flare into whatever wall is there. Inside: ONE column of 128 × 128 tiles with 10px
+  between them, grouped by day under a 9px mono caption, dealt in 26ms apart on the island
+  curve; no head, no find line, no pills — the notch carries the count and the pin; typing
+  while pinned filters. Hover opens after 120ms and closes after a 320ms grace; click pins;
+  ⌘⇧V pins from the keyboard; Escape unpins. Non-modal like the Artifact panel: no backdrop,
+  recede, stage hold or focus trap. A capture (SNAP-3) **flies in**: a ghost of the still
+  travels from where the capture was to the notch on the island curve (560ms), shrinking along
+  its travel (M4), then the notch bumps on the pop and the count ticks; reduced motion fades it
+  at the notch (M6). The column ends with the **Snap** tile, the product's door to the capture,
+  disabled with the honest word when the door is absent or refused.
 - **Segmented control**: full-round track in `--vf-fill`, sliding solid thumb
   (white / `#2C2C2E`, hairline + `shadow-sm`), 300ms island ease; labels 13px medium,
   active full-opacity, rest `/50`. A **small** size (26px thumb, 11px labels) for a switch that
@@ -672,6 +701,9 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   cluster anchored `top-4 right-4` (zoom pill · theme FAB · Artifact FAB outermost).
   **Bottom-left (2026-09-22, UA-D19):** the Me menu — the owner's face, §8 — then Godview,
   with the `hud.panel` slot above them; the Settings gear retires into the menu and `⌘,`.
+  **The left edge (2026-09-23, SNAP-3):** the clipboard tray's notch at mid-height, its drawer
+  from `top-16` to `bottom-20` (clearing the Me menu and Godview); the right edge is reserved
+  for its twin.
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.

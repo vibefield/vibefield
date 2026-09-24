@@ -111,6 +111,10 @@
     "agents",
     "profiles.json"
   ],
+  "AGENT_PROFILE_SETS_DIR": [
+    "agents",
+    "profiles"
+  ],
   "AGENT_ROOTS_DIR": [
     "agents",
     "roots"

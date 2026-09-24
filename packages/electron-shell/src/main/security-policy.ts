@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { PLUGIN_MODULE_SCHEME } from "@vibefield/contracts";
+import { PLUGIN_MODULE_SCHEME, SCREENSHOT_STILL_SCHEME } from "@vibefield/contracts";
 import type { ShellMode } from "./modes";
 
 // The PURE security policy (ESR §5.2.3–5.2.4) — no Electron import, unit-tested
@@ -69,7 +69,7 @@ export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = [
   return (
     `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' ${pluginModules}${hashes}; ` +
     `style-src 'self' 'unsafe-inline' ${pluginModules}; ` +
-    `img-src 'self' data: https://*.ts.net:*; ${workers}connect-src ${connect}; base-uri 'none'; object-src 'none'`
+    `img-src 'self' data: https://*.ts.net:* ${SCREENSHOT_STILL_SCHEME}:; ${workers}connect-src ${connect}; base-uri 'none'; object-src 'none'`
   );
 }
 
