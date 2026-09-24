@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentProfile } from "@vibecook/puppeteer-core";
 import type { AgentRuntime, ProfileSetInfo } from "@vibecook/puppeteer-runtime";
-import { LAYOUT } from "@vibefield/contracts";
+import { AgentsProfileSetsListResult, LAYOUT } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IndexService } from "../src/agent-index";
@@ -277,5 +277,132 @@ describe("AgentProfileService — what it deletes, and what it keeps", () => {
       expect.any(String),
       expect.objectContaining({ error: "agent runtime is disposed" }),
     );
+  });
+});
+
+describe("AgentProfileService — what each profile runs on (AR-S2c)", () => {
+  const ANTHROPIC = { id: "anthropic", label: "Anthropic" };
+  const OPENAI = { id: "openai", label: "OpenAI" };
+  const NOUS = { id: "nous", label: "Nous Research" };
+  const read = { verifiedAt: NOW, source: { kind: "native-status", stability: "documented" } };
+
+  it("carries puppeteer's plans on each set, what each sign-in holds, and the ways to add one", async () => {
+    const root = userRoot();
+    const claude = {
+      ...account(root, "work", "w-claude"),
+      identity: { loggedIn: true, email: "kim@work.example", plan: "max", ...read },
+    } as AgentProfile;
+    const hermes = {
+      ...account(root, "work", "w-hermes", "hermes"),
+      identity: {
+        loggedIn: true,
+        method: "oauth",
+        signIns: [
+          {
+            service: NOUS,
+            method: "oauth",
+            subscription: true,
+            inUse: true,
+            email: "kim@work.example",
+          },
+          { service: ANTHROPIC, method: "oauth", subscription: true },
+          { service: OPENAI, method: "api-key" },
+        ],
+        ...read,
+      },
+    } as AgentProfile;
+    const native = {
+      ...account(root, "native", "claude:native-default"),
+      kind: "native-default",
+      identity: { loggedIn: true, email: "KIM@work.example", plan: "max", ...read },
+    } as AgentProfile;
+    const work = { ...managedSet(root, "work"), profiles: [claude, hermes] };
+    const mac: ProfileSetInfo = {
+      set: { id: "native", kind: "native", label: "This Mac", createdAt: NOW },
+      isDefault: true,
+      profiles: [native],
+    };
+    const state = { sets: [mac, work], profiles: [native, claude, hermes] };
+    const runtime = stubRuntime(state, {
+      profileProviders: () => [
+        {
+          id: "claude",
+          label: "Claude Code",
+          support: {
+            supported: true,
+            identity: "native-status",
+            sharedSurfaces: [],
+            service: ANTHROPIC,
+          },
+        },
+        {
+          id: "hermes",
+          label: "Hermes Agent",
+          support: {
+            supported: true,
+            identity: "native-protocol",
+            sharedSurfaces: [],
+            service: NOUS,
+            signInRoutes: [
+              { id: "portal", label: "Nous Portal", service: NOUS },
+              { id: "provider", label: "Another provider…" },
+            ],
+          },
+        },
+      ],
+    });
+    const { profiles } = service(root, runtime);
+    const feed = AgentsProfileSetsListResult.parse(await profiles.sets());
+
+    const workSet = feed.sets.find((set) => set.id === "work")!;
+    expect(workSet.plans).toEqual([
+      {
+        id: "anthropic",
+        service: ANTHROPIC,
+        account: { email: "kim@work.example", plan: "max" },
+        namedBy: "w-claude",
+        holders: ["w-claude", "w-hermes"],
+        alsoIn: ["native"],
+      },
+      {
+        id: "nous",
+        service: NOUS,
+        account: { email: "kim@work.example" },
+        namedBy: "w-hermes",
+        holders: ["w-hermes"],
+        alsoIn: [],
+      },
+    ]);
+    const hermesHolds = workSet.personas.find((persona) => persona.provider === "hermes")!.holds;
+    expect(
+      hermesHolds?.map((held) => [held.service.id, held.planId ?? null, held.key, held.runsOn]),
+    ).toEqual([
+      ["nous", "nous", false, true],
+      ["anthropic", "anthropic", false, false],
+      ["openai", null, true, false],
+    ]);
+    // This Mac's plan is the same account, whatever its case
+    expect(feed.sets.find((set) => set.id === "native")!.plans?.[0]?.alsoIn).toEqual(["work"]);
+    // the ways to add a sign-in, for the agent whose folder holds several
+    expect(feed.routes).toEqual({
+      hermes: [
+        { id: "portal", label: "Nous Portal", service: NOUS },
+        { id: "provider", label: "Another provider…" },
+      ],
+    });
+  });
+
+  it("answers an empty profile with no plans, and a persona that holds nothing without a list", async () => {
+    const root = userRoot();
+    const unread = account(root, "work", "w-claude");
+    const state = {
+      sets: [{ ...managedSet(root, "work"), profiles: [unread] }],
+      profiles: [unread],
+    };
+    const { profiles } = service(root, stubRuntime(state));
+    const feed = AgentsProfileSetsListResult.parse(await profiles.sets());
+    expect(feed.sets[0]?.plans).toEqual([]);
+    expect(feed.sets[0]?.personas[0]).not.toHaveProperty("holds");
+    expect(feed.routes).toEqual({});
   });
 });

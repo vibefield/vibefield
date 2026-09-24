@@ -176,6 +176,8 @@ export function ProfilesSection({
       identity: feed?.identity ?? [],
       signOut: feed?.signOut ?? [],
       reading: feed?.reading ?? false,
+      sets: feed?.sets ?? [],
+      routes: feed?.routes ?? {},
     }),
     [providers, installs, usage, feed],
   );
@@ -357,6 +359,8 @@ export function ProfilesSection({
     setId: string,
     at: "profile" | "agent",
     fresh: boolean,
+    /** one of the agent's own routes (AR-S2c); absent, its default login */
+    route?: string,
   ): Promise<void> => {
     const open = signInRef.current;
     if (open !== null) {
@@ -374,7 +378,10 @@ export function ProfilesSection({
       `Couldn't start ${labelOf(provider)}'s sign-in`,
       async () =>
         AgentsProfilesLoginResult.parse(
-          await client.request("agents.profiles.login", { profileId }),
+          await client.request("agents.profiles.login", {
+            profileId,
+            ...(route !== undefined ? { route } : {}),
+          }),
         ),
     );
     if (answer === null) {
@@ -581,6 +588,11 @@ export function ProfilesSection({
         onReveal={() => void reveal(row.provider)}
         onSignOut={() => void signOut()}
         onOpenApp={() => onOpenApp(row.provider)}
+        plans={page?.plans}
+        routes={context.routes[row.provider]}
+        onAddSignIn={(signInRoute) =>
+          void startSignIn(row.persona.profileId, row.provider, set.id, "agent", false, signInRoute)
+        }
       />
     );
   } else if (page !== undefined) {
@@ -609,6 +621,15 @@ export function ProfilesSection({
         onMakeDefault={() => void update("default", { default: true })}
         onReveal={() => void reveal()}
         onDelete={() => void remove()}
+        onPlanAct={(card) => {
+          // a card's act is its agent's own login, in this profile's folder
+          const target = page.set.personas.find(
+            (candidate) => candidate.provider === card.act?.provider,
+          );
+          if (target !== undefined) {
+            void startSignIn(target.profileId, target.provider, page.set.id, "profile", false);
+          }
+        }}
       />
     );
   }

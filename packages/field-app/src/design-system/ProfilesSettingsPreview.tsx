@@ -51,10 +51,13 @@ export function ProfilesSettingsPreview({
   onSubpage: (subpage: SettingsSubpage | null) => void;
 }): ReactElement {
   const context = FIXTURE_PROFILES_CONTEXT;
-  const agent = useMemo(
-    () => (state === "agent" ? agentRow(context, FIXTURE_WORK.personas[0]!) : undefined),
-    [state, context],
-  );
+  // "agent": a vendor agent in Work (one subscription); "sign-ins": OpenCode,
+  // whose folder holds several
+  const agent = useMemo(() => {
+    const provider = state === "agent" ? "claude" : state === "sign-ins" ? "opencode" : undefined;
+    const persona = FIXTURE_WORK.personas.find((candidate) => candidate.provider === provider);
+    return persona === undefined ? undefined : agentRow(context, persona);
+  }, [state, context]);
   const agentLabel = agent?.label;
 
   useEffect(() => {
@@ -70,10 +73,15 @@ export function ProfilesSettingsPreview({
       <ProfileAgentPageView
         set={FIXTURE_WORK}
         row={agent}
-        appVersion="2.3.0"
+        appVersion={
+          context.installs.find((candidate) => candidate.provider === agent.provider)?.version
+        }
         canSignOut
         now={FIXTURE_PROFILES_NOW}
+        plans={profilePage(FIXTURE_WORK, context).plans}
+        routes={context.routes[agent.provider]}
         onSignIn={inert}
+        onAddSignIn={inert}
         onReveal={inert}
         onSignOut={inert}
         onOpenApp={inert}
@@ -107,6 +115,7 @@ export function ProfilesSettingsPreview({
       onMakeDefault={inert}
       onReveal={inert}
       onDelete={inert}
+      onPlanAct={inert}
     />
   );
 }

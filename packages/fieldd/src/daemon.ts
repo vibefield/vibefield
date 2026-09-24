@@ -1662,13 +1662,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("agents.profiles.login", async (ctx, params) => {
       const parsed = AgentsProfilesLoginParams.safeParse(params);
       if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { profileId, cwd? }", false);
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { profileId, cwd?, route? }",
+          false,
+        );
       return await audit.required(
         ctx,
         {
           action: "agents.profiles.login",
           target: { kind: "agent-persona", id: parsed.data.profileId },
-          attrs: { ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}) },
+          attrs: {
+            ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
+            ...(parsed.data.route !== undefined ? { route: parsed.data.route } : {}),
+          },
         },
         () => agents.login(parsed.data, ctx.principal),
         (result) => ({ outcome: "succeeded", attrs: { sessionId: result.terminal.sessionId } }),

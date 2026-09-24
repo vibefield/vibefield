@@ -959,6 +959,19 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       plan: "max",
     });
     expect(auditText(dataDir)).toContain('"action":"agents.profiles.login"');
+    // AR-S2c: a route is one the agent declared — Claude Code declares none, so
+    // puppeteer refuses one before any terminal opens; a malformed one never
+    // reaches it
+    const undeclared = await win.callErr("agents.profiles.login", {
+      profileId: "claude:native-default",
+      route: "portal",
+    });
+    expect(undeclared.data?.kind).toBe("PRECONDITION_FAILED");
+    const malformed = await win.callErr("agents.profiles.login", {
+      profileId: "claude:native-default",
+      route: "Not a route",
+    });
+    expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
     // the login pane is not a managed session: the fold never carried it
     expect(((await win.call("agent.list", {})) as AgentListResult).sessions).toEqual([]);
   }, 60_000);

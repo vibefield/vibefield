@@ -447,3 +447,284 @@
     transition-duration: 0ms;
   }
 }
+
+/* ── plans (AR-S2c, pass 19 P2): the cards on top, the badges on the agents ──
+   A card is the plan as a person knows it, raised a step above the lists; a
+   badge is the card in small. Hovering either lights its partners with the
+   selection ring; nothing moves. */
+
+.vf-profiles-plans {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vf-profiles-plans-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.vf-profiles-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+
+.vf-profiles-plan {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 13px;
+  padding: 15px 16px 12px;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 18px;
+  background-color: var(--vf-chrome-solid);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--vf-foreground) 3%, transparent),
+    transparent 72px
+  );
+  box-shadow: var(--vf-shadow-island);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.dark .vf-profiles-plan {
+  background-color: color-mix(in srgb, var(--vf-foreground) 5%, var(--vf-chrome-solid));
+}
+
+.vf-profiles-plan.is-lit {
+  border-color: color-mix(in srgb, var(--vf-select) 80%, transparent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--vf-select) 20%, transparent),
+    var(--vf-shadow-island);
+}
+
+.vf-profiles-plan-head {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.vf-profiles-plan-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--vf-text-primary);
+  background: var(--vf-fill);
+  box-shadow: inset 0 0 0 1px var(--vf-hairline);
+  font-size: 20px;
+}
+
+.vf-profiles-plan.is-lapsed .vf-profiles-plan-mark {
+  opacity: 0.55;
+}
+
+.vf-profiles-plan-name {
+  min-width: 0;
+}
+
+.vf-profiles-plan-title {
+  overflow: hidden;
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-profiles-plan-account {
+  overflow: hidden;
+  margin: 1px 0 0;
+  color: var(--vf-text-tertiary);
+  font-size: 11.5px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-profiles-plan-note {
+  margin: -3px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: var(--vf-text-secondary);
+  background: color-mix(in srgb, var(--vf-foreground) 4%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.vf-profiles-plan-sentence {
+  margin: 0;
+  padding: 2px 0 4px;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.vf-profiles-usage--card {
+  grid-template-columns: 34px minmax(0, 1fr) 66px;
+  gap: 7px 10px;
+  max-width: none;
+  margin-top: 0;
+}
+
+.vf-profiles-plan-foot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--vf-hairline);
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+}
+
+.vf-profiles-plan-users {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+
+.vf-profiles-plan-user {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--vf-text-primary);
+  background: var(--vf-fill);
+  font-size: 11px;
+}
+
+.vf-profiles-plan-names {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-profiles-plan-also {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* the badge: 22px, the company's mark and the plan's name; filled for the one
+   the agent runs on, outlined for its other sign-ins, dashed for a key */
+.vf-profiles-row.has-badges {
+  align-items: start;
+}
+
+.vf-profiles-row.has-badges > .vf-agents-mark,
+.vf-profiles-row.has-badges > .vf-agents-chevron,
+.vf-profiles-row.has-badges > .vf-agents-row-actions {
+  margin-top: 3px;
+}
+
+.vf-profiles-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.vf-profiles-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 7px;
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+
+.vf-profiles-badge > svg {
+  width: 11px;
+  height: 11px;
+  flex: none;
+}
+
+.vf-profiles-badge.is-on {
+  border-color: transparent;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-profiles-badge.is-key {
+  border-style: dashed;
+  border-color: var(--vf-hairline-strong);
+  color: var(--vf-text-tertiary);
+}
+
+.vf-profiles-badge.is-lit {
+  border-color: color-mix(in srgb, var(--vf-select) 80%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vf-select) 20%, transparent);
+}
+
+.vf-profiles-badge-hot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 1px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+}
+
+.vf-profiles-badge-expired {
+  color: var(--vf-orange);
+  font-style: normal;
+  font-weight: 500;
+}
+
+.vf-profiles-badges-note {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+}
+
+/* a harness's own page: each sign-in on its company's mark, edge to edge */
+.vf-profiles-signins {
+  margin: 0 -8px;
+}
+
+.vf-profiles-signin-line {
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.vf-profiles-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: var(--vf-text-secondary);
+  background: color-mix(in srgb, var(--vf-foreground) 7%, transparent);
+  font-size: 10.5px;
+  font-weight: 500;
+  vertical-align: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-profiles-plan,
+  .vf-profiles-badge {
+    transition: none;
+  }
+}

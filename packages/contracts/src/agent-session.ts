@@ -342,7 +342,17 @@ export type AgentListResult = z.infer<typeof AgentListResult>;
  * the persona when that terminal ends (the identity is native evidence read
  * afterwards, never a screen). */
 export const AgentsProfilesLoginParams = z
-  .object({ profileId: AgentProfileId, cwd: z.string().optional() })
+  .object({
+    profileId: AgentProfileId,
+    cwd: z.string().optional(),
+    /** AR-S2c: one of the agent's routes (the profiles feed's `routes`) to add
+     * another sign-in with; absent, its default login. puppeteer refuses a
+     * route the agent never declared (PRECONDITION_FAILED). */
+    route: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9-]{0,31}$/)
+      .optional(),
+  })
   .passthrough();
 export type AgentsProfilesLoginParams = z.infer<typeof AgentsProfilesLoginParams>;
 

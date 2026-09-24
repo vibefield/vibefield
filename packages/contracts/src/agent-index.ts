@@ -597,6 +597,84 @@ export type IndexSearchResult = z.infer<typeof IndexSearchResult>;
  * takes a path back. `signingIn` is present while its login pane is open
  * (the pane's floor session and when it opened), so every window can say so
  * and the one that opened it can show it. */
+/** puppeteer `SignInService`, mirrored: the company a sign-in is billed
+ * through ("Anthropic"), never the agent. The id is shared across agents so
+ * two agents' sign-ins to one company are known to be one; OPEN (AR-L1). */
+export const AgentSignInService = z
+  .object({ id: z.string().min(1).max(64), label: z.string().min(1).max(64) })
+  .passthrough();
+export type AgentSignInService = z.infer<typeof AgentSignInService>;
+
+/** puppeteer `ProfileSignIn`, mirrored: one sign-in a folder holds, for an
+ * agent whose folder holds several (Pi, OpenCode, Hermes). Who and which plan
+ * appear only when the agent itself reported them; never a token.
+ * `borrowedFrom` names the program whose sign-in it is when the folder holds
+ * none of its own (the machine's account, not the profile's). */
+export const AgentSignIn = z
+  .object({
+    service: AgentSignInService,
+    method: z.string(),
+    subscription: z.boolean().optional(),
+    inUse: z.boolean().optional(),
+    email: z.string().optional(),
+    account: z.string().optional(),
+    organization: z.string().optional(),
+    plan: z.string().optional(),
+    borrowedFrom: z.string().optional(),
+  })
+  .passthrough();
+export type AgentSignIn = z.infer<typeof AgentSignIn>;
+
+/** puppeteer `ProfileHolding`, mirrored (AR-S2c): one sign-in a persona holds,
+ * placed on its profile's plans — a vendor agent's one sign-in is made from
+ * its identity. `key` is a pay-per-use key, on no plan; `planId` names the
+ * set's plan it is on; `runsOn` the one the agent runs on. */
+export const AgentHolding = AgentSignIn.extend({
+  method: z.string().optional(),
+  key: z.boolean(),
+  planId: z.string().optional(),
+  runsOn: z.boolean(),
+}).passthrough();
+export type AgentHolding = z.infer<typeof AgentHolding>;
+
+/** puppeteer `ProfilePlan`, mirrored (AR-S2c): one plan an Agent Profile runs
+ * on, read from its sign-ins — never stored, never matched by a person.
+ * `account` is whose it is when an agent in the profile named it; `namedBy`
+ * the persona that named it (the plan's usage is that persona's reading);
+ * `holders` the personas with a sign-in on it; `alsoIn` the other profiles
+ * with the same account (or on the same borrowed sign-in). */
+export const AgentPlan = z
+  .object({
+    id: z.string().min(1).max(80),
+    service: AgentSignInService,
+    account: z
+      .object({
+        email: z.string().optional(),
+        account: z.string().optional(),
+        organization: z.string().optional(),
+        plan: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    namedBy: AgentProfileId.optional(),
+    borrowedFrom: z.string().optional(),
+    holders: z.array(AgentProfileId),
+    alsoIn: z.array(AgentProfileSetId),
+  })
+  .passthrough();
+export type AgentPlan = z.infer<typeof AgentPlan>;
+
+/** puppeteer `ProfileSignInRoute`, mirrored: one way to add a sign-in to a
+ * folder that holds several — the agent's own login, named as a menu item. */
+export const AgentSignInRoute = z
+  .object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/),
+    label: z.string().min(1).max(64),
+    service: AgentSignInService.optional(),
+  })
+  .passthrough();
+export type AgentSignInRoute = z.infer<typeof AgentSignInRoute>;
+
 export const AgentPersona = z
   .object({
     profileId: AgentProfileId,
@@ -609,8 +687,14 @@ export const AgentPersona = z
         loggedIn: z.boolean(),
         method: z.string().optional(),
         email: z.string().optional(),
+        /** a non-email handle (a GitHub login); shown before the email */
+        account: z.string().optional(),
         organization: z.string().optional(),
         plan: z.string().optional(),
+        borrowedFrom: z.string().optional(),
+        /** every sign-in, for an agent whose folder holds several; the fields
+         * above then repeat the one in use */
+        signIns: z.array(AgentSignIn).optional(),
         verifiedAt: z.string(),
       })
       .passthrough()
@@ -619,6 +703,8 @@ export const AgentPersona = z
     set: AgentProfileSetId.optional(),
     folder: z.string().optional(),
     signingIn: z.object({ sessionId: z.string(), since: z.string() }).passthrough().optional(),
+    /** on the profiles feed only (AR-S2c): what it holds, on its set's plans */
+    holds: z.array(AgentHolding).optional(),
   })
   .passthrough();
 export type AgentPersona = z.infer<typeof AgentPersona>;
@@ -725,12 +811,17 @@ export const AgentProfileSet = z
     createdAt: z.string(),
     folder: z.string().optional(),
     personas: z.array(AgentPersona),
+    /** AR-S2c: the plans it runs on, in the order its agents first hold them
+     * (puppeteer's `profileSetPlans`); absent from an older fieldd */
+    plans: z.array(AgentPlan).optional(),
   })
   .passthrough();
 export type AgentProfileSet = z.infer<typeof AgentProfileSet>;
 
 /** `agents.profileSets.list` and every `agents.profileSets.subscribe` frame
- * (full snapshots at the tick). `signIn` names the providers whose adapter
+ * (full snapshots at the tick). Each set carries the plans it runs on and each
+ * of its personas what it holds (AR-S2c); `routes` names the ways to add a
+ * sign-in to an agent whose folder holds several. `signIn` names the providers whose adapter
  * can run a sign-in in a folder here — the "Add agent…" menu's candidates
  * before installs are joined. `identity` names those whose adapter can also
  * read back WHO signed in; a sign-in of any other is known to be there, never
@@ -752,6 +843,10 @@ export const AgentsProfileSetsListResult = z
     identity: z.array(AgentProviderId),
     signOut: z.array(AgentProviderId),
     reading: z.boolean(),
+    /** AR-S2c: the ways to add a sign-in, per agent whose folder holds
+     * several (puppeteer `support.signInRoutes`); an agent absent here has
+     * one login, the default */
+    routes: z.record(AgentProviderId, z.array(AgentSignInRoute)).optional(),
   })
   .passthrough();
 export type AgentsProfileSetsListResult = z.infer<typeof AgentsProfileSetsListResult>;

@@ -845,6 +845,8 @@ export class AgentRuntimeService implements PersonaSessions {
     const result = await this.runtime.startProfileLogin({
       profileId: params.profileId,
       cwd: params.cwd ?? this.home,
+      // one of the agent's own routes (puppeteer refuses one it never declared)
+      ...(params.route !== undefined ? { route: params.route } : {}),
     });
     if (isFailure(result)) throw this.refusalOr(failureToError(result));
     const born = this.terminalHost?.born(result.runtimeSessionId);
@@ -868,6 +870,7 @@ export class AgentRuntimeService implements PersonaSessions {
       profileId: params.profileId,
       provider: profile.provider,
       sessionId: result.runtimeSessionId,
+      ...(params.route !== undefined ? { route: params.route } : {}),
     });
     return {
       persona: await this.profiles.project(

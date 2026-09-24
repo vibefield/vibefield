@@ -33,6 +33,7 @@ import {
   profilePage,
   resetWords,
   signedInUnder,
+  signInLines,
   usageLines,
 } from "../src/panels/agents/profiles-model";
 import { SettingsDialog } from "../src/panels/SettingsDialog";
@@ -840,6 +841,427 @@ describe("Agent Profiles, from the review (AR-S2b)", () => {
     });
     await click(button("Cancel Codex's sign-in"));
     expect(f.calls("terminal.terminate")).toEqual([{ sessionId: "login-elsewhere" }]);
+  });
+});
+
+// ── plans (AR-S2c, pass 19 P2): the cards on top, the badges on the agents ──
+
+const ANTHROPIC = { id: "anthropic", label: "Anthropic" };
+const OPENAI = { id: "openai", label: "OpenAI" };
+const KIMI = { id: "kimi", label: "Moonshot AI" };
+const GITHUB = { id: "github", label: "GitHub" };
+const NOUS = { id: "nous", label: "Nous Research" };
+
+const PLAN_PROVIDERS: AgentProviderSummary[] = [
+  ...PROVIDERS,
+  { id: "pi", label: "Pi", available: true, resumable: true, personas: [] },
+  { id: "copilot", label: "GitHub Copilot", available: true, resumable: false, personas: [] },
+  { id: "hermes", label: "Hermes", available: true, resumable: false, personas: [] },
+];
+const PLAN_INSTALLS = [
+  ...INSTALLS,
+  install("pi", "0.87.1"),
+  install("copilot", "1.0.88"),
+  install("hermes", "0.21.4"),
+];
+
+/** Work as fieldd reads it: Claude Code on Claude Max (near its limit); Codex's
+ * sign-in lapsed; Pi runs on the Claude plan without naming the account, and
+ * holds a Kimi sign-in nobody names and an OpenAI key; Copilot borrows the
+ * GitHub CLI's account, the same as This Mac's. */
+const P_CLAUDE = persona({
+  profileId: "p-claude",
+  provider: "claude",
+  identity: signedIn("kim@work.example", "max"),
+  holds: [
+    {
+      service: ANTHROPIC,
+      email: "kim@work.example",
+      plan: "max",
+      key: false,
+      planId: "anthropic",
+      runsOn: true,
+    },
+  ],
+});
+const P_CODEX = persona({
+  profileId: "p-codex",
+  provider: "codex",
+  identity: signedIn("kim@work.example", "pro"),
+  holds: [
+    {
+      service: OPENAI,
+      email: "kim@work.example",
+      plan: "pro",
+      key: false,
+      planId: "openai",
+      runsOn: true,
+    },
+  ],
+});
+const P_PI = persona({
+  profileId: "p-pi",
+  provider: "pi",
+  identity: {
+    loggedIn: true,
+    signIns: [
+      { service: KIMI, method: "oauth", subscription: true },
+      { service: ANTHROPIC, method: "oauth", subscription: true, inUse: true },
+      { service: OPENAI, method: "api-key" },
+    ],
+    verifiedAt: READ,
+  },
+  holds: [
+    {
+      service: KIMI,
+      method: "oauth",
+      subscription: true,
+      key: false,
+      planId: "kimi",
+      runsOn: false,
+    },
+    {
+      service: ANTHROPIC,
+      method: "oauth",
+      subscription: true,
+      inUse: true,
+      key: false,
+      planId: "anthropic",
+      runsOn: true,
+    },
+    { service: OPENAI, method: "api-key", key: true, runsOn: false },
+  ],
+});
+const P_COPILOT = persona({
+  profileId: "p-copilot",
+  provider: "copilot",
+  identity: {
+    loggedIn: true,
+    method: "gh-cli",
+    account: "kimdev",
+    borrowedFrom: "GitHub CLI",
+    verifiedAt: READ,
+  },
+  holds: [
+    {
+      service: GITHUB,
+      method: "gh-cli",
+      account: "kimdev",
+      borrowedFrom: "GitHub CLI",
+      key: false,
+      planId: "github",
+      runsOn: true,
+    },
+  ],
+});
+const P_HERMES = persona({
+  profileId: "p-hermes",
+  provider: "hermes",
+  identity: { loggedIn: false, signIns: [], verifiedAt: READ },
+});
+
+const PLANNED = set({
+  id: "work",
+  personas: [P_CLAUDE, P_CODEX, P_PI, P_COPILOT, P_HERMES],
+  plans: [
+    {
+      id: "anthropic",
+      service: ANTHROPIC,
+      account: { email: "kim@work.example", plan: "max" },
+      namedBy: "p-claude",
+      holders: ["p-claude", "p-pi"],
+      alsoIn: [],
+    },
+    {
+      id: "openai",
+      service: OPENAI,
+      account: { email: "kim@work.example", plan: "pro" },
+      namedBy: "p-codex",
+      holders: ["p-codex"],
+      alsoIn: [],
+    },
+    { id: "kimi", service: KIMI, holders: ["p-pi"], alsoIn: [] },
+    {
+      id: "github",
+      service: GITHUB,
+      account: { account: "kimdev" },
+      namedBy: "p-copilot",
+      borrowedFrom: "GitHub CLI",
+      holders: ["p-copilot"],
+      alsoIn: ["native"],
+    },
+  ],
+});
+
+const PLAN_USAGE: AgentAccountUsageEntry[] = [
+  USAGE[0]!,
+  {
+    provider: "codex",
+    label: "Codex",
+    profileId: "p-codex",
+    state: "unauthenticated",
+    fetchedAt: READ,
+    metrics: [],
+  },
+];
+
+const PLAN_ROUTES = {
+  hermes: [
+    { id: "portal", label: "Nous Portal", service: NOUS },
+    { id: "provider", label: "Another provider…" },
+  ],
+};
+
+function plannedFeed(): AgentsProfileSetsListResult {
+  const everyone = ["claude", "codex", "grok", "pi", "copilot", "hermes"];
+  return feed([NATIVE, PLANNED], { signIn: everyone, identity: everyone, routes: PLAN_ROUTES });
+}
+
+describe("the plans a profile runs on (pass 19)", () => {
+  const context = {
+    ...emptyProfilesContext(plannedFeed()),
+    providers: PLAN_PROVIDERS,
+    installs: PLAN_INSTALLS,
+    usage: PLAN_USAGE,
+  };
+
+  it("makes each plan a card: the plan as its product names it, whose it is, and what is left", () => {
+    const page = profilePage(PLANNED, context);
+    expect(
+      page.plans.map((card) => [
+        card.title,
+        card.account,
+        card.users.map((user) => user.label),
+        card.alsoIn,
+      ]),
+    ).toEqual([
+      ["Claude Max", "kim@work.example", ["Claude Code", "Pi"], ""],
+      ["ChatGPT Pro", "kim@work.example", ["Codex"], ""],
+      ["Kimi", "Account not named", ["Pi"], ""],
+      ["Copilot", "kimdev", ["GitHub Copilot"], "also on This Mac"],
+    ]);
+    // every window the account reports, on the card
+    expect(page.plans[0]!.metrics.map((metric) => metric.label)).toEqual(["5H", "7D"]);
+    // one sentence in place of the windows, and the one act that helps
+    expect(page.plans[1]).toMatchObject({
+      metrics: [],
+      sentence: {
+        attention: "Sign-in expired.",
+        text: "What is left shows again once Codex signs in.",
+      },
+      act: { kind: "reauth", provider: "codex", label: "Sign in again" },
+    });
+    expect(page.plans[2]!.sentence).toEqual({
+      text: "Pi doesn't say which Kimi account, and no agent here names one.",
+    });
+    expect(page.plans[3]).toMatchObject({
+      note: "No Copilot sign-in of its own here: it runs as GitHub CLI's account, the same one as This Mac.",
+      sentence: { text: "Usage isn't reported for this plan." },
+      act: { kind: "own", provider: "copilot", label: "Sign in to Copilot" },
+    });
+  });
+
+  it("gives each agent the cards in small: the one it runs on first, a key dashed, a lapse said on its own", () => {
+    const page = profilePage(PLANNED, context);
+    const row = (provider: string) =>
+      page.rows.find((candidate) => candidate.provider === provider)!;
+    expect(
+      row("pi").badges.map((badge) => [
+        badge.title,
+        badge.planId ?? null,
+        badge.runsOn,
+        badge.payAsYouGo,
+      ]),
+    ).toEqual([
+      ["Claude Max", "anthropic", true, false],
+      ["Kimi", "kimi", false, false],
+      ["OpenAI API key", null, false, true],
+    ]);
+    expect(row("pi").unnamed).toBe("Pi doesn't say which account");
+    // the lapse is Codex's own sign-in's: only its badge says expired
+    expect(row("codex").badges).toEqual([
+      expect.objectContaining({ title: "ChatGPT Pro", expired: true }),
+    ]);
+    expect(row("claude").badges).toEqual([
+      expect.objectContaining({ title: "Claude Max", expired: false, runsOn: true }),
+    ]);
+    expect(row("claude").unnamed).toBeUndefined();
+    // an agent whose folder holds several and holds nothing says so
+    expect(row("hermes")).toMatchObject({
+      state: "signed-out",
+      several: true,
+      fact: "Not signed in to anything yet",
+      badges: [],
+    });
+  });
+
+  it("lists a harness's sign-ins on its own page, each on its plan", () => {
+    const page = profilePage(PLANNED, context);
+    const pi = page.rows.find((candidate) => candidate.provider === "pi")!;
+    expect(signInLines(pi, page.plans).map((line) => [line.title, line.inUse, line.fact])).toEqual([
+      ["Claude Max", true, "Subscription · Pi doesn't say which account"],
+      ["Kimi", false, "Subscription · Pi doesn't say which account"],
+      ["OpenAI API key", false, "API key · pay as you go"],
+    ]);
+  });
+
+  it("draws the cards on top and the badges on the rows; hovering either lights its partners", async () => {
+    const f = fake(
+      doors({
+        "agent.providers": () => ({ providers: PLAN_PROVIDERS }),
+        "agents.installs": () => ({ installs: PLAN_INSTALLS, machineScope: true }),
+        "agents.profiles.login": () => ({ persona: P_COPILOT, terminal: ticket("login-own") }),
+      }),
+    );
+    await mountSection(f.client, { feed: plannedFeed(), route: { kind: "profile", set: "work" } });
+    expect(text()).toContain("What Work runs on");
+    const cards = [...(container?.querySelectorAll<HTMLElement>(".vf-profiles-plan") ?? [])];
+    expect(cards.map((card) => card.querySelector("h4")?.textContent)).toEqual([
+      "Claude Max",
+      "ChatGPT Pro",
+      "Kimi",
+      "Copilot",
+    ]);
+    const claudeCard = cards[0]!;
+    // every window as a C1 line, said whole
+    expect(
+      [...claudeCard.querySelectorAll("[role=listitem]")].map((line) =>
+        line.getAttribute("aria-label"),
+      ),
+    ).toEqual([
+      "5H: 91% used, resets in 1h, ahead of pace",
+      expect.stringMatching(/^7D: 12% used/),
+    ]);
+    expect(claudeCard.textContent).toContain("Claude Code, Pi");
+
+    // the badge on Pi's row: the plan it runs on, filled, with the dot of a plan near its limit
+    const piRow = container?.querySelector<HTMLElement>('[data-provider="pi"]');
+    const piClaude = piRow?.querySelector<HTMLElement>('.vf-profiles-badge[data-plan="anthropic"]');
+    expect(piClaude?.classList.contains("is-on")).toBe(true);
+    expect(piClaude?.querySelector(".vf-profiles-badge-hot")).not.toBeNull();
+    expect(piRow?.querySelector(".vf-profiles-badge.is-key")?.textContent).toContain(
+      "OpenAI API key",
+    );
+    expect(piRow?.textContent).toContain("Pi doesn't say which account");
+
+    // hover a badge: its card and every badge of that plan light; nothing else does
+    await act(async () => {
+      // React makes a pointer's enter from `pointerover`
+      piClaude?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+    const lit = () =>
+      [...(container?.querySelectorAll<HTMLElement>(".is-lit") ?? [])].map(
+        (element) => element.dataset.plan,
+      );
+    expect(lit()).toEqual(["anthropic", "anthropic", "anthropic"]);
+    await act(async () => {
+      // React makes a pointer's leave from `pointerout` toward what it moved to
+      piClaude?.dispatchEvent(
+        new PointerEvent("pointerout", { bubbles: true, relatedTarget: document.body }),
+      );
+    });
+    expect(lit()).toEqual([]);
+
+    // the borrowed card offers Copilot's own login, here in Work
+    await click(button("Sign GitHub Copilot in with its own login, for Work alone"));
+    expect(f.calls("agents.profiles.login")).toEqual([{ profileId: "p-copilot" }]);
+  });
+
+  it("adds a sign-in to a harness by one of its own routes", async () => {
+    const hermes = persona({
+      ...P_HERMES,
+      identity: {
+        loggedIn: true,
+        method: "oauth",
+        email: "kim@work.example",
+        plan: "Plus",
+        signIns: [
+          {
+            service: NOUS,
+            method: "oauth",
+            subscription: true,
+            inUse: true,
+            email: "kim@work.example",
+            plan: "Plus",
+          },
+        ],
+        verifiedAt: READ,
+      },
+      holds: [
+        {
+          service: NOUS,
+          method: "oauth",
+          subscription: true,
+          inUse: true,
+          email: "kim@work.example",
+          plan: "Plus",
+          key: false,
+          planId: "nous",
+          runsOn: true,
+        },
+      ],
+    });
+    const withHermes = {
+      ...PLANNED,
+      personas: [P_CLAUDE, hermes],
+      plans: [
+        {
+          id: "nous",
+          service: NOUS,
+          account: { email: "kim@work.example", plan: "Plus" },
+          namedBy: "p-hermes",
+          holders: ["p-hermes"],
+          alsoIn: [],
+        },
+      ],
+    };
+    const f = fake(
+      doors({
+        "agent.providers": () => ({ providers: PLAN_PROVIDERS }),
+        "agents.installs": () => ({ installs: PLAN_INSTALLS, machineScope: true }),
+        "agents.profiles.login": () => ({ persona: hermes, terminal: ticket("login-route") }),
+      }),
+    );
+    const everyone = ["claude", "codex", "grok", "pi", "copilot", "hermes"];
+    await mountSection(f.client, {
+      feed: feed([NATIVE, withHermes], {
+        signIn: everyone,
+        identity: everyone,
+        routes: PLAN_ROUTES,
+      }),
+      route: { kind: "agent", set: "work", provider: "hermes" },
+    });
+    expect(text()).toContain("Sign-ins");
+    expect(text()).toContain("Nous Portal Plus");
+    expect(text()).toContain("in use");
+    expect(text()).toContain("Sign out of everything in Hermes");
+
+    await click(button("Add a sign-in…"));
+    const items = [...(container?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+    expect(items.map((item) => item.textContent)).toEqual(["Nous Portal", "Another provider…"]);
+    await click(items[1]!);
+    expect(f.calls("agents.profiles.login")).toEqual([
+      { profileId: "p-hermes", route: "provider" },
+    ]);
+    expect(container?.querySelector("[data-signin-terminal]")).not.toBeNull();
+  });
+
+  it("offers an empty harness one way in: add a sign-in", async () => {
+    const f = fake(
+      doors({
+        "agent.providers": () => ({ providers: PLAN_PROVIDERS }),
+        "agents.installs": () => ({ installs: PLAN_INSTALLS, machineScope: true }),
+      }),
+    );
+    await mountSection(f.client, {
+      feed: plannedFeed(),
+      route: { kind: "agent", set: "work", provider: "hermes" },
+    });
+    expect(text()).toContain("Hermes isn't signed in to anything in Work");
+    expect(text()).toContain(
+      "Add a sign-in to any service it supports. It stays in Hermes's folder in Work.",
+    );
+    expect(hasButton("Add a sign-in…")).toBe(true);
   });
 });
 

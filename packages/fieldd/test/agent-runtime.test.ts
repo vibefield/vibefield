@@ -351,7 +351,7 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
     expect(audit).toContain(persona.profileId);
     expect(audit).toContain('"indexed":true');
   });
-  it("a provider the roll call does not know is created but not indexed (runtimeId absent); verify is honest about an adapter that cannot; unknown personas are refused typed", async () => {
+  it("a provider the roll call does not know is created but not indexed (runtimeId absent); verify reads an empty folder as signed out; unknown personas are refused typed", async () => {
     const { dataDir, daemon } = await setup();
     await ready(daemon);
     const win = await window(daemon, ALL, "p3");
@@ -369,12 +369,15 @@ describe("personas (AR-2) — the persona path against the scripted rosettad", (
     expect(daemon.health().rosettad.pid).toBe(pid); // nothing changed, nothing bounced
     expect(auditText(dataDir)).toContain('"indexed":false');
 
-    // pi exposes no credential-free identity document: the failure is data
+    // pi lists what its folder holds (puppeteer 16493b4): an empty folder is
+    // signed out with an empty list — read from the folder alone; pi itself
+    // runs only to confirm a stored sign-in, and there is none
     const verified = (await win.call("agents.profiles.verify", {
       profileId: persona.profileId,
     })) as AgentsProfilesVerifyResult;
     expect(verified.persona.profileId).toBe(persona.profileId);
-    expect(verified.failure).toMatchObject({ status: "unsupported", retryable: false });
+    expect(verified.failure).toBeUndefined();
+    expect(verified.persona.identity).toMatchObject({ loggedIn: false, signIns: [] });
     expect(auditText(dataDir)).toContain('"agents.profiles.verify"');
 
     const missing = await win.callErr("agents.profiles.verify", { profileId: "nope" });
@@ -519,15 +522,18 @@ describe("Agent Profiles (AR-S2) — puppeteer's profile sets, one folder each u
     // an embedded daemon reads no identity on its own (a status command is the vendor's)
     expect(claude?.identity).toBeUndefined();
     expect(listed.reading).toBe(false);
-    // the Add menu's candidates: every adapter that can sign in in a folder —
-    // pi, grok, kimi included — and, apart, the ones that can also say WHO
-    expect(listed.signIn).toEqual(
-      expect.arrayContaining(["claude", "codex", "grok", "kimi", "pi"]),
-    );
-    expect(listed.signIn).not.toContain("antigravity");
-    expect(listed.identity).toEqual(expect.arrayContaining(["claude", "codex"]));
-    expect(listed.identity).not.toContain("pi");
-    expect(listed.identity).not.toContain("grok");
+    // the Add menu's candidates: every adapter that can sign in in a folder,
+    // and, apart, the ones that can also say WHO — since puppeteer 16493b4,
+    // every one of them (Antigravity's profiles on, Pi's folder listed)
+    const every = ["claude", "codex", "grok", "kimi", "pi", "antigravity", "copilot"];
+    expect(listed.signIn).toEqual(expect.arrayContaining(every));
+    expect(listed.identity).toEqual(expect.arrayContaining(every));
+    // AR-S2c: the ways to add a sign-in, for an agent whose folder holds several
+    expect(listed.routes?.["hermes"]?.map((route) => route.id)).toEqual(["portal", "provider"]);
+    expect(listed.routes?.["opencode"]?.map((route) => route.id)).toEqual(["provider", "console"]);
+    expect(listed.routes).not.toHaveProperty("claude");
+    // nothing read, nothing it runs on
+    expect(native.plans).toEqual([]);
     // This Mac's sign-outs: only where the vendor's own command signs a folder out
     expect(listed.signOut).toContain("claude");
     expect(listed.signOut).not.toContain("codex");

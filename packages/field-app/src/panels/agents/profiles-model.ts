@@ -1,10 +1,15 @@
+import { planTitle, serviceProduct } from "@vibecook/puppeteer-views";
 import type {
   AgentAccountUsageEntry,
   AgentAccountUsageMetric,
+  AgentHolding,
   AgentInstall,
   AgentPersona,
+  AgentPlan,
   AgentProfileSet,
   AgentProviderSummary,
+  AgentSignInRoute,
+  AgentSignInService,
   AgentsProfileSetsListResult,
 } from "@vibefield/contracts";
 
@@ -14,7 +19,15 @@ import type {
 // glyph, and at most one of them the default for new sessions; This Mac is
 // every agent's own folder. This file only joins the doors' answers (the
 // profiles feed, the installs, the usage feed) and words them. AR-L1: no
-// vendor is named here — a provider is an id and puppeteer's label for it.
+// vendor is named here — a provider is an id and puppeteer's label for it; a
+// service is an id, its company's label, and the views' name for its plans.
+//
+// AR-S2c (pass 19, P2): a profile's page shows the PLANS it runs on — each
+// once, as a card with every usage window — and each agent row wears BADGES,
+// the cards in small. Which plans, whose account, and which sign-in each agent
+// runs on are puppeteer's reading of the identities (`plans` on the set,
+// `holds` on each persona); a plan's usage is the reading of the persona that
+// named its account (`namedBy`).
 
 /** A sidebar entry under "Agent Profiles". */
 export interface ProfileNavItem {
@@ -64,6 +77,64 @@ export interface ProfileAgentRow {
   usage: AgentAccountUsageMetric[];
   /** the provider does not report usage at all */
   usageUnsupported: boolean;
+  /** the usage reading's state, when there is a reading */
+  usageState?: string | undefined;
+  /** its folder holds several sign-ins (a harness): its page lists them */
+  several: boolean;
+  /** what it holds, the one it runs on first; empty when that is unknown */
+  holds: AgentHolding[];
+  /** the badges on its profile's page: every sign-in, the one it runs on filled */
+  badges: PlanBadge[];
+  /** said once on the row: the sign-in it runs on names no account */
+  unnamed?: string | undefined;
+}
+
+/** A badge: a plan card in small (pass 19) — the company's mark and the plan's name. */
+export interface PlanBadge {
+  key: string;
+  /** the card it stands for; absent for a key, which is on no plan */
+  planId?: string | undefined;
+  service: AgentSignInService;
+  title: string;
+  /** the one the agent runs on (filled) */
+  runsOn: boolean;
+  /** a pay-per-use key (dashed) */
+  payAsYouGo: boolean;
+  /** this agent's own sign-in to the plan lapsed */
+  expired: boolean;
+}
+
+/** One plan a profile runs on, as its card says it (pass 19, P2). */
+export interface PlanCard {
+  id: string;
+  service: AgentSignInService;
+  /** "Claude Max"; the product alone when no agent named the account */
+  title: string;
+  /** whose: "kim@work.example · Northlight", or "Account not named" */
+  account: string;
+  named: boolean;
+  /** every window of the account's usage, in the adapter's order */
+  metrics: AgentAccountUsageMetric[];
+  /** in place of the windows: one sentence, its lead in orange when it needs attention */
+  sentence?: { attention?: string; text: string } | undefined;
+  /** a borrowed sign-in, said above the body */
+  note?: string | undefined;
+  /** the card's one act */
+  act?:
+    | {
+        /** sign the account's agent in again, or sign the borrower in with its own login */
+        kind: "reauth" | "own";
+        provider: string;
+        label: string;
+        description: string;
+      }
+    | undefined;
+  /** the agents that spend it, in the profile's order */
+  users: Array<{ provider: string; label: string }>;
+  /** "also on This Mac", or empty */
+  alsoIn: string;
+  /** the persona that named the account, whose usage the card shows */
+  namedBy?: string | undefined;
 }
 
 export interface ProfilesContext {
@@ -78,6 +149,10 @@ export interface ProfilesContext {
   signOut: readonly string[];
   /** fieldd is reading This Mac's sign-ins now */
   reading: boolean;
+  /** every profile, for where else a plan's account is used */
+  sets: readonly AgentProfileSet[];
+  /** the ways to add a sign-in, per agent whose folder holds several */
+  routes: Readonly<Record<string, readonly AgentSignInRoute[]>>;
 }
 
 export function emptyProfilesContext(feed?: AgentsProfileSetsListResult | null): ProfilesContext {
@@ -89,6 +164,8 @@ export function emptyProfilesContext(feed?: AgentsProfileSetsListResult | null):
     identity: feed?.identity ?? [],
     signOut: feed?.signOut ?? [],
     reading: feed?.reading ?? false,
+    sets: feed?.sets ?? [],
+    routes: feed?.routes ?? {},
   };
 }
 
@@ -102,6 +179,8 @@ export interface ProfilePageModel {
   addable: Array<{ provider: string; label: string }>;
   /** the hero's fact line */
   facts: string;
+  /** the plans it runs on, each once (pass 19): the cards above the agents */
+  plans: PlanCard[];
 }
 
 const agentLabel = (context: ProfilesContext, provider: string): string =>
@@ -156,6 +235,11 @@ export function agentRow(context: ProfilesContext, persona: AgentPersona): Profi
   const state = signInState(persona, usage, context.identity.includes(persona.provider));
   const who = whoWords(persona);
   const email = persona.identity?.email ?? persona.identity?.organization;
+  // a folder that can hold several sign-ins lists them (a harness), and says
+  // what it holds rather than who it is
+  const several =
+    persona.identity?.signIns !== undefined || context.routes[persona.provider] !== undefined;
+  const label = agentLabel(context, persona.provider);
   const fact =
     state === "signing-in"
       ? "Signing in…"
@@ -164,21 +248,197 @@ export function agentRow(context: ProfilesContext, persona: AgentPersona): Profi
           ? "Checking…"
           : "Not checked yet"
         : state === "signed-out"
-          ? "Not signed in"
+          ? several
+            ? "Not signed in to anything yet"
+            : "Not signed in"
           : state === "expired"
             ? `Sign-in expired${email !== undefined ? ` · ${email}` : ""}`
             : state === "unverifiable"
               ? "Doesn't say who is signed in"
               : (who ?? "Signed in");
+  const held = persona.holds ?? [];
+  const runsOn = held.find((holding) => holding.runsOn);
+  const holds = runsOn === undefined ? held : [runsOn, ...held.filter((h) => h !== runsOn)];
   return {
     provider: persona.provider,
-    label: agentLabel(context, persona.provider),
+    label,
     persona,
     state,
     fact,
     usage: usage?.state === "available" || usage?.stale === true ? usage.metrics : [],
     usageUnsupported: usage?.state === "unsupported",
+    usageState: usage?.state,
+    several,
+    holds,
+    badges: [],
+    unnamed:
+      several && runsOn !== undefined && !runsOn.key && accountWho(runsOn) === undefined
+        ? `${label} doesn't say which account`
+        : undefined,
   };
+}
+
+/** The account's handle before its email (RFC 006: a view shows it first). */
+function accountWho(account: { account?: string | undefined; email?: string | undefined }) {
+  return account.account ?? account.email;
+}
+
+/** "kim@work.example · Northlight", or undefined when nobody is named. */
+export function accountWords(account: AgentPlan["account"]): string | undefined {
+  if (account === undefined) return undefined;
+  const who = accountWho(account);
+  if (who === undefined) return undefined;
+  return [who, account.organization].filter((part) => part !== undefined).join(" · ");
+}
+
+/** The cards: every plan the profile runs on whose agents are on its page. */
+function planCards(
+  set: AgentProfileSet,
+  rows: readonly ProfileAgentRow[],
+  context: ProfilesContext,
+): PlanCard[] {
+  const shown = new Map(rows.map((row) => [row.persona.profileId, row]));
+  const cards: PlanCard[] = [];
+  for (const plan of set.plans ?? []) {
+    const holders = plan.holders
+      .map((id) => shown.get(id))
+      .filter((row): row is ProfileAgentRow => row !== undefined);
+    if (holders.length === 0) continue;
+    // the account's agent is on the page, or (This Mac) installed no longer
+    const namerPersona = set.personas.find((candidate) => candidate.profileId === plan.namedBy);
+    const namer =
+      namerPersona === undefined
+        ? undefined
+        : (shown.get(namerPersona.profileId) ?? agentRow(context, namerPersona));
+    const account = accountWords(plan.account);
+    const product = serviceProduct(plan.service);
+    const labels = holders.map((row) => row.label);
+    const elsewhere = plan.alsoIn
+      .map((id) => context.sets.find((candidate) => candidate.id === id))
+      .filter((other): other is AgentProfileSet => other !== undefined);
+    let sentence: PlanCard["sentence"];
+    let act: PlanCard["act"];
+    let metrics: AgentAccountUsageMetric[] = [];
+    if (account === undefined || namer === undefined) {
+      sentence = {
+        text: `${listWords(labels)} ${labels.length === 1 ? "doesn't" : "don't"} say which ${product} account, and no agent here names one.`,
+      };
+    } else if (namer.state === "expired") {
+      sentence = {
+        attention: "Sign-in expired.",
+        text: `What is left shows again once ${namer.label} signs in.`,
+      };
+      act = {
+        kind: "reauth",
+        provider: namer.provider,
+        label: "Sign in again",
+        description: `Sign in to ${namer.label} again`,
+      };
+    } else if (namer.usage.length > 0) {
+      metrics = namer.usage;
+    } else {
+      sentence = {
+        text:
+          namer.usageState === undefined || namer.usageState === "unsupported"
+            ? "Usage isn't reported for this plan."
+            : "Usage couldn't be read just now.",
+      };
+    }
+    let note: string | undefined;
+    if (plan.borrowedFrom !== undefined) {
+      const same =
+        elsewhere.length > 0
+          ? `, the same one as ${listWords(elsewhere.map((other) => other.label))}`
+          : "";
+      // the service's own agent (a vendor's one sign-in) can have its own login here
+      const own = holders.find((row) => !row.several);
+      if (own !== undefined) {
+        note = `No ${product} sign-in of its own here: it runs as ${plan.borrowedFrom}'s account${same}.`;
+        act ??= {
+          kind: "own",
+          provider: own.provider,
+          label: `Sign in to ${product}`,
+          description: `Sign ${own.label} in with its own login, for ${set.label} alone`,
+        };
+      } else {
+        note = `${listWords(labels)} ${labels.length === 1 ? "runs" : "run"} as ${plan.borrowedFrom}'s account${same}.`;
+      }
+    }
+    cards.push({
+      id: plan.id,
+      service: plan.service,
+      title: planTitle(plan.service, account === undefined ? undefined : plan.account?.plan),
+      account: account ?? "Account not named",
+      named: account !== undefined,
+      metrics,
+      sentence,
+      note,
+      act,
+      users: holders.map((row) => ({ provider: row.provider, label: row.label })),
+      alsoIn: elsewhere.length > 0 ? `also ${listWords(elsewhere.map(inOnWords))}` : "",
+      namedBy: plan.namedBy,
+    });
+  }
+  return cards;
+}
+
+/** A row's badges: each sign-in it holds, named as its card is. */
+function badgesFor(row: ProfileAgentRow, cards: ReadonlyMap<string, PlanCard>): PlanBadge[] {
+  return row.holds.map((held, index) => {
+    const card = held.planId === undefined ? undefined : cards.get(held.planId);
+    return {
+      key: `${held.service.id}:${index}`,
+      planId: held.key ? undefined : held.planId,
+      service: held.service,
+      title: held.key
+        ? `${held.service.label} API key`
+        : (card?.title ?? planTitle(held.service, held.plan)),
+      runsOn: held.runsOn,
+      payAsYouGo: held.key,
+      expired: card?.namedBy === row.persona.profileId && row.state === "expired",
+    };
+  });
+}
+
+/** One sign-in on a harness's own page (pass 17's Sign-ins list, P2's words). */
+export interface SignInLine {
+  key: string;
+  service: AgentSignInService;
+  title: string;
+  inUse: boolean;
+  fact: string;
+  /** its plan's windows, when this sign-in is the one that named the account */
+  metrics: AgentAccountUsageMetric[];
+  planId?: string | undefined;
+}
+
+export function signInLines(row: ProfileAgentRow, plans: readonly PlanCard[]): SignInLine[] {
+  const cards = new Map(plans.map((card) => [card.id, card]));
+  return row.holds.map((held, index) => {
+    const card = held.planId === undefined ? undefined : cards.get(held.planId);
+    const own = accountWords(held);
+    const parts: string[] = [];
+    if (held.key) parts.push("API key · pay as you go");
+    else {
+      if (held.borrowedFrom !== undefined) parts.push(`Through ${held.borrowedFrom}`);
+      else if (held.subscription === true) parts.push("Subscription");
+      parts.push(own ?? `${row.label} doesn't say which account`);
+    }
+    return {
+      key: `${held.service.id}:${index}`,
+      service: held.service,
+      title: held.key
+        ? `${held.service.label} API key`
+        : (card?.title ?? planTitle(held.service, held.plan)),
+      inUse: held.inUse === true,
+      fact: parts.join(" · "),
+      metrics:
+        card !== undefined && card.namedBy === row.persona.profileId && own !== undefined
+          ? card.metrics
+          : [],
+      planId: held.key ? undefined : held.planId,
+    };
+  });
 }
 
 export function profilePage(set: AgentProfileSet, context: ProfilesContext): ProfilePageModel {
@@ -186,11 +446,14 @@ export function profilePage(set: AgentProfileSet, context: ProfilesContext): Pro
   // This Mac lists every installed agent in its own folder, whatever that
   // folder's sign-in says (and one whose login pane is open); a profile lists
   // every sign-in it holds, whatever state it is in — a place shows what is in it.
-  const rows = set.personas
+  const listed = set.personas
     .filter((persona) =>
       set.kind === "native" ? here.has(persona.provider) || persona.signingIn !== undefined : true,
     )
     .map((persona) => agentRow(context, persona));
+  const plans = planCards(set, listed, context);
+  const cards = new Map(plans.map((card) => [card.id, card]));
+  const rows = listed.map((row) => ({ ...row, badges: badgesFor(row, cards) }));
   const inProfile = new Set(rows.map((row) => row.provider));
   const addable = context.signIn
     .filter((provider) => here.has(provider) && !inProfile.has(provider))
@@ -201,7 +464,7 @@ export function profilePage(set: AgentProfileSet, context: ProfilesContext): Pro
     ...(set.kind === "native" ? ["each in its own folder"] : []),
     ...(set.default ? ["default for new sessions"] : []),
   ].join(" · ");
-  return { set, inOn: inOnWords(set), rows, addable, facts };
+  return { set, inOn: inOnWords(set), rows, addable, facts, plans };
 }
 
 /** Where one agent is signed in, profile by profile (the Agents page's
@@ -269,7 +532,7 @@ export function deleteWords(page: ProfilePageModel): {
   };
 }
 
-function listWords(items: readonly string[]): string {
+export function listWords(items: readonly string[]): string {
   if (items.length <= 1) return items.join("");
   return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
@@ -277,12 +540,22 @@ function listWords(items: readonly string[]): string {
 export function signOutWords(
   set: AgentProfileSet,
   label: string,
-): { description: string; question: string; what: string } {
+  /** what an agent whose folder holds several holds: it signs out of all of them */
+  holds?: readonly AgentHolding[],
+): { title: string; description: string; question: string; what: string } {
+  const companies = [...new Set((holds ?? []).map((held) => held.service.label))];
   return {
+    title: holds === undefined ? "Sign out" : `Sign out of everything in ${label}`,
     description:
       set.kind === "native"
         ? `Signs ${label} out of its own folder on This Mac, with its own command. The subscription itself isn't touched.`
-        : `Removes this sign-in from ${set.label}. The subscription itself isn't touched.`,
+        : holds !== undefined
+          ? `Deletes ${label}'s folder in ${set.label}${
+              holds.length > 0
+                ? `, with ${holds.length === 1 ? "its sign-in" : `its ${holds.length} sign-ins`} — ${listWords(companies)}`
+                : ""
+            }. The plans themselves aren't touched.`
+          : `Removes this sign-in from ${set.label}. The subscription itself isn't touched.`,
     question: `Sign out of ${label} ${inOnWords(set)}?`,
     what:
       set.kind === "native"

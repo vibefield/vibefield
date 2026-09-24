@@ -1,10 +1,16 @@
 import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { AgentProfile, ProfileFailure } from "@vibecook/puppeteer-core";
+import {
+  type AgentProfile,
+  type ProfileFailure,
+  type ProfileSetPlans,
+  profileSetPlans,
+} from "@vibecook/puppeteer-core";
 import type { AgentRuntime, ProfileSetInfo } from "@vibecook/puppeteer-runtime";
 import {
   type AgentPersona,
   type AgentProfileSet,
+  type AgentSignInRoute,
   type AgentsProfileSetsCreateParams,
   type AgentsProfileSetsDeleteResult,
   type AgentsProfileSetsListResult,
@@ -148,12 +154,25 @@ export class AgentProfileService {
 
   // ── the feed ──
 
-  /** Every Agent Profile, This Mac first, with its sign-ins. */
+  /** Every Agent Profile, This Mac first, with its sign-ins and the plans it
+   * runs on (AR-S2c: puppeteer reads them from the identities; nothing here
+   * is stored or matched). */
   async sets(): Promise<AgentsProfileSetsListResult> {
     const infos = await this.opts.runtime.profileSets();
+    const plans = this.plansOf(infos);
     const ids = await this.opts.index.runtimeIdsByRoot();
     const sets: AgentProfileSet[] = [];
-    for (const info of infos) sets.push(await this.projectSet(info, ids));
+    for (const info of infos) sets.push(await this.projectSet(info, ids, plans.get(info.set.id)));
+    const routes: Record<string, AgentSignInRoute[]> = {};
+    for (const provider of this.opts.runtime.profileProviders()) {
+      const declared = provider.support.signInRoutes;
+      if (!provider.support.supported || declared === undefined) continue;
+      routes[provider.id] = declared.map((route) => ({
+        id: route.id,
+        label: route.label,
+        ...(route.service !== undefined ? { service: { ...route.service } } : {}),
+      }));
+    }
     return {
       sets,
       signIn: this.signInProviders(),
@@ -163,6 +182,7 @@ export class AgentProfileService {
         .filter((provider) => provider.support.signOut === true)
         .map((provider) => provider.id),
       reading: this.reading !== null,
+      routes,
     };
   }
 
@@ -227,7 +247,7 @@ export class AgentProfileService {
       set: info.set.id,
       default: info.isDefault,
     });
-    return { set: await this.projectSet(info, await this.opts.index.runtimeIdsByRoot()) };
+    return { set: await this.projectOne(info) };
   }
 
   /** Rename, re-mark, or make the default. The folder keeps its name: a path
@@ -252,7 +272,7 @@ export class AgentProfileService {
       if (isFailure(moved)) throw failureToError(moved);
       info = moved;
     }
-    return { set: await this.projectSet(info, await this.opts.index.runtimeIdsByRoot()) };
+    return { set: await this.projectOne(info) };
   }
 
   /** The record's P7 act: stop the sessions running under the profile, sign
@@ -704,12 +724,30 @@ export class AgentProfileService {
     };
   }
 
+  /** puppeteer's reading of every set's plans, by set id. It reads all the
+   * sets at once, because a plan says where else its account is used. */
+  private plansOf(infos: readonly ProfileSetInfo[]): Map<string, ProfileSetPlans> {
+    const read = profileSetPlans(infos, this.opts.runtime.profileProviders());
+    return new Map(read.map((set) => [set.setId, set]));
+  }
+
+  /** One set as a door answers it, its plans read against every set. */
+  private async projectOne(info: ProfileSetInfo): Promise<AgentProfileSet> {
+    const plans = this.plansOf(await this.opts.runtime.profileSets());
+    return this.projectSet(info, await this.opts.index.runtimeIdsByRoot(), plans.get(info.set.id));
+  }
+
   private async projectSet(
     info: ProfileSetInfo,
     ids: ReadonlyMap<string, string>,
+    plans?: ProfileSetPlans,
   ): Promise<AgentProfileSet> {
     const personas: AgentPersona[] = [];
-    for (const profile of info.profiles) personas.push(await this.project(profile, ids, true));
+    for (const profile of info.profiles) {
+      const persona = await this.project(profile, ids, true);
+      const holds = plans?.holdings[profile.id];
+      personas.push(holds === undefined ? persona : { ...persona, holds });
+    }
     return {
       id: info.set.id,
       kind: info.set.kind,
@@ -719,6 +757,7 @@ export class AgentProfileService {
       createdAt: info.set.createdAt,
       ...(info.set.directory !== undefined ? { folder: this.tilde(info.set.directory) } : {}),
       personas,
+      plans: plans?.plans ?? [],
     };
   }
 
