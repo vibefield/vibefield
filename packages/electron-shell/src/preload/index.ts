@@ -10,6 +10,8 @@ import {
   ScreenshotCaptureRequest,
   type ScreenshotCaptureResult,
   ScreenshotCaptureResult as ScreenshotCaptureResultSchema,
+  ScreenshotPreviewRequest,
+  ScreenshotPreviewResult,
   type ShellCommand,
   ShellPlatform,
   type UserRecord,
@@ -315,6 +317,13 @@ contextBridge.exposeInMainWorld("vibefield", {
    * captures — a second call while one is live answers `busy` — and the View
    * menu's item runs the same capture. Validated both ways, like every door. */
   screenshot: {
+    preview: async (name: string): Promise<ScreenshotPreviewResult> =>
+      ScreenshotPreviewResult.parse(
+        await ipcRenderer.invoke(
+          IPC_CHANNELS.screenshotPreview,
+          ScreenshotPreviewRequest.parse({ name }),
+        ),
+      ),
     capture: async (): Promise<ScreenshotCaptureResult> =>
       ScreenshotCaptureResultSchema.parse(
         await ipcRenderer.invoke(

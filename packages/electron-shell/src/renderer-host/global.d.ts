@@ -2,6 +2,7 @@ import type {
   DesktopShellState,
   GodviewState,
   ScreenshotCaptureResult,
+  ScreenshotPreviewResult,
   ShellCommand,
   ShellPlatform,
   WindowConnection,
@@ -93,6 +94,7 @@ declare global {
        * the contract's own result (still on disk + clipboard, cancel, or a
        * typed error). */
       screenshot: {
+        preview(name: string): Promise<ScreenshotPreviewResult>;
         capture(): Promise<ScreenshotCaptureResult>;
         /** SNAP-3 — the result of a capture MAIN ran (the View menu's item);
          * the latest is retained until the renderer subscribes. */

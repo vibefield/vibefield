@@ -202,7 +202,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the sixteen channel keys, in order", () => {
+  it("exposes exactly the seventeen channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -222,6 +222,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "usersSwitch", // UA-5/UA-D15 — attach re-target + window reload
       "screenshotCapture", // SNAP-D3 — the native screenshot helper, one capture at a time
       "screenshotResult", // SNAP-3 — main → renderer: the View menu's capture, told to the page
+      "screenshotPreview",
     ]);
   });
 
@@ -243,6 +244,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       usersSwitch: "vibefield:users:switch",
       screenshotCapture: "vibefield:screenshot:capture",
       screenshotResult: "vibefield:screenshot:result",
+      screenshotPreview: "vibefield:screenshot:preview",
     });
   });
 });
@@ -326,7 +328,12 @@ describe("tray shell commands and app preferences", () => {
   it("requires a complete effective preference snapshot", () => {
     expect(
       AppPreferences.parse({ showTray: true, backgroundShell: false, syncPosture: "opt-in" }),
-    ).toEqual({ showTray: true, backgroundShell: false, syncPosture: "opt-in" });
+    ).toEqual({
+      showTray: true,
+      backgroundShell: false,
+      screenshotHotkey: true,
+      syncPosture: "opt-in",
+    });
     expect(AppPreferences.safeParse({ showTray: true }).success).toBe(false);
     // UA-6: the posture is part of the EFFECTIVE snapshot, so a caller can
     // never be handed one that leaves it to guess (the daemon folds the default).
@@ -334,6 +341,16 @@ describe("tray shell commands and app preferences", () => {
   });
 
   it("accepts the boolean preference mutations, and the posture's own word", () => {
+    expect(
+      AppPreferenceSetParams.safeParse({ key: APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY, value: false })
+        .success,
+    ).toBe(true);
+    expect(
+      AppPreferenceSetParams.safeParse({
+        key: APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY,
+        value: "opt-in",
+      }).success,
+    ).toBe(false);
     expect(
       AppPreferenceSetParams.parse({
         key: APP_PREFERENCE_KEYS.SHOW_TRAY,

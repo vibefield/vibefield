@@ -41,6 +41,8 @@ export function DesktopSection({
   const unavailable = subscription.status !== "live" || preferences === null;
   const showTray = preferences?.showTray ?? true;
   const backgroundShell = preferences?.backgroundShell ?? true;
+  const screenshotHotkey = preferences?.screenshotHotkey ?? true;
+  const screenshotIssue = screenshotHotkey ? desktopState?.screenshotHotkey?.message : null;
   const trayUnavailable = desktopState?.tray.availability === "unavailable";
   const trayIssue = showTray ? desktopState?.tray.issue : null;
   const effectiveBackgroundShell = desktopState?.tray.backgroundShellEffective ?? backgroundShell;
@@ -86,6 +88,28 @@ export function DesktopSection({
           {!showTray && (
             <div className={`py-2 ${labelCls}`}>
               Background mode requires the status item so the app cannot become unreachable.
+            </div>
+          )}
+        </>
+      )}
+      {(platform === "darwin" || platform === "win32") && (
+        <>
+          <SettingsRow
+            title="Global screenshot shortcut"
+            description={`${platform === "darwin" ? "⌃⌘A" : "Alt+A"} takes a screenshot from any app or display while VibeField is running.`}
+          >
+            <SettingsSwitch
+              label="Global screenshot shortcut"
+              checked={screenshotHotkey}
+              disabled={unavailable || pending !== null}
+              onChange={(checked) => {
+                void setPreference(APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY, checked);
+              }}
+            />
+          </SettingsRow>
+          {screenshotIssue != null && (
+            <div role="status" className={`py-2 ${labelCls}`}>
+              {screenshotIssue}
             </div>
           )}
         </>

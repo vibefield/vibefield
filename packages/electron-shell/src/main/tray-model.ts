@@ -40,6 +40,7 @@ export interface TrayActions {
   openPrimaryWindow(): void;
   openSettings(): void;
   openDiagnostics(): void;
+  takeScreenshot?: () => void;
   checkForUpdates?: () => void;
   restartToUpdate?: () => void;
   setBackgroundShell(enabled: boolean): void;
@@ -154,6 +155,16 @@ export function buildTrayMenu(
       ...availability(platform, actionable),
       ...(actionable ? { click: actions.openPrimaryWindow } : {}),
     },
+    ...(actions.takeScreenshot === undefined
+      ? []
+      : [
+          {
+            id: "screenshot",
+            label: "Take Screenshot",
+            ...availability(platform, actionable),
+            ...(actionable ? { click: actions.takeScreenshot } : {}),
+          },
+        ]),
     ...(snapshot.userName !== undefined
       ? [
           {

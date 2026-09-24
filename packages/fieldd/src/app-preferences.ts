@@ -11,6 +11,7 @@ import {
 export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
   showTray: true,
   backgroundShell: true,
+  screenshotHotkey: true,
   // UA-D7: `automatic` IS today's behavior, and that is why it is the default —
   // UA-6 must be invisible to a field nobody has touched a switch in.
   syncPosture: "automatic",
@@ -19,6 +20,7 @@ export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
 export function effectiveAppPreferences(values: Readonly<Record<string, unknown>>): AppPreferences {
   const showTray = values[APP_PREFERENCE_KEYS.SHOW_TRAY];
   const backgroundShell = values[APP_PREFERENCE_KEYS.BACKGROUND_SHELL];
+  const screenshotHotkey = values[APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY];
   const posture = MeshSyncPosture.safeParse(values[APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE]);
   return {
     showTray: typeof showTray === "boolean" ? showTray : DEFAULT_APP_PREFERENCES.showTray,
@@ -27,6 +29,10 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
         ? backgroundShell
         : DEFAULT_APP_PREFERENCES.backgroundShell,
     syncPosture: posture.success ? posture.data : DEFAULT_APP_PREFERENCES.syncPosture,
+    screenshotHotkey:
+      typeof screenshotHotkey === "boolean"
+        ? screenshotHotkey
+        : DEFAULT_APP_PREFERENCES.screenshotHotkey,
   };
 }
 

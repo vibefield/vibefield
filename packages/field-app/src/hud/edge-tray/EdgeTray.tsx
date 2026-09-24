@@ -33,7 +33,7 @@ const BUMP_MS = 420;
 
 export type ClipboardTrayHost = Pick<
   FieldHost,
-  "screenshotCapture" | "onScreenshotResult" | "screenshotStillUrl"
+  "screenshotCapture" | "onScreenshotResult" | "screenshotStillUrl" | "screenshotPreview"
 >;
 
 /** The honest word for each answer the door can give. */
@@ -131,6 +131,7 @@ export function ClipboardTray({
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<ScreenshotCaptureResult | null>(null);
   const [bumped, setBumped] = useState(false);
+  const [previewNotice, setPreviewNotice] = useState<string | null>(null);
   const [broken, setBroken] = useState<ReadonlySet<string>>(() => new Set());
   const nubRef = useRef<HTMLButtonElement | null>(null);
   const openTimer = useRef<number | null>(null);
@@ -238,7 +239,7 @@ export function ClipboardTray({
         land();
         return;
       }
-      const from = flightStart(result.bounds, window);
+      const from = flightStart(result.screenBounds, window);
       void flyToNotch({
         from,
         to: { left: to.left, top: to.top, width: to.width, height: to.height },
@@ -280,9 +281,16 @@ export function ClipboardTray({
   const look = useCallback(
     (id: string) => {
       const item = items.find((candidate) => candidate.id === id);
-      const url = item === undefined ? null : (host.screenshotStillUrl?.(item.path) ?? null);
-      if (url === null) return;
-      window.open(url, "_blank", "noopener");
+      if (item === undefined) return;
+      if (host.screenshotPreview === undefined) {
+        setPreviewNotice("Preview is available in the desktop app.");
+        return;
+      }
+      setPreviewNotice(null);
+      void host.screenshotPreview(item.path).then(
+        (result) => setPreviewNotice(result.ok ? null : result.message),
+        () => setPreviewNotice("The screenshot preview could not be opened. Try again."),
+      );
     },
     [host, items],
   );
@@ -317,6 +325,7 @@ export function ClipboardTray({
       bumped={bumped}
       hint="Clipboard — hover to open, click to keep open (⌘⇧V)"
       emptyWord="nothing here yet — take a screenshot and it lands here"
+      notice={previewNotice}
       nubRef={nubRef}
       onNubClick={() => pin(!pinned)}
       onPointerEnter={onPointerEnter}

@@ -38,6 +38,18 @@ const byId = (items: ReturnType<typeof buildTrayMenu>, id: string) => {
 };
 
 describe("buildTrayMenu", () => {
+  it("offers a screenshot when a helper exists, and releases the action while quitting", () => {
+    const takeScreenshot = vi.fn();
+    const a = { ...actions(), takeScreenshot };
+    byId(buildTrayMenu(snapshot(), a, "darwin"), "screenshot").click?.();
+    expect(takeScreenshot).toHaveBeenCalledTimes(1);
+    expect(
+      byId(buildTrayMenu(snapshot({ quitting: true }), a, "darwin"), "screenshot").click,
+    ).toBeUndefined();
+    expect(
+      buildTrayMenu(snapshot(), actions(), "darwin").some((item) => item.id === "screenshot"),
+    ).toBe(false);
+  });
   it("projects the exact Windows/Linux ordering and check states", () => {
     const menu = buildTrayMenu(snapshot(), actions(), "win32");
     expect(menu.map((item) => item.id ?? item.type)).toEqual([

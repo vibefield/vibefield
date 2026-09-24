@@ -62,7 +62,8 @@ stdout line is a protocol violation the host kills the helper for.
 pre-overlay timer. On Windows `width`/`height` are PNG pixels, `scale` is the
 monitor's effective DPI ÷ 96, `displayId` is the number parsed out of
 `\\.\DISPLAYN` (else 1-based enumeration order), and `bounds` is the monitor's
-`rcMonitor` in virtual-screen **physical** pixels — an origin may be negative.
+selected rectangle in virtual-screen **physical** pixels (the whole monitor for
+`--capture-test`) — an origin may be negative.
 `bounds` is informational, never authority.
 
 The four error codes and where they come from:

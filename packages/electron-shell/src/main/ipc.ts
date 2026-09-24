@@ -3,6 +3,7 @@ import {
   GodviewState as GodviewStateSchema,
   IPC_CHANNELS,
   type ScreenshotCaptureResult,
+  ScreenshotPreviewResult,
   type UserRecord,
   UsersCreateParams,
   type UsersListSnapshot,
@@ -16,6 +17,8 @@ import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap
 import type { GodviewRegistry } from "./godview";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
+import { createScreenshotPreviewDoor } from "./screenshot-preview";
+import type { StillResolution } from "./still-protocol";
 import type { WindowRegistry } from "./window-policy";
 
 // The closed IPC surface, main side (ESR §6.2–6.3): handlers wiring pure policy
@@ -217,4 +220,19 @@ export function registerScreenshotCapture(
     },
   });
   ipcMain.handle(IPC_CHANNELS.screenshotCapture, (event, raw: unknown) => door(event.sender, raw));
+}
+
+export function registerScreenshotPreview(
+  registry: WindowRegistry,
+  resolve: (url: string) => StillResolution,
+  preview: (sender: WebContents, path: string) => Promise<void>,
+): void {
+  const door = createScreenshotPreviewDoor({
+    owns: (sender: WebContents) => registry.owns(sender),
+    resolve,
+    preview,
+  });
+  ipcMain.handle(IPC_CHANNELS.screenshotPreview, async (event, raw: unknown) =>
+    ScreenshotPreviewResult.parse(await door(event.sender, raw)),
+  );
 }

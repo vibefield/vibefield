@@ -81,8 +81,36 @@ describe("DesktopSection", () => {
 
   it("hides the inapplicable close behavior on macOS", async () => {
     await mount(client({ showTray: true, backgroundShell: true }), "darwin");
-    expect(container?.querySelectorAll('[role="switch"]')).toHaveLength(1);
+    expect(container?.querySelectorAll('[role="switch"]')).toHaveLength(2);
     expect(container?.textContent).not.toContain("Keep running after window closes");
+  });
+
+  it("defaults the global shortcut on, exposes conflicts, and writes its preference", async () => {
+    const fieldd = client({ showTray: true, backgroundShell: true });
+    await mount(fieldd, "darwin", {
+      tray: {
+        availability: "available",
+        placement: "visible",
+        backgroundShellEffective: false,
+        issue: null,
+      },
+      screenshotHotkey: {
+        status: "conflict",
+        accelerator: "Control+Command+A",
+        message: "Another app is using this shortcut.",
+      },
+    });
+    const toggle = container?.querySelector<HTMLButtonElement>(
+      '[aria-label="Global screenshot shortcut"]',
+    );
+    expect(toggle?.getAttribute("aria-checked")).toBe("true");
+    expect(container?.textContent).toContain("any app or display");
+    expect(container?.textContent).toContain("Another app");
+    await act(async () => toggle?.click());
+    expect(fieldd.request).toHaveBeenCalledWith("storage.appPreferences.set", {
+      key: "desktop.screenshotHotkey",
+      value: false,
+    });
   });
 
   it("disables background residency when the status item is hidden", async () => {

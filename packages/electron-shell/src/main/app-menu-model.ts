@@ -87,13 +87,9 @@ export const GODVIEW_ITEM_ID = "view-godview";
 
 export const SCREENSHOT_ITEM_ID = "view-screenshot";
 
-/** The prototype's chord, kept: it is WeChat's own on both platforms, which is
- * the muscle memory the tool exists to serve. An APPLICATION accelerator, live
- * only while VibeField is focused — a global shortcut would take the chord from
- * every other app for as long as VibeField runs, and that wants a preference
- * before it wants a registration (SNAP-1). Collision check, 2026-09-09: nothing
- * in ghostty, macOS or this shell binds ⌃⌘A (⌘⇧3/4/5 are the system's); on
- * Windows Alt+A is free because no menu title here carries an `&A` mnemonic. */
+/** One spelling for the menu, the local interceptor and SNAP-1's global
+ * registration. The global chord defaults on and can be disabled in Desktop
+ * settings; this application accelerator remains available in that case. */
 export function screenshotAccelerator(platform: MenuPlatform): string {
   return platform === "darwin" ? "Control+Command+A" : "Alt+A";
 }

@@ -139,15 +139,15 @@ const defaultStream = (path: string): ReadableStream<Uint8Array> =>
   Readable.toWeb(createReadStream(path)) as unknown as ReadableStream<Uint8Array>;
 
 /**
- * Answer one request. Exported for the suite, which drives it with injected
- * filesystem seams; `installStillProtocol` is the only production caller.
+ * Resolve one retained still with the same filesystem authority for both the
+ * image protocol and native preview. Filesystem seams are injectable in tests.
  */
-export function serveStillRequest(requestUrl: string, options: StillProtocolOptions): Response {
+export function resolveStillFile(
+  requestUrl: string,
+  options: Pick<StillProtocolOptions, "retained" | "realpath">,
+): StillResolution {
   const resolution = resolveStill(requestUrl, options.retained());
-  if (!resolution.ok) {
-    options.onRefusal?.(resolution.reason, requestUrl);
-    return refusalResponse();
-  }
+  if (!resolution.ok) return resolution;
   const realpath = options.realpath ?? realpathSync;
   let realFile: string;
   let realDir: string;
@@ -155,8 +155,7 @@ export function serveStillRequest(requestUrl: string, options: StillProtocolOpti
     realFile = realpath(resolution.path);
     realDir = realpath(dirname(resolution.path));
   } catch {
-    options.onRefusal?.("missing-file", requestUrl);
-    return refusalResponse();
+    return { ok: false, reason: "missing-file" };
   }
   // The helper wrote a regular file at this path. If the FINAL component now
   // resolves elsewhere, something replaced it with a symlink between the write
@@ -164,10 +163,18 @@ export function serveStillRequest(requestUrl: string, options: StillProtocolOpti
   // The directory chain may resolve freely: macOS's own temp directory sits
   // under `/var`, which is itself a symlink to `/private/var`.
   if (realFile !== join(realDir, resolution.name)) {
-    options.onRefusal?.("not-a-file", requestUrl);
+    return { ok: false, reason: "not-a-file" };
+  }
+  return { ...resolution, path: realFile };
+}
+
+export function serveStillRequest(requestUrl: string, options: StillProtocolOptions): Response {
+  const resolution = resolveStillFile(requestUrl, options);
+  if (!resolution.ok) {
+    options.onRefusal?.(resolution.reason, requestUrl);
     return refusalResponse();
   }
-  const body = (options.openStream ?? defaultStream)(realFile);
+  const body = (options.openStream ?? defaultStream)(resolution.path);
   return new Response(body, {
     status: 200,
     headers: { ...SECURITY_HEADERS, "Content-Type": "image/png" },

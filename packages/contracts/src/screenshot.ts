@@ -171,6 +171,10 @@ export const ScreenshotCaptureOk = z
     scale: ScreenshotScale,
     displayId: ScreenshotDisplayId,
     bounds: ScreenshotBounds,
+    /** Shell-normalized selection in top-left, global screen DIP coordinates.
+     * Optional for older hosts or a display removed during capture. Renderers
+     * must never interpret the helper's platform-native `bounds` as these. */
+    screenBounds: ScreenshotBounds.optional(),
   })
   .passthrough();
 export type ScreenshotCaptureOk = z.infer<typeof ScreenshotCaptureOk>;
@@ -222,3 +226,33 @@ export function screenshotStillUrl(path: string): string {
   return `${SCREENSHOT_STILL_ORIGIN}/${encodeURIComponent(screenshotStillBasename(path))}`;
 }
 export type ScreenshotCaptureRequest = z.infer<typeof ScreenshotCaptureRequest>;
+
+/** Actual OS registration, separate from the user's global-hotkey preference. */
+export const ScreenshotShortcutState = z
+  .object({
+    status: z.enum(["disabled", "registered", "unavailable", "conflict"]),
+    accelerator: z.string().min(1),
+    message: z.string().min(1).max(1024).nullable(),
+  })
+  .passthrough();
+export type ScreenshotShortcutState = z.infer<typeof ScreenshotShortcutState>;
+
+/** Quick Look names only a retained PNG, never a renderer-supplied disk path. */
+export const ScreenshotPreviewRequest = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .max(SCREENSHOT_LIMITS.MAX_PATH_CHARS)
+      .refine(
+        (name) => hasNoControlCharacters(name) && !/[\\/]/.test(name) && /\.png$/i.test(name),
+        "expected a PNG basename",
+      ),
+  })
+  .passthrough();
+export type ScreenshotPreviewRequest = z.infer<typeof ScreenshotPreviewRequest>;
+export const ScreenshotPreviewResult = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true) }).passthrough(),
+  z.object({ ok: z.literal(false), message: ScreenshotMessage }).passthrough(),
+]);
+export type ScreenshotPreviewResult = z.infer<typeof ScreenshotPreviewResult>;

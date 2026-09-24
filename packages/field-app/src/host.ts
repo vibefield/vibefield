@@ -12,6 +12,7 @@ import type {
   GodviewState,
   RendererParticipantIdentity,
   ScreenshotCaptureResult,
+  ScreenshotPreviewResult,
   ShellCommand,
   ShellPlatform,
   WindowTerminalBootstrap,
@@ -188,8 +189,7 @@ export interface FieldHost {
    * offers the capture renders disabled and says so. The answer is the
    * contract's own result — a still on disk (and on the clipboard), a cancel,
    * or a typed error such as `helper-missing` or `permission-denied`. How the
-   * still reaches the canvas is the consumer slice's decision (SNAP-D4); no
-   * product surface calls this yet. */
+   * still reaches the canvas is a later slice; the clipboard tray calls this. */
   readonly screenshotCapture?: () => Promise<ScreenshotCaptureResult>;
   /** SNAP-3 — the answer to a capture MAIN ran on the page's behalf (the View
    * menu's item, its accelerator). A capture this page asked for through
@@ -202,6 +202,8 @@ export interface FieldHost {
    * the shell leaves this undefined; a tile then renders without its image
    * and says so, rather than pretending. */
   readonly screenshotStillUrl?: (path: string) => string;
+  /** Preview a retained still through the native host; no window navigation. */
+  readonly screenshotPreview?: (path: string) => Promise<ScreenshotPreviewResult>;
   getConnection(): Promise<FieldConnection>;
   onPrepareClose(handler: (requestId: string) => void): () => void;
   completeClose(result: { requestId: string; ok: boolean; error?: string }): void;

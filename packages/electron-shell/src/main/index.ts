@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { accessSync, constants as fsConstants, readFileSync } from "node:fs";
 import { homedir, release, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -36,8 +36,10 @@ import {
   clipboard,
   crashReporter,
   dialog,
+  globalShortcut,
   MessageChannelMain,
   nativeImage,
+  screen,
   session,
   shell,
 } from "electron";
@@ -57,6 +59,7 @@ import { GodviewRegistry, installGodviewDoubleShift } from "./godview";
 import {
   registerGodviewToggle,
   registerScreenshotCapture,
+  registerScreenshotPreview,
   registerUsersRoster,
   registerUsersUpdate,
   registerWindowBootstrap,
@@ -90,7 +93,9 @@ import {
   resolvePackagedResources,
 } from "./resources";
 import { registerShellSchemes } from "./scheme-registration";
+import { withScreenshotScreenBounds } from "./screenshot-bounds";
 import { installScreenshotChord } from "./screenshot-chord";
+import { ScreenshotShortcutController } from "./screenshot-shortcut";
 import {
   installCsp,
   installNavigationPolicy,
@@ -100,7 +105,7 @@ import {
 import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
 import { RecoveringShellProvider } from "./shell-provider";
-import { installStillProtocol } from "./still-protocol";
+import { installStillProtocol, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
@@ -166,6 +171,7 @@ let godviewStates: GodviewRegistry | null = null;
 // SNAP-D1 — the one screenshot tool per shell boot; null before the windowed
 // modes construct it and after teardown (the door answers `disposed`).
 let screenshotTool: ScreenshotTool | null = null;
+let screenshotShortcut: ScreenshotShortcutController | null = null;
 let primaryWindowOpener: (() => Promise<Electron.BrowserWindow>) | null = null;
 const shellDisposers = new Set<() => void>();
 const getSupervisor = () => supervisor;
@@ -200,6 +206,8 @@ function disposeShellState(): void {
   // that asked for it, and its capture settles `disposed` rather than hanging.
   screenshotTool?.dispose();
   screenshotTool = null;
+  screenshotShortcut?.dispose();
+  screenshotShortcut = null;
   primaryWindowOpener = null;
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
@@ -736,6 +744,7 @@ async function main(
       showTray: parsed.data.showTray,
       backgroundShell: parsed.data.backgroundShell,
     });
+    screenshotShortcut?.setEnabled(parsed.data.screenshotHotkey);
     enforceBackgroundEscapeHatch();
   };
   const applyEvidenceHealth = (raw: unknown): void => {
@@ -1163,6 +1172,15 @@ async function main(
   // The helper's path is the §4.3 resource contract's (null = no helper for
   // this platform, and the tool says so); its lifecycle rides the desktop log.
   const screenshotLogger = logger.child({ component: "screenshot" });
+  let screenshotHelperAvailable = false;
+  if (resources.screenshotHelperPath !== null) {
+    try {
+      accessSync(resources.screenshotHelperPath, fsConstants.X_OK);
+      screenshotHelperAvailable = true;
+    } catch {
+      // A peripheral is optional: leave the menu visible but disabled.
+    }
+  }
   screenshotTool = new ScreenshotTool({
     helperPath: resources.screenshotHelperPath,
     onEvent: (event) => {
@@ -1179,51 +1197,106 @@ async function main(
       }
     },
   });
-  const captureScreenshot = (): Promise<ScreenshotCaptureResult> =>
-    screenshotTool?.capture() ??
-    Promise.resolve({
-      status: "error",
-      code: "disposed",
-      message: "the screenshot tool is not available",
-    });
+  const captureScreenshot = async (): Promise<ScreenshotCaptureResult> => {
+    const result = await (screenshotTool?.capture() ??
+      Promise.resolve({
+        status: "error",
+        code: "disposed",
+        message: "the screenshot tool is not available",
+      } as const));
+    return withScreenshotScreenBounds(result, process.platform, screen.getAllDisplays(), (bounds) =>
+      screen.screenToDipRect(null, bounds),
+    );
+  };
   registerScreenshotCapture(
     registry,
     captureScreenshot,
     logger.child({ component: "ipc.screenshot" }),
   );
-  /** The menu item's action: the same capture the door runs, plus the one face
-   * main owes the user on this path — a macOS Screen Recording refusal names
-   * the setting to flip, because the helper cannot open it and no page is
-   * watching a menu-triggered capture. Everything else is logged; on `ok` the
-   * clipboard already holds the still (SNAP-D4). */
+  registerScreenshotPreview(
+    registry,
+    (url) => resolveStillFile(url, { retained: () => screenshotTool?.retainedStills ?? [] }),
+    async (sender, path) => {
+      if (process.platform === "darwin") {
+        const window = BrowserWindow.fromWebContents(sender);
+        if (window === null || window.isDestroyed()) throw new Error("preview window closed");
+        window.previewFile(path, "Screenshot");
+      } else {
+        const error = await shell.openPath(path);
+        if (error !== "") throw new Error(error);
+      }
+    },
+  );
+  // A global capture can finish with every product window closed. Keep the
+  // latest result for the next field, without revealing it before the freeze.
+  let pendingScreenshotResult: ScreenshotCaptureResult | null = null;
   const takeScreenshot = (): void => {
-    void captureScreenshot().then(async (result) => {
-      // SNAP-3 — the page that will hold the still is told, whichever door
-      // asked: the IPC door answers its own caller, and this path had none.
-      const target = BrowserWindow.getFocusedWindow() ?? registry.primary();
-      if (target !== null && !target.isDestroyed()) {
-        target.webContents.send(IPC_CHANNELS.screenshotResult, result);
-      }
-      if (result.status !== "error" || result.code !== "permission-denied") return;
-      const darwin = process.platform === "darwin";
-      const { response } = await dialog.showMessageBox({
-        type: "warning",
-        title: "Screen Recording",
-        message: "Screen Recording is off for VibeField.",
-        detail: darwin
-          ? "Turn it on in System Settings › Privacy & Security › Screen Recording, then take the screenshot again."
-          : result.message,
-        buttons: darwin ? ["Open Settings", "OK"] : ["OK"],
-        defaultId: 0,
-        cancelId: darwin ? 1 : 0,
-      });
-      if (darwin && response === 0) {
-        await shell.openExternal(
-          "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+    if (screenshotTool?.busy) return;
+    const focused = BrowserWindow.getFocusedWindow();
+    const recipient =
+      focused !== null && registry.owns(focused.webContents) ? focused : registry.primary();
+    void captureScreenshot()
+      .then(async (result) => {
+        // SNAP-3 — the page that will hold the still is told, whichever door
+        // asked: the IPC door answers its own caller, and this path had none.
+        const target =
+          recipient !== null && !recipient.isDestroyed() ? recipient : registry.primary();
+        if (target !== null && !target.isDestroyed()) {
+          target.webContents.send(IPC_CHANNELS.screenshotResult, result);
+        } else {
+          pendingScreenshotResult = result;
+        }
+        if (result.status !== "error" || result.code !== "permission-denied") return;
+        const darwin = process.platform === "darwin";
+        const { response } = await dialog.showMessageBox({
+          type: "warning",
+          title: "Screen Recording",
+          message: "Screen Recording is off for VibeField.",
+          detail: darwin
+            ? "Turn it on in System Settings › Privacy & Security › Screen Recording, then take the screenshot again."
+            : result.message,
+          buttons: darwin ? ["Open Settings", "OK"] : ["OK"],
+          defaultId: 0,
+          cancelId: darwin ? 1 : 0,
+        });
+        if (darwin && response === 0) {
+          await shell.openExternal(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+          );
+        }
+      })
+      .catch((error) => {
+        screenshotLogger.error(
+          "screenshot.capture.failed",
+          "Screenshot capture could not finish",
+          error,
         );
-      }
-    });
+      });
   };
+  screenshotShortcut = new ScreenshotShortcutController({
+    port: globalShortcut,
+    platform: process.platform,
+    helperAvailable: screenshotHelperAvailable,
+    capture: () => {
+      screenshotLogger.info(
+        "screenshot.shortcut.pressed",
+        "The OS delivered the global screenshot shortcut",
+      );
+      takeScreenshot();
+    },
+    onChanged: (state) => {
+      screenshotLogger.info(
+        "screenshot.shortcut.changed",
+        "Screenshot shortcut registration changed",
+        {
+          status: state.status,
+          accelerator: state.accelerator,
+          message: state.message,
+        },
+      );
+      if (trayController !== null) publishDesktopState(trayController.desktopState());
+    },
+  });
   /** The accelerator's and the menu item's one action. The focused window is
    * the subject — that is what "toggle" means from a menu — falling back to the
    * primary window, which is the only one v1 has and the one a hidden harness
@@ -1263,7 +1336,7 @@ async function main(
       toggleGodview,
       closeWindow,
       // SNAP-D5: no helper for this platform ⇒ the item stays, disabled.
-      ...(resources.screenshotHelperPath === null ? {} : { takeScreenshot }),
+      ...(screenshotHelperAvailable ? { takeScreenshot } : {}),
     });
   }
 
@@ -1467,7 +1540,10 @@ async function main(
 
   let latestDesktopState: DesktopShellState | null = null;
   const publishDesktopState = (raw: DesktopShellState): void => {
-    const state = DesktopShellStateSchema.parse(raw);
+    const state = DesktopShellStateSchema.parse({
+      ...raw,
+      ...(screenshotShortcut === null ? {} : { screenshotHotkey: screenshotShortcut.current() }),
+    });
     latestDesktopState = state;
     const window = registry.primary();
     if (window !== null && !window.isDestroyed()) {
@@ -1506,7 +1582,7 @@ async function main(
           installGodviewDoubleShift(window.webContents, toggleGodview);
           // ⌃⌘A — above the page too (SNAP-3): the canvas keymap's ⌘A select-all
           // swallows the menu accelerator, so the chord is taken here first.
-          if (resources.screenshotHelperPath !== null) {
+          if (screenshotHelperAvailable) {
             installScreenshotChord(window.webContents, takeScreenshot);
           }
           installNavigationPolicy(window, MODE);
@@ -1522,6 +1598,10 @@ async function main(
             MODE,
             DEVELOPMENT_EXTENSION?.productRendererUrl(VITE_URL) ?? VITE_URL,
           );
+          if (pendingScreenshotResult !== null) {
+            window.webContents.send(IPC_CHANNELS.screenshotResult, pendingScreenshotResult);
+            pendingScreenshotResult = null;
+          }
           await DEVELOPMENT_EXTENSION?.onProductWindowReady({
             productWindow: window,
             rendererBaseUrl: VITE_URL,
@@ -1591,6 +1671,7 @@ async function main(
       },
       openSettings: () => revealSurface("open-settings"),
       openDiagnostics: () => revealSurface("open-diagnostics"),
+      ...(screenshotHelperAvailable ? { takeScreenshot: async () => takeScreenshot() } : {}),
       setBackgroundShell: (enabled) =>
         setAppPreference(APP_PREFERENCE_KEYS.BACKGROUND_SHELL, enabled),
       setTrayVisible: (enabled) => setAppPreference(APP_PREFERENCE_KEYS.SHOW_TRAY, enabled),

@@ -111,6 +111,10 @@ describe("the fly-in's start", () => {
     const start = flightStart({ x: -5000, y: 200, width: 600, height: 375 }, win);
     expect(start).toEqual({ left: (1180 - 120) / 2, top: (780 - 75) / 2, width: 120, height: 75 });
   });
+
+  it("uses the centre when an older host cannot supply normalized bounds", () => {
+    expect(flightStart(undefined, win)).toEqual({ left: 530, top: 352.5, width: 120, height: 75 });
+  });
 });
 
 describe("the clipboard store", () => {
@@ -234,6 +238,22 @@ describe("EdgeTrayView", () => {
 });
 
 describe("ClipboardTray — the grammar", () => {
+  it("opens Quick Look through the host instead of a denied window.open, and shows a refusal", async () => {
+    const store = new ClipboardStore();
+    store.addCapture(OK);
+    const preview = vi.fn(async () => ({
+      ok: false as const,
+      message: "The still is no longer available.",
+    }));
+    const el = mount(
+      <ClipboardTray store={store} host={fakeHost({ screenshotPreview: preview })} />,
+    );
+    await act(async () => {
+      (el.querySelector('[aria-label="Quick Look"]') as HTMLButtonElement).click();
+    });
+    expect(preview).toHaveBeenCalledWith(OK.path);
+    expect(el.querySelector('[role="status"]')?.textContent).toContain("no longer available");
+  });
   it("opens after the hover delay, closes after the grace, and a click pins", () => {
     vi.useFakeTimers();
     const el = mount(<ClipboardTray store={new ClipboardStore()} host={fakeHost()} />);

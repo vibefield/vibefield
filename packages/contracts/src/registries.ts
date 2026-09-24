@@ -748,4 +748,6 @@ export const IPC_CHANNELS = {
    * answer; this is how the other door stops being invisible to the page that
    * will hold the still (SNAP-3, the clipboard tray). */
   screenshotResult: "vibefield:screenshot:result",
+  /** A registered product window asks main to preview one retained still. */
+  screenshotPreview: "vibefield:screenshot:preview",
 } as const;

@@ -12,6 +12,7 @@ import {
   SurfaceSourceDescriptorV1,
 } from "./live-surfaces";
 import { PluginId } from "./plugins";
+import { ScreenshotShortcutState } from "./screenshot";
 
 // Shell-boundary contracts (ESR spec §6.1): the shapes that cross the Electron
 // seam — the daemon's on-disk discovery descriptor and the closed contextBridge
@@ -157,6 +158,7 @@ export type ShellPlatform = z.infer<typeof ShellPlatform>;
  * this state describes whether the native shell actually realized it. */
 export const DesktopShellState = z
   .object({
+    screenshotHotkey: ScreenshotShortcutState.optional(),
     tray: z
       .object({
         availability: z.enum(["available", "hidden", "unavailable"]),
@@ -188,12 +190,14 @@ export type DesktopShellState = z.infer<typeof DesktopShellState>;
 export const APP_PREFERENCE_KEYS = {
   SHOW_TRAY: "desktop.showTray",
   BACKGROUND_SHELL: "desktop.backgroundShell",
+  SCREENSHOT_HOTKEY: "desktop.screenshotHotkey",
   MESH_SYNC_POSTURE: "mesh.syncPosture",
 } as const;
 
 export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.SHOW_TRAY,
   APP_PREFERENCE_KEYS.BACKGROUND_SHELL,
+  APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY,
   APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
@@ -209,6 +213,8 @@ export const AppPreferences = z
   .object({
     showTray: z.boolean(),
     backgroundShell: z.boolean(),
+    // SNAP-1: global by default, including snapshots from an older daemon.
+    screenshotHotkey: z.boolean().default(true),
     syncPosture: MeshSyncPosture,
   })
   .passthrough();
@@ -221,7 +227,14 @@ export const AppPreferenceSetParams = z
     // A union rather than `z.any()` — the setter still refuses what no key can hold.
     value: z.union([z.boolean(), MeshSyncPosture]),
   })
-  .passthrough();
+  .passthrough()
+  .refine(
+    ({ key, value }) =>
+      key === APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE
+        ? typeof value === "string"
+        : typeof value === "boolean",
+    "preference value does not match its key",
+  );
 export type AppPreferenceSetParams = z.infer<typeof AppPreferenceSetParams>;
 
 // AH-3 — the static Electron-main provider. These are ProductAPI contracts,

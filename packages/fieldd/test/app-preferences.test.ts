@@ -18,7 +18,23 @@ describe("app preferences", () => {
         [APP_PREFERENCE_KEYS.BACKGROUND_SHELL]: "not-a-boolean",
         futureKey: 42,
       }),
-    ).toEqual({ showTray: false, backgroundShell: true, syncPosture: "automatic" });
+    ).toEqual({
+      showTray: false,
+      backgroundShell: true,
+      screenshotHotkey: true,
+      syncPosture: "automatic",
+    });
+  });
+
+  it("enables the global screenshot chord by default and respects an explicit opt-out", () => {
+    expect(effectiveAppPreferences({}).screenshotHotkey).toBe(true);
+    expect(
+      effectiveAppPreferences({ [APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY]: false }).screenshotHotkey,
+    ).toBe(false);
+    expect(
+      effectiveAppPreferences({ [APP_PREFERENCE_KEYS.SCREENSHOT_HOTKEY]: "invalid" })
+        .screenshotHotkey,
+    ).toBe(true);
   });
 
   it("reads the sync posture, and refuses a word that is not one", () => {

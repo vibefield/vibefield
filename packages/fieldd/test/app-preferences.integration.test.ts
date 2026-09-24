@@ -55,6 +55,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(sub.snapshot).toEqual({
       showTray: true,
       backgroundShell: true,
+      screenshotHotkey: true,
       syncPosture: "automatic",
     });
 
@@ -73,6 +74,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(await shell.call("storage.appPreferences.get", {})).toEqual({
       showTray: false,
       backgroundShell: true,
+      screenshotHotkey: true,
       syncPosture: "automatic",
     });
 
@@ -81,7 +83,24 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(await renderer.call("storage.appPreferences.get", {})).toEqual({
       showTray: false,
       backgroundShell: true,
+      screenshotHotkey: true,
       syncPosture: "automatic",
+    });
+    await renderer.call("storage.appPreferences.set", {
+      key: "desktop.screenshotHotkey",
+      value: false,
+    });
+    await until(() =>
+      shell.notifications.some(
+        (notification) =>
+          notification.method === "storage.appPreferences.delta" &&
+          notification.params.subId === sub.subId &&
+          (notification.params.payload as { screenshotHotkey?: boolean } | undefined)
+            ?.screenshotHotkey === false,
+      ),
+    );
+    expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({
+      screenshotHotkey: false,
     });
   });
 

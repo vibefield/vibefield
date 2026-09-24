@@ -44,6 +44,7 @@ export interface EdgeTraySnap {
 }
 
 export interface EdgeTrayViewProps {
+  readonly notice?: string | null;
   readonly side: EdgeTraySide;
   readonly label: string;
   readonly open: boolean;
@@ -285,6 +286,11 @@ export function EdgeTrayView(props: EdgeTrayViewProps): ReactElement {
             ))}
             {props.items.length === 0 && (
               <div className="vf-edge-tray__empty">{props.emptyWord}</div>
+            )}
+            {props.notice != null && (
+              <div role="status" className="vf-edge-tray__empty">
+                {props.notice}
+              </div>
             )}
             {props.snap !== null && (
               <button

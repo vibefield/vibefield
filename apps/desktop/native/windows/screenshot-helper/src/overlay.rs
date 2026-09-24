@@ -463,8 +463,8 @@ fn confirm_overlay(overlay: &Overlay) -> Result<OverlayOutcome, String> {
         display_id: overlay.snapshot.display_id,
         scale: overlay.snapshot.scale,
         bounds: HostBounds {
-            x: selection.x,
-            y: selection.y,
+            x: selection.x + overlay.snapshot.x as f64,
+            y: selection.y + overlay.snapshot.y as f64,
             width: selection.width,
             height: selection.height,
         },

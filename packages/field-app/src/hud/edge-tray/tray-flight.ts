@@ -29,16 +29,18 @@ const GHOST_START_WIDTH = 120;
 export const FLIGHT_VISIBILITY_WAIT_MS = 1500;
 
 /** Where the ghost starts: the capture's bounds mapped into this window when
- * they fall inside it, else the window's centre. Bounds are top-left screen
- * points (the helper converts from Cocoa); the window's own screen origin maps
- * them. PURE. */
+ * they fall inside it, else the window's centre. Only the shell's normalized
+ * top-left screen DIP bounds belong here; a missing mapping uses the centre.
+ * The helper's native bounds must never be used as a fallback. PURE. */
 export function flightStart(
-  bounds: {
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  },
+  bounds:
+    | {
+        readonly x: number;
+        readonly y: number;
+        readonly width: number;
+        readonly height: number;
+      }
+    | undefined,
   window: {
     readonly screenX: number;
     readonly screenY: number;
@@ -46,16 +48,17 @@ export function flightStart(
     readonly innerHeight: number;
   },
 ): FlightRect {
-  const left = bounds.x - window.screenX;
-  const top = bounds.y - window.screenY;
+  const left = (bounds?.x ?? 0) - window.screenX;
+  const top = (bounds?.y ?? 0) - window.screenY;
   const inside =
+    bounds !== undefined &&
     bounds.width > 0 &&
     bounds.height > 0 &&
     left + bounds.width > 0 &&
     top + bounds.height > 0 &&
     left < window.innerWidth &&
     top < window.innerHeight;
-  if (inside) {
+  if (inside && bounds !== undefined) {
     const scale = Math.min(1, GHOST_START_WIDTH / bounds.width);
     const width = bounds.width * scale;
     const height = bounds.height * scale;

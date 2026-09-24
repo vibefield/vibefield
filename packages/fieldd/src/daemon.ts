@@ -3070,7 +3070,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell (boolean) | mesh.syncPosture (automatic|opt-in) }",
+          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey (boolean) | mesh.syncPosture (automatic|opt-in) }",
           false,
         );
       }

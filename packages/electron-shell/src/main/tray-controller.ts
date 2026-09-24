@@ -72,6 +72,7 @@ export interface TrayControllerActions {
   openPrimaryWindow(): Promise<void>;
   openSettings(): Promise<void>;
   openDiagnostics(): Promise<void>;
+  takeScreenshot?: () => Promise<void>;
   checkForUpdates?: () => Promise<void>;
   restartToUpdate?: () => Promise<void>;
   setBackgroundShell(enabled: boolean): Promise<void>;
@@ -397,6 +398,12 @@ export class TrayController {
       openSettings: () => this.runAction("openSettings", this.options.actions.openSettings),
       openDiagnostics: () =>
         this.runAction("openDiagnostics", this.options.actions.openDiagnostics),
+      ...(this.options.actions.takeScreenshot === undefined
+        ? {}
+        : {
+            takeScreenshot: () =>
+              this.runAction("takeScreenshot", this.options.actions.takeScreenshot!),
+          }),
       ...(this.options.actions.checkForUpdates !== undefined
         ? {
             checkForUpdates: () =>

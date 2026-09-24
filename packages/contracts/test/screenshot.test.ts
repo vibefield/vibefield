@@ -119,6 +119,19 @@ describe("ScreenshotHelperEvent — the four lines a helper may print", () => {
 });
 
 describe("ScreenshotCaptureResult — the shell's answer", () => {
+  it("accepts explicit normalized screen bounds, and refuses a non-finite mapping", () => {
+    const { v: _v, ...still } = OK;
+    const screenBounds = { x: -1920, y: -200, width: 5, height: 4 };
+    expect(ScreenshotCaptureResult.parse({ ...still, screenBounds })).toMatchObject({
+      screenBounds,
+    });
+    expect(
+      ScreenshotCaptureResult.safeParse({
+        ...still,
+        screenBounds: { ...screenBounds, x: Infinity },
+      }).success,
+    ).toBe(false);
+  });
   it("is the helper's line minus the version, or a typed host error", () => {
     const { v: _v, ...still } = OK;
     expect(ScreenshotCaptureResult.parse(still)).toMatchObject({ status: "ok", width: 10 });
