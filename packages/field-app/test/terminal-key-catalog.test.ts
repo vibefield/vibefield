@@ -19,6 +19,7 @@ import {
   KEY_COUNTS,
   KEY_ENTRIES,
   KEY_GROUPS,
+  keyNote,
 } from "../src/panels/terminal/ghostty-key-groups";
 import { GHOSTTY_KEYS, GHOSTTY_KEYS_SOURCE } from "../src/panels/terminal/ghostty-keys.generated";
 
@@ -38,6 +39,25 @@ describe("the key reference", () => {
     expect(KEY_COUNTS.applied + KEY_COUNTS.parsed + KEY_COUNTS.unsupported).toBe(KEY_COUNTS.known);
     expect(KEY_BY_NAME.get("palette")?.support).toBe("applied");
     expect(KEY_BY_NAME.get("font-size")?.support).toBe("parsed");
+  });
+
+  it("GT-8a: turns a key's note with the support the pinned loader reports", () => {
+    // today's pin recognizes link-url and ignores it; the pin that applies it
+    // turns the note too, so the reference never says both
+    expect(keyNote("link-url", "unsupported")?.timing).toBe("ignored");
+    expect(keyNote("link-url", "applied")).toEqual({
+      timing: "live",
+      note: expect.stringContaining("⌘-click"),
+    });
+    // a key with one note keeps it whatever the support, and an unknown has none
+    expect(keyNote("palette", "applied")).toEqual(keyNote("palette", "unsupported"));
+    expect(keyNote("no-such-key", "applied")).toBeNull();
+    const linkUrl = KEY_BY_NAME.get("link-url");
+    expect(linkUrl?.note).toEqual(keyNote("link-url", linkUrl?.support ?? "unsupported"));
+    // and nothing in the reference says Applied beside "ignored"
+    for (const entry of KEY_ENTRIES) {
+      if (entry.support === "applied") expect(entry.note?.timing, entry.key).not.toBe("ignored");
+    }
   });
 
   it("reads the same ghosttea release the deck runs", () => {

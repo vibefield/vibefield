@@ -1,3 +1,4 @@
+import { METHODS } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { WebContents } from "electron";
 import { describe, expect, it, vi } from "vitest";
@@ -171,6 +172,25 @@ describe("createBootstrapHandler (once per generation)", () => {
     expect(first.terminal).toEqual(terminal);
     expect(cached.terminal).toEqual(terminal);
     expect(daemon.mintCount()).toBe(1);
+  });
+
+  it("GT-8a: grants the window the door's own scope, and not shell.open", async () => {
+    const daemon = fakeDaemon();
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
+    await handler({ sender: fakeSender(1).wc });
+    const mint = daemon.request.mock.calls.find(([method]) => method === "system.mintWindowToken");
+    const scopes = (mint?.[1] as { scopes: string[] } | undefined)?.scopes ?? [];
+    // read off the registry row, so a door that moves scope moves this with it
+    const linkDoor = METHODS.find((method) => method.method === "terminal.link.open");
+    expect(linkDoor?.scope).toBe("terminal.link");
+    expect(scopes).toContain(linkDoor?.scope);
+    // the ruling: the plugin-eligible `shell.open` is not what the deck's
+    // links ride, so the window is not widened to it
+    expect(scopes).not.toContain("shell.open");
   });
 
   it("distinct senders mint distinct tokens with their own labels", async () => {

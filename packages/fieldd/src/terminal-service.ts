@@ -1803,9 +1803,17 @@ function projectDiagnostic(diagnostic: GhostteaConfigDiagnostic): TerminalConfig
  * palette lives in two OPTIONAL homes (0.11.1 fills both from one parse, and a
  * floor older than the field sends neither), so the renderer's is read, then
  * the terminal's, and absence is an empty palette — Ghostty's defaults — never
- * a refusal. Colours go from `[r, g, b]` to `#rrggbb`. */
+ * a refusal. Colours go from `[r, g, b]` to `#rrggbb`.
+ *
+ * GT-8a — `renderer.linkUrl` (Ghostty's `link-url`) is read TOLERANTLY: the
+ * pinned 0.11.1 client does not declare it and its validator passes the
+ * renderer object through untouched, so a floor that sends it is read here and
+ * one that does not leaves it absent — never a guessed `true`. A boolean or
+ * nothing: any other value is a field this build does not understand. */
 export function projectConfigSnapshot(snapshot: GhostteaConfigSnapshot): TerminalConfigSnapshot {
   const palette = snapshot.renderer.palette ?? snapshot.terminal.palette ?? [];
+  const renderer: object = snapshot.renderer;
+  const linkUrl: unknown = "linkUrl" in renderer ? renderer.linkUrl : undefined;
   return {
     revision: snapshot.revision,
     ghosttyVersion: snapshot.compatibility.ghosttyVersion,
@@ -1826,6 +1834,7 @@ export function projectConfigSnapshot(snapshot: GhostteaConfigSnapshot): Termina
     palette: palette.map((entry) => ({ index: entry.index, color: hexColor(entry.color) })),
     fontSize: snapshot.renderer.fontSize,
     fontFamilies: [...snapshot.renderer.fontFamilies],
+    ...(typeof linkUrl === "boolean" ? { linkUrl } : {}),
   };
 }
 

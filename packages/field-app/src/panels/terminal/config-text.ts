@@ -146,6 +146,8 @@ export interface ManagedValues {
   /** palette index → `#rrggbb`, 0–15 */
   readonly palette: ReadonlyMap<number, string> | null;
   readonly scrollbackLimit: number | null;
+  /** GT-8a — `link-url`: whether terminals find links in their output */
+  readonly linkUrl: boolean | null;
   /** `keybind` lines in order, each `trigger=action`; `clearDefaults` writes
    * `keybind = clear` ahead of them (Ghostty's defaults removed) */
   readonly keybinds: readonly string[] | null;
@@ -155,9 +157,21 @@ export interface ManagedValues {
 export const EMPTY_MANAGED_VALUES: ManagedValues = {
   palette: null,
   scrollbackLimit: null,
+  linkUrl: null,
   keybinds: null,
   clearDefaults: false,
 };
+
+/** A `link-url` value as the loader reads it (ghosttea-config's `parse_bool`
+ * on the trimmed value): `true` or `false`; an empty value resets the key to
+ * its default, which is on; anything else is the loader's error to report, so
+ * it says nothing here. */
+function linkUrlValue(value: string): boolean | null {
+  const trimmed = value.trim();
+  if (trimmed === "true" || trimmed === "") return true;
+  if (trimmed === "false") return false;
+  return null;
+}
 
 /** `palette = N=#rrggbb` → [N, "#rrggbb"], for N in 0–15 and a hex colour. */
 export function parsePaletteValue(value: string): [number, string] | null {
@@ -173,6 +187,7 @@ export function readManagedValues(text: string): ManagedValues {
   if (managedBlockState(text) !== "present") return EMPTY_MANAGED_VALUES;
   let palette: Map<number, string> | null = null;
   let scrollbackLimit: number | null = null;
+  let linkUrl: boolean | null = null;
   let keybinds: string[] | null = null;
   let clearDefaults = false;
   for (const line of parseConfigLines(text)) {
@@ -185,6 +200,9 @@ export function readManagedValues(text: string): ManagedValues {
     } else if (line.key === "scrollback-limit") {
       const bytes = Number(line.value);
       if (Number.isFinite(bytes) && bytes >= 0) scrollbackLimit = Math.round(bytes);
+    } else if (line.key === "link-url") {
+      // the last readable line wins, as it does in the loader
+      linkUrl = linkUrlValue(line.value) ?? linkUrl;
     } else if (line.key === "keybind") {
       if (line.value === "clear") {
         // As the loader reads it: `clear` drops every binding before it too.
@@ -196,7 +214,7 @@ export function readManagedValues(text: string): ManagedValues {
       }
     }
   }
-  return { palette, scrollbackLimit, keybinds, clearDefaults };
+  return { palette, scrollbackLimit, linkUrl, keybinds, clearDefaults };
 }
 
 /** One `keybind` value as the block writes it: no line breaks, no spaces at
@@ -216,6 +234,7 @@ function blockLines(values: ManagedValues): string[] {
   if (values.scrollbackLimit !== null) {
     lines.push(`scrollback-limit = ${Math.max(0, Math.round(values.scrollbackLimit))}`);
   }
+  if (values.linkUrl !== null) lines.push(`link-url = ${values.linkUrl}`);
   if (values.clearDefaults) lines.push("keybind = clear");
   if (values.keybinds !== null) {
     for (const binding of values.keybinds) lines.push(`keybind = ${normalizeBinding(binding)}`);

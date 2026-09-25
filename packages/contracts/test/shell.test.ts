@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { METHODS } from "../src/methods";
 import { IPC_CHANNELS } from "../src/registries";
 import {
   APP_PREFERENCE_KEYS,
@@ -10,13 +11,17 @@ import {
   DesktopShellState,
   GodviewSetRequest,
   GodviewState,
+  isUnambiguousLinkText,
   ProductInfo,
   RendererParticipantIdentity,
+  SHELL_INTERNAL_PROVIDER_METHODS,
   SHELL_PROVIDER_METHODS,
   ShellCommandRequest,
   ShellDialogPickFolderParams,
   ShellDialogPickFolderResult,
   ShellOpenExternalParams,
+  ShellOpenLinkParams,
+  ShellOpenLinkResult,
   ShellProviderCallParams,
   ShellProviderOutcome,
   ShellProviderRegisterParams,
@@ -419,6 +424,95 @@ describe("AH-3/AH-4 static shell provider", () => {
     ]) {
       expect(ShellOpenExternalParams.safeParse({ url }).success, url).toBe(false);
     }
+  });
+
+  it("GT-8a: opens a terminal link only as a canonical, credential-free http(s) URL", () => {
+    for (const url of [
+      // the dev server is the link a terminal prints most — http is admitted
+      "http://localhost:3000/x",
+      "https://example.com/",
+      "http://127.0.0.1:8080/api?q=1#top",
+      "http://[::1]:5173/",
+      "https://xn--bcher-kva.example/docs",
+      // exactly at the terminal's own bound
+      `https://example.com/${"x".repeat(8192 - "https://example.com/".length)}`,
+    ]) {
+      expect(ShellOpenLinkParams.safeParse({ url }).success, url).toBe(true);
+    }
+    for (const url of [
+      // credentials, in any arm
+      "https://user:pass@example.com/",
+      "https://user@example.com/",
+      "http://:secret@localhost:3000/",
+      // control characters: C0, DEL, C1
+      "https://example.com/\u0007",
+      "https://example.com/\u007f",
+      "https://example.com/\u0085",
+      // whitespace the parser would trim or encode
+      " https://example.com/",
+      "https://example.com/a b",
+      "https://example.com/\t",
+      "https://example.com/\u00a0",
+      // invisible format characters the parser would erase or encode
+      "https://exa\u200Bmple.com/",
+      "https://example.com/\u202Egnp.exe",
+      // backslashes, in the authority and in the query the parser keeps them in
+      "https://example.com\\@evil.example/",
+      "https://example.com/?next=\\evil",
+      // every scheme but http and https
+      "javascript:alert(1)",
+      "file:///tmp/source.ts",
+      "file:relative.ts",
+      "mailto:team@example.com",
+      "ftp://example.com/",
+      "ftps://example.com/",
+      "data:text/html,hi",
+      "vscode://file/tmp/source.ts",
+      // not the URL's own spelling: main opens only what the standard would print
+      "HTTPS://example.com/",
+      "https://example.com",
+      "https:example.com",
+      "http://0x7f.1/",
+      "https://bücher.example/",
+      // no host, or no URL at all
+      "http://",
+      "https:///",
+      "http://[::1",
+      "",
+      // past the bound
+      `https://example.com/${"x".repeat(8192)}`,
+    ]) {
+      expect(ShellOpenLinkParams.safeParse({ url }).success, JSON.stringify(url)).toBe(false);
+    }
+    expect(ShellOpenLinkResult.parse({ opened: true })).toEqual({ opened: true });
+    expect(ShellOpenLinkResult.safeParse({ opened: false }).success).toBe(false);
+    // the external door beside it keeps HTTPS-only for the callers that rely on it
+    expect(ShellOpenExternalParams.safeParse({ url: "http://localhost:3000/x" }).success).toBe(
+      false,
+    );
+  });
+
+  it("GT-8a: names the characters a URL parser would silently repair", () => {
+    expect(isUnambiguousLinkText("https://example.com/a%20b?q=1#top")).toBe(true);
+    expect(isUnambiguousLinkText("file:///tmp/my%20project/source.ts#L42")).toBe(true);
+    for (const text of [
+      "a b",
+      "a\tb",
+      "a\nb",
+      "a\u0000b",
+      "a\u0085b",
+      "a\u200Bb",
+      "a\u2066b",
+      "a\\b",
+    ]) {
+      expect(isUnambiguousLinkText(text), JSON.stringify(text)).toBe(false);
+    }
+  });
+
+  it("GT-8a: reaches the browser through an INTERNAL provider verb no client calls", () => {
+    expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.openLink");
+    expect(SHELL_PROVIDER_METHODS).toContain("shell.openLink");
+    expect(METHODS.some((method) => method.method === "shell.openLink")).toBe(false);
   });
 
   it("requires a unique registered static method set and exactly one outcome arm", () => {

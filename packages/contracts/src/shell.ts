@@ -13,6 +13,7 @@ import {
 } from "./live-surfaces";
 import { PluginId } from "./plugins";
 import { ScreenshotShortcutState } from "./screenshot";
+import { TERMINAL_LINK_MAX_CHARS } from "./terminal";
 
 // Shell-boundary contracts (ESR spec §6.1): the shapes that cross the Electron
 // seam — the daemon's on-disk discovery descriptor and the closed contextBridge
@@ -264,6 +265,12 @@ export const SHELL_INTERNAL_PROVIDER_METHODS = [
   // service dispatches them, and fieldd — not main — reads or writes the file.
   "shell.dialog.pickFile",
   "shell.dialog.saveFile",
+  // GT-8a (GT-D22) — a terminal link's web half: an http(s) URL to the
+  // default browser. Internal: only fieldd's `terminal.link.open` dispatches
+  // it, after its own policy has classified the link, so main opens exactly
+  // what that policy sends. `shell.openExternal` keeps its HTTPS-only rule for
+  // the callers that rely on it.
+  "shell.openLink",
 ] as const;
 export const SHELL_PROVIDER_METHODS = [
   ...SHELL_CLIENT_PROVIDER_METHODS,
@@ -357,6 +364,61 @@ export type ShellOpenExternalParams = z.infer<typeof ShellOpenExternalParams>;
 
 export const ShellOpenExternalResult = z.object({ opened: z.literal(true) }).passthrough();
 export type ShellOpenExternalResult = z.infer<typeof ShellOpenExternalResult>;
+
+/** GT-D22 — link text holding nothing a URL parser would silently repair or
+ * drop: whitespace, control characters, invisible format characters (a
+ * zero-width space inside a host is erased by the parser, so `exa\u200Bmple.com`
+ * opens example.com), and backslashes (read as `/` in some parts of a URL and
+ * kept in others). Each is a place where what a person saw and what opens can
+ * differ, so a link carrying one is refused rather than repaired. */
+export function isUnambiguousLinkText(raw: string): boolean {
+  return !/[\s\p{Cc}\p{Cf}\\]/u.test(raw);
+}
+
+/** GT-8a (GT-D22) — the link `shell.openLink` hands the default browser: an
+ * `http:` or `https:` URL with a host and no credentials, in the URL
+ * standard's own spelling (fieldd's `terminal.link.open` spells it so before
+ * it asks), unambiguous as above, and bounded like the terminal's own links.
+ * Wider than `ShellExternalUrl` by exactly `http:` — the link a terminal
+ * prints most is a dev server on localhost — and kept apart from it, because
+ * `shell.openExternal`'s callers rely on HTTPS-only. A hostless http(s) URL
+ * never parses, so "a host" is the parser's rule before it is this one's. */
+export const ShellLinkUrl = z
+  .string()
+  .min(1)
+  .max(TERMINAL_LINK_MAX_CHARS)
+  .superRefine((raw, ctx) => {
+    if (!/^https?:\/\//u.test(raw) || !isUnambiguousLinkText(raw)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "expected an unambiguous absolute http(s) URL",
+      });
+      return;
+    }
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "expected an absolute http(s) URL" });
+      return;
+    }
+    if (url.href !== raw) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "expected the URL in its canonical spelling",
+      });
+    }
+    if (url.username !== "" || url.password !== "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "URL credentials are forbidden" });
+    }
+  });
+export type ShellLinkUrl = z.infer<typeof ShellLinkUrl>;
+
+export const ShellOpenLinkParams = z.object({ url: ShellLinkUrl }).passthrough();
+export type ShellOpenLinkParams = z.infer<typeof ShellOpenLinkParams>;
+
+export const ShellOpenLinkResult = z.object({ opened: z.literal(true) }).passthrough();
+export type ShellOpenLinkResult = z.infer<typeof ShellOpenLinkResult>;
 
 /** GT-7 — a native open dialog for one file, locked to one purpose. */
 export const ShellDialogPickFileParams = z

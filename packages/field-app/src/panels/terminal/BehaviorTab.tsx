@@ -1,6 +1,6 @@
 import { UiButton } from "@vibefield/design-kit";
 import type { ReactElement } from "react";
-import { labelCls, SettingsRow } from "../settings-ui";
+import { labelCls, SettingsRow, SettingsSwitch } from "../settings-ui";
 import { formatBytes, GHOSTTY_DEFAULT_SCROLLBACK } from "./config-text";
 import { KEY_BY_NAME } from "./ghostty-key-groups";
 import { DeviceUnavailable } from "./LookTab";
@@ -38,6 +38,14 @@ const NOT_YET: readonly { key: string; what: string }[] = [
   { key: "bell-features", what: "What the bell does" },
 ];
 
+/** GT-8a — whether the pinned ghosttea finds links in terminal output: its
+ * loader APPLIES `link-url`, as the generated key catalog reports. Read at
+ * render, so the Links section and the page's search turn with the pin and
+ * nothing else. */
+export function terminalLinksApplied(): boolean {
+  return KEY_BY_NAME.get("link-url")?.support === "applied";
+}
+
 export function BehaviorTab({ model }: { model: TerminalPageModel }): ReactElement {
   const { device, managed } = model;
   const ready = device.kind === "ready" ? device : null;
@@ -55,6 +63,9 @@ export function BehaviorTab({ model }: { model: TerminalPageModel }): ReactEleme
     const bytes = SCROLLBACK_STEPS[Math.min(SCROLLBACK_STEPS.length - 1, Math.max(0, index))];
     if (bytes !== undefined) model.setManaged({ ...managed, scrollbackLimit: bytes });
   };
+  // What this Mac's terminals will do: the draft's own block first, then what
+  // the loader made of every layer, then Ghostty's default — on.
+  const findLinks = managed.linkUrl ?? ready?.snapshot?.linkUrl ?? true;
 
   return (
     <div className="vf-ts-tab" data-tab="behavior">
@@ -106,17 +117,47 @@ export function BehaviorTab({ model }: { model: TerminalPageModel }): ReactEleme
         )}
       </PageSection>
 
-      <PageSection
-        id="behavior-links"
-        title="Links"
-        scope="fact"
-        when="next-ghosttea"
-        description="Finding links in output, opening them with ⌘-click, and link-url to turn that off exist in ghosttea but are not released: 0.11.1, the version VibeField ships, has none of it, so a terminal here has no clickable links yet."
-      >
-        <SettingsRow title="Find links in output" divider={false}>
-          <Fact>Not in ghosttea 0.11.1</Fact>
-        </SettingsRow>
-      </PageSection>
+      {terminalLinksApplied() ? (
+        <PageSection
+          id="behavior-links"
+          title="Links"
+          scope="mac"
+          when="after-save"
+          description="⌘-click opens a web link in your browser; a file path is shown in Finder, never opened."
+        >
+          {ready !== null ? (
+            <SettingsRow
+              title="Find links in output"
+              divider={false}
+              description={
+                findLinks
+                  ? "On: web addresses and file paths in a terminal's output become links."
+                  : "Off: only the links a program marks itself (OSC 8) stay clickable."
+              }
+            >
+              <SettingsSwitch
+                checked={findLinks}
+                onChange={(on) => model.setManaged({ ...managed, linkUrl: on })}
+                label="Find links in output"
+              />
+            </SettingsRow>
+          ) : (
+            <DeviceUnavailable model={model} compact />
+          )}
+        </PageSection>
+      ) : (
+        <PageSection
+          id="behavior-links"
+          title="Links"
+          scope="fact"
+          when="next-ghosttea"
+          description="Finding links in output, opening them with ⌘-click, and link-url to turn that off exist in ghosttea but are not released: 0.11.1, the version VibeField ships, has none of it, so a terminal here has no clickable links yet."
+        >
+          <SettingsRow title="Find links in output" divider={false}>
+            <Fact>Not in ghosttea 0.11.1</Fact>
+          </SettingsRow>
+        </PageSection>
+      )}
 
       <PageSection
         id="behavior-sessions"

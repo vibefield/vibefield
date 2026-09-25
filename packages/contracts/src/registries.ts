@@ -363,6 +363,13 @@ export const SCOPES = [
   "agent.observe",
   "agent.bless", // D38 — single-purpose, PTY-bound (spawn-through shims)
   "terminal.attach",
+  // GT-8a (GT-D22) — open a link a terminal printed (`terminal.link.open`: a
+  // web link in the browser, a file SHOWN in Finder). Its own scope and not
+  // `shell.open`, which renderer plugins may be granted: this door must not be
+  // reachable without a person's click, so only the window's token holds it —
+  // Electron main mints it there and nowhere else. Local-only forever: in no
+  // TAILNET preset, and absent from every plugin eligibility table.
+  "terminal.link",
   "doc.read",
   "doc.write",
   "artifact.publish",

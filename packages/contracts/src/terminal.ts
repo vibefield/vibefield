@@ -325,6 +325,11 @@ export const TerminalConfigSnapshot = z
     /** what the layers ask for — parsed, not honoured on the desktop (see support) */
     fontSize: z.number(),
     fontFamilies: z.array(z.string()),
+    /** GT-8a — whether terminals find links in their output (Ghostty's
+     * `link-url`; an OSC 8 link is a link either way). Optional: a floor whose
+     * ghosttea predates the key (0.11.1) does not send it, and absent means the
+     * loader said nothing — a reader shows Ghostty's default, which is on. */
+    linkUrl: z.boolean().optional(),
   })
   .passthrough();
 export type TerminalConfigSnapshot = z.infer<typeof TerminalConfigSnapshot>;
@@ -549,3 +554,32 @@ export const TerminalConfigRevealResult = z
   })
   .passthrough();
 export type TerminalConfigRevealResult = z.infer<typeof TerminalConfigRevealResult>;
+
+// -- Terminal links (GT-8a, GT-D22). ghosttea's runtime finds links in a pane's
+// output and, on ⌘-click, hands the host the URL; `terminal.link.open` is where
+// VibeField decides what that click may do. The policy is VibeField's own and
+// stricter than ghosttea desktop's, because a same-uid agent can print any link
+// and one click must never run anything (EL7): an `http:` or `https:` link
+// opens in the default browser, a `file:` link naming an absolute path on this
+// device is SHOWN in the file manager and never opened (opening a `.command` or
+// an app would run it), and every other link is refused. fieldd holds the rule
+// (its `terminal-links.ts`); these are the door's wire shapes.
+
+/** The longest link the door reads — ghosttea's own bound for a link it will
+ * show (`terminalLinkUrl`), so every link the terminal can offer reaches the
+ * policy instead of a length check. */
+export const TERMINAL_LINK_MAX_CHARS = 8192;
+
+/** terminal.link.open params: the link as the terminal found it. */
+export const TerminalLinkOpenParams = z
+  .object({ url: z.string().min(1).max(TERMINAL_LINK_MAX_CHARS) })
+  .passthrough();
+export type TerminalLinkOpenParams = z.infer<typeof TerminalLinkOpenParams>;
+
+/** What the click did: a web link `opened` in the browser, a file link
+ * `revealed` in the file manager. A refused link is a PRECONDITION_FAILED,
+ * never an outcome — nothing happened. */
+export const TerminalLinkOpenResult = z
+  .object({ outcome: z.enum(["opened", "revealed"]) })
+  .passthrough();
+export type TerminalLinkOpenResult = z.infer<typeof TerminalLinkOpenResult>;

@@ -357,6 +357,12 @@ async function mint(
     // agent.usage — both local-only and plugin-ineligible, held by the
     // window because the monitor is spine code. index.manage (consent — the
     // roll call's checkboxes) stays out until a surface asks for consent.
+    // GT-8a: terminal.link — the deck's terminal links ride
+    // `terminal.link.open` (an http(s) link to the browser, a file shown in
+    // Finder, nothing else; GT-D22), and the deck is spine code on this token.
+    // The door has its own scope, held by this token alone: `shell.open` is
+    // plugin-eligible, and a plugin must not reach a door that opens links and
+    // reveals paths without a click. So the window does NOT hold shell.open.
     scopes: [
       "doc.read",
       "doc.write",
@@ -377,6 +383,7 @@ async function mint(
       "index.search",
       "agent.usage",
       "agents.manage",
+      "terminal.link",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

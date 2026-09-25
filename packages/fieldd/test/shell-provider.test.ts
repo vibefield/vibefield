@@ -229,4 +229,44 @@ describe("ShellProviderBroker", () => {
     });
     await expect(saving).rejects.toMatchObject({ kind: "INTERNAL", retryable: false });
   });
+
+  it("GT-8a: holds a terminal link to its contract before main is asked, and bounds the hand-off", async () => {
+    const broker = new ShellProviderBroker();
+    const lane = transport();
+    broker.register(shellContext(), lane, { methods: METHODS });
+    // refused before main is ever asked: a scheme main must never open, the
+    // spelling fieldd's door always canonicalizes, credentials, a file
+    for (const url of [
+      "mailto:team@example.com",
+      "https://example.com",
+      "https://user:pass@example.com/",
+      "file:///tmp/run.command",
+    ]) {
+      await expect(broker.callInternal("shell.openLink", { url }), url).rejects.toMatchObject({
+        kind: "PRECONDITION_FAILED",
+      });
+    }
+    expect(lane.notifications).toEqual([]);
+
+    const before = Date.now();
+    const opening = broker.callInternal("shell.openLink", { url: "http://localhost:3000/x" });
+    expect(lane.notifications[0]).toMatchObject({
+      method: "shell.provider.call",
+      params: {
+        method: "shell.openLink",
+        params: { url: "http://localhost:3000/x" },
+        caller: { kind: "local-token", clientKind: "fieldd" },
+      },
+    });
+    // the same OS hand-off as openExternal, with the same five seconds
+    const notified = lane.notifications[0]?.params as { deadlineAt?: number } | undefined;
+    const deadlineAt = notified?.deadlineAt ?? Number.NaN;
+    expect(deadlineAt).toBeGreaterThanOrEqual(before + 5_000);
+    expect(deadlineAt).toBeLessThanOrEqual(Date.now() + 5_000);
+    broker.resolve(shellContext(), lane, {
+      callId: notificationCallId(lane, 0),
+      outcome: { result: { opened: true } },
+    });
+    await expect(opening).resolves.toEqual({ opened: true });
+  });
 });

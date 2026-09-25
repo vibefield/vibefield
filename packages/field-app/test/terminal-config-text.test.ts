@@ -32,6 +32,7 @@ const VALUES: ManagedValues = {
     [1, "#e06c75"],
   ]),
   scrollbackLimit: 25_000_000,
+  linkUrl: false,
   keybinds: ["ctrl+super+k=clear_screen", "super+k=unbind"],
   clearDefaults: false,
 };
@@ -50,6 +51,7 @@ describe("the managed block", () => {
         "palette = 1=#e06c75",
         "palette = 4=#81a1c1",
         "scrollback-limit = 25000000",
+        "link-url = false",
         "keybind = ctrl+super+k=clear_screen",
         "keybind = super+k=unbind",
         MANAGED_BLOCK_END,
@@ -62,6 +64,7 @@ describe("the managed block", () => {
     const written = writeManagedValues("cursor-style = bar\n", VALUES);
     const read = readManagedValues(written);
     expect(read.scrollbackLimit).toBe(25_000_000);
+    expect(read.linkUrl).toBe(false);
     expect(read.keybinds).toEqual(["ctrl+super+k=clear_screen", "super+k=unbind"]);
     expect(read.clearDefaults).toBe(false);
     expect([...(read.palette ?? new Map()).entries()]).toEqual([
@@ -143,6 +146,7 @@ describe("the managed block", () => {
     const text = [
       "palette = 2=#112233",
       "scrollback-limit = 99",
+      "link-url = false",
       "keybind = super+x=cut",
       MANAGED_BLOCK_START,
       "palette = 1=#445566",
@@ -151,7 +155,50 @@ describe("the managed block", () => {
     const read = readManagedValues(text);
     expect([...(read.palette ?? new Map()).keys()]).toEqual([1]);
     expect(read.scrollbackLimit).toBeNull();
+    expect(read.linkUrl).toBeNull();
     expect(read.keybinds).toBeNull();
+  });
+
+  it("GT-8a: writes link-url after scrollback and before the shortcuts, and reads it back", () => {
+    const on = writeManagedValues("", {
+      ...EMPTY_MANAGED_VALUES,
+      scrollbackLimit: 1_000_000,
+      linkUrl: true,
+      keybinds: ["super+t=new_tab"],
+    });
+    const lines = on.split("\n");
+    expect(lines.indexOf("link-url = true")).toBe(lines.indexOf("scrollback-limit = 1000000") + 1);
+    expect(lines.indexOf("keybind = super+t=new_tab")).toBe(lines.indexOf("link-url = true") + 1);
+    expect(readManagedValues(on).linkUrl).toBe(true);
+    // a block that says nothing about it says nothing: the layers below decide
+    expect(
+      readManagedValues(writeManagedValues("", { ...EMPTY_MANAGED_VALUES, linkUrl: false })),
+    ).toMatchObject({ linkUrl: false, scrollbackLimit: null });
+    expect(
+      readManagedValues(writeManagedValues("", { ...EMPTY_MANAGED_VALUES, scrollbackLimit: 1 }))
+        .linkUrl,
+    ).toBeNull();
+    expect(EMPTY_MANAGED_VALUES.linkUrl).toBeNull();
+    expect(writeManagedValues("x = 1\n", { ...EMPTY_MANAGED_VALUES, linkUrl: null })).toBe(
+      "x = 1\n",
+    );
+  });
+
+  it("GT-8a: reads link-url the way the loader does — an unreadable value says nothing", () => {
+    const block = (...values: string[]): string =>
+      [MANAGED_BLOCK_START, ...values.map((value) => `link-url =${value}`), MANAGED_BLOCK_END].join(
+        "\n",
+      );
+    expect(readManagedValues(block(" false")).linkUrl).toBe(false);
+    expect(readManagedValues(block(" true")).linkUrl).toBe(true);
+    // the loader's error to report, not a value to show
+    expect(readManagedValues(block(" maybe")).linkUrl).toBeNull();
+    expect(readManagedValues(block(" FALSE")).linkUrl).toBeNull();
+    expect(readManagedValues(block(" 0")).linkUrl).toBeNull();
+    // the last readable line wins; an unreadable one after it changes nothing
+    expect(readManagedValues(block(" true", " false", " maybe")).linkUrl).toBe(false);
+    // an empty value resets the key to its default, which is on
+    expect(readManagedValues(block(" false", "")).linkUrl).toBe(true);
   });
 
   it("refuses to rewrite a block whose markers are missing, repeated or reversed", () => {

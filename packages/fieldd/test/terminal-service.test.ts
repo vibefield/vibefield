@@ -833,7 +833,7 @@ describe("TerminalService (NF-3, mock native)", () => {
     // `scope: null`, so it passed there too. Both halves are closed now: the
     // expected map must EXHAUST the registry (a new method with no entry fails
     // before anything is called), and every declared method is actually
-    // refused for a principal that holds neither scope.
+    // refused for a principal that holds none of the scopes.
     const EXPECTED_SCOPE: Record<string, string> = {
       "terminal.list": "terminal.attach",
       "terminal.sessions": "terminal.attach",
@@ -849,6 +849,8 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.config.import": "settings.manage",
       "terminal.config.export": "settings.manage",
       "terminal.config.reveal": "settings.manage",
+      // GT-8a: its own scope, the window's alone — never plugin-eligible shell.open
+      "terminal.link.open": "terminal.link",
     };
     const declared = METHODS.filter(
       (m) => m.surface === "product" && m.method.startsWith("terminal."),
@@ -868,7 +870,7 @@ describe("TerminalService (NF-3, mock native)", () => {
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
 
-    // holds NEITHER terminal.attach nor settings.manage
+    // holds none of terminal.attach, settings.manage and terminal.link
     const narrow = daemon.tokens.mint(["doc.read"], "narrow");
     const rpc = await openRpc(daemon.controlPort);
     await helloAs(rpc, narrow.token);
@@ -1819,10 +1821,28 @@ describe("GT-7 — Settings → Terminal's config document", () => {
       fontSize: 13,
       fontFamilies: ["Berkeley Mono", "Menlo"],
     });
+    // a 0.11.1 floor says nothing about link-url, and the projection says
+    // nothing either — never a guessed `true`
+    expect("linkUrl" in projected).toBe(false);
+    expect(TerminalConfigSnapshot.parse(projected)).toEqual(projected);
+
+    // GT-8a — a floor that applies link-url (0.12.0) sends `renderer.linkUrl`,
+    // which the pinned client's types do not declare: read tolerantly, a
+    // boolean or nothing. (Built outside the literal: the pinned renderer type
+    // refuses the key as an excess property.)
+    const linksOff = { ...snapshot.renderer, linkUrl: false };
+    const withLinks = projectConfigSnapshot({ ...snapshot, renderer: linksOff });
+    expect(withLinks.linkUrl).toBe(false);
     // exactly the contract's fields: what nobody here reads (the commit, the
     // cursor text, the opacity, the schema version) never reaches the wire
-    expect(Object.keys(projected).sort()).toEqual(Object.keys(TerminalConfigSnapshot.shape).sort());
-    expect(TerminalConfigSnapshot.parse(projected)).toEqual(projected);
+    expect(Object.keys(withLinks).sort()).toEqual(Object.keys(TerminalConfigSnapshot.shape).sort());
+    expect(TerminalConfigSnapshot.parse(withLinks)).toEqual(withLinks);
+    const linksOn = { ...snapshot.renderer, linkUrl: true };
+    expect(projectConfigSnapshot({ ...snapshot, renderer: linksOn }).linkUrl).toBe(true);
+    // anything but a boolean is a field this build does not understand (cast
+    // through unknown: no pinned type, before or after the key, allows it)
+    const linksGarbled = { ...snapshot.renderer, linkUrl: "no" } as unknown as typeof linksOff;
+    expect("linkUrl" in projectConfigSnapshot({ ...snapshot, renderer: linksGarbled })).toBe(false);
 
     // a floor that sends one home or neither: the other, then Ghostty's defaults
     const { palette: _renderer, ...rendererWithout } = snapshot.renderer;

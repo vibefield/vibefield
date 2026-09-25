@@ -1194,6 +1194,22 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // GT-8a (GT-D22) — a terminal link, ⌘-clicked in the deck: a web link to the
+  // default browser, a file link shown in the file manager, anything else
+  // refused (fieldd's `terminal-links.ts` is the policy). Its OWN scope,
+  // `terminal.link`, which only the window's token holds — not `shell.open`,
+  // which renderer plugins may be granted: a plugin must not reach a door that
+  // opens http links and reveals paths without a person's click. locality
+  // "local": the link opens on the Mac in front of the person who clicked, and
+  // the scope is in no tailnet preset, so no peer can make this Mac open
+  // anything. NOT idempotent: a second click is a second open.
+  defineMethod({
+    surface: "product",
+    method: "terminal.link.open",
+    scope: "terminal.link",
+    idempotent: false,
+    locality: "local",
+  }),
   // ── surface.* (DT-1 — thinking-devtools-pack.md DT-D2/DT-D3) ──
   // The registry scope is the BASE gate; one row carries one scope, so the
   // SurfaceService additionally enforces the kind→scope matrix on `open`

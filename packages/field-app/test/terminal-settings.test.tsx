@@ -18,10 +18,34 @@ import {
   FIXTURE_SAVED_TEXT,
 } from "../src/design-system/terminal-settings-fixtures";
 import type { SettingsSubpage } from "../src/panels/SettingsDialog";
-import { MANAGED_BLOCK_START } from "../src/panels/terminal/config-text";
+import {
+  MANAGED_BLOCK_START,
+  readManagedValues,
+  writeManagedValues,
+} from "../src/panels/terminal/config-text";
+import { GHOSTTY_KEYS } from "../src/panels/terminal/ghostty-keys.generated";
 import { TerminalSettings } from "../src/panels/terminal/TerminalSettings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** GT-8a — the support `link-url` has in the generated catalog, as a row
+ * plays it: null is the pinned catalog's own answer. */
+const linkUrlSupport = vi.hoisted(() => ({ current: null as "applied" | "unsupported" | null }));
+
+vi.mock("../src/panels/terminal/ghostty-key-groups", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/panels/terminal/ghostty-key-groups")>();
+  // Every other key reads the real catalog; `link-url` reads the row's pin,
+  // with the note that pin would carry.
+  class PinnedCatalog extends Map<string, (typeof actual.KEY_ENTRIES)[number]> {
+    override get(key: string): (typeof actual.KEY_ENTRIES)[number] | undefined {
+      const entry = super.get(key);
+      const support = linkUrlSupport.current;
+      if (key !== "link-url" || entry === undefined || support === null) return entry;
+      return { ...entry, support, note: actual.keyNote(key, support) };
+    }
+  }
+  return { ...actual, KEY_BY_NAME: new PinnedCatalog(actual.KEY_BY_NAME) };
+});
 
 type Handler = (params: Record<string, unknown>) => Promise<unknown>;
 
@@ -57,6 +81,7 @@ const subpages: (SettingsSubpage | null)[] = [];
 beforeEach(() => {
   calls.length = 0;
   subpages.length = 0;
+  linkUrlSupport.current = null;
   handlers = {
     "terminal.config.read": () => Promise.resolve(SAVED),
     "terminal.config.validate": () =>
@@ -357,5 +382,130 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
     act(() => opened?.onBack());
     expect(subpages.at(-1)).toBeNull();
     expect(button("Match a theme…")).toBeDefined();
+  });
+});
+
+/** The Behavior tab's Links section, and its switch when there is one. */
+function linksSection(): HTMLElement | null {
+  return host?.querySelector<HTMLElement>('[data-ts-anchor="behavior-links"]') ?? null;
+}
+
+function linksSwitch(): HTMLButtonElement | null {
+  return (
+    linksSection()?.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Find links in output"]',
+    ) ?? null
+  );
+}
+
+/** Type into the page's search, as a person does. */
+function search(query: string): void {
+  const input = host?.querySelector<HTMLInputElement>(
+    'input[aria-label="Search terminal settings"]',
+  );
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  act(() => {
+    setValue?.call(input, query);
+    input?.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function results(): string {
+  return host?.querySelector('[aria-label="Search results"]')?.textContent ?? "";
+}
+
+describe("GT-8a — Behavior → Links follows the pinned loader", () => {
+  it("while the pin does not apply link-url, says why there is no switch — today's copy", async () => {
+    linkUrlSupport.current = "unsupported";
+    await mount();
+    click("Behavior");
+    const section = linksSection()?.textContent ?? "";
+    expect(section).toContain("Read-only");
+    expect(section).toContain("Next ghosttea");
+    expect(section).toContain(
+      "0.11.1, the version VibeField ships, has none of it, so a terminal here has no clickable links yet.",
+    );
+    expect(section).toContain("Not in ghosttea 0.11.1");
+    expect(linksSwitch()).toBeNull();
+    search("links");
+    expect(results()).toContain("Behavior · Next ghosttea");
+    expect(results()).not.toContain("Find links in output");
+  });
+
+  it("the generated catalog decides, not the test — today's pin and the regen alike", async () => {
+    // No override here: the page reads the catalog `pnpm gen` wrote. 0.11.1's
+    // says recognized-not-applied, so today this is the fact; the regen that
+    // makes `link-url` applied turns this row's expectation, never its code.
+    const applied = GHOSTTY_KEYS.find((entry) => entry.key === "link-url")?.support === "applied";
+    await mount();
+    click("Behavior");
+    expect(linksSwitch() !== null).toBe(applied);
+    expect(linksSection()?.textContent?.includes("Not in ghosttea 0.11.1")).toBe(!applied);
+  });
+
+  it("once the pin applies it: a This Mac switch, on by default, saved like every Mac setting", async () => {
+    linkUrlSupport.current = "applied";
+    await mount();
+    click("Behavior");
+    const section = linksSection()?.textContent ?? "";
+    expect(section).toContain("This Mac");
+    expect(section).toContain("After save");
+    expect(section).toContain(
+      "⌘-click opens a web link in your browser; a file path is shown in Finder, never opened.",
+    );
+    expect(section).not.toContain("Not in ghosttea");
+    // the saved block and the loader both say nothing: Ghostty's default, on
+    expect(linksSwitch()?.getAttribute("aria-checked")).toBe("true");
+    expect(section).toContain("On: web addresses and file paths");
+
+    act(() => linksSwitch()?.click());
+    expect(linksSwitch()?.getAttribute("aria-checked")).toBe("false");
+    expect(linksSection()?.textContent).toContain("Off: only the links a program marks itself");
+    expect(bar()).toContain("1 change to config.ghostty");
+    await settle(400);
+    // the switch wrote the managed block, and only that; the loader judges it
+    const draft = writeManagedValues(FIXTURE_SAVED_TEXT, {
+      ...readManagedValues(FIXTURE_SAVED_TEXT),
+      linkUrl: false,
+    });
+    expect(draft).toContain("link-url = false");
+    expect(calls.filter((call) => call.method === "terminal.config.validate")).toEqual([
+      { method: "terminal.config.validate", params: { text: draft } },
+    ]);
+
+    search("links");
+    expect(results()).toContain("Find links in output");
+    expect(results()).toContain("Behavior · This Mac");
+  });
+
+  it("shows what the loader says when the block says nothing, and the block over it when it does", async () => {
+    linkUrlSupport.current = "applied";
+    // the user's own Ghostty file turned it off; the overlay's block is silent
+    handlers["terminal.config.read"] = () =>
+      Promise.resolve({ ...SAVED, config: { ...FIXTURE_SAVED_SNAPSHOT, linkUrl: false } });
+    await mount();
+    click("Behavior");
+    expect(linksSwitch()?.getAttribute("aria-checked")).toBe("false");
+    // turning it on here is this Mac's say, and the block now carries it
+    act(() => linksSwitch()?.click());
+    expect(linksSwitch()?.getAttribute("aria-checked")).toBe("true");
+    await settle(400);
+    const validated = calls.find((call) => call.method === "terminal.config.validate");
+    expect(String(validated?.params.text)).toContain("link-url = true");
+  });
+
+  it("says the device is unavailable rather than showing a switch it cannot save", async () => {
+    linkUrlSupport.current = "applied";
+    handlers["terminal.config.read"] = () =>
+      Promise.reject(
+        new FielddRpcError("UNAVAILABLE", "floor down", true, {
+          service: "terminal",
+          state: "down",
+        }),
+      );
+    await mount();
+    click("Behavior");
+    expect(linksSwitch()).toBeNull();
+    expect(linksSection()?.textContent).toContain("This Mac");
   });
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import * as contracts from "../src/index";
 import { METHODS } from "../src/methods";
-import { SCOPES, TAILNET_SCOPES } from "../src/registries";
+import { computeEffectiveGrants, PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
+import { SCOPES, TAILNET_GUEST_SCOPES, TAILNET_SCOPES } from "../src/registries";
 import {
   SHELL_INTERNAL_PROVIDER_METHODS,
   ShellDialogPickFileParams,
@@ -10,6 +12,7 @@ import {
 } from "../src/shell";
 import {
   TERMINAL_CONFIG_MAX_BYTES,
+  TERMINAL_LINK_MAX_CHARS,
   TerminalConfigConflict,
   TerminalConfigDocument,
   TerminalConfigExportResult,
@@ -18,6 +21,8 @@ import {
   TerminalConfigValidation,
   TerminalConfigWriteRefusal,
   TerminalConfigWriteResult,
+  TerminalLinkOpenParams,
+  TerminalLinkOpenResult,
   terminalConfigIncludeOps,
   terminalConfigIncludes,
   terminalConfigIncludesAllowed,
@@ -84,6 +89,13 @@ describe("GT-7: the loader's snapshot on the product wire", () => {
     });
     expect(parsed.sources[0]?.kind).toBe("remote-profile");
     expect(parsed.configuredKeys[0]?.support).toBe("experimental");
+  });
+
+  it("GT-8a: carries link-url when the loader says it, and absent means it said nothing", () => {
+    expect(TerminalConfigSnapshot.parse(SNAPSHOT).linkUrl).toBeUndefined();
+    expect(TerminalConfigSnapshot.parse({ ...SNAPSHOT, linkUrl: false }).linkUrl).toBe(false);
+    expect(TerminalConfigSnapshot.parse({ ...SNAPSHOT, linkUrl: true }).linkUrl).toBe(true);
+    expect(TerminalConfigSnapshot.safeParse({ ...SNAPSHOT, linkUrl: "no" }).success).toBe(false);
   });
 
   it("refuses a palette index outside 0–255", () => {
@@ -211,6 +223,82 @@ describe("GT-7: the file actions' results", () => {
         path: "/Users/me/Downloads/config.ghostty",
       }),
     ).toMatchObject({ canceled: false });
+  });
+});
+
+describe("GT-8a: the terminal link door", () => {
+  it("takes the link as the terminal found it, bounded like the terminal's own", () => {
+    expect(TERMINAL_LINK_MAX_CHARS).toBe(8192);
+    expect(TerminalLinkOpenParams.parse({ url: "http://localhost:3000/x" }).url).toBe(
+      "http://localhost:3000/x",
+    );
+    // the policy, not the wire, judges a link: any scheme reaches it
+    expect(TerminalLinkOpenParams.safeParse({ url: "mailto:team@example.com" }).success).toBe(true);
+    expect(TerminalLinkOpenParams.safeParse({ url: "x".repeat(8192) }).success).toBe(true);
+    for (const params of [{ url: "" }, { url: "x".repeat(8193) }, { url: 42 }, {}]) {
+      expect(TerminalLinkOpenParams.safeParse(params).success, JSON.stringify(params)).toBe(false);
+    }
+    // tolerant reader: a field a newer caller adds survives the parse
+    expect(TerminalLinkOpenParams.parse({ url: "https://example.com/", from: "pane" })).toEqual({
+      url: "https://example.com/",
+      from: "pane",
+    });
+  });
+
+  it("answers what the click did, and has no outcome for a refusal", () => {
+    expect(TerminalLinkOpenResult.parse({ outcome: "opened" }).outcome).toBe("opened");
+    expect(TerminalLinkOpenResult.parse({ outcome: "revealed" }).outcome).toBe("revealed");
+    expect(TerminalLinkOpenResult.safeParse({ outcome: "refused" }).success).toBe(false);
+  });
+
+  it("declares the door on its own scope, local, and never replayed", () => {
+    expect(METHODS.filter((method) => method.method.startsWith("terminal.link."))).toEqual([
+      {
+        surface: "product",
+        method: "terminal.link.open",
+        // not `shell.open`: that one is plugin-eligible (the ruling, GT-8a)
+        scope: "terminal.link",
+        idempotent: false,
+        locality: "local",
+      },
+    ]);
+    expect(SCOPES).toContain("terminal.link");
+  });
+
+  it("puts its scope in no preset — no tailnet, guest, MCP or other preset, no plugin of any kind", () => {
+    // Every scope list the contracts export, found by shape rather than by
+    // name, so a preset added later (an MCP one, say) is covered the day it
+    // lands. SCOPES itself is the catalog, not a grant.
+    const known = new Set<string>(SCOPES);
+    const presets = Object.entries(contracts).filter(
+      ([name, value]) =>
+        name !== "SCOPES" &&
+        Array.isArray(value) &&
+        value.every((item) => typeof item === "string" && known.has(item)),
+    );
+    expect(presets.map(([name]) => name)).toEqual(
+      expect.arrayContaining(["TAILNET_SCOPES", "TAILNET_GUEST_SCOPES"]),
+    );
+    for (const [name, preset] of presets) expect(preset, name).not.toContain("terminal.link");
+    expect(TAILNET_SCOPES).not.toContain("terminal.link");
+    expect(TAILNET_GUEST_SCOPES).not.toContain("terminal.link");
+
+    // absent from the eligibility table, so no plugin is ever granted it — while
+    // `shell.open` IS renderer-eligible, which is why the door has its own scope
+    expect(PLUGIN_CAPABILITY_ELIGIBILITY).not.toHaveProperty(["terminal.link"]);
+    expect(PLUGIN_CAPABILITY_ELIGIBILITY["shell.open"]).toEqual({ renderer: true });
+    for (const source of ["bundled", "dev-linked", "registry", "sideload"] as const) {
+      const grants = computeEffectiveGrants({
+        requested: ["terminal.link", "shell.open"],
+        hasRenderer: true,
+        hasService: true,
+        source,
+      });
+      expect(grants.granted, source).toEqual(["shell.open"]);
+      expect(grants.denied, source).toEqual([
+        { capability: "terminal.link", reason: "entry-kind" },
+      ]);
+    }
   });
 });
 

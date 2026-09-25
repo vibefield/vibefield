@@ -13,6 +13,8 @@ import {
   type ShellInternalProviderMethod,
   ShellOpenExternalParams,
   ShellOpenExternalResult,
+  ShellOpenLinkParams,
+  ShellOpenLinkResult,
   type ShellProviderCallParams,
   type ShellProviderMethod,
   ShellProviderRegisterParams,
@@ -122,6 +124,14 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
     input: ShellDialogSaveFileParams,
     output: ShellDialogSaveFileResult,
     deadlineMs: null,
+  },
+  // GT-8a — a terminal link's web half (internal; the `terminal.link.open`
+  // door dispatches it after its own policy). The same OS hand-off as
+  // openExternal, so the same deadline.
+  "shell.openLink": {
+    input: ShellOpenLinkParams,
+    output: ShellOpenLinkResult,
+    deadlineMs: OPEN_EXTERNAL_DEADLINE_MS,
   },
 };
 

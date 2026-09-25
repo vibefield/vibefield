@@ -9,6 +9,8 @@ import {
   ShellDialogSaveFileResult,
   ShellOpenExternalParams,
   ShellOpenExternalResult,
+  ShellOpenLinkParams,
+  ShellOpenLinkResult,
   type ShellProviderCallParams,
   ShellProviderCallParams as ShellProviderCallParamsSchema,
   type ShellProviderError,
@@ -313,6 +315,17 @@ export class RecoveringShellProvider {
       const params = ShellRevealPathParams.parse(call.params);
       this.native.revealPath(params.path);
       return ShellRevealPathResult.parse({ revealed: true });
+    }
+    // GT-8a (GT-D22) — a terminal link's web half. fieldd's door has already
+    // classified the link; main re-checks the one rule it owns — an http(s)
+    // URL in its canonical spelling, with no credentials — and hands exactly
+    // that string to the default browser. A file link never arrives here: it
+    // is revealed, never opened.
+    if (call.method === "shell.openLink") {
+      const params = ShellOpenLinkParams.safeParse(call.params);
+      if (!params.success) throw { kind: "PRECONDITION_FAILED" };
+      await this.native.openExternal(params.data.url);
+      return ShellOpenLinkResult.parse({ opened: true });
     }
     if (call.method === "shell.webcontents.captureArtifactPreview") {
       const params = ShellWebContentsCaptureArtifactPreviewParams.parse(call.params);

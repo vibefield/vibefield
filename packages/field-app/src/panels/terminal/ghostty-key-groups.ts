@@ -387,6 +387,21 @@ const NOTES: Readonly<Record<string, KeyNote>> = {
   },
 };
 
+/** Notes that replace the ones above once the pinned loader APPLIES the key
+ * (GT-8a): the note follows the generated support, so a pin move can never
+ * leave "Applied" beside "not applied". */
+const WHEN_APPLIED: Readonly<Record<string, KeyNote>> = {
+  "link-url": {
+    timing: "live",
+    note: "Whether ⌘-click finds links in output. Every session on this Mac, live after a save.",
+  },
+};
+
+/** What a key does in the deck, for the support the pinned loader reports. */
+export function keyNote(key: string, support: GhosttyKeySupport): KeyNote | null {
+  return (support === "applied" ? WHEN_APPLIED[key] : undefined) ?? NOTES[key] ?? null;
+}
+
 export interface KeyEntry {
   readonly key: string;
   readonly support: GhosttyKeySupport;
@@ -406,7 +421,7 @@ export const KEY_ENTRIES: readonly KeyEntry[] = (() => {
     key: entry.key,
     support: entry.support,
     group: GROUP_OF.get(entry.key) ?? other,
-    note: NOTES[entry.key] ?? null,
+    note: keyNote(entry.key, entry.support),
   }));
   const order = [...KEY_GROUPS, other];
   return entries.sort(

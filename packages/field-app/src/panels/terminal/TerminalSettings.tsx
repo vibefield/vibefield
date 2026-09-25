@@ -29,7 +29,7 @@ import {
 import { storedGodviewTheme } from "../../godview/godview-theme";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { labelCls } from "../settings-ui";
-import { BehaviorTab } from "./BehaviorTab";
+import { BehaviorTab, terminalLinksApplied } from "./BehaviorTab";
 import { ConfigFileTab } from "./ConfigFileTab";
 import {
   changedKeyCount,
@@ -204,6 +204,17 @@ const SETTINGS_INDEX: readonly {
   },
 ];
 
+/** The index as the pinned loader makes it: the Links row turns with its
+ * section (GT-8a) — a switch on This Mac once ghosttea applies `link-url`. */
+function settingsIndex(): typeof SETTINGS_INDEX {
+  if (!terminalLinksApplied()) return SETTINGS_INDEX;
+  return SETTINGS_INDEX.map((entry) =>
+    entry.anchor === "behavior-links"
+      ? { ...entry, title: "Find links in output", where: "Behavior · This Mac" }
+      : entry,
+  );
+}
+
 function matches(needle: string, ...haystacks: readonly string[]): boolean {
   const words = needle.toLowerCase().split(/\s+/u).filter(Boolean);
   const text = haystacks.join(" ").toLowerCase();
@@ -217,7 +228,7 @@ function SearchResults({
   query: string;
   onReveal: (tab: TerminalTab, anchor: string) => void;
 }): ReactElement {
-  const settings = SETTINGS_INDEX.filter((entry) =>
+  const settings = settingsIndex().filter((entry) =>
     matches(query, entry.title, entry.terms, entry.where),
   );
   const keys = KEY_ENTRIES.filter((entry) => matches(query, entry.key, entry.group.label)).slice(

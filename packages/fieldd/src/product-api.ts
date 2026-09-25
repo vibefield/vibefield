@@ -258,6 +258,18 @@ export class ProductApi extends EventEmitter {
     return this.shellProvider.provides("shell.revealPath");
   }
 
+  /** GT-8a — a terminal link's web half: the default browser, for a URL the
+   * `terminal.link.open` door has already classified (terminal-links.ts).
+   * Internal, like revealPath: main sees fieldd, never the renderer that
+   * clicked. */
+  openLink(
+    params: import("@vibefield/contracts").ShellOpenLinkParams,
+  ): Promise<import("@vibefield/contracts").ShellOpenLinkResult> {
+    return this.shellProvider.callInternal("shell.openLink", params) as Promise<
+      import("@vibefield/contracts").ShellOpenLinkResult
+    >;
+  }
+
   /** GT-7 — a native open dialog for one file, locked to one purpose.
    * Internal: only the terminal service enters, and it reads the file the user
    * picked — main returns a path, never bytes. */

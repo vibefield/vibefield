@@ -174,6 +174,7 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { createSurfaceService } from "./surface-service";
+import { createTerminalLinkDoor } from "./terminal-links";
 import { serveAllowGlob, TERMINAL_SERVE_ID, TerminalServeDriver } from "./terminal-serve";
 import { TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
@@ -1185,6 +1186,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => ({ outcome: "succeeded" }),
       );
     });
+    // GT-8a (GT-D22) — a terminal link, ⌘-clicked in the deck. Registered
+    // beside openExternal because it reaches the same provider, but gated by
+    // its own scope (`terminal.link`, the window's alone — never the
+    // plugin-eligible `shell.open`): terminal-links.ts is the policy (a web
+    // link to the default browser through the internal `shell.openLink`, a file
+    // link only ever SHOWN through `shell.revealPath`, anything else refused
+    // before main is asked), and main the mechanism.
+    const openTerminalLink = createTerminalLinkDoor({ shell: api, audit });
+    api.register("terminal.link.open", (ctx, params) => openTerminalLink(ctx, params));
 
     // DT-1b — the live-surface policy door. Registered beside the other
     // shell-dispatching methods because it is one: the service decides whether

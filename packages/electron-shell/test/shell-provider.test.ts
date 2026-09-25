@@ -80,6 +80,7 @@ function call(
     | "shell.dialog.pickFile"
     | "shell.dialog.saveFile"
     | "shell.openExternal"
+    | "shell.openLink"
     | "shell.revealPath"
     | "shell.webcontents.captureArtifactPreview"
     | "shell.renderer.requestReplacement",
@@ -187,6 +188,49 @@ describe("RecoveringShellProvider", () => {
         },
       }),
     );
+    provider.dispose();
+  });
+
+  it("GT-8a: opens a terminal link's canonical http(s) URL, and nothing else, in the browser", async () => {
+    const { client, native, provider } = await fixture();
+    const url = "http://localhost:3000/x";
+    client.emit("shell.provider.call", call("shell-linkaaaaaaaaaaaa", "shell.openLink", { url }));
+    await vi.waitFor(() => expect(native.openExternal).toHaveBeenCalledWith(url));
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: { callId: "shell-linkaaaaaaaaaaaa", outcome: { result: { opened: true } } },
+      }),
+    );
+    // main's own re-check: an app, a mailto, credentials, a spelling fieldd
+    // would have canonicalized — each refused before the browser is asked
+    const refusals = [
+      "file:///Applications/Calculator.app",
+      "mailto:team@example.com",
+      "https://user:pass@example.com/",
+      "https://example.com",
+    ];
+    for (const [index, refused] of refusals.entries()) {
+      const callId = `shell-linkrefused${index}xxxx`;
+      client.emit("shell.provider.call", call(callId, "shell.openLink", { url: refused }));
+      await vi.waitFor(() =>
+        expect(client.requests).toContainEqual({
+          method: "shell.provider.resolve",
+          params: {
+            callId,
+            outcome: {
+              error: {
+                kind: "PRECONDITION_FAILED",
+                message: "the desktop operation failed",
+                retryable: false,
+              },
+            },
+          },
+        }),
+      );
+    }
+    expect(native.openExternal).toHaveBeenCalledTimes(1);
+    expect(native.revealPath).not.toHaveBeenCalled();
     provider.dispose();
   });
 
