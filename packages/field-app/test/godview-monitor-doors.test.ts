@@ -608,14 +608,19 @@ describe("the usage port's subscription", () => {
     // it keeps the last batch it had.
     const door = subscribingClient();
     const seen: AccountUsageBatch[] = [];
-    usagePortOver(door.client).subscribe((batch) => seen.push(batch));
+    const port = usagePortOver(door.client);
+    const states: string[] = [];
+    port.subscribeState?.((state) => states.push(state.state));
+    port.subscribe((batch) => seen.push(batch));
 
     expect(() => door.frame({ entries: "not an array" })).not.toThrow();
     expect(() => door.frame(undefined)).not.toThrow();
     expect(seen).toHaveLength(0);
+    expect(states.at(-1)).toBe("unavailable");
     // …and the next readable frame still lands.
     door.frame(VALID);
     expect(seen).toHaveLength(1);
+    expect(states.at(-1)).toBe("ready");
   });
 
   it("unsubscribes on arrival when the column left before the door answered, and delivers nothing", async () => {

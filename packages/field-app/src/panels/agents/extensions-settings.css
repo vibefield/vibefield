@@ -510,3 +510,62 @@
   margin: 0;
   color: var(--vf-text-secondary);
 }
+
+/* ── acts (AR-S4c) ── */
+
+/* A cell whose agent offers an act: the mark itself is the button. */
+.vf-ext-cell-button {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.vf-ext-cell-button:hover:not(:disabled) .vf-ext-cell {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-foreground) 12%, transparent);
+}
+
+.vf-ext-cell-button:hover:not(:disabled) .vf-ext-cell--off {
+  box-shadow:
+    inset 0 0 0 1.5px var(--vf-hairline-strong),
+    0 0 0 3px color-mix(in srgb, var(--vf-foreground) 12%, transparent);
+}
+
+.vf-ext-cell-button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.vf-ext-cell-button:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-ext-cell-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.vf-ext-confirm {
+  margin-top: 12px;
+}
+
+.vf-ext-confirm-runs {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--vf-text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.vf-ext-run {
+  margin-top: 4px;
+}
+
+/* An item's page: an agent's switch, or its Remove…, beside its state. */
+.vf-ext-item-state--cell .vf-ui-button {
+  margin-left: 4px;
+}

@@ -210,6 +210,7 @@ export function GodviewOverlay(): ReactElement | null {
               tuningOpen={tuningOpen}
               door={remoteDoor}
               panes={panes}
+              reserveWindowControls={getHost().platform === "darwin"}
               onSelectView={monitor.selectView}
               onToggleTuning={() => setTuningOpen((current) => !current)}
               onThemeChange={changeTheme}

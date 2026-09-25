@@ -28,9 +28,8 @@ import type { AgentProvider } from "@vibecook/puppeteer-runtime";
 import {
   type AgentCatalogEntry,
   type AgentCatalogResult,
-  type AgentDistributionRecord,
-  type AgentProvidersResult,
-  AgentsExtensionsListResult,
+  type AgentDistributionRecord,  AgentsExtensionsActResult,
+  type AgentProvidersResult,  AgentsExtensionsListResult,
   type AgentsInstallsResult,
   type AgentsOperationsResult,
   type AgentsProfileSetsDeleteResult,
@@ -732,7 +731,7 @@ describe("Agent Profiles (AR-S2) — puppeteer's profile sets, one folder each u
 describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own reads", () => {
   /** Every built-in extension reader replaced by one that reads nothing: a
    * test daemon never opens the developer's own ~/.claude or starts a codex. */
-  function fakeReaders(reads: string[]) {
+  function fakeReaders(reads: string[], switches = new Map<string, boolean>()) {
     return (builtin: AgentProvider[]): AgentProvider[] =>
       builtin.map((provider) => {
         const real = provider.extensions;
@@ -741,6 +740,30 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
           ...provider,
           extensions: {
             provider: real.provider,
+            // AR-S4c: Codex's linear turns on and off through a stand-in for
+            // its protocol — nothing starts a process here.
+            plan: (_profile, item, act) =>
+              provider.descriptor.id === "codex" && act !== "remove"
+                ? {
+                    target: { kind: item.kind, id: item.id },
+                    act,
+                    available: true as const,
+                    runs: { kind: "protocol" as const, method: "config/value/write" },
+                    display: `config/value/write mcp_servers.${item.id}.enabled = ${act === "enable"}`,
+                    reaches: [],
+                  }
+                : {
+                    target: { kind: item.kind, id: item.id },
+                    act,
+                    available: false as const,
+                    reason: "no-command" as const,
+                    message: "no command here",
+                  },
+            perform: async (profile, plan, io) => {
+              io.onOutput?.(`${plan.display}\n`);
+              switches.set(`${profile.provider} ${plan.target.id}`, plan.act === "enable");
+              return { ok: true };
+            },
             inventory: async (profile) => {
               reads.push(`${profile.provider} ${profile.id}`);
               const linear = ["claude", "codex"].includes(profile.provider)
@@ -750,7 +773,7 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
                       id: "linear",
                       name: "linear",
                       origin: "own" as const,
-                      enabled: true,
+                      enabled: switches.get(`${profile.provider} linear`) ?? true,
                       transport: "http" as const,
                       target: "https://mcp.linear.app/mcp",
                       ...(profile.provider === "codex" ? { env: ["LINEAR_TOKEN"] } : {}),
@@ -823,6 +846,59 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
     await win.call("agents.extensions.list", { set: "native", refresh: true });
     expect(reads).toHaveLength(first * 2);
     await until(() => frames().some((frame) => frame.reading === false), 5_000);
+  }, 30_000);
+
+  it("runs an act through the agent's own protocol for a window holding agents.manage, audited, and answers with what the agent holds after (AR-S4c)", async () => {
+    const reads: string[] = [];
+    const { daemon, dataDir } = await setup({ providers: fakeReaders(reads) });
+    await ready(daemon);
+    const act = {
+      set: "native",
+      provider: "codex",
+      kind: "mcp-server",
+      id: "linear",
+      act: "disable",
+    };
+
+    const denied = await window(daemon, ["agent.spawn"], "x2");
+    expect((await denied.callErr("agents.extensions.act", act)).data?.kind).toBe("FORBIDDEN_SCOPE");
+    const win = await window(daemon, ALL, "x3");
+    expect((await win.callErr("agents.extensions.act", { set: "native" })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+
+    const before = AgentsExtensionsListResult.parse(
+      await win.call("agents.extensions.list", { set: "native" }),
+    );
+    const cell = (lens: AgentsExtensionsListResult, provider: string) =>
+      lens.servers.find((row) => row.name === "linear")?.cells[provider]?.[0];
+    // Codex offers its switch; Claude, here, offers nothing
+    expect(cell(before, "codex")?.acts).toEqual([
+      {
+        act: "disable",
+        runs: "config/value/write mcp_servers.linear.enabled = false",
+        reaches: [],
+      },
+    ]);
+    expect(cell(before, "claude")?.acts).toBeUndefined();
+    expect(
+      (await win.callErr("agents.extensions.act", { ...act, provider: "claude" })).data?.kind,
+    ).toBe("PRECONDITION_FAILED");
+
+    const answered = AgentsExtensionsActResult.parse(await win.call("agents.extensions.act", act));
+    expect(answered.receipt).toMatchObject({ status: "changed", message: "turned off" });
+    expect(answered.run).toMatchObject({ provider: "codex", name: "linear", state: "finished" });
+    const after = AgentsExtensionsListResult.parse(
+      await win.call("agents.extensions.list", { set: "native" }),
+    );
+    expect(cell(after, "codex")).toMatchObject({
+      enabled: false,
+      acts: [{ act: "enable", runs: "config/value/write mcp_servers.linear.enabled = true" }],
+    });
+    expect(after.run).toMatchObject({ act: "disable", receipt: { status: "changed" } });
+    const audit = auditText(dataDir);
+    expect(audit).toContain('"agents.extensions.act"');
+    expect(audit).toContain("codex:mcp-server:linear");
   }, 30_000);
 });
 

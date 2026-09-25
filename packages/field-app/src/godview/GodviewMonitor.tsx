@@ -38,8 +38,7 @@ import {
   recedeOutside,
   showsProfileTabs,
   spawnProfileLabel,
-} from "./monitor/profile-tabs";
-import {
+} from "./monitor/profile-tabs";import {
   personaChoices,
   providerBadge,
   providerHistoryClaim,
@@ -47,8 +46,7 @@ import {
   providerPickerLabel,
   providerStartsSessions,
 } from "./monitor/provider-picker";
-import type { MonitorDoor } from "./monitor/remote-door";
-import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
+import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
 import {
   type MonitorPaneFacts,
   type MonitorSourceCounts,
@@ -152,6 +150,8 @@ export interface GodviewMonitorProps {
   door?: MonitorDoor | null;
   /** The deck's pane facts, read-only. */
   panes?: MonitorPaneFacts;
+  /** The product shell overlays native macOS controls on the leading edge. */
+  reserveWindowControls?: boolean;
   onSelectView?: (viewId: string) => void;
   onToggleTuning?: () => void;
   onThemeChange?: (theme: GodviewTheme) => void;
@@ -165,6 +165,7 @@ export function GodviewMonitor({
   tuningOpen = false,
   door = null,
   panes,
+  reserveWindowControls = false,
   onSelectView,
   onToggleTuning,
   onThemeChange,
@@ -204,6 +205,8 @@ export function GodviewMonitor({
     actions,
     sources,
     providers,
+    providerState,
+    retryProviders,
     selectedProviderId,
     selectProvider,
     selectedPersonaId,
@@ -234,6 +237,22 @@ export function GodviewMonitor({
   // With no row chosen the control stays, disabled, exactly as before.
   const offersSpawn = selectedProvider === undefined || providerStartsSessions(selectedProvider);
   const chromeRef = useRef<HTMLDivElement>(null);
+  const usagePort = door?.usage;
+  const [usageState, setUsageState] = useState<MonitorFeedState>({ state: "no-door" });
+  const [usageAttempt, setUsageAttempt] = useState(0);
+  // Rebind the subscription on retry without remounting the column: it keeps
+  // the last good reading and the viewer's open usage popup while reconnecting.
+  const columnUsagePort = useMemo<AccountUsagePort>(() => {
+    const source = usagePort ?? NO_USAGE;
+    return {
+      snapshot: () => source.snapshot(),
+      subscribe: (listener) => source.subscribe(listener),
+    };
+  }, [usagePort, usageAttempt]);
+  useEffect(() => {
+    setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
+    return usagePort?.subscribeState?.(setUsageState);
+  }, [usagePort]);
   const claimsRef = useRef<HTMLDivElement>(null);
   /** The picker's history state, which describes the picker (AC-4). */
   const historyId = useId();
@@ -493,9 +512,14 @@ export function GodviewMonitor({
         theme={theme}
         onThemeChange={(next) => onThemeChange?.(next)}
         leading={
-          <span className="vf-godview-header-notice" aria-live="polite">
-            {notice ?? ""}
-          </span>
+          <>
+            {reserveWindowControls ? (
+              <span className="vf-godview-native-controls-space" aria-hidden="true" />
+            ) : null}
+            <span className="vf-godview-header-notice" aria-live="polite">
+              {notice ?? ""}
+            </span>
+          </>
         }
         {...(showTabs
           ? {
@@ -519,7 +543,15 @@ export function GodviewMonitor({
               disabled={providers.length === 0}
               onChange={(event) => selectProvider(event.currentTarget.value)}
             >
-              {providers.length === 0 ? <option value="">no providers</option> : null}
+              {providers.length === 0 ? (
+                <option value="">
+                  {providerState.state === "unavailable"
+                    ? "providers unavailable"
+                    : providerState.state === "ready"
+                      ? "no providers"
+                      : "loading providers…"}
+                </option>
+              ) : null}
               {providers.map((provider) => (
                 <option
                   key={provider.id}
@@ -634,7 +666,7 @@ export function GodviewMonitor({
         {/* The chrome slot: the usage column down the stage's left edge (record
             §05), the package's own; the swarm steers around it. */}
         <div ref={chromeRef} className="vf-monitor-chrome" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
-          <UsageColumn port={door?.usage ?? NO_USAGE} />
+          <UsageColumn port={columnUsagePort} />
         </div>
         {/* The claims: VibeField's, on their own strip — also solid to the swarm. */}
         <div ref={claimsRef} className="vf-monitor-claims" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
@@ -659,6 +691,26 @@ export function GodviewMonitor({
             >
               {remoteUnavailableClaim(sources)}
             </span>
+          ) : null}
+          {providerState.state === "unavailable" ? (
+            <button
+              type="button"
+              className="vf-monitor-feed-retry"
+              title={providerState.reason}
+              onClick={retryProviders}
+            >
+              Providers unavailable · Retry
+            </button>
+          ) : null}
+          {usageState.state === "unavailable" ? (
+            <button
+              type="button"
+              className="vf-monitor-feed-retry"
+              title={usageState.reason}
+              onClick={() => setUsageAttempt((attempt) => attempt + 1)}
+            >
+              Usage unavailable · Retry
+            </button>
           ) : null}
           <span className="vf-monitor-ack" aria-live="polite">
             {acknowledgement?.message ?? ""}

@@ -356,19 +356,13 @@ describe("select routes by source", () => {
     await act(async () => target?.click());
 
     expect(door.attach).toHaveBeenCalledTimes(1);
-    expect(door.attach.mock.calls[0]?.[0]).toMatchObject({
+    // The request identifies the session. The destination pane owns its colour;
+    // the monitor must not send a competing per-session accent to the deck.
+    expect(door.attach.mock.calls[0]?.[0]).toEqual({
       deviceId: "mini",
       deviceName: "mini",
       remoteSessionId: "s2",
     });
-    // The row's own accent travels with the attach: it is what paints the pane
-    // the session lands in, which is the deck↔monitor link. It is the colour
-    // the row is actually WEARING, not any colour — a peer's session belongs to
-    // no project this device has dealt, so what travels is the ramp, and the
-    // assertion is that the two agree rather than that either is a hue.
-    expect(door.attach.mock.calls[0]?.[0].color).toBe(
-      target?.style.getPropertyValue("--agent-color"),
-    );
     expect(door.mountLocal).not.toHaveBeenCalled();
     expect(ackText(view)).toContain("attached from mini");
   });

@@ -19,7 +19,11 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FIXTURE_EXTENSIONS } from "../src/design-system/extensions-fixtures";
+import {
+  FIXTURE_EXTENSION_RUN,
+  FIXTURE_EXTENSION_RUNNING,
+  FIXTURE_EXTENSIONS,
+} from "../src/design-system/extensions-fixtures";
 import { ProfileExtensions } from "../src/panels/agents/ExtensionsSection";
 import {
   AgentExtensionListView,
@@ -28,6 +32,7 @@ import {
   ProfileExtensionsView,
 } from "../src/panels/agents/ExtensionsView";
 import {
+  actConfirm,
   agentExtensions,
   agentList,
   builtFromWords,
@@ -35,6 +40,7 @@ import {
   extensionItem,
   holdingWords,
   readWords,
+  runWords,
 } from "../src/panels/agents/extensions-model";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -361,6 +367,75 @@ describe("a server's or skill's page (pass 24)", () => {
   });
 });
 
+describe("acts (AR-S4c)", () => {
+  const actOf = (key: "servers" | "skills", name: string, provider: string) =>
+    extensionGrid(LENS, key)
+      .rows.find((row) => row.name === name)
+      ?.cells.find((cell) => cell.provider === provider)?.act;
+
+  it("turns an on cell off, an off cell on, and removes where the agent has no switch", () => {
+    expect(actOf("servers", "linear", "codex")).toMatchObject({
+      act: "disable",
+      title: "Turn linear off for Codex",
+      runs: "config/value/write mcp_servers.linear.enabled = false",
+      reaches: [],
+    });
+    expect(actOf("servers", "postgres", "codex")).toMatchObject({
+      act: "enable",
+      title: "Turn postgres on for Codex",
+    });
+    expect(actOf("servers", "linear", "claude")).toMatchObject({
+      act: "remove",
+      title: "Remove linear from Claude",
+      reaches: ["definition", "sign-in"],
+    });
+    expect(actOf("skills", "release-notes", "codex")).toMatchObject({
+      act: "disable",
+      kind: "skill",
+    });
+    // what the agent borrows, or changes only in its app, offers nothing here
+    expect(actOf("servers", "linear", "grok")).toBeNull();
+    expect(actOf("servers", "linear", "opencode")).toBeNull();
+  });
+
+  it("asks first only when a click reaches further than its cell, and says what goes", () => {
+    expect(actConfirm(actOf("servers", "linear", "codex")!, "in Work")).toBeNull();
+    expect(actConfirm(actOf("servers", "linear", "claude")!, "in Work")).toEqual({
+      question: "Remove linear from Claude in Work?",
+      what: "Claude has no switch that turns linear off in Work: this removes it. Its sign-in goes with it. Turning it back on will need its address, and any key it uses, again.",
+      action: "Remove linear",
+      danger: true,
+    });
+  });
+
+  it("words the run: running, then what the agent holds now", () => {
+    expect(runWords(FIXTURE_EXTENSION_RUNNING, new Date("2026-09-25T08:58:41.000Z"))).toEqual({
+      state: "Running…",
+      outcome: null,
+    });
+    expect(runWords(FIXTURE_EXTENSION_RUN, new Date("2026-09-25T09:01:41.000Z"))).toEqual({
+      state: "Finished 3 minutes ago",
+      outcome: { tone: "neutral", text: "postgres is off for Codex." },
+    });
+    expect(
+      runWords(
+        {
+          ...FIXTURE_EXTENSION_RUN,
+          receipt: {
+            status: "failed",
+            message: "codex mcp remove postgres exited with 1",
+            finishedAt: "2026-09-25T08:58:41.000Z",
+          },
+        },
+        new Date("2026-09-25T08:58:41.000Z"),
+      ).outcome,
+    ).toEqual({
+      tone: "error",
+      text: "Codex couldn’t change postgres: codex mcp remove postgres exited with 1.",
+    });
+  });
+});
+
 // ── drawn ──
 
 let root: Root | null = null;
@@ -523,6 +598,103 @@ describe("an agent's Extensions, its lists and an item's page, drawn", () => {
   });
 });
 
+describe("acts, drawn", () => {
+  const cellButton = (label: string) =>
+    [...(container?.querySelectorAll<HTMLButtonElement>(".vf-ext-cell-button") ?? [])].find(
+      (button) => button.getAttribute("aria-label")?.startsWith(label),
+    );
+
+  it("runs a switch at once, and opens P7's confirm first for a click that reaches further", async () => {
+    const onAct = vi.fn();
+    await mount(createElement(ProfileExtensionsView, { lens: LENS, profile: "Work", onAct }));
+    // Codex linear, Claude linear, Claude postgres, Codex postgres, Codex's release-notes
+    expect(container?.querySelectorAll(".vf-ext-cell-button")).toHaveLength(5);
+    await act(async () => cellButton("Turn linear off for Codex")?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "codex",
+      kind: "mcp-server",
+      id: "linear",
+      act: "disable",
+    });
+    onAct.mockClear();
+    await act(async () => cellButton("Remove linear from Claude")?.click());
+    expect(onAct).not.toHaveBeenCalled();
+    const confirm = container?.querySelector("[data-ext-confirm]");
+    expect(confirm?.textContent).toContain("Remove linear from Claude in Work?");
+    expect(confirm?.textContent).toContain("claude mcp remove --scope user linear");
+    const remove = [...(confirm?.querySelectorAll("button") ?? [])].find(
+      (button) => button.textContent === "Remove linear",
+    );
+    await act(async () => remove?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "claude",
+      kind: "mcp-server",
+      id: "linear",
+      act: "remove",
+    });
+    expect(container?.querySelector("[data-ext-confirm]")).toBeNull();
+  });
+
+  it("holds every cell while an act runs, and shows its run card with the outcome after", async () => {
+    await mount(
+      createElement(ProfileExtensionsView, {
+        lens: { ...LENS, run: FIXTURE_EXTENSION_RUNNING },
+        profile: "Work",
+        onAct: vi.fn(),
+      }),
+    );
+    const buttons = [
+      ...(container?.querySelectorAll<HTMLButtonElement>(".vf-ext-cell-button") ?? []),
+    ];
+    expect(buttons.every((button) => button.disabled)).toBe(true);
+    expect(container?.querySelector("[data-ext-run]")?.textContent).toContain("Running…");
+    await act(async () =>
+      root?.render(
+        createElement(ProfileExtensionsView, {
+          lens: { ...LENS, run: FIXTURE_EXTENSION_RUN },
+          profile: "Work",
+          onAct: vi.fn(),
+          now: new Date("2026-09-25T08:58:50.000Z"),
+        }),
+      ),
+    );
+    expect(container?.querySelector('[data-ext-run="finished"]')?.textContent).toContain(
+      "postgres is off for Codex.",
+    );
+  });
+
+  it("gives each agent on an item's page its switch, or its Remove… behind the confirm", async () => {
+    const onAct = vi.fn();
+    await mount(
+      createElement(ExtensionItemView, {
+        lens: LENS,
+        list: "servers",
+        name: "linear",
+        where: "in Work",
+        onAct,
+      }),
+    );
+    const codexSwitch = container?.querySelector<HTMLButtonElement>(
+      '[data-ext-agent="codex"] [role="switch"]',
+    );
+    expect(codexSwitch?.getAttribute("aria-checked")).toBe("true");
+    await act(async () => codexSwitch?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "codex",
+      kind: "mcp-server",
+      id: "linear",
+      act: "disable",
+    });
+    const remove = container?.querySelector<HTMLButtonElement>(
+      '[data-ext-agent="claude"] [aria-label="Remove linear from Claude"]',
+    );
+    await act(async () => remove?.click());
+    expect(container?.querySelector("[data-ext-confirm]")?.textContent).toContain(
+      "Its sign-in goes with it.",
+    );
+  });
+});
+
 describe("ProfileExtensions (the controller)", () => {
   it("subscribes for the profile, draws each frame, and reads again when asked", async () => {
     let push: ((frame: unknown) => void) | undefined;
@@ -566,5 +738,46 @@ describe("ProfileExtensions (the controller)", () => {
     );
     await act(async () => again?.click());
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks agents.extensions.act for a cell's act, and says a refusal beside the lists", async () => {
+    const request = vi.fn(async (method: string, params?: unknown) => {
+      expect(method).toBe("agents.extensions.act");
+      expect(params).toEqual({
+        set: "work",
+        provider: "codex",
+        kind: "mcp-server",
+        id: "linear",
+        act: "disable",
+      });
+      throw Object.assign(new Error("another change is running"), { kind: "CONFLICT" });
+    });
+    const client = {
+      status: "ready",
+      onStatusChange: () => () => undefined,
+      request,
+      subscribe: vi.fn(async () => ({
+        subId: "extensions:work",
+        snapshot: LENS,
+        unsubscribe: (): void => undefined,
+      })),
+    } as unknown as FielddClient;
+    await mount(
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(ProfileExtensions, { set: "work", profile: "Work" }),
+      ),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const cell = [
+      ...(container?.querySelectorAll<HTMLButtonElement>(".vf-ext-cell-button") ?? []),
+    ].find((button) => button.getAttribute("aria-label")?.startsWith("Turn linear off for Codex"));
+    await act(async () => cell?.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
+      "That change didn’t run",
+    );
   });
 });

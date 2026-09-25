@@ -138,6 +138,13 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: true,
         locality: "local",
       },
+      // AR-S4c — an act through the agent's own command: a mutation, audited
+      {
+        method: "agents.extensions.act",
+        scope: "agents.manage",
+        idempotent: false,
+        locality: "local",
+      },
       // AR-5d — account usage: a READ of the agent plane, so it rides
       // AR-5b: the account's billing state, a credentialed call per reading —
       // its own scope, not the fold's

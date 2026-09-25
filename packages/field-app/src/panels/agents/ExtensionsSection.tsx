@@ -5,6 +5,7 @@ import { refusalSentence } from "../../account/use-account";
 import {
   AgentExtensionListView,
   AgentExtensionsView,
+  type ExtensionActRequest,
   ExtensionItemView,
   ProfileExtensionsView,
 } from "./ExtensionsView";
@@ -17,7 +18,9 @@ import type { AgentListKey, ExtensionKindKey } from "./extensions-model";
 // "Read again", which asks `agents.extensions.list` to read every agent
 // again; its frame arrives on the subscription. Moving between the pages
 // subscribes again and gets the kept read at once. Nothing is polled and
-// nothing is kept here.
+// nothing is kept here. AR-S4c: an act asks `agents.extensions.act`; its
+// output and outcome arrive on the same frames (the lens's `run`), and the
+// cells turn when fieldd has read the agents again.
 
 /** A minute's tick for "Read 3 minutes ago". */
 const CLOCK_MS = 60_000;
@@ -27,6 +30,9 @@ interface ExtensionLens {
   error: string | null;
   refreshing: boolean;
   refresh: () => void;
+  /** An act was asked for and has not answered. */
+  acting: boolean;
+  act: (request: ExtensionActRequest) => void;
   now: Date;
 }
 
@@ -34,6 +40,7 @@ function useExtensionLens(set: string): ExtensionLens {
   const client = useFielddClient();
   const feed = useSubscription<unknown>("agents.extensions.subscribe", { set });
   const [refreshing, setRefreshing] = useState(false);
+  const [acting, setActing] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
 
@@ -56,6 +63,18 @@ function useExtensionLens(set: string): ExtensionLens {
       .finally(() => setRefreshing(false));
   }, [client, set]);
 
+  const act = useCallback(
+    (request: ExtensionActRequest) => {
+      setActing(true);
+      setRefusal(null);
+      client
+        .request("agents.extensions.act", { set, ...request })
+        .catch((cause: unknown) => setRefusal(refusalSentence("That change didn’t run", cause)))
+        .finally(() => setActing(false));
+    },
+    [client, set],
+  );
+
   const error =
     refusal ??
     (feed.status === "error"
@@ -64,22 +83,25 @@ function useExtensionLens(set: string): ExtensionLens {
         ? "fieldd answered with a list this version cannot read."
         : null);
 
-  return { lens, error, refreshing, refresh, now };
+  return { lens, error, refreshing, refresh, acting, act, now };
 }
 
 /** The profile page's two lists. */
 export function ProfileExtensions({
   set,
   profile,
+  where,
   onOpenItem,
 }: {
   set: string;
   /** The profile's name, for the words. */
   profile: string;
+  /** "in Work" · "on This Mac" */
+  where?: string;
   /** A row's name opens that server's or skill's page. */
   onOpenItem?: (key: ExtensionKindKey, name: string) => void;
 }): ReactElement {
-  const { lens, error, refreshing, refresh, now } = useExtensionLens(set);
+  const { lens, error, refreshing, refresh, acting, act, now } = useExtensionLens(set);
   return (
     <ProfileExtensionsView
       lens={lens}
@@ -87,7 +109,10 @@ export function ProfileExtensions({
       error={error}
       refreshing={refreshing}
       onRefresh={refresh}
+      onAct={act}
+      acting={acting}
       now={now}
+      {...(where !== undefined ? { where } : {})}
       {...(onOpenItem !== undefined ? { onOpenItem } : {})}
     />
   );
@@ -155,7 +180,7 @@ export function ExtensionItem({
   name: string;
   where: string;
 }): ReactElement {
-  const { lens, error, refreshing, refresh, now } = useExtensionLens(set);
+  const { lens, error, refreshing, refresh, acting, act, now } = useExtensionLens(set);
   return (
     <ExtensionItemView
       lens={lens}
@@ -165,6 +190,8 @@ export function ExtensionItem({
       error={error}
       refreshing={refreshing}
       onRefresh={refresh}
+      onAct={act}
+      acting={acting}
       now={now}
     />
   );

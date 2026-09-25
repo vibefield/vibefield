@@ -25,16 +25,9 @@ import type { AgentMonitorMirror, AgentSessionSummary, AgentStatus } from "./fac
  *     precisely its RESUME verb. Same fold, two honest readings — which is the
  *     reason the fold is lifted above both (AR-6 §4.1).
  *
- *     KNOWN GAP, upstream of this file (found at GT-6, read out of fieldd
- *     rather than out of a doc): the fold carries MANAGED and PENDING runs only
- *     (`fieldd/src/agent-runtime.ts:720` — `list()` folds `this.managed` and
- *     `this.pending`), and a run whose process ends is REMOVED from `managed`
- *     (`closeRun`, :2029) with only its record left for a later `agent.resume`.
- *     So a pane left showing a dead PTY usually has no row at all and wears the
- *     bare badge: the resume verb is reachable while the mirror already says
- *     `alive: false` and fieldd has not withdrawn the row yet, and not after.
- *     Closing that is fieldd's to do — the fold carrying exited-but-resumable
- *     records as rows of their own — and this seam is ready for them.
+ *     MF-1f keeps exited rows while their PTYs remain on the floor; MF-1g keeps
+ *     agent panes until explicitly closed. The GT-6 gap is therefore closed:
+ *     the fold can supply this projection after exit and after a restart.
  *   · Nothing here reads terminal text, and nothing enumerates a vendor: the
  *     mark is puppeteer's open provider id (AR-L1).
  */

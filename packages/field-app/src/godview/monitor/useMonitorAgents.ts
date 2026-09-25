@@ -1,14 +1,11 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { MonitorUsageState } from "@vibecook/puppeteer-core";
 import {
-  dealPaneColours,
-  EMPTY_PANE_COLOUR_LEDGER,
   EMPTY_UNREAD_LEDGER,
   EMPTY_USAGE_LEDGER,
   exportUsage,
   type MonitorPalette,
   type PaneAttachment,
-  paneColours,
   reconcileUnread,
   reconcileUsage,
   seedUsage,
@@ -36,16 +33,14 @@ import {
   loadProjectLedger,
   type ProjectLedger,
   saveProjectLedger,
-} from "./project-ledger";
-import {
+} from "./project-ledger";import {
   defaultProviderId,
   newSessionRefusal,
   personaChoices,
   providerListed,
   providerPickerLabel,
 } from "./provider-picker";
-import { type MonitorDoor, remoteRowId } from "./remote-door";
-import { useRemoteSessionField } from "./remote-session-field";
+import { type MonitorDoor, type MonitorFeedState, remoteRowId } from "./remote-door";import { useRemoteSessionField } from "./remote-session-field";
 import type { MonitorActions, MonitorAgent } from "./types";
 import { createUsageHistoryCache } from "./usage-history-cache";
 
@@ -143,6 +138,8 @@ export interface MonitorPaneFacts {
   /** The panes themselves, parallel to `sessionIds` (AR-5): a pane owns a
    * colour, and the session wears it while mounted there (record §02). */
   paneIds?: readonly string[];
+  /** Dealt once by the deck; the same colours its terminal frames wear. */
+  paneColors?: ReadonlyMap<string, string>;
   activePaneId?: string;
   /** The floor summaries of those panes' sessions (ghosttea's, as the deck
    * holds them): what makes an unclaimed pane a terminal row, and what lets
@@ -163,6 +160,8 @@ export interface MonitorAgentsResult {
   /** What the chrome can spawn as, and which of them is chosen. Only the rows
    * the picker lists (`providerListed`): a `declined` row is not offered. */
   providers: readonly AgentProviderSummary[];
+  providerState: MonitorFeedState;
+  retryProviders(): void;
   selectedProviderId: string | null;
   selectProvider(id: string): void;
   /** AC-4 — the persona a new session is born as: a `profileId` from the
@@ -205,7 +204,6 @@ export interface MonitorAcknowledgement {
 /** Where a remote row landed, remembered from the attach that put it there. */
 interface RemoteLink {
   localSessionId: string;
-  color: string;
 }
 
 const NO_PANES: MonitorPaneFacts = { sessionIds: [] };
@@ -289,6 +287,9 @@ export function useMonitorAgents({
    * session because the row is what survives a refresh of the mesh. */
   const [links, setLinks] = useState<ReadonlyMap<string, RemoteLink>>(() => new Map());
   const [providers, setProviders] = useState<readonly AgentProviderSummary[]>([]);
+  const [providerState, setProviderState] = useState<MonitorFeedState>({ state: "no-door" });
+  const [providerAttempt, setProviderAttempt] = useState(0);
+  const retryProviders = useCallback(() => setProviderAttempt((attempt) => attempt + 1), []);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [selectedPersonaId, setSelectedPersonaId] = useState("");
 
@@ -298,7 +299,8 @@ export function useMonitorAgents({
    * same tick, and what stays here is the monitor's pure projection of them. */
   const localField = useAgentFold();
   const remoteField = useRemoteSessionField({ door });
-
+  // Failed discovery is different from an empty inventory. A retry opens a new
+  // request, and late answers from the previous door/attempt cannot overwrite it.
   // What one can spawn as, asked per door — and again whenever the door
   // says the index moved (AC-4, the review: the history state and the persona
   // list are live daemon facts; a persona create bounces the daemon, and the
@@ -308,15 +310,16 @@ export function useMonitorAgents({
   // listed, and the first choice is a row that starts sessions
   // (`defaultProviderId`) — so a deck never opens with SPAWN withdrawn while
   // an offered agent was on the list; a choice already made survives a
-  // re-ask while its row is still listed.
-  useEffect(() => {
+  // re-ask while its row is still listed.  useEffect(() => {
     if (door === null) {
       setProviders([]);
-      setSelectedProviderId(null);
+      setSelectedProviderId(null);      setProviderState({ state: "no-door" });
       return;
     }
     let alive = true;
     let degraded = false;
+    setProviders([]);
+    setProviderState({ state: "loading" });
     const ask = (): void => {
       void door
         .providers()
@@ -325,29 +328,33 @@ export function useMonitorAgents({
           const list = answered.filter(providerListed);
           degraded = list.some((p) => p.history === "unavailable");
           setProviders(list);
+          setProviderState({ state: "ready" });
           setSelectedProviderId((current) => {
             if (current !== null && list.some((p) => p.id === current)) return current;
             return defaultProviderId(list);
           });
         })
-        .catch(() => {
+        .catch((cause: unknown) => {
           if (!alive) return;
           degraded = false;
           setProviders([]);
           setSelectedProviderId(null);
+          setProviderState({
+            state: "unavailable",
+            reason: cause instanceof Error ? cause.message : String(cause),
+          });
         });
     };
     ask();
     const stop = door.indexChanges?.(ask);
     const clock = setInterval(() => {
       if (degraded) ask();
-    }, HISTORY_REASK_MS);
-    return () => {
+    }, HISTORY_REASK_MS);    return () => {
       alive = false;
       stop?.();
       clearInterval(clock);
     };
-  }, [door]);
+  }, [door, providerAttempt]);
 
   /** GT-3p's damage gate, kept: the projection's INPUTS as JSON. A frame
    * that changed nothing anybody renders still arrives as a new object; the
@@ -384,18 +391,14 @@ export function useMonitorAgents({
   }, [paneSummaryKey]);
 
   /**
-   * AR-5 — the panes' colours (record §02): dealt as panes open, on the wheel
-   * parallel to the projects', retired with the pane; the session in a pane
-   * wears it while mounted there, as the band and, in the selected pane, the
-   * light. The ledger lives for the stage's life, and the attachments the
-   * views draw are built from it and the deck's pane facts.
+   * The deck owns pane colours and keeps them while this monitor is closed.
+   * A session wears its active pane's colour, or its first pane's when none of
+   * its panes is active. Never deal a second ledger here: reopening the stage
+   * must not change the bubble-to-frame association.
    */
-  const paneLedgerRef = useRef(EMPTY_PANE_COLOUR_LEDGER);
   const paneIdsKey = (panes.paneIds ?? []).join("\0");
   const attachments = useMemo(() => {
     const paneIds = paneIdsKey === "" ? [] : paneIdsKey.split("\0");
-    paneLedgerRef.current = dealPaneColours(paneLedgerRef.current, paneIds);
-    const colours = paneColours(paneLedgerRef.current, palette.tint);
     const bySession = new Map<string, string[]>();
     paneIds.forEach((paneId, index) => {
       const sessionId = panes.sessionIds[index];
@@ -408,7 +411,7 @@ export function useMonitorAgents({
     for (const [sessionId, ids] of bySession) {
       const activeIndex = panes.activePaneId === undefined ? -1 : ids.indexOf(panes.activePaneId);
       const primaryPaneId = ids[activeIndex >= 0 ? activeIndex : 0] as string;
-      const color = colours.get(primaryPaneId);
+      const color = panes.paneColors?.get(primaryPaneId);
       result.set(sessionId, {
         primaryPaneId,
         paneIds: [primaryPaneId, ...ids.filter((id) => id !== primaryPaneId)],
@@ -417,7 +420,7 @@ export function useMonitorAgents({
     }
     return result;
     // keyed by the facts, not by the array the deck republishes
-  }, [paneIdsKey, paneSessionKey, panes.activePaneId, palette.tint]);
+  }, [paneIdsKey, paneSessionKey, panes.activePaneId, panes.paneColors]);
 
   /**
    * AR-5 — the projects' colours (record §02, D3): every managed row's project
@@ -706,7 +709,6 @@ export function useMonitorAgents({
         deviceId: remote.deviceId,
         deviceName: remote.deviceName,
         remoteSessionId: remote.remoteSessionId,
-        color: agent.color,
       });
       if (outcome.state === "no-pane") {
         announce("no pane to attach to — open one in the deck first");
@@ -718,7 +720,7 @@ export function useMonitorAgents({
       }
       setLinks((current) => {
         const next = new Map(current);
-        next.set(agent.id, { localSessionId: outcome.sessionId, color: agent.color });
+        next.set(agent.id, { localSessionId: outcome.sessionId });
         return next;
       });
       // Mirror-write, honest and in the same breath as the success: the pane is
@@ -884,6 +886,8 @@ export function useMonitorAgents({
     actions,
     sources,
     providers,
+    providerState,
+    retryProviders,
     selectedProviderId,
     selectProvider,
     selectedPersonaId: personaId,
