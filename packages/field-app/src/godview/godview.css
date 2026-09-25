@@ -138,6 +138,29 @@
     background-color 240ms ease;
 }
 
+/* The shell's native traffic lights start at x=18 (windows.ts). Combined
+   with the shared bar's 15px padding and 8px gap, reserve the same ~96px
+   leading region as the product HUD. Only the macOS host mounts this slot. */
+.vf-godview-native-controls-space {
+  flex: 0 0 72px;
+  align-self: stretch;
+}
+
+.vf-monitor-feed-retry {
+  pointer-events: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  background: var(--panel-bg);
+  cursor: pointer;
+}
+
+.vf-monitor-feed-retry:focus-visible {
+  outline: 1px solid var(--text-main);
+  outline-offset: 2px;
+}
+
 /* VibeField's own bar tools (AR-5): the provider select beside the SPAWN and
    TUNE controls, wearing the bar's recipe (22px, 5px radius, the panel
    material). A control that cannot act says so: the muted ramp at DESIGN.md

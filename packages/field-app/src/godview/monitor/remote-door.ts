@@ -3,6 +3,16 @@ import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
 import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
 
+export type MonitorFeedState =
+  | { state: "no-door" | "loading" | "ready" }
+  | { state: "unavailable"; reason: string };
+
+/** The shared column stays presentation-only; the host reports transport and
+ * parse failures beside it, without inventing an empty usage batch. */
+export interface MonitorUsagePort extends AccountUsagePort {
+  subscribeState?(listener: (state: MonitorFeedState) => void): () => void;
+}
+
 /**
  * THE DOOR (GT-D17, widened at AR-3). The whole of what the monitor may reach
  * outside itself.
@@ -52,7 +62,7 @@ export interface MonitorDoor {
   history: HistoryPort;
   /** AR-5 — the account-usage readings the usage column draws
    * (`agents.usage` + its subscription), adapted to the views' port. */
-  usage: AccountUsagePort;
+  usage: MonitorUsagePort;
   /** AR-S5 — the Agent Profiles the bar's tabs are made of
    * (`agents.profileSets.subscribe`), held only while the stage is open
    * (PF6). Optional, and deliberately: a door without it draws no tabs,
@@ -121,9 +131,6 @@ export interface RemoteAttachRequest {
   deviceName: string;
   /** The session's id ON THE PEER. It is not an id in this device's floor. */
   remoteSessionId: string;
-  /** The row's §2.6 accent, so the pane it lands in wears the bubble's color —
-   * the deck↔monitor link the reference app draws and GT-3m ported unfed. */
-  color: string;
 }
 
 /**

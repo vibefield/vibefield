@@ -15,6 +15,7 @@
  * provider the overlay mounts in production.
  */
 
+import { useMonitorPalette } from "@vibecook/puppeteer-views";
 import {
   act,
   type ComponentType,
@@ -27,6 +28,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
+import { type MonitorPaneFacts, useMonitorAgents } from "../src/godview/monitor/useMonitorAgents";
 import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
@@ -61,7 +63,8 @@ const workspace = {
   mounts: [] as string[],
   /** The live context's `mountSession`, so a test can land a birth the way
    * ghosttea lands what `createSplitSession` answers. */
-  mount: (_summary: { id: string; cwd?: string | null }) => undefined as void,
+  mount: (_summary: { id: string; cwd?: string | null }): void => undefined,
+  refresh: (): void => undefined,
 };
 
 /**
@@ -78,7 +81,10 @@ function WorkspaceStub({
   decoratePane,
 }: {
   sidebar: ComponentType<{ workspace: unknown }>;
-  decoratePane?: (session: StubSession) => { color?: string; label?: string } | undefined;
+  decoratePane?: (
+    session: StubSession,
+    paneId: string,
+  ) => { color?: string; label?: string } | undefined;
 }): ReactElement {
   const [version, setVersion] = useState(0);
   const context = useMemo(
@@ -107,6 +113,7 @@ function WorkspaceStub({
     [version],
   );
   workspace.mount = context.mountSession;
+  workspace.refresh = () => setVersion((current) => current + 1);
   return (
     <>
       <Sidebar workspace={context} />
@@ -120,7 +127,7 @@ function WorkspaceStub({
           // PU-14b it is also a visible difference: the frame's line and glow
           // take the project colour under `[data-pane-accent]` and the
           // terminal's ink without it.
-          const face = decoratePane?.(pane.session);
+          const face = decoratePane?.(pane.session, pane.id);
           return (
             <div
               key={pane.id}
@@ -181,6 +188,7 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
         decoratePane={
           props["decoratePane"] as (
             session: StubSession,
+            paneId: string,
           ) => { color?: string; label?: string } | undefined
         }
       />
@@ -341,6 +349,39 @@ async function settle(): Promise<void> {
   }
 }
 
+function PaneLinks({ panes }: { panes: MonitorPaneFacts }): ReactElement {
+  const palette = useMonitorPalette();
+  const { agents } = useMonitorAgents({ palette, panes });
+  return (
+    <div>
+      {agents.map((agent) => (
+        <output
+          key={agent.id}
+          data-session={agent.session?.id}
+          data-pane-color={agent.attachment?.color}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DeckScene(): ReactElement {
+  const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
+  return (
+    <>
+      <GodviewDeck
+        active
+        theme="light"
+        onPanes={setPanes}
+        onRemoteDoor={(next) => {
+          deckDoor = next;
+        }}
+      />
+      <PaneLinks panes={panes} />
+    </>
+  );
+}
+
 async function mountDeck(): Promise<HTMLElement> {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -348,13 +389,7 @@ async function mountDeck(): Promise<HTMLElement> {
   await act(async () => {
     root?.render(
       <GodviewAgentsProvider door={foldDoor()}>
-        <GodviewDeck
-          active
-          theme="light"
-          onRemoteDoor={(next) => {
-            deckDoor = next;
-          }}
-        />
+        <DeckScene />
       </GodviewAgentsProvider>,
     );
   });
@@ -383,6 +418,8 @@ beforeEach(() => {
   workspace.activePaneId = "pane-1";
   workspace.mounts = [];
   localStorage.clear();
+  document.documentElement.style.setProperty("--tint-l", "0.6");
+  document.documentElement.style.setProperty("--tint-c", "0.15");
   disposeTerminalPool();
   configureTerminalPool({ transport: "routed", defaultShell: "/bin/zsh", home: "/home/tester" });
   installHost();
@@ -393,10 +430,69 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
+  document.documentElement.style.removeProperty("--tint-l");
+  document.documentElement.style.removeProperty("--tint-c");
+  document.documentElement.classList.remove("godview-test-dark");
   vi.restoreAllMocks();
 });
 
 describe("the deck's pane frames", () => {
+  it("shares each pane's colour with Swarm across duplicate sessions, replacement and pane closure", async () => {
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-2") },
+    ];
+    const host = await mountDeck();
+    const colour = (id: string) => paneOf(host, id)?.style.getPropertyValue("--ghostty-pane-color");
+    const ring = (id: string) =>
+      host.querySelector(`output[data-session="${id}"]`)?.getAttribute("data-pane-color");
+    const first = colour("pane-1");
+    const second = colour("pane-2");
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(first).not.toBe(second);
+    expect(frameFor(host, "pty-1")?.style.getPropertyValue("--pane-color")).toBe(first);
+    expect(ring("pty-1")).toBe(first);
+    expect(ring("pty-2")).toBe(second);
+    expect(workspaceProps["splitSizing"]).toBe("equal");
+
+    await act(async () => {
+      workspace.activePaneId = "pane-2";
+      workspace.mount(stubSession("pty-1"));
+    });
+    await settle();
+    expect(colour("pane-1")).toBe(first);
+    expect(colour("pane-2")).toBe(second);
+    expect(ring("pty-1")).toBe(second);
+    expect(
+      paneOf(host, "pane-2")
+        ?.querySelector<HTMLElement>("[data-vf-pane-frame]")
+        ?.style.getPropertyValue("--pane-color"),
+    ).toBe(second);
+
+    await act(async () => {
+      workspace.panes = workspace.panes.filter((pane) => pane.id !== "pane-1");
+      workspace.panes.push({ id: "pane-3", session: stubSession("pty-3") });
+      workspace.refresh();
+    });
+    await settle();
+    expect(colour("pane-2")).toBe(second);
+    expect(colour("pane-3")).toBeTruthy();
+    expect(colour("pane-3")).not.toBe(first);
+    expect(ring("pty-3")).toBe(colour("pane-3"));
+
+    // The theme changes the tint, but both surfaces must move together even
+    // though no pane/session identity changed (the deck's publication gate).
+    await act(async () => {
+      document.documentElement.style.setProperty("--tint-l", "0.74");
+      document.documentElement.classList.add("godview-test-dark");
+    });
+    await settle();
+    expect(colour("pane-2")).not.toBe(second);
+    expect(ring("pty-1")).toBe(colour("pane-2"));
+    expect(frameFor(host, "pty-3")?.style.getPropertyValue("--pane-color")).toBe(colour("pane-3"));
+  });
+
   it("marks the deck so the package's pane rules apply, and frames every pane", async () => {
     workspace.panes = [
       { id: "pane-1", session: stubSession("pty-1") },
@@ -668,18 +764,19 @@ describe("the deck's pane frames", () => {
 
   it("says where a peer's session lives, from the attach that put it there", async () => {
     const host = await mountDeck();
+    const paneColor = paneOf(host, "pane-1")?.style.getPropertyValue("--ghostty-pane-color");
     expect(deckDoor).not.toBeNull();
     await act(async () => {
       await deckDoor?.attach({
         deviceId: "mini",
         deviceName: "mini",
         remoteSessionId: "s1",
-        color: "oklch(0.66 0.13 60)",
       });
     });
     await settle();
     const frame = frameFor(host, "replica-mini-s1");
     expect(frame).not.toBeNull();
+    expect(frame?.style.getPropertyValue("--pane-color")).toBe(paneColor);
     expect(frame?.querySelector(".vf-pane-badge-name")?.getAttribute("title")).toContain("on mini");
     expect(frame?.querySelector(".vf-pane-os")).not.toBeNull();
   });

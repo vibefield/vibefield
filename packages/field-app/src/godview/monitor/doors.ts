@@ -8,7 +8,6 @@ import {
   type AccountUsageSource,
 } from "@vibecook/puppeteer-core";
 import type {
-  AccountUsagePort,
   HistoryPort,
   HistorySearchReadiness,
   HistorySearchStatus,
@@ -22,7 +21,7 @@ import {
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
-import type { ProfileSetsPort } from "./remote-door";
+import type { MonitorFeedState, MonitorUsagePort, ProfileSetsPort } from "./remote-door";
 
 // THE TWO PORTS (AR-5, D14): the find sheet and the usage column reach fieldd
 // only through the deck's door, and the deck builds these over its own
@@ -267,18 +266,55 @@ export function toAccountUsageBatch(payload: unknown): AccountUsageBatch {
   return { refreshedAt: batch.generatedAt, entries: batch.entries.map(toEntry) };
 }
 
-export function usagePortOver(client: DoorClient): AccountUsagePort {
+export function usagePortOver(client: DoorClient): MonitorUsagePort {
+  const listeners = new Set<(state: MonitorFeedState) => void>();
+  const errors = new Map<"snapshot" | "subscription", string>();
+  let snapshotAttempt = 0;
+  let subscriptionReady = false;
+  let state: MonitorFeedState = { state: "loading" };
+  const report = (source: "snapshot" | "subscription", cause?: unknown): void => {
+    if (source === "subscription") subscriptionReady = cause === undefined;
+    if (subscriptionReady) errors.delete("snapshot");
+    if (cause === undefined) errors.delete(source);
+    else if (source !== "snapshot" || !subscriptionReady) {
+      errors.set(source, cause instanceof Error ? cause.message : String(cause));
+    }
+    const reason = [...errors.values()].join(" · ");
+    state = reason ? { state: "unavailable", reason } : { state: "ready" };
+    for (const listener of listeners) listener(state);
+  };
   return {
-    snapshot: async () => toAccountUsageBatch(await client.request("agents.usage", {})),
+    subscribeState: (listener) => {
+      listeners.add(listener);
+      listener(state);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    snapshot: async () => {
+      const attempt = ++snapshotAttempt;
+      try {
+        const batch = toAccountUsageBatch(await client.request("agents.usage", {}));
+        if (attempt === snapshotAttempt) report("snapshot");
+        return batch;
+      } catch (cause) {
+        if (attempt === snapshotAttempt) report("snapshot", cause);
+        throw cause;
+      }
+    },
     subscribe: (listener) => {
+      subscriptionReady = false;
       let cancelled = false;
       let unsubscribe: (() => void) | null = null;
       const deliver = (payload: unknown): void => {
-        // the tolerant reader: an unreadable frame is dropped, never drawn
+        // Keep the last good batch on an unreadable frame, but expose the
+        // failure to the host. A later valid frame clears this failure.
         try {
-          listener(toAccountUsageBatch(payload));
-        } catch {
-          // a frame this reader cannot parse — the column keeps its last batch
+          const batch = toAccountUsageBatch(payload);
+          report("subscription");
+          listener(batch);
+        } catch (cause) {
+          report("subscription", cause);
         }
       };
       void client
@@ -293,7 +329,9 @@ export function usagePortOver(client: DoorClient): AccountUsagePort {
           unsubscribe = subscription.unsubscribe;
           deliver(subscription.snapshot);
         })
-        .catch(() => undefined);
+        .catch((cause: unknown) => {
+          if (!cancelled) report("subscription", cause);
+        });
       return () => {
         cancelled = true;
         unsubscribe?.();

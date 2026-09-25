@@ -47,6 +47,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
+import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentProviderSummary, AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
@@ -674,6 +675,53 @@ describe("the monitor stage", () => {
     const button = host.querySelector<HTMLButtonElement>(".vf-godview-spawn");
     await act(async () => button?.click());
     expect(door.spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it("distinguishes failed provider discovery from an empty inventory and recovers on retry", async () => {
+    const door = fakeDoor();
+    const providers = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("provider service unavailable"))
+      .mockResolvedValue(PROVIDERS);
+    door.providers = providers;
+    const host = await mountMonitor("list", door);
+    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Agent provider"]');
+    expect(select?.textContent).toContain("providers unavailable");
+    expect(host.querySelector<HTMLButtonElement>(".vf-godview-spawn")?.disabled).toBe(true);
+    const retry = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Providers unavailable · Retry",
+    );
+    expect(retry?.title).toBe("provider service unavailable");
+    await act(async () => retry?.click());
+    expect(providers).toHaveBeenCalledTimes(2);
+    expect(select?.value).toBe("claude");
+    expect(host.querySelector<HTMLButtonElement>(".vf-godview-spawn")?.disabled).toBe(false);
+    expect(host.textContent).not.toContain("Providers unavailable · Retry");
+  });
+
+  it("surfaces a failed usage subscription and retries through the same product port", async () => {
+    const door = fakeDoor();
+    const batch = { generatedAt: CHECKED_AT, entries: [] };
+    const unsubscribe = vi.fn();
+    const subscribe = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("usage stream unavailable"))
+      .mockResolvedValue({ snapshot: batch, unsubscribe });
+    door.usage = usagePortOver({ request: async () => batch, subscribe });
+    const host = await mountMonitor("list", door);
+    const column = host.querySelector(".vf-usage-column");
+    const retry = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Usage unavailable · Retry",
+    );
+    expect(retry?.title).toBe("usage stream unavailable");
+    await act(async () => retry?.click());
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    expect(host.textContent).not.toContain("Usage unavailable · Retry");
+    // Retry must preserve the column's existing readings and popup state.
+    expect(host.querySelector(".vf-usage-column")).toBe(column);
+    act(() => root?.unmount());
+    root = null;
+    expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
   it("refuses to spawn a provider that is not installed, and says so before asking the door", async () => {

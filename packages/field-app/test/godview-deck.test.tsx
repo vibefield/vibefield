@@ -737,7 +737,6 @@ describe("paneMeta, the durable half of restore (GT-D8 as amended)", () => {
         deviceId: "studio-mini",
         deviceName: "studio-mini",
         remoteSessionId: "s1",
-        color: "#ec4899",
       }),
     );
     expect(outcome).toMatchObject({ state: "attached" });

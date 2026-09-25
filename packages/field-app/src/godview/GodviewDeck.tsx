@@ -9,8 +9,12 @@ import {
   DECK_FRAMED_CLASS,
   type DeckFrameSlotProps,
   DeckFrames,
+  dealPaneColours,
+  EMPTY_PANE_COLOUR_LEDGER,
   PaneFrame,
   type PaneFrameVerbs,
+  paneColours,
+  useMonitorPalette,
 } from "@vibecook/puppeteer-views";
 import {
   AgentInterruptResult,
@@ -271,17 +275,24 @@ export function GodviewDeck({
    * has to be the deck's rather than the stage's: the stage is shared with the
    * monitor and the tuning panel, and a zoom is about the panes. */
   const zoomHostRef = useRef<HTMLDivElement>(null);
-  /** Session id → the monitor row's accent that brought it here. The pane wears
-   * the bubble's color, which is the deck↔monitor link the reference app draws
-   * (GT-3m ported `PaneAttachment` for exactly this and could not feed it). A
-   * ref because `decoratePane` must stay referentially stable, and the mount
-   * that follows an attach re-renders the workspace anyway. */
-  const paneColors = useRef(new Map<string, string>());
+  /** One ledger for the deck's lifetime, including while the monitor is closed.
+   * A colour belongs to a PANE, even when two panes show the same session.
+   * Frames, terminal decoration and the Swarm all consume this same map. */
+  const paneLedger = useRef(EMPTY_PANE_COLOUR_LEDGER);
+  const palette = useMonitorPalette();
+  const paneIdsKey = (workspace?.panes ?? []).map((pane) => pane.id).join("\0");
+  const framePaneColors = useMemo(() => {
+    paneLedger.current = dealPaneColours(
+      paneLedger.current,
+      paneIdsKey === "" ? [] : paneIdsKey.split("\0"),
+    );
+    return paneColours(paneLedger.current, palette.tint);
+  }, [paneIdsKey, palette.tint]);
   /** Local replica id → the PEER it came from. The deck is the only place that
    * knows a pane is a peer's, and it knows it exactly once — at the attach that
    * made it — so this is where locality is recorded rather than inferred later
    * from a path (GT-5c, the 2026-08-06 erratum). It is read by `paneMeta`, so a
-   * ref for the same reason `paneColors` is one. */
+   * ref so recording an origin does not reinitialize the workspace. */
   const remoteDevices = useRef(new Map<string, string>());
   /** Session id → the folder this deck BORN it in (PU-14b's `fallbackCwd`).
    *
@@ -290,7 +301,7 @@ export function GodviewDeck({
    * not drawn its first prompt has announced nothing — so the badge read
    * `terminal` for the beat before the prompt landed. The deck is the one place
    * that knows the answer, because the deck is what asked for the split. A ref
-   * for the same reason `paneColors` is one: it must not re-run the workspace's
+   * because it must not re-run the workspace's
    * initialization, and the mount that follows a birth re-renders anyway. */
   const bornCwd = useRef(new Map<string, string>());
   /** GT-3, the restore gate. `null` while the question is still being asked of
@@ -958,7 +969,6 @@ export function GodviewDeck({
             runtime.terminate(session.id);
             return { state: "no-pane" };
           }
-          paneColors.current.set(session.id, request.color);
           // The locality record (GT-5c). This is the one moment the deck knows
           // for certain that this pane holds a PEER'S session, and `paneMeta`
           // stamps it into the persisted document so a later restore does not
@@ -1147,21 +1157,6 @@ export function GodviewDeck({
   paneRuns.current = paneAgents.runs;
   const deckZoom = useRef(zoom);
   deckZoom.current = zoom;
-
-  /** The pane colours, keyed as the package wants them (by PANE, record §02).
-   * The deck records a colour per SESSION at the attach or mount that dealt it,
-   * so this is that ref joined through the panes the workspace currently lays
-   * out. Ghosttea also sets the colour on the pane element itself, which is
-   * where the frame's line and glow read it from; this is for the chrome the
-   * frame draws inside the portal. */
-  const framePaneColors = useMemo(() => {
-    const colours = new Map<string, string>();
-    for (const pane of workspace?.panes ?? []) {
-      const colour = paneColors.current.get(pane.session.id);
-      if (colour !== undefined) colours.set(pane.id, colour);
-    }
-    return colours;
-  }, [workspace]);
 
   /** The birth folders, joined through the panes the workspace lays out — the
    * badge's LAST fallback, after the agent's project and the session's own cwd
@@ -1411,6 +1406,7 @@ export function GodviewDeck({
       sessionIds.join("\u0000"),
       activeSessionId ?? "",
       paneIds.join("\u0000"),
+      paneIds.map((id) => framePaneColors.get(id) ?? "").join("\u0000"),
       activePaneId ?? "",
       ...sessions.map(
         (session) =>
@@ -1422,13 +1418,6 @@ export function GodviewDeck({
     ].join("\u0001");
     if (key === lastPaneFacts.current) return;
     lastPaneFacts.current = key;
-    // A color belongs to a pane, so it leaves with one. Pruned HERE rather than
-    // on close because this is where the deck learns its panes changed, whatever
-    // changed them — and a map that only ever grew would hand a stale accent
-    // back if the floor ever reused a session id.
-    for (const sessionId of paneColors.current.keys()) {
-      if (!sessionIds.includes(sessionId)) paneColors.current.delete(sessionId);
-    }
     for (const sessionId of remoteDevices.current.keys()) {
       if (!sessionIds.includes(sessionId)) remoteDevices.current.delete(sessionId);
     }
@@ -1439,6 +1428,7 @@ export function GodviewDeck({
       sessionIds,
       ...(activeSessionId !== undefined ? { activeSessionId } : {}),
       paneIds,
+      paneColors: framePaneColors,
       ...(activePaneId !== undefined ? { activePaneId } : {}),
       // the floor summaries the panes hold (AR-3): an unclaimed pane is a
       // terminal row on the stage, a managed row carries its PTY's summary
@@ -1446,21 +1436,24 @@ export function GodviewDeck({
       // …and every live PTY the floor holds (GT-6b), pane or no pane.
       floor: floorRoster,
     });
-  }, [paneSessionIds, workspace, onPanes, floorRoster]);
+  }, [paneSessionIds, workspace, onPanes, floorRoster, framePaneColors]);
 
   /** The pane's face, plus the monitor link (GT-D17).
    *
    * `describePane` stays a pure function of the session and keeps its own law
-   * (a live pane says nothing). What this adds is a §2.6 accent for a pane a
-   * monitor row put there — an accent GROUPS and labels and never signals
+   * (a live pane says nothing). What this adds is the pane's own accent:
+   * an accent GROUPS and labels and never signals
    * state, which is why an exit's `--vf-red` still wins: a state outranks a
    * label, always. */
-  const decorate = useCallback((session: DeckSession): PaneFace | undefined => {
-    const face = describePane(session);
-    const color = paneColors.current.get(session.id);
-    if (color === undefined) return face;
-    return { ...face, color: face?.color ?? color };
-  }, []);
+  const decorate = useCallback(
+    (session: DeckSession, paneId: string): PaneFace | undefined => {
+      const face = describePane(session);
+      const color = framePaneColors.get(paneId);
+      if (color === undefined) return face;
+      return { ...face, color: face?.color ?? color };
+    },
+    [framePaneColors],
+  );
 
   // Whatever the deck currently is, said out loud once per change. The canvas
   // smoke's CANVAS_READY precedent: the headless harness reads renderer console
@@ -1663,6 +1656,7 @@ export function GodviewDeck({
           // anything or becoming a second authority over what a pane holds. The
           // workspace still asks; it just gets its session from the product door.
           createSplitSession={createSplitSession}
+          splitSizing="equal"
           initialCwd={shell.home}
           claimExistingSessions
           // STAYS OFF, and no longer as a wait (GT-D7's 2026-08-05 amendment):
