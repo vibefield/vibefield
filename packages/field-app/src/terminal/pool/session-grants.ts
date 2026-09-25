@@ -34,7 +34,13 @@ export interface SessionGrants {
   readonly transportGrant: CellTransportGrant;
   readonly attachGrant: SessionAttachGrant;
   /** Wall-clock ms the ATTACH grant expires at — recorded so TP-S3 can schedule
-   * `renewAttach` against it. Nothing schedules anything today. */
+   * `renewAttach` against it. Nothing schedules anything today.
+   *
+   * Correction (2026-09-24, P0): nothing schedules against THIS field, but the
+   * renderer renews — since TP-S3-production (`67c043d9`) ghosttea-react's
+   * routed runtime schedules `renewAttach` from the grant it holds, through the
+   * door `routed/host.ts` gives it. TM-r7 read the line above as "renewal is
+   * unbuilt, product-wide"; only the phone's half was, until P0-C. */
   readonly attachExpiresAt: number;
   /** The generation `renewAttach(sessionId, expectGeneration, requestId)` will
    * CAS against. Held, never incremented here. */
