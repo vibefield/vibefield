@@ -3,7 +3,12 @@ import type { MonitorParameterDefinition } from "@vibecook/puppeteer-views";
 import { CARD_BG } from "@vibefield/design-kit";
 import { type CSSProperties, type ReactElement, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { type DeckAppearance, deckThemeNameForMode, setDeckAppearance } from "./deck-appearance";
+import {
+  DECK_BACKDROP_BLUR_MAX,
+  type DeckAppearance,
+  deckThemeNameForMode,
+  setDeckAppearance,
+} from "./deck-appearance";
 import { GodviewPerfReadout } from "./GodviewPerfReadout";
 import type { MonitorTuningSection } from "./monitor/monitor-tuning";
 
@@ -15,10 +20,11 @@ export type GodviewTheme = "light" | "dark";
 
 const DECK_DEFAULT_THEME_VALUE = "";
 
+/** The panel's MEMORY-ONLY knobs. The stage's opacity and blur are not here any
+ * more (GT-7, GT-D19): they are the viewer's backdrop, saved in the deck
+ * appearance beside the pane glass, and this panel edits that store. */
 export interface GodviewTuning {
   stageColor: string;
-  stageOpacity: number;
-  stageBlur: number;
   bubbleIdleColor: string;
   bubbleWorkingColor: string;
   bubbleWaitingColor: string;
@@ -40,8 +46,6 @@ export function defaultGodviewTuning(theme: GodviewTheme = "light"): GodviewTuni
   const light = theme === "light";
   return {
     stageColor: tokenColor(`--vf-godview-${theme}-monitor-bg`, CARD_BG),
-    stageOpacity: 100,
-    stageBlur: 0,
     bubbleIdleColor: tokenColor(`--vf-godview-${theme}-idle-bg`, light ? "#e5e5e5" : "#2a2a2a"),
     bubbleWorkingColor: tokenColor(
       `--vf-godview-${theme}-working-bg`,
@@ -59,8 +63,6 @@ type GodviewTuningStyle = CSSProperties & Record<`--vf-godview-${string}`, strin
 export function godviewTuningStyle(value: GodviewTuning): GodviewTuningStyle {
   return {
     "--vf-godview-stage-color": value.stageColor,
-    "--vf-godview-stage-opacity": `${value.stageOpacity}%`,
-    "--vf-godview-stage-blur": `${value.stageBlur}px`,
     "--vf-godview-bubble-idle": value.bubbleIdleColor ?? "var(--idle-bg)",
     "--vf-godview-bubble-working": value.bubbleWorkingColor ?? "var(--working-bg)",
     "--vf-godview-bubble-waiting": value.bubbleWaitingColor ?? "var(--waiting-bg)",
@@ -220,21 +222,25 @@ export function GodviewTuningPanel({
           value={value.stageColor}
           onChange={(stageColor) => onChange({ stageColor })}
         />
+        {/* GT-7: these two edit the viewer's saved backdrop — the value Settings →
+            Terminal → Glass edits and the stage draws — not a copy of it. */}
         <RangeControl
           label="Stage opacity"
-          value={value.stageOpacity}
+          value={Math.round(appearance.backdropOpacity * 100)}
           min={0}
           max={100}
           unit="%"
-          onChange={(stageOpacity) => onChange({ stageOpacity })}
+          onChange={(percent) =>
+            setDeckAppearance({ ...appearance, backdropOpacity: percent / 100 })
+          }
         />
         <RangeControl
           label="Backdrop blur"
-          value={value.stageBlur}
+          value={appearance.backdropBlur}
           min={0}
-          max={80}
+          max={DECK_BACKDROP_BLUR_MAX}
           unit="px"
-          onChange={(stageBlur) => onChange({ stageBlur })}
+          onChange={(backdropBlur) => setDeckAppearance({ ...appearance, backdropBlur })}
         />
       </fieldset>
 

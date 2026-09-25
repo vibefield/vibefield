@@ -73,9 +73,10 @@ export function TerminalAppearanceSection(): ReactElement {
   // no longer carries" — the same two cases the deck's own projection collapses
   // into an omitted prop, resolved here the same way so the panel can never
   // show a port selected that the panes are not drawing.
-  const selectedShader = GHOSTTEA_SHADER_OPTIONS.find(
-    (shader) => shader.id === appearance.shaderEffect,
-  );
+  // GT-7 keeps this section's one-effect chips on top of the v2 stack: the
+  // head of the stack is "the" effect, and a pick replaces the whole stack.
+  const selectedShaderId = appearance.shaderEffects[0] ?? NO_SHADER_VALUE;
+  const selectedShader = GHOSTTEA_SHADER_OPTIONS.find((shader) => shader.id === selectedShaderId);
 
   const update = (patch: Partial<DeckAppearance>): void => {
     setDeckAppearance({ ...appearance, ...patch });
@@ -178,11 +179,11 @@ export function TerminalAppearanceSection(): ReactElement {
             <legend className="sr-only">Shader effect</legend>
             <button
               type="button"
-              aria-pressed={appearance.shaderEffect === NO_SHADER_VALUE}
+              aria-pressed={selectedShaderId === NO_SHADER_VALUE}
               className={`${CHIP_BASE} ${
-                appearance.shaderEffect === NO_SHADER_VALUE ? CHIP_SELECTED : CHIP_RESTING
+                selectedShaderId === NO_SHADER_VALUE ? CHIP_SELECTED : CHIP_RESTING
               }`}
-              onClick={() => update({ shaderEffect: NO_SHADER_VALUE })}
+              onClick={() => update({ shaderEffects: [] })}
             >
               No effect
             </button>
@@ -190,11 +191,11 @@ export function TerminalAppearanceSection(): ReactElement {
               <button
                 key={shader.id}
                 type="button"
-                aria-pressed={appearance.shaderEffect === shader.id}
+                aria-pressed={selectedShaderId === shader.id}
                 className={`${CHIP_BASE} ${
-                  appearance.shaderEffect === shader.id ? CHIP_SELECTED : CHIP_RESTING
+                  selectedShaderId === shader.id ? CHIP_SELECTED : CHIP_RESTING
                 }`}
-                onClick={() => update({ shaderEffect: shader.id })}
+                onClick={() => update({ shaderEffects: [shader.id] })}
               >
                 {shader.name}
               </button>

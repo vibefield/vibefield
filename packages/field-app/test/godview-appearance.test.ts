@@ -20,7 +20,7 @@ import {
   setDeckAppearance,
   subscribeDeckAppearance,
 } from "../src/godview/deck-appearance";
-import { godviewTerminalEffects } from "../src/godview/deck-theme";
+import { godviewBackdropStyle, godviewTerminalEffects } from "../src/godview/deck-theme";
 
 beforeEach(() => resetDeckAppearanceForTest());
 afterEach(() => resetDeckAppearanceForTest());
@@ -34,8 +34,10 @@ describe("the deck appearance store", () => {
           darkThemeName: "Solarized Dark",
           opacity: 0.5,
           opacityCells: true,
-          shaderEffect: "ghosttea:vhs",
+          shaderEffects: ["ghosttea:vhs", "ghosttea:crt"],
           shaderAnimate: true,
+          backdropOpacity: 0.6,
+          backdropBlur: 18,
         }),
       ),
     ).toEqual({
@@ -43,9 +45,51 @@ describe("the deck appearance store", () => {
       darkThemeName: "Solarized Dark",
       opacity: 0.5,
       opacityCells: true,
-      shaderEffect: "ghosttea:vhs",
+      shaderEffects: ["ghosttea:vhs", "ghosttea:crt"],
       shaderAnimate: true,
+      backdropOpacity: 0.6,
+      backdropBlur: 18,
     });
+  });
+
+  it("reads a record from before the stack as a stack of its one effect (GT-7)", () => {
+    // Every deck GT-3f saved holds `shaderEffect`: one name or null. The stack
+    // must open wearing exactly that — and the smoke still seeds this shape.
+    expect(
+      parseDeckAppearance(JSON.stringify({ shaderEffect: "ghosttea:vhs" })).shaderEffects,
+    ).toEqual(["ghosttea:vhs"]);
+    expect(parseDeckAppearance(JSON.stringify({ shaderEffect: null })).shaderEffects).toEqual([]);
+    // Once a stack is written, it wins over a stale single field beside it.
+    expect(
+      parseDeckAppearance(JSON.stringify({ shaderEffect: "ghosttea:vhs", shaderEffects: [] }))
+        .shaderEffects,
+    ).toEqual([]);
+  });
+
+  it("keeps a stack's order, drops non-names and repeats, and caps its depth", () => {
+    const stack = parseDeckAppearance(
+      JSON.stringify({
+        shaderEffects: [
+          "ghosttea:crt",
+          7,
+          "",
+          "ghosttea:vhs",
+          "ghosttea:crt",
+          ...Array(20).fill("x"),
+        ],
+      }),
+    ).shaderEffects;
+    expect(stack.slice(0, 3)).toEqual(["ghosttea:crt", "ghosttea:vhs", "x"]);
+    expect(stack.length).toBeLessThanOrEqual(8);
+  });
+
+  it("clamps the backdrop into its ranges and defaults it to the flat, opaque stage", () => {
+    expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: 3 })).backdropOpacity).toBe(1);
+    expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: -1 })).backdropOpacity).toBe(0);
+    expect(parseDeckAppearance(JSON.stringify({ backdropBlur: 500 })).backdropBlur).toBe(80);
+    expect(parseDeckAppearance(JSON.stringify({ backdropBlur: "soft" })).backdropBlur).toBe(0);
+    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(1);
+    expect(DEFAULT_DECK_APPEARANCE.backdropBlur).toBe(0);
   });
 
   it("reads a record written before shaders existed as no shader", () => {
@@ -55,7 +99,7 @@ describe("the deck appearance store", () => {
       JSON.stringify({ lightThemeName: null, darkThemeName: null, opacity: 0.7 }),
     );
 
-    expect(legacy.shaderEffect).toBeNull();
+    expect(legacy.shaderEffects).toEqual([]);
     expect(legacy.shaderAnimate).toBe(false);
     expect(godviewTerminalEffects(legacy)).toBeUndefined();
   });
@@ -87,8 +131,10 @@ describe("the deck appearance store", () => {
       darkThemeName: null,
       opacity: 0.4,
       opacityCells: false,
-      shaderEffect: null,
+      shaderEffects: [],
       shaderAnimate: false,
+      backdropOpacity: 1,
+      backdropBlur: 0,
     });
   });
 
@@ -110,8 +156,10 @@ describe("the deck appearance store", () => {
       darkThemeName: "Catppuccin Mocha",
       opacity: 0.33,
       opacityCells: true,
-      shaderEffect: "ghosttea:crt",
+      shaderEffects: ["ghosttea:crt"],
       shaderAnimate: false,
+      backdropOpacity: 0.5,
+      backdropBlur: 12,
     });
 
     expect(announced).toBe(1);
@@ -123,8 +171,10 @@ describe("the deck appearance store", () => {
       darkThemeName: "Catppuccin Mocha",
       opacity: 0.33,
       opacityCells: true,
-      shaderEffect: "ghosttea:crt",
+      shaderEffects: ["ghosttea:crt"],
       shaderAnimate: false,
+      backdropOpacity: 0.5,
+      backdropBlur: 12,
     });
     stop();
   });
@@ -135,7 +185,7 @@ describe("the deck appearance store", () => {
     expect(DEFAULT_DECK_APPEARANCE.opacity).toBeLessThan(1);
     expect(DEFAULT_DECK_APPEARANCE.lightThemeName).toBeNull();
     expect(DEFAULT_DECK_APPEARANCE.darkThemeName).toBeNull();
-    expect(DEFAULT_DECK_APPEARANCE.shaderEffect).toBeNull();
+    expect(DEFAULT_DECK_APPEARANCE.shaderEffects).toEqual([]);
   });
 });
 
@@ -157,7 +207,7 @@ describe("the viewer's shader, as the effects prop", () => {
   it("names the chosen port in shaderEffects and leaves postProcess alone", () => {
     for (const shader of GHOSTTEA_SHADER_OPTIONS) {
       expect(
-        godviewTerminalEffects({ ...DEFAULT_DECK_APPEARANCE, shaderEffect: shader.id }),
+        godviewTerminalEffects({ ...DEFAULT_DECK_APPEARANCE, shaderEffects: [shader.id] }),
       ).toEqual({ postProcess: "none", shaderEffects: [shader.id], animate: false });
     }
   });
@@ -168,7 +218,7 @@ describe("the viewer's shader, as the effects prop", () => {
     // is empty, so saying it twice would be one choice with two authorities.
     const effects = godviewTerminalEffects({
       ...DEFAULT_DECK_APPEARANCE,
-      shaderEffect: "ghosttea:better-crt",
+      shaderEffects: ["ghosttea:better-crt"],
     });
 
     expect(effects?.postProcess).toBe("none");
@@ -182,7 +232,7 @@ describe("the viewer's shader, as the effects prop", () => {
     expect(
       godviewTerminalEffects({
         ...DEFAULT_DECK_APPEARANCE,
-        shaderEffect: animated?.id ?? "",
+        shaderEffects: [animated?.id ?? ""],
         shaderAnimate: true,
       })?.animate,
     ).toBe(true);
@@ -195,10 +245,35 @@ describe("the viewer's shader, as the effects prop", () => {
     expect(
       godviewTerminalEffects({
         ...DEFAULT_DECK_APPEARANCE,
-        shaderEffect: "ghosttea:retired-in-some-future-release",
+        shaderEffects: ["ghosttea:retired-in-some-future-release"],
         shaderAnimate: true,
       }),
     ).toBeUndefined();
+  });
+
+  it("hands the renderer the whole stack in the viewer's order (GT-7)", () => {
+    // The renderer runs one pass per effect in list order, so the order is the
+    // look: CRT-then-VHS and VHS-then-CRT are two different pictures.
+    expect(
+      godviewTerminalEffects({
+        ...DEFAULT_DECK_APPEARANCE,
+        shaderEffects: ["ghosttea:vhs", "ghosttea:crt", "ghosttea:sparks-from-fire"],
+        shaderAnimate: true,
+      }),
+    ).toEqual({
+      postProcess: "none",
+      shaderEffects: ["ghosttea:vhs", "ghosttea:crt", "ghosttea:sparks-from-fire"],
+      animate: true,
+    });
+  });
+
+  it("drops a retired port from a stack without dropping the rest", () => {
+    expect(
+      godviewTerminalEffects({
+        ...DEFAULT_DECK_APPEARANCE,
+        shaderEffects: ["ghosttea:retired-in-some-future-release", "ghosttea:crt"],
+      })?.shaderEffects,
+    ).toEqual(["ghosttea:crt"]);
   });
 
   it("returns a value that survives ghosttea's own equality key", () => {
@@ -206,9 +281,32 @@ describe("the viewer's shader, as the effects prop", () => {
     // (JSON of postProcess, animate, shaderEffects). Two projections of the
     // same stored selection must land on the same key or every parent rerender
     // would invalidate terminals the viewer never touched.
-    const appearance = { ...DEFAULT_DECK_APPEARANCE, shaderEffect: "ghosttea:crt" };
+    const appearance = { ...DEFAULT_DECK_APPEARANCE, shaderEffects: ["ghosttea:crt"] };
     expect(JSON.stringify(godviewTerminalEffects(appearance))).toBe(
       JSON.stringify(godviewTerminalEffects({ ...appearance })),
     );
+  });
+});
+
+/**
+ * The stage's backdrop (GT-7, GT-D19) — the two variables godview.css reads,
+ * from ONE projection the overlay, the catalog and Settings all use.
+ */
+describe("the viewer's backdrop, as the stage's variables", () => {
+  it("projects the default as the reference's flat, opaque stage", () => {
+    expect(godviewBackdropStyle(DEFAULT_DECK_APPEARANCE)).toEqual({
+      "--vf-godview-stage-opacity": "100%",
+      "--vf-godview-stage-blur": "0px",
+    });
+  });
+
+  it("projects a see-through, blurred backdrop", () => {
+    expect(
+      godviewBackdropStyle({
+        ...DEFAULT_DECK_APPEARANCE,
+        backdropOpacity: 0.456,
+        backdropBlur: 24,
+      }),
+    ).toEqual({ "--vf-godview-stage-opacity": "46%", "--vf-godview-stage-blur": "24px" });
   });
 });

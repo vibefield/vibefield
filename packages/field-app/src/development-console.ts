@@ -67,8 +67,11 @@ export interface GodviewDeckFacts {
    * coincide by construction (nothing selected ⇒ nothing sent), which is what
    * lets one field prove both that a selection arrived and that an empty one
    * never overrides the floor's own configuration. Whether the CRT curve looks
-   * right is James's eye; that the id reached the renderer is a fact. */
-  effects: { shaderEffect: string | null; animate: boolean };
+   * right is James's eye; that the id reached the renderer is a fact.
+   * GT-7: `shaderEffects` is the whole stack in the order the renderer runs it
+   * (empty exactly when `shaderEffect` is null); `shaderEffect` stays its head
+   * so a harness written before the stack still reads. */
+  effects: { shaderEffect: string | null; shaderEffects: string[]; animate: boolean };
   /** TP-S2 / TP-R3: pane zoom, as the two numbers the gate is about.
    *
    * `phase` is where the gesture is (`idle` when there is no zoom). `commits`

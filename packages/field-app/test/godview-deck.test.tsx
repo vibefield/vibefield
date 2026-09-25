@@ -416,7 +416,7 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     const props = workspaceMounts[workspaceMounts.length - 1]!;
 
     expect("effects" in props, "an unchosen shader is a prop that was never sent").toBe(false);
-    expect(latest().effects).toEqual({ shaderEffect: null, animate: false });
+    expect(latest().effects).toEqual({ shaderEffect: null, shaderEffects: [], animate: false });
   });
 
   it("hands a chosen shader over live, without re-initializing (GT-3f)", async () => {
@@ -429,7 +429,7 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     await act(async () => {
       setDeckAppearance({
         ...DEFAULT_DECK_APPEARANCE,
-        shaderEffect: "ghosttea:crt",
+        shaderEffects: ["ghosttea:crt"],
         shaderAnimate: false,
       });
     });
@@ -447,7 +447,11 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     }
     // And the marker says what the renderer was told, which is what the smoke
     // reads back out of the real thing.
-    expect(latest().effects).toEqual({ shaderEffect: "ghosttea:crt", animate: false });
+    expect(latest().effects).toEqual({
+      shaderEffect: "ghosttea:crt",
+      shaderEffects: ["ghosttea:crt"],
+      animate: false,
+    });
   });
 
   it("holds one effects object still across renders the viewer did not cause", async () => {
@@ -457,7 +461,7 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     // memo is on the stored selection; an unrelated rerender must not move it.
     await mountDeck();
     await act(async () => {
-      setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, shaderEffect: "ghosttea:vhs" });
+      setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, shaderEffects: ["ghosttea:vhs"] });
     });
     await settle();
     const chosen = workspaceMounts[workspaceMounts.length - 1]!.effects;
@@ -486,7 +490,7 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     await act(async () => {
       setDeckAppearance({
         ...DEFAULT_DECK_APPEARANCE,
-        shaderEffect: "ghosttea:vhs",
+        shaderEffects: ["ghosttea:vhs"],
         shaderAnimate: true,
       });
     });

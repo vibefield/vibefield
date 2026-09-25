@@ -90,7 +90,7 @@ describe("the shader cards, live (GT-3f)", () => {
 
     await act(async () => chip("CRT").click());
 
-    expect(getDeckAppearance().shaderEffect).toBe("ghosttea:crt");
+    expect(getDeckAppearance().shaderEffects).toEqual(["ghosttea:crt"]);
     expect(chip("CRT").getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -100,11 +100,11 @@ describe("the shader cards, live (GT-3f)", () => {
     await act(async () => chip("VHS").click());
     await act(async () => chip("CRT").click());
 
-    expect(getDeckAppearance().shaderEffect).toBe("ghosttea:crt");
+    expect(getDeckAppearance().shaderEffects).toEqual(["ghosttea:crt"]);
     expect(chip("VHS").getAttribute("aria-pressed")).toBe("false");
 
     await act(async () => chip("No effect").click());
-    expect(getDeckAppearance().shaderEffect, "back to the omitted prop").toBeNull();
+    expect(getDeckAppearance().shaderEffects, "back to the omitted prop").toEqual([]);
     expect(chip("No effect").getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -137,7 +137,7 @@ describe("the shader cards, live (GT-3f)", () => {
     // The store keeps a name; the catalog decides what it still means. The
     // panel must agree with the projection — showing a chip pressed for a
     // shader the panes are not drawing would be the worst of both.
-    setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, shaderEffect: "ghosttea:long-gone" });
+    setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, shaderEffects: ["ghosttea:long-gone"] });
     await mount();
 
     for (const shader of GHOSTTEA_SHADER_OPTIONS) {

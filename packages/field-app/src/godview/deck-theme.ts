@@ -143,7 +143,24 @@ export function godviewTerminalTheme(
  * Nothing here can change that, so the Settings copy says it rather than the
  * control pretending otherwise. */
 export function godviewTerminalEffects(appearance: DeckAppearance): TerminalEffects | undefined {
-  const id = appearance.shaderEffect;
-  if (id === null || !isGhostteaShaderEffect(id)) return undefined;
-  return { postProcess: "none", shaderEffects: [id], animate: appearance.shaderAnimate };
+  // The stack in the viewer's order (GT-D19), minus any id upstream no longer
+  // publishes — dropped one by one, so a retired port costs its own pass and
+  // not the whole stack.
+  const stack = appearance.shaderEffects.filter(isGhostteaShaderEffect);
+  if (stack.length === 0) return undefined;
+  return { postProcess: "none", shaderEffects: stack, animate: appearance.shaderAnimate };
+}
+
+/** The stage's backdrop as the two variables `godview.css` reads on
+ * `.vf-godview` (GT-7, GT-D19): the ground's opacity as a percentage for its
+ * `color-mix`, and the blur for its `backdrop-filter`. One projection, three
+ * readers — the overlay, the catalog's stage, and Settings' Godview in
+ * miniature — so the three can never draw different glass from one value. */
+export function godviewBackdropStyle(
+  appearance: DeckAppearance,
+): Record<"--vf-godview-stage-opacity" | "--vf-godview-stage-blur", string> {
+  return {
+    "--vf-godview-stage-opacity": `${Math.round(appearance.backdropOpacity * 100)}%`,
+    "--vf-godview-stage-blur": `${appearance.backdropBlur}px`,
+  };
 }

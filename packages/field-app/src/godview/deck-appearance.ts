@@ -53,24 +53,42 @@ export interface DeckAppearance {
    * same alpha. Off by default: a program that paints a background usually
    * means it, and dissolving it hides output rather than framing it. */
   opacityCells: boolean;
-  /** A `GHOSTTEA_SHADER_OPTIONS` port id, or `null` for no effect at all.
+  /** `GHOSTTEA_SHADER_OPTIONS` port ids, IN ORDER — the renderer runs one pass
+   * per effect in this order (0.11.1's `#shaderStack`), so the order is part of
+   * the look, not a detail of storage (GT-7, GT-D19: the stack replaced the one
+   * `shaderEffect` GT-3f shipped; the reader seeds it from that field).
    *
-   * Held as a NAME rather than a resolved effect for the same reason the theme
+   * Held as NAMES rather than resolved effects for the same reason the theme
    * is (`lightThemeName` above): a pinned catalog can drop a port between
-   * releases, and the projection that resolves it — `godviewTerminalEffects` —
-   * is where an id upstream no longer knows becomes "no effect" instead of
-   * something the renderer is asked to draw.
+   * releases, and the projection that resolves them — `godviewTerminalEffects`
+   * — is where an id upstream no longer knows is dropped instead of drawn.
    *
-   * `null` is the default and it means the prop is OMITTED, not sent empty:
+   * Empty is the default and it means the prop is OMITTED, not sent empty:
    * ghosttea reads its own configuration when `effects` is absent, and an empty
    * object would silently override that path for every viewer that ever runs
    * with a floor-configured shader. */
-  shaderEffect: string | null;
-  /** Whether an animated port animates. Kept across a change of port so
-   * switching VHS → CRT → VHS does not silently forget the answer; upstream's
-   * own gate ignores it for a port that has no animation. */
+  shaderEffects: readonly string[];
+  /** Whether the animated ports animate. Kept across a change of stack so
+   * adding and removing VHS does not silently forget the answer; upstream's
+   * own gate ignores it for a stack with nothing that moves. */
   shaderAnimate: boolean;
+  /** Godview's BACKDROP — the stage's own ground behind the bodies and the
+   * panes (GT-7, GT-D19). `backdropOpacity` (0–1) is how much of that ground
+   * is drawn: below 1 the canvas under Godview shows through. `backdropBlur`
+   * (px, 0–{@link DECK_BACKDROP_BLUR_MAX}) softens what shows through — one
+   * backdrop filter on the overlay, over a field Godview holds still (DESIGN.md
+   * §6 M5), never one per pane. Until GT-7 these were the system panel's
+   * memory-only STAGE knobs; they are the viewer's now, saved with the rest of
+   * its glass. The defaults are the reference's flat, opaque stage. */
+  backdropOpacity: number;
+  backdropBlur: number;
 }
+
+/** The backdrop blur's ceiling — the system panel's own range since GT-3v. */
+export const DECK_BACKDROP_BLUR_MAX = 80;
+
+/** A stack deeper than the four ports is a record this writer did not make. */
+const SHADER_STACK_MAX = 8;
 
 export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
   lightThemeName: null,
@@ -80,8 +98,12 @@ export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
   // No shader is the deck's default because it is what GT-3v shipped: this
   // slice adds a control, and adding a control must not restyle every existing
   // viewer's panes on its way in.
-  shaderEffect: null,
+  shaderEffects: [],
   shaderAnimate: false,
+  // The reference's stage: flat and opaque (GodviewTuningPanel's defaults since
+  // the Godview visual pass). Promoting the knobs must not restyle anyone.
+  backdropOpacity: 1,
+  backdropBlur: 0,
 };
 
 export type DeckAppearanceMode = "light" | "dark";
@@ -103,6 +125,32 @@ function parsedName(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
+/** The effect stack: a list of names, each once, in the order written. A
+ * record from before the stack (`shaderEffect`, one name or null) is a stack of
+ * zero or one. */
+function parsedShaderEffects(record: Record<string, unknown>): readonly string[] {
+  if (Array.isArray(record.shaderEffects)) {
+    const names: string[] = [];
+    for (const entry of record.shaderEffects) {
+      const name = parsedName(entry);
+      if (name !== null && !names.includes(name)) names.push(name);
+      if (names.length === SHADER_STACK_MAX) break;
+    }
+    return names;
+  }
+  const legacy = parsedName(record.shaderEffect);
+  return legacy === null ? [] : [legacy];
+}
+
+/** A finite number clamped into a range, or the fallback. Clamped rather than
+ * rejected: a value outside the range is a version of this file the writer got
+ * wrong, and the nearest legal value beats reverting a user's whole glass. */
+function clamped(value: unknown, min: number, max: number, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, value))
+    : fallback;
+}
+
 /** Tolerant reader (design-00): anything unreadable is the default, and a
  * partly-readable record keeps the fields that parsed. A preference is never
  * worth failing a mount over. */
@@ -116,7 +164,6 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
   }
   if (typeof value !== "object" || value === null) return DEFAULT_DECK_APPEARANCE;
   const record = value as Record<string, unknown>;
-  const opacity = record.opacity;
   // `themeName` was the original single-selection schema. Seed BOTH new mode
   // slots from it so an upgrade preserves the user's existing choice; once
   // either new field is written, each mode evolves independently.
@@ -125,16 +172,17 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
     lightThemeName:
       "lightThemeName" in record ? parsedName(record.lightThemeName) : legacyThemeName,
     darkThemeName: "darkThemeName" in record ? parsedName(record.darkThemeName) : legacyThemeName,
-    // Clamped rather than rejected: a value outside 0–1 is a version of this
-    // file the writer got wrong, and the nearest legal opacity is a better
-    // answer than reverting a user's whole appearance.
-    opacity:
-      typeof opacity === "number" && Number.isFinite(opacity)
-        ? Math.min(1, Math.max(0, opacity))
-        : DEFAULT_DECK_APPEARANCE.opacity,
+    opacity: clamped(record.opacity, 0, 1, DEFAULT_DECK_APPEARANCE.opacity),
     opacityCells: record.opacityCells === true,
-    shaderEffect: parsedName(record.shaderEffect),
+    shaderEffects: parsedShaderEffects(record),
     shaderAnimate: record.shaderAnimate === true,
+    backdropOpacity: clamped(record.backdropOpacity, 0, 1, DEFAULT_DECK_APPEARANCE.backdropOpacity),
+    backdropBlur: clamped(
+      record.backdropBlur,
+      0,
+      DECK_BACKDROP_BLUR_MAX,
+      DEFAULT_DECK_APPEARANCE.backdropBlur,
+    ),
   };
 }
 

@@ -1490,6 +1490,8 @@ export function GodviewDeck({
       // this line says so with a null rather than by falling silent.
       effects: {
         shaderEffect: terminalEffects?.shaderEffects?.[0] ?? null,
+        // GT-7: the whole stack, in the order the renderer runs it.
+        shaderEffects: [...(terminalEffects?.shaderEffects ?? [])],
         animate: terminalEffects?.animate === true,
       },
       // TP-R3's end-to-end counter. The deck republishes on every zoom state
