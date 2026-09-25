@@ -111,7 +111,7 @@ export function BehaviorTab({ model }: { model: TerminalPageModel }): ReactEleme
         title="Links"
         scope="fact"
         when="next-ghosttea"
-        description="ghosttea's main branch finds links in output, opens them with ⌘-click, and reads link-url to turn that off. None of it is in 0.11.1, the version VibeField ships, so a terminal here has no clickable links yet."
+        description="Finding links in output, opening them with ⌘-click, and link-url to turn that off exist in ghosttea but are not released: 0.11.1, the version VibeField ships, has none of it, so a terminal here has no clickable links yet."
       >
         <SettingsRow title="Find links in output" divider={false}>
           <Fact>Not in ghosttea 0.11.1</Fact>

@@ -379,7 +379,7 @@ const NOTES: Readonly<Record<string, KeyNote>> = {
   },
   "link-url": {
     timing: "ignored",
-    note: "Recognized, not applied by ghosttea 0.11.1; its main branch applies it, unreleased.",
+    note: "Recognized, not applied by ghosttea 0.11.1; unreleased ghosttea work applies it.",
   },
   "background-blur": {
     timing: "ignored",
