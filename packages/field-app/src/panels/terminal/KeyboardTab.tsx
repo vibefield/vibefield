@@ -133,15 +133,6 @@ export function KeyboardTab({ model }: { model: TerminalPageModel }): ReactEleme
         scope="mac"
         when="after-save"
         description={`Ghostty's shortcuts, as every terminal on this Mac will run them after you save. ${counts.runs} of ${counts.total} do something in the deck today; the rest are Ghostty actions ghosttea doesn't have yet.`}
-        action={
-          <SegmentedControl
-            options={FILTERS}
-            value={filter}
-            onChange={setFilter}
-            label="Show shortcuts"
-            size="small"
-          />
-        }
       >
         <SettingsRow
           title="Start from Ghostty's defaults"
@@ -157,6 +148,17 @@ export function KeyboardTab({ model }: { model: TerminalPageModel }): ReactEleme
             label="Start from Ghostty's defaults"
           />
         </SettingsRow>
+        {/* A view of the list, not a setting — so it sits on the list, not
+            in the section's head beside the facts. */}
+        <div className="vf-ts-keyfilter">
+          <SegmentedControl
+            options={FILTERS}
+            value={filter}
+            onChange={setFilter}
+            label="Show shortcuts"
+            size="small"
+          />
+        </div>
         {KEYBOARD_GROUP_ORDER.map((group) => {
           const groupRows = visible.filter((row) => row.group === group);
           if (groupRows.length === 0) return null;

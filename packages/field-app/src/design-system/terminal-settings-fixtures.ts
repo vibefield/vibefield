@@ -111,7 +111,8 @@ export function fixtureDraft(state: TerminalFixtureState): {
     const error = {
       severity: "error",
       code: "invalid-color",
-      message: "`background` is not a Ghostty color: `#12`",
+      // The loader's own words (ghosttea-config 0.11.1 `apply_color`).
+      message: "`background` must be a valid Ghostty color",
       source: FIXTURE_CONFIG_PATH,
       line: 10,
       key: "background",

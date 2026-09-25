@@ -27,7 +27,11 @@
   gap: 10px 14px;
   margin-top: -24px;
   padding: 24px 0 14px;
+  /* The sheet's own material: 96% surface, and a blur so the 4% of the page
+     scrolling under it reads as material, never as ghost text. */
   background: var(--vf-sheet-surface);
+  -webkit-backdrop-filter: blur(24px) saturate(1.1);
+  backdrop-filter: blur(24px) saturate(1.1);
 }
 
 .vf-ts-tabs {
@@ -954,6 +958,12 @@
 
 /* ── Keyboard ─────────────────────────────────────────────────────────────── */
 
+/* The list's filter: a view of the rows below it, left-aligned on the list. */
+.vf-ts-keyfilter {
+  display: flex;
+  padding-top: 14px;
+}
+
 .vf-ts-keygroup {
   display: flex;
   flex-direction: column;
@@ -1243,9 +1253,18 @@
   white-space: nowrap;
 }
 
-.vf-ts-reference-search {
-  width: 100%;
+/* The reference's search and its support filter, one row that wraps. */
+.vf-ts-reference-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   margin-bottom: 8px;
+}
+
+.vf-ts-reference-search {
+  flex: 1 1 14rem;
+  min-width: 0;
 }
 
 .vf-ts-reference {

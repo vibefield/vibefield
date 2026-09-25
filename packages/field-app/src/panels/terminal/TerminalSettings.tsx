@@ -416,6 +416,12 @@ function DockedPreview({
   shown: boolean;
 }): ReactElement {
   const [minimized, setMinimized] = useState(false);
+  // The dock's miniature is a second Godview in small. Nothing mounts it until
+  // the page first scrolls the big one away; then it stays, for the exit.
+  const [everShown, setEverShown] = useState(shown);
+  useEffect(() => {
+    if (shown) setEverShown(true);
+  }, [shown]);
   const theme = previewTheme(
     deckThemeNameForMode(model.appearance, model.previewMode),
     model.previewMode,
@@ -456,13 +462,15 @@ function DockedPreview({
             Hide
           </UiButton>
         </div>
-        <GodviewMiniature
-          variant="thumb"
-          mode={model.previewMode}
-          theme={theme}
-          palette={model.palette}
-          appearance={model.appearance}
-        />
+        {everShown && (
+          <GodviewMiniature
+            variant="thumb"
+            mode={model.previewMode}
+            theme={theme}
+            palette={model.palette}
+            appearance={model.appearance}
+          />
+        )}
         <div className={`vf-ts-dock-foot ${labelCls}`}>
           <b>{theme.name}</b> · {Math.round(model.appearance.opacity * 100)}%
           {model.appearance.backdropOpacity < 1
@@ -494,7 +502,15 @@ export function TerminalSettingsView(props: TerminalSettingsViewProps): ReactEle
       return;
     }
     const observer = new IntersectionObserver(
-      ([entry]) => setDocked((entry?.intersectionRatio ?? 1) < 0.2),
+      // Docked once the preview has scrolled up and away — under a fifth of it
+      // showing, and its top above the viewport's (a preview still BELOW the
+      // fold has not been scrolled past).
+      ([entry]) =>
+        setDocked(
+          entry !== undefined &&
+            entry.intersectionRatio < 0.2 &&
+            entry.boundingClientRect.top < (entry.rootBounds?.top ?? 0),
+        ),
       {
         threshold: [0, 0.2, 0.5, 1],
       },
@@ -559,11 +575,9 @@ export function TerminalSettingsView(props: TerminalSettingsViewProps): ReactEle
           <SearchResults query={query} onReveal={props.onReveal} />
         ) : (
           <div role="tabpanel" aria-label={TABS.find((entry) => entry.id === tab)?.label}>
-            {tab === "look" && (
-              <div ref={watchPreview}>
-                <LookTab model={model} />
-              </div>
-            )}
+            {/* The PREVIEW is watched, not the tab: the tab is tall enough that
+                under a fifth of it is on screen while the preview is fully in view. */}
+            {tab === "look" && <LookTab model={model} previewRef={watchPreview} />}
             {tab === "behavior" && <BehaviorTab model={model} />}
             {tab === "keyboard" && <KeyboardTab model={model} />}
             {tab === "file" && <ConfigFileTab model={model} />}

@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { PRODUCT_CHORDS } from "../src/field/product-chords";
 import {
+  actionLabel,
   bindingLine,
   chordGlyphs,
   defaultBindings,
@@ -103,6 +104,15 @@ describe("chords", () => {
     expect(bindingLine("performable:super+f", "start_search")).toBe(
       "performable:super+f=start_search",
     );
+  });
+});
+
+describe("labels", () => {
+  it("names an action as a person would, leaving out Ghostty's default target", () => {
+    expect(actionLabel("new_split:right")).toBe("Split · right");
+    expect(actionLabel("close_tab:this")).toBe("Close tab");
+    expect(actionLabel("close_tab:other")).toBe("Close tab · other");
+    expect(actionLabel("some_new_action")).toBe("Some new action");
   });
 });
 

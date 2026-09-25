@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   TerminalConfigDocument,
+  TerminalConfigValidation,
+  TerminalConfigWriteRefusal,
   TerminalConfigWriteResult,
   TerminalCreateOpenResult,
   TerminalListResult,
@@ -2451,6 +2453,104 @@ async function clickDeckButton(win: BrowserWindow, label: string): Promise<void>
   throw new Error(`no "${label}" button appeared within 20s (${seen})`);
 }
 
+/** GT-7: a thrown RPC refusal's kind and details — structural, like
+ * `unobservedRefusal`, because the error crosses the supervisor's client. */
+function rpcRefusal(error: unknown): { kind: string; details: unknown } | null {
+  if (!(error instanceof Error) || !("kind" in error)) return null;
+  return {
+    kind: String((error as { kind: unknown }).kind),
+    details: (error as { details?: unknown }).details,
+  };
+}
+
+/** Evaluate `expression` in the renderer until it answers "ok"; a timeout says
+ * what it answered last, which is the fact a reader needs. */
+async function untilRenderer(
+  win: BrowserWindow,
+  label: string,
+  expression: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const answer = (await win.webContents.executeJavaScript(expression)) as string;
+    if (answer === "ok") return;
+    seen = answer;
+    await sleep(200);
+  }
+  throw new Error(`${label} did not happen within ${timeoutMs}ms (${seen})`);
+}
+
+/** Click the first button inside `scope` whose text or accessible name is
+ * `label` — polled, like `clickDeckButton`, and scoped, because a settings
+ * page and the deck behind it can both hold a "Save" or a "Terminal". */
+async function clickIn(win: BrowserWindow, scope: string, label: string): Promise<void> {
+  await untilRenderer(
+    win,
+    `a "${label}" button in ${scope}`,
+    `(() => {
+      const root = document.querySelector(${JSON.stringify(scope)});
+      if (!root) return "no ${scope.replaceAll('"', "'")}";
+      const button = [...root.querySelectorAll("button")].find(
+        (candidate) =>
+          candidate.textContent.trim() === ${JSON.stringify(label)} ||
+          candidate.getAttribute("aria-label") === ${JSON.stringify(label)},
+      );
+      if (!button) return "absent";
+      if (button.disabled) return "disabled";
+      button.click();
+      return "ok";
+    })()`,
+    20_000,
+  );
+}
+
+/** GT-D21's chords as a keyboard presses them — down, then up, and NO `char`
+ * event: a command chord types nothing, and a stray character reaching the
+ * shell is the very leak row 11e watches for. */
+function pressProductChord(win: BrowserWindow, keyCode: string): void {
+  const modifiers: ("meta" | "control")[] = [process.platform === "darwin" ? "meta" : "control"];
+  win.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+  win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
+}
+
+/** Row 11e's ear at the pane: a target-phase keydown listener on every deck
+ * input, beside ghosttea's own. A key that reaches the pane at all is heard
+ * here — ghosttea stops PROPAGATION, never the listeners on its own target. */
+const CHORD_PROBE = `(() => {
+  const inputs = [...document.querySelectorAll(".vf-godview-terminal-deck .terminal-input")];
+  if (inputs.length === 0) return "no pane input";
+  window.__vfChordProbe = [];
+  for (const input of inputs) {
+    if (input.__vfChordProbed) continue;
+    input.__vfChordProbed = true;
+    input.addEventListener("keydown", (event) => {
+      window.__vfChordProbe.push((event.metaKey ? "meta+" : "") + (event.ctrlKey ? "ctrl+" : "") + event.key);
+    });
+  }
+  return "ok";
+})()`;
+
+/** Whether the element a pointer would hit at `selector`'s centre belongs to
+ * it — the check that catches a surface opened BEHIND Godview's stage, which
+ * the DOM alone would call open. */
+function onTop(selector: string): string {
+  return `(() => {
+    const surface = document.querySelector(${JSON.stringify(selector)});
+    if (!surface) return "absent";
+    const box = surface.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + Math.min(box.height / 2, 40));
+    return surface.contains(hit) ? "ok" : "under " + (hit?.closest("[class]")?.className ?? "nothing");
+  })()`;
+}
+
+async function chordProbeHeard(win: BrowserWindow): Promise<string[]> {
+  return (await win.webContents.executeJavaScript(
+    `[...(window.__vfChordProbe ?? [])]`,
+  )) as string[];
+}
+
 /**
  * Click a verb on the record's PANE FRAME, by its accessible name (GT-6a).
  *
@@ -4056,6 +4156,213 @@ export async function runSmokeGodview(opts: {
       );
     }
     verdict["shaderLeftConfigAlone"] = true;
+
+    // 11d. THE DRY RUN, AGAINST THE REAL LOADER (GT-7, GT-D20). fieldd's suite
+    //      pins the port against a fake floor; only a real field-native can say
+    //      that ghosttea 0.11.1's validator answers the way the port assumed —
+    //      the line a diagnostic names, the path it names, which texts block.
+    //      Nothing here writes: every text in this row is a question, and the
+    //      one write it attempts must be refused before the disk moves.
+    const configAsked = TerminalConfigDocument.parse(
+      await opts.handle.client.request("terminal.config.read", {}),
+    );
+    if (configAsked.config === undefined) {
+      throw new Error("terminal.config.read carried no loader snapshot (GT-7a)");
+    }
+    verdict["configLoader"] =
+      `Ghostty ${configAsked.config.ghosttyVersion} · ${configAsked.config.knownKeyCount} keys`;
+    const validate = async (text: string) =>
+      TerminalConfigValidation.parse(
+        await opts.handle.client.request("terminal.config.validate", { text }),
+      );
+    // A clean edit: the CANDIDATE's snapshot carries it — the loader read the
+    // draft, not the file.
+    const cleanDraft = `${configAsked.text}scrollback-limit = 25000000\n`;
+    const clean = await validate(cleanDraft);
+    if (clean.blocking.length > 0 || clean.config?.scrollbackBytes !== 25_000_000) {
+      throw new Error(
+        `the loader did not read a clean draft as written: ${JSON.stringify({ blocking: clean.blocking, scrollbackBytes: clean.config?.scrollbackBytes })}`,
+      );
+    }
+    // An error of the draft's own blocks, on the line and in the file the page
+    // will mark: Settings places a diagnostic by `line` in `source`.
+    const brokenDraft = `${configAsked.text}background = #12\n`;
+    const brokenLine = brokenDraft.split("\n").length - 1;
+    const broken = await validate(brokenDraft);
+    const own = broken.blocking.find((diagnostic) => diagnostic.key === "background");
+    if (own === undefined) {
+      throw new Error(`the loader blocked nothing in a bad colour: ${JSON.stringify(broken)}`);
+    }
+    verdict["configBlocking"] = `${own.code} · line ${String(own.line)} · ${String(own.source)}`;
+    if (own.line !== brokenLine || own.source !== configAsked.path) {
+      throw new Error(
+        `the loader placed the error at ${String(own.source)}:${String(own.line)}, not ${configAsked.path}:${brokenLine} — the page would mark the wrong line`,
+      );
+    }
+    // …and the door refuses the same text before the disk moves.
+    let writeRefused: { kind: string; details: unknown } | null = null;
+    try {
+      await opts.handle.client.request("terminal.config.write", {
+        text: brokenDraft,
+        revision: configAsked.revision,
+      });
+    } catch (error) {
+      writeRefused = rpcRefusal(error);
+      if (writeRefused === null) throw error;
+    }
+    const refusal =
+      writeRefused === null ? null : TerminalConfigWriteRefusal.safeParse(writeRefused.details);
+    if (
+      writeRefused?.kind !== "PRECONDITION_FAILED" ||
+      refusal?.success !== true ||
+      refusal.data.reason !== "blocking-errors"
+    ) {
+      throw new Error(
+        `the door did not refuse a text its loader blocks: ${JSON.stringify(writeRefused)}`,
+      );
+    }
+    if (readFileSync(configAsked.path, "utf8") !== configAsked.text) {
+      throw new Error("a refused write moved config.ghostty");
+    }
+    verdict["configRefused"] = refusal.data.reason;
+    // The includes rule: a draft that ADDS an include is judged before any
+    // loader runs, so validation can never be a door to reading another file.
+    const included = await validate(
+      `config-file = ${join(tmpdir(), "vf-smoke-absent-include")}\n${configAsked.text}`,
+    );
+    if (included.includesAllowed || included.config !== undefined) {
+      throw new Error(
+        `a draft that adds an include was judged as a load: ${JSON.stringify(included)}`,
+      );
+    }
+    verdict["configIncludesKept"] = true;
+
+    // 11e. THE PAGE, END TO END (GT-7: GT-D18, GT-D20, GT-D21). The chain a
+    //      person drives: the product's chords over a FOCUSED pane, Settings →
+    //      Terminal, one control, the loader's verdict in the bar, Save, the
+    //      bytes on disk, the floor's reload. Clicks are DOM clicks and keys
+    //      are `sendInputEvent` into this window — nothing reaches the OS.
+    //      Delivery of these chords by macOS predates GT-7 (the palette and
+    //      the settings chord shipped before it); what GT-7 changed, and what
+    //      this row measures, is who hears them once a pane has focus.
+    await focusDeck(win);
+    await untilRenderer(win, "the chord probe", CHORD_PROBE, 5_000);
+    // The POSITIVE CONTROL: a key the pane should hear reaches it, so a silent
+    // probe below is routing, not a deaf probe.
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Shift", modifiers: ["shift"] });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Shift", modifiers: [] });
+    await untilRenderer(
+      win,
+      "the control key reaching the pane",
+      `(window.__vfChordProbe ?? []).includes("Shift") ? "ok" : JSON.stringify(window.__vfChordProbe)`,
+      5_000,
+    );
+    const PALETTE = `document.querySelector('[role="dialog"][aria-label="Command palette"]')`;
+    await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+    pressProductChord(win, "k");
+    await untilRenderer(
+      win,
+      "⌘K opening the palette over a focused pane",
+      `${PALETTE} ? "ok" : "closed"`,
+      10_000,
+    );
+    const heardK = await chordProbeHeard(win);
+    if (heardK.some((key) => key.toLowerCase().endsWith("+k"))) {
+      throw new Error(`the pane heard ⌘K too (Ghostty's clear_screen): ${JSON.stringify(heardK)}`);
+    }
+    await untilRenderer(
+      win,
+      "the palette on top of Godview",
+      onTop('[role="dialog"][aria-label="Command palette"]'),
+      5_000,
+    );
+    pressProductChord(win, "k");
+    await untilRenderer(win, "⌘K closing the palette", `${PALETTE} ? "open" : "ok"`, 10_000);
+    verdict["chordPalette"] = "opened on top of a focused pane; the pane never heard ⌘K";
+    await focusDeck(win);
+    await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+    pressProductChord(win, ",");
+    const SETTINGS_NAV = `nav[aria-label="Settings categories"]`;
+    await untilRenderer(
+      win,
+      "⌘, opening Settings over a focused pane",
+      `document.querySelector(${JSON.stringify(SETTINGS_NAV)}) ? "ok" : "closed"`,
+      10_000,
+    );
+    const heardComma = await chordProbeHeard(win);
+    if (heardComma.some((key) => key.endsWith("+,"))) {
+      throw new Error(
+        `the pane heard ⌘, too (Ghostty's open_config): ${JSON.stringify(heardComma)}`,
+      );
+    }
+    await untilRenderer(win, "Settings on top of Godview", onTop(SETTINGS_NAV), 5_000);
+    verdict["chordSettings"] = "opened on top of a focused pane; the pane never heard ⌘,";
+    // Settings → Terminal → Behavior: one step more history, through the page.
+    await clickIn(win, SETTINGS_NAV, "Terminal");
+    await clickIn(win, ".vf-ts-page", "Behavior");
+    // The stepper exists once the page has READ the document; before that the
+    // tab says it is reading, and a value read then is the loading state's.
+    const STEPPER = `(document.querySelector(".vf-ts-stepper output")?.textContent ?? "")`;
+    await untilRenderer(
+      win,
+      "the page reading config.ghostty",
+      `${STEPPER} !== "" ? "ok" : "reading"`,
+      20_000,
+    );
+    const shownBefore = (await win.webContents.executeJavaScript(STEPPER)) as string;
+    await clickIn(win, ".vf-ts-page", "More scrollback");
+    const BAR = `(document.querySelector(".vf-ts-savebar")?.textContent ?? "")`;
+    await untilRenderer(
+      win,
+      "the loader's verdict in the save bar",
+      `${BAR}.includes("reloads when you save") ? "ok" : ${BAR}`,
+      30_000,
+    );
+    await clickIn(win, ".vf-ts-savebar", "Save");
+    await untilRenderer(win, "the save", `${BAR}.includes("Saved.") ? "ok" : ${BAR}`, 30_000);
+    const pageSaved = TerminalConfigDocument.parse(
+      await opts.handle.client.request("terminal.config.read", {}),
+    );
+    const block =
+      /# >>> Ghosttea common settings[^\n]*\n(?:[^\n]*\n)*?scrollback-limit = (\d+)\n(?:[^\n]*\n)*?# <<< Ghosttea common settings/u.exec(
+        pageSaved.text,
+      );
+    if (block === null) {
+      throw new Error(`the page's save holds no managed block: ${JSON.stringify(pageSaved.text)}`);
+    }
+    const pageBytes = Number(block[1]);
+    // Every line the user wrote survives byte for byte (GT-D20): the block is
+    // appended to row 11's text, never woven into it.
+    if (!pageSaved.text.startsWith(configAsked.text)) {
+      throw new Error(
+        `the page rewrote lines outside its block: ${JSON.stringify(pageSaved.text)}`,
+      );
+    }
+    if (readFileSync(pageSaved.path, "utf8") !== pageSaved.text) {
+      throw new Error("the page's save is not what the file holds");
+    }
+    // The floor RELOADED with it: the effective snapshot is the page's number.
+    if (pageSaved.config?.scrollbackBytes !== pageBytes) {
+      throw new Error(
+        `the floor did not take the page's scrollback: file ${pageBytes}, effective ${String(pageSaved.config?.scrollbackBytes)}`,
+      );
+    }
+    // What the page shows now is the SAVED document's value, read back — the
+    // same number the floor reloaded with, in the page's words.
+    const shownAfter = (await win.webContents.executeJavaScript(STEPPER)) as string;
+    if (shownAfter === shownBefore) {
+      throw new Error(`the page still shows ${shownBefore} after saving ${pageBytes} bytes`);
+    }
+    verdict["settingsPageSaved"] =
+      `${shownBefore} → ${shownAfter} (${pageBytes} bytes); own lines kept; the floor reloaded`;
+    await clickIn(win, ".vf-ts-savebar", "OK");
+    pressProductChord(win, ",");
+    await untilRenderer(
+      win,
+      "⌘, closing Settings",
+      `document.querySelector(${JSON.stringify(SETTINGS_NAV)}) ? "open" : "ok"`,
+      10_000,
+    );
 
     // 12. RETIRED AT TP-S3e. This row SIGKILLed the ghosttea bridge utility
     //    and watched the deck rebuild — a failure mode that no longer has a

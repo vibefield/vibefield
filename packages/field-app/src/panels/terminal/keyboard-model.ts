@@ -252,7 +252,11 @@ export function actionLabel(action: string): string {
   const base =
     ACTION_LABEL[name] ?? `${name.charAt(0).toUpperCase()}${name.slice(1).replaceAll("_", " ")}`;
   const parameter = rest.join(":");
-  return parameter === "" ? base : `${base} · ${parameter.replaceAll("_", " ")}`;
+  // `this` is Ghostty's spelling of the default target (`close_tab:this`):
+  // saying it adds nothing a person reads.
+  return parameter === "" || parameter === "this"
+    ? base
+    : `${base} · ${parameter.replaceAll("_", " ")}`;
 }
 
 export type KeyboardGroup =

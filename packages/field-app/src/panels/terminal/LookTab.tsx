@@ -77,7 +77,14 @@ function LayerHead({
   );
 }
 
-export function LookTab({ model }: { model: TerminalPageModel }): ReactElement {
+export function LookTab({
+  model,
+  previewRef,
+}: {
+  model: TerminalPageModel;
+  /** the page watches THIS element to dock the preview once it scrolls away */
+  previewRef?: (node: HTMLDivElement | null) => void;
+}): ReactElement {
   const { appearance, previewMode, device } = model;
   const set = (patch: Partial<typeof appearance>): void =>
     model.setAppearance({ ...appearance, ...patch });
@@ -124,7 +131,7 @@ export function LookTab({ model }: { model: TerminalPageModel }): ReactElement {
           size="small"
         />
       </div>
-      <div className="vf-ts-preview" data-ts-preview="">
+      <div className="vf-ts-preview" data-ts-preview="" ref={previewRef}>
         <GodviewMiniature
           mode={previewMode}
           theme={theme}

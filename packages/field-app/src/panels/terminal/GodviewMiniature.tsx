@@ -57,7 +57,7 @@ const SHELL: readonly (readonly Segment[])[] = [
   ],
   [[" FAIL ", { bg: 1, fg: 15, bold: true }], [" biome     "], ["2 errors", { fg: 1 }]],
   [
-    ["  src/panels/TerminalSection.tsx", { fg: 6 }],
+    ["  src/panels/terminal/LookTab.tsx", { fg: 6 }],
     [":128:9", { fg: 8 }],
   ],
   [["  lint/style/useTemplate ", { fg: 3 }], ["use a template literal"]],

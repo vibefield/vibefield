@@ -130,10 +130,23 @@ export function ConfigFileTab({ model }: { model: TerminalPageModel }): ReactEle
   const ready = device.kind === "ready" ? device : null;
   const lines = useMemo(() => (ready === null ? [] : parseConfigLines(ready.draft)), [ready]);
   const diagnostics = ready?.snapshot?.diagnostics ?? [];
+  // The snapshot describes the DRAFT only once the loader has read it; until
+  // then (checking, includes refused, a dry run that failed) it is the SAVED
+  // text's, and its line numbers name the saved file's lines — so only what is
+  // said about a KEY may be placed on this text.
+  const describesDraft = ready !== null && (!ready.dirty || ready.validation?.config !== undefined);
   const marks = useMemo(
     () =>
-      ready === null ? new Map<number, LineMark[]>() : lineMarks(lines, diagnostics, ready.path),
-    [lines, diagnostics, ready],
+      ready === null
+        ? new Map<number, LineMark[]>()
+        : lineMarks(
+            lines,
+            describesDraft
+              ? diagnostics
+              : diagnostics.filter((diagnostic) => diagnostic.line === undefined),
+            ready.path,
+          ),
+    [lines, diagnostics, ready, describesDraft],
   );
 
   if (ready === null) {
@@ -219,7 +232,8 @@ export function ConfigFileTab({ model }: { model: TerminalPageModel }): ReactEle
           <p className="vf-ts-notice" data-tone="attention" role="status">
             This text changes which files config.ghostty includes. Settings can keep includes
             exactly as they are, or remove them all — to change them, edit the file itself (Show in
-            Finder). It wasn't checked, so nothing is marked below.
+            Finder). The loader didn't read it, so the marks below say what's known about each key,
+            not its verdict on this text.
           </p>
         )}
         <div className="vf-ts-editor">
@@ -269,9 +283,11 @@ export function ConfigFileTab({ model }: { model: TerminalPageModel }): ReactEle
         description={
           ready.checking
             ? "Checking with ghosttea's loader…"
-            : errors + warnings + notes === 0
-              ? "ghosttea's loader reads this file without a complaint."
-              : `${errors} ${errors === 1 ? "error" : "errors"} · ${warnings} ${warnings === 1 ? "warning" : "warnings"} · ${notes} ${notes === 1 ? "note" : "notes"}${blocking.length > 0 ? " — errors keep Save off" : ""}`
+            : `${describesDraft ? "" : "The loader hasn't read these edits; this is the saved file. "}${
+                errors + warnings + notes === 0
+                  ? "ghosttea's loader reads this file without a complaint."
+                  : `${errors} ${errors === 1 ? "error" : "errors"} · ${warnings} ${warnings === 1 ? "warning" : "warnings"} · ${notes} ${notes === 1 ? "note" : "notes"}${blocking.length > 0 ? " — errors keep Save off" : ""}`
+              }`
         }
       >
         {own.length > 0 && (
@@ -280,7 +296,11 @@ export function ConfigFileTab({ model }: { model: TerminalPageModel }): ReactEle
               <li key={index} data-severity={diagnostic.severity}>
                 <span className="vf-ts-diagnostic-dot" aria-hidden="true" />
                 <span className="vf-ts-diagnostic-text">{diagnostic.message}</span>
-                {diagnostic.line !== undefined ? (
+                {diagnostic.line !== undefined && !describesDraft ? (
+                  // The saved file's line: jumping there in the draft would
+                  // land somewhere else.
+                  <code className={labelCls}>saved line {diagnostic.line}</code>
+                ) : diagnostic.line !== undefined ? (
                   <button
                     type="button"
                     className="vf-ts-linkish"
@@ -342,7 +362,17 @@ export function ConfigFileTab({ model }: { model: TerminalPageModel }): ReactEle
         title="Every Ghostty key"
         scope="fact"
         description={`The ${KEY_COUNTS.known} keys of Ghostty ${GHOSTTY_KEYS_SOURCE.ghostty}, and what ghosttea ${GHOSTTY_KEYS_SOURCE.version} does with each: ${KEY_COUNTS.applied} applied, ${KEY_COUNTS.parsed} kept without drawing, ${KEY_COUNTS.unsupported} ignored.`}
-        action={
+      >
+        {/* Views of the list, on the list — not in the head beside its facts. */}
+        <div className="vf-ts-reference-tools">
+          <input
+            type="search"
+            className="vf-ui-field vf-ts-reference-search"
+            placeholder={`Search ${KEY_COUNTS.known} keys`}
+            value={referenceQuery}
+            onChange={(event) => setReferenceQuery(event.currentTarget.value)}
+            aria-label="Search Ghostty keys"
+          />
           <SegmentedControl
             options={SUPPORT_FILTERS}
             value={support}
@@ -350,16 +380,7 @@ export function ConfigFileTab({ model }: { model: TerminalPageModel }): ReactEle
             label="Show keys"
             size="small"
           />
-        }
-      >
-        <input
-          type="search"
-          className="vf-ui-field vf-ts-reference-search"
-          placeholder={`Search ${KEY_COUNTS.known} keys`}
-          value={referenceQuery}
-          onChange={(event) => setReferenceQuery(event.currentTarget.value)}
-          aria-label="Search Ghostty keys"
-        />
+        </div>
         <div className="vf-ts-reference">
           {KEY_GROUPS.map((group) => {
             const entries = reference.filter((entry) => entry.group.id === group.id);

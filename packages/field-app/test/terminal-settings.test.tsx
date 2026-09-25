@@ -300,6 +300,50 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
     expect(calls.some((call) => call.method === "terminal.config.validate")).toBe(false);
   });
 
+  it("never places the saved file's line numbers on a draft the loader hasn't read", async () => {
+    // The saved snapshot warns about line 3 (`font-thicken`). The edit puts an
+    // include on top, so the loader refuses to read it — and line 3 of the
+    // DRAFT is now `cursor-style`, which the warning is not about.
+    handlers["terminal.config.read"] = () =>
+      Promise.resolve({
+        ...SAVED,
+        config: {
+          ...FIXTURE_SAVED_SNAPSHOT,
+          diagnostics: [
+            {
+              severity: "warning",
+              code: "deprecated",
+              message: "font-thicken is deprecated",
+              source: FIXTURE_CONFIG_PATH,
+              line: 3,
+              key: "font-thicken",
+            },
+          ],
+        },
+      });
+    handlers["terminal.config.validate"] = () =>
+      Promise.resolve({ documentRevision: "doc-2", includesAllowed: false, blocking: [] });
+    await mount();
+    click("Config file");
+    const gutter = (line: number): string | undefined =>
+      host?.querySelectorAll<HTMLElement>(".vf-ts-editor-gutter span")[line - 1]?.dataset.mark;
+    expect(gutter(3)).toBe("warning");
+    const textarea = host?.querySelector("textarea");
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    act(() => {
+      setValue?.call(textarea, `config-file = ~/elsewhere\n${FIXTURE_SAVED_TEXT}`);
+      textarea?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle(400);
+    expect(bar()).toContain("includes can't change here");
+    expect(gutter(3)).not.toBe("warning");
+    expect(gutter(4)).not.toBe("warning");
+    expect(host?.textContent).toContain(
+      "The loader hasn't read these edits; this is the saved file.",
+    );
+    expect(host?.textContent).toContain("saved line 3");
+  });
+
   it("opens the theme browser as the dialog's subpage, with the way back", async () => {
     await mount();
     click("Match a theme…");
