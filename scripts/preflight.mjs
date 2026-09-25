@@ -82,30 +82,30 @@ const PIN_EXPECTATIONS = [
     re: /"@vibecook\/ice":\s*0\.11\.0/,
     label: '"@vibecook/ice": 0.11.0',
   },
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.11\.1"/m, label: 'ghosttea = "=0.11.1"' },
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.12\.0"/m, label: 'ghosttea = "=0.12.0"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1
   // adapter left the floor (`thinking-terminal-mesh-cells.md`, TM-D1 ruled T), so
   // there is no second ghosttea consumer to keep in lockstep; the ghosttea row
   // alone carries truffle-core's version agreement now.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.11\.1/,
-    label: '"@vibecook/ghosttea-client": 0.11.1',
+    re: /"@vibecook\/ghosttea-client":\s*0\.12\.0/,
+    label: '"@vibecook/ghosttea-client": 0.12.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-electron":\s*0\.11\.1/,
-    label: '"@vibecook/ghosttea-electron": 0.11.1',
+    re: /"@vibecook\/ghosttea-electron":\s*0\.12\.0/,
+    label: '"@vibecook/ghosttea-electron": 0.12.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-react":\s*0\.11\.1/,
-    label: '"@vibecook/ghosttea-react": 0.11.1',
+    re: /"@vibecook\/ghosttea-react":\s*0\.12\.0/,
+    label: '"@vibecook/ghosttea-react": 0.12.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-protocol":\s*0\.11\.1/,
-    label: '"@vibecook/ghosttea-protocol": 0.11.1',
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.12\.0/,
+    label: '"@vibecook/ghosttea-protocol": 0.12.0',
   },
 ];
 // A petition window's [patch.crates-io] row is part of its pin: without it the

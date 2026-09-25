@@ -1,12 +1,13 @@
 /**
- * GT-8a — the deck's half of a terminal link. The helper asks fieldd's
- * `terminal.link.open` and nothing else, and it never throws into ghosttea's
- * pointer handler: a refused link is an ordinary answer, logged quietly by
- * scheme and kind — never by the URL, which can carry a token.
+ * GT-8 — a terminal link, from the window's one runtime to fieldd. The helper
+ * asks fieldd's `terminal.link.open` and nothing else, and it never throws into
+ * ghosttea's pointer handler: a refused link is an ordinary answer, logged
+ * quietly by scheme and kind — never by the URL, which can carry a token. The
+ * runtime's opener (GT-8b) asks for WEB links only: ghosttea's hook names no
+ * session, so a file link cannot be told from a peer's path.
  */
 import { FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openTerminalLink, type TerminalLinkClient } from "../src/godview/terminal-links";
 import {
   getRendererLogger,
   type RendererLogFields,
@@ -14,6 +15,11 @@ import {
   type RendererLoggerBindings,
   setRendererLogger,
 } from "../src/logging";
+import {
+  openTerminalLink,
+  type TerminalLinkClient,
+  terminalLinkOpener,
+} from "../src/terminal/links";
 
 interface LogLine {
   level: string;
@@ -91,7 +97,7 @@ describe("openTerminalLink", () => {
       {
         level: "warn",
         event: "renderer.terminal.link_not_opened",
-        bindings: { component: "godview.links" },
+        bindings: { component: "terminal.links" },
         attrs: { scheme: "mailto", kind: "PRECONDITION_FAILED" },
       },
     ]);
@@ -128,5 +134,54 @@ describe("openTerminalLink", () => {
     };
     await expect(openTerminalLink(throwing, "https://example.com/")).resolves.toBeUndefined();
     expect(lines).toHaveLength(1);
+  });
+});
+
+describe("terminalLinkOpener — the runtime platform's openExternal (GT-8b)", () => {
+  it("asks fieldd for a web link, http as well as https", async () => {
+    const fieldd = client(() => Promise.resolve({ outcome: "opened" }));
+    const open = terminalLinkOpener(fieldd);
+    await expect(open("http://localhost:3000/x")).resolves.toBeUndefined();
+    await open("https://example.com/docs");
+    expect(fieldd.calls).toEqual([
+      { method: "terminal.link.open", params: { url: "http://localhost:3000/x" } },
+      { method: "terminal.link.open", params: { url: "https://example.com/docs" } },
+    ]);
+    expect(lines).toEqual([]);
+  });
+
+  it("never asks for a file link — it could be a peer's path — nor any other scheme", async () => {
+    const fieldd = client(() => Promise.resolve({ outcome: "revealed" }));
+    const open = terminalLinkOpener(fieldd);
+    for (const link of [
+      "file:///Users/me/project/src/main.rs",
+      "file:///Applications/Calculator.app",
+      "mailto:someone@example.com",
+      "ftp://example.com/",
+    ]) {
+      await expect(open(link), link).resolves.toBeUndefined();
+    }
+    expect(fieldd.calls).toEqual([]);
+    expect(lines.map((line) => [line.level, line.event, line.attrs])).toEqual([
+      ["info", "renderer.terminal.link_not_asked", { scheme: "file" }],
+      ["info", "renderer.terminal.link_not_asked", { scheme: "file" }],
+      ["info", "renderer.terminal.link_not_asked", { scheme: "mailto" }],
+      ["info", "renderer.terminal.link_not_asked", { scheme: "ftp" }],
+    ]);
+    // the path is never logged, only its scheme
+    expect(JSON.stringify(lines)).not.toContain("Calculator");
+  });
+
+  it("carries a refused web link through the same quiet path as openTerminalLink", async () => {
+    const fieldd = client(() =>
+      Promise.reject(new FielddRpcError("PRECONDITION_FAILED", "credentials", false)),
+    );
+    await expect(
+      terminalLinkOpener(fieldd)("https://user:pass@example.com/"),
+    ).resolves.toBeUndefined();
+    expect(fieldd.calls).toHaveLength(1);
+    expect(lines.map((line) => line.attrs)).toEqual([
+      { scheme: "https", kind: "PRECONDITION_FAILED" },
+    ]);
   });
 });

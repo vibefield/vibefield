@@ -38,14 +38,6 @@ const NOT_YET: readonly { key: string; what: string }[] = [
   { key: "bell-features", what: "What the bell does" },
 ];
 
-/** GT-8a — whether the pinned ghosttea finds links in terminal output: its
- * loader APPLIES `link-url`, as the generated key catalog reports. Read at
- * render, so the Links section and the page's search turn with the pin and
- * nothing else. */
-export function terminalLinksApplied(): boolean {
-  return KEY_BY_NAME.get("link-url")?.support === "applied";
-}
-
 export function BehaviorTab({ model }: { model: TerminalPageModel }): ReactElement {
   const { device, managed } = model;
   const ready = device.kind === "ready" ? device : null;
@@ -117,47 +109,38 @@ export function BehaviorTab({ model }: { model: TerminalPageModel }): ReactEleme
         )}
       </PageSection>
 
-      {terminalLinksApplied() ? (
-        <PageSection
-          id="behavior-links"
-          title="Links"
-          scope="mac"
-          when="after-save"
-          description="⌘-click opens a web link in your browser; a file path is shown in Finder, never opened."
-        >
-          {ready !== null ? (
-            <SettingsRow
-              title="Find links in output"
-              divider={false}
-              description={
-                findLinks
-                  ? "On: web addresses and file paths in a terminal's output become links."
-                  : "Off: only the links a program marks itself (OSC 8) stay clickable."
-              }
-            >
-              <SettingsSwitch
-                checked={findLinks}
-                onChange={(on) => model.setManaged({ ...managed, linkUrl: on })}
-                label="Find links in output"
-              />
-            </SettingsRow>
-          ) : (
-            <DeviceUnavailable model={model} compact />
-          )}
-        </PageSection>
-      ) : (
-        <PageSection
-          id="behavior-links"
-          title="Links"
-          scope="fact"
-          when="next-ghosttea"
-          description="Finding links in output, opening them with ⌘-click, and link-url to turn that off exist in ghosttea but are not released: 0.11.1, the version VibeField ships, has none of it, so a terminal here has no clickable links yet."
-        >
-          <SettingsRow title="Find links in output" divider={false}>
-            <Fact>Not in ghosttea 0.11.1</Fact>
+      {/* GT-8b: ghosttea 0.12.0 applies `link-url` (the generated catalog
+          says so, and a catalog row pins it). A file path is found and
+          underlined like any link, but the deck asks fieldd to open web links
+          only — ghosttea's hook names no session, so a path cannot be told
+          from a peer's — and the line says so rather than promising Finder. */}
+      <PageSection
+        id="behavior-links"
+        title="Links"
+        scope="mac"
+        when="after-save"
+        description="⌘-click opens a web link in your browser. A file path is underlined too, but opens nothing yet: the terminal can't say which Mac it's on."
+      >
+        {ready !== null ? (
+          <SettingsRow
+            title="Find links in output"
+            divider={false}
+            description={
+              findLinks
+                ? "On: web addresses and file paths in a terminal's output become links."
+                : "Off: only the links a program marks itself (OSC 8) stay clickable."
+            }
+          >
+            <SettingsSwitch
+              checked={findLinks}
+              onChange={(on) => model.setManaged({ ...managed, linkUrl: on })}
+              label="Find links in output"
+            />
           </SettingsRow>
-        </PageSection>
-      )}
+        ) : (
+          <DeviceUnavailable model={model} compact />
+        )}
+      </PageSection>
 
       <PageSection
         id="behavior-sessions"

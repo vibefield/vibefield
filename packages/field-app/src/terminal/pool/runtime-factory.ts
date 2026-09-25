@@ -43,8 +43,16 @@ export type TerminalRuntimeTransport =
   | { readonly transport?: "bridge" }
   | { readonly transport: "routed"; readonly host: GhostteaRoutedHost };
 
+export interface TerminalRuntimeOptions {
+  /** GT-8b — where a ⌘-clicked terminal link goes: ghosttea's runtime platform
+   * `openExternal` (0.12.0). The runtime surfaces links ONLY when it is given
+   * one, so absent means no link is underlined or opened at all. */
+  readonly openLink?: (url: string) => void | Promise<void>;
+}
+
 export function createTerminalRuntime(
   transport: TerminalRuntimeTransport = { transport: "bridge" },
+  options: TerminalRuntimeOptions = {},
 ): GhostteaTerminalRuntime {
   const common = {
     clientBuild: "vibefield-godview",
@@ -54,6 +62,7 @@ export function createTerminalRuntime(
     workerFactory: () => new TerminalRenderWorker(),
     platform: {
       writeClipboard: (text: string) => void navigator.clipboard?.writeText(text),
+      ...(options.openLink !== undefined ? { openExternal: options.openLink } : {}),
       forceCanvasFallback: () => false,
       setForceCanvasFallback: () => undefined,
       // A VibeField renderer cannot reload itself — security.ts denies every

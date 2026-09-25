@@ -377,30 +377,17 @@ const NOTES: Readonly<Record<string, KeyNote>> = {
     timing: "kept",
     note: "Kept, not drawn: the desktop grid has a fixed 2 px inset.",
   },
+  // GT-8b: applied since ghosttea 0.12.0 (the key reference used to say
+  // "recognized, not applied by 0.11.1").
   "link-url": {
-    timing: "ignored",
-    note: "Recognized, not applied by ghosttea 0.11.1; unreleased ghosttea work applies it.",
+    timing: "live",
+    note: "Whether ⌘-click finds links in output. Every session on this Mac, live after a save.",
   },
   "background-blur": {
     timing: "ignored",
     note: "Ignored by ghosttea. In the deck, Look → Glass → Background blur softens your canvas behind Godview.",
   },
 };
-
-/** Notes that replace the ones above once the pinned loader APPLIES the key
- * (GT-8a): the note follows the generated support, so a pin move can never
- * leave "Applied" beside "not applied". */
-const WHEN_APPLIED: Readonly<Record<string, KeyNote>> = {
-  "link-url": {
-    timing: "live",
-    note: "Whether ⌘-click finds links in output. Every session on this Mac, live after a save.",
-  },
-};
-
-/** What a key does in the deck, for the support the pinned loader reports. */
-export function keyNote(key: string, support: GhosttyKeySupport): KeyNote | null {
-  return (support === "applied" ? WHEN_APPLIED[key] : undefined) ?? NOTES[key] ?? null;
-}
 
 export interface KeyEntry {
   readonly key: string;
@@ -421,7 +408,7 @@ export const KEY_ENTRIES: readonly KeyEntry[] = (() => {
     key: entry.key,
     support: entry.support,
     group: GROUP_OF.get(entry.key) ?? other,
-    note: keyNote(entry.key, entry.support),
+    note: NOTES[entry.key] ?? null,
   }));
   const order = [...KEY_GROUPS, other];
   return entries.sort(

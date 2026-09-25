@@ -163,7 +163,13 @@ truffle-core = "=0.7.14"
 # npm-side (`ghosttea-react`: host `getSession` + `applySessionEvent` + the
 # inbound extension mirror); the cargo rows move in the SAME event to keep the
 # one-version law, as GT-4 did in the other direction.
-ghosttea = "=0.11.1"
+# GT-8b (2026-09-25) bumps 0.11.1 → 0.12.0 — terminal links: frames carry link
+# targets (TRF1 section 12, additive), the loader APPLIES `link-url` and the
+# snapshot carries `renderer.linkUrl`, and a local session reports its launch
+# cwd from creation. A 0.x minor because `TextSnapshot.links` and
+# `RendererConfig.link_url` are new public fields; field-native builds neither
+# struct literally. The npm rows move in the SAME event (one-version law).
+ghosttea = "=0.12.0"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is

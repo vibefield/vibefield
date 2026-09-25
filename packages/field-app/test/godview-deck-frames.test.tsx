@@ -237,6 +237,8 @@ const fieldd = {
         sessionId: "born-1",
         // A shell that has not drawn its first prompt has announced no OSC 7,
         // so the floor reports no cwd — which is the case `fallbackCwd` is for.
+        // (ERRATA 2026-09-25, GT-8b: a ghosttea 0.12.0 floor reports the spawn
+        // directory from creation, so this `cwd: null` is an older floor's.)
         session: bornSummary("born-1", { cwd: null }),
         ...routedTicket("born-1"),
       });
@@ -641,6 +643,10 @@ describe("the deck's pane frames", () => {
     // The floor says nothing about this shell's folder — a shell before its
     // first prompt has announced no OSC 7 — so the badge would read `terminal`
     // if the deck did not remember the folder it asked for the split in.
+    // ERRATA (2026-09-25, GT-8b): a ghosttea 0.12.0 floor does say. A local
+    // session reports its spawn directory from creation, so this stub's `cwd:
+    // null` is the older floor, and the remembered folder is now the fallback
+    // for a floor that says nothing rather than the only source.
     expect(frameFor(host, "born-1")?.querySelector(".vf-pane-name")?.textContent).toBe("rosetta");
   });
 

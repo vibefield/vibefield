@@ -127,18 +127,23 @@ overrides:
   # lifecycle door driving the same internal paths as the UDS events), and the
   # inbound extension mirror `onExtensionMessage` (+ the routed runtime's
   # `capabilities` advertisement). Cargo rows move in the same event.
-  "@vibecook/ghosttea-client": 0.11.1
+  # GT-8b (2026-09-25) bumps 0.11.1 → 0.12.0 — terminal links: the runtime
+  # platform's optional `openExternal` (links surface only when a host supplies
+  # it), `terminalLinkUrl`, and the loader APPLIES Ghostty's `link-url`. A 0.x
+  # minor, not 0.11.2: the release adds public fields to two published Rust
+  # structs. Cargo rows move in the same event.
+  "@vibecook/ghosttea-client": 0.12.0
   # GT-0 (2026-08-01): the Godview terminal planes join at the same exact version
   # (one-version law) — electron-shell consumes ghosttea-electron, field-app
   # consumes ghosttea-react; packages ask for "*".
-  "@vibecook/ghosttea-electron": 0.11.1
-  "@vibecook/ghosttea-react": 0.11.1
+  "@vibecook/ghosttea-electron": 0.12.0
+  "@vibecook/ghosttea-react": 0.12.0
   # GT-3m (2026-08-04): field-app declares the wire vocabulary directly — the
   # monitor's rows ARE floor sessions, so `SessionSummary` is the honest type for
   # them. Types-and-constants only (zero dependencies), already resolved at this
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
-  "@vibecook/ghosttea-protocol": 0.11.1
+  "@vibecook/ghosttea-protocol": 0.12.0
   # ---- SIBLING MODE (AR-0, 2026-09-12) --------------------------------------
   # chopsticks and spaghetti retired on 2026-09-04 (James): the agent runtime is
   # puppeteer, agent history is rosetta. Neither is published, so they enter as
@@ -185,12 +190,12 @@ catalog:
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
   - '@vibecook/ice@0.11.0'
-  - '@vibecook/ghosttea-client@0.11.1'
-  - '@vibecook/ghosttea-protocol@0.11.1'
-  - '@vibecook/ghosttea-electron@0.11.1'
-  - '@vibecook/ghosttea-react@0.11.1'
-  - '@vibecook/ghosttea-frame@0.11.1'
-  - '@vibecook/ghosttea@0.11.1'
+  - '@vibecook/ghosttea-client@0.12.0'
+  - '@vibecook/ghosttea-protocol@0.12.0'
+  - '@vibecook/ghosttea-electron@0.12.0'
+  - '@vibecook/ghosttea-react@0.12.0'
+  - '@vibecook/ghosttea-frame@0.12.0'
+  - '@vibecook/ghosttea@0.12.0'
   # AH-1b — the exact T2 release is a reviewed executable input, not an
   # unreviewed transitive update. All platform packages move in lockstep.
   # 0.7.12 → 0.7.14 (2026-09-16, UA-P-X): the RFC 025 petition window's exit.

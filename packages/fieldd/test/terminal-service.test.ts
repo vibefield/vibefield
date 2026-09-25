@@ -1821,15 +1821,14 @@ describe("GT-7 — Settings → Terminal's config document", () => {
       fontSize: 13,
       fontFamilies: ["Berkeley Mono", "Menlo"],
     });
-    // a 0.11.1 floor says nothing about link-url, and the projection says
-    // nothing either — never a guessed `true`
+    // a floor older than the key (0.11.1) says nothing about link-url, and the
+    // projection says nothing either — never a guessed `true`
     expect("linkUrl" in projected).toBe(false);
     expect(TerminalConfigSnapshot.parse(projected)).toEqual(projected);
 
-    // GT-8a — a floor that applies link-url (0.12.0) sends `renderer.linkUrl`,
-    // which the pinned client's types do not declare: read tolerantly, a
-    // boolean or nothing. (Built outside the literal: the pinned renderer type
-    // refuses the key as an excess property.)
+    // GT-8a — a floor that applies link-url (0.12.0) sends `renderer.linkUrl`:
+    // a boolean or nothing reaches the contract. (Built beside the literal,
+    // which keeps the older floor's shape.)
     const linksOff = { ...snapshot.renderer, linkUrl: false };
     const withLinks = projectConfigSnapshot({ ...snapshot, renderer: linksOff });
     expect(withLinks.linkUrl).toBe(false);

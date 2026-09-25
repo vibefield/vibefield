@@ -1805,15 +1805,14 @@ function projectDiagnostic(diagnostic: GhostteaConfigDiagnostic): TerminalConfig
  * the terminal's, and absence is an empty palette — Ghostty's defaults — never
  * a refusal. Colours go from `[r, g, b]` to `#rrggbb`.
  *
- * GT-8a — `renderer.linkUrl` (Ghostty's `link-url`) is read TOLERANTLY: the
- * pinned 0.11.1 client does not declare it and its validator passes the
- * renderer object through untouched, so a floor that sends it is read here and
- * one that does not leaves it absent — never a guessed `true`. A boolean or
- * nothing: any other value is a field this build does not understand. */
+ * GT-8a — `renderer.linkUrl` (Ghostty's `link-url`) is OPTIONAL on the wire:
+ * ghosttea 0.12.0's client declares it so, because a floor older than the key
+ * sends none. Absent stays absent — never a guessed `true`; a boolean or
+ * nothing reaches the contract. (GT-8b: at the 0.11.1 pin this was read through
+ * an `object`, since that client's types did not declare the field.) */
 export function projectConfigSnapshot(snapshot: GhostteaConfigSnapshot): TerminalConfigSnapshot {
   const palette = snapshot.renderer.palette ?? snapshot.terminal.palette ?? [];
-  const renderer: object = snapshot.renderer;
-  const linkUrl: unknown = "linkUrl" in renderer ? renderer.linkUrl : undefined;
+  const linkUrl: unknown = snapshot.renderer.linkUrl;
   return {
     revision: snapshot.revision,
     ghosttyVersion: snapshot.compatibility.ghosttyVersion,

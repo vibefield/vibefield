@@ -159,6 +159,16 @@ export function rememberDeviceHost(cwd: string | null | undefined): void {
  * must not break this, and a tolerant reader does not insist on the shape it
  * happens to see today.
  *
+ * ERRATA (2026-09-25, GT-8b): the parenthesis above stopped being true at
+ * ghosttea 0.12.0. A local session reports its SPAWN directory from creation,
+ * as a plain absolute path (`session.rs` seeds the summary's `cwd` with the
+ * directory its link finder resolves relative paths against), until the
+ * shell's first OSC 7 replaces it with the URL. So on this Mac a shell with no
+ * OSC 7 integration now restores in the folder it was opened in, not at home:
+ * the later ghosttea arrived, and this reader took its plain path unchanged. A
+ * peer's plain path is still refused, by rule 1 below. A Windows drive path
+ * (`C:\…`) is neither shape here, so a pane there still restores at home.
+ *
  * THE HOST IS CONSULTED, in two ways, and this is no longer the conditional the
  * GT-3 comment left here (see the 2026-08-06 erratum: the spec read that TODO
  * as a safeguard that existed, and GT-4 then lit up remote panes against it):

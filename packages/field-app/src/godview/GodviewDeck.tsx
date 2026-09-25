@@ -762,6 +762,10 @@ export function GodviewDeck({
       // is not reported and OSC 7 needs a shell integration — and now also for a
       // pane that was a PEER'S: its folder is on another machine, and opening a
       // local shell there is either the wrong directory or a dropped pane.
+      // ERRATA (2026-09-25, GT-8b): "most of them" stopped being true at
+      // ghosttea 0.12.0, which reports a local session's spawn directory from
+      // creation, as a plain path that `paneCwd` takes as it is. Home is now the
+      // fallback for a peer's pane, a Windows drive path, and an older floor.
       const cwd = paneCwd(context.meta, readDeviceHost()) ?? shell.home;
       try {
         return await bornSession(cwd);

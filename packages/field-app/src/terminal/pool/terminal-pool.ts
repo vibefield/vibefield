@@ -11,6 +11,7 @@ import type { FielddClient } from "@vibefield/fieldd-client";
 import { getHost } from "../../host";
 import { getRendererLogger } from "../../logging";
 import { registerTerminalPerfSource } from "../../perf/terminal-perf-source";
+import { terminalLinkOpener } from "../links";
 import { createRoutedTerminalHost, type RoutedTerminalHostBinding } from "../routed/host";
 import {
   type CellBootId,
@@ -501,7 +502,13 @@ function ensureRuntime(): GhostteaTerminalRuntime {
     onTicket: recordRoutedTicket,
     onTerminated: forgetRoutedSession,
   });
-  runtime = createTerminalRuntime({ transport: "routed", host: routedHost.host });
+  // GT-8b: the same client carries ⌘-clicked links to fieldd's
+  // `terminal.link.open` — one runtime per window, so one opener for every
+  // surface that mounts it.
+  runtime = createTerminalRuntime(
+    { transport: "routed", host: routedHost.host },
+    { openLink: terminalLinkOpener(fieldd) },
+  );
   routedHost.bind(runtime);
   runtimeGeneration += 1;
   unregisterPerfSource = registerTerminalPerfSource(runtime);

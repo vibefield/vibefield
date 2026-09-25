@@ -420,7 +420,7 @@ export function LookTab({
         id="look-text"
         title="Font & cursor"
         scope="fact"
-        description="ghosttea 0.11.1 draws the desktop terminal with a fixed font and cursor, so these are facts rather than choices."
+        description="ghosttea 0.12.0 draws the desktop terminal with a fixed font and cursor, so these are facts rather than choices."
       >
         <SettingsRow
           title="Font"
