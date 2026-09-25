@@ -621,6 +621,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       otherUserLinks: () => otherUserLinks(config.dataDir, linkLogger),
     });
     links.start();
+    // UA-P-0j — the first dial already happened above, so this hears only the
+    // re-dials: a floor respawned under this daemon (a crash, a wedge restart)
+    // boots holding no posture, and the link service is the one that asks.
+    native.on("connected", () => links.floorReconnected());
     // C6-3g: sync is constructed after docs but has to be reachable from its
     // commit hook, so the hook reads a binding that is filled in below. It is
     // optional the whole way down — with the mesh off (the default) `docSync`

@@ -26,6 +26,16 @@ export class MockMgmtServer {
   supersedeAfterSubscribe = false;
   /** when set, every native.mesh.* call answers UNAVAILABLE (node not up) */
   meshUnavailable = false;
+  /** UA-P-0j — the floor's mesh POSTURE, modelled only for a suite that opts
+   * in; `undefined` (the default) keeps the scripted node every older row
+   * expects. `null` is a floor holding NO posture — the real floor's boot
+   * default, so a respawn is `meshPosture = null` plus `killClients()` — and
+   * then every `native.mesh.*` call but `start` answers UNAVAILABLE with the
+   * real floor's word for it, `disabled`. `native.mesh.start` records what it
+   * was asked for, and `native.mesh.self` answers as that node. */
+  meshPosture: { mode: string; login?: string } | null | undefined = undefined;
+  /** Every `native.mesh.start` this floor was asked, with its params, in order. */
+  readonly meshStarts: Array<Record<string, unknown>> = [];
   /** scripted node-side serve state (C2/AH-1 reconcile tests), keyed by serveId */
   meshServes = new Map<
     string,
@@ -395,7 +405,7 @@ export class MockMgmtServer {
     }
     const reply = (body: object) =>
       sock.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body }) + "\n");
-    if (this.meshUnavailable) {
+    const notUp = (state: string) =>
       reply({
         error: {
           code: -32006,
@@ -403,10 +413,40 @@ export class MockMgmtServer {
           data: {
             kind: "UNAVAILABLE",
             retryable: true,
-            details: { service: "mesh-gateway", state: "starting" },
+            details: { service: "mesh-gateway", state },
           },
         },
       });
+    if (msg.method === "native.mesh.start") this.meshStarts.push({ ...(msg.params ?? {}) });
+    if (this.meshPosture !== undefined) {
+      const p = msg.params ?? {};
+      if (msg.method === "native.mesh.start") {
+        const mode = String(p["mode"]);
+        this.meshPosture = {
+          mode,
+          ...(typeof p["login"] === "string" ? { login: p["login"] } : {}),
+        };
+        reply({ result: { mode, started: true } });
+        return;
+      }
+      if (this.meshPosture === null) {
+        notUp("disabled");
+        return;
+      }
+      if (msg.method === "native.mesh.self") {
+        const login = this.meshPosture.login;
+        reply({
+          result: {
+            deviceId: "mock-device",
+            ...(login !== undefined ? { login } : {}),
+            loginAllow: login !== undefined && this.meshPosture.mode === "linked" ? [login] : [],
+          },
+        });
+        return;
+      }
+    }
+    if (this.meshUnavailable) {
+      notUp("starting");
       return;
     }
     const p = msg.params ?? {};

@@ -104,6 +104,12 @@ export class LinkService extends EventEmitter {
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
   private lastEmitted = "";
+  /** The posture ask in flight, if any. A probe that finds the floor holding no
+   * posture restores it only when nothing is already asking: the boot's own
+   * ask races the first probe, and a second `native.mesh.start` landing before
+   * the first has installed a node ABORTS that bring-up and starts another
+   * (services/mesh.rs `start`: no node present ⇒ teardown + build). */
+  private declaring: Promise<void> | null = null;
 
   constructor(private readonly opts: LinkServiceOptions) {
     super();
@@ -153,6 +159,19 @@ export class LinkService extends EventEmitter {
     this.stopped = true;
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
+  }
+
+  /** UA-P-0j — the mgmt link dialed the floor again: a reconnect, or the
+   * supervisor's respawn after a crash or a wedge. A respawned floor boots
+   * OFFLINE and holds no posture until it is asked (services/mesh.rs, the mesh
+   * unit's `start`), and nothing else here would ever ask it again — measured
+   * 2026-09-24: a wedge restart at 12:05:59 left a LINKED desktop with no
+   * tailnet node until a new fieldd booted at 14:46:19. So the next probe is
+   * brought forward; it reads the floor's own answer and restores the posture
+   * only when the floor holds none. */
+  floorReconnected(): void {
+    if (this.state !== "linked" && this.state !== "capturing") return;
+    this.schedule(0);
   }
 
   /** UA-P-0a (D1) — THE LINK ACT. The floor brings a node up in `capture` mode,
@@ -221,7 +240,15 @@ export class LinkService extends EventEmitter {
 
   // ---- the posture, as asked of the floor ----
 
-  private async declarePosture(mode: "capture" | "linked", login?: string): Promise<void> {
+  private declarePosture(mode: "capture" | "linked", login?: string): Promise<void> {
+    const asking = this.askFloor(mode, login).finally(() => {
+      if (this.declaring === asking) this.declaring = null;
+    });
+    this.declaring = asking;
+    return asking;
+  }
+
+  private async askFloor(mode: "capture" | "linked", login?: string): Promise<void> {
     try {
       MeshStartResult.parse(
         await this.opts.native.request("native.mesh.start", {
@@ -231,10 +258,11 @@ export class LinkService extends EventEmitter {
       );
     } catch (error) {
       // The floor being unreachable is not a posture change: the link is still
-      // the link, and the next probe (or the next boot) re-declares. What must
-      // NOT happen is a silent downgrade to something more open — and none is
-      // possible here, because the door and the serve both read the stored
-      // login, not this call's outcome.
+      // the link, and the next probe that finds the floor holding no posture
+      // re-declares it (UA-P-0j), as does the next boot. What must NOT happen is
+      // a silent downgrade to something more open — and none is possible here,
+      // because the door and the serve both read the stored login, not this
+      // call's outcome.
       this.logger.warn(
         "fieldd.link.posture_declare_failed",
         "The mesh posture could not be declared to the floor",
@@ -320,8 +348,38 @@ export class LinkService extends EventEmitter {
           : {};
       this.nodeState = typeof details.state === "string" ? details.state : null;
       this.authUrl = typeof details.authUrl === "string" ? details.authUrl : null;
+      // UA-P-0j — `disabled` is the floor's word for "no posture held": its boot
+      // default, `stop` and `retire` set it and nothing else does
+      // (services/mesh.rs). This service holding a posture while the floor holds
+      // none means the floor restarted under us, so the posture is asked for
+      // again. ONLY `disabled`: `starting` is a bring-up in flight that a second
+      // ask would abort, and `degraded`/`crashed` are a posture the floor still
+      // holds. An ask already in flight (the boot's own) is left to land.
+      if (this.nodeState === "disabled" && this.declaring === null) {
+        await this.restorePosture();
+      }
       this.emitIfChanged();
       this.schedule(this.opts.probeMs ?? PROBE_MS);
+    }
+  }
+
+  /** UA-P-0j — re-ask the floor for the posture this service holds. */
+  private async restorePosture(): Promise<void> {
+    const login = this.link?.login ?? null;
+    if (this.state === "linked" && login !== null) {
+      this.logger.warn(
+        "fieldd.link.posture_restored",
+        "The floor held no mesh posture while this desktop is linked; declared it again",
+        { mode: "linked" },
+      );
+      await this.declarePosture("linked", login);
+    } else if (this.state === "capturing") {
+      this.logger.warn(
+        "fieldd.link.posture_restored",
+        "The floor held no mesh posture while a link was being captured; declared it again",
+        { mode: "capture" },
+      );
+      await this.declarePosture("capture");
     }
   }
 

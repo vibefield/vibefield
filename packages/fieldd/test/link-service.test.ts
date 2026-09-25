@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LinkService, otherUserLinks } from "../src/link-service";
 import { RpcCallError } from "../src/native-link";
 
@@ -338,6 +338,201 @@ describe("UA-P-0a — the mesh posture", () => {
       authUrl: "https://login.tailscale.example/a/b",
     });
     svc.stop();
+  });
+});
+
+// ---- UA-P-0j: a floor that restarts under fieldd gets its posture back ----
+//
+// The floor boots holding NO posture (services/mesh.rs: OFFLINE until fieldd
+// asks), so a respawn under a live fieldd — the supervisor's crash respawn or
+// its wedge restart — left a linked desktop off its tailnet until fieldd itself
+// restarted (measured 2026-09-24: a wedge restart at 12:05:59, the node back at
+// 14:46:19 with the next fieldd). The probe now reads the floor's own
+// `disabled` and asks again, and a re-dial brings that probe forward. Only
+// `setTimeout` is faked, so the boot's `schedule(0)` fires only when a row says
+// so, and a real `setImmediate` drains a probe a timer started.
+
+const linkedRoot = () => {
+  const root = mkRoot();
+  mkdirSync(join(root, "fieldd"), { recursive: true });
+  writeFileSync(
+    linkPath(root),
+    JSON.stringify({ login: "james@github", linkedAt: "2026-01-01T00:00:00.000Z" }),
+  );
+  return root;
+};
+
+const notUp = (state: string): Promise<never> =>
+  Promise.reject(
+    new RpcCallError("UNAVAILABLE", "mesh node not up", true, { service: "mesh-gateway", state }),
+  );
+
+const starts = (params: Call[]) => params.filter((call) => call.method === "native.mesh.start");
+
+/** Await the posture ask in flight, if any — the boot's is fire-and-forget. */
+const askLanded = async (svc: LinkService) => {
+  await (svc as unknown as { declaring: Promise<void> | null }).declaring;
+};
+
+const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+/** A floor that holds a posture once asked, and holds none after `restart()`. */
+function restartableFloor(
+  mode: "linked" | "capture",
+  whenHeld: (method: string) => Promise<unknown>,
+) {
+  let held = false;
+  return {
+    restart: () => {
+      held = false;
+    },
+    respond: (method: string): Promise<unknown> => {
+      if (method === "native.mesh.start") {
+        held = true;
+        return Promise.resolve({ mode, started: true });
+      }
+      return held ? whenHeld(method) : notUp("disabled");
+    },
+  };
+}
+
+describe("UA-P-0j — a floor that restarts under fieldd gets its posture back", () => {
+  it("a LINKED desktop whose floor holds no posture asks for it again, naming the account", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const floor = restartableFloor("linked", floorWithLogin());
+      const { svc, params } = build(linkedRoot(), floor.respond);
+      svc.start();
+      await askLanded(svc);
+      await probe(svc); // up and verified: nothing to ask
+      expect(starts(params)).toHaveLength(1);
+
+      floor.restart(); // it holds nothing now
+      await probe(svc);
+      expect(starts(params)).toEqual([
+        { method: "native.mesh.start", params: { mode: "linked", login: "james@github" } },
+        { method: "native.mesh.start", params: { mode: "linked", login: "james@github" } },
+      ]);
+      expect(svc.status()).toMatchObject({ linkState: "linked", link: { login: "james@github" } });
+
+      await probe(svc); // it holds the posture again: nothing more to ask
+      expect(starts(params)).toHaveLength(2);
+      expect(svc.status().nodeState).toBe("up");
+      svc.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("only `disabled` restores: a bring-up in flight, or a posture the floor still holds, is left alone", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      for (const state of ["starting", "degraded", "crashed"]) {
+        const { svc, params } = build(linkedRoot(), (method) =>
+          method === "native.mesh.start"
+            ? Promise.resolve({ mode: "linked", started: true })
+            : notUp(state),
+        );
+        svc.start();
+        await askLanded(svc);
+        await probe(svc);
+        await probe(svc);
+        // a second `start` before the node is installed would ABORT the
+        // bring-up and begin another (services/mesh.rs `start`)
+        expect(starts(params), state).toHaveLength(1);
+        expect(svc.status().nodeState, state).toBe(state);
+        svc.stop();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the boot's own ask is never doubled: a probe that finds `disabled` while it is in flight lets it land", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let release = () => {};
+      const landed = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const { svc, params } = build(linkedRoot(), (method) =>
+        method === "native.mesh.start"
+          ? landed.then(() => ({ mode: "linked", started: true }))
+          : notUp("disabled"),
+      );
+      svc.start(); // the ask is on the wire and the floor has not installed it yet
+      await probe(svc);
+      expect(starts(params)).toHaveLength(1);
+
+      release();
+      await askLanded(svc);
+      // once it has landed, a floor that STILL holds nothing is asked again
+      await probe(svc);
+      expect(starts(params)).toHaveLength(2);
+      svc.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a capture interrupted by a floor restart is asked for again, in capture mode", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // capturing: the node is coming up and no login has landed yet
+      const floor = restartableFloor("capture", () => notUp("starting"));
+      const { svc, params } = build(mkRoot(), floor.respond);
+      await svc.begin();
+      expect(starts(params)).toEqual([
+        { method: "native.mesh.start", params: { mode: "capture" } },
+      ]);
+
+      floor.restart();
+      await probe(svc);
+      expect(starts(params)).toEqual([
+        { method: "native.mesh.start", params: { mode: "capture" } },
+        { method: "native.mesh.start", params: { mode: "capture" } },
+      ]);
+      // and nothing names an account: the capture is still waiting for one
+      expect(svc.status()).toMatchObject({ linkState: "capturing", link: null });
+      svc.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a re-dial brings the probe forward while a posture is held, and does nothing offline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const floor = restartableFloor("linked", floorWithLogin());
+      const { svc, params } = build(linkedRoot(), floor.respond);
+      svc.start();
+      await vi.advanceTimersByTimeAsync(0); // the boot's first probe: up, verified
+      await drain();
+      expect(starts(params)).toHaveLength(1);
+
+      // the floor respawns under us; the next verify is minutes away
+      floor.restart();
+      await vi.advanceTimersByTimeAsync(60_000);
+      await drain();
+      expect(starts(params)).toHaveLength(1); // nothing noticed on its own yet
+
+      svc.floorReconnected(); // the mgmt link dialed the new floor
+      await vi.advanceTimersByTimeAsync(0);
+      await drain();
+      expect(starts(params)).toHaveLength(2);
+      svc.stop();
+
+      // an OFFLINE desktop holds no posture, so a re-dial asks for nothing
+      const { svc: offline, calls } = build(mkRoot(), floorWithLogin());
+      offline.start();
+      offline.floorReconnected();
+      await vi.advanceTimersByTimeAsync(60_000);
+      await drain();
+      expect(calls).toEqual([]);
+      offline.stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
