@@ -217,9 +217,12 @@ export type TerminalTerminateResult = z.infer<typeof TerminalTerminateResult>;
 // -- The `config.ghostty` surface (GT-3 rider). Config belongs to whoever owns
 // the daemon, and that is us: field-native points its embedded service at
 // `<its data dir>/config.ghostty` (registries FILES), loaded as an overlay
-// AFTER the user's own Ghostty files. These two methods are the product-plane
+// AFTER the user's own Ghostty files. These methods are the product-plane
 // door onto that one file, scoped `settings.manage` — the trusted desktop
-// surface, never plugins, agents, or the tailnet.
+// surface, never plugins, agents, or the tailnet. GT-7 added the third, the
+// DRY RUN (`terminal.config.validate`): the loader reads a candidate text in
+// the overlay's place and says what it would make of it, writing nothing —
+// ghosttea's own `validate-config-document`, forwarded.
 //
 // The floor's OWN document API is what runs underneath: it reads and replaces
 // the overlay atomically (same-directory temp + fsync + revision recheck) and
@@ -232,32 +235,6 @@ export type TerminalTerminateResult = z.infer<typeof TerminalTerminateResult>;
  * handler (GT-5b), on connectTicket's reasoning and with the same `?? {}`. */
 export const TerminalConfigReadParams = z.object({}).passthrough();
 export type TerminalConfigReadParams = z.infer<typeof TerminalConfigReadParams>;
-
-/** The overlay as it stands. `exists: false` with empty `text` is a NORMAL
- * state, not an error — ghosttea treats a not-yet-created overlay as a valid
- * empty config (verified in the pinned loader: the explicit path joins the
- * source list marked optional), so nothing has to create the file to read it.
- * `revision` is the loader's own hash of the exact bytes; a write must hand it
- * back, which is what makes a lost update impossible rather than unlikely. */
-export const TerminalConfigDocument = z
-  .object({
-    path: z.string(),
-    text: z.string(),
-    revision: z.string(),
-    exists: z.boolean(),
-  })
-  .passthrough();
-export type TerminalConfigDocument = z.infer<typeof TerminalConfigDocument>;
-
-/** terminal.config.write params. `revision` is the one the reader was handed;
- * a stale one is CONFLICT with the current document, never a silent clobber. */
-export const TerminalConfigWriteParams = z
-  .object({
-    text: z.string(),
-    revision: z.string(),
-  })
-  .passthrough();
-export type TerminalConfigWriteParams = z.infer<typeof TerminalConfigWriteParams>;
 
 /** One thing the config loader has to say about the text it just read. Ghostty
  * syntax is permissive — an unknown key is a diagnostic, not a refusal — so a
@@ -274,6 +251,113 @@ export const TerminalConfigDiagnostic = z
   })
   .passthrough();
 export type TerminalConfigDiagnostic = z.infer<typeof TerminalConfigDiagnostic>;
+
+/** Where the loader read settings from, in load order: the user's own Ghostty
+ * files first, anything they include, and our overlay LAST, which is why it
+ * wins (ghosttea `ConfigSourceKind`: `ghostty-default` · `included` ·
+ * `ghosttea-overlay`). `kind` stays a string so a kind the next ghosttea adds
+ * is shown, not refused. */
+export const TerminalConfigSource = z
+  .object({
+    path: z.string(),
+    kind: z.string(),
+  })
+  .passthrough();
+export type TerminalConfigSource = z.infer<typeof TerminalConfigSource>;
+
+/** A key the loaded text sets, and what this terminal does with it — ghosttea's
+ * own classification, the only public view of it: `applied` (it changes what a
+ * terminal draws or keeps), `parsed` (read and kept, not honoured on the
+ * desktop yet — the fonts), `unsupported` (a Ghostty key this terminal
+ * recognizes and ignores). `occurrences` counts every layer, overlay included. */
+export const TerminalConfiguredKey = z
+  .object({
+    key: z.string(),
+    support: z.string(),
+    occurrences: z.number(),
+  })
+  .passthrough();
+export type TerminalConfiguredKey = z.infer<typeof TerminalConfiguredKey>;
+
+/** One effective keybinding, in Ghostty's own spelling (`super+k` · `clear_screen`). */
+export const TerminalConfigKeybinding = z
+  .object({
+    trigger: z.string(),
+    action: z.string(),
+  })
+  .passthrough();
+export type TerminalConfigKeybinding = z.infer<typeof TerminalConfigKeybinding>;
+
+/** One palette entry the layers set (sparse: an index nobody set is absent and
+ * the terminal draws Ghostty's default for it). */
+export const TerminalConfigPaletteEntry = z
+  .object({
+    index: z.number().int().min(0).max(255),
+    /** `#rrggbb` */
+    color: z.string(),
+  })
+  .passthrough();
+export type TerminalConfigPaletteEntry = z.infer<typeof TerminalConfigPaletteEntry>;
+
+/** The loader's snapshot of every layer together (GT-7), reduced to what the
+ * product draws: which files were read and in what order, what the loader said
+ * about each line, which keys the text sets and whether this terminal honours
+ * them, and the effective values Settings shows as facts. It is ghosttea's
+ * `ConfigSnapshot` projected — a VibeField shape, so an upstream field that
+ * nobody here reads never becomes a wire promise. */
+export const TerminalConfigSnapshot = z
+  .object({
+    /** the effective configuration's revision (moves when anything effective does) */
+    revision: z.string(),
+    /** the Ghostty release whose key schema the loader speaks (`1.3.1`) */
+    ghosttyVersion: z.string(),
+    /** how many Ghostty keys that schema knows */
+    knownKeyCount: z.number(),
+    sources: z.array(TerminalConfigSource),
+    diagnostics: z.array(TerminalConfigDiagnostic),
+    configuredKeys: z.array(TerminalConfiguredKey),
+    keybindings: z.array(TerminalConfigKeybinding),
+    /** a `keybind = clear` removed Ghostty's defaults before these */
+    clearKeybindings: z.boolean(),
+    /** bytes of scrollback a NEW terminal keeps (the floor reads it at spawn) */
+    scrollbackBytes: z.number(),
+    palette: z.array(TerminalConfigPaletteEntry),
+    /** what the layers ask for — parsed, not honoured on the desktop (see support) */
+    fontSize: z.number(),
+    fontFamilies: z.array(z.string()),
+  })
+  .passthrough();
+export type TerminalConfigSnapshot = z.infer<typeof TerminalConfigSnapshot>;
+
+/** The overlay as it stands. `exists: false` with empty `text` is a NORMAL
+ * state, not an error — ghosttea treats a not-yet-created overlay as a valid
+ * empty config (verified in the pinned loader: the explicit path joins the
+ * source list marked optional), so nothing has to create the file to read it.
+ * `revision` is the loader's own hash of the exact bytes; a write must hand it
+ * back, which is what makes a lost update impossible rather than unlikely. */
+export const TerminalConfigDocument = z
+  .object({
+    path: z.string(),
+    text: z.string(),
+    revision: z.string(),
+    exists: z.boolean(),
+    /** GT-7: the loader's snapshot of the document as saved, every layer with
+     * it — so a reader sees the diagnostics and the load order before any
+     * edit. Optional on the wire: an older fieldd does not send it. */
+    config: TerminalConfigSnapshot.optional(),
+  })
+  .passthrough();
+export type TerminalConfigDocument = z.infer<typeof TerminalConfigDocument>;
+
+/** terminal.config.write params. `revision` is the one the reader was handed;
+ * a stale one is CONFLICT with the current document, never a silent clobber. */
+export const TerminalConfigWriteParams = z
+  .object({
+    text: z.string(),
+    revision: z.string(),
+  })
+  .passthrough();
+export type TerminalConfigWriteParams = z.infer<typeof TerminalConfigWriteParams>;
 
 /** terminal.config.write result — the service's own verdict, not our summary.
  *
@@ -293,6 +377,175 @@ export const TerminalConfigWriteResult = z
     document: TerminalConfigDocument,
     effectiveChanged: z.boolean(),
     diagnostics: z.array(TerminalConfigDiagnostic),
+    /** GT-7: the snapshot the write's own reload produced */
+    config: TerminalConfigSnapshot.optional(),
   })
   .passthrough();
 export type TerminalConfigWriteResult = z.infer<typeof TerminalConfigWriteResult>;
+
+/** terminal.config.validate params (GT-7) — the candidate text, nothing else:
+ * it is loaded in the overlay's place and never written. */
+export const TerminalConfigValidateParams = z
+  .object({
+    text: z.string(),
+  })
+  .passthrough();
+export type TerminalConfigValidateParams = z.infer<typeof TerminalConfigValidateParams>;
+
+/** terminal.config.validate result (GT-7): what the loader would make of the
+ * candidate, and whether Settings may save it.
+ *
+ * TWO RULES decide a save, and the write re-checks both (a stale page cannot
+ * talk its way past them):
+ * - **includes**: the text may keep the document's `config-file` queue exactly
+ *   or clear it, never restructure it. Otherwise the loader would read any file
+ *   the text names — validation would become a file-read door. A refused text
+ *   is NOT loaded: `includesAllowed` is false and `config` is absent. Includes
+ *   are edited in the file itself (ghosttea's desktop rule, adopted whole).
+ * - **blocking**: every error in this document blocks; an error from an
+ *   inherited layer (the user's Ghostty file) blocks only when this text adds
+ *   another occurrence of it — a Ghostty mistake the user made elsewhere must
+ *   not make VibeField's own file read-only.
+ *
+ * `documentRevision` is the saved document the validation read against; a save
+ * still hands its own read revision, so this is information, not a lease. */
+export const TerminalConfigValidation = z
+  .object({
+    documentRevision: z.string(),
+    includesAllowed: z.boolean(),
+    blocking: z.array(TerminalConfigDiagnostic),
+    config: TerminalConfigSnapshot.optional(),
+  })
+  .passthrough();
+export type TerminalConfigValidation = z.infer<typeof TerminalConfigValidation>;
+
+/** Why a write was refused before it touched the disk (GT-7) — the details of a
+ * PRECONDITION_FAILED from `terminal.config.write`. */
+export const TerminalConfigWriteRefusal = z
+  .object({
+    reason: z.enum(["includes-changed", "blocking-errors"]),
+    blocking: z.array(TerminalConfigDiagnostic),
+  })
+  .passthrough();
+export type TerminalConfigWriteRefusal = z.infer<typeof TerminalConfigWriteRefusal>;
+
+/** The details of a CONFLICT from `terminal.config.write` (GT-7): the document
+ * as it stands now, so a page can show what moved instead of only "reload". */
+export const TerminalConfigConflict = z
+  .object({
+    current: TerminalConfigDocument,
+  })
+  .passthrough();
+export type TerminalConfigConflict = z.infer<typeof TerminalConfigConflict>;
+
+// -- The include queue (GT-7). The loader's small `config-file` grammar, and
+// only that: each line whose key is `config-file` either QUEUES a path
+// (`path`, `"path"`, `?path`, `?"path"` — `?` marks it optional) or, bare,
+// RESETS the queue. One implementation, two callers: fieldd enforces the rule
+// on validate and on write; Settings predicts it so the editor can say so
+// before a round trip. Mirrors ghosttea's desktop `configDocumentIncludes`.
+
+export type TerminalConfigIncludeOp =
+  | { kind: "include"; path: string; optional: boolean }
+  | { kind: "reset" };
+
+export function terminalConfigIncludeOps(text: string): TerminalConfigIncludeOp[] {
+  const ops: TerminalConfigIncludeOp[] = [];
+  for (const raw of text.split(/\r?\n/u)) {
+    const separator = raw.indexOf("=");
+    if (separator < 0 || raw.slice(0, separator).trim() !== "config-file") continue;
+    const rawValue = raw.slice(separator + 1).trim();
+    const quoted = rawValue.length >= 2 && rawValue.startsWith('"') && rawValue.endsWith('"');
+    let value = quoted ? rawValue.slice(1, -1) : rawValue;
+    if (!quoted && value === "") {
+      ops.push({ kind: "reset" });
+      continue;
+    }
+    let optional = false;
+    if (!quoted && value.startsWith("?")) {
+      optional = true;
+      value = value.slice(1);
+      if (value.length >= 2 && value.startsWith('"') && value.endsWith('"'))
+        value = value.slice(1, -1);
+    }
+    if (value) ops.push({ kind: "include", path: value, optional });
+  }
+  return ops;
+}
+
+/** The paths the queue ends up holding (a reset empties it). */
+export function terminalConfigIncludes(text: string): Set<string> {
+  const includes = new Set<string>();
+  for (const op of terminalConfigIncludeOps(text)) {
+    if (op.kind === "reset") includes.clear();
+    else includes.add(op.path);
+  }
+  return includes;
+}
+
+/** The includes rule: `candidate` keeps `current`'s queue operation for
+ * operation, or includes nothing at all. Reordering or swapping paths counts as
+ * a change — an included file can reset entries after it, so a reorder could
+ * read a file the saved document never did. */
+export function terminalConfigIncludesAllowed(current: string, candidate: string): boolean {
+  const before = terminalConfigIncludeOps(current);
+  const after = terminalConfigIncludeOps(candidate);
+  const unchanged =
+    before.length === after.length &&
+    before.every((op, index) => {
+      const next = after[index];
+      if (next === undefined || op.kind !== next.kind) return false;
+      return (
+        op.kind === "reset" ||
+        (next.kind === "include" && op.path === next.path && op.optional === next.optional)
+      );
+    });
+  return unchanged || terminalConfigIncludes(candidate).size === 0;
+}
+
+/** The largest document Settings may save or import — the loader's own limit
+ * (ghosttea `MAX_CONFIG_DOCUMENT_BYTES`), so a refusal happens before a round
+ * trip rather than inside the floor. */
+export const TERMINAL_CONFIG_MAX_BYTES = 64 * 1024;
+
+// -- The file actions (GT-7): three product methods, each reaching the native
+// dialog or the file manager through the scoped `shell.*` provider (ESR §6.2:
+// shell-native capabilities enter there, never as new preload channels).
+// fieldd owns the file IO on both sides of a dialog, bounded to the loader's
+// own limit, and nothing here writes the overlay: an import lands in the
+// editor as a draft and goes through `terminal.config.write` like any edit.
+
+/** terminal.config.import result: the user picks a file (a native open
+ * dialog); its text (a regular file, UTF-8, at most TERMINAL_CONFIG_MAX_BYTES)
+ * comes back for the editor. */
+export const TerminalConfigImportResult = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("cancelled") }).passthrough(),
+  z.object({ status: z.literal("imported"), path: z.string(), text: z.string() }).passthrough(),
+]);
+export type TerminalConfigImportResult = z.infer<typeof TerminalConfigImportResult>;
+
+/** terminal.config.export params: the text to save (the editor's, saved or
+ * not) — written where the user's native save dialog says, audited by size. */
+export const TerminalConfigExportRequest = z
+  .object({
+    text: z.string(),
+  })
+  .passthrough();
+export type TerminalConfigExportRequest = z.infer<typeof TerminalConfigExportRequest>;
+
+export const TerminalConfigExportResult = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("cancelled") }).passthrough(),
+  z.object({ status: z.literal("exported"), path: z.string(), bytes: z.number() }).passthrough(),
+]);
+export type TerminalConfigExportResult = z.infer<typeof TerminalConfigExportResult>;
+
+/** Reveal: the overlay (or, before it exists, its folder) shown in the file
+ * manager. fieldd takes the path from the floor's own document — the caller
+ * names nothing. */
+export const TerminalConfigRevealResult = z
+  .object({
+    revealed: z.boolean(),
+    path: z.string(),
+  })
+  .passthrough();
+export type TerminalConfigRevealResult = z.infer<typeof TerminalConfigRevealResult>;

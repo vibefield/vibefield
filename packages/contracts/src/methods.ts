@@ -1155,6 +1155,45 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // GT-7: the DRY RUN. The loader reads the candidate in the overlay's place
+  // and answers what it would make of it; nothing is written, so it is
+  // idempotent — but it is still `settings.manage`, because a loader pointed at
+  // arbitrary text reads whatever files that text includes. The includes rule
+  // (`terminalConfigIncludesAllowed`) is enforced here before the loader runs.
+  defineMethod({
+    surface: "product",
+    method: "terminal.config.validate",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  // GT-7's file actions — each a native dialog or the file manager, reached
+  // through the scoped `shell.*` provider (ESR §6.2), with fieldd doing the
+  // bounded file IO. import only READS a file the user picked (idempotent: no
+  // state moves; the text goes back as a draft); export WRITES where the user's
+  // save dialog says (audited, bytes only); reveal shows the overlay the floor
+  // names, so the caller hands no path at all.
+  defineMethod({
+    surface: "product",
+    method: "terminal.config.import",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "terminal.config.export",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "terminal.config.reveal",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   // ── surface.* (DT-1 — thinking-devtools-pack.md DT-D2/DT-D3) ──
   // The registry scope is the BASE gate; one row carries one scope, so the
   // SurfaceService additionally enforces the kind→scope matrix on `open`

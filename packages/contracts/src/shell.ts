@@ -256,8 +256,14 @@ export const SHELL_INTERNAL_PROVIDER_METHODS = [
   "shell.surfaces.release",
   // The Agents settings section — show a path in the OS file manager. Internal:
   // only fieldd's agent service dispatches it, for a path its own inventory
-  // holds; no caller hands main a path to reveal.
+  // holds; no caller hands main a path to reveal. GT-7: the terminal service
+  // dispatches it too, for the overlay path the floor itself reports.
   "shell.revealPath",
+  // GT-7 — Settings → Terminal's Import file… and Export…: a native open or
+  // save dialog, each locked to one purpose. Internal: only fieldd's terminal
+  // service dispatches them, and fieldd — not main — reads or writes the file.
+  "shell.dialog.pickFile",
+  "shell.dialog.saveFile",
 ] as const;
 export const SHELL_PROVIDER_METHODS = [
   ...SHELL_CLIENT_PROVIDER_METHODS,
@@ -353,6 +359,44 @@ export const ShellOpenExternalResult = z.object({ opened: z.literal(true) }).pas
 export type ShellOpenExternalResult = z.infer<typeof ShellOpenExternalResult>;
 
 /** An absolute path on this device, as fieldd's own inventory named it. */
+/** GT-7 — a native open dialog for one file, locked to one purpose. */
+export const ShellDialogPickFileParams = z
+  .object({ purpose: z.literal("terminal.config.import") })
+  .passthrough();
+export type ShellDialogPickFileParams = z.infer<typeof ShellDialogPickFileParams>;
+
+export const ShellDialogPickFileResult = z.union([
+  z.object({ canceled: z.literal(true) }).passthrough(),
+  z.object({ canceled: z.literal(false), path: ShellAbsolutePath }).passthrough(),
+]);
+export type ShellDialogPickFileResult = z.infer<typeof ShellDialogPickFileResult>;
+
+/** A suggested file NAME for a save dialog — a bare basename, never a path. */
+const ShellSuggestedFileName = z
+  .string()
+  .min(1)
+  .max(255)
+  .refine(
+    (name) => !/[\\/\0]/.test(name) && name !== "." && name !== "..",
+    "expected a bare file name",
+  );
+
+/** GT-7 — a native save dialog, locked to one purpose; `defaultName` is only
+ * the name the dialog proposes. */
+export const ShellDialogSaveFileParams = z
+  .object({
+    purpose: z.literal("terminal.config.export"),
+    defaultName: ShellSuggestedFileName,
+  })
+  .passthrough();
+export type ShellDialogSaveFileParams = z.infer<typeof ShellDialogSaveFileParams>;
+
+export const ShellDialogSaveFileResult = z.union([
+  z.object({ canceled: z.literal(true) }).passthrough(),
+  z.object({ canceled: z.literal(false), path: ShellAbsolutePath }).passthrough(),
+]);
+export type ShellDialogSaveFileResult = z.infer<typeof ShellDialogSaveFileResult>;
+
 export const ShellRevealPathParams = z.object({ path: ShellAbsolutePath }).passthrough();
 export type ShellRevealPathParams = z.infer<typeof ShellRevealPathParams>;
 
