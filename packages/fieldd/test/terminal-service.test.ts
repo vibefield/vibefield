@@ -7,7 +7,8 @@
 // transport-death honesty law (a dead control socket is UNAVAILABLE, never the
 // benign already-gone race). The live create/terminate/attach path needs a
 // real PTY authority and lives in terminal-seam.test.ts.
-import { createHmac } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { createHash, createHmac } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
@@ -18,9 +19,21 @@ import {
   grantSigningInput,
   isPipeEndpoint,
   METHODS,
+  SHELL_PROVIDER_METHODS,
+  type ShellDialogPickFileResult,
+  type ShellDialogSaveFileResult,
+  ShellProviderCallParams,
   SOCKETS,
+  TERMINAL_CONFIG_MAX_BYTES,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
+  TerminalConfigConflict,
   TerminalConfigDocument,
+  TerminalConfigExportResult,
+  TerminalConfigImportResult,
+  TerminalConfigRevealResult,
+  TerminalConfigSnapshot,
+  TerminalConfigValidation,
+  TerminalConfigWriteRefusal,
   TerminalConfigWriteResult,
   TerminalCreateOpenResult,
   type TerminalCreateResult,
@@ -37,11 +50,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, NativeLink, RpcCallError } from "../src/index";
 import { terminalCreateTarget } from "../src/native-link";
-import { TerminalService } from "../src/terminal-service";
+import {
+  blockingConfigDiagnostics,
+  projectConfigSnapshot,
+  type TerminalConfigShell,
+  TerminalService,
+} from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath } from "./link-fixture";
 import { nativeEndpoint, shortTmpRoot } from "./native-harness";
-import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
+import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -132,9 +150,47 @@ interface FakeConfigDocument {
   contents: string;
 }
 
+/** One loader diagnostic, in the protocol's own shape. */
+interface FakeDiagnostic {
+  severity: "info" | "warning" | "error";
+  code: string;
+  message: string;
+  source?: string;
+  line?: number;
+  key?: string;
+}
+
+/** GT-7 — what a fake LOADER says about a text in the overlay's place (every
+ * load: the effective one, a dry run, a replace's reload). The default is
+ * GT-3's case, now placed where the real loader places a bad line: an unknown
+ * key is an error in the overlay itself, at its line. */
+type FakeLoader = (contents: string, overlayPath: string) => FakeDiagnostic[];
+
+const unknownKeyLoader: FakeLoader = (contents, overlayPath) =>
+  contents.split("\n").flatMap((line, index) =>
+    line.startsWith("nonsense-key")
+      ? [
+          {
+            severity: "error" as const,
+            code: "unknown-key",
+            message: "unknown configuration key",
+            source: overlayPath,
+            line: index + 1,
+            key: "nonsense-key",
+          },
+        ]
+      : [],
+  );
+
+/** A revision the way the real floor mints one: a hash of the exact bytes, so
+ * two different texts of one length never share it. */
+const fakeRevision = (prefix: string, contents: string): string =>
+  `${prefix}-${createHash("sha256").update(contents).digest("hex").slice(0, 12)}`;
+
 /** A fake ghosttead control endpoint speaking just enough protocol: LE-u32
  * framing, bare-token auth → "ok", the hello, one create-session, and (GT-3)
- * the config-document trio. Enough to exercise the product plane's
+ * the config-document trio (GT-7: with the dry run, and every command
+ * recorded). Enough to exercise the product plane's
  * create/terminate/config without a real PTY authority (that lives in
  * terminal-seam.test.ts, against the real floor).
  * `dieOnTerminate` destroys the socket mid-call — the NF-6 hole.
@@ -150,7 +206,10 @@ interface FakeConfigDocument {
  * beside it, the shape a 0.10.0 floor emits.
  * `protocolMinor` reports an older floor on the hello (below 11 = no config
  * documents, below 15 = no per-session scrollback; the pinned CLIENT refuses
- * those before the wire). Default 16 — the 0.10.0 floor. */
+ * those before the wire). Default 16 — the 0.10.0 floor.
+ * `loader` (GT-7) is what this floor's loader says about a text;
+ * `concurrentWrite` lands another writer's text just before the first
+ * replace is answered — the race an early revision check cannot close. */
 async function startFakeFloor(
   opts: {
     dieOnTerminate?: boolean;
@@ -163,6 +222,8 @@ async function startFakeFloor(
      * messages fail with the same words when it is gone. */
     automationError?: string;
     protocolMinor?: number;
+    loader?: FakeLoader;
+    concurrentWrite?: string;
   } = {},
 ): Promise<{
   endpoints: TerminalEndpoints;
@@ -175,6 +236,9 @@ async function startFakeFloor(
   /** the options of the last create-session that REACHED this floor —
    * undefined when the pinned client refused before the wire (G16) */
   createOptions: () => Record<string, unknown> | undefined;
+  /** GT-7 — every command this floor was sent, in order (the auth packet is
+   * not a command) */
+  commands: () => string[];
 }> {
   // The root is the harness's (short on unix for the sun_path budget, tmpdir()
   // on win32 where no /tmp exists), and the fake binds the endpoint the real
@@ -196,6 +260,15 @@ async function startFakeFloor(
     contents: "",
   };
   let configRevision = "config-0";
+  const loader = opts.loader ?? unknownKeyLoader;
+  // The effective configuration is LOADED, and kept: the text it was loaded
+  // from and what the loader said then. A replace reloads it; nothing else
+  // does, because the real floor watches no files — its `get-config` is a
+  // snapshot as old as the last reload, and so is this one.
+  let effectiveContents = "";
+  let effectiveDiagnostics = loader(effectiveContents, document.path);
+  let pendingConcurrentWrite = opts.concurrentWrite;
+  const commands: string[] = [];
   let lastCreateOptions: Record<string, unknown> | undefined;
   let connections = 0;
   const stall = new Set(opts.stall ?? []);
@@ -219,6 +292,7 @@ async function startFakeFloor(
           continue;
         }
         const msg = JSON.parse(body.toString("utf8"));
+        commands.push(String(msg.type));
         const reply = (payload: Record<string, unknown>): void => {
           sock.write(packet(Buffer.from(JSON.stringify({ requestId: msg.requestId, ...payload }))));
         };
@@ -263,11 +337,33 @@ async function startFakeFloor(
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
           sock.destroy(); // the floor dies mid-call
         } else if (msg.type === "get-config") {
-          reply({ type: "config", config: fakeConfig(configRevision) });
+          reply({ type: "config", config: fakeConfig(configRevision, effectiveDiagnostics) });
         } else if (msg.type === "get-config-document") {
           if (opts.noOverlay === true) reply({ type: "error", message: NO_OVERLAY_MESSAGE });
           else reply({ type: "config-document", document: { schemaVersion: 1, ...document } });
+        } else if (msg.type === "validate-config-document") {
+          // The real floor loads the candidate in the overlay's place and
+          // answers the revision the candidate WOULD have — not the saved one.
+          if (opts.noOverlay === true) reply({ type: "error", message: NO_OVERLAY_MESSAGE });
+          else
+            reply({
+              type: "config-document-validation",
+              documentRevision: fakeRevision("rev", msg.contents),
+              config: fakeConfig(
+                msg.contents === effectiveContents
+                  ? configRevision
+                  : fakeRevision("config", msg.contents),
+                loader(msg.contents, document.path),
+              ),
+            });
         } else if (msg.type === "replace-config-document") {
+          if (pendingConcurrentWrite !== undefined) {
+            // another writer wins the race to the file
+            document.contents = pendingConcurrentWrite;
+            document.revision = fakeRevision("rev", pendingConcurrentWrite);
+            document.exists = true;
+            pendingConcurrentWrite = undefined;
+          }
           if (opts.noOverlay === true) {
             reply({ type: "error", message: NO_OVERLAY_MESSAGE });
           } else if (msg.expectedRevision !== document.revision) {
@@ -280,15 +376,17 @@ async function startFakeFloor(
           } else {
             // The real replace_document writes, then reloads, in one operation:
             // the effective revision moves iff the text actually did.
-            if (msg.contents !== document.contents)
-              configRevision = `config-${msg.contents.length}`;
+            if (msg.contents !== effectiveContents)
+              configRevision = fakeRevision("config", msg.contents);
+            effectiveContents = msg.contents;
+            effectiveDiagnostics = loader(msg.contents, document.path);
             document.contents = msg.contents;
-            document.revision = `rev-${msg.contents.length}`;
+            document.revision = fakeRevision("rev", msg.contents);
             document.exists = true;
             reply({
               type: "config-document-updated",
               document: { schemaVersion: 1, ...document },
-              config: fakeConfig(configRevision, msg.contents),
+              config: fakeConfig(configRevision, effectiveDiagnostics),
             });
           }
         }
@@ -318,6 +416,7 @@ async function startFakeFloor(
     configRevision: () => configRevision,
     connections: () => connections,
     createOptions: () => lastCreateOptions,
+    commands: () => [...commands],
   };
 }
 
@@ -338,21 +437,25 @@ const NO_OVERLAY_MESSAGE = "configuration document is unavailable without an exp
  * The parts that MEAN something here: `revision` is what fieldd compares to
  * derive `effectiveChanged`, and `diagnostics` severities decide `ok` — an
  * unknown key earns a diagnostic and NOT a refusal in Ghostty syntax, which is
- * the case the panel has to show. */
-const fakeConfig = (revision: string, contents = ""): Record<string, unknown> => ({
+ * the case the panel has to show. Since GT-7 the diagnostics are the fake
+ * LOADER's (`FakeLoader`), and they decide which saves are refused too. The
+ * palette sits in both of its homes, as 0.11.1 sends it. */
+const fakeConfig = (
+  revision: string,
+  diagnostics: FakeDiagnostic[] = [],
+): Record<string, unknown> => ({
   schemaVersion: 1,
   revision,
   compatibility: { ghosttyVersion: "1.0.0", ghosttyCommit: "deadbeef", knownKeyCount: 1 },
   sources: [{ path: "/fake/config.ghostty", kind: "ghosttea-overlay" }],
-  diagnostics: contents.includes("nonsense-key")
-    ? [{ severity: "error", code: "unknown-key", message: "unknown configuration key" }]
-    : [],
+  diagnostics,
   configuredKeys: [],
   terminal: {
     scrollbackBytes: 1024,
     foreground: [255, 255, 255],
     background: [0, 0, 0],
     cursor: [255, 255, 255],
+    palette: [{ index: 1, color: [215, 0, 0] }],
   },
   renderer: {
     foreground: [255, 255, 255],
@@ -360,6 +463,7 @@ const fakeConfig = (revision: string, contents = ""): Record<string, unknown> =>
     cursor: [255, 255, 255],
     selectionBackground: [255, 255, 255],
     selectionForeground: [0, 0, 0],
+    palette: [{ index: 1, color: [215, 0, 0] }],
     fontSize: 13,
     fontFamilies: [],
     paddingX: [2, 2],
@@ -367,7 +471,10 @@ const fakeConfig = (revision: string, contents = ""): Record<string, unknown> =>
     postProcess: "none",
     customShaderPaths: [],
   },
-  workspace: { keybindings: [], clearKeybindings: false },
+  workspace: {
+    keybindings: [{ trigger: "super+k", action: "clear_screen" }],
+    clearKeybindings: false,
+  },
 });
 
 interface AuditRecord {
@@ -637,6 +744,8 @@ describe("TerminalService (NF-3, mock native)", () => {
       ["terminal.terminate", { sessionId: "s1" }],
       ["terminal.config.read", {}],
       ["terminal.config.write", { text: "", revision: "rev" }],
+      ["terminal.config.validate", { text: "" }],
+      ["terminal.config.reveal", {}],
     ] as const) {
       const err = await rpc.callErr(method, params);
       expect(err.data?.kind, method).toBe("UNAVAILABLE");
@@ -736,6 +845,10 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.roster": "terminal.attach",
       "terminal.config.read": "settings.manage",
       "terminal.config.write": "settings.manage",
+      "terminal.config.validate": "settings.manage",
+      "terminal.config.import": "settings.manage",
+      "terminal.config.export": "settings.manage",
+      "terminal.config.reveal": "settings.manage",
     };
     const declared = METHODS.filter(
       (m) => m.surface === "product" && m.method.startsWith("terminal."),
@@ -964,13 +1077,28 @@ describe("TerminalService (NF-3, mock native)", () => {
     expect(serialized).not.toContain("font-size");
   });
 
-  it("a write the loader refuses is honest, not a failed call (GT-3)", async () => {
-    // Ghostty syntax is permissive: an unknown key is a DIAGNOSTIC and the file
-    // still loads. The bytes reached the disk and the floor reloaded, so this
-    // is not an error — it is a verdict the user has to see.
+  it("an error of the text's own is refused before the disk; an inherited one lands with ok:false (GT-3 → GT-7)", async () => {
+    // This row's meaning MOVED at GT-7, deliberately. GT-3 wrote whatever it
+    // was given and let the reload speak: an unknown key landed on disk and
+    // came back `ok: false`, "a verdict the user has to see". GT-7 adopts
+    // ghosttea desktop's save rule — an error in THIS document blocks — so that
+    // same text is now refused before the replace and the file never moves.
+    // `ok: false` survives with a narrower meaning: the loader still has
+    // errors, and none of them are the text's (an INHERITED one, from the
+    // user's own Ghostty file, which must not make our file read-only).
+    const inherited: FakeDiagnostic = {
+      severity: "error",
+      code: "invalid-value",
+      message: "invalid value for `font-size`",
+      source: "/Users/me/.config/ghostty/config",
+      line: 3,
+      key: "font-size",
+    };
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
-    const floor = await startFakeFloor();
+    const floor = await startFakeFloor({
+      loader: (contents, overlayPath) => [inherited, ...unknownKeyLoader(contents, overlayPath)],
+    });
     mock.helloTerminal = floor.endpoints;
     const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
     cleanup.push(() => daemon.stop());
@@ -980,15 +1108,28 @@ describe("TerminalService (NF-3, mock native)", () => {
     await helloAs(rpc, grant.token);
 
     const before = TerminalConfigDocument.parse(await rpc.call("terminal.config.read", {}));
+    const refused = await rpc.callErr("terminal.config.write", {
+      text: "nonsense-key = 1\n",
+      revision: before.revision,
+    });
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    const refusal = TerminalConfigWriteRefusal.parse(refused.data?.details);
+    expect(refusal.reason).toBe("blocking-errors");
+    expect(refusal.blocking.map((diagnostic) => [diagnostic.code, diagnostic.line])).toEqual([
+      ["unknown-key", 1],
+    ]);
+    expect(floor.document.exists, "nothing reached the disk").toBe(false);
+    expect(floor.commands()).not.toContain("replace-config-document");
+
     const written = TerminalConfigWriteResult.parse(
       await rpc.call("terminal.config.write", {
-        text: "nonsense-key = 1\n",
+        text: "font-size = 14\n",
         revision: before.revision,
       }),
     );
-    expect(written.ok).toBe(false);
-    expect(written.document.exists, "it still landed").toBe(true);
-    expect(written.diagnostics[0]?.message).toBe("unknown configuration key");
+    expect(written.ok, "the loader still reports an error").toBe(false);
+    expect(written.document.exists, "and the text landed").toBe(true);
+    expect(written.diagnostics).toEqual([inherited]);
   });
 
   it("a stale revision is a CONFLICT, never a silent clobber (GT-3)", async () => {
@@ -1052,6 +1193,12 @@ describe("TerminalService (NF-3, mock native)", () => {
     for (const [method, params] of [
       ["terminal.config.read", {}],
       ["terminal.config.write", { text: "", revision: "r" }],
+      // GT-7: a dry run reads whatever layers the text names, and the file
+      // actions open native dialogs — the same power, the same gate
+      ["terminal.config.validate", { text: "" }],
+      ["terminal.config.import", {}],
+      ["terminal.config.export", { text: "" }],
+      ["terminal.config.reveal", {}],
     ] as const) {
       const err = await rpc.callErr(method, params);
       expect(err.data?.kind, method).toBe("FORBIDDEN_SCOPE");
@@ -1507,6 +1654,691 @@ describe("TerminalService (NF-3, mock native)", () => {
     const res = (await rpc.call("device.list", {})) as { devices: DeviceInfo[] };
     const self = res.devices.find((d) => d.self);
     expect(self?.capabilities?.terminalHost).toBe(true);
+  });
+});
+
+/** GT-7 — a service on one fake floor (or none), with main's file doors when
+ * the row gives it some: the rows that read the service's own answers, with
+ * no daemon between. */
+function configService(
+  floor: { endpoints: TerminalEndpoints } | undefined,
+  shell: TerminalConfigShell | null = null,
+): TerminalService {
+  const service = new TerminalService({
+    link: {
+      subscribe: async () => ({ snapshot: {} }),
+      terminalEndpoints: floor?.endpoints,
+      on: () => undefined,
+    },
+    shell: () => shell,
+  });
+  cleanup.push(() => service.dispose());
+  return service;
+}
+
+/** GT-7 — main's file doors as a script: each dialog answers what the row says
+ * (a cancel, unless told otherwise), and every call is kept. */
+function scriptedShell(
+  script: { pick?: ShellDialogPickFileResult; save?: ShellDialogSaveFileResult } = {},
+): { shell: TerminalConfigShell; calls: Array<{ door: string; params: unknown }> } {
+  const calls: Array<{ door: string; params: unknown }> = [];
+  return {
+    calls,
+    shell: {
+      pickFile: async (params) => {
+        calls.push({ door: "pickFile", params });
+        return script.pick ?? { canceled: true };
+      },
+      saveFile: async (params) => {
+        calls.push({ door: "saveFile", params });
+        return script.save ?? { canceled: true };
+      },
+      revealPath: async (params) => {
+        calls.push({ door: "revealPath", params });
+        return { revealed: true };
+      },
+    },
+  };
+}
+
+/** The refusal a call settles with — a failed row if it resolved instead. */
+async function refusalOf(promise: Promise<unknown>): Promise<RpcCallError> {
+  const outcome = await promise.then(
+    (value: unknown) => ({ settled: "resolved" as const, value }),
+    (error: unknown) => ({ settled: "rejected" as const, error }),
+  );
+  if (outcome.settled === "resolved") {
+    throw new Error(`expected a refusal, got ${JSON.stringify(outcome.value)}`);
+  }
+  expect(outcome.error).toBeInstanceOf(RpcCallError);
+  return outcome.error as RpcCallError;
+}
+
+/** Every `shell.provider.call` a fake Electron main has been sent. */
+function providerCalls(shell: WsRpc): ShellProviderCallParams[] {
+  return shell.notifications
+    .filter((notification) => notification.method === "shell.provider.call")
+    .map((notification) => ShellProviderCallParams.parse(notification.params));
+}
+
+/** Answer the `index`th provider call once it arrives, the way main does. */
+async function answerCall(
+  shell: WsRpc,
+  index: number,
+  result: unknown,
+): Promise<ShellProviderCallParams> {
+  await until(() => providerCalls(shell).length > index);
+  const call = providerCalls(shell)[index];
+  if (call === undefined) throw new Error(`provider call ${index} never arrived`);
+  await shell.call("shell.provider.resolve", { callId: call.callId, outcome: { result } });
+  return call;
+}
+
+const OVERLAY = "/Users/me/Library/Application Support/VibeField/native/config.ghostty";
+const USER_GHOSTTY = "/Users/me/.config/ghostty/config";
+
+describe("GT-7 — Settings → Terminal's config document", () => {
+  it("projects ghosttea's snapshot field by field, and an absent palette is an empty one", () => {
+    const snapshot: Parameters<typeof projectConfigSnapshot>[0] = {
+      schemaVersion: 1,
+      revision: "effective-7",
+      compatibility: { ghosttyVersion: "1.3.1", ghosttyCommit: "332b2ae", knownKeyCount: 202 },
+      sources: [
+        { path: USER_GHOSTTY, kind: "ghostty-default" },
+        { path: "/Users/me/.config/ghostty/extra", kind: "included" },
+        { path: OVERLAY, kind: "ghosttea-overlay" },
+      ],
+      diagnostics: [
+        {
+          severity: "info",
+          code: "recognized-not-applied",
+          message: "Ghostty key `window-padding-balance` is recognized but not applied yet",
+          key: "window-padding-balance",
+        },
+        {
+          severity: "error",
+          code: "invalid-color",
+          message: "invalid color `#12`",
+          source: OVERLAY,
+          line: 4,
+          key: "background",
+        },
+      ],
+      configuredKeys: [
+        { key: "background", support: "applied", occurrences: 1 },
+        { key: "font-family", support: "parsed", occurrences: 2 },
+        { key: "window-padding-balance", support: "unsupported", occurrences: 1 },
+      ],
+      terminal: {
+        scrollbackBytes: 10_000_000,
+        foreground: [255, 255, 255],
+        background: [16, 24, 32],
+        cursor: [255, 255, 255],
+        palette: [{ index: 0, color: [1, 2, 3] }],
+      },
+      renderer: {
+        foreground: [255, 255, 255],
+        background: [16, 24, 32],
+        cursor: [255, 255, 255],
+        cursorText: [240, 224, 208],
+        selectionBackground: [255, 255, 255],
+        selectionForeground: [0, 0, 0],
+        palette: [
+          { index: 1, color: [215, 0, 0] },
+          { index: 15, color: [253, 252, 251] },
+        ],
+        backgroundOpacity: 0.72,
+        fontSize: 13,
+        fontFamilies: ["Berkeley Mono", "Menlo"],
+        paddingX: [2, 2],
+        paddingY: [2, 2],
+        postProcess: "none",
+        customShaderPaths: [],
+      },
+      workspace: {
+        keybindings: [{ trigger: "super+k", action: "clear_screen" }],
+        clearKeybindings: true,
+      },
+    };
+    const projected = projectConfigSnapshot(snapshot);
+    expect(projected).toEqual({
+      revision: "effective-7",
+      ghosttyVersion: "1.3.1",
+      knownKeyCount: 202,
+      sources: snapshot.sources,
+      diagnostics: snapshot.diagnostics,
+      configuredKeys: snapshot.configuredKeys,
+      keybindings: [{ trigger: "super+k", action: "clear_screen" }],
+      clearKeybindings: true,
+      scrollbackBytes: 10_000_000,
+      // the renderer's home is read first; each channel is two hex digits
+      palette: [
+        { index: 1, color: "#d70000" },
+        { index: 15, color: "#fdfcfb" },
+      ],
+      fontSize: 13,
+      fontFamilies: ["Berkeley Mono", "Menlo"],
+    });
+    // exactly the contract's fields: what nobody here reads (the commit, the
+    // cursor text, the opacity, the schema version) never reaches the wire
+    expect(Object.keys(projected).sort()).toEqual(Object.keys(TerminalConfigSnapshot.shape).sort());
+    expect(TerminalConfigSnapshot.parse(projected)).toEqual(projected);
+
+    // a floor that sends one home or neither: the other, then Ghostty's defaults
+    const { palette: _renderer, ...rendererWithout } = snapshot.renderer;
+    const { palette: _terminal, ...terminalWithout } = snapshot.terminal;
+    expect(projectConfigSnapshot({ ...snapshot, renderer: rendererWithout }).palette).toEqual([
+      { index: 0, color: "#010203" },
+    ]);
+    expect(
+      projectConfigSnapshot({ ...snapshot, renderer: rendererWithout, terminal: terminalWithout })
+        .palette,
+    ).toEqual([]);
+  });
+
+  it("blocks every error of the document's own, and an inherited one only when it is NEW — one for one", () => {
+    const own = {
+      severity: "error",
+      code: "invalid-color",
+      message: "invalid color `#12`",
+      source: OVERLAY,
+      line: 4,
+      key: "background",
+    };
+    const unplaced = { severity: "error", code: "io", message: "the loader could not place this" };
+    const warning = {
+      severity: "warning",
+      code: "deprecated",
+      message: "old key",
+      source: OVERLAY,
+    };
+    const inherited = {
+      severity: "error",
+      code: "unknown-key",
+      message: "unknown key `foo`",
+      source: USER_GHOSTTY,
+      line: 7,
+      key: "foo",
+    };
+
+    // the document's own errors block whatever the baseline holds — its path,
+    // or no source at all; a warning never blocks
+    expect(blockingConfigDiagnostics([own, unplaced], [own, unplaced, warning], OVERLAY)).toEqual([
+      own,
+      unplaced,
+    ]);
+    // spelled with a `..`, the document is still the document
+    const aliased = { ...own, source: OVERLAY.replace("/native/", "/native/../native/") };
+    expect(blockingConfigDiagnostics([aliased], [aliased], OVERLAY)).toEqual([aliased]);
+    // an inherited error the saved text already has does not block …
+    expect(blockingConfigDiagnostics([inherited], [inherited], OVERLAY)).toEqual([]);
+    // … one the candidate brings does …
+    expect(blockingConfigDiagnostics([], [inherited], OVERLAY)).toEqual([inherited]);
+    // … and so does a second occurrence: matched one for one, never by kind
+    expect(blockingConfigDiagnostics([inherited], [inherited, inherited], OVERLAY)).toEqual([
+      inherited,
+    ]);
+    // the identity is the whole diagnostic: the same words on another line are another error
+    const moved = { ...inherited, line: 8 };
+    expect(blockingConfigDiagnostics([inherited], [moved], OVERLAY)).toEqual([moved]);
+  });
+
+  it("read carries the loader's snapshot; validate dry-runs against the SAVED revision; write answers the reload's", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["settings.manage"], "settings-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const read = TerminalConfigDocument.parse(await rpc.call("terminal.config.read", {}));
+    const effective = TerminalConfigSnapshot.parse(read.config);
+    expect(effective.revision, "the cell's EFFECTIVE configuration").toBe(floor.configRevision());
+    expect(effective.palette).toEqual([{ index: 1, color: "#d70000" }]);
+    expect(effective.keybindings).toEqual([{ trigger: "super+k", action: "clear_screen" }]);
+
+    const text = "font-size = 14\nnonsense-key = 1\n";
+    const validation = TerminalConfigValidation.parse(
+      await rpc.call("terminal.config.validate", { text }),
+    );
+    expect(validation.includesAllowed).toBe(true);
+    // the saved document's revision: the floor answers the revision the
+    // CANDIDATE would have, which is a different fact and is not forwarded
+    expect(validation.documentRevision).toBe(read.revision);
+    expect(validation.documentRevision).not.toBe(fakeRevision("rev", text));
+    expect(validation.blocking.map((diagnostic) => [diagnostic.code, diagnostic.line])).toEqual([
+      ["unknown-key", 2],
+    ]);
+    expect(validation.config?.diagnostics).toEqual(validation.blocking);
+    expect(floor.document.exists, "a dry run writes nothing").toBe(false);
+    expect(floor.commands()).not.toContain("replace-config-document");
+
+    const written = TerminalConfigWriteResult.parse(
+      await rpc.call("terminal.config.write", {
+        text: "font-size = 14\n",
+        revision: read.revision,
+      }),
+    );
+    expect(written.ok).toBe(true);
+    expect(written.effectiveChanged).toBe(true);
+    expect(TerminalConfigSnapshot.parse(written.config).revision, "the reload's own").toBe(
+      floor.configRevision(),
+    );
+    expect(written.config?.revision).not.toBe(effective.revision);
+  });
+
+  it("refuses a restructured include queue WITHOUT running the loader — a dry run is no file-read door", async () => {
+    const floor = await startFakeFloor();
+    // Includes are edited in the file itself, so the saved document gets its
+    // queue the way a user's own editor would give it one: on disk.
+    const saved = "config-file = ?themes/night.conf\nfont-size = 13\n";
+    Object.assign(floor.document, { contents: saved, revision: "rev-with-include", exists: true });
+    const service = configService(floor);
+
+    for (const text of [
+      "config-file = /etc/passwd\nfont-size = 13\n", // another path
+      "config-file = themes/night.conf\nfont-size = 13\n", // the same one, no longer optional
+      "config-file = ?themes/night.conf\nconfig-file = ?other.conf\n", // one more
+    ]) {
+      const refused = await service.validateConfig(text);
+      expect(refused, text).toEqual({
+        documentRevision: "rev-with-include",
+        includesAllowed: false,
+        blocking: [],
+      });
+      expect(refused, "a refused text is not loaded, so there is no snapshot").not.toHaveProperty(
+        "config",
+      );
+    }
+    expect(floor.commands(), "the loader never ran").not.toContain("validate-config-document");
+
+    // the write re-checks the rule and refuses before anything else
+    const write = await refusalOf(
+      service.writeConfig("config-file = /etc/passwd\n", "rev-with-include"),
+    );
+    expect(write.kind).toBe("PRECONDITION_FAILED");
+    expect(TerminalConfigWriteRefusal.parse(write.details)).toEqual({
+      reason: "includes-changed",
+      blocking: [],
+    });
+    expect(floor.document.contents).toBe(saved);
+    expect(floor.commands()).not.toContain("validate-config-document");
+    expect(floor.commands()).not.toContain("replace-config-document");
+
+    // keeping the queue exactly, or clearing it, is allowed — and only then does the loader run
+    for (const text of ["config-file = ?themes/night.conf\nfont-size = 14\n", "font-size = 14\n"]) {
+      expect((await service.validateConfig(text)).includesAllowed, text).toBe(true);
+    }
+    expect(floor.commands()).toContain("validate-config-document");
+  });
+
+  it("names what blocks a save: the text's own errors, and an inherited one only when the text brings it", async () => {
+    const inherited: FakeDiagnostic = {
+      severity: "error",
+      code: "invalid-value",
+      message: "invalid value for `font-size`",
+      source: USER_GHOSTTY,
+      line: 3,
+      key: "font-size",
+    };
+    const themeError: FakeDiagnostic = {
+      severity: "error",
+      code: "invalid-color",
+      message: "invalid color `#zz`",
+      source: "/Users/me/.config/ghostty/themes/broken",
+      line: 2,
+      key: "background",
+    };
+    const floor = await startFakeFloor({
+      loader: (contents, overlayPath) => [
+        inherited,
+        // a theme is read from ANOTHER file: its errors are inherited by
+        // source, and new by occurrence when the text is what names it
+        ...(contents.includes("theme = broken") ? [themeError] : []),
+        // a theme pointed at the user's own file reads that file twice: the
+        // SAME error, one more occurrence
+        ...(contents.includes(`theme = ${USER_GHOSTTY}`) ? [inherited] : []),
+        ...unknownKeyLoader(contents, overlayPath),
+      ],
+    });
+    const service = configService(floor);
+
+    const inheritedOnly = await service.validateConfig("font-size = 14\n");
+    expect(inheritedOnly.blocking, "the user's own Ghostty mistake does not block").toEqual([]);
+    expect(inheritedOnly.config?.diagnostics).toEqual([inherited]);
+    expect(
+      (await service.validateConfig("nonsense-key = 1\n")).blocking.map((d) => d.code),
+      "the text's own error does",
+    ).toEqual(["unknown-key"]);
+    expect((await service.validateConfig("theme = broken\n")).blocking).toEqual([themeError]);
+    expect((await service.validateConfig(`theme = ${USER_GHOSTTY}\n`)).blocking).toEqual([
+      inherited,
+    ]);
+
+    // the write re-checks it, and the refusal carries the list
+    const refused = await refusalOf(service.writeConfig("theme = broken\n", "rev-empty"));
+    expect(refused.kind).toBe("PRECONDITION_FAILED");
+    expect(TerminalConfigWriteRefusal.parse(refused.details)).toEqual({
+      reason: "blocking-errors",
+      blocking: [themeError],
+    });
+    expect(floor.document.exists).toBe(false);
+    expect(floor.commands()).not.toContain("replace-config-document");
+  });
+
+  it("measures inherited errors against a FRESH load of the saved text, never the cell's last reload", async () => {
+    // The cell's snapshot (`get-config`) is as old as its last reload, and the
+    // floor watches no files. The user breaks their own Ghostty file AFTER the
+    // cell loaded: every fresh load now carries that error and the snapshot
+    // does not. Measured against the snapshot, every save would block on a
+    // mistake in a file VibeField does not own — the outcome the rule exists
+    // to prevent. The baseline is a dry run of the saved text instead.
+    let userFileBroken = false;
+    const inherited: FakeDiagnostic = {
+      severity: "error",
+      code: "unknown-key",
+      message: "unknown configuration key `fnot-size`",
+      source: USER_GHOSTTY,
+      line: 9,
+      key: "fnot-size",
+    };
+    const floor = await startFakeFloor({
+      loader: (contents, overlayPath) => [
+        ...(userFileBroken ? [inherited] : []),
+        ...unknownKeyLoader(contents, overlayPath),
+      ],
+    });
+    const service = configService(floor);
+    expect(
+      (await service.readConfig()).config?.diagnostics,
+      "the cell loaded a clean file",
+    ).toEqual([]);
+
+    userFileBroken = true;
+    const validation = await service.validateConfig("font-size = 14\n");
+    expect(validation.config?.diagnostics, "a dry run reads the file as it is now").toEqual([
+      inherited,
+    ]);
+    expect(validation.blocking).toEqual([]);
+    const written = await service.writeConfig("font-size = 14\n", "rev-empty");
+    expect(written.ok, "it landed, and the loader's complaint is still shown").toBe(false);
+    expect(written.diagnostics).toEqual([inherited]);
+  });
+
+  it("refuses a text over the loader's limit in UTF-8 bytes, before any round trip", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["settings.manage"], "settings-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+    const before = TerminalConfigDocument.parse(await rpc.call("terminal.config.read", {}));
+    const seen = floor.commands().length;
+
+    // 16,385 four-byte characters: 65,540 bytes, and only 32,770 UTF-16 units
+    const text = "🌱".repeat(TERMINAL_CONFIG_MAX_BYTES / 4 + 1);
+    for (const [method, params] of [
+      ["terminal.config.validate", { text }],
+      ["terminal.config.write", { text, revision: before.revision }],
+    ] as const) {
+      const err = await rpc.callErr(method, params);
+      expect(err.data?.kind, method).toBe("PRECONDITION_FAILED");
+      expect(err.data?.details, "not a TerminalConfigWriteRefusal").toBeUndefined();
+    }
+    expect(floor.commands().length, "refused before the floor").toBe(seen);
+    expect(floor.document.exists).toBe(false);
+  });
+
+  it("a stale write's CONFLICT carries the document as it now stands — caught early, and from the floor's race", async () => {
+    const floor = await startFakeFloor();
+    const service = configService(floor);
+    await service.writeConfig("font-size = 13\n", "rev-empty");
+    const dryRuns = () =>
+      floor.commands().filter((command) => command === "validate-config-document").length;
+    const before = dryRuns();
+    const early = await refusalOf(service.writeConfig("font-size = 99\n", "rev-empty"));
+    expect(early.kind).toBe("CONFLICT");
+    expect(TerminalConfigConflict.parse(early.details).current).toEqual({
+      path: floor.document.path,
+      text: "font-size = 13\n",
+      revision: fakeRevision("rev", "font-size = 13\n"),
+      exists: true,
+    });
+    expect(dryRuns(), "a stale base is refused before the loader runs").toBe(before);
+    expect(floor.document.contents).toBe("font-size = 13\n");
+
+    // the race: another writer lands between fieldd's check and the replace;
+    // the floor's own recheck refuses and names the text that won
+    const racing = await startFakeFloor({ concurrentWrite: "font-size = 20\n" });
+    const raced = await refusalOf(
+      configService(racing).writeConfig("font-size = 14\n", "rev-empty"),
+    );
+    expect(raced.kind).toBe("CONFLICT");
+    expect(TerminalConfigConflict.parse(raced.details).current.text).toBe("font-size = 20\n");
+    expect(racing.document.contents, "the winner survived").toBe("font-size = 20\n");
+  });
+
+  it("imports a picked file as a draft, and refuses whatever is not a small UTF-8 regular file", async () => {
+    const dir = makeDataDir();
+    const file = join(dir, "picked.ghostty");
+    // a leading byte-order mark is the encoding's marker, not the draft's text
+    writeFileSync(file, "﻿font-size = 14\n");
+    const picked = scriptedShell({ pick: { canceled: false, path: file } });
+    expect(
+      TerminalConfigImportResult.parse(await configService(undefined, picked.shell).importConfig()),
+    ).toEqual({ status: "imported", path: file, text: "font-size = 14\n" });
+    expect(picked.calls).toEqual([
+      { door: "pickFile", params: { purpose: "terminal.config.import" } },
+    ]);
+    expect(await configService(undefined, scriptedShell().shell).importConfig()).toEqual({
+      status: "cancelled",
+    });
+
+    const oversize = join(dir, "big.ghostty");
+    writeFileSync(oversize, "#".repeat(TERMINAL_CONFIG_MAX_BYTES + 1));
+    const latin1 = join(dir, "latin1.ghostty");
+    writeFileSync(latin1, Buffer.from([0x66, 0x6f, 0xe9, 0x0a])); // "foé\n", not UTF-8
+    const folder = join(dir, "a-folder");
+    mkdirSync(folder);
+    for (const [path, reason] of [
+      [oversize, /at most 65536/],
+      [latin1, /not UTF-8 text/],
+      [folder, /not a regular file/],
+      [join(dir, "gone.ghostty"), /no longer exists/],
+    ] as const) {
+      const shell = scriptedShell({ pick: { canceled: false, path } }).shell;
+      const error = await refusalOf(configService(undefined, shell).importConfig());
+      expect(error.kind, path).toBe("PRECONDITION_FAILED");
+      expect(error.message, path).toMatch(reason);
+      expect(error.message, "a refusal never quotes the user's path").not.toContain(dir);
+    }
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "refuses a picked named pipe at once rather than waiting for a writer",
+    async () => {
+      const dir = makeDataDir();
+      const fifo = join(dir, "pipe");
+      execFileSync("mkfifo", [fifo]);
+      const shell = scriptedShell({ pick: { canceled: false, path: fifo } }).shell;
+      const error = await refusalOf(configService(undefined, shell).importConfig());
+      expect(error.kind).toBe("PRECONDITION_FAILED");
+      expect(error.message).toMatch(/not a regular file/);
+    },
+  );
+
+  it("exports atomically where the save dialog says, and refuses before the dialog what could never come back", async () => {
+    const dir = makeDataDir();
+    const target = join(dir, "exported.ghostty");
+    writeFileSync(target, "# an older export\n");
+    const text = "# 🌱 exported\nfont-size = 14\n";
+    const saved = scriptedShell({ save: { canceled: false, path: target } });
+    expect(
+      TerminalConfigExportResult.parse(
+        await configService(undefined, saved.shell).exportConfig(text),
+      ),
+    ).toEqual({ status: "exported", path: target, bytes: Buffer.byteLength(text, "utf8") });
+    expect(saved.calls).toEqual([
+      {
+        door: "saveFile",
+        params: { purpose: "terminal.config.export", defaultName: "config.ghostty" },
+      },
+    ]);
+    expect(readFileSync(target, "utf8"), "the older file replaced whole").toBe(text);
+    expect(readdirSync(dir), "no temp file left behind").toEqual(["exported.ghostty"]);
+
+    expect(await configService(undefined, scriptedShell().shell).exportConfig(text)).toEqual({
+      status: "cancelled",
+    });
+
+    const tooBig = scriptedShell({ save: { canceled: false, path: target } });
+    const oversize = await refusalOf(
+      configService(undefined, tooBig.shell).exportConfig(
+        "#".repeat(TERMINAL_CONFIG_MAX_BYTES + 1),
+      ),
+    );
+    expect(oversize.kind).toBe("PRECONDITION_FAILED");
+    expect(tooBig.calls, "no dialog for a text that could never be imported back").toEqual([]);
+
+    const gone = join(dir, "gone", "config.ghostty");
+    const vanished = await refusalOf(
+      configService(
+        undefined,
+        scriptedShell({ save: { canceled: false, path: gone } }).shell,
+      ).exportConfig(text),
+    );
+    expect(vanished.kind).toBe("PRECONDITION_FAILED");
+    expect(vanished.message).toMatch(/no longer exists/);
+    expect(readFileSync(target, "utf8")).toBe(text);
+    expect(readdirSync(dir), "nothing left behind by a refusal").toEqual(["exported.ghostty"]);
+  });
+
+  it("reveals the overlay the floor names — its folder until the first save", async () => {
+    const floor = await startFakeFloor();
+    const revealed = scriptedShell();
+    const service = configService(floor, revealed.shell);
+    const folder = dirname(floor.document.path);
+    expect(TerminalConfigRevealResult.parse(await service.revealConfig())).toEqual({
+      revealed: true,
+      path: folder,
+    });
+    await service.writeConfig("font-size = 13\n", "rev-empty");
+    expect(await service.revealConfig()).toEqual({ revealed: true, path: floor.document.path });
+    expect(revealed.calls).toEqual([
+      { door: "revealPath", params: { path: folder } },
+      { door: "revealPath", params: { path: floor.document.path } },
+    ]);
+  });
+
+  it("without a shell provider the file actions are UNAVAILABLE in the broker's own words", async () => {
+    const floor = await startFakeFloor();
+    const service = configService(floor, null);
+    for (const action of [
+      () => service.importConfig(),
+      () => service.exportConfig("font-size = 13\n"),
+      () => service.revealConfig(),
+    ]) {
+      const error = await refusalOf(action());
+      expect(error.kind).toBe("UNAVAILABLE");
+      expect(error.details).toEqual({ service: "shell", state: "unavailable" });
+    }
+    expect(floor.commands(), "no floor round trip behind a door that is not there").toEqual([]);
+  });
+
+  it("reaches Electron main's dialogs through the broker, and audits an export by size alone", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.helloTerminal = floor.endpoints;
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["settings.manage"], "settings-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    // before main registers, the doors are not there — the broker says so
+    const early = await rpc.callErr("terminal.config.import", {});
+    expect(early.data?.kind).toBe("UNAVAILABLE");
+    expect(early.data?.details).toMatchObject({ service: "shell", state: "unavailable" });
+
+    const shell = await openRpc(daemon.controlPort);
+    await helloAs(shell, daemon.shellToken, "shell-main");
+    await shell.call("shell.provider.register", { methods: [...SHELL_PROVIDER_METHODS] });
+
+    const files = makeDataDir();
+    const picked = join(files, "picked.ghostty");
+    writeFileSync(picked, "font-size = 15\n");
+    const imported = rpc.call("terminal.config.import", {});
+    expect(await answerCall(shell, 0, { canceled: false, path: picked })).toMatchObject({
+      method: "shell.dialog.pickFile",
+      params: { purpose: "terminal.config.import" },
+      // an internal door: main sees fieldd, never the renderer that asked
+      caller: { clientKind: "fieldd" },
+      deadlineAt: Number.MAX_SAFE_INTEGER,
+    });
+    expect(TerminalConfigImportResult.parse(await imported)).toEqual({
+      status: "imported",
+      path: picked,
+      text: "font-size = 15\n",
+    });
+
+    const secret = "# private-marker-8d1f\nfont-size = 16\n";
+    const bytes = Buffer.byteLength(secret, "utf8");
+    const target = join(files, "exported.ghostty");
+    const exported = rpc.call("terminal.config.export", { text: secret });
+    expect(await answerCall(shell, 1, { canceled: false, path: target })).toMatchObject({
+      method: "shell.dialog.saveFile",
+      params: { purpose: "terminal.config.export", defaultName: "config.ghostty" },
+    });
+    expect(TerminalConfigExportResult.parse(await exported)).toEqual({
+      status: "exported",
+      path: target,
+      bytes,
+    });
+    expect(readFileSync(target, "utf8")).toBe(secret);
+    const cancelled = rpc.call("terminal.config.export", { text: secret });
+    await answerCall(shell, 2, { canceled: true });
+    expect(await cancelled).toEqual({ status: "cancelled" });
+
+    const revealing = rpc.call("terminal.config.reveal", {});
+    expect(await answerCall(shell, 3, { revealed: true })).toMatchObject({
+      method: "shell.revealPath",
+      params: { path: dirname(floor.document.path) },
+    });
+    expect(TerminalConfigRevealResult.parse(await revealing)).toEqual({
+      revealed: true,
+      path: dirname(floor.document.path),
+    });
+
+    // export is the one act here: audited by size, never by contents or path;
+    // import, validate and reveal write nothing anywhere and are not audited
+    const records = (await readAuditRecords(dataDir)).filter((record) =>
+      record.action.startsWith("terminal.config."),
+    );
+    expect(records).toMatchObject([
+      { action: "terminal.config.export", phase: "attempt", attrs: { bytes } },
+      {
+        action: "terminal.config.export",
+        phase: "outcome",
+        outcome: "succeeded",
+        attrs: { bytes },
+      },
+      { action: "terminal.config.export", phase: "attempt", attrs: { bytes } },
+      { action: "terminal.config.export", phase: "outcome", outcome: "cancelled" },
+    ]);
+    const persisted = readdirSync(join(dataDir, "audit"))
+      .filter((name) => name.endsWith(".jsonl"))
+      .map((name) => readFileSync(join(dataDir, "audit", name), "utf8"))
+      .join("\n");
+    expect(persisted).not.toContain("private-marker-8d1f");
+    expect(persisted).not.toContain("exported.ghostty");
+    expect(persisted).not.toContain("picked.ghostty");
   });
 });
 

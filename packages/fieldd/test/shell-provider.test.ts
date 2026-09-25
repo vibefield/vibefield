@@ -191,4 +191,42 @@ describe("ShellProviderBroker", () => {
     broker.resolve(shellContext(), lane, { callId, outcome: { result: { opened: false } } });
     await expect(invalid).rejects.toMatchObject({ kind: "INTERNAL", retryable: false });
   });
+
+  it("GT-7: holds the file dialogs to their contracts — one purpose, a bare name, an absolute answer", async () => {
+    const broker = new ShellProviderBroker();
+    const lane = transport();
+    broker.register(shellContext(), lane, { methods: METHODS });
+    // refused before main is ever asked
+    await expect(
+      broker.callInternal("shell.dialog.pickFile", { purpose: "artifact.publish" }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    await expect(
+      broker.callInternal("shell.dialog.saveFile", {
+        purpose: "terminal.config.export",
+        defaultName: "../../.zshrc",
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    expect(lane.notifications).toEqual([]);
+
+    // a visible dialog has no theater deadline; and a RELATIVE answer never
+    // reaches the service that would write there (it would resolve against
+    // fieldd's own working directory)
+    const saving = broker.callInternal("shell.dialog.saveFile", {
+      purpose: "terminal.config.export",
+      defaultName: "config.ghostty",
+    });
+    expect(lane.notifications[0]).toMatchObject({
+      method: "shell.provider.call",
+      params: {
+        method: "shell.dialog.saveFile",
+        caller: { kind: "local-token", clientKind: "fieldd" },
+        deadlineAt: Number.MAX_SAFE_INTEGER,
+      },
+    });
+    broker.resolve(shellContext(), lane, {
+      callId: notificationCallId(lane, 0),
+      outcome: { result: { canceled: false, path: "exports/config.ghostty" } },
+    });
+    await expect(saving).rejects.toMatchObject({ kind: "INTERNAL", retryable: false });
+  });
 });

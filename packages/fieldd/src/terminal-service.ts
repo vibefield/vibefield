@@ -1,6 +1,8 @@
-import { existsSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, constants as fsConstants } from "node:fs";
+import { type FileHandle, open, rm } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
-import { isAbsolute } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
   type AutomationInputResult,
   GhostteaAutomationClient,
@@ -14,9 +16,24 @@ import {
   ObservedState,
   type RemoteCellEndpointSet,
   type RouteBinding,
+  type ShellDialogPickFileParams,
+  type ShellDialogPickFileResult,
+  type ShellDialogSaveFileParams,
+  type ShellDialogSaveFileResult,
+  type ShellRevealPathParams,
+  type ShellRevealPathResult,
+  TERMINAL_CONFIG_MAX_BYTES,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
   TERMINAL_SESSION_CAP,
+  type TerminalConfigConflict,
+  type TerminalConfigDiagnostic,
   type TerminalConfigDocument,
+  type TerminalConfigExportResult,
+  type TerminalConfigImportResult,
+  type TerminalConfigRevealResult,
+  type TerminalConfigSnapshot,
+  type TerminalConfigValidation,
+  type TerminalConfigWriteRefusal,
   type TerminalConfigWriteResult,
   type TerminalCreateOpenResponse,
   type TerminalCreateParams,
@@ -35,8 +52,9 @@ import {
   type TerminalTerminateResult,
   type TerminalWorkloadClass,
   type TicketEndpointSet,
+  terminalConfigIncludesAllowed,
 } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { createNoopLogger, durableRename, type Logger } from "@vibefield/logging";
 import { RpcCallError, terminalCreateTarget } from "./native-link";
 import {
   type CellGrantKey,
@@ -93,6 +111,23 @@ export type AgentTerminalAutomation =
   | { kind: "text"; text: string }
   | { kind: "interrupt" };
 
+/** GT-7 — the desktop shell's doors that Settings → Terminal's file actions
+ * reach (ESR §6.2: shell-native capabilities enter through the scoped `shell.*`
+ * provider, never as preload growth). The structural slice of ProductApi this
+ * service consumes, TerminalLink's pattern. Main answers with a PATH at most:
+ * the bytes on either side of a dialog are this service's to read and write. */
+export interface TerminalConfigShell {
+  pickFile(params: ShellDialogPickFileParams): Promise<ShellDialogPickFileResult>;
+  saveFile(params: ShellDialogSaveFileParams): Promise<ShellDialogSaveFileResult>;
+  revealPath(params: ShellRevealPathParams): Promise<ShellRevealPathResult>;
+}
+
+/** ghosttea's own config shapes, named through the pinned client — fieldd
+ * depends on the client, never on the protocol package beneath it. */
+type GhostteaConfigSnapshot = Awaited<ReturnType<GhostteaAutomationClient["getConfig"]>>;
+type GhostteaConfigDocument = Awaited<ReturnType<GhostteaAutomationClient["getConfigDocument"]>>;
+type GhostteaConfigDiagnostic = GhostteaConfigSnapshot["diagnostics"][number];
+
 export interface TerminalServiceOptions {
   link: TerminalLink;
   logger?: Logger;
@@ -116,6 +151,11 @@ export interface TerminalServiceOptions {
    * which is exactly the pre-TM-2 behaviour.
    */
   remoteEndpoints?: (cellBootId: string) => RemoteCellEndpointSet | undefined;
+  /** GT-7 — the shell provider's file doors, as a GETTER: the api that owns
+   * the provider is built after this service in the daemon's boot. Absent or
+   * null, the file actions answer UNAVAILABLE in the broker's own words — the
+   * state they are in when Electron main has not registered. */
+  shell?: () => TerminalConfigShell | null;
 }
 
 /** Free-shell spawn geometry until an attached view claims resize authority
@@ -991,20 +1031,45 @@ export class TerminalService {
    * and restyle at their next respawn, so a font change can be visible in the
    * interactive panes and not in the agent ones until then. The fix is a floor
    * verb that fans the reload across cells (TC-S6's neighbourhood), not a
-   * fieldd loop dialing every cell to re-read a file it does not own. */
+   * fieldd loop dialing every cell to re-read a file it does not own.
+   *
+   * GT-7 — the loader's snapshot rides along (`config`): the EFFECTIVE
+   * configuration this cell loaded, every layer with it, so the page shows the
+   * load order and the loader's diagnostics before any edit. */
   async readConfig(): Promise<TerminalConfigDocument> {
     const client = await this.connectedClient(await this.awaitClassCell("interactive"));
     try {
-      const document = await client.getConfigDocument();
-      return {
-        path: document.path,
-        text: document.contents,
-        revision: document.revision,
-        exists: document.exists,
-      };
+      const [document, config] = await Promise.all([
+        client.getConfigDocument(),
+        client.getConfig(),
+      ]);
+      return { ...projectConfigDocument(document), config: projectConfigSnapshot(config) };
     } catch (error) {
       throw this.configFailure("read", client, error);
     }
+  }
+
+  /** GT-7 — the DRY RUN: what the loader would make of `text` in the overlay's
+   * place, and whether Settings may save it. Nothing is written.
+   *
+   * The INCLUDES rule runs first and alone: a text that restructures the saved
+   * document's `config-file` queue is refused WITHOUT reaching the loader, or
+   * this method would read any file a caller names and report on it — a
+   * file-read door behind `settings.manage`. The refusal carries no snapshot.
+   *
+   * `documentRevision` is the SAVED document's revision (the one the rules were
+   * judged against). The floor's own validation answers the revision the
+   * candidate WOULD have if saved, which is a different fact; it is not
+   * forwarded. */
+  async validateConfig(text: string): Promise<TerminalConfigValidation> {
+    assertConfigBytes("validate", text);
+    const client = await this.connectedClient(await this.awaitClassCell("interactive"));
+    const current = await this.savedConfigDocument(client, "validate");
+    if (!terminalConfigIncludesAllowed(current.contents, text)) {
+      return { documentRevision: current.revision, includesAllowed: false, blocking: [] };
+    }
+    const { config, blocking } = await this.dryRunConfig(client, current, text, "validate");
+    return { documentRevision: current.revision, includesAllowed: true, blocking, config };
   }
 
   /** GT-3: replace the overlay and let the floor reload itself.
@@ -1021,9 +1086,39 @@ export class TerminalService {
    * the one the write answered — the same comparison, one level up.
    *
    * TC-S3 — through the interactive cell, and the read above carries the named
-   * debt this write is the reason for: the reload lands in THIS cell. */
+   * debt this write is the reason for: the reload lands in THIS cell.
+   *
+   * GT-7 — the save rules are RE-CHECKED here, against the document on disk,
+   * before anything is replaced: a stale page cannot talk its way past them.
+   * The revision is checked first, because the includes rule is only
+   * meaningful against the document the caller was editing; then includes
+   * (`includes-changed`); then the loader's dry run (`blocking-errors`). Each
+   * refusal is a PRECONDITION_FAILED whose details are a
+   * `TerminalConfigWriteRefusal`, and none of them touches the disk. What
+   * lands can still carry errors — inherited ones the rule lets through — so
+   * `ok` keeps its GT-3 meaning: the loader's verdict on everything it read. */
   async writeConfig(text: string, revision: string): Promise<TerminalConfigWriteResult> {
+    assertConfigBytes("write", text);
     const client = await this.connectedClient(await this.awaitClassCell("interactive"));
+    const current = await this.savedConfigDocument(client, "write");
+    if (current.revision !== revision) throw configConflict(current);
+    if (!terminalConfigIncludesAllowed(current.contents, text)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "config write refused: the text changes the document's config-file includes — keep them exactly or remove them all, and edit includes in the file itself",
+        false,
+        { reason: "includes-changed", blocking: [] } satisfies TerminalConfigWriteRefusal,
+      );
+    }
+    const { blocking } = await this.dryRunConfig(client, current, text, "write");
+    if (blocking.length > 0) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `config write refused: the loader reports ${blocking.length} error${blocking.length === 1 ? "" : "s"} that block saving this text`,
+        false,
+        { reason: "blocking-errors", blocking } satisfies TerminalConfigWriteRefusal,
+      );
+    }
     let before: string | undefined;
     try {
       before = (await client.getConfig()).revision;
@@ -1039,43 +1134,71 @@ export class TerminalService {
       // Mapped field by field rather than forwarded: the contract shape is what
       // the renderer parses, and passing the library's object straight through
       // would put whatever it grows next on our wire without a decision.
-      const diagnostics = (update.config.diagnostics ?? []).map((diagnostic) => ({
-        severity: String(diagnostic.severity),
-        code: diagnostic.code,
-        message: diagnostic.message,
-        ...(diagnostic.source !== undefined ? { source: diagnostic.source } : {}),
-        ...(diagnostic.line !== undefined ? { line: diagnostic.line } : {}),
-        ...(diagnostic.key !== undefined ? { key: diagnostic.key } : {}),
-      }));
+      const config = projectConfigSnapshot(update.config);
       return {
         // The loader's verdict on what it just read, not our summary of it: an
         // unknown key is a diagnostic and not a refusal in Ghostty syntax, so a
         // write can land, reload, and still leave the config in a state the
         // user has to see.
-        ok: !diagnostics.some((diagnostic) => diagnostic.severity === "error"),
-        document: {
-          path: update.document.path,
-          text: update.document.contents,
-          revision: update.document.revision,
-          exists: update.document.exists,
-        },
+        ok: !config.diagnostics.some((diagnostic) => diagnostic.severity === "error"),
+        document: projectConfigDocument(update.document),
         effectiveChanged: update.config.revision !== before,
-        diagnostics,
+        diagnostics: config.diagnostics,
+        config,
       };
     } catch (error) {
       // A stale revision is the one refusal that is neither our fault nor the
       // floor's: the file moved under this editor. It gets its own kind so the
       // panel can say so and re-read, rather than showing a transport error for
-      // something no retry fixes.
-      if (isConfigConflict(error)) {
-        throw new RpcCallError(
-          "CONFLICT",
-          "the terminal configuration changed since it was read",
-          false,
-        );
-      }
+      // something no retry fixes. This is the race the early check above
+      // cannot close (a writer between it and the replace); the floor's own
+      // recheck names the document that won.
+      if (isConfigConflict(error)) throw configConflict(error.document);
       throw this.configFailure("write", client, error);
     }
+  }
+
+  /** GT-7 — Import file…: the user picks a file in a native open dialog and its
+   * text comes back as a DRAFT for the editor. Nothing is written — the draft
+   * goes through `writeConfig` like any edit, so the includes and blocking
+   * rules judge it there. The file must be a regular file of at most the
+   * loader's limit and valid UTF-8; each refusal is a PRECONDITION_FAILED in
+   * plain words. Its contents are never logged or audited. */
+  async importConfig(): Promise<TerminalConfigImportResult> {
+    const picked = await this.configShell().pickFile({ purpose: "terminal.config.import" });
+    if (picked.canceled) return { status: "cancelled" };
+    return { status: "imported", path: picked.path, text: await readImportText(picked.path) };
+  }
+
+  /** GT-7 — Export…: `text` (the editor's, saved or not) written where the
+   * user's native save dialog says, atomically (a temp file in the SAME
+   * directory, fsync, rename), so a reader of that path sees the old file or
+   * the new one and never half of either. The byte bound is checked before
+   * the dialog opens: a text that could never be imported back is refused
+   * first. */
+  async exportConfig(text: string): Promise<TerminalConfigExportResult> {
+    assertConfigBytes("export", text);
+    const chosen = await this.configShell().saveFile({
+      purpose: "terminal.config.export",
+      defaultName: "config.ghostty",
+    });
+    if (chosen.canceled) return { status: "cancelled" };
+    const bytes = Buffer.from(text, "utf8");
+    await writeExportText(chosen.path, bytes);
+    return { status: "exported", path: chosen.path, bytes: bytes.byteLength };
+  }
+
+  /** GT-7 — Reveal in Finder: the overlay the floor names, shown in the file
+   * manager. The path comes from the floor's own document and the caller hands
+   * none; before the first save there is no file yet, so its folder — where
+   * it will appear — is revealed instead. */
+  async revealConfig(): Promise<TerminalConfigRevealResult> {
+    const shell = this.configShell();
+    const client = await this.connectedClient(await this.awaitClassCell("interactive"));
+    const document = await this.savedConfigDocument(client, "reveal");
+    const path = document.exists ? document.path : dirname(document.path);
+    const revealed = await shell.revealPath({ path });
+    return { revealed: revealed.revealed, path };
   }
 
   dispose(): void {
@@ -1418,7 +1541,7 @@ export class TerminalService {
    * than an error toast. Anything else is the service refusing on its own
    * terms, reported verbatim. */
   private configFailure(
-    operation: "read" | "write",
+    operation: "read" | "write" | "validate" | "reveal",
     client: GhostteaAutomationClient,
     error: unknown,
     stage?: string,
@@ -1456,6 +1579,63 @@ export class TerminalService {
       `config ${operation} failed${where}: ${errorMessage(error)}`,
       true,
     );
+  }
+
+  /** GT-7 — the overlay as it stands on disk, read through the floor's
+   * document door: the base every save rule is judged against. */
+  private async savedConfigDocument(
+    client: GhostteaAutomationClient,
+    operation: "write" | "validate" | "reveal",
+  ): Promise<GhostteaConfigDocument> {
+    try {
+      return await client.getConfigDocument();
+    } catch (error) {
+      throw this.configFailure(operation, client, error, "reading the saved document");
+    }
+  }
+
+  /** GT-7 — the loader's dry run of `text`, and the errors that refuse it.
+   *
+   * The BASELINE is a dry run of the SAVED text, taken at the same moment, and
+   * not the cell's loaded snapshot (`getConfig`): that snapshot is only as new
+   * as the last reload, and the floor watches no files, so a mistake the user
+   * made in their own Ghostty file since then would appear in the candidate's
+   * load alone and block a save it has nothing to do with — the one outcome
+   * the rule exists to prevent. Two loads a moment apart differ only in the
+   * overlay's text. This is also ghosttea desktop's own baseline
+   * (`validateManagedConfigCandidate`), adopted with its rule. */
+  private async dryRunConfig(
+    client: GhostteaAutomationClient,
+    current: GhostteaConfigDocument,
+    text: string,
+    operation: "write" | "validate",
+  ): Promise<{ config: TerminalConfigSnapshot; blocking: TerminalConfigDiagnostic[] }> {
+    const [baseline, candidate] = await Promise.all([
+      client.validateConfigDocument(current.contents),
+      client.validateConfigDocument(text),
+    ]).catch((error: unknown) => {
+      throw this.configFailure(operation, client, error, "dry-running the loader");
+    });
+    const config = projectConfigSnapshot(candidate.config);
+    const blocking = blockingConfigDiagnostics(
+      baseline.config.diagnostics.map(projectDiagnostic),
+      config.diagnostics,
+      current.path,
+    );
+    return { config, blocking };
+  }
+
+  /** GT-7 — the shell provider's file doors, or the broker's own refusal when
+   * there are none (no api in this composition, or none bound yet). */
+  private configShell(): TerminalConfigShell {
+    const shell = this.opts.shell?.() ?? null;
+    if (shell === null) {
+      throw new RpcCallError("UNAVAILABLE", "desktop shell provider is unavailable", true, {
+        service: "shell",
+        state: "unavailable",
+      });
+    }
+    return shell;
   }
 
   private defaultShell(): string {
@@ -1579,8 +1759,283 @@ const NO_OVERLAY = /unavailable without an explicit overlay/i;
 
 /** A revision that moved under the editor. The client throws its own error
  * class for exactly this, so it is identified by type and not by prose. */
-function isConfigConflict(error: unknown): boolean {
+function isConfigConflict(error: unknown): error is GhostteaConfigDocumentConflictError {
   return error instanceof GhostteaConfigDocumentConflictError;
+}
+
+/** GT-7 — the CONFLICT a stale write earns, carrying the document as it now
+ * stands (`TerminalConfigConflict`), so a page can show what moved instead of
+ * only "reload". */
+function configConflict(current: GhostteaConfigDocument): RpcCallError {
+  return new RpcCallError(
+    "CONFLICT",
+    "the terminal configuration changed since it was read",
+    false,
+    { current: projectConfigDocument(current) } satisfies TerminalConfigConflict,
+  );
+}
+
+/** The floor's document in the contract's words (`contents` is `text` here). */
+function projectConfigDocument(document: GhostteaConfigDocument): TerminalConfigDocument {
+  return {
+    path: document.path,
+    text: document.contents,
+    revision: document.revision,
+    exists: document.exists,
+  };
+}
+
+function projectDiagnostic(diagnostic: GhostteaConfigDiagnostic): TerminalConfigDiagnostic {
+  return {
+    severity: String(diagnostic.severity),
+    code: diagnostic.code,
+    message: diagnostic.message,
+    ...(diagnostic.source !== undefined ? { source: diagnostic.source } : {}),
+    ...(diagnostic.line !== undefined ? { line: diagnostic.line } : {}),
+    ...(diagnostic.key !== undefined ? { key: diagnostic.key } : {}),
+  };
+}
+
+/** GT-7 — ghosttea's `ConfigSnapshot` as the product draws it. Field by field,
+ * never forwarded: an upstream field nobody here reads must not become a wire
+ * promise without a decision. The pinned client has already validated every
+ * field it requires, so the tolerance here is for the ones it does not: the
+ * palette lives in two OPTIONAL homes (0.11.1 fills both from one parse, and a
+ * floor older than the field sends neither), so the renderer's is read, then
+ * the terminal's, and absence is an empty palette — Ghostty's defaults — never
+ * a refusal. Colours go from `[r, g, b]` to `#rrggbb`. */
+export function projectConfigSnapshot(snapshot: GhostteaConfigSnapshot): TerminalConfigSnapshot {
+  const palette = snapshot.renderer.palette ?? snapshot.terminal.palette ?? [];
+  return {
+    revision: snapshot.revision,
+    ghosttyVersion: snapshot.compatibility.ghosttyVersion,
+    knownKeyCount: snapshot.compatibility.knownKeyCount,
+    sources: snapshot.sources.map((source) => ({ path: source.path, kind: source.kind })),
+    diagnostics: snapshot.diagnostics.map(projectDiagnostic),
+    configuredKeys: snapshot.configuredKeys.map((configured) => ({
+      key: configured.key,
+      support: configured.support,
+      occurrences: configured.occurrences,
+    })),
+    keybindings: snapshot.workspace.keybindings.map((binding) => ({
+      trigger: binding.trigger,
+      action: binding.action,
+    })),
+    clearKeybindings: snapshot.workspace.clearKeybindings,
+    scrollbackBytes: snapshot.terminal.scrollbackBytes,
+    palette: palette.map((entry) => ({ index: entry.index, color: hexColor(entry.color) })),
+    fontSize: snapshot.renderer.fontSize,
+    fontFamilies: [...snapshot.renderer.fontFamilies],
+  };
+}
+
+function hexColor(color: readonly [number, number, number]): string {
+  return `#${color.map((component) => component.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** GT-7 — which of the loader's errors refuse a save: ghosttea desktop's
+ * `blockingConfigDiagnostics` (apps/desktop/src/main/config-editor.ts), ported
+ * whole. Every error in THIS document blocks — its own path, or no source at
+ * all, because the loader could not place it anywhere else. An error from
+ * another layer (the user's Ghostty file, an include, a theme) blocks only
+ * when the candidate carries an occurrence the baseline does not, matched one
+ * for one on its full identity: a Ghostty mistake the user made elsewhere must
+ * not make VibeField's own file read-only. Warnings and info never block. */
+export function blockingConfigDiagnostics(
+  baseline: readonly TerminalConfigDiagnostic[],
+  candidate: readonly TerminalConfigDiagnostic[],
+  documentPath: string,
+): TerminalConfigDiagnostic[] {
+  const inherited = new Map<string, number>();
+  for (const diagnostic of baseline) {
+    if (diagnostic.severity !== "error" || isDocumentSource(diagnostic.source, documentPath))
+      continue;
+    const identity = diagnosticIdentity(diagnostic);
+    inherited.set(identity, (inherited.get(identity) ?? 0) + 1);
+  }
+  const blocking: TerminalConfigDiagnostic[] = [];
+  for (const diagnostic of candidate) {
+    if (diagnostic.severity !== "error") continue;
+    if (isDocumentSource(diagnostic.source, documentPath)) {
+      blocking.push(diagnostic);
+      continue;
+    }
+    const identity = diagnosticIdentity(diagnostic);
+    const remaining = inherited.get(identity) ?? 0;
+    if (remaining > 0) inherited.set(identity, remaining - 1);
+    else blocking.push(diagnostic);
+  }
+  return blocking;
+}
+
+function diagnosticIdentity(diagnostic: TerminalConfigDiagnostic): string {
+  return JSON.stringify([
+    diagnostic.severity,
+    diagnostic.code,
+    diagnostic.message,
+    diagnostic.source ?? null,
+    diagnostic.line ?? null,
+    diagnostic.key ?? null,
+  ]);
+}
+
+/** No source (or an empty one), or the document's own path — resolved, so a
+ * `..` in either spelling is still the same file. */
+function isDocumentSource(source: string | undefined, documentPath: string): boolean {
+  return !source || resolve(source) === resolve(documentPath);
+}
+
+/** GT-7 — the loader's own size limit (`TERMINAL_CONFIG_MAX_BYTES`), in UTF-8
+ * BYTES as the loader measures it, refused before any round trip. */
+function assertConfigBytes(operation: "validate" | "write" | "export", text: string): void {
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (bytes > TERMINAL_CONFIG_MAX_BYTES) {
+    throw new RpcCallError(
+      "PRECONDITION_FAILED",
+      `config ${operation} refused: the text is ${bytes} bytes and a terminal configuration is at most ${TERMINAL_CONFIG_MAX_BYTES}`,
+      false,
+    );
+  }
+}
+
+/** GT-7 — the picked file's text, or a plain refusal. Opened NON-BLOCKING:
+ * opening a FIFO for reading otherwise waits for a writer, so a picked named
+ * pipe would park a libuv thread for good. That changes nothing for a regular
+ * file, and the fstat on the OPEN handle refuses anything else — a directory,
+ * a device, a pipe — without a gap between the check and the read. */
+async function readImportText(path: string): Promise<string> {
+  let file: FileHandle;
+  try {
+    file = await open(
+      path,
+      fsConstants.O_RDONLY | (process.platform === "win32" ? 0 : fsConstants.O_NONBLOCK),
+    );
+  } catch (error) {
+    throw fileFailure("import", error);
+  }
+  try {
+    const stats = await file.stat();
+    if (!stats.isFile()) throw importRefusal("the chosen item is not a regular file");
+    if (stats.size > TERMINAL_CONFIG_MAX_BYTES) {
+      throw importRefusal(
+        `the chosen file is ${stats.size} bytes and a terminal configuration is at most ${TERMINAL_CONFIG_MAX_BYTES}`,
+      );
+    }
+    // One byte past the limit is read, so a file that grew after the stat is
+    // refused on what was read rather than on what the stat promised.
+    const buffer = Buffer.alloc(TERMINAL_CONFIG_MAX_BYTES + 1);
+    let length = 0;
+    for (;;) {
+      const { bytesRead } = await file.read(buffer, length, buffer.length - length, length);
+      if (bytesRead === 0) break;
+      length += bytesRead;
+      if (length === buffer.length) break;
+    }
+    if (length > TERMINAL_CONFIG_MAX_BYTES) {
+      throw importRefusal(
+        `the chosen file is larger than ${TERMINAL_CONFIG_MAX_BYTES} bytes, the most a terminal configuration may be`,
+      );
+    }
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, length));
+    } catch {
+      throw importRefusal("the chosen file is not UTF-8 text");
+    }
+  } catch (error) {
+    throw error instanceof RpcCallError ? error : fileFailure("import", error);
+  } finally {
+    await file.close();
+  }
+}
+
+function importRefusal(reason: string): RpcCallError {
+  return new RpcCallError("PRECONDITION_FAILED", `config import refused: ${reason}`, false);
+}
+
+/** GT-7 — `bytes` at `target`, atomically: a temp file in the SAME directory
+ * (a rename across filesystems is a copy), fsync, then the rename commits it,
+ * so a reader of `target` sees the old file or the new one and never half of
+ * either. The temp name is fixed-length, so a long chosen name cannot push it
+ * past the filesystem's limit. A failure removes the temp file. */
+async function writeExportText(target: string, bytes: Uint8Array): Promise<void> {
+  const directory = dirname(target);
+  const temporary = join(directory, `.vibefield-export-${randomBytes(6).toString("hex")}.tmp`);
+  try {
+    const file = await open(temporary, "wx");
+    try {
+      await file.writeFile(bytes);
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    await durableRename(temporary, target);
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => undefined);
+    throw fileFailure("export", error);
+  }
+  // Persisting the rename itself is best effort: the file is already in place
+  // under its name, and an export that reported failure while the user's file
+  // sat there would be the dishonest answer. Windows cannot open a directory
+  // handle for fsync at all (doc-service's posture), and a user's chosen
+  // folder may be on a filesystem that refuses it.
+  if (process.platform !== "win32") {
+    const handle = await open(directory, "r").catch(() => null);
+    if (handle !== null) {
+      await handle.sync().catch(() => undefined);
+      await handle.close().catch(() => undefined);
+    }
+  }
+}
+
+/** GT-7 — an fs failure on the user's chosen path, as a refusal they can act
+ * on when it is one (the path, not fieldd, is the problem); anything else
+ * stays INTERNAL with the errno code carried for diagnosis. Node's own fs
+ * messages quote the path, so a coded failure is named by its code alone: the
+ * path is the user's, and an error message reaches logs. */
+function fileFailure(operation: "import" | "export", error: unknown): RpcCallError {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  const refused = (reason: string) =>
+    new RpcCallError("PRECONDITION_FAILED", `config ${operation} refused: ${reason}`, false);
+  switch (code) {
+    case "ENOENT":
+      return refused(
+        operation === "import"
+          ? "the chosen file no longer exists"
+          : "the chosen folder no longer exists",
+      );
+    case "EACCES":
+    case "EPERM":
+      return refused(
+        operation === "import"
+          ? "the chosen file cannot be read (permission denied)"
+          : "the chosen location cannot be written (permission denied)",
+      );
+    case "EROFS":
+      return refused("the chosen location is read-only");
+    case "EISDIR":
+      return refused(
+        operation === "import"
+          ? "the chosen item is not a regular file"
+          : "the chosen name is a folder",
+      );
+    case "ENOTDIR":
+      return refused("part of the chosen path is not a folder");
+    case "ENOSPC":
+    case "EDQUOT":
+      return new RpcCallError(
+        "RESOURCE_EXHAUSTED",
+        `config ${operation} failed: the chosen disk is full`,
+        false,
+      );
+    default:
+      return new RpcCallError(
+        "INTERNAL",
+        code === undefined
+          ? `config ${operation} failed: ${errorMessage(error)}`
+          : `config ${operation} failed (${code})`,
+        true,
+      );
+  }
 }
 
 /** Opaque passthrough with a typed default (NF-D3: keep-until-exit IS the

@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
 import { SHELL_PROVIDER_METHODS } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { createNoopLogger } from "@vibefield/logging";
@@ -76,6 +77,8 @@ function call(
   callId: string,
   method:
     | "shell.dialog.pickFolder"
+    | "shell.dialog.pickFile"
+    | "shell.dialog.saveFile"
     | "shell.openExternal"
     | "shell.revealPath"
     | "shell.webcontents.captureArtifactPreview"
@@ -101,6 +104,8 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
   const native: ShellProviderNative = {
     parentWindow: vi.fn(() => parent),
     showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
+    showSaveDialog: vi.fn(async () => ({ canceled: true, filePath: "" })),
+    documentsPath: vi.fn(() => "/Users/test/Documents"),
     openExternal: vi.fn(async () => undefined),
     revealPath: vi.fn(),
     captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
@@ -140,6 +145,8 @@ describe("RecoveringShellProvider", () => {
       const native: ShellProviderNative = {
         parentWindow: () => fakeWindow(),
         showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
+        showSaveDialog: vi.fn(async () => ({ canceled: true, filePath: "" })),
+        documentsPath: () => "/Users/test/Documents",
         openExternal: vi.fn(async () => undefined),
         revealPath: vi.fn(),
         captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
@@ -385,6 +392,201 @@ describe("RecoveringShellProvider", () => {
     provider.dispose();
   });
 
+  it("parents one file picker for Import, locked to its purpose, under the one-dialog rule", async () => {
+    const picker = deferred<{ canceled: boolean; filePaths: string[] }>();
+    const showOpenDialog = vi.fn<ShellProviderNative["showOpenDialog"]>(() => picker.promise);
+    const { client, native, parent, provider } = await fixture({ showOpenDialog });
+    client.emit(
+      "shell.provider.call",
+      call("shell-importaaaaaaaaaa", "shell.dialog.pickFile", {
+        purpose: "terminal.config.import",
+      }),
+    );
+    // one dialog at a time, whichever kind: a save is refused while a pick is up
+    client.emit(
+      "shell.provider.call",
+      call("shell-exportbbbbbbbbbb", "shell.dialog.saveFile", {
+        purpose: "terminal.config.export",
+        defaultName: "config.ghostty",
+      }),
+    );
+    await vi.waitFor(() => expect(showOpenDialog).toHaveBeenCalledTimes(1));
+    expect(showOpenDialog.mock.calls[0]?.[0]).toBe(parent);
+    expect(showOpenDialog.mock.calls[0]?.[1]).toEqual({
+      title: "Import a terminal configuration",
+      buttonLabel: "Import",
+      properties: ["openFile"],
+    });
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId: "shell-exportbbbbbbbbbb",
+          outcome: {
+            error: { kind: "CONFLICT", message: "another dialog is already open", retryable: true },
+          },
+        },
+      }),
+    );
+    expect(native.showSaveDialog).not.toHaveBeenCalled();
+    picker.resolve({ canceled: false, filePaths: ["/Users/me/Downloads/theirs.ghostty"] });
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId: "shell-importaaaaaaaaaa",
+          outcome: { result: { canceled: false, path: "/Users/me/Downloads/theirs.ghostty" } },
+        },
+      }),
+    );
+
+    // the purpose lock: another purpose is refused before any dialog exists
+    client.emit(
+      "shell.provider.call",
+      call("shell-importcccccccccc", "shell.dialog.pickFile", { purpose: "artifact.publish" }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId: "shell-importcccccccccc",
+          outcome: {
+            error: {
+              kind: "PRECONDITION_FAILED",
+              message: "the desktop operation failed",
+              retryable: false,
+            },
+          },
+        },
+      }),
+    );
+    expect(showOpenDialog).toHaveBeenCalledTimes(1);
+    provider.dispose();
+  });
+
+  it("proposes Documents/<name> for Export, asks before replacing, and takes a name, never a path", async () => {
+    const showSaveDialog = vi.fn<ShellProviderNative["showSaveDialog"]>(async () => ({
+      canceled: false,
+      filePath: "/Users/test/Documents/config.ghostty",
+    }));
+    const { client, parent, provider } = await fixture({ showSaveDialog });
+    client.emit(
+      "shell.provider.call",
+      call("shell-saveaaaaaaaaaaaa", "shell.dialog.saveFile", {
+        purpose: "terminal.config.export",
+        defaultName: "config.ghostty",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId: "shell-saveaaaaaaaaaaaa",
+          outcome: { result: { canceled: false, path: "/Users/test/Documents/config.ghostty" } },
+        },
+      }),
+    );
+    expect(showSaveDialog.mock.calls[0]?.[0]).toBe(parent);
+    expect(showSaveDialog.mock.calls[0]?.[1]).toEqual({
+      title: "Export the terminal configuration",
+      buttonLabel: "Export",
+      defaultPath: join("/Users/test/Documents", "config.ghostty"),
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+
+    // Electron reports a cancelled save with an empty path
+    showSaveDialog.mockResolvedValueOnce({ canceled: true, filePath: "" });
+    client.emit(
+      "shell.provider.call",
+      call("shell-savebbbbbbbbbbbb", "shell.dialog.saveFile", {
+        purpose: "terminal.config.export",
+        defaultName: "config.ghostty",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: { callId: "shell-savebbbbbbbbbbbb", outcome: { result: { canceled: true } } },
+      }),
+    );
+
+    // the dialog only ever proposes a bare name: a path is refused before it opens
+    client.emit(
+      "shell.provider.call",
+      call("shell-savecccccccccccc", "shell.dialog.saveFile", {
+        purpose: "terminal.config.export",
+        defaultName: "../../.zshrc",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId: "shell-savecccccccccccc",
+          outcome: {
+            error: {
+              kind: "PRECONDITION_FAILED",
+              message: "the desktop operation failed",
+              retryable: false,
+            },
+          },
+        },
+      }),
+    );
+    expect(showSaveDialog).toHaveBeenCalledTimes(2);
+    provider.dispose();
+  });
+
+  it("turns a file dialog's answer into a cancel when its window closed underneath it", async () => {
+    const picker = deferred<{ canceled: boolean; filePaths: string[] }>();
+    const showOpenDialog = vi.fn<ShellProviderNative["showOpenDialog"]>(() => picker.promise);
+    const { client, parent, provider } = await fixture({ showOpenDialog });
+    client.emit(
+      "shell.provider.call",
+      call("shell-closedaaaaaaaaaa", "shell.dialog.pickFile", {
+        purpose: "terminal.config.import",
+      }),
+    );
+    await vi.waitFor(() => expect(showOpenDialog).toHaveBeenCalledTimes(1));
+    parent.emit("closed");
+    picker.resolve({ canceled: false, filePaths: ["/Users/me/private.ghostty"] });
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: { callId: "shell-closedaaaaaaaaaa", outcome: { result: { canceled: true } } },
+      }),
+    );
+    provider.dispose();
+  });
+
+  it("opens no file dialog without a window to parent it", async () => {
+    const { client, native, provider } = await fixture({ parentWindow: () => null });
+    client.emit(
+      "shell.provider.call",
+      call("shell-nowindowaaaaaaaa", "shell.dialog.saveFile", {
+        purpose: "terminal.config.export",
+        defaultName: "config.ghostty",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId: "shell-nowindowaaaaaaaa",
+          outcome: {
+            error: {
+              kind: "UNAVAILABLE",
+              message: "the primary window is unavailable",
+              retryable: true,
+            },
+          },
+        },
+      }),
+    );
+    expect(native.showSaveDialog).not.toHaveBeenCalled();
+    provider.dispose();
+  });
+
   it("re-registers after reconnect and detaches the previous handle", async () => {
     const first = new FakeClient();
     const second = new FakeClient();
@@ -398,6 +600,8 @@ describe("RecoveringShellProvider", () => {
     const native: ShellProviderNative = {
       parentWindow: () => fakeWindow(),
       showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
+      showSaveDialog: vi.fn(async () => ({ canceled: true, filePath: "" })),
+      documentsPath: () => "/Users/test/Documents",
       openExternal: vi.fn(async () => undefined),
       revealPath: vi.fn(),
       captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),

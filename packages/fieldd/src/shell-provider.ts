@@ -4,8 +4,12 @@ import {
   type CallerContext,
   SHELL_PROVIDER_METHODS,
   type ShellClientProviderMethod,
+  ShellDialogPickFileParams,
+  ShellDialogPickFileResult,
   ShellDialogPickFolderParams,
   ShellDialogPickFolderResult,
+  ShellDialogSaveFileParams,
+  ShellDialogSaveFileResult,
   type ShellInternalProviderMethod,
   ShellOpenExternalParams,
   ShellOpenExternalResult,
@@ -99,11 +103,25 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
     deadlineMs: SURFACE_AUTHORITY_LIMITS.RELEASE_DEADLINE_MS,
   },
   // The Agents settings section's Show in Finder (internal; the agent
-  // distribution service dispatches it for a path its own inventory holds).
+  // distribution service dispatches it for a path its own inventory holds, and
+  // GT-7's terminal service for the overlay path the floor reports).
   "shell.revealPath": {
     input: ShellRevealPathParams,
     output: ShellRevealPathResult,
     deadlineMs: REVEAL_PATH_DEADLINE_MS,
+  },
+  // GT-7 — Settings → Terminal's Import file… and Export… (internal; the
+  // terminal service dispatches them and does the file IO itself). A visible
+  // native dialog lives for the window's lifetime, as the folder picker does.
+  "shell.dialog.pickFile": {
+    input: ShellDialogPickFileParams,
+    output: ShellDialogPickFileResult,
+    deadlineMs: null,
+  },
+  "shell.dialog.saveFile": {
+    input: ShellDialogSaveFileParams,
+    output: ShellDialogSaveFileResult,
+    deadlineMs: null,
   },
 };
 

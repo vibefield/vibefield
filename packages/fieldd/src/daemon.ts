@@ -86,7 +86,13 @@ import {
   SOCKETS,
   STORES,
   type TerminalConfigDocument,
+  TerminalConfigExportRequest,
+  type TerminalConfigExportResult,
+  type TerminalConfigImportResult,
   TerminalConfigReadParams,
+  type TerminalConfigRevealResult,
+  TerminalConfigValidateParams,
+  type TerminalConfigValidation,
   TerminalConfigWriteParams,
   type TerminalConfigWriteResult,
   type TerminalCreateOpenResponse,
@@ -540,8 +546,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   let terminalsRef: TerminalService | null = null;
   let devicesForAgents: DeviceService | null = null;
   // Show in Finder reaches Electron main through the shell provider, which
-  // the api owns — built later in this boot, so bound through a ref too.
-  let shellForAgents: ProductApi | null = null;
+  // the api owns — built later in this boot, so bound through a ref too. GT-7:
+  // Settings → Terminal's file actions (the terminal service) reach it here.
+  let shellApi: ProductApi | null = null;
   const agents = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
@@ -550,7 +557,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     terminals: () => terminalsRef,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
     revealPath: () => {
-      const shell = shellForAgents;
+      const shell = shellApi;
       if (shell === null || !shell.revealPathAvailable()) return null;
       return async (path) => {
         await shell.revealPath({ path });
@@ -1083,6 +1090,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         if (!serve.routes.some((route) => route.prefix === prefix)) return undefined;
         return remoteCellEndpointsFor(serve.url, cellBootId);
       },
+      // GT-7 — Import file… / Export… / Reveal: the api's internal shell
+      // doors, read at call time (the api is built after this service).
+      shell: () => shellApi,
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
@@ -1122,7 +1132,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       getLinkedLogin: () => links.status().link?.login ?? null,
     });
     diagnosticsService.register(api);
-    shellForAgents = api;
+    shellApi = api;
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
 
     api.register("shell.dialog.pickFolder", async (ctx, params) => {
@@ -2315,6 +2325,57 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         }),
       );
     });
+    // GT-7 — the dry run, the file actions. validate and import write nothing
+    // anywhere (a dry run; a draft handed back to the editor), so like read
+    // they are not audited acts. export WRITES a file where the user's save
+    // dialog says: audited like write, by size and never by contents or path.
+    // reveal only shows the file manager.
+    api.register(
+      "terminal.config.validate",
+      async (_ctx, params): Promise<TerminalConfigValidation> => {
+        const parsed = TerminalConfigValidateParams.safeParse(params);
+        if (!parsed.success)
+          throw new RpcCallError("PRECONDITION_FAILED", "expected { text: string }", false);
+        return await terminals.validateConfig(parsed.data.text);
+      },
+    );
+    api.register(
+      "terminal.config.import",
+      async (_ctx, params): Promise<TerminalConfigImportResult> => {
+        // read's shape: the caller names nothing — the user picks the file
+        if (!TerminalConfigReadParams.safeParse(params ?? {}).success)
+          throw new RpcCallError("PRECONDITION_FAILED", "expected an object or no params", false);
+        return await terminals.importConfig();
+      },
+    );
+    api.register("terminal.config.export", async (ctx, params) => {
+      const parsed = TerminalConfigExportRequest.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { text: string }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "terminal.config.export",
+          target: { kind: "terminal", id: "config" },
+          attrs: { bytes: Buffer.byteLength(parsed.data.text, "utf8") },
+        },
+        async (): Promise<TerminalConfigExportResult> =>
+          await terminals.exportConfig(parsed.data.text),
+        (result) =>
+          result.status === "cancelled"
+            ? { outcome: "cancelled" }
+            : { outcome: "succeeded", attrs: { bytes: result.bytes } },
+      );
+    });
+    api.register(
+      "terminal.config.reveal",
+      async (_ctx, params): Promise<TerminalConfigRevealResult> => {
+        // the path is the floor's own document's — the caller hands none
+        if (!TerminalConfigReadParams.safeParse(params ?? {}).success)
+          throw new RpcCallError("PRECONDITION_FAILED", "expected an object or no params", false);
+        return await terminals.revealConfig();
+      },
+    );
 
     // -- PluginRegistry (PLUG-P2, plugin spec §21.3/§22.1) --
     api.register("plugins.list", () => plugins.snapshot());

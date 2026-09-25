@@ -358,7 +358,6 @@ export type ShellOpenExternalParams = z.infer<typeof ShellOpenExternalParams>;
 export const ShellOpenExternalResult = z.object({ opened: z.literal(true) }).passthrough();
 export type ShellOpenExternalResult = z.infer<typeof ShellOpenExternalResult>;
 
-/** An absolute path on this device, as fieldd's own inventory named it. */
 /** GT-7 — a native open dialog for one file, locked to one purpose. */
 export const ShellDialogPickFileParams = z
   .object({ purpose: z.literal("terminal.config.import") })
@@ -397,6 +396,7 @@ export const ShellDialogSaveFileResult = z.union([
 ]);
 export type ShellDialogSaveFileResult = z.infer<typeof ShellDialogSaveFileResult>;
 
+/** An absolute path on this device, as fieldd's own inventory named it. */
 export const ShellRevealPathParams = z.object({ path: ShellAbsolutePath }).passthrough();
 export type ShellRevealPathParams = z.infer<typeof ShellRevealPathParams>;
 

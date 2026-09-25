@@ -1,7 +1,12 @@
+import { join } from "node:path";
 import {
   SHELL_PROVIDER_METHODS,
+  ShellDialogPickFileParams,
+  ShellDialogPickFileResult,
   ShellDialogPickFolderParams,
   ShellDialogPickFolderResult,
+  ShellDialogSaveFileParams,
+  ShellDialogSaveFileResult,
   ShellOpenExternalParams,
   ShellOpenExternalResult,
   type ShellProviderCallParams,
@@ -28,7 +33,7 @@ import {
 } from "@vibefield/contracts";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
-import type { BrowserWindow, OpenDialogOptions } from "electron";
+import type { BrowserWindow, OpenDialogOptions, SaveDialogOptions } from "electron";
 import type { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 
 type Stop = () => void;
@@ -43,9 +48,17 @@ export interface ShellProviderNative {
     parent: BrowserWindow,
     options: OpenDialogOptions,
   ): Promise<{ canceled: boolean; filePaths: string[] }>;
+  /** GT-7 — Export…'s native save dialog (`filePath` is "" when cancelled). */
+  showSaveDialog(
+    parent: BrowserWindow,
+    options: SaveDialogOptions,
+  ): Promise<{ canceled: boolean; filePath: string }>;
+  /** The user's Documents folder — where Export… first proposes to save. */
+  documentsPath(): string;
   openExternal(url: string): Promise<void>;
   /** Show a path in the OS file manager (Electron's `shell.showItemInFolder`).
-   * fieldd has already proven the path is one of its own inventoried installs. */
+   * fieldd names only paths it owns: one of its inventoried installs, or (GT-7)
+   * the terminal overlay the floor reports. */
   revealPath(path: string): void;
   captureArtifactPreview(
     params: ShellWebContentsCaptureArtifactPreviewParams,
@@ -97,7 +110,9 @@ function safeProviderError(
       kind === "CONFLICT"
         ? method === "shell.webcontents.captureArtifactPreview"
           ? "another preview capture is already running"
-          : "another folder dialog is already open"
+          : method === "shell.dialog.pickFolder"
+            ? "another folder dialog is already open"
+            : "another dialog is already open"
         : kind === "UNAVAILABLE"
           ? method === "shell.renderer.requestReplacement"
             ? "the exact renderer generation is unavailable"
@@ -329,9 +344,68 @@ export class RecoveringShellProvider {
       const params = ShellSurfacesReleaseParams.parse(call.params);
       return ShellSurfacesReleaseResultSchema.parse(await this.native.releaseSurface(params));
     }
+    // GT-7 — Settings → Terminal's Import file…: one FILE, and main hands back
+    // only its path; fieldd reads it (bounded, UTF-8). Each verb is locked to
+    // its one purpose, so anything else is refused before a dialog exists.
+    if (call.method === "shell.dialog.pickFile") {
+      const params = ShellDialogPickFileParams.safeParse(call.params);
+      if (!params.success) throw { kind: "PRECONDITION_FAILED" };
+      const { result, parentClosed } = await this.parentedDialog((parent) =>
+        this.native.showOpenDialog(parent, {
+          title: "Import a terminal configuration",
+          buttonLabel: "Import",
+          properties: ["openFile"],
+        }),
+      );
+      if (parentClosed || result.canceled || result.filePaths.length !== 1) {
+        return ShellDialogPickFileResult.parse({ canceled: true });
+      }
+      return ShellDialogPickFileResult.parse({ canceled: false, path: result.filePaths[0] });
+    }
+    // GT-7 — Export…: the dialog proposes Documents/<defaultName> (a bare name
+    // by contract) and asks before replacing a file; fieldd writes it.
+    if (call.method === "shell.dialog.saveFile") {
+      const params = ShellDialogSaveFileParams.safeParse(call.params);
+      if (!params.success) throw { kind: "PRECONDITION_FAILED" };
+      const { result, parentClosed } = await this.parentedDialog((parent) =>
+        this.native.showSaveDialog(parent, {
+          title: "Export the terminal configuration",
+          buttonLabel: "Export",
+          defaultPath: join(this.native.documentsPath(), params.data.defaultName),
+          properties: ["createDirectory", "showOverwriteConfirmation"],
+        }),
+      );
+      if (parentClosed || result.canceled || result.filePath === "") {
+        return ShellDialogSaveFileResult.parse({ canceled: true });
+      }
+      return ShellDialogSaveFileResult.parse({ canceled: false, path: result.filePath });
+    }
 
     const params = ShellDialogPickFolderParams.parse(call.params);
     if (params.purpose !== "artifact.publish") throw { kind: "PRECONDITION_FAILED" };
+    const { result, parentClosed } = await this.parentedDialog((parent) =>
+      this.native.showOpenDialog(parent, {
+        title: "Choose a folder to publish",
+        buttonLabel: "Choose Folder",
+        properties: ["openDirectory", "createDirectory"],
+      }),
+    );
+    if (parentClosed || result.canceled || result.filePaths.length !== 1) {
+      return ShellDialogPickFolderResult.parse({ canceled: true });
+    }
+    return ShellDialogPickFolderResult.parse({
+      canceled: false,
+      path: result.filePaths[0],
+    });
+  }
+
+  /** The rules every native dialog here shares: one at a time (CONFLICT while
+   * another is up), parented to the focused-else-primary window (UNAVAILABLE
+   * without one), and a parent that closes while the dialog is up turns
+   * whatever it answers into a cancel — the caller that asked is gone. */
+  private async parentedDialog<T>(
+    show: (parent: BrowserWindow) => Promise<T>,
+  ): Promise<{ result: T; parentClosed: boolean }> {
     if (this.dialogBusy) throw { kind: "CONFLICT" };
     const parent = this.native.parentWindow();
     if (parent === null || parent.isDestroyed()) throw { kind: "UNAVAILABLE" };
@@ -342,18 +416,8 @@ export class RecoveringShellProvider {
     };
     parent.once("closed", onClosed);
     try {
-      const result = await this.native.showOpenDialog(parent, {
-        title: "Choose a folder to publish",
-        buttonLabel: "Choose Folder",
-        properties: ["openDirectory", "createDirectory"],
-      });
-      if (parentClosed || result.canceled || result.filePaths.length !== 1) {
-        return ShellDialogPickFolderResult.parse({ canceled: true });
-      }
-      return ShellDialogPickFolderResult.parse({
-        canceled: false,
-        path: result.filePaths[0],
-      });
+      const result = await show(parent);
+      return { result, parentClosed };
     } finally {
       parent.removeListener("closed", onClosed);
       this.dialogBusy = false;

@@ -243,8 +243,9 @@ export class ProductApi extends EventEmitter {
   }
 
   /** Show a path in the OS file manager — internal, like the capture door:
-   * only fieldd's agent distribution service enters, for a path its own
-   * inventory holds, with an explicit fieldd caller. */
+   * only fieldd's own services enter (the agent distribution service for a
+   * path its inventory holds; GT-7's terminal service for the overlay path the
+   * floor reports), with an explicit fieldd caller. */
   revealPath(
     params: import("@vibefield/contracts").ShellRevealPathParams,
   ): Promise<import("@vibefield/contracts").ShellRevealPathResult> {
@@ -255,6 +256,27 @@ export class ProductApi extends EventEmitter {
 
   revealPathAvailable(): boolean {
     return this.shellProvider.provides("shell.revealPath");
+  }
+
+  /** GT-7 — a native open dialog for one file, locked to one purpose.
+   * Internal: only the terminal service enters, and it reads the file the user
+   * picked — main returns a path, never bytes. */
+  pickFile(
+    params: import("@vibefield/contracts").ShellDialogPickFileParams,
+  ): Promise<import("@vibefield/contracts").ShellDialogPickFileResult> {
+    return this.shellProvider.callInternal("shell.dialog.pickFile", params) as Promise<
+      import("@vibefield/contracts").ShellDialogPickFileResult
+    >;
+  }
+
+  /** GT-7 — a native save dialog, locked to one purpose; the terminal service
+   * writes where it says. */
+  saveFile(
+    params: import("@vibefield/contracts").ShellDialogSaveFileParams,
+  ): Promise<import("@vibefield/contracts").ShellDialogSaveFileResult> {
+    return this.shellProvider.callInternal("shell.dialog.saveFile", params) as Promise<
+      import("@vibefield/contracts").ShellDialogSaveFileResult
+    >;
   }
 
   // DT-1 — the SurfaceService's typed doors to the main-side authority. Like

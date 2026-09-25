@@ -916,6 +916,8 @@ async function main(
       {
         parentWindow: () => BrowserWindow.getFocusedWindow() ?? registry.primary(),
         showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
+        showSaveDialog: (parent, options) => dialog.showSaveDialog(parent, options),
+        documentsPath: () => app.getPath("documents"),
         openExternal: (url) => shell.openExternal(url),
         revealPath: (path) => shell.showItemInFolder(path),
         captureArtifactPreview: (params, signal) => artifactPreviewCapture.capture(params, signal),
