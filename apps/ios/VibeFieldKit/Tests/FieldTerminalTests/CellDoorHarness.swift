@@ -52,6 +52,10 @@ actor CellDoorHarness {
   private(set) var sceneApplied: [JSONValue] = []
   private(set) var inputs: [JSONValue] = []
   private(set) var controlAttach: Attach?
+  /// P0-C — EVERY `AttachControlLeg`, in order, whole: a renewal rides the same
+  /// message at a higher generation, so the last one alone cannot tell a
+  /// renewal from a re-attach.
+  private(set) var controlAttaches: [JSONValue] = []
   private(set) var framesAttach: Attach?
   private(set) var framesResume: JSONValue?
   private(set) var requestHeaders: [[(name: String, value: String)]] = []
@@ -230,6 +234,7 @@ actor CellDoorHarness {
     case "AttachControlLeg":
       controlAttach = Attach(
         sessionId: "", activationId: value["activationId"]?.stringValue ?? "")
+      controlAttaches.append(value)
     case "AttachFramesLeg":
       framesAttach = Attach(
         sessionId: "", activationId: value["activationId"]?.stringValue ?? "")

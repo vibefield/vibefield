@@ -92,6 +92,14 @@ public final class TerminalAttachment {
   /// has to import the other's vocabulary to say so.
   public typealias TicketDoor = @MainActor @Sendable (String) async throws -> JSONValue
 
+  /// P0-C — how an attach grant is renewed: one `terminal.renewAttach`
+  /// `{sessionId, expectGeneration, requestId}` over the same product door,
+  /// answered as the raw JSON the daemon sent (`{attachGrant}`), for the same
+  /// reason `TicketDoor` is raw.
+  public typealias RenewalDoor =
+    @MainActor @Sendable (_ sessionId: String, _ expectGeneration: Int64, _ requestId: String)
+    async throws -> JSONValue
+
   /// How to reach the tailnet: the mesh node's own `URLSession` factory.
   ///
   /// The phone's tailnet is a userspace netstack in THIS process, so a plain
@@ -137,6 +145,7 @@ public final class TerminalAttachment {
   // --- end IOS-5b -----------------------------------------------------------
 
   @ObservationIgnored private let door: TicketDoor
+  @ObservationIgnored private let renewal: RenewalDoor?
   @ObservationIgnored private let transport: any RoutedLegTransport
   @ObservationIgnored private var client: RoutedTerminalClient?
   @ObservationIgnored private var sink: RoutedTerminalFrameSink?
@@ -153,10 +162,12 @@ public final class TerminalAttachment {
   public convenience init(
     session: @escaping SessionProvider,
     appearance: TerminalAppearance,
-    door: @escaping TicketDoor
+    door: @escaping TicketDoor,
+    renewal: RenewalDoor? = nil
   ) {
     self.init(
-      transport: URLSessionRoutedTransport(session: session), appearance: appearance, door: door)
+      transport: URLSessionRoutedTransport(session: session), appearance: appearance, door: door,
+      renewal: renewal)
   }
 
   /// The seam the tests hold: a transport with no sockets behind it. Every
@@ -166,11 +177,13 @@ public final class TerminalAttachment {
   public init(
     transport: any RoutedLegTransport,
     appearance: TerminalAppearance,
-    door: @escaping TicketDoor
+    door: @escaping TicketDoor,
+    renewal: RenewalDoor? = nil
   ) {
     self.transport = transport
     self.appearance = appearance
     self.door = door
+    self.renewal = renewal
     presentation = presentationConfig(for: appearance)
   }
 
@@ -211,12 +224,13 @@ public final class TerminalAttachment {
   /// This viewer's INPUT right has run out on a session that is otherwise live.
   ///
   /// The attach grant is minted for ten minutes and both ends close input a
-  /// minute early unless a renewal arrives (`ATTACH_RENEWAL_MARGIN_MS`), and
-  /// nothing on this phone renews one — there is no `terminal.renewAttach` in
-  /// `FieldLink` and `RoutedTerminalClient.renew` has no caller. So this is a
-  /// real resting state a long session reaches, and it used to be invisible:
-  /// presentation continues, the phase stays `.live`, and the only sign was a
-  /// keystroke quietly going nowhere.
+  /// minute early unless a renewal arrives (`ATTACH_RENEWAL_MARGIN_MS`). Until
+  /// P0-C (2026-09-24) nothing on this phone renewed one, so this was the
+  /// resting state of every long session. The client now renews ahead of the
+  /// margin through the renewal door, so this reads true only when a renewal
+  /// FAILED — the desktop's door unreachable, a refused CAS — and at expiry the
+  /// client re-attaches with a fresh ticket on its own. It stays a face because
+  /// in that minute a keystroke still goes nowhere, and saying so is the rule.
   public var writeGrantExpired: Bool {
     guard let client, let sessionID, let session = client.sessions[sessionID] else { return false }
     // Only for a viewer that WAS granted input. A read-only one has its own
@@ -321,6 +335,9 @@ public final class TerminalAttachment {
             throw error
           }
         },
+        // P0-C — the grant is renewed ahead of the cell's input margin, so a
+        // long session keeps both its input and its activation.
+        renewalProvider: Self.renewalProvider(renewal),
         viewId: "phone-\(UUID().uuidString.lowercased())"))
     self.sink = sink
     self.client = client
@@ -334,6 +351,24 @@ public final class TerminalAttachment {
     // the card would say "connecting…" over a client that has stopped.
     if client.needsTicket {
       localPhase = .refused(client.lastRefusal ?? "this desktop's ticket could not be used")
+    }
+  }
+
+  /// The client's renewal, over the door: the raw `{attachGrant}` answer read
+  /// into the grant the client carries to the cell. Nothing else is read — the
+  /// grant is the cell's to verify.
+  static func renewalProvider(
+    _ door: RenewalDoor?
+  ) -> (@MainActor @Sendable (RoutedRenewal) async throws -> RoutedGrant)? {
+    guard let door else { return nil }
+    return { request in
+      let answer = try await door(request.sessionId, request.expectGeneration, request.requestId)
+      guard let grant = answer["attachGrant"] else {
+        throw FieldProductError(
+          kind: "INTERNAL", message: "terminal.renewAttach answered without an attach grant",
+          retryable: true)
+      }
+      return try RoutedGrant(json: grant)
     }
   }
 
@@ -608,14 +643,12 @@ public final class TerminalAttachment {
       return "view only — this desktop granted read without input"
     }
     if !session.inputRightLive {
-      // It said "the write grant is expiring — renewing it" until TM-r3, and
-      // NOTHING renews it: there is no `terminal.renewAttach` door in
-      // `FieldLink` and `RoutedTerminalClient.renew` has no caller. A sentence
-      // promising work that is not happening is the one thing the voice rule
-      // forbids outright (DESIGN.md §9 — never overstate what we know), and it
-      // is worse than silence, because it tells a person to wait for something
-      // that will never arrive. What is true is that the right is gone and a
-      // reattach is what gets it back.
+      // It said "the write grant is expiring — renewing it" until TM-r3, when
+      // nothing renewed it, and a sentence promising work that is not happening
+      // is the one thing the voice rule forbids outright (DESIGN.md §9 — never
+      // overstate what we know). P0-C (2026-09-24) wired the renewal, so this
+      // line is reached only when the renewal FAILED — and then it is still
+      // true that the right is gone and a reattach is what gets it back.
       return "the write grant has run out — reattach to type again"
     }
     if !session.presentationReady {

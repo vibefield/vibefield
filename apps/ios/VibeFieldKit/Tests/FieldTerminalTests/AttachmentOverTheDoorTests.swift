@@ -24,9 +24,9 @@ import Testing
   /// The golden, with live windows and a loopback authority.
   ///
   /// `attachLifetimeMs` is the attach grant's window. It is a parameter because
-  /// the phone closes input a minute before that window ends and nothing
-  /// renews it, so a SHORT one is the only way to reach the closed-input face
-  /// without waiting nine real minutes (TM-r3, K-M1).
+  /// the phone closes input a minute before that window ends unless a renewal
+  /// lands, so a SHORT one is the only way to reach the closed-input face — or
+  /// the renewal (P0-C) — without waiting nine real minutes (TM-r3, K-M1).
   static func ticketJSON(
     port: UInt16, sessionId: String = "sess-01J8Z3K9", attachLifetimeMs: Int64 = 600_000
   ) throws -> JSONValue {
@@ -255,12 +255,13 @@ import Testing
   @MainActor
   @Test func aClosedWriteGrantNamesTheActRatherThanPromisingARenewal() async throws {
     // TM-r3, K-M1. The attach grant runs ten minutes and both ends close input
-    // a minute early unless a renewal arrives — and NOTHING on this phone
-    // renews one: there is no `terminal.renewAttach` in `FieldLink` and
-    // `RoutedTerminalClient.renew` has no caller. So typing stops while the
-    // phase stays `.live`, the scene keeps advancing, and the only sign used to
-    // be a keystroke going nowhere under the sentence "the write grant is
-    // expiring — renewing it", which was a promise about work nobody was doing.
+    // a minute early unless a renewal arrives. Until P0-C (2026-09-24) nothing
+    // on this phone renewed one, so every long session reached this state;
+    // since, it is reached when there is no renewal door (this row passes
+    // none) or the renewal FAILED. Typing stops while the phase stays `.live`,
+    // the scene keeps advancing, and the only sign used to be a keystroke going
+    // nowhere under "the write grant is expiring — renewing it", a promise
+    // about work nobody was doing.
     //
     // The grant here is stamped 30 s so the margin has already closed input,
     // which is the same state a nine-minute session reaches without the wait.
@@ -335,6 +336,77 @@ import Testing
     #expect(note == "the write grant has run out — reattach to type again")
     #expect(!note.contains("renewing"))
     #expect(await door.inputs.isEmpty)
+
+    await attachment.detach()
+  }
+
+  /// What the renewal door was asked, off the main actor's waits — the `Mints`
+  /// rule.
+  @MainActor
+  final class Renewals {
+    private(set) var expected: [Int64] = []
+    func record(_ generation: Int64) { expected.append(generation) }
+  }
+
+  @MainActor
+  @Test func theRenewalDoorRenewsTheWriteGrantBeforeInputCloses() async throws {
+    // P0-C (2026-09-24). With a renewal door the phone asks `renewAttach` ahead
+    // of the cell's input margin and carries the renewed grant to the cell on
+    // the SAME activation — over a real socket, through the attachment's own
+    // wiring (`TerminalAttachment.renewalProvider` reading the door's raw
+    // `{attachGrant}`). The grant is stamped so the renewal falls due at once.
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+
+    let frames = try LaneFrames.load()
+    let identity = try decodeTRF1Frame(frames.seed)
+    let session = "sess-01J8Z3K9"
+    let lifetime =
+      Int64(RoutedTerminalContract.attachRenewalMarginMs) + RoutedTerminalClient.renewalHeadroomMs
+      + 400
+    let ticket = try Self.ticketJSON(port: port, sessionId: session, attachLifetimeMs: lifetime)
+    let held = try #require(ticket["attachGrant"]?["claims"]?["grantGeneration"]?.intValue)
+    let renewals = Renewals()
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(),
+      appearance: .default,
+      door: { _ in ticket },
+      renewal: { _, generation, _ in
+        renewals.record(generation)
+        // fieldd's answer: the held grant, one generation on, ten minutes more
+        guard var grant = ticket["attachGrant"]?.objectValue,
+          var claims = grant["claims"]?.objectValue
+        else { throw MissingFixture() }
+        claims["grantGeneration"] = .int(generation + 1)
+        claims["expiresAt"] = .int(Int64(Date().timeIntervalSince1970 * 1000) + 600_000)
+        grant["claims"] = .object(claims)
+        return .object(["attachGrant": .object(grant)])
+      })
+
+    attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
+    let control = try await Self.value("the control leg to attach") { await door.controlAttach }
+    let activation = control.activationId
+    await door.send(
+      .controlLegAttached,
+      Script.controlAttached(session: session, activation: activation, rights: ["input", "read"]),
+      on: .control)
+    await door.send(
+      .framesLegAttached,
+      Script.framesAttached(
+        session: session, activation: activation,
+        sessionHandle: String(identity.sessionHandle), viewHandle: String(identity.viewHandle)),
+      on: .frames)
+
+    try await Self.until("the renewed grant to reach the cell") {
+      await door.controlAttaches.count == 2
+    }
+    let attaches = await door.controlAttaches
+    // the SAME activation — a renewal, not a re-attach — at the next generation
+    #expect(attaches[1]["activationId"]?.stringValue == activation)
+    #expect(attaches[1]["attachGrant"]?["claims"]?["grantGeneration"]?.intValue == held + 1)
+    #expect(renewals.expected == [held])
+    #expect(!attachment.writeGrantExpired)
 
     await attachment.detach()
   }

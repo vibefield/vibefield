@@ -9,6 +9,16 @@ public enum RoutedDemand: String, Sendable, Equatable {
   case live
 }
 
+/// One ask of `terminal.renewAttach` (spec §5.1): a CAS on the generation the
+/// client holds, idempotent by `requestId` — so a retry of the SAME renewal
+/// carries the same id, and a reply lost on the way back cannot bump the
+/// generation twice.
+public struct RoutedRenewal: Sendable, Equatable {
+  public let sessionId: String
+  public let expectGeneration: Int64
+  public let requestId: String
+}
+
 /// One session's activation, as VALUES — never blanks.
 ///
 /// The two-dimensional lease is the reason this is not a boolean: a read-only or
@@ -165,6 +175,12 @@ public final class RoutedTerminalClient {
     /// and waits to be handed one. Present = the client re-tickets itself with
     /// backoff, which is what the phone's attachment wants.
     public var ticketProvider: (@MainActor @Sendable (String) async throws -> RoutedTerminalTicket)?
+    /// P0-C — how an attach grant is RENEWED: one `terminal.renewAttach` over
+    /// the product door, answered with the renewed grant. Absent = nothing
+    /// renews, input closes a minute before the grant expires, and the cell
+    /// revokes the activation at expiry — which this client then answers by
+    /// re-attaching with a fresh ticket, never by calling the session ended.
+    public var renewalProvider: (@MainActor @Sendable (RoutedRenewal) async throws -> RoutedGrant)?
     public var maxBackoff: Duration
     /// A claimant id for the geometry lease. The cell mints the holder
     /// generation; the caller can only name itself.
@@ -173,11 +189,13 @@ public final class RoutedTerminalClient {
 
     public init(
       ticketProvider: (@MainActor @Sendable (String) async throws -> RoutedTerminalTicket)? = nil,
+      renewalProvider: (@MainActor @Sendable (RoutedRenewal) async throws -> RoutedGrant)? = nil,
       maxBackoff: Duration = .seconds(10),
       viewId: String = UUID().uuidString,
       capacities: RoutedReceiverCapacities = .phone
     ) {
       self.ticketProvider = ticketProvider
+      self.renewalProvider = renewalProvider
       self.maxBackoff = maxBackoff
       self.viewId = viewId
       self.capacities = capacities
@@ -219,6 +237,17 @@ public final class RoutedTerminalClient {
   /// the local half, so a keystroke is refused on the device rather than sent to
   /// be dropped and audited.
   private static let attachRenewalMarginMs = Int64(RoutedTerminalContract.attachRenewalMarginMs)
+
+  /// P0-C — how far BEFORE that margin a renewal is asked for, so the renewed
+  /// grant lands while input is still open. Not a wire number: the margin is
+  /// the cell's; this is the phone's headroom for a round trip over the mesh
+  /// and a retry or two. (The renderer's runtime asks AT the margin, which the
+  /// 2026-09-24 audit noted costs it one round trip of closed input.)
+  public static let renewalHeadroomMs: Int64 = 30_000
+
+  /// The renewal each attached session has scheduled, cancelled with its
+  /// activation.
+  private var renewals: [String: Task<Void, Never>] = [:]
 
   /// How many AUTHORITATIVE scenes in a row the sink may refuse before this
   /// client stops asking for another (see `repairRefused`).
@@ -287,14 +316,13 @@ public final class RoutedTerminalClient {
   /// higher generation: idempotent for the activation, rights and expiry
   /// updated, and a dropped input right revoked the moment the cell accepts it.
   ///
-  /// **It has NO caller today** (stated TM-r3, K-M1). fieldd serves
-  /// `terminal.renewAttach`, but `FieldLink` opens no door for it, so nothing
-  /// on this phone asks — input simply closes a minute before the grant expires
-  /// and the card says so and offers a reattach. Wiring the renewal is a
-  /// product-wide follow-up shared with the renderer (`session-grants.ts`) and
-  /// deliberately not this fix: half a renewal on one client is a worse state
-  /// than none, because the face would stop being able to tell the truth about
-  /// which half ran.
+  /// P0-C (2026-09-24) — the renewal schedule (`scheduleRenewal`) calls this,
+  /// given an `Options.renewalProvider`. Until then it had NO caller (TM-r3,
+  /// K-M1): input closed at 540 s of every phone attach, and at 600 s the cell
+  /// revoked the whole activation, which the card called "this session ended"
+  /// over a PTY that was still running. (TM-r's note that renewal was a
+  /// product-wide gap was wrong about the renderer, whose routed runtime has
+  /// renewed through `terminal.renewAttach` since G23 — the gap was this one.)
   public func renew(_ grant: RoutedGrant) {
     guard let sessionId = grant.sessionId, var session = sessions[sessionId] else { return }
     guard let held = grants[sessionId], let next = grant.grantGeneration,
@@ -606,6 +634,10 @@ public final class RoutedTerminalClient {
       session.rights = attached.rights
       sessions[attached.sessionId] = session
       noteAttachment()
+      // P0-C — the grant this activation now rides is the one to renew. Both an
+      // attach and an accepted renewal land here, and scheduling is idempotent:
+      // it replaces whatever was scheduled with the grant actually held.
+      scheduleRenewal(for: attached.sessionId)
 
     case .attachRefused:
       guard let refused = try? RoutedAttachRefused(json: body) else { return }
@@ -621,8 +653,12 @@ public final class RoutedTerminalClient {
         requestFreshTicket(for: sessionId, because: .staleRoute)
       } else if refused.code == "GRANT_INVALID" || refused.code == "GRANT_GENERATION_ROLLBACK" {
         // Every grant code is TERMINAL for that grant: a retry with the same one
-        // can never succeed, so the only move is a fresh mint.
-        requestFreshTicket(for: sessionId, because: .reconnecting)
+        // can never succeed, so the only move is a fresh mint. But an attach
+        // refusal is one message on a LIVE leg, and the legs are fine — P0-C:
+        // this used to go through `requestFreshTicket`, whose `.reconnecting`
+        // left `open` no branch that attaches over live legs, so the fresh grant
+        // was stored, never used, and the card read "connecting…" for good.
+        reattach(sessionId: sessionId)
       } else {
         state = .refused(code: refused.code)
       }
@@ -685,9 +721,23 @@ public final class RoutedTerminalClient {
       // clock can say" is the furthest one it CAN say.
       session.leaseDeadlineMs = Self.deadline(from: session.nowMs, after: status.leaseTtlMs)
       if case .revoked(let reason) = status.presentation {
+        endActivation(&session, reason: reason)
+        if Self.lapsedAttach(reason) {
+          // P0-C — the ATTACH lapsed, not the session: the cell revokes an
+          // activation whose attach grant expired (`right-revoked`) or whose
+          // attach missed its deadline, and the PTY behind it is running. This
+          // used to read `.ended`, and the card said "this session ended" over a
+          // live session with nothing to offer but the way back to the field.
+          session.control = .attaching
+          session.frames = .attaching
+          session.lastRefusal = reason
+          sessions[status.sessionId] = session
+          noteAttachment()
+          reattach(sessionId: status.sessionId)
+          return
+        }
         session.control = .ended(reason: reason)
         session.frames = .failed(reason)
-        endActivation(&session, reason: reason)
         sessions[status.sessionId] = session
         noteAttachment()
       }
@@ -1106,6 +1156,124 @@ public final class RoutedTerminalClient {
     }
   }
 
+  // MARK: Renewal and the lapsed attach (P0-C)
+
+  /// Schedule this session's renewal: `renewalHeadroomMs` before the cell's
+  /// input margin, so the renewed grant is in place while input is still open.
+  ///
+  /// One `requestId` per scheduled renewal, reused across its retries — the
+  /// door is idempotent by it (spec §5.1), so a reply lost on the way back is
+  /// answered with the same grant rather than a second generation. A renewal
+  /// that still has not landed when the grant EXPIRES stops asking: past
+  /// expiry the cell revokes the activation, and that revoke is what
+  /// re-attaches (`lapsedAttach`).
+  private func scheduleRenewal(for sessionId: String) {
+    renewals[sessionId]?.cancel()
+    renewals[sessionId] = nil
+    guard let provider = options.renewalProvider, let grant = grants[sessionId],
+      let generation = grant.grantGeneration
+    else { return }
+    let token = self.generation
+    let due = Self.renewalDue(for: grant)
+    let request = RoutedRenewal(
+      sessionId: sessionId, expectGeneration: generation,
+      requestId: "renew-\(UUID().uuidString.lowercased())")
+    renewals[sessionId] = Task { [weak self] in
+      let wait = due - Self.nowMs()
+      if wait > 0 { try? await Task.sleep(for: .milliseconds(wait)) }
+      var delay = Duration.seconds(1)
+      while !Task.isCancelled {
+        guard let self, token == self.generation, !self.closed,
+          self.grants[sessionId]?.grantGeneration == generation
+        else { return }
+        do {
+          let renewed = try await provider(request)
+          guard !Task.isCancelled, token == self.generation, !self.closed else { return }
+          self.renew(renewed)
+          return  // the cell's ControlLegAttached for the new generation reschedules
+        } catch {
+          guard !Task.isCancelled else { return }
+          self.lastRefusal = String(describing: error)
+        }
+        guard Self.nowMs() < grant.expiresAt else { return }
+        try? await Task.sleep(for: delay)
+        delay = min(delay * 2, .seconds(10))
+      }
+    }
+  }
+
+  /// When a renewal is due: the grant's expiry, less the cell's margin and this
+  /// client's headroom — saturating, for the reason `deadline(from:after:)`
+  /// states: `expiresAt` is fieldd's number.
+  static func renewalDue(for grant: RoutedGrant) -> Int64 {
+    let due = grant.expiresAt.subtractingReportingOverflow(
+      attachRenewalMarginMs + renewalHeadroomMs)
+    return due.overflow ? Int64.min : due.partialValue
+  }
+
+  /// A revoke that ended the ATTACH and not the session: the attach grant ran
+  /// out (`right-revoked` — the cell's tick at expiry) or the attach missed the
+  /// cell's deadline. The PTY is alive in both.
+  static func lapsedAttach(_ reason: String) -> Bool {
+    reason == "right-revoked" || reason == "attach-deadline"
+  }
+
+  /// Re-attach one session with a FRESH ticket, keeping the legs when they can
+  /// carry it.
+  ///
+  /// Unlike `requestFreshTicket` this does not move the set to `.reconnecting`:
+  /// what lapsed was one session's attach, and the legs are up. A fresh mint
+  /// within one fieldd boot names the same connection set (§5.1: stable per
+  /// {client, cell}), so its attach grant rides the legs already accepted; a
+  /// different set — a new cell boot, or a fieldd restart, which mints a new
+  /// client (TP-R21) — dials its own.
+  private func reattach(sessionId: String) {
+    renewals[sessionId]?.cancel()
+    renewals[sessionId] = nil
+    guard let provider = options.ticketProvider else {
+      needsTicket = true
+      return
+    }
+    needsTicket = false
+    let token = generation
+    Task { [weak self] in
+      var delay = Duration.milliseconds(100)
+      while !Task.isCancelled {
+        guard let self, token == self.generation, !self.closed else { return }
+        do {
+          let fresh = try await provider(sessionId)
+          guard token == self.generation, !self.closed else { return }
+          if self.attachOnLiveLegs(fresh) { return }
+          self.teardownLegs()
+          self.open(fresh)
+          guard self.needsTicket else { return }
+        } catch {
+          self.lastRefusal = String(describing: error)
+        }
+        try? await Task.sleep(for: delay)
+        delay = min(delay * 2, self.options.maxBackoff)
+      }
+    }
+  }
+
+  /// Attach a fresh ticket's grant over the legs already accepted — true when
+  /// it could, which is only for the SAME cell boot and the SAME connection set.
+  private func attachOnLiveLegs(_ fresh: RoutedTerminalTicket) -> Bool {
+    guard let sessionId = fresh.sessionId, let current = ticket,
+      control != nil, frames != nil, controlAccepted != nil, framesAccepted != nil,
+      current.route.cellBootId == fresh.route.cellBootId,
+      current.transportGrant.connectionSetId == fresh.transportGrant.connectionSetId
+    else { return false }
+    grants[sessionId] = fresh.attachGrant
+    ticket = fresh
+    needsTicket = false
+    // The legs never left: whatever an attach refusal said about the set, it
+    // is ready for this attach.
+    if state != .attached { state = .ready }
+    attach(sessionId: sessionId)
+    return true
+  }
+
   /// End one activation, in BOTH dimensions.
   ///
   /// Both, and not only the frames leg: an activation is two legs, so the moment
@@ -1116,6 +1284,8 @@ public final class RoutedTerminalClient {
     // Law (2)/(3): the account goes DRAINING — already-admitted bytes are never
     // pretended away — and stays reported until the cell has seen them.
     ledger.drain(activationId: session.activationId, nowMs: Self.nowMs())
+    renewals[session.sessionId]?.cancel()
+    renewals[session.sessionId] = nil
     session.transfer = nil
     if case .refused = session.control {} else { session.control = .ended(reason: reason) }
     session.frames = .failed(reason)
@@ -1140,6 +1310,10 @@ public final class RoutedTerminalClient {
     framesAccepted = nil
     pumps.forEach { $0.cancel() }
     pumps = []
+    // every activation rode these legs, so every scheduled renewal goes with
+    // them; a re-attach on new legs schedules its own
+    renewals.values.forEach { $0.cancel() }
+    renewals = [:]
   }
 
   private func teardown() {

@@ -984,6 +984,222 @@ import Testing
     #expect(client.sessionEvents.isEmpty)
     client.close()
   }
+
+  // MARK: Renewal and the lapsed attach (P0-C)
+  //
+  // The 2026-09-24 terminal audit: `renew(_:)` had no caller, so every phone
+  // attach lost input at 540 s and, at 600 s, the cell revoked the activation
+  // with `right-revoked` — which this client mapped to `.ended`, and the card
+  // to "this session ended" over a PTY that was still running.
+
+  /// A ticket whose attach grant falls due for renewal `dueInMs` from now: its
+  /// expiry sits exactly the cell's margin plus this client's headroom beyond.
+  private func renewableTicket(dueInMs: Int64) throws -> RoutedTerminalTicket {
+    let now = RoutedTerminalClient.nowMs()
+    let expiresAt =
+      now + Int64(RoutedTerminalContract.attachRenewalMarginMs)
+      + RoutedTerminalClient.renewalHeadroomMs + dueInMs
+    return try TicketFactory.makeMixed(
+      sessionId: session, attachIssuedAt: now - 1_000, attachExpiresAt: expiresAt)
+  }
+
+  /// What `terminal.renewAttach` answers: the held grant at the NEXT generation,
+  /// good for another ten minutes.
+  private func renewed(from grant: RoutedGrant) throws -> RoutedGrant {
+    var envelope = grant.raw.objectValue ?? [:]
+    var claims = envelope["claims"]?.objectValue ?? [:]
+    claims["grantGeneration"] = .int((grant.grantGeneration ?? 0) + 1)
+    claims["expiresAt"] = .int(RoutedTerminalClient.nowMs() + 600_000)
+    envelope["claims"] = .object(claims)
+    return try RoutedGrant(json: .object(envelope))
+  }
+
+  private func attachControlLegs(_ control: ScriptedConnection) async -> Int {
+    await control.sentTags().filter { $0 == "AttachControlLeg" }.count
+  }
+
+  /// The renewal is asked for BEFORE the cell closes input, and rides the SAME
+  /// activation: a renewal is not a re-attach.
+  @Test func theGrantIsRenewedBeforeTheInputMarginOnTheSameActivation() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let asks = RenewalAsks()
+    let ticket = try renewableTicket(dueInMs: 300)
+    let answer = try renewed(from: ticket.attachGrant)
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        renewalProvider: { request in
+          asks.requests.append(request)
+          return answer
+        },
+        viewId: "view-1"))
+    client.open(ticket)
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    try await settle("the renewal carried to the cell") {
+      await attachControlLegs(live.control) == 2
+    }
+    #expect(asks.requests.count == 1)
+    #expect(asks.requests.first?.sessionId == session)
+    #expect(asks.requests.first?.expectGeneration == ticket.attachGrant.grantGeneration)
+    #expect(asks.requests.first?.requestId.isEmpty == false)
+    let carried = await live.control.lastSent("AttachControlLeg")
+    #expect(carried?["activationId"]?.stringValue == live.activation)
+    #expect(carried?["attachGrant"] == answer.raw)
+    // the local deadline moved with the new expiry: input stays open
+    #expect(client.sessions[session]?.inputRightLive == true)
+    client.close()
+  }
+
+  /// A renewal that fails is asked again under the SAME request id: the door is
+  /// idempotent by it, so a reply lost on the way back cannot cost a generation.
+  @Test func aFailedRenewalIsRetriedUnderTheSameRequestId() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let asks = RenewalAsks()
+    let ticket = try renewableTicket(dueInMs: 200)
+    let answer = try renewed(from: ticket.attachGrant)
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        renewalProvider: { request in
+          asks.requests.append(request)
+          if asks.requests.count == 1 {
+            throw FieldProductError(kind: "UNAVAILABLE", message: "busy", retryable: true)
+          }
+          return answer
+        },
+        viewId: "view-1"))
+    client.open(ticket)
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    try await settle("the retried renewal carried to the cell", timeout: .seconds(8)) {
+      await attachControlLegs(live.control) == 2
+    }
+    #expect(asks.requests.count == 2)
+    #expect(asks.requests[0].requestId == asks.requests[1].requestId)
+    #expect(asks.requests[0].expectGeneration == asks.requests[1].expectGeneration)
+    client.close()
+  }
+
+  /// The cell's tick at the grant's expiry revokes the WHOLE activation with
+  /// `right-revoked`. The session is alive, so the client re-attaches — a fresh
+  /// ticket's grant, on the SAME legs — and never reads `.ended`.
+  @Test func aLapsedGrantReattachesOnTheSameLegsInsteadOfEndingTheSession() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let mints = TicketMints()
+    let session = session
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        ticketProvider: { _ in
+          mints.calls += 1
+          return try TicketFactory.make(sessionId: session)
+        },
+        maxBackoff: .milliseconds(200), viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    let dialsBefore = transport.dials.count
+
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(
+        session: session, activation: live.activation, sequence: 1, presentation: "revoked",
+        input: "revoked", reason: "right-revoked"))
+
+    try await settle("a fresh attach") { await attachControlLegs(live.control) == 2 }
+    if case .ended = client.sessions[session]?.control {
+      Issue.record("a lapsed grant read as an ended session")
+    }
+    #expect(mints.calls == 1)
+    // the same legs: a lapsed attach is not a lost connection
+    #expect(transport.dials.count == dialsBefore)
+    let reattach = await live.control.lastSent("AttachControlLeg")
+    let activation = reattach?["activationId"]?.stringValue
+    #expect(activation != nil)
+    #expect(activation != live.activation)
+    #expect(reattach?["replacesActivationId"]?.stringValue == live.activation)
+    #expect(client.state != .reconnecting)
+    client.close()
+  }
+
+  /// …and only a lapse re-attaches: a revoke for any other reason still ends
+  /// the session, in the cell's own words.
+  @Test func aRevokeForAnyOtherReasonStillEndsTheSession() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(
+        session: session, activation: live.activation, sequence: 1, presentation: "revoked",
+        reason: "session-gone"))
+    try await settle("the session ended") {
+      if case .ended(let reason) = client.sessions[session]?.control {
+        return reason == "session-gone"
+      }
+      return false
+    }
+    #expect(await attachControlLegs(live.control) == 1)
+    client.close()
+  }
+
+  /// An attach refused for its GRANT is one message on a LIVE leg: the fresh
+  /// grant re-attaches over the same legs. It used to set the set to
+  /// `.reconnecting`, where `open` has no branch that attaches over live legs —
+  /// the fresh grant was stored, never used, and the card said "connecting…"
+  /// for good.
+  @Test func anAttachRefusedForItsGrantReattachesOnTheLiveLegs() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let mints = TicketMints()
+    let session = session
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        ticketProvider: { _ in
+          mints.calls += 1
+          return try TicketFactory.make(sessionId: session)
+        },
+        maxBackoff: .milliseconds(200), viewId: "view-1"))
+    client.open(try ticket())
+    let control = transport.connection(for: "/control")
+    let frames = transport.connection(for: "/frames")
+    try await settle("two hellos") {
+      let onControl = await control.sentTags().contains("ConnectionHello")
+      let onFrames = await frames.sentTags().contains("ConnectionHello")
+      return onControl && onFrames
+    }
+    try await control.deliver(.connectionAccepted, try Script.accepted(channel: .control))
+    try await frames.deliver(.connectionAccepted, try Script.accepted(channel: .frames))
+    try await settle("the first attach") { await attachControlLegs(control) == 1 }
+    let first = await control.lastSent("AttachControlLeg")?["activationId"]?.stringValue ?? ""
+
+    try await control.deliver(
+      .attachRefused,
+      [
+        "activationId": .string(first), "code": .string("GRANT_INVALID"),
+        "retryable": .bool(false),
+      ])
+
+    try await settle("a second attach on the same legs") { await attachControlLegs(control) == 2 }
+    #expect(mints.calls == 1)
+    #expect(transport.dials.count == 2)
+    #expect(client.state != .reconnecting)
+    client.close()
+  }
+}
+
+/// What the renewal provider was asked, in order (the `TicketMints` rule: a
+/// class, because the provider is `@Sendable` and main-actor isolated).
+@MainActor
+final class RenewalAsks {
+  var requests: [RoutedRenewal] = []
 }
 
 /// What the ticket provider has been asked for, and what it hands back.

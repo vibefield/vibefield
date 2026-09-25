@@ -438,6 +438,31 @@ public final class FieldLink {
       "terminal.openTicket", params: .object(["sessionId": .string(sessionId)]))
   }
 
+  /// P0-C — renew a session's attach grant over the desktop that minted it:
+  /// `terminal.renewAttach`, a CAS on the generation the phone holds and
+  /// idempotent by `requestId` (spec §5.1). The same door and the same scope as
+  /// the mint (`terminal.attach`, local to that desktop's fieldd), and the same
+  /// rule as `openTerminalTicket`: the answer comes back unread, because what a
+  /// grant means belongs to the target that carries it to the cell.
+  public func renewTerminalGrant(
+    on deviceId: String, sessionId: String, expectGeneration: Int64, requestId: String
+  ) async throws -> JSONValue {
+    guard let client = clients[deviceId] else {
+      throw FieldProductError(
+        kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
+        details: .object([
+          "service": .string("terminal"), "state": .string("no_door"),
+        ]))
+    }
+    return try await client.call(
+      "terminal.renewAttach",
+      params: .object([
+        "sessionId": .string(sessionId),
+        "expectGeneration": .int(expectGeneration),
+        "requestId": .string(requestId),
+      ]))
+  }
+
   /// IOS-4c — RESUME an ended run, over the desktop that owns it.
   ///
   /// The answer carries the NEW run, and this deliberately does not put it on
