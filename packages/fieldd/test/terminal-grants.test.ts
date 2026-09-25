@@ -18,6 +18,7 @@ import {
   clientIdFor,
   connectionSetIdFor,
   isSelfTailnetPrincipal,
+  mintedClientId,
   projectRoster,
   rightsFor,
   TerminalGrantMinter,
@@ -164,7 +165,7 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
 
   it("mints a ticket whose grants parse, verify against the cell key, and bind audience/client/session", () => {
     let now = 1_787_788_800_000;
-    const minter = new TerminalGrantMinter(() => now);
+    const minter = new TerminalGrantMinter(() => now, "E1");
     const ticket = minter.mintTicket({
       key: KEY,
       principal: WINDOW,
@@ -178,8 +179,9 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
     expect(verify(KEY, ticket.attachGrant)).toBe(true);
     expect(ticket.transportGrant.claims).toMatchObject({
       audienceCellBootId: "cell-boot-A",
-      clientId: "win:p-3c4d#doc-2",
-      connectionSetId: "win:p-3c4d#doc-2@cell-boot-A",
+      // TP-R21 — the identity, scoped to this minter's (this fieldd boot's) epoch
+      clientId: "win:p-3c4d#doc-2~E1",
+      connectionSetId: "win:p-3c4d#doc-2~E1@cell-boot-A",
       allowedChannels: ["control", "frames"],
       transportGrantGeneration: 1,
       issuedAt: now,
@@ -187,7 +189,7 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
     });
     expect(ticket.attachGrant.claims).toMatchObject({
       audienceCellBootId: "cell-boot-A",
-      clientId: "win:p-3c4d#doc-2",
+      clientId: "win:p-3c4d#doc-2~E1",
       sessionId: "s1",
       routeRevision: 12,
       grantGeneration: 1,
@@ -344,6 +346,101 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
       requestId: "r-11",
     });
     expect(last.claims.grantGeneration).toBe(13);
+  });
+});
+
+// TP-R21 (the 2026-09-24 terminal audit) — the minter's ledgers are memory-only
+// and restart at 1 with fieldd, while the cells OUTLIVE fieldd and hold each
+// connection set's high-water for `maxGrantLifetimeMs` + skew (field-native
+// `tp/ledger.rs`). A grant BELOW a set's high-water is `GRANT_GENERATION_ROLLBACK`
+// (retryable: false). So a restart is safe only if every clientId — and with it
+// every connection set and attach ledger key — is NEW after it. A window got that
+// from Electron main's boot fence; a tailnet caller (`tailnet:<login>#<node>`) was
+// the same identity before and after, and nothing made it new.
+describe("TP-R21 — a fieldd restart never meets its own old high-water", () => {
+  const PHONE = { ...SELF, tailscaleId: "nodekey:aaaa" };
+
+  /** The cell's rule, as `tp/ledger.rs` states it: per connection set, a
+   * generation below the high-water is a rollback; at or above, admitted. */
+  function cellLedger() {
+    const highWater = new Map<string, number>();
+    return {
+      admit(claims: { connectionSetId: string; transportGrantGeneration: number }): boolean {
+        const held = highWater.get(claims.connectionSetId) ?? 0;
+        if (claims.transportGrantGeneration < held) return false;
+        highWater.set(claims.connectionSetId, claims.transportGrantGeneration);
+        return true;
+      },
+    };
+  }
+
+  it("scopes EVERY minted clientId to the minter's epoch, stable within it", () => {
+    const minter = new TerminalGrantMinter(() => 10, "E1");
+    for (const principal of [PHONE, SELF, GUEST, WINDOW, { kind: "shell-main", tokenId: "t" }]) {
+      const first = minter.mintTransport(KEY, principal).claims;
+      const second = minter.mintTransport(KEY, principal).claims;
+      expect(first.clientId).toBe(mintedClientId(principal, "E1"));
+      expect(first.clientId).toBe(`${clientIdFor(principal)}~E1`);
+      // within one fieldd boot the client is ONE client: its connection set is
+      // stable and its generations climb (spec §5.1)
+      expect(second.connectionSetId).toBe(first.connectionSetId);
+      expect(second.transportGrantGeneration).toBe(first.transportGrantGeneration + 1);
+    }
+  });
+
+  it("two boots never mint one clientId, one connection set or one attach key for a stable identity", () => {
+    const bootA = new TerminalGrantMinter(() => 10);
+    const bootB = new TerminalGrantMinter(() => 20);
+    expect(bootA.epoch).not.toBe(bootB.epoch);
+    for (const principal of [PHONE, WINDOW]) {
+      const a = bootA.mintTicket({
+        key: KEY,
+        principal,
+        sessionId: "s1",
+        route: ROUTE,
+        doors: DOORS,
+      });
+      const b = bootB.mintTicket({
+        key: KEY,
+        principal,
+        sessionId: "s1",
+        route: ROUTE,
+        doors: DOORS,
+      });
+      expect(b.transportGrant.claims.clientId).not.toBe(a.transportGrant.claims.clientId);
+      expect(b.transportGrant.claims.connectionSetId).not.toBe(
+        a.transportGrant.claims.connectionSetId,
+      );
+      expect(b.attachGrant.claims.clientId).not.toBe(a.attachGrant.claims.clientId);
+    }
+  });
+
+  it("the phone's first grant after a restart is ADMITTED by a cell that remembers the last boot", () => {
+    const cell = cellLedger();
+    const bootA = new TerminalGrantMinter(() => 10);
+    // boot A: three tickets (a flaky leg re-mints each time), the cell admits each
+    for (let i = 0; i < 3; i += 1) {
+      expect(cell.admit(bootA.mintTransport(KEY, PHONE).claims)).toBe(true);
+    }
+    // fieldd restarts; the cell does not — boot B's counter starts again at 1
+    const bootB = new TerminalGrantMinter(() => 20);
+    const first = bootB.mintTransport(KEY, PHONE).claims;
+    expect(first.transportGrantGeneration).toBe(1);
+    expect(cell.admit(first)).toBe(true);
+  });
+
+  it("CONTROL — the unscoped identity is exactly what the cell refuses as a rollback", () => {
+    // what the grants carried before TP-R21 was fixed: the bare identity
+    const cell = cellLedger();
+    const unscoped = (generation: number) => ({
+      connectionSetId: connectionSetIdFor(clientIdFor(PHONE), KEY.cellBootId),
+      transportGrantGeneration: generation,
+    });
+    for (let generation = 1; generation <= 3; generation += 1) {
+      expect(cell.admit(unscoped(generation))).toBe(true);
+    }
+    // the restarted fieldd's first grant, generation 1, on the SAME set
+    expect(cell.admit(unscoped(1))).toBe(false);
   });
 });
 

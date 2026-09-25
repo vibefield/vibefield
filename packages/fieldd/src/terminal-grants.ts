@@ -62,7 +62,11 @@ export function isSelfTailnetPrincipal(principal: GrantPrincipal): boolean {
  * (`bootstrap.ts`), so the id is bound to the window token and NON-REUSED
  * after the document is destroyed — a new incarnation is a new client, which
  * is what keeps a reset generation counter from ever meeting an old
- * high-water (TP-R21). Other principals get their own stable identity. */
+ * high-water (TP-R21). Other principals get their own stable identity.
+ *
+ * This is the principal's IDENTITY. The id a grant CARRIES is `mintedClientId`
+ * — this, scoped to the minting fieldd's epoch — because a stable identity is
+ * exactly what TP-R21 cannot survive across a fieldd restart. */
 export function clientIdFor(principal: GrantPrincipal): string {
   const rp = principal.rendererParticipant;
   if (rp !== undefined) return `win:${rp.participantId}#${rp.incarnation}`;
@@ -193,24 +197,51 @@ export interface RenewAttachInput extends Omit<MintTicketInput, "doors"> {
  * bounds the map against a client that never stops asking. */
 const RENEWAL_MEMORY = 8;
 
+/** TP-R21 — the clientId a grant CARRIES: the principal's identity, scoped to
+ * the minting fieldd's epoch. See `TerminalGrantMinter` for why. */
+export function mintedClientId(principal: GrantPrincipal, epoch: string): string {
+  return `${clientIdFor(principal)}~${epoch}`;
+}
+
+/** A fresh epoch: one per minter, which is one per fieldd boot. */
+export function freshMinterEpoch(): string {
+  return randomBytes(6).toString("base64url");
+}
+
 /**
  * The generation ledgers live HERE, in memory, and nowhere else — spec §5.1
  * "Generation ownership": `transportGrantGeneration` is monotonic per
  * {clientId, cellBootId}, `grantGeneration` per {clientId, sessionId}; neither
- * is persisted, and that is safe only because a fieldd restart replaces every
- * renderer document (the boot fence) and so every clientId.
+ * is persisted. TP-R21: that reset is safe only if a fieldd restart makes
+ * every clientId NEW, because the cells outlive fieldd and hold each connection
+ * set's high-water for at least `maxGrantLifetimeMs` + skew (field-native
+ * `tp/ledger.rs`) — a stable identity meeting its own old high-water with a
+ * restarted counter is refused `GRANT_GENERATION_ROLLBACK`, `retryable: false`.
+ *
+ * Windows got that from Electron main's boot fence (a fieldd restart replaces
+ * every renderer document, so `win:<participant>#<incarnation>` is new). A
+ * TAILNET caller never did: `tailnet:<login>#<node>` (E-F2) is the phone's
+ * identity, the same before and after a restart — so after one, a phone could
+ * be locked out of a cell for up to ten minutes (the 2026-09-24 terminal audit;
+ * nothing measured it happening). The fix lives where the counters live: every
+ * minted clientId carries this minter's EPOCH, so the invariant holds by
+ * construction for every principal, whatever else fences it.
  */
 export class TerminalGrantMinter {
   private readonly transportGenerations = new Map<string, number>();
   private readonly attachGenerations = new Map<string, number>();
   private readonly renewals = new Map<string, Map<string, SessionAttachGrant>>();
 
-  constructor(private readonly now: () => number = () => Date.now()) {}
+  constructor(
+    private readonly now: () => number = () => Date.now(),
+    /** one per minter; a test passes a fixed one to pin exact claims */
+    readonly epoch: string = freshMinterEpoch(),
+  ) {}
 
   /** Every ticket carries a FRESH transport grant (spec §5.1 — fieldd cannot
    * know another process's socket state; an optional grant is a TOCTOU). */
   mintTransport(key: CellGrantKey, principal: GrantPrincipal): CellTransportGrant {
-    const clientId = clientIdFor(principal);
+    const clientId = mintedClientId(principal, this.epoch);
     const ledgerKey = `${clientId}|${key.cellBootId}`;
     const generation = (this.transportGenerations.get(ledgerKey) ?? 0) + 1;
     this.transportGenerations.set(ledgerKey, generation);
@@ -234,7 +265,7 @@ export class TerminalGrantMinter {
    * newest it accepts, so an older in-flight grant becomes a rollback — the
    * newest wins, which is the semantics a re-open wants. */
   mintAttach(input: MintTicketInput): SessionAttachGrant {
-    const clientId = clientIdFor(input.principal);
+    const clientId = mintedClientId(input.principal, this.epoch);
     const generation = this.bumpAttachGeneration(clientId, input.sessionId);
     return this.attachGrantAt(input, clientId, generation);
   }
@@ -258,7 +289,7 @@ export class TerminalGrantMinter {
    * CONFLICT (the caller re-reads what it holds); a repeated requestId returns
    * the grant it already got, generation untouched. */
   renewAttach(input: RenewAttachInput): SessionAttachGrant {
-    const clientId = clientIdFor(input.principal);
+    const clientId = mintedClientId(input.principal, this.epoch);
     const ledgerKey = `${clientId}|${input.sessionId}`;
     const remembered = this.renewals.get(ledgerKey)?.get(input.requestId);
     if (remembered !== undefined) return remembered;
@@ -287,7 +318,7 @@ export class TerminalGrantMinter {
 
   /** The generation a {client, session} pair currently holds (0 = never minted). */
   attachGeneration(principal: GrantPrincipal, sessionId: string): number {
-    return this.attachGenerations.get(`${clientIdFor(principal)}|${sessionId}`) ?? 0;
+    return this.attachGenerations.get(`${mintedClientId(principal, this.epoch)}|${sessionId}`) ?? 0;
   }
 
   private bumpAttachGeneration(clientId: string, sessionId: string): number {

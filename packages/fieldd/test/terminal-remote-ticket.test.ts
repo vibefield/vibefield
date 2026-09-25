@@ -116,7 +116,7 @@ async function boot(opts: { terminalMesh?: boolean; login?: string | null } = {}
   };
   const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
   cleanup.push(() => daemon.stop());
-  return { daemon, mock };
+  return { daemon, mock, dataDir };
 }
 
 /** The product door's capability URL, exactly as the phone reads it out of
@@ -198,10 +198,47 @@ describe("TM-2 — a self peer is told to dial the tailnet, a window the loopbac
     });
     expect(ticket.transportGrant.claims.allowedChannels).toEqual(["control", "frames"]);
     // §5.1: the clientId is derived from the VERIFIED login, so two remote
-    // clients never share a connection set or an attach ledger
-    expect(ticket.attachGrant.claims.clientId).toBe(`tailnet:${LOGIN}`);
-    expect(ticket.transportGrant.claims.connectionSetId).toBe(`tailnet:${LOGIN}@cell-i`);
+    // clients never share a connection set or an attach ledger — scoped to this
+    // fieldd boot's epoch (TP-R21: the row below)
+    const clientId = ticket.attachGrant.claims.clientId;
+    expect(clientId.startsWith(`tailnet:${LOGIN}~`)).toBe(true);
+    expect(ticket.transportGrant.claims.clientId).toBe(clientId);
+    expect(ticket.transportGrant.claims.connectionSetId).toBe(`${clientId}@cell-i`);
   });
+
+  // TP-R21 (the 2026-09-24 terminal audit) — the cells outlive fieldd and keep
+  // each connection set's high-water, while fieldd's generation counters restart
+  // at 1. The phone's identity (`tailnet:<login>`) is the same before and after
+  // a restart, so if its connection set were too, its first ticket from the new
+  // fieldd would sit below the cell's high-water: GRANT_GENERATION_ROLLBACK,
+  // retryable false. Two daemons on ONE root, against ONE floor.
+  it("hands the same phone a NEW client after a fieldd restart, so no old high-water applies", async () => {
+    const { daemon, mock, dataDir } = await boot();
+    await serving(daemon);
+    const before = TerminalOpenTicketResult.parse(
+      await (await dialAsTailnet(daemon, mock, LOGIN)).call("terminal.openTicket", {
+        sessionId: "pane-1",
+      }),
+    );
+    await daemon.stop();
+
+    const next = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => next.stop());
+    await serving(next);
+    const after = TerminalOpenTicketResult.parse(
+      await (await dialAsTailnet(next, mock, LOGIN)).call("terminal.openTicket", {
+        sessionId: "pane-1",
+      }),
+    );
+    // the new fieldd's counter DID restart — the fix is not a counter
+    expect(after.transportGrant.claims.transportGrantGeneration).toBe(1);
+    expect(after.transportGrant.claims.clientId.startsWith(`tailnet:${LOGIN}~`)).toBe(true);
+    expect(after.transportGrant.claims.clientId).not.toBe(before.transportGrant.claims.clientId);
+    expect(after.transportGrant.claims.connectionSetId).not.toBe(
+      before.transportGrant.claims.connectionSetId,
+    );
+    expect(after.attachGrant.claims.clientId).not.toBe(before.attachGrant.claims.clientId);
+  }, 30_000); // two daemon boots and two serve waits
 
   it("leaves a WINDOW's ticket byte-for-byte what it was", async () => {
     const { daemon } = await boot();
