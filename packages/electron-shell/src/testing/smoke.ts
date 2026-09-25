@@ -2943,6 +2943,9 @@ export async function runSmokeGodview(opts: {
   beforeExit: () => Promise<void>;
   /** Short, gated G22/G23 proof selected by --terminal-direct-proof. */
   terminalDirectProof?: boolean;
+  /** GT-8b: what main's OS opener was handed — a harness records instead of
+   * opening (main's `harnessShellOpens`). The link row reads it. */
+  shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
   const scratch = mkdtempSync(join(tmpdir(), "vf-smoke-godview-"));
@@ -3823,15 +3826,27 @@ export async function runSmokeGodview(opts: {
     //    made to) or an upstream/ConPTY-side answer before this row can mean
     //    anything here; until then asserting it would only prove cmd.exe is
     //    cmd.exe.
+    //
+    //    ERRATA (2026-09-25, GT-8b): "the spawn directory is never reported"
+    //    stopped being true at ghosttea 0.12.0, which reports a local session's
+    //    spawn directory from creation, as a plain path, until its shell's first
+    //    OSC 7 replaces it. That does not rescue this row on Windows: what it
+    //    asserts is where a `cd` MOVED a pane, and only an announcement says
+    //    that. (A Windows pane now persists its spawn directory, but `paneCwd`
+    //    takes no drive path, so it still restores at home.)
     if (process.platform === "win32") {
-      verdict["cwdRestore"] = "unavailable: cmd.exe announces no OSC 7, so no pane cwd is known";
+      verdict["cwdRestore"] =
+        "unavailable: cmd.exe announces no OSC 7, so the floor never learns where a cd moved a pane";
     } else {
       //    A plain `cd` is all it takes, and that is itself the finding: a
       //    session's cwd comes ONLY from what the shell announces over OSC 7 (the
       //    spawn directory is never reported), and this user's zsh announces it
       //    on every prompt. What the floor then reports is that announcement
       //    VERBATIM — a `file://host/path` URL, not a path — which is why the
-      //    deck decodes it before spawning anything.
+      //    deck decodes it before spawning anything. (ERRATA 2026-09-25, GT-8b:
+      //    since ghosttea 0.12.0 the spawn directory IS reported, as a plain
+      //    path, until the first announcement replaces it. Where a `cd` lands
+      //    still comes only from OSC 7, and that is what this row asserts.)
       const workdir = join(scratch, "work");
       mkdirSync(workdir, { recursive: true });
       // TP-S3f: this row is BACK in full after two eras of honest gap-marks.
@@ -3859,7 +3874,7 @@ export async function runSmokeGodview(opts: {
       const withCwd = await untilFloor(
         opts.handle,
         (terminals) => inWorkdir(terminals) !== undefined,
-        `report a deck pane sitting in ${workdir} (a pane's cwd is only ever what its shell announced over OSC 7)`,
+        `report a deck pane sitting in ${workdir} (where a cd lands is only ever what the shell announces over OSC 7)`,
         20_000,
       ).catch(async (failure) => {
         // The marker DID land (typeLineUntilMarker throws otherwise), so a shell
@@ -4363,6 +4378,117 @@ export async function runSmokeGodview(opts: {
       `document.querySelector(${JSON.stringify(SETTINGS_NAV)}) ? "open" : "ok"`,
       10_000,
     );
+
+    // 11f. THE LINK ROW (GT-8, GT-D22). ghosttea 0.12.0 finds links in a
+    //      pane's output. A ⌘-click hands the runtime platform's `openExternal`
+    //      the URL; the deck's opener asks fieldd's `terminal.link.open`; the
+    //      policy admits a web link; main's `shell.openLink` gives it to the OS
+    //      opener — which RECORDS in a harness (main's `harnessShellOpens`), so
+    //      this run never touches the user's browser. The hover is witnessed
+    //      first: the input names the link under a ⌘-held pointer
+    //      (`data-terminal-link`) only once the frames carry link targets, which
+    //      is the floor applying `link-url`. A file path is found too, and the
+    //      deck does NOT ask for it (GT-8b: ghosttea's hook names no session, so
+    //      a path cannot be told from a peer's): nothing reaches main. Pointer
+    //      events are `sendInputEvent` into this window, like 11e's keys.
+    //
+    //      Every row of the pane shows the link, so the click needs no screen
+    //      geometry beyond the cell size: it lands mid-pane, a few columns in.
+    //      The harness WRITES the printing loop into a script and types only
+    //      `sh <script>`: it types key by key, and a 260-key line under load
+    //      lost a key and never ran (the first attempt at this row).
+    const shellOpens = opts.shellOpens;
+    if (shellOpens === undefined) throw new Error("main handed the link row no opener record");
+    const nonce = Math.random().toString(36).slice(2, 10);
+    const webLink = `https://example.com/vf-gt8-${nonce}`;
+    const fileLink = join(scratch, `gt8-${nonce}.txt`);
+    writeFileSync(fileLink, "gt8\n");
+    const printEveryRow = (line: string, name: string): string => {
+      const script = join(scratch, `${name}-${nonce}.sh`);
+      writeFileSync(script, `i=0; while [ $i -lt 60 ]; do echo ${line}; i=$((i + 1)); done\n`);
+      return `sh ${script}`;
+    };
+    const LINK_INPUT = `(document.activeElement?.classList.contains("terminal-input") ? document.activeElement : null)`;
+    /** Where the middle row's fifth column is, by ghosttea's own cell geometry
+     * (`renderers/types.ts`: 7.83 × 19 px cells from a 2 px origin). */
+    const midCell = async (): Promise<{ x: number; y: number }> => {
+      const cell = (await win.webContents.executeJavaScript(`(() => {
+        const input = ${LINK_INPUT};
+        if (!input) return null;
+        const r = input.getBoundingClientRect();
+        const rows = Math.floor((r.height - 2) / 19);
+        return { x: Math.round(r.left + 2 + 5.5 * 7.83), y: Math.round(r.top + 2 + (Math.floor(rows / 2) + 0.5) * 19) };
+      })()`)) as { x: number; y: number } | null;
+      if (cell === null) throw new Error("no focused pane input to click links in");
+      return cell;
+    };
+    /** Hover with ⌘ held until the input names `want`'s link; the last name
+     * seen is the failure's evidence. */
+    const hoverLink = async (at: { x: number; y: number }, want: string): Promise<string> => {
+      const deadline = Date.now() + 15_000;
+      let seen = "";
+      while (Date.now() < deadline) {
+        win.webContents.sendInputEvent({
+          type: "mouseMove",
+          x: at.x,
+          y: at.y,
+          modifiers: ["meta"],
+        });
+        await sleep(150);
+        seen = (await win.webContents.executeJavaScript(
+          `${LINK_INPUT}?.getAttribute("data-terminal-link") ?? ""`,
+        )) as string;
+        if (seen.includes(want)) return seen;
+      }
+      throw new Error(
+        `no link under a ⌘-held pointer naming ${want} (last: ${JSON.stringify(seen)})`,
+      );
+    };
+    const commandClick = (at: { x: number; y: number }): void => {
+      for (const type of ["mouseDown", "mouseUp"] as const) {
+        win.webContents.sendInputEvent({
+          type,
+          x: at.x,
+          y: at.y,
+          button: "left",
+          clickCount: 1,
+          modifiers: ["meta"],
+        });
+      }
+    };
+    await focusDeck(win);
+    await runInPane(win, join(scratch, "links.txt"), printEveryRow(webLink, "gt8-web"));
+    const webAt = await midCell();
+    const hovered = await hoverLink(webAt, webLink);
+    const openedBefore = shellOpens.opened.length;
+    commandClick(webAt);
+    const openDeadline = Date.now() + 15_000;
+    while (Date.now() < openDeadline && !shellOpens.opened.slice(openedBefore).includes(webLink)) {
+      await sleep(100);
+    }
+    if (!shellOpens.opened.slice(openedBefore).includes(webLink)) {
+      throw new Error(
+        `a ⌘-clicked ${webLink} never reached main's opener (it recorded ${JSON.stringify(shellOpens.opened.slice(openedBefore))})`,
+      );
+    }
+    verdict["linkOpened"] =
+      `${hovered} → terminal.link.open → shell.openLink (recorded, not opened)`;
+
+    await focusDeck(win);
+    await runInPane(win, join(scratch, "files.txt"), printEveryRow(fileLink, "gt8-file"));
+    const fileAt = await midCell();
+    const fileHovered = await hoverLink(fileAt, `gt8-${nonce}.txt`);
+    const handedBefore = shellOpens.opened.length + shellOpens.revealed.length;
+    commandClick(fileAt);
+    // An absence, so it is given time to be wrong in; the web click above is
+    // the control that the same gesture does reach main when it should.
+    await sleep(2_000);
+    if (shellOpens.opened.length + shellOpens.revealed.length !== handedBefore) {
+      throw new Error(
+        `a ⌘-clicked file link reached main: opened ${JSON.stringify(shellOpens.opened)}, revealed ${JSON.stringify(shellOpens.revealed)}`,
+      );
+    }
+    verdict["fileLinkNotAsked"] = `${fileHovered} found; the deck asked nothing (GT-8b)`;
 
     // 12. RETIRED AT TP-S3e. This row SIGKILLed the ghosttea bridge utility
     //    and watched the deck rebuild — a failure mode that no longer has a

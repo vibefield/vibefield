@@ -805,6 +805,12 @@ async function main(
     pairBundles.set(userId, bundle);
     return bundle;
   };
+  // GT-8b — a harness drives the real product, so in every smoke-like mode the
+  // OS opener RECORDS instead of opening: no test run puts a page in the user's
+  // browser or a window in their Finder. The godview smoke's link row reads it.
+  const harnessShellOpens: { opened: string[]; revealed: string[] } | null = isSmokeLike(MODE)
+    ? { opened: [], revealed: [] }
+    : null;
   const wireAttachment = (bundle: PairBundle, userRoot: string): { dispose(): void } => {
     const observers = new RecoveringFielddObservers(bundle.handles, {
       onStatus: (status) => {
@@ -918,8 +924,15 @@ async function main(
         showOpenDialog: (parent, options) => dialog.showOpenDialog(parent, options),
         showSaveDialog: (parent, options) => dialog.showSaveDialog(parent, options),
         documentsPath: () => app.getPath("documents"),
-        openExternal: (url) => shell.openExternal(url),
-        revealPath: (path) => shell.showItemInFolder(path),
+        openExternal: (url) => {
+          if (harnessShellOpens === null) return shell.openExternal(url);
+          harnessShellOpens.opened.push(url);
+          return Promise.resolve();
+        },
+        revealPath: (path) => {
+          if (harnessShellOpens === null) return shell.showItemInFolder(path);
+          harnessShellOpens.revealed.push(path);
+        },
         captureArtifactPreview: (params, signal) => artifactPreviewCapture.capture(params, signal),
         requestRendererReplacement: ({ rendererParticipant }) => ({
           requested: windowRendererBoundary?.requestReplacement(rendererParticipant) === true,
@@ -1420,6 +1433,7 @@ async function main(
       toggleGodview,
       beforeExit: closeEvidence,
       terminalDirectProof: process.argv.includes("--terminal-direct-proof"),
+      ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({
