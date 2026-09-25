@@ -12,6 +12,7 @@
  */
 import type { ScreenshotCaptureResult } from "@vibefield/contracts";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isClipboardTrayChord } from "../../field/product-chords";
 import { type FieldHost, getHost } from "../../host";
 import {
   type ClipboardItem,
@@ -186,13 +187,11 @@ export function ClipboardTray({
   // ⌘⇧V pins from the keyboard; Escape unpins; typing while pinned filters.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (
-        (event.key === "v" || event.key === "V") &&
-        (event.metaKey || event.ctrlKey) &&
-        event.shiftKey &&
-        !event.altKey
-      ) {
+      if (isClipboardTrayChord(event)) {
         event.preventDefault();
+        // GT-D21: stopped here too, or a focused Godview pane would ALSO run
+        // its Ghostty default for ⌘⇧V (paste_from_selection).
+        event.stopPropagation();
         pin(!pinned);
         return;
       }

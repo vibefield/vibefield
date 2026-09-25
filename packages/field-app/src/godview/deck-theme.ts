@@ -157,7 +157,7 @@ export function godviewTerminalEffects(appearance: DeckAppearance): TerminalEffe
  * readers — the overlay, the catalog's stage, and Settings' Godview in
  * miniature — so the three can never draw different glass from one value. */
 export function godviewBackdropStyle(
-  appearance: DeckAppearance,
+  appearance: Pick<DeckAppearance, "backdropOpacity" | "backdropBlur">,
 ): Record<"--vf-godview-stage-opacity" | "--vf-godview-stage-blur", string> {
   return {
     "--vf-godview-stage-opacity": `${Math.round(appearance.backdropOpacity * 100)}%`,

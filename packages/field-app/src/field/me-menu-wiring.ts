@@ -23,17 +23,22 @@ export function isSettingsChord(event: ChordKey): boolean {
 
 /** Settings from anywhere. The gear this replaced said "settings" by being
  * one; a face does not, so the chord carries the discoverability the icon used
- * to. It toggles, like ⌘K. */
+ * to. It toggles, like ⌘K.
+ *
+ * GT-D21: caught on the window's CAPTURE phase and stopped there — "anywhere"
+ * includes a focused Godview pane, whose Ghostty default for ⌘, is
+ * `open_config`, and ghosttea's own capture listener used to swallow it. */
 export function useSettingsChord(open: boolean, onOpen: () => void, onClose: () => void): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (!isSettingsChord(event)) return;
       event.preventDefault();
+      event.stopPropagation();
       if (open) onClose();
       else onOpen();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onOpen, onClose]);
 }
 

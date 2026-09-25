@@ -57,8 +57,7 @@ import {
   SettingsSection,
   SettingsSwitch,
 } from "./settings-ui";
-import { TerminalAppearanceSection } from "./TerminalAppearanceSection";
-import { TerminalSection } from "./TerminalSection";
+import { TerminalSettings } from "./terminal/TerminalSettings";
 
 const LazyDiagnosticsSection = lazy(() =>
   import("./DiagnosticsSection").then((module) => ({
@@ -258,6 +257,8 @@ export function SettingsPanel({
     set: "native",
   });
   const [profilesSubpage, setProfilesSubpage] = useState<SettingsSubpage | null>(null);
+  // GT-7: the theme browser, a page below Terminal.
+  const [terminalSubpage, setTerminalSubpage] = useState<SettingsSubpage | null>(null);
   const openProfiles = useCallback((route: ProfilesRoute): void => {
     setProfilesRoute(route);
     setActivePage("profiles");
@@ -660,14 +661,9 @@ export function SettingsPanel({
   } else if (activePage === "mesh") {
     pageContent = <MeshSection />;
   } else if (activePage === "terminal") {
-    // Two owners, in the order a reader meets them: how this viewer draws the
-    // deck, then the device-wide file every terminal loads (GT-D12).
-    pageContent = (
-      <div className="space-y-4">
-        <TerminalAppearanceSection />
-        <TerminalSection />
-      </div>
-    );
+    // GT-7: one page over two owners — this window's look and this Mac's
+    // config.ghostty — each section saying which it is (GT-D18).
+    pageContent = <TerminalSettings rootRequest={pageRequest} onSubpage={setTerminalSubpage} />;
   } else if (activePage === "diagnostics") {
     pageContent = (
       <div className="space-y-4">
@@ -771,7 +767,9 @@ export function SettingsPanel({
             ? agentsSubpage
             : activePage === "profiles"
               ? profilesSubpage
-              : null
+              : activePage === "terminal"
+                ? terminalSubpage
+                : null
         }
       >
         {pageContent}

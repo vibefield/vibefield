@@ -126,6 +126,15 @@ Agent-state mapping (SessionSummary → badge/monitor): `working` green · `need
 orange · `waiting`/`idle` muted (text ramp, no hue) · `done` muted with green tick ·
 `failed` red · `unknown` muted italic — honesty over rainbow.
 
+**State as TEXT — the inks** (GT-7, 2026-09-24). The values above are FILLS: dots, rings,
+badges, hairlines. As small text on light chrome every one of them fails 4.5:1 against white
+(green 2.0, orange 2.1, red 3.4, cyan 1.9), so a state word that has to be READ takes its
+ink: `--vf-ink-healthy` `#1F7A36` (5.4:1) · `--vf-ink-attention` `#B25E00` (4.7:1) ·
+`--vf-ink-danger` `#D70015` (5.4:1) · `--vf-ink-info` `#0A6A93` (6.0:1). On dark chrome the
+inks ARE the fills (`.dark` maps each to its fill — 5.0–9.0:1 on `#1C1C1E`), so one token
+names one meaning in both themes. The meanings are the table's; an ink is never decorative
+either.
+
 ### 2.6 Organizational accents (containers, comments, tags)
 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
@@ -615,6 +624,32 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   declares none (device/secret keys are never on the stack), and the honest outcome when
   an action no-ops ("nothing to undo", "history horizon reached"). No optimistic echo — an
   applied undo re-gets every row from the daemon.
+- **Fact labels — scope and timing** (GT-7, Settings → Terminal; 2026-09-24): a page whose
+  settings have DIFFERENT owners says, on each section head, whose a setting is and when it
+  lands — as facts, in the plugin-source-badge recipe (hairline chip, no fill, no hue; 10px
+  uppercase, tertiary ramp). Scope: "This window" (the viewer's own store, GT-D12) · "This
+  Mac" (a device document every terminal reads) · "Read-only" (a fact, shown so nothing is
+  guessed). Timing: "Live" · "New terminals" · "After save" · "Kept, not drawn" on a DASHED
+  hairline; "Next ghosttea" — not in the shipped release — DOTTED. Ownership and timing are
+  not states of concern, so a tag never takes a hue.
+- **Device-document edits collect in one save bar** (GT-7): edits to a device-scoped
+  document (config.ghostty) never apply per control. They gather in a bar at the page's foot
+  — "N changes to config.ghostty · every terminal on this Mac reloads when you save", Discard
+  and Save — because one save reloads every terminal on the device and deserves one moment
+  of review. The bar tells the loader's truth as it arrives ("checking…", "N errors to fix
+  first", "includes can't change here") and holds Save only on the loader's verdict. A
+  CONFLICT names both sides ("Use the file's version" · "Save mine over it") — never a
+  silent clobber. This-window settings on the same page apply as they change; the scope tag
+  is what tells the two apart.
+- **The terminal preview is Godview in miniature** (GT-7): a preview of how terminals will
+  look mounts Godview's OWN parts over a depiction of the canvas — `GodviewStage` with the
+  saved backdrop, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
+  imitation of a terminal. Its glass is named in the order light passes through it: the
+  pane's opacity · Godview's backdrop (opacity and blur, `--vf-godview-stage-opacity/-blur`;
+  opaque and sharp by default) · your canvas. Variants: `window` (on the page), `deck` (the
+  theme browser's stage), `thumb` (a 600px window scaled, docked in the corner once the big
+  one scrolls away, and minimizable to a pill). It is `inert` inside a `role="img"` with a
+  description — a picture, never a second UI.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views

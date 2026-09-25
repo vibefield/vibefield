@@ -289,6 +289,7 @@ describe("UI system ownership boundaries", () => {
       "hud/WidgetTray.css",
       "hud/ZoomPill.css",
       "panels/settings.css",
+      "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",
       "terminal/mirror/mirror.css",
       "terminal/widget/mirror-widget.css",

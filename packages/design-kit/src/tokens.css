@@ -49,6 +49,13 @@
   --vf-select: #4a90d9;
   --vf-state-on-attention: #111111;
   --vf-state-on-solid: #ffffff;
+  /* §2.5 text inks (GT-7): the same states as TEXT on light chrome, where every
+     swatch falls under 4.5:1 on white (green 2.0, orange 2.1, red 3.4, cyan 1.9).
+     Each ink holds 4.5:1 or better there; dark chrome reads the swatches themselves. */
+  --vf-ink-healthy: #1f7a36;
+  --vf-ink-attention: #b25e00;
+  --vf-ink-danger: #d70015;
+  --vf-ink-info: #0a6a93;
 
   /* §2.6 Organizational accents — the curated set, assigned per object and used
      as TINT. They group and label; they never signal state (that is §2.5's job,
@@ -210,6 +217,12 @@
 }
 
 .dark {
+  /* §2.5 text inks: on dark chrome the swatches read as text themselves */
+  --vf-ink-healthy: var(--vf-green);
+  --vf-ink-attention: var(--vf-orange);
+  --vf-ink-danger: var(--vf-red);
+  --vf-ink-info: var(--vf-cyan);
+
   /* §2.1 Ground */
   --vf-canvas-bg: #171717;
   --vf-canvas-dot: rgba(255, 255, 255, 0.08);

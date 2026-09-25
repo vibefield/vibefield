@@ -26,6 +26,8 @@ import {
   PROFILES_FIXTURE_STATES,
   type ProfilesFixtureState,
 } from "../profiles-fixtures";
+import { TerminalSettingsPreview } from "../TerminalSettingsPreview";
+import { TERMINAL_FIXTURE_STATES, type TerminalFixtureState } from "../terminal-settings-fixtures";
 
 export function SurfacesSection({
   magnetGridGlyph,
@@ -67,7 +69,9 @@ export function SurfacesSection({
               others: FIXTURE_OTHERS_WAITING,
               onSwitch: () => undefined,
             }}
-            subpage={settingsPage === "agents" ? settingsSubpage : null}
+            subpage={
+              settingsPage === "agents" || settingsPage === "terminal" ? settingsSubpage : null
+            }
           >
             {settingsPage === "appearance" ? (
               <SettingsSection
@@ -105,6 +109,12 @@ export function SurfacesSection({
                 state="installed"
                 onSubpage={setSettingsSubpage}
               />
+            ) : settingsPage === "terminal" ? (
+              <TerminalSettingsPreview
+                key={settingsVisit}
+                state="everyday"
+                onSubpage={setSettingsSubpage}
+              />
             ) : (
               <UnavailableState
                 compact
@@ -122,6 +132,14 @@ export function SurfacesSection({
 
       <Specimen title="Agent profiles" source="panels/agents/ProfilesSection.tsx" bleed>
         <ProfilesSettingsSpecimen />
+      </Specimen>
+
+      <Specimen
+        title="Terminal settings — this window's look, this Mac's config.ghostty"
+        source="panels/terminal/TerminalSettings.tsx"
+        bleed
+      >
+        <TerminalSettingsSpecimen />
       </Specimen>
 
       <div className="vf-ds-grid vf-ds-grid-2">
@@ -193,6 +211,41 @@ function AgentsSettingsSpecimen(): ReactElement {
         subpage={subpage}
       >
         <AgentsSettingsPreview key={state} state={state} onSubpage={setSubpage} />
+      </SettingsDialog>
+    </div>
+  );
+}
+
+/** Settings → Terminal in the shipping dialog, in every production state
+ * (GT-7): the page is `TerminalSettingsView` over fixtures, never a replica. */
+function TerminalSettingsSpecimen(): ReactElement {
+  const [state, setState] = useState<TerminalFixtureState>("everyday");
+  const [subpage, setSubpage] = useState<SettingsSubpage | null>(null);
+  return (
+    <div className="vf-ds-settings-stage vf-ds-agents-stage" data-terminal-settings-catalog="">
+      <div className="vf-ds-production-statebar">
+        <span>Production state</span>
+        <UiSegmentedControl
+          options={TERMINAL_FIXTURE_STATES}
+          value={state}
+          onChange={setState}
+          label="Terminal settings state"
+        />
+      </div>
+      <SettingsDialog
+        className="vf-ds-settings-dialog"
+        activePage="terminal"
+        onSelectPage={() => undefined}
+        onClose={() => undefined}
+        onUndo={() => undefined}
+        onRedo={() => undefined}
+        historyBusy={false}
+        undoAvailable={false}
+        redoAvailable={false}
+        account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
+        subpage={subpage}
+      >
+        <TerminalSettingsPreview key={state} state={state} onSubpage={setSubpage} />
       </SettingsDialog>
     </div>
   );

@@ -15,6 +15,7 @@ import {
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "./GodviewTuningPanel";
+import { GODVIEW_THEME_STORAGE_KEY, storedGodviewTheme } from "./godview-theme";
 import { useLabSwitches } from "./lab-switches";
 import { GodviewAgentsProvider } from "./monitor/GodviewAgentsProvider";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
@@ -27,7 +28,6 @@ import {
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { useGodviewOpen } from "./overlay-state";
 
-const THEME_STORAGE_KEY = "vf-godview-color-theme-v1";
 /** The prewarm's off switch (GT-3p). A DIAGNOSTIC, not a product setting: the
  * smoke sets it to measure a genuinely cold open, and the only supported value
  * is the one that disables. Nothing in the UI writes it. */
@@ -60,14 +60,6 @@ function whenIdle(task: () => void, timeoutMs: number): () => void {
   return () => window.clearTimeout(timer);
 }
 
-function initialGodviewTheme(): GodviewTheme {
-  try {
-    return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
-  } catch {
-    return "light";
-  }
-}
-
 /** RETIRED shape kept for the docs trail: the bridge badge died with the
  * bridge at TP-S3e (per-activation health is the routed runtime's, surfaced by
  * the deck's own faces). */
@@ -82,7 +74,7 @@ function bridgeNotice(): string | null {
 export function GodviewOverlay(): ReactElement | null {
   const open = useGodviewOpen();
   const [everOpened, setEverOpened] = useState(false);
-  const [theme, setTheme] = useState<GodviewTheme>(initialGodviewTheme);
+  const [theme, setTheme] = useState<GodviewTheme>(storedGodviewTheme);
   const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning(theme));
   const [tuningOpen, setTuningOpen] = useState(false);
   const appearance = useDeckAppearance();
@@ -144,7 +136,7 @@ export function GodviewOverlay(): ReactElement | null {
 
   useEffect(() => {
     try {
-      localStorage.setItem(THEME_STORAGE_KEY, theme);
+      localStorage.setItem(GODVIEW_THEME_STORAGE_KEY, theme);
     } catch {
       // A disabled storage partition should not disable the switch itself.
     }

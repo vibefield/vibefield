@@ -32,6 +32,7 @@ import { SettingsPanel } from "../panels";
 import { ThemeToggleButton } from "../ThemeToggleButton";
 import type { MagnetGridGlyph } from "./canvas-appearance";
 import { useMeMenuYields, useSettingsChord } from "./me-menu-wiring";
+import { isCommandPaletteChord, listenForProductChord } from "./product-chords";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
 import { fabCls } from "./theme-constants";
 import { useMagnetGridGlyph } from "./use-magnet-grid-glyph";
@@ -314,24 +315,24 @@ export function ChromeLayer({
   // ⌘K / Ctrl+K toggles the command palette (§8.3). ⌘K is free — the ICE keymap
   // and the tray's B/Esc/C additions never claim it. Opening it closes the tray
   // and docs sheets (one modal at a time — the FieldView mutual-exclusion rule).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.key !== "k" && e.key !== "K") || (!e.metaKey && !e.ctrlKey) || e.altKey) return;
-      e.preventDefault();
-      setPaletteOpen((v) => {
-        const next = !v;
-        if (next) {
-          onTrayOpenChange(false);
-          onDocsOpenChange(false);
-          setShowSettings(false);
-          closeSidePanel(false);
-        }
-        return next;
-      });
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [closeSidePanel, onTrayOpenChange, onDocsOpenChange, setShowSettings]);
+  // GT-D21: caught in the window's capture phase, so a focused Godview pane
+  // (whose Ghostty default for ⌘K is clear_screen) never sees it.
+  useEffect(
+    () =>
+      listenForProductChord(isCommandPaletteChord, () => {
+        setPaletteOpen((v) => {
+          const next = !v;
+          if (next) {
+            onTrayOpenChange(false);
+            onDocsOpenChange(false);
+            setShowSettings(false);
+            closeSidePanel(false);
+          }
+          return next;
+        });
+      }),
+    [closeSidePanel, onTrayOpenChange, onDocsOpenChange, setShowSettings],
+  );
 
   // ⌘, / Ctrl+, — Settings from anywhere (DESIGN.md §8, the Me menu).
   const openGeneralSettings = useCallback(() => openSettings("general"), [openSettings]);

@@ -46,6 +46,13 @@ function storedViewId(): string {
   }
 }
 
+/** The stage's saved tunables, read once — for a surface that draws Godview
+ * without being it (Settings → Terminal's miniature, GT-7): it shows the CRT
+ * lines and vignette the user actually tuned, and never writes them. */
+export function storedStageParameters(): MonitorParameters {
+  return loadMonitorParameters(STAGE_STORAGE_KEY, STAGE_PARAMETER_GROUPS);
+}
+
 export interface MonitorTuning {
   view: AgentMonitorView;
   /** The active view's own bag, already normalized to its controls. */

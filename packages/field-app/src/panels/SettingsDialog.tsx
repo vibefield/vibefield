@@ -95,7 +95,7 @@ const PAGES: readonly PageMeta[] = [
   {
     id: "terminal",
     label: "Terminal",
-    description: "Configuration every terminal on this device loads.",
+    description: "How terminals look in this window, and how every terminal on this Mac behaves.",
     icon: "terminal",
   },
   {
