@@ -3,7 +3,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { isPipeEndpoint, PORTS, SOCKETS } from "@vibefield/contracts";
+import { ARTIFACT_SERVE_PREFIX, isPipeEndpoint, PORTS, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { MeshClient, type ServeState } from "../src/mesh-client";
 import { NativeLink } from "../src/native-link";
@@ -184,6 +184,61 @@ describe("MeshClient", () => {
     ]);
     await mesh.removeServe("stable-id");
     await expect(mesh.removeServe("stable-id")).resolves.toEqual({ removed: true });
+  });
+
+  // P0-S (2026-09-24) — the floor outlives fieldd, so a restarted fieldd's
+  // MeshClient meets serves its PREDECESSOR placed. `serve.list` carries no
+  // target, secret or allow, so adopting a listed serve kept the dead fieldd's
+  // `product` door forever.
+  it("REPLACES a desired serve a predecessor placed, instead of adopting it", async () => {
+    const { mock, mesh } = await setup();
+    // the node already holds `product`, aimed at a fieldd that no longer exists
+    mock.meshServes.set("product", {
+      serveId: "product",
+      name: "product",
+      listenPort: PORTS.FIELDD_PRODUCT_SERVE,
+      target: { kind: "port", port: 50_001 },
+      url: "http://mock.ts.net:9423",
+    });
+    const states = await mesh.setServes([
+      {
+        name: "product",
+        listenPort: PORTS.FIELDD_PRODUCT_SERVE,
+        target: { kind: "port", port: 50_002 },
+        tls: false,
+      },
+    ]);
+    expect(states[0]!.status).toBe("active");
+    expect(mock.meshRemoveCalls).toBe(1);
+    expect(mock.meshAddCalls).toBe(1);
+    expect(mock.meshServes.get("product")?.target).toEqual({ kind: "port", port: 50_002 });
+  });
+
+  it("ADOPTS a serve this client placed: a reconcile against the same node adds nothing", async () => {
+    const { mock, mesh } = await setup();
+    await mesh.setServes([{ name: "api", target: { kind: "port", port: 3_000 } }]);
+    expect(mock.meshAddCalls).toBe(1);
+    await mesh.reconcile();
+    await mesh.reconcile();
+    expect(mock.meshAddCalls).toBe(1);
+    expect(mock.meshRemoveCalls).toBe(0);
+  });
+
+  it("still ADOPTS a predecessor's artifact serve — AH-1's durable queue owns those", async () => {
+    const { mock, mesh } = await setup();
+    const serveId = `${ARTIFACT_SERVE_PREFIX}01H`;
+    mock.meshServes.set(serveId, {
+      serveId,
+      name: "artifact",
+      listenPort: 8443,
+      target: { kind: "port", port: 50_001 },
+      url: "https://mock.ts.net:8443",
+    });
+    await mesh.setServes([
+      { serveId, name: "artifact", listenPort: 8443, target: { kind: "port", port: 50_001 } },
+    ]);
+    expect(mock.meshRemoveCalls).toBe(0);
+    expect(mock.meshAddCalls).toBe(0);
   });
 
   it("merges runtime events by serveId, not by the display name", async () => {

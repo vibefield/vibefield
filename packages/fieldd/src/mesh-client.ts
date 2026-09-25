@@ -98,6 +98,11 @@ export class MeshClient extends EventEmitter {
   private states = new Map<string, ServeState>();
   /** the runtime layer, fused over `states` by `serves()` */
   private runtime = new Map<string, RuntimeEntry>();
+  /** P0-S — the serves THIS client has placed on the node (a `serve.add` that
+   * succeeded). `states` cannot answer that: it also holds `pending` records
+   * written while the mesh was down. A desired serve the node lists that is not
+   * in here is a PREDECESSOR's — see `doReconcile`. */
+  private readonly placed = new Set<string>();
   /** registered once; NativeLink replays the subscription across reconnects */
   private serveSubscribed = false;
   /** signature of the last emitted fused view — "serves-changed" fires only on
@@ -133,6 +138,7 @@ export class MeshClient extends EventEmitter {
       this.desired.delete(serveId);
       this.states.delete(serveId);
       this.runtime.delete(serveId);
+      this.placed.delete(serveId);
       this.emitServesChanged();
       return { removed: true };
     });
@@ -213,11 +219,13 @@ export class MeshClient extends EventEmitter {
             await this.link.request("native.mesh.serve.remove", { serveId });
             this.states.delete(serveId);
             this.runtime.delete(serveId);
+            this.placed.delete(serveId);
             live.delete(serveId);
           } catch (error) {
             if (error instanceof RpcCallError && error.kind === "NOT_FOUND") {
               this.states.delete(serveId);
               this.runtime.delete(serveId);
+              this.placed.delete(serveId);
               live.delete(serveId);
             }
             // Any other failure keeps the tracking record for the next pass.
@@ -227,13 +235,45 @@ export class MeshClient extends EventEmitter {
 
       for (const [serveId, spec] of this.desired) {
         const existing = live.get(serveId);
-        if (existing) {
+        // AH-1's artifact serves are adopted as before: their own durable
+        // remove-before-add queue owns what a restart left behind.
+        if (
+          existing !== undefined &&
+          (this.placed.has(serveId) || serveId.startsWith(ARTIFACT_SERVE_PREFIX))
+        ) {
           this.states.set(serveId, {
             ...spec,
             status: "active",
             ...(existing.url ? { url: existing.url } : {}),
           });
           continue; // keep runtime — the node's live status is the truth
+        }
+        if (existing !== undefined) {
+          // P0-S — a serve this client never placed is a PREDECESSOR's. The
+          // floor outlives fieldd, so a fieldd that restarts under it finds its
+          // own old `product` serve still listed — aimed at the dead control
+          // port, gated by the old per-boot path secret — and adopting it left
+          // the phone's door forwarding to nothing until the floor itself
+          // restarted (measured 2026-09-24: the target stayed 52522 six seconds
+          // after the new fieldd bound 52527). `serve.list` carries no target,
+          // secret or allow to compare, so first sight REPLACES: remove, then
+          // add. truffle's proxy has no update; the one blink is on a listener
+          // whose backend is already gone.
+          try {
+            await this.link.request("native.mesh.serve.remove", { serveId });
+          } catch (error) {
+            if (!(error instanceof RpcCallError && error.kind === "NOT_FOUND")) {
+              this.states.set(serveId, {
+                ...spec,
+                status: "error",
+                error: `a predecessor's serve could not be replaced: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              });
+              continue; // not placed, so the next reconcile tries again
+            }
+          }
+          this.runtime.delete(serveId);
         }
         try {
           const added = (await this.link.request(
@@ -242,6 +282,7 @@ export class MeshClient extends EventEmitter {
           )) as {
             url?: string;
           };
+          this.placed.add(serveId);
           this.states.set(serveId, {
             ...spec,
             status: "active",
