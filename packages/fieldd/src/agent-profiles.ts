@@ -51,7 +51,8 @@ import type { RosettadSupervisor } from "./rosettad-supervisor";
 // The persona path is AR-2's, per sign-in (topology §4): creating one
 // allocates its root inside its profile's folder and enrolls the root its
 // provider's own layout applies to — `observationRoot(profile)`, never
-// `dataRoot` — under the kind rosetta's roll call joins it to. What changed is
+// `dataRoot` — under the catalog row's kind, with rosetta's roll call as the
+// witness (AC-3, `kindFor`). What changed is
 // the end of a sign-in (AR-D25). SIGN OUT retires it at once — out of its
 // profile and out of new spawns — and FINISHES it when no session runs under
 // it any more: the vendor's own sign-out where the credential lives outside
@@ -444,9 +445,10 @@ export class AgentProfileService {
   }
 
   /** Allocate the agent's root inside the profile's folder and register it
-   * (puppeteer), then enroll its observation root under the joined kind. An
-   * enrollment that cannot happen now (daemon down, kind unknown to the roll
-   * call) leaves the persona indexed later, not failed. */
+   * (puppeteer), then enroll its observation root under the catalog row's kind
+   * with the roll call as witness (AC-3). An enrollment that cannot happen now
+   * (daemon down, its census not yet answered, a kind the roll call does not
+   * spell) leaves the persona indexed later, not failed. */
   async createPersona(params: AgentsProfilesCreateParams): Promise<AgentsProfilesCreateResult> {
     // AC-3 — a persona is offered only where the catalog row claims it
     requireOffered(this.opts.catalog, params.provider, "personas");
@@ -654,8 +656,9 @@ export class AgentProfileService {
 
   /** Every daemon ready re-applies the record to the personas: a managed
    * persona the record does not name yet (created while the daemon was down,
-   * or before this fieldd) is enrolled now under the kind the roll call joins.
-   * Serialized; a change publishes and bounces the daemon ONCE — the ready
+   * or before this fieldd) is enrolled now under the catalog's kind, with the
+   * roll call as witness (`kindFor` waits for the census the daemon publishes
+   * behind its ready line). Serialized; a change publishes and bounces the daemon ONCE — the ready
    * that follows finds nothing to do. */
   reconcile(): Promise<void> {
     if (this.disposed) return Promise.resolve();
@@ -778,9 +781,13 @@ export class AgentProfileService {
 
   /** The providers whose adapter can run a sign-in in a folder here. */
   private signInProviders(): string[] {
+    // AC-3 — a sign-in is offered only where the catalog row claims personas
     return this.opts.runtime
       .profileProviders()
-      .filter((provider) => provider.support.supported)
+      .filter(
+        (provider) =>
+          provider.support.supported && this.opts.catalog.isOffered(provider.id, "personas"),
+      )
       .map((provider) => provider.id);
   }
 
@@ -788,7 +795,12 @@ export class AgentProfileService {
   private identityProviders(): string[] {
     return this.opts.runtime
       .profileProviders()
-      .filter((provider) => provider.support.supported && provider.support.identity !== "none")
+      .filter(
+        (provider) =>
+          provider.support.supported &&
+          provider.support.identity !== "none" &&
+          this.opts.catalog.isVisible(provider.id),
+      )
       .map((provider) => provider.id);
   }
 
@@ -1018,8 +1030,8 @@ export class AgentProfileService {
   }
 
   /** The enrollment spec for a managed persona, or undefined when it cannot be
-   * enrolled NOW (already named; the daemon is not ready; the provider's layout
-   * root is not on the roll call; the adapter names a root outside the profile).
+   * enrolled NOW (already named; the daemon is not ready; the roll call does not
+   * witness the row's kind; the adapter names a root outside the profile).
    * Creates the observation root when the adapter binds one level inside the
    * profile root that nothing has written yet (pi). */
   private async enrollmentSpecFor(profile: AgentProfile): Promise<EnrollRuntimeSpec | undefined> {

@@ -39,7 +39,7 @@ import {
 } from "@vibefield/contracts";
 import { durableRenameSync, type Logger } from "@vibefield/logging";
 import { withUsersLock } from "@vibefield/users";
-import { requireOffered } from "./agent-catalog-gates";
+import { requireOffered, requireVisible } from "./agent-catalog-gates";
 import { RpcCallError } from "./native-link";
 import { renderTerminalText } from "./terminal-text";
 
@@ -413,6 +413,8 @@ export class AgentDistributionService {
   /** Show one of a provider's installs in the OS file manager — a path THIS
    * daemon inventoried, never one a caller spelled. */
   async reveal(params: AgentsRevealParams): Promise<AgentsRevealResult> {
+    // AC-3 — an agent the catalog does not show has no install to reveal here
+    requireVisible(this.opts.catalog, params.provider, "reveal its install");
     const installations = await this.opts.runtime.inspectInstallations({
       providerId: params.provider,
     });

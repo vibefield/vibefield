@@ -14,6 +14,7 @@ import type {
 import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
 import {
   AGENT_OPERATION_OUTPUT_BYTES,
+  type AgentCatalogReaders,
   type AgentExtensionAct,
   type AgentExtensionColumn,
   type AgentExtensionHolding,
@@ -28,6 +29,7 @@ import {
   type AgentsExtensionsListResult,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { requireVisible } from "./agent-catalog-gates";
 import { displayTail } from "./agent-distribution";
 import { RpcCallError } from "./native-link";
 
@@ -63,6 +65,9 @@ export interface AgentExtensionServiceOptions {
     | "extensionActPlans"
     | "runExtensionAct"
   >;
+  /** AC-3 — the catalog's readers: a lens has a column only for an agent the
+   * catalog shows, and an act runs only for one */
+  catalog: AgentCatalogReaders;
   /** The OS user's home, which places are abbreviated against. */
   home: string;
   now?: () => Date;
@@ -431,6 +436,8 @@ export class AgentExtensionService {
    * is a CONFLICT, never two of the agents' commands racing.
    */
   async act(params: AgentsExtensionsActParams): Promise<AgentsExtensionsActResult> {
+    // AC-3 — an agent the catalog does not show is acted on nowhere here
+    requireVisible(this.opts.catalog, params.provider, "act on its extensions");
     const setId = params.set;
     this.refuseWhileRunning(setId);
     const lens = this.lenses.get(setId) ?? (await this.read(setId));
@@ -677,12 +684,16 @@ export class AgentExtensionService {
     const support = new Map(
       this.opts.runtime.extensionProviders().map((provider) => [provider.id, provider.support]),
     );
-    return profiles.map((profile) => ({
-      provider: profile.provider,
-      label: labels.get(profile.provider) ?? profile.provider,
-      profileId: profile.id,
-      support: support.get(profile.provider) ?? {},
-    }));
+    // AC-3 — a sign-in of an agent the catalog does not show has no column: a
+    // `declined` id never leaves fieldd through the lens either
+    return profiles
+      .filter((profile) => this.opts.catalog.isVisible(profile.provider))
+      .map((profile) => ({
+        provider: profile.provider,
+        label: labels.get(profile.provider) ?? profile.provider,
+        profileId: profile.id,
+        support: support.get(profile.provider) ?? {},
+      }));
   }
 
   /** One read of every agent in the profile; `fresh` never joins a read that began earlier. */

@@ -9,7 +9,11 @@ import type {
   McpServerItem,
   SkillItem,
 } from "@vibecook/puppeteer-core";
-import { AgentsExtensionsActResult, AgentsExtensionsListResult } from "@vibefield/contracts";
+import {
+  AGENT_CATALOG_READERS,
+  AgentsExtensionsActResult,
+  AgentsExtensionsListResult,
+} from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   AgentExtensionService,
@@ -407,7 +411,12 @@ function stubRuntime(options: {
 }
 
 const service = (runtime: ReturnType<typeof stubRuntime>["runtime"]) =>
-  new AgentExtensionService({ runtime, home: HOME, now: () => new Date(NOW) });
+  new AgentExtensionService({
+    runtime,
+    catalog: AGENT_CATALOG_READERS,
+    home: HOME,
+    now: () => new Date(NOW),
+  });
 
 describe("AgentExtensionService", () => {
   it("reads a profile's agents once, answers again from that read, and reads again when asked", async () => {

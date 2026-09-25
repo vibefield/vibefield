@@ -287,12 +287,12 @@ const R23B_ALLOW = [
   },
   {
     file: "packages/field-app/src/design-system/extensions-fixtures.ts",
-    count: 6,
+    count: 8,
     why: "Extensions' fixture lens for the design catalog (AR-S4b), the contracts fixture's twin — fixture data, never compared",
   },
   {
     file: "packages/field-app/src/design-system/ProfilesSettingsPreview.tsx",
-    count: 5,
+    count: 6,
     why: "the Agent Profiles catalog preview's own sample rows (AR-S2/S4): fixture data fed to the shipping views, never compared",
   },
   {

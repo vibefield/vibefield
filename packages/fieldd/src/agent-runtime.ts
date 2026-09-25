@@ -509,7 +509,8 @@ export class AgentRuntimeService implements PersonaSessions {
     this.catalog = createAgentCatalogReaders(opts.catalog ?? AGENT_CATALOG);
     // The active executable per provider is bound at construction (RFC 006's
     // `executables`; puppeteer's own PUPPETEER_<KIND>_BIN convention is its
-    // fallback). A `setActive` therefore reaches spawns from the next boot —    // stated at the door's contract. AC-3: over CATALOG ids (the record's keys
+    // fallback). A `setActive` therefore reaches spawns from the next boot —
+    // stated at the door's contract. AC-3: over CATALOG ids (the record's keys
     // are catalog ids by AC-D2), so fieldd no longer names the sibling's closed
     // kind union; a record entry for an id the catalog never decided on stays
     // where it is and is ignored.
@@ -586,6 +587,7 @@ export class AgentRuntimeService implements PersonaSessions {
     // registry changes under one someone is watching; never on a timer.
     this.extensions = new AgentExtensionService({
       runtime: this.runtime,
+      catalog: this.catalog,
       home: this.home,
       now: this.now,
       logger: this.logger,
@@ -606,7 +608,8 @@ export class AgentRuntimeService implements PersonaSessions {
         "Composed provider has no catalog row; not offered (a decision is owed)",
         { provider: descriptor.id },
       );
-    } // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
+    }
+    // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
     this.unsubscribeMonitor.push(
       this.runtime.onMonitorState((state) => this.onMonitorState(state)),
       this.runtime.onMonitorRemoved((runtimeRunId) => this.onMonitorRemoved(runtimeRunId)),
@@ -652,7 +655,8 @@ export class AgentRuntimeService implements PersonaSessions {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    const ids = await this.opts.index.runtimeIdsByRoot(); // a signed-out persona is nobody's to spawn as, though it stays registered
+    const ids = await this.opts.index.runtimeIdsByRoot();
+    // a signed-out persona is nobody's to spawn as, though it stays registered
     // until its sessions end (AR-D25)
     const profiles = (await this.runtime.profiles()).filter((p) => p.retiredAt === undefined);
     const history = await this.historyStates();
@@ -1987,7 +1991,8 @@ export class AgentRuntimeService implements PersonaSessions {
     if (!verdict.idle) {
       this.armPending(entry);
       return;
-    } // AR-D25 — the replacement would end this PTY and resume under an account
+    }
+    // AR-D25 — the replacement would end this PTY and resume under an account
     // that is signed out, which starts nothing: the session keeps running
     // until it ends, as its sign-out promised, and is not polled again
     if (!this.personaActive(entry.record.profileId)) return;

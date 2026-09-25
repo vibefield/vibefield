@@ -28,8 +28,10 @@ import type { AgentProvider } from "@vibecook/puppeteer-runtime";
 import {
   type AgentCatalogEntry,
   type AgentCatalogResult,
-  type AgentDistributionRecord,  AgentsExtensionsActResult,
-  type AgentProvidersResult,  AgentsExtensionsListResult,
+  type AgentDistributionRecord,
+  type AgentProvidersResult,
+  AgentsExtensionsActResult,
+  AgentsExtensionsListResult,
   type AgentsInstallsResult,
   type AgentsOperationsResult,
   type AgentsProfileSetsDeleteResult,
@@ -130,7 +132,8 @@ async function setup(
     profiles?: {
       version: 1;
       profiles: unknown[];
-    } /** boot as the product's daemon does: read the agents' installs at boot */;
+    };
+    /** boot as the product's daemon does: read the agents' installs at boot */
     warm?: boolean;
     /** compose providers beside puppeteer's built-ins (the extension rows' fakes) */
     providers?: (builtin: AgentProvider[]) => AgentProvider[];
