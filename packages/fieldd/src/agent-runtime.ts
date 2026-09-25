@@ -61,6 +61,7 @@ import {
   DistributionRecordStore,
   type RevealPath,
 } from "./agent-distribution";
+import { AgentExtensionService } from "./agent-extensions";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
 import type { IndexService } from "./agent-index";
 import {
@@ -386,6 +387,8 @@ export class AgentRuntimeService implements PersonaSessions {
   readonly distribution: AgentDistributionService;
   /** Agent Profiles and the persona doors (agent-profiles.ts) */
   readonly profiles: AgentProfileService;
+  /** Extensions: each Agent Profile's lens (agent-extensions.ts) */
+  readonly extensions: AgentExtensionService;
   private readonly records: SessionRecordStore;
   private readonly home: string;
   private readonly logger: Logger;
@@ -491,7 +494,13 @@ export class AgentRuntimeService implements PersonaSessions {
           executables[provider as BuiltinExecutableAgentKind] = entry.activeExecutable;
       }
     }
-    const builtin = createBuiltinProviders({ executables });
+    // A home given here is a test's: puppeteer's native-default roots and the
+    // extension readers hang off it, and never follow this machine's own
+    // variables. Production passes none, so each agent reads where it would.
+    const builtin = createBuiltinProviders({
+      executables,
+      ...(opts.home !== undefined ? { home: opts.home } : {}),
+    });
     const runtimeOptions: AgentRuntimeOptions = {
       host: this.host,
       defaultCwd: this.home,
@@ -544,7 +553,18 @@ export class AgentRuntimeService implements PersonaSessions {
       now: this.now,
       logger: this.logger,
     });
+    // AR-S4b — each profile's lens is read when a page asks, again when the
+    // registry changes under one someone is watching; never on a timer.
+    this.extensions = new AgentExtensionService({
+      runtime: this.runtime,
+      home: this.home,
+      now: this.now,
+      logger: this.logger,
+    });
     this.unsubscribeMonitor.push(this.runtime.onProfilesChanged(() => void this.refreshPersonas()));
+    this.unsubscribeMonitor.push(
+      this.runtime.onProfilesChanged(() => this.extensions.profilesChanged()),
+    );
     void this.refreshPersonas();
     // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
     this.unsubscribeMonitor.push(
@@ -1243,6 +1263,7 @@ export class AgentRuntimeService implements PersonaSessions {
     for (const unsubscribe of this.unsubscribeMonitor) unsubscribe();
     this.distribution.dispose();
     this.profiles.dispose();
+    this.extensions.dispose();
     if (this.publishTimer !== null) {
       clearTimeout(this.publishTimer);
       this.publishTimer = null;

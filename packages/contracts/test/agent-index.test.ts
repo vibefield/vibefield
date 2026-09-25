@@ -123,6 +123,21 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: true,
         locality: "local",
       },
+      // AR-S4b — Extensions: a read of the agents' own configuration on this
+      // machine (servers, folders; reading Codex starts its app-server), so the
+      // distribution reads' native.admin posture
+      {
+        method: "agents.extensions.list",
+        scope: "agents.manage",
+        idempotent: true,
+        locality: "local",
+      },
+      {
+        method: "agents.extensions.subscribe",
+        scope: "agents.manage",
+        idempotent: true,
+        locality: "local",
+      },
       // AR-5d — account usage: a READ of the agent plane, so it rides
       // AR-5b: the account's billing state, a credentialed call per reading —
       // its own scope, not the fold's
@@ -136,7 +151,7 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
     ]);
   });
 
-  it("none of the rows federates or admits a guest; only the usage and operations feeds subscribe", () => {
+  it("none of the rows federates or admits a guest; only the feeds subscribe", () => {
     for (const m of METHODS.filter(
       (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),
     )) {
@@ -145,11 +160,13 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       // AR-5d widened this family by exactly one subscription (the usage
       // column's feed), the Agents settings section by one more (an update's
       // output while it runs), Agent Profiles by a third (the profiles and
-      // their sign-ins); every other row stays a one-shot call.
+      // their sign-ins), Extensions by a fourth (a profile's lens, again when
+      // a read finishes); every other row stays a one-shot call.
       expect(m.subscription ?? false, m.method).toBe(
         m.method === "agents.usage.subscribe" ||
           m.method === "agents.operations.subscribe" ||
-          m.method === "agents.profileSets.subscribe",
+          m.method === "agents.profileSets.subscribe" ||
+          m.method === "agents.extensions.subscribe",
       );
     }
   });

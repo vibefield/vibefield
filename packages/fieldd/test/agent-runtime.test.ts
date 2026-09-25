@@ -24,8 +24,10 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AgentProvider } from "@vibecook/puppeteer-runtime";
 import {
   type AgentDistributionRecord,
+  AgentsExtensionsListResult,
   type AgentsInstallsResult,
   type AgentsOperationsResult,
   type AgentsProfileSetsDeleteResult,
@@ -123,6 +125,8 @@ async function setup(
     profiles?: { version: 1; profiles: unknown[] };
     /** boot as the product's daemon does: read the agents' installs at boot */
     warm?: boolean;
+    /** compose providers beside puppeteer's built-ins (the extension rows' fakes) */
+    providers?: (builtin: AgentProvider[]) => AgentProvider[];
   } = {},
 ): Promise<{ root: string; dataDir: string; bin: string; daemon: FielddDaemon }> {
   const root = mkdtempSync(join(tmpdir(), "vf-agents-"));
@@ -156,6 +160,7 @@ async function setup(
     agentSearchPath: bin,
     agentFetch: fakeFetch,
     ...(config.warm === true ? { agentInventoryWarm: true, logRoot: join(root, "logs") } : {}),
+    ...(config.providers !== undefined ? { agentProviders: config.providers } : {}),
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
   return { root, dataDir, bin, daemon };
@@ -701,6 +706,103 @@ describe("Agent Profiles (AR-S2) — puppeteer's profile sets, one folder each u
     const shell = await win.callErr("agents.profileSets.reveal", { set: "personal" });
     expect(shell.data?.kind).toBe("UNAVAILABLE");
   }, 20_000);
+});
+
+describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own reads", () => {
+  /** Every built-in extension reader replaced by one that reads nothing: a
+   * test daemon never opens the developer's own ~/.claude or starts a codex. */
+  function fakeReaders(reads: string[]) {
+    return (builtin: AgentProvider[]): AgentProvider[] =>
+      builtin.map((provider) => {
+        const real = provider.extensions;
+        if (real === undefined) return provider;
+        return {
+          ...provider,
+          extensions: {
+            provider: real.provider,
+            inventory: async (profile) => {
+              reads.push(`${profile.provider} ${profile.id}`);
+              const linear = ["claude", "codex"].includes(profile.provider)
+                ? [
+                    {
+                      kind: "mcp-server" as const,
+                      id: "linear",
+                      name: "linear",
+                      origin: "own" as const,
+                      enabled: true,
+                      transport: "http" as const,
+                      target: "https://mcp.linear.app/mcp",
+                      ...(profile.provider === "codex" ? { env: ["LINEAR_TOKEN"] } : {}),
+                    },
+                  ]
+                : [];
+              return {
+                provider: profile.provider,
+                profileId: profile.id,
+                fetchedAt: "2026-09-25T09:00:00.000Z",
+                items: linear,
+                source: { kind: "native-store" as const, stability: "documented" as const },
+              };
+            },
+          },
+        };
+      });
+  }
+
+  it("lists This Mac's lens for a window holding agents.manage, reads again when asked, and pushes the read to subscribers", async () => {
+    const reads: string[] = [];
+    const { daemon } = await setup({ providers: fakeReaders(reads) });
+    await ready(daemon);
+    // Nothing is read until a page asks.
+    expect(reads).toEqual([]);
+
+    const denied = await window(daemon, ["agent.spawn"], "x0");
+    expect((await denied.callErr("agents.extensions.list", { set: "native" })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+
+    const win = await window(daemon, ALL, "x1");
+    expect((await win.callErr("agents.extensions.list", {})).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect((await win.callErr("agents.extensions.list", { set: "gone" })).data?.kind).toBe(
+      "NOT_FOUND",
+    );
+
+    const lens = AgentsExtensionsListResult.parse(
+      await win.call("agents.extensions.list", { set: "native" }),
+    );
+    expect(lens.set).toBe("native");
+    expect(lens.reading).toBe(false);
+    const claude = lens.agents.find((column) => column.provider === "claude");
+    expect(claude).toMatchObject({ profileId: "claude:native-default", counts: { mcpServers: 1 } });
+    // An agent puppeteer has no extension reader for is a column that says so.
+    expect(lens.agents.find((column) => column.provider === "copilot")?.failure?.status).toBe(
+      "unsupported",
+    );
+    const linear = lens.servers.find((row) => row.name === "linear");
+    expect(Object.keys(linear?.cells ?? {})).toEqual(["claude", "codex"]);
+    // Codex's reads a variable Claude's does not: two versions.
+    expect(linear?.versions).toBe(2);
+    const first = reads.length;
+    expect(first).toBeGreaterThan(0);
+
+    // The kept read answers again; `refresh` reads every agent again.
+    await win.call("agents.extensions.list", { set: "native" });
+    expect(reads).toHaveLength(first);
+
+    const frames = (): AgentsExtensionsListResult[] =>
+      win.notifications
+        .map((n) => n.params.payload as AgentsExtensionsListResult | undefined)
+        .filter((payload): payload is AgentsExtensionsListResult => payload?.set === "native");
+    const subscribed = (await win.call("agents.extensions.subscribe", {
+      set: "native",
+    })) as { snapshot?: AgentsExtensionsListResult } | AgentsExtensionsListResult;
+    expect(JSON.stringify(subscribed)).toContain('"linear"');
+    await win.call("agents.extensions.list", { set: "native", refresh: true });
+    expect(reads).toHaveLength(first * 2);
+    await until(() => frames().some((frame) => frame.reading === false), 5_000);
+  }, 30_000);
 });
 
 /** `setup` at a caller-owned root (the reconcile row plants files first). */

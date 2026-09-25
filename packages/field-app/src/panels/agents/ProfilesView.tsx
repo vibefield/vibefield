@@ -862,6 +862,8 @@ export interface ProfilePageViewProps {
   busy?: string | null | undefined;
   /** the sign-in terminal, when one runs on this page */
   signIn?: ReactNode;
+  /** AR-S4b — the profile's MCP servers and skills, beneath its agents */
+  extensions?: ReactNode;
   revealLabel?: string | undefined;
   onAdd: (provider: string) => void;
   onOpenAgent: (provider: string) => void;
@@ -887,6 +889,7 @@ export function ProfilePageView({
   notice = null,
   busy = null,
   signIn,
+  extensions,
   revealLabel = "Show in Finder",
   onAdd,
   onOpenAgent,
@@ -1019,6 +1022,8 @@ export function ProfilePageView({
           </div>
         </SettingsSection>
       )}
+
+      {extensions}
 
       <SettingsSection title="Profile">
         {managed && (

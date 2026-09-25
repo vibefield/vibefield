@@ -10,6 +10,8 @@ import {
   AgentResumeParams,
   AgentSpawnParams,
   AgentSubscribeParams,
+  AgentsExtensionsListParams,
+  AgentsExtensionsSubscribeParams,
   AgentsInstallsParams,
   AgentsProfileSetsCreateParams,
   AgentsProfileSetsDeleteParams,
@@ -1443,6 +1445,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { set, provider? }", false);
       return await agents.profiles.reveal(parsed.data);
+    });
+    // AR-S4b — Extensions (agent-extensions.ts): one Agent Profile's lens,
+    // what each of its agents holds, read from the agents' own stores. Reads
+    // only; a read runs when asked (`refresh`, or the first time) and its
+    // frame reaches the profile's subscribers.
+    api.register("agents.extensions.list", async (_ctx, params) => {
+      const parsed = AgentsExtensionsListParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, refresh? }", false);
+      return await agents.extensions.list(parsed.data.set, parsed.data.refresh === true);
+    });
+    api.registerSubscription("agents.extensions.subscribe", async (_ctx, params, emit) => {
+      const parsed = AgentsExtensionsSubscribeParams.safeParse(params);
+      if (!parsed.success) throw new RpcCallError("PRECONDITION_FAILED", "expected { set }", false);
+      // The last read, or the profile's agents while the first runs; the
+      // finished read follows as a frame.
+      return await agents.extensions.subscribe(parsed.data.set, (frame) => emit(frame));
     });
     api.register("agents.installs", async (_ctx, params) => {
       const parsed = AgentsInstallsParams.safeParse(params ?? {});

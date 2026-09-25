@@ -3,6 +3,7 @@
 
 export const CONTRACTS_VERSION = "0.1.0";
 
+export * from "./agent-extensions";
 export * from "./agent-field";
 export * from "./agent-index";
 export * from "./agent-session";

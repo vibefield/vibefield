@@ -1,0 +1,316 @@
+/* Extensions on a profile's page (AR-S4b; the design record's pass 24, L2 —
+   the grid). A row per server or skill, a column per agent, a cell saying
+   what that agent holds. The sections are the settings surface's own
+   (settings-ui.tsx); this file owns the table, its marks and the row's
+   detail. Tokens only (DESIGN.md §2, UI_SYSTEM.md). */
+
+.vf-ext {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vf-ext-built {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-quiet {
+  margin: 0;
+  font-size: 12px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-ext-attn {
+  color: var(--vf-orange);
+  font-weight: 600;
+}
+
+.vf-ext-glyph {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The table scrolls sideways inside its section, never the page. */
+.vf-ext-wrap {
+  overflow-x: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.vf-ext-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.vf-ext-col {
+  width: 64px;
+}
+
+.vf-ext-grid--many .vf-ext-col {
+  width: 66px;
+}
+
+.vf-ext-grid th,
+.vf-ext-grid td {
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--vf-hairline);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.vf-ext-grid tbody tr:last-child > th,
+.vf-ext-grid tbody tr:last-child > td {
+  border-bottom: 0;
+}
+
+.vf-ext-grid thead th {
+  border-bottom-color: var(--vf-hairline-strong);
+  font-weight: 400;
+}
+
+.vf-ext-grid .vf-ext-namehead {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-ext-head {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.vf-ext-head-mark {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+}
+
+.vf-ext-head b {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vf-text-primary);
+}
+
+.vf-ext-head small {
+  min-height: 13px;
+  font-size: 10px;
+  color: var(--vf-text-tertiary);
+  white-space: nowrap;
+}
+
+.vf-ext-grid tbody th {
+  text-align: left;
+  font-weight: 400;
+}
+
+/* The row's name opens its detail in place. */
+.vf-ext-name {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-ext-name:hover {
+  background: var(--vf-fill);
+}
+
+.vf-ext-name:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 1px;
+}
+
+.vf-ext-name-glyph {
+  display: inline-flex;
+  padding-top: 1px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-ext-name-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.vf-ext-name-text b {
+  font-weight: 600;
+  color: var(--vf-text-primary);
+}
+
+.vf-ext-name-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-ext-code {
+  font-family: var(--vf-font-mono);
+  font-size: 10.5px;
+}
+
+/* A cell: the mark of what the agent holds under the row's name — pass 24's
+   circles: on is the switch's own ink, off a ring, "needs a look" an orange
+   dot, what the profile cannot turn a faint glyph. */
+.vf-ext-cell {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--vf-text-faint);
+  vertical-align: middle;
+}
+
+.vf-ext-cell .vf-ext-glyph {
+  width: 13px;
+  height: 13px;
+}
+
+.vf-ext-cell--on {
+  background: var(--vf-foreground);
+  color: var(--vf-foreground-inverse);
+}
+
+.vf-ext-cell--on .vf-ext-glyph,
+.vf-ext-cell--app .vf-ext-glyph {
+  stroke-width: 2.4;
+}
+
+.vf-ext-cell--attn::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+  box-shadow: 0 0 0 2px var(--vf-sheet-surface);
+}
+
+.vf-ext-cell--fixed {
+  background: color-mix(in srgb, var(--vf-foreground) 30%, transparent);
+  color: var(--vf-foreground-inverse);
+}
+
+.vf-ext-cell--off {
+  box-shadow: inset 0 0 0 1.5px var(--vf-hairline-strong);
+}
+
+.vf-ext-cell--app {
+  outline: 1.5px dashed var(--vf-hairline-strong);
+  outline-offset: -2px;
+}
+
+.vf-ext-cell--app.vf-ext-cell--lit {
+  outline-color: color-mix(in srgb, var(--vf-foreground) 55%, transparent);
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-cell--na {
+  cursor: help;
+}
+
+.vf-ext-cell--na .vf-ext-glyph {
+  width: 14px;
+  height: 14px;
+}
+
+.vf-ext-cell--lent :where(svg) {
+  width: 14px;
+  height: 14px;
+  opacity: 0.5;
+}
+
+.vf-ext-cell--none,
+.vf-ext-cell--unread {
+  font-size: 13px;
+}
+
+/* The row's detail: each agent's own holding, in its own words. */
+.vf-ext-grid .vf-ext-detail > td {
+  padding: 4px 6px 10px;
+  text-align: left;
+  background: var(--vf-field-surface);
+}
+
+.vf-ext-detail ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 0 0;
+  list-style: none;
+}
+
+.vf-ext-detail li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-detail-mark {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.vf-ext-detail b {
+  color: var(--vf-text-primary);
+  font-weight: 600;
+}
+
+.vf-ext-detail-fact {
+  display: block;
+  font-family: var(--vf-font-mono);
+  font-size: 10.5px;
+  color: var(--vf-text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.vf-ext-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-ext-when {
+  margin-left: auto;
+  white-space: nowrap;
+}

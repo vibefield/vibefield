@@ -22,6 +22,7 @@ import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } 
 import { refusalSentence } from "../../account/use-account";
 import type { SettingsSubpage } from "../SettingsDialog";
 import type { AgentsNotice } from "./AgentsView";
+import { ProfileExtensions } from "./ExtensionsSection";
 import {
   NewProfileView,
   ProfileAgentPageView,
@@ -740,6 +741,12 @@ export function ProfilesSection({
         notice={notice}
         busy={busy ?? signInBusy}
         signIn={card("profile")}
+        extensions={
+          // AR-S4b — read when the page opens (a profile with no agent has nothing to read)
+          page.rows.length > 0 ? (
+            <ProfileExtensions set={page.set.id} profile={page.set.label} />
+          ) : undefined
+        }
         revealLabel={revealLabel}
         onAdd={(provider) => void add(provider)}
         onOpenAgent={(provider) => onRoute({ kind: "agent", set: page.set.id, provider })}

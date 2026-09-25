@@ -14,6 +14,7 @@
 @import "./panels/settings.css";
 @import "./panels/agents/agents-settings.css";
 @import "./panels/agents/profiles-settings.css";
+@import "./panels/agents/extensions-settings.css";
 @import "./panels/terminal/terminal-settings.css";
 @import "./godview/godview.css";
 @import "./godview/deck-zoom.css";

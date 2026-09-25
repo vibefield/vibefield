@@ -1464,6 +1464,28 @@ export const METHODS: MethodDef[] = [
   // like every other agents.* row (D36): a quota belongs to THIS device's
   // accounts and its credentials never roam, so the column of a peer's usage
   // would be a different door, not this one federated.
+  // AR-S4b — Extensions (agent-extensions.ts): what each agent in an Agent
+  // Profile holds — MCP servers, skills, plugins, marketplaces — read from the
+  // agent's own stores and grouped into the profile page's lens. A read of the
+  // agent plane's configuration on THIS machine: it names servers and folders,
+  // and reading Codex starts its app-server — so the native.admin posture of
+  // the distribution reads beside it, `agents.manage`, local-only. Nothing here
+  // mutates; the acts (S4c) join the same scope, audited.
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.list",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.subscribe",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
   defineMethod({
     surface: "product",
     method: "agents.usage",

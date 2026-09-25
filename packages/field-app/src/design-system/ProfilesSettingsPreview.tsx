@@ -1,4 +1,5 @@
 import { type ReactElement, useEffect, useMemo } from "react";
+import { ProfileExtensionsView } from "../panels/agents/ExtensionsView";
 import {
   NewProfileView,
   ProfileAgentPageView,
@@ -8,6 +9,7 @@ import {
 } from "../panels/agents/ProfilesView";
 import { agentRow, profilePage, signInNote } from "../panels/agents/profiles-model";
 import type { SettingsSubpage } from "../panels/SettingsDialog";
+import { FIXTURE_EXTENSIONS, FIXTURE_EXTENSIONS_NOW } from "./extensions-fixtures";
 import {
   FIXTURE_DEMO,
   FIXTURE_NATIVE,
@@ -114,6 +116,17 @@ export function ProfilesSettingsPreview({
       onRefreshUsage={inert}
       now={FIXTURE_PROFILES_NOW}
       signIn={signing}
+      extensions={
+        // AR-S4b: Work's servers and skills, and the page while its first read runs
+        set === FIXTURE_WORK ? (
+          <ProfileExtensionsView
+            lens={state === "reading extensions" ? null : FIXTURE_EXTENSIONS}
+            profile={set.label}
+            now={FIXTURE_EXTENSIONS_NOW}
+            onRefresh={inert}
+          />
+        ) : undefined
+      }
       busy={state === "signing in" ? "add:grok" : null}
       onAdd={inert}
       onOpenAgent={inert}

@@ -480,14 +480,32 @@ function fake(doors: Record<string, Door>, initialUsage: AgentAccountUsageBatch 
     status: "ready",
     onStatusChange: () => () => undefined,
     request,
-    subscribe: vi.fn(async (method: string, _params: unknown, onData: typeof onUsage) => {
+    subscribe: vi.fn(async (method: string, params: unknown, onData: typeof onUsage) => {
+      // AR-S4b: a profile's page also reads what its agents hold; here, a read
+      // that is still under way, so the page draws its agents and nothing more
+      if (method === "agents.extensions.subscribe") {
+        const set = (params as { set?: string } | undefined)?.set ?? "native";
+        return {
+          subId: `extensions:${set}`,
+          snapshot: {
+            set,
+            reading: true,
+            agents: [],
+            servers: [],
+            skills: [],
+            plugins: {},
+            marketplaces: {},
+          },
+          unsubscribe: (): void => undefined,
+        };
+      }
       if (method !== "agents.usage.subscribe")
         throw new Error(`unexpected subscription: ${method}`);
       onUsage = onData;
       return {
         subId: "usage",
         snapshot: initialUsage,
-        unsubscribe: () => undefined,
+        unsubscribe: (): void => undefined,
       };
     }),
   } as unknown as FielddClient;
