@@ -2,8 +2,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { type ZodTypeAny, z } from "zod";import { AgentCatalogResult } from "../src/agent-catalog";
-import { AgentsExtensionsActResult, AgentsExtensionsListResult } from "../src/agent-extensions";import {
+import { type ZodTypeAny, z } from "zod";
+import { AgentCatalogResult } from "../src/agent-catalog";
+import { AgentsExtensionsActResult, AgentsExtensionsListResult } from "../src/agent-extensions";
+import {
   AgentFieldDelta,
   AgentFieldSlice,
   AgentFieldSnapshot,

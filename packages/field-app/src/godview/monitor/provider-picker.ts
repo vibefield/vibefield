@@ -178,6 +178,17 @@ export function defaultProviderId(
   );
 }
 
+/**
+ * Whether the row CLAIMS personas (`offers.personas` true): the one reading
+ * behind the persona choice below and the stage's own sign-in refusal under a
+ * profile tab (AR-S5), so the two cannot disagree. Absence is no claim — a
+ * daemon before AC-3 decides nothing — and neither is `false` (ACP), whose
+ * agent takes no sign-in anywhere: advice to add one would be impossible.
+ */
+export function providerClaimsPersonas(provider: Pick<PickerRow, "offers">): boolean {
+  return provider.offers?.personas === true;
+}
+
 /** One identity a new session can be born as. `value` is the persona's
  * `profileId`, or "" for the native default — the spawn then carries no
  * `profileId` at all. */
@@ -205,7 +216,7 @@ export interface PersonaChoice {
 export function personaChoices(
   provider: Pick<PickerRow, "status" | "offers" | "personas">,
 ): readonly PersonaChoice[] {
-  if (!providerStartsSessions(provider) || provider.offers?.personas !== true) return [];
+  if (!providerStartsSessions(provider) || !providerClaimsPersonas(provider)) return [];
   const managed = provider.personas.filter((persona) => persona.kind === "managed");
   if (managed.length === 0) return [];
   const native = provider.personas.find((persona) => persona.kind === "native-default");

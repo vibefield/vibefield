@@ -38,15 +38,16 @@ import {
   recedeOutside,
   showsProfileTabs,
   spawnProfileLabel,
-} from "./monitor/profile-tabs";import {
-  personaChoices,
+} from "./monitor/profile-tabs";
+import {
   providerBadge,
   providerHistoryClaim,
   providerOptionText,
   providerPickerLabel,
   providerStartsSessions,
 } from "./monitor/provider-picker";
-import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
+import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
+import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
 import {
   type MonitorPaneFacts,
   type MonitorSourceCounts,
@@ -209,8 +210,10 @@ export function GodviewMonitor({
     retryProviders,
     selectedProviderId,
     selectProvider,
+    personaOptions,
     selectedPersonaId,
     selectPersona,
+    spawnLaunch,
     spawn,
     acknowledgement,
     clearAcknowledgement,
@@ -222,12 +225,13 @@ export function GodviewMonitor({
   });
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
   // AC-4 — the chosen row's decision, read for the bar (and the marker) from
-  // ONE module (`provider-picker.ts`), the same one the spawn verb asks.
+  // ONE module (`provider-picker.ts`), the same one the spawn verb asks. The
+  // persona choices come from the hook that sends the spawn, so the control
+  // drawn and the request sent cannot disagree (none under a chosen tab).
   const selectedLabel =
     selectedProvider === undefined ? undefined : providerPickerLabel(selectedProvider);
   const historyClaim =
     selectedProvider === undefined ? null : providerHistoryClaim(selectedProvider);
-  const personaOptions = selectedProvider === undefined ? [] : personaChoices(selectedProvider);
   const persona = personaOptions.find(
     (choice) => choice.value !== "" && choice.value === selectedPersonaId,
   );
@@ -430,6 +434,7 @@ export function GodviewMonitor({
     historyClaim,
     personaOptions.length,
   ]);
+
   const closeFind = useCallback((): void => setFindOpen(false), []);
 
   const selectNextStatus = useCallback(
@@ -488,10 +493,20 @@ export function GodviewMonitor({
   }, [showTabs, tabKey]);
 
   const MonitorView = view.Component;
+  // Where SPAWN lands, in its tip's words: the profile the spawn names (the
+  // hook's `spawnLaunch` — the chosen tab's, or none for a row that denies
+  // personas), else the default profile's rule. A persona chosen under All
+  // is its own sign-in, so the tip says "as" it and names no profile — not
+  // the default's, which the spawn does not run under.
   const spawnUnder =
-    selectedProvider === undefined
+    selectedProvider === undefined || persona !== undefined
       ? undefined
-      : spawnProfileLabel(profileSets, chosen, selectedProvider.id);
+      : spawnProfileLabel(
+          profileSets,
+          spawnLaunch === null ? undefined : chosen,
+          selectedProvider.id,
+        );
+
   return (
     <>
       {/* THE INSTRUMENT BAR (record §04), the package's recipe: counters left,
@@ -502,7 +517,8 @@ export function GodviewMonitor({
           AC-4: each row says the catalog's decision in its own text, the
           chosen row's history state follows the picker in the deck's degraded
           idiom, and the persona choice and SPAWN appear only where the row
-          claims them. */}
+          claims them — the persona choice only under All, since a chosen
+          profile tab decides the sign-in (AR-S5). */}
       <InstrumentBar
         counts={counts}
         onSelectStatus={selectNextStatus}
@@ -561,7 +577,7 @@ export function GodviewMonitor({
                   {providerOptionText(provider)}
                 </option>
               ))}
-            </select>{" "}
+            </select>
             {historyClaim !== null ? (
               <span id={historyId} className="vf-godview-provider-history">
                 {historyClaim}
@@ -599,7 +615,7 @@ export function GodviewMonitor({
               >
                 SPAWN
               </button>
-            ) : null}{" "}
+            ) : null}
             <BarControl
               mark="find"
               label="FIND"

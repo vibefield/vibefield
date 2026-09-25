@@ -1072,3 +1072,169 @@ describe("the profile tabs (AR-S5)", () => {
     expect(listRows(host).some((row) => row.receded)).toBe(false);
   });
 });
+
+// ---- AC-4 beside AR-S5 — the persona choice and the profile tabs -------------
+//
+// Until James rules on the persona select's fate beside the tabs, the two never
+// compose: a chosen tab decides the sign-in (no persona select, no `profileId`),
+// and All keeps the persona choice (a `profileId`, no `profileSet`). The
+// providers row lists EVERY profile's sign-ins, and puppeteer refuses a spawn
+// whose persona sits outside the profile it names — so sending both was a
+// refusal for any persona outside the chosen tab, and every one under This Mac.
+
+const RESEARCH_SET = tabSet("research", "Research", [tabPersona("r-claude", "claude")], {
+  glyph: "flask",
+});
+const PERSONA_SETS = [NATIVE_SET, WORK_SET, RESEARCH_SET];
+/** A sign-in as the providers row lists it: named, and inside its profile. */
+const signIn = (profileId: string, set: string, label: string): AgentPersona => ({
+  ...tabPersona(profileId, "claude"),
+  label,
+  set,
+});
+/** claude with a sign-in in each managed profile, as the row lists them. */
+const CLAUDE_SIGNED_IN: AgentProviderSummary = {
+  id: "claude",
+  label: "Claude",
+  available: true,
+  resumable: true,
+  personas: [signIn("w-claude", "work", "Work"), signIn("r-claude", "research", "Research")],
+  status: "supported",
+  offers: OFFERS,
+};
+/** A row that DENIES personas — ACP's decision in the catalog: a protocol, a
+ * sign-in nowhere, so no profile can hold one for it. */
+const DENIES_PERSONAS: AgentProviderSummary = {
+  id: "acp",
+  label: "ACP",
+  available: true,
+  resumable: true,
+  personas: [],
+  status: "preview",
+  offers: { ...OFFERS, history: false, usage: false, distribution: false, personas: false },
+};
+/** A row as a daemon before AC-3 sends it: no decision, so no claim at all. */
+const UNCLAIMED: AgentProviderSummary = {
+  id: "grok",
+  label: "Grok",
+  available: true,
+  resumable: true,
+  personas: [],
+};
+
+/** A profile door whose providers answer is `providers`, and whose spawn names
+ * the session after the provider it was asked for. */
+function personaDoor(
+  providers: readonly AgentProviderSummary[],
+  sets: readonly AgentProfileSet[] = PERSONA_SETS,
+): TabDoor {
+  const door = tabDoor(sets);
+  door.providers = vi.fn(async () => providers);
+  door.spawn.mockImplementation(async (request: { provider: string }) => ({
+    state: "spawned" as const,
+    sessionId: `born-${request.provider}`,
+    runtimeRunId: `run-${request.provider}`,
+    label: providers.find((row) => row.id === request.provider)?.label ?? request.provider,
+  }));
+  return door;
+}
+
+const barSelect = (host: HTMLElement, label: string): HTMLSelectElement | null =>
+  host.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
+const spawnControl = (host: HTMLElement): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>(".vf-godview-spawn");
+
+async function choose(select: HTMLSelectElement | null, value: string): Promise<void> {
+  expect(select, `no select to choose ${value} in`).not.toBeNull();
+  await act(async () => {
+    if (select === null) return;
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+describe("the persona choice beside the profile tabs (AC-4 × AR-S5)", () => {
+  it("draws no persona select under a chosen tab — the tab decides the sign-in, and the spawn names the profile only", async () => {
+    const door = personaDoor([CLAUDE_SIGNED_IN, ...PROVIDERS.slice(1)]);
+    const host = await mountMonitor("list", door);
+    // All: the row's sign-ins, the native default first
+    const personas = barSelect(host, "Agent persona");
+    expect([...(personas?.options ?? [])].map((option) => option.textContent)).toEqual([
+      "Default",
+      "Work",
+      "Research",
+    ]);
+    expect(latest().picker.personas).toBe(3);
+    await choose(personas, "r-claude");
+
+    // Work: the select goes, the marker counts no control, and the persona
+    // chosen under All does not ride along
+    await act(async () => tabButton(host, "work")?.click());
+    expect(barSelect(host, "Agent persona")).toBeNull();
+    expect(latest().picker.personas).toBe(0);
+    expect(spawnControl(host)?.title).toBe("spawn Claude in the active pane, under Work");
+    await act(async () => spawnControl(host)?.click());
+    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude", profileSet: "work" });
+    expect(ackText(host)).toBe("Claude spawned in the active pane, under Work");
+
+    // This Mac: the same, where every managed persona used to be refused
+    await act(async () => tabButton(host, "native")?.click());
+    expect(barSelect(host, "Agent persona")).toBeNull();
+    expect(latest().picker.personas).toBe(0);
+    await act(async () => spawnControl(host)?.click());
+    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude", profileSet: "native" });
+  });
+
+  it("keeps the persona choice under All: a persona chosen rides alone, and the tip says 'as' it and names no profile", async () => {
+    const door = personaDoor([CLAUDE_SIGNED_IN, ...PROVIDERS.slice(1)]);
+    const host = await mountMonitor("list", door);
+    expect(chosenTab(host)).toBe("all");
+    // the native default: the tip names where puppeteer's default lands
+    expect(spawnControl(host)?.title).toBe("spawn Claude in the active pane, under This Mac");
+    await choose(barSelect(host, "Agent persona"), "r-claude");
+    // the persona is its own sign-in: "as Research", and never "under This
+    // Mac", the default the spawn does not run under
+    expect(spawnControl(host)?.title).toBe("spawn Claude as Research in the active pane");
+    await act(async () => spawnControl(host)?.click());
+    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({
+      provider: "claude",
+      profileId: "r-claude",
+    });
+    expect(ackText(host)).toBe("Claude spawned in the active pane");
+  });
+
+  it("says an uninstalled agent is not installed before it says a tab holds no sign-in for it", async () => {
+    const door = tabDoor();
+    const host = await mountMonitor("list", door);
+    await act(async () => tabButton(host, "work")?.click());
+    // pi is not installed, and Work holds no pi sign-in: the install speaks
+    // first, on the tip and in the refusal alike
+    await choose(barSelect(host, "Agent provider"), "pi");
+    expect(spawnControl(host)?.title).toBe("Pi is not installed on this device");
+    await act(async () => spawnControl(host)?.click());
+    expect(door.spawn).not.toHaveBeenCalled();
+    expect(ackText(host)).toBe("Pi is not installed on this device");
+  });
+
+  it("never sends a row without the persona claim to Settings: one that denies personas spawns as itself from any tab, one that claims nothing names the tab", async () => {
+    const door = personaDoor([...PROVIDERS, DENIES_PERSONAS, UNCLAIMED], TAB_SETS);
+    const host = await mountMonitor("list", door);
+    await act(async () => tabButton(host, "work")?.click());
+    await choose(barSelect(host, "Agent provider"), "acp");
+    // Work holds no ACP sign-in, and none can exist. puppeteer refuses a
+    // managed profile for an agent with no account profiles, so the spawn is
+    // the one All sends — the agent's own folder — and the tip says so.
+    expect(spawnControl(host)?.title).toBe("spawn ACP in the active pane, under This Mac");
+    await act(async () => spawnControl(host)?.click());
+    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "acp" });
+    expect(ackText(host)).toBe("ACP spawned in the active pane");
+
+    // a daemon before AC-3 claims nothing: the tab rides as AR-S5 sent it, and
+    // a profile without the sign-in is the daemon's to refuse in its own words
+    await choose(barSelect(host, "Agent provider"), "grok");
+    expect(spawnControl(host)?.title).toBe("spawn Grok in the active pane, under Work");
+    await act(async () => spawnControl(host)?.click());
+    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "grok", profileSet: "work" });
+    expect(ackText(host)).toBe("Grok spawned in the active pane, under Work");
+  });
+});

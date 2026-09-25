@@ -33,14 +33,18 @@ import {
   loadProjectLedger,
   type ProjectLedger,
   saveProjectLedger,
-} from "./project-ledger";import {
+} from "./project-ledger";
+import {
   defaultProviderId,
   newSessionRefusal,
+  type PersonaChoice,
   personaChoices,
+  providerClaimsPersonas,
   providerListed,
   providerPickerLabel,
 } from "./provider-picker";
-import { type MonitorDoor, type MonitorFeedState, remoteRowId } from "./remote-door";import { useRemoteSessionField } from "./remote-session-field";
+import { type MonitorDoor, type MonitorFeedState, remoteRowId } from "./remote-door";
+import { useRemoteSessionField } from "./remote-session-field";
 import type { MonitorActions, MonitorAgent } from "./types";
 import { createUsageHistoryCache } from "./usage-history-cache";
 
@@ -126,9 +130,12 @@ export interface UseMonitorAgentsOptions {
    * Facts, published by the deck; the monitor reads them and drives nothing. */
   panes?: MonitorPaneFacts;
   /** AR-S5 — the profile the bar's chosen tab names: a spawn runs under it,
-   * and is refused here, before anything runs, for an agent it holds no
-   * sign-in for. Null or absent (All): the default profile, as puppeteer
-   * resolves a spawn that names none. */
+   * and is refused here, before anything runs, for an agent whose row claims
+   * personas and that it holds no sign-in for. While it is set the TAB
+   * decides the sign-in: no persona is offered and none rides the spawn. A
+   * row that denies personas runs as itself from any tab (`spawnLaunch`).
+   * Null or absent (All): the default profile, as puppeteer resolves a spawn
+   * that names none — or the persona chosen. */
   launch?: LaunchProfile | null;
 }
 
@@ -164,11 +171,20 @@ export interface MonitorAgentsResult {
   retryProviders(): void;
   selectedProviderId: string | null;
   selectProvider(id: string): void;
-  /** AC-4 — the persona a new session is born as: a `profileId` from the
-   * chosen row's `personaChoices`, or "" for the native default (the spawn
-   * then carries no `profileId`). Reset to "" whenever the provider changes. */
+  /** AC-4 — the persona control's choices, as drawn: the chosen row's
+   * `personaChoices` under All, and none while a profile tab is chosen (the
+   * tab decides the sign-in, AR-S5). Empty = no control is drawn. */
+  personaOptions: readonly PersonaChoice[];
+  /** AC-4 — the persona a new session is born as: a `profileId` from
+   * `personaOptions`, or "" for the native default (the spawn then carries no
+   * `profileId`) — always "" under a tab. Reset to "" whenever the provider
+   * changes. */
   selectedPersonaId: string;
   selectPersona(profileId: string): void;
+  /** AR-S5 — the profile the chosen row's spawn names, for the stage to say
+   * where SPAWN lands: the chosen tab's, or null — under All, and for a row
+   * that denies personas, which spawns as it does under All from every tab. */
+  spawnLaunch: LaunchProfile | null;
   /** Spawn the chosen provider into the active pane — the chrome's own verb;
    * `createAt` is the same act from a view's gesture. */
   spawn(): Promise<void>;
@@ -299,6 +315,7 @@ export function useMonitorAgents({
    * same tick, and what stays here is the monitor's pure projection of them. */
   const localField = useAgentFold();
   const remoteField = useRemoteSessionField({ door });
+
   // Failed discovery is different from an empty inventory. A retry opens a new
   // request, and late answers from the previous door/attempt cannot overwrite it.
   // What one can spawn as, asked per door — and again whenever the door
@@ -310,10 +327,12 @@ export function useMonitorAgents({
   // listed, and the first choice is a row that starts sessions
   // (`defaultProviderId`) — so a deck never opens with SPAWN withdrawn while
   // an offered agent was on the list; a choice already made survives a
-  // re-ask while its row is still listed.  useEffect(() => {
+  // re-ask while its row is still listed.
+  useEffect(() => {
     if (door === null) {
       setProviders([]);
-      setSelectedProviderId(null);      setProviderState({ state: "no-door" });
+      setSelectedProviderId(null);
+      setProviderState({ state: "no-door" });
       return;
     }
     let alive = true;
@@ -349,7 +368,8 @@ export function useMonitorAgents({
     const stop = door.indexChanges?.(ask);
     const clock = setInterval(() => {
       if (degraded) ask();
-    }, HISTORY_REASK_MS);    return () => {
+    }, HISTORY_REASK_MS);
+    return () => {
       alive = false;
       stop?.();
       clearInterval(clock);
@@ -792,21 +812,43 @@ export function useMonitorAgents({
   );
 
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
+  /** The persona control's choices (AC-4), beside AR-S5's tabs until James
+   * rules on the select's fate there: under All, the chosen row's; under a
+   * chosen tab, none — the tab decides the sign-in. A persona is a sign-in
+   * INSIDE one profile, the row lists every profile's, and puppeteer refuses
+   * a spawn whose persona sits outside the profile it names (so under This
+   * Mac every managed persona would be refused). */
+  const personaOptions = useMemo<readonly PersonaChoice[]>(
+    () =>
+      selectedProvider === undefined || launch !== null ? [] : personaChoices(selectedProvider),
+    [selectedProvider, launch],
+  );
   /** The persona a spawn would actually carry: the one chosen while it is
-   * still among the row's choices, else the native default. What the persona
+   * still among the drawn choices, else the native default. What the persona
    * control shows and what the door is sent are the same value by
-   * construction — a persona that vanished from the list cannot ride along. */
-  const personaId =
-    selectedProvider !== undefined &&
-    personaChoices(selectedProvider).some((choice) => choice.value === selectedPersonaId)
-      ? selectedPersonaId
-      : "";
+   * construction — a persona that vanished from the list, or whose control a
+   * chosen tab withdrew, cannot ride along. The choice itself is kept, so
+   * All shows it again. */
+  const personaId = personaOptions.some((choice) => choice.value === selectedPersonaId)
+    ? selectedPersonaId
+    : "";
+  /** The profile the chosen row's spawn names (AR-S5): the chosen tab's —
+   * except for a row that DENIES personas (`offers.personas` false: ACP). No
+   * profile holds a sign-in for that agent, and puppeteer refuses a managed
+   * profile for an agent with no account profiles, so it spawns as itself,
+   * exactly as under All, from every tab. A row that carries no claim (a
+   * daemon before AC-3) still names the tab, as AR-S5 always sent it: absence
+   * is no claim, and that daemon runs it under the tab or refuses in its own
+   * words. */
+  const spawnLaunch = selectedProvider?.offers?.personas === false ? null : launch;
 
   /** The birth (AR-3): the chrome's chosen provider, into the active pane.
    * AC-4 — only where the row offers a new session: a deprecated agent (or
    * one that denies `spawn`) is refused HERE, before the door is asked, and
    * the refusal is said, because the views' own create gesture reaches this
-   * verb too and cannot be withdrawn. */
+   * verb too and cannot be withdrawn. The refusals run from the catalog's
+   * word, to the install, to the profile's sign-in: an agent that is not
+   * installed is said to be so, never sent to Settings for a sign-in. */
   const spawn = useCallback(async (): Promise<void> => {
     if (door === null) {
       announce("no agent can be spawned yet — the deck has no connection");
@@ -823,21 +865,33 @@ export function useMonitorAgents({
       return;
     }
     const label = providerPickerLabel(provider);
-    // AR-S5 — a profile runs only the agents it holds a sign-in for; said
-    // here in the stage's words rather than as puppeteer's refusal after a
-    // round trip (it refuses the same spawn: "<profile> has no <id> account").
-    if (launch?.signedIn != null && !launch.signedIn.has(provider.id)) {
-      announce(`${launch.label} has no ${label} sign-in — add one in Settings`);
-      return;
-    }
     if (!provider.available) {
       announce(`${label} is not installed on this device`);
       return;
     }
+    // AR-S5 — a profile runs only the agents it holds a sign-in for; said
+    // here in the stage's words rather than as puppeteer's refusal after a
+    // round trip (it refuses the same spawn: "<profile> has no <id> account").
+    // Only for a row that CLAIMS personas: the advice is possible only there,
+    // and a row with no claim hears the daemon's own words instead.
+    if (
+      spawnLaunch?.signedIn != null &&
+      providerClaimsPersonas(provider) &&
+      !spawnLaunch.signedIn.has(provider.id)
+    ) {
+      announce(`${spawnLaunch.label} has no ${label} sign-in — add one in Settings`);
+      return;
+    }
+    // A profile OR a persona, never both: under a tab the profile names the
+    // sign-in (`personaId` is "" there by construction); under All the
+    // persona chosen does, or neither and puppeteer's default applies.
     const outcome = await door.spawn({
       provider: provider.id,
-      ...(launch !== null ? { profileSet: launch.set } : {}),
-      ...(personaId !== "" ? { profileId: personaId } : {}),
+      ...(spawnLaunch !== null
+        ? { profileSet: spawnLaunch.set }
+        : personaId !== ""
+          ? { profileId: personaId }
+          : {}),
     });
     if (outcome.state === "no-pane") {
       announce("no pane to spawn into — open one in the deck first");
@@ -848,11 +902,12 @@ export function useMonitorAgents({
       return;
     }
     announce(
-      launch !== null
-        ? `${outcome.label} spawned in the active pane, under ${launch.label}`
+      spawnLaunch !== null
+        ? `${outcome.label} spawned in the active pane, under ${spawnLaunch.label}`
         : `${outcome.label} spawned in the active pane`,
     );
-  }, [announce, door, launch, selectedProvider, personaId]);
+  }, [announce, door, spawnLaunch, selectedProvider, personaId]);
+
   const createAt = useCallback((): Promise<void> => spawn(), [spawn]);
 
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
@@ -890,8 +945,10 @@ export function useMonitorAgents({
     retryProviders,
     selectedProviderId,
     selectProvider,
+    personaOptions,
     selectedPersonaId: personaId,
     selectPersona,
+    spawnLaunch,
     spawn,
     acknowledgement,
     clearAcknowledgement,
