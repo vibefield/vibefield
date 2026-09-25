@@ -356,7 +356,7 @@ function SaveBar({
           : includes
             ? "includes can't change here — see Config file"
             : blocking > 0
-              ? `${blocking} ${blocking === 1 ? "error" : "errors"} to fix first`
+              ? `${blocking} ${blocking === 1 ? "error" : "errors"} to fix first — see Config file`
               : "every terminal on this Mac reloads when you save"}
         {save.kind === "failed" && <span className="vf-ts-savebar-error"> · {save.message}</span>}
         {save.kind === "refused" && (
@@ -948,15 +948,20 @@ export function TerminalSettings({
         setSave({ kind: "idle" });
       }}
       onDismissSave={() => setSave({ kind: "idle" })}
+      // A CONFLICT's `current` is the document alone — no loader snapshot rides
+      // with it (GT-7b) — so taking the file's version READS it again, snapshot
+      // and all, rather than showing Ghostty's defaults until the page reopens.
       onTakeTheirs={() => {
         if (save.kind !== "conflict") return;
-        setSaved(save.current);
-        setDraft(save.current.text);
         setSave({ kind: "idle" });
+        void read();
       }}
+      // Saving over it keeps the last snapshot until the write answers with its
+      // own (a refusal leaves the draft dirty, and its dry run replaces it).
       onSaveOverTheirs={() => {
         if (save.kind !== "conflict") return;
-        setSaved(save.current);
+        const known = saved?.config;
+        setSaved({ ...save.current, ...(known !== undefined ? { config: known } : {}) });
         void write(save.current.revision);
       }}
       onReveal={(nextTab, anchor) => {

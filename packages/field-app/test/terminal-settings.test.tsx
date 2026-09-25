@@ -166,21 +166,26 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
 
   it("puts the file's newer version beside the draft on a conflict, and can take it", async () => {
     const theirs = `${FIXTURE_SAVED_TEXT}font-thicken = false\n`;
-    handlers["terminal.config.write"] = () =>
-      Promise.reject(
-        new FielddRpcError("CONFLICT", "stale revision", false, {
-          current: { ...SAVED, text: theirs, revision: "rev-9" },
-        }),
-      );
+    // As fieldd answers it (GT-7b): the conflict carries the DOCUMENT only —
+    // no loader snapshot — so taking it must read again, snapshot and all.
+    const current = { path: FIXTURE_CONFIG_PATH, text: theirs, revision: "rev-9", exists: true };
+    handlers["terminal.config.write"] = () => {
+      handlers["terminal.config.read"] = () => Promise.resolve({ ...SAVED, ...current });
+      return Promise.reject(new FielddRpcError("CONFLICT", "stale revision", false, { current }));
+    };
     await mount();
     await raiseScrollback();
     click("Save");
     await settle();
     expect(bar()).toContain("config.ghostty changed on disk since this page read it.");
     click("Use the file's version");
+    await settle();
     expect(bar()).toBe("");
+    expect(calls.filter((call) => call.method === "terminal.config.read")).toHaveLength(2);
     click("Config file");
     expect(host?.querySelector("textarea")?.value).toBe(theirs);
+    // The load order is the snapshot's: a page left without one would say nothing here.
+    expect(host?.textContent).toContain("Loaded in this order");
   });
 
   it("can save the draft over the file's newer version, with that version's revision", async () => {
@@ -244,7 +249,7 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
       });
     await mount();
     await raiseScrollback();
-    expect(bar()).toContain("1 error to fix first");
+    expect(bar()).toContain("1 error to fix first — see Config file");
     expect(button("Save").disabled).toBe(true);
   });
 
