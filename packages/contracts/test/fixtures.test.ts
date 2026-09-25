@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { ZodTypeAny } from "zod";
+import { type ZodTypeAny, z } from "zod";
 import {
   AgentFieldDelta,
   AgentFieldSlice,
@@ -80,7 +80,11 @@ import {
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
-import { ScreenshotCaptureResult, ScreenshotHelperEvent } from "../src/screenshot";
+import {
+  ScreenshotCaptureResult,
+  ScreenshotHelperCommand,
+  ScreenshotHelperEvent,
+} from "../src/screenshot";
 import { TerminalCreateParams } from "../src/terminal";
 import {
   AttachControlLeg,
@@ -176,6 +180,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // Swift harness and the Rust crate parse these same files.
   "screenshot-helper-event": ScreenshotHelperEvent,
   "screenshot-capture-result": ScreenshotCaptureResult,
+  // The warm macOS service (bc15f28f): one pipe, both directions — the host's
+  // `capture` command and the helper's idle/ready lines — so one prefix parses
+  // as either side. Its own suite pins each side separately (screenshot.test.ts).
+  "screenshot-service": z.union([ScreenshotHelperCommand, ScreenshotHelperEvent]),
   // AR-1 — the enrollment record is rosettad's `--enroll` input as well as
   // VibeField's truth; the valid fixture is the exact shape rosetta's own
   // integration bench writes (crates/rosettad/tests/enrolled_serve.rs) plus
