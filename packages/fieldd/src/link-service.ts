@@ -110,6 +110,18 @@ export class LinkService extends EventEmitter {
    * the first has installed a node ABORTS that bring-up and starts another
    * (services/mesh.rs `start`: no node present ⇒ teardown + build). */
   private declaring: Promise<void> | null = null;
+  /** UA-P-0k — whether the posture this service holds has LANDED on the floor
+   * behind the current mgmt link. The floor's `disabled` is evidence of a
+   * forgotten posture only while it has not: the floor answers
+   * `native.mesh.self` from its AGGREGATED health, which its own task refreshes
+   * after `start` has already set the unit (field-native `lib.rs`
+   * `health_refresh`, fed by `services/mesh.rs` `Shared::set`), so the boot
+   * default can outlive the ask that ended it — and a second `start` then tears
+   * down the bring-up the first began. Measured 2026-09-24 on the dev stack:
+   * `fieldd.link.posture_restored` 8 ms after the first dial of a cold linked
+   * boot whose ask had landed. A new ask clears it until it lands; so do a
+   * re-dial (a respawned floor holds nothing) and this service's own stop. */
+  private postureLanded = false;
 
   constructor(private readonly opts: LinkServiceOptions) {
     super();
@@ -168,8 +180,10 @@ export class LinkService extends EventEmitter {
    * 2026-09-24: a wedge restart at 12:05:59 left a LINKED desktop with no
    * tailnet node until a new fieldd booted at 14:46:19. So the next probe is
    * brought forward; it reads the floor's own answer and restores the posture
-   * only when the floor holds none. */
+   * only when the floor holds none. The re-dial is also what makes a `disabled`
+   * answer evidence again once an ask has landed (UA-P-0k, `postureLanded`). */
   floorReconnected(): void {
+    this.postureLanded = false;
     if (this.state !== "linked" && this.state !== "capturing") return;
     this.schedule(0);
   }
@@ -227,6 +241,7 @@ export class LinkService extends EventEmitter {
     this.linkFileCorrupt = false;
     this.captureMisses = 0;
     this.nodeState = "disabled";
+    this.postureLanded = false;
     this.authUrl = null;
     // UA-P-0a — unlink is the posture going offline, and the timer goes with
     // it: an unlinked desktop has no node and therefore nothing to probe.
@@ -241,6 +256,7 @@ export class LinkService extends EventEmitter {
   // ---- the posture, as asked of the floor ----
 
   private declarePosture(mode: "capture" | "linked", login?: string): Promise<void> {
+    this.postureLanded = false;
     const asking = this.askFloor(mode, login).finally(() => {
       if (this.declaring === asking) this.declaring = null;
     });
@@ -256,6 +272,7 @@ export class LinkService extends EventEmitter {
           ...(login !== undefined ? { login } : {}),
         }),
       );
+      this.postureLanded = true;
     } catch (error) {
       // The floor being unreachable is not a posture change: the link is still
       // the link, and the next probe that finds the floor holding no posture
@@ -277,6 +294,7 @@ export class LinkService extends EventEmitter {
    * link again — but it does not leave a node running for a desktop that is not
    * scoped to any account. */
   private async stopNode(): Promise<void> {
+    this.postureLanded = false;
     try {
       MeshStopResult.parse(await this.opts.native.request("native.mesh.stop"));
     } catch (error) {
@@ -355,7 +373,15 @@ export class LinkService extends EventEmitter {
       // again. ONLY `disabled`: `starting` is a bring-up in flight that a second
       // ask would abort, and `degraded`/`crashed` are a posture the floor still
       // holds. An ask already in flight (the boot's own) is left to land.
-      if (this.nodeState === "disabled" && this.declaring === null) {
+      //
+      // UA-P-0k (2026-09-24) — and an ask that HAS landed is left alone too,
+      // until the link re-dials: right after `start`, the floor can still answer
+      // its boot default `disabled` (`postureLanded` says why), and restoring
+      // on that read doubled every cold linked boot and every link click — the
+      // floor tore down the bring-up the first ask began and built another. The
+      // UA-P-0j note that the boot's ask was "never doubled" held only against
+      // a probe racing the ask, not against one reading the floor just after it.
+      if (this.nodeState === "disabled" && this.declaring === null && !this.postureLanded) {
         await this.restorePosture();
       }
       this.emitIfChanged();

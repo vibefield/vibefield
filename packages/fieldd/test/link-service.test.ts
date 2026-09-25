@@ -407,7 +407,8 @@ describe("UA-P-0j — a floor that restarts under fieldd gets its posture back",
       await probe(svc); // up and verified: nothing to ask
       expect(starts(params)).toHaveLength(1);
 
-      floor.restart(); // it holds nothing now
+      floor.restart(); // it holds nothing now…
+      svc.floorReconnected(); // …and the mgmt link re-dialed it, as a respawn always does
       await probe(svc);
       expect(starts(params)).toEqual([
         { method: "native.mesh.start", params: { mode: "linked", login: "james@github" } },
@@ -448,7 +449,7 @@ describe("UA-P-0j — a floor that restarts under fieldd gets its posture back",
     }
   });
 
-  it("the boot's own ask is never doubled: a probe that finds `disabled` while it is in flight lets it land", async () => {
+  it("the boot's own ask is never doubled: not by a probe racing it, nor by a stale `disabled` read just after it lands", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
       let release = () => {};
@@ -466,7 +467,16 @@ describe("UA-P-0j — a floor that restarts under fieldd gets its posture back",
 
       release();
       await askLanded(svc);
-      // once it has landed, a floor that STILL holds nothing is asked again
+      // UA-P-0k — landed, and the floor can still answer its boot default for
+      // a beat: `native.mesh.self` reads its AGGREGATED health, which catches up
+      // on its own task. That is not a forgotten posture, and a second `start`
+      // would tear down the bring-up the first one began.
+      await probe(svc);
+      await probe(svc);
+      expect(starts(params)).toHaveLength(1);
+
+      // a re-dial is what makes `disabled` evidence again: a respawned floor
+      svc.floorReconnected();
       await probe(svc);
       expect(starts(params)).toHaveLength(2);
       svc.stop();
@@ -487,6 +497,7 @@ describe("UA-P-0j — a floor that restarts under fieldd gets its posture back",
       ]);
 
       floor.restart();
+      svc.floorReconnected();
       await probe(svc);
       expect(starts(params)).toEqual([
         { method: "native.mesh.start", params: { mode: "capture" } },
@@ -530,6 +541,48 @@ describe("UA-P-0j — a floor that restarts under fieldd gets its posture back",
       await drain();
       expect(calls).toEqual([]);
       offline.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a link click is asked for once: the probe begin() awaits may read the floor's stale `disabled` (UA-P-0k)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // the capture ask lands, and the floor's aggregated health has not caught
+      // up yet — the read `begin()` awaits right after its ask
+      const { svc, params } = build(mkRoot(), (method) =>
+        method === "native.mesh.start"
+          ? Promise.resolve({ mode: "capture", started: true })
+          : notUp("disabled"),
+      );
+      await svc.begin();
+      expect(starts(params)).toEqual([
+        { method: "native.mesh.start", params: { mode: "capture" } },
+      ]);
+      expect(svc.status()).toMatchObject({ linkState: "capturing", link: null });
+      svc.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an ask that never landed is asked again by the next probe that finds `disabled`, with no re-dial", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let refuse = true;
+      const { svc, params } = build(linkedRoot(), (method) => {
+        if (method === "native.mesh.start") {
+          return refuse ? notUp("disabled") : Promise.resolve({ mode: "linked", started: true });
+        }
+        return notUp("disabled");
+      });
+      svc.start();
+      await askLanded(svc); // refused: the floor never took it
+      refuse = false;
+      await probe(svc);
+      expect(starts(params)).toHaveLength(2);
+      svc.stop();
     } finally {
       vi.useRealTimers();
     }

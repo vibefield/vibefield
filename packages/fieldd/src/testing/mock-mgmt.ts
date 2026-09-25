@@ -36,6 +36,15 @@ export class MockMgmtServer {
   meshPosture: { mode: string; login?: string } | null | undefined = undefined;
   /** Every `native.mesh.start` this floor was asked, with its params, in order. */
   readonly meshStarts: Array<Record<string, unknown>> = [];
+  /** UA-P-0k — the real floor answers `native.mesh.self` from its AGGREGATED
+   * health, which its own task refreshes after `start` has set the unit
+   * (field-native `lib.rs` `health_refresh`), so the boot default can outlive
+   * the `start` that ended it. With `meshPosture` opted in, this many
+   * `native.mesh.self` calls after a `start` from NO posture still answer
+   * `disabled`; `meshStaleAnswers` counts the ones given. */
+  meshHealthLag = 0;
+  meshStaleAnswers = 0;
+  private meshStaleLeft = 0;
   /** scripted node-side serve state (C2/AH-1 reconcile tests), keyed by serveId */
   meshServes = new Map<
     string,
@@ -422,11 +431,22 @@ export class MockMgmtServer {
       const p = msg.params ?? {};
       if (msg.method === "native.mesh.start") {
         const mode = String(p["mode"]);
+        if (this.meshPosture === null) this.meshStaleLeft = this.meshHealthLag;
         this.meshPosture = {
           mode,
           ...(typeof p["login"] === "string" ? { login: p["login"] } : {}),
         };
         reply({ result: { mode, started: true } });
+        return;
+      }
+      if (msg.method === "native.mesh.self" && this.meshStaleLeft > 0) {
+        this.meshStaleLeft -= 1;
+        this.meshStaleAnswers += 1;
+        // its own write, after the `start` answer — as the floor's writer task
+        // sends them — so the client has settled the ask before this arrives
+        setTimeout(() => {
+          if (!sock.destroyed) notUp("disabled");
+        }, 10);
         return;
       }
       if (this.meshPosture === null) {
