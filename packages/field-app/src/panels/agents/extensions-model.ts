@@ -1,6 +1,8 @@
 import type {
   AgentExtensionColumn,
   AgentExtensionHolding,
+  AgentExtensionOrigin,
+  AgentExtensionPlugin,
   AgentExtensionRow,
   AgentsExtensionsListResult,
 } from "@vibefield/contracts";
@@ -79,10 +81,8 @@ export interface ExtensionGridRow {
   /** Held two different ways under one name. */
   twoVersions: boolean;
   /** A server at an address (globe) or a program on this Mac (prompt); a skill. */
-  glyph: "globe" | "prompt" | "skill";
+  glyph: "globe" | "prompt" | "snippets";
   cells: Array<{ provider: string; cell: ExtensionCell }>;
-  /** Every holding, per agent, for the row's detail. */
-  holdings: Array<{ provider: string; label: string; items: AgentExtensionHolding[] }>;
 }
 
 export interface ExtensionGridModel {
@@ -99,10 +99,10 @@ export interface ExtensionGridModel {
 
 const MINE = new Set(["own", "agent"]);
 
-const listWords = (names: readonly string[]): string =>
+const listWords = (names: readonly string[], joiner = "and"): string =>
   names.length < 3
-    ? names.join(" and ")
-    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    ? names.join(` ${joiner} `)
+    : `${names.slice(0, -1).join(", ")} ${joiner} ${names[names.length - 1]}`;
 
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
@@ -305,18 +305,11 @@ export function extensionGrid(
         return { fact: factLine(two, fact), factCode: fact.code, factText: fact.text };
       })(),
       twoVersions: key === "servers" && row.versions > 1,
-      glyph: key === "skills" ? "skill" : first?.transport === "stdio" ? "prompt" : "globe",
+      glyph: key === "skills" ? "snippets" : first?.transport === "stdio" ? "prompt" : "globe",
       cells: lens.agents.map((column) => ({
         provider: column.provider,
         cell: extensionCell(lens, key, row, column),
       })),
-      holdings: lens.agents
-        .filter((column) => (row.cells[column.provider]?.length ?? 0) > 0)
-        .map((column) => ({
-          provider: column.provider,
-          label: column.label,
-          items: row.cells[column.provider] ?? [],
-        })),
     };
   });
   // What else the agents hold of this kind, under a name with no row: a row's
@@ -358,7 +351,7 @@ export function builtFromWords(
   };
 }
 
-/** A holding in the row's detail: where it comes from and where it lives. */
+/** One agent's holding, in words: where it comes from and where it lives. */
 export function holdingWords(
   lens: AgentsExtensionsListResult,
   holding: AgentExtensionHolding,
@@ -398,4 +391,696 @@ export function readWords(lens: AgentsExtensionsListResult, now: Date): string {
   if (lens.readAt === undefined) return "";
   const minutes = Math.max(0, Math.round((now.getTime() - Date.parse(lens.readAt)) / 60_000));
   return minutes < 1 ? "Read just now" : `Read ${plural(minutes, "minute", "minutes")} ago`;
+}
+
+/* ── one agent: its Extensions rows and its own lists (pass 23) ──────────────
+   An agent's page in a profile has three rows — Plugins, MCP servers, Skills —
+   each counting what the agent holds, what it borrows included, with a fact
+   line only for an exception; each opens the agent's own list, grouped by
+   where each item comes from. A kind the agent lacks has no row: one sentence
+   beneath says so (N1). Read-only here, like the grid. */
+
+export type AgentListKey = "plugins" | "servers" | "skills";
+
+const LISTS = {
+  plugins: { title: "Plugins", many: "plugins", support: "plugins", kind: "plugin" },
+  servers: { title: "MCP servers", many: "servers", support: "mcpServers", kind: "mcp-server" },
+  skills: { title: "Skills", many: "skills", support: "skills", kind: "skill" },
+} as const;
+
+const LIST_ORDER: readonly AgentListKey[] = ["plugins", "servers", "skills"];
+
+export const agentListTitle = (key: AgentListKey): string => LISTS[key].title;
+
+/** "MCP servers" stays as it is; "Plugins" reads "plugins" inside a sentence. */
+const lowerTitle = (title: string): string =>
+  title.replace(/^[A-Z][a-z]/u, (head) => head.toLowerCase());
+
+/** One thing an agent holds of one kind. */
+interface Held {
+  name: string;
+  description?: string | undefined;
+  origin: AgentExtensionOrigin;
+  enabled: boolean;
+  lender?: string | undefined;
+  /** a server's or a skill's holding */
+  holding?: AgentExtensionHolding;
+  /** a plugin */
+  plugin?: AgentExtensionPlugin;
+}
+
+function heldOf(lens: AgentsExtensionsListResult, provider: string, key: AgentListKey): Held[] {
+  if (key === "plugins") {
+    return (lens.plugins[provider] ?? []).map((plugin) => ({
+      name: plugin.name,
+      description: plugin.description,
+      origin: plugin.origin,
+      enabled: plugin.enabled,
+      lender: plugin.lender,
+      plugin,
+    }));
+  }
+  const rows = key === "servers" ? lens.servers : lens.skills;
+  return rows.flatMap((row) =>
+    (row.cells[provider] ?? []).map((holding) => ({
+      name: row.name,
+      description: row.description,
+      origin: holding.origin,
+      enabled: holding.enabled,
+      lender: holding.lender,
+      holding,
+    })),
+  );
+}
+
+/** Why an agent that could not be read has nothing to show. */
+function failureWords(column: AgentExtensionColumn): string | null {
+  if (column.failure === undefined) return null;
+  return column.failure.status === "unsupported"
+    ? `VibeField doesn’t read ${column.label}’s plugins, servers and skills yet.`
+    : `${column.label}’s plugins, servers and skills couldn’t be read: ${column.failure.message}`;
+}
+
+export interface AgentExtensionsRowModel {
+  key: AgentListKey;
+  title: string;
+  glyph: "plugin" | "globe" | "snippets";
+  /** How many it holds, what it borrows included, or "None"; empty when unread. */
+  value: string;
+  /** What wants a look, set apart: a server that asks for a sign-in. */
+  attention: string;
+  /** The other exceptions, in words; empty when there are none. */
+  fact: string;
+  /** VibeField can't read this kind of the agent yet: the row opens nothing. */
+  unread: boolean;
+}
+
+export interface AgentExtensionsModel {
+  label: string;
+  rows: AgentExtensionsRowModel[];
+  /** Above the rows: the agent keeps every kind in one place. */
+  sub: string | null;
+  /** Beneath the rows: the kinds the agent has none of (N1). */
+  lacks: string | null;
+  /** The agent could not be read at all. */
+  failure: string | null;
+}
+
+/** An agent's Extensions rows on its page in a profile; null when the lens has no such agent. */
+export function agentExtensions(
+  lens: AgentsExtensionsListResult,
+  provider: string,
+): AgentExtensionsModel | null {
+  const column = lens.agents.find((candidate) => candidate.provider === provider);
+  if (column === undefined) return null;
+  const { label } = column;
+  const failure = failureWords(column);
+  if (failure !== null) return { label, rows: [], sub: null, lacks: null, failure };
+  const has = LIST_ORDER.filter((key) => column.support[LISTS[key].support] !== undefined);
+  const missing = LIST_ORDER.filter((key) => !has.includes(key));
+  const allShared =
+    has.length > 0 && has.every((key) => column.support[LISTS[key].support]?.store === "shared");
+  const rows = has.map((key): AgentExtensionsRowModel => {
+    const words = LISTS[key];
+    const support = column.support[words.support];
+    const glyph = key === "plugins" ? "plugin" : key === "servers" ? "globe" : "snippets";
+    if (support?.read !== true) {
+      return {
+        key,
+        title: words.title,
+        glyph,
+        value: "",
+        attention: "",
+        fact: "VibeField can’t read these yet",
+        unread: true,
+      };
+    }
+    const held = heldOf(lens, provider, key);
+    const lent = held.filter((item) => item.origin === "borrowed");
+    // what is built into the agent is not counted: it comes with the app (pass 23)
+    const counted = held.filter(
+      (item) => item.origin !== "borrowed" && !(key === "skills" && item.origin === "bundled"),
+    );
+    const asking = held.find(
+      (item) =>
+        item.origin !== "borrowed" && item.enabled && item.holding?.auth === "needs-sign-in",
+    );
+    const offHere = held.filter(
+      (item) => item.holding?.shared === true && item.holding.switchable === true && !item.enabled,
+    ).length;
+    const lenders = [
+      ...new Set(lent.flatMap((item) => (item.lender === undefined ? [] : [item.lender]))),
+    ].map((lender) => labelOf(lens.agents, lender));
+    const partial = column.unread?.some((entry) => entry.kind === words.kind) === true;
+    const fact = [
+      offHere > 0 ? `${plural(offHere, "shared skill", "shared skills")} turned off here` : "",
+      partial ? "Not all could be read" : "",
+      support.store === "shared" && !allShared ? "Shared by every profile" : "",
+      support.changes === "in-app" ? `Changed only inside ${label}` : "",
+      lent.length === 0
+        ? ""
+        : counted.length > 0
+          ? `${lent.length} of them from ${listWords(lenders)}`
+          : `All from ${listWords(lenders)} on This Mac`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const total = counted.length + lent.length;
+    return {
+      key,
+      title: words.title,
+      glyph,
+      value: total > 0 ? String(total) : "None",
+      attention: asking === undefined ? "" : `${asking.name} asks you to sign in`,
+      fact,
+      unread: false,
+    };
+  });
+  return {
+    label,
+    rows,
+    sub: allShared ? `${label} keeps them in one place, shared by every profile` : null,
+    lacks:
+      missing.length > 0
+        ? `${label} has no ${listWords(
+            missing.map((key) => lowerTitle(LISTS[key].title)),
+            "or",
+          )}.`
+        : null,
+    failure: null,
+  };
+}
+
+export interface AgentListItem {
+  key: string;
+  name: string;
+  /** A plugin's initial on its tile; a server at an address or a program; a skill. */
+  glyph: "plugin" | "globe" | "prompt" | "snippets";
+  initial?: string;
+  /** What is typed — a target, a version — set as code. */
+  code: string;
+  /** The rest, in words. */
+  text: string;
+  /** On the right: its state, when there is one to say ("Off", "Signed in"). */
+  state: string;
+  attention: boolean;
+}
+
+export interface AgentListSection {
+  key: string;
+  title: string;
+  sub: string;
+  items: AgentListItem[];
+  /** In place of the items: one line counting them (what is built in). */
+  summary?: { title: string; text: string; value: string };
+}
+
+export interface AgentListModel {
+  key: AgentListKey;
+  title: string;
+  label: string;
+  /** Above the list: how the agent keeps this kind, when that is particular. */
+  intro: string | null;
+  sections: AgentListSection[];
+  /** Nothing of its own: the sentence in its section's place. */
+  empty: string | null;
+  /** Why the list is missing, or not whole. */
+  unread: string | null;
+}
+
+/** A commit reads as its first seven characters (pass 23). */
+const versionWords = (version: string | undefined): string =>
+  version === undefined ? "" : /^[0-9a-f]{12,}$/iu.test(version) ? version.slice(0, 7) : version;
+
+function listItem(key: AgentListKey, item: Held): AgentListItem {
+  if (key === "plugins" && item.plugin !== undefined) {
+    const plugin = item.plugin;
+    return {
+      key: plugin.id,
+      name: plugin.name,
+      glyph: "plugin",
+      initial: plugin.name.slice(0, 1).toUpperCase(),
+      code: versionWords(plugin.version),
+      text: [
+        plugin.marketplace === undefined ? "" : `from ${plugin.marketplace}`,
+        plugin.description ?? "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      state: plugin.enabled ? "" : "Off",
+      attention: false,
+    };
+  }
+  const holding = item.holding!;
+  if (key === "servers") {
+    const asks = holding.enabled && holding.auth === "needs-sign-in";
+    return {
+      key: holding.id,
+      name: item.name,
+      glyph: holding.transport === "stdio" ? "prompt" : "globe",
+      code: holding.target ?? "",
+      text: [
+        holding.env !== undefined && holding.env.length > 0
+          ? `reads ${holding.env.join(", ")}`
+          : "",
+        holding.headers !== undefined && holding.headers.length > 0
+          ? `sends ${holding.headers.join(", ")}`
+          : "",
+        holding.origin === "project" ? (holding.project ?? "") : "",
+        holding.origin === "plugin" && holding.plugin !== undefined
+          ? `from the ${holding.plugin} plugin`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      state: !holding.enabled
+        ? "Off"
+        : asks
+          ? "Asks you to sign in"
+          : holding.auth === "signed-in"
+            ? "Signed in"
+            : "",
+      attention: asks,
+    };
+  }
+  return {
+    key: holding.id,
+    name: item.name,
+    glyph: "snippets",
+    code: "",
+    text: item.description ?? "",
+    state: !holding.enabled
+      ? "Off"
+      : holding.origin === "plugin"
+        ? (holding.plugin ?? "")
+        : holding.switchable === true
+          ? "On"
+          : "",
+    attention: false,
+  };
+}
+
+/** One agent's own list of one kind, grouped by where each item comes from. */
+export function agentList(
+  lens: AgentsExtensionsListResult,
+  provider: string,
+  key: AgentListKey,
+  /** "in Work" · "on This Mac" */
+  where: string,
+): AgentListModel | null {
+  const column = lens.agents.find((candidate) => candidate.provider === provider);
+  if (column === undefined) return null;
+  const words = LISTS[key];
+  const { label } = column;
+  const bare = { key, title: words.title, label, intro: null, sections: [], empty: null };
+  const failure = failureWords(column);
+  if (failure !== null) return { ...bare, unread: failure };
+  const support = column.support[words.support];
+  if (support === undefined) {
+    return { ...bare, empty: `${label} has no ${lowerTitle(words.title)}.`, unread: null };
+  }
+  if (!support.read) {
+    return { ...bare, unread: `VibeField can’t read ${label}’s ${words.many} yet.` };
+  }
+  const shared = support.store === "shared";
+  const inApp = support.changes === "in-app";
+  const intro =
+    shared && inApp
+      ? `${label} keeps its ${words.many} in one place for every profile, and changes them only inside its app.`
+      : shared
+        ? `${label} keeps its ${words.many} in one place, for every profile.`
+        : inApp
+          ? `${label} changes its ${words.many} only inside its app.`
+          : null;
+  const held = heldOf(lens, provider, key);
+  const of = (test: (item: Held) => boolean) =>
+    held.filter(test).map((item) => listItem(key, item));
+  const sections: AgentListSection[] = [];
+  const push = (section: AgentListSection) => {
+    if (section.items.length > 0 || section.summary !== undefined) sections.push(section);
+  };
+
+  const own = (item: Held) => item.origin === "own";
+  if (key === "skills") {
+    const switchable = held.some((item) => own(item) && item.holding?.switchable === true);
+    push({
+      key: "own",
+      title: "Yours",
+      sub: `In ${label}’s folder ${where}`,
+      items: of((item) => own(item) && item.holding?.shared !== true),
+    });
+    push({
+      key: "shared",
+      title: switchable ? "Your skills" : "Shared skills",
+      sub: switchable
+        ? `In a folder every profile reads; whether each is on is kept ${where}`
+        : "In a folder every profile reads",
+      items: of((item) => own(item) && item.holding?.shared === true),
+    });
+  } else {
+    push({
+      key: "own",
+      title: key === "plugins" ? "Installed" : "Servers",
+      sub: "",
+      items: of(own),
+    });
+  }
+  push({
+    key: "agent",
+    title: `Written by ${label}`,
+    sub: `${label} writes these itself, from what worked in a session.`,
+    items: of((item) => item.origin === "agent"),
+  });
+  push({
+    key: "project",
+    title: "Only in one project",
+    sub: `Added for one folder; ${label} keeps them ${where}.`,
+    items: of((item) => item.origin === "project"),
+  });
+  push({
+    key: "plugin",
+    title: "From plugins",
+    sub: "They come and go with their plugin.",
+    items: of((item) => item.origin === "plugin"),
+  });
+  push(
+    key === "plugins"
+      ? {
+          key: "managed",
+          title: "Required by your organization",
+          sub: "Your organization installs these; they change with it.",
+          items: of((item) => item.origin === "managed"),
+        }
+      : {
+          key: "managed",
+          title: "From its app or your organization",
+          sub: "They change with the app or your organization.",
+          items: of((item) => item.origin === "managed"),
+        },
+  );
+  const lenders = [
+    ...new Set(
+      held.flatMap((item) =>
+        item.origin === "borrowed" && item.lender !== undefined ? [item.lender] : [],
+      ),
+    ),
+  ];
+  for (const lender of lenders) {
+    const from = labelOf(lens.agents, lender);
+    push({
+      key: `borrowed:${lender}`,
+      title: `From ${from} on This Mac`,
+      sub: `${label} loads these from ${from}’s own settings on This Mac, in every profile; they change where they live.`,
+      items: of((item) => item.origin === "borrowed" && item.lender === lender),
+    });
+  }
+  const built = held.filter((item) => item.origin === "bundled");
+  if (built.length > 0) {
+    const names = built.map((item) => item.name);
+    push({
+      key: "bundled",
+      title: "",
+      sub: "",
+      items: [],
+      summary: {
+        title: `Built into ${label}`,
+        text: `${names.slice(0, 5).join(" · ")}${names.length > 5 ? ` and ${names.length - 5} more` : ""}`,
+        value: String(names.length),
+      },
+    });
+  }
+  if (key === "plugins" && column.support.marketplaces?.read === true) {
+    push({
+      key: "marketplaces",
+      title: "Marketplaces",
+      sub: `Where ${label} finds plugins`,
+      items: (lens.marketplaces[provider] ?? []).map((market) => ({
+        key: market.id,
+        name: market.name,
+        glyph: "plugin",
+        initial: market.name.slice(0, 1).toUpperCase(),
+        code: market.source ?? "",
+        text: "",
+        state: market.enabled ? "" : "Off",
+        attention: false,
+      })),
+    });
+  }
+  const mine = sections.some((section) => ["own", "shared"].includes(section.key));
+  const partial = column.unread?.find((entry) => entry.kind === words.kind);
+  return {
+    key,
+    title: words.title,
+    label,
+    intro,
+    sections,
+    empty: mine
+      ? null
+      : `${label} has no ${key === "servers" ? "MCP servers" : words.many} of its own ${where}.`,
+    unread:
+      partial === undefined
+        ? null
+        : `Not all of ${label}’s ${words.many} could be read: ${partial.message}`,
+  };
+}
+
+/* ── one server or skill of the profile (pass 24's item page) ────────────────
+   The grid's row name opens it: what it is, the versions the agents hold
+   under its name, and a row per agent saying how that agent holds it. Its
+   acts — Use this one everywhere, a switch per agent, Remove — are S4c's. */
+
+export interface ExtensionItemVersion {
+  code: string;
+  /** What else tells it apart: the names a server reads and sends. */
+  names: string;
+  agents: string;
+}
+
+export interface ExtensionItemFact {
+  term: string;
+  /** The term is a name (a variable, a header), set as code. */
+  termCode?: boolean;
+  code?: string;
+  text?: string;
+  attention?: boolean;
+}
+
+export interface ExtensionItemAgent {
+  provider: string;
+  label: string;
+  cell: ExtensionCell;
+  /** On the right, beside the cell's mark: "On", "Off", "Always on", "Signed in", … */
+  state: string;
+  attention: boolean;
+  /** How the agent holds it — where its holding comes from — or why it has none. */
+  fact: string;
+  /** Where the agent keeps it. */
+  place?: string;
+}
+
+export interface ExtensionItemModel {
+  key: ExtensionKindKey;
+  name: string;
+  /** "MCP server" or "Skill". */
+  kindWord: string;
+  glyph: "globe" | "prompt" | "snippets";
+  /** No agent of the profile holds it now. */
+  gone: boolean;
+  versions: { title: string; sub: string; entries: ExtensionItemVersion[] } | null;
+  facts: ExtensionItemFact[];
+  agentsSub: string;
+  agents: ExtensionItemAgent[];
+  /** A skill in a folder every profile reads: where, and who loads it from there. */
+  sharedFolder: string | null;
+}
+
+const namesWords = (holding: AgentExtensionHolding): string =>
+  [
+    holding.env !== undefined && holding.env.length > 0 ? `reads ${holding.env.join(", ")}` : "",
+    holding.headers !== undefined && holding.headers.length > 0
+      ? `sends ${holding.headers.join(", ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+function stateOf(
+  lens: AgentsExtensionsListResult,
+  cell: ExtensionCell,
+  holding: AgentExtensionHolding | undefined,
+): { state: string; attention: boolean } {
+  switch (cell.s) {
+    case "on":
+      if (holding?.auth === "needs-sign-in")
+        return { state: "Asks you to sign in", attention: true };
+      if (cell.attn) return { state: "Another version", attention: true };
+      return { state: holding?.auth === "signed-in" ? "Signed in" : "On", attention: false };
+    case "off":
+      return { state: "Off", attention: false };
+    case "fixed":
+      return { state: "Always on", attention: false };
+    case "app":
+      return { state: cell.on ? "On" : "Off", attention: false };
+    case "plugin":
+      return { state: cell.glyph === "folder" ? "One project" : "Its own", attention: false };
+    case "lent":
+      return { state: `${labelOf(lens.agents, cell.from)}’s`, attention: false };
+    case "none":
+      return { state: "—", attention: false };
+    default:
+      return { state: "Not read", attention: false };
+  }
+}
+
+/** The page of one server or skill the profile's agents hold. */
+export function extensionItem(
+  lens: AgentsExtensionsListResult,
+  key: ExtensionKindKey,
+  name: string,
+): ExtensionItemModel {
+  const kindWord = key === "servers" ? "MCP server" : "Skill";
+  const row = (key === "servers" ? lens.servers : lens.skills).find(
+    (candidate) => candidate.name === name,
+  );
+  if (row === undefined) {
+    return {
+      key,
+      name,
+      kindWord,
+      glyph: key === "skills" ? "snippets" : "globe",
+      gone: true,
+      versions: null,
+      facts: [],
+      agentsSub: "",
+      agents: [],
+      sharedFolder: null,
+    };
+  }
+  const holdings = lens.agents.flatMap((column) =>
+    (row.cells[column.provider] ?? []).map((holding) => ({ column, holding })),
+  );
+  const first = holdings.find(({ holding }) => holding.transport !== undefined)?.holding;
+  const folderOf = (holding: AgentExtensionHolding) => holding.linkTarget ?? holding.place ?? "";
+
+  let versions: ExtensionItemModel["versions"] = null;
+  if (row.versions > 1) {
+    const entries: ExtensionItemVersion[] = [];
+    for (let index = 0; index < row.versions; index += 1) {
+      const those = holdings.filter(({ holding }) => (holding.version ?? 0) === index);
+      const one = those[0]?.holding;
+      if (one === undefined) continue;
+      entries.push({
+        code: key === "servers" ? (one.target ?? "") : folderOf(one),
+        names: key === "servers" ? namesWords(one) : "",
+        agents: listWords([...new Set(those.map(({ column }) => column.label))]),
+      });
+    }
+    versions =
+      key === "servers"
+        ? {
+            title: row.versions === 2 ? "Two versions" : `${row.versions} versions`,
+            sub: `The agents hold ${row.versions === 2 ? "two" : row.versions} different servers named ${name}.`,
+            entries,
+          }
+        : {
+            title: row.versions === 2 ? "In two places" : `In ${row.versions} places`,
+            sub: `The agents load ${name} from different folders; an edit to one doesn’t reach the other.`,
+            entries,
+          };
+  }
+
+  const facts: ExtensionItemFact[] = [];
+  if (key === "servers") {
+    facts.push(
+      row.versions > 1
+        ? { term: "Connects to", text: "Two versions, above", attention: true }
+        : { term: "Connects to", code: first?.target ?? "" },
+      {
+        term: "Kind",
+        text: first?.transport === "stdio" ? "A program on this Mac" : "A server at a URL",
+      },
+    );
+    const env = [...new Set(holdings.flatMap(({ holding }) => holding.env ?? []))].sort();
+    const headers = [...new Set(holdings.flatMap(({ holding }) => holding.headers ?? []))].sort();
+    for (const variable of env) {
+      facts.push({
+        term: variable,
+        termCode: true,
+        text: "Given to the server when it starts. Its value stays with the agent; VibeField sees only the name.",
+      });
+    }
+    for (const header of headers) {
+      facts.push({
+        term: header,
+        termCode: true,
+        text: "Sent with each request. Its value stays with the agent; VibeField sees only the name.",
+      });
+    }
+    facts.push({ term: "Kept", text: "In each agent’s own settings" });
+  } else {
+    if (row.description !== undefined) facts.push({ term: "What it does", text: row.description });
+    const folders = [...new Set(holdings.map(({ holding }) => folderOf(holding)).filter(Boolean))];
+    if (folders.length === 1) facts.push({ term: "Folder", code: folders[0]! });
+    // a skill in the shared folder says so beneath the agents instead
+    const holders = [...new Set(holdings.map(({ column }) => column.label))];
+    if (!holdings.some(({ holding }) => holding.shared === true)) {
+      facts.push({
+        term: "Each agent",
+        text:
+          holders.length === 1
+            ? `Only ${holders[0]} has it, in its own folder`
+            : "Each keeps its own copy",
+      });
+    }
+  }
+
+  const agents = lens.agents.map((column): ExtensionItemAgent => {
+    const cell = extensionCell(lens, key, row, column);
+    const holding = row.cells[column.provider]?.[0];
+    const base = {
+      provider: column.provider,
+      label: column.label,
+      cell,
+      ...stateOf(lens, cell, holding),
+    };
+    if (holding === undefined) {
+      const fact =
+        cell.s === "off"
+          ? `${column.label} doesn’t have it`
+          : cell.s === "app"
+            ? `${column.label} doesn’t have it; it changes its ${WORDS[key].many} only inside its app`
+            : cell.why;
+      return { ...base, fact };
+    }
+    const words = holdingWords(lens, holding);
+    // two versions: what this agent's reads, so the difference shows
+    const names = key === "servers" && row.versions > 1 ? namesWords(holding) : "";
+    return {
+      ...base,
+      fact: [words.origin, names].filter(Boolean).join(" · "),
+      ...(words.place !== undefined ? { place: words.place } : {}),
+    };
+  });
+
+  const sharedHoldings = holdings.filter(({ holding }) => holding.shared === true);
+  const sharedPlace = sharedHoldings[0]?.holding.place;
+  const sharedFolder =
+    key !== "skills" || sharedPlace === undefined
+      ? null
+      : `${sharedPlace.replace(/\/[^/]+$/u, "")} is a folder every profile reads; ${listWords([
+          ...new Set(sharedHoldings.map(({ column }) => column.label)),
+        ])} ${sharedHoldings.length === 1 ? "loads" : "load"} ${name} from there. Removing it there removes it for all of them.`;
+
+  return {
+    key,
+    name,
+    kindWord,
+    glyph: key === "skills" ? "snippets" : first?.transport === "stdio" ? "prompt" : "globe",
+    gone: false,
+    versions,
+    facts,
+    agentsSub: key === "servers" ? "Each agent signs in to a server on its own" : "",
+    agents,
+    sharedFolder,
+  };
 }

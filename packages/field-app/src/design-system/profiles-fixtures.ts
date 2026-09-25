@@ -29,6 +29,11 @@ export type ProfilesFixtureState =
   | "signing in"
   | "agent"
   | "sign-ins"
+  | "agent's plugins"
+  | "agent's servers"
+  | "agent's skills"
+  | "server"
+  | "skill"
   | "new";
 
 export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
@@ -41,6 +46,11 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "signing in",
   "agent",
   "sign-ins",
+  "agent's plugins",
+  "agent's servers",
+  "agent's skills",
+  "server",
+  "skill",
   "new",
 ];
 

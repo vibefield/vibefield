@@ -22,7 +22,14 @@ import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } 
 import { refusalSentence } from "../../account/use-account";
 import type { SettingsSubpage } from "../SettingsDialog";
 import type { AgentsNotice } from "./AgentsView";
-import { ProfileExtensions } from "./ExtensionsSection";
+import {
+  AgentExtensionList,
+  AgentExtensions,
+  ExtensionItem,
+  ProfileExtensions,
+} from "./ExtensionsSection";
+import { agentListSubpage, extensionItemSubpage } from "./ExtensionsView";
+import type { AgentListKey, ExtensionKindKey } from "./extensions-model";
 import {
   NewProfileView,
   ProfileAgentPageView,
@@ -30,7 +37,7 @@ import {
   profileAgentSubpage,
   SignInCard,
 } from "./ProfilesView";
-import { agentRow, plural, profilePage, signInNote } from "./profiles-model";
+import { agentRow, inOnWords, plural, profilePage, signInNote } from "./profiles-model";
 import { SignInTerminal } from "./SignInTerminal";
 
 // Agent Profiles' controller (the design record's R1, pass 16).
@@ -51,6 +58,11 @@ import { SignInTerminal } from "./SignInTerminal";
 // removed again, so a cancelled add adds nothing. Leaving the page does NOT
 // end it: a browser-based login can still finish, and the row it belongs to
 // offers Cancel wherever it is shown next.
+//
+// AR-S4b — Extensions: below a profile's page, one server's or skill's own
+// page (a list's row name opens it); below an agent's, its own plugins,
+// servers or skills (its Extensions rows open them). Each reads the profile's
+// lens itself (ExtensionsSection.tsx).
 
 /** How long a closed sign-in waits for the identity read before it says so. */
 const IDENTITY_WAIT_MS = 15_000;
@@ -61,6 +73,10 @@ const UNSEEN_CHECK_MS = 3_000;
 export type ProfilesRoute =
   | { kind: "profile"; set: string }
   | { kind: "agent"; set: string; provider: string }
+  /** AR-S4b — one agent's own plugins, servers or skills, a page below the agent's */
+  | { kind: "list"; set: string; provider: string; list: AgentListKey }
+  /** AR-S4b — one server or skill of the profile, a page below the profile's */
+  | { kind: "item"; set: string; list: ExtensionKindKey; name: string }
   | { kind: "new" };
 
 interface SignIn {
@@ -196,28 +212,47 @@ export function ProfilesSection({
   const set: AgentProfileSet | undefined =
     route.kind === "new" ? undefined : feed?.sets.find((candidate) => candidate.id === route.set);
   const page = set === undefined ? undefined : profilePage(set, context);
+  // the agent a page is about: its own page, or one of its lists
+  const provider = route.kind === "agent" || route.kind === "list" ? route.provider : undefined;
   const persona =
-    route.kind === "agent" && set !== undefined
-      ? set.personas.find((candidate) => candidate.provider === route.provider)
+    provider !== undefined && set !== undefined
+      ? set.personas.find((candidate) => candidate.provider === provider)
       : undefined;
   const row = persona === undefined ? undefined : agentRow(context, persona);
 
-  // The header: an agent's page names the agent and its profile, with the way back.
+  // The header: a page below the profile's names itself and its profile, with the way back.
   const backToProfile = useCallback((): void => {
-    if (route.kind === "agent") onRoute({ kind: "profile", set: route.set });
+    if (route.kind !== "new") onRoute({ kind: "profile", set: route.set });
+  }, [route, onRoute]);
+  const backToAgent = useCallback((): void => {
+    if (route.kind === "list") {
+      onRoute({ kind: "agent", set: route.set, provider: route.provider });
+    }
   }, [route, onRoute]);
   const subpageKey =
-    route.kind === "agent" && set !== undefined && row !== undefined
-      ? `${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}`
-      : null;
+    set === undefined
+      ? null
+      : route.kind === "agent" && row !== undefined
+        ? `agent|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}`
+        : route.kind === "list" && row !== undefined
+          ? `list|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}|${route.list}`
+          : route.kind === "item"
+            ? `item|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${route.list}|${route.name}`
+            : null;
   // keyed by what the header shows: a feed frame that changes nothing on it does not rebuild it
   useEffect(() => {
-    onSubpage(
-      route.kind === "agent" && set !== undefined && row !== undefined
-        ? profileAgentSubpage(set, row.label, backToProfile)
-        : null,
-    );
-  }, [subpageKey, onSubpage, backToProfile]);
+    if (set === undefined) {
+      onSubpage(null);
+    } else if (route.kind === "agent" && row !== undefined) {
+      onSubpage(profileAgentSubpage(set, row.label, backToProfile));
+    } else if (route.kind === "list" && row !== undefined) {
+      onSubpage(agentListSubpage(set, row.label, route.list, backToAgent));
+    } else if (route.kind === "item") {
+      onSubpage(extensionItemSubpage(set, route.list, route.name, backToProfile));
+    } else {
+      onSubpage(null);
+    }
+  }, [subpageKey, onSubpage, backToProfile, backToAgent]);
   useEffect(() => () => onSubpage(null), [onSubpage]);
 
   // A page whose profile (or sign-in) went away closes to where it lived —
@@ -235,7 +270,7 @@ export function ProfilesSection({
       return;
     }
     if (
-      route.kind === "agent" &&
+      (route.kind === "agent" || route.kind === "list") &&
       persona === undefined &&
       seen.current.has(`${route.set}:${route.provider}`)
     ) {
@@ -248,15 +283,23 @@ export function ProfilesSection({
   const routeKey =
     route.kind === "new"
       ? "new"
-      : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}`;
+      : route.kind === "item"
+        ? `item:${route.set}:${route.list}:${route.name}`
+        : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}${
+            route.kind === "list" ? `:${route.list}` : ""
+          }`;
   const currentRoute = useRef(routeKey);
   currentRoute.current = routeKey;
+  // what each page reads usage for: an agent's own, a profile's every agent;
+  // the Extensions pages show no usage
   const usageProfileIds =
-    route.kind === "agent"
-      ? persona === undefined
-        ? []
-        : [persona.profileId]
-      : (set?.personas.map((item) => item.profileId) ?? []);
+    route.kind === "list" || route.kind === "item"
+      ? []
+      : route.kind === "agent"
+        ? persona === undefined
+          ? []
+          : [persona.profileId]
+        : (set?.personas.map((item) => item.profileId) ?? []);
   const usagePageKey =
     usageProfileIds.length === 0 ? null : JSON.stringify([routeKey, usageProfileIds]);
   useEffect(() => {
@@ -728,6 +771,37 @@ export function ProfilesSection({
         onAddSignIn={(signInRoute) =>
           void startSignIn(row.persona.profileId, row.provider, set.id, "agent", false, signInRoute)
         }
+        extensions={
+          // AR-S4b — pass 23's three rows, each opening the agent's own list
+          <AgentExtensions
+            set={set.id}
+            provider={row.provider}
+            onOpen={(list) => onRoute({ kind: "list", set: set.id, provider: row.provider, list })}
+          />
+        }
+      />
+    );
+  } else if (route.kind === "list" && set !== undefined && row !== undefined) {
+    body = (
+      <AgentExtensionList
+        key={`${set.id}:${row.provider}:${route.list}`}
+        set={set.id}
+        provider={row.provider}
+        agent={row.label}
+        list={route.list}
+        profile={set.label}
+        where={inOnWords(set)}
+        onOpenProfile={() => onRoute({ kind: "profile", set: set.id })}
+      />
+    );
+  } else if (route.kind === "item" && set !== undefined) {
+    body = (
+      <ExtensionItem
+        key={`${set.id}:${route.list}:${route.name}`}
+        set={set.id}
+        list={route.list}
+        name={route.name}
+        where={inOnWords(set)}
       />
     );
   } else if (page !== undefined) {
@@ -744,7 +818,11 @@ export function ProfilesSection({
         extensions={
           // AR-S4b — read when the page opens (a profile with no agent has nothing to read)
           page.rows.length > 0 ? (
-            <ProfileExtensions set={page.set.id} profile={page.set.label} />
+            <ProfileExtensions
+              set={page.set.id}
+              profile={page.set.label}
+              onOpenItem={(list, name) => onRoute({ kind: "item", set: page.set.id, list, name })}
+            />
           ) : undefined
         }
         revealLabel={revealLabel}

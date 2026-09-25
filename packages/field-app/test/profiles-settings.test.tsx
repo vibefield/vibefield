@@ -469,7 +469,12 @@ describe("the Agent Profiles group in the sidebar", () => {
 
 type Door = (params: Record<string, unknown>) => unknown;
 
-function fake(doors: Record<string, Door>, initialUsage: AgentAccountUsageBatch = USAGE_BATCH) {
+function fake(
+  doors: Record<string, Door>,
+  initialUsage: AgentAccountUsageBatch = USAGE_BATCH,
+  /** what `agents.extensions.subscribe` answers first; absent, a read under way */
+  extensions?: unknown,
+) {
   let onUsage: ((batch: AgentAccountUsageBatch) => void) | undefined;
   const request = vi.fn(async (method: string, params?: unknown) => {
     const door = doors[method];
@@ -487,7 +492,7 @@ function fake(doors: Record<string, Door>, initialUsage: AgentAccountUsageBatch 
         const set = (params as { set?: string } | undefined)?.set ?? "native";
         return {
           subId: `extensions:${set}`,
-          snapshot: {
+          snapshot: extensions ?? {
             set,
             reading: true,
             agents: [],
@@ -1236,6 +1241,91 @@ describe("a new profile", () => {
       { label: "Client demo", glyph: "rocket" },
     ]);
     expect(section.onRoute).toHaveBeenCalledWith({ kind: "profile", set: "client-demo" });
+  });
+});
+
+describe("Extensions below a profile and an agent (AR-S4b)", () => {
+  // the contracts fixture: Work's agents as fieldd would read them
+  const LENS: unknown = JSON.parse(
+    readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "..",
+        "contracts",
+        "fixtures",
+        "agents-extensions.valid.json",
+      ),
+      "utf8",
+    ),
+  );
+
+  it("an agent's rows open its own list, the list leads back, and a list's name opens its page", async () => {
+    const f = fake(doors(), USAGE_BATCH, LENS);
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "agent", set: "work", provider: "claude" },
+    });
+    const kinds = [...(container?.querySelectorAll("[data-ext-kind]") ?? [])];
+    expect(kinds.map((row) => row.querySelector(".vf-agents-value")?.textContent)).toEqual([
+      "1",
+      "3",
+      "3",
+    ]);
+    await click(button("MCP servers"));
+    expect(section.onRoute).toHaveBeenLastCalledWith({
+      kind: "list",
+      set: "work",
+      provider: "claude",
+      list: "servers",
+    });
+
+    await section.render({
+      route: { kind: "list", set: "work", provider: "claude", list: "servers" },
+    });
+    const listHead = section.onSubpage.mock.calls.at(-1)?.[0];
+    expect(listHead).toMatchObject({ title: "MCP servers", backLabel: "Back to Claude Code" });
+    expect(text()).toContain("Only in one project");
+    listHead.onBack();
+    expect(section.onRoute).toHaveBeenLastCalledWith({
+      kind: "agent",
+      set: "work",
+      provider: "claude",
+    });
+    await click(button("Open Work"));
+    expect(section.onRoute).toHaveBeenLastCalledWith({ kind: "profile", set: "work" });
+
+    await section.render({ route: { kind: "profile", set: "work" } });
+    await click(container!.querySelector<HTMLButtonElement>('[data-ext-row="linear"] button')!);
+    expect(section.onRoute).toHaveBeenLastCalledWith({
+      kind: "item",
+      set: "work",
+      list: "servers",
+      name: "linear",
+    });
+    const usageReads = f.calls("agents.usage").length;
+    await section.render({
+      route: { kind: "item", set: "work", list: "servers", name: "linear" },
+    });
+    const itemHead = section.onSubpage.mock.calls.at(-1)?.[0];
+    expect(itemHead).toMatchObject({ title: "linear", backLabel: "Back to Work" });
+    expect(text()).toContain("Two versions");
+    expect(container?.querySelectorAll("[data-ext-agent]")).toHaveLength(5);
+    itemHead.onBack();
+    expect(section.onRoute).toHaveBeenLastCalledWith({ kind: "profile", set: "work" });
+    // the Extensions pages show no usage, so opening one reads none
+    expect(f.calls("agents.usage")).toHaveLength(usageReads);
+  });
+
+  it("a list whose agent leaves the profile closes to the profile", async () => {
+    const f = fake(doors(), USAGE_BATCH, LENS);
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "list", set: "work", provider: "claude", list: "skills" },
+    });
+    expect(text()).toContain("From plugins");
+    await section.render({ feed: feed([NATIVE, { ...WORK, personas: [] }]) });
+    expect(section.onRoute).toHaveBeenLastCalledWith({ kind: "profile", set: "work" });
   });
 });
 

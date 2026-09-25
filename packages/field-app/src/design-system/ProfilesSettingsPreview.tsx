@@ -1,5 +1,13 @@
 import { type ReactElement, useEffect, useMemo } from "react";
-import { ProfileExtensionsView } from "../panels/agents/ExtensionsView";
+import {
+  AgentExtensionListView,
+  AgentExtensionsView,
+  agentListSubpage,
+  ExtensionItemView,
+  extensionItemSubpage,
+  ProfileExtensionsView,
+} from "../panels/agents/ExtensionsView";
+import type { AgentListKey, ExtensionKindKey } from "../panels/agents/extensions-model";
 import {
   NewProfileView,
   ProfileAgentPageView,
@@ -7,7 +15,7 @@ import {
   profileAgentSubpage,
   SignInCard,
 } from "../panels/agents/ProfilesView";
-import { agentRow, profilePage, signInNote } from "../panels/agents/profiles-model";
+import { agentRow, inOnWords, profilePage, signInNote } from "../panels/agents/profiles-model";
 import type { SettingsSubpage } from "../panels/SettingsDialog";
 import { FIXTURE_EXTENSIONS, FIXTURE_EXTENSIONS_NOW } from "./extensions-fixtures";
 import {
@@ -25,6 +33,21 @@ import {
 // login (the live one is the window's terminal pool, which a catalog has not).
 
 const inert = (): void => undefined;
+
+/** AR-S4b: an agent's own list in Work, as the extensions fixture reads it. */
+const LISTS: Partial<
+  Record<ProfilesFixtureState, { provider: string; agent: string; list: AgentListKey }>
+> = {
+  "agent's plugins": { provider: "claude", agent: "Claude", list: "plugins" },
+  "agent's servers": { provider: "claude", agent: "Claude", list: "servers" },
+  "agent's skills": { provider: "codex", agent: "Codex", list: "skills" },
+};
+
+/** AR-S4b: one of Work's servers or skills on its own page. */
+const ITEMS: Partial<Record<ProfilesFixtureState, { list: ExtensionKindKey; name: string }>> = {
+  server: { list: "servers", name: "linear" },
+  skill: { list: "skills", name: "release-notes" },
+};
 
 /** The Settings header each state wears (the panel supplies it in the product). */
 export function profilesPreviewHead(state: ProfilesFixtureState): {
@@ -67,12 +90,20 @@ export function ProfilesSettingsPreview({
     return persona === undefined ? undefined : agentRow(context, persona);
   }, [state, context]);
   const agentLabel = agent?.label;
+  const list = LISTS[state];
+  const item = ITEMS[state];
 
   useEffect(() => {
     onSubpage(
-      agentLabel === undefined ? null : profileAgentSubpage(FIXTURE_WORK, agentLabel, inert),
+      agentLabel !== undefined
+        ? profileAgentSubpage(FIXTURE_WORK, agentLabel, inert)
+        : list !== undefined
+          ? agentListSubpage(FIXTURE_WORK, list.agent, list.list, inert)
+          : item !== undefined
+            ? extensionItemSubpage(FIXTURE_WORK, item.list, item.name, inert)
+            : null,
     );
-  }, [agentLabel, onSubpage]);
+  }, [agentLabel, list, item, onSubpage]);
   useEffect(() => () => onSubpage(null), [onSubpage]);
 
   if (state === "new") return <NewProfileView onCancel={inert} onCreate={inert} />;
@@ -93,6 +124,36 @@ export function ProfilesSettingsPreview({
         onReveal={inert}
         onSignOut={inert}
         onOpenApp={inert}
+        extensions={
+          <AgentExtensionsView lens={FIXTURE_EXTENSIONS} provider={agent.provider} onOpen={inert} />
+        }
+      />
+    );
+  }
+  if (list !== undefined) {
+    return (
+      <AgentExtensionListView
+        lens={FIXTURE_EXTENSIONS}
+        provider={list.provider}
+        agent={list.agent}
+        list={list.list}
+        profile={FIXTURE_WORK.label}
+        where={inOnWords(FIXTURE_WORK)}
+        onRefresh={inert}
+        onOpenProfile={inert}
+        now={FIXTURE_EXTENSIONS_NOW}
+      />
+    );
+  }
+  if (item !== undefined) {
+    return (
+      <ExtensionItemView
+        lens={FIXTURE_EXTENSIONS}
+        list={item.list}
+        name={item.name}
+        where={inOnWords(FIXTURE_WORK)}
+        onRefresh={inert}
+        now={FIXTURE_EXTENSIONS_NOW}
       />
     );
   }
@@ -124,6 +185,7 @@ export function ProfilesSettingsPreview({
             profile={set.label}
             now={FIXTURE_EXTENSIONS_NOW}
             onRefresh={inert}
+            onOpenItem={inert}
           />
         ) : undefined
       }

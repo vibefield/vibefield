@@ -1289,6 +1289,8 @@ export interface ProfileAgentPageViewProps {
   routes?: readonly AgentSignInRoute[] | undefined;
   /** add a sign-in by one of the agent's routes, or by its default login */
   onAddSignIn?: ((route?: string) => void) | undefined;
+  /** AR-S4b — the agent's plugins, servers and skills in this profile (pass 23's rows) */
+  extensions?: ReactNode;
 }
 
 export function ProfileAgentPageView({
@@ -1311,6 +1313,7 @@ export function ProfileAgentPageView({
   plans = [],
   routes,
   onAddSignIn,
+  extensions,
 }: ProfileAgentPageViewProps): ReactElement {
   const at = now ?? new Date();
   const lines = usageLines(row.usage, at);
@@ -1525,6 +1528,8 @@ export function ProfileAgentPageView({
       {first}
 
       {signIn}
+
+      {extensions}
 
       <section className={`${borderCls} vf-profiles-more`}>
         <SettingsRow

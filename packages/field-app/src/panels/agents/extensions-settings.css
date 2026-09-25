@@ -1,8 +1,10 @@
-/* Extensions on a profile's page (AR-S4b; the design record's pass 24, L2 —
-   the grid). A row per server or skill, a column per agent, a cell saying
-   what that agent holds. The sections are the settings surface's own
-   (settings-ui.tsx); this file owns the table, its marks and the row's
-   detail. Tokens only (DESIGN.md §2, UI_SYSTEM.md). */
+/* Extensions (AR-S4b). On a profile's page, the design record's pass 24, L2 —
+   the grid: a row per server or skill, a column per agent, a cell saying what
+   that agent holds. On an agent's page in a profile, pass 23's three rows;
+   below them the agent's own lists, and a server's or skill's own page. The
+   sections and door rows are the settings surface's own (settings-ui.tsx,
+   agents-settings.css); this file owns the table, its marks, the lists' plain
+   rows and the item page's parts. Tokens only (DESIGN.md §2, UI_SYSTEM.md). */
 
 .vf-ext {
   display: flex;
@@ -123,7 +125,7 @@
   font-weight: 400;
 }
 
-/* The row's name opens its detail in place. */
+/* The row's name opens the server's or skill's own page (pass 24). */
 .vf-ext-name {
   display: flex;
   align-items: flex-start;
@@ -136,14 +138,17 @@
   color: inherit;
   font: inherit;
   text-align: left;
+}
+
+.vf-ext-name--open {
   cursor: pointer;
 }
 
-.vf-ext-name:hover {
+.vf-ext-name--open:hover {
   background: var(--vf-fill);
 }
 
-.vf-ext-name:focus-visible {
+.vf-ext-name--open:focus-visible {
   outline: 2px solid var(--vf-select);
   outline-offset: 1px;
 }
@@ -258,49 +263,6 @@
   font-size: 13px;
 }
 
-/* The row's detail: each agent's own holding, in its own words. */
-.vf-ext-grid .vf-ext-detail > td {
-  padding: 4px 6px 10px;
-  text-align: left;
-  background: var(--vf-field-surface);
-}
-
-.vf-ext-detail ul {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 6px 0 0;
-  list-style: none;
-}
-
-.vf-ext-detail li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  color: var(--vf-text-secondary);
-}
-
-.vf-ext-detail-mark {
-  display: inline-flex;
-  width: 16px;
-  height: 16px;
-  flex: none;
-}
-
-.vf-ext-detail b {
-  color: var(--vf-text-primary);
-  font-weight: 600;
-}
-
-.vf-ext-detail-fact {
-  display: block;
-  font-family: var(--vf-font-mono);
-  font-size: 10.5px;
-  color: var(--vf-text-tertiary);
-  overflow-wrap: anywhere;
-}
-
 .vf-ext-foot {
   display: flex;
   justify-content: space-between;
@@ -313,4 +275,238 @@
 .vf-ext-when {
   margin-left: auto;
   white-space: nowrap;
+}
+
+/* ── an agent's page in a profile: its Extensions rows (pass 23) ── */
+
+.vf-agents-mark .vf-ext-glyph {
+  width: 16px;
+  height: 16px;
+}
+
+.vf-ext-chevron {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--vf-text-faint);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.vf-ext-kind-title {
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-ext-kind--unread .vf-ext-kind-title {
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-lacks {
+  margin-top: 8px;
+}
+
+/* ── an agent's own list, and a server's or skill's page ── */
+
+.vf-ext-intro {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--vf-text-secondary);
+}
+
+/* pass 24's one line on an agent's list: the profile lists these together. */
+.vf-ext-pointer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--vf-field-surface);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-empty {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--vf-hairline-strong);
+  border-radius: 14px;
+  font-size: 12px;
+  color: var(--vf-text-tertiary);
+  text-align: center;
+}
+
+/* A plain row: what it is and its state, nothing to open. */
+.vf-ext-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -8px;
+}
+
+.vf-ext-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px;
+}
+
+.vf-ext-item + .vf-ext-item::before {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  left: 48px;
+  height: 1px;
+  background: var(--vf-hairline);
+  content: "";
+}
+
+.vf-ext-summary .vf-ext-item {
+  margin: 0 -8px;
+}
+
+.vf-ext-initial {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vf-ext-item-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.vf-ext-item-text b {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.vf-ext-item-text small {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.vf-ext-item-text .vf-ext-place {
+  font-family: var(--vf-font-mono);
+  font-size: 10.5px;
+}
+
+.vf-ext-item-state {
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* A state that wants a look is said in the attention colour, as the grid's dot is. */
+.vf-ext-item-state.vf-ext-attn {
+  color: var(--vf-orange);
+}
+
+/* On an item's page an agent's state wears the grid's own cell beside its word. */
+.vf-ext-item-state--cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-ext-readfoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--vf-text-tertiary);
+}
+
+/* The versions held under one name, each with the agents that hold it. */
+.vf-ext-versions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vf-ext-version {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--vf-field-surface);
+  font-size: 12px;
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-version .vf-ext-code {
+  color: var(--vf-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.vf-ext-version small {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--vf-text-tertiary);
+}
+
+/* What the item is: a term and its value, a row each. */
+.vf-ext-def {
+  display: grid;
+  grid-template-columns: minmax(88px, max-content) minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.vf-ext-def dt {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-ext-def dt code {
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-def dd {
+  margin: 0;
+  color: var(--vf-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.vf-ext-shared {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.vf-ext-shared b {
+  font-weight: 600;
+  color: var(--vf-text-primary);
+}
+
+.vf-ext-shared p {
+  margin: 0;
+  color: var(--vf-text-secondary);
 }

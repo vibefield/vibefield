@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 /**
- * Extensions on a profile's page (AR-S4b; the design record's pass 24, L2):
+ * Extensions (AR-S4b). On a profile's page, the design record's pass 24, L2:
  * the lens fieldd sends, worded for the grid — a row per name some agent
  * holds as its own, a cell per agent in pass 24's states, the rest counted
- * beneath — then drawn read-only, and fed by `agents.extensions.subscribe`
- * with "Read again" asking `agents.extensions.list` to read every agent anew.
- * The lens is the contracts fixture, the one fieldd's shape is checked by.
+ * beneath — a row's name opening that server's or skill's own page. On an
+ * agent's page in a profile, pass 23's three rows, each opening the agent's
+ * own list. All read-only, fed by `agents.extensions.subscribe`, with "Read
+ * again" asking `agents.extensions.list` to read every agent anew. The lens is
+ * the contracts fixture, the one fieldd's shape is checked by.
  */
 
 import { readFileSync } from "node:fs";
@@ -19,10 +21,18 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FIXTURE_EXTENSIONS } from "../src/design-system/extensions-fixtures";
 import { ProfileExtensions } from "../src/panels/agents/ExtensionsSection";
-import { ProfileExtensionsView } from "../src/panels/agents/ExtensionsView";
 import {
+  AgentExtensionListView,
+  AgentExtensionsView,
+  ExtensionItemView,
+  ProfileExtensionsView,
+} from "../src/panels/agents/ExtensionsView";
+import {
+  agentExtensions,
+  agentList,
   builtFromWords,
   extensionGrid,
+  extensionItem,
   holdingWords,
   readWords,
 } from "../src/panels/agents/extensions-model";
@@ -151,6 +161,206 @@ describe("the Extensions model", () => {
   });
 });
 
+describe("one agent's Extensions (pass 23)", () => {
+  const rowsOf = (provider: string) =>
+    agentExtensions(LENS, provider)?.rows.map((row) => [row.title, row.value, row.fact]);
+
+  it("counts what each agent holds, what it borrows included, and says only the exceptions", () => {
+    expect(rowsOf("claude")).toEqual([
+      ["Plugins", "1", ""],
+      ["MCP servers", "3", ""],
+      ["Skills", "3", ""],
+    ]);
+    // a built-in skill comes with the app: it is not counted
+    expect(rowsOf("codex")).toEqual([
+      ["Plugins", "1", ""],
+      ["MCP servers", "2", ""],
+      ["Skills", "1", ""],
+    ]);
+    expect(rowsOf("grok")).toEqual([
+      ["Plugins", "None", ""],
+      ["MCP servers", "1", "All from Claude on This Mac"],
+      ["Skills", "1", ""],
+    ]);
+    expect(agentExtensions(LENS, "opencode")).toMatchObject({
+      sub: "OpenCode keeps them in one place, shared by every profile",
+      lacks: null,
+      failure: null,
+    });
+    expect(rowsOf("opencode")).toEqual([
+      ["Plugins", "None", ""],
+      ["MCP servers", "None", "Changed only inside OpenCode"],
+      ["Skills", "None", "Not all could be read"],
+    ]);
+    expect(agentExtensions(LENS, "kimi")).toMatchObject({
+      rows: [],
+      failure:
+        "Kimi’s plugins, servers and skills couldn’t be read: extension inventory failed for kimi",
+    });
+    expect(agentExtensions(LENS, "pi")).toBeNull();
+  });
+
+  it("drops a kind the agent lacks and says so beneath (N1); a server asking for a sign-in is set apart", () => {
+    const lens = structuredClone(LENS);
+    const codex = lens.agents.find((column) => column.provider === "codex")!;
+    delete codex.support.plugins;
+    delete codex.support.mcpServers;
+    const claude = lens.servers[0]!.cells.claude![0]!;
+    claude.auth = "needs-sign-in";
+    expect(agentExtensions(lens, "codex")).toMatchObject({
+      rows: [{ key: "skills" }],
+      lacks: "Codex has no plugins or MCP servers.",
+    });
+    expect(agentExtensions(lens, "claude")?.rows[1]).toMatchObject({
+      attention: "linear asks you to sign in",
+    });
+  });
+
+  it("lists an agent's own servers by where each comes from", () => {
+    const claude = agentList(LENS, "claude", "servers", "in Work");
+    expect(
+      claude?.sections.map((section) => [section.title, section.items.map((item) => item.name)]),
+    ).toEqual([
+      ["Servers", ["linear", "postgres"]],
+      ["Only in one project", ["sentry"]],
+    ]);
+    expect(claude?.sections[0]?.items[0]).toMatchObject({
+      glyph: "globe",
+      code: "https://mcp.linear.app/mcp",
+      text: "sends Authorization",
+      state: "Signed in",
+    });
+    expect(claude?.sections[0]?.items[1]).toMatchObject({
+      glyph: "prompt",
+      text: "reads PGPASSWORD",
+    });
+    expect(claude?.sections[1]?.items[0]).toMatchObject({
+      text: "~/Projects/billing",
+      state: "Off",
+    });
+    expect(claude?.sections[1]?.sub).toBe("Added for one folder; Claude keeps them in Work.");
+    // borrowed: its own section under the lender's name, and nothing of Grok's own
+    const grok = agentList(LENS, "grok", "servers", "in Work");
+    expect(grok?.sections.map((section) => section.title)).toEqual(["From Claude on This Mac"]);
+    expect(grok?.empty).toBe("Grok has no MCP servers of its own in Work.");
+  });
+
+  it("lists skills and plugins: yours, the shared folder, a plugin's, and what is built in counted", () => {
+    const claude = agentList(LENS, "claude", "skills", "in Work");
+    expect(
+      claude?.sections.map((section) => [
+        section.title,
+        section.items.map((item) => [item.name, item.state]),
+      ]),
+    ).toEqual([
+      [
+        "Yours",
+        [
+          ["release-notes", ""],
+          ["sql-review", "Off"],
+        ],
+      ],
+      ["From plugins", [["house-style", "review@northlight"]]],
+    ]);
+    const codex = agentList(LENS, "codex", "skills", "in Work");
+    expect(codex?.sections[0]).toMatchObject({
+      title: "Your skills",
+      sub: "In a folder every profile reads; whether each is on is kept in Work",
+      items: [{ name: "release-notes", state: "On" }],
+    });
+    expect(codex?.sections[1]?.summary).toEqual({
+      title: "Built into Codex",
+      text: "skill-creator",
+      value: "1",
+    });
+    const plugins = agentList(LENS, "claude", "plugins", "in Work");
+    expect(plugins?.sections.map((section) => section.title)).toEqual([
+      "Installed",
+      "Marketplaces",
+    ]);
+    expect(plugins?.sections[0]?.items[0]).toMatchObject({
+      initial: "R",
+      code: "3f9c2a1",
+      text: "from northlight · Reviews against the house style",
+    });
+    expect(plugins?.sections[1]?.items[0]).toMatchObject({ code: "northlight-studio/plugins" });
+    // one config for every profile, and a read that could not cover it all
+    expect(agentList(LENS, "opencode", "skills", "in Work")).toMatchObject({
+      intro: "OpenCode keeps its skills in one place, for every profile.",
+      unread:
+        "Not all of OpenCode’s skills could be read: skills from `skills.urls` are downloaded when OpenCode starts and are not read here",
+      empty: "OpenCode has no skills of its own in Work.",
+    });
+    expect(agentList(LENS, "kimi", "servers", "in Work")?.unread).toBe(
+      "Kimi’s plugins, servers and skills couldn’t be read: extension inventory failed for kimi",
+    );
+  });
+});
+
+describe("a server's or skill's page (pass 24)", () => {
+  it("tells two versions apart by what they read, and says how each agent holds the server", () => {
+    const linear = extensionItem(LENS, "servers", "linear");
+    expect(linear.versions).toEqual({
+      title: "Two versions",
+      sub: "The agents hold two different servers named linear.",
+      entries: [
+        {
+          code: "https://mcp.linear.app/mcp",
+          names: "sends Authorization",
+          agents: "Claude and Grok",
+        },
+        {
+          code: "https://mcp.linear.app/mcp",
+          names: "reads LINEAR_TOKEN · sends Authorization",
+          agents: "Codex",
+        },
+      ],
+    });
+    expect(linear.facts.map((fact) => fact.term)).toEqual([
+      "Connects to",
+      "Kind",
+      "LINEAR_TOKEN",
+      "Authorization",
+      "Kept",
+    ]);
+    expect(linear.facts[0]).toMatchObject({ text: "Two versions, above", attention: true });
+    expect(linear.agents.map((agent) => [agent.label, agent.state, agent.fact])).toEqual([
+      ["Claude", "Signed in", "Its own · sends Authorization"],
+      ["Codex", "Another version", "Its own · reads LINEAR_TOKEN · sends Authorization"],
+      ["Grok", "Claude’s", "Loaded from Claude, on This Mac · sends Authorization"],
+      ["OpenCode", "Off", "OpenCode doesn’t have it; it changes its servers only inside its app"],
+      ["Kimi", "Not read", "Kimi could not be read: extension inventory failed for kimi"],
+    ]);
+    expect(linear.agents[2]?.place).toBe("~/.claude.json");
+  });
+
+  it("says where a skill lives, and who loads it from the shared folder", () => {
+    const notes = extensionItem(LENS, "skills", "release-notes");
+    expect(notes.versions?.title).toBe("In two places");
+    expect(notes.versions?.entries.map((entry) => [entry.code, entry.agents])).toEqual([
+      [
+        "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/release-notes",
+        "Claude",
+      ],
+      ["~/.agents/skills/release-notes", "Codex and Grok"],
+    ]);
+    expect(notes.sharedFolder).toBe(
+      "~/.agents/skills is a folder every profile reads; Codex and Grok load release-notes from there. Removing it there removes it for all of them.",
+    );
+    const sql = extensionItem(LENS, "skills", "sql-review");
+    expect(sql.facts).toEqual([
+      { term: "What it does", text: "Reviews a migration before it ships" },
+      {
+        term: "Folder",
+        code: "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review",
+      },
+      { term: "Each agent", text: "Only Claude has it, in its own folder" },
+    ]);
+    expect(sql.sharedFolder).toBeNull();
+    expect(extensionItem(LENS, "servers", "nothing-here").gone).toBe(true);
+  });
+});
+
 // ── drawn ──
 
 let root: Root | null = null;
@@ -172,11 +382,13 @@ async function mount(element: ReturnType<typeof createElement>): Promise<void> {
 }
 
 describe("ProfileExtensionsView", () => {
-  it("draws two read-only grids, and opens a row in place to each agent's own holding", async () => {
+  it("draws two read-only grids, and a row's name opens that server's or skill's page", async () => {
+    const onOpenItem = vi.fn();
     await mount(
       createElement(ProfileExtensionsView, {
         lens: LENS,
         profile: "Work",
+        onOpenItem,
         now: new Date("2026-09-25T09:00:30.000Z"),
       }),
     );
@@ -194,12 +406,14 @@ describe("ProfileExtensionsView", () => {
     expect(cell).not.toBeNull();
     // read-only: nothing in a cell is a control
     expect(container?.querySelectorAll("td button")).toHaveLength(0);
-    const name = container?.querySelector<HTMLButtonElement>('[data-ext-row="linear"] button');
-    expect(name?.getAttribute("aria-expanded")).toBe("false");
-    await act(async () => name?.click());
-    const detail = container?.querySelector(".vf-ext-detail");
-    expect(detail?.textContent).toContain("Codex · Its own");
-    expect(detail?.textContent).toContain("reads LINEAR_TOKEN");
+    await act(async () =>
+      container?.querySelector<HTMLButtonElement>('[data-ext-row="linear"] button')?.click(),
+    );
+    expect(onOpenItem).toHaveBeenCalledWith("servers", "linear");
+    await act(async () =>
+      container?.querySelector<HTMLButtonElement>('[data-ext-row="sql-review"] button')?.click(),
+    );
+    expect(onOpenItem).toHaveBeenLastCalledWith("skills", "sql-review");
     expect(container?.textContent).toContain("Read just now");
   });
 
@@ -219,6 +433,93 @@ describe("ProfileExtensionsView", () => {
       "Could not read the agents again — boom.",
     );
     expect(container?.querySelector('[data-ext-grid="servers"]')).not.toBeNull();
+  });
+});
+
+describe("an agent's Extensions, its lists and an item's page, drawn", () => {
+  it("draws an agent's three rows as doors to its own lists, and a failure in their place", async () => {
+    const onOpen = vi.fn();
+    await mount(createElement(AgentExtensionsView, { lens: LENS, provider: "grok", onOpen }));
+    const rows = [...(container?.querySelectorAll("[data-ext-kind]") ?? [])];
+    expect(rows.map((row) => row.getAttribute("data-ext-kind"))).toEqual([
+      "plugins",
+      "servers",
+      "skills",
+    ]);
+    expect(rows[1]?.textContent).toContain("All from Claude on This Mac");
+    expect(rows[1]?.querySelector(".vf-agents-value")?.textContent).toBe("1");
+    await act(async () => rows[1]?.querySelector<HTMLButtonElement>("button")?.click());
+    expect(onOpen).toHaveBeenCalledWith("servers");
+    await act(async () =>
+      root?.render(createElement(AgentExtensionsView, { lens: LENS, provider: "kimi", onOpen })),
+    );
+    expect(container?.querySelectorAll("[data-ext-kind]")).toHaveLength(0);
+    expect(container?.textContent).toContain("Kimi’s plugins, servers and skills couldn’t be read");
+    await act(async () =>
+      root?.render(createElement(AgentExtensionsView, { lens: null, provider: "kimi", onOpen })),
+    );
+    expect(container?.textContent).toContain("Reading…");
+  });
+
+  it("draws an agent's own list by where each comes from, and points at the profile's lists", async () => {
+    const onOpenProfile = vi.fn();
+    await mount(
+      createElement(AgentExtensionListView, {
+        lens: LENS,
+        provider: "claude",
+        agent: "Claude",
+        list: "servers",
+        profile: "Work",
+        where: "in Work",
+        onOpenProfile,
+        onRefresh: vi.fn(),
+        now: new Date("2026-09-25T09:00:30.000Z"),
+      }),
+    );
+    expect(
+      [...(container?.querySelectorAll("h3") ?? [])].map((heading) => heading.textContent),
+    ).toEqual(["Servers", "Only in one project"]);
+    expect(container?.querySelector('[data-ext-item="linear"]')?.textContent).toContain(
+      "Signed in",
+    );
+    // read-only: the only controls are the way to the profile's lists and Read again
+    const buttons = [...(container?.querySelectorAll("button") ?? [])].map((b) => b.textContent);
+    expect(buttons).toEqual(["Open Work", "Read again"]);
+    await act(async () =>
+      [...(container?.querySelectorAll("button") ?? [])]
+        .find((button) => button.textContent === "Open Work")
+        ?.click(),
+    );
+    expect(onOpenProfile).toHaveBeenCalled();
+    expect(container?.textContent).toContain("Read just now");
+  });
+
+  it("draws a server's page: its versions, what it is, and each agent's hold with the grid's mark", async () => {
+    await mount(
+      createElement(ExtensionItemView, {
+        lens: LENS,
+        list: "servers",
+        name: "linear",
+        where: "in Work",
+      }),
+    );
+    expect(container?.querySelectorAll("[data-ext-version]")).toHaveLength(2);
+    expect(container?.querySelector(".vf-ext-def")?.textContent).toContain("A server at a URL");
+    const codex = container?.querySelector('[data-ext-agent="codex"]');
+    expect(codex?.textContent).toContain("Another version");
+    expect(codex?.querySelector(".vf-ext-cell--on.vf-ext-cell--attn")).not.toBeNull();
+    expect(container?.querySelectorAll("[data-ext-agent]")).toHaveLength(5);
+    await act(async () =>
+      root?.render(
+        createElement(ExtensionItemView, {
+          lens: LENS,
+          list: "servers",
+          name: "gone-away",
+          where: "in Work",
+        }),
+      ),
+    );
+    expect(container?.textContent).toContain("No agent in Work holds gone-away now.");
   });
 });
 
