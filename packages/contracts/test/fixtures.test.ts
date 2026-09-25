@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { type ZodTypeAny, z } from "zod";
-import { AgentsExtensionsListResult } from "../src/agent-extensions";
+import { AgentsExtensionsActResult, AgentsExtensionsListResult } from "../src/agent-extensions";
 import {
   AgentFieldDelta,
   AgentFieldSlice,
@@ -219,6 +219,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // mid-login, the display folders, the Add menu's candidates.
   "agents-profile-sets": AgentsProfileSetsListResult,
   "agents-extensions": AgentsExtensionsListResult,
+  // AR-S4c — an act's answer: the finished run and its receipt.
+  "agents-extensions-act": AgentsExtensionsActResult,
   // AR-5d — the usage column's feed: one batch with three states beside the
   // honest empty one the door answers before the first refresh.
   "agent-usage": AgentAccountUsageBatch,

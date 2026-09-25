@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { sep } from "node:path";
 import type {
   AgentProfile,
+  ExtensionActPlan,
   ExtensionFailure,
   ExtensionInventory,
   ExtensionItem,
@@ -10,16 +12,23 @@ import type {
   SkillItem,
 } from "@vibecook/puppeteer-core";
 import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
-import type {
-  AgentExtensionColumn,
-  AgentExtensionHolding,
-  AgentExtensionMarketplace,
-  AgentExtensionPlugin,
-  AgentExtensionRow,
-  AgentExtensionSupport,
-  AgentsExtensionsListResult,
+import {
+  AGENT_OPERATION_OUTPUT_BYTES,
+  type AgentExtensionAct,
+  type AgentExtensionColumn,
+  type AgentExtensionHolding,
+  type AgentExtensionMarketplace,
+  type AgentExtensionPlugin,
+  type AgentExtensionReceipt,
+  type AgentExtensionRow,
+  type AgentExtensionRun,
+  type AgentExtensionSupport,
+  type AgentsExtensionsActParams,
+  type AgentsExtensionsActResult,
+  type AgentsExtensionsListResult,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { displayTail } from "./agent-distribution";
 import { RpcCallError } from "./native-link";
 
 // EXTENSIONS (AR-S4b; the design record's pass 24) — the doors behind the
@@ -33,13 +42,26 @@ import { RpcCallError } from "./native-link";
 // its app-server) and costs the agents' own listings.
 //
 // EL7: a holding crosses with puppeteer's masked target and the NAMES of what
-// it reads; a place crosses home-abbreviated, for display only. The acts
-// (S4c) will name items by the agent's own id, never by a path from here.
+// it reads; a place crosses home-abbreviated, for display only. An act names
+// its item by the agent's own id, never by a path from here.
+//
+// ACTS (AR-S4c; RFC 006 C2): each holding carries the acts its agent offers
+// on it, as the adapter planned them from the same read (no second read per
+// holding). One act runs at a time per profile, through the agent's own
+// command or protocol; its output rides the profile's frames as display text,
+// and the receipt is puppeteer's second read, never the output. When it
+// finishes, the whole profile is read again, so every cell says what the
+// agents hold now.
 
 export interface AgentExtensionServiceOptions {
   runtime: Pick<
     AgentRuntime,
-    "profileSet" | "profileProviders" | "extensionProviders" | "extensionInventory"
+    | "profileSet"
+    | "profileProviders"
+    | "extensionProviders"
+    | "extensionInventory"
+    | "extensionActPlans"
+    | "runExtensionAct"
   >;
   /** The OS user's home, which places are abbreviated against. */
   home: string;
@@ -123,6 +145,26 @@ export interface ExtensionLensAgent {
   profileId: string;
   support: ExtensionProvider["support"];
   result: ExtensionInventory | ExtensionFailure;
+  /** What the adapter answered for each held server and skill, each act (RFC 006 C2). */
+  plans?: readonly ExtensionActPlan[];
+}
+
+/**
+ * The acts a holding offers now: the available plans for it, without the one
+ * that would change nothing (turning on what is on, off what is off).
+ */
+function actsOf(
+  plans: readonly ExtensionActPlan[] | undefined,
+  item: McpServerItem | SkillItem,
+): AgentExtensionAct[] {
+  const acts: AgentExtensionAct[] = [];
+  for (const plan of plans ?? []) {
+    if (!plan.available || plan.target.kind !== item.kind || plan.target.id !== item.id) continue;
+    if ((plan.act === "enable" && item.enabled) || (plan.act === "disable" && !item.enabled))
+      continue;
+    acts.push({ act: plan.act, runs: plan.display, reaches: [...plan.reaches] });
+  }
+  return acts;
 }
 
 /** One agent's column before anything of it is read. */
@@ -146,10 +188,11 @@ function isFailure(result: ExtensionInventory | ExtensionFailure): result is Ext
 }
 
 function rowsOf<T extends McpServerItem | SkillItem>(
-  agents: ReadonlyArray<{ provider: string; items: T[] }>,
+  agents: ReadonlyArray<{ provider: string; items: T[]; plans?: readonly ExtensionActPlan[] }>,
   definition: (item: T, provider: string) => string,
   home: string,
 ): AgentExtensionRow[] {
+  const plansOf = new Map(agents.map((agent) => [agent.provider, agent.plans]));
   const byRowName = new Map<string, Map<string, T[]>>();
   for (const { provider, items } of agents) {
     for (const item of items) {
@@ -176,10 +219,14 @@ function rowsOf<T extends McpServerItem | SkillItem>(
       const ordered = [...items].sort(
         (a, b) => ORIGIN_RANK[a.origin] - ORIGIN_RANK[b.origin] || (a.id < b.id ? -1 : 1),
       );
-      cells[provider] = ordered.map((item) => ({
-        ...holdingOf(item, home),
-        ...(versions.size > 1 ? { version: versions.get(definition(item, provider))! } : {}),
-      }));
+      cells[provider] = ordered.map((item) => {
+        const acts = actsOf(plansOf.get(provider), item);
+        return {
+          ...holdingOf(item, home),
+          ...(versions.size > 1 ? { version: versions.get(definition(item, provider))! } : {}),
+          ...(acts.length > 0 ? { acts } : {}),
+        };
+      });
       if (description === undefined) {
         description = ordered.find(
           (item): item is T & SkillItem => item.kind === "skill" && item.description !== undefined,
@@ -208,8 +255,16 @@ export function buildExtensionLens(input: {
   home: string;
 }): Frame {
   const columns: AgentExtensionColumn[] = [];
-  const servers: Array<{ provider: string; items: McpServerItem[] }> = [];
-  const skills: Array<{ provider: string; items: SkillItem[] }> = [];
+  const servers: Array<{
+    provider: string;
+    items: McpServerItem[];
+    plans?: readonly ExtensionActPlan[];
+  }> = [];
+  const skills: Array<{
+    provider: string;
+    items: SkillItem[];
+    plans?: readonly ExtensionActPlan[];
+  }> = [];
   const plugins: Frame["plugins"] = {};
   const marketplaces: Frame["marketplaces"] = {};
   const place = (path: string | undefined) =>
@@ -235,8 +290,9 @@ export function buildExtensionLens(input: {
       servers: items.filter((item): item is McpServerItem => item.kind === "mcp-server"),
       skills: items.filter((item): item is SkillItem => item.kind === "skill"),
     };
-    servers.push({ provider: agent.provider, items: own.servers });
-    skills.push({ provider: agent.provider, items: own.skills });
+    const plans = agent.plans === undefined ? {} : { plans: agent.plans };
+    servers.push({ provider: agent.provider, items: own.servers, ...plans });
+    skills.push({ provider: agent.provider, items: own.skills, ...plans });
     const pluginRows: AgentExtensionPlugin[] = [];
     const marketplaceRows: AgentExtensionMarketplace[] = [];
     for (const item of items) {
@@ -287,15 +343,71 @@ export function buildExtensionLens(input: {
   };
 }
 
+/** A run's output frames coalesce to this tick. */
+const RUN_TICK_MS = 16;
+/** The raw output kept per run, rendered at projection (as the update runs do). */
+const RUN_RAW_BYTES = 4 * AGENT_OPERATION_OUTPUT_BYTES;
+
+interface RunEntry {
+  id: string;
+  provider: string;
+  label: string;
+  kind: "mcp-server" | "skill";
+  item: string;
+  name: string;
+  act: AgentExtensionAct["act"];
+  runs: string;
+  state: "running" | "finished";
+  startedAt: string;
+  finishedAt?: string;
+  raw: string;
+  dropped: boolean;
+  receipt?: AgentExtensionReceipt;
+}
+
+function projectRun(entry: RunEntry): AgentExtensionRun {
+  const { output, truncated } = displayTail(entry.raw, entry.dropped);
+  return {
+    id: entry.id,
+    provider: entry.provider,
+    label: entry.label,
+    kind: entry.kind,
+    item: entry.item,
+    name: entry.name,
+    act: entry.act,
+    runs: entry.runs,
+    state: entry.state,
+    startedAt: entry.startedAt,
+    ...(entry.finishedAt !== undefined ? { finishedAt: entry.finishedAt } : {}),
+    output,
+    truncated,
+    ...(entry.receipt !== undefined ? { receipt: entry.receipt } : {}),
+  };
+}
+
+function appendRaw(entry: RunEntry, chunk: string): void {
+  entry.raw += chunk;
+  if (entry.raw.length > RUN_RAW_BYTES) {
+    const kept = entry.raw.slice(entry.raw.length - RUN_RAW_BYTES);
+    // start on a whole line: never inside an escape, never mid-redraw
+    const firstBreak = kept.indexOf("\n");
+    entry.raw = firstBreak === -1 ? kept : kept.slice(firstBreak + 1);
+    entry.dropped = true;
+  }
+}
+
 /**
  * The lens per Agent Profile: read on demand, the last read kept, a frame to a
  * profile's subscribers each time one finishes. Concurrent asks for one
- * profile share one read.
+ * profile share one read. An act runs one at a time per profile; its run
+ * rides every frame of that profile until the next one replaces it.
  */
 export class AgentExtensionService {
   private readonly lenses = new Map<string, Frame>();
   private readonly inflight = new Map<string, Promise<Frame>>();
   private readonly subscribers = new Map<string, Set<(frame: Frame) => void>>();
+  private readonly runs = new Map<string, RunEntry>();
+  private readonly ticks = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly now: () => Date;
   private readonly logger: Logger;
   private disposed = false;
@@ -308,7 +420,127 @@ export class AgentExtensionService {
   /** `agents.extensions.list`: the last read, or a new one when there is none or `refresh` asks. */
   async list(setId: string, refresh = false): Promise<Frame> {
     const known = refresh ? undefined : this.lenses.get(setId);
-    return known ?? (await this.read(setId));
+    // a refresh skips the kept read, and still shares one already under way
+    return this.frameOf(setId, known ?? (await this.read(setId)));
+  }
+
+  /**
+   * `agents.extensions.act`: one act on one holding, as its agent offered it
+   * in the last read; the profile's output on its frames while it runs, then
+   * the whole profile read again. A second act for the profile while one runs
+   * is a CONFLICT, never two of the agents' commands racing.
+   */
+  async act(params: AgentsExtensionsActParams): Promise<AgentsExtensionsActResult> {
+    const setId = params.set;
+    this.refuseWhileRunning(setId);
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = lens.agents.find((candidate) => candidate.provider === params.provider);
+    if (column === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `${params.provider} is not in this Agent Profile`,
+        false,
+        {
+          set: setId,
+          provider: params.provider,
+        },
+      );
+    }
+    const rows = params.kind === "mcp-server" ? lens.servers : lens.skills;
+    let found: { row: AgentExtensionRow; holding: AgentExtensionHolding } | undefined;
+    for (const row of rows) {
+      const holding = row.cells[params.provider]?.find((candidate) => candidate.id === params.id);
+      if (holding !== undefined) {
+        found = { row, holding };
+        break;
+      }
+    }
+    if (found === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `${column.label} does not hold ${params.id} in this Agent Profile`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    const offered = found.holding.acts?.find((candidate) => candidate.act === params.act);
+    if (offered === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${column.label} offers no ${params.act} for ${found.row.name} here`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    // a read above may have let another act start
+    this.refuseWhileRunning(setId);
+    const entry: RunEntry = {
+      id: randomUUID(),
+      provider: params.provider,
+      label: column.label,
+      kind: params.kind,
+      item: params.id,
+      name: found.row.name,
+      act: params.act,
+      runs: offered.runs,
+      state: "running",
+      startedAt: this.now().toISOString(),
+      raw: "",
+      dropped: false,
+    };
+    this.runs.set(setId, entry);
+    this.publishRun(setId);
+    let receipt: AgentExtensionReceipt;
+    try {
+      const result = await this.opts.runtime.runExtensionAct({
+        providerId: params.provider,
+        profileId: column.profileId,
+        target: { kind: params.kind, id: params.id },
+        act: params.act,
+        onOutput: (chunk) => {
+          appendRaw(entry, chunk);
+          this.publishRun(setId);
+        },
+      });
+      receipt = {
+        status: result.status,
+        message: result.message,
+        ...(result.exitCode !== undefined ? { exitCode: result.exitCode } : {}),
+        finishedAt: result.finishedAt,
+      };
+    } catch (error) {
+      this.logger.warn("fieldd.agents.extension_act_failed", "An extension act could not run", {
+        set: setId,
+        provider: params.provider,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      receipt = {
+        status: "failed",
+        message: "it could not be run",
+        finishedAt: this.now().toISOString(),
+      };
+    }
+    entry.state = "finished";
+    entry.finishedAt = receipt.finishedAt;
+    entry.receipt = receipt;
+    this.logger.info("fieldd.agents.extension_act", "An extension act ran", {
+      set: setId,
+      provider: params.provider,
+      act: params.act,
+      status: receipt.status,
+    });
+    // every cell says what the agents hold now: a read that began before the act finished cannot
+    try {
+      await this.read(setId, true);
+    } catch (error) {
+      this.publishRun(setId);
+      this.logger.warn(
+        "fieldd.agents.extensions_read_failed",
+        "Reading an Agent Profile's extensions failed",
+        { set: setId, error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+    return { run: projectRun(entry), receipt };
   }
 
   /**
@@ -321,7 +553,7 @@ export class AgentExtensionService {
     emit: (frame: Frame) => void,
   ): Promise<{ snapshot: Frame; dispose: () => void }> {
     const known = this.lenses.get(setId);
-    const snapshot = known ?? (await this.placeholder(setId));
+    const snapshot = this.frameOf(setId, known ?? (await this.placeholder(setId)));
     const listeners = this.subscribers.get(setId) ?? new Set<(frame: Frame) => void>();
     this.subscribers.set(setId, listeners);
     listeners.add(emit);
@@ -347,8 +579,54 @@ export class AgentExtensionService {
 
   dispose(): void {
     this.disposed = true;
+    for (const tick of this.ticks.values()) clearTimeout(tick);
+    this.ticks.clear();
     this.subscribers.clear();
     this.lenses.clear();
+  }
+
+  /** A profile's frame: its lens, and its act while one runs or the last that did. */
+  private frameOf(setId: string, lens: Frame): Frame {
+    const run = this.runs.get(setId);
+    return run === undefined ? lens : { ...lens, run: projectRun(run) };
+  }
+
+  private refuseWhileRunning(setId: string): void {
+    const running = this.runs.get(setId);
+    if (running?.state === "running") {
+      throw new RpcCallError(
+        "CONFLICT",
+        `${running.label} is still changing ${running.name} in this Agent Profile`,
+        true,
+        { set: setId },
+      );
+    }
+  }
+
+  private emit(setId: string, frame: Frame): void {
+    for (const emit of this.subscribers.get(setId) ?? []) {
+      try {
+        emit(frame);
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.agents.extensions_emit_failed",
+          "An extensions frame was not delivered",
+          { set: setId, error: error instanceof Error ? error.message : String(error) },
+        );
+      }
+    }
+  }
+
+  /** The run's output as it arrives, coalesced to the tick, on the profile's last lens. */
+  private publishRun(setId: string): void {
+    if (this.disposed || this.ticks.has(setId) || !this.subscribers.has(setId)) return;
+    const tick = setTimeout(() => {
+      this.ticks.delete(setId);
+      const lens = this.lenses.get(setId);
+      if (lens !== undefined) this.emit(setId, this.frameOf(setId, lens));
+    }, RUN_TICK_MS);
+    tick.unref?.();
+    this.ticks.set(setId, tick);
   }
 
   private readInBackground(setId: string): void {
@@ -407,16 +685,20 @@ export class AgentExtensionService {
     }));
   }
 
-  private read(setId: string): Promise<Frame> {
+  /** One read of every agent in the profile; `fresh` never joins a read that began earlier. */
+  private read(setId: string, fresh = false): Promise<Frame> {
     const running = this.inflight.get(setId);
-    if (running !== undefined) return running;
-    const request = (async () => {
+    if (running !== undefined && !fresh) return running;
+    const request: Promise<Frame> = (async () => {
       const info = await this.profileSet(setId);
       const agents = await Promise.all(
-        this.columnsOf(info.profiles).map(async (column) => ({
-          ...column,
-          result: await this.opts.runtime.extensionInventory(column.provider, column.profileId),
-        })),
+        this.columnsOf(info.profiles).map(async (column) => {
+          const result = await this.opts.runtime.extensionInventory(
+            column.provider,
+            column.profileId,
+          );
+          return { ...column, result, ...(await this.plansFor(column, result)) };
+        }),
       );
       const lens = buildExtensionLens({
         set: setId,
@@ -426,23 +708,41 @@ export class AgentExtensionService {
       });
       if (this.disposed) return lens;
       this.lenses.set(setId, lens);
-      for (const emit of this.subscribers.get(setId) ?? []) {
-        try {
-          emit(lens);
-        } catch (error) {
-          this.logger.warn(
-            "fieldd.agents.extensions_emit_failed",
-            "An extensions frame was not delivered",
-            {
-              set: setId,
-              error: error instanceof Error ? error.message : String(error),
-            },
-          );
-        }
-      }
+      this.emit(setId, this.frameOf(setId, lens));
       return lens;
-    })().finally(() => this.inflight.delete(setId));
+    })().finally(() => {
+      // a fresh read may have taken the profile over: leave its entry alone
+      if (this.inflight.get(setId) === request) this.inflight.delete(setId);
+    });
     this.inflight.set(setId, request);
     return request;
+  }
+
+  /** What each held server and skill offers, planned from this same read (no read per holding). */
+  private async plansFor(
+    column: { provider: string; profileId: string },
+    result: ExtensionInventory | ExtensionFailure,
+  ): Promise<{ plans?: ExtensionActPlan[] }> {
+    if (isFailure(result)) return {};
+    const items = result.items.filter(
+      (item): item is McpServerItem | SkillItem =>
+        item.kind === "mcp-server" || item.kind === "skill",
+    );
+    if (items.length === 0) return {};
+    try {
+      const plans = await this.opts.runtime.extensionActPlans(
+        column.provider,
+        column.profileId,
+        items,
+      );
+      return Array.isArray(plans) ? { plans } : {};
+    } catch (error) {
+      // no acts is a safe answer: the cells stay read-only
+      this.logger.warn("fieldd.agents.extension_plans_failed", "Planning extension acts failed", {
+        provider: column.provider,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {};
+    }
   }
 }

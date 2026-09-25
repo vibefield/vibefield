@@ -189,7 +189,14 @@
             "target": "https://mcp.linear.app/mcp",
             "headers": ["Authorization"],
             "auth": "signed-in",
-            "version": 0
+            "version": 0,
+            "acts": [
+              {
+                "act": "remove",
+                "runs": "claude mcp remove --scope user linear",
+                "reaches": ["definition", "sign-in"]
+              }
+            ]
           }
         ],
         "codex": [
@@ -202,7 +209,19 @@
             "target": "https://mcp.linear.app/mcp",
             "env": ["LINEAR_TOKEN"],
             "headers": ["Authorization"],
-            "version": 1
+            "version": 1,
+            "acts": [
+              {
+                "act": "disable",
+                "runs": "config/value/write mcp_servers.linear.enabled = false",
+                "reaches": []
+              },
+              {
+                "act": "remove",
+                "runs": "codex mcp remove linear",
+                "reaches": ["definition"]
+              }
+            ]
           }
         ],
         "grok": [
@@ -233,7 +252,14 @@
             "transport": "stdio",
             "target": "npx -y @modelcontextprotocol/server-postgres postgresql://•••@localhost/dev",
             "env": ["PGPASSWORD"],
-            "version": 0
+            "version": 0,
+            "acts": [
+              {
+                "act": "remove",
+                "runs": "claude mcp remove --scope user postgres",
+                "reaches": ["definition"]
+              }
+            ]
           }
         ],
         "codex": [
@@ -244,7 +270,19 @@
             "transport": "stdio",
             "target": "uvx postgres-mcp --access-mode=restricted",
             "env": ["DATABASE_URI"],
-            "version": 1
+            "version": 1,
+            "acts": [
+              {
+                "act": "enable",
+                "runs": "config/value/write mcp_servers.postgres.enabled = true",
+                "reaches": []
+              },
+              {
+                "act": "remove",
+                "runs": "codex mcp remove postgres",
+                "reaches": ["definition"]
+              }
+            ]
           }
         ]
       }
@@ -305,7 +343,14 @@
             "switchable": true,
             "enabled": true,
             "place": "~/.agents/skills/release-notes",
-            "version": 1
+            "version": 1,
+            "acts": [
+              {
+                "act": "disable",
+                "runs": "skills/config/write release-notes enabled = false",
+                "reaches": []
+              }
+            ]
           }
         ],
         "grok": [

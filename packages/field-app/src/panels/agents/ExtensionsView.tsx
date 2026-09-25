@@ -1,23 +1,38 @@
 import { AgentIcon } from "@vibecook/puppeteer-views";
-import type { AgentProfileSet, AgentsExtensionsListResult } from "@vibefield/contracts";
-import { InlineNotice, UiButton } from "@vibefield/design-kit/primitives";
-import { Fragment, type ReactElement, type ReactNode } from "react";
+import type {
+  AgentExtensionRun,
+  AgentProfileSet,
+  AgentsExtensionsListResult,
+} from "@vibefield/contracts";
+import { InlineNotice, UiButton, UiSwitch } from "@vibefield/design-kit/primitives";
+import {
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import type { SettingsSubpage } from "../SettingsDialog";
-import { borderCls, SettingsSection } from "../settings-ui";
+import { borderCls, labelCls, SettingsSection } from "../settings-ui";
 import {
   type AgentListItem,
   type AgentListKey,
+  actConfirm,
   agentExtensions,
   agentList,
   agentListTitle,
   builtFromWords,
   type ExtensionCell,
+  type ExtensionCellAct,
   type ExtensionGridModel,
   type ExtensionKindKey,
   extensionGrid,
   extensionItem,
   extensionKindTitle,
   readWords,
+  runWords,
 } from "./extensions-model";
 import { ProfileMark } from "./ProfilesView";
 
@@ -27,8 +42,10 @@ import { ProfileMark } from "./ProfilesView";
 // column per agent, a cell saying what that agent holds — a row's name opens
 // that server's or skill's own page. On an agent's page in a profile, pass
 // 23's three rows — Plugins, MCP servers, Skills — each opening the agent's
-// own list. Read-only in this slice: every cell and row says what the agent
-// holds, and the acts arrive with S4c.
+// own list. AR-S4c: a cell whose agent offers an act is a button — on turns
+// off (or, where the agent has no switch, removes), off turns on — and a click
+// that reaches further than its cell asks first (P7); the act's own output
+// and outcome sit in the run card under the lists.
 
 const KINDS: ExtensionKindKey[] = ["servers", "skills"];
 
@@ -136,12 +153,91 @@ function FactLine({ code, text }: { code: string; text: string }): ReactElement 
   );
 }
 
+/** What a person asked a cell or a switch for: an act, maybe waiting on its confirm. */
+export interface ExtensionActRequest {
+  provider: string;
+  kind: "mcp-server" | "skill";
+  id: string;
+  act: ExtensionCellAct["act"];
+}
+
+const requestOf = (act: ExtensionCellAct): ExtensionActRequest => ({
+  provider: act.provider,
+  kind: act.kind,
+  id: act.id,
+  act: act.act,
+});
+
+/** P7: the confirm a click that reaches further than its cell opens beneath its list. */
+function ActConfirm({
+  act,
+  where,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  act: ExtensionCellAct;
+  where: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}): ReactElement | null {
+  const confirm = actConfirm(act, where);
+  const button = useRef<HTMLButtonElement>(null);
+  const questionId = useId();
+  useEffect(() => {
+    button.current?.focus();
+  }, []);
+  if (confirm === null) return null;
+  return (
+    <fieldset
+      className="vf-profiles-confirm-box vf-ext-confirm"
+      aria-labelledby={questionId}
+      data-ext-confirm={`${act.provider}:${act.id}`}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <p id={questionId} className="vf-profiles-confirm-question">
+        {confirm.question}
+      </p>
+      <p className={`vf-profiles-confirm-what ${labelCls}`}>{confirm.what}</p>
+      <p className="vf-ext-confirm-runs">
+        Runs <code className="vf-ext-code">{act.runs}</code>
+      </p>
+      <div className="vf-profiles-confirm-acts">
+        <UiButton
+          ref={button}
+          variant={confirm.danger ? "danger" : "quiet"}
+          disabled={busy}
+          onClick={onConfirm}
+        >
+          {confirm.action}
+        </UiButton>
+        <UiButton disabled={busy} onClick={onCancel}>
+          Cancel
+        </UiButton>
+      </div>
+    </fieldset>
+  );
+}
+
 function ExtensionGridView({
   model,
   onOpenItem,
+  busy = false,
+  onCellAct,
 }: {
   model: ExtensionGridModel;
   onOpenItem?: ((key: ExtensionKindKey, name: string) => void) | undefined;
+  /** An act is running or asked for: no cell starts another. */
+  busy?: boolean;
+  /** A cell with an act was clicked. */
+  onCellAct?: ((act: ExtensionCellAct) => void) | undefined;
 }): ReactElement {
   const many = model.heads.length > 5;
   return (
@@ -204,9 +300,24 @@ function ExtensionGridView({
                     </button>
                   )}
                 </th>
-                {row.cells.map(({ provider, cell }) => {
+                {row.cells.map(({ provider, cell, act }) => {
                   const label =
                     model.heads.find((head) => head.provider === provider)?.label ?? provider;
+                  if (act !== null && onCellAct !== undefined) {
+                    return (
+                      <td key={provider} title={`${cell.why} — ${act.title}`}>
+                        <button
+                          type="button"
+                          className="vf-ext-cell-button"
+                          aria-label={`${act.title}: ${cell.why}`}
+                          disabled={busy}
+                          onClick={() => onCellAct(act)}
+                        >
+                          <CellMark cell={cell} />
+                        </button>
+                      </td>
+                    );
+                  }
                   return (
                     <td
                       key={provider}
@@ -248,6 +359,51 @@ function ReadAgain({
   );
 }
 
+/** The act running for the profile, or the last one: what ran, its own output, and what the agent holds now. */
+function RunCard({ run, now }: { run: AgentExtensionRun; now?: Date | undefined }): ReactElement {
+  const words = runWords(run, now ?? new Date());
+  const running = run.state === "running";
+  const text = run.output.length > 0 ? run.output : running ? "Waiting for output…" : "No output.";
+  const pre = (
+    <pre className="vf-agents-output-text" aria-live="off">
+      {text}
+    </pre>
+  );
+  return (
+    <section
+      className="vf-agents-output vf-ext-run"
+      aria-label={`${run.label}: ${run.name}`}
+      data-ext-run={run.state}
+    >
+      <header className="vf-agents-output-head">
+        <span className="vf-agents-output-command">{run.runs}</span>
+        <span className="vf-agents-output-state" role="status">
+          {words.state}
+        </span>
+      </header>
+      {running ? (
+        pre
+      ) : (
+        <details className="vf-agents-output-details">
+          <summary>
+            <span className="vf-agents-output-show">Show output</span>
+            <span className="vf-agents-output-hide">Hide output</span>
+          </summary>
+          {pre}
+        </details>
+      )}
+      {run.truncated && (
+        <p className={`vf-agents-output-note ${labelCls}`}>Earlier output was trimmed here.</p>
+      )}
+      {words.outcome !== null && (
+        <InlineNotice tone={words.outcome.tone} className="vf-agents-output-receipt">
+          {words.outcome.text}
+        </InlineNotice>
+      )}
+    </section>
+  );
+}
+
 /** Before the first read has answered there is nothing to draw but that. */
 const firstRead = (lens: AgentsExtensionsListResult | null): boolean =>
   lens === null || (lens.reading && lens.readAt === undefined);
@@ -257,11 +413,19 @@ export interface ProfileExtensionsViewProps {
   lens: AgentsExtensionsListResult | null;
   /** The profile's name, for the words. */
   profile: string;
+  /** "in Work" · "on This Mac"; `in <profile>` when absent. */
+  where?: string;
   error?: string | null;
   refreshing?: boolean;
   onRefresh?: () => void;
   /** A row's name opens that server's or skill's page. */
   onOpenItem?: (key: ExtensionKindKey, name: string) => void;
+  /** AR-S4c: run an act a cell offers; absent, the lists are read-only. */
+  onAct?: (request: ExtensionActRequest) => void;
+  /** An act was asked for and has not answered yet. */
+  acting?: boolean;
+  /** The catalog's still of a confirm: the act whose confirm is open. */
+  armed?: ExtensionActRequest;
   now?: Date;
 }
 
@@ -269,13 +433,40 @@ export interface ProfileExtensionsViewProps {
 export function ProfileExtensionsView({
   lens,
   profile,
+  where = `in ${profile}`,
   error = null,
   refreshing = false,
   onRefresh,
   onOpenItem,
+  onAct,
+  acting = false,
+  armed: armedInitially,
   now,
 }: ProfileExtensionsViewProps): ReactElement {
+  const [armed, setArmed] = useState<ExtensionCellAct | null>(null);
   const reading = refreshing || lens === null || lens.reading;
+  const busy = acting || lens?.run?.state === "running";
+  // the catalog opens a confirm by naming its act
+  const initial =
+    armedInitially === undefined || lens === null
+      ? null
+      : ([...extensionGrid(lens, "servers").rows, ...extensionGrid(lens, "skills").rows]
+          .flatMap((row) => row.cells.map((cell) => cell.act))
+          .find(
+            (act) =>
+              act !== null &&
+              act.provider === armedInitially.provider &&
+              act.id === armedInitially.id &&
+              act.act === armedInitially.act,
+          ) ?? null);
+  const open = armed ?? initial;
+  const cellAct =
+    onAct === undefined
+      ? undefined
+      : (act: ExtensionCellAct) => {
+          if (act.reaches.length > 0) setArmed(act);
+          else onAct(requestOf(act));
+        };
   const refresh = <ReadAgain reading={reading} onRefresh={onRefresh} />;
   if (lens === null && error !== null) {
     return (
@@ -323,8 +514,28 @@ export function ProfileExtensionsView({
             {model.empty !== null ? (
               <p className="vf-ext-quiet">{model.empty}</p>
             ) : (
-              <ExtensionGridView model={model} onOpenItem={onOpenItem} />
+              <ExtensionGridView
+                model={model}
+                onOpenItem={onOpenItem}
+                busy={busy}
+                onCellAct={cellAct}
+              />
             )}
+            {open !== null &&
+              onAct !== undefined &&
+              (open.kind === "mcp-server") === (key === "servers") && (
+                <ActConfirm
+                  key={`${open.provider}:${open.id}:${open.act}`}
+                  act={open}
+                  where={where}
+                  busy={busy}
+                  onConfirm={() => {
+                    setArmed(null);
+                    onAct(requestOf(open));
+                  }}
+                  onCancel={() => setArmed(null)}
+                />
+              )}
             {(model.more !== null || (index === 1 && when !== "")) && (
               <div className="vf-ext-foot">
                 {model.more !== null && <span>{model.more}</span>}
@@ -334,6 +545,7 @@ export function ProfileExtensionsView({
           </SettingsSection>
         );
       })}
+      {lens.run !== undefined && <RunCard run={lens.run} now={now} />}
     </div>
   );
 }
@@ -570,6 +782,9 @@ export interface ExtensionItemViewProps {
   error?: string | null;
   refreshing?: boolean;
   onRefresh?: () => void;
+  /** AR-S4c: an agent's switch, or its Remove…; absent, the page is read-only. */
+  onAct?: (request: ExtensionActRequest) => void;
+  acting?: boolean;
   now?: Date;
 }
 
@@ -582,9 +797,18 @@ export function ExtensionItemView({
   error = null,
   refreshing = false,
   onRefresh,
+  onAct,
+  acting = false,
   now,
 }: ExtensionItemViewProps): ReactElement {
+  const [armed, setArmed] = useState<ExtensionCellAct | null>(null);
   const model = lens === null || firstRead(lens) ? null : extensionItem(lens, list, name);
+  const busy = acting || lens?.run?.state === "running";
+  const ask = (act: ExtensionCellAct): void => {
+    if (onAct === undefined) return;
+    if (act.reaches.length > 0) setArmed(act);
+    else onAct(requestOf(act));
+  };
   const kindWord = list === "servers" ? "MCP server" : "Skill";
   let body: ReactNode;
   if (model === null) {
@@ -660,13 +884,47 @@ export function ExtensionItemView({
                   className={`vf-ext-item-state vf-ext-item-state--cell${agent.attention ? " vf-ext-attn" : ""}`}
                   title={agent.cell.why}
                 >
-                  <CellMark cell={agent.cell} />
+                  {agent.act !== null && agent.switchable && onAct !== undefined ? (
+                    // the agent's own switch for this profile
+                    <UiSwitch
+                      checked={agent.act.act === "disable"}
+                      disabled={busy}
+                      label={agent.act.title}
+                      onChange={() => ask(agent.act!)}
+                    />
+                  ) : (
+                    <CellMark cell={agent.cell} />
+                  )}
                   {agent.state}
+                  {agent.act !== null && !agent.switchable && onAct !== undefined && (
+                    <UiButton
+                      variant="danger"
+                      disabled={busy}
+                      aria-label={agent.act.title}
+                      onClick={() => ask(agent.act!)}
+                    >
+                      Remove…
+                    </UiButton>
+                  )}
                 </span>
               </div>
             ))}
           </div>
+          {armed !== null && onAct !== undefined && (
+            <ActConfirm
+              key={`${armed.provider}:${armed.id}:${armed.act}`}
+              act={armed}
+              where={where}
+              busy={busy}
+              onConfirm={() => {
+                setArmed(null);
+                onAct(requestOf(armed));
+              }}
+              onCancel={() => setArmed(null)}
+            />
+          )}
         </SettingsSection>
+        {lens?.run !== undefined && lens.run.name === name && <RunCard run={lens.run} now={now} />}
         {model.sharedFolder !== null && (
           <section className={`${borderCls} vf-ext-shared`}>
             <b>In the shared folder</b>

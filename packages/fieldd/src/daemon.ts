@@ -10,6 +10,7 @@ import {
   AgentResumeParams,
   AgentSpawnParams,
   AgentSubscribeParams,
+  AgentsExtensionsActParams,
   AgentsExtensionsListParams,
   AgentsExtensionsSubscribeParams,
   AgentsInstallsParams,
@@ -1472,6 +1473,37 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // The last read, or the profile's agents while the first runs; the
       // finished read follows as a frame.
       return await agents.extensions.subscribe(parsed.data.set, (frame) => emit(frame));
+    });
+    // AR-S4c — an act (RFC 006 C2): the agent's own command or protocol
+    // changes one thing it holds, so it is audited like an update; its output
+    // rides the profile's frames and the answer is the receipt puppeteer
+    // read back, never the output.
+    api.register("agents.extensions.act", async (ctx, params) => {
+      const parsed = AgentsExtensionsActParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { set, provider, kind, id, act }",
+          false,
+        );
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.extensions.act",
+          target: {
+            kind: "agent-extension",
+            id: `${parsed.data.provider}:${parsed.data.kind}:${parsed.data.id}`.slice(0, 256),
+          },
+          attrs: { set: parsed.data.set, act: parsed.data.act },
+        },
+        () => agents.extensions.act(parsed.data),
+        (result) => ({
+          attrs: {
+            status: result.receipt.status,
+            ...(result.receipt.exitCode !== undefined ? { exitCode: result.receipt.exitCode } : {}),
+          },
+        }),
+      );
     });
     api.register("agents.installs", async (_ctx, params) => {
       const parsed = AgentsInstallsParams.safeParse(params ?? {});

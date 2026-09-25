@@ -821,6 +821,7 @@ export function ProfilesSection({
             <ProfileExtensions
               set={page.set.id}
               profile={page.set.label}
+              where={inOnWords(page.set)}
               onOpenItem={(list, name) => onRoute({ kind: "item", set: page.set.id, list, name })}
             />
           ) : undefined

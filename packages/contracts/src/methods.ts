@@ -1502,6 +1502,16 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: true,
   }),
+  // AR-S4c — an act: one server or skill an agent holds turned on, off or
+  // out, through the agent's own command or protocol (RFC 006 C2); audited,
+  // one at a time per Agent Profile, its output on the subscription above.
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.act",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "agents.usage",

@@ -1,9 +1,11 @@
 import type {
+  AgentExtensionAct,
   AgentExtensionColumn,
   AgentExtensionHolding,
   AgentExtensionOrigin,
   AgentExtensionPlugin,
   AgentExtensionRow,
+  AgentExtensionRun,
   AgentsExtensionsListResult,
 } from "@vibefield/contracts";
 
@@ -82,7 +84,7 @@ export interface ExtensionGridRow {
   twoVersions: boolean;
   /** A server at an address (globe) or a program on this Mac (prompt); a skill. */
   glyph: "globe" | "prompt" | "snippets";
-  cells: Array<{ provider: string; cell: ExtensionCell }>;
+  cells: Array<{ provider: string; cell: ExtensionCell; act: ExtensionCellAct | null }>;
 }
 
 export interface ExtensionGridModel {
@@ -309,6 +311,7 @@ export function extensionGrid(
       cells: lens.agents.map((column) => ({
         provider: column.provider,
         cell: extensionCell(lens, key, row, column),
+        act: cellAct(key, row, column),
       })),
     };
   });
@@ -869,6 +872,10 @@ export interface ExtensionItemAgent {
   provider: string;
   label: string;
   cell: ExtensionCell;
+  /** What its switch or its Remove… runs; null when the agent offers nothing here. */
+  act: ExtensionCellAct | null;
+  /** The switch turns either way; without one, only removal is offered. */
+  switchable: boolean;
   /** On the right, beside the cell's mark: "On", "Off", "Always on", "Signed in", … */
   state: string;
   attention: boolean;
@@ -1037,10 +1044,14 @@ export function extensionItem(
   const agents = lens.agents.map((column): ExtensionItemAgent => {
     const cell = extensionCell(lens, key, row, column);
     const holding = row.cells[column.provider]?.[0];
+    const act = cellAct(key, row, column);
     const base = {
       provider: column.provider,
       label: column.label,
       cell,
+      act,
+      switchable:
+        holding?.acts?.some((offer) => offer.act === "enable" || offer.act === "disable") === true,
       ...stateOf(lens, cell, holding),
     };
     if (holding === undefined) {
@@ -1083,4 +1094,154 @@ export function extensionItem(
     agents,
     sharedFolder,
   };
+}
+
+/* ── acts (AR-S4c): what a cell's click runs ─────────────────────────────────
+   A holding carries the acts its agent offers (RFC 006 C2, planned by its
+   adapter). A click on an "on" cell turns it off — or, for an agent with no
+   switch (Claude Code's servers), removes it; on an "off" cell it turns it
+   on. A click that reaches further than its cell — the definition, a
+   sign-in, every profile, a shared folder — asks first (P7). */
+
+export interface ExtensionCellAct {
+  provider: string;
+  label: string;
+  kind: "mcp-server" | "skill";
+  /** The holding's id in the agent's own read. */
+  id: string;
+  name: string;
+  act: AgentExtensionAct["act"];
+  runs: string;
+  reaches: AgentExtensionAct["reaches"];
+  /** The control's accessible name. */
+  title: string;
+}
+
+/** The act a click on one agent's cell runs, or null when it offers none here. */
+export function cellAct(
+  key: ExtensionKindKey,
+  row: AgentExtensionRow,
+  column: AgentExtensionColumn,
+): ExtensionCellAct | null {
+  const holding = row.cells[column.provider]?.[0];
+  const acts = holding?.acts ?? [];
+  if (holding === undefined || acts.length === 0) return null;
+  const offer = holding.enabled
+    ? (acts.find((candidate) => candidate.act === "disable") ??
+      acts.find((candidate) => candidate.act === "remove"))
+    : acts.find((candidate) => candidate.act === "enable");
+  if (offer === undefined) return null;
+  const title =
+    offer.act === "enable"
+      ? `Turn ${row.name} on for ${column.label}`
+      : offer.act === "disable"
+        ? `Turn ${row.name} off for ${column.label}`
+        : `Remove ${row.name} from ${column.label}`;
+  return {
+    provider: column.provider,
+    label: column.label,
+    kind: key === "servers" ? "mcp-server" : "skill",
+    id: holding.id,
+    name: row.name,
+    act: offer.act,
+    runs: offer.runs,
+    reaches: [...offer.reaches],
+    title,
+  };
+}
+
+export interface ExtensionActConfirm {
+  question: string;
+  /** What it takes, in sentences. */
+  what: string;
+  /** The confirming button. */
+  action: string;
+  danger: boolean;
+}
+
+/** P7: the two-step confirm a click needs when it reaches further than its cell; null when it does not. */
+export function actConfirm(act: ExtensionCellAct, where: string): ExtensionActConfirm | null {
+  if (act.reaches.length === 0) return null;
+  const sentences: string[] = [];
+  if (act.act === "remove") {
+    sentences.push(
+      `${act.label} has no switch that turns ${act.name} off ${where}: this removes it.`,
+    );
+  }
+  if (act.reaches.includes("sign-in")) sentences.push("Its sign-in goes with it.");
+  if (act.reaches.includes("definition")) {
+    sentences.push(
+      act.kind === "mcp-server"
+        ? `Turning it back on will need its address, and any key it uses, again.`
+        : "Turning it back on will need its folder again.",
+    );
+  }
+  if (act.reaches.includes("every-profile")) {
+    sentences.push(`${act.label} keeps one config for every profile: this changes all of them.`);
+  }
+  if (act.reaches.includes("shared-folder")) {
+    sentences.push("It lives in a folder every profile reads, and other agents too.");
+  }
+  const everywhere = act.reaches.includes("every-profile") ? "in every profile" : where;
+  return {
+    question:
+      act.act === "remove"
+        ? `Remove ${act.name} from ${act.label} ${where}?`
+        : `Turn ${act.name} ${act.act === "enable" ? "on" : "off"} for ${act.label} ${everywhere}?`,
+    what: sentences.join(" "),
+    action:
+      act.act === "remove"
+        ? `Remove ${act.name}`
+        : act.act === "enable"
+          ? "Turn it on"
+          : "Turn it off",
+    danger: act.act === "remove",
+  };
+}
+
+/** The run card's words: what ran, how it stands, and what the agent holds now. */
+export function runWords(
+  run: AgentExtensionRun,
+  now: Date,
+): { state: string; outcome: { tone: "neutral" | "error"; text: string } | null } {
+  if (run.state === "running") return { state: "Running…", outcome: null };
+  const at = run.finishedAt === undefined ? Number.NaN : Date.parse(run.finishedAt);
+  const minutes = Number.isFinite(at) ? Math.max(0, Math.round((now.getTime() - at) / 60_000)) : 0;
+  const state =
+    minutes < 1 ? "Finished just now" : `Finished ${plural(minutes, "minute", "minutes")} ago`;
+  const receipt = run.receipt;
+  if (receipt === undefined) return { state, outcome: null };
+  switch (receipt.status) {
+    case "changed":
+      return {
+        state,
+        outcome: {
+          tone: "neutral",
+          text:
+            run.act === "enable"
+              ? `${run.name} is on for ${run.label}.`
+              : run.act === "disable"
+                ? `${run.name} is off for ${run.label}.`
+                : `${run.name} is gone from ${run.label}.`,
+        },
+      };
+    case "unchanged":
+      return {
+        state,
+        outcome: {
+          tone: "neutral",
+          text: `${run.label} ran it, and still holds ${run.name} as before: ${receipt.message}.`,
+        },
+      };
+    case "failed":
+      return {
+        state,
+        outcome: {
+          tone: "error",
+          text: `${run.label} couldn’t change ${run.name}: ${receipt.message}.`,
+        },
+      };
+    default:
+      return { state, outcome: { tone: "error", text: `${receipt.message}.` } };
+  }
 }

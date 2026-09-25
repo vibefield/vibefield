@@ -1,0 +1,27 @@
+{
+  "run": {
+    "id": "act-7f3a",
+    "provider": "codex",
+    "label": "Codex",
+    "kind": "mcp-server",
+    "item": "postgres",
+    "name": "postgres",
+    "act": "disable",
+    "runs": "config/value/write mcp_servers.postgres.enabled = false",
+    "state": "finished",
+    "startedAt": "2026-09-25T08:58:40.000Z",
+    "finishedAt": "2026-09-25T08:58:41.000Z",
+    "output": "config/value/write mcp_servers.postgres.enabled = false\nCodex wrote it to its config.\n",
+    "truncated": false,
+    "receipt": {
+      "status": "changed",
+      "message": "turned off",
+      "finishedAt": "2026-09-25T08:58:41.000Z"
+    }
+  },
+  "receipt": {
+    "status": "changed",
+    "message": "turned off",
+    "finishedAt": "2026-09-25T08:58:41.000Z"
+  }
+}

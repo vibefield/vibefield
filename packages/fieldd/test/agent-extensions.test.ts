@@ -1,11 +1,15 @@
 import type {
   AgentProfile,
+  ExtensionActPlan,
+  ExtensionActReceipt,
   ExtensionFailure,
   ExtensionInventory,
   ExtensionItem,
   ExtensionProvider,
+  McpServerItem,
+  SkillItem,
 } from "@vibecook/puppeteer-core";
-import { AgentsExtensionsListResult } from "@vibefield/contracts";
+import { AgentsExtensionsActResult, AgentsExtensionsListResult } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   AgentExtensionService,
@@ -334,6 +338,18 @@ const profile = (provider: string, set = "work"): AgentProfile => ({
 function stubRuntime(options: {
   sets?: Record<string, string[]>;
   read?: (provider: string, profileId: string) => Promise<ExtensionInventory | ExtensionFailure>;
+  plans?: (
+    provider: string,
+    profileId: string | undefined,
+    items: ReadonlyArray<McpServerItem | SkillItem>,
+  ) => Promise<ExtensionActPlan[] | ExtensionFailure>;
+  act?: (request: {
+    providerId: string;
+    profileId?: string;
+    target: { kind: "mcp-server" | "skill"; id: string };
+    act: "enable" | "disable" | "remove";
+    onOutput?: (chunk: string) => void;
+  }) => Promise<ExtensionActReceipt>;
 }) {
   const sets = options.sets ?? { work: ["claude", "codex", "copilot"] };
   const extensionInventory = vi.fn(
@@ -373,12 +389,20 @@ function stubRuntime(options: {
       { id: "codex", label: "Codex", support: SUPPORT.codex! },
     ],
     extensionInventory,
+    extensionActPlans: vi.fn(options.plans ?? (async () => [])),
+    runExtensionAct: vi.fn(
+      options.act ??
+        (async () => {
+          throw new Error("no act expected");
+        }),
+    ),
   };
   return {
     runtime: runtime as unknown as ConstructorParameters<
       typeof AgentExtensionService
     >[0]["runtime"],
     extensionInventory,
+    runExtensionAct: runtime.runExtensionAct,
   };
 }
 
@@ -485,5 +509,175 @@ describe("AgentExtensionService", () => {
     await extensions.list("home");
     expect(extensionInventory.mock.calls.at(-1)).toEqual(["codex", "home-codex"]);
     dispose();
+  });
+});
+
+describe("AgentExtensionService acts (AR-S4c)", () => {
+  /** Codex's own `linear`, on or off as the stub's "config" says, planned the way the adapter would. */
+  function codexWithLinear() {
+    let enabled = true;
+    let release: (() => void) | undefined;
+    const plans = async (
+      _provider: string,
+      _profileId: string | undefined,
+      items: ReadonlyArray<McpServerItem | SkillItem>,
+    ): Promise<ExtensionActPlan[]> =>
+      items.flatMap((item) =>
+        (["enable", "disable", "remove"] as const).map((act) => ({
+          target: { kind: item.kind, id: item.id },
+          act,
+          available: true as const,
+          runs:
+            act === "remove"
+              ? { kind: "command" as const, argv: ["codex", "mcp", "remove", item.id] }
+              : { kind: "protocol" as const, method: "config/value/write" },
+          display:
+            act === "remove"
+              ? `codex mcp remove ${item.id}`
+              : `config/value/write mcp_servers.${item.id}.enabled = ${act === "enable"}`,
+          reaches: act === "remove" ? (["definition"] as const) : [],
+        })),
+      ) as ExtensionActPlan[];
+    const { runtime, runExtensionAct } = stubRuntime({
+      sets: { work: ["codex"] },
+      read: async (provider, profileId) => ({
+        ...inventory(provider, [linear("linear", { enabled })]),
+        profileId,
+      }),
+      plans,
+      act: async (request) => {
+        request.onOutput?.("config/value/write mcp_servers.linear.enabled = false\n");
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        enabled = request.act === "enable";
+        return {
+          provider: "codex",
+          profileId: request.profileId ?? "work-codex",
+          target: request.target,
+          act: request.act,
+          status: "changed",
+          startedAt: NOW,
+          finishedAt: NOW,
+          display: "config/value/write mcp_servers.linear.enabled = false",
+          message: "turned off",
+        };
+      },
+    });
+    return { runtime, runExtensionAct, release: () => release?.() };
+  }
+
+  it("offers on each holding what its agent planned, leaving out the act that would change nothing", async () => {
+    const { runtime } = codexWithLinear();
+    const lens = AgentsExtensionsListResult.parse(await service(runtime).list("work"));
+    expect(lens.servers[0]?.cells.codex?.[0]?.acts).toEqual([
+      {
+        act: "disable",
+        runs: "config/value/write mcp_servers.linear.enabled = false",
+        reaches: [],
+      },
+      { act: "remove", runs: "codex mcp remove linear", reaches: ["definition"] },
+    ]);
+  });
+
+  it("runs one act at a time, its output on the frames, then reads the profile again", async () => {
+    const { runtime, runExtensionAct, release } = codexWithLinear();
+    const extensions = service(runtime);
+    const frames: Array<ReturnType<typeof AgentsExtensionsListResult.parse>> = [];
+    const { dispose } = await extensions.subscribe("work", (frame) =>
+      frames.push(AgentsExtensionsListResult.parse(frame)),
+    );
+    await vi.waitFor(() => expect(frames).toHaveLength(1));
+
+    const acting = extensions.act({
+      set: "work",
+      provider: "codex",
+      kind: "mcp-server",
+      id: "linear",
+      act: "disable",
+    });
+    await vi.waitFor(() =>
+      expect(frames.at(-1)?.run).toMatchObject({
+        provider: "codex",
+        label: "Codex",
+        name: "linear",
+        act: "disable",
+        state: "running",
+        // rendered as a terminal would leave it
+        output: "config/value/write mcp_servers.linear.enabled = false",
+      }),
+    );
+    expect(runExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: "codex",
+        profileId: "work-codex",
+        target: { kind: "mcp-server", id: "linear" },
+        act: "disable",
+      }),
+    );
+    // a second act for the profile while one runs is refused, not raced
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "codex",
+        kind: "mcp-server",
+        id: "linear",
+        act: "remove",
+      }),
+    ).rejects.toMatchObject({ kind: "CONFLICT" });
+
+    release();
+    const answered = AgentsExtensionsActResult.parse(await acting);
+    expect(answered.receipt).toMatchObject({ status: "changed", message: "turned off" });
+    expect(answered.run).toMatchObject({ state: "finished", finishedAt: NOW });
+    // the read after the act: the cell says what Codex holds now, and offers the way back
+    await vi.waitFor(() =>
+      expect(frames.at(-1)?.servers[0]?.cells.codex?.[0]).toMatchObject({
+        enabled: false,
+        acts: [
+          {
+            act: "enable",
+            runs: "config/value/write mcp_servers.linear.enabled = true",
+            reaches: [],
+          },
+          { act: "remove", runs: "codex mcp remove linear", reaches: ["definition"] },
+        ],
+      }),
+    );
+    expect(frames.at(-1)?.run).toMatchObject({ state: "finished", receipt: { status: "changed" } });
+    dispose();
+  });
+
+  it("refuses an act the agent does not offer, and a holding the profile does not have", async () => {
+    const { runtime, runExtensionAct } = codexWithLinear();
+    const extensions = service(runtime);
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "codex",
+        kind: "mcp-server",
+        id: "linear",
+        act: "enable",
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "codex",
+        kind: "mcp-server",
+        id: "sentry",
+        act: "disable",
+      }),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "mcp-server",
+        id: "linear",
+        act: "disable",
+      }),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    expect(runExtensionAct).not.toHaveBeenCalled();
   });
 });

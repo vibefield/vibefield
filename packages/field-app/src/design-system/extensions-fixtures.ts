@@ -1,10 +1,12 @@
-import type { AgentsExtensionsListResult } from "@vibefield/contracts";
+import type { AgentExtensionRun, AgentsExtensionsListResult } from "@vibefield/contracts";
 
 // Extensions on fixture data (AR-S4b): the lens fieldd sends for the "Work"
 // profile — the same document as the contracts fixture
 // (packages/contracts/fixtures/agents-extensions.valid.json; a test keeps them
 // equal). Fixture DATA only — every view is the shipping one. Names, logins
-// and paths are examples.
+// and paths are examples. AR-S4c: its holdings carry the acts their agents
+// offer, and FIXTURE_EXTENSION_RUN is an act's run as the act fixture
+// (agents-extensions-act.valid.json) has it.
 
 /** The catalog's "now" for the lists: two minutes after the read. */
 export const FIXTURE_EXTENSIONS_NOW = new Date("2026-09-25T09:02:10.000Z");
@@ -203,6 +205,13 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
             headers: ["Authorization"],
             auth: "signed-in",
             version: 0,
+            acts: [
+              {
+                act: "remove",
+                runs: "claude mcp remove --scope user linear",
+                reaches: ["definition", "sign-in"],
+              },
+            ],
           },
         ],
         codex: [
@@ -217,6 +226,18 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
             env: ["LINEAR_TOKEN"],
             headers: ["Authorization"],
             version: 1,
+            acts: [
+              {
+                act: "disable",
+                runs: "config/value/write mcp_servers.linear.enabled = false",
+                reaches: [],
+              },
+              {
+                act: "remove",
+                runs: "codex mcp remove linear",
+                reaches: ["definition"],
+              },
+            ],
           },
         ],
         grok: [
@@ -248,6 +269,13 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
             target: "npx -y @modelcontextprotocol/server-postgres postgresql://•••@localhost/dev",
             env: ["PGPASSWORD"],
             version: 0,
+            acts: [
+              {
+                act: "remove",
+                runs: "claude mcp remove --scope user postgres",
+                reaches: ["definition"],
+              },
+            ],
           },
         ],
         codex: [
@@ -259,6 +287,18 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
             target: "uvx postgres-mcp --access-mode=restricted",
             env: ["DATABASE_URI"],
             version: 1,
+            acts: [
+              {
+                act: "enable",
+                runs: "config/value/write mcp_servers.postgres.enabled = true",
+                reaches: [],
+              },
+              {
+                act: "remove",
+                runs: "codex mcp remove postgres",
+                reaches: ["definition"],
+              },
+            ],
           },
         ],
       },
@@ -322,6 +362,13 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
             enabled: true,
             place: "~/.agents/skills/release-notes",
             version: 1,
+            acts: [
+              {
+                act: "disable",
+                runs: "skills/config/write release-notes enabled = false",
+                reaches: [],
+              },
+            ],
           },
         ],
         grok: [
@@ -405,4 +452,43 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
       },
     ],
   },
+};
+
+/** An act the catalog shows finished: Codex's postgres turned off (the act fixture's run). */
+export const FIXTURE_EXTENSION_RUN: AgentExtensionRun = {
+  id: "act-7f3a",
+  provider: "codex",
+  label: "Codex",
+  kind: "mcp-server",
+  item: "postgres",
+  name: "postgres",
+  act: "disable",
+  runs: "config/value/write mcp_servers.postgres.enabled = false",
+  state: "finished",
+  startedAt: "2026-09-25T08:58:40.000Z",
+  finishedAt: "2026-09-25T08:58:41.000Z",
+  output:
+    "config/value/write mcp_servers.postgres.enabled = false\nCodex wrote it to its config.\n",
+  truncated: false,
+  receipt: {
+    status: "changed",
+    message: "turned off",
+    finishedAt: "2026-09-25T08:58:41.000Z",
+  },
+};
+
+/** The same act while it runs. */
+export const FIXTURE_EXTENSION_RUNNING: AgentExtensionRun = {
+  id: "act-7f3a",
+  provider: "codex",
+  label: "Codex",
+  kind: "mcp-server",
+  item: "postgres",
+  name: "postgres",
+  act: "disable",
+  runs: "config/value/write mcp_servers.postgres.enabled = false",
+  state: "running",
+  startedAt: "2026-09-25T08:58:40.000Z",
+  output: "config/value/write mcp_servers.postgres.enabled = false\n",
+  truncated: false,
 };

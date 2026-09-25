@@ -17,7 +17,12 @@ import {
 } from "../panels/agents/ProfilesView";
 import { agentRow, inOnWords, profilePage, signInNote } from "../panels/agents/profiles-model";
 import type { SettingsSubpage } from "../panels/SettingsDialog";
-import { FIXTURE_EXTENSIONS, FIXTURE_EXTENSIONS_NOW } from "./extensions-fixtures";
+import {
+  FIXTURE_EXTENSION_RUN,
+  FIXTURE_EXTENSION_RUNNING,
+  FIXTURE_EXTENSIONS,
+  FIXTURE_EXTENSIONS_NOW,
+} from "./extensions-fixtures";
 import {
   FIXTURE_DEMO,
   FIXTURE_NATIVE,
@@ -153,6 +158,7 @@ export function ProfilesSettingsPreview({
         name={item.name}
         where={inOnWords(FIXTURE_WORK)}
         onRefresh={inert}
+        onAct={inert}
         now={FIXTURE_EXTENSIONS_NOW}
       />
     );
@@ -178,14 +184,35 @@ export function ProfilesSettingsPreview({
       now={FIXTURE_PROFILES_NOW}
       signIn={signing}
       extensions={
-        // AR-S4b: Work's servers and skills, and the page while its first read runs
+        // AR-S4b: Work's servers and skills, and the page while its first read
+        // runs; AR-S4c: a cell's confirm open, an act running, an act finished
         set === FIXTURE_WORK ? (
           <ProfileExtensionsView
-            lens={state === "reading extensions" ? null : FIXTURE_EXTENSIONS}
+            lens={
+              state === "reading extensions"
+                ? null
+                : state === "act running"
+                  ? { ...FIXTURE_EXTENSIONS, run: FIXTURE_EXTENSION_RUNNING }
+                  : state === "act finished"
+                    ? { ...FIXTURE_EXTENSIONS, run: FIXTURE_EXTENSION_RUN }
+                    : FIXTURE_EXTENSIONS
+            }
             profile={set.label}
+            where={inOnWords(set)}
             now={FIXTURE_EXTENSIONS_NOW}
             onRefresh={inert}
             onOpenItem={inert}
+            onAct={inert}
+            {...(state === "act confirm"
+              ? {
+                  armed: {
+                    provider: "claude",
+                    kind: "mcp-server" as const,
+                    id: "linear",
+                    act: "remove" as const,
+                  },
+                }
+              : {})}
           />
         ) : undefined
       }
