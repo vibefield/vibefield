@@ -50,7 +50,13 @@ export function ProfilesSettingsPreview({
   state: ProfilesFixtureState;
   onSubpage: (subpage: SettingsSubpage | null) => void;
 }): ReactElement {
-  const context = FIXTURE_PROFILES_CONTEXT;
+  const context = useMemo(
+    () =>
+      state === "loading usage"
+        ? { ...FIXTURE_PROFILES_CONTEXT, usage: [] }
+        : FIXTURE_PROFILES_CONTEXT,
+    [state],
+  );
   // "agent": a vendor agent in Work (one subscription); "sign-ins": OpenCode,
   // whose folder holds several
   const agent = useMemo(() => {
@@ -104,6 +110,8 @@ export function ProfilesSettingsPreview({
   return (
     <ProfilePageView
       page={profilePage(set, context)}
+      refreshingUsage={state === "loading usage" || state === "refreshing usage"}
+      onRefreshUsage={inert}
       now={FIXTURE_PROFILES_NOW}
       signIn={signing}
       busy={state === "signing in" ? "add:grok" : null}

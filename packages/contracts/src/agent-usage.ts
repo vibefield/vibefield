@@ -167,3 +167,13 @@ export const AgentAccountUsageBatch = z
   })
   .passthrough();
 export type AgentAccountUsageBatch = z.infer<typeof AgentAccountUsageBatch>;
+
+/** An explicit refresh waits for a reading, bypassing the normal poll interval
+ * while preserving provider backoff and the monitor's repeated-click guard. */
+export const AgentsUsageParams = z
+  .object({
+    refresh: z.boolean().optional(),
+    profileIds: z.array(AgentProfileId).max(256).optional(),
+  })
+  .strict();
+export type AgentsUsageParams = z.infer<typeof AgentsUsageParams>;

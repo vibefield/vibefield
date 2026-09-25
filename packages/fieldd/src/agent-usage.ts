@@ -6,6 +6,7 @@ import type {
 import {
   type AccountUsageMonitor,
   type AccountUsageMonitorOptions,
+  type AccountUsageRefreshOptions,
   type AgentRuntime,
   createAccountUsageMonitor,
 } from "@vibecook/puppeteer-runtime";
@@ -358,11 +359,15 @@ export class AccountUsageService {
     this.monitor.stop();
   }
 
-  /** Force a reading now (the daemon does not call this; tests and a future
-   * explicit refresh door do). */
-  async refresh(): Promise<AgentAccountUsageBatch> {
-    await this.monitor.refresh();
-    return this.snapshot();
+  /** Manual refresh bypasses the poll interval, never the monitor's backoff.
+   * Reconcile without polling so a cold request only reads its target accounts. */
+  async refresh(options: AccountUsageRefreshOptions = {}): Promise<AgentAccountUsageBatch> {
+    if (this.disposed || (options.force && !this.armed)) {
+      return this.latest ?? { entries: [], generatedAt: this.now().toISOString() };
+    }
+    if (options.force) await this.monitor.refreshProfiles({ poll: false });
+    if (!this.disposed) await this.monitor.refresh(options);
+    return this.latest ?? { entries: [], generatedAt: this.now().toISOString() };
   }
 
   /** Re-read the persona registry: a new account becomes its own row, a

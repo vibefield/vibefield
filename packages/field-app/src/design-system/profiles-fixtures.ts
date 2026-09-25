@@ -22,6 +22,8 @@ import type { ProfilesContext } from "../panels/agents/profiles-model";
 export type ProfilesFixtureState =
   | "profile"
   | "this mac"
+  | "loading usage"
+  | "refreshing usage"
   | "empty"
   | "signing in"
   | "agent"
@@ -31,6 +33,8 @@ export type ProfilesFixtureState =
 export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "profile",
   "this mac",
+  "loading usage",
+  "refreshing usage",
   "empty",
   "signing in",
   "agent",

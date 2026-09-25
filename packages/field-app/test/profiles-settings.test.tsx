@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
+  AgentAccountUsageBatch,
   AgentAccountUsageEntry,
   AgentInstall,
   AgentPersona,
@@ -178,6 +179,8 @@ const USAGE: AgentAccountUsageEntry[] = [
     ],
   },
 ];
+
+const USAGE_BATCH: AgentAccountUsageBatch = { entries: USAGE, generatedAt: READ };
 
 // ── the model ──
 
@@ -466,7 +469,8 @@ describe("the Agent Profiles group in the sidebar", () => {
 
 type Door = (params: Record<string, unknown>) => unknown;
 
-function fake(doors: Record<string, Door>) {
+function fake(doors: Record<string, Door>, initialUsage: AgentAccountUsageBatch = USAGE_BATCH) {
+  let onUsage: ((batch: AgentAccountUsageBatch) => void) | undefined;
   const request = vi.fn(async (method: string, params?: unknown) => {
     const door = doors[method];
     if (door === undefined) throw new Error(`unexpected request: ${method}`);
@@ -476,18 +480,20 @@ function fake(doors: Record<string, Door>) {
     status: "ready",
     onStatusChange: () => () => undefined,
     request,
-    subscribe: vi.fn(async (method: string) => {
+    subscribe: vi.fn(async (method: string, _params: unknown, onData: typeof onUsage) => {
       if (method !== "agents.usage.subscribe")
         throw new Error(`unexpected subscription: ${method}`);
+      onUsage = onData;
       return {
         subId: "usage",
-        snapshot: { entries: USAGE, generatedAt: READ },
+        snapshot: initialUsage,
         unsubscribe: () => undefined,
       };
     }),
   } as unknown as FielddClient;
   return {
     client,
+    emitUsage: (batch: AgentAccountUsageBatch) => onUsage?.(batch),
     calls: (method: string) =>
       request.mock.calls.filter(([called]) => called === method).map(([, params]) => params),
   };
@@ -497,6 +503,8 @@ function doors(over: Record<string, Door> = {}): Record<string, Door> {
   return {
     "agent.providers": () => ({ providers: PROVIDERS }),
     "agents.installs": () => ({ installs: INSTALLS, machineScope: true }),
+    "agents.usage": () => USAGE_BATCH,
+    "agents.profileSets.list": () => feed([NATIVE, WORK]),
     "agents.profileSets.update": (params) => ({ set: { ...WORK, ...params, id: "work" } }),
     ...over,
   };
@@ -510,6 +518,7 @@ afterEach(async () => {
   root = null;
   container?.remove();
   container = null;
+  vi.restoreAllMocks();
 });
 
 async function settle(): Promise<void> {
@@ -527,7 +536,10 @@ async function mount(element: ReturnType<typeof createElement>): Promise<void> {
 }
 
 interface Section {
-  render: (next: { feed?: AgentsProfileSetsListResult; route?: ProfilesRoute }) => Promise<void>;
+  render: (next: {
+    feed?: AgentsProfileSetsListResult | null;
+    route?: ProfilesRoute;
+  }) => Promise<void>;
   onRoute: ReturnType<typeof vi.fn>;
   onLeave: ReturnType<typeof vi.fn>;
   onSubpage: ReturnType<typeof vi.fn>;
@@ -536,7 +548,7 @@ interface Section {
 
 async function mountSection(
   client: FielddClient,
-  initial: { feed: AgentsProfileSetsListResult; route: ProfilesRoute },
+  initial: { feed: AgentsProfileSetsListResult | null; route: ProfilesRoute },
 ): Promise<Section> {
   const onRoute = vi.fn();
   const onLeave = vi.fn();
@@ -602,7 +614,327 @@ async function click(element: HTMLElement): Promise<void> {
   await settle();
 }
 
+async function windowEvent(type: "focus" | "blur"): Promise<void> {
+  await act(async () => window.dispatchEvent(new FocusEvent(type)));
+  await settle();
+}
+
+describe("usage freshness when visiting settings", () => {
+  it("refreshes This Mac's identities on entry, return, and button clicks, without changing managed profiles", async () => {
+    const f = fake(doors());
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "native" },
+    });
+    expect(f.calls("agents.profileSets.list")).toEqual([{ refresh: true }]);
+    await windowEvent("blur");
+    await windowEvent("focus");
+    expect(f.calls("agents.profileSets.list")).toHaveLength(2);
+    await click(button("Refresh usage"));
+    expect(f.calls("agents.profileSets.list")).toHaveLength(3);
+    await section.render({ route: { kind: "agent", set: "native", provider: "codex" } });
+    expect(f.calls("agents.profileSets.list")).toHaveLength(4);
+    await section.render({ route: { kind: "profile", set: "work" } });
+    await windowEvent("blur");
+    await windowEvent("focus");
+    expect(f.calls("agents.profileSets.list")).toHaveLength(4);
+  });
+
+  it("keeps a successful usage reading when the independent identity request fails", async () => {
+    const nativeUsage = {
+      ...USAGE_BATCH,
+      generatedAt: new Date(Date.parse(READ) + 1_000).toISOString(),
+      entries: [{ ...USAGE[0]!, profileId: "claude:native-default" }],
+    };
+    const f = fake(
+      doors({
+        "agents.usage": () => nativeUsage,
+        "agents.profileSets.list": () => {
+          throw new Error("Connection lost");
+        },
+      }),
+    );
+    await mountSection(f.client, {
+      feed: feed([NATIVE]),
+      route: { kind: "profile", set: "native" },
+    });
+    expect(text()).toContain("91%");
+    expect(container?.querySelector('[role="alert"]')).toBeNull();
+    await click(button("Refresh usage"));
+    expect(text()).toContain("91%");
+    expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
+      "Sign-ins couldn't be refreshed",
+    );
+    expect(button("Refresh usage").disabled).toBe(false);
+  });
+
+  it("refreshes each page when its accounts arrive, without refreshing on ordinary feed updates", async () => {
+    const f = fake(doors());
+    const section = await mountSection(f.client, {
+      feed: null,
+      route: { kind: "profile", set: "work" },
+    });
+    expect(f.calls("agents.usage")).toEqual([]);
+    await section.render({ feed: feed([NATIVE, WORK]) });
+    expect(f.calls("agents.usage")).toEqual([
+      { refresh: true, profileIds: [WORK_CLAUDE.profileId] },
+    ]);
+    expect(text()).not.toContain("Usage checked");
+    await section.render({ feed: feed([NATIVE, { ...WORK, label: "Office" }]) });
+    expect(f.calls("agents.usage")).toHaveLength(1);
+    await section.render({ route: { kind: "agent", set: "work", provider: "claude" } });
+    expect(f.calls("agents.usage")).toHaveLength(2);
+    expect(f.calls("agents.usage").at(-1)).toEqual({
+      refresh: true,
+      profileIds: [WORK_CLAUDE.profileId],
+    });
+    await section.render({ route: { kind: "profile", set: "work" } });
+    expect(f.calls("agents.usage")).toHaveLength(3);
+  });
+
+  it("updates the meters on returning to the window, not when moving focus between controls", async () => {
+    let next = USAGE_BATCH;
+    const f = fake(doors({ "agents.usage": () => next }));
+    await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" },
+    });
+    const name = container?.querySelector('input[aria-label="Profile name"]');
+    expect(name).not.toBeNull();
+    await act(async () => {
+      name?.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+      name?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+    });
+    expect(f.calls("agents.usage")).toHaveLength(1);
+    await windowEvent("blur");
+    next = {
+      generatedAt: new Date(Date.parse(READ) + 60_000).toISOString(),
+      entries: [{ ...USAGE[0]!, metrics: [{ ...USAGE[0]!.metrics[0]!, usedPercent: 37 }] }],
+    };
+    await windowEvent("focus");
+    expect(f.calls("agents.usage")).toHaveLength(2);
+    expect(text()).toContain("37%");
+    expect(text()).not.toContain("Usage checked");
+    await windowEvent("focus");
+    expect(f.calls("agents.usage")).toHaveLength(2);
+  });
+
+  it("combines visibility and focus events in either order when returning from another screen", async () => {
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+    const visibility = async (value: boolean): Promise<void> => {
+      hidden.mockReturnValue(value);
+      await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+      await settle();
+    };
+    const f = fake(doors());
+    await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" },
+    });
+    await windowEvent("blur");
+    await visibility(true);
+    expect(f.calls("agents.usage")).toHaveLength(1);
+    await visibility(false);
+    await windowEvent("focus");
+    expect(f.calls("agents.usage")).toHaveLength(2);
+    await visibility(true);
+    await windowEvent("blur");
+    await windowEvent("focus");
+    expect(f.calls("agents.usage")).toHaveLength(2);
+    await visibility(false);
+    expect(f.calls("agents.usage")).toHaveLength(3);
+  });
+
+  it("coalesces returns during a refresh, then reads a newly opened profile after it finishes", async () => {
+    let finish: ((batch: AgentAccountUsageBatch) => void) | undefined;
+    const readUsage = vi
+      .fn<Door>()
+      .mockReturnValue(USAGE_BATCH)
+      .mockImplementationOnce(
+        () =>
+          new Promise<AgentAccountUsageBatch>((resolve) => {
+            finish = resolve;
+          }),
+      );
+    const f = fake(doors({ "agents.usage": readUsage }));
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" },
+    });
+    expect(button("Refreshing…").disabled).toBe(true);
+    await windowEvent("blur");
+    await windowEvent("focus");
+    expect(f.calls("agents.usage")).toHaveLength(1);
+    await section.render({ route: { kind: "profile", set: "native" } });
+    expect(f.calls("agents.usage")).toHaveLength(1);
+    await act(async () => finish?.(USAGE_BATCH));
+    await settle();
+    expect(f.calls("agents.usage")).toEqual([
+      { refresh: true, profileIds: [WORK_CLAUDE.profileId] },
+      { refresh: true, profileIds: NATIVE.personas.map((item) => item.profileId) },
+    ]);
+    expect(button("Refresh usage").disabled).toBe(false);
+  });
+
+  it("stops refreshing when the page closes and refreshes again when reopened", async () => {
+    const f = fake(doors());
+    const initial = {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" } as const,
+    };
+    await mountSection(f.client, initial);
+    await act(async () => root?.unmount());
+    root = null;
+    container?.remove();
+    container = null;
+    await windowEvent("blur");
+    await windowEvent("focus");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(f.calls("agents.usage")).toHaveLength(1);
+    await mountSection(f.client, initial);
+    expect(f.calls("agents.usage")).toHaveLength(2);
+  });
+
+  it("leaves empty and new profile pages alone and keeps automatic failures quiet", async () => {
+    const f = fake(
+      doors({
+        "agents.usage": () => {
+          throw new Error("offline");
+        },
+      }),
+    );
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, { ...WORK, personas: [] }]),
+      route: { kind: "profile", set: "work" },
+    });
+    await windowEvent("blur");
+    await windowEvent("focus");
+    expect(f.calls("agents.usage")).toEqual([]);
+    await section.render({ route: { kind: "new" } });
+    await windowEvent("blur");
+    await windowEvent("focus");
+    expect(f.calls("agents.usage")).toEqual([]);
+    await section.render({ feed: feed([NATIVE, WORK]), route: { kind: "profile", set: "work" } });
+    expect(f.calls("agents.usage")).toHaveLength(1);
+    expect(container?.querySelector('[role="alert"]')).toBeNull();
+    expect(text()).toContain("91%");
+    expect(button("Refresh usage").disabled).toBe(false);
+    await click(button("Refresh usage"));
+    expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
+      "Usage couldn't be refreshed",
+    );
+  });
+});
+
 describe("a profile's page", () => {
+  it("refreshes its accounts once, shows the reply, then follows newer subscription readings", async () => {
+    let finish: ((batch: AgentAccountUsageBatch) => void) | undefined;
+    const readUsage = vi.fn<Door>().mockReturnValue(USAGE_BATCH);
+    const f = fake(doors({ "agents.usage": readUsage }));
+    await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" },
+    });
+    readUsage.mockImplementationOnce(
+      () =>
+        new Promise<AgentAccountUsageBatch>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await click(button("Refresh usage"));
+    expect(button("Refreshing…").disabled).toBe(true);
+    await click(button("Refreshing…"));
+    expect(f.calls("agents.usage")).toEqual([
+      { refresh: true, profileIds: [WORK_CLAUDE.profileId] },
+      { refresh: true, profileIds: [WORK_CLAUDE.profileId] },
+    ]);
+    const reading = (percent: number, after: number): AgentAccountUsageBatch => ({
+      generatedAt: new Date(Date.parse(READ) + after).toISOString(),
+      entries: [{ ...USAGE[0]!, metrics: [{ ...USAGE[0]!.metrics[0]!, usedPercent: percent }] }],
+    });
+    await act(async () => finish?.(reading(36, 60_000)));
+    expect(text()).toContain("36%");
+    expect(text()).toContain("Usage checked");
+    expect(button("Refresh usage").disabled).toBe(false);
+    await act(async () => f.emitUsage(reading(71, 120_000)));
+    expect(text()).toContain("71%");
+    expect(text()).not.toContain("36%");
+  });
+
+  it("refreshes only the agent being viewed and preserves readings when the request fails", async () => {
+    const f = fake(
+      doors({
+        "agents.usage": () => {
+          throw new Error("Connection lost");
+        },
+      }),
+    );
+    await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "agent", set: "work", provider: "claude" },
+    });
+    await click(button("Refresh usage"));
+    expect(f.calls("agents.usage")).toEqual([
+      { refresh: true, profileIds: [WORK_CLAUDE.profileId] },
+      { refresh: true, profileIds: [WORK_CLAUDE.profileId] },
+    ]);
+    expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
+      "Usage couldn't be refreshed",
+    );
+    expect(text()).toContain("91%");
+    expect(button("Refresh usage").disabled).toBe(false);
+  });
+
+  it("shows a provider's refusal and retry time alongside retained meters", async () => {
+    const f = fake(
+      doors({
+        "agents.usage": () => ({
+          generatedAt: new Date(Date.parse(READ) + 60_000).toISOString(),
+          entries: [
+            {
+              ...USAGE[0]!,
+              state: "rate-limited",
+              stale: true,
+              message: "Please wait before checking again",
+              retryAt: new Date(Date.parse(READ) + 120_000).toISOString(),
+            },
+          ],
+        }),
+      }),
+    );
+    await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" },
+    });
+    await click(button("Refresh usage"));
+    expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
+      "Please wait before checking again",
+    );
+    expect(text()).toContain("Retry after");
+    expect(text()).toContain("91%");
+  });
+
+  it("does not carry a late refresh notice to another profile", async () => {
+    let fail: ((error: Error) => void) | undefined;
+    const readUsage = vi.fn<Door>().mockReturnValue(USAGE_BATCH);
+    const f = fake(doors({ "agents.usage": readUsage }));
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "profile", set: "work" },
+    });
+    readUsage.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    await click(button("Refresh usage"));
+    await section.render({ route: { kind: "profile", set: "native" } });
+    await act(async () => fail?.(new Error("late failure")));
+    expect(container?.querySelector('[role="alert"]')).toBeNull();
+    expect(button("Refresh usage").disabled).toBe(false);
+  });
+
   it("shows its sign-ins with their usage, its settings, and a delete that asks first", async () => {
     const f = fake(
       doors({
@@ -773,6 +1105,32 @@ describe("a profile's page", () => {
 });
 
 describe("one agent inside a profile", () => {
+  it("shows pending usage instead of an unsupported sentence until the reading arrives", async () => {
+    let finish: ((batch: AgentAccountUsageBatch) => void) | undefined;
+    const f = fake(
+      doors({
+        "agents.usage": () =>
+          new Promise<AgentAccountUsageBatch>((resolve) => {
+            finish = resolve;
+          }),
+      }),
+      { entries: [{ ...USAGE[0]!, state: "unsupported", metrics: [] }], generatedAt: READ },
+    );
+    await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "agent", set: "work", provider: "claude" },
+    });
+    expect(text()).toContain("Loading usage…");
+    expect(text()).not.toContain("usage isn't reported");
+    expect(container?.querySelector(".vf-profiles-usage-placeholder")).not.toBeNull();
+    await act(async () =>
+      finish?.({ ...USAGE_BATCH, generatedAt: new Date(Date.parse(READ) + 1_000).toISOString() }),
+    );
+    expect(text()).toContain("91%");
+    expect(text()).not.toContain("Loading usage…");
+    expect(container?.querySelector(".vf-profiles-usage-placeholder")).toBeNull();
+  });
+
   it("names itself in the header, switches account, shows its folder, and signs out after asking", async () => {
     const f = fake(
       doors({
@@ -1173,6 +1531,104 @@ describe("the plans a profile runs on (pass 19)", () => {
     usage: PLAN_USAGE,
   };
 
+  it("recovers Codex's plan after an unread identity without relocating its meters to the agent row", async () => {
+    const nativeCodex = { ...NATIVE.personas[1]!, identity: undefined, holds: undefined };
+    const unread = { ...NATIVE, personas: [nativeCodex], plans: [] };
+    const nativeUsage = {
+      ...USAGE_BATCH,
+      entries: [
+        { ...USAGE[0]!, provider: "codex", label: "Codex", profileId: nativeCodex.profileId },
+      ],
+    };
+    const f = fake(doors({ "agents.usage": () => nativeUsage }), nativeUsage);
+    const section = await mountSection(f.client, {
+      feed: feed([unread]),
+      route: { kind: "profile", set: "native" },
+    });
+    const codexRow = () => container?.querySelector('[data-provider="codex"]');
+    expect(f.calls("agents.profileSets.list")).toEqual([{ refresh: true }]);
+    expect(container?.querySelector('[data-plan="openai"]')).toBeNull();
+    expect(codexRow()?.textContent).toContain("Not checked yet");
+    expect(codexRow()?.querySelector('[role="table"]')).toBeNull();
+    expect(text()).not.toContain("91%");
+
+    await section.render({ feed: feed([unread], { reading: true }) });
+    expect(codexRow()?.textContent).toContain("Checking…");
+    expect(button("Refreshing…").disabled).toBe(true);
+    const recovered = {
+      ...unread,
+      personas: [{ ...nativeCodex, identity: P_CODEX.identity, holds: P_CODEX.holds }],
+      plans: [
+        { ...PLANNED.plans![1]!, namedBy: nativeCodex.profileId, holders: [nativeCodex.profileId] },
+      ],
+    };
+    await section.render({ feed: feed([recovered], { reading: true }) });
+    const card = container?.querySelector('.vf-profiles-plan[data-plan="openai"]');
+    expect(card?.textContent).toContain("ChatGPT Pro");
+    expect(card?.textContent).toContain("91%");
+    expect(card?.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
+      "ChatGPT Pro: Refreshing usage",
+    );
+    expect(card?.textContent).not.toContain("Refreshing usage…");
+    expect(codexRow()?.textContent).toContain("ChatGPT Pro");
+    expect(codexRow()?.textContent).not.toContain("91%");
+    await section.render({ feed: feed([recovered]) });
+    expect(button("Refresh usage").disabled).toBe(false);
+    expect(
+      container?.querySelector('.vf-profiles-plan[data-plan="openai"]')?.textContent,
+    ).toContain("91%");
+    expect(f.calls("agents.usage")).toHaveLength(1);
+  });
+
+  it("loads missing meters, preserves arriving readings, and ends the placeholders after a failed refresh", async () => {
+    let fail: ((error: Error) => void) | undefined;
+    const f = fake(
+      doors({
+        "agent.providers": () => ({ providers: PLAN_PROVIDERS }),
+        "agents.installs": () => ({ installs: PLAN_INSTALLS, machineScope: true }),
+        "agents.usage": () =>
+          new Promise<AgentAccountUsageBatch>((_resolve, reject) => {
+            fail = reject;
+          }),
+      }),
+      { entries: [PLAN_USAGE[1]!], generatedAt: READ },
+    );
+    await mountSection(f.client, { feed: plannedFeed(), route: { kind: "profile", set: "work" } });
+    const card = (id: string) =>
+      container?.querySelector<HTMLElement>(`.vf-profiles-plan[data-plan="${id}"]`);
+    expect(card("anthropic")?.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
+      "Claude Max: Loading usage",
+    );
+    expect(
+      card("anthropic")?.querySelector(".vf-profiles-plan-sentence")?.getAttribute("aria-hidden"),
+    ).toBe("true");
+    expect(card("github")?.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
+      "Copilot: Loading usage",
+    );
+    expect(card("github")?.querySelector(".vf-profiles-usage-loading-caption")).toBeNull();
+    expect(card("openai")?.textContent).toContain("Sign-in expired.");
+    expect(card("openai")?.querySelector('[role="status"]')).toBeNull();
+    expect(card("kimi")?.textContent).toContain("no agent here names one");
+    expect(card("kimi")?.querySelector('[role="status"]')).toBeNull();
+
+    await act(async () => f.emitUsage({ entries: PLAN_USAGE, generatedAt: READ }));
+    expect(card("anthropic")?.textContent).toContain("91%");
+    expect(card("anthropic")?.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
+      "Claude Max: Refreshing usage",
+    );
+    expect(card("anthropic")?.textContent).not.toContain("Refreshing usage…");
+    expect(card("anthropic")?.querySelector(".vf-profiles-usage-placeholder")).toBeNull();
+    expect(card("github")?.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
+      "Copilot: Loading usage",
+    );
+
+    await act(async () => fail?.(new Error("Connection lost")));
+    expect(card("anthropic")?.textContent).toContain("91%");
+    expect(card("github")?.textContent).toContain("Usage isn't reported for this subscription.");
+    expect(container?.querySelector(".vf-profiles-usage-loading")).toBeNull();
+    expect(button("Refresh usage").disabled).toBe(false);
+  });
+
   it("makes each plan a card: the plan as its product names it, whose it is, and what is left", () => {
     const page = profilePage(PLANNED, context);
     expect(
@@ -1204,7 +1660,7 @@ describe("the plans a profile runs on (pass 19)", () => {
     });
     expect(page.plans[3]).toMatchObject({
       note: "No Copilot sign-in of its own here: it runs as GitHub CLI's account, the same one as This Mac.",
-      sentence: { text: "Usage isn't reported for this plan." },
+      sentence: { text: "Usage isn't reported for this subscription." },
       act: { kind: "own", provider: "copilot", label: "Sign in to Copilot" },
     });
   });

@@ -222,6 +222,101 @@
   stroke-width: 1.8;
 }
 
+/* Pending usage uses the meter's silhouette; the soft sweep is indeterminate. */
+.vf-profiles-usage-loading {
+  display: grid;
+  gap: 10px;
+  max-width: 470px;
+  margin-top: 8px;
+}
+
+.vf-profiles-usage-loading--card {
+  position: absolute;
+  inset: 0;
+  align-content: center;
+  max-width: none;
+  margin-top: 0;
+}
+
+.vf-profiles-usage-placeholder {
+  display: grid;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.vf-profiles-usage-placeholder-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+}
+
+.vf-profiles-usage-placeholder-row > span {
+  position: relative;
+  overflow: hidden;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vf-foreground) 7%, transparent);
+}
+
+.vf-profiles-usage-placeholder-row > .vf-profiles-usage-placeholder-track {
+  height: 10px;
+}
+
+.vf-profiles-usage-placeholder-row > .vf-profiles-usage-placeholder-reset {
+  width: 36px;
+  justify-self: end;
+}
+
+.vf-profiles-usage-placeholder-row > span::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--vf-foreground) 9%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: vf-profiles-usage-shimmer 1800ms ease-in-out infinite;
+}
+
+.vf-profiles-usage-placeholder-row:nth-child(2) > span::after {
+  animation-delay: 140ms;
+}
+
+.vf-profiles-usage-loading-caption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.vf-profiles-usage-loading-dot {
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: vf-profiles-usage-breathe 1800ms ease-in-out infinite;
+}
+
+@keyframes vf-profiles-usage-shimmer {
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes vf-profiles-usage-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 /* ── a menu under its button: island material, 32px items, Esc closes ── */
 
 .vf-profiles-menu-wrap {
@@ -496,7 +591,9 @@
 @media (prefers-reduced-motion: reduce) {
   .vf-profiles-menu,
   .vf-profiles-confirm-box,
-  .vf-profiles-signin {
+  .vf-profiles-signin,
+  .vf-profiles-usage-placeholder-row > span::after,
+  .vf-profiles-usage-loading-dot {
     animation: none;
   }
 
@@ -562,10 +659,25 @@
 }
 
 .vf-profiles-plan-head {
+  position: relative;
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+}
+
+/* The refresh signal sits on the mark, outside flow: no extra row or wrapping. */
+.vf-profiles-plan-refresh {
+  position: absolute;
+  top: 30px;
+  left: 30px;
+  display: grid;
+  place-items: center;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  color: var(--vf-text-secondary);
+  background: var(--vf-chrome-solid);
 }
 
 .vf-profiles-plan-mark {
@@ -626,6 +738,19 @@
   color: var(--vf-text-tertiary);
   font-size: 12px;
   line-height: 1.45;
+}
+
+/* Two normal meter rows. Longer readings/messages grow naturally; changing
+   refresh state never contributes another line to the card's height. */
+.vf-profiles-plan-usage {
+  position: relative;
+  display: grid;
+  align-content: center;
+  min-height: 39px;
+}
+
+.vf-profiles-plan-usage.is-loading > .vf-profiles-plan-sentence {
+  visibility: hidden;
 }
 
 .vf-profiles-usage--card {

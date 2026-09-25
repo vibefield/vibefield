@@ -6,6 +6,7 @@ import {
   AGENT_ACCOUNT_USAGE_STATES,
   AgentAccountUsageBatch,
   AgentAccountUsageEntry,
+  AgentsUsageParams,
 } from "../src/agent-usage";
 import { METHODS } from "../src/methods";
 
@@ -21,6 +22,21 @@ const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8")) as unknown;
 
 describe("the agents.usage rows (AR-5d)", () => {
+  it("accepts a targeted refresh and rejects malformed refresh requests", () => {
+    expect(AgentsUsageParams.parse({})).toEqual({});
+    expect(
+      AgentsUsageParams.parse({ refresh: true, profileIds: ["claude:native-default"] }),
+    ).toEqual({ refresh: true, profileIds: ["claude:native-default"] });
+    for (const params of [
+      { refresh: "true" },
+      { refresh: true, profileIds: ["../credentials"] },
+      { refresh: true, profileIds: "all" },
+      { force: true },
+    ]) {
+      expect(AgentsUsageParams.safeParse(params).success).toBe(false);
+    }
+  });
+
   it("both doors read on agent.usage — their own scope, not the fold's — stay local, and exactly one subscribes", () => {
     const rows = METHODS.filter((m) => m.method.startsWith("agents.usage")).map((m) => ({
       method: m.method,

@@ -320,6 +320,42 @@ async function batchWhere(
 }
 
 describe("the account usage doors (AR-5d)", () => {
+  it("an explicit refresh waits for the selected account and validates its parameters", async () => {
+    const { daemon, scripted, script } = await setup({ profiles: true });
+    const spawner = await window(daemon, ["agent.spawn"], "manual-profile");
+    const work = (await spawner.call("agents.profileSets.create", { label: "Work" })) as {
+      set: { id: string };
+    };
+    const created = (await spawner.call("agents.profiles.create", {
+      set: work.set.id,
+      provider: "scripted",
+    })) as { persona: { profileId: string } };
+    const profileId = created.persona.profileId;
+    script({ [profileId]: available("scripted", "2026-09-13T13:00:00.000Z") });
+    const win = await window(daemon, OBSERVER, "manual-usage");
+    const batch = AgentAccountUsageBatch.parse(
+      await win.call("agents.usage", {
+        refresh: true,
+        profileIds: [profileId],
+      }),
+    );
+    expect(batch.entries).toContainEqual(
+      expect.objectContaining({
+        profileId,
+        state: "available",
+        metrics: expect.arrayContaining([expect.objectContaining({ usedPercent: 42 })]),
+      }),
+    );
+    expect(scripted.fetches()).toEqual({ [profileId]: 1 });
+    expect((await win.callErr("agents.usage", { refresh: "yes" })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    const denied = await window(daemon, ["agent.observe"], "manual-denied");
+    expect((await denied.callErr("agents.usage", { refresh: true })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+  }, 30_000);
+
   it("agents.usage answers the batch: the adapter's rows, its metric order, and NOTHING else", async () => {
     const { daemon } = await setup();
     const win = await window(daemon, OBSERVER, "u1");
@@ -583,6 +619,37 @@ function fakeRuntime(pollIntervalMs: number): FakeRuntime {
 }
 
 describe("the reading's own rules (AR-5d)", () => {
+  it("manual refresh bypasses the normal interval, retains provider backoff, and stops with the service", async () => {
+    let ms = 0;
+    const runtime = fakeRuntime(30 * 60_000);
+    const service = new AccountUsageService({ runtime, now: () => new Date(ms) });
+    cleanup.push(() => service.stop());
+    await service.refresh({ force: true });
+    expect(runtime.asked).toBe(0); // before daemon ready
+    service.start();
+    runtime.answers.push(available("scripted", new Date(ms).toISOString(), 10));
+    await service.refresh({ force: true });
+    ms = 30_000;
+    runtime.answers.push(available("scripted", new Date(ms).toISOString(), 25));
+    const changed = await service.refresh({ force: true });
+    expect(changed.entries[0]?.metrics[0]?.usedPercent).toBe(25);
+    expect(runtime.asked).toBe(2);
+    await service.refresh({ force: true });
+    expect(runtime.asked).toBe(2);
+    ms = 60_000;
+    runtime.answers.push(rateLimited("scripted", new Date(180_000).toISOString()));
+    await service.refresh({ force: true });
+    ms = 90_000;
+    const retained = await service.refresh({ force: true });
+    expect(runtime.asked).toBe(3);
+    expect(retained.entries[0]).toMatchObject({ state: "rate-limited", stale: true });
+    expect(retained.entries[0]?.metrics[0]?.usedPercent).toBe(25);
+    service.stop();
+    ms = 180_000;
+    await service.refresh({ force: true });
+    expect(runtime.asked).toBe(3);
+  });
+
   it("a retryable failure pushes the next reading past the refresh interval, and a good one brings it back", async () => {
     let ms = Date.parse("2026-09-13T12:00:00.000Z");
     const runtime = fakeRuntime(1_000);

@@ -300,6 +300,44 @@ function UsageGroupLine({ heading, line }: { heading?: string | undefined; line:
   );
 }
 
+/** Pending meters keep their shape without inventing window labels or percentages. */
+function UsageLoading({
+  label,
+  hasReading = false,
+  variant = "row",
+}: {
+  label: string;
+  hasReading?: boolean;
+  variant?: "row" | "card";
+}): ReactElement {
+  if (hasReading) {
+    return <span className="sr-only" role="status" aria-label={`${label}: Refreshing usage`} />;
+  }
+  return (
+    <div
+      className={`vf-profiles-usage-loading${variant === "card" ? " vf-profiles-usage-loading--card" : ""}`}
+      role="status"
+      aria-label={`${label}: Loading usage`}
+    >
+      <div className="vf-profiles-usage-placeholder" aria-hidden="true">
+        {[0, 1].map((row) => (
+          <div className="vf-profiles-usage-placeholder-row" key={row}>
+            <span className="vf-profiles-usage-placeholder-label" />
+            <span className="vf-profiles-usage-placeholder-track" />
+            <span className="vf-profiles-usage-placeholder-reset" />
+          </div>
+        ))}
+      </div>
+      {variant === "row" && (
+        <span className="vf-profiles-usage-loading-caption" aria-hidden="true">
+          <span className="vf-profiles-usage-loading-dot" />
+          Loading usage…
+        </span>
+      )}
+    </div>
+  );
+}
+
 /* ── plans (pass 19, P2): cards on top, badges on the agents ─────────────── */
 
 /** Which plan the pointer is on, shared by a page's cards and badges. */
@@ -316,15 +354,19 @@ export function PlanCardView({
   now,
   light,
   busy = false,
+  refreshingUsage = false,
   onAct,
 }: {
   card: PlanCard;
   now: Date;
   light?: PlanLight | undefined;
   busy?: boolean;
+  refreshingUsage?: boolean;
   onAct?: ((card: PlanCard) => void) | undefined;
 }): ReactElement {
   const lines = usageLines(card.metrics, now);
+  const loading =
+    refreshingUsage && card.named && card.namedBy !== undefined && card.act?.kind !== "reauth";
   const titleId = useId();
   return (
     <article
@@ -338,6 +380,16 @@ export function PlanCardView({
     >
       <header className="vf-profiles-plan-head">
         <ServiceTile service={card.service} size="card" />
+        {loading && lines.length > 0 && (
+          <span
+            className="vf-profiles-plan-refresh"
+            role="status"
+            aria-label={`${card.title}: Refreshing usage`}
+            title="Refreshing usage…"
+          >
+            <span className="vf-profiles-usage-loading-dot" aria-hidden="true" />
+          </span>
+        )}
         <div className="vf-profiles-plan-name">
           <h4 id={titleId} className="vf-profiles-plan-title">
             {card.title}
@@ -356,18 +408,23 @@ export function PlanCardView({
         )}
       </header>
       {card.note !== undefined && <p className="vf-profiles-plan-note">{card.note}</p>}
-      {lines.length > 0 ? (
-        <UsageTimeline lines={lines} label={card.title} variant="card" />
-      ) : (
-        card.sentence !== undefined && (
-          <p className="vf-profiles-plan-sentence">
+      <div
+        className={`vf-profiles-plan-usage${loading && lines.length === 0 ? " is-loading" : ""}`}
+      >
+        {lines.length > 0 ? (
+          <UsageTimeline lines={lines} label={card.title} variant="card" />
+        ) : card.sentence !== undefined ? (
+          // Preserve the sentence's space while the skeleton replaces it,
+          // including wrapped failure messages on narrow cards.
+          <p className="vf-profiles-plan-sentence" aria-hidden={loading || undefined}>
             {card.sentence.attention !== undefined && (
               <span className="vf-profiles-attention">{card.sentence.attention} </span>
             )}
             {card.sentence.text}
           </p>
-        )
-      )}
+        ) : null}
+        {loading && lines.length === 0 && <UsageLoading label={card.title} variant="card" />}
+      </div>
       <footer className="vf-profiles-plan-foot">
         <span className="vf-profiles-plan-users" aria-hidden="true">
           {card.users.map((user) => (
@@ -404,7 +461,7 @@ function PlanBadgeView({
         plan !== undefined && light?.lit === plan ? " is-lit" : ""
       }`}
       data-plan={plan}
-      title={badge.payAsYouGo ? "Pay as you go — not a plan" : undefined}
+      title={badge.payAsYouGo ? "Pay as you go — not a subscription" : undefined}
       onPointerEnter={plan === undefined ? undefined : () => light?.onLight(plan)}
       onPointerLeave={plan === undefined ? undefined : () => light?.onLight(null)}
     >
@@ -796,6 +853,8 @@ export function ConfirmRow({
 
 export interface ProfilePageViewProps {
   page: ProfilePageModel;
+  refreshingUsage?: boolean | undefined;
+  onRefreshUsage?: (() => void) | undefined;
   /** "now" for the usage lines (the catalog pins it) */
   now?: Date | undefined;
   notice?: AgentsNotice | null | undefined;
@@ -822,6 +881,8 @@ export interface ProfilePageViewProps {
 
 export function ProfilePageView({
   page,
+  refreshingUsage = false,
+  onRefreshUsage,
   now,
   notice = null,
   busy = null,
@@ -881,6 +942,11 @@ export function ProfilePageView({
           </h2>
           <p className="vf-agents-hero-fact">{page.facts}</p>
         </div>
+        {rows.length > 0 && onRefreshUsage !== undefined && (
+          <UiButton disabled={refreshingUsage} aria-busy={refreshingUsage} onClick={onRefreshUsage}>
+            {refreshingUsage ? "Refreshing…" : "Refresh usage"}
+          </UiButton>
+        )}
       </header>
 
       {notice !== null && (
@@ -910,7 +976,7 @@ export function ProfilePageView({
               id={`vf-profiles-plans-${set.id}`}
               className="text-[13px] font-semibold tracking-[-0.01em] text-black/85 dark:text-white/85"
             >
-              Plans
+              Subscriptions
             </h3>
             <span className={labelCls}>What {set.label} runs on</span>
           </div>
@@ -922,6 +988,7 @@ export function ProfilePageView({
                 now={at}
                 light={light}
                 busy={busy !== null}
+                refreshingUsage={refreshingUsage}
                 onAct={onPlanAct}
               />
             ))}
@@ -1053,7 +1120,9 @@ function ProfileAgentRowView({
   const factId = `vf-profiles-fact-${row.persona.profileId}`;
   // pass 19: a row that wears badges leaves its plan's usage to the plan's card
   const badged = row.badges.length > 0 && (row.state === "signed-in" || row.state === "expired");
-  const lines = badged ? [] : usageLines(row.usage, now ?? new Date());
+  // Usage may arrive before the identity that places it on a plan. Keep it
+  // for that card instead of briefly moving the meters into the agent row.
+  const lines = badged || row.state === "unread" ? [] : usageLines(row.usage, now ?? new Date());
   let action: ReactNode = null;
   if (row.state === "expired") {
     action = (
@@ -1097,7 +1166,7 @@ function ProfileAgentRowView({
         </button>
         {badged ? (
           // biome-ignore lint/a11y/useSemanticElements: badges wrap as one flowing line; a <ul> would add list chrome to reset
-          <span id={factId} className="vf-profiles-badges" role="list" aria-label="Plans">
+          <span id={factId} className="vf-profiles-badges" role="list" aria-label="Subscriptions">
             {row.badges.map((badge) => (
               <PlanBadgeView
                 key={badge.key}
@@ -1191,6 +1260,8 @@ function NameField({
 export interface ProfileAgentPageViewProps {
   set: AgentProfileSet;
   row: ProfileAgentRow;
+  refreshingUsage?: boolean | undefined;
+  onRefreshUsage?: (() => void) | undefined;
   /** the shared app's installed version, for the row that leads to it */
   appVersion?: string | undefined;
   /** This Mac's sign-out needs the agent's own command; a profile's always works */
@@ -1218,6 +1289,8 @@ export interface ProfileAgentPageViewProps {
 export function ProfileAgentPageView({
   set,
   row,
+  refreshingUsage = false,
+  onRefreshUsage,
   appVersion,
   canSignOut,
   now,
@@ -1253,7 +1326,7 @@ export function ProfileAgentPageView({
     row.state === "signed-in"
       ? lines.length > 0
         ? who
-        : `${who}${row.usageUnsupported ? ` · usage isn't reported by ${row.label}` : ""}`
+        : `${who}${row.usageUnsupported && !refreshingUsage ? ` · usage isn't reported by ${row.label}` : ""}`
       : row.fact;
   const inOn = inOnWords(set);
   const words = signOutWords(set, row.label, row.several ? row.holds : undefined);
@@ -1331,22 +1404,38 @@ export function ProfileAgentPageView({
       <SettingsSection
         title="Sign-ins"
         action={
-          // one sign-in at a time: while one is open, its way out stands where the way in was
-          row.state === "signing-in" && onCancelSignIn !== undefined ? (
-            <UiButton onClick={onCancelSignIn}>Cancel sign-in</UiButton>
-          ) : (
-            addSignIn("quiet")
-          )
+          <div className="vf-agents-row-actions">
+            {onRefreshUsage !== undefined && (
+              <UiButton
+                disabled={refreshingUsage}
+                aria-busy={refreshingUsage}
+                onClick={onRefreshUsage}
+              >
+                {refreshingUsage ? "Refreshing…" : "Refresh usage"}
+              </UiButton>
+            )}
+            {row.state === "signing-in" && onCancelSignIn !== undefined ? (
+              <UiButton onClick={onCancelSignIn}>Cancel sign-in</UiButton>
+            ) : (
+              addSignIn("quiet")
+            )}
+          </div>
         }
       >
         <div className="vf-agents-list vf-profiles-signins">
           {signInLines(row, plans).map((line) => {
             const windows = usageLines(line.metrics, at);
+            const plan = plans.find((candidate) => candidate.id === line.planId);
+            const loading =
+              refreshingUsage &&
+              row.state === "signed-in" &&
+              plan?.named === true &&
+              plan.namedBy === row.persona.profileId;
             return (
               <div
                 key={line.key}
                 className={`vf-agents-row vf-profiles-row vf-profiles-signin-line${
-                  windows.length > 0 ? " has-usage" : ""
+                  windows.length > 0 || loading ? " has-usage" : ""
                 }`}
                 data-plan={line.planId}
               >
@@ -1358,6 +1447,7 @@ export function ProfileAgentPageView({
                   </span>
                   <span className="vf-agents-row-fact">{line.fact}</span>
                   <UsageTimeline lines={windows} label={line.title} />
+                  {loading && <UsageLoading label={line.title} hasReading={windows.length > 0} />}
                 </div>
               </div>
             );
@@ -1367,10 +1457,23 @@ export function ProfileAgentPageView({
     );
   } else {
     first = (
-      <SettingsSection title={row.several ? "Sign-ins" : "Subscription"}>
+      <SettingsSection
+        title={row.several ? "Sign-ins" : "Subscription"}
+        action={
+          onRefreshUsage !== undefined && (
+            <UiButton
+              disabled={refreshingUsage}
+              aria-busy={refreshingUsage}
+              onClick={onRefreshUsage}
+            >
+              {refreshingUsage ? "Refreshing…" : "Refresh usage"}
+            </UiButton>
+          )
+        }
+      >
         <div
           className={`vf-agents-row vf-profiles-row vf-profiles-subscription${
-            lines.length > 0 ? " has-usage" : ""
+            lines.length > 0 || (refreshingUsage && row.state === "signed-in") ? " has-usage" : ""
           }`}
         >
           {card !== undefined ? (
@@ -1394,6 +1497,9 @@ export function ProfileAgentPageView({
               <p className="vf-profiles-plan-note">{card.note}</p>
             )}
             <UsageTimeline lines={lines} label={row.label} />
+            {refreshingUsage && row.state === "signed-in" && (
+              <UsageLoading label={title} hasReading={lines.length > 0} />
+            )}
           </div>
           <div className="vf-agents-row-actions">{act}</div>
         </div>

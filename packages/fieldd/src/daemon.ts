@@ -26,6 +26,7 @@ import {
   AgentsSetActiveParams,
   AgentsUpdateParams,
   AgentsUpdateStopParams,
+  AgentsUsageParams,
   AppPreferenceSetParams,
   ArtifactPublishParams,
   ArtifactPublishV2Params,
@@ -1659,7 +1660,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // PROJECTION and nothing else: percentages, labels, the provider's own
     // sentence for a refusal (EL7). Before the first reading lands the answer
     // is an honest empty batch, never a wait and never a throw.
-    api.register("agents.usage", () => agentUsage.snapshot());
+    api.register("agents.usage", (_ctx, params) => {
+      const parsed = AgentsUsageParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { refresh?, profileIds? }", false);
+      return parsed.data.refresh === true
+        ? agentUsage.refresh({
+            force: true,
+            ...(parsed.data.profileIds !== undefined ? { profileIds: parsed.data.profileIds } : {}),
+          })
+        : agentUsage.snapshot();
+    });
     api.registerSubscription("agents.usage.subscribe", (_ctx, _params, emit) => {
       const dispose = agentUsage.subscribe((batch) => emit(batch));
       return { snapshot: agentUsage.snapshot(), dispose };

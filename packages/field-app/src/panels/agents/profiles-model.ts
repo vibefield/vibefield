@@ -348,7 +348,7 @@ function planCards(
       sentence = {
         text:
           namer.usageState === undefined || namer.usageState === "unsupported"
-            ? "Usage isn't reported for this plan."
+            ? "Usage isn't reported for this subscription."
             : "Usage couldn't be read just now.",
       };
     }
@@ -562,7 +562,7 @@ export function signOutWords(
               holds.length > 0
                 ? `, with ${holds.length === 1 ? "its sign-in" : `its ${holds.length} sign-ins`} — ${listWords(companies)}`
                 : ""
-            }. The plans themselves aren't touched.`
+            }. The subscriptions themselves aren't touched.`
           : `Removes this sign-in from ${set.label}. The subscription itself isn't touched.`,
     question: `Sign out of ${label} ${inOnWords(set)}?`,
     what:

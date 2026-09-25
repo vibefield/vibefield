@@ -111,6 +111,8 @@ export function ProfilesSection({
   const [signIn, setSignIn] = useState<SignIn | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [now, setNow] = useState(() => pinnedNow ?? new Date());
+  const [refreshingUsage, setRefreshingUsage] = useState(false);
+  const [refreshedUsage, setRefreshedUsage] = useState<AgentAccountUsageBatch | null>(null);
   const mounted = useRef(true);
   const root = useRef<HTMLDivElement>(null);
   // acts in flight, by key: a second press of the same act does nothing
@@ -164,8 +166,16 @@ export function ProfilesSection({
 
   const usage = useMemo(() => {
     const parsed = AgentAccountUsageBatch.safeParse(usageFeed.data);
+    // The reply can beat the subscription frame; a later frame takes over.
+    if (
+      refreshedUsage !== null &&
+      (!parsed.success ||
+        Date.parse(refreshedUsage.generatedAt) > Date.parse(parsed.data.generatedAt))
+    ) {
+      return refreshedUsage.entries;
+    }
     return parsed.success ? parsed.data.entries : [];
-  }, [usageFeed.data]);
+  }, [usageFeed.data, refreshedUsage]);
 
   const context = useMemo(
     () => ({
@@ -238,11 +248,133 @@ export function ProfilesSection({
     route.kind === "new"
       ? "new"
       : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}`;
+  const currentRoute = useRef(routeKey);
+  currentRoute.current = routeKey;
+  const usageProfileIds =
+    route.kind === "agent"
+      ? persona === undefined
+        ? []
+        : [persona.profileId]
+      : (set?.personas.map((item) => item.profileId) ?? []);
+  const usagePageKey =
+    usageProfileIds.length === 0 ? null : JSON.stringify([routeKey, usageProfileIds]);
   useEffect(() => {
     root.current?.querySelector<HTMLElement>("[data-agents-page-title]")?.focus();
     if (keepNotice.current) keepNotice.current = false;
     else setNotice(null);
   }, [routeKey]);
+
+  async function refreshUsage(feedback = true): Promise<void> {
+    if (set === undefined || inFlight.current.has("usage")) return;
+    const profileIds = usageProfileIds;
+    if (profileIds.length === 0) return;
+    inFlight.current.add("usage");
+    setRefreshingUsage(true);
+    if (feedback) setNotice(null);
+    try {
+      // This Mac's plan cards come from identities, independently of usage.
+      // A failed boot-time identity read must be retried too, or a working
+      // meter has no plan card to belong to. The daemon coalesces these reads
+      // and publishes each recovered identity through the profiles feed.
+      const [usageResult, identitiesResult] = await Promise.allSettled([
+        client.request("agents.usage", { refresh: true, profileIds }),
+        set.kind === "native"
+          ? client.request("agents.profileSets.list", { refresh: true })
+          : Promise.resolve(),
+      ]);
+      if (usageResult.status === "rejected") throw usageResult.reason;
+      const batch = AgentAccountUsageBatch.parse(usageResult.value);
+      if (!mounted.current) return;
+      setRefreshedUsage(batch);
+      setNow(pinnedNow ?? new Date());
+      if (!feedback || currentRoute.current !== routeKey) return;
+      if (identitiesResult.status === "rejected") {
+        setNotice({
+          tone: "error",
+          text: refusalSentence("Sign-ins couldn't be refreshed", identitiesResult.reason),
+        });
+        return;
+      }
+      const entries = batch.entries.filter(
+        (entry) => entry.profileId !== undefined && profileIds.includes(entry.profileId),
+      );
+      const failures = entries.filter(
+        (entry) => entry.state !== "available" && entry.state !== "unsupported",
+      );
+      setNotice(
+        failures.length > 0
+          ? {
+              tone: "error",
+              text: failures
+                .map((entry) => {
+                  const retryAt = entry.retryAt === undefined ? NaN : Date.parse(entry.retryAt);
+                  const retry = Number.isFinite(retryAt)
+                    ? ` Retry after ${new Date(retryAt).toLocaleTimeString()}.`
+                    : "";
+                  return `${entry.label}: ${entry.message ?? "Usage couldn't be refreshed."}${retry}`;
+                })
+                .join(" "),
+            }
+          : {
+              tone: "neutral",
+              text: entries.some((entry) => entry.state === "available")
+                ? "Usage checked. Readings from the last 30 seconds are reused."
+                : "Usage isn't reported for these sign-ins.",
+            },
+      );
+    } catch (cause) {
+      if (feedback && mounted.current && currentRoute.current === routeKey) {
+        setNotice({ tone: "error", text: refusalSentence("Usage couldn't be refreshed", cause) });
+      }
+    } finally {
+      inFlight.current.delete("usage");
+      if (mounted.current) setRefreshingUsage(false);
+    }
+  }
+
+  const refreshUsageRef = useRef(refreshUsage);
+  refreshUsageRef.current = refreshUsage;
+  // A route may open before its feed arrives, or while the previous route is
+  // still refreshing. Keep that opening pending until its own accounts can be read.
+  const pendingUsagePage = useRef<string | null>(null);
+  useEffect(() => {
+    pendingUsagePage.current = usagePageKey;
+  }, [usagePageKey]);
+  useEffect(() => {
+    if (usagePageKey === null || pendingUsagePage.current !== usagePageKey || refreshingUsage)
+      return;
+    pendingUsagePage.current = null;
+    void refreshUsageRef.current(false);
+  }, [usagePageKey, refreshingUsage]);
+
+  useEffect(() => {
+    let away = document.hidden || !document.hasFocus();
+    const resume = (): void => {
+      if (!away || document.hidden) return;
+      away = false;
+      void refreshUsageRef.current(false);
+    };
+    const onBlur = (event: FocusEvent): void => {
+      if (event.target === event.currentTarget) away = true;
+    };
+    const onFocus = (event: FocusEvent): void => {
+      if (event.target === event.currentTarget) resume();
+    };
+    const onVisibility = (): void => {
+      if (document.hidden) away = true;
+      else resume();
+    };
+    // App switches emit window focus; minimizing or changing Spaces may also
+    // change visibility. Treat the pair as one return, not two refreshes.
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   const labelOf = (provider: string): string =>
     providers.find((p) => p.id === provider)?.label ?? provider;
@@ -572,6 +704,8 @@ export function ProfilesSection({
         key={`${set.id}:${row.provider}`}
         set={set}
         row={row}
+        refreshingUsage={refreshingUsage || (set.kind === "native" && context.reading)}
+        onRefreshUsage={() => void refreshUsage()}
         appVersion={install?.version}
         canSignOut={set.kind === "managed" || context.signOut.includes(row.provider)}
         now={now}
@@ -600,6 +734,8 @@ export function ProfilesSection({
       <ProfilePageView
         key={page.set.id}
         page={page}
+        refreshingUsage={refreshingUsage || (page.set.kind === "native" && context.reading)}
+        onRefreshUsage={() => void refreshUsage()}
         now={now}
         notice={notice}
         busy={busy ?? signInBusy}
