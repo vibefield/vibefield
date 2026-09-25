@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentProfile } from "@vibecook/puppeteer-core";
 import type { AgentRuntime, ProfileSetInfo } from "@vibecook/puppeteer-runtime";
-import { AgentsProfileSetsListResult, LAYOUT } from "@vibefield/contracts";
+import { AGENT_CATALOG_READERS, AgentsProfileSetsListResult, LAYOUT } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { IndexService } from "../src/agent-index";
@@ -115,7 +115,9 @@ function service(root: string, runtime: AgentRuntime, sessions: PersonaSessions 
   const warn = vi.spyOn(logger, "warn");
   const profiles = new AgentProfileService({
     runtime,
+    catalog: AGENT_CATALOG_READERS,
     index,
+    supervisor: null,
     sessions,
     userRoot: root,
     home: "/Users/nobody",

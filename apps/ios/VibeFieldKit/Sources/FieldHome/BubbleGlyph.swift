@@ -1,5 +1,6 @@
 import FieldAgents
 import SwiftUI
+import UIKit
 
 /// The mark a bubble wears, chosen by what the bubble IS.
 ///
@@ -12,12 +13,12 @@ struct BubbleGlyph: View {
 
   var body: some View {
     if bubble.remote != nil {
-      Image("agent-terminal", bundle: .module)
+      Image(AgentGlyph.terminalAsset, bundle: .module)
         .renderingMode(.template)
         .resizable()
         .scaledToFit()
-    } else if let provider = bubble.agent?.provider {
-      AgentGlyph(provider: provider)
+    } else if let agent = bubble.agent {
+      AgentGlyph(mark: agent.markKey)
     }
   }
 }
@@ -26,23 +27,42 @@ struct BubbleGlyph: View {
 /// Icons v5.14.0 (MIT) — the same set the desktop godview embeds — so the
 /// two surfaces draw identical marks.
 ///
-/// A provider with no drawn mark wears its LETTER, which is the reference's
-/// own fallback (`AgentIcon.tsx`) and not a special case for ACP: `acp` is
-/// simply the one override in the table. Since `AgentProvider` opened, this is
-/// also what an unfamiliar vendor gets — an agent you can see and read,
-/// rather than one that could not be drawn and therefore was not shown.
+/// A mark with no drawn glyph wears its LETTER, which is the reference's own
+/// fallback (`AgentIcon.tsx`): an agent you can see and read, rather than one
+/// that could not be drawn and therefore was not shown.
+///
+/// **WHICH marks have a glyph is the asset catalog's to say (AC-5).** An
+/// `agent-<mark>` imageset exists in `Glyphs.xcassets` or it does not, looked
+/// up by the catalog's mark key (the catalog id unless the row names another).
+/// Until AC-5 that answer was `AgentProvider.hasDrawnMark`, a three-vendor list
+/// in code that had to agree with this folder by hand — a roster of its own. It
+/// is also NOT the swarm's atlas: `MarksAtlas` tiles nine marks and this folder
+/// holds three glyphs, so "the atlas has a tile" would have sent six agents to
+/// an image that is not here and drawn them as nothing.
 struct AgentGlyph: View {
-  let provider: AgentProvider
+  let mark: String
+
+  /// The peer-terminal prompt. It lives in the same folder and is never an
+  /// agent's mark, whatever an agent is called.
+  static let terminalAsset = "agent-terminal"
 
   var body: some View {
-    if provider.hasDrawnMark {
-      Image("agent-\(provider.rawValue)", bundle: .module)
+    if let asset = Self.drawnAsset(for: mark) {
+      Image(asset, bundle: .module)
         .renderingMode(.template)
         .resizable()
         .scaledToFit()
     } else {
-      Text(provider.markLetter)
+      Text(AgentProvider(rawValue: mark).markLetter)
         .font(.system(size: 44, weight: .heavy, design: .monospaced))
     }
+  }
+
+  /// The imageset a mark key draws, or nil for the letter.
+  static func drawnAsset(for mark: String) -> String? {
+    guard !mark.isEmpty else { return nil }
+    let name = "agent-\(mark)"
+    guard name != terminalAsset else { return nil }
+    return UIImage(named: name, in: .module, compatibleWith: nil) == nil ? nil : name
   }
 }

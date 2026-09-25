@@ -375,3 +375,37 @@ private func model(
     #expect(body.accent == nil)
   }
 }
+
+/// AC-5 — the body is named and marked by the CATALOG's row: the label stands
+/// in when there is no model name, and the watermark is read by the mark key.
+/// With no row it is the raw id for both, which is what an older desktop, the
+/// scripted fleet and an unfamiliar agent all draw (R4).
+@Suite struct BodyCatalogNamingTests {
+  @Test func aBodyWithNoModelWearsTheCatalogsLabel() {
+    let row = AgentCatalogEntry(id: .claude, label: "Claude Code", status: "supported")
+    let body = model(agent(facet: AgentFacet(provider: .claude, catalogEntry: row)))
+    #expect(body.title == "puppeteer · Claude Code · Editing tokens.css")
+    #expect(body.watermark?.sprite == "claude")
+  }
+
+  @Test func aBodyWithNoRowWearsItsRawId() {
+    let body = model(agent(facet: AgentFacet(provider: AgentProvider(rawValue: "hermes"))))
+    #expect(body.title == "puppeteer · hermes · Editing tokens.css")
+    #expect(body.watermark?.sprite == "hermes")
+  }
+
+  /// A row that points its agent at another mark is drawn by that mark.
+  @Test func theWatermarkIsReadByTheRowsMarkKey() {
+    let row = AgentCatalogEntry(
+      id: AgentProvider(rawValue: "claude-next"), label: "Claude Next", status: "preview",
+      mark: "claude")
+    let body = model(
+      agent(
+        facet: AgentFacet(
+          provider: AgentProvider(rawValue: "claude-next"), modelName: "Fable 5.1",
+          catalogEntry: row)))
+    #expect(body.watermark?.sprite == "claude")
+    // The model name still comes first: the label is only its stand-in.
+    #expect(body.title == "puppeteer · Fable 5.1 · Editing tokens.css")
+  }
+}

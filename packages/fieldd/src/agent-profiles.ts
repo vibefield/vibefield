@@ -8,6 +8,7 @@ import {
 } from "@vibecook/puppeteer-core";
 import type { AgentRuntime, ProfileSetInfo } from "@vibecook/puppeteer-runtime";
 import {
+  type AgentCatalogReaders,
   type AgentPersona,
   type AgentProfileSet,
   type AgentSignInRoute,
@@ -26,10 +27,12 @@ import {
   LAYOUT,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import { requireOffered } from "./agent-catalog-gates";
 import type { RevealPath } from "./agent-distribution";
 import type { EnrollRuntimeSpec, IndexService } from "./agent-index";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
+import type { RosettadSupervisor } from "./rosettad-supervisor";
 
 // AGENT PROFILES (AR-S2; AR-D23…D25) — the doors behind Settings → Agent
 // Profiles, and the persona lifecycle beneath them.
@@ -98,9 +101,19 @@ export interface PersonaSessions {
   signingIn(profileId: string): { sessionId: string; since: string } | undefined;
 }
 
+/** AC-3 — how long an enrollment waits for a ready daemon's first census (the
+ * roll call fills in behind the ready line) */
+const ROLL_CALL_WAIT_MS = 30_000;
+
 export interface AgentProfileServiceOptions {
   runtime: AgentRuntime;
+  /** AC-3 — the catalog's readers: the kind a persona is enrolled under is the
+   * row's seam column, and a persona is offered only where the row claims it */
+  catalog: AgentCatalogReaders;
   index: IndexService;
+  /** the index daemon's supervisor, for the readiness the witness needs; null =
+   * no daemon configured */
+  supervisor: RosettadSupervisor | null;
   sessions: PersonaSessions;
   /** this user's root: the registry and every profile folder live under it */
   userRoot: string;
@@ -435,6 +448,8 @@ export class AgentProfileService {
    * enrollment that cannot happen now (daemon down, kind unknown to the roll
    * call) leaves the persona indexed later, not failed. */
   async createPersona(params: AgentsProfilesCreateParams): Promise<AgentsProfilesCreateResult> {
+    // AC-3 — a persona is offered only where the catalog row claims it
+    requireOffered(this.opts.catalog, params.provider, "personas");
     if (this.deletingSets.has(params.set)) {
       throw new RpcCallError("PRECONDITION_FAILED", "that profile is being deleted", false, {
         set: params.set,
@@ -880,9 +895,12 @@ export class AgentProfileService {
     };
   }
 
+  /** AC-D4 — our label for the agent: the catalog's, else the adapter's, else the id. */
   private labelOf(providerId: string): string {
     return (
-      this.opts.runtime.profileProviders().find((p) => p.id === providerId)?.label ?? providerId
+      this.opts.catalog.entry(providerId)?.label ??
+      this.opts.runtime.profileProviders().find((p) => p.id === providerId)?.label ??
+      providerId
     );
   }
 
@@ -1024,23 +1042,54 @@ export class AgentProfileService {
     return { kind, dataRoot: observationRoot, label: profile.label, profileId: profile.id };
   }
 
-  /** rosetta's kind for a puppeteer provider: the provider's native layout
-   * root, folded to `~/…`, looked up on the roll call. */
+  /** rosetta's kind for a catalog id (AC-3): the row's seam column, with the
+   * roll call as WITNESS — the daemon is ready and spells the row's layout
+   * root under that kind. The witness is mandatory: the catalog is the SOURCE
+   * of the kind, the roll call the proof this daemon registers it, and an
+   * enrollment written on the catalog's word alone would be refused at the
+   * daemon's next start. So while the daemon is not ready, or its census has
+   * not answered within the wait (it fills in behind the ready line), or it
+   * spells the root under another kind (or not at all), nothing is enrolled:
+   * the persona is indexed at the next ready's reconcile (R4) and the drift
+   * is logged. AC-D8 (agent-index.ts) stays for the record that outlives its
+   * binary — a daemon swapped under an enrolled kind. */
   private async kindFor(provider: string): Promise<string | undefined> {
-    const kinds = await this.opts.index.kindsByLayoutRoot();
-    if (kinds.size === 0) return undefined;
-    const native = (await this.opts.runtime.profiles(provider)).find(
-      (p) => p.kind === "native-default",
-    );
-    if (native === undefined) return undefined;
-    const layoutRoot = await this.opts.runtime.profileObservationRoot(native.id);
-    const kind = layoutRoot === undefined ? undefined : kinds.get(this.tilde(layoutRoot));
-    if (kind === undefined) {
+    const row = this.opts.catalog.entry(provider);
+    const kind = row?.seams.rosetta?.kind;
+    if (
+      row === undefined ||
+      kind === undefined ||
+      row.layoutRoot === null ||
+      !row.offers.history ||
+      !this.opts.catalog.isVisible(provider)
+    ) {
       this.logger.info(
         "fieldd.agents.kind_unresolved",
-        "Provider's layout root is not on the index's roll call; personas of it are not indexed",
-        { provider, ...(layoutRoot !== undefined ? { layoutRoot: this.tilde(layoutRoot) } : {}) },
+        "The catalog shows no history for this agent; personas of it are not indexed",
+        { provider, ...(row !== undefined ? { status: row.status } : {}) },
       );
+      return undefined;
+    }
+    const phase = this.opts.supervisor?.health().phase ?? "unconfigured";
+    if (phase !== "ready") {
+      this.logger.info(
+        "fieldd.agents.kind_unwitnessed",
+        "The index daemon is not ready; the persona is enrolled at its next ready",
+        { provider, phase },
+      );
+      return undefined;
+    }
+    const witness = await this.opts.index.kindsByLayoutRoot({ waitMs: ROLL_CALL_WAIT_MS });
+    const daemonKind = witness.get(row.layoutRoot);
+    if (daemonKind !== kind) {
+      this.logger.warn(
+        "fieldd.agents.catalog_drift",
+        witness.size === 0
+          ? "The daemon is ready but its roll call did not answer in time; not enrolled until it does"
+          : "The daemon's roll call disagrees with the catalog on this agent's kind; not enrolled",
+        { provider, layoutRoot: row.layoutRoot, catalogKind: kind, daemonKind: daemonKind ?? null },
+      );
+      return undefined;
     }
     return kind;
   }

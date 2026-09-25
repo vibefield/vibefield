@@ -14,7 +14,7 @@
 // row (all-or-nothing against the lock, exactly as the npm family rule works)
 // and the Go sidecar built beside field-native (missing or stale WARNs; the
 // floor reports a missing sidecar as Degraded honestly, so it is not a gate).
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import {
@@ -383,6 +383,56 @@ try {
   problems.push(
     "import-boundary walls failed (node scripts/check-import-boundaries.mjs --enforce)",
   );
+}
+
+// --- wall R23: the agent catalog is honoured by the pins (AC-2) --------------
+// thinking-ar-agent-catalog.md §4. The walls' shape, the walls' lesson: the
+// self-test must pass on its rotten fixtures before a verdict may speak, since a
+// broken checker's green is no green — and since AC-7 the checker enforces that
+// itself (every mode runs its self-test in-process first and refuses to judge
+// while it is red), so one call carries both walls: --enforce proves every
+// catalog row against the pinned puppeteer (through fieldd's R20 door) and the
+// lock's rosettad; --literals is R23b (no agent id literal in product code).
+// Its WARN lines are lifted into this report. The rosetta half WARNs
+// UNVERIFIED without a built rosettad (AC-D10) and is REQUIRED in CI — the
+// workflow builds the binary and exports FIELDD_ROSETTAD_BIN before this runs,
+// which the checker accepts only because it IS the lock's build — as it is at
+// `pnpm siblings:pin`, which passes the same flag itself.
+{
+  const inCi = ["true", "1"].includes(String(process.env.CI ?? "").toLowerCase());
+  // The lock's rosettad as this preflight already resolved it above (siblings.mjs
+  // caches cargo's answer per process), handed over so the checker does not
+  // ask cargo a second time.
+  const lockRosettad = rosettadBinary(root)?.path ?? null;
+  const args = [
+    "--enforce",
+    ...(inCi ? ["--require-rosetta"] : []),
+    ...(lockRosettad === null ? [] : ["--rosettad", lockRosettad]),
+    "--literals",
+  ];
+  const run = spawnSync(process.execPath, ["scripts/check-agent-catalog.mjs", ...args], {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const output = `${run.stdout ?? ""}${run.stderr ?? ""}`;
+  for (const line of output.split("\n")) {
+    if (line.startsWith("WARN ")) warnings.push(line.slice("WARN ".length));
+  }
+  if (run.status !== 0) {
+    if (output.trim()) console.error(output.trim());
+    // A spawn that failed or a checker killed by a signal prints nothing of its
+    // own: say which, never a bare red.
+    const how =
+      run.error !== undefined
+        ? `could not run: ${run.error.message}`
+        : run.signal !== null
+          ? `killed by ${run.signal}`
+          : `exit ${run.status}; the report above names the part — the checker's own self-test, the projection, R23 or R23b`;
+    problems.push(
+      `agent catalog walls R23/R23b failed (node scripts/check-agent-catalog.mjs ${args.join(" ")}) — ${how}`,
+    );
+  }
 }
 
 // --- installed desktop identity ---------------------------------------------

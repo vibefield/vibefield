@@ -141,8 +141,15 @@
 /* VibeField's own bar tools (AR-5): the provider select beside the SPAWN and
    TUNE controls, wearing the bar's recipe (22px, 5px radius, the panel
    material). A control that cannot act says so: the muted ramp at DESIGN.md
-   §8's `disabled:opacity-40`, the same treatment the kill sheet's actions wear. */
+   §8's `disabled:opacity-40`, the same treatment the kill sheet's actions wear.
+   The persona select (AC-4) wears the same recipe.
+
+   `no-drag` (AC-4): the bar drags the window (`bar.css`), and in a hiddenInset
+   window a control inside a drag region never receives the click — Electron's
+   documented rule, and the reason the package marks every one of its own
+   controls `no-drag`. This class was the one tool on the bar without it. */
 .vf-godview-bar-select {
+  -webkit-app-region: no-drag;
   height: 22px;
   max-width: 160px;
   padding: 0 4px;
@@ -545,8 +552,16 @@
    this is the ordinary reading on a machine that is not on a mesh, and painting
    the default state orange would train the eye to ignore it. It sits one step
    down the text ramp from the mock chip — present, quiet, and truthful — and
-   the floor's own reason can run long, so it yields its width first. */
-.vf-monitor-remote-unavailable-chip {
+   the floor's own reason can run long, so it yields its width first.
+
+   The deck's ONE degraded idiom, so the picker's history state (AC-4 — "history
+   not indexed", "history unavailable" for the chosen agent) wears this rule
+   rather than a second reading of it: the same state, the same words' weight,
+   and still no hue — an agent whose sessions are not indexed yet has not
+   failed. On the bar it sits beside the picker and, like here, gives up its
+   width before anything else does. */
+.vf-monitor-remote-unavailable-chip,
+.vf-godview-provider-history {
   overflow: hidden;
   min-width: 0;
   padding: 0;

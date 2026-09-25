@@ -6861,7 +6861,6 @@ James invited a second account to the tailnet (a plain Member cannot generate a 
 **Witness.** `pnpm verify` VERBATIM in a clean worktree of this tree: preflight through typecheck (25 projects) green; lint red only on main's own `docs/agent-plane` pages (the same 9 errors); then fmt · clippy · bundle:assert (567.8 KB raw / 153.8 KB gz, from 563.5 / 152.7) · test — field-app 854, electron-shell 717, contracts 508, users 40, fieldd 900 with 3 timing rows red on a loaded host (the TM-2 attach-join pair, the PRC-2 drain) whose files pass alone 2 of 2 · test:rust 263 passed / 9 ignored / 0 failed · gen:check. Measured over CDP at the window James tested in (766 × 573): pane 2 (both themes, both frames) and the chooser each scroll exactly their shell's height.
 
 **Findings.** (1) The overflow no trim could fix: each deck cell's `sr-only` radio is `position: absolute` and the cells were unpositioned, so the hidden rows' radios escaped the deck's clip and stretched the SHELL's scroller — 443 against 425 while the form measured 416. Positioned cells fix it, and take the same stray scroll out of Settings → Account. (2) A new user's "Back" cannot un-create the user (create-then-attach), so it opens a chooser of who to enter instead; an unfinished user stays on the machine, labelled, and removing one remains spec §11's non-goal.
-
 ## AR-S1 — Settings → Agents: the shelf of installed agents, updates with the updater's own output, each agent's page (2026-09-22; `19b35b1b`, puppeteer `ea90c34` pinned)
 
 **James:** "…implement the settings ui inside vibefield properly following its coding conventions, and at the same time, any api and underline features needs should be implemented or refactored properly inside puppetear side … plan and implement the agent setting first, focus on that, let's do it proper and solid, features in puppetear should also have proper abstractions so actual per agent logics are implemented properly under each adapters." The design is the record's R1 at pass 16 (artifact `MqjwWoxdxFZ87Vt2uduNT1`); AR-S1 is its shared half — the plan names the series (S2 Agent Profiles, S3 install from Settings, S4 extensions, S5 usage windows) in `draft/thinking-ar-agents-settings.md`.
@@ -7271,3 +7270,118 @@ candidates, not changes in this slice. Full review and phase table:
 - G29, the link hook naming its session. When it lands the deck asks for file links, and GT-D22's Finder half goes live.
 - The iOS kit's ghosttea stays at 0.10.1 until G28's Swift pin closes GM-D7.
 - Program colours per window and the recorder's silence about ⌘K ⌘, ⌘⇧V are GT-7's owed items, unchanged.
+
+## AC — the agent catalog (2026-09-22)
+
+**The question (James):** does VibeField have a single source of control on the agents it supports?
+It did not — puppeteer composed ten providers behind five uncross-checked lists, rosetta registered
+nine kinds in one Rust registry, VibeField joined them at runtime by native layout root with no
+tripwire between the siblings, three spellings of one agent on the surfaces, no tiers and no place
+to record a decision (`draft/thinking-ar-agent-catalog.md` §1). **The ruling:** "deciding what agent to
+support is a decision to make, maintain, track" — a HAND-MAINTAINED catalog, verified by the gate
+(AC-D1…AC-D11; the DECISIONS row is owed, see AC-6 below). Six slices, one day, one linear chain on main:
+
+- **AC-1 `5f09ef2b`** — `packages/contracts/src/agent-catalog.ts`: `AGENT_CATALOG`, ten rows in display order,
+  each a decision (`status`, the two seam ids, the layout root both siblings must spell alike, `offers`,
+  `surfaces`, `admitted`, `decision`); STRICT row schema, tolerant wire form; the readers; two generated
+  projections under `gen:check` (`gen/agent-catalog.json` for preflight, `fixtures/agent-catalog.valid.json`
+  for the phone); the `agent.catalog` door row; the dated erratum in `agent-index.ts`'s header. Contracts
+  27 files / 499 rows.
+- **docs `7f2978be` + `2f9298a5`** — the three agent-plane pages linted red (biome lints HTML: `aria-label` on
+  plain divs), found by AC-1's gate — the docs wave had landed them with a link check, not the gate.
+- **AC-3 `e9733df4`** (+ `9cf86be7` typecheck fixups, `190932ed` the wire opened) — fieldd answers from the catalog:
+  `agent.providers` iterates the visible rows (status, offers, OUR label, the index's state where history is
+  offered, `available`/`resumable` as this device's facts); `agent.catalog {surface?}`; typed refusals
+  (no row NOT_FOUND, a row not offering the capability PRECONDITION_FAILED `unsupported-agent`) on spawn,
+  personas, update, setActive; resume and the login pane need the agent VISIBLE; releases and usage
+  enumerate only offering rows; the executables map over catalog ids (the sibling's closed kind union
+  gone from fieldd); `kindFor` reads the row and the roll call WITNESSES (`fieldd.agents.catalog_drift`
+  withholds); AC-D8 — a daemon refusal at start (`unknown agent kind`) retires the refused roots and the
+  supervisor's own retry brings the index up — **erratum 2026-09-22 (the review): as landed here this was
+  BLIND on the real daemon** — the supervisor's failure detail cut a real root's line off before the reason
+  (`bfda5f0a` keeps the lines whole) and the real daemon prefixes every stderr line `rosettad: `
+  (`09e69344` accepts it; a live row at `f4d99bff` proves the wording against the pinned binary); the
+  record row carries `refused: {detail}`, the projection `refused: {reason}` (never a path); the kill-matrix
+  row's premise — a persona ENROLLED with no daemon — was itself withdrawn by the review (the witness is
+  mandatory, `f4d99bff`); `index.*` rows carry `agent`. `status`/`history` are OPEN strings on the wire
+  (AC-4's finding: a closed enum refused a whole list on one unknown word). Eight agent suites green.
+- **DEV `c5804e6a`** — the dev runner leaked the shell's `FIELDD_ROSETTAD_BIN` into Electron's env past a null
+  resolver (`electron-stack.test.mjs:118` red on every lane's gate — the briefed command and CI export it);
+  found by AC-2's gate; `unset` when the resolver names none, 97/98 → 98/98.
+- **AC-1 erratum `5931ee9d`** — R23's FIRST run on the real pins: antigravity claimed personas; puppeteer's
+  antigravity adapter declares `support: { supported: false }` (a port is not the capability). `personas:
+  false`, evidence in the row.
+- **AC-2 `4b5c552a`** — `scripts/check-agent-catalog.mjs`: `--self-test` (a rotten fixture per FAIL class),
+  `--enforce` (the puppeteer half through fieldd's dependency edge under `node --import tsx`, reading the
+  adapter's support declaration for personas and the observation root along fieldd's own `kindFor` path;
+  the rosetta half through `rosettad discover --json --home <empty>`), `--literals` (R23b over
+  `packages/*/src` and the kit's `Sources`, an allow-list where a stale entry is itself a FAIL); wired
+  into `pnpm preflight` after the walls (`--require-rosetta` under CI) and into `pnpm siblings:pin`;
+  `pnpm catalog:check`. On the landed tree: "10 catalog row(s) honoured by both pins, 0 warning(s)"; 17
+  mutants killed; witnessed live: preflight lifts R23's WARN, `CI=true` with no rosettad FAILs, a red
+  self-test blocks R23, `siblings:pin` goes green and red with the lock bytes unchanged.
+- **AC-4 `c82369ac`** — the deck's picker (`GodviewMonitor`'s native `<select>` in the views InstrumentBar):
+  its rules in ONE pure module (`godview/monitor/provider-picker.ts`); the badge is the option's word
+  ("Grok · Preview"); SPAWN absent for a deprecated row or `offers.spawn` false, the views' create gesture
+  refused out loud; the history state beside the picker on the deck's one degraded rule; labels door →
+  `catalogEntry(id)?.label` → id; unknown status/history words drawn as sent, never refused. ONE NEW VERB,
+  flagged to James: a persona select where `offers.personas` and a managed persona exist (default = today's
+  request). Pre-existing bug fixed: `.vf-godview-bar-select` lacked `-webkit-app-region: no-drag`
+  (unclickable in the hiddenInset window since AR-5; not witnessed live). `godview-provider-picker.test.tsx`
+  20 rows, 14 mutation probes; `smoke:godview` green. OWED: the per-pane `resumable` gate (the pane's
+  RESUME shows for every exited agent), the design catalog's specimen adapter for the picker's states,
+  the both-themes screenshot, the live badge witness on the landed stack.
+- **AC-5 `e6383ff0`** — the phone: FieldProduct decodes `agent.catalog` tolerantly (status raw, unknown fields
+  named, an unreadable row dropped and named); FieldLink asks `{surface: "phone"}` at every hello,
+  caches per connection like `device.list`, drops it with the door, exposes the merged catalog and a
+  `phoneRoster` without ACP; each desktop's rows name its own agents first; a NOT_FOUND desktop leaves the
+  field as before. `AgentModel.swift` names no agent (the four statics, `known`, the label switch, the
+  `acp→A` override gone); the atlas test asserts its keys ⊆ the mirrored fixture and prints `["acp"]` as
+  the candidate without a tile; the card asks its asset catalog for a drawn mark. Kit suite 852 tests /
+  157 suites (pristine 816 / 150), exit 0, no restarts, by UDID. FINDING — a LIVE AR-L1 exception:
+  `ReplyChips` branched on `.claude` (K-D4) through the old static, invisible to a literal lint (the
+  literal in one file, the branch in another); now an explicit one-literal table with a test, allow-listed;
+  the real fix — the field row's blocker carrying its transport — is OWED. Without a catalog (an older
+  desktop, the DEBUG fleet) a body with no model name reads its raw id, the honest fallback.
+- **integration `eb995886` + `2fdacc92`** — R23b's allow-list moved to AC-5's files (ReplyChips, MockAgentField,
+  the swarm lab fixtures; AgentModel retired); the kit's three fixture mirrors follow the erratum.
+- **AC-6 (this commit)** — the fold: this entry, the ROADMAP's AR row, CLAUDE.md's law bullet, the hub,
+  dated notes on the umbrella and the doors pages (`agent.catalog` in the catalogue, 4 walls), the acp
+  row's decision text ("spawn and resume only" — the pin implements resume), the design doc's §13
+  (dev-local). The `docs/DECISIONS.md` row (AC-D1…AC-D11) and the D3 addendum landed with the review's
+  fold below (the file was under James's live edit when this entry was written).
+
+**Gate:** `pnpm verify` verbatim on the AC-6 tip; its tail is appended below by the follow-up commit. Along the
+way: two environmental reds every lane hit before the fixes above (the docs lint, the dev-runner leak); a
+worktree needs `target` symlinked to its cargo target dir (the fieldd test setup looks at the fixed path
+`<checkout>/target/debug/field-native`); with three lanes compiling the whole TS graph flaked at vitest's
+5 s timeout and two Rust rows (fd exhaustion, the PTY fence) at load 300–600 — every red passed alone,
+and the claim is the quiet-host run.
+
+**Upstream asks (non-blocking):** PU-16 (capabilities and the observation root as data on the descriptor),
+RO-9 (`rosettad adapters --json`); PU-3/RO-3 (vocabulary convergence) now optional. **Lanes:** the gate,
+the deck and the phone by Opus builders on worktrees `vf-ac2/4/5`; AC-1/AC-3/the integration/the fold by
+the orchestrator; every lane report's findings are in the entries above.
+
+**The gate, verbatim, on `c18239f5` (2026-09-22T21:03Z, load 83): `pnpm verify` → `=== exit=0`.** Its tail, condensed from the log:
+
+```
+preflight OK (2 warning(s))
+check-single-copy: ok — one copy each of loro-crdt@1.13.8, @vibecook/ice@0.11.0, @vibecook/strata-ecs@0.13.0, react@19.2
+ios fixtures: 45 copies identical to packages/contracts/fixtures
+Checked 1343 files in 2s. No fixes applied.
+cargo test: 21 suites ok, 0 failed
+ok     docs         7 file(s) written to /Users/jamesyong/Projects/project100/vf-ac5/docs/plugin-authoring
+=== exit=0 2026-09-22T21:08:17Z
+```
+
+Runs 1–4 on content-identical trees were red only on load rows, each green alone on the same tree (3× for the TM-2 attach-join row, which the gate lane also saw flake on the base): `spawn.test.ts` readiness, `agent-field-daemon.test.ts` TM-2, `doc-manager.test.ts` (5 s), `sanitize.test.ts`, `service-drain.test.ts`, `resource_governance.rs` fd exhaustion, `tp_activation.rs` the PTY fence.
+
+**The review before landing (2026-09-22; `bfda5f0a` · `09e69344` · `f4d99bff` · the merge `ff914714` · AC-7 `48f7ca8a` + DEV `97915aa4` · `3c5b49ee` · AC-7 `0e44108f` + `304f2079` · this fold).** James: "review your code first". `/code-review` at high effort — thirteen finders (fieldd line by line, the renderer, the Swift kit, the gate, removed behaviour, language pitfalls, wrappers, altitude, reuse, efficiency, simplification, conventions, a tracer) and three verifiers — plus two Opus reviewers on the gate and the surfaces. Every confirmed finding is fixed on the chain; the chain is MERGED over main's UA-7 (`ff914714`) rather than rebased, so every SHA this ledger names stays reachable and main still lands by fast-forward. What each commit does:
+
+- **`bfda5f0a`** — AC-D8's subtraction was blind on real paths: the supervisor's per-line failure-detail tail (256 chars) cut a real root's line off before the reason, and the kill-matrix row had passed only because its temp paths are short. The supervisor keeps `--enroll` lines whole (`RosettadState.enrollRefusals`, internal), the index reads them; four unit rows on the seam.
+- **`09e69344` — the review's nine.** The real daemon prefixes every stderr line `rosettad: ` (three reviewers and a live run; the scripted daemon now prints it too); a path leaked into `index.status` (`refused: {reason}` only; `unescapeRustDebug` for Rust's `{:?}` — `JSON.parse` cannot read `\u{301}`); `releases {provider}` and `installs` bypassed the catalog (an honest `unsupported` row; the visible filter); `resumable` and the idle auto-resume ignored it (every session row through `withCatalogWord`, the idle replacement withheld and said once); session and usage rows still carried puppeteer's label (fieldd's `labelFor`); the door's `surface` was a closed enum (open); `kindFor` withheld on an empty roll call while ready and cached it (not cached); `status`/`offers` REQUIRED on `AgentProviderSummary` blanked the picker when a new shell adopted an older leave-running daemon — production has no build id and a major-only hello, a verifier reproduced it — optional to a reader, always sent.
+- **`f4d99bff` — the second wave.** kindFor's witness is MANDATORY (the "enroll before the first ready" path was the one product flow that wrote an unvetted kind — the refusal AC-D8 then parsed; not ready ⇒ the next ready's reconcile enrolls, the rule the docstrings already described); the census is WAITED FOR (rosettad prints `ready` before it walks the roots, `serve.rs:461` vs `:595`: `kindsByLayoutRoot({waitMs})` polls until the first census with rows — the reconcile and a persona create wait 30 s, `historyStates` 3 s; the scripted daemon's `FAKE_ROSETTAD_CENSUS_DELAY_MS` reproduces the window); a refusal cannot take fieldd down (`store.publish()` ran unguarded inside the child's `exit` handler with no process-level handler — ENOSPC during a refusal would have ended fieldd with the old record on disk, a crash loop: caught, the write OWED and retried at the next refusal, the deferred restart `.catch`ed); `index.enroll` gated by the catalog (a deprecated row's history stays consentable); usage pushes from a non-offered provider dropped, not thrown at; the tolerant reader at every depth (`AgentOffers` was a closed object of seven required booleans inside passthrough parents — the next capability added would have recreated the whole-list refusal; `.partial().passthrough()` on the wire, the table strict; the two `refused` objects `.passthrough()`); the deck's picker asked `providers()` once per door and the door is memoised on nothing a rosettad transition changes (an optional `indexChanges` port on `MonitorDoor`, the deck on `system.health.subscribe`, the hook re-asks on it and on a 20 s clock while any row says `unavailable`; the choice survives while listed); the phone named a body by its raw id against a pre-AC desktop and a desktop's ACP session `acp` on every phone — the door drops the row for the surface, and the kit tests pinned "ACP" only because their fake door ignored `surface` — `AgentSnapshot`/`AgentFacet` carry the row's `label` and the name is the catalog row → the row's word → the id; a desktop that went `online: false` (never `left`) left its bodies on the field (`sweep()` returned before its only refold) — the sweep refolds after the vanish loop. **A NEW LIVE WITNESS:** AC-D8 against the real rosettad — a record naming `nope-agent` refused at start, subtracted with the daemon's own reason, the index up: the wording the parser reads is proven at the pin, not mirrored. fieldd's agent-runtime suite 18/18 against the real binary; the kit 854 tests / 157 suites (the two known real-time re-ask rows red in the full run at load 95, green alone twice on the same tree).
+- **AC-7 `48f7ca8a` + DEV `97915aa4` (lane rev-gate, Opus) + `3c5b49ee` (the projection's digest) + AC-7 `0e44108f` and `304f2079` (the lane's last two, cherry-picked after the digest).** The gate hardened: `--require-rosetta` proves the LOCK's build (`bin-foreign` when an exported `FIELDD_ROSETTAD_BIN` resolves elsewhere; `siblingCargoEnv` strips a lane's `CARGO_TARGET_DIR` from every sibling cargo call, so `siblings:build` never lands in a lane's target); `siblings:pin` builds rosettad before the gate; the self-test drives `runEnforce`/`runLiterals` end to end and the verdict classes are a registry the fixture must provoke; R23b's allow-list carries an exact `count` per file (`allow-count`); the TS lexer resumes after an unclosed quote and `=>` opens a regex, the Swift lexer reads `"""` bodies; the projection records `source: {file, sha256}` and a stale one fails unjudged (`catalog-stale`); every mode runs the self-test first and preflight makes ONE call; capabilities are owned exactly once (`PORT_FOR` or `ROSETTA_CAPABILITIES`); the lifecycle judges what a row CLAIMS, never its status (§6's declined and deprecated rows can pass; a NON-declined row that claims nothing also passes when its provider is removed — §6's "red until declined" would need status to count again, for the ruling); `pin-root` skipped where the pin has no root; R23b walks `plugins/*/src`, `examples/plugins/*/src`, `apps/*/src`, `apps/ios/App` (629 files), never following symlinks; a child's tail is indented so preflight never lifts its WARNs; `--help` exclusive. 25 self-test rows, 18 mutants killed. DEV: the runner asks the lock for rosettad at every launch (the old memo cached "none" for the runner's life) and `c5804e6a`'s strip has a deterministic witness. Then `0e44108f`: "is it the lock's rosettad" asks for the FILE'S IDENTITY (device + inode; `realpathSync.native` where a filesystem reports none) — on this case-insensitive volume a differently-cased spelling of the lock's own build was a false `bin-foreign` FAIL under `--require-rosetta`, witnessed; a real-filesystem probe joins the self-test. And `304f2079`: preflight and `siblings:pin` say how a checker died when it printed nothing (`could not run: …`, `killed by SIGKILL`); `--rosettad <path>` hands `--enforce` the lock's rosettad the caller already resolved (one `cargo metadata` per preflight instead of two); R23b lexes only the files whose raw text quotes an id (6 of 629 on this tree, the same verdict and counts; a Swift multi-line body pinned by a fixture). 26 self-test rows, 21 mutants killed; medians on this host: `--literals` 398 → 189 ms, `--enforce` 1012 → 807 ms; the puppeteer probe child alone is 704 ms — the owed cache's number.
+- **Still owed (recorded, not hidden):** the deeper AC-D8 — read the launched binary's registry through `rosettad discover --json` BEFORE launch and withhold at publish, RO-9's clean form (the ruled mechanism stands, with the live witness above); the picker's catalog specimen adapter and the both-themes witness (UI_SYSTEM's "cataloged"); the per-pane `resumable` gate; `installs {}` runs every provider's version command before filtering (no non-visible row exists today); the naming rule lives at four sites with one precedence (fieldd `labelFor`, the picker, the session rows, the phone); `phoneRoster` has no production reader and ignores `status`; the picker test copies the monitor test's door fixture; R23 costs preflight ~1 s daily (the puppeteer probe re-run); `withCatalogWord`'s two lookups per row on the publish path; the `ReplyChips` transport; the `system.html` refactor slate.
+- **The fold (this commit)** — this entry and the AC-3 erratum above; the `docs/DECISIONS.md` row AC-D1…AC-D11 and the D3 addendum; the ROADMAP's AR row; `system.html` (the owner of the enrollment path: the catalog's kind witnessed, AC-D8, 24 doors); the stamp notes on the umbrella and the doors pages; CLAUDE.md's R23b wording names the allow-list and the walls read R20–R23. The gate, verbatim, on this tip is appended below by the follow-up commit, as before.

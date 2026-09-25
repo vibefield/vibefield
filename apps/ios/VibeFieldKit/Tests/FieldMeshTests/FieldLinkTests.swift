@@ -65,11 +65,12 @@ private func deviceSlice(name: String, url: String?) -> JSONValue {
   return .object(fields)
 }
 
-private func boardRow(id: String, status: String = "working", kind: String = "claude") -> JSONValue
-{
+private func boardRow(
+  id: String, status: String = "working", kind: String = "claude", label: String = "Claude Code"
+) -> JSONValue {
   .object([
     "runtimeRunId": .string(id), "revision": .int(1), "kind": .string(kind),
-    "label": .string("Claude Code"), "tier": .string("managed"),
+    "label": .string(label), "tier": .string("managed"),
     "device": .string("dev-studio"), "status": .string(status),
     "statusSince": .string("2026-09-13T18:42:11.000Z"),
     "stateChangedAt": .string("2026-09-13T18:42:11.000Z"),
@@ -194,6 +195,17 @@ private actor LinkConnection: ProductConnection {
   }
 
   func close() { failure = failure ?? LinkDoorError.closed }
+
+  /// The socket DROPS under a read in flight, as a dead radio's does: the
+  /// pending receive fails, so the client sees it and re-dials. `close()`
+  /// alone leaves a suspended read waiting forever.
+  func drop() {
+    failure = LinkDoorError.closed
+    if let waiter {
+      self.waiter = nil
+      waiter.resume(throwing: LinkDoorError.closed)
+    }
+  }
 
   func deliver(_ text: String) {
     if let waiter {
@@ -1473,7 +1485,6 @@ enum MeshFixture {
     var description: String { "fixture `\(name).json` is not in the FieldMeshTests bundle" }
   }
 }
-
 // MARK: - IOS-8c: who the desktop serves
 
 /// A self desktop whose hello NAMES its user (UA-2's ULID), as every fieldd
@@ -1515,5 +1526,320 @@ struct FieldLinkUserIdTests {
     defer { link.stop() }
     try await waitUntil("the door to be ready") { link.desktops.first?.state == .ready }
     #expect(link.desktops.first?.userId == nil)
+// MARK: - The agent catalog over the door (AC-5, AC-D9)
+
+/// Which request ids asked for the catalog. A door script is a synchronous
+/// `@Sendable` closure, so the tally is a lock-held box rather than an actor.
+private final class CatalogTally: @unchecked Sendable {
+  private let lock = NSLock()
+  private var ids: [Int64] = []
+
+  /// Records one ask and says which it was, counting from 1.
+  func record(_ id: Int64) -> Int {
+    lock.withLock {
+      ids.append(id)
+      return ids.count
+    }
   }
+
+  var asks: Int { lock.withLock { ids.count } }
+  var last: Int64? { lock.withLock { ids.last } }
+}
+
+/// The standing rig with its passes COUNTED, so a row can pin "a pass ran and
+/// did not ask" rather than "nothing asked yet", and with a call deadline long
+/// enough that a row holding an answer back is not raced by a TIMEOUT on a
+/// loaded host.
+@MainActor
+private func countedLink(
+  schedule: FieldDiscoverySchedule = briskSchedule,
+  script: @escaping LinkDoor.Script
+) async -> (FieldLink, MeshRehearsal, LinkDoor, SweepCounter) {
+  let mesh = MeshRehearsal()
+  await mesh.set(peers: [studio])
+  let counter = SweepCounter()
+  var doors = await mesh.doors()
+  let peers = doors.onlinePeers
+  doors.onlinePeers = {
+    await counter.bump()
+    return await peers()
+  }
+  let door = LinkDoor(script: script)
+  let link = FieldLink(
+    storeDoors: doors, transport: door, probe: LinkProbe(),
+    options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(30)),
+    magicDNSSuffix: rehearsalSuffix, schedule: schedule, storeBus: false)
+  link.start()
+  return (link, mesh, door, counter)
+}
+
+/// A sweep that does not come round again inside any row's wait: after the
+/// first passes settle, nothing but the CLIENT's own state can ask the door.
+private let idleSchedule = FieldDiscoverySchedule(
+  notThisAccount: .seconds(300), unreachable: .seconds(30), tick: .seconds(120))
+
+/// The subscribe answer every row below uses: one Claude run, one agent a
+/// catalog may or may not have decided on, and one ACP run — a row the door
+/// keeps off a phone's catalog (AC-D7). Every row carries the label the
+/// desktop stamped, as fieldd's field rows do.
+private func catalogBoard(_ id: Int64) -> String {
+  frame(
+    id: id,
+    .object([
+      "subId": .string("s1"),
+      "snapshot": snapshotFrame(
+        revision: 1,
+        rows: [
+          boardRow(id: "run-1"), boardRow(id: "run-2", kind: "zed", label: "Zed"),
+          boardRow(id: "run-3", kind: "acp", label: "ACP"),
+        ]),
+    ]))
+}
+
+/// The golden as the door answers a PHONE: the rows whose `surfaces.phone` is
+/// not false — what fieldd's `visible("phone")` sends (its own test pins that
+/// the protocol row never reaches a phone).
+private func phoneCatalog(_ golden: JSONValue) -> JSONValue {
+  guard case .object(var fields) = golden, case .array(let rows)? = fields["catalog"] else {
+    return golden
+  }
+  fields["catalog"] = .array(
+    rows.filter { row in
+      guard case .object(let r) = row, case .object(let s)? = r["surfaces"],
+        case .bool(false)? = s["phone"]
+      else { return true }
+      return false
+    })
+  return .object(fields)
+}
+
+/// Generous ceilings: these rows wait on real socket turns, and a host at a
+/// load average in the hundreds has timed out the 5 s default on main's own
+/// tree. Each wait still returns the moment its condition holds.
+private let catalogWait: Duration = .seconds(20)
+
+@MainActor
+@Suite struct FieldLinkCatalogTests {
+  /// AC-D9 whole: the link asks the door for the catalog AS A PHONE once the
+  /// hello lands, the phone's lists read it, and the field is named by it — a
+  /// row the catalog decided on by its label, one it did not (or one the door
+  /// keeps off the phone: ACP) by the label its field row carries.
+  @Test func theDoorsCatalogNamesTheField() async throws {
+    let golden = try MeshFixture.json("agent-catalog.valid")
+    let (link, _, door, _) = await countedLink(script: { method, id, params in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.catalog":
+        #expect(params == .object(["surface": .string("phone")]))
+        return [frame(id: id, phoneCatalog(golden))]
+      case "agent.subscribe": return [catalogBoard(id)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("the named field", timeout: catalogWait) {
+      link.agents.count == 3 && link.agents.first?.catalogEntry != nil
+    }
+    #expect(link.agents.map { $0.catalogEntry?.label } == ["Claude Code", nil, nil])
+    #expect(
+      link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == [
+        "Claude Code", "Zed", "ACP",
+      ])
+    // The door answered the phone WITHOUT the protocol row (AC-D7): the
+    // phone's lists never offer it, and the desktop's ACP session still drew,
+    // named by the label its row carries.
+    #expect(link.catalog.entries.count == 9)
+    #expect(link.catalog.phoneRoster.count == 9)
+    #expect(!link.catalog.phoneRoster.contains { $0.id.rawValue == "acp" })
+    #expect(await door.latest?.methods.filter { $0 == "agent.catalog" }.count == 1)
+  }
+
+  /// A catalog that lands AFTER the board renames the bodies already drawn:
+  /// the answer refolds the field, whichever arrived first.
+  @Test func aCatalogThatLandsAfterTheBoardRenamesTheBodies() async throws {
+    let golden = try MeshFixture.json("agent-catalog.valid")
+    let tally = CatalogTally()
+    let (link, _, door, _) = await countedLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.catalog":
+        _ = tally.record(id)
+        return []  // held back; answered by hand below
+      case "agent.subscribe": return [catalogBoard(id)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("an unnamed field and the ask", timeout: catalogWait) {
+      link.agents.count == 3 && tally.asks == 1
+    }
+    // PIN THE PRECONDITION: the bodies are on the field and nothing names them.
+    #expect(link.agents.allSatisfy { $0.catalogEntry == nil })
+
+    await door.latest?.deliver(frame(id: try #require(tally.last), golden))
+    try await waitUntil("the field renamed", timeout: catalogWait) {
+      link.agents.first?.catalogEntry?.label == "Claude Code"
+    }
+    #expect(tally.asks == 1)
+  }
+
+  /// A desktop from before the door answers NOT_FOUND. NOTHING breaks: the
+  /// catalog stays empty, every body draws by its raw id, the desktop stays
+  /// ready and connected — and the door is not asked again on this connection.
+  @Test func aDesktopWithoutTheDoorLeavesTheFieldAsItWas() async throws {
+    let tally = CatalogTally()
+    let (link, mesh, door, counter) = await countedLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.catalog":
+        _ = tally.record(id)
+        return [failureFrame(id: id, kind: "NOT_FOUND", message: "method not found")]
+      case "agent.subscribe": return [catalogBoard(id)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("the fallback note", timeout: catalogWait) {
+      link.notes.contains { $0.contains("has no agent catalog for this phone") }
+    }
+    try await waitUntil("the bodies", timeout: catalogWait) { link.agents.count == 3 }
+    #expect(link.catalog.isEmpty)
+    #expect(link.agents.allSatisfy { $0.catalogEntry == nil })
+    // named by the word each row carries — such a desktop stamps its
+    // adapter's own — never blanked to the raw id
+    #expect(
+      link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == [
+        "Claude Code", "Zed", "ACP",
+      ])
+    #expect(link.desktops.first?.state == .ready)
+    #expect(link.desktops.first?.feed == .door)
+
+    // PIN THE PRECONDITION: two passes RAN with the door open and chose not to
+    // ask — without them, "asked once" is equally true of a sweep that had not
+    // happened yet.
+    try await sweepNow(mesh, counter)
+    try await sweepNow(mesh, counter)
+    #expect(tally.asks == 1)
+    #expect(await door.latest?.methods.filter { $0 == "agent.catalog" }.count == 1)
+  }
+
+  /// A failure that asking again could fix — the door's own `retryable` — is
+  /// asked again on the sweep's clock, and the second answer names the field.
+  @Test func aRetryableFailureIsAskedAgainOnTheSweepsClock() async throws {
+    let golden = try MeshFixture.json("agent-catalog.valid")
+    let tally = CatalogTally()
+    let (link, mesh, _, counter) = await countedLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.catalog":
+        return tally.record(id) == 1
+          ? [
+            failureFrame(
+              id: id, kind: "UNAVAILABLE", message: "fieldd is still adopting", retryable: true)
+          ]
+          : [frame(id: id, golden)]
+      case "agent.subscribe": return [catalogBoard(id)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("the weather note", timeout: catalogWait) {
+      link.notes.contains { $0.contains("asking again") }
+    }
+    try await sweepNow(mesh, counter)
+    try await waitUntil("the catalog, second time", timeout: catalogWait) {
+      !link.catalog.isEmpty
+    }
+    #expect(tally.asks == 2)
+    #expect(link.agents.first?.catalogEntry?.label == "Claude Code")
+  }
+
+  /// Cached PER CONNECTION: the answer holds for the life of a socket, and a
+  /// new socket — a re-dial after a drop — is asked afresh, because the desktop
+  /// may have been upgraded while it was gone.
+  ///
+  /// On a sweep that will not come round for two minutes, so the second ask can
+  /// only come from the client's own hello — the path a real phone takes, whose
+  /// sweep is ten seconds away.
+  @Test func aNewConnectionIsAskedAfreshAtItsHello() async throws {
+    let golden = try MeshFixture.json("agent-catalog.valid")
+    let tally = CatalogTally()
+    let (link, _, door, _) = await countedLink(schedule: idleSchedule, script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.catalog":
+        _ = tally.record(id)
+        return [frame(id: id, golden)]
+      case "agent.subscribe": return [catalogBoard(id)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("the first answer", timeout: catalogWait) { !link.catalog.isEmpty }
+    #expect(tally.asks == 1)
+    #expect(await door.dials == 1)
+
+    await door.latest?.drop()
+    try await waitUntil("a second connection's ask", timeout: catalogWait) {
+      await door.dials >= 2 && tally.asks >= 2
+    }
+    #expect(await door.latest?.methods.filter { $0 == "agent.catalog" }.count == 1)
+    #expect(link.catalog.entries.count == 10)
+  }
+
+  /// A door that goes takes its catalog with it: a phone must not keep naming
+  /// agents by a desktop that is no longer on its field.
+  @Test func aPeerThatLeavesTakesItsCatalogWithIt() async throws {
+    let golden = try MeshFixture.json("agent-catalog.valid")
+    let (link, mesh, _, _) = await countedLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.catalog": return [frame(id: id, golden)]
+      case "agent.subscribe": return [catalogBoard(id)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("the catalog", timeout: catalogWait) { !link.catalog.isEmpty }
+    await mesh.set(peers: [])
+    await mesh.emit(.left(studio))
+    try await waitUntil("the catalog gone", timeout: catalogWait) { link.catalog.isEmpty }
+    #expect(link.desktops.isEmpty)
+  }
+
+  /// A desktop that drops off the ONLINE list (a sleep: truffle keeps the peer
+  /// in its snapshot as `online: false` and never says `left`) takes its
+  /// bodies off the field too — the sweep that forgets it refolds, not only
+  /// the `.left` path (the review's finding: the sweep returned before its
+  /// refold when nothing else was due, and the vanished desktop's bodies
+  /// stayed, named by a catalog the link no longer held).
+  @Test func aDesktopThatGoesOfflineTakesItsBodiesOffTheField() async throws {
+    let golden = try MeshFixture.json("agent-catalog.valid")
+    let (link, mesh, _, _) = await countedLink(script: { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.catalog": return [frame(id: id, golden)]
+      case "agent.subscribe": return [catalogBoard(id)]
+      default: return []
+      }
+    })
+    defer { link.stop() }
+
+    try await waitUntil("the named field", timeout: catalogWait) {
+      link.agents.count == 3 && !link.catalog.isEmpty
+    }
+    let asleepStudio = FieldStorePeer(
+      id: studio.id, deviceId: studio.deviceId, online: false, hostname: studio.hostname,
+      tailnetIPs: studio.tailnetIPs)
+    await mesh.set(peers: [asleepStudio])
+    await mesh.emit(.upsert(asleepStudio))
+    try await waitUntil("the field emptied", timeout: catalogWait) { link.agents.isEmpty }
+    #expect(link.desktops.isEmpty)
+    #expect(link.catalog.isEmpty)  }
 }

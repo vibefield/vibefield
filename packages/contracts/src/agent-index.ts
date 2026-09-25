@@ -11,11 +11,16 @@ import { z } from "zod";
 // Two vocabularies meet here and are deliberately NOT merged. rosetta names an
 // agent by its adapter KIND (`claude-code`, `codex`, `pi`, …) and a runtime by
 // `(kind, data_root)`; puppeteer names a PROVIDER (`claude`, `codex`, …) and a
-// profile (a persona) by id. Both are open strings — the registries are the
-// siblings', read at the seam, never enumerated in this package (tolerant
-// reader; AR-D3's alias table only ever groups for display). The join between
-// them is the enrollment record below: a persona's observation root enrolled
-// under its `profile_id`.
+// profile (a persona) by id. Both stay open strings ON THE WIRE (tolerant
+// reader). **Errata 2026-09-22 (AC-D1/AC-D2, thinking-ar-agent-catalog.md):**
+// this paragraph said the registries are "never enumerated in this package"
+// and that "AR-D3's alias table only ever groups for display". Since AC-1 the
+// agents VibeField SUPPORTS are enumerated ONCE, in `agent-catalog.ts`, as
+// decisions the gate (wall R23) holds to both siblings' registries: the
+// catalog id is puppeteer's provider id, rosetta's kind is a seam column
+// fieldd translates where the seam is crossed, and no surface shows a kind.
+// The join between the two for SESSIONS is unchanged — the enrollment record
+// below: a persona's observation root enrolled under its `profile_id`.
 //
 // TS-only in the generation pipeline (design-01 §7): field-native reads none
 // of these files — fieldd is the one writer of the enrollment record and the
@@ -115,6 +120,16 @@ export const IndexRetiredRuntime = z
     label: z.string().min(1).max(64).optional(),
     profile_id: AgentProfileId.optional(),
     retired_at: z.string(),
+    /** AC-D8 — the daemon REFUSED this root at start (`unknown agent kind`:
+     * a catalog/daemon skew) and fieldd subtracted it so the index could come
+     * up; `retired_at` is when. The daemon's line, kept whole here (it names
+     * the root — this file never leaves fieldd). VibeField-only; the row is
+     * re-enrolled by the ready-time reconcile once a daemon's roll call names
+     * the kind again. */
+    refused: z
+      .object({ detail: z.string().max(512) })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type IndexRetiredRuntime = z.infer<typeof IndexRetiredRuntime>;
@@ -152,6 +167,10 @@ export const IndexDiscovery = z
      * own `enabled` flag is the cache and is not projected: the two differ
      * only across the restart that follows a change. */
     consented: z.boolean(),
+    /** AC-1 — the catalog id this kind maps to (`catalogIdForKind`); absent
+     * when no row maps it, and the row is then shown by its wire `kind` and
+     * never selectable (tolerant reader). fieldd fills it from AC-3. */
+    agent: AgentProviderId.optional(),
   })
   .passthrough();
 export type IndexDiscovery = z.infer<typeof IndexDiscovery>;
@@ -234,6 +253,8 @@ export const IndexRuntimeStatus = z
     /** rosetta's canonical runtime id — the join key with every session row */
     runtimeId: z.string().min(1),
     kind: AgentKind,
+    /** AC-1 — the catalog id for `kind` (absent when no row maps it) */
+    agent: AgentProviderId.optional(),
     provenance: z.enum(["discovered", "enrolled"]),
     dataRoot: z.string().optional(),
     label: z.string().optional(),
@@ -267,6 +288,11 @@ export const IndexEnrollmentSummary = z
           label: z.string().optional(),
           profileId: AgentProfileId.optional(),
           retiredAt: z.string(),
+          /** AC-D8 — set when the daemon refused the root rather than the user
+           * retiring it (`retiredAt` is when): the daemon's reason (`unknown
+           * agent kind`) — never its line, which names the root (this
+           * projection carries no paths). The record keeps the line. */
+          refused: z.object({ reason: z.string() }).passthrough().optional(),
         })
         .passthrough(),
     ),

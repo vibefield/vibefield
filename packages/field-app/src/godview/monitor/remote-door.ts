@@ -52,7 +52,13 @@ export interface MonitorDoor {
   history: HistoryPort;
   /** AR-5 — the account-usage readings the usage column draws
    * (`agents.usage` + its subscription), adapted to the views' port. */
-  usage: AccountUsagePort;
+  usage: AccountUsagePort /** AC-4 (the review) — the door says when its `providers()` answer may
+   * have moved: the index daemon's phase or generation changed (a persona
+   * create bounces it; it comes up; it fails). The history state and the
+   * persona list are LIVE daemon facts, and a picker that asked once kept
+   * both from a daemon that was gone. Optional: a door without it is asked
+   * once, as before. Returns the dispose. */;
+  indexChanges?(listener: () => void): () => void;
   /** AR-S5 — the Agent Profiles the bar's tabs are made of
    * (`agents.profileSets.subscribe`), held only while the stage is open
    * (PF6). Optional, and deliberately: a door without it draws no tabs,

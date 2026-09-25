@@ -37,14 +37,16 @@ public struct AgentFieldProjection: Sendable, Equatable {
   public static let empty = AgentFieldProjection(agents: [], ended: 0)
 }
 
-/// A whole board.
+/// A whole board, named by `catalog` — the catalog of the desktop that
+/// published it (AC-D9). The default is no catalog, which draws every agent
+/// as its raw id and its letter.
 public func projectAgentField(
-  rows: [AgentFieldRow], device: String? = nil
+  rows: [AgentFieldRow], device: String? = nil, catalog: AgentCatalog = .empty
 ) -> AgentFieldProjection {
   var agents: [AgentSnapshot] = []
   var ended = 0
   for row in rows {
-    guard let snapshot = agentSnapshot(from: row, device: device) else {
+    guard let snapshot = agentSnapshot(from: row, device: device, catalog: catalog) else {
       ended += 1
       continue
     }
@@ -62,7 +64,15 @@ public func projectAgentField(
 /// provider without a mark wears its LETTER (`AgentIcon.tsx`) — and the Metal
 /// renderer here had transcribed that fallback all along. The only thing
 /// standing between an unfamiliar agent and the field was a closed enum.
-public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> AgentSnapshot? {
+///
+/// And it is NAMED by `catalog` (AC-D9): the row the catalog has for `kind`
+/// rides the snapshot, and a kind the catalog never decided on — or no catalog
+/// at all — rides with none, which draws the raw id and the letter (R4). A
+/// catalog decides what a PHONE may offer; it never decides what a field may
+/// show, so a desktop-only agent (`surfaces.phone == false`) still draws here.
+public func agentSnapshot(
+  from row: AgentFieldRow, device: String? = nil, catalog: AgentCatalog = .empty
+) -> AgentSnapshot? {
   let provider = AgentProvider(rawValue: row.kind)
 
   // WHAT KEEPS A ROW ON THE FIELD, in the wire's own three facts.
@@ -153,6 +163,10 @@ public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> Age
     // when there is one, because that is what a card will attach to (IOS-4c).
     runtimeSessionID: row.terminal?.runtimeSessionId ?? row.runtimeRunId,
     provider: provider,
+    // The producer's word for the agent (the catalog's label from an AC-3
+    // desktop, the adapter's from an older one): the name when no catalog row
+    // reaches this phone for the id. An empty label is no word.
+    label: row.label.isEmpty ? nil : row.label,
     // The wire now sends the FOLDER (MF-1i), so there is nothing left to
     // reduce: `folderName` was doing the basename work the producer does now,
     // and running it again on a name that is already one would only find new
@@ -173,7 +187,8 @@ public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> Age
       pending: parked,
       // MF-1f's row: the process ended and the pane is still on the floor. A
       // PENDING row is not this — it is live and merely unobserved.
-      exited: !row.alive && !parked))
+      exited: !row.alive && !parked),
+    catalogEntry: catalog.entry(for: provider))
 }
 
 /// Every live board the phone can hear, folded into one field.
@@ -183,8 +198,11 @@ public func agentSnapshot(from row: AgentFieldRow, device: String? = nil) -> Age
 /// heartbeat is what says so. The reader's clock is its own, which is why this
 /// takes `now` rather than reading it — a test should not need to wait 30 s to
 /// watch a board go stale.
+///
+/// `catalogs` names each board by its own desktop's catalog, by device id; a
+/// device with none there is folded with no catalog.
 public func projectAgentSlices(
-  _ slices: [AgentFieldSlice], now: Date = .now
+  _ slices: [AgentFieldSlice], now: Date = .now, catalogs: [String: AgentCatalog] = [:]
 ) -> AgentFieldProjection {
   var agents: [AgentSnapshot] = []
   var ended = 0
@@ -192,7 +210,8 @@ public func projectAgentSlices(
   // a dictionary rehashed would respawn every body.
   for slice in slices.sorted(by: { $0.deviceId < $1.deviceId }) {
     guard !slice.isExpired(at: now) else { continue }
-    let projected = projectAgentField(rows: slice.rows, device: slice.deviceId)
+    let projected = projectAgentField(
+      rows: slice.rows, device: slice.deviceId, catalog: catalogs[slice.deviceId] ?? .empty)
     agents.append(contentsOf: projected.agents)
     ended += projected.ended
   }

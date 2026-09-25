@@ -35,9 +35,52 @@ private func close(_ colour: SwarmColor, _ r: Double, _ g: Double, _ b: Double, 
   abs(colour.r - r) < tolerance && abs(colour.g - g) < tolerance && abs(colour.b - b) < tolerance
 }
 
+/// One catalog row, as far as the atlas cares: the id and the mark key it names.
+private struct CatalogMarkRow: Decodable {
+  let id: String
+  let mark: String?
+  /// The key the atlas is read by — the row's `mark`, else its id.
+  var key: String { mark ?? id }
+}
+
+private struct CatalogGolden: Decodable {
+  let catalog: [CatalogMarkRow]
+}
+
+private struct MissingCatalogGolden: Error, CustomStringConvertible {
+  var description: String { "fixture `agent-catalog.valid.json` is not in the FieldSwarmTests bundle" }
+}
+
+/// The contracts' catalog golden, mirrored into this bundle byte for byte
+/// (`pnpm check:ios-fixtures` keeps it so).
+private func catalogGolden() throws -> [CatalogMarkRow] {
+  guard
+    let url = Bundle.module.url(
+      forResource: "agent-catalog.valid", withExtension: "json", subdirectory: "Fixtures")
+  else { throw MissingCatalogGolden() }
+  return try JSONDecoder().decode(CatalogGolden.self, from: Data(contentsOf: url)).catalog
+}
+
 @Suite struct MarksAtlasTests {
-  @Test func theChosenProvidersInAtlasOrder() {
-    #expect(MarksAtlas.providers == ["claude", "codex", "grok", "kimi", "opencode", "hermes", "antigravity", "copilot", "pi"])
+  /// AC-5 — the atlas keeps NO ROSTER OF ITS OWN. Until this lane it pinned its
+  /// nine providers here, so a new upstream agent drifted past it silently (the
+  /// catalog design's §1.3, gap 4). It is held to the CATALOG now: every mark
+  /// it tiles must be for an agent the catalog decided on — a tile for anything
+  /// else is a red — and a catalogued agent with no tile is PRINTED as a
+  /// candidate, never failed: it wears its letter until a mark is baked.
+  @Test func everyTileIsForAnAgentTheCatalogDecidedOn() throws {
+    let rows = try catalogGolden()
+    let keys = Set(rows.map(\.key))
+    let strays = MarksAtlas.providers.filter { !keys.contains($0) }
+    #expect(strays.isEmpty, "tiles for agents the catalog never decided on: \(strays)")
+    // One chosen tile per key, or `tile(for:)` would answer whichever came first.
+    #expect(Set(MarksAtlas.providers).count == MarksAtlas.providers.count)
+    let lettered = rows.map(\.key).filter { MarksAtlas.tile(for: $0) == nil }
+    print("MarksAtlas candidates — catalogued, no tile, drawn as a letter: \(lettered)")
+  }
+
+  /// The tiles and the letter fallback, by the keys the atlas is read by.
+  @Test func theTilesAndTheLetterFallback() {
     #expect(MarksAtlas.tile(for: "claude") == MarksAtlas.Tile(x: 0, y: 0))
     #expect(MarksAtlas.tile(for: "codex") == MarksAtlas.Tile(x: 198, y: 0))
     #expect(MarksAtlas.tile(for: "pi") == MarksAtlas.Tile(x: 0, y: 198))

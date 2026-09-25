@@ -76,6 +76,10 @@ const announceDir = args.includes("--announce") ? flag("--announce-dir") : undef
 const db = flag("--db");
 const enrollPath = flag("--enroll");
 const protocol = Number(process.env.FAKE_ROSETTAD_PROTOCOL ?? "20");
+// the real daemon prints `ready` BEFORE it walks the roots: its census (the
+// roll call) is empty and its ingest phase `discovering` until the walk ends.
+// This knob reproduces that window for as many milliseconds as it says.
+const censusDelayMs = Number(process.env.FAKE_ROSETTAD_CENSUS_DELAY_MS ?? "0");
 
 if (mode === "crash-on-start") {
   process.stderr.write("fake rosettad: refusing to start (scripted)\n");
@@ -109,8 +113,10 @@ if (enrollPath !== undefined) {
   }
   const runtimes = Array.isArray(parsed.runtimes) ? parsed.runtimes : [];
   runtimes.forEach((spec, i) => {
+    // the real daemon's shape: main.rs prints every top-level error as
+    // `rosettad: <message>`, and the message begins `--enroll <file>: …`
     const entry = (message) =>
-      `--enroll ${enrollPath}: runtime #${i + 1} (kind ${JSON.stringify(spec.kind)}, data_root ${JSON.stringify(spec.data_root)}): ${message}\n`;
+      `rosettad: --enroll ${enrollPath}: runtime #${i + 1} (kind ${JSON.stringify(spec.kind)}, data_root ${JSON.stringify(spec.data_root)}): ${message}\n`;
     if (!KNOWN.has(spec.kind)) {
       process.stderr.write(entry("unknown agent kind"));
       process.exit(2);
@@ -227,6 +233,7 @@ if (mode === "silent") {
   // a real loopback HTTP listener, so the origin is a port the OS actually
   // gave us and the status probe answers like the real server
   const startedAt = Date.now();
+  const censusPublished = () => Date.now() - startedAt >= censusDelayMs;
   const server = createServer((req, res) => {
     const rows = [...discoveredRows, ...enrolledRows];
     if (req.url === "/api/status") {
@@ -256,12 +263,20 @@ if (mode === "silent") {
             rings_evicted: 0,
             overflow_rewarms: 0,
           },
-          ingest: { phase, runtimes: rows.map(backfill), projects: [] },
+          ingest: {
+            phase: censusPublished() ? phase : "discovering",
+            runtimes: rows.map(backfill),
+            projects: [],
+          },
         },
       });
       return;
     }
     if (req.url === "/api/discoveries") {
+      if (!censusPublished()) {
+        json(res, { discoveries: [] });
+        return;
+      }
       json(res, {
         discoveries: [
           {

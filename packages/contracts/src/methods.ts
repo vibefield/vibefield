@@ -1533,6 +1533,17 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // AC-1 (thinking-ar-agent-catalog.md) — the catalog: the visible rows with
+  // `surfaces` applied for the caller; `declined` rows never leave fieldd.
+  // Read-only and content-free like `agent.list`, hence `agent.observe` and the
+  // same locality — the phone's link calls it the way it calls `agent.list`.
+  defineMethod({
+    surface: "product",
+    method: "agent.catalog",
+    scope: "agent.observe",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "agent.spawn",

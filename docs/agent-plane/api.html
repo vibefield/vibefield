@@ -1100,9 +1100,7 @@
           <b class="contract">zod schema</b> → <b>registry row</b> (surface · scope · locality ·
           idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
         </div>
-        <div class="stats">
-          <div class="stat"><strong>32</strong><span>agent-plane doors</span></div>
-          <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
+        <div class="stats">          <div class="stat"><strong>33</strong><span>agent-plane doors</span></div>          <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
           <div class="stat"><strong>15</strong><span>audited mutations</span></div>
           <div class="stat"><strong>0</strong><span>that federate</span></div>
         </div>
@@ -1146,6 +1144,16 @@
               the registries belong to the siblings and are read at the seam. There is no alias table:
               the join between rosetta's kind and puppeteer's provider is data in the enrollment record,
               ruled that way when the slate was ratified.
+            </p>
+            <p class="section-note">
+              <strong>Update 2026-09-22 (AC-1…AC-6, LANDED §AC).</strong> Re-ruled: the agents VibeField SUPPORTS are
+              enumerated once, in <code>packages/contracts/src/agent-catalog.ts</code> (<code>AGENT_CATALOG</code>), as
+              decisions wall R23 holds to both pins at preflight; the catalog id is puppeteer's provider id and rosetta's
+              kind is a seam column fieldd translates. The wire grammar stays open — <code>AgentProviderId</code>,
+              <code>AgentKind</code>, and a row's <code>status</code>/<code>history</code> are open strings a reader carries.
+              The doors answer from the catalog since AC-3: <code>agent.providers</code> lists its visible rows with
+              <code>status</code>, <code>offers</code> and the index's state, and <code>agent.catalog</code> serves the rows to
+              a surface. <span class="badge tone-built">Built</span>
             </p>
 
             <h3>The registry row</h3>
@@ -1449,9 +1457,18 @@
                     <td><p><code>—</code> → <code>AgentProvidersResult</code></p></td>
                     <td><p><code>agent.spawn</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p><code>runtime.providers()</code>, <code>launchProviders()</code>, <code>distributionProviders()</code></p></td>
+                    <td><p>the catalog's visible rows (AC-3) · <code>inspectInstallations()</code>, <code>launchProviders()</code>, the enrollment record and the roll call</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>agent-runtime.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.catalog</span></td>
+                    <td><p><code>AgentCatalogParams</code> → <code>AgentCatalogResult</code></p></td>
+                    <td><p><code>agent.observe</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>the catalog itself (<code>visibleCatalog(surface)</code>; <code>declined</code> never leaves fieldd) — AC-3, 2026-09-22</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-runtime.test.ts</code> (the catalog rows)</p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent.spawn</span></td>
@@ -1972,7 +1989,8 @@
           <footer>
             <p>
               Agent plane · vibe-field. Written against vibe-field <code>b7ebb444</code>, puppeteer
-              <code>2f5ce002</code>, rosetta <code>e8d907ab</code>. The registry is the authority on a
+              <code>2f5ce002</code>, rosetta <code>e8d907ab</code>; the AC notes and the
+              <code>agent.catalog</code> row (LANDED §AC) were read at the AC chain's tip, 2026-09-22. The registry is the authority on a
               door's scope and locality; where this page and
               <code>packages/contracts/src/methods.ts</code> disagree, the registry is right and this page
               is a bug.

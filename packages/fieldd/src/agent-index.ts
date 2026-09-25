@@ -11,7 +11,11 @@ import type {
 } from "@rosetta/protocol";
 import {
   AbsoluteDataRoot,
+  AGENT_CATALOG,
+  type AgentCatalogEntry,
+  type AgentCatalogReaders,
   AgentKind,
+  createAgentCatalogReaders,
   type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   IndexEnrollmentRecord as IndexEnrollmentRecordSchema,
@@ -38,7 +42,11 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
-import { ROSETTAD_UNCONFIGURED, type RosettadSupervisor } from "./rosettad-supervisor";
+import {
+  ROSETTAD_UNCONFIGURED,
+  type RosettadState,
+  type RosettadSupervisor,
+} from "./rosettad-supervisor";
 
 // The agent index through fieldd (AR-1; thinking-ar-data-topology.md
 // AR-D17/D18/D19): the enrollment RECORD this user's consent lives in, and the
@@ -66,6 +74,11 @@ import { ROSETTAD_UNCONFIGURED, type RosettadSupervisor } from "./rosettad-super
 // profile id; where fieldd keeps its root is fieldd's business).
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 3_000;
+/** the roll call's poll while a ready daemon has not published its census
+ * yet (rosettad prints `ready` before it walks the roots): first step, then
+ * doubling to the ceiling, for as long as the caller said it would wait */
+const ROLL_CALL_POLL_MS = 100;
+const ROLL_CALL_POLL_MAX_MS = 1_000;
 
 // AR-5e — the find sheet's two questions. The numbers are the reference
 // client's (puppeteer `apps/godview/src/main/history-search.ts`), which is the
@@ -167,6 +180,9 @@ export class EnrollmentStore {
         ...(rt.label !== undefined ? { label: rt.label } : {}),
         ...(rt.profile_id !== undefined ? { profileId: rt.profile_id } : {}),
         retiredAt: rt.retired_at,
+        ...(rt.refused !== undefined
+          ? { refused: { reason: refusalReason(rt.refused.detail) } }
+          : {}),
       })),
       updatedAt: r.updated_at ?? null,
     };
@@ -249,7 +265,7 @@ export class EnrollmentStore {
 
   /** Retire a managed root: watch off, rows kept, the persona still named
    * (AR-D19). Purge is a separate act (RO-8). */
-  retireRuntime(row: { kind: string; data_root: string }): boolean {
+  retireRuntime(row: { kind: string; data_root: string }, refused?: { detail: string }): boolean {
     const at = this.record.runtimes.findIndex((rt) => sameRuntime(rt, row));
     if (at === -1) return false;
     const [entry] = this.record.runtimes.splice(at, 1);
@@ -258,6 +274,9 @@ export class EnrollmentStore {
       {
         ...(entry as IndexEnrollmentRecord["runtimes"][number]),
         retired_at: this.now().toISOString(),
+        // AC-D8 — the daemon's refusal, kept so the summary can say why the
+        // persona is not indexed; absent when the user retired it
+        ...(refused !== undefined ? { refused } : {}),
       },
     ];
     this.touch();
@@ -341,7 +360,56 @@ export interface IndexServiceOptions {
   expectedProtocolVersion: number;
   fetchFn?: typeof fetch;
   requestTimeoutMs?: number;
+  /** AC-3 test seam: the catalog (default: THE table) — the kind → id column */
+  catalog?: readonly AgentCatalogEntry[];
   logger?: Logger;
+}
+
+/** AC-D8 — the daemon's refusal of an enrolled root at start, as rosettad and
+ * the scripted daemon both word it (`enroll.rs`: `--enroll <file>: runtime #N
+ * (kind "<k>", data_root "<root>"): unknown agent kind`). The root is printed
+ * `{:?}`-quoted, so a backslash escape is admitted and unescaped below. */
+const REFUSED_KIND_RE =
+  /runtime #\d+ \(kind "(?<kind>[^"]+)", data_root "(?<root>(?:[^"\\]|\\.)*)"\): unknown agent kind/g;
+
+/** AC-D8 — the daemon's reason from its refusal line (`… (kind "k", data_root
+ * "r"): <reason>`), for the projection: the path stays in the record. A line
+ * with no such clause is said generically rather than copied. */
+function refusalReason(detail: string): string {
+  const at = detail.lastIndexOf("): ");
+  return at === -1
+    ? "refused by the daemon"
+    : detail.slice(at + 3).trim() || "refused by the daemon";
+}
+
+/** AC-D8 — Rust's `{:?}` spelling of a string, undone: `\u{HEX}` (a decomposed
+ * accent on macOS is one), `\x..`, `\n`/`\r`/`\t`/`\0` and the quoted `\"`,
+ * `\'`, `\\`. JSON.parse cannot read `\u{…}`. */
+function unescapeRustDebug(quoted: string): string {
+  return quoted.replace(
+    /\\(u\{([0-9a-fA-F]{1,6})\}|x([0-9a-fA-F]{2})|[\s\S])/g,
+    (_m, whole: string, hex6?: string, hex2?: string) => {
+      if (hex6 !== undefined) return String.fromCodePoint(Number.parseInt(hex6, 16));
+      if (hex2 !== undefined) return String.fromCharCode(Number.parseInt(hex2, 16));
+      switch (whole) {
+        case "n":
+          return "\n";
+        case "r":
+          return "\r";
+        case "t":
+          return "\t";
+        case "0":
+          return "\0";
+        default:
+          return whole;
+      }
+    },
+  );
+}
+
+/** AC-3 — the projections' `agent` column: present only when a catalog row maps the kind. */
+function agentColumn(agent: string | undefined): { agent?: string } {
+  return agent === undefined ? {} : { agent };
 }
 
 /** The `index.*` doors' service: reads fold the daemon's answers with the
@@ -381,11 +449,112 @@ export class IndexService {
   private rollCall: { pid: number | null; kinds: ReadonlyMap<string, string> } | null = null;
   /** the tolerant reader's logging half: `<shape>.<key>` said once, ever */
   private readonly seenUnknownFields = new Set<string>();
+  /** AC-3 — the catalog's readers (the kind → id column for the projections) */
+  private readonly catalog: AgentCatalogReaders;
+  private readonly onTransition: ((state: RosettadState) => void) | null;
+  /** AC-D8 — a subtraction happened since the daemon last came up: the
+   * supervisor's own retry carries it, and if the retry window closes first
+   * (`failed` arrives with the same, already-consumed refusal lines) this is
+   * what says one restart is still owed */
+  private pendingRestart = false;
+  /** AC-D8 — a subtraction the record on disk does not carry yet (its write
+   * failed inside the daemon's exit handler); retried at the next refusal */
+  private publishOwed = false;
 
   constructor(private readonly opts: IndexServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
     this.fetchFn = opts.fetchFn ?? fetch.bind(globalThis);
     this.timeoutMs = opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.catalog = createAgentCatalogReaders(opts.catalog ?? AGENT_CATALOG);
+    // AC-D8 — a daemon that refuses the record at start (`unknown agent kind`:
+    // the catalog names a kind this daemon's registry lacks, a skew the gate
+    // cannot see past a FIELDD_ROSETTAD_BIN override) is not left failing:
+    // the refused roots are subtracted from `runtimes[]` — kept as retired
+    // rows carrying the refusal — and the daemon is started again. The
+    // ready-time reconcile cannot re-add them: it joins through the roll
+    // call, which never names a kind the daemon does not register.
+    // (a unit seam may stub the supervisor with `health()` alone: no
+    // transitions to watch, nothing to subtract)
+    if (opts.supervisor !== null && typeof opts.supervisor.on === "function") {
+      this.onTransition = (state) => {
+        if (state.phase === "ready") this.pendingRestart = false;
+        if (state.phase === "restarting" || state.phase === "failed") this.subtractRefused(state);
+      };
+      opts.supervisor.on("transition", this.onTransition);
+    } else {
+      this.onTransition = null;
+    }
+  }
+
+  /** Stop listening to the daemon (the daemon's shutdown). */
+  dispose(): void {
+    if (this.onTransition !== null) this.opts.supervisor?.off("transition", this.onTransition);
+  }
+
+  private subtractRefused(state: RosettadState): void {
+    // the refusal lines in full (the supervisor keeps them whole because the
+    // failure detail's per-line tail cuts a real root off before the reason),
+    // then the detail itself for a supervisor that carries none
+    const text = [...(state.enrollRefusals ?? []), state.detail ?? ""].join("\n");
+    if (!text.includes("unknown agent kind")) return;
+    const phase = state.phase;
+    let changed = false;
+    for (const match of text.matchAll(REFUSED_KIND_RE)) {
+      const kind = match.groups?.kind;
+      const quoted = match.groups?.root;
+      if (kind === undefined || quoted === undefined) continue;
+      const dataRoot = unescapeRustDebug(quoted);
+      const refusal = { detail: match[0].slice(0, 512) };
+      if (!this.opts.store.retireRuntime({ kind, data_root: dataRoot }, refusal)) continue;
+      changed = true;
+      this.logger.warn(
+        "fieldd.index.enrollment_refused",
+        "The daemon refused an enrolled root at start; subtracted so the index can come up",
+        { kind, dataRoot, detail: refusal.detail },
+      );
+    }
+    if (changed || this.publishOwed) {
+      // This runs inside the supervisor's transition emit, which runs inside
+      // the child's exit handler: a throw here (a full disk, an unwritable
+      // user root) would take fieldd down with the daemon — nothing at the
+      // process level catches it — while the record on disk still named the
+      // root for the next start. The subtraction stands in memory; the write
+      // is owed and retried at the next refusal (or by the next settle).
+      try {
+        this.opts.store.publish();
+        this.publishOwed = false;
+      } catch (error) {
+        this.publishOwed = true;
+        this.logger.warn(
+          "fieldd.index.refusal_publish_failed",
+          "The subtracted enrollment record could not be written; the subtraction stands in memory and the write is owed",
+          { error: error instanceof Error ? error.message : String(error) },
+        );
+      }
+    }
+    // `restarting` = the supervisor's own bounded retry is already scheduled
+    // and launches with the rewritten record — a second launch from here would
+    // race it; remember that a restart is owed. `failed` = the intensity
+    // window closed, which the supervisor publishes with the SAME refusal
+    // lines the retry already consumed, so `changed` is false there: the owed
+    // restart is the daemon's own act, deferred past the supervisor's
+    // bookkeeping for this transition, once.
+    if (changed && phase === "restarting") this.pendingRestart = true;
+    if (phase === "failed" && (changed || this.pendingRestart)) {
+      this.pendingRestart = false;
+      setTimeout(() => {
+        // caught: fieldd installs no unhandled-rejection handler, and a
+        // launch that fails (a reap that cannot remove an orphan's dir) is
+        // the supervisor's own honest `failed`, not a reason to exit
+        this.opts.supervisor?.requestRestart().catch((error: unknown) => {
+          this.logger.warn(
+            "fieldd.index.refusal_restart_failed",
+            "The restart owed after a refusal did not launch",
+            { error: error instanceof Error ? error.message : String(error) },
+          );
+        });
+      }, 0);
+    }
   }
 
   /** The honest picture: the folded phase, the daemon projection, the record,
@@ -441,6 +610,9 @@ export class IndexService {
     return {
       discoveries: census.discoveries.map((row) => ({
         kind: row.kind,
+        // AC-3 — the catalog id for the kind; absent when no row maps it (shown
+        // by its wire kind, never selectable)
+        ...agentColumn(this.catalog.idForKind(row.kind)),
         dataRoot: row.data_root,
         installed: row.installed,
         files: Number(row.files),
@@ -451,8 +623,33 @@ export class IndexService {
     };
   }
 
-  /** Declare the complete consented set of discovered kinds. */
+  /** Declare the complete consented set of discovered kinds. AC-3 — consent
+   * is over the agents the catalog shows and offers history for: a kind no
+   * visible row maps, or one whose row claims no history, is refused typed
+   * (`unsupported-agent`), the same word the persona doors use. A deprecated
+   * row's history stays consentable (AC-D3: its sessions and history stay). */
   async enroll(kinds: readonly string[]): Promise<IndexMutationResult> {
+    for (const kind of kinds) {
+      const id = this.catalog.idForKind(kind);
+      const row = id === undefined ? undefined : this.catalog.entry(id);
+      if (
+        id === undefined ||
+        row === undefined ||
+        !this.catalog.isVisible(id) ||
+        !row.offers.history
+      ) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `the catalog offers no history for agent kind ${kind}`,
+          false,
+          {
+            kind,
+            reason: "unsupported-agent",
+            ...(row !== undefined ? { status: row.status } : {}),
+          },
+        );
+      }
+    }
     const changed = this.opts.store.setEnabledKinds(kinds);
     return await this.settle(changed);
   }
@@ -518,18 +715,37 @@ export class IndexService {
    * names the provider's native layout root (PU-7's observation root of the
    * native-default profile), folded to the same spelling — so neither sibling's
    * registry is ever enumerated here (design-01 §1: the registries are theirs,
-   * read at the seam). Cached per daemon generation. EMPTY while the daemon is
-   * not ready or does not answer: a caller degrades to "not indexed yet" and
-   * the next ready re-applies (topology R4), rather than failing the persona. */
-  async kindsByLayoutRoot(): Promise<ReadonlyMap<string, string>> {
-    const health = this.opts.supervisor?.health() ?? ROSETTAD_UNCONFIGURED;
-    if (health.phase !== "ready") return new Map();
-    if (this.rollCall !== null && this.rollCall.pid === health.pid) return this.rollCall.kinds;
+   * read at the seam). Cached per daemon generation once it has rows. EMPTY
+   * while the daemon is not ready, does not answer, or has not published its
+   * census yet — rosettad prints `ready` BEFORE it walks the roots, and the
+   * roll call fills in behind the line, seconds later on a big home — so a
+   * caller that can wait says so (`waitMs`) and is answered by the first
+   * census with rows, the generation's end, or the deadline, whichever comes
+   * first; one that cannot degrades to "not indexed yet". Either way the
+   * next ready re-applies (topology R4), rather than failing the persona. */
+  async kindsByLayoutRoot(opts: { waitMs?: number } = {}): Promise<ReadonlyMap<string, string>> {
+    const deadline = Date.now() + (opts.waitMs ?? 0);
+    let delay = ROLL_CALL_POLL_MS;
+    for (;;) {
+      const health = this.opts.supervisor?.health() ?? ROSETTAD_UNCONFIGURED;
+      if (health.phase !== "ready") return new Map();
+      if (this.rollCall !== null && this.rollCall.pid === health.pid) return this.rollCall.kinds;
+      const kinds = await this.readRollCall();
+      if (kinds.size > 0) {
+        this.rollCall = { pid: health.pid, kinds };
+        return kinds;
+      }
+      if (Date.now() + delay > deadline) return kinds;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay = Math.min(delay * 2, ROLL_CALL_POLL_MAX_MS);
+    }
+  }
+
+  /** one read of the census; empty when the daemon does not answer */
+  private async readRollCall(): Promise<Map<string, string>> {
     try {
       const census = await this.get<DiscoveriesResponse>("/api/discoveries");
-      const kinds = new Map(census.discoveries.map((row) => [row.data_root, row.kind]));
-      this.rollCall = { pid: health.pid, kinds };
-      return kinds;
+      return new Map(census.discoveries.map((row) => [row.data_root, row.kind]));
     } catch {
       return new Map();
     }
@@ -579,6 +795,7 @@ export class IndexService {
     return {
       runtimeId: row.id,
       kind: row.kind,
+      ...agentColumn(this.catalog.idForKind(row.kind)),
       provenance: enrolled ? "enrolled" : "discovered",
       // a discovered root is the layout's `~` form; an enrolled root's path
       // stays inside fieldd (the persona is named by profileId)

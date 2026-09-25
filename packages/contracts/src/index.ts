@@ -2,7 +2,7 @@
 // (design-01). Zero runtime service code lives here; daemons and clients import from it.
 
 export const CONTRACTS_VERSION = "0.1.0";
-
+export * from "./agent-catalog";
 export * from "./agent-extensions";
 export * from "./agent-field";
 export * from "./agent-index";

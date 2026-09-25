@@ -11,6 +11,17 @@ import UIKit
 // the edge, the field in the red channel). The atlas carries each agent's own
 // mark plus the neighbours it could be confused with, so the lab can show the
 // choice; the app draws only the chosen ones.
+//
+// THE ALLOW-LISTED PRESENTATION TABLE (AC-5, R23b). `candidates` below is the
+// one place in this target that names agents, and it is allowed to because it
+// selects nothing but a picture: tile ↔ catalog id. It stays BUILD-TIME — the
+// png ships in the bundle, and AC-D9 keeps assets compiled in while the
+// catalog itself comes over the wire — and it is keyed by the catalog's MARK
+// KEY, which is the catalog id unless a row names another mark. It keeps no
+// roster of its own: `FieldSwarmTests` holds it to the catalog golden
+// (`agent-catalog.valid.json`, mirrored byte for byte), so a tile for an agent
+// the catalog never decided on is a red, and a catalogued agent with no tile
+// is printed as a candidate — it wears its letter until one is baked.
 
 public enum MarksAtlas {
   public static let width = 396
@@ -29,7 +40,8 @@ public enum MarksAtlas {
     public var id: String
     public var title: String
     public var tile: Tile
-    /// The provider this mark belongs with, when it is a candidate for one.
+    /// The catalog mark key (the agent's catalog id) this mark belongs with,
+    /// when it is a candidate for one.
     public var provider: String?
     /// The mark the app draws for that provider.
     public var chosen: Bool
@@ -63,21 +75,22 @@ public enum MarksAtlas {
     Candidate(id: "inflection", title: "Inflection", tile: at(19), provider: "pi", chosen: false),
   ]
 
-  /// The providers with a chosen tile, in atlas order.
+  /// The mark keys with a chosen tile, in atlas order — a subset of the keys
+  /// the catalog decides on (`FieldSwarmTests`), never a roster of its own.
   public static let providers: [String] = candidates.filter(\.chosen).compactMap(\.provider)
 
-  /// The provider's tile, or nil for a provider with only a letter.
-  public static func tile(for providerID: String) -> Tile? {
-    candidates.first { $0.chosen && $0.provider == providerID }?.tile
+  /// The tile for a mark key, or nil for one with only a letter.
+  public static func tile(for mark: String) -> Tile? {
+    candidates.first { $0.chosen && $0.provider == mark }?.tile
   }
 
-  /// The letter a provider without a tile wears (the reference's `LETTER_MARKS`).
+  /// The letter a mark key without a tile wears (the reference's `LETTER_MARKS`).
   ///
   /// The rule itself lives on `AgentProvider` — the card's SwiftUI glyph draws
   /// the same letter, and two transcriptions of one rule is how the two
   /// surfaces come to disagree about what an agent is called.
-  public static func letter(for providerID: String) -> String {
-    AgentProvider(rawValue: providerID).markLetter
+  public static func letter(for mark: String) -> String {
+    AgentProvider(rawValue: mark).markLetter
   }
 
   /// The png's red channel as an `r8Unorm` texture. An undecodable atlas

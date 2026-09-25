@@ -10,7 +10,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
-import type { BuiltinExecutableAgentKind } from "@vibecook/puppeteer-builtin-providers";
+import type { BuiltinProviderOptions } from "@vibecook/puppeteer-builtin-providers";
 import { createBuiltinProviders } from "@vibecook/puppeteer-builtin-providers";
 import type {
   AgentContinuation,
@@ -37,25 +37,35 @@ import {
   type SpawnAgentResult,
 } from "@vibecook/puppeteer-runtime";
 import {
+  AGENT_CATALOG,
+  type AgentCapability,
+  type AgentCatalogEntry,
+  type AgentCatalogReaders,
+  type AgentCatalogResult,
+  type AgentHistoryState,
   type AgentInterruptParams,
   type AgentInterruptResult,
   type AgentListResult,
   type AgentMonitorMirror,
   type AgentPersona,
   type AgentProfileFailure,
+  type AgentProviderSummary,
   type AgentProvidersResult,
   type AgentResumeParams,
   type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
   type AgentSpawnResult,
+  type AgentSurface,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginParams,
   type AgentsProfilesLoginResult,
+  createAgentCatalogReaders,
   LAYOUT,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+import { requireOffered as offeredBy, requireVisible as visibleBy } from "./agent-catalog-gates";
 import {
   AgentDistributionService,
   DistributionRecordStore,
@@ -79,6 +89,7 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
+import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
@@ -233,6 +244,10 @@ const STOP_EXIT_WAIT_MS = 12_000;
  * the inventory before the new run is born — two processes on one native
  * session is the one thing a resume must never make. */
 const RESUME_IDLE_AFTER_MS = 30_000;
+/** AC-3 — how long a door that only REPORTS the index's state waits for a
+ * ready daemon's first census (the roll call fills in behind the ready line);
+ * the enrollment's own wait is the profile service's */
+const HISTORY_STATE_WAIT_MS = 3_000;
 const RESUME_POLL_MS = 5_000;
 const REPLACE_GRACE_MS = 5_000;
 /** AR-4b — the idle poll backs off while the index cannot answer (doubling
@@ -269,6 +284,10 @@ export interface AgentRuntimeServiceOptions {
   deviceId?: () => string;
   /** test seam: compose providers beside (or instead of) puppeteer's built-ins */
   providers?: (builtin: AgentProvider[]) => AgentProvider[];
+  /** AC-3 test seam: the catalog (default: THE table, `AGENT_CATALOG`) — a
+   * test composes rows for its scripted provider beside the real ones, which
+   * is how the catalog's rules are exercised without a vendor literal */
+  catalog?: readonly AgentCatalogEntry[];
   /** the daemon's environment the agent allow-list reads from (default process.env) */
   environment?: NodeJS.ProcessEnv;
   /** the OS user's home: puppeteer's default cwd and the `~` fold. Default os.homedir() */
@@ -379,6 +398,8 @@ export class AgentRuntimeService implements PersonaSessions {
    * family's: the composed providers are the built-ins plus whatever the
    * `providers` seam adds, and `spawn` takes any composed id. */
   readonly runtime: AgentRuntime;
+  /** AC-3 — the catalog's readers: the truth of what is offered here */
+  private readonly catalog: AgentCatalogReaders;
   private readonly host: AgentHost;
   private readonly terminalHost: TerminalAgentHost | null;
   /** the machine record (AR-D16); null = no machine scope */
@@ -404,6 +425,8 @@ export class AgentRuntimeService implements PersonaSessions {
   private readonly byTerminal = new Map<string, string>();
   /** the FIRST inventory of this boot is the re-attach; once */
   private reattachStarted = false;
+  /** AC-3 — pending runs whose idle resume was withheld, said once each */
+  private readonly idleWithheld = new Set<string>();
   /** puppeteer's durable claims — the authority on a run's epoch (AR-4b) */
   private readonly claims: CreationRequestRegistry;
   /** records whose PTY the first inventory lacked, within their grace */
@@ -483,22 +506,25 @@ export class AgentRuntimeService implements PersonaSessions {
       });
       this.host = this.terminalHost;
     }
+    this.catalog = createAgentCatalogReaders(opts.catalog ?? AGENT_CATALOG);
     // The active executable per provider is bound at construction (RFC 006's
     // `executables`; puppeteer's own PUPPETEER_<KIND>_BIN convention is its
-    // fallback). A `setActive` therefore reaches spawns from the next boot —
-    // stated at the door's contract.
-    const executables: Partial<Record<BuiltinExecutableAgentKind, string>> = {};
+    // fallback). A `setActive` therefore reaches spawns from the next boot —    // stated at the door's contract. AC-3: over CATALOG ids (the record's keys
+    // are catalog ids by AC-D2), so fieldd no longer names the sibling's closed
+    // kind union; a record entry for an id the catalog never decided on stays
+    // where it is and is ignored.
+    const executables: Record<string, string> = {};
     if (this.distributionRecord !== null) {
       for (const [provider, entry] of Object.entries(this.distributionRecord.read().providers)) {
-        if (entry.activeExecutable !== undefined)
-          executables[provider as BuiltinExecutableAgentKind] = entry.activeExecutable;
+        if (entry.activeExecutable !== undefined && this.catalog.entry(provider) !== undefined)
+          executables[provider] = entry.activeExecutable;
       }
     }
     // A home given here is a test's: puppeteer's native-default roots and the
     // extension readers hang off it, and never follow this machine's own
     // variables. Production passes none, so each agent reads where it would.
     const builtin = createBuiltinProviders({
-      executables,
+      executables: executables as BuiltinProviderOptions["executables"],
       ...(opts.home !== undefined ? { home: opts.home } : {}),
     });
     const runtimeOptions: AgentRuntimeOptions = {
@@ -537,6 +563,7 @@ export class AgentRuntimeService implements PersonaSessions {
     this.runtime = createAgentRuntime(runtimeOptions);
     this.distribution = new AgentDistributionService({
       runtime: this.runtime,
+      catalog: this.catalog,
       store: this.distributionRecord,
       revealPath: opts.revealPath ?? (() => null),
       now: this.now,
@@ -544,7 +571,9 @@ export class AgentRuntimeService implements PersonaSessions {
     });
     this.profiles = new AgentProfileService({
       runtime: this.runtime,
+      catalog: this.catalog,
       index: opts.index,
+      supervisor: opts.supervisor,
       sessions: this,
       userRoot: opts.userRoot,
       home: this.home,
@@ -566,7 +595,18 @@ export class AgentRuntimeService implements PersonaSessions {
       this.runtime.onProfilesChanged(() => this.extensions.profilesChanged()),
     );
     void this.refreshPersonas();
-    // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
+    // AC-3 — the catalog is the truth of support: a provider the runtime
+    // composes with no visible row is never offered. A `declined` row makes
+    // that silent (a decision); no row at all is a decision owed — wall R23
+    // says so at the gate, this says so at boot.
+    for (const descriptor of this.runtime.providers()) {
+      if (this.catalog.entry(descriptor.id) !== undefined) continue;
+      this.logger.warn(
+        "fieldd.agents.uncatalogued",
+        "Composed provider has no catalog row; not offered (a decision is owed)",
+        { provider: descriptor.id },
+      );
+    } // The fold's inputs (AR-3): puppeteer's monitor projection, verbatim.
     this.unsubscribeMonitor.push(
       this.runtime.onMonitorState((state) => this.onMonitorState(state)),
       this.runtime.onMonitorRemoved((runtimeRunId) => this.onMonitorRemoved(runtimeRunId)),
@@ -595,9 +635,14 @@ export class AgentRuntimeService implements PersonaSessions {
 
   // ── managed sessions (AR-3) ──
 
-  /** What one can spawn AS here: every composed provider, whether an install
-   * resolved for it, whether its adapter resumes, and its personas. */
+  /** What one can spawn AS here — the CATALOG's visible rows (AC-3), each
+   * decorated with this device's facts: whether an install resolved for it
+   * (`available`), whether its adapter resumes AND the row offers it
+   * (`resumable`), the index's state for it where the row offers history,
+   * and its personas. A provider the runtime composes with no visible row is
+   * absent; a row the runtime does not compose is listed unavailable. */
   async providers(): Promise<AgentProvidersResult> {
+    const composed = new Set(this.runtime.providers().map((p) => p.id));
     const launch = new Map(this.runtime.launchProviders().map((p) => [p.id, p]));
     let installs: readonly AgentInstallation[] = [];
     try {
@@ -607,32 +652,128 @@ export class AgentRuntimeService implements PersonaSessions {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    const ids = await this.opts.index.runtimeIdsByRoot();
-    // a signed-out persona is nobody's to spawn as, though it stays registered
+    const ids = await this.opts.index.runtimeIdsByRoot(); // a signed-out persona is nobody's to spawn as, though it stays registered
     // until its sessions end (AR-D25)
     const profiles = (await this.runtime.profiles()).filter((p) => p.retiredAt === undefined);
-    const providers = [];
-    for (const descriptor of this.runtime.providers()) {
+    const history = await this.historyStates();
+    const providers: AgentProviderSummary[] = [];
+    for (const row of this.catalog.visible("desktop")) {
       const personas: AgentPersona[] = [];
       for (const profile of profiles) {
-        if (profile.provider === descriptor.id) {
-          personas.push(await this.profiles.project(profile, ids));
-        }
+        if (profile.provider === row.id) personas.push(await this.profiles.project(profile, ids));
       }
+      const state = history.get(row.id);
       providers.push({
-        id: descriptor.id,
-        label: descriptor.label,
-        available: installs.some((install) => install.provider === descriptor.id),
-        resumable: launch.get(descriptor.id)?.resume === true,
+        id: row.id,
+        label: row.label,
+        available: composed.has(row.id) && installs.some((install) => install.provider === row.id),
+        resumable: row.offers.resume && launch.get(row.id)?.resume === true,
         personas,
+        status: row.status,
+        offers: row.offers,
+        ...(state !== undefined ? { history: state } : {}),
       });
     }
     return { providers };
   }
 
+  /** agent.catalog — the visible rows for the caller's surface (AC-3;
+   * `declined` never leaves fieldd). */
+  visibleCatalog(surface?: string): AgentCatalogResult {
+    // an OPEN word on the wire (tolerant reader): a surface this build never
+    // heard of gets every visible row rather than a refusal
+    const known: AgentSurface | undefined =
+      surface === "desktop" || surface === "phone" ? surface : undefined;
+    return { catalog: this.catalog.visible(known) };
+  }
+
+  /** AC-D4 — our label for a session row: the catalog's, else the adapter's. */
+  private labelFor(provider: string, fallback: string): string {
+    return this.catalog.entry(provider)?.label ?? fallback;
+  }
+
+  /** AC-3 — a row of an agent the catalog does not show continues nothing:
+   * its `continuation.resumable` says so, the way `agent.resume` would. */
+  private withCatalogWord(row: AgentSessionSummary): AgentSessionSummary {
+    const label = this.labelFor(row.kind, row.label);
+    const visible = this.catalog.isVisible(row.kind);
+    if (label === row.label && (visible || row.continuation === undefined)) return row;
+    return {
+      ...row,
+      label,
+      ...(row.continuation !== undefined && !visible
+        ? { continuation: { ...row.continuation, resumable: false } }
+        : {}),
+    };
+  }
+
+  /** AC-3 — the runtime surface the usage service reads, with the catalog's
+   * word applied: only providers whose row offers usage are polled. */
+  usageRuntime(): AccountUsageRuntime {
+    const runtime = this.runtime;
+    return {
+      accountUsageProviders: () =>
+        runtime
+          .accountUsageProviders()
+          .filter((p) => this.catalog.isOffered(p.id, "usage"))
+          .map((p) => ({ ...p, label: this.labelFor(p.id, p.label) })),
+      accountUsage: runtime.accountUsage.bind(runtime),
+      // a push from a provider the row does not offer usage for is dropped
+      // here — the monitor was never given that provider, and a push it
+      // cannot file would be a thrown-at warning per push
+      onAccountUsage: (listener) =>
+        runtime.onAccountUsage((provider, result) => {
+          if (this.catalog.isOffered(provider.id, "usage")) listener(provider, result);
+        }),
+      onProfilesChanged: runtime.onProfilesChanged.bind(runtime),
+      profiles: runtime.profiles.bind(runtime),
+    };
+  }
+
+  /** AC-3 — the index's state per agent that offers history: `unavailable`
+   * while the daemon is not ready, its census has not answered within a short
+   * wait (it fills in behind the ready line), or its roll call disagrees with
+   * the catalog on the kind (the skew AC-D8 subtracts at start); `indexed`
+   * when the record consents to the kind or enrolls a root of it; else
+   * `unindexed`. */
+  private async historyStates(): Promise<ReadonlyMap<string, AgentHistoryState>> {
+    const out = new Map<string, AgentHistoryState>();
+    const ready = (this.opts.supervisor?.health().phase ?? "unconfigured") === "ready";
+    const witness = ready
+      ? await this.opts.index.kindsByLayoutRoot({ waitMs: HISTORY_STATE_WAIT_MS })
+      : new Map<string, string>();
+    const record = this.opts.index.record();
+    for (const row of this.catalog.visible()) {
+      if (!row.offers.history || row.seams.rosetta === null || row.layoutRoot === null) continue;
+      const kind = row.seams.rosetta.kind;
+      if (!ready || witness.get(row.layoutRoot) !== kind) {
+        out.set(row.id, "unavailable");
+        continue;
+      }
+      const named =
+        record.enabled_kinds.includes(kind) || record.runtimes.some((rt) => rt.kind === kind);
+      out.set(row.id, named ? "indexed" : "unindexed");
+    }
+    return out;
+  }
+
+  /** AC-3 — the catalog's word on an id before a door acts: no row is
+   * NOT_FOUND (no such agent here); a row that does not offer the capability
+   * is PRECONDITION_FAILED `{reason: "unsupported-agent", status}`. */
+  private requireOffered(provider: string, capability: AgentCapability): AgentCatalogEntry {
+    return offeredBy(this.catalog, provider, capability);
+  }
+
+  /** AC-3 — a door that CONTINUES something (a resume, a login) needs the
+   * agent visible, not offered: a deprecated agent's sessions still resume. */
+  private requireVisible(provider: string, act: string): void {
+    visibleBy(this.catalog, provider, act);
+  }
+
   /** A managed session born in a PTY on this device's floor. The answer is
    * the fold's row at birth and the routed ticket the pane mounts. */
   async spawn(params: AgentSpawnParams, principal: GrantPrincipal): Promise<AgentSpawnResult> {
+    this.requireOffered(params.provider, "spawn");
     const terminals = this.requireTerminals();
     const cwd = params.cwd ?? this.home;
     const identity = this.newIdentity();
@@ -667,6 +808,7 @@ export class AgentRuntimeService implements PersonaSessions {
         runtimeRunId: params.runtimeRunId,
       });
     }
+    this.requireVisible(record.provider, "resume it");
     // AR-4b — a record already continued into another run is not continued
     // again: two runs on one native conversation is the state a resume must
     // never make, and the successor is the one to resume
@@ -865,6 +1007,7 @@ export class AgentRuntimeService implements PersonaSessions {
         profileId: params.profileId,
       });
     }
+    this.requireVisible(profile.provider, "log its persona in");
     const result = await this.runtime.startProfileLogin({
       profileId: params.profileId,
       cwd: params.cwd ?? this.home,
@@ -1046,7 +1189,6 @@ export class AgentRuntimeService implements PersonaSessions {
   personas(provider?: string): Promise<AgentsProfilesListResult> {
     return this.profiles.personas(provider);
   }
-
   /** R4 — every daemon ready re-applies the record to the personas. */
   reconcile(): Promise<void> {
     return this.profiles.reconcile();
@@ -1179,7 +1321,6 @@ export class AgentRuntimeService implements PersonaSessions {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
-
   /** Terminate a session this fold holds as live. One born a moment ago may
    * not be in the floor's inventory yet, and an op on an unplaced session is
    * routed to the interactive cell, which does not know it (`terminated:
@@ -1846,11 +1987,24 @@ export class AgentRuntimeService implements PersonaSessions {
     if (!verdict.idle) {
       this.armPending(entry);
       return;
-    }
-    // AR-D25 — the replacement would end this PTY and resume under an account
+    } // AR-D25 — the replacement would end this PTY and resume under an account
     // that is signed out, which starts nothing: the session keeps running
     // until it ends, as its sign-out promised, and is not polled again
     if (!this.personaActive(entry.record.profileId)) return;
+    // AC-3 — the daemon's own act follows the same word as the human's door:
+    // an agent the catalog does not show is not continued at idle; the row
+    // stays pending, said once, and a later catalog can pick it up
+    if (!this.catalog.isVisible(entry.record.provider)) {
+      if (!this.idleWithheld.has(runtimeRunId)) {
+        this.idleWithheld.add(runtimeRunId);
+        this.logger.warn(
+          "fieldd.agents.resume_when_idle_withheld",
+          "A pending managed session is not resumed at idle: the catalog does not show its agent",
+          { runtimeRunId, provider: entry.record.provider },
+        );
+      }
+      return;
+    }
     try {
       await this.track(this.replacePending(entry, undefined, "idle"));
     } catch (error) {
@@ -2174,17 +2328,19 @@ export class AgentRuntimeService implements PersonaSessions {
         },
       });
     }
-    return summarizeExitedRecord({
-      record: exited.record,
-      label:
-        this.runtime.providers().find((p) => p.id === exited.record.provider)?.label ??
-        exited.record.provider,
-      device: this.opts.deviceId?.() ?? "local",
-      terminalSessionId: exited.terminalSessionId,
-      terminal: exited.terminal,
-      since: exited.since,
-      resumable: this.resumableNow(exited.record) && this.personaActive(exited.record.profileId),
-    });
+    return this.withCatalogWord(
+      summarizeExitedRecord({
+        record: exited.record,
+        label:
+          this.runtime.providers().find((p) => p.id === exited.record.provider)?.label ??
+          exited.record.provider,
+        device: this.opts.deviceId?.() ?? "local",
+        terminalSessionId: exited.terminalSessionId,
+        terminal: exited.terminal,
+        since: exited.since,
+        resumable: this.resumableNow(exited.record) && this.personaActive(exited.record.profileId),
+      }),
+    );
   }
 
   /** Whether `agent.resume` would take this record right now: it exists and no
@@ -2197,17 +2353,19 @@ export class AgentRuntimeService implements PersonaSessions {
   }
 
   private summarizePending(entry: PendingEntry): AgentSessionSummary {
-    return summarizePending({
-      record: entry.record,
-      label:
-        this.runtime.providers().find((p) => p.id === entry.record.provider)?.label ??
-        entry.record.provider,
-      device: this.opts.deviceId?.() ?? "local",
-      terminal: entry.terminal,
-      reason: entry.reason,
-      since: entry.since,
-      resumable: this.personaActive(entry.record.profileId),
-    });
+    return this.withCatalogWord(
+      summarizePending({
+        record: entry.record,
+        label:
+          this.runtime.providers().find((p) => p.id === entry.record.provider)?.label ??
+          entry.record.provider,
+        device: this.opts.deviceId?.() ?? "local",
+        terminal: entry.terminal,
+        reason: entry.reason,
+        since: entry.since,
+        resumable: this.personaActive(entry.record.profileId),
+      }),
+    );
   }
 
   private onMonitorState(state: AgentMonitorState): void {
@@ -2383,24 +2541,26 @@ export class AgentRuntimeService implements PersonaSessions {
     } catch {
       // a disposed adapter has no level to report
     }
-    return summarizeManaged({
-      info: entry.info,
-      monitor: entry.mirror,
-      observationLevel,
-      device: this.opts.deviceId?.() ?? "local",
-      terminal: overrides?.terminal ?? entry.terminal,
-      hosted: overrides?.hosted ?? !entry.exiting,
-      record: overrides?.record ?? {
-        persisted: true,
-        resumable: false,
-        ...(entry.reattached ? { reattached: true } : {}),
-      },
-      replaced: entry.replaced,
-      createdAt: entry.createdAt,
-      stateChangedAt: entry.stateChangedAt,
-      lastActivityAt: entry.lastActivityAt,
-      title: entry.title,
-    });
+    return this.withCatalogWord(
+      summarizeManaged({
+        info: entry.info,
+        monitor: entry.mirror,
+        observationLevel,
+        device: this.opts.deviceId?.() ?? "local",
+        terminal: overrides?.terminal ?? entry.terminal,
+        hosted: overrides?.hosted ?? !entry.exiting,
+        record: overrides?.record ?? {
+          persisted: true,
+          resumable: false,
+          ...(entry.reattached ? { reattached: true } : {}),
+        },
+        replaced: entry.replaced,
+        createdAt: entry.createdAt,
+        stateChangedAt: entry.stateChangedAt,
+        lastActivityAt: entry.lastActivityAt,
+        title: entry.title,
+      }),
+    );
   }
 
   private publish(): void {

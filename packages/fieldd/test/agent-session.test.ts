@@ -75,6 +75,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 import {
   killDaemonTree,
   nativeBinPath,
@@ -403,6 +404,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     rosettadHome: home,
     vibefieldRoot: root,
     agentSearchPath: bin,
+    agentCatalog: SCRIPTED_CATALOG,
     agentProviders: (builtin) => [
       ...builtin,
       scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined, {
@@ -2201,7 +2203,10 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
       return found?.continuation?.pending !== undefined ? found : undefined;
     }, 20_000);
     expect(held.title).toBe("the troubled one");
-    expect(held.continuation).toMatchObject({ resumable: true, pending: "resume-when-idle" });
+    // AC-3: the row says what `agent.resume` would do — the catalog shows no
+    // agent named "ghost", so it is held (pending) but NOT resumable; before
+    // the catalog the row said resumable and the resume failed at the runtime
+    expect(held.continuation).toMatchObject({ resumable: false, pending: "resume-when-idle" });
     expect(readRecord(first.dataDir, bad.session.runtimeRunId).reattach).toMatchObject({
       state: "failed",
     });

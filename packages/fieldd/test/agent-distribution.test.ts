@@ -9,6 +9,7 @@ import type {
   UpdatePlan,
 } from "@vibecook/puppeteer-runtime";
 import {
+  AGENT_CATALOG_READERS,
   AGENT_OPERATION_OUTPUT_BYTES,
   type AgentDistributionRecord,
   type AgentsOperationsResult,
@@ -148,6 +149,7 @@ function service(
       : new DistributionRecordStore({ rootReal: root, now: NOW, logger });
   const distribution = new AgentDistributionService({
     runtime: scriptedRuntime(script),
+    catalog: AGENT_CATALOG_READERS,
     store,
     revealPath: () => (options.reveal === undefined ? null : options.reveal),
     now: NOW,

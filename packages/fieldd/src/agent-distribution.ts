@@ -16,6 +16,7 @@ import {
   AGENT_DISTRIBUTION_FORMAT,
   AGENT_OPERATION_OUTPUT_BYTES,
   type AgentAvailableUpdate,
+  type AgentCatalogReaders,
   type AgentDistributionRecord,
   AgentDistributionRecord as AgentDistributionRecordSchema,
   type AgentInstall,
@@ -38,6 +39,7 @@ import {
 } from "@vibefield/contracts";
 import { durableRenameSync, type Logger } from "@vibefield/logging";
 import { withUsersLock } from "@vibefield/users";
+import { requireOffered } from "./agent-catalog-gates";
 import { RpcCallError } from "./native-link";
 import { renderTerminalText } from "./terminal-text";
 
@@ -144,6 +146,9 @@ export type RevealPath = (path: string) => Promise<void>;
 
 export interface AgentDistributionServiceOptions {
   runtime: AgentRuntime;
+  /** AC-3 — the catalog's readers: an agent the catalog does not show has no
+   * installs here, and updates run only where the row offers distribution */
+  catalog: AgentCatalogReaders;
   /** the machine record; null = no machine scope (no VibeField root above the user root) */
   store: DistributionRecordStore | null;
   /** null = no shell provider is registered (a headless or unit daemon) */
@@ -190,10 +195,17 @@ export class AgentDistributionService {
     provider?: string,
     options: { refresh?: boolean } = {},
   ): Promise<AgentsInstallsResult> {
-    const installations = await this.opts.runtime.inspectInstallations({
-      ...(provider !== undefined ? { providerId: provider } : {}),
-      refresh: options.refresh === true,
-    });
+    // AC-3 — an agent the catalog does not show has no installs here: a
+    // `declined` id never leaves fieldd, and no vendor command runs for it
+    if (provider !== undefined && !this.opts.catalog.isVisible(provider)) {
+      return { installs: [], machineScope: this.hasMachineScope() };
+    }
+    const installations = (
+      await this.opts.runtime.inspectInstallations({
+        ...(provider !== undefined ? { providerId: provider } : {}),
+        refresh: options.refresh === true,
+      })
+    ).filter((install) => this.opts.catalog.isVisible(install.provider));
     const plans = await Promise.all(
       installations.map((install) => this.plan(install.provider, install.executable)),
     );
@@ -234,8 +246,32 @@ export class AgentDistributionService {
    * consulted anything is KEPT in the machine record; `cached: true` runs
    * nothing and answers that record, re-judged against today's installs. */
   async releases(params: AgentsReleasesParams): Promise<AgentsReleasesResult> {
+    // AC-3 — an explicit provider the catalog does not offer distribution for
+    // is answered as this door's honest failure row, and the vendor's oracle
+    // and the network detectors never run for it
+    if (
+      params.provider !== undefined &&
+      !this.opts.catalog.isOffered(params.provider, "distribution")
+    ) {
+      const row = this.opts.catalog.entry(params.provider);
+      return {
+        releases: [
+          {
+            provider: params.provider,
+            status: "unsupported",
+            message: `${row?.label ?? params.provider} is ${row?.status ?? "not in the catalog"} here and offers no distribution`,
+            retryable: false,
+          },
+        ],
+        available: [],
+        checked: [],
+      };
+    }
     const known = new Map(this.opts.runtime.distributionProviders().map((p) => [p.id, p]));
-    const providers = params.provider !== undefined ? [params.provider] : [...known.keys()];
+    const providers =
+      params.provider !== undefined
+        ? [params.provider]
+        : [...known.keys()].filter((id) => this.opts.catalog.isOffered(id, "distribution"));
     if (params.cached === true) return await this.cachedReleases(providers);
 
     const record = this.opts.store?.read();
@@ -287,6 +323,7 @@ export class AgentDistributionService {
    * the users file's, shared by every fieldd on this device. One update per
    * provider at a time — a second is a CONFLICT, never a race of two updaters. */
   async update(provider: string): Promise<AgentsUpdateResult> {
+    requireOffered(this.opts.catalog, provider, "distribution");
     const store = this.requireMachineScope();
     if (this.operations.get(provider)?.state === "running") {
       throw new RpcCallError("CONFLICT", `an update of ${provider} is already running`, true, {
@@ -347,6 +384,7 @@ export class AgentDistributionService {
   /** Record which of the provider's installs new spawns use (from the next
    * boot: the runtime binds it at construction). */
   async setActive(params: AgentsSetActiveParams): Promise<AgentsSetActiveResult> {
+    requireOffered(this.opts.catalog, params.provider, "distribution");
     const store = this.requireMachineScope();
     const installations = await this.opts.runtime.inspectInstallations({
       providerId: params.provider,

@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { createElectronStack } from "../src/electron-stack.mjs";
+import { createElectronStack, createRosettadBinResolver } from "../src/electron-stack.mjs";
 
-function setup({ studioOpen = true, studioPhysical = false, rosettadBin = null } = {}) {
+function setup({
+  studioOpen = true,
+  studioPhysical = false,
+  rosettadBin = null,
+  resolveRosettadBin = () => rosettadBin,
+} = {}) {
   const child = new EventEmitter();
   Object.assign(child, { pid: 1234, exitCode: null, signalCode: null, connected: true });
   const updates = [];
@@ -35,7 +40,7 @@ function setup({ studioOpen = true, studioPhysical = false, rosettadBin = null }
     electronExecutable: "/electron",
     // AR-0: the sibling lock's rosettad, resolved outside the unit (the
     // default reads siblings.lock.json and asks cargo — not a unit's business)
-    resolveRosettadBin: () => rosettadBin,
+    resolveRosettadBin,
     spawnProcess(...args) {
       spawnArgs = args;
       child.send = (message, callback) => {
@@ -92,6 +97,76 @@ test("hands fieldd the built rosettad when the sibling lock resolves one (AR-0)"
   await fixture.stack.start(runtime);
   const [, , options] = fixture.getSpawnArgs();
   assert.equal(options.env.FIELDD_ROSETTAD_BIN, "/ssd/rust-target/rosetta/release/rosettad");
+});
+
+/** Run `body` with FIELDD_ROSETTAD_BIN exported in THIS process, as a lane's
+ * gate command exports it, and restore whatever the launching shell had. */
+async function withExportedRosettadBin(value, body) {
+  const had = Object.hasOwn(process.env, "FIELDD_ROSETTAD_BIN");
+  const previous = process.env.FIELDD_ROSETTAD_BIN;
+  process.env.FIELDD_ROSETTAD_BIN = value;
+  try {
+    await body();
+  } finally {
+    if (had) process.env.FIELDD_ROSETTAD_BIN = previous;
+    else delete process.env.FIELDD_ROSETTAD_BIN;
+  }
+}
+
+test("strips an inherited FIELDD_ROSETTAD_BIN when the resolver names none (c5804e6a)", async () => {
+  // The row below the start test asserts absence too, but only a shell that
+  // exports the variable can tell the strip from its absence — this one does.
+  await withExportedRosettadBin("/stale/lane/rosettad", async () => {
+    const fixture = setup({ rosettadBin: null });
+    await fixture.stack.start(runtime);
+    const [, , options] = fixture.getSpawnArgs();
+    assert.equal("FIELDD_ROSETTAD_BIN" in options.env, false);
+  });
+});
+
+test("the resolver's rosettad replaces an inherited one, never rides beside it", async () => {
+  await withExportedRosettadBin("/stale/lane/rosettad", async () => {
+    const fixture = setup({ rosettadBin: "/ssd/rust-target/rosetta/release/rosettad" });
+    await fixture.stack.start(runtime);
+    const [, , options] = fixture.getSpawnArgs();
+    assert.equal(options.env.FIELDD_ROSETTAD_BIN, "/ssd/rust-target/rosetta/release/rosettad");
+  });
+});
+
+test("a resolver answering none, then a build, is honoured at the next launch (AC-7)", async () => {
+  const answers = [null, "/ssd/rust-target/rosetta/release/rosettad"];
+  const fixture = setup({ resolveRosettadBin: () => answers.shift() ?? null });
+  await fixture.stack.start(runtime);
+  assert.equal("FIELDD_ROSETTAD_BIN" in fixture.getSpawnArgs()[2].env, false);
+  await fixture.stack.stop({ stopDaemons: false });
+  await fixture.stack.start(runtime);
+  assert.equal(
+    fixture.getSpawnArgs()[2].env.FIELDD_ROSETTAD_BIN,
+    "/ssd/rust-target/rosetta/release/rosettad",
+  );
+});
+
+test("the default resolver memoizes only the shell's explicit choice, never a missing build", () => {
+  const lookups = [null, "/ssd/built/rosettad"];
+  let asked = 0;
+  const lookup = () => {
+    asked += 1;
+    return lookups.shift() ?? null;
+  };
+  const unset = createRosettadBinResolver({ env: {}, lookup });
+  assert.equal(unset(), null);
+  assert.equal(unset(), "/ssd/built/rosettad");
+  assert.equal(asked, 2);
+
+  const explicit = createRosettadBinResolver({
+    env: { FIELDD_ROSETTAD_BIN: "/shell/rosettad" },
+    lookup: () => assert.fail("the lock is not asked when the shell names a rosettad"),
+  });
+  assert.equal(explicit(), "/shell/rosettad");
+  assert.equal(explicit(), "/shell/rosettad");
+
+  const empty = createRosettadBinResolver({ env: { FIELDD_ROSETTAD_BIN: "" }, lookup: () => null });
+  assert.equal(empty(), null, "an empty variable is no choice");
 });
 
 test("starts Electron directly with isolated state and the daemon build identity", async () => {

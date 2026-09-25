@@ -49,6 +49,7 @@ import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentProviderSummary, AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
+import { providerOptionText } from "../src/godview/monitor/provider-picker";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
@@ -105,9 +106,35 @@ const ROWS: readonly AgentSessionSummary[] = [
     createdAt: "2026-09-12T10:00:02.000Z",
   }),
 ];
+// AC-3 — a providers row carries the catalog's decision and claims
+const OFFERS = {
+  spawn: true,
+  resume: true,
+  reattach: false,
+  history: true,
+  usage: true,
+  distribution: true,
+  personas: true,
+};
 const PROVIDERS: readonly AgentProviderSummary[] = [
-  { id: "claude", label: "Claude", available: true, resumable: true, personas: [] },
-  { id: "pi", label: "Pi", available: false, resumable: true, personas: [] },
+  {
+    id: "claude",
+    label: "Claude",
+    available: true,
+    resumable: true,
+    personas: [],
+    status: "supported",
+    offers: OFFERS,
+  },
+  {
+    id: "pi",
+    label: "Pi",
+    available: false,
+    resumable: true,
+    personas: [],
+    status: "preview",
+    offers: { ...OFFERS, usage: false },
+  },
 ];
 const pane = (id: string, cwd = "/project/scratch"): SessionSummary =>
   ({ id, exited: false, createdAtMs: 5, cwd, title: "zsh" }) as SessionSummary;
@@ -660,10 +687,15 @@ describe("the monitor stage", () => {
     // the chrome chose the first AVAILABLE provider
     const select = host.querySelector<HTMLSelectElement>('select[aria-label="Agent provider"]');
     expect(select?.value).toBe("claude");
-    expect([...(select?.options ?? [])].map((option) => option.textContent)).toEqual([
-      "Claude",
-      "Pi (not installed)",
-    ]);
+    // The rows in the door's order, each in the picker's own words. The badge
+    // rules are godview-provider-picker.test.tsx's to pin; this row holds for
+    // a door before AC-3 (no decision: "Pi (not installed)") and after it (pi
+    // a preview row: "Pi · Preview (not installed)") alike.
+    expect([...(select?.options ?? [])].map((option) => option.textContent)).toEqual(
+      PROVIDERS.map(providerOptionText),
+    );
+    expect(select?.options[0]?.textContent).toBe("Claude");
+    expect(select?.options[1]?.textContent).toMatch(/^Pi\b.*\(not installed\)$/);
 
     const create = host.querySelector<HTMLButtonElement>(".vf-monitor-list-new");
     await act(async () => create?.click());

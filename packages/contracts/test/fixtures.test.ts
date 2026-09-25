@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { type ZodTypeAny, z } from "zod";
+import { AgentCatalogResult } from "../src/agent-catalog";
 import { AgentsExtensionsListResult } from "../src/agent-extensions";
 import {
   AgentFieldDelta,
@@ -214,6 +215,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-spawn": AgentSpawnResult,
   "agent-list": AgentListResult,
   "agent-providers": AgentProvidersResult,
+  // AC-1 — the catalog as `agent.catalog` answers it (the whole table; the
+  // phone's kit mirrors this file byte for byte).
+  "agent-catalog": AgentCatalogResult,
   "agents-profiles-login": AgentsProfilesLoginResult,
   // AR-S2 — Agent Profiles: the native set beside a managed one, a sign-in
   // mid-login, the display folders, the Add menu's candidates.

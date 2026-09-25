@@ -66,26 +66,47 @@ public func replyChips(
   // Not waiting, nothing to answer. This is the common case by far, and it is
   // what makes the chips row absent rather than empty.
   guard !permissions.isEmpty else { return [] }
-  switch provider {
-  case .claude:
-    // The copy is the canvas's, and the canvas's is Claude's own TUI shortened
-    // to a chip: sentence case (DESIGN.md §9), the number in its own circle.
-    return [
-      ReplyChip(id: "claude-yes", number: "1", label: "Yes", act: .sendDraft("1")),
-      ReplyChip(
-        id: "claude-yes-always", number: "2", label: "Yes, don't ask", act: .sendDraft("2")),
-      ReplyChip(id: "claude-no", number: "3", label: "No", act: .sendDraft("3")),
-      // Not an answer — the interrupt. It is on the row because a dialog you
-      // did not expect is most often one you want gone, and Esc is what the
-      // design gives that gesture (§2's chip row: 1 / 2 / 3 / Esc). It carries no
-      // number because the TUI printed none: it is the way out, not a choice.
-      ReplyChip(id: "claude-esc", label: "Esc", act: .keystroke(TerminalKeystroke(.escape))),
-    ]
-  default:
-    // Absent, not disabled. See the structured transport above — and since
-    // `AgentProvider` opened, this is also where a vendor this build has never
-    // heard of lands: no chips, because we do not know what its TUI prints,
-    // and the card's "approve at the desktop" line stands in their place.
-    return []
-  }
+  // Absent, not disabled, for every agent the table does not name: the
+  // structured transport above, and — since `AgentProvider` opened — every
+  // agent this build has never heard of. No chips, because we do not know what
+  // its TUI prints, and the card's "approve at the desktop" line stands in
+  // their place.
+  return typedDialogs[provider] ?? []
+}
+
+/// K-D4's `tui` transport as a TABLE (AR-D8): the agents whose permission
+/// dialog is drawn by their OWN terminal UI, by catalog id, with the answers
+/// that UI prints — so the answer is the keystroke, and the chip types it.
+///
+/// **The one vendor-keyed BEHAVIOUR table in this kit, allow-listed by R23b for
+/// that reason and no other (AC-5, 2026-09-22).** It was a `case .claude:` over
+/// a static declared in `AgentModel.swift`, which is how a literal lint missed
+/// it: the literal lived in an allow-listed file and the BRANCH lived here.
+/// With the statics retired the literal sits where the decision is, so the
+/// gate names this file instead of never seeing it. It is knowledge of a
+/// vendor's protocol, which AR-L1 would rather the WIRE carried — the field
+/// row's blocker says `kind` and `tool` and not which transport answers it —
+/// and until a contract carries that (or PU-4 gives every vendor a structured
+/// verdict and this collapses), this table and `ReplyChipsTests` are the
+/// record.
+private let typedDialogs: [AgentProvider: [ReplyChip]] = [
+  // The copy is the canvas's, and the canvas's is Claude's own TUI shortened
+  // to a chip: sentence case (DESIGN.md §9), the number in its own circle.
+  AgentProvider(rawValue: "claude"): [
+    ReplyChip(id: "claude-yes", number: "1", label: "Yes", act: .sendDraft("1")),
+    ReplyChip(
+      id: "claude-yes-always", number: "2", label: "Yes, don't ask", act: .sendDraft("2")),
+    ReplyChip(id: "claude-no", number: "3", label: "No", act: .sendDraft("3")),
+    // Not an answer — the interrupt. It is on the row because a dialog you
+    // did not expect is most often one you want gone, and Esc is what the
+    // design gives that gesture (§2's chip row: 1 / 2 / 3 / Esc). It carries no
+    // number because the TUI printed none: it is the way out, not a choice.
+    ReplyChip(id: "claude-esc", label: "Esc", act: .keystroke(TerminalKeystroke(.escape))),
+  ]
+]
+
+/// The agents K-D4 answers by typing, in id order — what a fixture reaches for
+/// when it wants the chips on screen without naming an agent itself.
+public let typedDialogAgents: [AgentProvider] = typedDialogs.keys.sorted {
+  $0.rawValue < $1.rawValue
 }

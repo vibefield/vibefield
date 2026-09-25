@@ -38,7 +38,7 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   system — puppeteer (the agent runtime, in fieldd) · rosetta (agent history, `rosettad` per user
   root) · this repo (custody, policy, presentation). Its umbrella page
   `docs/agent-plane/architecture.html` carries the ownership law (AR-L1: VibeField knows no vendor),
-  the seams, the walls R20–R22, the data domains and the status legend; `system.html` the
+  the seams, the walls R20–R23, the data domains and the status legend; `system.html` the
   aggregation and `api.html` the doors. Read it before touching a seam: a seam change updates the
   page that OWNS the seam first, then the umbrella's table.
 
@@ -175,6 +175,15 @@ sidecar was built from source while the window's Go half was open, and comes fro
 - **Contracts first.** Every VibeField-owned wire shape is a zod schema in
   `packages/contracts`; ports/scopes/stores/env-prefixes come from its `registries.ts` —
   never hardcode. The Rust side is generated (`pnpm gen`) and pinned by golden fixtures.
+- **The agent catalog decides support (AC, 2026-09-22).** `packages/contracts/src/agent-catalog.ts`
+  (`AGENT_CATALOG`) is the ONE hand-maintained list of the agents VibeField offers — the id
+  (puppeteer's), our label, `status`, the two seam ids, the layout root, `offers`, `surfaces`, the
+  decision trail. Wall R23 (`scripts/check-agent-catalog.mjs`, in `pnpm preflight`; required by
+  `pnpm siblings:pin`) holds every row to both pinned siblings; a sibling offering with no row is red
+  (`declined` is a row). fieldd's doors answer from it; no product code compares an agent id to a
+  literal (R23b — the gate's allow-list names the few presentation tables that may, each with an exact
+  count). After editing the table: `pnpm --filter @vibefield/contracts gen:schema`, then copy
+  `fixtures/agent-catalog.valid.json` to the kit's three mirrors (`pnpm check:ios-fixtures` names them).
 - **EL2 — bytes never ride JSON-RPC or Node.** Control via contract surfaces; data planes
   via ticketed direct sockets.
 - **EL7 — same-uid agents are the adversary.** Scoped bearer tokens on every surface;

@@ -2,7 +2,7 @@
   "providers": [
     {
       "id": "claude",
-      "label": "Claude",
+      "label": "Claude Code",
       "available": true,
       "resumable": true,
       "personas": [
@@ -25,14 +25,36 @@
           },
           "runtimeId": "rt_0b7e2c4d9a1f3e58"
         }
-      ]
+      ],
+      "status": "supported",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": true,
+        "history": true,
+        "usage": true,
+        "distribution": true,
+        "personas": true
+      },
+      "history": "indexed"
     },
     {
       "id": "pi",
       "label": "Pi",
       "available": false,
       "resumable": true,
-      "personas": []
+      "personas": [],
+      "status": "preview",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": false,
+        "distribution": true,
+        "personas": true
+      },
+      "history": "unindexed"
     }
   ]
 }

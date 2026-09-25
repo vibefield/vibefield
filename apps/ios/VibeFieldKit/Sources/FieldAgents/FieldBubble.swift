@@ -10,6 +10,9 @@ import Foundation
 /// What an agent bubble knows that a terminal cannot.
 public struct AgentFacet: Sendable, Equatable {
   public let provider: AgentProvider
+  /// The producer's word for the agent, as the snapshot carried it — see
+  /// `AgentSnapshot.label`.
+  public let label: String?
   public let modelName: String?
   public let branch: String?
   public let contextUsedPercent: Double?
@@ -41,9 +44,21 @@ public struct AgentFacet: Sendable, Equatable {
   /// G3's join: where this run's terminal is, and on whose desktop. nil for a
   /// feed that has no desktop behind it.
   public let join: AgentJoin?
+  /// The catalog's row for this agent, as the snapshot carried it (AC-D9). nil
+  /// draws the raw id and the letter — see `AgentSnapshot.catalogEntry`.
+  public let catalogEntry: AgentCatalogEntry?
+
+  /// What this agent is called on every surface: the catalog's label (AC-D4),
+  /// else the label its row carries, else the raw id.
+  public var providerName: String { provider.displayName(with: catalogEntry, orLabel: label) }
+  /// The key its mark is drawn by in both atlases — the swarm's tiles and the
+  /// card's glyphs: the catalog's `mark` (the id unless the row names another),
+  /// else the id.
+  public var markKey: String { provider.markKey(with: catalogEntry) }
 
   public init(
     provider: AgentProvider,
+    label: String? = nil,
     modelName: String? = nil,
     branch: String? = nil,
     contextUsedPercent: Double? = nil,
@@ -55,9 +70,11 @@ public struct AgentFacet: Sendable, Equatable {
     usage: UsageHistory? = nil,
     statusSince: Date? = nil,
     lastEvidenceAt: Date? = nil,
-    join: AgentJoin? = nil
+    join: AgentJoin? = nil,
+    catalogEntry: AgentCatalogEntry? = nil
   ) {
     self.provider = provider
+    self.label = label
     self.modelName = modelName
     self.branch = branch
     self.contextUsedPercent = contextUsedPercent
@@ -70,6 +87,7 @@ public struct AgentFacet: Sendable, Equatable {
     self.statusSince = statusSince
     self.lastEvidenceAt = lastEvidenceAt
     self.join = join
+    self.catalogEntry = catalogEntry
   }
 }
 
@@ -185,6 +203,7 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
     createdAt: snapshot.createdAt,
     agent: AgentFacet(
       provider: snapshot.provider,
+      label: snapshot.label,
       modelName: state?.modelName,
       branch: state?.branch,
       contextUsedPercent: state?.contextUsedPercent,
@@ -198,7 +217,8 @@ public func fieldBubble(from snapshot: AgentSnapshot) -> FieldBubble? {
       monitorUsage: state?.usage,
       statusSince: state?.statusSince,
       lastEvidenceAt: state?.lastEvidenceAt,
-      join: snapshot.join),
+      join: snapshot.join,
+      catalogEntry: snapshot.catalogEntry),
     // NEVER both facets. "Exactly one facet is non-nil" is what tells the
     // renderer to draw a body rather than a hollow, so an agent whose PTY is
     // published does NOT become a remote bubble — the card resolves the join

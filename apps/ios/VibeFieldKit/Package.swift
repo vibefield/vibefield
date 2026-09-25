@@ -290,7 +290,15 @@ let package = Package(
       resources: [.copy("Fixtures")]
     ),
     .testTarget(name: "FieldInputTests", dependencies: ["FieldInput"]),
-    .testTarget(name: "FieldSwarmTests", dependencies: ["FieldSwarm"]),
+    .testTarget(
+      name: "FieldSwarmTests",
+      dependencies: ["FieldSwarm"],
+      // AC-5 — the contracts' OWN catalog golden, copied in (EL9 on the third
+      // side): the mark atlas is held to the agents the catalog decides on,
+      // not to a roster of its own. `pnpm check:ios-fixtures` keeps the word
+      // "copy" true.
+      resources: [.copy("Fixtures")]
+    ),
     // The home screen's DECISIONS, which is all of it that is testable without
     // a simulator — and, until this target existed, all of it that was
     // untested: the integrator carried three state-machine bugs (the parked

@@ -54,6 +54,9 @@ Design corpus (`draft/`, tracked on the local-only `dev-local` branch, never on 
 - `draft/thinking-ar-agent-plane.md` — the triad design: the ownership law, the planes, the identity spine, the durability ceilings, the cross-repo asks. §17 is the re-verification delta. **RATIFIED 2026-09-12**
 - `draft/thinking-ar-data-topology.md` — consent by construction, the machine scope, personas as profiles, who writes what. **RATIFIED 2026-09-12**
 - `draft/thinking-ar-sibling-workbench.md` — the three-repo workbench: the link mechanism, the pin, the walls, the build, the exit (W-D8). **current**
+- `draft/thinking-ar-agent-catalog.md` — the agent CATALOG: which agents VibeField supports, decided by hand in
+  `packages/contracts/src/agent-catalog.ts` and held to both pins by wall R23; the slate AC-D1…AC-D11; §13 as built.
+  **RULED + BUILT 2026-09-22** (LANDED §AC)
 - `draft/thinking-ar-views-port.md` — the views port as built. `draft/thinking-ar-approvals-prompts.md` — the design AR-6 will run. **current**
 - `draft/design-00…design-04` — the governing specification in authority order. The agent plane defers to these for mechanics. **current**
 
@@ -98,5 +101,9 @@ Its own map is `docs/README.md`, which sorts documents by whether they are autho
 4. **The pages name their revisions.** Each carries the vibe-field, puppeteer and rosetta revisions it
    was read at. A pin move (`pnpm siblings:pin`) is an EL8 event with its own ledger entry; if it
    changes a seam, it changes the page that owns that seam.
-5. **Definitions stay in their owning document.** `docs/DECISIONS.md` flips statuses; it does not
+5. **A new agent is a row, never a branch.** Support is decided in `packages/contracts/src/agent-catalog.ts`
+   (AC-D1…D11): a pin move that composes or registers an agent with no row turns `pnpm siblings:pin` red
+   until a maintainer writes one (`declined` counts). No product code compares an agent id to a literal
+   (R23b); the readers are the way in.
+6. **Definitions stay in their owning document.** `docs/DECISIONS.md` flips statuses; it does not
    redefine. The same rule holds between these pages and the design corpus in `draft/`.

@@ -6,6 +6,7 @@ import { join } from "node:path";
 // needs only the version its supervisor holds a spawned rosettad to
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
+  AgentCatalogParams,
   AgentInterruptParams,
   AgentResumeParams,
   AgentSpawnParams,
@@ -240,6 +241,9 @@ export interface FielddConfig {
   /** AR-3 test seam: compose providers beside (or instead of) puppeteer's
    * built-ins — a scripted adapter that spawns through the real host. */
   agentProviders?: AgentRuntimeServiceOptions["providers"];
+  /** AC-3 test seam: the catalog (default: THE table) — a test composes rows
+   * for its scripted provider beside the real ones */
+  agentCatalog?: AgentRuntimeServiceOptions["catalog"];
   /** AR-4 test seam: resume-when-idle's thresholds (production: 30 s still,
    * asked every 5 s). */
   agentResumeWhenIdle?: AgentRuntimeServiceOptions["resumeWhenIdle"];
@@ -534,6 +538,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     supervisor: rosettad,
     store: enrollment,
     expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+    ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
     logger: logger.child({ component: "index_service" }),
   });
   // AR-2 — the agent runtime (puppeteer's first import): one per fieldd, its
@@ -567,6 +572,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       };
     },
     ...(config.agentProviders !== undefined ? { providers: config.agentProviders } : {}),
+    ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
     ...(config.agentSearchPath !== undefined ? { searchPath: config.agentSearchPath } : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
     ...(config.agentResumeWhenIdle !== undefined
@@ -583,7 +589,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // are already listened for; `start()` is after `fieldd.lifecycle.ready`,
   // because a quota is never a boot gate.
   const agentUsage = new AccountUsageService({
-    runtime: agents.runtime,
+    // AC-3 — the catalog's word applied: only providers whose row offers usage
+    runtime: agents.usageRuntime(),
     ...(config.agentUsage !== undefined ? { poll: config.agentUsage } : {}),
     logger: logger.child({ component: "agent_usage" }),
   });
@@ -1560,6 +1567,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // run id and the terminal id ride the outcome); the login pane like a
     // persona mutation. The reads are the fold, unaudited like terminal.list.
     api.register("agent.providers", async () => await agents.providers());
+    // AC-3 — the catalog (thinking-ar-agent-catalog.md §5.1): the visible rows
+    // for the caller's surface; `declined` rows never leave fieldd.
+    api.register("agent.catalog", (_ctx, params) => {
+      const parsed = AgentCatalogParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { surface? }", false);
+      return agents.visibleCatalog(parsed.data.surface);
+    });
     api.register("agent.spawn", async (ctx, params) => {
       const parsed = AgentSpawnParams.safeParse(params);
       if (!parsed.success)
@@ -4085,6 +4100,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
           agentUsage.stop(); // AR-5d — the polling ends before the runtime it asks
           await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
+          index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           detachHealthSources?.();
           endpoints.dispose();

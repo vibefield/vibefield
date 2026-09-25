@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentOffers } from "./agent-catalog";
 import { AgentPersona, AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-index";
 import { TerminalCreateOpenResult } from "./terminal-pipeline";
 
@@ -12,7 +13,8 @@ import { TerminalCreateOpenResult } from "./terminal-pipeline";
 // remote (a peer's rows through the mesh).
 //
 // The vendor wall (AR-L1) holds at this file: `kind` is puppeteer's OPEN
-// provider id and `label` the adapter's own label — nothing here enumerates a
+// provider id and `label` the catalog's label for it (AC-D4; a daemon from before
+// AC-3 stamps the adapter's) — nothing here enumerates a
 // vendor, and nothing here carries a file path, an argv, or a hook. The
 // `monitor` field is a MIRROR of puppeteer's `AgentMonitorState` (its
 // schema generation is pinned below) restricted to the fields fieldd's own
@@ -147,7 +149,8 @@ export const AgentSessionSummary = z
     sessionIdBasis: z.string().optional(),
     /** puppeteer provider id — OPEN (AR-L1: no vendor is enumerated here) */
     kind: AgentProviderId,
-    /** the adapter's own label for the provider */
+    /** the catalog's label for the provider (AC-D4: ours, on every row since
+     * AC-3; a daemon from before it stamps the adapter's own) */
     label: z.string().min(1),
     /** the device this row lives on (its fieldd's device id) */
     device: z.string().min(1),
@@ -287,10 +290,33 @@ export type AgentSessionRecord = z.infer<typeof AgentSessionRecord>;
 export const AgentProviderSummary = z
   .object({
     id: AgentProviderId,
+    /** the catalog's label (AC-D4: ours, not the adapter's descriptor) */
     label: z.string().min(1),
     available: z.boolean(),
     resumable: z.boolean(),
     personas: z.array(AgentPersona),
+    // AC-1/AC-3 (thinking-ar-agent-catalog.md) — the row's decision and its
+    // claims, so a picker badges `preview`/`deprecated` and hides verbs the
+    // row does not offer; `history` is present only where the row offers it —
+    // the index's state for this agent on this device (`unavailable` = the
+    // daemon is down, or its registry disagrees with the catalog on the kind).
+    // The catalog's decision and its claims — fieldd ALWAYS sends both since
+    // AC-3 (it answers from the catalog), and a READER keeps them optional:
+    // a newer shell adopts a running older daemon in production (the
+    // `leave-running` policy), and a row without them must draw as before —
+    // no badge, no persona control — never blank the list (the review's
+    // finding). `status` and `history` are OPEN strings (a closed enum made
+    // one unknown word refuse the whole list); the known vocabularies are
+    // `AgentCatalogStatus` and `AGENT_HISTORY_STATES`; a word outside them
+    // reads as "not offered" / "unknown", never as an error.
+    status: z.string().min(1).max(32).optional(),
+    // PARTIAL and PASSTHROUGH to a reader as well: a capability this build
+    // adds later is a key an older daemon's row lacks, and one a newer daemon
+    // sends is a key this build never heard of — neither must refuse the list
+    // (absent reads as "not claimed"; unknown rides through, the tolerant
+    // reader's rule at every depth)
+    offers: AgentOffers.partial().passthrough().optional(),
+    history: z.string().min(1).max(32).optional(),
   })
   .passthrough();
 export type AgentProviderSummary = z.infer<typeof AgentProviderSummary>;

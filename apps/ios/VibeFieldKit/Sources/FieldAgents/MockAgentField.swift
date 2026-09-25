@@ -37,17 +37,36 @@ public final class MockAgentField {
   private static let branches = [
     "main", "c6-meshdata", "ios-bootstrap", "d29-settings", "el8-lockstep", nil, nil,
   ]
+
+  // THE CAST — FIXTURE ids (AC-5). The scripted fleet dresses its bodies as real
+  // agents so the swarm draws real marks, and a fixture is where a literal id
+  // may live outside the catalog: R23b's lint allow-lists this file AS a
+  // fixture, never as a decision. They are `private` on purpose — a public
+  // `AgentProvider.claude` is how a vendor branch hid in `ReplyChips.swift`
+  // until AC-5, out of reach of any literal lint, and nothing outside this
+  // fixture can branch on these.
+  private static let claude = AgentProvider(rawValue: "claude")
+  private static let codex = AgentProvider(rawValue: "codex")
+  private static let grok = AgentProvider(rawValue: "grok")
+  private static let acp = AgentProvider(rawValue: "acp")
+  /// Who a spawn may raise, in the order the retired `AgentProvider.known`
+  /// listed them — kept, so a seeded fleet deals the agents it always dealt.
+  /// `acp` stays although the catalog keeps it off the phone's lists: the
+  /// fleet stands in for what DESKTOPS run, and a desktop's ACP session draws
+  /// here by its letter (R4).
+  private static let cast: [AgentProvider] = [claude, codex, grok, acp]
+
   private static let models: [AgentProvider: String] = [
-    .claude: "Fable 5", .codex: "o5", .grok: "Grok 4", .acp: "ACP",
+    claude: "Fable 5", codex: "o5", grok: "Grok 4", acp: "ACP",
   ]
   private static let efforts: [AgentProvider: String] = [
-    .claude: "high", .codex: "medium", .grok: "low",
+    claude: "high", codex: "medium", grok: "low",
   ]
   /// What the mock charges per million tokens, so the burn ladder has rungs
   /// to show (RFC 008 prices only claude and codex; a provider with no
   /// pricing lane is UNAVAILABLE, and the mock leaves grok and acp so).
   private static let pricesPerMillion: [AgentProvider: Double] = [
-    .claude: 30, .codex: 12,
+    claude: 30, codex: 12,
   ]
   private static let toolTitles = [
     "Bash", "Edit", "Read", "WebFetch", "pnpm verify", "cargo test", "Grep",
@@ -164,14 +183,14 @@ public final class MockAgentField {
     agents = [
       makeAgent(project: "vibe-field", state: working, burn: .steady),
       makeAgent(project: "truffle", state: thinking, burn: .blaze),
-      makeAgent(project: "chopsticks", state: blocked, provider: .codex),
+      makeAgent(project: "chopsticks", state: blocked, provider: Self.codex),
       makeAgent(project: "ghosttea", state: idle),
       makeAgent(
         project: "mille",
         state: AgentRuntimeState(
           contextUsedPercent: 7, effort: AgentEffort(value: "low", intent: .configured),
           statusSince: now, lastEvidenceAt: now),
-        provider: .grok),
+        provider: Self.grok),
       makeAgent(project: "ice", state: nil),
     ]
   }
@@ -183,7 +202,7 @@ public final class MockAgentField {
     spawnCounter += 1
     let chosenProvider =
       provider
-      ?? (random(10) < 6 ? .claude : AgentProvider.known[random(AgentProvider.known.count)])
+      ?? (random(10) < 6 ? Self.claude : Self.cast[random(Self.cast.count)])
     let id = "mock-session-\(spawnCounter)"
     let shape = burn ?? BurnShape.allCases[random(BurnShape.allCases.count)]
     let price = Self.pricesPerMillion[chosenProvider].map { $0 / 1_000_000 }

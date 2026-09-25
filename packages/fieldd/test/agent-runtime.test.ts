@@ -26,7 +26,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentProvider } from "@vibecook/puppeteer-runtime";
 import {
+  type AgentCatalogEntry,
+  type AgentCatalogResult,
   type AgentDistributionRecord,
+  type AgentProvidersResult,
   AgentsExtensionsListResult,
   type AgentsInstallsResult,
   type AgentsOperationsResult,
@@ -40,26 +43,29 @@ import {
   type AgentsReleasesResult,
   type AgentsSetActiveResult,
   type AgentsUpdateResult,
+  type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   type IndexStatus,
   LAYOUT,
   SOCKETS,
+  visibleCatalog,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { catalogWith } from "./agent-catalog-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const FAKE_ROSETTAD = join(FIXTURES, "fake-rosettad.mjs");
 const FAKE_CLAUDE = join(FIXTURES, "fake-claude");
-const fakeSpawner = (mode: string): typeof spawn =>
+const fakeSpawner = (mode: string, env: Record<string, string> = {}): typeof spawn =>
   ((_bin: string, args: readonly string[], options: object) =>
     spawn(process.execPath, [FAKE_ROSETTAD, ...args], {
       ...options,
-      env: { ...process.env, FAKE_ROSETTAD_MODE: mode },
+      env: { ...process.env, FAKE_ROSETTAD_MODE: mode, ...env },
     })) as unknown as typeof spawn;
 
 /** the vendor's stable and latest release texts, and nothing else, reachable;
@@ -122,11 +128,15 @@ async function setup(
     /** false = boot with NO VibeField root above the user root (no machine scope) */
     machine?: boolean;
     /** a registry written BEFORE boot (puppeteer's snapshot shape) */
-    profiles?: { version: 1; profiles: unknown[] };
-    /** boot as the product's daemon does: read the agents' installs at boot */
+    profiles?: {
+      version: 1;
+      profiles: unknown[];
+    } /** boot as the product's daemon does: read the agents' installs at boot */;
     warm?: boolean;
     /** compose providers beside puppeteer's built-ins (the extension rows' fakes) */
     providers?: (builtin: AgentProvider[]) => AgentProvider[];
+    /** AC-3: the catalog the doors answer from (default: THE table) */
+    catalog?: readonly AgentCatalogEntry[];
   } = {},
 ): Promise<{ root: string; dataDir: string; bin: string; daemon: FielddDaemon }> {
   const root = mkdtempSync(join(tmpdir(), "vf-agents-"));
@@ -157,6 +167,7 @@ async function setup(
     ...(config.real ? {} : { rosettadSpawn: fakeSpawner(config.mode ?? "ok") }),
     rosettadHome: home,
     ...(config.machine === false ? {} : { vibefieldRoot: root }),
+    ...(config.catalog !== undefined ? { agentCatalog: config.catalog } : {}),
     agentSearchPath: bin,
     agentFetch: fakeFetch,
     ...(config.warm === true ? { agentInventoryWarm: true, logRoot: join(root, "logs") } : {}),
@@ -194,6 +205,16 @@ const ready = (daemon: FielddDaemon) =>
   until(() => daemon.health().rosettad.phase === "ready", 8_000);
 const readRecord = (dataDir: string): IndexEnrollmentRecord =>
   JSON.parse(readFileSync(join(dataDir, ...LAYOUT.INDEX_ENROLLMENT_FILE), "utf8"));
+/** the record's runtimes, [] when no daemon has published a record yet */
+const recordRuntimes = (dataDir: string): IndexEnrollmentRecord["runtimes"] =>
+  existsSync(join(dataDir, ...LAYOUT.INDEX_ENROLLMENT_FILE)) ? readRecord(dataDir).runtimes : [];
+/** a record as an earlier daemon would have written it (AC-D8's scenario: the
+ * binary changes under an enrolled kind) */
+function writeRecord(dataDir: string, record: IndexEnrollmentRecord): void {
+  const path = join(dataDir, ...LAYOUT.INDEX_ENROLLMENT_FILE);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(record)}\n`);
+}
 const readDistribution = (root: string): AgentDistributionRecord =>
   JSON.parse(readFileSync(join(root, ...LAYOUT.MACHINE_DISTRIBUTION_FILE), "utf8"));
 const mode = (path: string) => statSync(path).mode & 0o777;
@@ -808,7 +829,13 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
 /** `setup` at a caller-owned root (the reconcile row plants files first). */
 async function setupAt(
   root: string,
-  config: { profiles?: { version: 1; profiles: unknown[] } },
+  config: {
+    profiles?: { version: 1; profiles: unknown[] };
+    /** the real rosettad (FIELDD_ROSETTAD_BIN) instead of the scripted one */
+    real?: boolean;
+    /** the scripted daemon's knobs */
+    env?: Record<string, string>;
+  },
 ): Promise<{ dataDir: string; daemon: FielddDaemon }> {
   const dataDir = join(root, ...LAYOUT.USERS_DIR, "1");
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -832,8 +859,8 @@ async function setupAt(
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
-    rosettadBin: "/stand-in/rosettad",
-    rosettadSpawn: fakeSpawner("ok"),
+    rosettadBin: config.real ? (REAL_BIN as string) : "/stand-in/rosettad",
+    ...(config.real ? {} : { rosettadSpawn: fakeSpawner("ok", config.env ?? {}) }),
     rosettadHome: home,
     vibefieldRoot: root,
     agentSearchPath: bin,
@@ -1232,5 +1259,260 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
       expect(finalStatus.enrollment.retired.map((rt) => rt.label).sort()).toEqual(["Kim", "Lab"]);
       expect(finalStatus.runtimes.filter((rt) => rt.watched)).toEqual([]);
     }, 120_000);
+
+    it("AC-D8 against the real daemon: a record naming a kind its registry lacks is refused at start, the root is subtracted with the daemon's own reason, and the index comes up", async () => {
+      // the refusal is read off rosettad's stderr (`rosettad: --enroll …:
+      // runtime #1 (kind "…", data_root "…"): unknown agent kind`); this row
+      // is the live witness of that wording at the pin — the scripted daemon
+      // only mirrors it
+      const root = mkdtempSync(join(tmpdir(), "vf-real-d8-"));
+      cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+      const dataDir = join(root, ...LAYOUT.USERS_DIR, "1");
+      const ghostRoot = join(dataDir, ...LAYOUT.AGENT_ROOTS_DIR, "nope-agent", "ghost-root");
+      mkdirSync(ghostRoot, { recursive: true, mode: 0o700 });
+      writeRecord(dataDir, {
+        format: 1,
+        enabled_kinds: [],
+        runtimes: [
+          { kind: "nope-agent", data_root: ghostRoot, label: "Ghost", profile_id: "nope:1" },
+        ],
+      });
+      const { daemon } = await setupAt(root, { real: true });
+      await until(() => daemon.health().rosettad.phase === "ready", 60_000);
+      const record = readRecord(dataDir);
+      expect(record.runtimes).toEqual([]);
+      expect(record.retired?.[0]).toMatchObject({ kind: "nope-agent", profile_id: "nope:1" });
+      expect(record.retired?.[0]?.refused?.detail).toContain("unknown agent kind");
+      const win = await window(daemon, ALL, "live-d8");
+      const status = (await win.call("index.status", {})) as IndexStatus;
+      expect(status.enrollment.retired[0]?.refused).toEqual({ reason: "unknown agent kind" });
+      expect(JSON.stringify(status)).not.toContain(dataDir);
+    }, 120_000);
   },
 );
+
+describe("the catalog (AC-3) — the doors answer from the table, the roll call witnesses", () => {
+  const NONE = {
+    spawn: false,
+    resume: false,
+    reattach: false,
+    history: false,
+    usage: false,
+    distribution: false,
+    personas: false,
+  };
+
+  it("agent.providers lists the catalog's visible rows — the decision, the claims, our label, the index's state — in the table's order", async () => {
+    const { daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ["agent.spawn"], "c1");
+    const { providers } = (await win.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.map((p) => p.id)).toEqual(visibleCatalog("desktop").map((r) => r.id));
+    const claude = providers.find((p) => p.id === "claude");
+    // the label is the catalog's, the fake claude on the search path resolves,
+    // the fake's roll call spells ~/.claude as claude-code and nothing is
+    // consented yet: indexable, not indexed
+    expect(claude).toMatchObject({
+      label: "Claude Code",
+      status: "supported",
+      available: true,
+      resumable: true,
+      history: "unindexed",
+    });
+    expect(claude?.offers?.reattach).toBe(true);
+    // the fake's roll call has no ~/.pi: the catalog offers history for pi
+    // and the daemon cannot witness it — unavailable, said out loud
+    expect(providers.find((p) => p.id === "pi")).toMatchObject({
+      status: "preview",
+      available: false,
+      history: "unavailable",
+    });
+    // a protocol row: spawn only, no history state at all
+    const acp = providers.find((p) => p.id === "acp");
+    expect(acp).toMatchObject({ status: "preview" });
+    expect(acp?.offers?.history).toBe(false);
+    expect(acp).not.toHaveProperty("history");
+    expect(JSON.stringify(providers)).not.toContain("/");
+  });
+
+  it("agent.catalog answers the visible rows for the surface; the phone never sees the protocol row; a declined row never leaves fieldd; it reads on agent.observe", async () => {
+    const { daemon } = await setup({
+      catalog: catalogWith("grok", {
+        status: "declined",
+        offers: NONE,
+        surfaces: { desktop: false, phone: false },
+      }),
+    });
+    await ready(daemon);
+    const win = await window(daemon, ["agent.observe"], "c2");
+    const all = (await win.call("agent.catalog", {})) as AgentCatalogResult;
+    expect(all.catalog.some((r) => r.id === "grok")).toBe(false);
+    expect(all.catalog.some((r) => r.id === "acp")).toBe(true);
+    expect(all.catalog.every((r) => r.status !== "declined")).toBe(true);
+    const phone = (await win.call("agent.catalog", { surface: "phone" })) as AgentCatalogResult;
+    expect(phone.catalog.some((r) => r.id === "acp")).toBe(false);
+    expect(phone.catalog.map((r) => r.id)).toEqual(
+      all.catalog.filter((r) => r.surfaces.phone).map((r) => r.id),
+    );
+    // an OPEN surface word: one this build never heard of gets every visible row
+    const tv = (await win.call("agent.catalog", { surface: "tv" })) as AgentCatalogResult;
+    expect(tv.catalog.map((r) => r.id)).toEqual(all.catalog.map((r) => r.id));
+    const bad = await win.callErr("agent.catalog", { surface: "" });
+    expect(bad.data?.kind).toBe("PRECONDITION_FAILED");
+    const denied = await window(daemon, ["agents.manage"], "c2b");
+    expect((await denied.callErr("agent.catalog", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
+    // and agent.providers no longer offers what the catalog declined
+    const spawner = await window(daemon, ["agent.spawn"], "c2c");
+    const { providers } = (await spawner.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.some((p) => p.id === "grok")).toBe(false);
+  });
+
+  it("a door refuses typed what the catalog does not offer: no row is NOT_FOUND, a declined row PRECONDITION_FAILED {reason: unsupported-agent}, a row without personas refuses profiles.create", async () => {
+    const { daemon } = await setup({
+      catalog: catalogWith("claude", {
+        status: "declined",
+        offers: NONE,
+        surfaces: { desktop: false, phone: false },
+      }),
+    });
+    await ready(daemon);
+    const win = await window(daemon, ALL, "c3");
+    const nobody = await win.callErr("agent.spawn", { provider: "nobody" });
+    expect(nobody.data?.kind).toBe("NOT_FOUND");
+    const declined = await win.callErr("agent.spawn", { provider: "claude" });
+    expect(declined.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(declined.data?.details).toMatchObject({
+      reason: "unsupported-agent",
+      status: "declined",
+    });
+    const persona = await win.callErr("agents.profiles.create", {
+      set: "native",
+      provider: "acp",
+    });
+    expect(persona.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(persona.data?.details).toMatchObject({
+      reason: "unsupported-agent",
+      capability: "personas",
+    });
+    const active = await win.callErr("agents.setActive", {
+      provider: "claude",
+      executable: "/nowhere/claude",
+    });
+    expect(active.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(active.data?.details).toMatchObject({ reason: "unsupported-agent" });
+  });
+
+  it("index.discoveries and the runtimes carry the catalog id for the daemon's kind; a kind no row maps is shown by its wire kind alone", async () => {
+    const { daemon } = await setup();
+    await ready(daemon);
+    const win = await window(daemon, ALL, "c4");
+    const { discoveries } = (await win.call("index.discoveries", {})) as IndexDiscoveriesResult;
+    expect(discoveries.find((d) => d.kind === "claude-code")?.agent).toBe("claude");
+    expect(discoveries.find((d) => d.kind === "codex")?.agent).toBe("codex");
+    await win.call("index.enroll", { kinds: ["claude-code"] });
+    await ready(daemon);
+    const status = (await win.call("index.status", {})) as IndexStatus;
+    const runtime = status.runtimes.find((r) => r.kind === "claude-code");
+    expect(runtime?.agent).toBe("claude");
+  });
+
+  it("AC-D8 — a persona created with no daemon is NOT enrolled on the catalog's word (no witness); a record naming a kind the daemon's registry lacks is subtracted at start; the index comes up; the refusal is on the record", async () => {
+    // boot 1: no index daemon at all — no witness, so the persona exists in
+    // the registry and waits for a ready (R4); the record is not written on
+    // the catalog's word alone (the review's finding: that word is what a
+    // daemon refuses at its next start)
+    const first = await setup({ rosettadBin: "" });
+    expect(first.daemon.health().rosettad.phase).toBe("unconfigured");
+    const win = await window(first.daemon, ALL, "c5");
+    // AR-S2: a persona is a sign-in inside an Agent Profile (a profile set)
+    await win.call("agents.profileSets.create", { label: "Ghost" });
+    const { persona } = (await win.call("agents.profiles.create", {
+      set: "ghost",
+      provider: "hermes",
+    })) as AgentsProfilesCreateResult;
+    expect(persona.runtimeId).toBeUndefined();
+    expect(recordRuntimes(first.dataDir)).toEqual([]);
+    await first.daemon.stop();
+    // the scenario AC-D8 is for: a record an earlier daemon (one that
+    // registered hermes) wrote, and a binary under it that does not
+    const ghostRoot = join(first.dataDir, ...LAYOUT.AGENT_ROOTS_DIR, "hermes", "ghost-root");
+    mkdirSync(ghostRoot, { recursive: true, mode: 0o700 });
+    writeRecord(first.dataDir, {
+      format: 1,
+      enabled_kinds: [],
+      runtimes: [
+        { kind: "hermes", data_root: ghostRoot, label: "Ghost", profile_id: persona.profileId },
+      ],
+    });
+    // boot 2: the scripted daemon does not register hermes and refuses the
+    // file at start (exit 2, "unknown agent kind") — fieldd subtracts the
+    // root, restarts the daemon, and it comes up
+    const second = await setupAt(first.root, {});
+    await until(() => second.daemon.health().rosettad.phase === "ready", 15_000);
+    const record = readRecord(second.dataDir);
+    expect(record.runtimes.some((rt) => rt.kind === "hermes")).toBe(false);
+    const retired = record.retired?.find((rt) => rt.kind === "hermes");
+    expect(retired?.profile_id).toBe(persona.profileId);
+    expect(retired?.refused?.detail).toContain("unknown agent kind");
+    const win2 = await window(second.daemon, ALL, "c5b");
+    const status = (await win2.call("index.status", {})) as IndexStatus;
+    // the projection says WHEN and WHY, never the root (no paths leave fieldd)
+    expect(status.enrollment.retired.find((r) => r.kind === "hermes")?.refused).toMatchObject({
+      reason: "unknown agent kind",
+    });
+    expect(JSON.stringify(status)).not.toContain(second.dataDir);
+    const { providers } = (await win2.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.find((p) => p.id === "hermes")).toMatchObject({ history: "unavailable" });
+    // the ready-time reconcile cannot re-add it: the roll call does not
+    // spell ~/.hermes, so the daemon stays up and the record stays subtracted
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(second.daemon.health().rosettad.phase).toBe("ready");
+    expect(readRecord(second.dataDir).runtimes.some((rt) => rt.kind === "hermes")).toBe(false);
+  });
+
+  it("the census fills in behind the ready line: a persona registered before this fieldd is still enrolled at the first ready (the reconcile waits for the roll call), and agent.providers asked at once says indexed, never unavailable", async () => {
+    // the R4 row's shape, against a daemon whose roll call is EMPTY for its
+    // first 1.2 s after `ready` — the real daemon's window (serve.rs prints
+    // ready, then walks the roots and publishes the census)
+    const root = mkdtempSync(join(tmpdir(), "vf-cen-"));
+    const preRoot = join(
+      root,
+      ...LAYOUT.USERS_DIR,
+      "1",
+      ...LAYOUT.AGENT_ROOTS_DIR,
+      "claude",
+      "late1",
+    );
+    mkdirSync(preRoot, { recursive: true, mode: 0o700 });
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const { dataDir, daemon } = await setupAt(root, {
+      env: { FAKE_ROSETTAD_CENSUS_DELAY_MS: "1200" },
+      profiles: {
+        version: 1,
+        profiles: [
+          {
+            id: "late1",
+            provider: "claude",
+            label: "Late",
+            kind: "managed",
+            dataRoot: preRoot,
+            createdAt: "2026-09-12T10:00:00.000Z",
+          },
+        ],
+      },
+    });
+    await untilAsync(
+      async () => recordRuntimes(dataDir).some((rt) => rt.profile_id === "late1"),
+      15_000,
+    );
+    expect(readRecord(dataDir).runtimes).toEqual([
+      { kind: "claude-code", data_root: preRoot, label: "Late", profile_id: "late1" },
+    ]);
+    // the bounce that followed comes up ready with its own empty window, and
+    // the door waits it out rather than saying `unavailable`
+    await until(() => daemon.health().rosettad.phase === "ready", 15_000);
+    const win = await window(daemon, ALL, "cen");
+    const { providers } = (await win.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.find((p) => p.id === "claude")).toMatchObject({ history: "indexed" });
+  });
+});
