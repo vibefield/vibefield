@@ -1485,6 +1485,7 @@ enum MeshFixture {
     var description: String { "fixture `\(name).json` is not in the FieldMeshTests bundle" }
   }
 }
+
 // MARK: - IOS-8c: who the desktop serves
 
 /// A self desktop whose hello NAMES its user (UA-2's ULID), as every fieldd
@@ -1526,6 +1527,9 @@ struct FieldLinkUserIdTests {
     defer { link.stop() }
     try await waitUntil("the door to be ready") { link.desktops.first?.state == .ready }
     #expect(link.desktops.first?.userId == nil)
+  }
+}
+
 // MARK: - The agent catalog over the door (AC-5, AC-D9)
 
 /// Which request ids asked for the catalog. A door script is a synchronous
@@ -1841,5 +1845,6 @@ private let catalogWait: Duration = .seconds(20)
     await mesh.emit(.upsert(asleepStudio))
     try await waitUntil("the field emptied", timeout: catalogWait) { link.agents.isEmpty }
     #expect(link.desktops.isEmpty)
-    #expect(link.catalog.isEmpty)  }
+    #expect(link.catalog.isEmpty)
+  }
 }
