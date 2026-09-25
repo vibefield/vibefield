@@ -218,6 +218,18 @@ interface CellClient {
 export class TerminalService {
   private readonly logger: Logger;
   private terminals: TerminalInfo[] = [];
+  /** TC-S3 — the cell each session THIS service birthed was born in, kept
+   * until the observed inventory places it (or it exits). The inventory lists
+   * a birth one reconcile tick later (field-native's 100 ms floor), and in that
+   * window `sessionCell` used to read an unplaced session as the INTERACTIVE
+   * cell's: an agent session terminated or automated that fast was dialed at a
+   * cell that never held it, which answered "unknown session", so terminate
+   * reported `terminated: false` for a PTY that went on running (GT-8's gate,
+   * 2026-09-25: agent-session's default-profile row terminated 66–121 ms after
+   * the birth, against 86–112 ms from birth to listing). A birth answer is
+   * positive knowledge, taken at the one moment it is certain; the
+   * inventory's tag replaces it the moment it exists. */
+  private readonly bornIn = new Map<string, string>();
   /** Which floor observation `terminals` came from — undefined until the first
    * one applies, which is exactly the state `list`/`get` refuse in. */
   private lastObservation: TerminalObservation | undefined;
@@ -359,6 +371,8 @@ export class TerminalService {
         const parsed = ObservedState.safeParse(payload);
         if (parsed.success) {
           this.terminals = parsed.data.terminals;
+          // a placed session follows its tag from here on (see `bornIn`)
+          for (const terminal of this.terminals) this.bornIn.delete(terminal.sessionId);
           // Kept, not discarded (GT-5b): these two fields are what let a
           // consumer tell an inventory apart from a LATER floor's, and their
           // presence is also the flag that `list`/`get` are answerable at all.
@@ -828,6 +842,7 @@ export class TerminalService {
   }> {
     try {
       const summary = await client.createSession(options);
+      if (cell.key !== LEGACY_CELL_KEY) this.bornIn.set(summary.id, cell.key);
       // The cell that took it, for the daemon's nested mint. The legacy key
       // names no cell — there is no row to name — and the mirror answers there.
       return {
@@ -1323,12 +1338,16 @@ export class TerminalService {
    * follow the tag or they follow nothing. */
   private sessionCell(sessionId: string): CellTarget {
     const tag = this.sessionCellTag(sessionId);
+    if (tag !== undefined) return this.cellByBootId(tag.cellBootId);
+    // A session this service birthed that no observation has placed yet: the
+    // cell that answered its birth (see `bornIn`).
+    const born = this.bornIn.get(sessionId);
+    if (born !== undefined) return this.cellByBootId(born);
     // Untagged, or a session this inventory has never named: the legacy
     // reading. On a pre-TC-S3 floor that IS the one cell; on a K=2 floor it is
     // the interactive target, which is the best fieldd can honestly do for a
-    // session no observation has placed yet.
-    if (tag === undefined) return this.classCell("interactive");
-    return this.cellByBootId(tag.cellBootId);
+    // session neither an observation nor its birth has placed.
+    return this.classCell("interactive");
   }
 
   private sessionCellTag(sessionId: string): TerminalInfo["cell"] {
@@ -1340,7 +1359,8 @@ export class TerminalService {
    * every other op gets. A TAGGED session needs no wait — its cell is either in
    * the snapshot now or gone, and gone is an answer. */
   private async sessionCellForOp(sessionId: string): Promise<CellTarget> {
-    if (this.sessionCellTag(sessionId) === undefined) await this.awaitEndpoints("interactive");
+    if (this.sessionCellTag(sessionId) === undefined && !this.bornIn.has(sessionId))
+      await this.awaitEndpoints("interactive");
     return this.sessionCell(sessionId);
   }
 
@@ -1452,6 +1472,7 @@ export class TerminalService {
     // service. The client is per cell, so a session's exit arrives on the
     // connection to the cell that held it.
     client.on("session-exited", (event: SessionExitedEvent) => {
+      this.bornIn.delete(event.sessionId);
       for (const listener of [...this.exitListeners]) {
         try {
           listener(event);

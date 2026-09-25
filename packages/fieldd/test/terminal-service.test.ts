@@ -269,6 +269,8 @@ async function startFakeFloor(
   let effectiveDiagnostics = loader(effectiveContents, document.path);
   let pendingConcurrentWrite = opts.concurrentWrite;
   const commands: string[] = [];
+  /** the sessions THIS floor created — what its terminate recognizes */
+  const born = new Set<string>();
   let lastCreateOptions: Record<string, unknown> | undefined;
   let connections = 0;
   const stall = new Set(opts.stall ?? []);
@@ -312,7 +314,10 @@ async function startFakeFloor(
           lastCreateOptions = msg.options as Record<string, unknown>;
           if (opts.createError !== undefined)
             reply({ type: "error", message: opts.createError, ...opts.createErrorMeta });
-          else reply({ type: "session-created", session: fakeSession(createdSessionId) });
+          else {
+            born.add(createdSessionId);
+            reply({ type: "session-created", session: fakeSession(createdSessionId) });
+          }
         } else if (
           (msg.type === "get-automation-state" || msg.type === "automation-input") &&
           opts.automationError !== undefined
@@ -336,6 +341,12 @@ async function startFakeFloor(
           reply({ type: "sessions", sessions: [fakeSession(createdSessionId)] });
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
           sock.destroy(); // the floor dies mid-call
+        } else if (msg.type === "terminate") {
+          // the real floor's answer for a session it never held (service.rs
+          // `terminate` bails "unknown session"), so a misrouted terminate
+          // reads here exactly as it does against a real cell
+          if (born.has(String(msg.sessionId))) reply({ type: "ok" });
+          else reply({ type: "error", message: "unknown session" });
         } else if (msg.type === "get-config") {
           reply({ type: "config", config: fakeConfig(configRevision, effectiveDiagnostics) });
         } else if (msg.type === "get-config-document") {
@@ -2661,6 +2672,47 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
     expect(plain.cellBootId).toBe("cell-i");
     expect(interactive.connections()).toBe(1);
     expect(agent.connections(), "one connection per cell, both still live").toBe(1);
+  });
+
+  it("dials a session it just birthed at the cell that took it, before any inventory places it", async () => {
+    // GT-8's gate found it (2026-09-25): the observed inventory lists a birth
+    // one reconcile tick later, and in that window an unplaced session read as
+    // the INTERACTIVE cell's. An agent session terminated that fast was dialed
+    // at a cell that never held it, which answered "unknown session", and the
+    // terminate reported `terminated: false` for a PTY that went on running.
+    // This service never subscribes, so no inventory ever places the session:
+    // the birth is the only thing that knows where it lives.
+    const interactive = await startFakeFloor();
+    const agent = await startFakeFloor();
+    const routed = routedLink(
+      classRoutes(1, [
+        {
+          cellInstanceId: 1,
+          cellBootId: "cell-i",
+          endpoints: interactive.endpoints,
+          workloadClass: "interactive",
+          role: "class",
+        },
+        {
+          cellInstanceId: 2,
+          cellBootId: "cell-a",
+          endpoints: agent.endpoints,
+          workloadClass: "agent",
+          role: "class",
+        },
+      ]),
+    );
+    const service = new TerminalService({ link: routed.link });
+    cleanup.push(() => service.dispose());
+
+    const born = await service.create({ workloadClass: "agent" });
+    expect(born.cellBootId).toBe("cell-a");
+    await expect(
+      service.automate(born.sessionId, { kind: "text", text: "echo placed" }),
+    ).resolves.toMatchObject({ accepted: true });
+    await expect(service.terminate(born.sessionId)).resolves.toEqual({ terminated: true });
+    expect(agent.commands()).toEqual(expect.arrayContaining(["automation-input", "terminate"]));
+    expect(interactive.connections(), "the interactive cell was never dialed").toBe(0);
   });
 
   it("targets the class row, else the NEWEST solo cell", async () => {
