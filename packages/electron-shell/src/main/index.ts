@@ -95,6 +95,7 @@ import {
 import { registerShellSchemes } from "./scheme-registration";
 import { withScreenshotScreenBounds } from "./screenshot-bounds";
 import { installScreenshotChord } from "./screenshot-chord";
+import { screenshotHelperSupportsService } from "./screenshot-helper-capabilities";
 import { ScreenshotShortcutController } from "./screenshot-shortcut";
 import {
   installCsp,
@@ -1183,6 +1184,9 @@ async function main(
   }
   screenshotTool = new ScreenshotTool({
     helperPath: resources.screenshotHelperPath,
+    persistent:
+      process.platform === "darwin" &&
+      screenshotHelperSupportsService(resources.screenshotHelperPath),
     onEvent: (event) => {
       if (event.kind === "lifecycle") {
         screenshotLogger.info(event.event, "screenshot helper lifecycle", event.attrs);
@@ -1197,6 +1201,8 @@ async function main(
       }
     },
   });
+  // Load native frameworks off the shortcut path; pixels are captured only on request.
+  if (screenshotHelperAvailable) void screenshotTool.prepare();
   const captureScreenshot = async (): Promise<ScreenshotCaptureResult> => {
     const result = await (screenshotTool?.capture() ??
       Promise.resolve({

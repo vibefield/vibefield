@@ -37,6 +37,15 @@ struct HostResult: Codable {
     var bounds: HostBounds?
     var code: HostErrorCode?
     var message: String?
+    var timings: HostCaptureTimings?
+}
+
+struct HostCaptureTimings: Codable {
+    var permissionMs: Double = 0
+    var windowListMs: Double = 0
+    var captureMs: Double = 0
+    var overlayMs: Double = 0
+    var totalMs: Double = 0
 }
 
 enum HostProtocol {
@@ -66,8 +75,12 @@ enum HostProtocol {
         )
     }
 
-    static func makeReady() -> HostResult {
-        HostResult(v: HostProtocolVersion.current, status: "ready")
+    static func makeReady(timings: HostCaptureTimings? = nil) -> HostResult {
+        HostResult(v: HostProtocolVersion.current, status: "ready", timings: timings)
+    }
+
+    static func idle() {
+        emit(HostResult(v: HostProtocolVersion.current, status: "idle"))
     }
 
     static func makeCancel() -> HostResult {
@@ -114,8 +127,8 @@ enum HostProtocol {
         emit(makeOK(path: path, pixelSize: pixelSize, scale: scale, displayId: displayId, bounds: bounds))
     }
 
-    static func ready() {
-        emit(makeReady())
+    static func ready(timings: HostCaptureTimings? = nil) {
+        emit(makeReady(timings: timings))
     }
 
     static func cancel() {

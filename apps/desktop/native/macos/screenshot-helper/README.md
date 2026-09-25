@@ -4,8 +4,10 @@ The native half of VibeField's screenshot tool: a `swiftc`-built, ad-hoc signed 
 freezes every display **before** any overlay exists, lets you snap to a window or drag a
 rectangle, mark it up (rect · ellipse · arrow · pen · mosaic · undo), and on confirm copies
 the still to the clipboard as PNG and TIFF, writes the PNG to the temporary directory, and
-prints ONE JSON line to stdout. It is a **shell-plane tool** (SNAP-D1): Electron main spawns
-it for one capture and it exits — it is not product truth and it outlives nothing. The wire
+prints a result JSON line to stdout. It is a **shell-plane tool** (SNAP-D1): Electron main
+prewarms one host-owned process and requests one capture at a time — it is not product truth
+and exits when the host closes its command pipe. While idle it has no capture images or
+overlay windows and does not request Screen Recording permission. The wire
 is versioned and its errors are typed (SNAP-D2), the prototype's host-hiding flag and its
 two AppleScript calls are gone (SNAP-D6), and macOS 26's glass chrome is resolved by name at
 runtime so the helper compiles against any macOS ≥ 14 SDK (SNAP-D8).
@@ -17,12 +19,25 @@ Ported from `research/screenshot2` at SNAP-0. The design record is
 
 | Flag | What it does |
 |---|---|
-| `--once` | Capture now: overlay, one result line, exit. The default, and what the shell spawns. |
+| `--once` | Capture now: overlay, one result line, exit. The CLI default and older-shell fallback. |
+| `--service` | Load AppKit, emit `idle`, then wait for a host capture command on stdin. Exit on EOF. |
 | `--capture-test` | No overlay. One PNG per display under the temporary directory; `ok` names the first. |
 | `--standalone` | Stay running; `Control+Command+A` captures. The developer loop (below). |
 | `--help` | The usage text. |
 
-Exit code is 0 after `ok`/`cancel` and 1 after `error`.
+Read the terminal JSON status to determine success. AppKit termination can return 0 even
+after an `error` event; the host does not infer capture success from the exit code.
+
+The staged `Info.plist` advertises `VFScreenshotServiceVersion = 1`. The shell checks this
+before opting into `--service`: an older helper treated unknown flags as an immediate
+capture, so source-code version alone is insufficient. Current helpers refuse unknown flags.
+
+In service mode the host sends `{"v":1,"action":"capture"}` followed by a newline. The
+helper captures fresh pixels, shows the overlays, emits `ready` and one terminal result,
+tears down all windows/images, then emits `{"v":1,"status":"idle"}` again. A second request
+must wait for that acknowledgement. Invalid/oversized commands terminate the helper;
+closing stdin also terminates it, including during a capture. No background capture loop
+or cached screen images are used. `--standalone` remains the independent developer mode.
 
 ## The line protocol (v1)
 
@@ -39,6 +54,10 @@ bottom-left origin, display-relative); it is informational, never authority.
 ```
 
 `ready` is printed once the overlays are on screen; it lifts the host's pre-overlay timer.
+It also carries `timings` (`permissionMs`, `windowListMs`, `captureMs`, `overlayMs`, `totalMs`),
+measured with the monotonic clock. Electron logs these alongside the time from a capture
+request to `ready` and whether the process was already booted, separating capture cost from
+process startup.
 The error `code` is one of `permission-denied` · `capture-failed` · `no-displays` ·
 `write-failed` — typed here, where the knowledge is, rather than guessed from prose by the
 host. Unknown fields pass through on the way in (tolerant reader), and the fixtures under
@@ -59,6 +78,10 @@ pnpm run verify:screenshot-helper   # builds, then a real --capture-test on this
 `Tests/ScreenshotHelperTests.swift`, and runs it with `VF_CONTRACT_FIXTURES` pointing at
 `packages/contracts/fixtures`. An unset variable or a short fixture directory FAILS the
 harness: a silent skip is not a test.
+
+The harness also checks the service command/idle/timing fixtures and reads a short command
+from a still-open pipe. The latter is essential: a buffered `FileHandle.read(upToCount:)`
+can wait for more bytes or EOF. The command reader uses one bounded POSIX `read` instead.
 
 ## The developer loop
 

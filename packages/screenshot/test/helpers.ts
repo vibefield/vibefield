@@ -40,7 +40,36 @@ const okLine = (extra = {}) => JSON.stringify({
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 process.stderr.write("fake helper args=" + JSON.stringify(args) + "\\n");
-switch (mode) {
+if (mode.startsWith("service")) {
+  if (mode === "service-hang-boot") {
+    setInterval(() => {}, 1e6);
+  } else if (mode === "service-premature") {
+    out(okLine());
+    setInterval(() => {}, 1e6);
+  } else {
+    await sleep(Number(process.env.FAKE_HELPER_BOOT_DELAY ?? 10));
+    out(JSON.stringify({ v: 1, status: "idle" }));
+    let buffer = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("end", () => process.exit(0));
+    process.stdin.on("data", async (chunk) => {
+      buffer += chunk;
+      let end;
+      while ((end = buffer.indexOf("\\n")) >= 0) {
+        const command = JSON.parse(buffer.slice(0, end));
+        buffer = buffer.slice(end + 1);
+        if (command.v !== 1 || command.action !== "capture") process.exit(8);
+        if (mode === "service-die") process.exit(3);
+        if (mode === "service-hang-capture") continue;
+        out(JSON.stringify({ v: 1, status: "ready", timings: { permissionMs: 1, windowListMs: 2, captureMs: 3, overlayMs: 4, totalMs: 10 } }));
+        await sleep(20);
+        out(okLine());
+        if (mode === "service-duplicate") out(okLine());
+        if (mode !== "service-linger") out(JSON.stringify({ v: 1, status: "idle" }));
+      }
+    });
+  }
+} else switch (mode) {
   case "ok": out(JSON.stringify({ v: 1, status: "ready" })); await sleep(20); out(okLine()); process.exit(0);
   case "unknown-field": out(JSON.stringify({ v: 1, status: "ready" })); out(okLine({ pinned: false, futureField: { carried: true } })); process.exit(0);
   case "cancel": out(JSON.stringify({ v: 1, status: "ready" })); await sleep(10); out(JSON.stringify({ v: 1, status: "cancel" })); process.exit(0);
@@ -69,7 +98,7 @@ export function createFakeHelper(): FakeHelperHarness {
     spawnFor(mode, extraEnv = {}) {
       return (_helperPath, args) => {
         const child = spawn(process.execPath, [script, ...args], {
-          stdio: ["ignore", "pipe", "pipe"],
+          stdio: ["pipe", "pipe", "pipe"],
           env: { ...process.env, FAKE_HELPER_MODE: mode, FAKE_HELPER_DIR: dir, ...extraEnv },
         });
         if (child.pid !== undefined) pids.add(child.pid);

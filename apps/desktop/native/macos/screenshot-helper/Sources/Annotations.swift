@@ -128,6 +128,9 @@ enum ImageCompositor {
         ).integral
         guard let cropped = snapshot.cropping(to: crop) else { return nil }
         guard crop.width > 0, crop.height > 0 else { return nil }
+        // The common unmarked shot needs no full-size allocation/redraw.
+        // CGImage's crop retains the original pixels and color profile.
+        if annotations.isEmpty { return cropped }
 
         let width = cropped.width
         let height = cropped.height

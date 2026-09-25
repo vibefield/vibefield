@@ -142,8 +142,11 @@ final class OverlayView: NSView {
         lastMouse = point
         updateMagnifier(at: point)
         if mode == .hover {
-            hoverWindow = detector.window(atCGPoint: cgPoint(forViewPoint: point))
-            needsDisplay = true
+            let next = detector.window(atCGPoint: cgPoint(forViewPoint: point))
+            if next?.windowID != hoverWindow?.windowID {
+                hoverWindow = next
+                needsDisplay = true
+            }
         }
         updateHandleCursor(at: point)
     }

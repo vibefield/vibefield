@@ -2,6 +2,7 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let args = Array(CommandLine.arguments.dropFirst())
+    private var service: HostService?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -12,8 +13,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        let allowed: Set<String> = ["--once", "--service", "--standalone", "--capture-test"]
+        guard args.allSatisfy({ allowed.contains($0) }) else {
+            HostProtocol.error(.captureFailed, "unknown screenshot helper option")
+            NSApp.terminate(nil)
+            return
+        }
+
         if args.contains("--capture-test") {
             Task { await runCaptureTest() }
+            return
+        }
+
+        if args.contains("--service") {
+            let service = HostService()
+            self.service = service
+            OverlayController.shared.configure(
+                exitOnFinish: false,
+                showPermissionAlert: false,
+                onIdle: { [weak service] in service?.completed() }
+            )
+            service.start {
+                Task { await OverlayController.shared.start() }
+            }
             return
         }
 
@@ -40,6 +62,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        service?.stop()
     }
 
     /// No overlay: one PNG per display under the temporary directory, and an
@@ -104,6 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         VibeField screenshot helper — freeze the screen, pick a region, copy it.
 
           field-screenshot-helper --once          Capture now (default)
+          field-screenshot-helper --service       Wait for host commands; exit on stdin EOF
           field-screenshot-helper --standalone    Stay running; Control+Command+A captures
           field-screenshot-helper --capture-test  Write one PNG per display, no overlay
           field-screenshot-helper --help          Show this

@@ -9,6 +9,7 @@ import {
   SCREENSHOT_LIMITS,
   ScreenshotCaptureResult,
   ScreenshotErrorCode,
+  ScreenshotHelperCommand,
   ScreenshotHelperErrorCode,
   ScreenshotHelperEvent,
   ScreenshotHelperOk,
@@ -33,7 +34,27 @@ const OK = {
   bounds: { x: 0, y: 0, width: 5, height: 4 },
 } as const;
 
-describe("ScreenshotHelperEvent — the four lines a helper may print", () => {
+describe("ScreenshotHelperEvent — capture and service lifecycle lines", () => {
+  it("pins the macOS service handshake, command and phase timings", () => {
+    const serviceFixture = (name: string) =>
+      JSON.parse(readFileSync(join(FIXTURES, `screenshot-service.${name}.json`), "utf8"));
+    expect(ScreenshotHelperEvent.parse(serviceFixture("idle"))).toEqual({ v: 1, status: "idle" });
+    expect(ScreenshotHelperCommand.parse(serviceFixture("command"))).toEqual({
+      v: 1,
+      action: "capture",
+    });
+    const ready = serviceFixture("ready");
+    expect(ScreenshotHelperEvent.parse(ready)).toMatchObject({
+      status: "ready",
+      timings: { totalMs: 37 },
+    });
+    expect(
+      ScreenshotHelperEvent.safeParse({ ...ready, timings: { ...ready.timings, totalMs: -1 } })
+        .success,
+    ).toBe(false);
+    expect(ScreenshotHelperCommand.safeParse({ v: 2, action: "capture" }).success).toBe(false);
+    expect(ScreenshotHelperCommand.safeParse({ v: 1, action: "anything" }).success).toBe(false);
+  });
   it("parses every golden fixture to its status", () => {
     expect(ScreenshotHelperEvent.parse(fixture("ready")).status).toBe("ready");
     expect(ScreenshotHelperEvent.parse(fixture("cancel")).status).toBe("cancel");

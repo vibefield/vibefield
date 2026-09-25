@@ -18,6 +18,7 @@ enum ScreenshotHelperTests {
         testHostJSON()
         testHostJSONCarriesVersionAndCode()
         testContractFixturesDecode()
+        testHostServiceCommands()
         print("ALL PASSED")
     }
 
@@ -332,6 +333,47 @@ enum ScreenshotHelperTests {
             }
         }
         print("ok  decoded \(fixtures.count) contract fixtures from \(directory)")
+    }
+
+    static func testHostServiceCommands() {
+        let pipe = Pipe()
+        let short = Data("{\"v\":1,\"action\":\"capture\"}\n".utf8)
+        pipe.fileHandleForWriting.write(short)
+        expect(HostCommandReader.readAvailableChunk(from: pipe.fileHandleForReading) == short,
+               "a short command is delivered while the host keeps its pipe open")
+        pipe.fileHandleForWriting.closeFile()
+        expect(HostCommandReader.readAvailableChunk(from: pipe.fileHandleForReading) == nil,
+               "host pipe EOF is observed")
+        pipe.fileHandleForReading.closeFile()
+        guard let directory = ProcessInfo.processInfo.environment["VF_CONTRACT_FIXTURES"] else {
+            fail("VF_CONTRACT_FIXTURES is required for service fixtures")
+            return
+        }
+        let root = URL(fileURLWithPath: directory)
+        do {
+            let data = try Data(contentsOf: root.appendingPathComponent("screenshot-service.command.json"))
+            var reader = HostCommandReader()
+            expect(try reader.push(Data(data.prefix(5))).isEmpty, "split command waits for its newline")
+            let commands = try reader.push(Data(data.dropFirst(5)))
+            expect(commands.count == 1 && commands[0].action == "capture", "service reads the shared capture command")
+            let idle = try HostProtocol.decode(Data(contentsOf: root.appendingPathComponent("screenshot-service.idle.json")))
+            expect(idle.status == "idle" && idle.v == 1, "service idle fixture decodes")
+            let ready = try HostProtocol.decode(Data(contentsOf: root.appendingPathComponent("screenshot-service.ready.json")))
+            expect(ready.timings?.totalMs == 37, "service timing fixture decodes")
+            let encoded = HostProtocol.encode(HostProtocol.makeReady(timings: ready.timings))!
+            expect(try HostProtocol.decode(encoded).timings?.captureMs == 30, "native timings round trip")
+        } catch {
+            fail("service fixture decode: \(error)")
+        }
+        for bad in ["{\"v\":2,\"action\":\"capture\"}\n", "{\"v\":1,\"action\":\"other\"}\n", "garbage\n", String(repeating: "x", count: HostCommandReader.maxLineBytes + 1)] {
+            var reader = HostCommandReader()
+            do {
+                _ = try reader.push(Data(bad.utf8))
+                fail("invalid host command was accepted")
+            } catch {
+                expect(true, "invalid/oversized host command is refused")
+            }
+        }
     }
 
     static func makeGradientImage(width: Int, height: Int) -> CGImage {

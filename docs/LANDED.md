@@ -7047,3 +7047,44 @@ The lane was cut at `69c1385c`; main moved eight commits under it (SNAP-3/3a, AR
 **Found.** "GPT RESERVE 7D" was OpenAI's Luna Reserve (the Codex limit `gpt-reserve`: GPT-5.6 Luna only, for some personal Plus and Pro accounts, drawn on only after the regular limits run out); "3P" was Antigravity's "Claude and GPT models". The concurrent session's glyph rule (its uncommitted `glyphs.test.tsx`: product code draws no inline `<svg>`) decided the line's form. Its `FieldGlyph` swap in `ProfilesView.tsx` and `profiles-settings.css` stays uncommitted in the working tree, as theirs.
 
 **Owed.** AR-D27 as worded awaits ratification. Godview's compact usage column still labels by `label` (it could head its rings by group). Luna Reserve's name is known only for the `gpt-reserve` id when the backend names none.
+
+## SNAP-1a — macOS screenshot startup and rendering (2026-09-24)
+
+James asked for a performance review because the tool takes time to appear after the
+shortcut. Existing real presses took 573–626 ms from helper spawn to `ready`, while global
+shortcut dispatch to spawn took 3–10 ms. The capture started a new AppKit process every time.
+
+The shell now prepares a macOS `--service` process at app startup and sends one versioned
+capture command at a time. Idle startup reads no screen pixels, creates no overlay and
+requests no Screen Recording permission. Every capture still freezes fresh displays before
+showing the overlays; cleanup releases snapshots and windows, hides the helper, then
+acknowledges `idle`. EOF and shell disposal end the helper; bounded boot/capture/cleanup
+failures kill it, and a later request can restart it. The staged plist must advertise service
+version 1, because older binaries treat an unknown flag as an immediate capture. Windows
+keeps its existing `--once` path. The native command reader uses a bounded POSIX read: a real
+pipe probe caught Foundation's buffered read waiting for more bytes on a short command.
+
+Two smaller costs are removed: hovering within the same snapped window no longer requests
+another full-overlay repaint, and an unmarked crop returns its CGImage without allocating
+and redrawing a second bitmap. The overlay under the pointer receives keyboard focus.
+`ready` logs native permission/window-list/capture/overlay timings plus host elapsed time.
+
+**Evidence.** A hidden, single-display probe measured 250.8 ms for the first native capture
+and overlay construction, then 82.3 and 81.5 ms when repeated in the same process. Those
+exclude permission checks, process launch and visible presentation: they are NOT new global
+shortcut-to-visible measurements. The rebuilt real service emitted idle without a capture,
+exited on stdin EOF, and promptly refused a short invalid command while the pipe remained
+open. Initial idle RSS was about 31 MiB. The running dev app logged `persistent: true` and
+initial `idle` for helper PID 27362, followed by global shortcut registration.
+
+**Checks.** Focused TS suites covering the host/protocol/service, contracts, shell screenshot
+paths, settings and tray passed; screenshot/shell typechecks, the Swift harness, the native
+build, targeted Biome and `pnpm bundle:assert` passed. `pnpm verify` was run verbatim and
+stopped at unrelated preflight issues: sibling worktrees/pinned rosetta revision and the
+tracked iOS scheme filename containing whitespace. Those files were left as found.
+
+**Remaining evidence and review.** Updated shortcut-to-visible timings and repeated capture
+on a secondary display still need the user's live press. Mosaic per-block pixel sampling,
+synchronous PNG/TIFF export, and Windows serial capture/fallbacks are the next measured-work
+candidates, not changes in this slice. Full review and phase table:
+`draft/reviews/screenshot-performance-2026-09-24.md`.

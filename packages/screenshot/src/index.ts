@@ -1,6 +1,7 @@
 // @vibefield/screenshot — the host side of the native screenshot helper
-// (SNAP-D1): spawn one `--once` helper, read its one-line protocol, keep the
-// timers and the still ring honest. Node-only; no Electron anywhere below this
+// (SNAP-D1): own one helper, read its line protocol, keep the
+// capture timers and still ring honest. macOS prewarms --service without
+// capturing; Windows keeps --once. Node-only; no Electron anywhere below this
 // line (wall R19) — Electron main composes it, a vitest drives it with a
 // scripted fake helper.
 export { type LineVerdict, parseScreenshotHelperLine, ScreenshotLineReader } from "./protocol";

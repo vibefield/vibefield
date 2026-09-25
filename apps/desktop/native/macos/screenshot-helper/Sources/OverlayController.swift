@@ -13,10 +13,12 @@ final class OverlayController: NSObject {
     private var exitOnFinish = true
     private var showPermissionAlert = true
     private var saveSheetOpen = false
+    private var onIdle: (() -> Void)?
 
-    func configure(exitOnFinish: Bool, showPermissionAlert: Bool = true) {
+    func configure(exitOnFinish: Bool, showPermissionAlert: Bool = true, onIdle: (() -> Void)? = nil) {
         self.exitOnFinish = exitOnFinish
         self.showPermissionAlert = showPermissionAlert
+        self.onIdle = onIdle
     }
 
     func registerStandaloneHotkey() {
@@ -41,23 +43,32 @@ final class OverlayController: NSObject {
     func start() async {
         guard !isActive else { return }
         isActive = true
+        let started = ProcessInfo.processInfo.systemUptime
+        var timings = HostCaptureTimings()
         if !Permissions.promptIfNeeded(showAlert: showPermissionAlert) {
             isActive = false
             HostProtocol.error(.permissionDenied, Permissions.deniedMessage)
-            if exitOnFinish { NSApp.terminate(nil) }
+            finish()
             return
         }
+        timings.permissionMs = (ProcessInfo.processInfo.systemUptime - started) * 1000
 
         do {
+            let windowsStarted = ProcessInfo.processInfo.systemUptime
             detector = WindowDetector(excludingPID: ProcessInfo.processInfo.processIdentifier)
+            timings.windowListMs = (ProcessInfo.processInfo.systemUptime - windowsStarted) * 1000
+            let captureStarted = ProcessInfo.processInfo.systemUptime
             snapshots = try await ScreenCapture.captureAllDisplays()
+            timings.captureMs = (ProcessInfo.processInfo.systemUptime - captureStarted) * 1000
         } catch {
-            isActive = false
+            tearDownOverlays()
             HostProtocol.error(HostErrorCode.forCapture(error), error.localizedDescription)
-            if exitOnFinish { NSApp.terminate(nil) }
+            finish()
             return
         }
 
+        let overlayStarted = ProcessInfo.processInfo.systemUptime
+        NSApp.unhideWithoutActivation()
         NSApp.activate(ignoringOtherApps: true)
 
         for snapshot in snapshots {
@@ -68,12 +79,19 @@ final class OverlayController: NSObject {
             view.delegate = self
             window.contentView = view
             window.setFrame(frame, display: true)
-            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
             windows.append(window)
             overlays.append(view)
         }
-        overlays.first?.window?.makeFirstResponder(overlays.first)
-        HostProtocol.ready()
+        // Task-group completion order is arbitrary. Keyboard focus belongs to
+        // the display under the pointer, not whichever capture finished first.
+        let focused = overlays.first { $0.snapshot.screenFrame.contains(NSEvent.mouseLocation) }
+            ?? overlays.first
+        focused?.window?.makeKeyAndOrderFront(nil)
+        focused?.window?.makeFirstResponder(focused)
+        timings.overlayMs = (ProcessInfo.processInfo.systemUptime - overlayStarted) * 1000
+        timings.totalMs = (ProcessInfo.processInfo.systemUptime - started) * 1000
+        HostProtocol.ready(timings: timings)
     }
 
     private func makeOverlayWindow(frame: CGRect) -> OverlayWindow {
@@ -88,6 +106,7 @@ final class OverlayController: NSObject {
         windows.removeAll()
         overlays.removeAll()
         snapshots.removeAll()
+        detector = nil
         isActive = false
     }
 
@@ -97,6 +116,8 @@ final class OverlayController: NSObject {
     private func finish() {
         if exitOnFinish {
             NSApp.terminate(nil)
+        } else {
+            onIdle?()
         }
     }
 }

@@ -7,7 +7,9 @@ import { z } from "zod";
 // `@vibefield/screenshot`. TS-only by design — never in the Rust gen bundle:
 // field-native has no reader, and the Windows helper keeps its own serde shape,
 // pinned by the SAME fixtures under packages/contracts/fixtures (EL9 in three
-// languages: zod here, the Swift test harness, the Rust crate's tests).
+// languages: zod here, the Swift test harness, the Rust crate's tests). The
+// optional macOS service handshake has separate zod/Swift fixtures; Windows
+// continues to emit only the common one-shot capture events.
 
 export const SCREENSHOT_HELPER_PROTOCOL_VERSION = 1 as const;
 
@@ -31,8 +33,10 @@ export const SCREENSHOT_LIMITS = {
 
 /** The helper's command-line vocabulary — spelled once, spawned from here. */
 export const SCREENSHOT_HELPER_ARGS = {
-  /** Capture now, overlay, print ONE result line, exit (the host's mode). */
+  /** Capture now, overlay, print ONE result line, exit (the one-shot host mode). */
   once: "--once",
+  /** macOS: stay idle on a host-owned stdin pipe; capture only on a command. */
+  service: "--service",
   /** No overlay: a PNG per display under the OS temp dir, `ok` names the first. */
   captureTest: "--capture-test",
 } as const;
@@ -91,9 +95,34 @@ export type ScreenshotHelperErrorCode = z.infer<typeof ScreenshotHelperErrorCode
 
 const ProtocolVersion = z.literal(SCREENSHOT_HELPER_PROTOCOL_VERSION);
 
+/** The macOS service has finished booting or tearing down the last overlay.
+ * It has no capture pixels or windows while idle. Windows keeps --once. */
+export const ScreenshotHelperIdle = z
+  .object({ v: ProtocolVersion, status: z.literal("idle") })
+  .passthrough();
+
+export const ScreenshotHelperCommand = z
+  .object({ v: ProtocolVersion, action: z.literal("capture") })
+  .passthrough();
+export type ScreenshotHelperCommand = z.infer<typeof ScreenshotHelperCommand>;
+
+/** Monotonic native phase durations. Optional so older/Windows helpers keep
+ * speaking v1; never includes image bytes, window names or screen contents. */
+export const ScreenshotCaptureTimings = z.object({
+  permissionMs: ScreenshotFinite.nonnegative(),
+  windowListMs: ScreenshotFinite.nonnegative(),
+  captureMs: ScreenshotFinite.nonnegative(),
+  overlayMs: ScreenshotFinite.nonnegative(),
+  totalMs: ScreenshotFinite.nonnegative(),
+});
+
 /** Printed once the overlays are on screen; lifts the host's pre-overlay timer. */
 export const ScreenshotHelperReady = z
-  .object({ v: ProtocolVersion, status: z.literal("ready") })
+  .object({
+    v: ProtocolVersion,
+    status: z.literal("ready"),
+    timings: ScreenshotCaptureTimings.optional(),
+  })
   .passthrough();
 export type ScreenshotHelperReady = z.infer<typeof ScreenshotHelperReady>;
 
@@ -131,6 +160,7 @@ export type ScreenshotHelperError = z.infer<typeof ScreenshotHelperError>;
 /** Every line the helper may print. `status` is the discriminant; `v` is the
  * version every line carries so a future shape can announce itself. */
 export const ScreenshotHelperEvent = z.discriminatedUnion("status", [
+  ScreenshotHelperIdle,
   ScreenshotHelperReady,
   ScreenshotHelperOk,
   ScreenshotHelperCancel,

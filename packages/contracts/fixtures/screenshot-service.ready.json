@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "status": "ready",
+  "timings": {
+    "permissionMs": 1,
+    "windowListMs": 2,
+    "captureMs": 30,
+    "overlayMs": 4,
+    "totalMs": 37
+  }
+}
