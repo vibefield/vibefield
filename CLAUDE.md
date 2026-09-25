@@ -80,7 +80,8 @@ login-gated node. `siblings.lock.json` keeps a `truffle` entry, reduced to its `
 
 **The SwiftPM plane is still open, and closing it is not ours.** The kit is in a vice with both
 jaws measured: forward to `exact: "0.7.14"` is UNSATISFIABLE, because `ghosttea` declares
-`exact: "0.7.12"` of its own in every published Swift tag through v0.11.1 and two exact
+`exact: "0.7.12"` of its own in every published Swift tag through v0.12.0 (re-read at GT-8,
+2026-09-25) and two exact
 requirements cannot both hold; back to `0.7.12` resolves and then does not COMPILE, because
 UA-P-5a taught the kit RFC 025's login API (`MeshConfiguration.loginAllow`,
 `MeshNode.loginName`, `Peer.loginName`) which no 0.7.12 has. So the path package under

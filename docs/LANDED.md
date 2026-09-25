@@ -7203,3 +7203,71 @@ candidates, not changes in this slice. Full review and phase table:
 **Found.** The UI-G1 sheet moves `.vf-agents-chevron`'s stroke into FieldGlyph, which left a hand-drawn chevron filled black; the Extensions chevron is stroked by its own sheet (`.vf-ext-chevron`). puppeteer's messages mark a command or a key in backticks (`skills.urls`); the pages set those as code.
 
 **Owed.** The acts: S4c (RFC 006 C2) — the cells' switches, Use this one everywhere, Remove, a server's Sign in; S4d, adding once; S4e, pass 23's plugin pages (Browse, the plugin's page). A kind in the agent's own word (Pi's "Packages") needs puppeteer to say it. Pass 23's EX7 ("borrowed = one row opening a list") is drawn as a section on the list for now; picks ex0–ex7 are still open. AR-D29 as worded still awaits ratification.
+
+## GT-8 — terminal links: ghosttea 0.12.0 pinned, a ⌘-clicked web link opens through fieldd, and a race TC-S3 carried is closed (2026-09-25; `14ac43fc` GT-8a · `b76644a0` GT-8b · `811329ca` GT-8c · `0db71c10` GT-8d, branch `gt/8-links`)
+
+**James:** GT-7 left one thing owed: a ghosttea release carrying `link-url` and ⌘-click links, which was a public publish and his call. He chose the full release (push, PR, merge, a signed tag, the CI publish), once he knew the eight link commits were his own unpushed local work, and chose GT-8 to follow it: the pin, the Links switch, the opener. During the publish his words were "publish failed", then "can we fix this tedious CI once and for all", then "do them for me" (merge the fix once green; finish the GitHub release if it took another rerun), and "continue". Every `release` environment approval was his own.
+
+**What is real.**
+
+*Upstream (ghosttea, James's repo).* 0.12.0 was a 0.x minor, not 0.11.2, by ghosttea's own CHANGELOG 0.10.0 rule, because `2660c4a` adds public fields to two published structs.
+- PR #63 merged as `a0d657d`, and the Apple artifact `ghosttea-apple-native-a5fa7ef2afc2` was published and pinned (`caa4a56`).
+- The tag `v0.12.0` is signed with James's key, and publish run 36117528614 shipped 7 crates, 10 npm packages and the GitHub release, each checked on its registry.
+- The run needed five attempts, each behind his approval. Every failure was npm recording a version 56 s to 4m 09s after accepting it (the registry's `time[version]` against each job log's `+` line), against the helper's ~2.5 min.
+- PR #64 (`52bde2d`) fixes that for the next release. The publisher waits once per dependency layer, which the manifests decide, and gives each package 20 minutes (`REGISTRY_VISIBILITY_TIMEOUT_MINUTES`, set in the workflow so a retry can raise it). A rerun waits out an accepted-but-unrecorded version instead of failing. 11 tests replay the measured delays, and each of 8 mutations fails at least one.
+
+*GT-8a (phase 1, builder `gt8-links`).* The wire and the door:
+- `terminal.link.open`, under the scope `terminal.link` that only the window's token holds, and main's internal `shell.openLink`.
+- fieldd's policy (`terminal-links.ts`). http(s) goes to the browser, and main re-checks it against its own contract. A `file:` path on this device is shown in Finder, never opened. Anything else is refused before main is asked. The audit records the opener and the scheme, never the URL.
+- `TerminalConfigSnapshot.linkUrl` and the page's `ManagedValues.linkUrl`.
+
+*GT-8b.*
+- EL8, one event, 0.11.1 → 0.12.0: the cargo pin, the four npm overrides, the six age-gate rows and preflight's five rows. Both lockfiles moved only the ghosttea closure (six crates, six packages). The iOS kit stays at 0.10.1 (GM-D7).
+- `pnpm gen`: `link-url` reads as applied.
+- The opener is the runtime platform's `openExternal`, one per window (terminal-pool `ensureRuntime`), and asks fieldd for web links only.
+- Behavior → Links is a This Mac switch over the managed block's `link-url`, and the 0.11.1 fallback is deleted.
+
+*GT-8c.* A session fieldd just birthed is dialed at the cell that took it (see Found).
+
+*GT-8d.*
+- In every smoke-like mode, main's OS opener records instead of opening, so no harness run touches the user's browser or Finder.
+- Smoke row 11f is the live witness.
+- Row 9's errata.
+
+**Found.**
+- *TC-S3 carried a race.* A session no observed inventory had placed read as the INTERACTIVE cell's. field-native lists a birth one reconcile tick later (its 100 ms floor), so a terminate or `automate` into a just-born agent session could reach a cell that never held it. That cell answered "unknown session", and terminate returned `{terminated: false}` for a PTY that went on running.
+  - How it surfaced: agent-session's default-profile row terminated 66–121 ms after the birth, against 86–112 ms from birth to listing. It failed four of five alone runs at the 0.12.0 pin.
+  - It is latent on main, not a 0.12.0 regression: the 0.11.1 control passed the same row by 9 ms.
+  - How it was traced: file-written probes into fieldd plus a detached control worktree at main, after the first reading ("load 245, a lottery") was checked instead of believed.
+  - `birth()` knew the cell all along, so GT-8c records it until the inventory places the session or it exits. The new TC-S3 row is red without the fix and green with it; the real-floor file passes 3/3 at load 275.
+- *0.12.0 reports a local session's SPAWN directory from creation* (`session.rs` seeds the summary's `cwd` with the directory its link finder resolves relative paths against). It falsified "the spawn directory is never reported" in five places: `deck-restore.ts`, `GodviewDeck.tsx`, two godview-deck-frames comments and smoke row 9. Each got a dated correction at its source.
+  - A shell with no OSC 7 now restores in its own folder on this Mac, and a peer's pane still restores at home.
+  - Row 9's `rehydratedCwd` is now a plain path from creation.
+  - The Windows finding narrows but stands: a Windows pane now persists its spawn directory, but `paneCwd` takes no drive path, and cmd.exe still never says where a `cd` went.
+- *ghosttea's link hook names no session.* `openExternal(url)` receives the URL alone, so a file link cannot be told from a path on a PEER's pane, and revealing this Mac's file of that name would show the wrong one. The deck asks for web links only, and GT-D22's file half is built, unit-tested and unreached. This is petition G29.
+- The builder ran out of context mid-phase-2, in the page test. The orchestrator reviewed its work, finished the key-catalog row and the errata, and built GT-8c and GT-8d.
+
+**Witness.** The lane was rebased onto `fb9dbad0` after AR-S4a–b and AR-S4b2 landed beneath it. The four code commits are patch-identical (`git range-diff`), and the lane's own puppeteer checkout was moved to the new pin `63bf175`.
+- `pnpm verify` VERBATIM at the rebased tip: exit 0, the whole chain.
+  - preflight OK · check:deps · check:ios-fixtures · icons:check · typecheck 25 projects · biome (warnings only, main's own) · cargo fmt · clippy · bundle:assert.
+  - Tests in every project: field-app 107 files / 1061 passed; fieldd 1005 passed / 14 skipped; electron-shell 774 passed / 2 skipped. 22 of the 25 test targets were Nx cache hits on identical inputs that had passed; the rest ran fresh.
+  - `test:rust`: 21 suites, 263 passed, 9 ignored. `gen:check` clean.
+  - The same chain was exit 0 before the rebase, at `a6239f39`.
+- The graded reds. This machine ran at load 100–440 all afternoon, from other sessions' test runs, and every red was a timing row:
+  - design-system and doc-manager timeouts;
+  - the godview monitor's "WEBGPU UNAVAILABLE" state read while still "starting";
+  - terminal-settings' theme-browser row at 5 s;
+  - fieldd's UA-P-4 board row and service-drain-deadline, GT-7's recorded lottery rows.
+
+  Each passed alone or on the next run. Nx then REPLAYED field-app's cached failure for unchanged inputs, so field-app was run fresh (`nx run @vibefield/field-app:test --skip-nx-cache`, 107 files / 1050 passed, on `97ddf8b6`) before the verbatim gate. After the second rebase, AR-S4b2's changes made field-app run fresh by itself. The agent-session row was the race above, not load.
+- `TMPDIR=/tmp/ pnpm smoke:godview` at the rebased tip: `ok: true`, 90 fields, exit 0.
+  - Row 11f `linkOpened`: "https://example.com/vf-gt8-o7jmrr84 → terminal.link.open → shell.openLink (recorded, not opened)".
+  - Row 11f `fileLinkNotAsked`: "file:///tmp/vf-smoke-godview-nK0mnb/gt8-o7jmrr84.txt found; the deck asked nothing (GT-8b)". The hover witnesses ghosttea finding both links, and the web click is the absence's control.
+  - Row 9's `rehydratedCwd` is a plain path from creation.
+  - Every GT-7 row still passes: 11d "Ghostty 1.3.1 · 202 keys", 11e "10 MB → 25 MB (25000000 bytes); own lines kept; the floor reloaded".
+  - It passed at both earlier tips too, before the rebases. Three earlier attempts are graded: two stopped at the renderer reload at load 99–207 (`renderer.boot.stability_cap_reached`, GT-7's recorded lottery), and one reached 11f and lost a key in a 260-key typed loop, so the row now types `sh <script>`.
+
+**Upstream / owed.**
+- G29, the link hook naming its session. When it lands the deck asks for file links, and GT-D22's Finder half goes live.
+- The iOS kit's ghosttea stays at 0.10.1 until G28's Swift pin closes GM-D7.
+- Program colours per window and the recorder's silence about ⌘K ⌘, ⌘⇧V are GT-7's owed items, unchanged.
