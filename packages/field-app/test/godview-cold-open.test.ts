@@ -186,6 +186,17 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
     expect(css).toContain(".vf-monitor-swarm");
   });
 
+  it("resets the overlay's controls at no weight, so every component's own type wins (AR-S5)", () => {
+    // Controls take the stage's face rather than the browser's, but a reset at
+    // one class and one element outranked the package's one-class rules: the
+    // instrument bar's counters, SPAWN and the provider list drew at the
+    // stage's 14px regular instead of §04's 9px 700. Under `:where()` the reset
+    // weighs nothing and still reaches every control no component styles.
+    expect(css).toMatch(/:where\(\.vf-godview\) button/);
+    expect(css).toMatch(/:where\(\.vf-godview-tweak-panel\) button/);
+    expect(css).not.toMatch(/(^|[\s,}])\.vf-godview(-tweak-panel)?\s+(button|kbd|select)\s*[,{]/m);
+  });
+
   it("runs NO keyframe loop in the DOM — the ambient motion left with the bodies (AR-5)", () => {
     // GT-3p's ignition loops and shadow cross-fades were the DOM bubble's.
     // Since AR-5 the bodies are drawn by the views package's WebGPU renderer

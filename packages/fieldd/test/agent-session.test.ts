@@ -62,6 +62,7 @@ import {
   type AgentSpawnResult,
   type AgentsProfileSetsDeleteResult,
   type AgentsProfileSetsListResult,
+  type AgentsProfileSetsSetResult,
   type AgentsProfilesCreateResult,
   type AgentsProfilesDeleteResult,
   type AgentsProfilesListResult,
@@ -1154,6 +1155,59 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     await win.call("agent.spawn", { provider: "scripted", cwd: envOut });
     expect(seen.at(-1)).toBeUndefined();
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+
+  it("AR-S5 — a spawn under a named profile runs on its sign-in and the row says which profile; This Mac is the agent's own folder; a profile with no sign-in for the agent refuses before anything runs", async () => {
+    const { daemon, dataDir, envOut, seen } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "ap5");
+    const work = await signedIn(win, dataDir, "Work");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: work.set,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)?.id).toBe(work.profileId);
+    expect(spawned.session.profileId).toBe(work.profileId);
+    expect(spawned.session.profileSet).toBe(work.set);
+    // the record keeps it, so a pending or exited row still says it
+    expect(readRecord(dataDir, spawned.session.runtimeRunId).profileSet).toBe(work.set);
+    const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+    expect(
+      sessions.find((row) => row.runtimeRunId === spawned.session.runtimeRunId)?.profileSet,
+    ).toBe(work.set);
+
+    // This Mac: the agent's own folder, bound to no sign-in, and named on the row
+    const native = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: "native",
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)).toBeUndefined();
+    expect(native.session.profileId).toBeUndefined();
+    expect(native.session.profileSet).toBe("native");
+
+    // a profile that holds no sign-in for the agent: refused, in puppeteer's words, audited as failed
+    const made = (await win.call("agents.profileSets.create", {
+      label: "Empty",
+    })) as AgentsProfileSetsSetResult;
+    const before = seen.length;
+    const refused = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: made.set.id,
+    });
+    expect(refused.data?.kind).toBe("NOT_FOUND");
+    expect(refused.message).toContain("Empty has no scripted account");
+    expect(seen.length).toBe(before);
+    const act = auditAct(
+      dataDir,
+      (entry) =>
+        entry.action === "agent.session.spawn" && entry.attrs?.["profileSet"] === made.set.id,
+    );
+    expect(act.outcome.outcome).toBe("failed");
+
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await win.call("terminal.terminate", { sessionId: native.terminal.sessionId });
   }, 60_000);
 
   it("deleting a profile stops the sessions running under it first, then deletes its folder", async () => {

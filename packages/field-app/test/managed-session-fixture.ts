@@ -30,6 +30,8 @@ export interface ManagedSummaryOptions {
   lastAssistantText?: string;
   createdAt?: string;
   profileId?: string;
+  /** AR-S5 — the Agent Profile fieldd says the run was born under */
+  profileSet?: string;
   /** omit the monitor projection entirely (a run before its first state) */
   monitor?: false;
   /**
@@ -124,6 +126,7 @@ export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessio
     runtimeRunId,
     runtimeEpoch: 1,
     ...(options.profileId !== undefined ? { profileId: options.profileId } : {}),
+    ...(options.profileSet !== undefined ? { profileSet: options.profileSet } : {}),
     terminal:
       terminalSessionId === null
         ? { hosted: "none" }

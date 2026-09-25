@@ -1521,7 +1521,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { provider, cwd?, profileId?, title? }",
+          "expected { provider, cwd?, profileId?, profileSet?, title? }",
           false,
         );
       return await audit.required(
@@ -1533,6 +1533,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             provider: parsed.data.provider,
             ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
             ...(parsed.data.profileId !== undefined ? { profileId: parsed.data.profileId } : {}),
+            ...(parsed.data.profileSet !== undefined ? { profileSet: parsed.data.profileSet } : {}),
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
           },
         },

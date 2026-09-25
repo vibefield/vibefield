@@ -17,10 +17,12 @@ import type {
 import {
   AgentAccountUsageBatch,
   type AgentAccountUsageEntry,
+  AgentsProfileSetsListResult,
   IndexSearchResult,
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import type { ProfileSetsPort } from "./remote-door";
 
 // THE TWO PORTS (AR-5, D14): the find sheet and the usage column reach fieldd
 // only through the deck's door, and the deck builds these over its own
@@ -281,6 +283,42 @@ export function usagePortOver(client: DoorClient): AccountUsagePort {
       };
       void client
         .subscribe("agents.usage.subscribe", {}, (payload) => {
+          if (!cancelled) deliver(payload);
+        })
+        .then((subscription) => {
+          if (cancelled) {
+            subscription.unsubscribe();
+            return;
+          }
+          unsubscribe = subscription.unsubscribe;
+          deliver(subscription.snapshot);
+        })
+        .catch(() => undefined);
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    },
+  };
+}
+
+/* ── profiles: agents.profileSets.subscribe (AR-S5) ─────────────────────── */
+
+/** The Agent Profiles for the bar's tabs, over the same feed Settings reads.
+ * Whole snapshots; the tolerant reader drops a frame it cannot parse, and a
+ * subscription that cannot be opened leaves the bar without tabs rather than
+ * inventing any. */
+export function profileSetsPortOver(client: DoorClient): ProfileSetsPort {
+  return {
+    subscribe: (listener) => {
+      let cancelled = false;
+      let unsubscribe: (() => void) | null = null;
+      const deliver = (payload: unknown): void => {
+        const parsed = AgentsProfileSetsListResult.safeParse(payload);
+        if (parsed.success) listener(parsed.data.sets);
+      };
+      void client
+        .subscribe("agents.profileSets.subscribe", {}, (payload) => {
           if (!cancelled) deliver(payload);
         })
         .then((subscription) => {

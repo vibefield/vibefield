@@ -30,6 +30,7 @@ import {
 import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
 import { useAgentFold } from "./GodviewAgentsProvider";
 import type { LocalFieldState } from "./local-agent-field";
+import type { LaunchProfile } from "./profile-tabs";
 import {
   dealProjectSeqs,
   loadProjectLedger,
@@ -117,6 +118,11 @@ export interface UseMonitorAgentsOptions {
   /** The sessions the deck's panes are showing, and the one the user is in.
    * Facts, published by the deck; the monitor reads them and drives nothing. */
   panes?: MonitorPaneFacts;
+  /** AR-S5 — the profile the bar's chosen tab names: a spawn runs under it,
+   * and is refused here, before anything runs, for an agent it holds no
+   * sign-in for. Null or absent (All): the default profile, as puppeteer
+   * resolves a spawn that names none. */
+  launch?: LaunchProfile | null;
 }
 
 export interface MonitorPaneFacts {
@@ -211,6 +217,7 @@ function rowsKey(rows: readonly AgentSessionSummary[]): string {
         row.kind,
         row.label,
         row.profileId ?? "",
+        row.profileSet ?? "",
         row.status,
         row.stateChangedAt,
         row.lastActivityAt ?? "",
@@ -254,6 +261,7 @@ export function useMonitorAgents({
   palette,
   door = null,
   panes = NO_PANES,
+  launch = null,
 }: UseMonitorAgentsOptions): MonitorAgentsResult {
   /** Which row the user last pointed at — a preview highlight for a row no
    * pane is showing yet. Cleared when the row lands in a pane. */
@@ -753,7 +761,17 @@ export function useMonitorAgents({
       announce(`${provider.label} is not installed on this device`);
       return;
     }
-    const outcome = await door.spawn({ provider: provider.id });
+    // AR-S5 — a profile runs only the agents it holds a sign-in for; said
+    // here in the stage's words rather than as puppeteer's refusal after a
+    // round trip (it refuses the same spawn: "<profile> has no <id> account").
+    if (launch?.signedIn != null && !launch.signedIn.has(provider.id)) {
+      announce(`${launch.label} has no ${provider.label} sign-in — add one in Settings`);
+      return;
+    }
+    const outcome = await door.spawn({
+      provider: provider.id,
+      ...(launch !== null ? { profileSet: launch.set } : {}),
+    });
     if (outcome.state === "no-pane") {
       announce("no pane to spawn into — open one in the deck first");
       return;
@@ -762,8 +780,12 @@ export function useMonitorAgents({
       announce(`${provider.label} could not be spawned — ${outcome.reason}`);
       return;
     }
-    announce(`${outcome.label} spawned in the active pane`);
-  }, [announce, door, providers, selectedProviderId]);
+    announce(
+      launch !== null
+        ? `${outcome.label} spawned in the active pane, under ${launch.label}`
+        : `${outcome.label} spawned in the active pane`,
+    );
+  }, [announce, door, launch, providers, selectedProviderId]);
 
   const createAt = useCallback((): Promise<void> => spawn(), [spawn]);
 

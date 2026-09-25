@@ -622,6 +622,9 @@ export class AgentRuntimeService implements PersonaSessions {
         cwd,
         ...(params.title !== undefined ? { title: params.title } : {}),
         ...(params.profileId !== undefined ? { profile: params.profileId } : {}),
+        // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
+        // profile that holds none, and a plain spawn takes the default's
+        ...(params.profileSet !== undefined ? { profileSet: params.profileSet } : {}),
         creationRequestId: identity.creationRequestId,
         ingress: identity.ingress,
       });

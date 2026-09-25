@@ -184,6 +184,10 @@ export interface GodviewMonitorFacts {
   usageTiles: number;
   /** AR-5: `open` · `closed` — the find sheet, the chord's witness. */
   findSheet: string;
+  /** AR-S5: the chosen profile tab's id — `all` while All is chosen or no
+   * strip is drawn — and how many rows it leaves on the stage unreceded. */
+  profileTab: string;
+  shownAgents: number;
 }
 
 export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {

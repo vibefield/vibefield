@@ -1,5 +1,6 @@
 import type { RemoteHostSummary, SharedSessionSummary } from "@vibecook/ghosttea-protocol";
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
+import type { AgentProfileSet } from "@vibefield/contracts";
 import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
 
 /**
@@ -52,6 +53,18 @@ export interface MonitorDoor {
   /** AR-5 — the account-usage readings the usage column draws
    * (`agents.usage` + its subscription), adapted to the views' port. */
   usage: AccountUsagePort;
+  /** AR-S5 — the Agent Profiles the bar's tabs are made of
+   * (`agents.profileSets.subscribe`), held only while the stage is open
+   * (PF6). Optional, and deliberately: a door without it draws no tabs,
+   * which is also what the bar should draw when there is no feed to read. */
+  profiles?: ProfileSetsPort;
+}
+
+/** AR-S5 — the Agent Profiles as whole snapshots at fieldd's tick. Returns the
+ * dispose; a frame the reader cannot parse is dropped, and the tabs keep the
+ * last one they drew. */
+export interface ProfileSetsPort {
+  subscribe(listener: (sets: readonly AgentProfileSet[]) => void): () => void;
 }
 
 /** AR-4 — a mount that takes a PTY's place: the run was resumed into a new
@@ -74,8 +87,12 @@ export interface LocalFieldListener {
 export interface LocalSpawnRequest {
   /** puppeteer's provider id, from the chrome's own list */
   provider: string;
-  /** a persona (`agents.profiles.*`); absent = the provider's native default */
+  /** a persona (`agents.profiles.*`); absent = the default profile's sign-in,
+   * else the agent's own folder (AR-S2) */
   profileId?: string;
+  /** AR-S5 — the Agent Profile the bar's chosen tab names (`native` = This
+   * Mac): its sign-in for the agent, refused by fieldd when it holds none */
+  profileSet?: string;
 }
 
 /**

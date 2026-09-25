@@ -35,6 +35,8 @@ export interface MonitorAgentFacet extends ViewsMonitorAgentFacet {
   tier: AgentTier;
   runtimeRunId: string;
   profileId?: string;
+  /** AR-S5 — the Agent Profile the run was born under, when fieldd knows it */
+  profileSet?: string;
   /** Core's projection, the mirror the fold carries verbatim; absent only
    * before the first monitor state (a starting row). */
   monitor?: AgentMonitorState;

@@ -9,11 +9,14 @@ import {
   MONITOR_STAGE_CLASS,
   MONITOR_VIEWS,
   type MonitorParameters,
+  ProfileGlyph,
+  ProfileTabs,
   SwarmPhysicsProvider,
   UsageColumn,
   useMonitorPalette,
   type MonitorAgent as ViewsMonitorAgent,
 } from "@vibecook/puppeteer-views";
+import type { AgentProfileSet } from "@vibefield/contracts";
 import {
   type ReactElement,
   useCallback,
@@ -26,6 +29,15 @@ import {
 import { emitGodviewMonitorMarker } from "../development-console";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
+import {
+  chosenProfile,
+  launchProfile,
+  personaProfiles,
+  profileTabs,
+  recedeOutside,
+  showsProfileTabs,
+  spawnProfileLabel,
+} from "./monitor/profile-tabs";
 import type { MonitorDoor } from "./monitor/remote-door";
 import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
 import {
@@ -158,6 +170,26 @@ export function GodviewMonitor({
     godviewRootRef.current = stageRef.current?.closest(".vf-godview") ?? null;
   }, []);
   const palette = useMonitorPalette(godviewRootRef);
+
+  // AR-S5 — THE PROFILE TABS (the agents-settings record's T3). The feed is
+  // the one Settings reads, held only while this stage is (PF6). A chosen tab
+  // keeps its profile's sessions and recedes every other one, the counters
+  // count what it shows, and a spawn from the bar runs under it. All — the
+  // tab chosen on open — is the default profile, as before there were tabs.
+  const [profileSets, setProfileSets] = useState<readonly AgentProfileSet[]>([]);
+  const [profileTab, setProfileTab] = useState<string | null>(null);
+  const profilesPort = door?.profiles;
+  useEffect(() => {
+    if (profilesPort === undefined) {
+      setProfileSets([]);
+      return;
+    }
+    return profilesPort.subscribe(setProfileSets);
+  }, [profilesPort]);
+  const showTabs = showsProfileTabs(profileSets);
+  const chosen = useMemo(() => chosenProfile(profileSets, profileTab), [profileSets, profileTab]);
+  const launch = useMemo(() => launchProfile(chosen), [chosen]);
+
   const {
     agents,
     actions,
@@ -172,6 +204,7 @@ export function GodviewMonitor({
     palette,
     door,
     ...(panes ? { panes } : {}),
+    launch,
   });
   const chromeRef = useRef<HTMLDivElement>(null);
   const claimsRef = useRef<HTMLDivElement>(null);
@@ -180,7 +213,27 @@ export function GodviewMonitor({
   const [swarmRenderer, setSwarmRenderer] = useState("none");
   /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */
   const [usageTiles, setUsageTiles] = useState(-1);
-  const counts = useMemo(() => monitorAgentCounts(agents), [agents]);
+  const personas = useMemo(() => personaProfiles(profileSets), [profileSets]);
+  const chosenId = chosen?.id;
+  /** The rows as the stage draws them: every one, the chosen profile's as
+   * they are and the rest receded — still in the physics, in their places. */
+  const staged = useMemo(
+    () => recedeOutside(agents, chosenId, personas),
+    [agents, chosenId, personas],
+  );
+  const shown = useMemo(
+    () => (chosenId === undefined ? agents : staged.filter((agent) => agent.receded !== true)),
+    [agents, chosenId, staged],
+  );
+  const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
+  const tabs = useMemo(
+    () => profileTabs(profileSets, agents, personas),
+    [profileSets, agents, personas],
+  );
+  /** A tab with no sessions under it says so over the stage; with no sessions
+   * at all the view's own empty state speaks instead. */
+  const emptyUnder =
+    chosen !== undefined && agents.length > 0 && shown.length === 0 ? chosen : undefined;
 
   // Views that lay out in flow clear the chrome with these two insets (the
   // list's padding reads both); the swarm instead reads the chrome elements'
@@ -300,8 +353,10 @@ export function GodviewMonitor({
       swarmRenderer,
       usageTiles,
       findSheet: findOpen ? "open" : "closed",
+      profileTab: chosenId ?? "all",
+      shownAgents: shown.length,
     });
-  }, [agents, view.id, sources, swarmRenderer, usageTiles, findOpen]);
+  }, [agents, view.id, sources, swarmRenderer, usageTiles, findOpen, chosenId, shown]);
 
   const closeFind = useCallback((): void => setFindOpen(false), []);
 
@@ -309,11 +364,12 @@ export function GodviewMonitor({
     (status: AgentVisualStatus): void => {
       // By ROW id: a managed row with no pane has no session, and a session
       // id of undefined matched the first sessionless row instead of cycling.
-      const currentId = agents.find((agent) => agent.active)?.id;
-      const next = nextMonitorAgentForStatus(agents, status, currentId);
+      // AR-S5: through what the chosen tab shows, as the counters count it.
+      const currentId = shown.find((agent) => agent.active)?.id;
+      const next = nextMonitorAgentForStatus(shown, status, currentId);
       if (next) actions.select(next);
     },
-    [actions, agents],
+    [actions, shown],
   );
 
   useEffect(() => {
@@ -338,8 +394,33 @@ export function GodviewMonitor({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [selectNextStatus]);
 
+  // AR-S5 — ⌥0 is All, ⌥1…⌥n the tabs, while the strip is drawn: captured
+  // like the chords above, and only for the digits that have a tab, so ⌥ and
+  // any other digit still reach the pane.
+  const tabKey = profileSets.map((set) => set.id).join(" ");
+  useEffect(() => {
+    if (!showTabs) return;
+    const ids: (string | null)[] = [null, ...tabKey.split(" ")];
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+      const digit = /^Digit([0-9])$/.exec(event.code);
+      if (digit === null) return;
+      const index = Number(digit[1]);
+      if (index >= ids.length) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setProfileTab(ids[index] ?? null);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [showTabs, tabKey]);
+
   const MonitorView = view.Component;
   const selectedProvider = providers.find((p) => p.id === selectedProviderId);
+  const spawnUnder =
+    selectedProvider === undefined
+      ? undefined
+      : spawnProfileLabel(profileSets, chosen, selectedProvider.id);
 
   return (
     <>
@@ -361,6 +442,18 @@ export function GodviewMonitor({
             {notice ?? ""}
           </span>
         }
+        {...(showTabs
+          ? {
+              centre: (
+                <ProfileTabs
+                  tabs={tabs}
+                  selected={chosenId ?? null}
+                  onSelect={setProfileTab}
+                  shortcuts
+                />
+              ),
+            }
+          : {})}
         trailing={
           <>
             <select
@@ -385,7 +478,9 @@ export function GodviewMonitor({
                 selectedProvider === undefined
                   ? "no agent provider is available on this device"
                   : selectedProvider.available
-                    ? `spawn ${selectedProvider.label} in the active pane`
+                    ? `spawn ${selectedProvider.label} in the active pane${
+                        spawnUnder !== undefined ? `, under ${spawnUnder}` : ""
+                      }`
                     : `${selectedProvider.label} is not installed on this device`
               }
               onClick={() => void spawn()}
@@ -435,12 +530,26 @@ export function GodviewMonitor({
             is handed the driver through its context and never learns which. */}
         <SwarmPhysicsProvider factory={createSwarmPhysicsDriver}>
           <MonitorView
-            agents={agents}
+            agents={staged}
             parameters={parameters}
             actions={actions}
             palette={palette}
           />
         </SwarmPhysicsProvider>
+        {emptyUnder !== undefined ? (
+          <div className="vf-monitor-profile-empty" role="status">
+            <span className="vf-monitor-profile-empty-ring" aria-hidden="true">
+              <ProfileGlyph
+                glyph={emptyUnder.glyph}
+                kind={emptyUnder.kind}
+                filled={emptyUnder.default}
+                size={16}
+              />
+            </span>
+            <b>No sessions under {emptyUnder.label}</b>
+            <span>A session started from this tab runs under this profile.</span>
+          </div>
+        ) : null}
         {/* The chrome slot: the usage column down the stage's left edge (record
             §05), the package's own; the swarm steers around it. */}
         <div ref={chromeRef} className="vf-monitor-chrome" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>

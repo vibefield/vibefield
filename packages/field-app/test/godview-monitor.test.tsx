@@ -41,6 +41,7 @@ import {
   createInlineSwarmPhysicsDriver,
   type SwarmPhysicsDriver,
 } from "@vibecook/puppeteer-views/physics";
+import type { AgentPersona, AgentProfileSet } from "@vibefield/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,7 +49,7 @@ import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentProviderSummary, AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
-import type { MonitorDoor } from "../src/godview/monitor/remote-door";
+import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
 import { managedSummary } from "./managed-session-fixture";
@@ -770,5 +771,224 @@ describe("the monitor stage", () => {
     expect(latest().localClaim).toBeNull();
     expect(host.querySelector(".vf-monitor-local-chip")).toBeNull();
     expect(host.querySelector<HTMLButtonElement>(".vf-godview-spawn")?.disabled).toBe(true);
+  });
+});
+
+// ---- AR-S5 — the profile tabs -------------------------------------------------
+//
+// The strip is the package's (`ProfileTabs`); what is VibeField's is what a tab
+// DOES: which rows it keeps, what the counters count, what the chords pick,
+// where a spawn lands, and the one sentence over an empty tab. The rows here
+// say their profile the way fieldd does (`profileSet`), and the feed is the
+// door's port, as the deck builds it over `agents.profileSets.subscribe`.
+
+const TAB_AT = "2026-09-24T12:00:00.000Z";
+const tabPersona = (profileId: string, provider: string): AgentPersona => ({
+  profileId,
+  provider,
+  label: provider,
+  kind: "managed",
+  createdAt: TAB_AT,
+});
+const tabSet = (
+  id: string,
+  label: string,
+  personas: AgentPersona[],
+  extra: Partial<AgentProfileSet> = {},
+): AgentProfileSet => ({
+  id,
+  kind: id === "native" ? "native" : "managed",
+  label,
+  default: false,
+  createdAt: TAB_AT,
+  personas,
+  ...extra,
+});
+const NATIVE_SET = tabSet("native", "This Mac", [], { default: true });
+const WORK_SET = tabSet("work", "Work", [tabPersona("w-claude", "claude")], { glyph: "briefcase" });
+const EMPTY_SET = tabSet("empty", "Empty", [], { glyph: "flask" });
+const TAB_SETS = [NATIVE_SET, WORK_SET, EMPTY_SET];
+/** Claude and Codex under Work (Codex blocked), Grok in its own folder. */
+const TAB_ROWS: readonly AgentSessionSummary[] = [
+  managedSummary({
+    runtimeRunId: "run-claude",
+    kind: "claude",
+    label: "Claude",
+    status: "working",
+    profileSet: "work",
+    cwd: "/project/vibe-field",
+  }),
+  managedSummary({
+    runtimeRunId: "run-codex",
+    kind: "codex",
+    label: "Codex",
+    status: "blocked",
+    blocker: { kind: "permission", tool: "Bash" },
+    profileSet: "work",
+    cwd: "/project/voyager",
+  }),
+  managedSummary({
+    runtimeRunId: "run-grok",
+    kind: "grok",
+    label: "Grok",
+    status: "idle",
+    cwd: "/project/jabali",
+  }),
+];
+
+interface TabDoor extends FakeDoor {
+  pushSets(sets: readonly AgentProfileSet[]): void;
+}
+
+function tabDoor(sets: readonly AgentProfileSet[] = TAB_SETS): TabDoor {
+  const door = fakeDoor(TAB_ROWS);
+  let listener: ((next: readonly AgentProfileSet[]) => void) | null = null;
+  const profiles: ProfileSetsPort = {
+    subscribe: (next) => {
+      listener = next;
+      next(sets);
+      return () => {
+        listener = null;
+      };
+    },
+  };
+  return Object.assign(door, {
+    profiles,
+    pushSets: (next: readonly AgentProfileSet[]) => listener?.(next),
+  });
+}
+
+const tabButton = (host: HTMLElement, id: string): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>(`[data-profile-tab="${id}"]`);
+const chosenTab = (host: HTMLElement): string | null | undefined =>
+  host.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("data-profile-tab");
+const counters = (host: HTMLElement): string[] =>
+  [...host.querySelectorAll('[aria-label="Agent status"] .vf-godview-bar-num')].map(
+    (node) => node.textContent ?? "",
+  );
+const listRows = (host: HTMLElement): { project: string; receded: boolean }[] =>
+  [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row")].map((row) => ({
+    project: row.querySelector("strong")?.textContent ?? "",
+    receded: row.classList.contains("is-receded"),
+  }));
+
+describe("the profile tabs (AR-S5)", () => {
+  it("draws no strip while This Mac is the only profile, and All first once a profile exists", async () => {
+    const door = tabDoor([NATIVE_SET]);
+    const host = await mountMonitor("list", door);
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    await act(async () => door.pushSets(TAB_SETS));
+    const tabs = [...host.querySelectorAll('[role="tab"]')].map((tab) =>
+      tab.getAttribute("data-profile-tab"),
+    );
+    expect(tabs).toEqual(["all", "native", "work", "empty"]);
+    expect(chosenTab(host)).toBe("all");
+    // the one dot: Codex is blocked under Work
+    expect(tabButton(host, "work")?.getAttribute("aria-label")).toBe("Work, a session is blocked");
+    expect(tabButton(host, "native")?.getAttribute("aria-label")).toBe("This Mac");
+    // centred between two spacers, before the view marks
+    const bar = host.querySelector(".vf-godview-header");
+    expect(bar?.querySelectorAll(":scope > .vf-godview-bar-spacer").length).toBe(2);
+  });
+
+  it("keeps the chosen profile's sessions, recedes every other row in place, and counts what it shows", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const everything = counters(host);
+    await act(async () => tabButton(host, "work")?.click());
+    expect(chosenTab(host)).toBe("work");
+    expect(counters(host)).toEqual(["1", "1", "0"]);
+    const rows = listRows(host);
+    expect(rows.filter((row) => !row.receded).map((row) => row.project)).toEqual([
+      "voyager",
+      "vibe-field",
+    ]);
+    // Grok (This Mac) and the unclaimed pane stay on the stage, receded, below
+    expect(rows.filter((row) => row.receded).length).toBe(2);
+    expect(rows.slice(-2).every((row) => row.receded)).toBe(true);
+    expect(latest().profileTab).toBe("work");
+    expect(latest().shownAgents).toBe(2);
+
+    await act(async () => tabButton(host, "all")?.click());
+    expect(counters(host)).toEqual(everything);
+    expect(listRows(host).some((row) => row.receded)).toBe(false);
+    expect(latest().profileTab).toBe("all");
+  });
+
+  it("chooses with ⌥0…⌥n, and lets any digit without a tab through", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const press = (code: string): KeyboardEvent => {
+      const event = new KeyboardEvent("keydown", {
+        code,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(event);
+      return event;
+    };
+    await act(async () => {
+      press("Digit2");
+    });
+    expect(chosenTab(host)).toBe("work");
+    await act(async () => {
+      press("Digit1");
+    });
+    expect(chosenTab(host)).toBe("native");
+    await act(async () => {
+      press("Digit0");
+    });
+    expect(chosenTab(host)).toBe("all");
+    let passed: KeyboardEvent | undefined;
+    await act(async () => {
+      passed = press("Digit7");
+    });
+    expect(passed?.defaultPrevented).toBe(false);
+    expect(chosenTab(host)).toBe("all");
+  });
+
+  it("spawns under the chosen profile, and refuses in the stage's words an agent it holds no sign-in for", async () => {
+    const door = tabDoor();
+    const host = await mountMonitor("list", door);
+    const spawnButton = (): HTMLButtonElement | null =>
+      host.querySelector<HTMLButtonElement>(".vf-godview-spawn");
+    // All: the default — This Mac here — as puppeteer resolves a spawn that names none
+    expect(spawnButton()?.title).toBe("spawn Claude in the active pane, under This Mac");
+    await act(async () => spawnButton()?.click());
+    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude" });
+
+    await act(async () => tabButton(host, "work")?.click());
+    expect(spawnButton()?.title).toBe("spawn Claude in the active pane, under Work");
+    await act(async () => spawnButton()?.click());
+    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude", profileSet: "work" });
+    expect(ackText(host)).toContain("Claude spawned in the active pane, under Work");
+
+    await act(async () => tabButton(host, "native")?.click());
+    await act(async () => spawnButton()?.click());
+    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude", profileSet: "native" });
+
+    const asked = door.spawn.mock.calls.length;
+    await act(async () => tabButton(host, "empty")?.click());
+    await act(async () => spawnButton()?.click());
+    expect(door.spawn.mock.calls.length).toBe(asked);
+    expect(ackText(host)).toContain("Empty has no Claude sign-in — add one in Settings");
+  });
+
+  it("says so over the stage when a tab has no sessions, and a profile deleted while chosen falls back to All", async () => {
+    const door = tabDoor();
+    const host = await mountMonitor("list", door);
+    await act(async () => tabButton(host, "empty")?.click());
+    const empty = host.querySelector(".vf-monitor-profile-empty");
+    expect(empty?.textContent).toContain("No sessions under Empty");
+    expect(empty?.textContent).toContain(
+      "A session started from this tab runs under this profile.",
+    );
+    expect(empty?.querySelector('[data-profile-glyph="flask"]')).not.toBeNull();
+    expect(host.querySelector(".vf-monitor-list")?.classList.contains("is-all-receded")).toBe(true);
+    expect(counters(host)).toEqual(["0", "0", "0"]);
+
+    await act(async () => door.pushSets([NATIVE_SET, WORK_SET]));
+    expect(chosenTab(host)).toBe("all");
+    expect(host.querySelector(".vf-monitor-profile-empty")).toBeNull();
+    expect(listRows(host).some((row) => row.receded)).toBe(false);
   });
 });

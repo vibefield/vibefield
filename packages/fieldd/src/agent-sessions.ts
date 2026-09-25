@@ -296,6 +296,7 @@ export function recordForRun(input: {
     runtimeEpoch: info.runtimeEpoch,
     provider: info.provider.id,
     ...(info.profileId !== undefined ? { profileId: info.profileId } : {}),
+    ...(info.profileSetId !== undefined ? { profileSet: info.profileSetId } : {}),
     cwd: input.cwd,
     ...(input.title !== undefined ? { title: input.title } : {}),
     terminalSessionId: info.terminalSessionId,
@@ -389,6 +390,7 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     runtimeRunId: info.runtimeRunId,
     runtimeEpoch: info.runtimeEpoch,
     ...(info.profileId !== undefined ? { profileId: info.profileId } : {}),
+    ...(info.profileSetId !== undefined ? { profileSet: info.profileSetId } : {}),
     terminal: input.hosted
       ? {
           hosted: "local",
@@ -441,6 +443,7 @@ export function summarizeExitedRecord(input: SummarizeExitedInput): AgentSession
     runtimeRunId: record.runtimeRunId,
     runtimeEpoch: record.runtimeEpoch,
     ...(record.profileId !== undefined ? { profileId: record.profileId } : {}),
+    ...(record.profileSet !== undefined ? { profileSet: record.profileSet } : {}),
     // the pane is the whole reason this row exists, so the join is exact
     terminal: {
       hosted: "local",
@@ -505,6 +508,7 @@ export function summarizePending(input: SummarizePendingInput): AgentSessionSumm
     runtimeRunId: record.runtimeRunId,
     runtimeEpoch: record.runtimeEpoch,
     ...(record.profileId !== undefined ? { profileId: record.profileId } : {}),
+    ...(record.profileSet !== undefined ? { profileSet: record.profileSet } : {}),
     terminal:
       record.terminalSessionId !== undefined
         ? {

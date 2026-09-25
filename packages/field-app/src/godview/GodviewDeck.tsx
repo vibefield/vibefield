@@ -64,7 +64,7 @@ import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./
 import { zoomLayoutApplied } from "./deck-zoom";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import type { MonitorFloorRecord } from "./monitor/agents";
-import { historyPortOver, usagePortOver } from "./monitor/doors";
+import { historyPortOver, profileSetsPortOver, usagePortOver } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
@@ -923,6 +923,9 @@ export function GodviewDeck({
       // The views never dial rosettad; the daemon's origin stays in fieldd.
       history: historyPortOver(doorClient),
       usage: usagePortOver(doorClient),
+      // AR-S5 — the Agent Profiles the bar's tabs are made of, and the one a
+      // spawn below runs under when a tab names it.
+      profiles: profileSetsPortOver(doorClient),
       attach: async (request) => {
         const active = workspaceRef.current?.activeSession;
         if (active === undefined) return { state: "no-pane" };
@@ -1025,6 +1028,7 @@ export function GodviewDeck({
             await fieldd.request("agent.spawn", {
               provider: request.provider,
               ...(request.profileId !== undefined ? { profileId: request.profileId } : {}),
+              ...(request.profileSet !== undefined ? { profileSet: request.profileSet } : {}),
               ...(cwd !== undefined ? { cwd } : {}),
             }),
           );

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentPersona, AgentProfileId, AgentProviderId } from "./agent-index";
+import { AgentPersona, AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-index";
 import { TerminalCreateOpenResult } from "./terminal-pipeline";
 
 // AR-3 — the managed-session doors (`agent.*`) and the fold's one row shape,
@@ -155,6 +155,11 @@ export const AgentSessionSummary = z
     runtimeRunId: z.string().min(1),
     runtimeEpoch: z.number().int(),
     profileId: AgentProfileId.optional(),
+    /** AR-S5 — the Agent Profile the run was born under, when puppeteer knows
+     * it (`AgentSessionInfo.profileSetId`: a spawn that chose one or took the
+     * default's sign-in, or a run whose sign-in is registered). Absent is
+     * unknown, never "This Mac": a reader falls back to the persona's set. */
+    profileSet: AgentProfileSetId.optional(),
     terminal: AgentSessionTerminal.optional(),
     workspace: AgentSessionWorkspace.optional(),
     /** puppeteer's monitor projection, verbatim (the mirror above) */
@@ -210,6 +215,8 @@ export const AgentSessionRecord = z
     runtimeEpoch: z.number().int(),
     provider: AgentProviderId,
     profileId: AgentProfileId.optional(),
+    /** AR-S5 — the Agent Profile it was born under, as the summary says it */
+    profileSet: AgentProfileSetId.optional(),
     cwd: z.string(),
     title: z.string().optional(),
     terminalSessionId: z.string().optional(),
@@ -296,12 +303,17 @@ export type AgentProvidersResult = z.infer<typeof AgentProvidersResult>;
 /** agent.spawn — a managed session born in a PTY on this device's floor
  * (workload class `agent`, a clean allow-listed environment). `cwd` defaults
  * to the OS user's home; `profileId` selects the persona (its root is bound
- * through the provider's own variable by puppeteer — fieldd never spells one). */
+ * through the provider's own variable by puppeteer — fieldd never spells one).
+ * AR-S5 — `profileSet` runs it under that Agent Profile's sign-in for the
+ * agent (`native`: the agent's own folder), refused when the profile holds
+ * none; with neither, the default profile's sign-in, else the agent's own
+ * folder. */
 export const AgentSpawnParams = z
   .object({
     provider: AgentProviderId,
     cwd: z.string().optional(),
     profileId: AgentProfileId.optional(),
+    profileSet: AgentProfileSetId.optional(),
     title: z.string().max(256).optional(),
   })
   .passthrough();

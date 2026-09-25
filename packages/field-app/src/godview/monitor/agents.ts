@@ -203,6 +203,7 @@ export function monitorAgentFromManaged(
       tier: summary.tier,
       runtimeRunId: summary.runtimeRunId,
       ...(summary.profileId !== undefined ? { profileId: summary.profileId } : {}),
+      ...(summary.profileSet !== undefined ? { profileSet: summary.profileSet } : {}),
       ...(model ? { model: model.displayName || model.id } : {}),
       ...(branch ? { branch } : {}),
       ...(context ? { contextWindow: context } : {}),

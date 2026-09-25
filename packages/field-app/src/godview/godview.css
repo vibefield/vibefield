@@ -109,9 +109,14 @@
     background-color 240ms ease;
 }
 
-.vf-godview button,
-.vf-godview kbd,
-.vf-godview select {
+/* Controls take the stage's type rather than the browser's, and the reset
+   weighs nothing: under `:where()` it gives way to every component's own
+   type. At one class and one element it outranked them, and the instrument
+   bar's counters, SPAWN and the provider list drew at the stage's 14px
+   regular instead of §04's 9px 700 (found at AR-S5). */
+:where(.vf-godview) button,
+:where(.vf-godview) kbd,
+:where(.vf-godview) select {
   font: inherit;
 }
 
@@ -191,8 +196,9 @@
   user-select: none;
 }
 
-.vf-godview-tweak-panel button,
-.vf-godview-tweak-panel select {
+/* The same reset for the panel's portal, weighing nothing for the same reason. */
+:where(.vf-godview-tweak-panel) button,
+:where(.vf-godview-tweak-panel) select {
   font: inherit;
 }
 
@@ -769,5 +775,62 @@
     transition:
       opacity 120ms ease,
       visibility 0s linear;
+  }
+}
+
+/* AR-S5 — a profile tab with no sessions under it says so over the stage, in
+   the bar's own type (the agents-settings record's T3): the profile's glyph in
+   a dashed ring, its name, one sentence. The bodies behind it step back to 7%
+   (`@vibecook/puppeteer-views` monitor/recede.ts), so the words read. */
+.vf-monitor-profile-empty {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-align: center;
+  pointer-events: none;
+  /* It fades in once as it appears: an entry transition, never a keyframe
+     (the overlay runs none — GT-D15.1's audit, godview-cold-open.test.ts). */
+  transition: opacity 300ms ease-out;
+}
+
+@starting-style {
+  .vf-monitor-profile-empty {
+    opacity: 0;
+  }
+}
+
+.vf-monitor-profile-empty-ring {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--panel-border);
+  border-radius: 50%;
+  color: var(--text-muted);
+}
+
+.vf-monitor-profile-empty b {
+  color: var(--text-main);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.vf-godview[data-godview-animations="off"] .vf-monitor-profile-empty {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-monitor-profile-empty {
+    transition: none;
   }
 }

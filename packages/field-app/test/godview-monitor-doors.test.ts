@@ -26,10 +26,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AccountUsageBatch } from "@vibecook/puppeteer-core";
+import type { AgentProfileSet } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   type DoorClient,
   historyPortOver,
+  profileSetsPortOver,
   toAccountUsageBatch,
   usagePortOver,
 } from "../src/godview/monitor/doors";
@@ -647,5 +649,44 @@ describe("the usage port's subscription", () => {
     // The dispose is still safe to call: there is nothing to unsubscribe.
     expect(() => dispose()).not.toThrow();
     expect(door.unsubscribes).toBe(0);
+  });
+});
+
+describe("the profiles port over fieldd's profile-sets feed (AR-S5)", () => {
+  const FEED = fixture("agents-profile-sets.valid.json");
+
+  it("delivers the snapshot's profiles, then every readable frame, and drops one it cannot read", async () => {
+    const door = subscribingClient();
+    const seen: (readonly AgentProfileSet[])[] = [];
+    const dispose = profileSetsPortOver(door.client).subscribe((sets) => seen.push(sets));
+    door.resolve(FEED);
+    await settle();
+    expect(seen.at(-1)?.map((set) => [set.id, set.kind, set.label])).toEqual([
+      ["native", "native", "This Mac"],
+      ["work", "managed", "Work"],
+    ]);
+    door.frame({ sets: "not a list" });
+    expect(seen).toHaveLength(1);
+    door.frame(FEED);
+    expect(seen).toHaveLength(2);
+    dispose();
+    expect(door.unsubscribes).toBe(1);
+  });
+
+  it("unsubscribes on arrival when the stage closed first, and survives a refusal", async () => {
+    const late = subscribingClient();
+    const seen: (readonly AgentProfileSet[])[] = [];
+    profileSetsPortOver(late.client).subscribe((sets) => seen.push(sets))();
+    late.resolve(FEED);
+    await settle();
+    expect(late.unsubscribes).toBe(1);
+    expect(seen).toEqual([]);
+
+    const refused = subscribingClient();
+    const dispose = profileSetsPortOver(refused.client).subscribe((sets) => seen.push(sets));
+    refused.reject(new Error("FORBIDDEN_SCOPE: agents.profileSets.subscribe"));
+    await settle();
+    expect(seen).toEqual([]);
+    expect(() => dispose()).not.toThrow();
   });
 });
