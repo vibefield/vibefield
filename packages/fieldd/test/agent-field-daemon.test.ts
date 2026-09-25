@@ -154,27 +154,37 @@ async function fieldDoor(daemon: FielddDaemon): Promise<Array<Record<string, unk
   return sub.snapshot.rows;
 }
 
-// TWO CARRIERS AGAIN (UA-P-4), and these rows are about the DOOR one.
+// TWO CARRIERS (UA-P-4), and these rows ask both of them the same question.
 //
 // The field has two: the `field.agents.v1` slice and the door's
 // `agent.subscribe {projection: "field"}`. UA-P-0e turned the slice carrier off
 // (a broadcast store carried every agent's label, project, branch, model,
 // effort and blocker tool to other people's desktops); RFC 025's login gate
 // brought it back scoped, and the daemon wiring for it is the UA-P-4 describe
-// below. The door carrier was never touched: it answers the SAME rows, only to
-// a caller whose WhoIs login matches the stored link, and it is what the phone
-// reads today.
+// below. The door carrier answers the SAME rows, only to a caller whose WhoIs
+// login matches the stored link. Both pass their rows through one
+// `attachableRows` (TM-r7), so both must withhold or carry the join together.
 //
-// The `agentFieldWrites` assertions in these two rows are NOT a claim that the
-// bus is off — it is on. They hold because neither row ever opens the
-// publisher's gate: `boot()` leaves the product serve as it finds it and these
-// tests drive no `serves-changed` edge, so the carrier has nothing to publish
-// yet. Stated plainly because an assertion that passes for a reason other than
-// the one it names is how a suite stops meaning anything. The slice carrier's
-// own behaviour — withdraw on gate close, re-publish, the fold subscription,
-// the graceful empty slice — is asserted in `agent-field-publisher.test.ts`
-// against a publisher driven directly, and its daemon wiring below.
-describe("TM-2 (F-M4) — the board's surviving carrier answers the same question", () => {
+// P0-F (2026-09-24) — these rows used to assert that the SLICE carrier had
+// published NOTHING, on the premise that `boot()` leaves the product serve as
+// it finds it. It does not: a linked daemon declares its own product serve at
+// boot (the terminal serve driver's first refresh always declares, TM-r4, and
+// the desired set carries `product`), the serve goes active, and the publisher
+// flushes 250 ms later. So the assertion held only while the row finished
+// inside that window, and went red under load (the terminal/mesh check: 1654 ms
+// red, 463 ms alone green). The rows now wait for the slice and ask it what they
+// ask the door.
+
+/** The run's row in the newest `field.agents.v1` slice the floor was asked to
+ * store, once there is one. */
+const sliceRow = (mock: MockMgmtServer): Record<string, unknown> | undefined => {
+  const last = mock.agentFieldWrites.at(-1) as
+    | { rows?: Array<Record<string, unknown>> }
+    | undefined;
+  return last?.rows?.find((row) => row["runtimeRunId"] === RUN);
+};
+
+describe("TM-2 (F-M4) — both carriers of the board answer the same question", () => {
   it("withholds the attach join while the doors are not published", async () => {
     const { daemon, mock } = await boot({ terminalMesh: false });
     await poll(() =>
@@ -189,9 +199,10 @@ describe("TM-2 (F-M4) — the board's surviving carrier answers the same questio
     expect(row).toMatchObject({ kind: "scripted" });
     expect(row?.["terminal"], "the join is withheld").toBeUndefined();
 
-    // the slice carrier's gate never opened in this row, so it has published
-    // nothing — see the note above: this is not the bus being off
-    expect(mock.agentFieldWrites).toEqual([]);
+    // …and the slice carrier says the same thing: the row, without the join
+    const sliced = await poll(() => sliceRow(mock));
+    expect(sliced).toMatchObject({ kind: "scripted" });
+    expect(sliced["terminal"], "the slice withholds the join too").toBeUndefined();
   });
 
   it("carries the attach join once the floor publishes its doors", async () => {
@@ -204,7 +215,11 @@ describe("TM-2 (F-M4) — the board's surviving carrier answers the same questio
     expect(rows.find((r) => r["runtimeRunId"] === RUN)?.["terminal"]).toMatchObject({
       runtimeSessionId: PANE,
     });
-    expect(mock.agentFieldWrites).toEqual([]);
+    const sliced = await poll(() => {
+      const found = sliceRow(mock);
+      return found?.["terminal"] === undefined ? undefined : found;
+    });
+    expect(sliced["terminal"]).toMatchObject({ runtimeSessionId: PANE });
   });
 });
 
