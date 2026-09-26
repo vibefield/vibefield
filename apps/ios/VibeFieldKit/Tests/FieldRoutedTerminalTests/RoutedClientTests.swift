@@ -40,16 +40,17 @@ import Testing
       .connectionAccepted, try Script.accepted(channel: .control, legGeneration: legGeneration))
     try await frames.deliver(
       .connectionAccepted, try Script.accepted(channel: .frames, legGeneration: legGeneration))
-    try await settle("both attaches") {
-      let onControl = await control.lastSent("AttachControlLeg") != nil
-      let onFrames = await frames.lastSent("AttachFramesLeg") != nil
-      return onControl && onFrames
+    try await settle("control attach") {
+      await control.lastSent("AttachControlLeg") != nil
     }
     let attach = await control.lastSent("AttachControlLeg")
     let activation = attach?["activationId"]?.stringValue ?? ""
     try await control.deliver(
       .controlLegAttached,
       Script.controlAttached(session: session, activation: activation, rights: ["input", "read"]))
+    try await settle("frames attach after control acknowledgement") {
+      await frames.lastSent("AttachFramesLeg") != nil
+    }
     try await frames.deliver(
       .framesLegAttached, Script.framesAttached(session: session, activation: activation))
     try await settle("attached") { client.state == .attached }
@@ -57,6 +58,50 @@ import Testing
   }
 
   // MARK: The handshake
+
+  @Test func framesWaitsForMatchingControlAcknowledgementAndAttachesOnlyOnce() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    defer { client.close() }
+    client.open(try ticket())
+    let control = transport.connection(for: "/control")
+    let frames = transport.connection(for: "/frames")
+    try await settle("two hellos") {
+      let onControl = await control.lastSent("ConnectionHello") != nil
+      let onFrames = await frames.lastSent("ConnectionHello") != nil
+      return onControl && onFrames
+    }
+    try await control.deliver(.connectionAccepted, try Script.accepted(channel: .control))
+    try await frames.deliver(.connectionAccepted, try Script.accepted(channel: .frames))
+    let attach = try await settled("control attach") {
+      await control.lastSent("AttachControlLeg")
+    }
+    let activation = try #require(attach["activationId"]?.stringValue)
+    // A stale ack cannot authorize frames, even while the current ack is delayed.
+    try await control.deliver(
+      .controlLegAttached,
+      Script.controlAttached(session: session, activation: "stale", rights: ["read"]))
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(await frames.allSent("AttachFramesLeg").isEmpty)
+    try await control.deliver(
+      .controlLegAttached,
+      Script.controlAttached(session: session, activation: activation, rights: ["input", "read"]))
+    let framesAttach = try await settled("frames attach") {
+      await frames.lastSent("AttachFramesLeg")
+    }
+    #expect(framesAttach["activationId"]?.stringValue == activation)
+    // Duplicate and higher-generation renewal acknowledgements share this path.
+    try await control.deliver(
+      .controlLegAttached,
+      Script.controlAttached(session: session, activation: activation, rights: ["input", "read"]))
+    var renewal = Script.controlAttached(session: session, activation: activation, rights: ["read"])
+    renewal["grantGenerationAccepted"] = .int(2)
+    try await control.deliver(.controlLegAttached, renewal)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(await frames.allSent("AttachFramesLeg").count == 1)
+    #expect(client.sessions[session]?.rights == [.read])
+  }
 
   /// One ticket opens BOTH legs: the hello carries the grant VERBATIM, names its
   /// own channel, and advertises receive capacity on the frames leg only —

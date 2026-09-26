@@ -71,6 +71,13 @@ final class RoutedLeg {
   private var connection: (any RoutedLegConnection)?
   private var pump: Task<Void, Never>?
   private var heartbeat: Task<Void, Never>?
+  private var writer: Task<Void, Never>?
+  private var outbound: [String] = []
+  private var bufferedMessages = 0
+  private var bufferedBytes = 0
+  // Local client bounds, including the write in flight (spec §5.4).
+  static let maximumBufferedMessages = 256
+  static let maximumBufferedBytes = 4 * 1024 * 1024
   private var heartbeatSequence: Int64 = 0
   private var stopped = false
 
@@ -134,7 +141,35 @@ final class RoutedLeg {
       return
     }
     guard let text = try? RoutedWire.encode(type, body) else { return }
-    Task { try? await connection.send(.text(text)) }
+    let bytes = text.utf8.count
+    guard bufferedMessages < Self.maximumBufferedMessages,
+      bytes <= Self.maximumBufferedBytes - bufferedBytes
+    else {
+      fail(.dropped("outgoing queue exceeded its capacity"))
+      return
+    }
+    outbound.append(text)
+    bufferedMessages += 1
+    bufferedBytes += bytes
+    guard writer == nil else { return }
+    // A task per message permits overtaking at an async send. One writer owns
+    // the FIFO, including input sequences, heartbeat sequences and credit.
+    writer = Task { [weak self] in
+      guard let self else { return }
+      while !self.stopped, !Task.isCancelled, !self.outbound.isEmpty {
+        let text = self.outbound.removeFirst()
+        do {
+          try await connection.send(.text(text))
+        } catch {
+          self.fail(.dropped("outbound write failed"))
+          return
+        }
+        guard !self.stopped else { return }
+        self.bufferedMessages -= 1
+        self.bufferedBytes -= text.utf8.count
+      }
+      self.writer = nil
+    }
   }
 
   func close() {
@@ -143,6 +178,7 @@ final class RoutedLeg {
     phase = .closed
     heartbeat?.cancel()
     heartbeat = nil
+    discardWrites()
     pump?.cancel()
     pump = nil
     let connection = self.connection
@@ -271,10 +307,19 @@ final class RoutedLeg {
     phase = .failed(failure)
     heartbeat?.cancel()
     heartbeat = nil
+    discardWrites()
     let connection = self.connection
     self.connection = nil
     Task { await connection?.close() }
     callbacks.onFailed(failure)
+  }
+
+  private func discardWrites() {
+    writer?.cancel()
+    writer = nil
+    outbound.removeAll()
+    bufferedMessages = 0
+    bufferedBytes = 0
   }
 
   private static func body(_ value: JSONValue) -> [String: JSONValue] {

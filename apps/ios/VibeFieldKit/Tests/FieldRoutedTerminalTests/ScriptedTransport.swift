@@ -19,10 +19,29 @@ actor ScriptedConnection: RoutedLegConnection {
   private(set) var sent: [String] = []
   private(set) var sentBinary: [Data] = []
   private(set) var isClosed = false
+  private var pauseSend = false
+  private var sendWaiter: CheckedContinuation<Void, Never>?
+  private var rejectSend = false
+  var sendIsPaused: Bool { sendWaiter != nil }
+
+  func pauseNextSend() { pauseSend = true }
+  func releaseSend() {
+    sendWaiter?.resume()
+    sendWaiter = nil
+  }
+  func failNextSend() { rejectSend = true }
 
   struct HungUp: Error {}
 
   func send(_ frame: RoutedLegFrame) async throws {
+    if pauseSend {
+      pauseSend = false
+      await withCheckedContinuation { sendWaiter = $0 }
+    }
+    if rejectSend {
+      rejectSend = false
+      throw HungUp()
+    }
     switch frame {
     case .text(let text): sent.append(text)
     case .binary(let data): sentBinary.append(data)
@@ -39,7 +58,10 @@ actor ScriptedConnection: RoutedLegConnection {
 
   func closeCode() -> Int? { code }
 
-  func close() { isClosed = true }
+  func close() {
+    isClosed = true
+    releaseSend()
+  }
 
   /// Push a frame at the client.
   func deliver(_ frame: RoutedLegFrame) {

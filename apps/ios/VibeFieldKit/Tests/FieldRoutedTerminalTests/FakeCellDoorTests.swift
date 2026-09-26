@@ -55,20 +55,20 @@ import Testing
     #expect(capacities?["perActivationCreditBytes"]?.intValue == 524_288)
     #expect(await door.advertisedCapabilities == ["resume", "session-events"])
 
-    try await settle("both attaches") {
-      let control = await door.controlAttach != nil
-      let frames = await door.framesAttach != nil
-      return control && frames
-    }
+    try await settle("control attach") { await door.controlAttach != nil }
     let activation = try #require(await door.controlAttach?.activationId)
-    #expect(await door.framesAttach?.activationId == activation)
-    // A first attach carries no resume — there is nothing to resume from.
-    #expect(await door.framesResume == nil)
+    // Separate real sockets cannot establish an ordering without this ack.
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(await door.framesAttach == nil)
 
     await door.send(
       .controlLegAttached,
       Script.controlAttached(session: session, activation: activation, rights: ["input", "read"]),
       on: .control)
+    try await settle("frames attach") { await door.framesAttach != nil }
+    #expect(await door.framesAttach?.activationId == activation)
+    // A first attach carries no resume — there is nothing to resume from.
+    #expect(await door.framesResume == nil)
     await door.send(
       .framesLegAttached, Script.framesAttached(session: session, activation: activation),
       on: .frames)
@@ -155,15 +155,12 @@ import Testing
     let client = RoutedTerminalClient(
       transport: URLSessionRoutedTransport(timeout: 10), sink: sink, options: .init())
     client.open(try ticket(port: port))
-    try await settle("both attaches") {
-      let control = await door.controlAttach != nil
-      let frames = await door.framesAttach != nil
-      return control && frames
-    }
+    try await settle("control attach") { await door.controlAttach != nil }
     let first = try #require(await door.controlAttach?.activationId)
     await door.send(
       .controlLegAttached,
       Script.controlAttached(session: session, activation: first, rights: ["read"]), on: .control)
+    try await settle("frames attach") { await door.framesAttach != nil }
     await door.send(
       .framesLegAttached, Script.framesAttached(session: session, activation: first), on: .frames)
     try await settle("attached") { client.state == .attached }
@@ -188,20 +185,16 @@ import Testing
     await door.rotate()
     await door.set(legGeneration: 2)
     client.open(try ticket(port: port))
-    try await settle("a second pair of attaches") {
-      let control = await door.controlAttach != nil
-      let frames = await door.framesAttach != nil
-      return control && frames
-    }
+    try await settle("second control attach") { await door.controlAttach != nil }
     let second = try #require(await door.controlAttach?.activationId)
     #expect(second != first)
-    // The resume capability was negotiated and there is a token plus an applied
-    // stamp, so the frames attach asks to resume rather than to reseed.
-    #expect(await door.framesResume?["resumeToken"]?.stringValue == "rt-1")
-
     await door.send(
       .controlLegAttached,
       Script.controlAttached(session: session, activation: second, rights: ["read"]), on: .control)
+    try await settle("second frames attach") { await door.framesAttach != nil }
+    // The resume capability was negotiated and there is a token plus an applied
+    // stamp, so the frames attach asks to resume rather than to reseed.
+    #expect(await door.framesResume?["resumeToken"]?.stringValue == "rt-1")
     await door.send(
       .framesLegAttached,
       Script.framesAttached(

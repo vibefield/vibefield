@@ -54,6 +54,103 @@ import Testing
     leg.close()
   }
 
+  @Test func aSuspendedSendCannotBeOvertakenByLaterInput() async throws {
+    let transport = ScriptedTransport()
+    let connection = transport.connection(for: "/control")
+    let leg = makeLeg(transport: transport)
+    defer { leg.close() }
+    leg.open(hello: hello(.control))
+    try await settle("hello") { await connection.lastSent("ConnectionHello") != nil }
+    try await connection.deliver(.connectionAccepted, try Script.accepted(channel: .control))
+    try await settle("accepted") { leg.phase == .accepted }
+    await connection.pauseNextSend()
+    leg.send(.sendInput, ["inputSequence": .int(1)])
+    try await settle("first write suspended") { await connection.sendIsPaused }
+    for sequence in 2...12 { leg.send(.sendInput, ["inputSequence": .int(Int64(sequence))]) }
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(await connection.allSent("SendInput").isEmpty)
+    await connection.releaseSend()
+    try await settle("all input written") { await connection.allSent("SendInput").count == 12 }
+    let sequences = await connection.allSent("SendInput").compactMap {
+      $0["inputSequence"]?.intValue
+    }
+    #expect(sequences == (1...12).map(Int64.init))
+  }
+
+  @Test func closingALegDiscardsQueuedWrites() async throws {
+    let transport = ScriptedTransport()
+    let connection = transport.connection(for: "/control")
+    let leg = makeLeg(transport: transport)
+    leg.open(hello: hello(.control))
+    try await settle("hello") { await connection.lastSent("ConnectionHello") != nil }
+    try await connection.deliver(.connectionAccepted, try Script.accepted(channel: .control))
+    try await settle("accepted") { leg.phase == .accepted }
+    await connection.pauseNextSend()
+    leg.send(.sendInput, ["inputSequence": .int(1)])
+    try await settle("first write suspended") { await connection.sendIsPaused }
+    leg.send(.sendInput, ["inputSequence": .int(2)])
+    leg.close()
+    try await settle("socket closed") { await connection.isClosed }
+    try await Task.sleep(for: .milliseconds(30))
+    let sequences = await connection.allSent("SendInput").compactMap {
+      $0["inputSequence"]?.intValue
+    }
+    #expect(!sequences.contains(2))
+    #expect(leg.phase == .closed)
+  }
+
+  @Test func aWriteFailureEndsTheLegAndDiscardsPendingInput() async throws {
+    let transport = ScriptedTransport()
+    let connection = transport.connection(for: "/control")
+    var failure: RoutedLegFailure?
+    let leg = makeLeg(transport: transport, onFailed: { failure = $0 })
+    leg.open(hello: hello(.control))
+    try await settle("hello") { await connection.lastSent("ConnectionHello") != nil }
+    try await connection.deliver(.connectionAccepted, try Script.accepted(channel: .control))
+    try await settle("accepted") { leg.phase == .accepted }
+    await connection.pauseNextSend()
+    await connection.failNextSend()
+    leg.send(.sendInput, ["inputSequence": .int(1)])
+    try await settle("first write suspended") { await connection.sendIsPaused }
+    leg.send(.sendInput, ["inputSequence": .int(2)])
+    await connection.releaseSend()
+    try await settle("failure surfaced") { failure != nil }
+    #expect(failure == .dropped("outbound write failed"))
+    #expect(await connection.allSent("SendInput").isEmpty)
+    leg.close()
+  }
+
+  @Test(arguments: [false, true])
+  func aStalledWriterIsBoundedByMessagesAndBytes(exhaustBytes: Bool) async throws {
+    let transport = ScriptedTransport()
+    let connection = transport.connection(for: "/control")
+    var failure: RoutedLegFailure?
+    let leg = makeLeg(transport: transport, onFailed: { failure = $0 })
+    leg.open(hello: hello(.control))
+    try await settle("hello") { await connection.lastSent("ConnectionHello") != nil }
+    try await connection.deliver(.connectionAccepted, try Script.accepted(channel: .control))
+    try await settle("accepted") { leg.phase == .accepted }
+    await connection.pauseNextSend()
+    leg.send(.sendInput, ["inputSequence": .int(1)])
+    try await settle("first write suspended") { await connection.sendIsPaused }
+    if exhaustBytes {
+      leg.send(
+        .sendInput,
+        ["text": .string(String(repeating: "x", count: RoutedLeg.maximumBufferedBytes))])
+    } else {
+      for _ in 0..<RoutedLeg.maximumBufferedMessages {
+        leg.send(.sendInput, ["inputSequence": .int(2)])
+      }
+    }
+    #expect(failure == .dropped("outgoing queue exceeded its capacity"))
+    try await settle("socket closed") { await connection.isClosed }
+    let sequences = await connection.allSent("SendInput").compactMap {
+      $0["inputSequence"]?.intValue
+    }
+    #expect(!sequences.contains(2))
+    leg.close()
+  }
+
   /// After the accept, the leg heartbeats UNCONDITIONALLY at the cell's TTL over
   /// three — not only while idle.
   ///

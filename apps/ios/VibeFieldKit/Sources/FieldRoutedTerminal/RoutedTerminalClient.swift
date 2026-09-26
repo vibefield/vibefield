@@ -113,6 +113,7 @@ public struct RoutedSessionState: Sendable {
   internal var demandSequence: Int64 = 0
   internal var geometryRevision: Int64 = 0
   internal var demand: RoutedDemand = .live
+  internal var framesAttachSent = false
   internal var transfer: RoutedTransfer?
   internal var activationSequence: Int64 = -1
   /// CONSECUTIVE authoritative scenes this activation's sink refused. Reset by
@@ -574,7 +575,7 @@ public final class RoutedTerminalClient {
   /// never invents an activation id — which is what makes a reconnect race
   /// impossible to disagree about: only one side decides.
   private func attach(sessionId: String) {
-    guard let grant = grants[sessionId], let control, let frames else { return }
+    guard let grant = grants[sessionId], let control, frames != nil else { return }
     let previous = sessions[sessionId]
     if let previous, previous.control == .attached, previous.frames == .active { return }
     let activationId = "act-\(UUID().uuidString.lowercased())"
@@ -595,16 +596,26 @@ public final class RoutedTerminalClient {
       controlBody["replacesActivationId"] = .string(replaced)
     }
     control.send(.attachControlLeg, controlBody)
+    // The control acknowledgement proves the cell has created this activation.
+    // Sending frames now races that creation on the other socket (Phase 0).
+  }
 
+  private func attachFrames(sessionId: String) {
+    guard var session = sessions[sessionId], session.control == .attached,
+      !session.framesAttachSent, let grant = grants[sessionId], let frames
+    else { return }
+    // Duplicate control acknowledgements and renewals must not reattach frames.
+    session.framesAttachSent = true
+    sessions[sessionId] = session
     var framesBody: [String: JSONValue] = [
-      "activationId": .string(activationId),
+      "activationId": .string(session.activationId),
       "attachGrant": grant.raw,
     ]
     // `resume` is a CAPABILITY: the token and the client's ACTUAL applied stamp
     // (which may be ahead of the cell's last SceneApplied — acks in flight when
     // the leg died) are sent only when the cell negotiated it.
     if negotiatedCapabilities.contains(RoutedTerminalContract.resumeCapability),
-      let token = previous?.resumeToken, let from = previous?.appliedContent
+      let token = session.resumeToken, let from = session.appliedContent
     {
       framesBody["resume"] = .object(["resumeToken": .string(token), "from": from.json])
     }
@@ -612,9 +623,9 @@ public final class RoutedTerminalClient {
   }
 
   /// The SET is `attached` while any session has both legs attached. One place
-  /// decides it, because the two acknowledgements arrive in either order over a
-  /// real pair of sockets and a check written into each arm answers differently
-  /// depending on which won.
+  /// decides it by reconciling both leg states. Phase 0 ordering correction:
+  /// frames is sent only after control is acknowledged; subsequent control
+  /// acknowledgements can still arrive independently when the grant renews.
   private func noteAttachment() {
     guard state == .ready || state == .attached else { return }
     state = sessions.values.contains(where: \.bothLegsAttached) ? .attached : .ready
@@ -633,6 +644,7 @@ public final class RoutedTerminalClient {
       // the grant asked for.
       session.rights = attached.rights
       sessions[attached.sessionId] = session
+      attachFrames(sessionId: attached.sessionId)
       noteAttachment()
       // P0-C — the grant this activation now rides is the one to renew. Both an
       // attach and an accepted renewal land here, and scheduling is idempotent:

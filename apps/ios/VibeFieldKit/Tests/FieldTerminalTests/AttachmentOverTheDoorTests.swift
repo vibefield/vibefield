@@ -150,22 +150,26 @@ import Testing
     attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
 
     // 1. Both legs dial, both hellos land, and the client attaches the session
-    //    the JOIN named — ONE activation across the two of them.
+    //    the JOIN named on the CONTROL leg — the frames leg waits for the
+    //    cell's acknowledgement (TPv3 §5.4, P0-H3: the control attach creates
+    //    the activation, frames only binds it).
     let control = try await Self.value("the control leg to attach") { await door.controlAttach }
-    let framesAttach = try await Self.value("the frames leg to attach") { await door.framesAttach }
     let activation = control.activationId
-    #expect(framesAttach.activationId == activation)
+    #expect(await door.framesAttach == nil)
     #expect(await door.helloCount[.control] == 1)
     #expect(await door.helloCount[.frames] == 1)
     // ONE mint for the pair: a ticket authorises a connection SET, not a leg.
     #expect(mints.count == 1)
 
-    // 2. The cell acknowledges both legs, declaring the TRF1 identity the seed
-    //    frame actually carries.
+    // 2. The cell acknowledges control, declaring the TRF1 identity the seed
+    //    frame actually carries; the client then attaches frames on the SAME
+    //    activation, and the cell acknowledges that too.
     await door.send(
       .controlLegAttached,
       Script.controlAttached(session: session, activation: activation, rights: ["input", "read"]),
       on: .control)
+    let framesAttach = try await Self.value("the frames leg to attach") { await door.framesAttach }
+    #expect(framesAttach.activationId == activation)
     await door.send(
       .framesLegAttached,
       Script.framesAttached(
