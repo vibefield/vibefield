@@ -21,7 +21,7 @@ connection, whole mesh through it), EL3/EL7 as ever.
 | Path | What |
 |---|---|
 | `VibeField.xcodeproj` | thin composition shell — hand-authored pbxproj (synthetic IDs, the GhostteaApp convention; objectVersion 60 since Xcode touched it); no product code |
-| `App/` | `@main` + assets + privacy manifest, nothing else |
+| `App/` | `@main`, bundle configuration, assets, and privacy manifest |
 | `VibeFieldKit/` | the real code, one SPM package, ten source targets |
 | `VibeFieldKit/Sources/FieldDesign` | the FACE (IOS-8a, DESIGN.md §2.8: `FaceDeck` — the contracts' 48 and the same FNV-1a deal; `StickerRenderer` — the die-cut through Core Image, `CIMorphologyMaximum` as §2.8 prescribes; `UserFaceView` — the sticker and the coin) beside two token sets and one motion table: the **godview** monochrome tokens (`FieldPalette`, `FieldType` — palette light+dark, mono type ramp, grid/scanlines/vignette), scoped to the swarm field and the terminal surface by DESIGN.md §1.1, and the **chrome** tokens (`ChromeType`, `ChromePalette`, `ChromeMaterial`, `ChromeControls`) every other surface wears — SF type, the glass card recipe, the radii and the two pill buttons |
 | `VibeFieldKit/Sources/SwarmPhysics` | Matter.js-parity solver — pure Swift, no UI imports, seedable, headless-tested; since IOS-6b it steps on the reference's fixed schedule (`advance(now:)`: 30 Hz behind an accumulator, the 15 Hz floor and the 0.2 air-friction ceiling clamped at every entry, a stall cap, every body's last two solved positions for the renderer's blend) |
@@ -57,6 +57,17 @@ TailscaleKit binary's floor — GhostteaApp's own) · simulator is arm64-only
 `com.jamesyong.vibefield.ios` under the frozen desktop root (`PKG-ID`).
 
 ## Build · test · run
+
+`App/Info.plist` supplies the ATS exception for `ts.net` and its subdomains;
+Xcode merges it with the generated bundle metadata in both configurations.
+The product and terminal endpoints use HTTP/WebSockets inside Truffle's
+authenticated Tailscale transport. ATS cannot observe that transport's
+encryption and otherwise rejects the first desktop probe with
+`NSURLErrorDomain -1022`. The exception covers MagicDNS hosts only. Requests
+still use `MeshNode.urlSession`, the peer endpoint checks, and the account gate;
+other domains keep their default ATS requirements. The same reasoning is the
+exception's justification for App Store review. See
+[Apple's ATS exception guidance](https://developer.apple.com/documentation/security/preventing-insecure-network-connections).
 
 This machine's `xcode-select` points at CommandLineTools, so every invocation
 passes `DEVELOPER_DIR` (the Ghosttea convention). Since IOS-3 the tree also
