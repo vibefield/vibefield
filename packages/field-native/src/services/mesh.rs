@@ -792,7 +792,178 @@ fn resolve_sidecar(override_path: Option<PathBuf>, searched: &mut Vec<String>) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::sync::mpsc;
+
+    type MgmtReader =
+        tokio::io::Lines<BufReader<tokio::io::ReadHalf<crate::local_ipc::ClientStream>>>;
+    type MgmtWriter = tokio::io::WriteHalf<crate::local_ipc::ClientStream>;
+
+    async fn mgmt_send(writer: &mut MgmtWriter, id: u64, method: &str, params: Value) {
+        let line = format!(
+            "{}\n",
+            json!({"jsonrpc":"2.0", "id":id, "method":method, "params":params})
+        );
+        writer.write_all(line.as_bytes()).await.unwrap();
+    }
+
+    async fn mgmt_recv(reader: &mut MgmtReader) -> Value {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(5), reader.next_line())
+            .await
+            .expect("management reply deadline")
+            .unwrap()
+            .expect("management connection closed");
+        serde_json::from_str(&line).unwrap()
+    }
+
+    async fn mgmt_client(daemon: &crate::RunningDaemon) -> (MgmtReader, MgmtWriter) {
+        let stream = crate::local_ipc::connect(&daemon.mgmt_endpoint)
+            .await
+            .unwrap();
+        let (read, mut write) = tokio::io::split(stream);
+        let mut read = BufReader::new(read).lines();
+        let secret = hex::decode(
+            std::fs::read_to_string(&daemon.pairing_file)
+                .unwrap()
+                .trim(),
+        )
+        .unwrap();
+        let ts = crate::pairing::now_epoch_secs();
+        let boot = "phase0-mesh-control-test";
+        let mac = crate::pairing::compute_mac(&secret, boot, ts);
+        mgmt_send(
+            &mut write,
+            1,
+            "native.lifecycle.hello",
+            json!({
+                "contractsVersion":"0.1.0", "minCompatible":"0.1.0", "clientKind":"fieldd",
+                "credential":{"bootId":boot, "ts":ts, "mac":mac}
+            }),
+        )
+        .await;
+        assert!(mgmt_recv(&mut read).await.get("result").is_some());
+        (read, write)
+    }
+
+    // Real management sockets and pairing, with a deterministic slow mesh
+    // operation. Holding the store lock pauses teardown without a tailnet or
+    // a timing-dependent network. This is the same dispatch path a slow TLS
+    // listener occupied during Phase 0, starving the floor heartbeat.
+    #[tokio::test]
+    async fn mesh_control_keeps_heartbeat_live_and_mesh_requests_ordered() {
+        let dir = tempfile::tempdir().unwrap();
+        let daemon = crate::bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
+            .await
+            .unwrap();
+        let (mut reader, mut writer) = mgmt_client(&daemon).await;
+        let mut entered = daemon.state.mesh.shared.node.subscribe();
+        let held = daemon.state.mesh.shared.stores.lock().await;
+        mgmt_send(&mut writer, 2, "native.mesh.stop", json!({})).await;
+        tokio::time::timeout(std::time::Duration::from_secs(5), entered.changed())
+            .await
+            .unwrap()
+            .unwrap();
+        mgmt_send(&mut writer, 3, "native.lifecycle.ping", json!({})).await;
+        mgmt_send(&mut writer, 4, "native.mesh.stop", json!({})).await;
+        let first =
+            tokio::time::timeout(std::time::Duration::from_secs(2), reader.next_line()).await;
+        drop(held);
+        if first.is_err() {
+            drop(writer);
+            drop(reader);
+            daemon.shutdown().await;
+            panic!("a pending mesh operation blocked the floor heartbeat");
+        }
+        let first: Value = serde_json::from_str(&first.unwrap().unwrap().unwrap()).unwrap();
+        assert_eq!(
+            first["id"], 3,
+            "the heartbeat must pass the waiting mesh requests"
+        );
+        assert!(first.get("result").is_some());
+        assert_eq!(mgmt_recv(&mut reader).await["id"], 2);
+        assert_eq!(mgmt_recv(&mut reader).await["id"], 4);
+        drop(writer);
+        drop(reader);
+        daemon.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn mesh_control_discards_superseded_clients_queued_mutations() {
+        let dir = tempfile::tempdir().unwrap();
+        let daemon = crate::bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
+            .await
+            .unwrap();
+        let (mut old_read, mut old_write) = mgmt_client(&daemon).await;
+        let mut entered = daemon.state.mesh.shared.node.subscribe();
+        let held = daemon.state.mesh.shared.stores.lock().await;
+        mgmt_send(&mut old_write, 2, "native.mesh.stop", json!({})).await;
+        tokio::time::timeout(std::time::Duration::from_secs(5), entered.changed())
+            .await
+            .unwrap()
+            .unwrap();
+        mgmt_send(&mut old_write, 3, "native.mesh.retire", json!({})).await;
+        let (mut new_read, mut new_write) = mgmt_client(&daemon).await;
+        // Takeover closes the old outbox; consume its supersession notice.
+        let old_closed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while old_read.next_line().await.unwrap().is_some() {}
+        })
+        .await;
+        drop(held);
+        old_closed.expect("the superseded connection must close even with a pending mesh call");
+        mgmt_send(&mut new_write, 2, "native.mesh.stop", json!({})).await;
+        assert!(mgmt_recv(&mut new_read).await.get("result").is_some());
+        assert!(
+            !daemon
+                .state
+                .mesh
+                .shared
+                .retired
+                .load(std::sync::atomic::Ordering::SeqCst),
+            "the superseded client's queued retire must not run"
+        );
+        drop((old_read, old_write, new_read, new_write));
+        daemon.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn mesh_control_saturation_refuses_work_without_blocking_heartbeat() {
+        let dir = tempfile::tempdir().unwrap();
+        let daemon = crate::bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
+            .await
+            .unwrap();
+        let (mut reader, mut writer) = mgmt_client(&daemon).await;
+        let mut entered = daemon.state.mesh.shared.node.subscribe();
+        let held = daemon.state.mesh.shared.stores.lock().await;
+        mgmt_send(&mut writer, 2, "native.mesh.stop", json!({})).await;
+        tokio::time::timeout(std::time::Duration::from_secs(5), entered.changed())
+            .await
+            .unwrap()
+            .unwrap();
+        // More requests than any intended local caller needs. They must be
+        // refused promptly rather than parking the reader behind the worker.
+        for id in 3..43 {
+            mgmt_send(&mut writer, id, "native.mesh.stop", json!({})).await;
+        }
+        mgmt_send(&mut writer, 43, "native.lifecycle.ping", json!({})).await;
+        let mut refused = 0;
+        loop {
+            let reply = mgmt_recv(&mut reader).await;
+            if reply["id"] == 43 {
+                assert!(reply.get("result").is_some());
+                break;
+            }
+            assert_eq!(reply["error"]["code"], -32010);
+            refused += 1;
+        }
+        assert!(
+            refused > 0,
+            "pending mesh requests must have a finite bound"
+        );
+        drop(held);
+        drop((reader, writer));
+        daemon.shutdown().await;
+    }
 
     // UA-3 — the retire lifecycle at the handle seam: state-dir custody and
     // the resurrection guard. The archive RENAME belongs to the mgmt handler

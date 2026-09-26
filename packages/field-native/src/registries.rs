@@ -46,6 +46,7 @@ pub mod mesh_control_limits {
     pub const MGMT_FRAME_BYTES: usize = 83886080;
     pub const MGMT_QUEUED_BYTES: usize = 100663296;
     pub const MGMT_OUTBOX_MESSAGES: usize = 64;
+    pub const MGMT_PENDING_MESH_REQUESTS: usize = 32;
     pub const PRODUCT_FRAME_BYTES: usize = 134217728;
     pub const PRODUCT_QUEUED_BYTES: usize = 134217728;
 }

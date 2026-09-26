@@ -28,6 +28,7 @@ use crate::contracts::{DesiredState, Hello, TerminalRouteSnapshot, TerminalRoute
 use crate::contracts::{TerminalEndpoints, TerminalRouteCell};
 use crate::local_ipc;
 use crate::pairing;
+use crate::registries::mesh_control_limits;
 use crate::services::mesh::NodePresence;
 use crate::services::terminal;
 use crate::services::terminal_client::ControlClient;
@@ -36,8 +37,92 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
+use tokio::task::JoinSet;
 
 const CONTRACTS_VERSION: &str = "0.1.0";
+
+// The work bound beside the shared management byte budget — both from the
+// registry (`MESH_CONTROL_LIMITS`, generated), never retyped here. A waiting
+// mesh service must neither block the socket reader nor grow its heap without
+// limit (design-02 §2.7, Phase 0 correction).
+const MESH_PENDING_REQUESTS: usize = mesh_control_limits::MGMT_PENDING_MESH_REQUESTS;
+
+struct MeshRequest {
+    conn_id: u64,
+    tx: MgmtOutbox,
+    method: String,
+    params: Value,
+    id: Option<Value>,
+    _bytes: OwnedSemaphorePermit,
+}
+
+#[derive(Clone)]
+struct MeshQueue {
+    tx: mpsc::Sender<MeshRequest>,
+    bytes: Arc<Semaphore>,
+}
+
+impl MeshQueue {
+    fn enqueue(
+        &self,
+        conn_id: u64,
+        tx: &MgmtOutbox,
+        method: String,
+        params: Value,
+        id: Option<Value>,
+        frame_bytes: usize,
+    ) {
+        // Frames are bounded before parsing, so this fits u32. Retain the
+        // permit through execution: one large in-flight call still counts.
+        let Ok(bytes) = self
+            .bytes
+            .clone()
+            .try_acquire_many_owned(frame_bytes as u32)
+        else {
+            send(tx, mesh_queue_full(id));
+            return;
+        };
+        let request = MeshRequest {
+            conn_id,
+            tx: tx.clone(),
+            method,
+            params,
+            id,
+            _bytes: bytes,
+        };
+        match self.tx.try_send(request) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(request)) => {
+                send(tx, mesh_queue_full(request.id));
+            }
+            Err(mpsc::error::TrySendError::Closed(request)) => {
+                send(
+                    tx,
+                    err(
+                        request.id,
+                        "UNAVAILABLE",
+                        -32006,
+                        "mesh request worker stopped",
+                        true,
+                        Some(json!({"service":"mesh-gateway", "state":"stopped"})),
+                    ),
+                );
+            }
+        }
+    }
+}
+
+fn mesh_queue_full(id: Option<Value>) -> Value {
+    err(
+        id,
+        "RESOURCE_EXHAUSTED",
+        -32010,
+        "mesh request queue is full",
+        true,
+        Some(json!({"service":"mesh-gateway"})),
+    )
+}
 
 /// How a reconcile prune classifies the exits it causes. `TerminationSource` is
 /// a kebab-case wire enum with exactly three variants (session.rs:39-46) and
@@ -91,11 +176,38 @@ fn classify_prune_error(message: &str) -> PruneErrorKind {
 }
 
 pub async fn serve(mut listener: local_ipc::Listener, state: Arc<DaemonState>) {
+    let (mesh_tx, mut mesh_rx) = mpsc::channel::<MeshRequest>(MESH_PENDING_REQUESTS);
+    let mesh_queue = MeshQueue {
+        tx: mesh_tx,
+        bytes: Arc::new(Semaphore::new(mesh_control_limits::MGMT_QUEUED_BYTES)),
+    };
+    // One worker for the server, not one per client: a replacement fieldd's
+    // replay cannot race the previous client's in-flight node/listener change.
+    // JoinSet aborts it if the server is stopped. A mere client disconnect does
+    // not cancel a partially applied mesh mutation.
+    let mut mesh_worker = JoinSet::new();
+    let mesh_state = state.clone();
+    mesh_worker.spawn(async move {
+        while let Some(request) = mesh_rx.recv().await {
+            if request.tx.is_closed() || !mesh_state.is_current_client(request.conn_id).await {
+                continue;
+            }
+            mesh::handle(
+                &mesh_state,
+                &request.tx,
+                &request.method,
+                &request.params,
+                request.id,
+            )
+            .await;
+        }
+    });
     loop {
         match listener.accept().await {
             Ok(stream) => {
                 let state = state.clone();
-                tokio::spawn(async move { handle_conn(stream, state).await });
+                let mesh_queue = mesh_queue.clone();
+                tokio::spawn(async move { handle_conn(stream, state, mesh_queue).await });
             }
             Err(e) => {
                 tracing::error!(
@@ -110,7 +222,7 @@ pub async fn serve(mut listener: local_ipc::Listener, state: Arc<DaemonState>) {
     }
 }
 
-async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
+async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_queue: MeshQueue) {
     let conn_id = state.conn_id();
     // io::split, not into_split: a NamedPipeServer has no owned split, and the
     // generic halves serve both transports identically.
@@ -262,6 +374,8 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
                 // that path is what the caller is measuring. The boot id lets
                 // a supervisor notice a floor that restarted underneath a
                 // surviving socket.
+                // Phase 0 correction: external mesh waits belong to the FIFO
+                // worker; they must not stall this shared reader/dispatch path.
                 let ts = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_millis() as i64)
@@ -348,7 +462,7 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>) {
                 send(&tx, diagnostics::lease_revoke(&state, &params, id));
             }
             m if m.starts_with("native.mesh.") => {
-                mesh::handle(&state, &tx, m, &params, id).await;
+                mesh_queue.enqueue(conn_id, &tx, method, params, id, line.len() + 1);
             }
             m if m.starts_with("native.process.") || m.starts_with("native.sidecar.") => {
                 send(

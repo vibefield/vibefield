@@ -130,6 +130,12 @@ export const MESH_CONTROL_LIMITS = {
   MGMT_FRAME_BYTES: 80 * 1024 * 1024,
   MGMT_QUEUED_BYTES: 96 * 1024 * 1024,
   MGMT_OUTBOX_MESSAGES: 64,
+  /** P0-H2 (design-02 §2.7, the Phase 0 correction) — how many `native.mesh.*`
+   * requests the floor holds for its one mesh worker before answering
+   * `RESOURCE_EXHAUSTED`; the byte budget above still counts every one of them,
+   * the in-flight request included. Enqueue never waits, so the socket reader
+   * that answers the heartbeat is never behind a mesh listener that is. */
+  MGMT_PENDING_MESH_REQUESTS: 32,
   PRODUCT_FRAME_BYTES: 128 * 1024 * 1024,
   PRODUCT_QUEUED_BYTES: 128 * 1024 * 1024,
 } as const;

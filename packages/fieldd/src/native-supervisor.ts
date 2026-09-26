@@ -22,6 +22,9 @@ import { RpcCallError } from "./native-link";
 //   silence: a loaded-host scheduling stall (measured: vault-free round trips
 //   p99 24–37ms at load ~40, max 69ms) must never kill a healthy floor.
 //   State is reversible; SIGKILL is not.
+//   Phase 0 correction (2026-09-25): native dispatch queues external mesh work
+//   separately from the shared reader/writer. A pending TLS listener must not
+//   starve this probe and be mistaken for a floor wedge (§2.7 of design-02).
 //
 // Bounded intensity (RESPAWN_MAX per RESPAWN_WINDOW_MS), then the permanent
 // honest degraded state "gone" with a user-visible restart affordance

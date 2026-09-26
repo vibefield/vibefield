@@ -958,7 +958,13 @@ async fn serve_add(
 /// secret never leaves this machine. The backend sees exactly what it saw before,
 /// which is why fieldd's door is untouched.
 ///
-/// VERIFIED, not assumed (the probe is in UA-P-0d's commit message): sidecar-slim
+/// Hardware erratum (2026-09-25): the probe below verified ordinary HTTP only.
+/// Truffle 0.7.14's WebSocket hijack bypasses ReverseProxy and omits the target
+/// path, so a phone reaches the local door and receives "invalid token". The
+/// sidecar must apply the same director before hijacking; preserve this private
+/// target path rather than putting the secret back into a public URL.
+///
+/// For ordinary HTTP, sidecar-slim
 /// builds every route handler with `httputil.NewSingleHostReverseProxy`
 /// (`main.go:3294`), whose director joins the target's path onto the request's —
 /// `/` becomes `/t/<secret>/`, `/anything` becomes `/t/<secret>/anything` — and
