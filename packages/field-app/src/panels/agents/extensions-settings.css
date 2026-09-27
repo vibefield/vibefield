@@ -565,6 +565,18 @@
   margin-top: 4px;
 }
 
+/* A server's sign-in (AR-S4c): the profile sign-in's card, under the lists;
+   where another window opened it, a line in the pane's place. */
+.vf-ext-signin {
+  margin-top: 4px;
+}
+
+.vf-ext-signin-elsewhere {
+  margin: 0;
+  padding: 12px;
+  line-height: 1.5;
+}
+
 /* An item's page: an agent's switch, or its Remove…, beside its state. */
 .vf-ext-item-state--cell .vf-ui-button {
   margin-left: 4px;

@@ -239,6 +239,8 @@ async function startFakeFloor(
   /** GT-7 — every command this floor was sent, in order (the auth packet is
    * not a command) */
   commands: () => string[];
+  /** AR-S4c — the floor's own exit fact for one session, to every connected client */
+  exit: (sessionId: string) => void;
 }> {
   // The root is the harness's (short on unix for the sun_path budget, tmpdir()
   // on win32 where no /tmp exists), and the fake binds the endpoint the real
@@ -428,6 +430,18 @@ async function startFakeFloor(
     connections: () => connections,
     createOptions: () => lastCreateOptions,
     commands: () => [...commands],
+    exit: (sessionId: string): void => {
+      const event = {
+        requestId: 0,
+        type: "session-exited",
+        sessionId,
+        exitCode: 0,
+        exitSignal: null,
+        requestedTermination: null,
+        exitOutcome: "completed",
+      };
+      for (const sock of live) sock.write(packet(Buffer.from(JSON.stringify(event))));
+    },
   };
 }
 
@@ -2712,6 +2726,47 @@ describe("TC-S3 — class cells (K=2) and solo isolation", () => {
     ).resolves.toMatchObject({ accepted: true });
     await expect(service.terminate(born.sessionId)).resolves.toEqual({ terminated: true });
     expect(agent.commands()).toEqual(expect.arrayContaining(["automation-input", "terminate"]));
+    expect(interactive.connections(), "the interactive cell was never dialed").toBe(0);
+  });
+
+  it("closes a session born and ended inside one reconcile tick at the cell that held it", async () => {
+    // AR-S4c found it (2026-09-26): an exited agent pane stays on its cell
+    // until closed (MF-1g), and an exit listener is what closes it — a login
+    // pane's, a server sign-in's. The birth used to be forgotten AT the exit,
+    // so a pane that ended before any inventory placed it was closed at the
+    // interactive cell ("unknown session") and its husk stood for good.
+    const interactive = await startFakeFloor();
+    const agent = await startFakeFloor();
+    const routed = routedLink(
+      classRoutes(1, [
+        {
+          cellInstanceId: 1,
+          cellBootId: "cell-i",
+          endpoints: interactive.endpoints,
+          workloadClass: "interactive",
+          role: "class",
+        },
+        {
+          cellInstanceId: 2,
+          cellBootId: "cell-a",
+          endpoints: agent.endpoints,
+          workloadClass: "agent",
+          role: "class",
+        },
+      ]),
+    );
+    const service = new TerminalService({ link: routed.link });
+    cleanup.push(() => service.dispose());
+
+    const born = await service.create({ workloadClass: "agent" });
+    const closed = new Promise<{ terminated: boolean }>((resolve, reject) => {
+      service.onSessionExited((event) => {
+        service.terminate(event.sessionId).then(resolve, reject);
+      });
+    });
+    agent.exit(born.sessionId);
+    await expect(closed).resolves.toEqual({ terminated: true });
+    expect(agent.commands()).toContain("terminate");
     expect(interactive.connections(), "the interactive cell was never dialed").toBe(0);
   });
 

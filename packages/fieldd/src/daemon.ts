@@ -13,6 +13,7 @@ import {
   AgentSubscribeParams,
   AgentsExtensionsActParams,
   AgentsExtensionsListParams,
+  AgentsExtensionsSignInParams,
   AgentsExtensionsSubscribeParams,
   AgentsInstallsParams,
   AgentsProfileSetsCreateParams,
@@ -1510,6 +1511,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(result.receipt.exitCode !== undefined ? { exitCode: result.receipt.exitCode } : {}),
           },
         }),
+      );
+    });
+    // AR-S4c — a remote server's sign-in: the agent's own login in a pane on
+    // the page, as a persona's is (`agents.profiles.login`), so it is audited
+    // like one; the receipt follows on the subscription when the pane ends.
+    api.register("agents.extensions.signIn", async (ctx, params) => {
+      const parsed = AgentsExtensionsSignInParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, provider, id }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.extensions.sign_in",
+          target: {
+            kind: "agent-extension",
+            id: `${parsed.data.provider}:mcp-server:${parsed.data.id}`.slice(0, 256),
+          },
+          attrs: { set: parsed.data.set },
+        },
+        () => agents.extensions.signIn(parsed.data, ctx.principal),
+        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.terminal.sessionId } }),
       );
     });
     api.register("agents.installs", async (_ctx, params) => {

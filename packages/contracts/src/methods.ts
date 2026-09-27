@@ -1512,6 +1512,17 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // AR-S4c — a remote server's sign-in: the agent's own login in a pane on the
+  // page (it opens a browser, and may ask for a code), so it takes
+  // `agent.spawn` as `agents.profiles.login` does; audited, one act at a time
+  // per Agent Profile, the receipt on the subscription when the pane ends.
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.signIn",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "agents.usage",

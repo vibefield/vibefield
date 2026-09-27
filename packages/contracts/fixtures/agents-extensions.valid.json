@@ -32,7 +32,7 @@
       "counts": {
         "plugins": 1,
         "marketplaces": 1,
-        "mcpServers": 3,
+        "mcpServers": 4,
         "skills": 3
       },
       "fetchedAt": "2026-09-25T09:00:00.000Z"
@@ -66,7 +66,7 @@
       "counts": {
         "plugins": 1,
         "marketplaces": 0,
-        "mcpServers": 2,
+        "mcpServers": 3,
         "skills": 2
       },
       "fetchedAt": "2026-09-25T09:00:02.000Z"
@@ -236,6 +236,64 @@
             "target": "https://mcp.linear.app/mcp",
             "headers": ["Authorization"],
             "version": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "notion",
+      "versions": 1,
+      "cells": {
+        "claude": [
+          {
+            "id": "notion",
+            "origin": "own",
+            "enabled": true,
+            "place": "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/.claude.json",
+            "transport": "http",
+            "target": "https://mcp.notion.com/mcp",
+            "acts": [
+              {
+                "act": "remove",
+                "runs": "claude mcp remove --scope user notion",
+                "reaches": ["definition", "sign-in"]
+              },
+              {
+                "act": "sign-in",
+                "runs": "claude mcp login notion",
+                "reaches": [],
+                "terminal": true
+              }
+            ]
+          }
+        ],
+        "codex": [
+          {
+            "id": "notion",
+            "origin": "own",
+            "enabled": true,
+            "place": "~/Library/Application Support/VibeField/agents/profiles/work/codex-7a10c3e2/config.toml",
+            "transport": "http",
+            "target": "https://mcp.notion.com/mcp",
+            "auth": "needs-sign-in",
+            "acts": [
+              {
+                "act": "disable",
+                "runs": "config/value/write mcp_servers.notion.enabled = false",
+                "reaches": []
+              },
+              {
+                "act": "remove",
+                "runs": "codex mcp remove notion",
+                "reaches": ["definition"]
+              },
+              {
+                "act": "sign-in",
+                "runs": "codex mcp login notion",
+                "reaches": ["every-profile"],
+                "terminal": true
+              }
+            ]
           }
         ]
       }

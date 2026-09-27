@@ -145,6 +145,13 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: false,
         locality: "local",
       },
+      // AR-S4c — a server's sign-in opens a pane, as a persona's login does
+      {
+        method: "agents.extensions.signIn",
+        scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+      },
       // AR-5d — account usage: a READ of the agent plane, so it rides
       // AR-5b: the account's billing state, a credentialed call per reading —
       // its own scope, not the fold's

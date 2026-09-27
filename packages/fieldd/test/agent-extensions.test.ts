@@ -9,10 +9,12 @@ import type {
   McpServerItem,
   SkillItem,
 } from "@vibecook/puppeteer-core";
+import type { StartedExtensionAct } from "@vibecook/puppeteer-runtime";
 import {
   AGENT_CATALOG_READERS,
   AgentsExtensionsActResult,
   AgentsExtensionsListResult,
+  type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -20,7 +22,9 @@ import {
   abbreviateHome,
   buildExtensionLens,
   type ExtensionLensAgent,
+  type ExtensionSignInPanes,
 } from "../src/agent-extensions";
+import type { GrantPrincipal } from "../src/terminal-grants";
 
 // AR-S4b — the Extensions lens: what each agent in an Agent Profile holds,
 // grouped by name. The builder is pure; the service is measured against a
@@ -351,9 +355,19 @@ function stubRuntime(options: {
     providerId: string;
     profileId?: string;
     target: { kind: "mcp-server" | "skill"; id: string };
-    act: "enable" | "disable" | "remove";
+    act: "enable" | "disable" | "remove" | "sign-out";
     onOutput?: (chunk: string) => void;
   }) => Promise<ExtensionActReceipt>;
+  start?: (request: {
+    providerId: string;
+    profileId?: string;
+    target: { kind: "mcp-server" | "skill"; id: string };
+    act: "sign-in";
+  }) => Promise<StartedExtensionAct | ExtensionActReceipt>;
+  settle?: (
+    started: StartedExtensionAct,
+    ended?: { exitCode?: number | null; stopped?: boolean },
+  ) => Promise<ExtensionActReceipt>;
 }) {
   const sets = options.sets ?? { work: ["claude", "codex", "copilot"] };
   const extensionInventory = vi.fn(
@@ -400,6 +414,18 @@ function stubRuntime(options: {
           throw new Error("no act expected");
         }),
     ),
+    startExtensionAct: vi.fn(
+      options.start ??
+        (async () => {
+          throw new Error("no sign-in expected");
+        }),
+    ),
+    settleExtensionAct: vi.fn(
+      options.settle ??
+        (async () => {
+          throw new Error("no sign-in expected");
+        }),
+    ),
   };
   return {
     runtime: runtime as unknown as ConstructorParameters<
@@ -407,6 +433,8 @@ function stubRuntime(options: {
     >[0]["runtime"],
     extensionInventory,
     runExtensionAct: runtime.runExtensionAct,
+    startExtensionAct: runtime.startExtensionAct,
+    settleExtensionAct: runtime.settleExtensionAct,
   };
 }
 
@@ -688,5 +716,284 @@ describe("AgentExtensionService acts (AR-S4c)", () => {
       }),
     ).rejects.toMatchObject({ kind: "NOT_FOUND" });
     expect(runExtensionAct).not.toHaveBeenCalled();
+  });
+});
+
+describe("AgentExtensionService sign-ins (AR-S4c)", () => {
+  const PRINCIPAL = { kind: "shell-main" } as GrantPrincipal;
+  const TICKET = { sessionId: "pty-sign-in" } as unknown as TerminalCreateOpenResult;
+  const LINEAR = { kind: "mcp-server" as const, id: "linear" };
+
+  /** Codex's own remote `linear`, which asks for a sign-in until the "person" finishes one. */
+  function codexAsking(options: { enabled?: boolean } = {}) {
+    const state = { auth: "needs-sign-in" as "needs-sign-in" | "signed-in" };
+    const plans = async (
+      _provider: string,
+      _profileId: string | undefined,
+      items: ReadonlyArray<McpServerItem | SkillItem>,
+    ): Promise<ExtensionActPlan[]> =>
+      items.flatMap((item) =>
+        (["enable", "disable", "remove", "sign-in", "sign-out"] as const).map((act) => {
+          const verb = act === "sign-in" ? "login" : act === "sign-out" ? "logout" : act;
+          return {
+            target: { kind: item.kind, id: item.id },
+            act,
+            available: true as const,
+            runs: {
+              kind: act === "sign-in" ? ("terminal" as const) : ("command" as const),
+              argv: ["codex", "mcp", verb, item.id],
+            },
+            display: `codex mcp ${verb} ${item.id}`,
+            reaches:
+              act === "sign-in" || act === "sign-out"
+                ? (["every-profile"] as const)
+                : act === "remove"
+                  ? (["definition"] as const)
+                  : [],
+          };
+        }),
+      ) as ExtensionActPlan[];
+    const started: StartedExtensionAct = {
+      runtimeSessionId: "pty-sign-in",
+      providerId: "codex",
+      profileId: "work-codex",
+      target: LINEAR,
+      act: "sign-in",
+      display: "codex mcp login linear",
+      reaches: ["every-profile"],
+      startedAt: NOW,
+      before: linear("linear", { auth: "needs-sign-in" }) as McpServerItem,
+    };
+    const stub = stubRuntime({
+      sets: { work: ["codex"] },
+      read: async (provider, profileId) => ({
+        ...inventory(provider, [
+          linear("linear", { auth: state.auth, enabled: options.enabled ?? true }),
+        ]),
+        profileId,
+      }),
+      plans,
+      start: async () => started,
+      settle: async (_started, ended) => ({
+        provider: "codex",
+        profileId: "work-codex",
+        target: LINEAR,
+        act: "sign-in",
+        status: state.auth === "signed-in" ? "changed" : "unchanged",
+        startedAt: NOW,
+        finishedAt: NOW,
+        display: "codex mcp login linear",
+        ...(typeof ended?.exitCode === "number" ? { exitCode: ended.exitCode } : {}),
+        message: state.auth === "signed-in" ? "signed in" : "Codex still asks you to sign in",
+      }),
+    });
+    const panes = {
+      open: vi.fn<ExtensionSignInPanes["open"]>(() => TICKET),
+      close: vi.fn<ExtensionSignInPanes["close"]>(async () => undefined),
+    };
+    const make = (extra: { panes?: ExtensionSignInPanes | null; signInWaitMs?: number } = {}) =>
+      new AgentExtensionService({
+        runtime: stub.runtime,
+        catalog: AGENT_CATALOG_READERS,
+        home: HOME,
+        now: () => new Date(NOW),
+        ...(extra.panes === null ? {} : { panes: extra.panes ?? panes }),
+        ...(extra.signInWaitMs !== undefined ? { signInWaitMs: extra.signInWaitMs } : {}),
+      });
+    return { ...stub, state, panes, make, signIn: () => state };
+  }
+
+  const exit = (
+    sessionId: string,
+    fields: { exitCode: number | null; requestedTermination: string | null },
+  ) =>
+    ({ type: "session-exited", sessionId, ...fields }) as unknown as Parameters<
+      AgentExtensionService["handleTerminalExit"]
+    >[0];
+
+  it("offers a sign-in where the agent asks, a sign-out only where it says signed in, and marks the one that needs a terminal", async () => {
+    const t = codexAsking();
+    const asking = AgentsExtensionsListResult.parse(await t.make().list("work"));
+    expect(asking.servers[0]?.cells.codex?.[0]?.acts?.map((act) => act.act)).toEqual([
+      "disable",
+      "remove",
+      "sign-in",
+    ]);
+    expect(asking.servers[0]?.cells.codex?.[0]?.acts?.[2]).toEqual({
+      act: "sign-in",
+      runs: "codex mcp login linear",
+      reaches: ["every-profile"],
+      terminal: true,
+    });
+    t.state.auth = "signed-in";
+    const signedIn = AgentsExtensionsListResult.parse(await t.make().list("work"));
+    expect(signedIn.servers[0]?.cells.codex?.[0]?.acts?.map((act) => act.act)).toEqual([
+      "disable",
+      "remove",
+      "sign-out",
+    ]);
+    // a server the agent does not load is not signed in to
+    const off = codexAsking({ enabled: false });
+    const lens = AgentsExtensionsListResult.parse(await off.make().list("work"));
+    expect(lens.servers[0]?.cells.codex?.[0]?.acts?.map((act) => act.act)).toEqual([
+      "enable",
+      "remove",
+    ]);
+  });
+
+  it("opens the sign-in in a pane for the caller, holds the profile while it runs, and settles it when the pane ends", async () => {
+    const t = codexAsking();
+    const extensions = t.make();
+    const frames: Array<ReturnType<typeof AgentsExtensionsListResult.parse>> = [];
+    const { dispose } = await extensions.subscribe("work", (frame) =>
+      frames.push(AgentsExtensionsListResult.parse(frame)),
+    );
+    await vi.waitFor(() => expect(frames).toHaveLength(1));
+
+    const answered = await extensions.signIn(
+      { set: "work", provider: "codex", id: "linear" },
+      PRINCIPAL,
+    );
+    expect(answered.terminal).toBe(TICKET);
+    expect(answered.run).toMatchObject({
+      act: "sign-in",
+      name: "linear",
+      runs: "codex mcp login linear",
+      state: "running",
+      terminal: { sessionId: "pty-sign-in" },
+    });
+    expect(t.panes.open).toHaveBeenCalledWith("pty-sign-in", PRINCIPAL);
+    expect(t.startExtensionAct).toHaveBeenCalledWith({
+      providerId: "codex",
+      profileId: "work-codex",
+      target: LINEAR,
+      act: "sign-in",
+    });
+    await vi.waitFor(() =>
+      expect(frames.at(-1)?.run).toMatchObject({
+        state: "running",
+        terminal: { sessionId: "pty-sign-in" },
+      }),
+    );
+    // the profile is held while the pane is open
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "codex",
+        kind: "mcp-server",
+        id: "linear",
+        act: "remove",
+      }),
+    ).rejects.toMatchObject({
+      kind: "CONFLICT",
+      message: "Codex is still signing in to linear in this Agent Profile",
+    });
+
+    // the person finishes in the browser; the pane ends
+    t.state.auth = "signed-in";
+    expect(
+      await extensions.handleTerminalExit(
+        exit("pty-sign-in", { exitCode: 0, requestedTermination: null }),
+      ),
+    ).toBe(true);
+    expect(t.settleExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeSessionId: "pty-sign-in" }),
+      {
+        exitCode: 0,
+        stopped: false,
+      },
+    );
+    expect(t.panes.close).toHaveBeenCalledWith("pty-sign-in");
+    await vi.waitFor(() =>
+      expect(frames.at(-1)?.servers[0]?.cells.codex?.[0]).toMatchObject({ auth: "signed-in" }),
+    );
+    const run = frames.at(-1)?.run;
+    expect(run).toMatchObject({
+      state: "finished",
+      receipt: { status: "changed", message: "signed in" },
+    });
+    expect(run?.terminal).toBeUndefined();
+    // a pane that was never a sign-in's is not this service's
+    expect(
+      await extensions.handleTerminalExit(
+        exit("pty-other", { exitCode: 0, requestedTermination: null }),
+      ),
+    ).toBe(false);
+    dispose();
+  });
+
+  it("says a pane the person closed was stopped, not refused", async () => {
+    const t = codexAsking();
+    const extensions = t.make();
+    await extensions.signIn({ set: "work", provider: "codex", id: "linear" }, PRINCIPAL);
+    await extensions.handleTerminalExit(
+      exit("pty-sign-in", { exitCode: null, requestedTermination: "api" }),
+    );
+    expect(t.settleExtensionAct).toHaveBeenCalledWith(expect.anything(), {
+      exitCode: null,
+      stopped: true,
+    });
+  });
+
+  it("refuses without a floor, ends a pane no ticket can reach, and says when the agent no longer offers it", async () => {
+    const t = codexAsking();
+    await expect(
+      t.make({ panes: null }).signIn({ set: "work", provider: "codex", id: "linear" }, PRINCIPAL),
+    ).rejects.toMatchObject({ kind: "UNAVAILABLE" });
+    expect(t.startExtensionAct).not.toHaveBeenCalled();
+
+    t.panes.open.mockImplementationOnce(() => {
+      throw new Error("no ticket");
+    });
+    await expect(
+      t.make().signIn({ set: "work", provider: "codex", id: "linear" }, PRINCIPAL),
+    ).rejects.toThrow("no ticket");
+    expect(t.panes.close).toHaveBeenCalledWith("pty-sign-in");
+
+    t.startExtensionAct.mockImplementationOnce(async () => ({
+      provider: "codex",
+      profileId: "work-codex",
+      target: LINEAR,
+      act: "sign-in",
+      status: "unavailable",
+      startedAt: NOW,
+      finishedAt: NOW,
+      message: "Codex has no sign-in for linear: it sends a key, or asks for none",
+    }));
+    await expect(
+      t.make().signIn({ set: "work", provider: "codex", id: "linear" }, PRINCIPAL),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    // signed in already: the lens offers no sign-in, so none is started
+    t.state.auth = "signed-in";
+    await expect(
+      t.make().signIn({ set: "work", provider: "codex", id: "linear" }, PRINCIPAL),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+  });
+
+  it("leaves a pane nobody finished to the person once the wait runs out, and reads again when it ends", async () => {
+    const t = codexAsking();
+    const extensions = t.make({ signInWaitMs: 5 });
+    await extensions.signIn({ set: "work", provider: "codex", id: "linear" }, PRINCIPAL);
+    await vi.waitFor(() =>
+      expect(t.settleExtensionAct).toHaveBeenCalledWith(expect.anything(), undefined),
+    );
+    // still the person's: nothing closed it, and the profile is free again
+    expect(t.panes.close).not.toHaveBeenCalled();
+    await vi.waitFor(async () =>
+      expect(AgentsExtensionsListResult.parse(await extensions.list("work")).run).toMatchObject({
+        state: "finished",
+        receipt: { status: "unchanged" },
+      }),
+    );
+    const reads = t.extensionInventory.mock.calls.length;
+    t.state.auth = "signed-in";
+    expect(
+      await extensions.handleTerminalExit(
+        exit("pty-sign-in", { exitCode: 0, requestedTermination: null }),
+      ),
+    ).toBe(true);
+    expect(t.panes.close).toHaveBeenCalledWith("pty-sign-in");
+    expect(t.extensionInventory.mock.calls.length).toBeGreaterThan(reads);
+    expect(t.settleExtensionAct).toHaveBeenCalledTimes(1);
   });
 });

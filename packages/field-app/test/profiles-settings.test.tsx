@@ -1267,9 +1267,10 @@ describe("Extensions below a profile and an agent (AR-S4b)", () => {
       route: { kind: "agent", set: "work", provider: "claude" },
     });
     const kinds = [...(container?.querySelectorAll("[data-ext-kind]") ?? [])];
+    // AR-S4c's fixture adds notion: Claude holds four servers in Work
     expect(kinds.map((row) => row.querySelector(".vf-agents-value")?.textContent)).toEqual([
       "1",
-      "3",
+      "4",
       "3",
     ]);
     await click(button("MCP servers"));

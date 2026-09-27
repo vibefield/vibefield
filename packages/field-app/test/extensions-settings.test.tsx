@@ -7,13 +7,19 @@
  * agent's page in a profile, pass 23's three rows, each opening the agent's
  * own list. All read-only, fed by `agents.extensions.subscribe`, with "Read
  * again" asking `agents.extensions.list` to read every agent anew. The lens is
- * the contracts fixture, the one fieldd's shape is checked by.
+ * the contracts fixture, the one fieldd's shape is checked by. AR-S4c: the
+ * acts, and a server's sign-in — the agent's own login in a pane on the page,
+ * drawn here with a stand-in pane (the window's terminal pool is not).
  */
 
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentsExtensionsListResult } from "@vibefield/contracts";
+import {
+  AgentsExtensionsListResult,
+  AgentsExtensionsSignInResult,
+  type TerminalCreateOpenResult,
+} from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
@@ -22,9 +28,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FIXTURE_EXTENSION_RUN,
   FIXTURE_EXTENSION_RUNNING,
+  FIXTURE_EXTENSION_SIGNING_IN,
   FIXTURE_EXTENSIONS,
 } from "../src/design-system/extensions-fixtures";
-import { ProfileExtensions } from "../src/panels/agents/ExtensionsSection";
+import { ExtensionItem, ProfileExtensions } from "../src/panels/agents/ExtensionsSection";
 import {
   AgentExtensionListView,
   AgentExtensionsView,
@@ -41,7 +48,15 @@ import {
   holdingWords,
   readWords,
   runWords,
+  signInNote,
 } from "../src/panels/agents/extensions-model";
+
+// The window's terminal pool is not here: a sign-in's pane is a stand-in that
+// names the ticket it was handed.
+vi.mock("../src/panels/agents/SignInTerminal", () => ({
+  SignInTerminal: ({ terminal }: { terminal: TerminalCreateOpenResult }) =>
+    createElement("div", { "data-sign-in-pane": terminal.sessionId }),
+}));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -55,6 +70,9 @@ const FIXTURE = join(
 );
 const RAW: unknown = JSON.parse(readFileSync(FIXTURE, "utf8"));
 const LENS = AgentsExtensionsListResult.parse(RAW);
+const SIGN_IN = AgentsExtensionsSignInResult.parse(
+  JSON.parse(readFileSync(join(dirname(FIXTURE), "agents-extensions-sign-in.valid.json"), "utf8")),
+);
 
 it("draws the catalog from the contracts fixture itself", () => {
   expect(FIXTURE_EXTENSIONS).toEqual(RAW);
@@ -69,7 +87,7 @@ describe("the Extensions model", () => {
   it("lists a name some agent holds as its own, and counts the rest beneath", () => {
     const servers = extensionGrid(LENS, "servers");
     // sentry is only a project's server in Claude: it stays on Claude's own list
-    expect(servers.rows.map((row) => row.name)).toEqual(["linear", "postgres"]);
+    expect(servers.rows.map((row) => row.name)).toEqual(["linear", "notion", "postgres"]);
     expect(servers.more).toBe(
       "1 more comes with a plugin, an app or one project; it stays on its agent’s own list.",
     );
@@ -148,12 +166,12 @@ describe("the Extensions model", () => {
       glyph: "globe",
       fact: "Two versions · https://mcp.linear.app/mcp",
     });
-    expect(servers.rows[1]).toMatchObject({ glyph: "prompt", twoVersions: true });
+    expect(servers.rows[2]).toMatchObject({ glyph: "prompt", twoVersions: true });
     expect(extensionGrid(LENS, "skills").rows[0]?.fact).toBe(
       "~/.agents/skills · Drafts release notes from merged pull requests",
     );
     expect(builtFromWords(LENS, "Work")).toEqual({
-      text: "Built from what Work’s agents already have: 2 servers and 2 skills. Nothing in the agents changed.",
+      text: "Built from what Work’s agents already have: 3 servers and 2 skills. Nothing in the agents changed.",
       twoVersions: ["linear", "postgres"],
     });
     const grok = LENS.servers[0]?.cells.grok?.[0];
@@ -174,15 +192,19 @@ describe("one agent's Extensions (pass 23)", () => {
   it("counts what each agent holds, what it borrows included, and says only the exceptions", () => {
     expect(rowsOf("claude")).toEqual([
       ["Plugins", "1", ""],
-      ["MCP servers", "3", ""],
+      ["MCP servers", "4", ""],
       ["Skills", "3", ""],
     ]);
-    // a built-in skill comes with the app: it is not counted
+    // a built-in skill comes with the app: it is not counted; a server asking
+    // for a sign-in is set apart
     expect(rowsOf("codex")).toEqual([
       ["Plugins", "1", ""],
-      ["MCP servers", "2", ""],
+      ["MCP servers", "3", ""],
       ["Skills", "1", ""],
     ]);
+    expect(agentExtensions(LENS, "codex")?.rows[1]).toMatchObject({
+      attention: "notion asks you to sign in",
+    });
     expect(rowsOf("grok")).toEqual([
       ["Plugins", "None", ""],
       ["MCP servers", "1", "All from Claude on This Mac"],
@@ -227,7 +249,7 @@ describe("one agent's Extensions (pass 23)", () => {
     expect(
       claude?.sections.map((section) => [section.title, section.items.map((item) => item.name)]),
     ).toEqual([
-      ["Servers", ["linear", "postgres"]],
+      ["Servers", ["linear", "notion", "postgres"]],
       ["Only in one project", ["sentry"]],
     ]);
     expect(claude?.sections[0]?.items[0]).toMatchObject({
@@ -236,7 +258,7 @@ describe("one agent's Extensions (pass 23)", () => {
       text: "sends Authorization",
       state: "Signed in",
     });
-    expect(claude?.sections[0]?.items[1]).toMatchObject({
+    expect(claude?.sections[0]?.items[2]).toMatchObject({
       glyph: "prompt",
       text: "reads PGPASSWORD",
     });
@@ -434,6 +456,112 @@ describe("acts (AR-S4c)", () => {
       text: "Codex couldn’t change postgres: codex mcp remove postgres exited with 1.",
     });
   });
+
+  it("offers each agent's own sign-in on a server's page, and a sign-out only where it says signed in", () => {
+    const notion = extensionItem(LENS, "servers", "notion");
+    const [claude, codex] = notion.agents;
+    expect(codex).toMatchObject({
+      state: "Asks you to sign in",
+      attention: true,
+      signIn: {
+        label: "Sign in",
+        act: {
+          act: "sign-in",
+          runs: "codex mcp login notion",
+          reaches: ["every-profile"],
+          terminal: true,
+          title: "Sign in to notion for Codex",
+        },
+      },
+      signOut: null,
+    });
+    // Claude doesn't say whether it is signed in: its sign-in is there, quietly
+    expect(claude).toMatchObject({
+      state: "On",
+      signIn: { label: "Sign in…", act: { act: "sign-in", reaches: [], terminal: true } },
+      signOut: null,
+    });
+    // the grid's cells still turn the server on and off, never sign in
+    expect(
+      extensionGrid(LENS, "servers")
+        .rows.find((row) => row.name === "notion")
+        ?.cells.map((cell) => cell.act?.act),
+    ).toEqual(["remove", "disable", undefined, undefined, undefined]);
+
+    const signedIn = structuredClone(LENS);
+    const held = signedIn.servers.find((row) => row.name === "notion")!.cells.codex![0]!;
+    held.auth = "signed-in";
+    held.acts = [
+      ...(held.acts ?? []).filter((offer) => offer.act !== "sign-in"),
+      { act: "sign-out", runs: "codex mcp logout notion", reaches: ["every-profile"] },
+    ];
+    const after = extensionItem(signedIn, "servers", "notion").agents[1];
+    expect(after).toMatchObject({ state: "Signed in", signIn: null });
+    expect(after?.signOut).toMatchObject({
+      act: "sign-out",
+      title: "Sign out of notion for Codex",
+    });
+  });
+
+  it("asks before a sign-in every profile of the agent shares, and says where one lands", () => {
+    const [claude, codex] = extensionItem(LENS, "servers", "notion").agents;
+    expect(actConfirm(codex!.signIn!.act, "in Work")).toEqual({
+      question: "Sign in to notion for Codex in every profile?",
+      what: "Codex keeps one sign-in to notion for every profile on this Mac: every Codex profile that holds notion at this address will use this one, not only Work.",
+      action: "Sign in",
+      danger: false,
+    });
+    expect(actConfirm(claude!.signIn!.act, "in Work")).toBeNull();
+    expect(signInNote(LENS, FIXTURE_EXTENSION_SIGNING_IN, "in Work")).toBe(
+      "Codex opens your browser to finish. The sign-in is Codex’s for every profile on this Mac.",
+    );
+    expect(
+      signInNote(
+        LENS,
+        { ...FIXTURE_EXTENSION_SIGNING_IN, provider: "claude", label: "Claude" },
+        "in Work",
+      ),
+    ).toBe("Claude opens your browser to finish. The sign-in lands in Work alone.");
+  });
+
+  it("words a sign-in: signing in, then what the agent says, or that it doesn't say", () => {
+    const at = new Date("2026-09-25T09:01:10.000Z");
+    expect(runWords(FIXTURE_EXTENSION_SIGNING_IN, at)).toEqual({
+      state: "Signing in…",
+      outcome: null,
+    });
+    const finished = (
+      status: "changed" | "unchanged" | "unconfirmed" | "failed",
+      message: string,
+    ) =>
+      runWords(
+        {
+          ...FIXTURE_EXTENSION_SIGNING_IN,
+          state: "finished",
+          finishedAt: "2026-09-25T09:01:40.000Z",
+          receipt: { status, message, finishedAt: "2026-09-25T09:01:40.000Z" },
+        },
+        at,
+      ).outcome;
+    expect(finished("changed", "signed in")).toEqual({
+      tone: "neutral",
+      text: "Codex is signed in to notion.",
+    });
+    expect(finished("unchanged", "Codex still asks you to sign in")).toEqual({
+      tone: "neutral",
+      text: "Codex still asks you to sign in to notion.",
+    });
+    expect(
+      finished("unconfirmed", "Codex says whether it is signed in only inside a session"),
+    ).toEqual({
+      tone: "neutral",
+      text: "Codex doesn’t say whether it’s signed in until a session uses notion.",
+    });
+    expect(finished("failed", "codex mcp login notion exited with 1")).toEqual({
+      tone: "error",
+      text: "Codex couldn’t sign in to notion: codex mcp login notion exited with 1.",
+    });
+  });
 });
 
 // ── drawn ──
@@ -607,8 +735,8 @@ describe("acts, drawn", () => {
   it("runs a switch at once, and opens P7's confirm first for a click that reaches further", async () => {
     const onAct = vi.fn();
     await mount(createElement(ProfileExtensionsView, { lens: LENS, profile: "Work", onAct }));
-    // Codex linear, Claude linear, Claude postgres, Codex postgres, Codex's release-notes
-    expect(container?.querySelectorAll(".vf-ext-cell-button")).toHaveLength(5);
+    // linear, notion and postgres for Claude and for Codex, and Codex's release-notes
+    expect(container?.querySelectorAll(".vf-ext-cell-button")).toHaveLength(7);
     await act(async () => cellButton("Turn linear off for Codex")?.click());
     expect(onAct).toHaveBeenCalledWith({
       provider: "codex",
@@ -779,5 +907,168 @@ describe("ProfileExtensions (the controller)", () => {
     expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
       "That change didn’t run",
     );
+  });
+});
+
+describe("a server's sign-in, drawn", () => {
+  const buttonNamed = (label: string) =>
+    [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (button) => button.getAttribute("aria-label") === label || button.textContent === label,
+    );
+
+  it("signs in from a server's page: every profile's asks first, the profile's own at once", async () => {
+    const onAct = vi.fn();
+    await mount(
+      createElement(ExtensionItemView, {
+        lens: LENS,
+        list: "servers",
+        name: "notion",
+        where: "in Work",
+        onAct,
+      }),
+    );
+    expect(buttonNamed("Sign in to notion for Codex")?.textContent).toBe("Sign in");
+    expect(buttonNamed("Sign in to notion for Claude")?.textContent).toBe("Sign in…");
+    await act(async () => buttonNamed("Sign in to notion for Claude")?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "claude",
+      kind: "mcp-server",
+      id: "notion",
+      act: "sign-in",
+    });
+    onAct.mockClear();
+    await act(async () => buttonNamed("Sign in to notion for Codex")?.click());
+    expect(onAct).not.toHaveBeenCalled();
+    const confirm = container?.querySelector("[data-ext-confirm]");
+    expect(confirm?.textContent).toContain("Sign in to notion for Codex in every profile?");
+    expect(confirm?.textContent).toContain("codex mcp login notion");
+    await act(async () =>
+      [...(confirm?.querySelectorAll("button") ?? [])]
+        .find((button) => button.textContent === "Sign in")
+        ?.click(),
+    );
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "codex",
+      kind: "mcp-server",
+      id: "notion",
+      act: "sign-in",
+    });
+  });
+
+  it("shows a running sign-in's pane where this window opened it, a line elsewhere, and Cancel", async () => {
+    const onCancel = vi.fn();
+    const lens = { ...LENS, run: FIXTURE_EXTENSION_SIGNING_IN };
+    await mount(
+      createElement(ExtensionItemView, {
+        lens,
+        list: "servers",
+        name: "notion",
+        where: "in Work",
+        onAct: vi.fn(),
+        signIn: { pane: createElement("div", { "data-pane": "" }), onCancel },
+      }),
+    );
+    const card = container?.querySelector('[aria-label="Codex sign-in to notion"]');
+    expect(card?.querySelector("[data-pane]")).not.toBeNull();
+    expect(card?.textContent).toContain("Codex · sign in to notion · Work");
+    expect(card?.textContent).toContain("The sign-in is Codex’s for every profile on this Mac.");
+    // one act at a time: nothing else starts while the pane is open
+    expect(buttonNamed("Sign in to notion for Claude")?.disabled).toBe(true);
+    await act(async () => buttonNamed("Cancel")?.click());
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    await mount(
+      createElement(ExtensionItemView, {
+        lens,
+        list: "servers",
+        name: "notion",
+        where: "in Work",
+        signIn: { onCancel },
+      }),
+    );
+    expect(container?.textContent).toContain(
+      "codex mcp login notion is running in a terminal another window opened.",
+    );
+  });
+});
+
+describe("ExtensionItem (the controller)", () => {
+  it("asks agents.extensions.signIn, shows the pane it answers with, and cancels it with terminal.terminate", async () => {
+    let push: ((frame: unknown) => void) | undefined;
+    const request = vi.fn(async (method: string, params?: unknown) => {
+      if (method === "agents.extensions.signIn") {
+        expect(params).toEqual({ set: "work", provider: "claude", id: "notion" });
+        return SIGN_IN;
+      }
+      expect(method).toBe("terminal.terminate");
+      expect(params).toEqual({ sessionId: SIGN_IN.terminal.sessionId });
+      return { terminated: true };
+    });
+    const client = {
+      status: "ready",
+      onStatusChange: () => () => undefined,
+      request,
+      subscribe: vi.fn(
+        async (_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+          push = onData;
+          return { subId: "extensions:work", snapshot: LENS, unsubscribe: (): void => undefined };
+        },
+      ),
+    } as unknown as FielddClient;
+    await mount(
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(ExtensionItem, {
+          set: "work",
+          list: "servers",
+          name: "notion",
+          where: "in Work",
+        }),
+      ),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const signIn = [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (button) => button.getAttribute("aria-label") === "Sign in to notion for Claude",
+    );
+    await act(async () => signIn?.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(request).toHaveBeenCalledWith("agents.extensions.signIn", {
+      set: "work",
+      provider: "claude",
+      id: "notion",
+    });
+    // the frame says the sign-in runs: this window holds its pane
+    await act(async () => push?.({ ...LENS, run: SIGN_IN.run }));
+    expect(
+      container?.querySelector(`[data-sign-in-pane="${SIGN_IN.terminal.sessionId}"]`),
+    ).not.toBeNull();
+    const cancel = [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (button) => button.textContent === "Cancel",
+    );
+    await act(async () => cancel?.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(request).toHaveBeenCalledWith("terminal.terminate", {
+      sessionId: SIGN_IN.terminal.sessionId,
+    });
+    // the pane ended: the receipt, and the pane no more
+    await act(async () =>
+      push?.({
+        ...LENS,
+        run: {
+          ...SIGN_IN.run,
+          state: "finished",
+          terminal: undefined,
+          finishedAt: "2026-09-25T09:01:40.000Z",
+          receipt: {
+            status: "unchanged",
+            message: "Codex still asks you to sign in",
+            finishedAt: "2026-09-25T09:01:40.000Z",
+          },
+        },
+      }),
+    );
+    expect(container?.querySelector("[data-sign-in-pane]")).toBeNull();
+    expect(container?.textContent).toContain("Codex still asks you to sign in to notion.");
   });
 });

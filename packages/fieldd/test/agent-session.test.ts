@@ -43,6 +43,7 @@ import type {
   AgentHost,
   AgentProfile,
   BoundIngress,
+  ExtensionService,
   ProfileService,
   PromptReceipt,
   PromptSubmission,
@@ -60,6 +61,8 @@ import {
   type AgentProvidersResult,
   AgentSessionRecord,
   type AgentSpawnResult,
+  type AgentsExtensionsListResult,
+  type AgentsExtensionsSignInResult,
   type AgentsProfileSetsDeleteResult,
   type AgentsProfileSetsListResult,
   type AgentsProfileSetsSetResult,
@@ -219,16 +222,84 @@ function scriptedProfiles(): ProfileService {
   };
 }
 
+/** AR-S4c — the scripted agent's one remote server, `linear`: it asks for a
+ * sign-in until its sign-in — a shell in a pane on the floor — leaves `mark`. */
+function scriptedExtensions(mark: string): ExtensionService {
+  return {
+    provider: {
+      id: "scripted",
+      label: "Scripted",
+      support: { mcpServers: { store: "profile", changes: "command", read: true } },
+    },
+    inventory: async (profile) => ({
+      provider: "scripted",
+      profileId: profile.id,
+      fetchedAt: new Date().toISOString(),
+      items: [
+        {
+          kind: "mcp-server",
+          id: "linear",
+          name: "linear",
+          origin: "own",
+          enabled: true,
+          transport: "http",
+          target: "https://mcp.linear.app/mcp",
+          auth: existsSync(mark) ? "signed-in" : "needs-sign-in",
+        },
+      ],
+      source: { kind: "native-store", stability: "documented" },
+    }),
+    plan: (_profile, item, act) =>
+      act === "sign-in"
+        ? {
+            target: { kind: item.kind, id: item.id },
+            act,
+            available: true,
+            runs: { kind: "terminal", argv: ["/bin/sh", "-c", `touch '${mark}'`] },
+            display: "scripted mcp login linear",
+            reaches: [],
+          }
+        : {
+            target: { kind: item.kind, id: item.id },
+            act,
+            available: false,
+            reason: "no-command",
+            message: "no command here",
+          },
+  };
+}
+
+/** AR-S4c — a built-in agent's extension reads, answered empty: no test here
+ * reads this machine's homes. */
+function withoutExtensionReads(provider: AgentProvider): AgentProvider {
+  const real = provider.extensions;
+  if (real === undefined) return provider;
+  return {
+    ...provider,
+    extensions: {
+      provider: real.provider,
+      inventory: async (profile) => ({
+        provider: provider.descriptor.id,
+        profileId: profile.id,
+        fetchedAt: new Date().toISOString(),
+        items: [],
+        source: { kind: "native-store", stability: "documented" },
+      }),
+    },
+  };
+}
+
 function scriptedProvider(
   envOut: string,
   sessions: ScriptedSession[],
   attach: { records: ScriptedAttach[] } | undefined,
-  extra: { profiles?: boolean; seen?: Array<AgentProfile | undefined> } = {},
+  extra: { profiles?: boolean; seen?: Array<AgentProfile | undefined>; signInMark?: string } = {},
 ): AgentProvider {
   let counter = 0;
   return {
     descriptor: { id: "scripted", label: "Scripted" },
     ...(extra.profiles === true ? { profiles: scriptedProfiles() } : {}),
+    ...(extra.signInMark !== undefined ? { extensions: scriptedExtensions(extra.signInMark) } : {}),
     async createSession(options: AgentProviderSessionOptions): Promise<AgentAdapterBinding> {
       const bornAt = Date.now();
       const n = ++counter;
@@ -325,6 +396,9 @@ interface SetupConfig {
   rosettadMode?: string;
   /** AR-S2 — give the scripted provider an account capability (sign-ins) */
   profiles?: boolean;
+  /** AR-S4c — the scripted agent holds a server whose sign-in runs in a pane;
+   * every built-in agent's extension reads answer empty */
+  extensions?: boolean;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -406,10 +480,11 @@ async function setup(config: SetupConfig): Promise<Box> {
     agentSearchPath: bin,
     agentCatalog: SCRIPTED_CATALOG,
     agentProviders: (builtin) => [
-      ...builtin,
+      ...(config.extensions === true ? builtin.map(withoutExtensionReads) : builtin),
       scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined, {
         profiles: config.profiles === true,
         seen,
+        ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
       }),
     ],
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
@@ -977,6 +1052,45 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
     // the login pane is not a managed session: the fold never carried it
     expect(((await win.call("agent.list", {})) as AgentListResult).sessions).toEqual([]);
+  }, 60_000);
+
+  it("a server's sign-in (AR-S4c): the agent's own login in a pane on the floor, the agent read again when it ends, its husk closed", async () => {
+    const { daemon, dataDir } = await setup({ floor: "real", profiles: true, extensions: true });
+    const win = await window(daemon, [...DECK, "agents.manage"], "e1");
+    const lensOf = async () =>
+      (await win.call("agents.extensions.list", { set: "native" })) as AgentsExtensionsListResult;
+    const cell = (lens: AgentsExtensionsListResult) =>
+      lens.servers.find((row) => row.name === "linear")?.cells["scripted"]?.[0];
+    expect(cell(await lensOf())).toMatchObject({
+      auth: "needs-sign-in",
+      acts: [{ act: "sign-in", runs: "scripted mcp login linear", reaches: [], terminal: true }],
+    });
+
+    const started = (await win.call("agents.extensions.signIn", {
+      set: "native",
+      provider: "scripted",
+      id: "linear",
+    })) as AgentsExtensionsSignInResult;
+    expect(started.run).toMatchObject({
+      act: "sign-in",
+      state: "running",
+      terminal: { sessionId: started.terminal.sessionId },
+    });
+    expect(started.terminal.endpoints.controlUrl).toMatch(/^ws:/);
+    expect(started.terminal).toHaveProperty("attachGrant");
+
+    // the scripted sign-in leaves its mark and returns: the pane's end settles
+    // it, and the read after says signed in, with no sign-in left to offer
+    const after = await poll(async () => {
+      const lens = await lensOf();
+      return lens.run?.state === "finished" && cell(lens)?.auth === "signed-in" ? lens : undefined;
+    }, 15_000);
+    expect(after.run).toMatchObject({ receipt: { status: "changed", message: "signed in" } });
+    expect(after.run?.terminal).toBeUndefined();
+    expect(cell(after)?.acts).toBeUndefined();
+    // the husk is closed, as a login pane's is
+    await untilListed(win, started.terminal.sessionId, false);
+    expect(auditText(dataDir)).toContain('"action":"agents.extensions.sign_in"');
   }, 60_000);
 });
 

@@ -215,6 +215,10 @@ interface CellClient {
   token: string;
 }
 
+/** How long a session's birth cell is kept after its exit, for the listeners
+ * that close its husk (see `bornIn`); the inventory places a husk long before. */
+const BORN_IN_EXIT_GRACE_MS = 30_000;
+
 export class TerminalService {
   private readonly logger: Logger;
   private terminals: TerminalInfo[] = [];
@@ -228,7 +232,14 @@ export class TerminalService {
    * 2026-09-25: agent-session's default-profile row terminated 66–121 ms after
    * the birth, against 86–112 ms from birth to listing). A birth answer is
    * positive knowledge, taken at the one moment it is certain; the
-   * inventory's tag replaces it the moment it exists. */
+   * inventory's tag replaces it the moment it exists.
+   *
+   * AR-S4c — it outlives the session's EXIT by a grace period. An exited
+   * agent pane stays on its cell until it is closed (MF-1g), and closing it is
+   * what an exit listener does (a login pane's, a server sign-in's): a session
+   * born and ended inside one reconcile tick was otherwise closed at the
+   * interactive cell, which answered "unknown session", and its husk stood on
+   * the agent cell for good. A terminate that lands forgets it at once. */
   private readonly bornIn = new Map<string, string>();
   /** Which floor observation `terminals` came from — undefined until the first
    * one applies, which is exactly the state `list`/`get` refuse in. */
@@ -999,6 +1010,7 @@ export class TerminalService {
     const client = await this.connectedClient(await this.sessionCellForOp(sessionId));
     try {
       await client.terminate(sessionId, "application");
+      this.bornIn.delete(sessionId);
       return { terminated: true };
     } catch (error) {
       if (!client.connected) throw this.unavailable("the terminal floor died mid-terminate", error);
@@ -1472,7 +1484,9 @@ export class TerminalService {
     // service. The client is per cell, so a session's exit arrives on the
     // connection to the cell that held it.
     client.on("session-exited", (event: SessionExitedEvent) => {
-      this.bornIn.delete(event.sessionId);
+      // the birth cell outlives the exit: a listener below may close the husk (see `bornIn`)
+      const { sessionId } = event;
+      setTimeout(() => this.bornIn.delete(sessionId), BORN_IN_EXIT_GRACE_MS).unref?.();
       for (const listener of [...this.exitListeners]) {
         try {
           listener(event);

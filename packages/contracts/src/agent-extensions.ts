@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-index";
+import { TerminalCreateOpenResult } from "./terminal-pipeline";
 
 // ── agents.extensions.* (AR-S4b — Extensions; the design record's pass 24) ──
 //
@@ -13,7 +14,11 @@ import { AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-inde
 //
 // AR-S4c: a holding carries the acts its agent offers on it — the command as a
 // person reads it and what it reaches beyond its cell — and one act runs at a
-// time per profile, its output as display text on the same frames.
+// time per profile, its output as display text on the same frames. A remote
+// server's sign-in is the one act a person answers (the agent's own login
+// opens a browser and may ask for a code), so it runs in a terminal on the
+// page: `agents.extensions.signIn` answers with the pane, like a profile's
+// sign-in, and the receipt follows when the pane ends.
 //
 // EL7: a server crosses as puppeteer renders it — its target with userinfo,
 // query and secret-looking arguments masked — and the NAMES of the variables
@@ -59,8 +64,8 @@ export const AgentExtensionSupport = z
   .passthrough();
 export type AgentExtensionSupport = z.infer<typeof AgentExtensionSupport>;
 
-/** AR-S4c — what a person can ask of one holding (RFC 006 C2). */
-export const AgentExtensionActKind = z.enum(["enable", "disable", "remove"]);
+/** AR-S4c — what a person can ask of one holding (RFC 006 C2); a remote server's sign-in and sign-out beside the switches. */
+export const AgentExtensionActKind = z.enum(["enable", "disable", "remove", "sign-in", "sign-out"]);
 export type AgentExtensionActKind = z.infer<typeof AgentExtensionActKind>;
 
 /** What an act changes beyond its one cell, said before it runs. */
@@ -69,7 +74,7 @@ export const AgentExtensionReach = z.enum([
   "definition",
   /** A remote server's stored sign-in goes with it. */
   "sign-in",
-  /** One config serves every profile of the agent. */
+  /** Every profile of the agent shares it: one config, or one keychain entry, serves them all. */
   "every-profile",
   /** It lives in a folder other profiles, and other agents, read. */
   "shared-folder",
@@ -83,6 +88,8 @@ export const AgentExtensionAct = z
     /** What runs, as a person reads it: the agent's own command line, or its protocol call. */
     runs: z.string().min(1),
     reaches: z.array(AgentExtensionReach),
+    /** It runs in a terminal on the page, which the person answers: a sign-in (`agents.extensions.signIn`). */
+    terminal: z.literal(true).optional(),
   })
   .passthrough();
 export type AgentExtensionAct = z.infer<typeof AgentExtensionAct>;
@@ -210,10 +217,12 @@ export const AgentExtensionMarketplace = z
   .passthrough();
 export type AgentExtensionMarketplace = z.infer<typeof AgentExtensionMarketplace>;
 
-/** An act's outcome: decided by reading the agent again, never by its output. */
+/** An act's outcome: decided by reading the agent again, never by its output.
+ * `unconfirmed`: the agent ran it and says whether it took only inside a
+ * session (a sign-in it keeps where no read looks). */
 export const AgentExtensionReceipt = z
   .object({
-    status: z.enum(["changed", "unchanged", "failed", "unavailable"]),
+    status: z.enum(["changed", "unchanged", "failed", "unavailable", "unconfirmed"]),
     message: z.string().min(1),
     exitCode: z.number().int().optional(),
     finishedAt: z.string(),
@@ -242,11 +251,17 @@ export const AgentExtensionRun = z
     output: z.string(),
     truncated: z.boolean(),
     receipt: AgentExtensionReceipt.optional(),
+    /** A sign-in's pane while it runs: the page that asked shows it; any other can end it. */
+    terminal: z
+      .object({ sessionId: z.string().min(1) })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type AgentExtensionRun = z.infer<typeof AgentExtensionRun>;
 
-/** `agents.extensions.act` — run one act; its output arrives on the subscription. */
+/** `agents.extensions.act` — run one act; its output arrives on the subscription.
+ * A sign-in is not one of them: it runs in a terminal (`agents.extensions.signIn`). */
 export const AgentsExtensionsActParams = z
   .object({
     set: AgentProfileSetId,
@@ -254,7 +269,7 @@ export const AgentsExtensionsActParams = z
     kind: z.enum(["mcp-server", "skill"]),
     /** The holding's id, as the lens gave it. */
     id: z.string().min(1).max(512),
-    act: AgentExtensionActKind,
+    act: AgentExtensionActKind.exclude(["sign-in"]),
   })
   .passthrough();
 export type AgentsExtensionsActParams = z.infer<typeof AgentsExtensionsActParams>;
@@ -263,6 +278,25 @@ export const AgentsExtensionsActResult = z
   .object({ run: AgentExtensionRun, receipt: AgentExtensionReceipt })
   .passthrough();
 export type AgentsExtensionsActResult = z.infer<typeof AgentsExtensionsActResult>;
+
+/** `agents.extensions.signIn` — the agent's own sign-in to one of its remote
+ * servers, in a pane on the page: the run (on the subscription too) and the
+ * caller's ticket for the pane. The receipt arrives on the subscription when
+ * the pane ends and the profile has been read again. */
+export const AgentsExtensionsSignInParams = z
+  .object({
+    set: AgentProfileSetId,
+    provider: AgentProviderId,
+    /** The server's id in that agent's read, as the lens gave it. */
+    id: z.string().min(1).max(512),
+  })
+  .passthrough();
+export type AgentsExtensionsSignInParams = z.infer<typeof AgentsExtensionsSignInParams>;
+
+export const AgentsExtensionsSignInResult = z
+  .object({ run: AgentExtensionRun, terminal: TerminalCreateOpenResult })
+  .passthrough();
+export type AgentsExtensionsSignInResult = z.infer<typeof AgentsExtensionsSignInResult>;
 
 /** `agents.extensions.list` — the lens for one Agent Profile. `refresh: true`
  * reads every agent again; otherwise the last read answers when there is one. */

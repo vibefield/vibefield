@@ -287,8 +287,8 @@ const R23B_ALLOW = [
   },
   {
     file: "packages/field-app/src/design-system/extensions-fixtures.ts",
-    count: 8,
-    why: "Extensions' fixture lens for the design catalog (AR-S4b), the contracts fixture's twin — fixture data, never compared",
+    count: 9,
+    why: "Extensions' fixture lens for the design catalog (AR-S4b), the contracts fixture's twin, and its runs (AR-S4c: an act, a server's sign-in) — fixture data, never compared",
   },
   {
     file: "packages/field-app/src/design-system/ProfilesSettingsPreview.tsx",

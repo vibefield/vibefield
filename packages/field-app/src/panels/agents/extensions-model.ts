@@ -876,6 +876,14 @@ export interface ExtensionItemAgent {
   act: ExtensionCellAct | null;
   /** The switch turns either way; without one, only removal is offered. */
   switchable: boolean;
+  /**
+   * AR-S4c — the agent's own sign-in to this server, in a terminal on the
+   * page: "Sign in" where the agent says the server asks for one, "Sign in…"
+   * where it doesn't say. Null when it offers none here.
+   */
+  signIn: { act: ExtensionCellAct; label: "Sign in" | "Sign in…" } | null;
+  /** Its sign-out, offered only where the agent says it is signed in. */
+  signOut: ExtensionCellAct | null;
   /** On the right, beside the cell's mark: "On", "Off", "Always on", "Signed in", … */
   state: string;
   attention: boolean;
@@ -1045,6 +1053,7 @@ export function extensionItem(
     const cell = extensionCell(lens, key, row, column);
     const holding = row.cells[column.provider]?.[0];
     const act = cellAct(key, row, column);
+    const signIn = offerOf(key, row, column, "sign-in");
     const base = {
       provider: column.provider,
       label: column.label,
@@ -1052,6 +1061,15 @@ export function extensionItem(
       act,
       switchable:
         holding?.acts?.some((offer) => offer.act === "enable" || offer.act === "disable") === true,
+      signIn:
+        signIn === null
+          ? null
+          : {
+              act: signIn,
+              label:
+                holding?.auth === "needs-sign-in" ? ("Sign in" as const) : ("Sign in…" as const),
+            },
+      signOut: offerOf(key, row, column, "sign-out"),
       ...stateOf(lens, cell, holding),
     };
     if (holding === undefined) {
@@ -1101,7 +1119,9 @@ export function extensionItem(
    adapter). A click on an "on" cell turns it off — or, for an agent with no
    switch (Claude Code's servers), removes it; on an "off" cell it turns it
    on. A click that reaches further than its cell — the definition, a
-   sign-in, every profile, a shared folder — asks first (P7). */
+   sign-in, every profile, a shared folder — asks first (P7). A remote
+   server's sign-in is the agent's own login in a terminal on the page, and its
+   sign-out the agent's own forgetting of it; both are the item page's. */
 
 export interface ExtensionCellAct {
   provider: string;
@@ -1113,30 +1133,30 @@ export interface ExtensionCellAct {
   act: AgentExtensionAct["act"];
   runs: string;
   reaches: AgentExtensionAct["reaches"];
+  /** It runs in a terminal on the page, which the person answers: a sign-in. */
+  terminal: boolean;
   /** The control's accessible name. */
   title: string;
 }
 
-/** The act a click on one agent's cell runs, or null when it offers none here. */
-export function cellAct(
+const TITLES: Record<AgentExtensionAct["act"], (name: string, agent: string) => string> = {
+  enable: (name, agent) => `Turn ${name} on for ${agent}`,
+  disable: (name, agent) => `Turn ${name} off for ${agent}`,
+  remove: (name, agent) => `Remove ${name} from ${agent}`,
+  "sign-in": (name, agent) => `Sign in to ${name} for ${agent}`,
+  "sign-out": (name, agent) => `Sign out of ${name} for ${agent}`,
+};
+
+/** One act the agent offers on its holding under this row, or null when it offers none such. */
+function offerOf(
   key: ExtensionKindKey,
   row: AgentExtensionRow,
   column: AgentExtensionColumn,
+  kind: AgentExtensionAct["act"],
 ): ExtensionCellAct | null {
   const holding = row.cells[column.provider]?.[0];
-  const acts = holding?.acts ?? [];
-  if (holding === undefined || acts.length === 0) return null;
-  const offer = holding.enabled
-    ? (acts.find((candidate) => candidate.act === "disable") ??
-      acts.find((candidate) => candidate.act === "remove"))
-    : acts.find((candidate) => candidate.act === "enable");
-  if (offer === undefined) return null;
-  const title =
-    offer.act === "enable"
-      ? `Turn ${row.name} on for ${column.label}`
-      : offer.act === "disable"
-        ? `Turn ${row.name} off for ${column.label}`
-        : `Remove ${row.name} from ${column.label}`;
+  const offer = holding?.acts?.find((candidate) => candidate.act === kind);
+  if (holding === undefined || offer === undefined) return null;
   return {
     provider: column.provider,
     label: column.label,
@@ -1146,8 +1166,22 @@ export function cellAct(
     act: offer.act,
     runs: offer.runs,
     reaches: [...offer.reaches],
-    title,
+    terminal: offer.terminal === true,
+    title: TITLES[offer.act](row.name, column.label),
   };
+}
+
+/** The act a click on one agent's cell runs, or null when it offers none here. */
+export function cellAct(
+  key: ExtensionKindKey,
+  row: AgentExtensionRow,
+  column: AgentExtensionColumn,
+): ExtensionCellAct | null {
+  const holding = row.cells[column.provider]?.[0];
+  if (holding === undefined) return null;
+  return holding.enabled
+    ? (offerOf(key, row, column, "disable") ?? offerOf(key, row, column, "remove"))
+    : offerOf(key, row, column, "enable");
 }
 
 export interface ExtensionActConfirm {
@@ -1162,6 +1196,20 @@ export interface ExtensionActConfirm {
 /** P7: the two-step confirm a click needs when it reaches further than its cell; null when it does not. */
 export function actConfirm(act: ExtensionCellAct, where: string): ExtensionActConfirm | null {
   if (act.reaches.length === 0) return null;
+  if (act.act === "sign-in" || act.act === "sign-out") {
+    // the one reach a sign-in has: the agent keeps it once for every profile
+    const signIn = act.act === "sign-in";
+    return {
+      question: signIn
+        ? `Sign in to ${act.name} for ${act.label} in every profile?`
+        : `Sign out of ${act.name} for ${act.label} in every profile?`,
+      what: signIn
+        ? `${act.label} keeps one sign-in to ${act.name} for every profile on this Mac: every ${act.label} profile that holds ${act.name} at this address will use this one, not only ${where.replace(/^(in|on) /u, "")}.`
+        : `${act.label} keeps one sign-in to ${act.name} for every profile on this Mac: every ${act.label} profile that holds ${act.name} at this address is signed out.`,
+      action: signIn ? "Sign in" : "Sign out",
+      danger: false,
+    };
+  }
   const sentences: string[] = [];
   if (act.act === "remove") {
     sentences.push(
@@ -1204,13 +1252,52 @@ export function runWords(
   run: AgentExtensionRun,
   now: Date,
 ): { state: string; outcome: { tone: "neutral" | "error"; text: string } | null } {
-  if (run.state === "running") return { state: "Running…", outcome: null };
+  if (run.state === "running")
+    return { state: run.act === "sign-in" ? "Signing in…" : "Running…", outcome: null };
   const at = run.finishedAt === undefined ? Number.NaN : Date.parse(run.finishedAt);
   const minutes = Number.isFinite(at) ? Math.max(0, Math.round((now.getTime() - at) / 60_000)) : 0;
   const state =
     minutes < 1 ? "Finished just now" : `Finished ${plural(minutes, "minute", "minutes")} ago`;
   const receipt = run.receipt;
   if (receipt === undefined) return { state, outcome: null };
+  if (run.act === "sign-in" || run.act === "sign-out") {
+    const signIn = run.act === "sign-in";
+    switch (receipt.status) {
+      case "changed":
+        return {
+          state,
+          outcome: {
+            tone: "neutral",
+            text: signIn
+              ? `${run.label} is signed in to ${run.name}.`
+              : `${run.label} is signed out of ${run.name}.`,
+          },
+        };
+      case "unchanged":
+        // puppeteer's own words: "Codex still asks you to sign in", "… still holds a sign-in"
+        return { state, outcome: { tone: "neutral", text: `${receipt.message} to ${run.name}.` } };
+      case "unconfirmed":
+        return {
+          state,
+          outcome: {
+            tone: "neutral",
+            text: `${run.label} doesn’t say whether it’s signed in until a session uses ${run.name}.`,
+          },
+        };
+      case "failed":
+        return {
+          state,
+          outcome: {
+            tone: "error",
+            text: signIn
+              ? `${run.label} couldn’t sign in to ${run.name}: ${receipt.message}.`
+              : `${run.label} couldn’t sign out of ${run.name}: ${receipt.message}.`,
+          },
+        };
+      default:
+        return { state, outcome: { tone: "error", text: `${receipt.message}.` } };
+    }
+  }
   switch (receipt.status) {
     case "changed":
       return {
@@ -1244,4 +1331,22 @@ export function runWords(
     default:
       return { state, outcome: { tone: "error", text: `${receipt.message}.` } };
   }
+}
+
+/**
+ * Where a sign-in lands, beside its terminal: this profile alone, or — where
+ * the agent keeps one sign-in for every profile — every one of them.
+ */
+export function signInNote(
+  lens: AgentsExtensionsListResult,
+  run: AgentExtensionRun,
+  where: string,
+): string {
+  const offer = lens.servers
+    .find((row) => row.name === run.name)
+    ?.cells[run.provider]?.find((holding) => holding.id === run.item)
+    ?.acts?.find((candidate) => candidate.act === "sign-in");
+  return offer?.reaches.includes("every-profile") === true
+    ? `${run.label} opens your browser to finish. The sign-in is ${run.label}’s for every profile on this Mac.`
+    : `${run.label} opens your browser to finish. The sign-in lands ${where} alone.`;
 }

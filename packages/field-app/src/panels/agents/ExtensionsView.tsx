@@ -33,6 +33,7 @@ import {
   extensionKindTitle,
   readWords,
   runWords,
+  signInNote,
 } from "./extensions-model";
 import { ProfileMark } from "./ProfilesView";
 
@@ -45,7 +46,10 @@ import { ProfileMark } from "./ProfilesView";
 // own list. AR-S4c: a cell whose agent offers an act is a button — on turns
 // off (or, where the agent has no switch, removes), off turns on — and a click
 // that reaches further than its cell asks first (P7); the act's own output
-// and outcome sit in the run card under the lists.
+// and outcome sit in the run card under the lists. A remote server's sign-in
+// is the agent's own login in a terminal on the page: while it runs, the run
+// card is its sign-in card — the live pane where this window opened it (the
+// controller hands it in), a line elsewhere — with Cancel.
 
 const KINDS: ExtensionKindKey[] = ["servers", "skills"];
 
@@ -404,6 +408,121 @@ function RunCard({ run, now }: { run: AgentExtensionRun; now?: Date | undefined 
   );
 }
 
+/** A server's sign-in while its pane is open: the agent's own login, live, and Cancel. */
+function ServerSignInCard({
+  run,
+  where,
+  note,
+  pane,
+  cancelling = false,
+  onCancel,
+}: {
+  run: AgentExtensionRun;
+  where: string;
+  note: string;
+  /** The live pane, where this window opened the sign-in; absent elsewhere. */
+  pane?: ReactNode | undefined;
+  cancelling?: boolean | undefined;
+  onCancel?: (() => void) | undefined;
+}): ReactElement {
+  const cancel = useRef<HTMLButtonElement>(null);
+  const hintId = useId();
+  return (
+    <section
+      className="vf-profiles-signin vf-ext-signin"
+      aria-label={`${run.label} sign-in to ${run.name}`}
+      data-ext-run="running"
+    >
+      <div className="vf-agents-output vf-profiles-signin-card">
+        <header className="vf-agents-output-head">
+          <span className="vf-profiles-signin-title">
+            {run.label} · sign in to {run.name} · {where.replace(/^(in|on) /u, "")}
+          </span>
+          <span className="vf-agents-output-state" role="status">
+            closes when {run.label} has been read again
+          </span>
+        </header>
+        {pane === undefined ? (
+          <p className={`vf-ext-signin-elsewhere ${labelCls}`}>
+            <code className="vf-ext-code">{run.runs}</code> is running in a terminal another window
+            opened. Finish it there, or cancel it here.
+          </p>
+        ) : (
+          // The terminal takes every key, Tab and Escape included, so a login
+          // can use them; Shift-Tab is the way back out, as on a profile's sign-in.
+          <div
+            className="vf-profiles-signin-body"
+            aria-describedby={hintId}
+            onKeyDownCapture={(event) => {
+              if (
+                event.key === "Tab" &&
+                event.shiftKey &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.altKey
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                cancel.current?.focus();
+              }
+            }}
+          >
+            {pane}
+          </div>
+        )}
+        <span id={hintId} className="sr-only">
+          Shift-Tab leaves the terminal.
+        </span>
+      </div>
+      <div className="vf-profiles-signin-row">
+        <span className={labelCls}>{note}</span>
+        {onCancel !== undefined && (
+          <UiButton ref={cancel} onClick={onCancel} disabled={cancelling}>
+            {cancelling ? "Cancelling…" : "Cancel"}
+          </UiButton>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** How a page shows the profile's run: a running sign-in's card, or the run card. */
+export interface ExtensionSignInSlot {
+  /** The live pane of the running sign-in, where this window opened it. */
+  pane?: ReactNode;
+  /** Ends the running sign-in's pane. */
+  onCancel?: () => void;
+  cancelling?: boolean;
+}
+
+function RunView({
+  lens,
+  run,
+  where,
+  signIn,
+  now,
+}: {
+  lens: AgentsExtensionsListResult;
+  run: AgentExtensionRun;
+  where: string;
+  signIn?: ExtensionSignInSlot | undefined;
+  now?: Date | undefined;
+}): ReactElement {
+  if (run.act === "sign-in" && run.state === "running") {
+    return (
+      <ServerSignInCard
+        run={run}
+        where={where}
+        note={signInNote(lens, run, where)}
+        pane={signIn?.pane}
+        cancelling={signIn?.cancelling}
+        onCancel={signIn?.onCancel}
+      />
+    );
+  }
+  return <RunCard run={run} now={now} />;
+}
+
 /** Before the first read has answered there is nothing to draw but that. */
 const firstRead = (lens: AgentsExtensionsListResult | null): boolean =>
   lens === null || (lens.reading && lens.readAt === undefined);
@@ -426,6 +545,8 @@ export interface ProfileExtensionsViewProps {
   acting?: boolean;
   /** The catalog's still of a confirm: the act whose confirm is open. */
   armed?: ExtensionActRequest;
+  /** A server's sign-in running for the profile: its pane and Cancel. */
+  signIn?: ExtensionSignInSlot;
   now?: Date;
 }
 
@@ -441,6 +562,7 @@ export function ProfileExtensionsView({
   onAct,
   acting = false,
   armed: armedInitially,
+  signIn,
   now,
 }: ProfileExtensionsViewProps): ReactElement {
   const [armed, setArmed] = useState<ExtensionCellAct | null>(null);
@@ -545,7 +667,9 @@ export function ProfileExtensionsView({
           </SettingsSection>
         );
       })}
-      {lens.run !== undefined && <RunCard run={lens.run} now={now} />}
+      {lens.run !== undefined && (
+        <RunView lens={lens} run={lens.run} where={where} signIn={signIn} now={now} />
+      )}
     </div>
   );
 }
@@ -782,9 +906,13 @@ export interface ExtensionItemViewProps {
   error?: string | null;
   refreshing?: boolean;
   onRefresh?: () => void;
-  /** AR-S4c: an agent's switch, or its Remove…; absent, the page is read-only. */
+  /** AR-S4c: an agent's switch, its Remove…, its Sign in; absent, the page is read-only. */
   onAct?: (request: ExtensionActRequest) => void;
   acting?: boolean;
+  /** The catalog's still of a confirm: the act whose confirm is open. */
+  armed?: ExtensionActRequest;
+  /** A server's sign-in running for the profile: its pane and Cancel. */
+  signIn?: ExtensionSignInSlot;
   now?: Date;
 }
 
@@ -799,10 +927,26 @@ export function ExtensionItemView({
   onRefresh,
   onAct,
   acting = false,
+  armed: armedInitially,
+  signIn,
   now,
 }: ExtensionItemViewProps): ReactElement {
-  const [armed, setArmed] = useState<ExtensionCellAct | null>(null);
+  const [armedByClick, setArmed] = useState<ExtensionCellAct | null>(null);
   const model = lens === null || firstRead(lens) ? null : extensionItem(lens, list, name);
+  // the catalog opens a confirm by naming its act
+  const armed =
+    armedByClick ??
+    (armedInitially === undefined || model === null
+      ? null
+      : (model.agents
+          .flatMap((agent) => [agent.act, agent.signIn?.act ?? null, agent.signOut])
+          .find(
+            (act) =>
+              act !== null &&
+              act.provider === armedInitially.provider &&
+              act.id === armedInitially.id &&
+              act.act === armedInitially.act,
+          ) ?? null));
   const busy = acting || lens?.run?.state === "running";
   const ask = (act: ExtensionCellAct): void => {
     if (onAct === undefined) return;
@@ -896,6 +1040,26 @@ export function ExtensionItemView({
                     <CellMark cell={agent.cell} />
                   )}
                   {agent.state}
+                  {agent.signIn !== null && onAct !== undefined && (
+                    // the agent's own login, in a terminal below
+                    <UiButton
+                      disabled={busy}
+                      aria-label={agent.signIn.act.title}
+                      onClick={() => ask(agent.signIn!.act)}
+                    >
+                      {agent.signIn.label}
+                    </UiButton>
+                  )}
+                  {agent.signOut !== null && onAct !== undefined && (
+                    <UiButton
+                      variant="quiet"
+                      disabled={busy}
+                      aria-label={agent.signOut.title}
+                      onClick={() => ask(agent.signOut!)}
+                    >
+                      Sign out
+                    </UiButton>
+                  )}
                   {agent.act !== null && !agent.switchable && onAct !== undefined && (
                     <UiButton
                       variant="danger"
@@ -924,7 +1088,9 @@ export function ExtensionItemView({
             />
           )}
         </SettingsSection>
-        {lens?.run !== undefined && lens.run.name === name && <RunCard run={lens.run} now={now} />}
+        {lens !== null && lens.run !== undefined && lens.run.name === name && (
+          <RunView lens={lens} run={lens.run} where={where} signIn={signIn} now={now} />
+        )}
         {model.sharedFolder !== null && (
           <section className={`${borderCls} vf-ext-shared`}>
             <b>In the shared folder</b>

@@ -20,6 +20,7 @@ import type { SettingsSubpage } from "../panels/SettingsDialog";
 import {
   FIXTURE_EXTENSION_RUN,
   FIXTURE_EXTENSION_RUNNING,
+  FIXTURE_EXTENSION_SIGNING_IN,
   FIXTURE_EXTENSIONS,
   FIXTURE_EXTENSIONS_NOW,
 } from "./extensions-fixtures";
@@ -28,6 +29,7 @@ import {
   FIXTURE_NATIVE,
   FIXTURE_PROFILES_CONTEXT,
   FIXTURE_PROFILES_NOW,
+  FIXTURE_SERVER_SIGN_IN_OUTPUT,
   FIXTURE_SIGN_IN_OUTPUT,
   FIXTURE_WORK,
   type ProfilesFixtureState,
@@ -48,9 +50,12 @@ const LISTS: Partial<
   "agent's skills": { provider: "codex", agent: "Codex", list: "skills" },
 };
 
-/** AR-S4b: one of Work's servers or skills on its own page. */
+/** AR-S4b: one of Work's servers or skills on its own page; AR-S4c: notion,
+ * which Codex asks to sign in to — its confirm open, then its pane. */
 const ITEMS: Partial<Record<ProfilesFixtureState, { list: ExtensionKindKey; name: string }>> = {
   server: { list: "servers", name: "linear" },
+  "server sign-in": { list: "servers", name: "notion" },
+  "server signing in": { list: "servers", name: "notion" },
   skill: { list: "skills", name: "release-notes" },
 };
 
@@ -151,15 +156,38 @@ export function ProfilesSettingsPreview({
     );
   }
   if (item !== undefined) {
+    const signing = FIXTURE_EXTENSION_SIGNING_IN;
     return (
       <ExtensionItemView
-        lens={FIXTURE_EXTENSIONS}
+        lens={
+          state === "server signing in"
+            ? { ...FIXTURE_EXTENSIONS, run: signing }
+            : FIXTURE_EXTENSIONS
+        }
         list={item.list}
         name={item.name}
         where={inOnWords(FIXTURE_WORK)}
         onRefresh={inert}
         onAct={inert}
         now={FIXTURE_EXTENSIONS_NOW}
+        {...(state === "server sign-in"
+          ? {
+              armed: {
+                provider: signing.provider,
+                kind: signing.kind,
+                id: signing.item,
+                act: signing.act,
+              },
+            }
+          : {})}
+        {...(state === "server signing in"
+          ? {
+              signIn: {
+                pane: <pre className="vf-agents-output-text">{FIXTURE_SERVER_SIGN_IN_OUTPUT}</pre>,
+                onCancel: inert,
+              },
+            }
+          : {})}
       />
     );
   }

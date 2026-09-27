@@ -6,7 +6,8 @@ import type { AgentExtensionRun, AgentsExtensionsListResult } from "@vibefield/c
 // equal). Fixture DATA only — every view is the shipping one. Names, logins
 // and paths are examples. AR-S4c: its holdings carry the acts their agents
 // offer, and FIXTURE_EXTENSION_RUN is an act's run as the act fixture
-// (agents-extensions-act.valid.json) has it.
+// (agents-extensions-act.valid.json) has it; FIXTURE_EXTENSION_SIGNING_IN is a
+// server's sign-in while its pane is open (agents-extensions-sign-in.valid.json).
 
 /** The catalog's "now" for the lists: two minutes after the read. */
 export const FIXTURE_EXTENSIONS_NOW = new Date("2026-09-25T09:02:10.000Z");
@@ -45,7 +46,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
       counts: {
         plugins: 1,
         marketplaces: 1,
-        mcpServers: 3,
+        mcpServers: 4,
         skills: 3,
       },
       fetchedAt: "2026-09-25T09:00:00.000Z",
@@ -79,7 +80,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
       counts: {
         plugins: 1,
         marketplaces: 0,
-        mcpServers: 2,
+        mcpServers: 3,
         skills: 2,
       },
       fetchedAt: "2026-09-25T09:00:02.000Z",
@@ -252,6 +253,66 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
             target: "https://mcp.linear.app/mcp",
             headers: ["Authorization"],
             version: 0,
+          },
+        ],
+      },
+    },
+    {
+      name: "notion",
+      versions: 1,
+      cells: {
+        claude: [
+          {
+            id: "notion",
+            origin: "own",
+            enabled: true,
+            place:
+              "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/.claude.json",
+            transport: "http",
+            target: "https://mcp.notion.com/mcp",
+            acts: [
+              {
+                act: "remove",
+                runs: "claude mcp remove --scope user notion",
+                reaches: ["definition", "sign-in"],
+              },
+              {
+                act: "sign-in",
+                runs: "claude mcp login notion",
+                reaches: [],
+                terminal: true,
+              },
+            ],
+          },
+        ],
+        codex: [
+          {
+            id: "notion",
+            origin: "own",
+            enabled: true,
+            place:
+              "~/Library/Application Support/VibeField/agents/profiles/work/codex-7a10c3e2/config.toml",
+            transport: "http",
+            target: "https://mcp.notion.com/mcp",
+            auth: "needs-sign-in",
+            acts: [
+              {
+                act: "disable",
+                runs: "config/value/write mcp_servers.notion.enabled = false",
+                reaches: [],
+              },
+              {
+                act: "remove",
+                runs: "codex mcp remove notion",
+                reaches: ["definition"],
+              },
+              {
+                act: "sign-in",
+                runs: "codex mcp login notion",
+                reaches: ["every-profile"],
+                terminal: true,
+              },
+            ],
           },
         ],
       },
@@ -491,4 +552,23 @@ export const FIXTURE_EXTENSION_RUNNING: AgentExtensionRun = {
   startedAt: "2026-09-25T08:58:40.000Z",
   output: "config/value/write mcp_servers.postgres.enabled = false\n",
   truncated: false,
+};
+
+/** A server's sign-in while its pane is open: Codex's own login to notion (the sign-in fixture's run). */
+export const FIXTURE_EXTENSION_SIGNING_IN: AgentExtensionRun = {
+  id: "act-9c2e",
+  provider: "codex",
+  label: "Codex",
+  kind: "mcp-server",
+  item: "notion",
+  name: "notion",
+  act: "sign-in",
+  runs: "codex mcp login notion",
+  state: "running",
+  startedAt: "2026-09-25T09:01:10.000Z",
+  output: "",
+  truncated: false,
+  terminal: {
+    sessionId: "sess-01J8Z3K9",
+  },
 };

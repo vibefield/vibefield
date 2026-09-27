@@ -744,24 +744,37 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
           extensions: {
             provider: real.provider,
             // AR-S4c: Codex's linear turns on and off through a stand-in for
-            // its protocol — nothing starts a process here.
+            // its protocol — nothing starts a process here — and asks for a
+            // sign-in, which would open Codex's own login in a pane.
             plan: (_profile, item, act) =>
-              provider.descriptor.id === "codex" && act !== "remove"
+              provider.descriptor.id === "codex" && (act === "sign-in" || act === "sign-out")
                 ? {
                     target: { kind: item.kind, id: item.id },
                     act,
                     available: true as const,
-                    runs: { kind: "protocol" as const, method: "config/value/write" },
-                    display: `config/value/write mcp_servers.${item.id}.enabled = ${act === "enable"}`,
-                    reaches: [],
+                    runs: {
+                      kind: act === "sign-in" ? ("terminal" as const) : ("command" as const),
+                      argv: ["codex", "mcp", act === "sign-in" ? "login" : "logout", item.id],
+                    },
+                    display: `codex mcp ${act === "sign-in" ? "login" : "logout"} ${item.id}`,
+                    reaches: ["every-profile" as const],
                   }
-                : {
-                    target: { kind: item.kind, id: item.id },
-                    act,
-                    available: false as const,
-                    reason: "no-command" as const,
-                    message: "no command here",
-                  },
+                : provider.descriptor.id === "codex" && act !== "remove"
+                  ? {
+                      target: { kind: item.kind, id: item.id },
+                      act,
+                      available: true as const,
+                      runs: { kind: "protocol" as const, method: "config/value/write" },
+                      display: `config/value/write mcp_servers.${item.id}.enabled = ${act === "enable"}`,
+                      reaches: [],
+                    }
+                  : {
+                      target: { kind: item.kind, id: item.id },
+                      act,
+                      available: false as const,
+                      reason: "no-command" as const,
+                      message: "no command here",
+                    },
             perform: async (profile, plan, io) => {
               io.onOutput?.(`${plan.display}\n`);
               switches.set(`${profile.provider} ${plan.target.id}`, plan.act === "enable");
@@ -779,7 +792,9 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
                       enabled: switches.get(`${profile.provider} linear`) ?? true,
                       transport: "http" as const,
                       target: "https://mcp.linear.app/mcp",
-                      ...(profile.provider === "codex" ? { env: ["LINEAR_TOKEN"] } : {}),
+                      ...(profile.provider === "codex"
+                        ? { env: ["LINEAR_TOKEN"], auth: "needs-sign-in" as const }
+                        : {}),
                     },
                   ]
                 : [];
@@ -875,12 +890,18 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
     );
     const cell = (lens: AgentsExtensionsListResult, provider: string) =>
       lens.servers.find((row) => row.name === "linear")?.cells[provider]?.[0];
-    // Codex offers its switch; Claude, here, offers nothing
+    // Codex offers its switch (and its sign-in, a pane's, AR-S4c); Claude, here, offers nothing
     expect(cell(before, "codex")?.acts).toEqual([
       {
         act: "disable",
         runs: "config/value/write mcp_servers.linear.enabled = false",
         reaches: [],
+      },
+      {
+        act: "sign-in",
+        runs: "codex mcp login linear",
+        reaches: ["every-profile"],
+        terminal: true,
       },
     ]);
     expect(cell(before, "claude")?.acts).toBeUndefined();
@@ -902,6 +923,38 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
     const audit = auditText(dataDir);
     expect(audit).toContain('"agents.extensions.act"');
     expect(audit).toContain("codex:mcp-server:linear");
+  }, 30_000);
+
+  it("opens a server's sign-in only for a window that may open a pane, and only where the agent offers one (AR-S4c)", async () => {
+    const reads: string[] = [];
+    const { daemon, dataDir } = await setup({ providers: fakeReaders(reads) });
+    await ready(daemon);
+    const signIn = { set: "native", provider: "codex", id: "linear" };
+
+    // a pane is a spawn: agents.manage alone may act, not open one
+    const manager = await window(daemon, ["agents.manage"], "s1");
+    expect((await manager.callErr("agents.extensions.signIn", signIn)).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    const win = await window(daemon, ALL, "s2");
+    expect((await win.callErr("agents.extensions.signIn", { set: "native" })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    // a sign-in is never an act: the act door refuses it before anything runs
+    expect(
+      (
+        await win.callErr("agents.extensions.act", {
+          ...signIn,
+          kind: "mcp-server",
+          act: "sign-in",
+        })
+      ).data?.kind,
+    ).toBe("PRECONDITION_FAILED");
+    // Claude offers no sign-in here: refused before any pane could open
+    expect(
+      (await win.callErr("agents.extensions.signIn", { ...signIn, provider: "claude" })).data?.kind,
+    ).toBe("PRECONDITION_FAILED");
+    expect(auditText(dataDir)).toContain('"agents.extensions.sign_in"');
   }, 30_000);
 });
 

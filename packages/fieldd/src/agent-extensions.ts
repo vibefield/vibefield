@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { sep } from "node:path";
+import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
 import type {
   AgentProfile,
   ExtensionActPlan,
@@ -11,7 +12,11 @@ import type {
   McpServerItem,
   SkillItem,
 } from "@vibecook/puppeteer-core";
-import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
+import type {
+  AgentRuntime,
+  ExtensionActEnd,
+  StartedExtensionAct,
+} from "@vibecook/puppeteer-runtime";
 import {
   AGENT_OPERATION_OUTPUT_BYTES,
   type AgentCatalogReaders,
@@ -27,11 +32,15 @@ import {
   type AgentsExtensionsActParams,
   type AgentsExtensionsActResult,
   type AgentsExtensionsListResult,
+  type AgentsExtensionsSignInParams,
+  type AgentsExtensionsSignInResult,
+  type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { requireVisible } from "./agent-catalog-gates";
 import { displayTail } from "./agent-distribution";
 import { RpcCallError } from "./native-link";
+import type { GrantPrincipal } from "./terminal-grants";
 
 // EXTENSIONS (AR-S4b; the design record's pass 24) — the doors behind the
 // profile page's MCP servers and skills, and each agent page's own lists.
@@ -54,6 +63,14 @@ import { RpcCallError } from "./native-link";
 // and the receipt is puppeteer's second read, never the output. When it
 // finishes, the whole profile is read again, so every cell says what the
 // agents hold now.
+//
+// A remote server's SIGN-IN is the act a person answers — the agent's own
+// login opens a browser, and may ask for a pasted code — so it runs in a pane
+// on the floor, like a profile's sign-in (`agents.profiles.login`): the door
+// answers with the caller's ticket, the run rides the frames while the pane
+// lives, and when it ends puppeteer reads the agent again for the receipt,
+// the husk is closed and the profile is read again. A pane nobody finishes is
+// waited on for ten minutes, then settled and left to the person.
 
 export interface AgentExtensionServiceOptions {
   runtime: Pick<
@@ -64,15 +81,32 @@ export interface AgentExtensionServiceOptions {
     | "extensionInventory"
     | "extensionActPlans"
     | "runExtensionAct"
+    | "startExtensionAct"
+    | "settleExtensionAct"
   >;
   /** AC-3 — the catalog's readers: a lens has a column only for an agent the
    * catalog shows, and an act runs only for one */
   catalog: AgentCatalogReaders;
   /** The OS user's home, which places are abbreviated against. */
   home: string;
+  /** A sign-in's pane on the floor; without one (no terminal floor here) a sign-in is refused. */
+  panes?: ExtensionSignInPanes;
+  /** Test seam: how long a sign-in's pane is waited on (production: ten minutes). */
+  signInWaitMs?: number;
   now?: () => Date;
   logger?: Logger;
 }
+
+/** The floor, as a sign-in needs it: the caller's ticket for its pane, and the pane closed when it is over. */
+export interface ExtensionSignInPanes {
+  /** The ticket for a pane the runtime just spawned, minted for the caller; throws when the floor did not spawn it. */
+  open(sessionId: string, principal: GrantPrincipal): TerminalCreateOpenResult;
+  /** The floor forgets the pane and its husk is closed; a pane already gone is not an error. */
+  close(sessionId: string): Promise<void>;
+}
+
+/** How long a sign-in's pane is waited on before it is settled and left to the person (a profile login's wait). */
+const SIGN_IN_WAIT_MS = 10 * 60_000;
 
 type Frame = AgentsExtensionsListResult;
 
@@ -163,11 +197,21 @@ function actsOf(
   item: McpServerItem | SkillItem,
 ): AgentExtensionAct[] {
   const acts: AgentExtensionAct[] = [];
+  const signedIn = item.kind === "mcp-server" && item.auth === "signed-in";
   for (const plan of plans ?? []) {
     if (!plan.available || plan.target.kind !== item.kind || plan.target.id !== item.id) continue;
     if ((plan.act === "enable" && item.enabled) || (plan.act === "disable" && !item.enabled))
       continue;
-    acts.push({ act: plan.act, runs: plan.display, reaches: [...plan.reaches] });
+    // a sign-in to a server the agent does not load, or is signed in to, changes nothing; a
+    // sign-out is offered only where the agent says it is signed in, so the read can say it went
+    if (plan.act === "sign-in" && (!item.enabled || signedIn)) continue;
+    if (plan.act === "sign-out" && !signedIn) continue;
+    acts.push({
+      act: plan.act,
+      runs: plan.display,
+      reaches: [...plan.reaches],
+      ...(plan.runs.kind === "terminal" ? { terminal: true as const } : {}),
+    });
   }
   return acts;
 }
@@ -368,6 +412,16 @@ interface RunEntry {
   raw: string;
   dropped: boolean;
   receipt?: AgentExtensionReceipt;
+  /** A sign-in's pane on the floor. */
+  sessionId?: string;
+}
+
+/** A sign-in whose pane is open: what settles it when the pane ends. */
+interface OpenSignIn {
+  setId: string;
+  started: StartedExtensionAct;
+  entry: RunEntry;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 function projectRun(entry: RunEntry): AgentExtensionRun {
@@ -387,6 +441,10 @@ function projectRun(entry: RunEntry): AgentExtensionRun {
     output,
     truncated,
     ...(entry.receipt !== undefined ? { receipt: entry.receipt } : {}),
+    // the pane only while it runs: a finished sign-in names none
+    ...(entry.sessionId !== undefined && entry.state === "running"
+      ? { terminal: { sessionId: entry.sessionId } }
+      : {}),
   };
 }
 
@@ -412,6 +470,10 @@ export class AgentExtensionService {
   private readonly inflight = new Map<string, Promise<Frame>>();
   private readonly subscribers = new Map<string, Set<(frame: Frame) => void>>();
   private readonly runs = new Map<string, RunEntry>();
+  /** sign-ins whose pane is open, by the floor's session id */
+  private readonly signIns = new Map<string, OpenSignIn>();
+  /** sign-ins settled when their wait ran out, whose pane is still the person's, by session id → profile */
+  private readonly waitedOut = new Map<string, string>();
   private readonly ticks = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly now: () => Date;
   private readonly logger: Logger;
@@ -440,45 +502,7 @@ export class AgentExtensionService {
     requireVisible(this.opts.catalog, params.provider, "act on its extensions");
     const setId = params.set;
     this.refuseWhileRunning(setId);
-    const lens = this.lenses.get(setId) ?? (await this.read(setId));
-    const column = lens.agents.find((candidate) => candidate.provider === params.provider);
-    if (column === undefined) {
-      throw new RpcCallError(
-        "NOT_FOUND",
-        `${params.provider} is not in this Agent Profile`,
-        false,
-        {
-          set: setId,
-          provider: params.provider,
-        },
-      );
-    }
-    const rows = params.kind === "mcp-server" ? lens.servers : lens.skills;
-    let found: { row: AgentExtensionRow; holding: AgentExtensionHolding } | undefined;
-    for (const row of rows) {
-      const holding = row.cells[params.provider]?.find((candidate) => candidate.id === params.id);
-      if (holding !== undefined) {
-        found = { row, holding };
-        break;
-      }
-    }
-    if (found === undefined) {
-      throw new RpcCallError(
-        "NOT_FOUND",
-        `${column.label} does not hold ${params.id} in this Agent Profile`,
-        false,
-        { set: setId, provider: params.provider },
-      );
-    }
-    const offered = found.holding.acts?.find((candidate) => candidate.act === params.act);
-    if (offered === undefined) {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        `${column.label} offers no ${params.act} for ${found.row.name} here`,
-        false,
-        { set: setId, provider: params.provider },
-      );
-    }
+    const { column, found, offered } = await this.offered(setId, params);
     // a read above may have let another act start
     this.refuseWhileRunning(setId);
     const entry: RunEntry = {
@@ -537,17 +561,111 @@ export class AgentExtensionService {
       status: receipt.status,
     });
     // every cell says what the agents hold now: a read that began before the act finished cannot
-    try {
-      await this.read(setId, true);
-    } catch (error) {
-      this.publishRun(setId);
-      this.logger.warn(
-        "fieldd.agents.extensions_read_failed",
-        "Reading an Agent Profile's extensions failed",
-        { set: setId, error: error instanceof Error ? error.message : String(error) },
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    return { run: projectRun(entry), receipt };
+  }
+
+  /**
+   * `agents.extensions.signIn`: the agent's own sign-in to one of its remote
+   * servers, as its agent offered it in the last read, in a pane on the floor.
+   * The caller gets the pane's ticket; the run rides the profile's frames until
+   * the pane ends, then the receipt. One act at a time per profile, this too.
+   */
+  async signIn(
+    params: AgentsExtensionsSignInParams,
+    principal: GrantPrincipal,
+  ): Promise<AgentsExtensionsSignInResult> {
+    requireVisible(this.opts.catalog, params.provider, "sign in to its servers");
+    const panes = this.opts.panes;
+    if (panes === undefined) {
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "agent terminals are not hosted: this daemon lends no terminal floor",
+        false,
+        { service: "agents", state: "no-terminal-host" },
       );
     }
-    return { run: projectRun(entry), receipt };
+    const setId = params.set;
+    this.refuseWhileRunning(setId);
+    const request = { ...params, kind: "mcp-server" as const, act: "sign-in" as const };
+    const { column, found, offered } = await this.offered(setId, request);
+    this.refuseWhileRunning(setId);
+    const started = await this.opts.runtime.startExtensionAct({
+      providerId: params.provider,
+      profileId: column.profileId,
+      target: { kind: "mcp-server", id: params.id },
+      act: "sign-in",
+    });
+    if (!("runtimeSessionId" in started)) {
+      // puppeteer read the agent again and it no longer offers this, or its login would not start
+      throw new RpcCallError(
+        started.status === "unavailable" ? "PRECONDITION_FAILED" : "UNAVAILABLE",
+        `${column.label}'s sign-in to ${found.row.name} did not start: ${started.message}`,
+        started.status !== "unavailable",
+        { set: setId, provider: params.provider },
+      );
+    }
+    const sessionId = started.runtimeSessionId;
+    let terminal: TerminalCreateOpenResult;
+    try {
+      terminal = panes.open(sessionId, principal);
+    } catch (error) {
+      // a pane no ticket can reach is a login nobody could finish: it ends here
+      await panes.close(sessionId).catch(() => undefined);
+      throw error;
+    }
+    const entry: RunEntry = {
+      id: randomUUID(),
+      provider: params.provider,
+      label: column.label,
+      kind: "mcp-server",
+      item: params.id,
+      name: found.row.name,
+      act: "sign-in",
+      runs: offered.runs,
+      state: "running",
+      startedAt: started.startedAt,
+      raw: "",
+      dropped: false,
+      sessionId,
+    };
+    const timer = setTimeout(
+      () => void this.settleSignIn(sessionId, undefined),
+      this.opts.signInWaitMs ?? SIGN_IN_WAIT_MS,
+    );
+    timer.unref?.();
+    this.runs.set(setId, entry);
+    this.signIns.set(sessionId, { setId, started, entry, timer });
+    this.publishRun(setId);
+    this.logger.info("fieldd.agents.extension_sign_in", "A server's sign-in pane opened", {
+      set: setId,
+      provider: params.provider,
+      sessionId,
+    });
+    return { run: projectRun(entry), terminal };
+  }
+
+  /**
+   * The floor's exit facts: a sign-in's pane ended (the person finished, or
+   * cancelled — `requestedTermination`), or one whose wait ran out finally
+   * did. True when the pane was a sign-in's.
+   */
+  async handleTerminalExit(event: SessionExitedEvent): Promise<boolean> {
+    if (this.signIns.has(event.sessionId)) {
+      await this.settleSignIn(event.sessionId, {
+        exitCode: event.exitCode,
+        // the floor names who asked for an end (a Cancel's terminate); a pane that ended itself has none
+        stopped: event.requestedTermination !== null,
+      });
+      return true;
+    }
+    const setId = this.waitedOut.get(event.sessionId);
+    if (setId === undefined) return false;
+    this.waitedOut.delete(event.sessionId);
+    await this.closePane(event.sessionId);
+    // a sign-in finished after its wait ran out: the cells say so now
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    return true;
   }
 
   /**
@@ -588,6 +706,10 @@ export class AgentExtensionService {
     this.disposed = true;
     for (const tick of this.ticks.values()) clearTimeout(tick);
     this.ticks.clear();
+    // an open pane outlives fieldd, as a profile login's does; nothing settles it now
+    for (const signIn of this.signIns.values()) clearTimeout(signIn.timer);
+    this.signIns.clear();
+    this.waitedOut.clear();
     this.subscribers.clear();
     this.lenses.clear();
   }
@@ -598,12 +720,143 @@ export class AgentExtensionService {
     return run === undefined ? lens : { ...lens, run: projectRun(run) };
   }
 
+  /** The holding an act names, and the act its agent offered on it in the last read — or the door's refusal. */
+  private async offered(
+    setId: string,
+    params: {
+      provider: string;
+      kind: "mcp-server" | "skill";
+      id: string;
+      act: AgentExtensionAct["act"];
+    },
+  ): Promise<{
+    column: AgentExtensionColumn;
+    found: { row: AgentExtensionRow; holding: AgentExtensionHolding };
+    offered: AgentExtensionAct;
+  }> {
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = lens.agents.find((candidate) => candidate.provider === params.provider);
+    if (column === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `${params.provider} is not in this Agent Profile`,
+        false,
+        {
+          set: setId,
+          provider: params.provider,
+        },
+      );
+    }
+    const rows = params.kind === "mcp-server" ? lens.servers : lens.skills;
+    let found: { row: AgentExtensionRow; holding: AgentExtensionHolding } | undefined;
+    for (const row of rows) {
+      const holding = row.cells[params.provider]?.find((candidate) => candidate.id === params.id);
+      if (holding !== undefined) {
+        found = { row, holding };
+        break;
+      }
+    }
+    if (found === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `${column.label} does not hold ${params.id} in this Agent Profile`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    const offered = found.holding.acts?.find((candidate) => candidate.act === params.act);
+    if (offered === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${column.label} offers no ${params.act} for ${found.row.name} here`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    return { column, found, offered };
+  }
+
+  /**
+   * A sign-in's pane ended, or its wait ran out: puppeteer reads the agent
+   * again for the receipt, an ended pane's husk is closed, and the profile is
+   * read again. A pane still open when the wait ran out stays the person's;
+   * its end, when it comes, reads the profile again.
+   */
+  private async settleSignIn(sessionId: string, ended: ExtensionActEnd | undefined): Promise<void> {
+    const signIn = this.signIns.get(sessionId);
+    if (signIn === undefined) return;
+    this.signIns.delete(sessionId);
+    clearTimeout(signIn.timer);
+    const { setId, started, entry } = signIn;
+    if (ended === undefined) this.waitedOut.set(sessionId, setId);
+    else await this.closePane(sessionId);
+    let receipt: AgentExtensionReceipt;
+    try {
+      const result = await this.opts.runtime.settleExtensionAct(started, ended);
+      receipt = {
+        status: result.status,
+        message: result.message,
+        ...(result.exitCode !== undefined ? { exitCode: result.exitCode } : {}),
+        finishedAt: result.finishedAt,
+      };
+    } catch (error) {
+      this.logger.warn("fieldd.agents.extension_act_failed", "A sign-in could not be read again", {
+        set: setId,
+        provider: entry.provider,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      receipt = {
+        status: "failed",
+        message: "it could not be read again",
+        finishedAt: this.now().toISOString(),
+      };
+    }
+    if (this.disposed) return;
+    entry.state = "finished";
+    entry.finishedAt = receipt.finishedAt;
+    entry.receipt = receipt;
+    this.logger.info("fieldd.agents.extension_act", "An extension act ran", {
+      set: setId,
+      provider: entry.provider,
+      act: entry.act,
+      status: receipt.status,
+    });
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+  }
+
+  private async closePane(sessionId: string): Promise<void> {
+    try {
+      await this.opts.panes?.close(sessionId);
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.extension_pane_close_failed",
+        "A sign-in's pane could not be closed",
+        {
+          sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+  }
+
+  /** A read after an act failed: the run's end still reaches the page, on the last lens. */
+  private readFailed(setId: string, error: unknown): void {
+    this.publishRun(setId);
+    this.logger.warn(
+      "fieldd.agents.extensions_read_failed",
+      "Reading an Agent Profile's extensions failed",
+      { set: setId, error: error instanceof Error ? error.message : String(error) },
+    );
+  }
+
   private refuseWhileRunning(setId: string): void {
     const running = this.runs.get(setId);
     if (running?.state === "running") {
       throw new RpcCallError(
         "CONFLICT",
-        `${running.label} is still changing ${running.name} in this Agent Profile`,
+        running.act === "sign-in"
+          ? `${running.label} is still signing in to ${running.name} in this Agent Profile`
+          : `${running.label} is still changing ${running.name} in this Agent Profile`,
         true,
         { set: setId },
       );

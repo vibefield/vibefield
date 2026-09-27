@@ -589,6 +589,31 @@ export class AgentRuntimeService implements PersonaSessions {
       runtime: this.runtime,
       catalog: this.catalog,
       home: this.home,
+      // AR-S4c — a server's sign-in runs in a pane on the floor, as a
+      // persona's login does: the caller's ticket, then the husk closed
+      ...(this.terminalHost !== null
+        ? {
+            panes: {
+              open: (sessionId, principal) => {
+                const terminals = this.requireTerminals();
+                const born = this.terminalHost?.born(sessionId);
+                if (born === undefined) {
+                  throw new RpcCallError(
+                    "INTERNAL",
+                    "the sign-in terminal was spawned outside the floor host; no ticket can be minted for it",
+                    false,
+                  );
+                }
+                return terminals.createOpenResult(principal, born);
+              },
+              close: async (sessionId) => {
+                this.terminalHost?.forget(sessionId);
+                const terminals = this.opts.terminals?.() ?? null;
+                if (terminals !== null) await this.reapHusk(sessionId, terminals);
+              },
+            },
+          }
+        : {}),
       now: this.now,
       logger: this.logger,
     });
@@ -1081,6 +1106,8 @@ export class AgentRuntimeService implements PersonaSessions {
    * run's PTY ended → puppeteer's `handleProcessExit`, the record stamped, the
    * row withdrawn; a login pane ended → the persona is verified. */
   async handleTerminalExit(event: SessionExitedEvent): Promise<void> {
+    // AR-S4c — a server's sign-in pane: its receipt, then the profile read again
+    if (await this.extensions.handleTerminalExit(event)) return;
     if (this.logins.has(event.sessionId)) {
       await this.finishLogin(event.sessionId, "exited");
       return;

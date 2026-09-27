@@ -36,6 +36,8 @@ export type ProfilesFixtureState =
   | "agent's servers"
   | "agent's skills"
   | "server"
+  | "server sign-in"
+  | "server signing in"
   | "skill"
   | "new";
 
@@ -56,6 +58,8 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "agent's servers",
   "agent's skills",
   "server",
+  "server sign-in",
+  "server signing in",
   "skill",
   "new",
 ];
@@ -450,5 +454,12 @@ export const FIXTURE_PROFILES_CONTEXT: ProfilesContext = {
  * vendor's login waits on a browser — the record's still, not Grok's words. */
 export const FIXTURE_SIGN_IN_OUTPUT = [
   "$ grok login",
+  "Opening your browser to finish signing in…",
+].join("\n");
+
+/** AR-S4c — what the catalog's server sign-in (Codex, to notion, in Work)
+ * shows while Codex's own login waits on a browser: the record's still. */
+export const FIXTURE_SERVER_SIGN_IN_OUTPUT = [
+  "$ codex mcp login notion",
   "Opening your browser to finish signing in…",
 ].join("\n");

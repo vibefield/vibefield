@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { type ZodTypeAny, z } from "zod";
 import { AgentCatalogResult } from "../src/agent-catalog";
-import { AgentsExtensionsActResult, AgentsExtensionsListResult } from "../src/agent-extensions";
+import {
+  AgentsExtensionsActResult,
+  AgentsExtensionsListResult,
+  AgentsExtensionsSignInResult,
+} from "../src/agent-extensions";
 import {
   AgentFieldDelta,
   AgentFieldSlice,
@@ -225,6 +229,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agents-extensions": AgentsExtensionsListResult,
   // AR-S4c — an act's answer: the finished run and its receipt.
   "agents-extensions-act": AgentsExtensionsActResult,
+  // AR-S4c — a server's sign-in: the run while its pane is open, and the caller's ticket.
+  "agents-extensions-sign-in": AgentsExtensionsSignInResult,
   // AR-5d — the usage column's feed: one batch with three states beside the
   // honest empty one the door answers before the first refresh.
   "agent-usage": AgentAccountUsageBatch,
