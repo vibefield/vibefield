@@ -1256,10 +1256,11 @@ describe("adding once (AR-S4d), the model", () => {
       ["OpenCode", true, false],
       ["Kimi", false, false],
     ]);
-    expect(addServerChips(LENS, PLAN.offers).map((chip) => chip.why).slice(3)).toEqual([
-      "OpenCode would add it for every profile",
-      "Kimi could not be read",
-    ]);
+    expect(
+      addServerChips(LENS, PLAN.offers)
+        .map((chip) => chip.why)
+        .slice(3),
+    ).toEqual(["OpenCode would add it for every profile", "Kimi could not be read"]);
   });
 });
 
