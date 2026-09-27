@@ -3,6 +3,7 @@ import type {
   AgentExtensionRun,
   AgentsExtensionsListResult,
   AgentsExtensionsPlanResult,
+  AgentsExtensionsPlanSkillResult,
 } from "@vibefield/contracts";
 
 // Extensions on fixture data (AR-S4b): the lens fieldd sends for the "Work"
@@ -16,7 +17,11 @@ import type {
 // AR-S4d: Work keeps context7, which no agent holds and whose key it keeps no
 // value for yet; notion is offered to the agents that hold none of it; and
 // FIXTURE_EXTENSION_PLAN is what Add server's form is told each agent would
-// run for figma (agents-extensions-plan.valid.json).
+// run for figma (agents-extensions-plan.valid.json). AR-S4d2: Work keeps
+// changelog-writer in its skills folder (Claude and Grok link to it; Codex's
+// turn would move it to the shared folder); sql-review is still Claude's own;
+// Grok dropped sql-review outside VibeField; FIXTURE_SKILL_PLAN is
+// Add skill's read of pdf-forms.
 
 /** The catalog's "now" for the lists: two minutes after the read. */
 export const FIXTURE_EXTENSIONS_NOW = new Date("2026-09-25T09:02:10.000Z");
@@ -56,7 +61,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
         plugins: 1,
         marketplaces: 1,
         mcpServers: 4,
-        skills: 3,
+        skills: 4,
       },
       fetchedAt: "2026-09-25T09:00:00.000Z",
     },
@@ -124,7 +129,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
         plugins: 0,
         marketplaces: 0,
         mcpServers: 1,
-        skills: 1,
+        skills: 2,
       },
       fetchedAt: "2026-09-25T09:00:00.000Z",
     },
@@ -455,6 +460,68 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
   ],
   skills: [
     {
+      name: "changelog-writer",
+      description: "Writes the changelog entry for a merged pull request",
+      versions: 1,
+      cells: {
+        claude: [
+          {
+            id: "changelog-writer",
+            origin: "own",
+            enabled: true,
+            place:
+              "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/changelog-writer",
+            linkTarget:
+              "~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
+            acts: [
+              {
+                act: "remove",
+                runs: "unlink ~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/changelog-writer",
+                reaches: [],
+              },
+            ],
+          },
+        ],
+        grok: [
+          {
+            id: "changelog-writer",
+            origin: "own",
+            enabled: true,
+            place:
+              "~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/changelog-writer",
+            linkTarget:
+              "~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
+            acts: [
+              {
+                act: "remove",
+                runs: "unlink ~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/changelog-writer",
+                reaches: [],
+              },
+            ],
+          },
+        ],
+      },
+      kept: true,
+      folder: "~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
+      offers: {
+        codex: {
+          act: {
+            act: "add",
+            runs: "move ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer → ~/.agents/skills/changelog-writer\nlink ~/.agents/skills/changelog-writer → ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
+            reaches: ["shared-folder"],
+            moves: "~/.agents/skills/changelog-writer",
+          },
+        },
+        opencode: {
+          act: {
+            act: "add",
+            runs: "link ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer → ~/.config/opencode/skills/changelog-writer",
+            reaches: ["every-profile"],
+          },
+        },
+      },
+    },
+    {
       name: "house-style",
       description: "Northlight naming and formatting",
       versions: 1,
@@ -544,8 +611,43 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
             enabled: false,
             place:
               "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review",
+            acts: [
+              {
+                act: "remove",
+                runs: "move ~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review → ~/Library/Application Support/VibeField/agents/skills/work/sql-review",
+                reaches: [],
+                moves: "~/Library/Application Support/VibeField/agents/skills/work/sql-review",
+              },
+            ],
           },
         ],
+      },
+      folder:
+        "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review",
+      owner: "claude",
+      offers: {
+        codex: {
+          act: {
+            act: "add",
+            runs: "move ~/Library/Application Support/VibeField/agents/skills/work/sql-review → ~/.agents/skills/sql-review\nlink ~/.agents/skills/sql-review → ~/Library/Application Support/VibeField/agents/skills/work/sql-review",
+            reaches: ["shared-folder"],
+            moves: "~/.agents/skills/sql-review",
+          },
+        },
+        grok: {
+          act: {
+            act: "add",
+            runs: "link ~/Library/Application Support/VibeField/agents/skills/work/sql-review → ~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/sql-review",
+            reaches: [],
+          },
+        },
+        opencode: {
+          act: {
+            act: "add",
+            runs: "link ~/Library/Application Support/VibeField/agents/skills/work/sql-review → ~/.config/opencode/skills/sql-review",
+            reaches: ["every-profile"],
+          },
+        },
       },
     },
   ],
@@ -586,6 +688,17 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
     ],
   },
   values: ["LINEAR_TOKEN"],
+  library: "~/Library/Application Support/VibeField/agents/skills/work",
+  changes: [
+    {
+      provider: "grok",
+      kind: "skill",
+      name: "sql-review",
+      change: "removed",
+      since: "2026-09-25T08:41:30.000Z",
+      at: "2026-09-25T09:00:02.000Z",
+    },
+  ],
 };
 
 /** An act the catalog shows finished: Codex's postgres turned off (the act fixture's run). */
@@ -674,6 +787,51 @@ export const FIXTURE_EXTENSION_PLAN: AgentsExtensionsPlanResult = {
       act: {
         act: "add",
         runs: "opencode mcp add figma --url https://mcp.figma.com/mcp",
+        reaches: ["every-profile"],
+      },
+    },
+    kimi: {
+      unavailable: {
+        reason: "unread",
+        message: "extension inventory failed for kimi",
+      },
+    },
+  },
+};
+
+/** AR-S4d2 — what Add skill's form is told of a folder, and what each agent would run for it
+ * (agents-extensions-plan-skill.valid.json). */
+export const FIXTURE_SKILL_PLAN: AgentsExtensionsPlanSkillResult = {
+  name: "pdf-forms",
+  description: "Fills in a PDF form from what the conversation already knows",
+  folder: "~/Library/Application Support/VibeField/agents/skills/work/pdf-forms",
+  offers: {
+    claude: {
+      act: {
+        act: "add",
+        runs: "link ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms → ~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/pdf-forms",
+        reaches: [],
+      },
+    },
+    codex: {
+      act: {
+        act: "add",
+        runs: "move ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms → ~/.agents/skills/pdf-forms\nlink ~/.agents/skills/pdf-forms → ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms",
+        reaches: ["shared-folder"],
+        moves: "~/.agents/skills/pdf-forms",
+      },
+    },
+    grok: {
+      act: {
+        act: "add",
+        runs: "link ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms → ~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/pdf-forms",
+        reaches: [],
+      },
+    },
+    opencode: {
+      act: {
+        act: "add",
+        runs: "link ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms → ~/.config/opencode/skills/pdf-forms",
         reaches: ["every-profile"],
       },
     },

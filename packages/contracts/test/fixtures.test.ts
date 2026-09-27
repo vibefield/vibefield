@@ -7,8 +7,10 @@ import { AgentCatalogResult } from "../src/agent-catalog";
 import {
   AgentsExtensionsActResult,
   AgentsExtensionsAddResult,
+  AgentsExtensionsAddSkillResult,
   AgentsExtensionsListResult,
   AgentsExtensionsPlanResult,
+  AgentsExtensionsPlanSkillResult,
   AgentsExtensionsSignInResult,
 } from "../src/agent-extensions";
 import {
@@ -236,6 +238,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // AR-S4d — Add server's answer (each agent's receipt), and the plan beside the form.
   "agents-extensions-add": AgentsExtensionsAddResult,
   "agents-extensions-plan": AgentsExtensionsPlanResult,
+  // AR-S4d2 — Add skill's answer (the name it is kept under, each agent's receipt), and the plan beside the form.
+  "agents-extensions-add-skill": AgentsExtensionsAddSkillResult,
+  "agents-extensions-plan-skill": AgentsExtensionsPlanSkillResult,
   // AR-5d — the usage column's feed: one batch with three states beside the
   // honest empty one the door answers before the first refresh.
   "agent-usage": AgentAccountUsageBatch,

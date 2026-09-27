@@ -24,12 +24,18 @@ import type { SettingsSubpage } from "../SettingsDialog";
 import type { AgentsNotice } from "./AgentsView";
 import {
   AddServer,
+  AddSkill,
   AgentExtensionList,
   AgentExtensions,
   ExtensionItem,
   ProfileExtensions,
 } from "./ExtensionsSection";
-import { addServerSubpage, agentListSubpage, extensionItemSubpage } from "./ExtensionsView";
+import {
+  addServerSubpage,
+  addSkillSubpage,
+  agentListSubpage,
+  extensionItemSubpage,
+} from "./ExtensionsView";
 import type { AgentListKey, ExtensionKindKey } from "./extensions-model";
 import {
   NewProfileView,
@@ -78,8 +84,8 @@ export type ProfilesRoute =
   | { kind: "list"; set: string; provider: string; list: AgentListKey }
   /** AR-S4b — one server or skill of the profile, a page below the profile's */
   | { kind: "item"; set: string; list: ExtensionKindKey; name: string }
-  /** AR-S4d — Add server: a server kept once for the profile, a page below the profile's */
-  | { kind: "add"; set: string }
+  /** AR-S4d — Add server (AR-S4d2 — Add skill): one kept once for the profile, a page below the profile's */
+  | { kind: "add"; set: string; list: ExtensionKindKey }
   | { kind: "new" };
 
 interface SignIn {
@@ -242,7 +248,7 @@ export function ProfilesSection({
           : route.kind === "item"
             ? `item|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${route.list}|${route.name}`
             : route.kind === "add"
-              ? `add|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}`
+              ? `add|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${route.list}`
               : null;
   // keyed by what the header shows: a feed frame that changes nothing on it does not rebuild it
   useEffect(() => {
@@ -255,7 +261,11 @@ export function ProfilesSection({
     } else if (route.kind === "item") {
       onSubpage(extensionItemSubpage(set, route.list, route.name, backToProfile));
     } else if (route.kind === "add") {
-      onSubpage(addServerSubpage(set, backToProfile));
+      onSubpage(
+        route.list === "skills"
+          ? addSkillSubpage(set, backToProfile)
+          : addServerSubpage(set, backToProfile),
+      );
     } else {
       onSubpage(null);
     }
@@ -293,7 +303,7 @@ export function ProfilesSection({
       : route.kind === "item"
         ? `item:${route.set}:${route.list}:${route.name}`
         : route.kind === "add"
-          ? `add:${route.set}`
+          ? `add:${route.set}:${route.list}`
           : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}${
               route.kind === "list" ? `:${route.list}` : ""
             }`;
@@ -737,6 +747,14 @@ export function ProfilesSection({
 
   // one sign-in at a time: while one runs, nothing else starts another
   const signInBusy = signIn !== null ? `add:${signIn.provider}` : null;
+  // AR-S4d2 — the other profiles and their agents: who a skill's move to the shared folder reaches
+  const otherProfilesOf = (setId: string): Array<{ profile: string; providers: string[] }> =>
+    (feed?.sets ?? [])
+      .filter((candidate) => candidate.id !== setId)
+      .map((candidate) => ({
+        profile: candidate.label,
+        providers: candidate.personas.map((member) => member.provider),
+      }));
   let body: ReactElement | null = null;
   if (route.kind === "new") {
     body = (
@@ -811,19 +829,30 @@ export function ProfilesSection({
         list={route.list}
         name={route.name}
         where={inOnWords(set)}
+        otherProfiles={otherProfilesOf(set.id)}
       />
     );
   } else if (route.kind === "add" && set !== undefined) {
-    body = (
-      <AddServer
-        key={`${set.id}:add`}
-        set={set.id}
-        profile={set.label}
-        where={inOnWords(set)}
-        onDone={(name) => onRoute({ kind: "item", set: set.id, list: "servers", name })}
-        onCancel={() => onRoute({ kind: "profile", set: set.id })}
-      />
-    );
+    body =
+      route.list === "skills" ? (
+        <AddSkill
+          key={`${set.id}:add-skill`}
+          set={set.id}
+          profile={set.label}
+          where={inOnWords(set)}
+          onDone={(name) => onRoute({ kind: "item", set: set.id, list: "skills", name })}
+          onCancel={() => onRoute({ kind: "profile", set: set.id })}
+        />
+      ) : (
+        <AddServer
+          key={`${set.id}:add`}
+          set={set.id}
+          profile={set.label}
+          where={inOnWords(set)}
+          onDone={(name) => onRoute({ kind: "item", set: set.id, list: "servers", name })}
+          onCancel={() => onRoute({ kind: "profile", set: set.id })}
+        />
+      );
   } else if (page !== undefined) {
     body = (
       <ProfilePageView
@@ -843,7 +872,9 @@ export function ProfilesSection({
               profile={page.set.label}
               where={inOnWords(page.set)}
               onOpenItem={(list, name) => onRoute({ kind: "item", set: page.set.id, list, name })}
-              onAddServer={() => onRoute({ kind: "add", set: page.set.id })}
+              onAddServer={() => onRoute({ kind: "add", set: page.set.id, list: "servers" })}
+              onAddSkill={() => onRoute({ kind: "add", set: page.set.id, list: "skills" })}
+              otherProfiles={otherProfilesOf(page.set.id)}
             />
           ) : undefined
         }

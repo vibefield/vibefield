@@ -33,6 +33,17 @@ import { TerminalCreateOpenResult } from "./terminal-pipeline";
 // file, and never back on the wire. Each agent's settings name the variable
 // in the agent's own syntax; VibeField gives the value when it starts the
 // agent. A value crosses exactly once, inward, on the door that keeps it.
+//
+// AR-S4d2 — SKILLS KEPT ONCE (pass 24): one folder for the profile — its
+// skills folder, under this user — and each agent gets a LINK to the skill
+// there, where the agent's docs say skills go, so an edit is made once. A
+// skill that is still one agent's own folder moves there (and is linked back)
+// the first time another agent takes it. Codex reads a person's skills only
+// from `~/.agents/skills`, one folder every profile shares: turning one on
+// for Codex moves the copy there (a link stays in the profile's folder) and
+// turns it off with Codex's own switch in the other profiles. A CHANGE MADE
+// OUTSIDE VibeField (O1) is followed: the cell shows what the agent holds
+// now, and one line says who changed what, between which two reads.
 
 /** Where an item comes from, as the agent keeps it (puppeteer `ExtensionOrigin`). */
 export const AgentExtensionOrigin = z.enum([
@@ -129,6 +140,10 @@ export const AgentExtensionAct = z
     reaches: z.array(AgentExtensionReach),
     /** It runs in a terminal on the page, which the person answers: a sign-in (`agents.extensions.signIn`). */
     terminal: z.literal(true).optional(),
+    /** AR-S4d2 — a skill's copy moves here, home-abbreviated: into the folder
+     * every profile shares (Codex reads a person's skills only there), or into
+     * the profile's skills folder (an agent's own, when it lets it go). */
+    moves: z.string().optional(),
   })
   .passthrough();
 export type AgentExtensionAct = z.infer<typeof AgentExtensionAct>;
@@ -184,6 +199,25 @@ export const AgentExtensionOffer = z
   .passthrough();
 export type AgentExtensionOffer = z.infer<typeof AgentExtensionOffer>;
 
+/** AR-S4d2 — a change made outside VibeField (pass 24, O1): one agent holds
+ * something of the profile's own differently than at VibeField's last read,
+ * and no act of VibeField's made it. The cell shows what the agent holds now;
+ * this says who changed what, between which two reads. */
+export const AgentExtensionChange = z
+  .object({
+    provider: AgentProviderId,
+    kind: z.enum(["mcp-server", "skill"]),
+    /** The row's name. */
+    name: z.string().min(1),
+    change: z.enum(["removed", "added", "off", "on"]),
+    /** The last read that saw it as it was. */
+    since: z.string(),
+    /** The read that found it changed. */
+    at: z.string(),
+  })
+  .passthrough();
+export type AgentExtensionChange = z.infer<typeof AgentExtensionChange>;
+
 /** One server or skill name across the profile's agents. */
 export const AgentExtensionRow = z
   .object({
@@ -208,6 +242,16 @@ export const AgentExtensionRow = z
     needs: z.array(AgentExtensionVariableName).optional(),
     /** Per agent that holds none of it: its own add, or why it cannot take it. */
     offers: z.record(AgentProviderId, AgentExtensionOffer).optional(),
+    /** AR-S4d2 — a skill's one copy, home-abbreviated: in the profile's skills
+     * folder (`kept`), in the folder every profile shares (`shared`), or still
+     * one agent's own folder (`owner`). Two copies under one name give none. */
+    folder: z.string().optional(),
+    /** The skill's copy is in `~/.agents/skills`, which every profile, Codex,
+     * and the agents that read it share. */
+    shared: z.literal(true).optional(),
+    /** The skill is still this agent's own folder: the first other agent
+     * turned on moves it to the profile's folder and links it back. */
+    owner: AgentProviderId.optional(),
   })
   .passthrough();
 export type AgentExtensionRow = z.infer<typeof AgentExtensionRow>;
@@ -403,6 +447,54 @@ export const AgentsExtensionsAddResult = z
   .passthrough();
 export type AgentsExtensionsAddResult = z.infer<typeof AgentsExtensionsAddResult>;
 
+/** A skill folder on this Mac, as a person gives it: absolute, or from `~/`. */
+export const AgentExtensionSkillSource = z.string().min(1).max(4096);
+
+/** `agents.extensions.addSkill` — AR-S4d2's Add skill: the folder copied into
+ * the profile's skills folder under its own name, then each named agent given
+ * it in turn (a link where it looks; Codex, the move to the shared folder),
+ * one run each on the subscription. A name the profile's lens already shows
+ * is a CONFLICT. */
+export const AgentsExtensionsAddSkillParams = z
+  .object({
+    set: AgentProfileSetId,
+    from: AgentExtensionSkillSource,
+    /** The agents to turn it on for, in the profile; none keeps it only. */
+    agents: z.array(AgentProviderId).max(16),
+  })
+  .passthrough();
+export type AgentsExtensionsAddSkillParams = z.infer<typeof AgentsExtensionsAddSkillParams>;
+
+export const AgentsExtensionsAddSkillResult = z
+  .object({
+    /** The name it is kept under: its folder's. */
+    name: z.string().min(1),
+    receipts: z.array(
+      z.object({ provider: AgentProviderId, receipt: AgentExtensionReceipt }).passthrough(),
+    ),
+  })
+  .passthrough();
+export type AgentsExtensionsAddSkillResult = z.infer<typeof AgentsExtensionsAddSkillResult>;
+
+/** `agents.extensions.planSkill` — the folder read before anything is copied:
+ * the name it would be kept under, what it says it does, where it would be
+ * kept, and what each of the profile's agents would run: the form's "Runs". */
+export const AgentsExtensionsPlanSkillParams = z
+  .object({ set: AgentProfileSetId, from: AgentExtensionSkillSource })
+  .passthrough();
+export type AgentsExtensionsPlanSkillParams = z.infer<typeof AgentsExtensionsPlanSkillParams>;
+
+export const AgentsExtensionsPlanSkillResult = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+    /** Where it would be kept, home-abbreviated: the profile's skills folder. */
+    folder: z.string().min(1),
+    offers: z.record(AgentProviderId, AgentExtensionOffer),
+  })
+  .passthrough();
+export type AgentsExtensionsPlanSkillResult = z.infer<typeof AgentsExtensionsPlanSkillResult>;
+
 /** `agents.extensions.plan` — what an Add would run on each of the profile's
  * agents, before anything is kept: the form's "Runs". */
 export const AgentsExtensionsPlanParams = z
@@ -437,6 +529,25 @@ export const AgentExtensionKeep = z
     values: z.array(AgentExtensionVariableName),
     /** provider → server name → the names given it with that server */
     given: z.record(z.string(), z.record(z.string(), z.array(AgentExtensionVariableName))),
+    /** AR-S4d2 (O1) — what each agent held of the profile's own at the last
+     * read: server and skill names, each with whether it was on. */
+    seen: z
+      .object({
+        at: z.string(),
+        agents: z.record(
+          z.string(),
+          z
+            .object({
+              servers: z.record(z.string(), z.boolean()),
+              skills: z.record(z.string(), z.boolean()),
+            })
+            .passthrough(),
+        ),
+      })
+      .passthrough()
+      .optional(),
+    /** The changes made outside VibeField that reads found, newest last. */
+    changes: z.array(AgentExtensionChange).optional(),
   })
   .passthrough();
 export type AgentExtensionKeep = z.infer<typeof AgentExtensionKeep>;
@@ -475,6 +586,10 @@ export const AgentsExtensionsListResult = z
     /** AR-S4d — the names VibeField keeps a value for in this profile (in its
      * keychain entry); never a value. */
     values: z.array(AgentExtensionVariableName).optional(),
+    /** AR-S4d2 — the profile's skills folder, home-abbreviated. */
+    library: z.string().optional(),
+    /** AR-S4d2 (O1) — changes made outside VibeField that reads found, newest last. */
+    changes: z.array(AgentExtensionChange).optional(),
   })
   .passthrough();
 export type AgentsExtensionsListResult = z.infer<typeof AgentsExtensionsListResult>;

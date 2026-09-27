@@ -291,13 +291,13 @@ const R23B_ALLOW = [
   },
   {
     file: "packages/field-app/src/design-system/extensions-fixtures.ts",
-    count: 9,
-    why: "Extensions' fixture lens for the design catalog (AR-S4b), the contracts fixture's twin, and its runs (AR-S4c: an act, a server's sign-in) — fixture data, never compared",
+    count: 11,
+    why: "Extensions' fixture lens for the design catalog (AR-S4b), the contracts fixture's twin, and its runs (AR-S4c: an act, a server's sign-in; AR-S4d2: a skill's owner, a change made outside VibeField) — fixture data, never compared",
   },
   {
     file: "packages/field-app/src/design-system/ProfilesSettingsPreview.tsx",
-    count: 6,
-    why: "the Agent Profiles catalog preview's own sample rows (AR-S2/S4): fixture data fed to the shipping views, never compared",
+    count: 7,
+    why: "the Agent Profiles catalog preview's own sample rows (AR-S2/S4; AR-S4d2: the skill moved for Codex, its confirm open): fixture data fed to the shipping views, never compared",
   },
   {
     file: "packages/field-app/src/panels/terminal/GodviewMiniature.tsx",

@@ -5,6 +5,7 @@ import type {
   AgentExtensionServerDefinition,
   AgentProfileSet,
   AgentsExtensionsListResult,
+  AgentsExtensionsPlanSkillResult,
 } from "@vibefield/contracts";
 import {
   InlineNotice,
@@ -29,14 +30,17 @@ import {
   type AgentListKey,
   actConfirm,
   addServerChips,
+  addSkillChips,
   agentExtensions,
   agentList,
   agentListTitle,
   builtFromWords,
+  changeLines,
   draftDefinition,
   draftProblem,
   type ExtensionCell,
   type ExtensionCellAct,
+  type ExtensionConfirmContext,
   type ExtensionGridModel,
   type ExtensionKindKey,
   extensionGrid,
@@ -44,7 +48,9 @@ import {
   extensionKindTitle,
   readWords,
   runWords,
+  sharedFolderReaders,
   signInNote,
+  skillSourceProblem,
 } from "./extensions-model";
 import { ProfileMark } from "./ProfilesView";
 
@@ -64,7 +70,11 @@ import { ProfileMark } from "./ProfilesView";
 // cell turns the server on for its agent, by the agent's own add; a value the
 // server reads is asked for first, in the confirm, and kept once in the
 // keychain. Add server… is a page of its own (pass 23's A1 form, with Turn on
-// for).
+// for). AR-S4d2: a skill's cell turns too — a link to its one copy in the
+// profile's skills folder, taken away again — and Codex's asks first, since
+// its copy moves to the folder every profile shares; Add skill… is a page of
+// its own. A change made outside VibeField greys its cell's corner and says
+// who changed what above the list (O1).
 
 const KINDS: ExtensionKindKey[] = ["servers", "skills"];
 
@@ -101,7 +111,18 @@ function Chevron(): ReactElement {
   return <Glyph name="chevron" className="vf-ext-chevron" />;
 }
 
-function CellMark({ cell }: { cell: ExtensionCell }): ReactElement {
+function CellMark({ cell, changed = false }: { cell: ExtensionCell; changed?: boolean }) {
+  // O1: a change made outside VibeField marks the cell with a grey dot
+  return changed ? (
+    <span className="vf-ext-was" data-ext-changed="">
+      <CellShape cell={cell} />
+    </span>
+  ) : (
+    <CellShape cell={cell} />
+  );
+}
+
+function CellShape({ cell }: { cell: ExtensionCell }): ReactElement {
   switch (cell.s) {
     case "on":
       return (
@@ -205,17 +226,20 @@ const asksFirst = (act: ExtensionCellAct): boolean =>
 function ActConfirm({
   act,
   where,
+  context,
   busy,
   onConfirm,
   onCancel,
 }: {
   act: ExtensionCellAct;
   where: string;
+  /** AR-S4d2 — who else a skill's move reaches, for its words and chips. */
+  context?: ExtensionConfirmContext | undefined;
   busy: boolean;
   onConfirm: (values?: Record<string, string>) => void;
   onCancel: () => void;
 }): ReactElement | null {
-  const confirm = actConfirm(act, where);
+  const confirm = actConfirm(act, where, context);
   const asks = act.act === "add" && act.needs.length > 0;
   const [values, setValues] = useState<Record<string, string>>({});
   const button = useRef<HTMLButtonElement>(null);
@@ -261,6 +285,19 @@ function ActConfirm({
         {question}
       </p>
       <p className={`vf-profiles-confirm-what ${labelCls}`}>{what}</p>
+      {confirm?.chips !== undefined && confirm.chips.length > 0 && (
+        // pass 24: chips name who gets it
+        <ul className="vf-ext-confirm-chips" aria-label="Loads it">
+          {confirm.chips.map((chip) => (
+            <li key={chip.provider} className="vf-ext-chip vf-ext-chip--on">
+              <span className="vf-ext-chip-mark" aria-hidden="true">
+                <AgentIcon providerId={chip.provider} />
+              </span>
+              {chip.label}
+            </li>
+          ))}
+        </ul>
+      )}
       {asks &&
         act.needs.map((name, index) => (
           <label key={name} className="vf-ext-value">
@@ -380,31 +417,28 @@ function ExtensionGridView({
                     </button>
                   )}
                 </th>
-                {row.cells.map(({ provider, cell, act }) => {
+                {row.cells.map(({ provider, cell, act, changed }) => {
                   const label =
                     model.heads.find((head) => head.provider === provider)?.label ?? provider;
+                  const why = changed === null ? cell.why : `${cell.why} · ${changed}`;
                   if (act !== null && onCellAct !== undefined) {
                     return (
-                      <td key={provider} title={`${cell.why} — ${act.title}`}>
+                      <td key={provider} title={`${why} — ${act.title}`}>
                         <button
                           type="button"
                           className="vf-ext-cell-button"
-                          aria-label={`${act.title}: ${cell.why}`}
+                          aria-label={`${act.title}: ${why}`}
                           disabled={busy}
                           onClick={() => onCellAct(act)}
                         >
-                          <CellMark cell={cell} />
+                          <CellMark cell={cell} changed={changed !== null} />
                         </button>
                       </td>
                     );
                   }
                   return (
-                    <td
-                      key={provider}
-                      title={cell.why}
-                      aria-label={`${row.name} for ${label}: ${cell.why}`}
-                    >
-                      <CellMark cell={cell} />
+                    <td key={provider} title={why} aria-label={`${row.name} for ${label}: ${why}`}>
+                      <CellMark cell={cell} changed={changed !== null} />
                     </td>
                   );
                 })}
@@ -625,7 +659,43 @@ export interface ProfileExtensionsViewProps {
   signIn?: ExtensionSignInSlot;
   /** AR-S4d — Add server…: a server kept once for the profile, turned on for its agents. */
   onAddServer?: () => void;
+  /** AR-S4d2 — Add skill…: a skill kept once for the profile, linked where its agents look. */
+  onAddSkill?: () => void;
+  /** AR-S4d2 — the other profiles and their agents, for what a move to the shared folder reaches. */
+  otherProfiles?: Array<{ profile: string; providers: string[] }>;
   now?: Date;
+}
+
+/**
+ * What a skill's move to the shared folder reaches: this profile's agents
+ * that read that folder too, and the other profiles' — an agent's support is
+ * its own wherever it is, so this profile's columns say which read it.
+ */
+function confirmContext(
+  lens: AgentsExtensionsListResult,
+  act: ExtensionCellAct,
+  otherProfiles: ReadonlyArray<{ profile: string; providers: string[] }>,
+): ExtensionConfirmContext {
+  const readers = sharedFolderReaders(lens, act.provider);
+  const reads = new Map(
+    lens.agents
+      .filter(
+        (column) =>
+          column.provider !== act.provider &&
+          (column.support.skills?.store === "mixed" || column.support.skills?.store === "shared"),
+      )
+      .map((column) => [column.provider, column.label]),
+  );
+  return {
+    readers,
+    elsewhere: otherProfiles.map((other) => ({
+      profile: other.profile,
+      agents: other.providers.flatMap((provider) => {
+        const label = reads.get(provider);
+        return label === undefined ? [] : [label];
+      }),
+    })),
+  };
 }
 
 /** The two lists on a profile's page: its agents' MCP servers and skills. */
@@ -642,6 +712,8 @@ export function ProfileExtensionsView({
   armed: armedInitially,
   signIn,
   onAddServer,
+  onAddSkill,
+  otherProfiles = [],
   now,
 }: ProfileExtensionsViewProps): ReactElement {
   const [armed, setArmed] = useState<ExtensionCellAct | null>(null);
@@ -675,6 +747,12 @@ export function ProfileExtensionsView({
         Add server…
       </UiButton>
     );
+  const addSkill =
+    onAddSkill === undefined ? null : (
+      <UiButton disabled={busy} onClick={onAddSkill}>
+        Add skill…
+      </UiButton>
+    );
   if (lens === null && error !== null) {
     return (
       <div className="vf-ext" data-profile-extensions="">
@@ -706,6 +784,7 @@ export function ProfileExtensionsView({
       )}
       {KINDS.map((key, index) => {
         const model = extensionGrid(lens, key);
+        const changes = changeLines(lens, key, now ?? new Date());
         return (
           <SettingsSection
             key={key}
@@ -721,10 +800,21 @@ export function ProfileExtensionsView({
                   {addServer}
                   {refresh}
                 </span>
-              ) : undefined
+              ) : (
+                (addSkill ?? undefined)
+              )
             }
             className={`vf-ext-section vf-ext-section--${key}`}
           >
+            {changes.map((change) => (
+              // O1: who changed what outside VibeField, and when a read noticed it
+              <p key={change.text} className="vf-ext-change" data-ext-change="">
+                <span className="vf-ext-change-dot" aria-hidden="true" />
+                <span>
+                  {change.text}, {change.when}. {change.now}
+                </span>
+              </p>
+            ))}
             {model.empty !== null ? (
               <p className="vf-ext-quiet">{model.empty}</p>
             ) : (
@@ -742,6 +832,7 @@ export function ProfileExtensionsView({
                   key={`${open.provider}:${open.id}:${open.act}`}
                   act={open}
                   where={where}
+                  context={confirmContext(lens, open, otherProfiles)}
                   busy={busy}
                   onConfirm={(values) => {
                     setArmed(null);
@@ -1005,6 +1096,8 @@ export interface ExtensionItemViewProps {
   armed?: ExtensionActRequest;
   /** A server's sign-in running for the profile: its pane and Cancel. */
   signIn?: ExtensionSignInSlot;
+  /** AR-S4d2 — the other profiles and their agents, for what a move to the shared folder reaches. */
+  otherProfiles?: Array<{ profile: string; providers: string[] }>;
   now?: Date;
 }
 
@@ -1021,10 +1114,14 @@ export function ExtensionItemView({
   acting = false,
   armed: armedInitially,
   signIn,
+  otherProfiles = [],
   now,
 }: ExtensionItemViewProps): ReactElement {
   const [armedByClick, setArmed] = useState<ExtensionCellAct | null>(null);
-  const model = lens === null || firstRead(lens) ? null : extensionItem(lens, list, name);
+  const model =
+    lens === null || firstRead(lens)
+      ? null
+      : extensionItem(lens, list, name, where.replace(/^(in|on) /u, ""));
   // the catalog opens a confirm by naming its act
   const armed =
     armedByClick ??
@@ -1121,9 +1218,9 @@ export function ExtensionItemView({
                   title={agent.cell.why}
                 >
                   {agent.act !== null && agent.switchable && onAct !== undefined ? (
-                    // the agent's own switch for this profile
+                    // the agent's own switch for this profile; a skill's link is its switch
                     <UiSwitch
-                      checked={agent.act.act === "disable"}
+                      checked={agent.act.act === "disable" || agent.act.act === "remove"}
                       disabled={busy}
                       label={agent.act.title}
                       onChange={() => ask(agent.act!)}
@@ -1152,16 +1249,19 @@ export function ExtensionItemView({
                       Sign out
                     </UiButton>
                   )}
-                  {agent.act !== null && agent.act.act === "add" && onAct !== undefined && (
-                    // AR-S4d — the agent's own add, from the profile's definition
-                    <UiButton
-                      disabled={busy}
-                      aria-label={agent.act.title}
-                      onClick={() => ask(agent.act!)}
-                    >
-                      Turn on
-                    </UiButton>
-                  )}
+                  {agent.act !== null &&
+                    agent.act.act === "add" &&
+                    !agent.switchable &&
+                    onAct !== undefined && (
+                      // AR-S4d — the agent's own add, from the profile's definition
+                      <UiButton
+                        disabled={busy}
+                        aria-label={agent.act.title}
+                        onClick={() => ask(agent.act!)}
+                      >
+                        Turn on
+                      </UiButton>
+                    )}
                   {agent.act !== null &&
                     agent.act.act !== "add" &&
                     !agent.switchable &&
@@ -1184,6 +1284,7 @@ export function ExtensionItemView({
               key={`${armed.provider}:${armed.id}:${armed.act}`}
               act={armed}
               where={where}
+              {...(lens !== null ? { context: confirmContext(lens, armed, otherProfiles) } : {})}
               busy={busy}
               onConfirm={(values) => {
                 setArmed(null);
@@ -1266,6 +1367,22 @@ export function extensionItemSubpage(
 export function addServerSubpage(set: AgentProfileSet, onBack: () => void): SettingsSubpage {
   return {
     title: "Add MCP server",
+    description: (
+      <span className="vf-profiles-subhead">
+        Kept once ·
+        <ProfileMark set={set} size={12} />
+        {set.label}
+      </span>
+    ),
+    backLabel: `Back to ${set.label}`,
+    onBack,
+  };
+}
+
+/** Add skill's page names itself, what it makes, and the profile it is for. */
+export function addSkillSubpage(set: AgentProfileSet, onBack: () => void): SettingsSubpage {
+  return {
+    title: "Add skill",
     description: (
       <span className="vf-profiles-subhead">
         Kept once ·
@@ -1547,6 +1664,198 @@ export function AddServerView({
         </UiButton>
         <UiButton type="submit" variant="primary" disabled={!ready}>
           {adding ? "Adding…" : "Add server"}
+        </UiButton>
+      </div>
+    </form>
+  );
+}
+
+/* ── Add skill (AR-S4d2; pass 24's "A skill, added once") ───────────────────── */
+
+export interface AddSkillRequest {
+  /** The folder a person named: a full path, or one from `~/`. */
+  from: string;
+  agents: string[];
+}
+
+/** What fieldd read of the folder, and what each agent would run to take it. */
+export type AddSkillPlan = AgentsExtensionsPlanSkillResult;
+
+export interface AddSkillViewProps {
+  lens: AgentsExtensionsListResult | null;
+  profile: string;
+  /** "in Work" · "on This Mac" */
+  where: string;
+  /** The folder's read and each agent's line; null until asked, or while the folder is wrong. */
+  plan?: AddSkillPlan | null;
+  /** Why the folder can't be kept (none there, no SKILL.md, the name taken), from fieldd. */
+  planError?: string | null;
+  error?: string | null;
+  adding?: boolean;
+  /** The folder changed: the controller asks fieldd what it is. */
+  onSource?: (from: string) => void;
+  onAdd?: (request: AddSkillRequest) => void;
+  onCancel?: () => void;
+  /** The catalog's still: a folder already named, and the agents chosen. */
+  initial?: { from?: string; agents?: string[] };
+  now?: Date;
+}
+
+/** The form: a folder with a SKILL.md, then Turn on for, and what each agent would run. */
+export function AddSkillView({
+  lens,
+  profile,
+  where,
+  plan = null,
+  planError = null,
+  error = null,
+  adding = false,
+  onSource,
+  onAdd,
+  onCancel,
+  initial,
+  now,
+}: AddSkillViewProps): ReactElement {
+  const [from, setFrom] = useState(initial?.from ?? "");
+  const [picked, setPicked] = useState<Set<string> | null>(
+    initial?.agents === undefined ? null : new Set(initial.agents),
+  );
+  const fieldRef = useRef<HTMLInputElement>(null);
+  useEffect(() => fieldRef.current?.focus(), []);
+  const source = from.trim();
+  // the controller reads each change of the folder
+  useEffect(() => {
+    onSource?.(source);
+  }, [source]);
+  const problem = skillSourceProblem(from);
+  const chips = lens === null ? [] : addSkillChips(lens, plan?.offers ?? null);
+  const chosen = chips.filter(
+    (chip) => chip.act !== null && (picked === null ? chip.preselected : picked.has(chip.provider)),
+  );
+  // pass 24's hint: who cannot take it, and whose taking reaches further than this profile
+  const notes = chips
+    .filter((chip) => chip.act === null || chip.act.reaches.length > 0)
+    .map((chip) => chip.why);
+  const ready =
+    problem === null && plan !== null && planError === null && !adding && onAdd !== undefined;
+  const running =
+    lens?.run !== undefined &&
+    plan !== null &&
+    lens.run.name === plan.name &&
+    (adding || lens.run.state === "running");
+  const keptIn = plan?.folder.replace(/\/[^/]+$/u, "") ?? lens?.library;
+  return (
+    <form
+      className="vf-agents vf-agents-page vf-ext-page vf-ext-add"
+      data-ext-add-skill=""
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!ready) return;
+        onAdd?.({ from: source, agents: chosen.map((chip) => chip.provider) });
+      }}
+    >
+      <h2 className="sr-only" tabIndex={-1} data-agents-page-title="">
+        Add a skill {where}
+      </h2>
+      <ErrorNotice error={error} />
+      <section className={borderCls}>
+        <SettingsRow
+          title="Folder"
+          description="A folder on this Mac with a SKILL.md inside"
+          divider={plan !== null}
+        >
+          <input
+            ref={fieldRef}
+            className={`${fieldCls} vf-ext-add-field vf-ext-mono`}
+            value={from}
+            spellCheck={false}
+            placeholder="~/Downloads/changelog-writer"
+            aria-label="Folder"
+            disabled={adding}
+            onChange={(event) => setFrom(event.target.value)}
+          />
+        </SettingsRow>
+        {plan !== null && (
+          <SettingsRow
+            title={plan.name}
+            description={plan.description ?? "Its SKILL.md says nothing of what it does"}
+            divider={false}
+          >
+            <span className="vf-ext-add-found" data-ext-found="">
+              A skill
+            </span>
+          </SettingsRow>
+        )}
+      </section>
+      <p className="vf-ext-quiet vf-ext-add-hint">
+        VibeField copies it into {profile}’s skills folder
+        {keptIn !== undefined && (
+          <>
+            , <code className="vf-ext-code">{keptIn}</code>
+          </>
+        )}
+        , so the agents share one copy and an edit is made once.
+      </p>
+      <SettingsSection
+        title="Turn on for"
+        description={`${notes.length === 0 ? "" : `${notes.join("; ")}. `}You can change any of them later, one agent at a time.`}
+      >
+        {/* biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a fieldset of inputs */}
+        <div className="vf-ext-chips" role="group" aria-label="Turn on for">
+          {chips.map((chip) => {
+            const on = chosen.includes(chip);
+            return (
+              <button
+                key={chip.provider}
+                type="button"
+                className={`vf-ext-chip${on ? " vf-ext-chip--on" : ""}`}
+                aria-pressed={on}
+                disabled={chip.act === null || adding}
+                title={chip.why}
+                onClick={() => {
+                  const next = new Set(chosen.map((candidate) => candidate.provider));
+                  if (on) next.delete(chip.provider);
+                  else next.add(chip.provider);
+                  setPicked(next);
+                }}
+              >
+                <span className="vf-ext-chip-mark" aria-hidden="true">
+                  <AgentIcon providerId={chip.provider} />
+                </span>
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="vf-ext-runs" data-ext-runs="">
+          <span className={labelCls}>Runs</span>
+          {plan === null ? (
+            <code className="vf-ext-code">nothing yet: name a folder</code>
+          ) : (
+            <>
+              <code className="vf-ext-code">
+                <i>VibeField</i> copy {source} → {plan.folder}
+              </code>
+              {chosen.flatMap((chip) =>
+                (chip.act?.runs ?? "").split("\n").map((line, index) => (
+                  <code key={`${chip.provider}:${index}`} className="vf-ext-code">
+                    <i>{index === 0 ? chip.label : ""}</i> {line}
+                  </code>
+                )),
+              )}
+            </>
+          )}
+        </div>
+      </SettingsSection>
+      <ErrorNotice error={planError} />
+      {running && lens?.run !== undefined && <RunCard run={lens.run} now={now} />}
+      <div className="vf-profiles-foot">
+        {problem !== null && !adding && <span className={labelCls}>{problem}</span>}
+        <UiButton onClick={onCancel} disabled={adding}>
+          Cancel
+        </UiButton>
+        <UiButton type="submit" variant="primary" disabled={!ready}>
+          {adding ? "Adding…" : "Add skill"}
         </UiButton>
       </div>
     </form>

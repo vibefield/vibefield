@@ -659,6 +659,12 @@ export const LAYOUT = {
    * agent. The values live in the OS keychain, one entry per profile — never
    * under this root. */
   AGENT_EXTENSIONS_DIR: ["agents", "extensions"],
+  /** AR-S4d2 — each Agent Profile's skills folder, `skills/<set>/<name>/`:
+   * the one copy of each skill the profile keeps (a folder with a SKILL.md,
+   * or a link to it in `~/.agents/skills` once Codex took it there). Every
+   * agent in the profile is given a link to it where it looks for skills;
+   * deleted with the profile. */
+  AGENT_SKILLS_DIR: ["agents", "skills"],
   /** AR-3 — this user's managed-session records: one `<runtimeRunId>.json`
    * (0600) per session fieldd spawned, holding puppeteer's opaque continuation
    * beside the launch facts (provider, persona, cwd, workspace) and the exit,

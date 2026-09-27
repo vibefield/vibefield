@@ -13,8 +13,10 @@ import {
   AgentSubscribeParams,
   AgentsExtensionsActParams,
   AgentsExtensionsAddParams,
+  AgentsExtensionsAddSkillParams,
   AgentsExtensionsListParams,
   AgentsExtensionsPlanParams,
+  AgentsExtensionsPlanSkillParams,
   AgentsExtensionsSignInParams,
   AgentsExtensionsSubscribeParams,
   AgentsInstallsParams,
@@ -1577,6 +1579,38 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { set, name, definition }", false);
       return await agents.extensions.plan(parsed.data);
+    });
+    // AR-S4d2 — Add skill: a folder copied into the profile's skills folder, then
+    // each agent given a link to it (audited; the folder a person named is not recorded)
+    api.register("agents.extensions.addSkill", async (ctx, params) => {
+      const parsed = AgentsExtensionsAddSkillParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, from, agents }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.extensions.add_skill",
+          target: { kind: "agent-extension", id: `${parsed.data.set}:skill`.slice(0, 256) },
+          attrs: {
+            set: parsed.data.set,
+            agents: parsed.data.agents.join(",").slice(0, 256),
+          },
+        },
+        () => agents.extensions.addSkill(parsed.data),
+        (result) => ({
+          attrs: {
+            skill: result.name.slice(0, 128),
+            changed: result.receipts.filter((entry) => entry.receipt.status === "changed").length,
+          },
+        }),
+      );
+    });
+    // AR-S4d2 — the folder read and each agent's line, before anything is copied: a read
+    api.register("agents.extensions.planSkill", async (_ctx, params) => {
+      const parsed = AgentsExtensionsPlanSkillParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, from }", false);
+      return await agents.extensions.planSkill(parsed.data);
     });
     api.register("agents.installs", async (_ctx, params) => {
       const parsed = AgentsInstallsParams.safeParse(params ?? {});

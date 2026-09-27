@@ -1,5 +1,6 @@
 import type {
   AgentExtensionAct,
+  AgentExtensionChange,
   AgentExtensionColumn,
   AgentExtensionHolding,
   AgentExtensionOffer,
@@ -30,6 +31,12 @@ import type {
 // AR-S4d: a server the profile keeps is a row too, though no agent holds it;
 // an empty cell carries the agent's own add (fieldd's offer, from the row's
 // definition), or why the agent cannot take the server.
+//
+// AR-S4d2: skills too — a skill's one copy is kept in the profile's skills
+// folder and an empty cell gives its agent a link to it (Codex: the copy
+// moves to the folder every profile shares, after a confirm that names who
+// else loads it). O1: a change made outside VibeField marks its cell with a
+// grey dot, and one line above the list says who changed what.
 
 export type ExtensionKindKey = "servers" | "skills";
 
@@ -92,7 +99,13 @@ export interface ExtensionGridRow {
   held: boolean;
   /** A server at an address (globe) or a program on this Mac (prompt); a skill. */
   glyph: "globe" | "prompt" | "snippets";
-  cells: Array<{ provider: string; cell: ExtensionCell; act: ExtensionCellAct | null }>;
+  cells: Array<{
+    provider: string;
+    cell: ExtensionCell;
+    act: ExtensionCellAct | null;
+    /** AR-S4d2 (O1) — changed outside VibeField since the read before: the sentence that says so. */
+    changed: string | null;
+  }>;
 }
 
 export interface ExtensionGridModel {
@@ -296,7 +309,7 @@ function factOf(key: ExtensionKindKey, row: AgentExtensionRow): { code: string; 
     };
   }
   if (key === "skills") {
-    const shared = holdings.some((holding) => holding.shared === true);
+    const shared = row.shared === true || holdings.some((holding) => holding.shared === true);
     return { code: shared ? "~/.agents/skills" : "", text: row.description ?? "" };
   }
   const first = holdings.find((holding) => holding.target !== undefined);
@@ -323,6 +336,7 @@ export function extensionGrid(
       ),
   );
   const heads = lens.agents.map((column) => headOf(lens, key, column));
+  const changed = changesOf(lens, key);
   const rows: ExtensionGridRow[] = listed.map((row) => {
     const first = Object.values(row.cells)
       .flat()
@@ -342,11 +356,17 @@ export function extensionGrid(
           : (first?.transport ?? row.definition?.transport) === "stdio"
             ? "prompt"
             : "globe",
-      cells: lens.agents.map((column) => ({
-        provider: column.provider,
-        cell: extensionCell(lens, key, row, column),
-        act: cellAct(key, row, column),
-      })),
+      cells: lens.agents.map((column) => {
+        const change = changed.find(
+          (candidate) => candidate.provider === column.provider && candidate.name === row.name,
+        );
+        return {
+          provider: column.provider,
+          cell: extensionCell(lens, key, row, column),
+          act: cellAct(key, row, column),
+          changed: change === undefined ? null : `${changeSentence(lens, [change])}`,
+        };
+      }),
     };
   });
   // What else the agents hold of this kind, under a name with no row: a row's
@@ -369,6 +389,106 @@ export function extensionGrid(
           ? `None of these agents’ ${words.many} could be read here.`
           : `None of these agents has ${words.one === "server" ? "an MCP server" : "a skill"} of its own.`,
   };
+}
+
+/* ── O1: a change made outside VibeField (pass 24) ───────────────────────────
+   A read that finds an agent holding something of the profile's own
+   differently than the read before, when no act of VibeField's made it, says
+   so: the cell shows what the agent holds now, with a grey dot, and one line
+   above the list says who changed what, and when it was noticed. Nothing to
+   settle: turning the cell is one click, and that settles the line. */
+
+const changesOf = (
+  lens: AgentsExtensionsListResult,
+  key: ExtensionKindKey,
+): AgentExtensionChange[] =>
+  (lens.changes ?? []).filter((change) => change.kind === WORDS[key].kind);
+
+const CHANGED: Record<AgentExtensionChange["change"], (agents: string, name: string) => string> = {
+  removed: (agents, name) => `${agents} dropped ${name} outside VibeField`,
+  added: (agents, name) => `${agents} took ${name} outside VibeField`,
+  off: (agents, name) => `${name} was turned off in ${agents} outside VibeField`,
+  on: (agents, name) => `${name} was turned on in ${agents} outside VibeField`,
+};
+
+/** One or more agents' same change to one name, in a sentence. */
+function changeSentence(
+  lens: AgentsExtensionsListResult,
+  changes: readonly AgentExtensionChange[],
+): string {
+  const [first] = changes;
+  if (first === undefined) return "";
+  const agents = listWords([
+    ...new Set(changes.map((change) => labelOf(lens.agents, change.provider))),
+  ]);
+  return CHANGED[first.change](agents, first.name);
+}
+
+/** When a read noticed it, in the page's words: "just now", "4 minutes ago", "yesterday"… */
+function noticedWords(at: string, now: Date): string {
+  const minutes = Math.max(0, Math.round((now.getTime() - Date.parse(at)) / 60_000));
+  if (!Number.isFinite(minutes) || minutes < 1) return "noticed just now";
+  if (minutes < 60) return `noticed ${plural(minutes, "minute", "minutes")} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `noticed ${plural(hours, "hour", "hours")} ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "noticed yesterday" : `noticed ${plural(days, "day", "days")} ago`;
+}
+
+export interface ExtensionChangeLine {
+  /** "Codex dropped linear outside VibeField" */
+  text: string;
+  /** What the cell says now. */
+  now: string;
+  /** "noticed 4 minutes ago" */
+  when: string;
+}
+
+/**
+ * The lines above one list: each change made outside VibeField, one line per
+ * name and kind of change, the agents that made it named together.
+ */
+export function changeLines(
+  lens: AgentsExtensionsListResult,
+  key: ExtensionKindKey,
+  now: Date,
+): ExtensionChangeLine[] {
+  const groups = new Map<string, AgentExtensionChange[]>();
+  for (const change of changesOf(lens, key)) {
+    const group = `${change.name}\u0000${change.change}`;
+    groups.set(group, [...(groups.get(group) ?? []), change]);
+  }
+  return [...groups.values()].map((changes) => {
+    const agents = listWords([
+      ...new Set(changes.map((change) => labelOf(lens.agents, change.provider))),
+    ]);
+    const last = changes.reduce((latest, change) => (change.at > latest.at ? change : latest));
+    const state = { removed: "off", added: "on", off: "off", on: "on" }[last.change];
+    return {
+      text: changeSentence(lens, changes),
+      now: `It shows ${state} for ${agents} now.`,
+      when: noticedWords(last.at, now),
+    };
+  });
+}
+
+/**
+ * The profile's agents that read the folder every profile shares for skills
+ * (`~/.agents/skills`), and have no switch to leave one out — beside `except`,
+ * the agent a skill is moving there for.
+ */
+export function sharedFolderReaders(
+  lens: AgentsExtensionsListResult,
+  except: string,
+): Array<{ provider: string; label: string }> {
+  return lens.agents
+    .filter(
+      (column) =>
+        column.provider !== except &&
+        column.failure === undefined &&
+        (column.support.skills?.store === "mixed" || column.support.skills?.store === "shared"),
+    )
+    .map((column) => ({ provider: column.provider, label: column.label }));
 }
 
 /**
@@ -395,7 +515,13 @@ export function holdingWords(
   holding: AgentExtensionHolding,
 ): { origin: string; detail: string; place?: string } {
   const origin = {
-    own: holding.shared === true ? "Its own, in a folder every profile reads" : "Its own",
+    // AR-S4d2 — a skill's link, placed where the agent looks, to the copy the profile keeps
+    own:
+      holding.linkTarget !== undefined
+        ? "A link in its skills folder"
+        : holding.shared === true
+          ? "Its own, in a folder every profile reads"
+          : "Its own",
     project: `For one project${holding.project === undefined ? "" : `, ${holding.project}`}`,
     plugin: `From the ${holding.plugin ?? ""} plugin`,
     bundled: "Built in",
@@ -987,6 +1113,8 @@ export function extensionItem(
   lens: AgentsExtensionsListResult,
   key: ExtensionKindKey,
   name: string,
+  /** The profile's name, for the words. */
+  profile = "this profile",
 ): ExtensionItemModel {
   const kindWord = key === "servers" ? "MCP server" : "Skill";
   const row = (key === "servers" ? lens.servers : lens.skills).find(
@@ -1095,19 +1223,28 @@ export function extensionItem(
     });
   } else {
     if (row.description !== undefined) facts.push({ term: "What it does", text: row.description });
+    // AR-S4d2 — the one copy, where the profile keeps it; else where the agents keep theirs
     const folders = [...new Set(holdings.map(({ holding }) => folderOf(holding)).filter(Boolean))];
-    if (folders.length === 1) facts.push({ term: "Folder", code: folders[0]! });
-    // a skill in the shared folder says so beneath the agents instead
+    const folder = row.folder ?? (folders.length === 1 ? folders[0] : undefined);
+    if (folder !== undefined) facts.push({ term: "Folder", code: folder });
     const holders = [...new Set(holdings.map(({ column }) => column.label))];
-    if (!holdings.some(({ holding }) => holding.shared === true)) {
-      facts.push({
-        term: "Each agent",
-        text:
-          holders.length === 1
-            ? `Only ${holders[0]} has it, in its own folder`
-            : "Each keeps its own copy",
-      });
-    }
+    const owner = row.owner === undefined ? undefined : labelOf(lens.agents, row.owner);
+    const each =
+      row.kept === true && row.shared === true
+        ? `In the folder every profile shares, for Codex; ${profile}’s skills folder keeps a link to it, and each agent here gets a link where it looks`
+        : row.kept === true
+          ? "Gets a link to this folder where it looks for skills, so an edit is made once"
+          : owner !== undefined
+            ? `It is still ${owner}’s alone; the first other agent you turn it on for moves it to ${profile}’s skills folder and links it from both`
+            : row.shared === true
+              ? undefined
+              : holders.length === 1
+                ? `Only ${holders[0]} has it, in its own folder`
+                : row.versions > 1
+                  ? "Each keeps its own copy"
+                  : "Each gets a link to this folder where it looks for skills";
+    // a skill in the shared folder says so beneath the agents instead
+    if (each !== undefined) facts.push({ term: "Each agent", text: each });
   }
 
   const agents = lens.agents.map((column): ExtensionItemAgent => {
@@ -1120,8 +1257,11 @@ export function extensionItem(
       label: column.label,
       cell,
       act,
+      // AR-S4d2 — a skill's link is its switch: on places it, off takes it away
       switchable:
-        holding?.acts?.some((offer) => offer.act === "enable" || offer.act === "disable") === true,
+        holding?.acts?.some((offer) => offer.act === "enable" || offer.act === "disable") ===
+          true ||
+        (key === "skills" && act !== null && (act.act === "add" || act.act === "remove")),
       signIn:
         signIn === null
           ? null
@@ -1205,6 +1345,8 @@ export interface ExtensionCellAct {
   terminal: boolean;
   /** AR-S4d — for an add: the names its server reads that VibeField keeps no value for yet. */
   needs: string[];
+  /** AR-S4d2 — a skill's copy moves here first (home-abbreviated): the folder every profile shares. */
+  moves?: string;
   /** The control's accessible name. */
   title: string;
 }
@@ -1239,29 +1381,39 @@ function offerOf(
     reaches: [...offer.reaches],
     terminal: offer.terminal === true,
     needs: [],
-    title: TITLES[offer.act](row.name, column.label),
+    ...(offer.moves !== undefined ? { moves: offer.moves } : {}),
+    // a skill's link goes, or its folder moves to the profile's: it is taken away, never lost
+    title:
+      key === "skills" && offer.act === "remove"
+        ? `Take ${row.name} away from ${column.label}`
+        : TITLES[offer.act](row.name, column.label),
   };
 }
 
-/** AR-S4d — an empty cell's add: the agent's own, from the row's definition, or null when it cannot take it. */
+/**
+ * AR-S4d — an empty cell's add: the agent's own, from the row's definition,
+ * or null when it cannot take it. AR-S4d2 — a skill's is a link to its one
+ * copy (Codex: the copy moves to the shared folder first).
+ */
 function addOf(
   key: ExtensionKindKey,
   row: AgentExtensionRow,
   column: AgentExtensionColumn,
 ): ExtensionCellAct | null {
   const offer: AgentExtensionOffer | undefined = row.offers?.[column.provider];
-  if (key !== "servers" || offer?.act === undefined) return null;
+  if (offer?.act === undefined) return null;
   return {
     provider: column.provider,
     label: column.label,
-    kind: "mcp-server",
+    kind: key === "servers" ? "mcp-server" : "skill",
     id: row.name,
     name: row.name,
     act: "add",
     runs: offer.act.runs,
     reaches: [...offer.act.reaches],
     terminal: offer.act.terminal === true,
-    needs: [...(row.needs ?? [])],
+    needs: key === "servers" ? [...(row.needs ?? [])] : [],
+    ...(offer.act.moves !== undefined ? { moves: offer.act.moves } : {}),
     title: TITLES.add(row.name, column.label),
   };
 }
@@ -1286,11 +1438,85 @@ export interface ExtensionActConfirm {
   /** The confirming button. */
   action: string;
   danger: boolean;
+  /** pass 24's chips: who gets it, beside the words. */
+  chips?: Array<{ provider: string; label: string }>;
+}
+
+/** What a skill's confirm names beyond the act: who else reads the folder it moves to. */
+export interface ExtensionConfirmContext {
+  /** This profile's agents that read the shared folder too, with no switch for one skill. */
+  readers?: Array<{ provider: string; label: string }>;
+  /** The other profiles, and theirs. */
+  elsewhere?: Array<{ profile: string; agents: string[] }>;
+}
+
+/** A path's folder: `~/.agents/skills/x` → `~/.agents/skills`. */
+const parentFolder = (path: string): string => path.replace(/\/[^/]+$/u, "");
+
+/** P7 for a skill: a move to the shared folder, one folder for every profile, or another folder agents share. */
+function skillConfirm(
+  act: ExtensionCellAct,
+  where: string,
+  context: ExtensionConfirmContext,
+): ExtensionActConfirm | null {
+  const profile = where.replace(/^(in|on) /u, "");
+  if (act.act === "add" && act.moves !== undefined && act.reaches.includes("shared-folder")) {
+    // pass 24 (lb4): Codex reads a person's skills only from the one folder every profile shares
+    const folder = parentFolder(act.moves);
+    const readers = context.readers ?? [];
+    const elsewhere = (context.elsewhere ?? []).filter((other) => other.agents.length > 0);
+    const loads = [
+      readers.length > 0 ? `${listWords(readers.map((reader) => reader.label))} here` : "",
+      ...elsewhere.map((other) => `${listWords(other.agents)} in ${other.profile}`),
+    ].filter(Boolean);
+    return {
+      question: `Move ${act.name} into the shared folder for ${act.label}?`,
+      what: [
+        `${act.label} reads your skills only from ${folder}, one folder every profile shares.`,
+        `VibeField moves ${act.name} there and leaves a link in ${profile}’s skills folder, so every agent here that has it keeps it.`,
+        `${act.label}’s own switch turns it on here and off in your other profiles.`,
+        loads.length > 0
+          ? `Other agents read that folder too and have no switch for one skill, so they load it: ${loads.join("; ")}.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      action: `Move it and turn on for ${act.label}`,
+      danger: false,
+      chips: [{ provider: act.provider, label: act.label }, ...readers],
+    };
+  }
+  if (act.reaches.includes("every-profile")) {
+    const on = act.act === "add";
+    return {
+      question: `${on ? "Turn" : "Take"} ${act.name} ${on ? "on for" : "away from"} ${act.label} in every profile?`,
+      what: `${act.label} reads one skills folder for every profile: this ${on ? "gives it to" : "takes it from"} all of them.${on ? "" : " Its folder stays."}`,
+      action: on ? "Turn it on" : "Take it away",
+      danger: !on,
+    };
+  }
+  if (act.reaches.includes("shared-folder")) {
+    const on = act.act === "add";
+    return {
+      question: `${on ? "Turn" : "Take"} ${act.name} ${on ? "on for" : "away from"} ${act.label} ${where}?`,
+      what: `${act.label}’s skills folder ${where} is one other agents read too, in every profile: ${on ? "they load it from there as well" : "they lose it too"}.`,
+      action: on ? "Turn it on" : "Take it away",
+      danger: !on,
+    };
+  }
+  return null;
 }
 
 /** P7: the two-step confirm a click needs when it reaches further than its cell; null when it does not. */
-export function actConfirm(act: ExtensionCellAct, where: string): ExtensionActConfirm | null {
+export function actConfirm(
+  act: ExtensionCellAct,
+  where: string,
+  context: ExtensionConfirmContext = {},
+): ExtensionActConfirm | null {
   if (act.reaches.length === 0) return null;
+  if (act.kind === "skill" && (act.act === "add" || act.act === "remove")) {
+    return skillConfirm(act, where, context);
+  }
   if (act.act === "sign-in" || act.act === "sign-out") {
     // the one reach a sign-in has: the agent keeps it once for every profile
     const signIn = act.act === "sign-in";
@@ -1410,7 +1636,11 @@ export function runWords(
           state,
           outcome: {
             tone: "neutral",
-            text: `${run.label} ran its add, but doesn’t hold ${run.name}.`,
+            // a skill's link the agent doesn't read is taken back: puppeteer says so
+            text:
+              run.kind === "skill"
+                ? `${run.label} doesn’t load ${run.name} from where it was placed, so VibeField took it back.`
+                : `${run.label} ran its add, but doesn’t hold ${run.name}.`,
           },
         };
       case "failed":
@@ -1606,6 +1836,55 @@ export function addServerChips(
         why: reaches ? `${column.label} would add it for every profile` : column.label,
         preselected: !reaches && offer.act.terminal !== true,
       };
+    }
+    return {
+      ...base,
+      act: null,
+      why: offer?.unavailable?.message ?? `${column.label} can’t take it here`,
+      preselected: false,
+    };
+  });
+}
+
+/* ── Add skill (AR-S4d2; pass 24's "A skill, added once") ─────────────────────
+   A folder on this Mac with a SKILL.md, copied into the profile's skills
+   folder so the agents share one copy, then Turn on for — a chip per agent,
+   chosen where its link stays in this profile; Codex, whose move takes it to
+   the folder every profile shares, and an agent whose one folder serves every
+   profile are there to choose, never chosen for you. Runs says each agent's
+   own line before anything is copied. */
+
+/** Why the folder can't be asked about yet, or null when it can. */
+export function skillSourceProblem(from: string): string | null {
+  const path = from.trim();
+  if (path === "") return "Name a folder with a SKILL.md inside";
+  if (!(path === "~" || path.startsWith("~/") || path.startsWith("/")))
+    return "A full path, or one from ~/";
+  return null;
+}
+
+/** Turn on for, for a skill: a chip per agent of the profile, from what each would run. */
+export function addSkillChips(
+  lens: AgentsExtensionsListResult,
+  offers: Record<string, AgentExtensionOffer> | null,
+): AddServerChip[] {
+  return lens.agents.map((column) => {
+    const offer = offers?.[column.provider];
+    const base = { provider: column.provider, label: column.label };
+    if (column.failure !== undefined)
+      return { ...base, act: null, why: `${column.label} could not be read`, preselected: false };
+    if (column.support.skills === undefined)
+      return { ...base, act: null, why: `${column.label} has no skills`, preselected: false };
+    if (offer?.act !== undefined) {
+      const reaches = offer.act.reaches;
+      const why = reaches.includes("shared-folder")
+        ? offer.act.moves !== undefined
+          ? `${column.label} would take it into the folder every profile shares`
+          : `${column.label}’s skills folder here is one other agents read too`
+        : reaches.includes("every-profile")
+          ? `${column.label} would add it for every profile`
+          : column.label;
+      return { ...base, act: offer.act, why, preselected: reaches.length === 0 };
     }
     return {
       ...base,

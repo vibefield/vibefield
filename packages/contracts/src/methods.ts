@@ -1541,6 +1541,24 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // AR-S4d2 — a skill kept once: Add skill copies a folder into the profile's
+  // skills folder, then gives it to each agent (a link where it looks),
+  // audited, one run at a time; its plan reads the folder and says what each
+  // agent would run before anything is copied.
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.addSkill",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.planSkill",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "agents.usage",

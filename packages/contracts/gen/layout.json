@@ -123,6 +123,10 @@
     "agents",
     "extensions"
   ],
+  "AGENT_SKILLS_DIR": [
+    "agents",
+    "skills"
+  ],
   "AGENT_SESSIONS_DIR": [
     "agents",
     "sessions"

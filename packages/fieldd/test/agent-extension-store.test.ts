@@ -1,8 +1,22 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentExtensionStore, EXTENSION_VALUES_SERVICE } from "../src/agent-extension-store";
+import {
+  AgentExtensionStore,
+  changeKey,
+  EXTENSION_VALUES_SERVICE,
+} from "../src/agent-extension-store";
 import type { SecretStore } from "../src/plugin-settings";
 
 // AR-S4d — what a profile keeps once for its agents: definitions and value
@@ -35,12 +49,26 @@ function memoryKeychain() {
 async function setup() {
   dir = await mkdtemp(join(tmpdir(), "fieldd-extension-store-"));
   const keychain = memoryKeychain();
+  const home = join(dir, "home");
+  const skillsDir = join(dir, "skills");
   const store = new AgentExtensionStore({
     dir,
+    skillsDir,
+    home,
     secrets: keychain.secrets,
+    // a folder of 41 entries is too big here; production's is 2,000
+    skillLimits: { entries: 40, bytes: 64 * 1024 },
     now: () => new Date("2026-09-27T10:00:00.000Z"),
   });
-  return { store, keychain, dir };
+  return { store, keychain, dir, home, skillsDir };
+}
+
+async function skillFolder(folder: string, description = "Drafts release notes") {
+  await mkdir(folder, { recursive: true });
+  await writeFile(
+    join(folder, "SKILL.md"),
+    `---\nname: ${folder.split("/").pop()}\ndescription: ${description}\n---\nThe steps.\n`,
+  );
 }
 
 const CONTEXT7 = {
@@ -81,7 +109,11 @@ describe("AgentExtensionStore", () => {
       LINEAR_API_KEY: "lin_api_value",
     });
     // another store over the same folder reads what the first wrote
-    const again = new AgentExtensionStore({ dir, secrets: keychain.secrets });
+    const again = new AgentExtensionStore({
+      dir,
+      skillsDir: join(dir, "skills"),
+      secrets: keychain.secrets,
+    });
     await expect(again.read("work")).resolves.toMatchObject({
       values: ["CONTEXT7_API_KEY", "LINEAR_API_KEY"],
     });
@@ -137,5 +169,172 @@ describe("AgentExtensionStore", () => {
       values: ["A_KEY", "B_KEY"],
       given: { codex: { one: ["A_KEY"], two: ["B_KEY"] } },
     });
+  });
+
+  it("keeps a skill once in the profile's folder: a copy of the folder a person names, links inside it kept as links", async () => {
+    const { store, home, skillsDir } = await setup();
+    const source = join(home, "Downloads", "changelog-writer");
+    await skillFolder(source, "Writes the changelog entry");
+    await mkdir(join(source, "scripts"));
+    await writeFile(join(source, "scripts", "run.sh"), "echo hi\n");
+    await symlink("/usr/bin/true", join(source, "scripts", "tool"));
+
+    const found = await store.inspectSkill("work", "~/Downloads/changelog-writer");
+    expect(found).toEqual({
+      name: "changelog-writer",
+      folder: source,
+      description: "Writes the changelog entry",
+    });
+    const kept = await store.keepSkill("work", found);
+    expect(kept).toBe(join(skillsDir, "work", "changelog-writer"));
+    expect(await readFile(join(kept, "scripts", "run.sh"), "utf8")).toBe("echo hi\n");
+    expect(await readlink(join(kept, "scripts", "tool"))).toBe("/usr/bin/true");
+    // the person's folder stays where it was
+    expect((await stat(join(source, "SKILL.md"))).isFile()).toBe(true);
+    await expect(store.keepSkill("work", found)).rejects.toMatchObject({ kind: "CONFLICT" });
+
+    // a link in the folder (Codex took the copy to the shared folder) is kept too, with where it points
+    const shared = join(home, ".agents", "skills", "release-notes");
+    await skillFolder(shared);
+    await symlink(shared, join(skillsDir, "work", "release-notes"), "dir");
+    await mkdir(join(skillsDir, "work", "not-a-skill"));
+    expect(await store.keptSkills("work")).toEqual([
+      {
+        name: "changelog-writer",
+        folder: kept,
+        description: "Writes the changelog entry",
+      },
+      {
+        name: "release-notes",
+        folder: join(skillsDir, "work", "release-notes"),
+        linkTarget: shared,
+        description: "Drafts release notes",
+      },
+    ]);
+    // a folder already in the profile's folder is not taken again
+    await expect(store.inspectSkill("work", kept)).rejects.toMatchObject({
+      details: { reason: "kept" },
+    });
+    // one named through a link is copied from where it is: a copy, never the link
+    await symlink(source, join(home, "Downloads", "writer-link"));
+    const linked = await store.inspectSkill("work", "~/Downloads/writer-link");
+    const copy = await store.keepSkill("work", linked);
+    expect((await lstat(copy)).isSymbolicLink()).toBe(false);
+    expect(await readFile(join(copy, "SKILL.md"), "utf8")).toContain("Writes the changelog entry");
+  });
+
+  it("names why a folder is not taken: not a full path, not there, a file, no SKILL.md, too big", async () => {
+    const { store, home } = await setup();
+    await mkdir(join(home, "empty"), { recursive: true });
+    await writeFile(join(home, "notes.txt"), "x");
+    const big = join(home, "big");
+    await skillFolder(big);
+    for (let index = 0; index < 41; index += 1) {
+      if (index % 20 === 0) await mkdir(join(big, `d${index}`));
+      await writeFile(join(big, `d${index - (index % 20)}`, `f${index}`), "");
+    }
+    const heavy = join(home, "heavy");
+    await skillFolder(heavy);
+    await writeFile(join(heavy, "model.bin"), Buffer.alloc(65 * 1024));
+    for (const [from, reason] of [
+      ["Downloads/x", "no-folder"],
+      ["~/missing", "no-folder"],
+      ["~/notes.txt", "no-folder"],
+      ["~/empty", "no-skill"],
+      ["~/big", "too-big"],
+      ["~/heavy", "too-big"],
+    ] as const) {
+      await expect(store.inspectSkill("work", from), from).rejects.toMatchObject({
+        kind: "PRECONDITION_FAILED",
+        details: { reason },
+      });
+    }
+  });
+
+  it("says what changed outside VibeField between two reads, and nothing for a cell VibeField turned", async () => {
+    const { store } = await setup();
+    const first = await store.noticeChanges(
+      "work",
+      "2026-09-27T10:00:00.000Z",
+      {
+        codex: { servers: { linear: true, notion: true }, skills: { "release-notes": true } },
+        claude: { servers: { linear: true }, skills: {} },
+      },
+      new Set(),
+    );
+    // the first read sees what is there, and says nothing
+    expect(first).toEqual([]);
+
+    const second = await store.noticeChanges(
+      "work",
+      "2026-09-27T10:05:00.000Z",
+      {
+        codex: { servers: { notion: false }, skills: { "release-notes": true, pdf: true } },
+        claude: { servers: {}, skills: {} },
+        grok: { servers: { linear: true }, skills: {} },
+      },
+      // VibeField took linear from Claude itself
+      new Set([changeKey("claude", "mcp-server", "linear")]),
+    );
+    const since = "2026-09-27T10:00:00.000Z";
+    const at = "2026-09-27T10:05:00.000Z";
+    expect(second).toEqual([
+      { provider: "codex", kind: "mcp-server", name: "linear", change: "removed", since, at },
+      { provider: "codex", kind: "mcp-server", name: "notion", change: "off", since, at },
+      { provider: "codex", kind: "skill", name: "pdf", change: "added", since, at },
+    ]);
+
+    // turning a cell settles its line; a newer change to a cell replaces its older line
+    const third = await store.noticeChanges(
+      "work",
+      "2026-09-27T10:09:00.000Z",
+      {
+        codex: { servers: { notion: true, linear: true }, skills: { "release-notes": true } },
+      },
+      new Set([changeKey("codex", "mcp-server", "linear")]),
+    );
+    expect(third).toEqual([
+      {
+        provider: "codex",
+        kind: "mcp-server",
+        name: "notion",
+        change: "on",
+        since: at,
+        at: "2026-09-27T10:09:00.000Z",
+      },
+      {
+        provider: "codex",
+        kind: "skill",
+        name: "pdf",
+        change: "removed",
+        since: at,
+        at: "2026-09-27T10:09:00.000Z",
+      },
+    ]);
+    // an agent not read this time keeps what was seen of it
+    expect((await store.read("work")).seen?.agents.grok).toEqual({
+      servers: { linear: true },
+      skills: {},
+    });
+
+    // three days on, the lines have gone
+    const later = await store.noticeChanges(
+      "work",
+      "2026-09-30T10:10:00.000Z",
+      { codex: { servers: { notion: true, linear: true }, skills: { "release-notes": true } } },
+      new Set(),
+    );
+    expect(later).toEqual([]);
+  });
+
+  it("forgets a deleted profile's skills folder, and never what a link in it points at", async () => {
+    const { store, home, skillsDir } = await setup();
+    const shared = join(home, ".agents", "skills", "release-notes");
+    await skillFolder(shared);
+    await skillFolder(join(skillsDir, "work", "changelog-writer"));
+    await symlink(shared, join(skillsDir, "work", "release-notes"), "dir");
+    await store.forgetProfile("work");
+    await expect(lstat(join(skillsDir, "work"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await stat(join(shared, "SKILL.md"))).isFile()).toBe(true);
   });
 });

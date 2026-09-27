@@ -1,0 +1,42 @@
+{
+  "name": "pdf-forms",
+  "description": "Fills in a PDF form from what the conversation already knows",
+  "folder": "~/Library/Application Support/VibeField/agents/skills/work/pdf-forms",
+  "offers": {
+    "claude": {
+      "act": {
+        "act": "add",
+        "runs": "link ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms → ~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/pdf-forms",
+        "reaches": []
+      }
+    },
+    "codex": {
+      "act": {
+        "act": "add",
+        "runs": "move ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms → ~/.agents/skills/pdf-forms\nlink ~/.agents/skills/pdf-forms → ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms",
+        "reaches": ["shared-folder"],
+        "moves": "~/.agents/skills/pdf-forms"
+      }
+    },
+    "grok": {
+      "act": {
+        "act": "add",
+        "runs": "link ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms → ~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/pdf-forms",
+        "reaches": []
+      }
+    },
+    "opencode": {
+      "act": {
+        "act": "add",
+        "runs": "link ~/Library/Application Support/VibeField/agents/skills/work/pdf-forms → ~/.config/opencode/skills/pdf-forms",
+        "reaches": ["every-profile"]
+      }
+    },
+    "kimi": {
+      "unavailable": {
+        "reason": "unread",
+        "message": "extension inventory failed for kimi"
+      }
+    }
+  }
+}
