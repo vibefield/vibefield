@@ -676,6 +676,14 @@ export const LAYOUT = {
    * it wrote itself — a same-uid file dropped into `agents/sessions/` is set
    * aside, never acted on (EL7). */
   AGENT_SESSIONS_KEY_FILE: ["agents", "sessions.key"],
+  /** AR-7 — the spawn-through shim's home under this user (0700): the
+   * rendezvous files, one launcher per offered agent's command, the bundled
+   * shim and the shell integration. puppeteer's spawn-through kit writes every
+   * file in it; fieldd chooses the path. A shell born in one of our panes
+   * carries only this DIRECTORY — what changes across a fieldd restart (the
+   * gateway's port, its bearer) lives in the files, never in the shell's
+   * environment, because our shells outlive fieldd. */
+  AGENT_SHIMS_DIR: ["agents", "shims"],
   /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
    * a full tree of the segments above; these four live at the VibeField root
    * itself and, with the `machine/` set below, are the only segments that

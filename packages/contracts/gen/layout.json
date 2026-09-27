@@ -135,6 +135,10 @@
     "agents",
     "sessions.key"
   ],
+  "AGENT_SHIMS_DIR": [
+    "agents",
+    "shims"
+  ],
   "USERS_DIR": [
     "users"
   ],

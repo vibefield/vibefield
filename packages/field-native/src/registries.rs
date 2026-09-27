@@ -174,6 +174,7 @@ pub mod layout {
     pub const AGENT_SESSIONS_DIR: &[&str] = &["agents", "sessions"];
     pub const AGENT_RUNS_DIR: &[&str] = &["agents", "runs"];
     pub const AGENT_SESSIONS_KEY_FILE: &[&str] = &["agents", "sessions.key"];
+    pub const AGENT_SHIMS_DIR: &[&str] = &["agents", "shims"];
     pub const USERS_DIR: &[&str] = &["users"];
     pub const USERS_FILE: &[&str] = &["users.json"];
     pub const USERS_LOCK: &[&str] = &["users.json.lock"];
@@ -218,6 +219,7 @@ pub mod layout {
         ("AGENT_SESSIONS_DIR", AGENT_SESSIONS_DIR),
         ("AGENT_RUNS_DIR", AGENT_RUNS_DIR),
         ("AGENT_SESSIONS_KEY_FILE", AGENT_SESSIONS_KEY_FILE),
+        ("AGENT_SHIMS_DIR", AGENT_SHIMS_DIR),
         ("USERS_DIR", USERS_DIR),
         ("USERS_FILE", USERS_FILE),
         ("USERS_LOCK", USERS_LOCK),
