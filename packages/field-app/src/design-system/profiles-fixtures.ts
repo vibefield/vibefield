@@ -24,6 +24,7 @@ export type ProfilesFixtureState =
   | "reading extensions"
   | "act confirm"
   | "turn on"
+  | "skill to codex"
   | "act running"
   | "act finished"
   | "this mac"
@@ -40,7 +41,9 @@ export type ProfilesFixtureState =
   | "server sign-in"
   | "server signing in"
   | "skill"
+  | "kept skill"
   | "add server"
+  | "add skill"
   | "new";
 
 export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
@@ -48,6 +51,7 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "reading extensions",
   "act confirm",
   "turn on",
+  "skill to codex",
   "act running",
   "act finished",
   "this mac",
@@ -64,7 +68,9 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "server sign-in",
   "server signing in",
   "skill",
+  "kept skill",
   "add server",
+  "add skill",
   "new",
 ];
 

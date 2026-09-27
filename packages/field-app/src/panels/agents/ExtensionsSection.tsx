@@ -3,6 +3,7 @@ import {
   type AgentExtensionServerDefinition,
   AgentsExtensionsListResult,
   AgentsExtensionsPlanResult,
+  AgentsExtensionsPlanSkillResult,
   AgentsExtensionsSignInResult,
   type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
@@ -19,6 +20,9 @@ import { refusalSentence } from "../../account/use-account";
 import {
   type AddServerRequest,
   AddServerView,
+  type AddSkillPlan,
+  type AddSkillRequest,
+  AddSkillView,
   AgentExtensionListView,
   AgentExtensionsView,
   type ExtensionActRequest,
@@ -26,7 +30,12 @@ import {
   type ExtensionSignInSlot,
   ProfileExtensionsView,
 } from "./ExtensionsView";
-import { ADD_SERVER_NAME, type AgentListKey, type ExtensionKindKey } from "./extensions-model";
+import {
+  ADD_SERVER_NAME,
+  type AgentListKey,
+  type ExtensionKindKey,
+  skillSourceProblem,
+} from "./extensions-model";
 import { SignInTerminal } from "./SignInTerminal";
 
 // Extensions' controllers (AR-S4b). Every page that shows what a profile's
@@ -46,7 +55,9 @@ import { SignInTerminal } from "./SignInTerminal";
 // AR-S4d: an act `add` carries the values its server reads (the confirm asked
 // for them); Add server asks `agents.extensions.plan` what each agent would
 // run as the form changes, then `agents.extensions.add`, whose runs ride the
-// frames, and opens the new server's page when it answers.
+// frames, and opens the new server's page when it answers. AR-S4d2: Add skill
+// asks `agents.extensions.planSkill` what the folder is and what each agent
+// would run as the path changes, then `agents.extensions.addSkill`.
 
 /** How long the form rests before its draft is planned. */
 const PLAN_REST_MS = 300;
@@ -205,6 +216,8 @@ export function ProfileExtensions({
   where,
   onOpenItem,
   onAddServer,
+  onAddSkill,
+  otherProfiles,
 }: {
   set: string;
   /** The profile's name, for the words. */
@@ -215,6 +228,10 @@ export function ProfileExtensions({
   onOpenItem?: (key: ExtensionKindKey, name: string) => void;
   /** AR-S4d — Add server… opens its page. */
   onAddServer?: () => void;
+  /** AR-S4d2 — Add skill… opens its page. */
+  onAddSkill?: () => void;
+  /** AR-S4d2 — the other profiles and their agents: what a move to the shared folder reaches. */
+  otherProfiles?: Array<{ profile: string; providers: string[] }>;
 }): ReactElement {
   const { lens, error, refreshing, refresh, acting, act, signIn, now } = useExtensionLens(set);
   return (
@@ -231,6 +248,92 @@ export function ProfileExtensions({
       {...(where !== undefined ? { where } : {})}
       {...(onOpenItem !== undefined ? { onOpenItem } : {})}
       {...(onAddServer !== undefined ? { onAddServer } : {})}
+      {...(onAddSkill !== undefined ? { onAddSkill } : {})}
+      {...(otherProfiles !== undefined ? { otherProfiles } : {})}
+    />
+  );
+}
+
+/** AR-S4d2 — Add skill's page: the folder read, what each agent would run, then the Add. */
+export function AddSkill({
+  set,
+  profile,
+  where,
+  onDone,
+  onCancel,
+}: {
+  set: string;
+  profile: string;
+  where: string;
+  /** The skill was kept (and given where it could be): its page. */
+  onDone: (name: string) => void;
+  onCancel: () => void;
+}): ReactElement {
+  const client = useFielddClient();
+  const { lens, error, now } = useExtensionLens(set);
+  const [plan, setPlan] = useState<AddSkillPlan | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const asked = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const onSource = useCallback(
+    (from: string) => {
+      clearTimeout(timer.current);
+      const ask = ++asked.current;
+      setPlan(null);
+      if (skillSourceProblem(from) !== null) {
+        setPlanError(null);
+        return;
+      }
+      timer.current = setTimeout(() => {
+        client
+          .request("agents.extensions.planSkill", { set, from })
+          .then((answer) => {
+            if (ask !== asked.current) return;
+            setPlan(AgentsExtensionsPlanSkillResult.parse(answer));
+            setPlanError(null);
+          })
+          .catch((cause: unknown) => {
+            if (ask !== asked.current) return;
+            setPlanError(refusalSentence("VibeField can’t keep this folder as a skill", cause));
+          });
+      }, PLAN_REST_MS);
+    },
+    [client, set],
+  );
+
+  const onAdd = useCallback(
+    (request: AddSkillRequest) => {
+      setAdding(true);
+      setRefusal(null);
+      client
+        .request("agents.extensions.addSkill", { set, ...request })
+        .then((answer) => {
+          const name = (answer as { name?: unknown } | null)?.name;
+          onDone(typeof name === "string" ? name : (plan?.name ?? ""));
+        })
+        .catch((cause: unknown) => setRefusal(refusalSentence("That skill wasn’t added", cause)))
+        .finally(() => setAdding(false));
+    },
+    [client, set, onDone, plan],
+  );
+
+  return (
+    <AddSkillView
+      lens={lens}
+      profile={profile}
+      where={where}
+      plan={plan}
+      planError={planError}
+      error={refusal ?? error}
+      adding={adding}
+      onSource={onSource}
+      onAdd={onAdd}
+      onCancel={onCancel}
+      now={now}
     />
   );
 }
@@ -373,11 +476,14 @@ export function ExtensionItem({
   list,
   name,
   where,
+  otherProfiles,
 }: {
   set: string;
   list: ExtensionKindKey;
   name: string;
   where: string;
+  /** AR-S4d2 — the other profiles and their agents: what a move to the shared folder reaches. */
+  otherProfiles?: Array<{ profile: string; providers: string[] }>;
 }): ReactElement {
   const { lens, error, refreshing, refresh, acting, act, signIn, now } = useExtensionLens(set);
   return (
@@ -393,6 +499,7 @@ export function ExtensionItem({
       acting={acting}
       now={now}
       {...(signIn !== undefined ? { signIn } : {})}
+      {...(otherProfiles !== undefined ? { otherProfiles } : {})}
     />
   );
 }

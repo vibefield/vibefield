@@ -535,9 +535,12 @@ export class AgentRuntimeService implements PersonaSessions {
       ...(opts.home !== undefined ? { home: opts.home } : {}),
     });
     // AR-S4d (pass 24, S1) — a profile's server values, in the keychain; an
-    // agent is given those of the servers VibeField gave it, when it starts
+    // agent is given those of the servers VibeField gave it, when it starts.
+    // AR-S4d2 — and its skills folder, the one copy each agent links to
     this.extensionStore = new AgentExtensionStore({
       dir: join(opts.userRoot, ...LAYOUT.AGENT_EXTENSIONS_DIR),
+      skillsDir: join(opts.userRoot, ...LAYOUT.AGENT_SKILLS_DIR),
+      home: this.home,
       secrets: opts.secretStore ?? createDarwinSecretStore(),
       now: this.now,
     });

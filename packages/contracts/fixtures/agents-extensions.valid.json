@@ -33,7 +33,7 @@
         "plugins": 1,
         "marketplaces": 1,
         "mcpServers": 4,
-        "skills": 3
+        "skills": 4
       },
       "fetchedAt": "2026-09-25T09:00:00.000Z"
     },
@@ -101,7 +101,7 @@
         "plugins": 0,
         "marketplaces": 0,
         "mcpServers": 1,
-        "skills": 1
+        "skills": 2
       },
       "fetchedAt": "2026-09-25T09:00:00.000Z"
     },
@@ -427,6 +427,64 @@
   ],
   "skills": [
     {
+      "name": "changelog-writer",
+      "description": "Writes the changelog entry for a merged pull request",
+      "versions": 1,
+      "cells": {
+        "claude": [
+          {
+            "id": "changelog-writer",
+            "origin": "own",
+            "enabled": true,
+            "place": "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/changelog-writer",
+            "linkTarget": "~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
+            "acts": [
+              {
+                "act": "remove",
+                "runs": "unlink ~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/changelog-writer",
+                "reaches": []
+              }
+            ]
+          }
+        ],
+        "grok": [
+          {
+            "id": "changelog-writer",
+            "origin": "own",
+            "enabled": true,
+            "place": "~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/changelog-writer",
+            "linkTarget": "~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
+            "acts": [
+              {
+                "act": "remove",
+                "runs": "unlink ~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/changelog-writer",
+                "reaches": []
+              }
+            ]
+          }
+        ]
+      },
+      "kept": true,
+      "folder": "~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
+      "offers": {
+        "codex": {
+          "act": {
+            "act": "add",
+            "runs": "move ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer → ~/.agents/skills/changelog-writer\nlink ~/.agents/skills/changelog-writer → ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
+            "reaches": ["shared-folder"],
+            "moves": "~/.agents/skills/changelog-writer"
+          }
+        },
+        "opencode": {
+          "act": {
+            "act": "add",
+            "runs": "link ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer → ~/.config/opencode/skills/changelog-writer",
+            "reaches": ["every-profile"]
+          }
+        }
+      }
+    },
+    {
       "name": "house-style",
       "description": "Northlight naming and formatting",
       "versions": 1,
@@ -511,9 +569,43 @@
             "id": "sql-review",
             "origin": "own",
             "enabled": false,
-            "place": "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review"
+            "place": "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review",
+            "acts": [
+              {
+                "act": "remove",
+                "runs": "move ~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review → ~/Library/Application Support/VibeField/agents/skills/work/sql-review",
+                "reaches": [],
+                "moves": "~/Library/Application Support/VibeField/agents/skills/work/sql-review"
+              }
+            ]
           }
         ]
+      },
+      "folder": "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review",
+      "owner": "claude",
+      "offers": {
+        "codex": {
+          "act": {
+            "act": "add",
+            "runs": "move ~/Library/Application Support/VibeField/agents/skills/work/sql-review → ~/.agents/skills/sql-review\nlink ~/.agents/skills/sql-review → ~/Library/Application Support/VibeField/agents/skills/work/sql-review",
+            "reaches": ["shared-folder"],
+            "moves": "~/.agents/skills/sql-review"
+          }
+        },
+        "grok": {
+          "act": {
+            "act": "add",
+            "runs": "link ~/Library/Application Support/VibeField/agents/skills/work/sql-review → ~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/sql-review",
+            "reaches": []
+          }
+        },
+        "opencode": {
+          "act": {
+            "act": "add",
+            "runs": "link ~/Library/Application Support/VibeField/agents/skills/work/sql-review → ~/.config/opencode/skills/sql-review",
+            "reaches": ["every-profile"]
+          }
+        }
       }
     }
   ],
@@ -553,5 +645,16 @@
       }
     ]
   },
-  "values": ["LINEAR_TOKEN"]
+  "values": ["LINEAR_TOKEN"],
+  "library": "~/Library/Application Support/VibeField/agents/skills/work",
+  "changes": [
+    {
+      "provider": "grok",
+      "kind": "skill",
+      "name": "sql-review",
+      "change": "removed",
+      "since": "2026-09-25T08:41:30.000Z",
+      "at": "2026-09-25T09:00:02.000Z"
+    }
+  ]
 }

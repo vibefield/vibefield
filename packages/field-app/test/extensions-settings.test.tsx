@@ -32,14 +32,18 @@ import {
   FIXTURE_EXTENSION_RUNNING,
   FIXTURE_EXTENSION_SIGNING_IN,
   FIXTURE_EXTENSIONS,
+  FIXTURE_EXTENSIONS_NOW,
+  FIXTURE_SKILL_PLAN,
 } from "../src/design-system/extensions-fixtures";
 import {
   AddServer,
+  AddSkill,
   ExtensionItem,
   ProfileExtensions,
 } from "../src/panels/agents/ExtensionsSection";
 import {
   AddServerView,
+  AddSkillView,
   AgentExtensionListView,
   AgentExtensionsView,
   ExtensionItemView,
@@ -51,6 +55,7 @@ import {
   agentExtensions,
   agentList,
   builtFromWords,
+  changeLines,
   draftDefinition,
   draftProblem,
   extensionGrid,
@@ -58,6 +63,7 @@ import {
   holdingWords,
   readWords,
   runWords,
+  sharedFolderReaders,
   signInNote,
   splitCommand,
 } from "../src/panels/agents/extensions-model";
@@ -109,8 +115,13 @@ describe("the Extensions model", () => {
       "1 more comes with a plugin, an app or one project; it stays on its agent’s own list.",
     );
     const skills = extensionGrid(LENS, "skills");
-    // a plugin's skill and a built-in one are not the profile's to list
-    expect(skills.rows.map((row) => row.name)).toEqual(["release-notes", "sql-review"]);
+    // a plugin's skill and a built-in one are not the profile's to list; changelog-writer is
+    // one Work keeps in its skills folder (AR-S4d2)
+    expect(skills.rows.map((row) => row.name)).toEqual([
+      "changelog-writer",
+      "release-notes",
+      "sql-review",
+    ]);
     expect(skills.more).toBe(
       "2 more are built into an agent, or come with a plugin or your organization; they stay on each agent’s own list.",
     );
@@ -185,11 +196,11 @@ describe("the Extensions model", () => {
       fact: "Two versions · https://mcp.linear.app/mcp",
     });
     expect(servers.rows[3]).toMatchObject({ glyph: "prompt", twoVersions: true });
-    expect(extensionGrid(LENS, "skills").rows[0]?.fact).toBe(
-      "~/.agents/skills · Drafts release notes from merged pull requests",
-    );
+    expect(
+      extensionGrid(LENS, "skills").rows.find((row) => row.name === "release-notes")?.fact,
+    ).toBe("~/.agents/skills · Drafts release notes from merged pull requests");
     expect(builtFromWords(LENS, "Work")).toEqual({
-      text: "Built from what Work’s agents already have: 3 servers and 2 skills. Nothing in the agents changed.",
+      text: "Built from what Work’s agents already have: 3 servers and 3 skills. Nothing in the agents changed.",
       twoVersions: ["linear", "postgres"],
     });
     const grok = LENS.servers.find((row) => row.name === "linear")?.cells.grok?.[0];
@@ -211,7 +222,7 @@ describe("one agent's Extensions (pass 23)", () => {
     expect(rowsOf("claude")).toEqual([
       ["Plugins", "1", ""],
       ["MCP servers", "4", ""],
-      ["Skills", "3", ""],
+      ["Skills", "4", ""],
     ]);
     // a built-in skill comes with the app: it is not counted; a server asking
     // for a sign-in is set apart
@@ -226,7 +237,7 @@ describe("one agent's Extensions (pass 23)", () => {
     expect(rowsOf("grok")).toEqual([
       ["Plugins", "None", ""],
       ["MCP servers", "1", "All from Claude on This Mac"],
-      ["Skills", "1", ""],
+      ["Skills", "2", ""],
     ]);
     expect(agentExtensions(LENS, "opencode")).toMatchObject({
       sub: "OpenCode keeps them in one place, shared by every profile",
@@ -302,6 +313,7 @@ describe("one agent's Extensions (pass 23)", () => {
       [
         "Yours",
         [
+          ["changelog-writer", ""],
           ["release-notes", ""],
           ["sql-review", "Off"],
         ],
@@ -393,14 +405,18 @@ describe("a server's or skill's page (pass 24)", () => {
     expect(notes.sharedFolder).toBe(
       "~/.agents/skills is a folder every profile reads; Codex and Grok load release-notes from there. Removing it there removes it for all of them.",
     );
-    const sql = extensionItem(LENS, "skills", "sql-review");
+    // AR-S4d2 — still Claude's own folder: the first other agent moves it to Work's
+    const sql = extensionItem(LENS, "skills", "sql-review", "Work");
     expect(sql.facts).toEqual([
       { term: "What it does", text: "Reviews a migration before it ships" },
       {
         term: "Folder",
         code: "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/skills/sql-review",
       },
-      { term: "Each agent", text: "Only Claude has it, in its own folder" },
+      {
+        term: "Each agent",
+        text: "It is still Claude’s alone; the first other agent you turn it on for moves it to Work’s skills folder and links it from both",
+      },
     ]);
     expect(sql.sharedFolder).toBeNull();
     expect(extensionItem(LENS, "servers", "nothing-here").gone).toBe(true);
@@ -755,8 +771,10 @@ describe("acts, drawn", () => {
     const onAct = vi.fn();
     await mount(createElement(ProfileExtensionsView, { lens: LENS, profile: "Work", onAct }));
     // linear, notion and postgres for Claude and for Codex, and Codex's release-notes;
-    // AR-S4d: context7 for the four agents that can take it, notion for Grok and OpenCode
-    expect(container?.querySelectorAll(".vf-ext-cell-button")).toHaveLength(13);
+    // AR-S4d: context7 for the four agents that can take it, notion for Grok and OpenCode;
+    // AR-S4d2: changelog-writer's links for Claude and Grok and its offers to Codex and
+    // OpenCode, sql-review's offers to Grok, Codex and OpenCode (Claude's own is off)
+    expect(container?.querySelectorAll(".vf-ext-cell-button")).toHaveLength(20);
     await act(async () => cellButton("Turn linear off for Codex")?.click());
     expect(onAct).toHaveBeenCalledWith({
       provider: "codex",
@@ -1148,7 +1166,7 @@ describe("adding once (AR-S4d), the model", () => {
       undefined,
     ]);
     // the I1 line counts what the agents have: still three servers
-    expect(builtFromWords(LENS, "Work")?.text).toContain("3 servers and 2 skills");
+    expect(builtFromWords(LENS, "Work")?.text).toContain("3 servers and 3 skills");
     const item = extensionItem(LENS, "servers", "context7");
     expect(item.gone).toBe(false);
     expect(item.facts).toEqual([
@@ -1256,10 +1274,11 @@ describe("adding once (AR-S4d), the model", () => {
       ["OpenCode", true, false],
       ["Kimi", false, false],
     ]);
-    expect(addServerChips(LENS, PLAN.offers).map((chip) => chip.why).slice(3)).toEqual([
-      "OpenCode would add it for every profile",
-      "Kimi could not be read",
-    ]);
+    expect(
+      addServerChips(LENS, PLAN.offers)
+        .map((chip) => chip.why)
+        .slice(3),
+    ).toEqual(["OpenCode would add it for every profile", "Kimi could not be read"]);
   });
 });
 
@@ -1502,5 +1521,282 @@ describe("AddServer (the controller)", () => {
     );
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     expect(onDone).toHaveBeenCalledWith("figma");
+  });
+});
+
+describe("skills kept once (AR-S4d2)", () => {
+  const LIB = "~/Library/Application Support/VibeField/agents/skills/work";
+  const CLAUDE = "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d";
+  const cellButton = (label: string) =>
+    [...(container?.querySelectorAll<HTMLButtonElement>(".vf-ext-cell-button") ?? [])].find(
+      (candidate) => candidate.getAttribute("aria-label")?.startsWith(label),
+    );
+  const button = (text: string) =>
+    [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (candidate) => candidate.textContent === text,
+    );
+
+  it("gives a skill a link from an empty cell, takes one away at once, and asks first where the copy moves", () => {
+    const row = extensionGrid(LENS, "skills").rows.find(
+      (candidate) => candidate.name === "changelog-writer",
+    );
+    const actOf = (provider: string) => row?.cells.find((cell) => cell.provider === provider)?.act;
+    expect(actOf("claude")).toMatchObject({
+      act: "remove",
+      kind: "skill",
+      runs: `unlink ${CLAUDE}/skills/changelog-writer`,
+      reaches: [],
+      title: "Take changelog-writer away from Claude",
+    });
+    expect(actConfirm(actOf("claude")!, "in Work")).toBeNull();
+    const codex = actOf("codex")!;
+    expect(codex).toMatchObject({
+      act: "add",
+      kind: "skill",
+      id: "changelog-writer",
+      moves: "~/.agents/skills/changelog-writer",
+      reaches: ["shared-folder"],
+    });
+    const confirm = actConfirm(codex, "in Work", {
+      readers: sharedFolderReaders(LENS, "codex"),
+      elsewhere: [{ profile: "Personal", agents: ["Kimi"] }],
+    });
+    expect(confirm).toMatchObject({
+      question: "Move changelog-writer into the shared folder for Codex?",
+      action: "Move it and turn on for Codex",
+      danger: false,
+      chips: [
+        { provider: "codex", label: "Codex" },
+        { provider: "grok", label: "Grok" },
+        { provider: "opencode", label: "OpenCode" },
+      ],
+    });
+    expect(confirm?.what).toBe(
+      "Codex reads your skills only from ~/.agents/skills, one folder every profile shares. VibeField moves changelog-writer there and leaves a link in Work’s skills folder, so every agent here that has it keeps it. Codex’s own switch turns it on here and off in your other profiles. Other agents read that folder too and have no switch for one skill, so they load it: Grok and OpenCode here; Kimi in Personal.",
+    );
+    // OpenCode reads one skills folder for every profile
+    expect(actConfirm(actOf("opencode")!, "in Work")).toMatchObject({
+      question: "Turn changelog-writer on for OpenCode in every profile?",
+      action: "Turn it on",
+    });
+    // still Claude's own: the first other agent moves it to Work's folder, silently
+    const sql = extensionGrid(LENS, "skills").rows.find(
+      (candidate) => candidate.name === "sql-review",
+    );
+    expect(sql?.cells.find((cell) => cell.provider === "grok")?.act).toMatchObject({
+      act: "add",
+      runs: `link ${LIB}/sql-review → ~/Library/Application Support/VibeField/agents/profiles/work/grok-5e3b91d7/skills/sql-review`,
+      reaches: [],
+    });
+  });
+
+  it("draws the move's confirm with who else loads it, and takes Claude's link away at once", async () => {
+    const onAct = vi.fn();
+    await mount(
+      createElement(ProfileExtensionsView, {
+        lens: LENS,
+        profile: "Work",
+        onAct,
+        otherProfiles: [{ profile: "Personal", providers: ["codex", "grok"] }],
+        now: FIXTURE_EXTENSIONS_NOW,
+      }),
+    );
+    await act(async () => cellButton("Take changelog-writer away from Claude")?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "claude",
+      kind: "skill",
+      id: "changelog-writer",
+      act: "remove",
+    });
+    onAct.mockClear();
+    await act(async () => cellButton("Turn changelog-writer on for Codex")?.click());
+    expect(onAct).not.toHaveBeenCalled();
+    const card = container?.querySelector("[data-ext-confirm]");
+    expect(card?.textContent).toContain("Move changelog-writer into the shared folder for Codex?");
+    expect(card?.textContent).toContain("they load it: Grok and OpenCode here; Grok in Personal.");
+    expect(
+      [...(card?.querySelectorAll(".vf-ext-confirm-chips li") ?? [])].map(
+        (chip) => chip.textContent,
+      ),
+    ).toEqual(["Codex", "Grok", "OpenCode"]);
+    await act(async () => button("Move it and turn on for Codex")?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "codex",
+      kind: "skill",
+      id: "changelog-writer",
+      act: "add",
+    });
+  });
+
+  it("says a change made outside VibeField above its list, and greys that cell's corner", async () => {
+    await mount(
+      createElement(ProfileExtensionsView, {
+        lens: LENS,
+        profile: "Work",
+        now: FIXTURE_EXTENSIONS_NOW,
+      }),
+    );
+    const lines = container?.querySelectorAll(".vf-ext-section--skills [data-ext-change]");
+    expect([...(lines ?? [])].map((line) => line.textContent)).toEqual([
+      "Grok dropped sql-review outside VibeField, noticed 2 minutes ago. It shows off for Grok now.",
+    ]);
+    expect(container?.querySelectorAll(".vf-ext-section--servers [data-ext-change]")).toHaveLength(
+      0,
+    );
+    const marked = container?.querySelectorAll("[data-ext-changed]");
+    expect(marked).toHaveLength(1);
+    expect(marked?.[0]?.closest("td")?.getAttribute("title")).toBe(
+      "Off · Grok dropped sql-review outside VibeField",
+    );
+    expect(changeLines({ ...LENS, changes: [] }, "skills", FIXTURE_EXTENSIONS_NOW)).toEqual([]);
+  });
+
+  it("gives each agent on a skill's page its switch: a link placed, a link taken away", async () => {
+    const onAct = vi.fn();
+    await mount(
+      createElement(ExtensionItemView, {
+        lens: LENS,
+        list: "skills",
+        name: "changelog-writer",
+        where: "in Work",
+        onAct,
+      }),
+    );
+    expect(container?.textContent).toContain(`${LIB}/changelog-writer`);
+    expect(container?.textContent).toContain(
+      "Gets a link to this folder where it looks for skills, so an edit is made once",
+    );
+    const switchOf = (provider: string) =>
+      container?.querySelector<HTMLButtonElement>(`[data-ext-agent="${provider}"] [role="switch"]`);
+    expect(switchOf("claude")?.getAttribute("aria-checked")).toBe("true");
+    expect(switchOf("grok")?.getAttribute("aria-checked")).toBe("true");
+    expect(switchOf("codex")?.getAttribute("aria-checked")).toBe("false");
+    await act(async () => switchOf("grok")?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "grok",
+      kind: "skill",
+      id: "changelog-writer",
+      act: "remove",
+    });
+    // Codex's move asks first, here too
+    onAct.mockClear();
+    await act(async () => switchOf("codex")?.click());
+    expect(onAct).not.toHaveBeenCalled();
+    expect(container?.querySelector("[data-ext-confirm]")?.textContent).toContain(
+      "Move changelog-writer into the shared folder for Codex?",
+    );
+  });
+
+  it("Add skill: a folder, the copy first, then each chosen agent's line under Runs", async () => {
+    const onAdd = vi.fn();
+    const onSource = vi.fn();
+    await mount(
+      createElement(AddSkillView, {
+        lens: LENS,
+        profile: "Work",
+        where: "in Work",
+        plan: FIXTURE_SKILL_PLAN,
+        onSource,
+        onAdd,
+        onCancel: vi.fn(),
+        initial: { from: "~/Downloads/pdf-forms" },
+      }),
+    );
+    expect(onSource).toHaveBeenLastCalledWith("~/Downloads/pdf-forms");
+    const chips = [...(container?.querySelectorAll<HTMLButtonElement>(".vf-ext-chip") ?? [])];
+    // a link in this profile alone is chosen; Codex's move and OpenCode's every profile are the person's to choose
+    expect(
+      chips.map((chip) => [chip.textContent, chip.getAttribute("aria-pressed"), chip.disabled]),
+    ).toEqual([
+      ["Claude", "true", false],
+      ["Codex", "false", false],
+      ["Grok", "true", false],
+      ["OpenCode", "false", false],
+      ["Kimi", "false", true],
+    ]);
+    const runs = () => container?.querySelector("[data-ext-runs]")?.textContent ?? "";
+    expect(runs()).toContain(`VibeField copy ~/Downloads/pdf-forms → ${LIB}/pdf-forms`);
+    expect(runs()).toContain(`link ${LIB}/pdf-forms → ${CLAUDE}/skills/pdf-forms`);
+    expect(runs()).not.toContain("~/.agents/skills");
+    expect(container?.textContent).toContain(
+      `VibeField copies it into Work’s skills folder, ${LIB}, so the agents share one copy and an edit is made once.`,
+    );
+    expect(container?.textContent).toContain(
+      "Codex would take it into the folder every profile shares; OpenCode would add it for every profile",
+    );
+    await act(async () => chips[1]?.click());
+    expect(runs()).toContain(`move ${LIB}/pdf-forms → ~/.agents/skills/pdf-forms`);
+    await act(async () => button("Add skill")?.click());
+    expect(onAdd).toHaveBeenCalledWith({
+      from: "~/Downloads/pdf-forms",
+      agents: ["claude", "codex", "grok"],
+    });
+  });
+});
+
+describe("AddSkill (the controller)", () => {
+  it("reads the folder with agents.extensions.planSkill, adds it with agents.extensions.addSkill, then opens its page", async () => {
+    let push: ((frame: unknown) => void) | undefined;
+    const request = vi.fn(async (method: string, params?: unknown) => {
+      if (method === "agents.extensions.planSkill") {
+        expect(params).toEqual({ set: "work", from: "~/Downloads/pdf-forms" });
+        return FIXTURE_SKILL_PLAN;
+      }
+      expect(method).toBe("agents.extensions.addSkill");
+      expect(params).toEqual({
+        set: "work",
+        from: "~/Downloads/pdf-forms",
+        agents: ["claude", "grok"],
+      });
+      return { name: "pdf-forms", receipts: [] };
+    });
+    const subscribe = vi.fn(
+      async (_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        push = onData;
+        return { subId: "extensions:work", snapshot: LENS, unsubscribe: () => undefined };
+      },
+    );
+    const client = {
+      status: "ready",
+      onStatusChange: () => () => undefined,
+      request,
+      subscribe,
+    } as unknown as FielddClient;
+    const onDone = vi.fn();
+    await mount(
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(AddSkill, {
+          set: "work",
+          profile: "Work",
+          where: "in Work",
+          onDone,
+          onCancel: vi.fn(),
+        }),
+      ),
+    );
+    await act(async () => push?.(LENS));
+    const field = container?.querySelector<HTMLInputElement>('input[aria-label="Folder"]');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(field, "~/Downloads/pdf-forms");
+      field?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // the folder rests, then it is read once
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(
+      request.mock.calls.filter(([method]) => method === "agents.extensions.planSkill"),
+    ).toHaveLength(1);
+    expect(container?.textContent).toContain(
+      "Fills in a PDF form from what the conversation already knows",
+    );
+    await act(async () =>
+      [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+        .find((candidate) => candidate.textContent === "Add skill")
+        ?.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(onDone).toHaveBeenCalledWith("pdf-forms");
   });
 });

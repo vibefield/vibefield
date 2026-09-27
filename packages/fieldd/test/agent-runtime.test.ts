@@ -13,10 +13,12 @@ import { spawn } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -24,6 +26,12 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  type AgentProfile,
+  extensionActUnavailable,
+  extensionSkillFolderPlan,
+  type SkillItem,
+} from "@vibecook/puppeteer-core";
 import type { AgentProvider } from "@vibecook/puppeteer-runtime";
 import {
   type AgentCatalogEntry,
@@ -32,8 +40,10 @@ import {
   type AgentProvidersResult,
   AgentsExtensionsActResult,
   AgentsExtensionsAddResult,
+  AgentsExtensionsAddSkillResult,
   AgentsExtensionsListResult,
   AgentsExtensionsPlanResult,
+  AgentsExtensionsPlanSkillResult,
   type AgentsInstallsResult,
   type AgentsOperationsResult,
   type AgentsProfileSetsDeleteResult,
@@ -1153,6 +1163,131 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
     });
     for (const text of [audit, keep, JSON.stringify(after), JSON.stringify(result)])
       expect(text).not.toContain(secret);
+  }, 30_000);
+
+  /**
+   * AR-S4d2: every agent reads a person's skills from a folder of its own
+   * under `root` — never its real one: these daemons run with this machine's
+   * home, where the native set's roots are the agents' own — planned with
+   * Core's placing, so the runtime makes each link itself and nothing starts.
+   */
+  function fakeSkills(root: string) {
+    return (builtin: AgentProvider[]): AgentProvider[] =>
+      builtin.map((provider) => {
+        const real = provider.extensions;
+        if (real === undefined) return provider;
+        const label = real.provider.label;
+        const folderOf = (profile: AgentProfile) => join(root, profile.provider, "skills");
+        return {
+          ...provider,
+          extensions: {
+            provider: real.provider,
+            plan: (profile, item, act, options) =>
+              item.kind === "skill" && (act === "add" || act === "remove")
+                ? extensionSkillFolderPlan({
+                    label,
+                    folder: folderOf(profile),
+                    item,
+                    act,
+                    ...(options?.keepIn !== undefined ? { keepIn: options.keepIn } : {}),
+                  })
+                : extensionActUnavailable(
+                    { kind: item.kind, id: item.id },
+                    act,
+                    "no-command",
+                    "no command here",
+                  ),
+            inventory: async (profile) => {
+              const items: SkillItem[] = [];
+              const folder = folderOf(profile);
+              for (const name of existsSync(folder) ? readdirSync(folder).sort() : []) {
+                const location = join(folder, name);
+                if (!existsSync(join(location, "SKILL.md"))) continue;
+                items.push({
+                  kind: "skill",
+                  id: name,
+                  name,
+                  origin: "own",
+                  enabled: true,
+                  location,
+                  ...(lstatSync(location).isSymbolicLink()
+                    ? { linkTarget: readlinkSync(location) }
+                    : {}),
+                });
+              }
+              return {
+                provider: profile.provider,
+                profileId: profile.id,
+                fetchedAt: "2026-09-27T09:00:00.000Z",
+                items,
+                source: { kind: "native-store" as const, stability: "documented" as const },
+              };
+            },
+          },
+        };
+      });
+  }
+
+  it("keeps a skill once for a window holding agents.manage: copied into the profile's folder, linked where Claude looks, audited (AR-S4d2)", async () => {
+    const agents = mkdtempSync(join(tmpdir(), "fieldd-skill-agents-"));
+    cleanup.push(() => rmSync(agents, { recursive: true, force: true }));
+    const { daemon, dataDir } = await setup({
+      providers: fakeSkills(agents),
+      secretStore: memoryKeychain().store,
+    });
+    await ready(daemon);
+    const source = join(agents, "Downloads", "changelog-writer");
+    mkdirSync(source, { recursive: true });
+    writeFileSync(
+      join(source, "SKILL.md"),
+      "---\nname: changelog-writer\ndescription: Writes the changelog entry\n---\nThe steps.\n",
+    );
+    const add = { set: "native", from: source, agents: ["claude"] };
+
+    const denied = await window(daemon, ["agent.spawn"], "k1");
+    expect((await denied.callErr("agents.extensions.addSkill", add)).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    expect(
+      (await denied.callErr("agents.extensions.planSkill", { set: "native", from: add.from })).data
+        ?.kind,
+    ).toBe("FORBIDDEN_SCOPE");
+    const win = await window(daemon, ALL, "k2");
+    expect((await win.callErr("agents.extensions.addSkill", { set: "native" })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+
+    const plan = AgentsExtensionsPlanSkillResult.parse(
+      await win.call("agents.extensions.planSkill", { set: "native", from: add.from }),
+    );
+    const library = join(dataDir, ...LAYOUT.AGENT_SKILLS_DIR, "native");
+    expect(plan).toMatchObject({
+      name: "changelog-writer",
+      description: "Writes the changelog entry",
+    });
+    expect(plan.offers.claude?.act?.runs).toContain(`${library}/changelog-writer`);
+    expect(existsSync(join(library, "changelog-writer"))).toBe(false);
+
+    const result = AgentsExtensionsAddSkillResult.parse(
+      await win.call("agents.extensions.addSkill", add),
+    );
+    expect(result).toMatchObject({
+      name: "changelog-writer",
+      receipts: [{ provider: "claude", receipt: { status: "changed", message: "added" } }],
+    });
+    expect(readFileSync(join(library, "changelog-writer", "SKILL.md"), "utf8")).toContain(
+      "The steps.",
+    );
+    const lens = AgentsExtensionsListResult.parse(
+      await win.call("agents.extensions.list", { set: "native" }),
+    );
+    const row = lens.skills.find((candidate) => candidate.name === "changelog-writer");
+    expect(row).toMatchObject({ kept: true, versions: 1 });
+    expect(row?.cells.claude?.[0]).toMatchObject({ origin: "own" });
+    expect(readlinkSync(join(agents, "claude", "skills", "changelog-writer"))).toBe(
+      join(library, "changelog-writer"),
+    );
+    expect(auditText(dataDir)).toContain('"agents.extensions.add_skill"');
   }, 30_000);
 });
 

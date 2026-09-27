@@ -1040,7 +1040,12 @@ describe("AgentExtensionService adding once (AR-S4d)", () => {
         entries.delete(account);
       }),
     };
-    const store = new AgentExtensionStore({ dir, secrets: keychain, now: () => new Date(NOW) });
+    const store = new AgentExtensionStore({
+      dir,
+      skillsDir: join(dir, "skills"),
+      secrets: keychain,
+      now: () => new Date(NOW),
+    });
     await store.keep("work", "notion", NOTION);
     const holds = new Map<string, Map<string, McpServerDefinition>>([
       ["claude", new Map([["context7", CONTEXT7]])],
@@ -1162,7 +1167,9 @@ describe("AgentExtensionService adding once (AR-S4d)", () => {
         codex: { act: { act: "add", runs: "codex mcp add notion" } },
       },
     });
-    // each agent was asked to plan only what it holds none of
+    // each agent was asked to plan only what it holds none of — and where a
+    // skill of its own would be kept, the profile's skills folder
+    const keep = { keep: join(dir!, "skills", "work") };
     expect(t.extensionActPlans).toHaveBeenCalledWith(
       "codex",
       "work-codex",
@@ -1171,10 +1178,15 @@ describe("AgentExtensionService adding once (AR-S4d)", () => {
         { name: "context7", definition: CONTEXT7 },
         { name: "notion", definition: NOTION },
       ],
+      keep,
     );
-    expect(t.extensionActPlans).toHaveBeenCalledWith("claude", "work-claude", expect.any(Array), [
-      { name: "notion", definition: NOTION },
-    ]);
+    expect(t.extensionActPlans).toHaveBeenCalledWith(
+      "claude",
+      "work-claude",
+      expect.any(Array),
+      [{ name: "notion", definition: NOTION }],
+      keep,
+    );
   });
 
   it("turns a server on for an agent that holds none of it: the value kept first, then its own add, then what it was given", async () => {

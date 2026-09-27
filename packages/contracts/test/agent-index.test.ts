@@ -166,6 +166,20 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: true,
         locality: "local",
       },
+      // AR-S4d2 — a skill kept once: Add skill copies a folder and places links
+      // (a mutation, audited); its plan only reads the folder
+      {
+        method: "agents.extensions.addSkill",
+        scope: "agents.manage",
+        idempotent: false,
+        locality: "local",
+      },
+      {
+        method: "agents.extensions.planSkill",
+        scope: "agents.manage",
+        idempotent: true,
+        locality: "local",
+      },
       // AR-5d — account usage: a READ of the agent plane, so it rides
       // AR-5b: the account's billing state, a credentialed call per reading —
       // its own scope, not the fold's

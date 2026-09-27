@@ -1,9 +1,11 @@
 import { type ReactElement, useEffect, useMemo } from "react";
 import {
   AddServerView,
+  AddSkillView,
   AgentExtensionListView,
   AgentExtensionsView,
   addServerSubpage,
+  addSkillSubpage,
   agentListSubpage,
   ExtensionItemView,
   extensionItemSubpage,
@@ -26,6 +28,7 @@ import {
   FIXTURE_EXTENSION_SIGNING_IN,
   FIXTURE_EXTENSIONS,
   FIXTURE_EXTENSIONS_NOW,
+  FIXTURE_SKILL_PLAN,
 } from "./extensions-fixtures";
 import {
   FIXTURE_DEMO,
@@ -60,6 +63,8 @@ const ITEMS: Partial<Record<ProfilesFixtureState, { list: ExtensionKindKey; name
   "server sign-in": { list: "servers", name: "notion" },
   "server signing in": { list: "servers", name: "notion" },
   skill: { list: "skills", name: "release-notes" },
+  // AR-S4d2 — a skill Work keeps once: its folder, and each agent's link as its switch
+  "kept skill": { list: "skills", name: "changelog-writer" },
 };
 
 /** The Settings header each state wears (the panel supplies it in the product). */
@@ -116,7 +121,9 @@ export function ProfilesSettingsPreview({
             ? extensionItemSubpage(FIXTURE_WORK, item.list, item.name, inert)
             : state === "add server"
               ? addServerSubpage(FIXTURE_WORK, inert)
-              : null,
+              : state === "add skill"
+                ? addSkillSubpage(FIXTURE_WORK, inert)
+                : null,
     );
   }, [agentLabel, list, item, state, onSubpage]);
   useEffect(() => () => onSubpage(null), [onSubpage]);
@@ -131,6 +138,21 @@ export function ProfilesSettingsPreview({
         where={inOnWords(FIXTURE_WORK)}
         offers={FIXTURE_EXTENSION_PLAN.offers}
         initial={{ draft: { name: "figma", how: "url", url: "https://mcp.figma.com/mcp" } }}
+        onAdd={inert}
+        onCancel={inert}
+        now={FIXTURE_EXTENSIONS_NOW}
+      />
+    );
+  }
+  // AR-S4d2 — Add skill with a folder named, told what the folder is and what each agent would run
+  if (state === "add skill") {
+    return (
+      <AddSkillView
+        lens={FIXTURE_EXTENSIONS}
+        profile={FIXTURE_WORK.label}
+        where={inOnWords(FIXTURE_WORK)}
+        plan={FIXTURE_SKILL_PLAN}
+        initial={{ from: "~/Downloads/pdf-forms" }}
         onAdd={inert}
         onCancel={inert}
         now={FIXTURE_EXTENSIONS_NOW}
@@ -252,6 +274,13 @@ export function ProfilesSettingsPreview({
             onOpenItem={inert}
             onAct={inert}
             onAddServer={inert}
+            onAddSkill={inert}
+            otherProfiles={[
+              {
+                profile: FIXTURE_DEMO.label,
+                providers: FIXTURE_DEMO.personas.map((member) => member.provider),
+              },
+            ]}
             {...(state === "act confirm"
               ? {
                   armed: {
@@ -269,6 +298,17 @@ export function ProfilesSettingsPreview({
                     provider: FIXTURE_EXTENSION_RUN.provider,
                     kind: "mcp-server" as const,
                     id: "context7",
+                    act: "add" as const,
+                  },
+                }
+              : {})}
+            {...(state === "skill to codex"
+              ? {
+                  // AR-S4d2 — changelog-writer taken to the shared folder for Codex, who else loads it named
+                  armed: {
+                    provider: "codex",
+                    kind: "skill" as const,
+                    id: "changelog-writer",
                     act: "add" as const,
                   },
                 }

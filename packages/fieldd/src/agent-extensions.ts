@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { sep } from "node:path";
+import { realpath } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
 import {
   type AgentProfile,
+  EXTENSION_SKILL_FOLDER_NAME,
   type ExtensionActPlan,
   type ExtensionFailure,
   type ExtensionInventory,
@@ -24,6 +26,7 @@ import {
   AGENT_OPERATION_OUTPUT_BYTES,
   type AgentCatalogReaders,
   type AgentExtensionAct,
+  type AgentExtensionChange,
   type AgentExtensionColumn,
   type AgentExtensionHolding,
   type AgentExtensionKeep,
@@ -39,9 +42,13 @@ import {
   type AgentsExtensionsActResult,
   type AgentsExtensionsAddParams,
   type AgentsExtensionsAddResult,
+  type AgentsExtensionsAddSkillParams,
+  type AgentsExtensionsAddSkillResult,
   type AgentsExtensionsListResult,
   type AgentsExtensionsPlanParams,
   type AgentsExtensionsPlanResult,
+  type AgentsExtensionsPlanSkillParams,
+  type AgentsExtensionsPlanSkillResult,
   type AgentsExtensionsSignInParams,
   type AgentsExtensionsSignInResult,
   ENV_PREFIXES,
@@ -50,7 +57,12 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { requireVisible } from "./agent-catalog-gates";
 import { displayTail } from "./agent-distribution";
-import type { AgentExtensionStore } from "./agent-extension-store";
+import {
+  type AgentExtensionStore,
+  changeKey,
+  type KeptSkill,
+  type SeenAgent,
+} from "./agent-extension-store";
 import { RpcCallError } from "./native-link";
 import type { GrantPrincipal } from "./terminal-grants";
 
@@ -93,11 +105,27 @@ import type { GrantPrincipal } from "./terminal-grants";
 // it from one, so turning it on again is one click; each value a server reads
 // is kept in the keychain (agent-extension-store.ts), and an agent is given
 // only the values of the servers VibeField gave it, when VibeField starts it.
+//
+// SKILLS KEPT ONCE (AR-S4d2; pass 24): a skill's one copy is in the profile's
+// skills folder, and every agent is given a LINK to it where it looks, by
+// puppeteer's placing (RFC 006 C2: the runtime makes the link itself). A skill
+// that is still one agent's own folder moves into the profile's folder, linked
+// back, the first time another agent takes it; one in the shared folder
+// (`~/.agents/skills`) is linked from there. Codex reads a person's skills
+// only from the shared folder, so turning one on for Codex moves the copy
+// there (a link stays in the profile's folder) and turns it off with Codex's
+// own switch in the other profiles. Copies are told apart by their real path,
+// so a link to a link is still the one copy.
+//
+// O1: every read is compared with the last one VibeField saw of the profile
+// (agent-extension-store.ts keeps it), and a difference no act of VibeField's
+// made becomes a line: who changed what, between which reads.
 
 export interface AgentExtensionServiceOptions {
   runtime: Pick<
     AgentRuntime,
     | "profileSet"
+    | "profileSets"
     | "profileProviders"
     | "extensionProviders"
     | "extensionInventory"
@@ -165,9 +193,111 @@ function serverDefinition(item: McpServerItem): string {
   ]);
 }
 
-/** A skill's copy is its folder: where a link points, else where the agent keeps it. */
-function skillDefinition(item: SkillItem, provider: string): string {
-  return item.linkTarget ?? item.location ?? `${provider} ${item.id}`;
+/**
+ * A skill's copy is its folder's real path — a link, or a link to a link, is
+ * the folder it ends at — else where the agent keeps it.
+ */
+function skillDefinition(canonical: ReadonlyMap<string, string>) {
+  return (item: SkillItem, provider: string): string =>
+    (item.location !== undefined ? canonical.get(item.location) : undefined) ??
+    item.linkTarget ??
+    item.location ??
+    `${provider} ${item.id}`;
+}
+
+/** Whether a path is a folder's own or anything below it. */
+function within(folder: string, path: string): boolean {
+  const inside = relative(folder, path);
+  return inside === "" || (!inside.startsWith("..") && !inside.startsWith(sep));
+}
+
+/** Where a skill's one copy is, and what another agent is given a link to. */
+export interface SkillCopy {
+  /** The copy's real path. */
+  folder: string;
+  /** The folder a link goes to: the profile's folder's entry, the shared copy, or the one elsewhere. */
+  from: string;
+  /** In the profile's skills folder. */
+  kept?: true;
+  /** In `~/.agents/skills`, which every profile shares. */
+  shared?: true;
+  /** Still this agent's own folder: the first other agent moves it to the profile's folder. */
+  owner?: string;
+}
+
+/** The facts a read gathers about skill folders beside the agents' own reads. */
+export interface SkillFolders {
+  /** The profile's skills folder, absolute. */
+  library: string;
+  /** What it keeps. */
+  kept: readonly KeptSkill[];
+  /** Every skill folder a read names, to its real path. */
+  canonical: ReadonlyMap<string, string>;
+  /** `~/.agents/skills`, its real path. */
+  shared: string;
+}
+
+/**
+ * Each skill's one copy, by name: the profile's kept one wins; else the one
+ * real folder every holding of the profile's own agrees on — in the shared
+ * folder, an agent's own (which moves to the profile's folder when another
+ * agent takes it), or elsewhere; two of them give none, since which is meant
+ * is the person's to say.
+ */
+export function skillCopies(
+  agents: ReadonlyArray<{ provider: string; result: ExtensionInventory | ExtensionFailure }>,
+  folders: SkillFolders,
+): Map<string, SkillCopy> {
+  const real = (path: string) => folders.canonical.get(path) ?? path;
+  const own = new Map<string, Array<{ provider: string; item: SkillItem; real: string }>>();
+  for (const agent of agents) {
+    if (isFailure(agent.result)) continue;
+    for (const item of agent.result.items) {
+      if (item.kind !== "skill" || item.origin !== "own" || item.location === undefined) continue;
+      own.set(item.name, [
+        ...(own.get(item.name) ?? []),
+        { provider: agent.provider, item, real: real(item.location) },
+      ]);
+    }
+  }
+  const copies = new Map<string, SkillCopy>();
+  for (const kept of folders.kept) {
+    const folder = real(kept.folder);
+    copies.set(kept.name, {
+      folder,
+      from: kept.folder,
+      kept: true,
+      ...(within(folders.shared, folder) ? { shared: true as const } : {}),
+    });
+  }
+  for (const [name, holdings] of own) {
+    if (copies.has(name)) continue;
+    const paths = new Set(holdings.map((holding) => holding.real));
+    if (paths.size !== 1) continue;
+    const [folder] = paths as unknown as [string];
+    if (within(folders.shared, folder)) {
+      copies.set(name, { folder, from: folder, shared: true });
+      continue;
+    }
+    // the one holding that is the folder itself, not a link to it
+    const owner = holdings.find((holding) => holding.item.linkTarget === undefined);
+    if (owner === undefined) copies.set(name, { folder, from: folder });
+    else if (EXTENSION_SKILL_FOLDER_NAME.test(name)) {
+      copies.set(name, { folder, from: join(folders.library, name), owner: owner.provider });
+    }
+  }
+  return copies;
+}
+
+/** What one agent holds of the profile's own, as O1 compares reads: names, each on or off. */
+function seenOf(result: ExtensionInventory): SeenAgent {
+  const seen: SeenAgent = { servers: {}, skills: {} };
+  for (const item of result.items) {
+    if (item.origin !== "own") continue;
+    if (item.kind === "mcp-server") seen.servers[item.name] = item.enabled;
+    else if (item.kind === "skill") seen.skills[item.name] = item.enabled;
+  }
+  return seen;
 }
 
 function holdingOf(item: McpServerItem | SkillItem, home: string): AgentExtensionHolding {
@@ -216,9 +346,26 @@ export interface ExtensionLensAgent {
  * The acts a holding offers now: the available plans for it, without the one
  * that would change nothing (turning on what is on, off what is off).
  */
+/** Where a skill's steps move its copy, home-abbreviated: the act says so before it runs. */
+function movesOf(plan: ExtensionActPlan, home: string): { moves?: string } {
+  if (!plan.available || plan.runs.kind !== "files") return {};
+  const move = plan.runs.steps.find((step) => step.op === "move");
+  return move?.op === "move" ? { moves: abbreviateHome(move.to, home) } : {};
+}
+
+/**
+ * A skill's add that moves its copy into a folder every profile of the agent
+ * reads: the agent reads a person's skills only there (Codex's), and its own
+ * switch is what keeps the skill to one profile.
+ */
+function sharesFolder(act: AgentExtensionAct): boolean {
+  return act.moves !== undefined && act.reaches.includes("shared-folder");
+}
+
 function actsOf(
   plans: readonly ExtensionActPlan[] | undefined,
   item: McpServerItem | SkillItem,
+  home: string,
 ): AgentExtensionAct[] {
   const acts: AgentExtensionAct[] = [];
   const signedIn = item.kind === "mcp-server" && item.auth === "signed-in";
@@ -236,6 +383,7 @@ function actsOf(
       runs: plan.display,
       reaches: [...plan.reaches],
       ...(plan.runs.kind === "terminal" ? { terminal: true as const } : {}),
+      ...movesOf(plan, home),
     });
   }
   return acts;
@@ -294,7 +442,7 @@ function rowsOf<T extends McpServerItem | SkillItem>(
         (a, b) => ORIGIN_RANK[a.origin] - ORIGIN_RANK[b.origin] || (a.id < b.id ? -1 : 1),
       );
       cells[provider] = ordered.map((item) => {
-        const acts = actsOf(plansOf.get(provider), item);
+        const acts = actsOf(plansOf.get(provider), item, home);
         return {
           ...holdingOf(item, home),
           ...(versions.size > 1 ? { version: versions.get(definition(item, provider))! } : {}),
@@ -366,8 +514,8 @@ export function serverDefinitions(
   return definitions;
 }
 
-/** An empty cell's offer: the agent's own add, or why it cannot take the server. */
-function offerOf(plan: ExtensionActPlan): AgentExtensionOffer {
+/** An empty cell's offer: the agent's own add, or why it cannot take the server or the skill. */
+function offerOf(plan: ExtensionActPlan, home: string): AgentExtensionOffer {
   return plan.available
     ? {
         act: {
@@ -375,6 +523,7 @@ function offerOf(plan: ExtensionActPlan): AgentExtensionOffer {
           runs: plan.display,
           reaches: [...plan.reaches],
           ...(plan.runs.kind === "terminal" ? { terminal: true as const } : {}),
+          ...movesOf(plan, home),
         },
       }
     : { unavailable: { reason: plan.reason, message: plan.message } };
@@ -392,6 +541,10 @@ export function buildExtensionLens(input: {
   home: string;
   /** AR-S4d — what the profile keeps once: its kept servers and the names it keeps values for. */
   keep?: Pick<AgentExtensionKeep, "servers" | "values">;
+  /** AR-S4d2 — the profile's skills folder and the real paths of the skills a read names. */
+  skills?: SkillFolders;
+  /** AR-S4d2 (O1) — the changes made outside VibeField that reads found. */
+  changes?: readonly AgentExtensionChange[];
 }): Frame {
   const columns: AgentExtensionColumn[] = [];
   const servers: Array<{
@@ -496,7 +649,58 @@ export function buildExtensionLens(input: {
           candidate.target.kind === "mcp-server" &&
           candidate.target.id === row.name,
       );
-      if (plan !== undefined) offers[agent.provider] = offerOf(plan);
+      if (plan !== undefined) offers[agent.provider] = offerOf(plan, input.home);
+    }
+    if (Object.keys(offers).length > 0) row.offers = offers;
+  }
+
+  const skillRows = rowsOf(
+    skills,
+    skillDefinition(input.skills?.canonical ?? new Map()),
+    input.home,
+  );
+  // a skill the profile keeps is its own even while no agent holds it
+  for (const skill of input.skills?.kept ?? []) {
+    if (!skillRows.some((row) => row.name === skill.name)) {
+      skillRows.push({
+        name: skill.name,
+        ...(skill.description !== undefined ? { description: skill.description } : {}),
+        versions: 0,
+        cells: {},
+      });
+    }
+  }
+  const copies = input.skills === undefined ? new Map() : skillCopies(input.agents, input.skills);
+  for (const row of skillRows) {
+    const copy = copies.get(row.name);
+    if (copy !== undefined) {
+      row.folder = abbreviateHome(copy.folder, input.home);
+      if (copy.kept) row.kept = true;
+      if (copy.shared) row.shared = true;
+      if (copy.owner !== undefined) row.owner = copy.owner;
+      if (row.kept) {
+        // a folder of an agent's own beside the kept copy is another version: it cannot move where the copy is
+        for (const holdings of Object.values(row.cells)) {
+          for (const holding of holdings) {
+            if (holding.origin !== "own" || holding.linkTarget !== undefined || holding.shared)
+              continue;
+            const acts = holding.acts?.filter((act) => act.act !== "remove");
+            if (acts === undefined || acts.length === 0) delete holding.acts;
+            else holding.acts = acts;
+          }
+        }
+      }
+    }
+    const offers: Record<string, AgentExtensionOffer> = {};
+    for (const agent of input.agents) {
+      if (isFailure(agent.result) || row.cells[agent.provider] !== undefined) continue;
+      const plan = agent.plans?.find(
+        (candidate) =>
+          candidate.act === "add" &&
+          candidate.target.kind === "skill" &&
+          candidate.target.id === row.name,
+      );
+      if (plan !== undefined) offers[agent.provider] = offerOf(plan, input.home);
     }
     if (Object.keys(offers).length > 0) row.offers = offers;
   }
@@ -507,10 +711,16 @@ export function buildExtensionLens(input: {
     readAt: input.readAt,
     agents: columns,
     servers: serverRows.sort(byName),
-    skills: rowsOf(skills, skillDefinition, input.home),
+    skills: skillRows.sort(byName),
     plugins,
     marketplaces,
     ...(values.length > 0 ? { values } : {}),
+    ...(input.skills !== undefined
+      ? { library: abbreviateHome(input.skills.library, input.home) }
+      : {}),
+    ...(input.changes !== undefined && input.changes.length > 0
+      ? { changes: [...input.changes] }
+      : {}),
   };
 }
 
@@ -537,6 +747,15 @@ interface RunEntry {
   /** A sign-in's pane on the floor. */
   sessionId?: string;
 }
+
+/** One act as puppeteer takes it, its output riding a run. */
+type ActRequest = Omit<Parameters<AgentRuntime["runExtensionAct"]>[0], "onOutput">;
+
+/** Runs an act inside a run; `shows` makes its line the run's own. */
+type ActRunner = (
+  request: ActRequest,
+  options?: { shows?: boolean },
+) => Promise<AgentExtensionReceipt>;
 
 /** A sign-in whose pane is open: what settles it when the pane ends. */
 interface OpenSignIn {
@@ -599,6 +818,10 @@ export class AgentExtensionService {
   private readonly ticks = new Map<string, ReturnType<typeof setTimeout>>();
   /** AR-S4d — profiles an Add is working through, agent by agent: no other act lands between two */
   private readonly adding = new Map<string, string>();
+  /** AR-S4d2 — each profile's skill copies at its last read: what a turn gives an agent a link to */
+  private readonly copies = new Map<string, Map<string, SkillCopy>>();
+  /** O1 — the cells VibeField turned, per profile, and when: a read does not call their change outside */
+  private readonly touched = new Map<string, Map<string, number>>();
   private readonly now: () => Date;
   private readonly logger: Logger;
   private disposed = false;
@@ -639,23 +862,38 @@ export class AgentExtensionService {
     const letsGo = params.kind === "mcp-server" && params.act === "remove";
     if (letsGo && found.row.definition !== undefined && found.row.kept !== true)
       await this.opts.store?.keep(setId, found.row.name, found.row.definition);
-    const { entry, receipt } = await this.runAct(
+    // AR-S4d2 — a skill that is a folder of the agent's own moves to the profile's folder: the profile keeps it
+    const keepsSkill =
+      params.kind === "skill" &&
+      params.act === "remove" &&
+      found.holding.linkTarget === undefined &&
+      this.opts.store !== undefined;
+    const folder = keepsSkill ? join(this.opts.store!.libraryOf(setId), found.row.name) : undefined;
+    const { entry, receipt } = await this.touching(
       setId,
-      {
-        provider: params.provider,
-        label: column.label,
-        kind: params.kind,
-        item: params.id,
-        name: found.row.name,
-        act: params.act,
-        runs: offered.runs,
-      },
-      {
-        providerId: params.provider,
-        profileId: column.profileId,
-        target: { kind: params.kind, id: params.id },
-        act: params.act,
-      },
+      params.provider,
+      params.kind,
+      found.row.name,
+      () =>
+        this.runAct(
+          setId,
+          {
+            provider: params.provider,
+            label: column.label,
+            kind: params.kind,
+            item: params.id,
+            name: found.row.name,
+            act: params.act,
+            runs: offered.runs,
+          },
+          {
+            providerId: params.provider,
+            profileId: column.profileId,
+            target: { kind: params.kind, id: params.id },
+            act: params.act,
+            ...(folder !== undefined ? { folder } : {}),
+          },
+        ),
     );
     if (letsGo && receipt.status === "changed")
       await this.remember(setId, () =>
@@ -674,15 +912,13 @@ export class AgentExtensionService {
    */
   private async turnOn(params: AgentsExtensionsActParams): Promise<AgentsExtensionsActResult> {
     const setId = params.set;
-    if (params.kind !== "mcp-server") {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "only a server is turned on from its definition",
-        false,
-        {
+    if (params.kind === "skill") {
+      if (params.values !== undefined) {
+        throw new RpcCallError("PRECONDITION_FAILED", "a skill reads no values", false, {
           set: setId,
-        },
-      );
+        });
+      }
+      return await this.turnOnSkill(params);
     }
     const lens = this.lenses.get(setId) ?? (await this.read(setId));
     const column = this.columnIn(lens, setId, params.provider);
@@ -710,24 +946,32 @@ export class AgentExtensionService {
     await this.keepValues(setId, row.name, definition, params.values ?? {}, lens.values ?? []);
     this.refuseWhileRunning(setId);
     if (row.kept !== true) await this.opts.store?.keep(setId, row.name, definition);
-    const { entry, receipt } = await this.runAct(
+    const runs = offer.act.runs;
+    const { entry, receipt } = await this.touching(
       setId,
-      {
-        provider: params.provider,
-        label: column.label,
-        kind: "mcp-server",
-        item: row.name,
-        name: row.name,
-        act: "add",
-        runs: offer.act.runs,
-      },
-      {
-        providerId: params.provider,
-        profileId: column.profileId,
-        target: { kind: "mcp-server", id: row.name },
-        act: "add",
-        definition,
-      },
+      params.provider,
+      "mcp-server",
+      row.name,
+      () =>
+        this.runAct(
+          setId,
+          {
+            provider: params.provider,
+            label: column.label,
+            kind: "mcp-server",
+            item: row.name,
+            name: row.name,
+            act: "add",
+            runs,
+          },
+          {
+            providerId: params.provider,
+            profileId: column.profileId,
+            target: { kind: "mcp-server", id: row.name },
+            act: "add",
+            definition,
+          },
+        ),
     );
     if (receipt.status === "changed") await this.gave(setId, params.provider, row.name, definition);
     await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
@@ -765,25 +1009,33 @@ export class AgentExtensionService {
     const receipts: AgentsExtensionsAddResult["receipts"] = [];
     try {
       for (const column of columns) {
-        const { receipt } = await this.runAct(
+        const runs = await this.addLine(column, params.name, definition);
+        const { receipt } = await this.touching(
           setId,
-          {
-            provider: column.provider,
-            label: column.label,
-            kind: "mcp-server",
-            item: params.name,
-            name: params.name,
-            act: "add",
-            // what the agent's own add will run, as a person reads it (puppeteer plans it again as it runs)
-            runs: await this.addLine(column, params.name, definition),
-          },
-          {
-            providerId: column.provider,
-            profileId: column.profileId,
-            target: { kind: "mcp-server", id: params.name },
-            act: "add",
-            definition,
-          },
+          column.provider,
+          "mcp-server",
+          params.name,
+          () =>
+            this.runAct(
+              setId,
+              {
+                provider: column.provider,
+                label: column.label,
+                kind: "mcp-server",
+                item: params.name,
+                name: params.name,
+                act: "add",
+                // what the agent's own add will run, as a person reads it (puppeteer plans it again as it runs)
+                runs,
+              },
+              {
+                providerId: column.provider,
+                profileId: column.profileId,
+                target: { kind: "mcp-server", id: params.name },
+                act: "add",
+                definition,
+              },
+            ),
         );
         receipts.push({ provider: column.provider, receipt });
         if (receipt.status === "changed")
@@ -794,6 +1046,162 @@ export class AgentExtensionService {
     }
     await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
     return { receipts };
+  }
+
+  /**
+   * AR-S4d2 — an act `add` on a skill: the row named `id` given to an agent
+   * that holds none of it, as a link to its one copy (Codex: the copy moves to
+   * the shared folder). A copy that is still another agent's own folder moves
+   * to the profile's folder first, linked back, in the same run.
+   */
+  private async turnOnSkill(params: AgentsExtensionsActParams): Promise<AgentsExtensionsActResult> {
+    const setId = params.set;
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = this.columnIn(lens, setId, params.provider);
+    const row = lens.skills.find((candidate) => candidate.name === params.id);
+    if (row === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `this Agent Profile has no skill named ${params.id}`,
+        false,
+        { set: setId },
+      );
+    }
+    const offer = row.offers?.[params.provider];
+    const copy = this.copies.get(setId)?.get(row.name);
+    if (offer?.act === undefined || copy === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${column.label} cannot take ${row.name} here${offer?.unavailable !== undefined ? `: ${offer.unavailable.message}` : ""}`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    this.refuseWhileRunning(setId);
+    const shares = sharesFolder(offer.act);
+    const { entry, receipt } = await this.runActs(
+      setId,
+      {
+        provider: params.provider,
+        label: column.label,
+        kind: "skill",
+        item: row.name,
+        name: row.name,
+        act: "add",
+        runs: offer.act.runs,
+      },
+      (act, say) => this.giveSkill(setId, lens, row, copy, column, shares, act, say),
+    );
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    return { run: projectRun(entry), receipt };
+  }
+
+  /**
+   * `agents.extensions.addSkill` (AR-S4d2's Add skill): the folder copied into
+   * the profile's skills folder under its own name, then each named agent given
+   * it in turn, one run each on the frames — no other act between two — and
+   * the profile read again once at the end.
+   */
+  async addSkill(params: AgentsExtensionsAddSkillParams): Promise<AgentsExtensionsAddSkillResult> {
+    const setId = params.set;
+    for (const provider of params.agents)
+      requireVisible(this.opts.catalog, provider, "give it a skill");
+    this.refuseWhileRunning(setId);
+    const store = this.requireStore(setId);
+    const source = await store.inspectSkill(setId, params.from);
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    if (lens.skills.some((row) => row.name === source.name)) {
+      throw new RpcCallError(
+        "CONFLICT",
+        `this Agent Profile already has a skill named ${source.name}`,
+        false,
+        { set: setId, reason: "taken" },
+      );
+    }
+    const columns = [...new Set(params.agents)].map((provider) =>
+      this.columnIn(lens, setId, provider),
+    );
+    this.refuseWhileRunning(setId);
+    const from = await store.keepSkill(setId, source);
+    const copy: SkillCopy = { folder: from, from, kept: true };
+    this.adding.set(setId, source.name);
+    const receipts: AgentsExtensionsAddSkillResult["receipts"] = [];
+    try {
+      for (const column of columns) {
+        const plan = await this.skillPlan(column, source.name, from);
+        const offer = plan === undefined ? undefined : offerOf(plan, this.opts.home).act;
+        const { receipt } = await this.runActs(
+          setId,
+          {
+            provider: column.provider,
+            label: column.label,
+            kind: "skill",
+            item: source.name,
+            name: source.name,
+            act: "add",
+            runs: offer?.runs ?? `${column.label}'s link to ${source.name}`,
+          },
+          (act, say) =>
+            this.giveSkill(
+              setId,
+              lens,
+              { name: source.name, cells: {} },
+              copy,
+              column,
+              offer !== undefined && sharesFolder(offer),
+              act,
+              say,
+            ),
+        );
+        receipts.push({ provider: column.provider, receipt });
+      }
+    } finally {
+      this.adding.delete(setId);
+    }
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    return { name: source.name, receipts };
+  }
+
+  /**
+   * `agents.extensions.planSkill`: the folder a person named, read before
+   * anything is copied — its name, what it does, where it would be kept — and
+   * what each of the profile's agents would run to take it.
+   */
+  async planSkill(
+    params: AgentsExtensionsPlanSkillParams,
+  ): Promise<AgentsExtensionsPlanSkillResult> {
+    const setId = params.set;
+    const store = this.requireStore(setId);
+    const source = await store.inspectSkill(setId, params.from);
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    if (lens.skills.some((row) => row.name === source.name)) {
+      throw new RpcCallError(
+        "CONFLICT",
+        `this Agent Profile already has a skill named ${source.name}`,
+        false,
+        { set: setId, reason: "taken" },
+      );
+    }
+    const from = join(store.libraryOf(setId), source.name);
+    const offers: AgentsExtensionsPlanSkillResult["offers"] = {};
+    await Promise.all(
+      lens.agents.map(async (column) => {
+        if (column.failure !== undefined) {
+          offers[column.provider] = {
+            unavailable: { reason: "unread", message: column.failure.message },
+          };
+          return;
+        }
+        const plan = await this.skillPlan(column, source.name, from);
+        if (plan !== undefined) offers[column.provider] = offerOf(plan, this.opts.home);
+      }),
+    );
+    return {
+      name: source.name,
+      ...(source.description !== undefined ? { description: source.description } : {}),
+      folder: abbreviateHome(from, this.opts.home),
+      offers,
+    };
   }
 
   /**
@@ -833,7 +1241,7 @@ export class AgentExtensionService {
           const plan = Array.isArray(plans)
             ? plans.find((candidate) => candidate.act === "add")
             : undefined;
-          if (plan !== undefined) offers[column.provider] = offerOf(plan);
+          if (plan !== undefined) offers[column.provider] = offerOf(plan, this.opts.home);
         } catch (error) {
           this.logger.warn("fieldd.agents.extension_plans_failed", "Planning an add failed", {
             provider: column.provider,
@@ -1056,6 +1464,182 @@ export class AgentExtensionService {
     return { column, found, offered };
   }
 
+  /**
+   * One agent given a skill, inside a run: its copy moved to the profile's
+   * folder first when it is still another agent's own (and linked back there),
+   * then the agent's link. An agent that reads a person's skills only from a
+   * folder every profile shares (Codex) takes the copy there (`shares`), and
+   * its own switch then turns it off in the other profiles.
+   */
+  private async giveSkill(
+    setId: string,
+    lens: Frame,
+    row: Pick<AgentExtensionRow, "name" | "cells">,
+    copy: SkillCopy,
+    column: AgentExtensionColumn,
+    shares: boolean,
+    act: ActRunner,
+    say: (line: string) => void,
+  ): Promise<AgentExtensionReceipt> {
+    if (copy.owner !== undefined && copy.kept !== true) {
+      const owner = lens.agents.find((candidate) => candidate.provider === copy.owner);
+      const holding = row.cells[copy.owner]?.find(
+        (candidate) => candidate.origin === "own" && candidate.linkTarget === undefined,
+      );
+      if (owner === undefined || holding === undefined) {
+        return {
+          status: "failed",
+          message: `${row.name} is no longer where it was`,
+          finishedAt: this.now().toISOString(),
+        };
+      }
+      const kept = await this.touching(setId, owner.provider, "skill", row.name, async () => {
+        const moved = await act({
+          providerId: owner.provider,
+          profileId: owner.profileId,
+          target: { kind: "skill", id: holding.id },
+          act: "remove",
+          folder: copy.from,
+        });
+        if (moved.status !== "changed") return { moved };
+        const back = await act({
+          providerId: owner.provider,
+          profileId: owner.profileId,
+          target: { kind: "skill", id: row.name },
+          act: "add",
+          folder: copy.from,
+        });
+        return { moved, back };
+      });
+      if (kept.back === undefined) {
+        return {
+          ...kept.moved,
+          message: `${row.name} could not move to this profile's folder: ${kept.moved.message}`,
+        };
+      }
+      const back = kept.back;
+      if (back.status !== "changed") {
+        return {
+          ...back,
+          status: "failed",
+          message: `${row.name} is in this profile's folder now, but ${owner.label} lost it: ${back.message}`,
+        };
+      }
+    }
+    const given = await this.touching(setId, column.provider, "skill", row.name, () =>
+      act(
+        {
+          providerId: column.provider,
+          profileId: column.profileId,
+          target: { kind: "skill", id: row.name },
+          act: "add",
+          folder: copy.from,
+        },
+        { shows: true },
+      ),
+    );
+    if (shares && given.status === "changed" && copy.shared !== true) {
+      await this.offElsewhere(setId, column, row.name, act, say);
+    }
+    return given;
+  }
+
+  /**
+   * An agent took a skill to the folder every one of its profiles reads: its
+   * own switch turns it off in each other profile with that agent, so it
+   * stays this profile's (pass 24). What each one did is said on the run.
+   */
+  private async offElsewhere(
+    setId: string,
+    column: AgentExtensionColumn,
+    name: string,
+    act: ActRunner,
+    say: (line: string) => void,
+  ): Promise<void> {
+    let sets: Awaited<ReturnType<AgentExtensionServiceOptions["runtime"]["profileSets"]>>;
+    try {
+      sets = await this.opts.runtime.profileSets();
+    } catch {
+      say(
+        `The other profiles could not be read; ${name} is on for ${column.label} in each of them.`,
+      );
+      return;
+    }
+    for (const info of sets) {
+      if (info.set.id === setId) continue;
+      const there = info.profiles.find((profile) => profile.provider === column.provider);
+      if (there === undefined) continue;
+      const off = await this.touching(info.set.id, column.provider, "skill", name, () =>
+        act({
+          providerId: column.provider,
+          profileId: there.id,
+          target: { kind: "skill", id: name },
+          act: "disable",
+        }),
+      );
+      say(
+        off.status === "changed"
+          ? `Off for ${column.label} in ${info.set.label}`
+          : `Still on for ${column.label} in ${info.set.label}: ${off.message}`,
+      );
+    }
+  }
+
+  /** The adapter's plan for giving an agent a skill from a folder: pure, so this reads nothing. */
+  private async skillPlan(
+    column: AgentExtensionColumn,
+    name: string,
+    from: string,
+  ): Promise<ExtensionActPlan | undefined> {
+    try {
+      const plans = await this.opts.runtime.extensionActPlans(
+        column.provider,
+        column.profileId,
+        [],
+        undefined,
+        { adds: [{ name, folder: from }] },
+      );
+      return Array.isArray(plans) ? plans.find((candidate) => candidate.act === "add") : undefined;
+    } catch (error) {
+      this.logger.warn("fieldd.agents.extension_plans_failed", "Planning a skill failed", {
+        provider: column.provider,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return undefined;
+    }
+  }
+
+  private requireStore(setId: string): AgentExtensionStore {
+    if (this.opts.store === undefined) {
+      throw new RpcCallError("UNAVAILABLE", "this daemon keeps no skills for agents", false, {
+        set: setId,
+      });
+    }
+    return this.opts.store;
+  }
+
+  /**
+   * O1: VibeField turns this cell while `work` runs. No read calls its change
+   * one made outside until a read that begins after the turn ended has seen it.
+   */
+  private async touching<T>(
+    setId: string,
+    provider: string,
+    kind: "mcp-server" | "skill",
+    name: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    const cells = this.touched.get(setId) ?? new Map<string, number>();
+    this.touched.set(setId, cells);
+    const key = changeKey(provider, kind, name);
+    cells.set(key, Number.POSITIVE_INFINITY);
+    try {
+      return await work();
+    } finally {
+      cells.set(key, this.now().getTime());
+    }
+  }
+
   /** An add's line for the run card before it runs: the adapter's plan is pure, so this reads nothing. */
   private async addLine(
     column: AgentExtensionColumn,
@@ -1210,13 +1794,24 @@ export class AgentExtensionService {
   }
 
   /** One act through puppeteer, riding the profile's frames: the run, then its receipt. */
-  private async runAct(
+  private runAct(
     setId: string,
     run: Pick<RunEntry, "provider" | "label" | "kind" | "item" | "name" | "act" | "runs">,
-    request: Omit<
-      Parameters<AgentExtensionServiceOptions["runtime"]["runExtensionAct"]>[0],
-      "onOutput"
-    >,
+    request: ActRequest,
+  ): Promise<{ entry: RunEntry; receipt: AgentExtensionReceipt }> {
+    return this.runActs(setId, run, (act) => act(request, { shows: true }));
+  }
+
+  /**
+   * Acts through puppeteer riding ONE run on the profile's frames — each act's
+   * output and every line `say`s, in order — whose receipt is what `body`
+   * answers: a skill given to an agent can move its copy first, and Codex's
+   * turns off its switch in the other profiles after.
+   */
+  private async runActs(
+    setId: string,
+    run: Pick<RunEntry, "provider" | "label" | "kind" | "item" | "name" | "act" | "runs">,
+    body: (act: ActRunner, say: (line: string) => void) => Promise<AgentExtensionReceipt>,
   ): Promise<{ entry: RunEntry; receipt: AgentExtensionReceipt }> {
     const entry: RunEntry = {
       id: randomUUID(),
@@ -1228,23 +1823,24 @@ export class AgentExtensionService {
     };
     this.runs.set(setId, entry);
     this.publishRun(setId);
-    let receipt: AgentExtensionReceipt;
-    try {
-      const result = await this.opts.runtime.runExtensionAct({
-        ...request,
-        onOutput: (chunk) => {
-          appendRaw(entry, chunk);
-          this.publishRun(setId);
-        },
-      });
-      receipt = {
+    const output = (chunk: string) => {
+      appendRaw(entry, chunk);
+      this.publishRun(setId);
+    };
+    const act: ActRunner = async (request, options) => {
+      const result = await this.opts.runtime.runExtensionAct({ ...request, onOutput: output });
+      // what puppeteer ran, as it planned it from the read it made
+      if (options?.shows === true && result.display !== undefined) entry.runs = result.display;
+      return {
         status: result.status,
         message: result.message,
         ...(result.exitCode !== undefined ? { exitCode: result.exitCode } : {}),
         finishedAt: result.finishedAt,
       };
-      // what puppeteer ran, as it planned it from the read it made
-      if (result.display !== undefined) entry.runs = result.display;
+    };
+    let receipt: AgentExtensionReceipt;
+    try {
+      receipt = await body(act, (line) => output(`${line}\n`));
     } catch (error) {
       this.logger.warn("fieldd.agents.extension_act_failed", "An extension act could not run", {
         set: setId,
@@ -1456,6 +2052,7 @@ export class AgentExtensionService {
     const running = this.inflight.get(setId);
     if (running !== undefined && !fresh) return running;
     const request: Promise<Frame> = (async () => {
+      const startedAt = this.now().getTime();
       const info = await this.profileSet(setId);
       const reads = await Promise.all(
         this.columnsOf(info.profiles).map(async (column) => ({
@@ -1466,19 +2063,28 @@ export class AgentExtensionService {
       const keep = await this.keepOf(setId);
       // AR-S4d — each empty cell's add is planned from the definition its row would give
       const definitions = serverDefinitions(reads, keep);
+      // AR-S4d2 — and each skill's link from its one copy; a folder of an agent's own moves to the profile's
+      const folders = await this.skillFolders(setId, reads);
+      const copies =
+        folders === undefined ? new Map<string, SkillCopy>() : skillCopies(reads, folders);
       const agents = await Promise.all(
         reads.map(async (agent) => ({
           ...agent,
-          ...(await this.plansFor(agent, agent.result, definitions)),
+          ...(await this.plansFor(agent, agent.result, definitions, copies, folders?.library)),
         })),
       );
+      const readAt = this.now().toISOString();
+      const changes = await this.notice(setId, readAt, reads, startedAt);
       const lens = buildExtensionLens({
         set: setId,
-        readAt: this.now().toISOString(),
+        readAt,
         agents,
         home: this.opts.home,
         ...(keep !== undefined ? { keep } : {}),
+        ...(folders !== undefined ? { skills: folders } : {}),
+        ...(changes !== undefined ? { changes } : {}),
       });
+      this.copies.set(setId, copies);
       if (this.disposed) return lens;
       this.lenses.set(setId, lens);
       this.emit(setId, this.frameOf(setId, lens));
@@ -1489,6 +2095,87 @@ export class AgentExtensionService {
     });
     this.inflight.set(setId, request);
     return request;
+  }
+
+  /**
+   * AR-S4d2 — the skill folders a read names beside the agents' own reads: the
+   * profile's skills folder and what it keeps, and every folder's real path,
+   * so a link to a link is still the one copy.
+   */
+  private async skillFolders(
+    setId: string,
+    reads: ReadonlyArray<{ result: ExtensionInventory | ExtensionFailure }>,
+  ): Promise<SkillFolders | undefined> {
+    const store = this.opts.store;
+    if (store === undefined) return undefined;
+    let kept: KeptSkill[] = [];
+    try {
+      kept = await store.keptSkills(setId);
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.extension_skills_unreadable",
+        "The profile's skills could not be read",
+        {
+          set: setId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+    const shared = join(this.opts.home, ".agents", "skills");
+    const paths = new Set<string>([shared, ...kept.map((skill) => skill.folder)]);
+    for (const read of reads) {
+      if (isFailure(read.result)) continue;
+      for (const item of read.result.items) {
+        if (item.kind === "skill" && item.location !== undefined) paths.add(item.location);
+      }
+    }
+    const canonical = new Map<string, string>();
+    await Promise.all(
+      [...paths].map(async (path) => {
+        canonical.set(path, await realpath(path).catch(() => path));
+      }),
+    );
+    return {
+      library: store.libraryOf(setId),
+      kept,
+      canonical,
+      shared: canonical.get(shared) ?? shared,
+    };
+  }
+
+  /**
+   * O1 — this read against the last one VibeField saw: what each agent read
+   * now holds of the profile's own, less the cells VibeField turned; a turn
+   * that ended before this read began is settled by it.
+   */
+  private async notice(
+    setId: string,
+    readAt: string,
+    reads: ReadonlyArray<{ provider: string; result: ExtensionInventory | ExtensionFailure }>,
+    startedAt: number,
+  ): Promise<AgentExtensionChange[] | undefined> {
+    const store = this.opts.store;
+    if (store === undefined) return undefined;
+    const seen: Record<string, SeenAgent> = {};
+    for (const read of reads) {
+      if (!isFailure(read.result)) seen[read.provider] = seenOf(read.result);
+    }
+    const cells = this.touched.get(setId) ?? new Map<string, number>();
+    try {
+      return await store.noticeChanges(setId, readAt, seen, new Set(cells.keys()));
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.extension_keep_failed",
+        "The profile's keep was not updated",
+        {
+          set: setId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      return undefined;
+    } finally {
+      for (const [key, finished] of cells) if (finished <= startedAt) cells.delete(key);
+    }
   }
 
   /** The profile's keep, or nothing when there is no store or it cannot be read. */
@@ -1511,12 +2198,16 @@ export class AgentExtensionService {
   /**
    * What each held server and skill offers, planned from this same read (no
    * read per holding) — and, AR-S4d, each server the agent holds none of, its
-   * add from the row's definition.
+   * add from the row's definition; AR-S4d2, each skill it holds none of, its
+   * link from the skill's one copy, and a folder of its own moving to the
+   * profile's (`library`) when it lets one go.
    */
   private async plansFor(
     column: { provider: string; profileId: string },
     result: ExtensionInventory | ExtensionFailure,
     definitions: ReadonlyMap<string, McpServerDefinition> = new Map(),
+    copies: ReadonlyMap<string, SkillCopy> = new Map(),
+    library?: string,
   ): Promise<{ plans?: ExtensionActPlan[] }> {
     if (isFailure(result)) return {};
     const items = result.items.filter(
@@ -1529,14 +2220,33 @@ export class AgentExtensionService {
     const adds = [...definitions]
       .filter(([name]) => !held.has(name))
       .map(([name, definition]) => ({ name, definition }));
-    if (items.length === 0 && adds.length === 0) return {};
+    const heldSkills = new Set(
+      result.items.filter((item) => item.kind === "skill").map((item) => item.name),
+    );
+    const skillAdds = [...copies]
+      .filter(([name]) => !heldSkills.has(name))
+      .map(([name, copy]) => ({ name, folder: copy.from }));
+    if (items.length === 0 && adds.length === 0 && skillAdds.length === 0) return {};
+    const skills = {
+      ...(skillAdds.length > 0 ? { adds: skillAdds } : {}),
+      ...(library !== undefined ? { keep: library } : {}),
+    };
     try {
-      const plans = await this.opts.runtime.extensionActPlans(
-        column.provider,
-        column.profileId,
-        items,
-        ...(adds.length > 0 ? [adds] : []),
-      );
+      const plans =
+        Object.keys(skills).length > 0
+          ? await this.opts.runtime.extensionActPlans(
+              column.provider,
+              column.profileId,
+              items,
+              adds.length > 0 ? adds : undefined,
+              skills,
+            )
+          : await this.opts.runtime.extensionActPlans(
+              column.provider,
+              column.profileId,
+              items,
+              ...(adds.length > 0 ? [adds] : []),
+            );
       return Array.isArray(plans) ? { plans } : {};
     } catch (error) {
       // no acts is a safe answer: the cells stay read-only

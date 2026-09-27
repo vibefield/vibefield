@@ -30,6 +30,7 @@
   "AGENT_PROFILE_SETS_DIR": ["agents", "profiles"],
   "AGENT_ROOTS_DIR": ["agents", "roots"],
   "AGENT_EXTENSIONS_DIR": ["agents", "extensions"],
+  "AGENT_SKILLS_DIR": ["agents", "skills"],
   "AGENT_SESSIONS_DIR": ["agents", "sessions"],
   "AGENT_RUNS_DIR": ["agents", "runs"],
   "AGENT_SESSIONS_KEY_FILE": ["agents", "sessions.key"],
