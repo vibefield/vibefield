@@ -18,6 +18,8 @@ export const SCRIPTED_ROW: AgentCatalogEntry = {
     usage: true,
     distribution: true,
     personas: true,
+    // the scripted provider composes no launch port, so no native grammar (AR-7a)
+    invoke: false,
   },
   admitted: "2026-09-22",
   decision: "test fixture — the scripted adapter beside the real rows",

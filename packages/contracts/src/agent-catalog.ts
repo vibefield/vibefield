@@ -68,7 +68,14 @@ export const AGENT_VISIBLE_STATUSES = ["supported", "preview", "deprecated"] as 
  * re-attach across a fieldd restart (puppeteer `attachSession`); `resume` is a
  * continuation into a new run (the launch descriptor's `resume`); `history` is
  * rosetta's index over the agent's on-disk ledger; `usage` the account-usage
- * port; `distribution` installs and updates; `personas` puppeteer profiles. */
+ * port; `distribution` installs and updates; `personas` puppeteer profiles.
+ * `invoke` (AR-7a) claims that typing the agent's name in one of our panes'
+ * shells gives a MANAGED session: puppeteer's launch provider declares the
+ * agent's native CLI grammar (`nativeInvocation`, which R23 reads from the
+ * pin), its spawn-through shim carries the typed command to fieldd's gateway,
+ * and the run is prepared from that grammar and adopted in the terminal that
+ * holds it (`prepareInvocation` → `adoptPrepared`). Only a row that claims it
+ * is given a launcher; any other name runs as the shell would run it. */
 export const AgentOffers = z.object({
   spawn: z.boolean(),
   resume: z.boolean(),
@@ -77,6 +84,7 @@ export const AgentOffers = z.object({
   usage: z.boolean(),
   distribution: z.boolean(),
   personas: z.boolean(),
+  invoke: z.boolean(),
 });
 export type AgentOffers = z.infer<typeof AgentOffers>;
 export type AgentCapability = keyof AgentOffers;
@@ -88,6 +96,7 @@ export const AGENT_CAPABILITIES = [
   "usage",
   "distribution",
   "personas",
+  "invoke",
 ] as const satisfies readonly AgentCapability[];
 
 /** Which surfaces show the row. A protocol agent (ACP) is desktop-only. */
@@ -157,6 +166,7 @@ const OFFERS_FULL: AgentOffers = {
   usage: true,
   distribution: true,
   personas: true,
+  invoke: true,
 };
 const OFFERS_NO_USAGE: AgentOffers = { ...OFFERS_FULL, usage: false };
 
@@ -167,6 +177,8 @@ export const AGENT_CATALOG = [
     // (§AR-4, the pin's one `attachSession`), the persona's root enrolled and
     // joined on the real daemon (§AR-2's real-rosettad row). Upstream:
     // `legacy-verified` in puppeteer's ledger.
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "claude",
     label: "Claude Code",
     status: "supported",
@@ -181,6 +193,8 @@ export const AGENT_CATALOG = [
     // 2026-09-22 AC-D6: `supported` — spawn rows since AR-3 and the scripted
     // daemon's join (`agent-runtime.test.ts`); upstream `legacy-verified`. The
     // real-daemon join row for codex is owed with AC-3 (the slate's note).
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "codex",
     label: "Codex",
     status: "supported",
@@ -196,6 +210,8 @@ export const AGENT_CATALOG = [
     // 2026-09-22 AC-D6: `preview` — both pins implement it (launch, usage,
     // distribution, profiles; the `grok` adapter), no live witness in this
     // repo yet; upstream `baseline-pending`.
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "grok",
     label: "Grok",
     status: "preview",
@@ -209,6 +225,8 @@ export const AGENT_CATALOG = [
   {
     // 2026-09-22 AC-D6: `preview`. The two siblings spell it differently
     // (`kimi` / `kimi-code`) — exactly the seam column's job.
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "kimi",
     label: "Kimi Code",
     status: "preview",
@@ -221,6 +239,8 @@ export const AGENT_CATALOG = [
   },
   {
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "opencode",
     label: "OpenCode",
     status: "preview",
@@ -233,6 +253,8 @@ export const AGENT_CATALOG = [
   },
   {
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "hermes",
     label: "Hermes",
     status: "preview",
@@ -258,6 +280,8 @@ export const AGENT_CATALOG = [
     // both dates. `history` is not a persona's: rosetta discovers the native
     // root, and a user consents to the kind through `index.enroll` (fieldd's
     // enabled_kinds).
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "antigravity",
     label: "Antigravity",
     status: "preview",
@@ -271,6 +295,8 @@ export const AGENT_CATALOG = [
   },
   {
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "copilot",
     label: "GitHub Copilot",
     status: "preview",
@@ -285,6 +311,8 @@ export const AGENT_CATALOG = [
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
     // The history join IS witnessed on the real daemon (§AR-2's pi persona:
     // `~/.pi` is the layout root, `~/.pi/agent` binds — PU-7); the spawn is not.
+    // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "pi",
     label: "Pi",
     status: "preview",
@@ -301,6 +329,8 @@ export const AGENT_CATALOG = [
     // not a vendor — how an unlisted agent attaches at all — with no on-disk
     // ledger for rosetta to index and no distribution or profiles port in the
     // pin. Alternative recorded in the slate: `declined`.
+    // 2026-09-27 AR-7a: no `invoke` — the pin's ACP launch provider declares no
+    // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
     id: "acp",
     label: "ACP",
     status: "preview",
@@ -314,6 +344,7 @@ export const AGENT_CATALOG = [
       usage: false,
       distribution: false,
       personas: false,
+      invoke: false,
     },
     admitted: "2026-09-22",
     decision:

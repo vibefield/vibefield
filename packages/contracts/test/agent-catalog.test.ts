@@ -56,7 +56,7 @@ describe("the agent catalog (AC-1)", () => {
     expect(new Set(roots).size).toBe(roots.length);
   });
 
-  it("a claim needs its seam: history ⇒ rosetta + a root; spawn/resume/reattach/usage/distribution/personas ⇒ puppeteer", () => {
+  it("a claim needs its seam: history ⇒ rosetta + a root; spawn/resume/reattach/usage/distribution/personas/invoke ⇒ puppeteer", () => {
     for (const row of rows) {
       if (row.offers.history) {
         expect(row.seams.rosetta, row.id).not.toBeNull();
@@ -217,6 +217,7 @@ describe("the agent catalog (AC-1)", () => {
           usage: false,
           distribution: false,
           personas: false,
+          invoke: false,
         },
         surfaces: { desktop: false, phone: false },
       },

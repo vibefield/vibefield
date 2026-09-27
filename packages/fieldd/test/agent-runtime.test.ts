@@ -1630,6 +1630,7 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     usage: false,
     distribution: false,
     personas: false,
+    invoke: false,
   };
 
   it("agent.providers lists the catalog's visible rows — the decision, the claims, our label, the index's state — in the table's order", async () => {

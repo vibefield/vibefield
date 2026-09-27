@@ -19,7 +19,9 @@
 //     what fieldd may load — builtin-providers and runtime — and nothing else).
 //     Per provider: the ports (createSession ⇒ spawn · launch.provider.resume ⇒
 //     resume · attachSession ⇒ reattach · accountUsage ⇒ usage · distribution ⇒
-//     distribution · a profiles port that declares support.supported ⇒ personas)
+//     distribution · a profiles port that declares support.supported ⇒ personas
+//     · launch.provider.nativeInvocation ⇒ invoke, AR-7a: the adapter's native
+//     CLI grammar, what `runtime.launchProviders()` hands a spawn-through host)
 //     and the native layout root, read the way fieldd's `kindFor` reads it
 //     (agent-runtime.ts: `runtime.profiles(id)` → the native-default profile →
 //     `runtime.profileObservationRoot`) and folded to `~/…` as fieldd's `tilde`
@@ -155,6 +157,7 @@ const CAPABILITIES = [
   "usage",
   "distribution",
   "personas",
+  "invoke",
 ];
 /** The puppeteer port that implements each puppeteer-owned capability. */
 const PORT_FOR = {
@@ -164,6 +167,7 @@ const PORT_FOR = {
   usage: "accountUsage",
   distribution: "distribution",
   personas: "profiles",
+  invoke: "launch.provider.nativeInvocation",
 };
 /** The capabilities rosetta supplies: a claim to one needs a rosetta seam
  * (history-seam) and a kind the pin registers (kind-registered). */
@@ -646,9 +650,13 @@ function tilde(path, home, separator = sep) {
 /** Which catalog capabilities one composed provider implements. `personas` is
  * the profiles port only when that port declares support: the registry lists no
  * profile for, and onboarding refuses to create one for, a provider whose port
- * says `supported: false` (puppeteer runtime/src/profiles/{registry,onboarding}.ts). */
+ * says `supported: false` (puppeteer runtime/src/profiles/{registry,onboarding}.ts).
+ * `invoke` is the launch provider's declared `nativeInvocation` — the runtime
+ * refuses to compose one without the adapter's normalizer (runtime.ts), so a
+ * provider that composes with it is one `prepareInvocation` can carry. */
 function portsOf(provider) {
   const profilesPort = provider.profiles !== undefined && provider.profiles !== null;
+  const nativeInvocation = provider.launch?.provider?.nativeInvocation;
   return {
     id: provider.descriptor.id,
     label: provider.descriptor.label,
@@ -659,6 +667,7 @@ function portsOf(provider) {
       usage: provider.accountUsage !== undefined && provider.accountUsage !== null,
       distribution: provider.distribution !== undefined && provider.distribution !== null,
       personas: profilesPort && provider.profiles.provider?.support?.supported === true,
+      invoke: nativeInvocation !== undefined && nativeInvocation !== null,
     },
     profilesPort,
   };
@@ -1450,13 +1459,15 @@ function printPuppeteerFacts(facts, out = console) {
   out.log(
     `R23 puppeteer pin — ${facts.providers.length} provider(s) composed (${FIELDD_DOOR.providers} through fieldd's edge, under tsx):`,
   );
+  // the ports column is as wide as a provider implementing every port, plus three
+  const width = PUPPETEER_CAPABILITIES.join(" ").length + 3;
   for (const p of facts.providers) {
     const ports = PUPPETEER_CAPABILITIES.filter((c) => p.ports[c]).join(" ");
     const via =
       p.rootVia === "port"
         ? "  (profiles port declares support false: no native-default profile; root read from the port)"
         : "";
-    out.log(`  ${p.id.padEnd(12)} ${ports.padEnd(52)} ${p.root ?? "—"}${via}`);
+    out.log(`  ${p.id.padEnd(12)} ${ports.padEnd(width)} ${p.root ?? "—"}${via}`);
   }
 }
 
@@ -1596,7 +1607,7 @@ function pinned(id, ports, root = null, extra = {}) {
   };
 }
 
-const FULL = ["spawn", "resume", "reattach", "usage", "distribution", "personas"];
+const FULL = ["spawn", "resume", "reattach", "usage", "distribution", "personas", "invoke"];
 
 /** The canned puppeteer pin the verdict fixtures and the enforce driver share. */
 function fixturePuppeteer() {
@@ -1818,6 +1829,39 @@ function selfTestVerdicts(check) {
     JSON.stringify(refused),
   );
 
+  // The invoke rule (AR-7a): a typed name becomes a managed session only through
+  // the launch provider's native-invocation grammar — the protocol shape at the
+  // 2026-09-27 pin composes a launch port with none. A claim without it is red;
+  // an offered row that leaves it unclaimed warns; a deprecated or declined row
+  // has already decided.
+  const typing = {
+    ok: true,
+    providers: [
+      pinned("tau", ["spawn", "resume", "invoke"]),
+      pinned("phi", ["spawn", "resume"]),
+      pinned("chi", ["spawn", "invoke"]),
+      pinned("psi", ["spawn", "invoke"]),
+    ],
+  };
+  const typed = judge(
+    [
+      row("tau", { offers: { spawn: true, resume: true } }),
+      row("phi", { offers: { spawn: true, resume: true, invoke: true } }),
+      row("chi", { status: "deprecated", offers: { spawn: true } }),
+      row("psi", { status: "declined", surfaces: { desktop: false, phone: false } }),
+    ],
+    typing,
+    { ok: true, kinds: new Map() },
+  );
+  check(
+    "invoke is the launch provider's nativeInvocation: claimed without it is red, left unclaimed on an offered row warns, on a deprecated or declined one is quiet",
+    JSON.stringify(typed.map((f) => `${f.level} ${f.cls} ${f.subject}`).sort()) ===
+      JSON.stringify(["FAIL pin-claim phi", "WARN candidate tau"]) &&
+      typed.every((f) => f.message.includes("`invoke`")) &&
+      typed.every((f) => f.message.includes("`launch.provider.nativeInvocation`")),
+    JSON.stringify(typed),
+  );
+
   // AC-D10: no rosettad is a WARN in a daily run, a FAIL when required; the
   // table's own history fact holds either way.
   const absent = { ok: false, cls: "unverified", message: "rosetta half UNVERIFIED (fixture)" };
@@ -1861,7 +1905,17 @@ async function selfTestReaders(check) {
     ...extra,
   });
   const full = provider("full", {
-    launch: { provider: { id: "full", label: "full", resume: true } },
+    launch: {
+      provider: {
+        id: "full",
+        label: "full",
+        resume: true,
+        nativeInvocation: {
+          commands: [{ name: "full", executable: "/h/bin/full" }],
+          environmentVariables: [],
+        },
+      },
+    },
     attachSession() {},
     accountUsage: {},
     distribution: {},
@@ -1883,8 +1937,8 @@ async function selfTestReaders(check) {
     return PUPPETEER_CAPABILITIES.filter((c) => read.ports[c]).join(" ");
   };
   check(
-    "the port reader: every port, a bare provider, a port that refuses",
-    ports(full) === "spawn resume reattach usage distribution personas" &&
+    "the port reader: every port, a bare provider, a port that refuses (a launch port with no native grammar is not invoke)",
+    ports(full) === "spawn resume reattach usage distribution personas invoke" &&
       ports(bare) === "spawn" &&
       ports(refusing) === "spawn" &&
       portsOf(refusing).profilesPort === true,
