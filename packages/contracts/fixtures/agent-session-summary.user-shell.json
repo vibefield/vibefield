@@ -1,0 +1,33 @@
+{
+  "sessionId": "native-7",
+  "sessionIdBasis": "observed",
+  "kind": "claude",
+  "label": "Claude Code",
+  "device": "dev-3c4d",
+  "tier": "managed",
+  "runtimeRunId": "run-7",
+  "runtimeEpoch": 1,
+  "profileId": "claude:native-default",
+  "terminal": {
+    "hosted": "local",
+    "runtimeSessionId": "sess-01J9A2T4",
+    "cellBootId": "cb-2b8e41d0-2026",
+    "workloadClass": "interactive"
+  },
+  "workspace": {
+    "mode": "direct",
+    "root": "/repo",
+    "sourcePath": "/repo",
+    "branch": "main"
+  },
+  "status": "working",
+  "observationLevel": "native-hooks",
+  "createdAt": "2026-09-27T10:00:00.500Z",
+  "stateChangedAt": "2026-09-27T10:00:05.000Z",
+  "lastActivityAt": "2026-09-27T10:00:05.000Z",
+  "continuation": {
+    "persisted": true,
+    "resumable": false
+  },
+  "spawnedBy": "user-shell"
+}

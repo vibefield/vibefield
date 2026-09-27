@@ -137,6 +137,17 @@ export const AgentSessionWorkspace = z
   .passthrough();
 export type AgentSessionWorkspace = z.infer<typeof AgentSessionWorkspace>;
 
+/** AR-7 — where a run came from: design-04 §8.1's provenance word, on the row
+ * (`spawnedBy`) and on its record. The vocabulary this build knows: `app` — a
+ * run one of our doors started (the spawn button, a resume); `user-shell` —
+ * a run adopted in a terminal the person's own shell owns (puppeteer's
+ * spawn-through: the agent's name typed at one of our panes' prompts), so its
+ * pane is a shell that outlives the agent. OPEN on the wire: a word this build
+ * never heard of must not refuse a row. Absent reads `app` — every row and
+ * record a daemon from before AR-7 sends. */
+export const AGENT_SPAWNED_BY = ["app", "user-shell"] as const;
+export type AgentSpawnedBy = (typeof AGENT_SPAWNED_BY)[number];
+
 /** SessionSummary v2 — the fold's row (design-01 §6.2 as amended by AR-D4).
  * `sessionId` is the provider-native session id, THE spine every repo joins
  * on (puppeteer `nativeSession.id`, rosetta `native_session_id`); before an
@@ -198,6 +209,10 @@ export const AgentSessionSummary = z
       })
       .passthrough()
       .optional(),
+    /** AR-7 — where the run came from (`AGENT_SPAWNED_BY`; OPEN, absent reads
+     * `app`). `user-shell`: the pane is the person's shell, which the agent's
+     * exit leaves standing. */
+    spawnedBy: z.string().min(1).max(32).optional(),
   })
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
@@ -275,6 +290,19 @@ export const AgentSessionRecord = z
         signal: z.string().nullable(),
         reason: z.string(),
       })
+      .passthrough()
+      .optional(),
+    /** AR-7 — where the run came from, persisted as the row says it
+     * (`AGENT_SPAWNED_BY`; OPEN, absent reads `app`: every record written
+     * before AR-7). Both AR-7 fields are optional, so a record without them
+     * canonicalises — and so verifies — exactly as it did before. */
+    spawnedBy: z.string().min(1).max(32).optional(),
+    /** AR-7 — for a run adopted in a caller's terminal (`user-shell`): the
+     * adopted process and the time it started, which a later boot compares
+     * before it re-attaches — a pid is reused, a start time is not. Absent on
+     * a run fieldd spawned itself. */
+    process: z
+      .object({ pid: z.number().int().positive(), startedAt: z.string().min(1) })
       .passthrough()
       .optional(),
   })

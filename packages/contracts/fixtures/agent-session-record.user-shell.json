@@ -1,0 +1,34 @@
+{
+  "format": 1,
+  "runtimeRunId": "run-7",
+  "runtimeEpoch": 1,
+  "provider": "claude",
+  "profileId": "claude:native-default",
+  "cwd": "/repo",
+  "terminalSessionId": "sess-01J9A2T4",
+  "continuation": {
+    "providerId": "claude",
+    "nativeSessionId": "native-7",
+    "implementation": "native",
+    "state": "{\"v\":1}"
+  },
+  "workspace": {
+    "mode": "direct",
+    "root": "/repo",
+    "sourcePath": "/repo",
+    "branch": "main"
+  },
+  "creationRequestId": "req-01J9A2T4",
+  "ingress": {
+    "port": 53344,
+    "token": "typed-bearer"
+  },
+  "spawnedBy": "user-shell",
+  "process": {
+    "pid": 48213,
+    "startedAt": "2026-09-27T10:00:00.412Z"
+  },
+  "createdAt": "2026-09-27T10:00:00.500Z",
+  "updatedAt": "2026-09-27T10:00:05.000Z",
+  "signature": "0000000000000000000000000000000000000000000000000000000000000000"
+}

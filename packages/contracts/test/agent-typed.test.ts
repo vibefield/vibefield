@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_CAPABILITIES,
@@ -6,7 +9,12 @@ import {
   AgentCatalogResult,
   isOffered,
 } from "../src/agent-catalog";
+import { AGENT_SPAWNED_BY, AgentSessionRecord, AgentSessionSummary } from "../src/agent-session";
 import { LAYOUT, LAYOUT_ROOT_LEVEL } from "../src/registries";
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+const fixture = (name: string): Record<string, unknown> =>
+  JSON.parse(readFileSync(join(FIXTURES, name), "utf8")) as Record<string, unknown>;
 
 // AR-7a / AR-9a — the contracts half of a typed agent (a name typed into one of
 // our panes' shells becomes a managed session through puppeteer's spawn-through
@@ -61,5 +69,64 @@ describe("the catalog's `invoke` (AR-7a)", () => {
     const parsed = AgentCatalogResult.parse({ catalog: [{ ...base, offers: olderOffers }] });
     expect(parsed.catalog[0]?.offers.invoke).toBeUndefined();
     expect(parsed.catalog[0]?.offers.spawn).toBe(true);
+  });
+});
+
+describe("where a run came from (AR-7): spawnedBy and the adopted process", () => {
+  it("knows two words, design-04 §8.1's", () => {
+    expect([...AGENT_SPAWNED_BY]).toEqual(["app", "user-shell"]);
+  });
+
+  it("a typed run's row says user-shell; a row from before AR-7 says nothing, which reads app", () => {
+    const typed = AgentSessionSummary.parse(fixture("agent-session-summary.user-shell.json"));
+    expect(typed.spawnedBy).toBe("user-shell");
+    expect(typed.terminal?.workloadClass).toBe("interactive");
+    const older = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect(older.spawnedBy).toBeUndefined();
+    expect(older).not.toHaveProperty("spawnedBy");
+  });
+
+  it("is OPEN on the wire: a word this build never heard of rides, an empty or overlong one is refused", () => {
+    const typed = fixture("agent-session-summary.user-shell.json");
+    expect(AgentSessionSummary.parse({ ...typed, spawnedBy: "someday" }).spawnedBy).toBe("someday");
+    expect(AgentSessionSummary.safeParse({ ...typed, spawnedBy: "" }).success).toBe(false);
+    expect(AgentSessionSummary.safeParse({ ...typed, spawnedBy: "x".repeat(33) }).success).toBe(
+      false,
+    );
+    const record = fixture("agent-session-record.user-shell.json");
+    expect(AgentSessionRecord.parse({ ...record, spawnedBy: "someday" }).spawnedBy).toBe("someday");
+    expect(AgentSessionRecord.safeParse({ ...record, spawnedBy: "" }).success).toBe(false);
+  });
+
+  it("a typed run's record carries the adopted process: a positive pid and the time it started", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.user-shell.json"));
+    expect(record.spawnedBy).toBe("user-shell");
+    expect(record.process).toEqual({ pid: 48213, startedAt: "2026-09-27T10:00:00.412Z" });
+    const raw = fixture("agent-session-record.user-shell.json");
+    const adopted = raw.process as Record<string, unknown>;
+    for (const pid of [0, -1, 1.5, "48213"]) {
+      expect(AgentSessionRecord.safeParse({ ...raw, process: { ...adopted, pid } }).success).toBe(
+        false,
+      );
+    }
+    expect(
+      AgentSessionRecord.safeParse({ ...raw, process: { ...adopted, startedAt: "" } }).success,
+    ).toBe(false);
+    expect(AgentSessionRecord.safeParse({ ...raw, process: { pid: 48213 } }).success).toBe(false);
+    // tolerant inside: a fact a newer daemon adds to the process rides through
+    const newer = AgentSessionRecord.parse({ ...raw, process: { ...adopted, ppid: 1 } });
+    expect((newer.process as Record<string, unknown>).ppid).toBe(1);
+  });
+
+  // The record is SIGNED over its canonical JSON (fieldd's agent-sessions.ts,
+  // untouched by AR-7a): a parse that added a key would change what an existing
+  // record canonicalises to. Both new fields are optional, so a record from
+  // before AR-7 comes back with exactly the keys it had.
+  it("adds nothing to a record from before AR-7: the parse returns exactly its keys", () => {
+    const raw = fixture("agent-session-record.valid.json");
+    const parsed = AgentSessionRecord.parse(raw);
+    expect(Object.keys(parsed).sort()).toEqual(Object.keys(raw).sort());
+    expect(parsed).not.toHaveProperty("spawnedBy");
+    expect(parsed).not.toHaveProperty("process");
   });
 });
