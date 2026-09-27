@@ -12,7 +12,9 @@ import {
   AgentSpawnParams,
   AgentSubscribeParams,
   AgentsExtensionsActParams,
+  AgentsExtensionsAddParams,
   AgentsExtensionsListParams,
+  AgentsExtensionsPlanParams,
   AgentsExtensionsSignInParams,
   AgentsExtensionsSubscribeParams,
   AgentsInstallsParams,
@@ -583,6 +585,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AR-4 — the daemon's own acts on a session (the re-attach at boot, a
     // resume-when-idle) are ledgered as the system actor
     audit: (mutation, effect, describe) => audit.requiredSystem(mutation, effect, describe),
+    // AR-S4d — a profile's server values sit beside the plugins' secrets, in the keychain
+    ...(config.secretStore !== undefined ? { secretStore: config.secretStore } : {}),
     logger: logger.child({ component: "agent_runtime" }),
   });
   // AR-5d — account usage beside the runtime that owns the adapters: one
@@ -1533,6 +1537,46 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => agents.extensions.signIn(parsed.data, ctx.principal),
         (result) => ({ outcome: "succeeded", attrs: { sessionId: result.terminal.sessionId } }),
       );
+    });
+    // AR-S4d — Add server: the definition kept once for the profile and each
+    // value it reads (the keychain), then each agent's own add in turn. Audited
+    // like an act; the ledger names the values it kept by count, never by value.
+    api.register("agents.extensions.add", async (ctx, params) => {
+      const parsed = AgentsExtensionsAddParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { set, name, definition, values?, agents }",
+          false,
+        );
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.extensions.add",
+          target: {
+            kind: "agent-extension",
+            id: `${parsed.data.set}:mcp-server:${parsed.data.name}`.slice(0, 256),
+          },
+          attrs: {
+            set: parsed.data.set,
+            agents: parsed.data.agents.join(",").slice(0, 256),
+            values: Object.keys(parsed.data.values ?? {}).length,
+          },
+        },
+        () => agents.extensions.add(parsed.data),
+        (result) => ({
+          attrs: {
+            changed: result.receipts.filter((entry) => entry.receipt.status === "changed").length,
+          },
+        }),
+      );
+    });
+    // AR-S4d — what an Add would run on each agent, before anything is kept: a read
+    api.register("agents.extensions.plan", async (_ctx, params) => {
+      const parsed = AgentsExtensionsPlanParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, name, definition }", false);
+      return await agents.extensions.plan(parsed.data);
     });
     api.register("agents.installs", async (_ctx, params) => {
       const parsed = AgentsInstallsParams.safeParse(params ?? {});

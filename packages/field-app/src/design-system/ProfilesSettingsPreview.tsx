@@ -1,7 +1,9 @@
 import { type ReactElement, useEffect, useMemo } from "react";
 import {
+  AddServerView,
   AgentExtensionListView,
   AgentExtensionsView,
+  addServerSubpage,
   agentListSubpage,
   ExtensionItemView,
   extensionItemSubpage,
@@ -18,6 +20,7 @@ import {
 import { agentRow, inOnWords, profilePage, signInNote } from "../panels/agents/profiles-model";
 import type { SettingsSubpage } from "../panels/SettingsDialog";
 import {
+  FIXTURE_EXTENSION_PLAN,
   FIXTURE_EXTENSION_RUN,
   FIXTURE_EXTENSION_RUNNING,
   FIXTURE_EXTENSION_SIGNING_IN,
@@ -111,12 +114,29 @@ export function ProfilesSettingsPreview({
           ? agentListSubpage(FIXTURE_WORK, list.agent, list.list, inert)
           : item !== undefined
             ? extensionItemSubpage(FIXTURE_WORK, item.list, item.name, inert)
-            : null,
+            : state === "add server"
+              ? addServerSubpage(FIXTURE_WORK, inert)
+              : null,
     );
-  }, [agentLabel, list, item, onSubpage]);
+  }, [agentLabel, list, item, state, onSubpage]);
   useEffect(() => () => onSubpage(null), [onSubpage]);
 
   if (state === "new") return <NewProfileView onCancel={inert} onCreate={inert} />;
+  // AR-S4d — Add server with its form typed, told what each agent would run
+  if (state === "add server") {
+    return (
+      <AddServerView
+        lens={FIXTURE_EXTENSIONS}
+        profile={FIXTURE_WORK.label}
+        where={inOnWords(FIXTURE_WORK)}
+        offers={FIXTURE_EXTENSION_PLAN.offers}
+        initial={{ draft: { name: "figma", how: "url", url: "https://mcp.figma.com/mcp" } }}
+        onAdd={inert}
+        onCancel={inert}
+        now={FIXTURE_EXTENSIONS_NOW}
+      />
+    );
+  }
   if (agent !== undefined) {
     return (
       <ProfileAgentPageView
@@ -231,6 +251,7 @@ export function ProfilesSettingsPreview({
             onRefresh={inert}
             onOpenItem={inert}
             onAct={inert}
+            onAddServer={inert}
             {...(state === "act confirm"
               ? {
                   armed: {
@@ -238,6 +259,17 @@ export function ProfilesSettingsPreview({
                     kind: "mcp-server" as const,
                     id: "linear",
                     act: "remove" as const,
+                  },
+                }
+              : {})}
+            {...(state === "turn on"
+              ? {
+                  // AR-S4d — context7 turned on for Codex (the act fixture's agent), its key asked for first
+                  armed: {
+                    provider: FIXTURE_EXTENSION_RUN.provider,
+                    kind: "mcp-server" as const,
+                    id: "context7",
+                    act: "add" as const,
                   },
                 }
               : {})}

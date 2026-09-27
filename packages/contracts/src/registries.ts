@@ -652,6 +652,13 @@ export const LAYOUT = {
   AGENT_PROFILES_FILE: ["agents", "profiles.json"],
   AGENT_PROFILE_SETS_DIR: ["agents", "profiles"],
   AGENT_ROOTS_DIR: ["agents", "roots"],
+  /** AR-S4d — what each Agent Profile keeps once for its agents (pass 24,
+   * S1): one `<set>.json` (0600) per profile with each kept MCP server's
+   * definition (what it runs or where it is, and the NAMES of the variables it
+   * reads), the names it keeps a value for, and which names it gave each
+   * agent. The values live in the OS keychain, one entry per profile — never
+   * under this root. */
+  AGENT_EXTENSIONS_DIR: ["agents", "extensions"],
   /** AR-3 — this user's managed-session records: one `<runtimeRunId>.json`
    * (0600) per session fieldd spawned, holding puppeteer's opaque continuation
    * beside the launch facts (provider, persona, cwd, workspace) and the exit,

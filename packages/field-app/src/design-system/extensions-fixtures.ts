@@ -1,4 +1,9 @@
-import type { AgentExtensionRun, AgentsExtensionsListResult } from "@vibefield/contracts";
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: an agent's own variable syntax, shown as the agent would run it
+import type {
+  AgentExtensionRun,
+  AgentsExtensionsListResult,
+  AgentsExtensionsPlanResult,
+} from "@vibefield/contracts";
 
 // Extensions on fixture data (AR-S4b): the lens fieldd sends for the "Work"
 // profile — the same document as the contracts fixture
@@ -8,6 +13,10 @@ import type { AgentExtensionRun, AgentsExtensionsListResult } from "@vibefield/c
 // offer, and FIXTURE_EXTENSION_RUN is an act's run as the act fixture
 // (agents-extensions-act.valid.json) has it; FIXTURE_EXTENSION_SIGNING_IN is a
 // server's sign-in while its pane is open (agents-extensions-sign-in.valid.json).
+// AR-S4d: Work keeps context7, which no agent holds and whose key it keeps no
+// value for yet; notion is offered to the agents that hold none of it; and
+// FIXTURE_EXTENSION_PLAN is what Add server's form is told each agent would
+// run for figma (agents-extensions-plan.valid.json).
 
 /** The catalog's "now" for the lists: two minutes after the read. */
 export const FIXTURE_EXTENSIONS_NOW = new Date("2026-09-25T09:02:10.000Z");
@@ -191,6 +200,49 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
   ],
   servers: [
     {
+      name: "context7",
+      versions: 0,
+      cells: {},
+      definition: {
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "@upstash/context7-mcp"],
+        env: ["CONTEXT7_API_KEY"],
+      },
+      kept: true,
+      needs: ["CONTEXT7_API_KEY"],
+      offers: {
+        claude: {
+          act: {
+            act: "add",
+            runs: "claude mcp add context7 --scope user -e CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-} -- npx -y @upstash/context7-mcp",
+            reaches: [],
+          },
+        },
+        codex: {
+          act: {
+            act: "add",
+            runs: 'config/value/write mcp_servers.context7 = {"command":"npx","args":["-y","@upstash/context7-mcp"],"env_vars":["CONTEXT7_API_KEY"]}',
+            reaches: [],
+          },
+        },
+        grok: {
+          act: {
+            act: "add",
+            runs: "grok mcp add --scope user --env CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-} context7 -- npx -y @upstash/context7-mcp",
+            reaches: [],
+          },
+        },
+        opencode: {
+          act: {
+            act: "add",
+            runs: "opencode mcp add context7 --env CONTEXT7_API_KEY={env:CONTEXT7_API_KEY} -- npx -y @upstash/context7-mcp",
+            reaches: ["every-profile"],
+          },
+        },
+      },
+    },
+    {
       name: "linear",
       versions: 2,
       cells: {
@@ -315,6 +367,26 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
             ],
           },
         ],
+      },
+      definition: {
+        transport: "http",
+        url: "https://mcp.notion.com/mcp",
+      },
+      offers: {
+        grok: {
+          act: {
+            act: "add",
+            runs: "grok mcp add --scope user notion https://mcp.notion.com/mcp",
+            reaches: [],
+          },
+        },
+        opencode: {
+          act: {
+            act: "add",
+            runs: "opencode mcp add notion --url https://mcp.notion.com/mcp",
+            reaches: ["every-profile"],
+          },
+        },
       },
     },
     {
@@ -513,6 +585,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
       },
     ],
   },
+  values: ["LINEAR_TOKEN"],
 };
 
 /** An act the catalog shows finished: Codex's postgres turned off (the act fixture's run). */
@@ -570,5 +643,45 @@ export const FIXTURE_EXTENSION_SIGNING_IN: AgentExtensionRun = {
   truncated: false,
   terminal: {
     sessionId: "sess-01J8Z3K9",
+  },
+};
+
+/** What each of Work's agents would run to add figma, as Add server's form asks (the plan fixture). */
+export const FIXTURE_EXTENSION_PLAN: AgentsExtensionsPlanResult = {
+  offers: {
+    claude: {
+      act: {
+        act: "add",
+        runs: "claude mcp add figma https://mcp.figma.com/mcp --scope user --transport http",
+        reaches: [],
+      },
+    },
+    codex: {
+      act: {
+        act: "add",
+        runs: 'config/value/write mcp_servers.figma = {"url":"https://mcp.figma.com/mcp"}',
+        reaches: [],
+      },
+    },
+    grok: {
+      act: {
+        act: "add",
+        runs: "grok mcp add --scope user figma https://mcp.figma.com/mcp",
+        reaches: [],
+      },
+    },
+    opencode: {
+      act: {
+        act: "add",
+        runs: "opencode mcp add figma --url https://mcp.figma.com/mcp",
+        reaches: ["every-profile"],
+      },
+    },
+    kimi: {
+      unavailable: {
+        reason: "unread",
+        message: "extension inventory failed for kimi",
+      },
+    },
   },
 };

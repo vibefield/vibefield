@@ -71,6 +71,7 @@ import {
   DistributionRecordStore,
   type RevealPath,
 } from "./agent-distribution";
+import { AgentExtensionStore } from "./agent-extension-store";
 import { AgentExtensionService } from "./agent-extensions";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
 import type { IndexService } from "./agent-index";
@@ -92,6 +93,7 @@ import {
 import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
+import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { GrantPrincipal } from "./terminal-grants";
 import type { TerminalService } from "./terminal-service";
@@ -304,6 +306,8 @@ export interface AgentRuntimeServiceOptions {
   audit?: SystemAudit;
   /** AR-4 test seam: the resume-when-idle thresholds (defaults above) */
   resumeWhenIdle?: { afterMs?: number; pollMs?: number };
+  /** AR-S4d test seam: where a profile's server values are kept (default: the OS keychain) */
+  secretStore?: SecretStore;
   now?: () => Date;
   logger?: Logger;
 }
@@ -410,6 +414,8 @@ export class AgentRuntimeService implements PersonaSessions {
   readonly profiles: AgentProfileService;
   /** Extensions: each Agent Profile's lens (agent-extensions.ts) */
   readonly extensions: AgentExtensionService;
+  /** AR-S4d — what each profile keeps once for its agents: definitions, value names, what each agent was given */
+  private readonly extensionStore: AgentExtensionStore;
   private readonly records: SessionRecordStore;
   private readonly home: string;
   private readonly logger: Logger;
@@ -528,9 +534,18 @@ export class AgentRuntimeService implements PersonaSessions {
       executables: executables as BuiltinProviderOptions["executables"],
       ...(opts.home !== undefined ? { home: opts.home } : {}),
     });
+    // AR-S4d (pass 24, S1) — a profile's server values, in the keychain; an
+    // agent is given those of the servers VibeField gave it, when it starts
+    this.extensionStore = new AgentExtensionStore({
+      dir: join(opts.userRoot, ...LAYOUT.AGENT_EXTENSIONS_DIR),
+      secrets: opts.secretStore ?? createDarwinSecretStore(),
+      now: this.now,
+    });
     const runtimeOptions: AgentRuntimeOptions = {
       host: this.host,
       defaultCwd: this.home,
+      launchEnvironment: (run) =>
+        this.extensionStore.launchValues(run.profileSetId, run.providerId),
       providers: opts.providers === undefined ? builtin : opts.providers(builtin),
       creationRegistry: this.claims,
       profiles: {
@@ -580,6 +595,8 @@ export class AgentRuntimeService implements PersonaSessions {
       home: this.home,
       revealPath: opts.revealPath ?? (() => null),
       ...(opts.audit !== undefined ? { audit: opts.audit } : {}),
+      // AR-S4d — a deleted profile's keep and keychain entry go with it
+      forgetExtensions: (setId) => this.extensionStore.forgetProfile(setId),
       now: this.now,
       logger: this.logger,
     });
@@ -589,6 +606,7 @@ export class AgentRuntimeService implements PersonaSessions {
       runtime: this.runtime,
       catalog: this.catalog,
       home: this.home,
+      store: this.extensionStore,
       // AR-S4c — a server's sign-in runs in a pane on the floor, as a
       // persona's login does: the caller's ticket, then the husk closed
       ...(this.terminalHost !== null

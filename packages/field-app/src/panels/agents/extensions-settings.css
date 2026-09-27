@@ -581,3 +581,124 @@
 .vf-ext-item-state--cell .vf-ui-button {
   margin-left: 4px;
 }
+
+/* AR-S4d — adding once. The values card asks for each name a server reads,
+   one field per name; the Add server page is pass 23's A1 form with Turn on
+   for: a chip per agent, lit when chosen, greyed with its reason when the
+   agent cannot take the server, and each chosen agent's own line under Runs. */
+.vf-ext-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.vf-ext-value {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.vf-ext-value .vf-ext-code {
+  min-width: 12ch;
+  color: var(--vf-text-primary);
+}
+
+.vf-ext-value-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.vf-ext-mono {
+  font-family: var(--vf-font-mono);
+  font-size: 12px;
+}
+
+.vf-ext-add-name {
+  width: 22ch;
+}
+
+.vf-ext-add .vf-ext-add-field {
+  width: 40ch;
+  max-width: 100%;
+}
+
+.vf-ext-env {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.vf-ext-env-row {
+  display: flex;
+  gap: 6px;
+}
+
+.vf-ext-env-row input {
+  width: 16ch;
+}
+
+.vf-ext-env-row input.vf-ext-mono {
+  width: 24ch;
+}
+
+.vf-ext-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vf-ext-chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vf-ext-chip--on {
+  border-color: var(--vf-foreground);
+  background: var(--vf-foreground);
+  color: var(--vf-foreground-inverse);
+}
+
+.vf-ext-chip:disabled {
+  border-style: dashed;
+  color: var(--vf-text-faint);
+  cursor: default;
+}
+
+.vf-ext-chip-mark {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+
+.vf-ext-chip-mark svg {
+  width: 16px;
+  height: 16px;
+}
+
+.vf-ext-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.vf-ext-runs .vf-ext-code {
+  color: var(--vf-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.vf-ext-runs i {
+  font-style: normal;
+  color: var(--vf-text-tertiary);
+}

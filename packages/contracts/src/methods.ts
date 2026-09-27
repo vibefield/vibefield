@@ -1523,6 +1523,24 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // AR-S4d — a server kept once for the profile: Add server keeps its
+  // definition and the values it reads (the keychain), then runs each agent's
+  // own add, audited, one run at a time; the plan beside it says what each
+  // agent would run before anything is kept.
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.add",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.plan",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "agents.usage",

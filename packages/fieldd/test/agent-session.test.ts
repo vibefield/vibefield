@@ -77,6 +77,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
+import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 import {
@@ -324,6 +325,8 @@ function scriptedProvider(
         ],
         cwd: options.cwd,
         env: {
+          // AR-S4d — a host's launch values, beneath the adapter's own, as the built-ins merge them
+          ...options.environment,
           SCRIPTED_ENV_OUT: out,
           SCRIPTED_TYPED_OUT: typedOut,
           SCRIPTED_TOKEN: `token-${n}`,
@@ -385,6 +388,8 @@ interface Box {
 
 interface SetupConfig {
   floor: "mock" | "real";
+  /** AR-S4d — the keychain fieldd keeps server values in (default: a map; never the machine's) */
+  secretStore?: SecretStore;
   realAgent?: boolean;
   /** AR-4 — give the scripted provider an `attachSession` */
   attach?: boolean;
@@ -470,6 +475,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     dataDir,
     controlPort: 0,
     dataPort: 0,
+    secretStore: config.secretStore ?? keychainIn(new Map()),
     rosettadBin: "/stand-in/rosettad",
     rosettadSpawn: fakeSpawner(config.rosettadMode ?? "ok", {
       FAKE_ROSETTAD_SESSIONS: sessionsFile,
@@ -697,6 +703,19 @@ const sessionRequests = (box: Box): number =>
         .split("\n")
         .filter((line) => line !== "").length
     : 0;
+
+/** AR-S4d — a keychain in a map, `service/account` → value: no test here writes the machine's. */
+function keychainIn(entries: Map<string, string>): SecretStore {
+  return {
+    get: async (service, account) => entries.get(`${service}/${account}`) ?? null,
+    set: async (service, account, value) => {
+      entries.set(`${service}/${account}`, value);
+    },
+    delete: async (service, account) => {
+      entries.delete(`${service}/${account}`);
+    },
+  };
+}
 
 const parseEnvFile = (path: string): Record<string, string> =>
   Object.fromEntries(
@@ -1177,6 +1196,69 @@ const rosettaRow = (nativeSessionId: string, stillForMs: number | null, child = 
       ? null
       : { first_at: Date.now() - stillForMs - 60_000, last_at: Date.now() - stillForMs },
   stream_state: "indexed",
+});
+
+describe("a server's values over the REAL floor (AR-S4d)", () => {
+  it("an agent VibeField starts is given the values of the servers VibeField gave it, and no other; none reaches a record or the ledger", async () => {
+    const entries = new Map<string, string>();
+    const { daemon, dataDir, envOut } = await setup({
+      floor: "real",
+      secretStore: keychainIn(entries),
+    });
+    // This Mac keeps context7's key, and gave context7 to the scripted agent
+    // alone; the entry also holds a value no agent here was given
+    const secret = "ctx7_value_for_the_scripted_agent";
+    mkdirSync(join(dataDir, ...LAYOUT.AGENT_EXTENSIONS_DIR), { recursive: true });
+    writeFileSync(
+      join(dataDir, ...LAYOUT.AGENT_EXTENSIONS_DIR, "native.json"),
+      `${JSON.stringify({
+        version: 1,
+        servers: {
+          context7: {
+            definition: {
+              transport: "stdio",
+              command: "npx",
+              args: ["-y", "@upstash/context7-mcp"],
+              env: ["CONTEXT7_API_KEY"],
+            },
+            keptAt: "2026-09-27T09:00:00.000Z",
+          },
+        },
+        values: ["CONTEXT7_API_KEY", "LINEAR_API_KEY"],
+        given: { scripted: { context7: ["CONTEXT7_API_KEY"] } },
+      })}\n`,
+      { mode: 0o600 },
+    );
+    entries.set(
+      "VibeField agent server values/native",
+      JSON.stringify({ CONTEXT7_API_KEY: secret, LINEAR_API_KEY: "lin_value_given_to_no_one" }),
+    );
+
+    const win = await window(daemon, DECK, "v1");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      title: "given a key",
+    })) as AgentSpawnResult;
+    const envFile = join(envOut, "session-1.env");
+    const env = await poll(
+      async () => (existsSync(envFile) ? parseEnvFile(envFile) : undefined),
+      10_000,
+    );
+    expect(env["CONTEXT7_API_KEY"]).toBe(secret);
+    expect(env).not.toHaveProperty("LINEAR_API_KEY");
+    // the adapter's own variables still win beneath the host's
+    expect(env["SCRIPTED_TOKEN"]).toBe("token-1");
+
+    // the value lives in the process alone: not the record the resume reads, not the ledger
+    const record = readFileSync(
+      join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR, `${spawned.session.runtimeRunId}.json`),
+      "utf8",
+    );
+    expect(record).not.toContain(secret);
+    expect(auditText(dataDir)).not.toContain(secret);
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+  }, 60_000);
 });
 
 describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins", () => {

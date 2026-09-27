@@ -170,6 +170,7 @@ pub mod layout {
     pub const AGENT_PROFILES_FILE: &[&str] = &["agents", "profiles.json"];
     pub const AGENT_PROFILE_SETS_DIR: &[&str] = &["agents", "profiles"];
     pub const AGENT_ROOTS_DIR: &[&str] = &["agents", "roots"];
+    pub const AGENT_EXTENSIONS_DIR: &[&str] = &["agents", "extensions"];
     pub const AGENT_SESSIONS_DIR: &[&str] = &["agents", "sessions"];
     pub const AGENT_RUNS_DIR: &[&str] = &["agents", "runs"];
     pub const AGENT_SESSIONS_KEY_FILE: &[&str] = &["agents", "sessions.key"];
@@ -213,6 +214,7 @@ pub mod layout {
         ("AGENT_PROFILES_FILE", AGENT_PROFILES_FILE),
         ("AGENT_PROFILE_SETS_DIR", AGENT_PROFILE_SETS_DIR),
         ("AGENT_ROOTS_DIR", AGENT_ROOTS_DIR),
+        ("AGENT_EXTENSIONS_DIR", AGENT_EXTENSIONS_DIR),
         ("AGENT_SESSIONS_DIR", AGENT_SESSIONS_DIR),
         ("AGENT_RUNS_DIR", AGENT_RUNS_DIR),
         ("AGENT_SESSIONS_KEY_FILE", AGENT_SESSIONS_KEY_FILE),

@@ -1,0 +1,38 @@
+{
+  "offers": {
+    "claude": {
+      "act": {
+        "act": "add",
+        "runs": "claude mcp add figma https://mcp.figma.com/mcp --scope user --transport http",
+        "reaches": []
+      }
+    },
+    "codex": {
+      "act": {
+        "act": "add",
+        "runs": "config/value/write mcp_servers.figma = {\"url\":\"https://mcp.figma.com/mcp\"}",
+        "reaches": []
+      }
+    },
+    "grok": {
+      "act": {
+        "act": "add",
+        "runs": "grok mcp add --scope user figma https://mcp.figma.com/mcp",
+        "reaches": []
+      }
+    },
+    "opencode": {
+      "act": {
+        "act": "add",
+        "runs": "opencode mcp add figma --url https://mcp.figma.com/mcp",
+        "reaches": ["every-profile"]
+      }
+    },
+    "kimi": {
+      "unavailable": {
+        "reason": "unread",
+        "message": "extension inventory failed for kimi"
+      }
+    }
+  }
+}

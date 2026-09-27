@@ -6,7 +6,9 @@ import { type ZodTypeAny, z } from "zod";
 import { AgentCatalogResult } from "../src/agent-catalog";
 import {
   AgentsExtensionsActResult,
+  AgentsExtensionsAddResult,
   AgentsExtensionsListResult,
+  AgentsExtensionsPlanResult,
   AgentsExtensionsSignInResult,
 } from "../src/agent-extensions";
 import {
@@ -231,6 +233,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agents-extensions-act": AgentsExtensionsActResult,
   // AR-S4c — a server's sign-in: the run while its pane is open, and the caller's ticket.
   "agents-extensions-sign-in": AgentsExtensionsSignInResult,
+  // AR-S4d — Add server's answer (each agent's receipt), and the plan beside the form.
+  "agents-extensions-add": AgentsExtensionsAddResult,
+  "agents-extensions-plan": AgentsExtensionsPlanResult,
   // AR-5d — the usage column's feed: one batch with three states beside the
   // honest empty one the door answers before the first refresh.
   "agent-usage": AgentAccountUsageBatch,

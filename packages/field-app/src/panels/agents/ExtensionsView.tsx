@@ -1,10 +1,17 @@
 import { AgentIcon } from "@vibecook/puppeteer-views";
 import type {
+  AgentExtensionOffer,
   AgentExtensionRun,
+  AgentExtensionServerDefinition,
   AgentProfileSet,
   AgentsExtensionsListResult,
 } from "@vibefield/contracts";
-import { InlineNotice, UiButton, UiSwitch } from "@vibefield/design-kit/primitives";
+import {
+  InlineNotice,
+  SegmentedControl,
+  UiButton,
+  UiSwitch,
+} from "@vibefield/design-kit/primitives";
 import {
   Fragment,
   type ReactElement,
@@ -15,15 +22,19 @@ import {
   useState,
 } from "react";
 import type { SettingsSubpage } from "../SettingsDialog";
-import { borderCls, labelCls, SettingsSection } from "../settings-ui";
+import { borderCls, fieldCls, labelCls, SettingsRow, SettingsSection } from "../settings-ui";
 import {
+  type AddServerDraft,
   type AgentListItem,
   type AgentListKey,
   actConfirm,
+  addServerChips,
   agentExtensions,
   agentList,
   agentListTitle,
   builtFromWords,
+  draftDefinition,
+  draftProblem,
   type ExtensionCell,
   type ExtensionCellAct,
   type ExtensionGridModel,
@@ -49,7 +60,11 @@ import { ProfileMark } from "./ProfilesView";
 // and outcome sit in the run card under the lists. A remote server's sign-in
 // is the agent's own login in a terminal on the page: while it runs, the run
 // card is its sign-in card — the live pane where this window opened it (the
-// controller hands it in), a line elsewhere — with Cancel.
+// controller hands it in), a line elsewhere — with Cancel. AR-S4d: an empty
+// cell turns the server on for its agent, by the agent's own add; a value the
+// server reads is asked for first, in the confirm, and kept once in the
+// keychain. Add server… is a page of its own (pass 23's A1 form, with Turn on
+// for).
 
 const KINDS: ExtensionKindKey[] = ["servers", "skills"];
 
@@ -163,16 +178,30 @@ export interface ExtensionActRequest {
   kind: "mcp-server" | "skill";
   id: string;
   act: ExtensionCellAct["act"];
+  /** AR-S4d — an add's values for the names its server reads, kept once in the keychain first. */
+  values?: Record<string, string>;
 }
 
-const requestOf = (act: ExtensionCellAct): ExtensionActRequest => ({
+const requestOf = (
+  act: ExtensionCellAct,
+  values?: Record<string, string>,
+): ExtensionActRequest => ({
   provider: act.provider,
   kind: act.kind,
   id: act.id,
   act: act.act,
+  ...(values !== undefined && Object.keys(values).length > 0 ? { values } : {}),
 });
 
-/** P7: the confirm a click that reaches further than its cell opens beneath its list. */
+/** A click asks first when it reaches further than its cell, or when its server needs a value. */
+const asksFirst = (act: ExtensionCellAct): boolean =>
+  act.reaches.length > 0 || act.needs.length > 0;
+
+/**
+ * P7: the confirm a click that reaches further than its cell opens beneath
+ * its list. AR-S4d: an add whose server reads a value VibeField keeps none of
+ * asks for it here, one field per name, before the agent's own add runs.
+ */
 function ActConfirm({
   act,
   where,
@@ -183,19 +212,41 @@ function ActConfirm({
   act: ExtensionCellAct;
   where: string;
   busy: boolean;
-  onConfirm: () => void;
+  onConfirm: (values?: Record<string, string>) => void;
   onCancel: () => void;
 }): ReactElement | null {
   const confirm = actConfirm(act, where);
+  const asks = act.act === "add" && act.needs.length > 0;
+  const [values, setValues] = useState<Record<string, string>>({});
   const button = useRef<HTMLButtonElement>(null);
+  const firstValue = useRef<HTMLInputElement>(null);
   const questionId = useId();
   useEffect(() => {
-    button.current?.focus();
-  }, []);
-  if (confirm === null) return null;
+    (asks ? firstValue.current : button.current)?.focus();
+  }, [asks]);
+  if (confirm === null && !asks) return null;
+  const filled = act.needs.every((name) => (values[name] ?? "") !== "");
+  const profile = where.replace(/^(in|on) /u, "");
+  const question = asks
+    ? `Turn ${act.name} on for ${act.label}${act.reaches.includes("every-profile") ? " in every profile" : ""}?`
+    : confirm!.question;
+  const what = asks
+    ? [
+        `${act.name} reads ${act.needs.join(", ")}. VibeField keeps ${act.needs.length === 1 ? "its value" : "each value"} once, in its keychain entry for ${profile}: ${act.label}’s settings name the variable, and VibeField gives the value when it starts ${act.label}.`,
+        // This Mac is each agent's own folder, which a plain terminal starts too
+        where.startsWith("on ") ? "An agent started outside VibeField gets none." : "",
+        confirm?.what ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : confirm!.what;
+  const submit = (): void => {
+    if (asks && !filled) return;
+    onConfirm(asks ? values : undefined);
+  };
   return (
     <fieldset
-      className="vf-profiles-confirm-box vf-ext-confirm"
+      className={`vf-profiles-confirm-box vf-ext-confirm${asks ? " vf-ext-values" : ""}`}
       aria-labelledby={questionId}
       data-ext-confirm={`${act.provider}:${act.id}`}
       onKeyDown={(event) => {
@@ -207,20 +258,45 @@ function ActConfirm({
       }}
     >
       <p id={questionId} className="vf-profiles-confirm-question">
-        {confirm.question}
+        {question}
       </p>
-      <p className={`vf-profiles-confirm-what ${labelCls}`}>{confirm.what}</p>
+      <p className={`vf-profiles-confirm-what ${labelCls}`}>{what}</p>
+      {asks &&
+        act.needs.map((name, index) => (
+          <label key={name} className="vf-ext-value">
+            <code className="vf-ext-code">{name}</code>
+            <input
+              ref={index === 0 ? firstValue : undefined}
+              type="password"
+              className={`${fieldCls} vf-ext-value-field`}
+              autoComplete="off"
+              spellCheck={false}
+              aria-label={`Value of ${name}`}
+              value={values[name] ?? ""}
+              onChange={(event) => {
+                const value = event.target.value;
+                setValues((previous) => ({ ...previous, [name]: value }));
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+            />
+          </label>
+        ))}
       <p className="vf-ext-confirm-runs">
         Runs <code className="vf-ext-code">{act.runs}</code>
       </p>
       <div className="vf-profiles-confirm-acts">
         <UiButton
           ref={button}
-          variant={confirm.danger ? "danger" : "quiet"}
-          disabled={busy}
-          onClick={onConfirm}
+          variant={asks ? "primary" : confirm!.danger ? "danger" : "quiet"}
+          disabled={busy || (asks && !filled)}
+          onClick={submit}
         >
-          {confirm.action}
+          {asks ? "Keep and turn on" : confirm!.action}
         </UiButton>
         <UiButton disabled={busy} onClick={onCancel}>
           Cancel
@@ -547,6 +623,8 @@ export interface ProfileExtensionsViewProps {
   armed?: ExtensionActRequest;
   /** A server's sign-in running for the profile: its pane and Cancel. */
   signIn?: ExtensionSignInSlot;
+  /** AR-S4d — Add server…: a server kept once for the profile, turned on for its agents. */
+  onAddServer?: () => void;
   now?: Date;
 }
 
@@ -563,6 +641,7 @@ export function ProfileExtensionsView({
   acting = false,
   armed: armedInitially,
   signIn,
+  onAddServer,
   now,
 }: ProfileExtensionsViewProps): ReactElement {
   const [armed, setArmed] = useState<ExtensionCellAct | null>(null);
@@ -586,10 +665,16 @@ export function ProfileExtensionsView({
     onAct === undefined
       ? undefined
       : (act: ExtensionCellAct) => {
-          if (act.reaches.length > 0) setArmed(act);
+          if (asksFirst(act)) setArmed(act);
           else onAct(requestOf(act));
         };
   const refresh = <ReadAgain reading={reading} onRefresh={onRefresh} />;
+  const addServer =
+    onAddServer === undefined ? null : (
+      <UiButton disabled={busy} onClick={onAddServer}>
+        Add server…
+      </UiButton>
+    );
   if (lens === null && error !== null) {
     return (
       <div className="vf-ext" data-profile-extensions="">
@@ -630,7 +715,14 @@ export function ProfileExtensionsView({
                 ? `What each of ${profile}’s agents connects to, as the agent itself holds it`
                 : `What each of ${profile}’s agents loads, from where the agent itself looks`
             }
-            action={index === 0 ? refresh : undefined}
+            action={
+              index === 0 ? (
+                <span className="vf-ext-actions">
+                  {addServer}
+                  {refresh}
+                </span>
+              ) : undefined
+            }
             className={`vf-ext-section vf-ext-section--${key}`}
           >
             {model.empty !== null ? (
@@ -651,9 +743,9 @@ export function ProfileExtensionsView({
                   act={open}
                   where={where}
                   busy={busy}
-                  onConfirm={() => {
+                  onConfirm={(values) => {
                     setArmed(null);
-                    onAct(requestOf(open));
+                    onAct(requestOf(open, values));
                   }}
                   onCancel={() => setArmed(null)}
                 />
@@ -950,7 +1042,7 @@ export function ExtensionItemView({
   const busy = acting || lens?.run?.state === "running";
   const ask = (act: ExtensionCellAct): void => {
     if (onAct === undefined) return;
-    if (act.reaches.length > 0) setArmed(act);
+    if (asksFirst(act)) setArmed(act);
     else onAct(requestOf(act));
   };
   const kindWord = list === "servers" ? "MCP server" : "Skill";
@@ -1060,16 +1152,29 @@ export function ExtensionItemView({
                       Sign out
                     </UiButton>
                   )}
-                  {agent.act !== null && !agent.switchable && onAct !== undefined && (
+                  {agent.act !== null && agent.act.act === "add" && onAct !== undefined && (
+                    // AR-S4d — the agent's own add, from the profile's definition
                     <UiButton
-                      variant="danger"
                       disabled={busy}
                       aria-label={agent.act.title}
                       onClick={() => ask(agent.act!)}
                     >
-                      Remove…
+                      Turn on
                     </UiButton>
                   )}
+                  {agent.act !== null &&
+                    agent.act.act !== "add" &&
+                    !agent.switchable &&
+                    onAct !== undefined && (
+                      <UiButton
+                        variant="danger"
+                        disabled={busy}
+                        aria-label={agent.act.title}
+                        onClick={() => ask(agent.act!)}
+                      >
+                        Remove…
+                      </UiButton>
+                    )}
                 </span>
               </div>
             ))}
@@ -1080,9 +1185,9 @@ export function ExtensionItemView({
               act={armed}
               where={where}
               busy={busy}
-              onConfirm={() => {
+              onConfirm={(values) => {
                 setArmed(null);
-                onAct(requestOf(armed));
+                onAct(requestOf(armed, values));
               }}
               onCancel={() => setArmed(null)}
             />
@@ -1155,4 +1260,295 @@ export function extensionItemSubpage(
     backLabel: `Back to ${set.label}`,
     onBack,
   };
+}
+
+/** Add server's page names itself, what it makes, and the profile it is for. */
+export function addServerSubpage(set: AgentProfileSet, onBack: () => void): SettingsSubpage {
+  return {
+    title: "Add MCP server",
+    description: (
+      <span className="vf-profiles-subhead">
+        Kept once ·
+        <ProfileMark set={set} size={12} />
+        {set.label}
+      </span>
+    ),
+    backLabel: `Back to ${set.label}`,
+    onBack,
+  };
+}
+
+/* ── Add server (AR-S4d; pass 24's "Adding one", pass 23's A1 form) ─────────── */
+
+export interface AddServerRequest {
+  name: string;
+  definition: AgentExtensionServerDefinition;
+  values: Record<string, string>;
+  agents: string[];
+}
+
+export interface AddServerViewProps {
+  lens: AgentsExtensionsListResult | null;
+  profile: string;
+  /** "in Work" · "on This Mac" */
+  where: string;
+  /** What each agent's own add would run for the draft, or why it cannot; null until asked. */
+  offers?: Record<string, AgentExtensionOffer> | null;
+  /** Why the draft cannot be kept as it stands (a key in its command line), from fieldd. */
+  planError?: string | null;
+  error?: string | null;
+  /** The Add is running: each agent's add rides the profile's frames. */
+  adding?: boolean;
+  /** The draft changed: the controller asks what each agent would run. */
+  onDraft?: (name: string, definition: AgentExtensionServerDefinition | null) => void;
+  onAdd?: (request: AddServerRequest) => void;
+  onCancel?: () => void;
+  /** The catalog's still: a draft already typed, and the agents chosen. */
+  initial?: { draft?: Partial<AddServerDraft>; agents?: string[] };
+  now?: Date;
+}
+
+const HOW = ["A program on this Mac", "A URL"] as const;
+
+/** The form: a name, what it connects to, the values it reads, and Turn on for. */
+export function AddServerView({
+  lens,
+  profile,
+  where,
+  offers = null,
+  planError = null,
+  error = null,
+  adding = false,
+  onDraft,
+  onAdd,
+  onCancel,
+  initial,
+  now,
+}: AddServerViewProps): ReactElement {
+  const [draft, setDraft] = useState<AddServerDraft>(() => ({
+    name: "",
+    how: "command",
+    command: "",
+    url: "",
+    env: [{ name: "", value: "" }],
+    ...initial?.draft,
+  }));
+  const [picked, setPicked] = useState<Set<string> | null>(
+    initial?.agents === undefined ? null : new Set(initial.agents),
+  );
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => nameRef.current?.focus(), []);
+  const definition = draftDefinition(draft);
+  const name = draft.name.trim();
+  const definitionKey = JSON.stringify(definition);
+  // the controller plans each change of what would be kept
+  useEffect(() => {
+    onDraft?.(name, definition);
+  }, [name, definitionKey]);
+
+  const taken = lens === null ? [] : lens.servers.map((row) => row.name);
+  const problem = draftProblem(draft, taken);
+  const chips = lens === null ? [] : addServerChips(lens, offers);
+  const chosen = chips.filter(
+    (chip) => chip.act !== null && (picked === null ? chip.preselected : picked.has(chip.provider)),
+  );
+  // pass 24's hint: who cannot take it, and who would take it further than this profile
+  const notes = chips
+    .filter((chip) => chip.act === null || chip.act.reaches.includes("every-profile"))
+    .map((chip) => chip.why);
+  const native = where.startsWith("on ");
+  const ready = problem === null && planError === null && !adding && onAdd !== undefined;
+  const set = (patch: Partial<AddServerDraft>): void =>
+    setDraft((previous) => ({ ...previous, ...patch }));
+
+  const running =
+    lens?.run !== undefined && lens.run.name === name && (adding || lens.run.state === "running");
+  return (
+    <form
+      className="vf-agents vf-agents-page vf-ext-page vf-ext-add"
+      data-ext-add=""
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!ready || definition === null) return;
+        const values: Record<string, string> = {};
+        for (const entry of draft.env) {
+          if (entry.name.trim() !== "") values[entry.name.trim()] = entry.value;
+        }
+        onAdd?.({
+          name,
+          definition,
+          values: definition.transport === "stdio" ? values : {},
+          agents: chosen.map((chip) => chip.provider),
+        });
+      }}
+    >
+      <h2 className="sr-only" tabIndex={-1} data-agents-page-title="">
+        Add an MCP server {where}
+      </h2>
+      <ErrorNotice error={error} />
+      <section className={borderCls}>
+        <SettingsRow title="Name" description="How the agents and you will call it">
+          <input
+            ref={nameRef}
+            className={`${fieldCls} vf-ext-add-name`}
+            value={draft.name}
+            maxLength={64}
+            spellCheck={false}
+            placeholder="context7"
+            aria-label="Name"
+            disabled={adding}
+            onChange={(event) => set({ name: event.target.value })}
+          />
+        </SettingsRow>
+        <SettingsRow title="Connects to">
+          <SegmentedControl
+            options={HOW}
+            value={draft.how === "command" ? HOW[0] : HOW[1]}
+            label="Connects to"
+            size="small"
+            onChange={(value) => set({ how: value === HOW[0] ? "command" : "url" })}
+          />
+        </SettingsRow>
+        {draft.how === "command" ? (
+          <>
+            <SettingsRow title="Command" description="What each agent runs to start it">
+              <input
+                className={`${fieldCls} vf-ext-add-field vf-ext-mono`}
+                value={draft.command}
+                spellCheck={false}
+                placeholder="npx -y @upstash/context7-mcp"
+                aria-label="Command"
+                disabled={adding}
+                onChange={(event) => set({ command: event.target.value })}
+              />
+            </SettingsRow>
+            <SettingsRow
+              title="Environment"
+              description={`Each value is kept once, in VibeField’s keychain entry for ${profile}. Each agent’s settings name the variable; VibeField gives the value when it starts the agent.${native ? " An agent started outside VibeField gets none." : ""}`}
+              align="start"
+              divider={false}
+            >
+              <div className="vf-ext-env">
+                {draft.env.map((entry, index) => (
+                  <div key={index} className="vf-ext-env-row">
+                    <input
+                      className={`${fieldCls} vf-ext-mono`}
+                      value={entry.name}
+                      spellCheck={false}
+                      placeholder="API_KEY"
+                      aria-label={`Variable ${index + 1}`}
+                      disabled={adding}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        set({
+                          env: draft.env.map((candidate, at) =>
+                            at === index ? { ...candidate, name: value } : candidate,
+                          ),
+                        });
+                      }}
+                    />
+                    <input
+                      type="password"
+                      className={fieldCls}
+                      value={entry.value}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="value"
+                      aria-label={`Value of variable ${index + 1}`}
+                      disabled={adding}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        set({
+                          env: draft.env.map((candidate, at) =>
+                            at === index ? { ...candidate, value } : candidate,
+                          ),
+                        });
+                      }}
+                    />
+                  </div>
+                ))}
+                <UiButton
+                  disabled={adding}
+                  onClick={() => set({ env: [...draft.env, { name: "", value: "" }] })}
+                >
+                  Add a variable
+                </UiButton>
+              </div>
+            </SettingsRow>
+          </>
+        ) : (
+          <SettingsRow
+            title="URL"
+            description="If the server asks you to sign in, each agent asks on its own"
+            divider={false}
+          >
+            <input
+              className={`${fieldCls} vf-ext-add-field vf-ext-mono`}
+              value={draft.url}
+              spellCheck={false}
+              placeholder="https://mcp.example.com/mcp"
+              aria-label="URL"
+              disabled={adding}
+              onChange={(event) => set({ url: event.target.value })}
+            />
+          </SettingsRow>
+        )}
+      </section>
+      <SettingsSection
+        title="Turn on for"
+        description={`${notes.length === 0 ? "" : `${notes.join("; ")}. `}You can change any of them later, one agent at a time.`}
+      >
+        {/* biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a fieldset of inputs */}
+        <div className="vf-ext-chips" role="group" aria-label="Turn on for">
+          {chips.map((chip) => {
+            const on = chosen.includes(chip);
+            return (
+              <button
+                key={chip.provider}
+                type="button"
+                className={`vf-ext-chip${on ? " vf-ext-chip--on" : ""}`}
+                aria-pressed={on}
+                disabled={chip.act === null || adding}
+                title={chip.why}
+                onClick={() => {
+                  const next = new Set(chosen.map((candidate) => candidate.provider));
+                  if (on) next.delete(chip.provider);
+                  else next.add(chip.provider);
+                  setPicked(next);
+                }}
+              >
+                <span className="vf-ext-chip-mark" aria-hidden="true">
+                  <AgentIcon providerId={chip.provider} />
+                </span>
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="vf-ext-runs" data-ext-runs="">
+          <span className={labelCls}>Runs</span>
+          {chosen.length === 0 ? (
+            <code className="vf-ext-code">nothing yet: choose an agent</code>
+          ) : (
+            chosen.map((chip) => (
+              <code key={chip.provider} className="vf-ext-code">
+                <i>{chip.label}</i> {chip.act?.runs}
+              </code>
+            ))
+          )}
+        </div>
+      </SettingsSection>
+      <ErrorNotice error={planError} />
+      {running && lens?.run !== undefined && <RunCard run={lens.run} now={now} />}
+      <div className="vf-profiles-foot">
+        {problem !== null && !adding && <span className={labelCls}>{problem}</span>}
+        <UiButton onClick={onCancel} disabled={adding}>
+          Cancel
+        </UiButton>
+        <UiButton type="submit" variant="primary" disabled={!ready}>
+          {adding ? "Adding…" : "Add server"}
+        </UiButton>
+      </div>
+    </form>
+  );
 }

@@ -17,6 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AgentsExtensionsListResult,
+  AgentsExtensionsPlanResult,
   AgentsExtensionsSignInResult,
   type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
@@ -26,13 +27,19 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  FIXTURE_EXTENSION_PLAN,
   FIXTURE_EXTENSION_RUN,
   FIXTURE_EXTENSION_RUNNING,
   FIXTURE_EXTENSION_SIGNING_IN,
   FIXTURE_EXTENSIONS,
 } from "../src/design-system/extensions-fixtures";
-import { ExtensionItem, ProfileExtensions } from "../src/panels/agents/ExtensionsSection";
 import {
+  AddServer,
+  ExtensionItem,
+  ProfileExtensions,
+} from "../src/panels/agents/ExtensionsSection";
+import {
+  AddServerView,
   AgentExtensionListView,
   AgentExtensionsView,
   ExtensionItemView,
@@ -40,15 +47,19 @@ import {
 } from "../src/panels/agents/ExtensionsView";
 import {
   actConfirm,
+  addServerChips,
   agentExtensions,
   agentList,
   builtFromWords,
+  draftDefinition,
+  draftProblem,
   extensionGrid,
   extensionItem,
   holdingWords,
   readWords,
   runWords,
   signInNote,
+  splitCommand,
 } from "../src/panels/agents/extensions-model";
 
 // The window's terminal pool is not here: a sign-in's pane is a stand-in that
@@ -86,8 +97,14 @@ const cellOf = (key: "servers" | "skills", name: string, provider: string) =>
 describe("the Extensions model", () => {
   it("lists a name some agent holds as its own, and counts the rest beneath", () => {
     const servers = extensionGrid(LENS, "servers");
-    // sentry is only a project's server in Claude: it stays on Claude's own list
-    expect(servers.rows.map((row) => row.name)).toEqual(["linear", "notion", "postgres"]);
+    // sentry is only a project's server in Claude: it stays on Claude's own list; context7
+    // is one Work keeps though no agent holds it (AR-S4d)
+    expect(servers.rows.map((row) => row.name)).toEqual([
+      "context7",
+      "linear",
+      "notion",
+      "postgres",
+    ]);
     expect(servers.more).toBe(
       "1 more comes with a plugin, an app or one project; it stays on its agent’s own list.",
     );
@@ -160,13 +177,14 @@ describe("the Extensions model", () => {
 
   it("words a row's fact, the I1 line and a holding's detail", () => {
     const servers = extensionGrid(LENS, "servers");
-    expect(servers.rows[0]).toMatchObject({
+    expect(servers.rows[1]).toMatchObject({
       name: "linear",
       twoVersions: true,
+      held: true,
       glyph: "globe",
       fact: "Two versions · https://mcp.linear.app/mcp",
     });
-    expect(servers.rows[2]).toMatchObject({ glyph: "prompt", twoVersions: true });
+    expect(servers.rows[3]).toMatchObject({ glyph: "prompt", twoVersions: true });
     expect(extensionGrid(LENS, "skills").rows[0]?.fact).toBe(
       "~/.agents/skills · Drafts release notes from merged pull requests",
     );
@@ -174,7 +192,7 @@ describe("the Extensions model", () => {
       text: "Built from what Work’s agents already have: 3 servers and 2 skills. Nothing in the agents changed.",
       twoVersions: ["linear", "postgres"],
     });
-    const grok = LENS.servers[0]?.cells.grok?.[0];
+    const grok = LENS.servers.find((row) => row.name === "linear")?.cells.grok?.[0];
     expect(holdingWords(LENS, grok!)).toEqual({
       origin: "Loaded from Claude, on This Mac",
       detail: "on · https://mcp.linear.app/mcp · sends Authorization",
@@ -233,7 +251,7 @@ describe("one agent's Extensions (pass 23)", () => {
     const codex = lens.agents.find((column) => column.provider === "codex")!;
     delete codex.support.plugins;
     delete codex.support.mcpServers;
-    const claude = lens.servers[0]!.cells.claude![0]!;
+    const claude = lens.servers.find((row) => row.name === "linear")!.cells.claude![0]!;
     claude.auth = "needs-sign-in";
     expect(agentExtensions(lens, "codex")).toMatchObject({
       rows: [{ key: "skills" }],
@@ -481,12 +499,13 @@ describe("acts (AR-S4c)", () => {
       signIn: { label: "Sign in…", act: { act: "sign-in", reaches: [], terminal: true } },
       signOut: null,
     });
-    // the grid's cells still turn the server on and off, never sign in
+    // the grid's cells still turn the server on and off — and, AR-S4d, on for an agent
+    // that holds none of it — never sign in; Kimi changes its servers only in its app
     expect(
       extensionGrid(LENS, "servers")
         .rows.find((row) => row.name === "notion")
         ?.cells.map((cell) => cell.act?.act),
-    ).toEqual(["remove", "disable", undefined, undefined, undefined]);
+    ).toEqual(["remove", "disable", "add", "add", undefined]);
 
     const signedIn = structuredClone(LENS);
     const held = signedIn.servers.find((row) => row.name === "notion")!.cells.codex![0]!;
@@ -735,8 +754,9 @@ describe("acts, drawn", () => {
   it("runs a switch at once, and opens P7's confirm first for a click that reaches further", async () => {
     const onAct = vi.fn();
     await mount(createElement(ProfileExtensionsView, { lens: LENS, profile: "Work", onAct }));
-    // linear, notion and postgres for Claude and for Codex, and Codex's release-notes
-    expect(container?.querySelectorAll(".vf-ext-cell-button")).toHaveLength(7);
+    // linear, notion and postgres for Claude and for Codex, and Codex's release-notes;
+    // AR-S4d: context7 for the four agents that can take it, notion for Grok and OpenCode
+    expect(container?.querySelectorAll(".vf-ext-cell-button")).toHaveLength(13);
     await act(async () => cellButton("Turn linear off for Codex")?.click());
     expect(onAct).toHaveBeenCalledWith({
       provider: "codex",
@@ -1070,5 +1090,417 @@ describe("ExtensionItem (the controller)", () => {
     );
     expect(container?.querySelector("[data-sign-in-pane]")).toBeNull();
     expect(container?.textContent).toContain("Codex still asks you to sign in to notion.");
+  });
+});
+
+// AR-S4d — adding once: a server kept for the profile, turned on for an agent
+// that holds none of it by that agent's own add; a value it reads asked for
+// first and kept once in the keychain; Add server with Turn on for.
+const PLAN = AgentsExtensionsPlanResult.parse(
+  JSON.parse(readFileSync(join(dirname(FIXTURE), "agents-extensions-plan.valid.json"), "utf8")),
+);
+
+it("draws Add server's plan from the contracts fixture itself", () => {
+  expect(FIXTURE_EXTENSION_PLAN).toEqual(PLAN);
+});
+
+describe("adding once (AR-S4d), the model", () => {
+  it("offers an empty cell the agent's own add, and says why where the agent cannot take the server", () => {
+    const notion = extensionGrid(LENS, "servers").rows.find((row) => row.name === "notion")!;
+    const cell = (provider: string) => notion.cells.find((entry) => entry.provider === provider)!;
+    expect(cell("grok").act).toMatchObject({
+      act: "add",
+      id: "notion",
+      runs: "grok mcp add --scope user notion https://mcp.notion.com/mcp",
+      reaches: [],
+      needs: [],
+      title: "Turn notion on for Grok",
+    });
+    expect(cell("grok").cell).toEqual({ s: "off", why: "Off" });
+    // OpenCode changes a server only in its app, but its own add takes one: a ring to click
+    expect(cell("opencode")).toMatchObject({
+      act: { act: "add", reaches: ["every-profile"] },
+      cell: { s: "off", why: "Off" },
+    });
+    // Kimi could not be read: nothing is offered where nothing is known
+    expect(cell("kimi")).toMatchObject({ act: null, cell: { s: "unread" } });
+    const opencode = cell("opencode").act!;
+    expect(actConfirm(opencode, "in Work")).toEqual({
+      question: "Turn notion on for OpenCode in every profile?",
+      what: "OpenCode keeps one config for every profile: this adds notion to all of them.",
+      action: "Turn it on",
+      danger: false,
+    });
+  });
+
+  it("lists a server the profile keeps though no agent holds it, asks for the value it reads, and builds nothing from it", () => {
+    const context7 = extensionGrid(LENS, "servers").rows.find((row) => row.name === "context7")!;
+    expect(context7).toMatchObject({
+      held: false,
+      glyph: "prompt",
+      fact: "npx -y @upstash/context7-mcp · CONTEXT7_API_KEY",
+    });
+    expect(context7.cells.map((entry) => entry.act?.needs)).toEqual([
+      ["CONTEXT7_API_KEY"],
+      ["CONTEXT7_API_KEY"],
+      ["CONTEXT7_API_KEY"],
+      ["CONTEXT7_API_KEY"],
+      undefined,
+    ]);
+    // the I1 line counts what the agents have: still three servers
+    expect(builtFromWords(LENS, "Work")?.text).toContain("3 servers and 2 skills");
+    const item = extensionItem(LENS, "servers", "context7");
+    expect(item.gone).toBe(false);
+    expect(item.facts).toEqual([
+      { term: "Connects to", code: "npx -y @upstash/context7-mcp" },
+      { term: "Kind", text: "A program on this Mac" },
+      {
+        term: "CONTEXT7_API_KEY",
+        termCode: true,
+        text: "Given to the server when it starts. VibeField keeps no value for it yet: turning the server on for an agent asks for one, and keeps it once, in its keychain.",
+      },
+      { term: "Kept", text: "Once, by VibeField, for this profile; no agent has it on" },
+    ]);
+    expect(item.agents.map((agent) => [agent.label, agent.act?.act ?? null, agent.state])).toEqual([
+      ["Claude", "add", "Off"],
+      ["Codex", "add", "Off"],
+      ["Grok", "add", "Off"],
+      ["OpenCode", "add", "Off"],
+      ["Kimi", null, "Not read"],
+    ]);
+    // a value Work keeps is said to be kept, never shown
+    const kept = extensionItem(LENS, "servers", "linear").facts.find(
+      (fact) => fact.term === "LINEAR_TOKEN",
+    );
+    expect(kept?.text).toContain("VibeField keeps its value once, in its keychain");
+  });
+
+  it("words an add's run: on for the agent, or why not", () => {
+    const run = {
+      ...FIXTURE_EXTENSION_RUN,
+      act: "add" as const,
+      name: "context7",
+      item: "context7",
+      receipt: {
+        status: "changed" as const,
+        message: "added",
+        finishedAt: FIXTURE_EXTENSION_RUN.finishedAt!,
+      },
+    };
+    const at = new Date(FIXTURE_EXTENSION_RUN.finishedAt!);
+    expect(runWords(run, at).outcome).toEqual({
+      tone: "neutral",
+      text: `context7 is on for ${run.label}.`,
+    });
+    expect(
+      runWords(
+        { ...run, receipt: { ...run.receipt, status: "failed", message: "exited with 1" } },
+        at,
+      ).outcome,
+    ).toEqual({ tone: "error", text: `${run.label} couldn’t add context7: exited with 1.` });
+  });
+
+  it("reads Add server's form: a command line split as a shell would, a name, a URL, each value given", () => {
+    expect(splitCommand(`npx -y "@scope/a server" --dir '/tmp/x y'`)).toEqual([
+      "npx",
+      "-y",
+      "@scope/a server",
+      "--dir",
+      "/tmp/x y",
+    ]);
+    expect(splitCommand(`npx "open`)).toBeNull();
+    const draft = {
+      name: "context7",
+      how: "command" as const,
+      command: "npx -y @upstash/context7-mcp",
+      url: "",
+      env: [{ name: "CONTEXT7_API_KEY", value: "ctx7" }],
+    };
+    expect(draftDefinition(draft)).toEqual({
+      transport: "stdio",
+      command: "npx",
+      args: ["-y", "@upstash/context7-mcp"],
+      env: ["CONTEXT7_API_KEY"],
+    });
+    expect(draftProblem(draft, [])).toBeNull();
+    expect(draftProblem(draft, ["context7"])).toBe(
+      "This profile already has a server named context7",
+    );
+    expect(draftProblem({ ...draft, name: "my server" }, [])).toBe(
+      "A name is letters, digits, “-” and “_”",
+    );
+    expect(draftProblem({ ...draft, env: [{ name: "CONTEXT7_API_KEY", value: "" }] }, [])).toBe(
+      "Give CONTEXT7_API_KEY its value",
+    );
+    expect(draftProblem({ ...draft, how: "url", url: "mcp.example.com" }, [])).toBe(
+      "A URL starts with https:// or http://",
+    );
+    expect(draftDefinition({ ...draft, how: "url", url: " https://mcp.figma.com/mcp " })).toEqual({
+      transport: "http",
+      url: "https://mcp.figma.com/mcp",
+    });
+  });
+
+  it("chooses an agent whose add runs quietly in this profile, and greys one that cannot take it", () => {
+    expect(
+      addServerChips(LENS, PLAN.offers).map((chip) => [
+        chip.label,
+        chip.act !== null,
+        chip.preselected,
+      ]),
+    ).toEqual([
+      ["Claude", true, true],
+      ["Codex", true, true],
+      ["Grok", true, true],
+      // OpenCode's one config reaches every profile: it is the person's to choose
+      ["OpenCode", true, false],
+      ["Kimi", false, false],
+    ]);
+    expect(addServerChips(LENS, PLAN.offers).map((chip) => chip.why).slice(3)).toEqual([
+      "OpenCode would add it for every profile",
+      "Kimi could not be read",
+    ]);
+  });
+});
+
+describe("adding once (AR-S4d), drawn", () => {
+  const cellButton = (label: string) =>
+    [...(container?.querySelectorAll<HTMLButtonElement>(".vf-ext-cell-button") ?? [])].find(
+      (button) => button.getAttribute("aria-label")?.startsWith(label),
+    );
+  const button = (text: string) =>
+    [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (candidate) => candidate.textContent === text,
+    );
+  const type = async (input: HTMLInputElement | null | undefined, value: string) => {
+    if (input === null || input === undefined) throw new Error("no such field");
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+
+  it("turns a server on from an empty cell: at once where it reaches nothing, the value first where it reads one", async () => {
+    const onAct = vi.fn();
+    await mount(createElement(ProfileExtensionsView, { lens: LENS, profile: "Work", onAct }));
+    await act(async () => cellButton("Turn notion on for Grok")?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "grok",
+      kind: "mcp-server",
+      id: "notion",
+      act: "add",
+    });
+    onAct.mockClear();
+
+    await act(async () => cellButton("Turn context7 on for Codex")?.click());
+    expect(onAct).not.toHaveBeenCalled();
+    const card = container?.querySelector("[data-ext-confirm]");
+    expect(card?.textContent).toContain("Turn context7 on for Codex?");
+    expect(card?.textContent).toContain(
+      "context7 reads CONTEXT7_API_KEY. VibeField keeps its value once, in its keychain entry for Work: Codex’s settings name the variable, and VibeField gives the value when it starts Codex.",
+    );
+    const keep = button("Keep and turn on");
+    expect(keep?.disabled).toBe(true);
+    const field = card?.querySelector<HTMLInputElement>(
+      'input[aria-label="Value of CONTEXT7_API_KEY"]',
+    );
+    expect(field?.type).toBe("password");
+    await type(field, "ctx7_value_typed_once");
+    expect(button("Keep and turn on")?.disabled).toBe(false);
+    // the value is in the field, never in the page's words
+    expect(container?.textContent).not.toContain("ctx7_value_typed_once");
+    await act(async () => button("Keep and turn on")?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "codex",
+      kind: "mcp-server",
+      id: "context7",
+      act: "add",
+      values: { CONTEXT7_API_KEY: "ctx7_value_typed_once" },
+    });
+    expect(container?.querySelector("[data-ext-confirm]")).toBeNull();
+  });
+
+  it("says on This Mac that an agent started outside VibeField gets no value", async () => {
+    await mount(
+      createElement(ProfileExtensionsView, {
+        lens: LENS,
+        profile: "This Mac",
+        where: "on This Mac",
+        onAct: vi.fn(),
+      }),
+    );
+    await act(async () => cellButton("Turn context7 on for Claude")?.click());
+    expect(container?.querySelector("[data-ext-confirm]")?.textContent).toContain(
+      "An agent started outside VibeField gets none.",
+    );
+  });
+
+  it("puts Add server… beside Read again, and turns a server on from its page", async () => {
+    const onAddServer = vi.fn();
+    await mount(
+      createElement(ProfileExtensionsView, {
+        lens: LENS,
+        profile: "Work",
+        onAct: vi.fn(),
+        onRefresh: vi.fn(),
+        onAddServer,
+      }),
+    );
+    await act(async () => button("Add server…")?.click());
+    expect(onAddServer).toHaveBeenCalledTimes(1);
+    await act(async () => root?.unmount());
+    const onAct = vi.fn();
+    await mount(
+      createElement(ExtensionItemView, {
+        lens: LENS,
+        list: "servers",
+        name: "notion",
+        where: "in Work",
+        onAct,
+      }),
+    );
+    const turnOn = container?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Turn notion on for Grok"]',
+    );
+    expect(turnOn?.textContent).toBe("Turn on");
+    await act(async () => turnOn?.click());
+    expect(onAct).toHaveBeenCalledWith({
+      provider: "grok",
+      kind: "mcp-server",
+      id: "notion",
+      act: "add",
+    });
+  });
+
+  it("Add server: a name, a command and its value, then each chosen agent's own line under Runs", async () => {
+    const onAdd = vi.fn();
+    const onDraft = vi.fn();
+    await mount(
+      createElement(AddServerView, {
+        lens: LENS,
+        profile: "Work",
+        where: "in Work",
+        offers: PLAN.offers,
+        onDraft,
+        onAdd,
+        onCancel: vi.fn(),
+      }),
+    );
+    expect(button("Add server")?.disabled).toBe(true);
+    await type(container?.querySelector('input[aria-label="Name"]'), "figma");
+    await act(async () => button("A URL")?.click());
+    await type(container?.querySelector('input[aria-label="URL"]'), "https://mcp.figma.com/mcp");
+    expect(onDraft).toHaveBeenLastCalledWith("figma", {
+      transport: "http",
+      url: "https://mcp.figma.com/mcp",
+    });
+    const chips = [...(container?.querySelectorAll<HTMLButtonElement>(".vf-ext-chip") ?? [])];
+    expect(
+      chips.map((chip) => [chip.textContent, chip.getAttribute("aria-pressed"), chip.disabled]),
+    ).toEqual([
+      ["Claude", "true", false],
+      ["Codex", "true", false],
+      ["Grok", "true", false],
+      ["OpenCode", "false", false],
+      ["Kimi", "false", true],
+    ]);
+    const runs = container?.querySelector("[data-ext-runs]")?.textContent ?? "";
+    expect(runs).toContain(
+      "claude mcp add figma https://mcp.figma.com/mcp --scope user --transport http",
+    );
+    expect(runs).not.toContain("opencode");
+    // Grok left out, by the person
+    await act(async () => chips[2]?.click());
+    await act(async () => button("Add server")?.click());
+    expect(onAdd).toHaveBeenCalledWith({
+      name: "figma",
+      definition: { transport: "http", url: "https://mcp.figma.com/mcp" },
+      values: {},
+      agents: ["claude", "codex"],
+    });
+  });
+});
+
+describe("AddServer (the controller)", () => {
+  it("plans the form's server with agents.extensions.plan, adds it with agents.extensions.add, then opens its page", async () => {
+    let push: ((frame: unknown) => void) | undefined;
+    const request = vi.fn(async (method: string, params?: unknown) => {
+      if (method === "agents.extensions.plan") {
+        expect(params).toEqual({
+          set: "work",
+          name: "figma",
+          definition: { transport: "http", url: "https://mcp.figma.com/mcp" },
+        });
+        return PLAN;
+      }
+      expect(method).toBe("agents.extensions.add");
+      expect(params).toEqual({
+        set: "work",
+        name: "figma",
+        definition: { transport: "http", url: "https://mcp.figma.com/mcp" },
+        values: {},
+        agents: ["claude", "codex", "grok"],
+      });
+      return { receipts: [] };
+    });
+    const subscribe = vi.fn(
+      async (_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        push = onData;
+        return { subId: "extensions:work", snapshot: LENS, unsubscribe: () => undefined };
+      },
+    );
+    const client = {
+      status: "ready",
+      onStatusChange: () => () => undefined,
+      request,
+      subscribe,
+    } as unknown as FielddClient;
+    const onDone = vi.fn();
+    await mount(
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(AddServer, {
+          set: "work",
+          profile: "Work",
+          where: "in Work",
+          onDone,
+          onCancel: vi.fn(),
+        }),
+      ),
+    );
+    await act(async () => push?.(LENS));
+    const field = (label: string) =>
+      container?.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+    const typeInto = async (input: HTMLInputElement | null | undefined, value: string) => {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        setter?.call(input, value);
+        input?.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+    await typeInto(field("Name"), "figma");
+    await act(async () =>
+      [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+        .find((candidate) => candidate.textContent === "A URL")
+        ?.click(),
+    );
+    await typeInto(field("URL"), "https://mcp.figma.com/mcp");
+    // the form rests, then it is planned once
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(
+      request.mock.calls.filter(([method]) => method === "agents.extensions.plan"),
+    ).toHaveLength(1);
+    expect(container?.querySelector("[data-ext-runs]")?.textContent).toContain(
+      "config/value/write mcp_servers.figma",
+    );
+    await act(async () =>
+      [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+        .find((candidate) => candidate.textContent === "Add server")
+        ?.click(),
+    );
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(onDone).toHaveBeenCalledWith("figma");
   });
 });

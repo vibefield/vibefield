@@ -31,7 +31,9 @@ import {
   type AgentDistributionRecord,
   type AgentProvidersResult,
   AgentsExtensionsActResult,
+  AgentsExtensionsAddResult,
   AgentsExtensionsListResult,
+  AgentsExtensionsPlanResult,
   type AgentsInstallsResult,
   type AgentsOperationsResult,
   type AgentsProfileSetsDeleteResult,
@@ -54,6 +56,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
+import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { catalogWith } from "./agent-catalog-fixture";
 import { nativeEndpoint } from "./native-harness";
@@ -139,6 +142,8 @@ async function setup(
     providers?: (builtin: AgentProvider[]) => AgentProvider[];
     /** AC-3: the catalog the doors answer from (default: THE table) */
     catalog?: readonly AgentCatalogEntry[];
+    /** AR-S4d: the keychain the daemon keeps values in (default: a map — never the machine's) */
+    secretStore?: SecretStore;
   } = {},
 ): Promise<{ root: string; dataDir: string; bin: string; daemon: FielddDaemon }> {
   const root = mkdtempSync(join(tmpdir(), "vf-agents-"));
@@ -174,9 +179,25 @@ async function setup(
     agentFetch: fakeFetch,
     ...(config.warm === true ? { agentInventoryWarm: true, logRoot: join(root, "logs") } : {}),
     ...(config.providers !== undefined ? { agentProviders: config.providers } : {}),
+    secretStore: config.secretStore ?? memoryKeychain().store,
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
   return { root, dataDir, bin, daemon };
+}
+
+/** A keychain in a map, so no test here ever writes the machine's. */
+function memoryKeychain() {
+  const entries = new Map<string, string>();
+  const store: SecretStore = {
+    get: async (service, account) => entries.get(`${service}/${account}`) ?? null,
+    set: async (service, account, value) => {
+      entries.set(`${service}/${account}`, value);
+    },
+    delete: async (service, account) => {
+      entries.delete(`${service}/${account}`);
+    },
+  };
+  return { store, entries };
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -955,6 +976,183 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
       (await win.callErr("agents.extensions.signIn", { ...signIn, provider: "claude" })).data?.kind,
     ).toBe("PRECONDITION_FAILED");
     expect(auditText(dataDir)).toContain('"agents.extensions.sign_in"');
+  }, 30_000);
+
+  /**
+   * AR-S4d: Claude holds its own context7, which reads a key; Codex holds
+   * nothing until its add runs — a stand-in for its protocol, nothing starts.
+   */
+  function fakeAdding(added: Set<string>) {
+    const context7 = {
+      transport: "stdio" as const,
+      command: "npx",
+      args: ["-y", "@upstash/context7-mcp"],
+      env: ["CONTEXT7_API_KEY"],
+    };
+    return (builtin: AgentProvider[]): AgentProvider[] =>
+      builtin.map((provider) => {
+        const real = provider.extensions;
+        if (real === undefined) return provider;
+        const id = provider.descriptor.id;
+        return {
+          ...provider,
+          extensions: {
+            provider: real.provider,
+            plan: (_profile, item, act) =>
+              id === "codex" && act === "add"
+                ? {
+                    target: { kind: item.kind, id: item.id },
+                    act,
+                    available: true as const,
+                    runs: { kind: "protocol" as const, method: "config/value/write" },
+                    display: `config/value/write mcp_servers.${item.id}`,
+                    reaches: [],
+                  }
+                : {
+                    target: { kind: item.kind, id: item.id },
+                    act,
+                    available: false as const,
+                    reason: "no-command" as const,
+                    message: "no command here",
+                  },
+            perform: async (profile, plan, io) => {
+              io.onOutput?.(`${plan.display}\n`);
+              added.add(`${profile.provider} ${plan.target.id}`);
+              return { ok: true };
+            },
+            inventory: async (profile) => ({
+              provider: profile.provider,
+              profileId: profile.id,
+              fetchedAt: "2026-09-27T09:00:00.000Z",
+              items: [
+                ...(id === "claude" || added.has(`${id} context7`)
+                  ? [
+                      {
+                        kind: "mcp-server" as const,
+                        id: "context7",
+                        name: "context7",
+                        origin: "own" as const,
+                        enabled: true,
+                        transport: "stdio" as const,
+                        target: "npx -y @upstash/context7-mcp",
+                        env: ["CONTEXT7_API_KEY"],
+                        definition: context7,
+                      },
+                    ]
+                  : []),
+                ...(added.has(`${id} linear`)
+                  ? [
+                      {
+                        kind: "mcp-server" as const,
+                        id: "linear",
+                        name: "linear",
+                        origin: "own" as const,
+                        enabled: true,
+                        transport: "http" as const,
+                        target: "https://mcp.linear.app/mcp",
+                      },
+                    ]
+                  : []),
+              ],
+              source: { kind: "native-store" as const, stability: "documented" as const },
+            }),
+          },
+        };
+      });
+  }
+
+  it("turns a server on once for a window holding agents.manage: the value into the keychain, never the ledger or the wire (AR-S4d)", async () => {
+    const added = new Set<string>();
+    const keychain = memoryKeychain();
+    const { daemon, dataDir } = await setup({
+      providers: fakeAdding(added),
+      secretStore: keychain.store,
+    });
+    await ready(daemon);
+    const secret = "ctx7_value_that_stays_in_the_keychain";
+    const turnOn = {
+      set: "native",
+      provider: "codex",
+      kind: "mcp-server",
+      id: "context7",
+      act: "add",
+      values: { CONTEXT7_API_KEY: secret },
+    };
+    const linear = {
+      set: "native",
+      name: "linear",
+      definition: { transport: "http", url: "https://mcp.linear.app/mcp" },
+      agents: ["codex"],
+    };
+
+    const denied = await window(daemon, ["agent.spawn"], "a1");
+    expect((await denied.callErr("agents.extensions.add", linear)).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    expect(
+      (
+        await denied.callErr("agents.extensions.plan", {
+          set: "native",
+          name: "linear",
+          definition: linear.definition,
+        })
+      ).data?.kind,
+    ).toBe("FORBIDDEN_SCOPE");
+    const win = await window(daemon, ALL, "a2");
+    expect((await win.callErr("agents.extensions.add", { set: "native" })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+
+    // the lens offers Codex its add of Claude's server, and needs the key first
+    const before = AgentsExtensionsListResult.parse(
+      await win.call("agents.extensions.list", { set: "native" }),
+    );
+    expect(before.servers.find((row) => row.name === "context7")).toMatchObject({
+      needs: ["CONTEXT7_API_KEY"],
+      offers: { codex: { act: { act: "add", runs: "config/value/write mcp_servers.context7" } } },
+    });
+    const answered = AgentsExtensionsActResult.parse(
+      await win.call("agents.extensions.act", turnOn),
+    );
+    expect(answered.receipt).toMatchObject({ status: "changed", message: "added" });
+    expect([...keychain.entries.keys()]).toEqual(["VibeField agent server values/native"]);
+    expect(JSON.parse(keychain.entries.get("VibeField agent server values/native")!)).toEqual({
+      CONTEXT7_API_KEY: secret,
+    });
+    const after = AgentsExtensionsListResult.parse(
+      await win.call("agents.extensions.list", { set: "native" }),
+    );
+    expect(after.values).toEqual(["CONTEXT7_API_KEY"]);
+    expect(Object.keys(after.servers.find((row) => row.name === "context7")?.cells ?? {})).toEqual([
+      "claude",
+      "codex",
+    ]);
+
+    // the plan, then the Add: each agent's own add, audited
+    expect(
+      AgentsExtensionsPlanResult.parse(
+        await win.call("agents.extensions.plan", {
+          set: "native",
+          name: "linear",
+          definition: linear.definition,
+        }),
+      ).offers.codex,
+    ).toMatchObject({ act: { act: "add", runs: "config/value/write mcp_servers.linear" } });
+    const result = AgentsExtensionsAddResult.parse(await win.call("agents.extensions.add", linear));
+    expect(result.receipts).toMatchObject([{ provider: "codex", receipt: { status: "changed" } }]);
+
+    const audit = auditText(dataDir);
+    expect(audit).toContain('"agents.extensions.act"');
+    expect(audit).toContain('"agents.extensions.add"');
+    expect(audit).toContain("native:mcp-server:linear");
+    const keep = readFileSync(join(dataDir, ...LAYOUT.AGENT_EXTENSIONS_DIR, "native.json"), "utf8");
+    expect(JSON.parse(keep)).toMatchObject({
+      servers: { context7: {}, linear: {} },
+      values: ["CONTEXT7_API_KEY"],
+      given: { codex: { context7: ["CONTEXT7_API_KEY"], linear: [] } },
+    });
+    for (const text of [audit, keep, JSON.stringify(after), JSON.stringify(result)])
+      expect(text).not.toContain(secret);
   }, 30_000);
 });
 

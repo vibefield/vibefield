@@ -152,6 +152,20 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: false,
         locality: "local",
       },
+      // AR-S4d — a server kept once: the add keeps a value in the keychain and
+      // runs agents' commands (a mutation, audited); its plan only reads
+      {
+        method: "agents.extensions.add",
+        scope: "agents.manage",
+        idempotent: false,
+        locality: "local",
+      },
+      {
+        method: "agents.extensions.plan",
+        scope: "agents.manage",
+        idempotent: true,
+        locality: "local",
+      },
       // AR-5d — account usage: a READ of the agent plane, so it rides
       // AR-5b: the account's billing state, a credentialed call per reading —
       // its own scope, not the fold's

@@ -129,6 +129,8 @@ export interface AgentProfileServiceOptions {
     effect: () => Promise<T>,
     describe?: (value: T) => AuditMutationOutcome,
   ) => Promise<T>;
+  /** AR-S4d — the profile's kept servers and their values, forgotten with it */
+  forgetExtensions?: (setId: string) => Promise<void>;
   now: () => Date;
   logger: Logger;
 }
@@ -375,6 +377,16 @@ export class AgentProfileService {
         }
       }
       for (const id of gone) ids.add(id);
+      // 6. what it kept once for its agents, the values in the keychain with it
+      try {
+        await this.opts.forgetExtensions?.(setId);
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.agents.profile_extensions_forget_failed",
+          "An Agent Profile's kept servers could not be forgotten",
+          { set: setId, error: error instanceof Error ? error.message : String(error) },
+        );
+      }
       this.logger.info("fieldd.agents.profile_deleted", "Agent profile deleted", {
         set: setId,
         signIns: removed.profiles.length,

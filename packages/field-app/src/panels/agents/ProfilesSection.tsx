@@ -23,12 +23,13 @@ import { refusalSentence } from "../../account/use-account";
 import type { SettingsSubpage } from "../SettingsDialog";
 import type { AgentsNotice } from "./AgentsView";
 import {
+  AddServer,
   AgentExtensionList,
   AgentExtensions,
   ExtensionItem,
   ProfileExtensions,
 } from "./ExtensionsSection";
-import { agentListSubpage, extensionItemSubpage } from "./ExtensionsView";
+import { addServerSubpage, agentListSubpage, extensionItemSubpage } from "./ExtensionsView";
 import type { AgentListKey, ExtensionKindKey } from "./extensions-model";
 import {
   NewProfileView,
@@ -77,6 +78,8 @@ export type ProfilesRoute =
   | { kind: "list"; set: string; provider: string; list: AgentListKey }
   /** AR-S4b — one server or skill of the profile, a page below the profile's */
   | { kind: "item"; set: string; list: ExtensionKindKey; name: string }
+  /** AR-S4d — Add server: a server kept once for the profile, a page below the profile's */
+  | { kind: "add"; set: string }
   | { kind: "new" };
 
 interface SignIn {
@@ -238,7 +241,9 @@ export function ProfilesSection({
           ? `list|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}|${route.list}`
           : route.kind === "item"
             ? `item|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${route.list}|${route.name}`
-            : null;
+            : route.kind === "add"
+              ? `add|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}`
+              : null;
   // keyed by what the header shows: a feed frame that changes nothing on it does not rebuild it
   useEffect(() => {
     if (set === undefined) {
@@ -249,6 +254,8 @@ export function ProfilesSection({
       onSubpage(agentListSubpage(set, row.label, route.list, backToAgent));
     } else if (route.kind === "item") {
       onSubpage(extensionItemSubpage(set, route.list, route.name, backToProfile));
+    } else if (route.kind === "add") {
+      onSubpage(addServerSubpage(set, backToProfile));
     } else {
       onSubpage(null);
     }
@@ -285,15 +292,17 @@ export function ProfilesSection({
       ? "new"
       : route.kind === "item"
         ? `item:${route.set}:${route.list}:${route.name}`
-        : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}${
-            route.kind === "list" ? `:${route.list}` : ""
-          }`;
+        : route.kind === "add"
+          ? `add:${route.set}`
+          : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}${
+              route.kind === "list" ? `:${route.list}` : ""
+            }`;
   const currentRoute = useRef(routeKey);
   currentRoute.current = routeKey;
   // what each page reads usage for: an agent's own, a profile's every agent;
   // the Extensions pages show no usage
   const usageProfileIds =
-    route.kind === "list" || route.kind === "item"
+    route.kind === "list" || route.kind === "item" || route.kind === "add"
       ? []
       : route.kind === "agent"
         ? persona === undefined
@@ -804,6 +813,17 @@ export function ProfilesSection({
         where={inOnWords(set)}
       />
     );
+  } else if (route.kind === "add" && set !== undefined) {
+    body = (
+      <AddServer
+        key={`${set.id}:add`}
+        set={set.id}
+        profile={set.label}
+        where={inOnWords(set)}
+        onDone={(name) => onRoute({ kind: "item", set: set.id, list: "servers", name })}
+        onCancel={() => onRoute({ kind: "profile", set: set.id })}
+      />
+    );
   } else if (page !== undefined) {
     body = (
       <ProfilePageView
@@ -823,6 +843,7 @@ export function ProfilesSection({
               profile={page.set.label}
               where={inOnWords(page.set)}
               onOpenItem={(list, name) => onRoute({ kind: "item", set: page.set.id, list, name })}
+              onAddServer={() => onRoute({ kind: "add", set: page.set.id })}
             />
           ) : undefined
         }

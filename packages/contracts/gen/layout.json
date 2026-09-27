@@ -119,6 +119,10 @@
     "agents",
     "roots"
   ],
+  "AGENT_EXTENSIONS_DIR": [
+    "agents",
+    "extensions"
+  ],
   "AGENT_SESSIONS_DIR": [
     "agents",
     "sessions"

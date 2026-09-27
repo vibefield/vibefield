@@ -24,6 +24,15 @@ import { TerminalCreateOpenResult } from "./terminal-pipeline";
 // query and secret-looking arguments masked — and the NAMES of the variables
 // and headers it reads, never a value. A place crosses home-abbreviated
 // (`~/.claude.json`), for display: acts name items by id, never by path.
+//
+// AR-S4d — ADDING ONCE (pass 24, S1): a server can be kept once for the
+// profile and turned on for an agent that does not hold it, by that agent's
+// own add. What VibeField keeps is the server's DEFINITION (what it runs or
+// where it is, and the names of the variables it reads) and each variable's
+// value — the value in VibeField's keychain entry for the profile, never in a
+// file, and never back on the wire. Each agent's settings name the variable
+// in the agent's own syntax; VibeField gives the value when it starts the
+// agent. A value crosses exactly once, inward, on the door that keeps it.
 
 /** Where an item comes from, as the agent keeps it (puppeteer `ExtensionOrigin`). */
 export const AgentExtensionOrigin = z.enum([
@@ -64,9 +73,39 @@ export const AgentExtensionSupport = z
   .passthrough();
 export type AgentExtensionSupport = z.infer<typeof AgentExtensionSupport>;
 
-/** AR-S4c — what a person can ask of one holding (RFC 006 C2); a remote server's sign-in and sign-out beside the switches. */
-export const AgentExtensionActKind = z.enum(["enable", "disable", "remove", "sign-in", "sign-out"]);
+/** AR-S4c — what a person can ask of one holding (RFC 006 C2); a remote
+ * server's sign-in and sign-out beside the switches. AR-S4d — `add` turns a
+ * server on for an agent that holds none of it. */
+export const AgentExtensionActKind = z.enum([
+  "enable",
+  "disable",
+  "remove",
+  "sign-in",
+  "sign-out",
+  "add",
+]);
 export type AgentExtensionActKind = z.infer<typeof AgentExtensionActKind>;
+
+/** A variable's name as a server reads it (and an agent's settings name it). */
+export const AgentExtensionVariableName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/);
+export type AgentExtensionVariableName = z.infer<typeof AgentExtensionVariableName>;
+
+/** AR-S4d — a server as VibeField keeps it and gives it to an agent (puppeteer
+ * `McpServerDefinition`): what it runs or where it is, and the NAMES of the
+ * variables it reads. A value never rides here. */
+export const AgentExtensionServerDefinition = z.discriminatedUnion("transport", [
+  z
+    .object({
+      transport: z.literal("stdio"),
+      command: z.string().trim().min(1).max(4096),
+      args: z.array(z.string().min(1).max(4096)).max(24),
+      env: z.array(AgentExtensionVariableName).min(1).max(12).optional(),
+    })
+    .passthrough(),
+  z.object({ transport: z.literal("http"), url: z.string().trim().min(1).max(4096) }).passthrough(),
+  z.object({ transport: z.literal("sse"), url: z.string().trim().min(1).max(4096) }).passthrough(),
+]);
+export type AgentExtensionServerDefinition = z.infer<typeof AgentExtensionServerDefinition>;
 
 /** What an act changes beyond its one cell, said before it runs. */
 export const AgentExtensionReach = z.enum([
@@ -131,6 +170,20 @@ export const AgentExtensionHolding = z
   .passthrough();
 export type AgentExtensionHolding = z.infer<typeof AgentExtensionHolding>;
 
+/** AR-S4d — turning a server on for an agent that holds none of it: the
+ * agent's own add, or why the agent cannot take it (puppeteer's reason and
+ * words: `in-app`, `unsupported`, `held`, …). */
+export const AgentExtensionOffer = z
+  .object({
+    act: AgentExtensionAct.optional(),
+    unavailable: z
+      .object({ reason: z.string().min(1), message: z.string().min(1) })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type AgentExtensionOffer = z.infer<typeof AgentExtensionOffer>;
+
 /** One server or skill name across the profile's agents. */
 export const AgentExtensionRow = z
   .object({
@@ -144,6 +197,17 @@ export const AgentExtensionRow = z
     /** Per agent, what it holds under this name, the most its own first; an
      * agent absent here holds none. */
     cells: z.record(AgentProviderId, z.array(AgentExtensionHolding)),
+    /** AR-S4d — what turning it on for another agent gives: the profile's kept
+     * definition, else its one version's when that one hides nothing. */
+    definition: AgentExtensionServerDefinition.optional(),
+    /** VibeField keeps its definition for this profile: added here, or kept
+     * when an agent let it go. A kept row no agent holds still shows. */
+    kept: z.literal(true).optional(),
+    /** Names its definition reads that VibeField keeps no value for here: a
+     * turn asks for them first. */
+    needs: z.array(AgentExtensionVariableName).optional(),
+    /** Per agent that holds none of it: its own add, or why it cannot take it. */
+    offers: z.record(AgentProviderId, AgentExtensionOffer).optional(),
   })
   .passthrough();
 export type AgentExtensionRow = z.infer<typeof AgentExtensionRow>;
@@ -260,16 +324,27 @@ export const AgentExtensionRun = z
   .passthrough();
 export type AgentExtensionRun = z.infer<typeof AgentExtensionRun>;
 
+/** Values for the names a server reads, kept in VibeField's keychain entry
+ * for the profile before an agent's add runs. Never echoed, logged or audited. */
+export const AgentExtensionValues = z.record(
+  AgentExtensionVariableName,
+  z.string().min(1).max(32768),
+);
+export type AgentExtensionValues = z.infer<typeof AgentExtensionValues>;
+
 /** `agents.extensions.act` — run one act; its output arrives on the subscription.
- * A sign-in is not one of them: it runs in a terminal (`agents.extensions.signIn`). */
+ * A sign-in is not one of them: it runs in a terminal (`agents.extensions.signIn`).
+ * AR-S4d — `add` turns the row named `id` on for an agent that holds none of
+ * it, from the row's definition; `values` first keeps what the row `needs`. */
 export const AgentsExtensionsActParams = z
   .object({
     set: AgentProfileSetId,
     provider: AgentProviderId,
     kind: z.enum(["mcp-server", "skill"]),
-    /** The holding's id, as the lens gave it. */
+    /** The holding's id, as the lens gave it; for `add`, the row's name. */
     id: z.string().min(1).max(512),
     act: AgentExtensionActKind.exclude(["sign-in"]),
+    values: AgentExtensionValues.optional(),
   })
   .passthrough();
 export type AgentsExtensionsActParams = z.infer<typeof AgentsExtensionsActParams>;
@@ -297,6 +372,74 @@ export const AgentsExtensionsSignInResult = z
   .object({ run: AgentExtensionRun, terminal: TerminalCreateOpenResult })
   .passthrough();
 export type AgentsExtensionsSignInResult = z.infer<typeof AgentsExtensionsSignInResult>;
+
+/** `agents.extensions.add` — AR-S4d's Add server: the definition kept once for
+ * the profile (and the values for the names it reads), then each named
+ * agent's own add in turn, one run each on the subscription. A name the
+ * profile's lens already shows is a CONFLICT. */
+export const AgentsExtensionsAddParams = z
+  .object({
+    set: AgentProfileSetId,
+    /** How the agents and the person call it: letters, digits, `_` and `-`. */
+    name: z
+      .string()
+      .regex(/^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/)
+      .max(64),
+    definition: AgentExtensionServerDefinition,
+    values: AgentExtensionValues.optional(),
+    /** The agents to turn it on for, in the profile; none keeps it only. */
+    agents: z.array(AgentProviderId).max(16),
+  })
+  .passthrough();
+export type AgentsExtensionsAddParams = z.infer<typeof AgentsExtensionsAddParams>;
+
+export const AgentsExtensionsAddResult = z
+  .object({
+    /** Each agent's receipt, in the order they ran. */
+    receipts: z.array(
+      z.object({ provider: AgentProviderId, receipt: AgentExtensionReceipt }).passthrough(),
+    ),
+  })
+  .passthrough();
+export type AgentsExtensionsAddResult = z.infer<typeof AgentsExtensionsAddResult>;
+
+/** `agents.extensions.plan` — what an Add would run on each of the profile's
+ * agents, before anything is kept: the form's "Runs". */
+export const AgentsExtensionsPlanParams = z
+  .object({
+    set: AgentProfileSetId,
+    name: z
+      .string()
+      .regex(/^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/)
+      .max(64),
+    definition: AgentExtensionServerDefinition,
+  })
+  .passthrough();
+export type AgentsExtensionsPlanParams = z.infer<typeof AgentsExtensionsPlanParams>;
+
+export const AgentsExtensionsPlanResult = z
+  .object({ offers: z.record(AgentProviderId, AgentExtensionOffer) })
+  .passthrough();
+export type AgentsExtensionsPlanResult = z.infer<typeof AgentsExtensionsPlanResult>;
+
+/** AR-S4d — what one Agent Profile keeps once for its agents, as fieldd
+ * writes it (`LAYOUT.AGENT_EXTENSIONS_DIR/<set>.json`, 0600): each kept
+ * server's definition by name, the names it keeps a value for (the values are
+ * in the OS keychain, never here), and the names it gave each agent with each
+ * server it added there. */
+export const AgentExtensionKeep = z
+  .object({
+    version: z.literal(1),
+    servers: z.record(
+      z.string(),
+      z.object({ definition: AgentExtensionServerDefinition, keptAt: z.string() }).passthrough(),
+    ),
+    values: z.array(AgentExtensionVariableName),
+    /** provider → server name → the names given it with that server */
+    given: z.record(z.string(), z.record(z.string(), z.array(AgentExtensionVariableName))),
+  })
+  .passthrough();
+export type AgentExtensionKeep = z.infer<typeof AgentExtensionKeep>;
 
 /** `agents.extensions.list` — the lens for one Agent Profile. `refresh: true`
  * reads every agent again; otherwise the last read answers when there is one. */
@@ -329,6 +472,9 @@ export const AgentsExtensionsListResult = z
     marketplaces: z.record(AgentProviderId, z.array(AgentExtensionMarketplace)),
     /** AR-S4c — the act running for this profile, or the last one finished. */
     run: AgentExtensionRun.optional(),
+    /** AR-S4d — the names VibeField keeps a value for in this profile (in its
+     * keychain entry); never a value. */
+    values: z.array(AgentExtensionVariableName).optional(),
   })
   .passthrough();
 export type AgentsExtensionsListResult = z.infer<typeof AgentsExtensionsListResult>;

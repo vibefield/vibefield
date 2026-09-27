@@ -176,6 +176,49 @@
   ],
   "servers": [
     {
+      "name": "context7",
+      "versions": 0,
+      "cells": {},
+      "definition": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@upstash/context7-mcp"],
+        "env": ["CONTEXT7_API_KEY"]
+      },
+      "kept": true,
+      "needs": ["CONTEXT7_API_KEY"],
+      "offers": {
+        "claude": {
+          "act": {
+            "act": "add",
+            "runs": "claude mcp add context7 --scope user -e CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-} -- npx -y @upstash/context7-mcp",
+            "reaches": []
+          }
+        },
+        "codex": {
+          "act": {
+            "act": "add",
+            "runs": "config/value/write mcp_servers.context7 = {\"command\":\"npx\",\"args\":[\"-y\",\"@upstash/context7-mcp\"],\"env_vars\":[\"CONTEXT7_API_KEY\"]}",
+            "reaches": []
+          }
+        },
+        "grok": {
+          "act": {
+            "act": "add",
+            "runs": "grok mcp add --scope user --env CONTEXT7_API_KEY=${CONTEXT7_API_KEY:-} context7 -- npx -y @upstash/context7-mcp",
+            "reaches": []
+          }
+        },
+        "opencode": {
+          "act": {
+            "act": "add",
+            "runs": "opencode mcp add context7 --env CONTEXT7_API_KEY={env:CONTEXT7_API_KEY} -- npx -y @upstash/context7-mcp",
+            "reaches": ["every-profile"]
+          }
+        }
+      }
+    },
+    {
       "name": "linear",
       "versions": 2,
       "cells": {
@@ -296,6 +339,26 @@
             ]
           }
         ]
+      },
+      "definition": {
+        "transport": "http",
+        "url": "https://mcp.notion.com/mcp"
+      },
+      "offers": {
+        "grok": {
+          "act": {
+            "act": "add",
+            "runs": "grok mcp add --scope user notion https://mcp.notion.com/mcp",
+            "reaches": []
+          }
+        },
+        "opencode": {
+          "act": {
+            "act": "add",
+            "runs": "opencode mcp add notion --url https://mcp.notion.com/mcp",
+            "reaches": ["every-profile"]
+          }
+        }
       }
     },
     {
@@ -489,5 +552,6 @@
         "updatedAt": "2026-09-20T10:00:00.000Z"
       }
     ]
-  }
+  },
+  "values": ["LINEAR_TOKEN"]
 }

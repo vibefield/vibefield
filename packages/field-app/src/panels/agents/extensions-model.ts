@@ -2,10 +2,12 @@ import type {
   AgentExtensionAct,
   AgentExtensionColumn,
   AgentExtensionHolding,
+  AgentExtensionOffer,
   AgentExtensionOrigin,
   AgentExtensionPlugin,
   AgentExtensionRow,
   AgentExtensionRun,
+  AgentExtensionServerDefinition,
   AgentsExtensionsListResult,
 } from "@vibefield/contracts";
 
@@ -24,6 +26,10 @@ import type {
 // app); `none` (the agent has no such kind, or VibeField does not read it);
 // `unread` (this read could not cover it). Every state carries its sentence:
 // the grid is read-only in this slice, so the sentence is the whole answer.
+//
+// AR-S4d: a server the profile keeps is a row too, though no agent holds it;
+// an empty cell carries the agent's own add (fieldd's offer, from the row's
+// definition), or why the agent cannot take the server.
 
 export type ExtensionKindKey = "servers" | "skills";
 
@@ -82,6 +88,8 @@ export interface ExtensionGridRow {
   factText: string;
   /** Held two different ways under one name. */
   twoVersions: boolean;
+  /** AR-S4d — some agent holds it; a server only the profile keeps holds none. */
+  held: boolean;
   /** A server at an address (globe) or a program on this Mac (prompt); a skill. */
   glyph: "globe" | "prompt" | "snippets";
   cells: Array<{ provider: string; cell: ExtensionCell; act: ExtensionCellAct | null }>;
@@ -160,9 +168,12 @@ export function extensionCell(
   if (holding === undefined && state.partial !== undefined)
     return { s: "unread", why: state.partial };
   if (holding === undefined) {
-    return state.inApp
-      ? { s: "app", on: false, why: `Off · changed in ${label}` }
-      : { s: "off", why: "Off" };
+    const offer = row.offers?.[column.provider];
+    // an agent that changes its servers only in its app may still take one by its own add
+    if (state.inApp && offer?.act === undefined)
+      return { s: "app", on: false, why: `Off · changed in ${label}` };
+    const unavailable = offer?.unavailable;
+    return { s: "off", why: unavailable === undefined ? "Off" : `Off · ${unavailable.message}` };
   }
   switch (holding.origin) {
     case "borrowed": {
@@ -267,8 +278,23 @@ function headOf(
   return { ...base, caveat: "", why: "" };
 }
 
+/** A definition's target as the grid shows one: the command line, or the address. */
+export const definitionTarget = (definition: AgentExtensionServerDefinition): string =>
+  definition.transport === "stdio"
+    ? [definition.command, ...definition.args]
+        .map((part) => (/[\s"'\\]/u.test(part) ? JSON.stringify(part) : part))
+        .join(" ")
+    : definition.url;
+
 function factOf(key: ExtensionKindKey, row: AgentExtensionRow): { code: string; text: string } {
   const holdings = Object.values(row.cells).flat();
+  if (key === "servers" && holdings.length === 0 && row.definition !== undefined) {
+    const env = row.definition.transport === "stdio" ? (row.definition.env ?? []) : [];
+    return {
+      code: [definitionTarget(row.definition), env.join(" ")].filter(Boolean).join(" · "),
+      text: "",
+    };
+  }
   if (key === "skills") {
     const shared = holdings.some((holding) => holding.shared === true);
     return { code: shared ? "~/.agents/skills" : "", text: row.description ?? "" };
@@ -289,10 +315,12 @@ export function extensionGrid(
 ): ExtensionGridModel {
   const words = WORDS[key];
   const source = key === "servers" ? lens.servers : lens.skills;
-  const listed = source.filter((row) =>
-    Object.values(row.cells).some((holdings) =>
-      holdings.some((holding) => MINE.has(holding.origin)),
-    ),
+  const listed = source.filter(
+    (row) =>
+      row.kept === true ||
+      Object.values(row.cells).some((holdings) =>
+        holdings.some((holding) => MINE.has(holding.origin)),
+      ),
   );
   const heads = lens.agents.map((column) => headOf(lens, key, column));
   const rows: ExtensionGridRow[] = listed.map((row) => {
@@ -307,7 +335,13 @@ export function extensionGrid(
         return { fact: factLine(two, fact), factCode: fact.code, factText: fact.text };
       })(),
       twoVersions: key === "servers" && row.versions > 1,
-      glyph: key === "skills" ? "snippets" : first?.transport === "stdio" ? "prompt" : "globe",
+      held: Object.keys(row.cells).length > 0,
+      glyph:
+        key === "skills"
+          ? "snippets"
+          : (first?.transport ?? row.definition?.transport) === "stdio"
+            ? "prompt"
+            : "globe",
       cells: lens.agents.map((column) => ({
         provider: column.provider,
         cell: extensionCell(lens, key, row, column),
@@ -345,12 +379,13 @@ export function builtFromWords(
   lens: AgentsExtensionsListResult,
   profile: string,
 ): { text: string; twoVersions: string[] } | null {
-  const servers = extensionGrid(lens, "servers");
-  const skills = extensionGrid(lens, "skills");
-  if (servers.rows.length === 0 && skills.rows.length === 0) return null;
+  // what the agents have: a server only the profile keeps is not built from them
+  const servers = extensionGrid(lens, "servers").rows.filter((row) => row.held);
+  const skills = extensionGrid(lens, "skills").rows;
+  if (servers.length === 0 && skills.length === 0) return null;
   return {
-    text: `Built from what ${profile}’s agents already have: ${plural(servers.rows.length, "server", "servers")} and ${plural(skills.rows.length, "skill", "skills")}. Nothing in the agents changed.`,
-    twoVersions: servers.rows.filter((row) => row.twoVersions).map((row) => row.name),
+    text: `Built from what ${profile}’s agents already have: ${plural(servers.length, "server", "servers")} and ${plural(skills.length, "skill", "skills")}. Nothing in the agents changed.`,
+    twoVersions: servers.filter((row) => row.twoVersions).map((row) => row.name),
   };
 }
 
@@ -1006,22 +1041,40 @@ export function extensionItem(
 
   const facts: ExtensionItemFact[] = [];
   if (key === "servers") {
+    // AR-S4d — a server the profile keeps says what it is from its definition, held or not
+    const definition = row.definition;
+    const transport = first?.transport ?? definition?.transport;
     facts.push(
       row.versions > 1
         ? { term: "Connects to", text: "Two versions, above", attention: true }
-        : { term: "Connects to", code: first?.target ?? "" },
+        : {
+            term: "Connects to",
+            code: first?.target ?? (definition === undefined ? "" : definitionTarget(definition)),
+          },
       {
         term: "Kind",
-        text: first?.transport === "stdio" ? "A program on this Mac" : "A server at a URL",
+        text: transport === "stdio" ? "A program on this Mac" : "A server at a URL",
       },
     );
-    const env = [...new Set(holdings.flatMap(({ holding }) => holding.env ?? []))].sort();
+    const kept = new Set(lens.values ?? []);
+    const env = [
+      ...new Set([
+        ...holdings.flatMap(({ holding }) => holding.env ?? []),
+        ...(definition?.transport === "stdio" ? (definition.env ?? []) : []),
+      ]),
+    ].sort();
     const headers = [...new Set(holdings.flatMap(({ holding }) => holding.headers ?? []))].sort();
     for (const variable of env) {
       facts.push({
         term: variable,
         termCode: true,
-        text: "Given to the server when it starts. Its value stays with the agent; VibeField sees only the name.",
+        text: kept.has(variable)
+          ? "Given to the server when it starts. VibeField keeps its value once, in its keychain, and gives it to each agent it turned the server on for when it starts that agent; an agent that keeps its own keeps that."
+          : row.needs?.includes(variable) === true
+            ? holdings.length === 0
+              ? "Given to the server when it starts. VibeField keeps no value for it yet: turning the server on for an agent asks for one, and keeps it once, in its keychain."
+              : "Given to the server when it starts. Each agent that holds it keeps its own value; turning it on for another asks for one, which VibeField keeps once, in its keychain."
+            : "Given to the server when it starts. Its value stays with the agent; VibeField sees only the name.",
       });
     }
     for (const header of headers) {
@@ -1031,7 +1084,15 @@ export function extensionItem(
         text: "Sent with each request. Its value stays with the agent; VibeField sees only the name.",
       });
     }
-    facts.push({ term: "Kept", text: "In each agent’s own settings" });
+    facts.push({
+      term: "Kept",
+      text:
+        row.kept === true
+          ? holdings.length === 0
+            ? "Once, by VibeField, for this profile; no agent has it on"
+            : "Once, by VibeField, for this profile, and in each agent’s own settings"
+          : "In each agent’s own settings",
+    });
   } else {
     if (row.description !== undefined) facts.push({ term: "What it does", text: row.description });
     const folders = [...new Set(holdings.map(({ holding }) => folderOf(holding)).filter(Boolean))];
@@ -1073,9 +1134,11 @@ export function extensionItem(
       ...stateOf(lens, cell, holding),
     };
     if (holding === undefined) {
+      // AR-S4d — an agent that cannot take it says why, in its own words
+      const unavailable = row.offers?.[column.provider]?.unavailable;
       const fact =
         cell.s === "off"
-          ? `${column.label} doesn’t have it`
+          ? (unavailable?.message ?? `${column.label} doesn’t have it`)
           : cell.s === "app"
             ? `${column.label} doesn’t have it; it changes its ${WORDS[key].many} only inside its app`
             : cell.why;
@@ -1104,7 +1167,12 @@ export function extensionItem(
     key,
     name,
     kindWord,
-    glyph: key === "skills" ? "snippets" : first?.transport === "stdio" ? "prompt" : "globe",
+    glyph:
+      key === "skills"
+        ? "snippets"
+        : (first?.transport ?? row.definition?.transport) === "stdio"
+          ? "prompt"
+          : "globe",
     gone: false,
     versions,
     facts,
@@ -1135,6 +1203,8 @@ export interface ExtensionCellAct {
   reaches: AgentExtensionAct["reaches"];
   /** It runs in a terminal on the page, which the person answers: a sign-in. */
   terminal: boolean;
+  /** AR-S4d — for an add: the names its server reads that VibeField keeps no value for yet. */
+  needs: string[];
   /** The control's accessible name. */
   title: string;
 }
@@ -1145,6 +1215,7 @@ const TITLES: Record<AgentExtensionAct["act"], (name: string, agent: string) => 
   remove: (name, agent) => `Remove ${name} from ${agent}`,
   "sign-in": (name, agent) => `Sign in to ${name} for ${agent}`,
   "sign-out": (name, agent) => `Sign out of ${name} for ${agent}`,
+  add: (name, agent) => `Turn ${name} on for ${agent}`,
 };
 
 /** One act the agent offers on its holding under this row, or null when it offers none such. */
@@ -1167,7 +1238,31 @@ function offerOf(
     runs: offer.runs,
     reaches: [...offer.reaches],
     terminal: offer.terminal === true,
+    needs: [],
     title: TITLES[offer.act](row.name, column.label),
+  };
+}
+
+/** AR-S4d — an empty cell's add: the agent's own, from the row's definition, or null when it cannot take it. */
+function addOf(
+  key: ExtensionKindKey,
+  row: AgentExtensionRow,
+  column: AgentExtensionColumn,
+): ExtensionCellAct | null {
+  const offer: AgentExtensionOffer | undefined = row.offers?.[column.provider];
+  if (key !== "servers" || offer?.act === undefined) return null;
+  return {
+    provider: column.provider,
+    label: column.label,
+    kind: "mcp-server",
+    id: row.name,
+    name: row.name,
+    act: "add",
+    runs: offer.act.runs,
+    reaches: [...offer.act.reaches],
+    terminal: offer.act.terminal === true,
+    needs: [...(row.needs ?? [])],
+    title: TITLES.add(row.name, column.label),
   };
 }
 
@@ -1178,7 +1273,7 @@ export function cellAct(
   column: AgentExtensionColumn,
 ): ExtensionCellAct | null {
   const holding = row.cells[column.provider]?.[0];
-  if (holding === undefined) return null;
+  if (holding === undefined) return addOf(key, row, column);
   return holding.enabled
     ? (offerOf(key, row, column, "disable") ?? offerOf(key, row, column, "remove"))
     : offerOf(key, row, column, "enable");
@@ -1207,6 +1302,14 @@ export function actConfirm(act: ExtensionCellAct, where: string): ExtensionActCo
         ? `${act.label} keeps one sign-in to ${act.name} for every profile on this Mac: every ${act.label} profile that holds ${act.name} at this address will use this one, not only ${where.replace(/^(in|on) /u, "")}.`
         : `${act.label} keeps one sign-in to ${act.name} for every profile on this Mac: every ${act.label} profile that holds ${act.name} at this address is signed out.`,
       action: signIn ? "Sign in" : "Sign out",
+      danger: false,
+    };
+  }
+  if (act.act === "add") {
+    return {
+      question: `Turn ${act.name} on for ${act.label} in every profile?`,
+      what: `${act.label} keeps one config for every profile: this adds ${act.name} to all of them.`,
+      action: "Turn it on",
       danger: false,
     };
   }
@@ -1298,6 +1401,30 @@ export function runWords(
         return { state, outcome: { tone: "error", text: `${receipt.message}.` } };
     }
   }
+  if (run.act === "add") {
+    switch (receipt.status) {
+      case "changed":
+        return { state, outcome: { tone: "neutral", text: `${run.name} is on for ${run.label}.` } };
+      case "unchanged":
+        return {
+          state,
+          outcome: {
+            tone: "neutral",
+            text: `${run.label} ran its add, but doesn’t hold ${run.name}.`,
+          },
+        };
+      case "failed":
+        return {
+          state,
+          outcome: {
+            tone: "error",
+            text: `${run.label} couldn’t add ${run.name}: ${receipt.message}.`,
+          },
+        };
+      default:
+        return { state, outcome: { tone: "error", text: `${receipt.message}.` } };
+    }
+  }
   switch (receipt.status) {
     case "changed":
       return {
@@ -1349,4 +1476,142 @@ export function signInNote(
   return offer?.reaches.includes("every-profile") === true
     ? `${run.label} opens your browser to finish. The sign-in is ${run.label}’s for every profile on this Mac.`
     : `${run.label} opens your browser to finish. The sign-in lands ${where} alone.`;
+}
+
+/* ── Add server (AR-S4d; pass 24's "Adding one") ──────────────────────────────
+   pass 23's A1 form without its scope: a name, what it connects to (a program
+   on this Mac, or a URL), each variable the program reads with its value, and
+   Turn on for — a chip per agent, chosen where its own add runs quietly,
+   greyed with the agent's own reason where it cannot take the server. Runs
+   says each agent's own line before anything is kept. */
+
+export interface AddServerDraft {
+  name: string;
+  how: "command" | "url";
+  /** One line, as a README gives it: `npx -y @upstash/context7-mcp`. */
+  command: string;
+  url: string;
+  /** Each variable the program reads, and its value; kept once, in the keychain. */
+  env: Array<{ name: string; value: string }>;
+}
+
+export const ADD_SERVER_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$/u;
+const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/u;
+
+/**
+ * A command line as a shell would split it into words, quotes kept together
+ * and removed; null when a quote is left open.
+ */
+export function splitCommand(line: string): string[] | null {
+  const words: string[] = [];
+  let word = "";
+  let started = false;
+  let quote: '"' | "'" | null = null;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]!;
+    if (quote !== null) {
+      if (char === quote) quote = null;
+      else if (char === "\\" && quote === '"' && index + 1 < line.length) word += line[++index];
+      else word += char;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      started = true;
+    } else if (/\s/u.test(char)) {
+      if (started) words.push(word);
+      word = "";
+      started = false;
+    } else if (char === "\\" && index + 1 < line.length) {
+      word += line[++index];
+      started = true;
+    } else {
+      word += char;
+      started = true;
+    }
+  }
+  if (quote !== null) return null;
+  if (started) words.push(word);
+  return words;
+}
+
+/** What the form would keep, or null while it is not a server yet. */
+export function draftDefinition(draft: AddServerDraft): AgentExtensionServerDefinition | null {
+  if (draft.how === "url") {
+    const url = draft.url.trim();
+    if (!/^https?:\/\/\S+$/u.test(url)) return null;
+    return { transport: "http", url };
+  }
+  const words = splitCommand(draft.command.trim());
+  if (words === null || words.length === 0 || words.some((word) => word === "")) return null;
+  const [command, ...args] = words;
+  const env = draft.env.map((entry) => entry.name.trim()).filter((name) => name !== "");
+  return {
+    transport: "stdio",
+    command: command!,
+    args,
+    ...(env.length > 0 ? { env: [...new Set(env)] } : {}),
+  };
+}
+
+/** Why the form cannot be added yet, or null when it can. */
+export function draftProblem(draft: AddServerDraft, taken: readonly string[]): string | null {
+  const name = draft.name.trim();
+  if (name === "") return "Name it";
+  if (!ADD_SERVER_NAME.test(name)) return "A name is letters, digits, “-” and “_”";
+  if (taken.includes(name)) return `This profile already has a server named ${name}`;
+  if (draft.how === "url") {
+    if (draft.url.trim() === "") return "Give its URL";
+    return draftDefinition(draft) === null ? "A URL starts with https:// or http://" : null;
+  }
+  if (draft.command.trim() === "") return "Give the command that starts it";
+  if (splitCommand(draft.command.trim()) === null) return "A quote in the command is left open";
+  for (const entry of draft.env) {
+    const variable = entry.name.trim();
+    if (variable === "" && entry.value === "") continue;
+    if (!VARIABLE_NAME.test(variable)) return "A variable’s name is letters, digits and “_”";
+    if (entry.value === "") return `Give ${variable} its value`;
+  }
+  return null;
+}
+
+export interface AddServerChip {
+  provider: string;
+  label: string;
+  /** The agent can take it: its own add. */
+  act: AgentExtensionAct | null;
+  /** Why it cannot, in its own words. */
+  why: string;
+  /** Chosen until the person says otherwise: its add runs quietly, in this profile alone. */
+  preselected: boolean;
+}
+
+/** Turn on for: a chip per agent of the profile, from what each would run. */
+export function addServerChips(
+  lens: AgentsExtensionsListResult,
+  offers: Record<string, AgentExtensionOffer> | null,
+): AddServerChip[] {
+  return lens.agents.map((column) => {
+    const offer = offers?.[column.provider];
+    const base = { provider: column.provider, label: column.label };
+    if (column.failure !== undefined)
+      return { ...base, act: null, why: `${column.label} could not be read`, preselected: false };
+    if (column.support.mcpServers === undefined)
+      return { ...base, act: null, why: `${column.label} has no MCP servers`, preselected: false };
+    if (offer?.act !== undefined) {
+      const reaches = offer.act.reaches.includes("every-profile");
+      return {
+        ...base,
+        act: offer.act,
+        why: reaches ? `${column.label} would add it for every profile` : column.label,
+        preselected: !reaches && offer.act.terminal !== true,
+      };
+    }
+    return {
+      ...base,
+      act: null,
+      why: offer?.unavailable?.message ?? `${column.label} can’t take it here`,
+      preselected: false,
+    };
+  });
 }

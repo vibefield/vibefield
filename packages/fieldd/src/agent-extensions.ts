@@ -1,21 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { sep } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
-import type {
-  AgentProfile,
-  ExtensionActPlan,
-  ExtensionFailure,
-  ExtensionInventory,
-  ExtensionItem,
-  ExtensionOrigin,
-  ExtensionProvider,
-  McpServerItem,
-  SkillItem,
+import {
+  type AgentProfile,
+  type ExtensionActPlan,
+  type ExtensionFailure,
+  type ExtensionInventory,
+  type ExtensionItem,
+  type ExtensionOrigin,
+  type ExtensionProvider,
+  type McpServerDefinition,
+  type McpServerItem,
+  mcpServerDefinition,
+  type SkillItem,
 } from "@vibecook/puppeteer-core";
-import type {
-  AgentRuntime,
-  ExtensionActEnd,
-  StartedExtensionAct,
+import {
+  type AgentRuntime,
+  type ExtensionActEnd,
+  isLaunchValueName,
+  type StartedExtensionAct,
 } from "@vibecook/puppeteer-runtime";
 import {
   AGENT_OPERATION_OUTPUT_BYTES,
@@ -23,22 +26,31 @@ import {
   type AgentExtensionAct,
   type AgentExtensionColumn,
   type AgentExtensionHolding,
+  type AgentExtensionKeep,
   type AgentExtensionMarketplace,
+  type AgentExtensionOffer,
   type AgentExtensionPlugin,
   type AgentExtensionReceipt,
   type AgentExtensionRow,
   type AgentExtensionRun,
+  type AgentExtensionServerDefinition,
   type AgentExtensionSupport,
   type AgentsExtensionsActParams,
   type AgentsExtensionsActResult,
+  type AgentsExtensionsAddParams,
+  type AgentsExtensionsAddResult,
   type AgentsExtensionsListResult,
+  type AgentsExtensionsPlanParams,
+  type AgentsExtensionsPlanResult,
   type AgentsExtensionsSignInParams,
   type AgentsExtensionsSignInResult,
+  ENV_PREFIXES,
   type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { requireVisible } from "./agent-catalog-gates";
 import { displayTail } from "./agent-distribution";
+import type { AgentExtensionStore } from "./agent-extension-store";
 import { RpcCallError } from "./native-link";
 import type { GrantPrincipal } from "./terminal-grants";
 
@@ -71,6 +83,16 @@ import type { GrantPrincipal } from "./terminal-grants";
 // lives, and when it ends puppeteer reads the agent again for the receipt,
 // the husk is closed and the profile is read again. A pane nobody finishes is
 // waited on for ten minutes, then settled and left to the person.
+//
+// ADDING ONCE (AR-S4d; pass 24, S1): a server some agent holds — or one the
+// profile keeps — can be turned on for an agent that holds none of it, by
+// that agent's own add. Each empty cell carries that add as its offer (or why
+// the agent cannot take it), planned from the row's definition: the one the
+// profile keeps, else the one its holdings agree on when it hides nothing.
+// The profile keeps a definition once it has given it to an agent or taken
+// it from one, so turning it on again is one click; each value a server reads
+// is kept in the keychain (agent-extension-store.ts), and an agent is given
+// only the values of the servers VibeField gave it, when VibeField starts it.
 
 export interface AgentExtensionServiceOptions {
   runtime: Pick<
@@ -91,6 +113,8 @@ export interface AgentExtensionServiceOptions {
   home: string;
   /** A sign-in's pane on the floor; without one (no terminal floor here) a sign-in is refused. */
   panes?: ExtensionSignInPanes;
+  /** AR-S4d — what each profile keeps once; without one, nothing is kept and no value is taken. */
+  store?: AgentExtensionStore;
   /** Test seam: how long a sign-in's pane is waited on (production: ten minutes). */
   signInWaitMs?: number;
   now?: () => Date;
@@ -199,7 +223,8 @@ function actsOf(
   const acts: AgentExtensionAct[] = [];
   const signedIn = item.kind === "mcp-server" && item.auth === "signed-in";
   for (const plan of plans ?? []) {
-    if (!plan.available || plan.target.kind !== item.kind || plan.target.id !== item.id) continue;
+    if (!plan.available || plan.act === "add") continue;
+    if (plan.target.kind !== item.kind || plan.target.id !== item.id) continue;
     if ((plan.act === "enable" && item.enabled) || (plan.act === "disable" && !item.enabled))
       continue;
     // a sign-in to a server the agent does not load, or is signed in to, changes nothing; a
@@ -292,6 +317,69 @@ function rowsOf<T extends McpServerItem | SkillItem>(
   return rows.sort(byName);
 }
 
+/** A definition as the wire carries it: the known fields, nothing a file or a read added. */
+function definitionOf(
+  definition: McpServerDefinition | AgentExtensionServerDefinition,
+): McpServerDefinition {
+  return definition.transport === "stdio"
+    ? {
+        transport: "stdio",
+        command: definition.command,
+        args: [...definition.args],
+        ...(definition.env !== undefined && definition.env.length > 0
+          ? { env: [...definition.env] }
+          : {}),
+      }
+    : { transport: definition.transport, url: definition.url };
+}
+
+/**
+ * AR-S4d — what turning each server on for another agent gives it, by name:
+ * the profile's kept definition, else the one its holdings agree on when one
+ * of them could travel (puppeteer sets `definition` only on a server that
+ * hides nothing). Two versions under one name give none: which is meant is
+ * the person's to say.
+ */
+export function serverDefinitions(
+  agents: ReadonlyArray<{ result: ExtensionInventory | ExtensionFailure }>,
+  keep?: Pick<AgentExtensionKeep, "servers">,
+): Map<string, McpServerDefinition> {
+  const byName = new Map<string, { versions: Set<string>; definition?: McpServerDefinition }>();
+  for (const agent of agents) {
+    if (isFailure(agent.result)) continue;
+    for (const item of agent.result.items) {
+      if (item.kind !== "mcp-server") continue;
+      const entry = byName.get(item.name) ?? { versions: new Set<string>() };
+      entry.versions.add(serverDefinition(item));
+      if (entry.definition === undefined && item.definition !== undefined)
+        entry.definition = item.definition;
+      byName.set(item.name, entry);
+    }
+  }
+  const definitions = new Map<string, McpServerDefinition>();
+  for (const [name, entry] of byName) {
+    if (entry.versions.size === 1 && entry.definition !== undefined)
+      definitions.set(name, definitionOf(entry.definition));
+  }
+  for (const [name, kept] of Object.entries(keep?.servers ?? {}))
+    definitions.set(name, definitionOf(kept.definition));
+  return definitions;
+}
+
+/** An empty cell's offer: the agent's own add, or why it cannot take the server. */
+function offerOf(plan: ExtensionActPlan): AgentExtensionOffer {
+  return plan.available
+    ? {
+        act: {
+          act: "add",
+          runs: plan.display,
+          reaches: [...plan.reaches],
+          ...(plan.runs.kind === "terminal" ? { terminal: true as const } : {}),
+        },
+      }
+    : { unavailable: { reason: plan.reason, message: plan.message } };
+}
+
 /**
  * The lens for one Agent Profile from its agents' reads, in the profile's own
  * agent order: pure, so the rules — a cell's order, what counts as another
@@ -302,6 +390,8 @@ export function buildExtensionLens(input: {
   readAt: string;
   agents: readonly ExtensionLensAgent[];
   home: string;
+  /** AR-S4d — what the profile keeps once: its kept servers and the names it keeps values for. */
+  keep?: Pick<AgentExtensionKeep, "servers" | "values">;
 }): Frame {
   const columns: AgentExtensionColumn[] = [];
   const servers: Array<{
@@ -380,15 +470,47 @@ export function buildExtensionLens(input: {
     if (marketplaceRows.length > 0) marketplaces[agent.provider] = marketplaceRows.sort(byName);
   }
 
+  const serverRows = rowsOf(servers, serverDefinition, input.home);
+  const kept = input.keep?.servers ?? {};
+  const values = [...(input.keep?.values ?? [])].sort();
+  // a server the profile keeps is its own even while no agent holds it
+  for (const name of Object.keys(kept)) {
+    if (!serverRows.some((row) => row.name === name))
+      serverRows.push({ name, versions: 0, cells: {} });
+  }
+  const definitions = serverDefinitions(input.agents, input.keep);
+  for (const row of serverRows) {
+    const definition = definitions.get(row.name);
+    if (definition !== undefined) row.definition = definition;
+    if (row.name in kept) row.kept = true;
+    const needs = (definition?.transport === "stdio" ? (definition.env ?? []) : []).filter(
+      (name) => !values.includes(name),
+    );
+    if (needs.length > 0) row.needs = needs;
+    const offers: Record<string, AgentExtensionOffer> = {};
+    for (const agent of input.agents) {
+      if (isFailure(agent.result) || row.cells[agent.provider] !== undefined) continue;
+      const plan = agent.plans?.find(
+        (candidate) =>
+          candidate.act === "add" &&
+          candidate.target.kind === "mcp-server" &&
+          candidate.target.id === row.name,
+      );
+      if (plan !== undefined) offers[agent.provider] = offerOf(plan);
+    }
+    if (Object.keys(offers).length > 0) row.offers = offers;
+  }
+
   return {
     set: input.set,
     reading: false,
     readAt: input.readAt,
     agents: columns,
-    servers: rowsOf(servers, serverDefinition, input.home),
+    servers: serverRows.sort(byName),
     skills: rowsOf(skills, skillDefinition, input.home),
     plugins,
     marketplaces,
+    ...(values.length > 0 ? { values } : {}),
   };
 }
 
@@ -475,6 +597,8 @@ export class AgentExtensionService {
   /** sign-ins settled when their wait ran out, whose pane is still the person's, by session id → profile */
   private readonly waitedOut = new Map<string, string>();
   private readonly ticks = new Map<string, ReturnType<typeof setTimeout>>();
+  /** AR-S4d — profiles an Add is working through, agent by agent: no other act lands between two */
+  private readonly adding = new Map<string, string>();
   private readonly now: () => Date;
   private readonly logger: Logger;
   private disposed = false;
@@ -502,67 +626,223 @@ export class AgentExtensionService {
     requireVisible(this.opts.catalog, params.provider, "act on its extensions");
     const setId = params.set;
     this.refuseWhileRunning(setId);
+    if (params.act === "add") return await this.turnOn(params);
+    if (params.values !== undefined) {
+      throw new RpcCallError("PRECONDITION_FAILED", "values are kept only with an add", false, {
+        set: setId,
+      });
+    }
     const { column, found, offered } = await this.offered(setId, params);
     // a read above may have let another act start
     this.refuseWhileRunning(setId);
-    const entry: RunEntry = {
-      id: randomUUID(),
-      provider: params.provider,
-      label: column.label,
-      kind: params.kind,
-      item: params.id,
-      name: found.row.name,
-      act: params.act,
-      runs: offered.runs,
-      state: "running",
-      startedAt: this.now().toISOString(),
-      raw: "",
-      dropped: false,
-    };
-    this.runs.set(setId, entry);
-    this.publishRun(setId);
-    let receipt: AgentExtensionReceipt;
-    try {
-      const result = await this.opts.runtime.runExtensionAct({
+    // AR-S4d — a server an agent lets go keeps its definition here, so turning it on again is one click
+    const letsGo = params.kind === "mcp-server" && params.act === "remove";
+    if (letsGo && found.row.definition !== undefined && found.row.kept !== true)
+      await this.opts.store?.keep(setId, found.row.name, found.row.definition);
+    const { entry, receipt } = await this.runAct(
+      setId,
+      {
+        provider: params.provider,
+        label: column.label,
+        kind: params.kind,
+        item: params.id,
+        name: found.row.name,
+        act: params.act,
+        runs: offered.runs,
+      },
+      {
         providerId: params.provider,
         profileId: column.profileId,
         target: { kind: params.kind, id: params.id },
         act: params.act,
-        onOutput: (chunk) => {
-          appendRaw(entry, chunk);
-          this.publishRun(setId);
-        },
-      });
-      receipt = {
-        status: result.status,
-        message: result.message,
-        ...(result.exitCode !== undefined ? { exitCode: result.exitCode } : {}),
-        finishedAt: result.finishedAt,
-      };
-    } catch (error) {
-      this.logger.warn("fieldd.agents.extension_act_failed", "An extension act could not run", {
-        set: setId,
-        provider: params.provider,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      receipt = {
-        status: "failed",
-        message: "it could not be run",
-        finishedAt: this.now().toISOString(),
-      };
-    }
-    entry.state = "finished";
-    entry.finishedAt = receipt.finishedAt;
-    entry.receipt = receipt;
-    this.logger.info("fieldd.agents.extension_act", "An extension act ran", {
-      set: setId,
-      provider: params.provider,
-      act: params.act,
-      status: receipt.status,
-    });
+      },
+    );
+    if (letsGo && receipt.status === "changed")
+      await this.remember(setId, () =>
+        this.opts.store?.take(setId, params.provider, found.row.name),
+      );
     // every cell says what the agents hold now: a read that began before the act finished cannot
     await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
     return { run: projectRun(entry), receipt };
+  }
+
+  /**
+   * AR-S4d — an act `add`: the row named `id` turned on for an agent that
+   * holds none of it, by that agent's own add, from the row's definition. The
+   * values it reads are kept first (those given here, and those kept before);
+   * the definition is kept too, so the profile has it whoever lets it go.
+   */
+  private async turnOn(params: AgentsExtensionsActParams): Promise<AgentsExtensionsActResult> {
+    const setId = params.set;
+    if (params.kind !== "mcp-server") {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "only a server is turned on from its definition",
+        false,
+        {
+          set: setId,
+        },
+      );
+    }
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = this.columnIn(lens, setId, params.provider);
+    const row = lens.servers.find((candidate) => candidate.name === params.id);
+    if (row === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `this Agent Profile has no server named ${params.id}`,
+        false,
+        {
+          set: setId,
+        },
+      );
+    }
+    const offer = row.offers?.[params.provider];
+    if (row.definition === undefined || offer?.act === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${column.label} cannot take ${row.name} here${offer?.unavailable !== undefined ? `: ${offer.unavailable.message}` : ""}`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    const definition = definitionOf(row.definition);
+    await this.keepValues(setId, row.name, definition, params.values ?? {}, lens.values ?? []);
+    this.refuseWhileRunning(setId);
+    if (row.kept !== true) await this.opts.store?.keep(setId, row.name, definition);
+    const { entry, receipt } = await this.runAct(
+      setId,
+      {
+        provider: params.provider,
+        label: column.label,
+        kind: "mcp-server",
+        item: row.name,
+        name: row.name,
+        act: "add",
+        runs: offer.act.runs,
+      },
+      {
+        providerId: params.provider,
+        profileId: column.profileId,
+        target: { kind: "mcp-server", id: row.name },
+        act: "add",
+        definition,
+      },
+    );
+    if (receipt.status === "changed") await this.gave(setId, params.provider, row.name, definition);
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    return { run: projectRun(entry), receipt };
+  }
+
+  /**
+   * `agents.extensions.add` (AR-S4d's Add server): the definition kept once for
+   * the profile, with the values it reads, then each named agent's own add in
+   * turn, one run each on the frames — no other act between two — and the
+   * profile read again once at the end.
+   */
+  async add(params: AgentsExtensionsAddParams): Promise<AgentsExtensionsAddResult> {
+    const setId = params.set;
+    for (const provider of params.agents)
+      requireVisible(this.opts.catalog, provider, "turn on a server for it");
+    this.refuseWhileRunning(setId);
+    const definition = this.travelling(params.name, params.definition);
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    if (lens.servers.some((row) => row.name === params.name)) {
+      throw new RpcCallError(
+        "CONFLICT",
+        `this Agent Profile already has a server named ${params.name}`,
+        false,
+        { set: setId },
+      );
+    }
+    const columns = [...new Set(params.agents)].map((provider) =>
+      this.columnIn(lens, setId, provider),
+    );
+    await this.keepValues(setId, params.name, definition, params.values ?? {}, lens.values ?? []);
+    this.refuseWhileRunning(setId);
+    await this.opts.store?.keep(setId, params.name, definition);
+    this.adding.set(setId, params.name);
+    const receipts: AgentsExtensionsAddResult["receipts"] = [];
+    try {
+      for (const column of columns) {
+        const { receipt } = await this.runAct(
+          setId,
+          {
+            provider: column.provider,
+            label: column.label,
+            kind: "mcp-server",
+            item: params.name,
+            name: params.name,
+            act: "add",
+            // what the agent's own add will run, as a person reads it (puppeteer plans it again as it runs)
+            runs: await this.addLine(column, params.name, definition),
+          },
+          {
+            providerId: column.provider,
+            profileId: column.profileId,
+            target: { kind: "mcp-server", id: params.name },
+            act: "add",
+            definition,
+          },
+        );
+        receipts.push({ provider: column.provider, receipt });
+        if (receipt.status === "changed")
+          await this.gave(setId, column.provider, params.name, definition);
+      }
+    } finally {
+      this.adding.delete(setId);
+    }
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    return { receipts };
+  }
+
+  /**
+   * `agents.extensions.plan`: what an Add would run on each of the profile's
+   * agents — or why an agent cannot take the server — before anything is kept.
+   */
+  async plan(params: AgentsExtensionsPlanParams): Promise<AgentsExtensionsPlanResult> {
+    const setId = params.set;
+    const definition = this.travelling(params.name, params.definition);
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const row = lens.servers.find((candidate) => candidate.name === params.name);
+    const offers: AgentsExtensionsPlanResult["offers"] = {};
+    await Promise.all(
+      lens.agents.map(async (column) => {
+        if (column.failure !== undefined) {
+          offers[column.provider] = {
+            unavailable: { reason: "unread", message: column.failure.message },
+          };
+          return;
+        }
+        if (row?.cells[column.provider] !== undefined) {
+          offers[column.provider] = {
+            unavailable: {
+              reason: "held",
+              message: `${column.label} already has a server named ${params.name}`,
+            },
+          };
+          return;
+        }
+        try {
+          const plans = await this.opts.runtime.extensionActPlans(
+            column.provider,
+            column.profileId,
+            [],
+            [{ name: params.name, definition }],
+          );
+          const plan = Array.isArray(plans)
+            ? plans.find((candidate) => candidate.act === "add")
+            : undefined;
+          if (plan !== undefined) offers[column.provider] = offerOf(plan);
+        } catch (error) {
+          this.logger.warn("fieldd.agents.extension_plans_failed", "Planning an add failed", {
+            provider: column.provider,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }),
+    );
+    return { offers };
   }
 
   /**
@@ -776,6 +1056,219 @@ export class AgentExtensionService {
     return { column, found, offered };
   }
 
+  /** An add's line for the run card before it runs: the adapter's plan is pure, so this reads nothing. */
+  private async addLine(
+    column: AgentExtensionColumn,
+    name: string,
+    definition: McpServerDefinition,
+  ): Promise<string> {
+    try {
+      const plans = await this.opts.runtime.extensionActPlans(
+        column.provider,
+        column.profileId,
+        [],
+        [{ name, definition }],
+      );
+      const plan = Array.isArray(plans)
+        ? plans.find((candidate) => candidate.act === "add")
+        : undefined;
+      if (plan?.available === true) return plan.display;
+    } catch {
+      // the run says what ran once it has
+    }
+    return `${column.label}'s own add`;
+  }
+
+  /** The profile's column for an agent — or NOT_FOUND, an agent the profile does not have. */
+  private columnIn(lens: Frame, setId: string, provider: string): AgentExtensionColumn {
+    const column = lens.agents.find((candidate) => candidate.provider === provider);
+    if (column === undefined) {
+      throw new RpcCallError("NOT_FOUND", `${provider} is not in this Agent Profile`, false, {
+        set: setId,
+        provider,
+      });
+    }
+    return column;
+  }
+
+  /**
+   * A definition as the person gave it, checked the way puppeteer checks what
+   * may travel: nothing a listing would hide (a key in the command line or the
+   * address belongs in a value) and no variable inside itself.
+   */
+  private travelling(name: string, given: AgentExtensionServerDefinition): McpServerDefinition {
+    const definition = definitionOf(given);
+    const checked = mcpServerDefinition(
+      definition.transport === "stdio"
+        ? {
+            transport: "stdio",
+            command: definition.command,
+            args: definition.args,
+            env: definition.env,
+          }
+        : { transport: definition.transport, url: definition.url },
+    );
+    if (checked === undefined || JSON.stringify(checked) !== JSON.stringify(definition)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        definition.transport === "stdio"
+          ? `${name}'s command carries what looks like a key or a variable: give it as an environment value instead`
+          : `${name}'s address carries what looks like a key or a variable: VibeField keeps a key only as a value`,
+        false,
+        { reason: "hides-a-value" },
+      );
+    }
+    for (const variable of definition.transport === "stdio" ? (definition.env ?? []) : []) {
+      if (
+        !isLaunchValueName(variable) ||
+        ENV_PREFIXES.some((prefix) => variable.startsWith(prefix))
+      ) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `${variable} is a name an agent's own environment keeps; a server's value takes another`,
+          false,
+          { reason: "reserved-name", name: variable },
+        );
+      }
+    }
+    return definition;
+  }
+
+  /**
+   * The values a server reads, kept before an agent is given it: those given
+   * now (only names the definition reads), and every name it reads must have
+   * one — given now or kept before.
+   */
+  private async keepValues(
+    setId: string,
+    name: string,
+    definition: McpServerDefinition,
+    values: Readonly<Record<string, string>>,
+    kept: readonly string[],
+  ): Promise<void> {
+    const reads = definition.transport === "stdio" ? (definition.env ?? []) : [];
+    const stray = Object.keys(values).filter((variable) => !reads.includes(variable));
+    if (stray.length > 0) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${name} does not read ${stray.join(", ")}`,
+        false,
+        { set: setId },
+      );
+    }
+    const missing = reads.filter(
+      (variable) => values[variable] === undefined && !kept.includes(variable),
+    );
+    if (missing.length > 0) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${name} needs a value for ${missing.join(", ")}`,
+        false,
+        { set: setId, needs: missing },
+      );
+    }
+    if (Object.keys(values).length === 0) return;
+    if (this.opts.store === undefined) {
+      throw new RpcCallError("UNAVAILABLE", "this daemon keeps no values for agents", false, {
+        set: setId,
+      });
+    }
+    await this.opts.store.keepValues(setId, values);
+  }
+
+  /** An agent took the server: it is given the values the server reads when VibeField starts it. */
+  private async gave(
+    setId: string,
+    provider: string,
+    name: string,
+    definition: McpServerDefinition,
+  ): Promise<void> {
+    await this.remember(setId, () =>
+      this.opts.store?.give(
+        setId,
+        provider,
+        name,
+        definition.transport === "stdio" ? (definition.env ?? []) : [],
+      ),
+    );
+  }
+
+  /** A note in the profile's keep after an act that already ran: its failure is said, never thrown. */
+  private async remember(setId: string, note: () => Promise<void> | undefined): Promise<void> {
+    try {
+      await note();
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.extension_keep_failed",
+        "The profile's keep was not updated",
+        {
+          set: setId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+  }
+
+  /** One act through puppeteer, riding the profile's frames: the run, then its receipt. */
+  private async runAct(
+    setId: string,
+    run: Pick<RunEntry, "provider" | "label" | "kind" | "item" | "name" | "act" | "runs">,
+    request: Omit<
+      Parameters<AgentExtensionServiceOptions["runtime"]["runExtensionAct"]>[0],
+      "onOutput"
+    >,
+  ): Promise<{ entry: RunEntry; receipt: AgentExtensionReceipt }> {
+    const entry: RunEntry = {
+      id: randomUUID(),
+      ...run,
+      state: "running",
+      startedAt: this.now().toISOString(),
+      raw: "",
+      dropped: false,
+    };
+    this.runs.set(setId, entry);
+    this.publishRun(setId);
+    let receipt: AgentExtensionReceipt;
+    try {
+      const result = await this.opts.runtime.runExtensionAct({
+        ...request,
+        onOutput: (chunk) => {
+          appendRaw(entry, chunk);
+          this.publishRun(setId);
+        },
+      });
+      receipt = {
+        status: result.status,
+        message: result.message,
+        ...(result.exitCode !== undefined ? { exitCode: result.exitCode } : {}),
+        finishedAt: result.finishedAt,
+      };
+      // what puppeteer ran, as it planned it from the read it made
+      if (result.display !== undefined) entry.runs = result.display;
+    } catch (error) {
+      this.logger.warn("fieldd.agents.extension_act_failed", "An extension act could not run", {
+        set: setId,
+        provider: run.provider,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      receipt = {
+        status: "failed",
+        message: "it could not be run",
+        finishedAt: this.now().toISOString(),
+      };
+    }
+    entry.state = "finished";
+    entry.finishedAt = receipt.finishedAt;
+    entry.receipt = receipt;
+    this.logger.info("fieldd.agents.extension_act", "An extension act ran", {
+      set: setId,
+      provider: run.provider,
+      act: run.act,
+      status: receipt.status,
+    });
+    return { entry, receipt };
+  }
+
   /**
    * A sign-in's pane ended, or its wait ran out: puppeteer reads the agent
    * again for the receipt, an ended pane's husk is closed, and the profile is
@@ -850,6 +1343,15 @@ export class AgentExtensionService {
   }
 
   private refuseWhileRunning(setId: string): void {
+    const adding = this.adding.get(setId);
+    if (adding !== undefined) {
+      throw new RpcCallError(
+        "CONFLICT",
+        `${adding} is still being turned on in this Agent Profile`,
+        true,
+        { set: setId },
+      );
+    }
     const running = this.runs.get(setId);
     if (running?.state === "running") {
       throw new RpcCallError(
@@ -955,20 +1457,27 @@ export class AgentExtensionService {
     if (running !== undefined && !fresh) return running;
     const request: Promise<Frame> = (async () => {
       const info = await this.profileSet(setId);
+      const reads = await Promise.all(
+        this.columnsOf(info.profiles).map(async (column) => ({
+          ...column,
+          result: await this.opts.runtime.extensionInventory(column.provider, column.profileId),
+        })),
+      );
+      const keep = await this.keepOf(setId);
+      // AR-S4d — each empty cell's add is planned from the definition its row would give
+      const definitions = serverDefinitions(reads, keep);
       const agents = await Promise.all(
-        this.columnsOf(info.profiles).map(async (column) => {
-          const result = await this.opts.runtime.extensionInventory(
-            column.provider,
-            column.profileId,
-          );
-          return { ...column, result, ...(await this.plansFor(column, result)) };
-        }),
+        reads.map(async (agent) => ({
+          ...agent,
+          ...(await this.plansFor(agent, agent.result, definitions)),
+        })),
       );
       const lens = buildExtensionLens({
         set: setId,
         readAt: this.now().toISOString(),
         agents,
         home: this.opts.home,
+        ...(keep !== undefined ? { keep } : {}),
       });
       if (this.disposed) return lens;
       this.lenses.set(setId, lens);
@@ -982,22 +1491,51 @@ export class AgentExtensionService {
     return request;
   }
 
-  /** What each held server and skill offers, planned from this same read (no read per holding). */
+  /** The profile's keep, or nothing when there is no store or it cannot be read. */
+  private async keepOf(setId: string): Promise<AgentExtensionKeep | undefined> {
+    try {
+      return await this.opts.store?.read(setId);
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.extension_keep_unreadable",
+        "The profile's keep could not be read",
+        {
+          set: setId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * What each held server and skill offers, planned from this same read (no
+   * read per holding) — and, AR-S4d, each server the agent holds none of, its
+   * add from the row's definition.
+   */
   private async plansFor(
     column: { provider: string; profileId: string },
     result: ExtensionInventory | ExtensionFailure,
+    definitions: ReadonlyMap<string, McpServerDefinition> = new Map(),
   ): Promise<{ plans?: ExtensionActPlan[] }> {
     if (isFailure(result)) return {};
     const items = result.items.filter(
       (item): item is McpServerItem | SkillItem =>
         item.kind === "mcp-server" || item.kind === "skill",
     );
-    if (items.length === 0) return {};
+    const held = new Set(
+      result.items.filter((item) => item.kind === "mcp-server").map((item) => item.name),
+    );
+    const adds = [...definitions]
+      .filter(([name]) => !held.has(name))
+      .map(([name, definition]) => ({ name, definition }));
+    if (items.length === 0 && adds.length === 0) return {};
     try {
       const plans = await this.opts.runtime.extensionActPlans(
         column.provider,
         column.profileId,
         items,
+        ...(adds.length > 0 ? [adds] : []),
       );
       return Array.isArray(plans) ? { plans } : {};
     } catch (error) {

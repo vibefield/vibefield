@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   AgentProfile,
   ExtensionActPlan,
@@ -6,6 +9,7 @@ import type {
   ExtensionInventory,
   ExtensionItem,
   ExtensionProvider,
+  McpServerDefinition,
   McpServerItem,
   SkillItem,
 } from "@vibecook/puppeteer-core";
@@ -16,7 +20,8 @@ import {
   AgentsExtensionsListResult,
   type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AgentExtensionStore } from "../src/agent-extension-store";
 import {
   AgentExtensionService,
   abbreviateHome,
@@ -350,12 +355,14 @@ function stubRuntime(options: {
     provider: string,
     profileId: string | undefined,
     items: ReadonlyArray<McpServerItem | SkillItem>,
+    adds?: ReadonlyArray<{ name: string; definition: McpServerDefinition }>,
   ) => Promise<ExtensionActPlan[] | ExtensionFailure>;
   act?: (request: {
     providerId: string;
     profileId?: string;
     target: { kind: "mcp-server" | "skill"; id: string };
-    act: "enable" | "disable" | "remove" | "sign-out";
+    act: "enable" | "disable" | "remove" | "sign-out" | "add";
+    definition?: McpServerDefinition;
     onOutput?: (chunk: string) => void;
   }) => Promise<ExtensionActReceipt>;
   start?: (request: {
@@ -432,6 +439,7 @@ function stubRuntime(options: {
       typeof AgentExtensionService
     >[0]["runtime"],
     extensionInventory,
+    extensionActPlans: runtime.extensionActPlans,
     runExtensionAct: runtime.runExtensionAct,
     startExtensionAct: runtime.startExtensionAct,
     settleExtensionAct: runtime.settleExtensionAct,
@@ -995,5 +1003,392 @@ describe("AgentExtensionService sign-ins (AR-S4c)", () => {
     expect(t.panes.close).toHaveBeenCalledWith("pty-sign-in");
     expect(t.extensionInventory.mock.calls.length).toBeGreaterThan(reads);
     expect(t.settleExtensionAct).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AgentExtensionService adding once (AR-S4d)", () => {
+  let dir: string | undefined;
+  afterEach(async () => {
+    if (dir !== undefined) await rm(dir, { recursive: true, force: true });
+    dir = undefined;
+  });
+
+  const CONTEXT7: McpServerDefinition = {
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@upstash/context7-mcp"],
+    env: ["CONTEXT7_API_KEY"],
+  };
+  const NOTION: McpServerDefinition = { transport: "http", url: "https://mcp.notion.com/mcp" };
+  const SECRET = "ctx7_secret_value_never_on_the_wire";
+
+  /**
+   * Work: Claude holds its own context7 (a definition that can travel), Codex
+   * holds nothing, and the profile keeps notion that no agent holds. Each
+   * agent's add is planned the way its adapter would; the "config" is the map
+   * the stub's act edits.
+   */
+  async function workAdding() {
+    dir = await mkdtemp(join(tmpdir(), "fieldd-extensions-adding-"));
+    const entries = new Map<string, string>();
+    const keychain = {
+      get: vi.fn(async (_service: string, account: string) => entries.get(account) ?? null),
+      set: vi.fn(async (_service: string, account: string, value: string) => {
+        entries.set(account, value);
+      }),
+      delete: vi.fn(async (_service: string, account: string) => {
+        entries.delete(account);
+      }),
+    };
+    const store = new AgentExtensionStore({ dir, secrets: keychain, now: () => new Date(NOW) });
+    await store.keep("work", "notion", NOTION);
+    const holds = new Map<string, Map<string, McpServerDefinition>>([
+      ["claude", new Map([["context7", CONTEXT7]])],
+      ["codex", new Map()],
+    ]);
+    let release: (() => void) | undefined;
+    let hold = false;
+    const stub = stubRuntime({
+      sets: { work: ["claude", "codex"] },
+      read: async (provider, profileId) => ({
+        ...inventory(
+          provider,
+          [...(holds.get(provider) ?? new Map())].map(
+            ([name, definition]) =>
+              ({
+                kind: "mcp-server",
+                id: name,
+                name,
+                origin: "own",
+                enabled: true,
+                transport: definition.transport,
+                target:
+                  definition.transport === "stdio"
+                    ? [definition.command, ...definition.args].join(" ")
+                    : definition.url,
+                ...(definition.transport === "stdio" && definition.env !== undefined
+                  ? { env: definition.env }
+                  : {}),
+                definition,
+              }) as ExtensionItem,
+          ),
+        ),
+        profileId,
+      }),
+      plans: async (provider, _profileId, items, adds = []) => [
+        ...items.map(
+          (item): ExtensionActPlan => ({
+            target: { kind: item.kind, id: item.id },
+            act: "remove",
+            available: true,
+            runs: { kind: "command", argv: [provider, "mcp", "remove", item.id] },
+            display: `${provider} mcp remove ${item.id}`,
+            reaches: ["definition"],
+          }),
+        ),
+        ...adds.map(
+          ({ name }): ExtensionActPlan => ({
+            target: { kind: "mcp-server", id: name },
+            act: "add",
+            available: true,
+            runs: { kind: "command", argv: [provider, "mcp", "add", name] },
+            display: `${provider} mcp add ${name}`,
+            reaches: [],
+          }),
+        ),
+      ],
+      act: async (request) => {
+        if (hold) await new Promise<void>((resolve) => (release = resolve));
+        const agent = holds.get(request.providerId)!;
+        if (request.act === "add") agent.set(request.target.id, request.definition!);
+        if (request.act === "remove") agent.delete(request.target.id);
+        return {
+          provider: request.providerId,
+          profileId: request.profileId ?? `work-${request.providerId}`,
+          target: request.target,
+          act: request.act,
+          status: "changed",
+          startedAt: NOW,
+          finishedAt: NOW,
+          display: `${request.providerId} mcp ${request.act} ${request.target.id}`,
+          message: request.act === "add" ? "added" : "removed",
+        };
+      },
+    });
+    const extensions = new AgentExtensionService({
+      runtime: stub.runtime,
+      catalog: AGENT_CATALOG_READERS,
+      home: HOME,
+      store,
+      now: () => new Date(NOW),
+    });
+    return {
+      ...stub,
+      extensions,
+      store,
+      keychain,
+      holds,
+      holdNext: () => {
+        hold = true;
+      },
+      release: () => {
+        hold = false;
+        release?.();
+      },
+    };
+  }
+
+  it("offers each agent that holds none of a server its own add, from the definition its row gives", async () => {
+    const t = await workAdding();
+    const lens = AgentsExtensionsListResult.parse(await t.extensions.list("work"));
+    const context7 = lens.servers.find((row) => row.name === "context7")!;
+    expect(context7).toMatchObject({
+      definition: CONTEXT7,
+      needs: ["CONTEXT7_API_KEY"],
+      offers: { codex: { act: { act: "add", runs: "codex mcp add context7", reaches: [] } } },
+    });
+    expect(context7.kept).toBeUndefined();
+    // Claude holds it: its cell offers its own acts, and no add
+    expect(context7.offers?.claude).toBeUndefined();
+    expect(context7.cells.claude?.[0]?.acts?.map((act) => act.act)).toEqual(["remove"]);
+    // a server the profile keeps shows though no agent holds it, offered to both
+    expect(lens.servers.find((row) => row.name === "notion")).toMatchObject({
+      versions: 0,
+      cells: {},
+      kept: true,
+      definition: NOTION,
+      offers: {
+        claude: { act: { act: "add", runs: "claude mcp add notion" } },
+        codex: { act: { act: "add", runs: "codex mcp add notion" } },
+      },
+    });
+    // each agent was asked to plan only what it holds none of
+    expect(t.extensionActPlans).toHaveBeenCalledWith(
+      "codex",
+      "work-codex",
+      [],
+      [
+        { name: "context7", definition: CONTEXT7 },
+        { name: "notion", definition: NOTION },
+      ],
+    );
+    expect(t.extensionActPlans).toHaveBeenCalledWith("claude", "work-claude", expect.any(Array), [
+      { name: "notion", definition: NOTION },
+    ]);
+  });
+
+  it("turns a server on for an agent that holds none of it: the value kept first, then its own add, then what it was given", async () => {
+    const t = await workAdding();
+    const frames: string[] = [];
+    const { dispose } = await t.extensions.subscribe("work", (frame) =>
+      frames.push(JSON.stringify(frame)),
+    );
+    const answered = AgentsExtensionsActResult.parse(
+      await t.extensions.act({
+        set: "work",
+        provider: "codex",
+        kind: "mcp-server",
+        id: "context7",
+        act: "add",
+        values: { CONTEXT7_API_KEY: SECRET },
+      }),
+    );
+    expect(answered.receipt).toMatchObject({ status: "changed", message: "added" });
+    expect(t.runExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: "codex",
+        target: { kind: "mcp-server", id: "context7" },
+        act: "add",
+        definition: CONTEXT7,
+      }),
+    );
+    // the value in the keychain entry; the keep names it, the definition and who has it
+    expect(JSON.parse((await t.keychain.get("", "work"))!)).toEqual({ CONTEXT7_API_KEY: SECRET });
+    await expect(t.store.read("work")).resolves.toMatchObject({
+      servers: { context7: { definition: CONTEXT7 } },
+      values: ["CONTEXT7_API_KEY"],
+      given: { codex: { context7: ["CONTEXT7_API_KEY"] } },
+    });
+    await expect(t.store.launchValues("work", "codex")).resolves.toEqual({
+      CONTEXT7_API_KEY: SECRET,
+    });
+    // Claude kept its own value in its own config, and is started with nothing of ours
+    await expect(t.store.launchValues("work", "claude")).resolves.toBeUndefined();
+    // the lens says what is kept, by name, and needs nothing now
+    const lens = AgentsExtensionsListResult.parse(await t.extensions.list("work"));
+    expect(lens.values).toEqual(["CONTEXT7_API_KEY"]);
+    const row = lens.servers.find((candidate) => candidate.name === "context7")!;
+    expect(row.kept).toBe(true);
+    expect(row.needs).toBeUndefined();
+    expect(row.cells.codex?.[0]).toMatchObject({ id: "context7" });
+    // never a value on the wire
+    expect(JSON.stringify(answered)).not.toContain(SECRET);
+    expect(frames.join("\n")).not.toContain(SECRET);
+    dispose();
+  });
+
+  it("asks for a value the server reads before any agent is given it, and takes no stray name", async () => {
+    const t = await workAdding();
+    const turn = (values?: Record<string, string>, provider = "codex") =>
+      t.extensions.act({
+        set: "work",
+        provider,
+        kind: "mcp-server",
+        id: "context7",
+        act: "add",
+        ...(values === undefined ? {} : { values }),
+      });
+    await expect(turn()).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      message: "context7 needs a value for CONTEXT7_API_KEY",
+    });
+    await expect(turn({ CONTEXT7_API_KEY: SECRET, OTHER_KEY: "x" })).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      message: "context7 does not read OTHER_KEY",
+    });
+    // Claude holds it already: no add is offered there
+    await expect(turn({ CONTEXT7_API_KEY: SECRET }, "claude")).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+    });
+    // values ride only an add
+    await expect(
+      t.extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "mcp-server",
+        id: "context7",
+        act: "remove",
+        values: { CONTEXT7_API_KEY: SECRET },
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    expect(t.runExtensionAct).not.toHaveBeenCalled();
+    expect(t.keychain.set).not.toHaveBeenCalled();
+  });
+
+  it("Add server keeps the definition once, then runs each agent's add in turn, holding the profile until the last", async () => {
+    const t = await workAdding();
+    await t.extensions.list("work");
+    t.holdNext();
+    const linear: McpServerDefinition = { transport: "http", url: "https://mcp.linear.app/mcp" };
+    const adding = t.extensions.add({
+      set: "work",
+      name: "linear",
+      definition: linear,
+      agents: ["claude", "codex"],
+    });
+    await vi.waitFor(() => expect(t.runExtensionAct).toHaveBeenCalledTimes(1));
+    // no other act lands between two of the Add's
+    await expect(
+      t.extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "mcp-server",
+        id: "context7",
+        act: "remove",
+      }),
+    ).rejects.toMatchObject({ kind: "CONFLICT" });
+    t.release();
+    const result = await adding;
+    expect(result.receipts.map((entry) => [entry.provider, entry.receipt.status])).toEqual([
+      ["claude", "changed"],
+      ["codex", "changed"],
+    ]);
+    expect(t.runExtensionAct.mock.calls.map(([request]) => request.providerId)).toEqual([
+      "claude",
+      "codex",
+    ]);
+    await expect(t.store.read("work")).resolves.toMatchObject({
+      servers: { linear: { definition: linear } },
+      given: { claude: { linear: [] }, codex: { linear: [] } },
+    });
+    // a name the profile already has is the person's to rename
+    await expect(
+      t.extensions.add({ set: "work", name: "linear", definition: linear, agents: [] }),
+    ).rejects.toMatchObject({ kind: "CONFLICT" });
+  });
+
+  it("keeps no definition that hides a key, and no value under a name an agent's environment keeps", async () => {
+    const t = await workAdding();
+    await expect(
+      t.extensions.add({
+        set: "work",
+        name: "search",
+        definition: {
+          transport: "stdio",
+          command: "uvx",
+          args: ["search-mcp", "--api-key", "abc123"],
+        },
+        agents: ["codex"],
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED", details: { reason: "hides-a-value" } });
+    await expect(
+      t.extensions.add({
+        set: "work",
+        name: "search",
+        definition: { transport: "http", url: "https://mcp.example.com/mcp?key=abc123" },
+        agents: [],
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED", details: { reason: "hides-a-value" } });
+    for (const name of ["PATH", "NODE_OPTIONS", "CODEX_HOME", "FIELDD_TOKEN"]) {
+      await expect(
+        t.extensions.add({
+          set: "work",
+          name: "search",
+          definition: { transport: "stdio", command: "npx", args: ["search-mcp"], env: [name] },
+          values: { [name]: "x" },
+          agents: [],
+        }),
+      ).rejects.toMatchObject({
+        kind: "PRECONDITION_FAILED",
+        details: { reason: "reserved-name" },
+      });
+    }
+    expect(t.keychain.set).not.toHaveBeenCalled();
+    expect(t.runExtensionAct).not.toHaveBeenCalled();
+  });
+
+  it("plans an Add on each agent before anything is kept", async () => {
+    const t = await workAdding();
+    const linear: McpServerDefinition = { transport: "http", url: "https://mcp.linear.app/mcp" };
+    await expect(
+      t.extensions.plan({ set: "work", name: "linear", definition: linear }),
+    ).resolves.toEqual({
+      offers: {
+        claude: { act: { act: "add", runs: "claude mcp add linear", reaches: [] } },
+        codex: { act: { act: "add", runs: "codex mcp add linear", reaches: [] } },
+      },
+    });
+    // an agent that holds the name says so
+    await expect(
+      t.extensions.plan({ set: "work", name: "context7", definition: CONTEXT7 }),
+    ).resolves.toMatchObject({
+      offers: {
+        claude: { unavailable: { reason: "held" } },
+        codex: { act: { act: "add" } },
+      },
+    });
+    await expect(t.store.read("work")).resolves.toMatchObject({ servers: { notion: {} } });
+    expect(Object.keys((await t.store.read("work")).servers)).toEqual(["notion"]);
+  });
+
+  it("keeps the definition of a server an agent lets go, so turning it on again is one click", async () => {
+    const t = await workAdding();
+    await t.extensions.act({
+      set: "work",
+      provider: "claude",
+      kind: "mcp-server",
+      id: "context7",
+      act: "remove",
+    });
+    await expect(t.store.read("work")).resolves.toMatchObject({
+      servers: { context7: { definition: CONTEXT7 } },
+    });
+    const lens = AgentsExtensionsListResult.parse(await t.extensions.list("work"));
+    // no agent holds it, the profile still does, and both agents are offered it back
+    expect(lens.servers.find((row) => row.name === "context7")).toMatchObject({
+      kept: true,
+      cells: {},
+      offers: { claude: { act: { act: "add" } }, codex: { act: { act: "add" } } },
+    });
   });
 });

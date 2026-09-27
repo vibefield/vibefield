@@ -1,12 +1,24 @@
 import {
+  type AgentExtensionOffer,
+  type AgentExtensionServerDefinition,
   AgentsExtensionsListResult,
+  AgentsExtensionsPlanResult,
   AgentsExtensionsSignInResult,
   type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
-import { type ReactElement, useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { refusalSentence } from "../../account/use-account";
 import {
+  type AddServerRequest,
+  AddServerView,
   AgentExtensionListView,
   AgentExtensionsView,
   type ExtensionActRequest,
@@ -14,7 +26,7 @@ import {
   type ExtensionSignInSlot,
   ProfileExtensionsView,
 } from "./ExtensionsView";
-import type { AgentListKey, ExtensionKindKey } from "./extensions-model";
+import { ADD_SERVER_NAME, type AgentListKey, type ExtensionKindKey } from "./extensions-model";
 import { SignInTerminal } from "./SignInTerminal";
 
 // Extensions' controllers (AR-S4b). Every page that shows what a profile's
@@ -31,6 +43,13 @@ import { SignInTerminal } from "./SignInTerminal";
 // pane the agent's login runs in: the ticket is kept for the window (below),
 // so any of the profile's pages shows the pane while the run says it is open,
 // and Cancel ends it (`terminal.terminate`); the receipt arrives on the frames.
+// AR-S4d: an act `add` carries the values its server reads (the confirm asked
+// for them); Add server asks `agents.extensions.plan` what each agent would
+// run as the form changes, then `agents.extensions.add`, whose runs ride the
+// frames, and opens the new server's page when it answers.
+
+/** How long the form rests before its draft is planned. */
+const PLAN_REST_MS = 300;
 
 /** A minute's tick for "Read 3 minutes ago". */
 const CLOCK_MS = 60_000;
@@ -185,6 +204,7 @@ export function ProfileExtensions({
   profile,
   where,
   onOpenItem,
+  onAddServer,
 }: {
   set: string;
   /** The profile's name, for the words. */
@@ -193,6 +213,8 @@ export function ProfileExtensions({
   where?: string;
   /** A row's name opens that server's or skill's page. */
   onOpenItem?: (key: ExtensionKindKey, name: string) => void;
+  /** AR-S4d — Add server… opens its page. */
+  onAddServer?: () => void;
 }): ReactElement {
   const { lens, error, refreshing, refresh, acting, act, signIn, now } = useExtensionLens(set);
   return (
@@ -208,6 +230,89 @@ export function ProfileExtensions({
       {...(signIn !== undefined ? { signIn } : {})}
       {...(where !== undefined ? { where } : {})}
       {...(onOpenItem !== undefined ? { onOpenItem } : {})}
+      {...(onAddServer !== undefined ? { onAddServer } : {})}
+    />
+  );
+}
+
+/** AR-S4d — Add server's page: the form, what each agent would run, then the Add. */
+export function AddServer({
+  set,
+  profile,
+  where,
+  onDone,
+  onCancel,
+}: {
+  set: string;
+  profile: string;
+  where: string;
+  /** The server was kept (and turned on where it could be): its page. */
+  onDone: (name: string) => void;
+  onCancel: () => void;
+}): ReactElement {
+  const client = useFielddClient();
+  const { lens, error, now } = useExtensionLens(set);
+  const [offers, setOffers] = useState<Record<string, AgentExtensionOffer> | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const asked = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const onDraft = useCallback(
+    (name: string, definition: AgentExtensionServerDefinition | null) => {
+      clearTimeout(timer.current);
+      const ask = ++asked.current;
+      if (definition === null || !ADD_SERVER_NAME.test(name)) {
+        setOffers(null);
+        setPlanError(null);
+        return;
+      }
+      timer.current = setTimeout(() => {
+        client
+          .request("agents.extensions.plan", { set, name, definition })
+          .then((answer) => {
+            if (ask !== asked.current) return;
+            setOffers(AgentsExtensionsPlanResult.parse(answer).offers);
+            setPlanError(null);
+          })
+          .catch((cause: unknown) => {
+            if (ask !== asked.current) return;
+            setOffers(null);
+            setPlanError(refusalSentence("VibeField can’t keep this server as it is", cause));
+          });
+      }, PLAN_REST_MS);
+    },
+    [client, set],
+  );
+
+  const onAdd = useCallback(
+    (request: AddServerRequest) => {
+      setAdding(true);
+      setRefusal(null);
+      client
+        .request("agents.extensions.add", { set, ...request })
+        .then(() => onDone(request.name))
+        .catch((cause: unknown) => setRefusal(refusalSentence("That server wasn’t added", cause)))
+        .finally(() => setAdding(false));
+    },
+    [client, set, onDone],
+  );
+
+  return (
+    <AddServerView
+      lens={lens}
+      profile={profile}
+      where={where}
+      offers={offers}
+      planError={planError}
+      error={refusal ?? error}
+      adding={adding}
+      onDraft={onDraft}
+      onAdd={onAdd}
+      onCancel={onCancel}
+      now={now}
     />
   );
 }
