@@ -629,6 +629,8 @@ interface Unit {
   table: Map<number, ProcessRecord>;
   /** how many times the table was read */
   reads: { count: number };
+  /** `ps` fails, or times out, while `now` is set */
+  unread: { now: boolean };
   catalog: AgentCatalogEntry[];
   logged: Logged[];
   ledger: Ledgered[];
@@ -680,6 +682,8 @@ interface UnitOptions {
   floor?: boolean;
   /** the platform a shell is born on, as the row states it */
   platform?: NodeJS.Platform;
+  /** the home takes this long to write (a slow disk) */
+  slowHomeMs?: number;
 }
 
 async function unit(options: UnitOptions = {}): Promise<Unit> {
@@ -697,6 +701,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
   const fold = new FoldStub();
   const table = new Map<number, ProcessRecord>();
   const reads = { count: 0 };
+  const unread = { now: false };
   const catalog = [...TYPED_CATALOG];
   const logged: Logged[] = [];
   const ledger: Ledgered[] = [];
@@ -730,15 +735,16 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     onShellIntegration: (integration) => integrations.push(integration),
     processTable: async () => {
       reads.count += 1;
-      return table;
+      return unread.now ? undefined : table;
     },
     kit: {
       startSpawnThroughGateway: (given) => {
         kit.gateway.push(given);
         return startSpawnThroughGateway(given);
       },
-      materializeShims: (given) => {
+      materializeShims: async (given) => {
         kit.materialized.push(given);
+        if (options.slowHomeMs !== undefined) await sleep(options.slowHomeMs);
         return materializeShims(given);
       },
       writeRendezvous: (home, given) => {
@@ -773,6 +779,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     fold,
     table,
     reads,
+    unread,
     catalog,
     logged,
     ledger,
@@ -1466,6 +1473,23 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
   );
 
   it(
+    "is handed nothing until the home is written: a shell born while the launchers are being written is born as before, though the offered set is already decided",
+    async () => {
+      const box = await unit({ slowHomeMs: 800 });
+      onePane(box);
+      const started = box.gateway.start();
+      await poll(() => (box.kit.materialized.length > 0 ? true : undefined), 5_000);
+      expect(box.gateway.state().names).toEqual([TYPED_COMMAND]);
+      expect(box.integrations).toEqual([]);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
+      await started;
+      expect(box.integrations).toEqual([box.gateway.shellIntegration]);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
     "answers nothing on win32 although launchers stand: the shim execs in place, which is POSIX only",
     async () => {
       const box = await unit({ platform: "win32" });
@@ -1752,6 +1776,33 @@ describe("the list of our shells — terminals.json (AR-7b)", () => {
     },
     PROCESS_BUDGET_MS,
   );
+
+  it(
+    "holds the list to the kit's bound: with more shells than it may list, the lowest pids are listed and the rest wait for a place",
+    async () => {
+      const box = await unit();
+      const rows: Array<{ sessionId: string; pid: number }> = [];
+      for (let n = 0; n < 1_030; n += 1) {
+        const pid = 10_000 + n;
+        rows.push({ sessionId: `s${n}`, pid });
+        box.table.set(pid, proc(pid, 77));
+      }
+      box.terminals.lists(rows);
+      await box.gateway.start();
+      const written = await readTerminals(box.home);
+      expect(written?.length).toBe(1_024);
+      expect(written?.[0]?.pid).toBe(10_000);
+      expect(written?.[1_023]?.pid).toBe(11_023);
+      // the shells above the bound are ours all the same: one of them ends,
+      // and a place opens for the next
+      box.terminals.exited("s0");
+      await listed(
+        box.home,
+        rows.slice(1, 1_025).map((row) => row.pid),
+      );
+    },
+    PROCESS_BUDGET_MS,
+  );
 });
 
 // ── the ancestor walk ──
@@ -2009,6 +2060,34 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
       expect(counted.every((entry) => entry.level === "debug")).toBe(true);
       expect(counted[1]?.attrs).toEqual({ code: "passthrough", provider: TYPED_PROVIDER });
       expect(JSON.stringify(box.logged)).not.toContain("say hi");
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "a launch while the process table cannot be read runs as typed — answered fallback although the host is strict, counted, said at warn with the pid and nothing else — and nothing is refused, prepared or recorded",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
+      box.unread.now = true;
+      const answer = await box.launch(600);
+      expect(answer).toMatchObject({ action: "fallback", code: "outside-host-terminals" });
+      expect(box.fold.adopted).toEqual([]);
+      expect(box.fold.identities).toBe(0);
+      expect(box.script.prepared).toEqual([]);
+      expect(refusals(box)).toEqual([]);
+      expect(box.ledger).toEqual([]);
+      const said = box.logged.filter(
+        (entry) => entry.event === "fieldd.agents.gateway_process_table_unread",
+      );
+      expect(said.map((entry) => entry.level)).toEqual(["warn"]);
+      expect(said[0]?.attrs).toEqual({ pid: 600 });
+      expect(box.gateway.counts().get("outside-host-terminals")).toBe(1);
+      // the table readable again: the same launch is placed, and adopted
+      box.unread.now = false;
+      expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      expect(box.fold.adopted.length).toBe(1);
     },
     PROCESS_BUDGET_MS,
   );
