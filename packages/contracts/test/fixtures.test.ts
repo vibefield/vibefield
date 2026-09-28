@@ -44,6 +44,7 @@ import {
   AgentListResult,
   AgentMonitorMirror,
   AgentProvidersResult,
+  AgentResumeParams,
   AgentSessionRecord,
   AgentSessionSummary,
   AgentSpawnResult,
@@ -232,6 +233,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-session-summary": AgentSessionSummary,
   "agent-session-record": AgentSessionRecord,
   "agent-spawn": AgentSpawnResult,
+  // QL-D10 — both arms of agent.resume's params: a run (the record's), and a
+  // conversation by its native id with the persona whose root holds it.
+  "agent-resume-params": AgentResumeParams,
   "agent-list": AgentListResult,
   "agent-providers": AgentProvidersResult,
   // AC-1 — the catalog as `agent.catalog` answers it (the whole table; the

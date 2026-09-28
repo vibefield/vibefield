@@ -52,7 +52,9 @@ import {
   type AgentProfileFailure,
   type AgentProviderSummary,
   type AgentProvidersResult,
+  type AgentResumeNativeParams,
   type AgentResumeParams,
+  type AgentResumeRunParams,
   type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
@@ -62,6 +64,7 @@ import {
   type AgentsProfilesLoginParams,
   type AgentsProfilesLoginResult,
   createAgentCatalogReaders,
+  isAgentResumeRun,
   LAYOUT,
   type TerminalInfo,
 } from "@vibefield/contracts";
@@ -942,12 +945,130 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return this.ticketed(entry, principal, terminals);
   }
 
+  /** `agent.resume` — a run of ours (its record), or QL-D10's conversation by
+   * its provider-native id. */
+  async resume(params: AgentResumeParams, principal: GrantPrincipal): Promise<AgentSpawnResult> {
+    return isAgentResumeRun(params)
+      ? await this.resumeRun(params, principal)
+      : await this.resumeNative(params, principal);
+  }
+
+  /** QL-D10 — continue a conversation the agent index knows (an
+   * `index.recent` row) with no record of ours behind it: puppeteer's own
+   * continuation, `implementation: "native"`, in a new run and a new PTY,
+   * recorded like any spawn. Refused before anything starts when the catalog
+   * row does not offer resume (a deprecated agent's conversations still
+   * resume — the row need only be visible), when the adapter's launch
+   * descriptor says it cannot, when a run already continues the conversation
+   * (AR-4b's one-run law), or when the persona is signed out. */
+  private async resumeNative(
+    params: AgentResumeNativeParams,
+    principal: GrantPrincipal,
+  ): Promise<AgentSpawnResult> {
+    this.requireVisible(params.provider, "resume it");
+    const row = this.catalog.entry(params.provider);
+    const launch = this.runtime.launchProviders().find((p) => p.id === params.provider);
+    if (row?.offers.resume !== true || launch?.resume === false) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${row?.label ?? params.provider} does not offer resume here`,
+        false,
+        {
+          provider: params.provider,
+          reason: "unsupported-agent",
+          ...(row !== undefined ? { status: row.status } : {}),
+          capability: "resume",
+        },
+      );
+    }
+    const terminals = this.requireTerminals();
+    const running = this.runContinuing(params.provider, params.nativeSessionId);
+    if (running !== undefined) throw conversationRunning(running);
+    const profileId = await this.resumeProfile(params);
+    if (!this.personaActive(profileId)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the account this conversation was held under is signed out",
+        false,
+        { provider: params.provider, state: "signed-out" },
+      );
+    }
+    const cwd = params.cwd ?? this.home;
+    const identity = this.identity();
+    const entry = await this.creation(profileId ?? null, async () => {
+      const result = await this.runtime.resume({
+        continuation: {
+          providerId: params.provider,
+          nativeSessionId: params.nativeSessionId,
+          implementation: "native",
+        },
+        cwd,
+        ...(params.title !== undefined ? { title: params.title } : {}),
+        ...(profileId !== undefined ? { profile: profileId } : {}),
+        creationRequestId: identity.creationRequestId,
+        ingress: identity.ingress,
+      });
+      if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
+      return this.enter(result, { cwd, title: params.title, ...identity.launched() });
+    });
+    return this.ticketed(entry, principal, terminals);
+  }
+
+  /** QL-D10 — the persona a native resume runs under: the one named, or the
+   * named Agent Profile's sign-in for the agent (puppeteer's own resolution,
+   * which `runtime.resume` does not make: it takes a profile id only). The
+   * native set, and naming neither, is the agent's own folder. */
+  private async resumeProfile(params: AgentResumeNativeParams): Promise<string | undefined> {
+    if (params.profileId !== undefined) return params.profileId;
+    if (params.profileSet === undefined) return undefined;
+    const info = await this.runtime.profileSet(params.profileSet);
+    if (info === undefined) {
+      throw new RpcCallError("NOT_FOUND", `no agent profile ${params.profileSet}`, false, {
+        set: params.profileSet,
+      });
+    }
+    if (info.set.kind === "native") return undefined;
+    const account = info.profiles.find((profile) => profile.provider === params.provider);
+    if (account === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `${info.set.label} has no ${this.labelFor(params.provider, params.provider)} sign-in`,
+        false,
+        { set: params.profileSet, provider: params.provider },
+      );
+    }
+    return account.id;
+  }
+
+  /** AR-4b's one-run law across both forms: the run (live, or pending a
+   * resume) that already continues this conversation, other than `except`. */
+  private runContinuing(
+    providerId: string,
+    nativeSessionId: string,
+    except?: string,
+  ): string | undefined {
+    for (const [runId, entry] of this.managed) {
+      if (runId === except || entry.exiting) continue;
+      const held = entry.info.continuation;
+      if (held.providerId === providerId && held.nativeSessionId === nativeSessionId) return runId;
+    }
+    for (const [runId, entry] of this.pending) {
+      if (runId === except) continue;
+      const held = entry.record.continuation;
+      if (held.providerId === providerId && held.nativeSessionId === nativeSessionId) return runId;
+    }
+    return undefined;
+  }
+
   /** Continue a managed session from its record: a new run in a new PTY,
    * the vendor's own conversation continued. For an EXITED session the
    * ordinary path; for a PENDING one (AR-4: its PTY alive but unobserved,
    * because this boot could not re-attach) the resume IS the replacement,
    * by hand instead of at the next idle. A live, attached run is refused. */
-  async resume(params: AgentResumeParams, principal: GrantPrincipal): Promise<AgentSpawnResult> {
+  private async resumeRun(
+    params: AgentResumeRunParams,
+    principal: GrantPrincipal,
+  ): Promise<AgentSpawnResult> {
     const terminals = this.requireTerminals();
     const record = this.records.read(params.runtimeRunId);
     if (record === undefined) {
@@ -1015,6 +1136,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // hand-over shape and exactly what the deck's resume verb reads
     // (`GodviewDeck.tsx`: the answer's ticket lands in the pane the verb was
     // pressed in, replacing the exited one).
+    // QL-D10 — another run may continue the same conversation (a native
+    // resume from the launcher): a second would be two runs on one native
+    // conversation, the state AR-4b forbids
+    const running = this.runContinuing(
+      record.continuation.providerId,
+      record.continuation.nativeSessionId,
+      record.runtimeRunId,
+    );
+    if (running !== undefined) throw conversationRunning(running);
     const husk = this.exited.get(record.runtimeRunId)?.terminalSessionId;
     const entry = await this.resumeFromRecord(record, params.cwd, husk);
     // MF-1f — the record names its successor, and the exited row goes: two
@@ -3112,3 +3242,14 @@ function canonical(path: string): string {
 }
 
 export type { AgentProfileFailure };
+
+/** QL-D10 — a resume of a conversation a run already continues: refused with
+ * that run, so a caller can offer it instead (AR-4b's one-run law). */
+function conversationRunning(runtimeRunId: string): RpcCallError {
+  return new RpcCallError(
+    "PRECONDITION_FAILED",
+    "the conversation is already running in another session; open that one",
+    false,
+    { runtimeRunId, state: "terminal-alive" },
+  );
+}

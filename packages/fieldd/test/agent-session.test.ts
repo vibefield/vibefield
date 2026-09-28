@@ -56,6 +56,7 @@ import type {
 import {
   AGENT_FIELD,
   AGENT_MONITOR_SCHEMA_VERSION,
+  type AgentCatalogEntry,
   AgentFieldRow,
   type AgentListResult,
   type AgentProvidersResult,
@@ -79,7 +80,7 @@ import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
-import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
+import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
 import {
   killDaemonTree,
   nativeBinPath,
@@ -404,6 +405,8 @@ interface SetupConfig {
   /** AR-S4c — the scripted agent holds a server whose sign-in runs in a pane;
    * every built-in agent's extension reads answer empty */
   extensions?: boolean;
+  /** the catalog this fieldd answers from (default: THE table plus the scripted row) */
+  catalog?: readonly AgentCatalogEntry[];
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -484,7 +487,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     rosettadHome: home,
     vibefieldRoot: root,
     agentSearchPath: bin,
-    agentCatalog: SCRIPTED_CATALOG,
+    agentCatalog: config.catalog ?? SCRIPTED_CATALOG,
     agentProviders: (builtin) => [
       ...(config.extensions === true ? builtin.map(withoutExtensionReads) : builtin),
       scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined, {
@@ -834,6 +837,62 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
       "NOT_FOUND",
     );
   });
+
+  it("QL-D10 — a resume by native id refuses before anything starts: a row that does not offer resume, an agent with no row, a persona named twice, an Agent Profile that does not exist", async () => {
+    const { daemon, dataDir } = await setup({
+      floor: "mock",
+      catalog: catalogWith("scripted", { offers: { ...SCRIPTED_ROW.offers, resume: false } }),
+    });
+    const win = await window(daemon, DECK, "qn1");
+    const denied = (await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-1",
+    })) as RpcErrorShape;
+    expect(denied.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(denied.data?.details).toMatchObject({
+      provider: "scripted",
+      reason: "unsupported-agent",
+      capability: "resume",
+    });
+    // the attempt is ledgered as the native form names it: a conversation, no run yet
+    const act = auditAct(
+      dataDir,
+      (entry) =>
+        entry.action === "agent.session.resume" && entry.attrs?.["nativeSessionId"] === "conv-1",
+    );
+    expect(act.attempt.target.id).toBe("pending");
+    expect(act.attempt.attrs?.["provider"]).toBe("scripted");
+    expect(act.outcome.outcome).toBe("failed");
+    const stranger = (await win.callErr("agent.resume", {
+      provider: "no-such-agent",
+      nativeSessionId: "conv-1",
+    })) as RpcErrorShape;
+    expect(stranger.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(stranger.data?.details).toMatchObject({ reason: "unsupported-agent", status: "no-row" });
+    // a persona is named once — by its id, or by its Agent Profile
+    const twice = (await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-1",
+      profileId: "scripted:a",
+      profileSet: "work",
+    })) as RpcErrorShape;
+    expect(twice.data?.kind).toBe("PRECONDITION_FAILED");
+    // nothing was recorded for any of them
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
+  });
+
+  it("QL-D10 — an Agent Profile a native resume names must exist", async () => {
+    const { daemon, dataDir } = await setup({ floor: "mock" });
+    const win = await window(daemon, DECK, "qn2");
+    const missing = (await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-1",
+      profileSet: "nowhere",
+    })) as RpcErrorShape;
+    expect(missing.data?.kind).toBe("NOT_FOUND");
+    expect(missing.data?.details).toMatchObject({ set: "nowhere" });
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
+  });
 });
 
 describe("managed sessions over the REAL floor (field-native)", () => {
@@ -1020,6 +1079,85 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     });
     expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
     expect(JSON.stringify(refused)).toContain("terminal-alive");
+
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 90_000);
+
+  it("QL-D10 — a conversation resumed by its native id: refused while a run continues it; then a new run on puppeteer's continuation, recorded and audited, answered like a spawn; the exited record no longer resumes beside it", async () => {
+    const { daemon, dataDir, envOut, sessions } = await setup({ floor: "real" });
+    const win = await window(daemon, DECK, "qn3");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      title: "first",
+    })) as AgentSpawnResult;
+    const conversation = spawned.session.sessionId;
+
+    // a run continues the conversation: a second would be two runs on it
+    const live = (await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+    })) as RpcErrorShape;
+    expect(live.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(live.data?.details).toMatchObject({
+      runtimeRunId: spawned.session.runtimeRunId,
+      state: "terminal-alive",
+    });
+    expect(sessions).toHaveLength(1);
+
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(dataDir, spawned.session.runtimeRunId).exited !== undefined ? true : undefined,
+      15_000,
+    );
+
+    const resumed = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+      cwd: envOut,
+      title: "from the launcher",
+    })) as AgentSpawnResult;
+    expect(resumed.session.runtimeRunId).not.toBe(spawned.session.runtimeRunId);
+    expect(resumed.session.sessionId).toBe(conversation);
+    expect(resumed.session.title).toBe("from the launcher");
+    expect(resumed.session.kind).toBe("scripted");
+    // the adapter was asked to CONTINUE the conversation, in the folder named
+    expect(sessions).toHaveLength(2);
+    expect(sessions[1]?.resume).toBe(conversation);
+    // the same routed ticket a spawn answers: the pane mounts it the same way
+    expect(resumed.terminal.endpoints.controlUrl).toMatch(/^ws:/);
+    expect(resumed.terminal).toHaveProperty("attachGrant");
+    expect(resumed.terminal.sessionId).not.toBe(spawned.terminal.sessionId);
+    // recorded like any spawn: a later exit resumes from THIS record
+    const record = readRecord(dataDir, resumed.session.runtimeRunId);
+    expect(record.continuation).toMatchObject({
+      providerId: "scripted",
+      nativeSessionId: conversation,
+    });
+    expect(record.cwd).toBe(envOut);
+    expect(record.exited).toBeUndefined();
+    const act = auditAct(
+      dataDir,
+      // the ledger redacts a temp root, so the one with a folder is the one sent with a folder
+      (entry) => entry.action === "agent.session.resume" && entry.attrs?.["cwd"] !== undefined,
+    );
+    expect(act.attempt.target.id).toBe("pending");
+    expect(act.attempt.attrs).toMatchObject({
+      provider: "scripted",
+      nativeSessionId: conversation,
+    });
+    expect(act.outcome.outcome).toBe("succeeded");
+    expect(act.outcome.attrs?.["runtimeRunId"]).toBe(resumed.session.runtimeRunId);
+
+    // the first run's record still stands exited — and its own resume would
+    // make a second run on the conversation the launcher already continued
+    const again = (await win.callErr("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as RpcErrorShape;
+    expect(again.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(again.data?.details).toMatchObject({ runtimeRunId: resumed.session.runtimeRunId });
+    expect(sessions).toHaveLength(2);
 
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 90_000);
@@ -1406,6 +1544,61 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
 
     await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
     await win.call("terminal.terminate", { sessionId: native.terminal.sessionId });
+  }, 60_000);
+
+  it("QL-D10 — a native resume under an Agent Profile runs on its sign-in for the agent; under a profile id, that persona; with neither, the agent's own folder — never the default; a profile with no sign-in for the agent refuses before anything runs", async () => {
+    const { daemon, dataDir, envOut, seen } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "qn4");
+    const work = await signedIn(win, dataDir, "Work", { default: true });
+    const underSet = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-set",
+      cwd: envOut,
+      profileSet: work.set,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)?.id).toBe(work.profileId);
+    expect(underSet.session.profileId).toBe(work.profileId);
+    const underId = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-id",
+      cwd: envOut,
+      profileId: work.profileId,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)?.id).toBe(work.profileId);
+    // Work is the DEFAULT, and a resume that names nothing still continues in
+    // the agent's own folder: the conversation lives where it was born
+    const own = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-own",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)).toBeUndefined();
+    expect(own.session.profileId).toBeUndefined();
+    const native = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-native",
+      cwd: envOut,
+      profileSet: "native",
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)).toBeUndefined();
+
+    const made = (await win.call("agents.profileSets.create", {
+      label: "Empty",
+    })) as AgentsProfileSetsSetResult;
+    const before = seen.length;
+    const refused = await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-empty",
+      cwd: envOut,
+      profileSet: made.set.id,
+    });
+    expect(refused.data?.kind).toBe("NOT_FOUND");
+    expect(refused.message).toContain("Empty has no Scripted sign-in");
+    expect(seen.length).toBe(before);
+
+    for (const run of [underSet, underId, own, native]) {
+      await win.call("terminal.terminate", { sessionId: run.terminal.sessionId });
+    }
   }, 60_000);
 
   it("deleting a profile stops the sessions running under it first, then deletes its folder", async () => {

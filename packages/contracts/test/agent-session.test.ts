@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_MONITOR_SCHEMA_VERSION,
   AgentMonitorMirror,
+  AgentResumeNativeParams,
+  AgentResumeParams,
   AgentSessionRecord,
   AgentSessionSummary,
   AgentSpawnParams,
@@ -202,6 +204,44 @@ describe("SessionSummary v2 and the doors", () => {
         .success,
     ).toBe(true);
     expect(AgentSpawnParams.safeParse({}).success).toBe(false);
+  });
+
+  it("QL-D10 — resume params: a run, or a conversation by its native id; the run is the more specific claim", () => {
+    const run = AgentResumeParams.parse(fixture("agent-resume-params.valid.json"));
+    expect("runtimeRunId" in run && run.runtimeRunId).toBe("run-01J8Z3K9");
+    const native = AgentResumeParams.parse(fixture("agent-resume-params.native.json"));
+    expect(native).toMatchObject({ provider: "codex", profileId: "codex:work-1c7e" });
+    expect("runtimeRunId" in native).toBe(false);
+    // a body naming both a run and a conversation is the RUN form
+    const both = AgentResumeParams.parse({
+      runtimeRunId: "run-1",
+      provider: "codex",
+      nativeSessionId: "n-1",
+    });
+    expect("runtimeRunId" in both && both.runtimeRunId).toBe("run-1");
+    // a persona is named once: its id, or an Agent Profile — never both
+    expect(
+      AgentResumeNativeParams.safeParse({
+        provider: "codex",
+        nativeSessionId: "n-1",
+        profileId: "codex:a",
+        profileSet: "work",
+      }).success,
+    ).toBe(false);
+    expect(
+      AgentResumeParams.safeParse({ provider: "codex", nativeSessionId: "n-1", profileSet: "work" })
+        .success,
+    ).toBe(true);
+    for (const bad of [
+      {},
+      { provider: "codex" },
+      { nativeSessionId: "n-1" },
+      { provider: "codex", nativeSessionId: "" },
+      { provider: "not a provider!", nativeSessionId: "n-1" },
+      { provider: "codex", nativeSessionId: "n-1", profileSet: "Not A Set" },
+    ]) {
+      expect(AgentResumeParams.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
   });
 
   it("the persisted record: an opaque continuation beside the launch facts, stamped at exit", () => {

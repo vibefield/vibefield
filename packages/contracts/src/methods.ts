@@ -1667,6 +1667,12 @@ export const METHODS: MethodDef[] = [
   // holding only `agent.spawn` reaches no PTY it did not already own. The
   // named upgrade, if agent cells ever adopt a PTY the record did not mint: a
   // resume that replaces a PTY asks for `terminal.attach` as well.
+  // QL-D10 (2026-09-28) widens the params to a second form — a conversation
+  // by its provider-native id (`AgentResumeNativeParams`, the empty pane
+  // launcher's resume of an `index.recent` row). That form ends NO PTY: it
+  // has no record of ours to resolve one through, and a conversation a live
+  // run still continues is refused rather than replaced. It births a run,
+  // which is exactly `agent.spawn`'s consent, so the scope stands.
   defineMethod({
     surface: "product",
     method: "agent.resume",

@@ -61,6 +61,7 @@ import {
   IndexRetireParams,
   IndexSearchParams,
   IndexSessionsParams,
+  isAgentResumeRun,
   KvDeleteParams,
   KvGetParams,
   KvListParams,
@@ -1965,15 +1966,35 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("agent.resume", async (ctx, params) => {
       const parsed = AgentResumeParams.safeParse(params);
       if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeRunId, cwd? }", false);
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { runtimeRunId, cwd? } or { provider, nativeSessionId, cwd?, profileId? | profileSet?, title? }",
+          false,
+        );
+      const resume = parsed.data;
+      // QL-D10 — the native form names a conversation, not a run of ours: the
+      // entry's target is pending like a spawn's, and the conversation rides
+      // its attributes
+      const run = isAgentResumeRun(resume);
+      const target = run
+        ? { kind: "agent-session", id: resume.runtimeRunId }
+        : { kind: "agent-session", id: "pending" };
+      const attrs = run
+        ? {}
+        : {
+            provider: resume.provider,
+            nativeSessionId: resume.nativeSessionId,
+            ...(resume.profileId !== undefined ? { profileId: resume.profileId } : {}),
+            ...(resume.profileSet !== undefined ? { profileSet: resume.profileSet } : {}),
+          };
       return await audit.required(
         ctx,
         {
           action: "agent.session.resume",
-          target: { kind: "agent-session", id: parsed.data.runtimeRunId },
-          attrs: { ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}) },
+          target,
+          attrs: { ...attrs, ...(resume.cwd !== undefined ? { cwd: resume.cwd } : {}) },
         },
-        () => agents.resume(parsed.data, ctx.principal),
+        () => agents.resume(resume, ctx.principal),
         (result) => ({
           outcome: "succeeded",
           attrs: {

@@ -389,13 +389,49 @@ export type AgentSpawnResult = z.infer<typeof AgentSpawnResult>;
  * record: a new run, a new PTY, the vendor's own session continued
  * (`runtime.resume({continuation})`). A record whose terminal is still alive
  * is refused (PRECONDITION_FAILED): re-attaching to a live process is AR-4's. */
-export const AgentResumeParams = z
+export const AgentResumeRunParams = z
   .object({
     runtimeRunId: z.string().min(1),
     cwd: z.string().optional(),
   })
   .passthrough();
+export type AgentResumeRunParams = z.infer<typeof AgentResumeRunParams>;
+
+/** QL-D10 (thinking-ql-empty-pane-launcher.md) — continue a conversation the
+ * agent index knows by its provider-native id (an `index.recent` row), with no
+ * record of ours behind it: `runtime.resume({continuation: {providerId,
+ * nativeSessionId, implementation: "native"}})`. `provider` is the catalog id;
+ * refused when its row does not offer `resume`. The persona is `profileId`
+ * (the row's own — the root that HOLDS the conversation) or `profileSet` (an
+ * Agent Profile, resolved to its sign-in for the agent; `native`: the agent's
+ * own folder), never both; with neither, the agent's own folder — a resume
+ * never takes the default profile (puppeteer's rule). A conversation a live
+ * run already continues is refused. The answer is `agent.spawn`'s. */
+export const AgentResumeNativeParams = z
+  .object({
+    provider: AgentProviderId,
+    nativeSessionId: z.string().min(1).max(256),
+    cwd: z.string().optional(),
+    profileId: AgentProfileId.optional(),
+    profileSet: AgentProfileSetId.optional(),
+    title: z.string().max(256).optional(),
+  })
+  .passthrough()
+  .refine((params) => params.profileId === undefined || params.profileSet === undefined, {
+    message: "name a profileId or a profileSet, not both",
+  });
+export type AgentResumeNativeParams = z.infer<typeof AgentResumeNativeParams>;
+
+/** Either form. A body carrying `runtimeRunId` is the record form, whatever
+ * else it carries — the run a caller names is the more specific claim. */
+export const AgentResumeParams = z.union([AgentResumeRunParams, AgentResumeNativeParams]);
 export type AgentResumeParams = z.infer<typeof AgentResumeParams>;
+
+/** Which form a parsed `AgentResumeParams` is (the passthrough index
+ * signature defeats `in` narrowing). */
+export function isAgentResumeRun(params: AgentResumeParams): params is AgentResumeRunParams {
+  return typeof (params as { runtimeRunId?: unknown }).runtimeRunId === "string";
+}
 
 /** agent.list result, and the shape of every `agent.subscribe` frame: FULL
  * snapshots (state transfer, never edges — a missed frame is repaired by the
