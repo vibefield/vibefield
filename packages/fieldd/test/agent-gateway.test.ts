@@ -267,15 +267,21 @@ describe("the launcher's runtime — one rule, four cases (AR-7b)", () => {
     mkdirSync(join(root, "elsewhere"));
     symlinkSync(join(shim, "node"), join(root, "elsewhere", "node"));
     const real = nodeIn(join(root, "real"));
+    // another host's launcher directory, whose `node` is a link to a real one: what runs is
+    // outside it, and the path that names it is still inside a directory a host empties
+    const other = join(root, "other-home", "bin");
+    mkdirSync(other, { recursive: true });
+    symlinkSync(real, join(other, "node"));
     const path = [
       join(root, "linked"),
       `${shim}/`,
       shim,
+      other,
       join(root, "elsewhere"),
       join(root, "absent"),
       join(root, "real"),
     ].join(":");
-    expect(firstNodeOnPath(path, [shim])).toBe(real);
+    expect(firstNodeOnPath(path, [shim, other])).toBe(real);
 
     const asked: string[] = [];
     const chosen = await chooseLauncherRuntime(
@@ -284,7 +290,7 @@ describe("the launcher's runtime — one rule, four cases (AR-7b)", () => {
         execPath: "/Applications/Electron.app/Contents/MacOS/Electron",
         nodeVersion: "22.19.0",
         path,
-        shimDirectories: [shim, undefined],
+        shimDirectories: [shim, undefined, other],
         probe: async (command) => {
           asked.push(command);
           return "22.15.0";
@@ -1346,16 +1352,26 @@ describe("the list of our shells — terminals.json (AR-7b)", () => {
   );
 
   it(
-    "reads a shell's start ONCE, and an inventory that changed nothing of ours reads and writes nothing",
+    "reads a shell's start ONCE — and asks ONCE about a session that has no shell — so an inventory that changed nothing of ours reads and writes nothing",
     async () => {
       const box = await unit();
       onePane(box);
+      // beside the pane, a session the floor keeps after its process ended
+      const panes = [
+        { sessionId: "s1", pid: 500 },
+        { sessionId: "husk", pid: 510 },
+      ];
+      box.terminals.lists(panes);
       await box.gateway.start();
       const reads = box.reads.count;
+      expect(reads).toBe(1);
       const written = statSync(join(box.home, "terminals.json")).mtimeMs;
       const text = readFileSync(join(box.home, "terminals.json"), "utf8");
       // a title changed, a directory changed: the floor publishes, our shells are who they were
-      for (let n = 0; n < 20; n += 1) box.terminals.lists([{ sessionId: "s1", pid: 500 }]);
+      for (let n = 0; n < 20; n += 1) {
+        box.terminals.lists(panes);
+        if (n % 5 === 0) await sleep(10);
+      }
       await sleep(150);
       expect(box.reads.count).toBe(reads);
       expect(statSync(join(box.home, "terminals.json")).mtimeMs).toBe(written);
