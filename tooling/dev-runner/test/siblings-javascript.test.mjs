@@ -155,7 +155,10 @@ writeFileSync("dist/index.js", "export const rendered = " + protocol + ";");
         "-e",
         "import { rendered } from 'fixture-renderer'; console.log(rendered)",
       ],
-      { cwd: checkout, encoding: "utf8" },
+      // Nx runs every task with FORCE_COLOR set, and a Node child then colours even
+      // a piped `console.log(42)` (`\x1B[33m42\x1B[39m`): pin the child's colours off so
+      // the row reads the number under `pnpm test` as it does under `node --test`.
+      { cwd: checkout, encoding: "utf8", env: { ...process.env, FORCE_COLOR: "0" } },
     ).trim(),
     "42",
   );
