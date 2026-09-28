@@ -86,6 +86,7 @@ jobs:
       # verify.yml's business: it drives contracts codegen freshness, which is not a
       # packaging concern.
 
+      - uses: ./.github/actions/prepare-ghosttea
       - run: pnpm install --frozen-lockfile
 
       # Root `build` is the Nx desktop build graph: fieldd, Electron main/preload/testing,

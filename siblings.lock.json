@@ -34,7 +34,16 @@
     },
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
-      "sha": "470b9e16d991b75582d897f2e1ffcc7e619ebe68",
+      "repository": "https://github.com/vibecook-dev/ghosttea.git",
+      "sha": "d86e285fbaaf595b88c4a4645c00a79a4c25e8af",
+      "javascript": {
+        "workspaces": [
+          "@vibecook/ghosttea-protocol",
+          "@vibecook/ghosttea-frame",
+          "@vibecook/ghosttea",
+          "@vibecook/ghosttea-react"
+        ]
+      },
       "packages": {
         "@vibecook/ghosttea-react": "packages/ghosttea-react"
       },

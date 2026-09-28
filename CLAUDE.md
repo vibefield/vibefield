@@ -136,6 +136,14 @@ through esbuild's and Vite's own input tracking, never through the runner's watc
 "never watches sibling trees" law below stands. Exit (W-D8) is a version edit: replace each
 `link:` row with an exact version and delete the lock entry.
 
+**Terminal performance source window (2026-09-27):** `../ghosttea-0.11.2` is also pinned in
+the lock, supplying six Cargo patches and the React renderer. Run
+`node scripts/siblings.mjs fetch ghosttea` to create a missing checkout at its pin, then
+`node scripts/siblings.mjs install-js` for its frozen npm workspace install.
+`pnpm siblings:build` builds its generated JavaScript exports in dependency order as well
+as rosettad; `node scripts/siblings.mjs build-js` rebuilds just those exports after edits.
+CI uses the same commands. Existing checkouts are never reset by `fetch`.
+
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version). Go is NO LONGER a prereq — truffle's mesh
 sidecar was built from source while the window's Go half was open, and comes from npm again.

@@ -34,8 +34,8 @@ a private mesh across machines, and an iPhone companion.
 ## Getting started
 
 Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify` ·
-three SIBLING CHECKOUTS beside this one: `../puppeteer` and `../rosetta` (AR-0) and
-`../truffle-rfc025`.
+four SIBLING CHECKOUTS beside this one: `../puppeteer` and `../rosetta` (AR-0),
+`../truffle-rfc025`, and `../ghosttea-0.11.2` (the terminal performance source window).
 **The RFC 025 petition window (2026-09-16) closed on two planes of three:** truffle 0.7.14
 shipped, so `truffle-core` is an exact registry pin again, the `[patch.crates-io]` row is gone,
 and the mesh sidecar comes from npm rather than being built from source (Go is no longer a
@@ -51,9 +51,11 @@ lives in the manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from the
 2026-09-16 when the manifest had been at `0.11.0` for weeks, which is why it now names none.
 
 ```sh
+node scripts/siblings.mjs fetch ghosttea # clone at its pin; preserves existing checkouts
+node scripts/siblings.mjs install-js    # frozen install of Ghosttea's renderer dependencies
 pnpm install
 pnpm siblings       # the sibling checkouts: path, pin, dirtiness, built binaries
-pnpm siblings:build # rosettad, from the pinned checkout
+pnpm siblings:build # rosettad + Ghosttea's React renderer and its dependencies
 pnpm preflight      # tool versions + sibling pins + import-boundary walls
 pnpm hooks:install  # one-time: wires scripts/git-hooks (the dev-local push guard)
 pnpm dev            # desktop app dev loop
@@ -62,6 +64,10 @@ pnpm dev:design     # open/focus Studio on the active dev host
 pnpm dev:design:web # optional browser-only catalog loop (no live app authority)
 pnpm verify         # full gate: typecheck · biome · rustfmt/clippy · TS+Rust tests · gen freshness
 ```
+
+Ghosttea exports generated `dist` files, so rebuild after editing its TypeScript sources
+with `node scripts/siblings.mjs build-js`. CI uses the same lock-driven fetch, install and
+build commands; the native Cargo patches resolve directly to the pinned source checkout.
 
 Env toggles are documented in `.env.example` (nothing auto-loads it — export in your shell).
 

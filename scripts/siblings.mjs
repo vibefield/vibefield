@@ -23,14 +23,18 @@
 // (EL8). A dirty sibling only WARNs — co-developing it is the normal state;
 // the pin is about the base revision.
 //
-// Usage: node scripts/siblings.mjs <status|pin|stamp|build|bin>
+// Usage: node scripts/siblings.mjs <status|pin|stamp|fetch NAME|install-js|build-js|build|bin>
 //   status  print each sibling's path, HEAD, pin, and dirtiness (never fails)
 //   pin     record every sibling's current HEAD in siblings.lock.json, build
 //           rosettad at it (a no-op when fresh), then prove the agent catalog
 //           against the new pins (wall R23, the rosetta half REQUIRED)
 //   stamp   one line naming each sibling's HEAD + a hash of its working-tree
 //           state — the Nx `sharedGlobals` runtime input
-//   build   every sibling's binary: `cargo build --release -p <crate>` in the
+//   fetch   clone a named sibling at its pin; never reset an existing checkout
+//   install-js  frozen npm workspace installs for source-linked dist packages
+//   build-js    build those workspaces in the lock's dependency order
+//   build   the JavaScript packages above and every sibling's binary:
+//           `cargo build --release -p <crate>` in the
 //           cargo sibling, `go build -o <repo>/target/debug/<binary>` in the go
 //           sibling's module
 //   bin     print the built rosettad path (exit 1 when it is not built)
@@ -55,7 +59,8 @@ export const LOCK_FILE = "siblings.lock.json";
 /** The parsed lock, or null when the file is absent. Shape: `{ siblings: {
  * <name>: { path, sha, packages?: { <npm name>: <dir inside the checkout> },
  * patch?: { <crate name>: <dir inside the checkout> },
- * cargo?: { crate, profile }, go?: { module, binary } } } }`. Every block is
+ * cargo?: { crate, profile }, go?: { module, binary }, repository?: string,
+ * javascript?: { workspaces: string[] } } } }`. Every block is
  * one KIND of consumption, and a sibling may carry several: `packages` is the
  * npm half (link: rows), `patch` the cargo half ([patch.crates-io] rows),
  * `cargo` a crate this repo builds from the sibling for its own use, `go` a Go
@@ -432,6 +437,74 @@ export function sidecarStagingSource(root = REPO_ROOT, platform = process.platfo
 
 // --- CLI ---------------------------------------------------------------------
 
+/** Fetch only absent checkouts. Existing developer trees, including dirty trees,
+ * are never checked out or reset; the revision must already match the pin. */
+export function fetchSibling(root, name) {
+  const entry = readLock(root)?.siblings[name];
+  if (!entry?.repository || !/^[a-f0-9]{40}$/.test(entry.sha)) {
+    throw new Error(
+      `siblings:fetch: ${name} needs a repository URL and full revision in ${LOCK_FILE}`,
+    );
+  }
+  const dir = siblingDir(root, entry);
+  if (!existsSync(dir)) {
+    execFileSync("git", ["clone", "--no-checkout", "--", entry.repository, dir], {
+      cwd: root,
+      stdio: "inherit",
+    });
+    execFileSync("git", ["checkout", "--detach", entry.sha], { cwd: dir, stdio: "inherit" });
+  }
+  if (siblingHead(dir) !== entry.sha) {
+    throw new Error(
+      `siblings:fetch: ${dir} exists but is not at ${entry.sha}; refusing to change it`,
+    );
+  }
+  console.log(`siblings:fetch: ${name} @ ${entry.sha} → ${dir}`);
+  return 0;
+}
+
+function runNpm(dir, args) {
+  console.log(`siblings: npm ${args.join(" ")}  (in ${dir})`);
+  const run = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", args, {
+    cwd: dir,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (run.error) throw run.error;
+  return run.status ?? 1;
+}
+
+/** These packages export generated dist files. Installing VibeField's link:
+ * dependencies neither installs the sibling's tools nor builds those files. */
+export function installJavaScript(root) {
+  for (const entry of Object.values(readLock(root)?.siblings ?? {})) {
+    if (!entry.javascript) continue;
+    const result = runNpm(siblingDir(root, entry), [
+      "ci",
+      "--include=dev",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "--include-workspace-root=false",
+      ...entry.javascript.workspaces.map((name) => `--workspace=${name}`),
+    ]);
+    if (result !== 0) return result;
+  }
+  return 0;
+}
+
+export function buildJavaScript(root) {
+  let result = null;
+  for (const entry of Object.values(readLock(root)?.siblings ?? {})) {
+    if (!entry.javascript) continue;
+    for (const workspace of entry.javascript.workspaces) {
+      result = runNpm(siblingDir(root, entry), ["run", "build", `--workspace=${workspace}`]);
+      if (result !== 0) return result;
+    }
+  }
+  return result;
+}
+
 function status(root) {
   const lock = readLock(root);
   if (lock === null) {
@@ -673,12 +746,10 @@ function build(root) {
     console.error(`siblings:build FAIL: ${LOCK_FILE} is absent (registry mode — nothing to build)`);
     return 1;
   }
-  // Both halves run even when the first fails: a developer asking for the
-  // sibling binaries wants the state of BOTH, not the first error and a guess
-  // about the other. The exit code is the first failure.
-  const results = [buildCargo(root), buildGo(root)];
+  // Report all declared builds even when one fails; return the first failure.
+  const results = [buildJavaScript(root), buildCargo(root), buildGo(root)];
   if (results.every((r) => r === null)) {
-    console.error(`siblings:build FAIL: no cargo or go sibling in ${LOCK_FILE} (nothing to build)`);
+    console.error(`siblings:build FAIL: no javascript, cargo or go sibling in ${LOCK_FILE}`);
     return 1;
   }
   return results.find((r) => r !== null && r !== 0) ?? 0;
@@ -708,12 +779,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       return 0;
     },
     build,
+    fetch: (root) => fetchSibling(root, process.argv[3]),
+    "install-js": installJavaScript,
+    "build-js": (root) => buildJavaScript(root) ?? 0,
     bin: printBin,
   };
   const handler = handlers[command];
   if (handler === undefined) {
-    console.error("usage: node scripts/siblings.mjs <status|pin|stamp|build|bin>");
+    console.error(
+      "usage: node scripts/siblings.mjs <status|pin|stamp|fetch NAME|install-js|build-js|build|bin>",
+    );
     process.exit(2);
   }
-  process.exit(handler(REPO_ROOT));
+  try {
+    process.exit(handler(REPO_ROOT));
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
 }
