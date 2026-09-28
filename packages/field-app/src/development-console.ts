@@ -120,6 +120,30 @@ export function emitGodviewDirectTerminalMarker(facts: GodviewDirectTerminalFact
   console.log(`GODVIEW_DIRECT_TERMINAL ${JSON.stringify(facts)}`);
 }
 
+/** AR-7: one run of the fold, as the monitor stage received it (`runs`). */
+export interface GodviewMonitorRunFacts {
+  run: string;
+  /** puppeteer's provider id, open (AR-L1) */
+  provider: string;
+  /** the floor session the run's PTY is — the pane join's own key — when a
+   * pane of THIS device can show it; absent for a run hosted in none */
+  terminal?: string;
+  /** design-04's provenance word: `app` for a run our doors started (the
+   * stage's SPAWN, a resume), `user-shell` for a name typed at a pane's prompt
+   * (open; a row without it reads `app`) */
+  spawnedBy: string;
+  /** fieldd's one derived status word */
+  status: string;
+  /** the fold holds the run as an EXITED row (MF-1f: its process ended while
+   * its pane is still on the floor) */
+  exited: boolean;
+  /** the provider has said something about the run (a monitor mirror) — what
+   * the pane frame's mark and readout are drawn from */
+  observed: boolean;
+  /** the stage DRAWS it: a body in the swarm (a run that is not alive is not) */
+  drawn: boolean;
+}
+
 /** What the Godview MONITOR currently is (GT-3m) — the deck marker's sibling,
  * for the stage above it.
  *
@@ -207,6 +231,17 @@ export interface GodviewMonitorFacts {
     history: string | null;
     personas: number;
   };
+  /**
+   * AR-7: the fold's rows, one per run, as this stage received them — every
+   * row, drawn or not. The counts above say how many; this says WHICH, and
+   * whose pane and whose doing each is. A run typed at a pane's prompt must
+   * read here as one the SPAWN button started (a row, a body, its pane), and
+   * when it ends its row must LEAVE — never stay behind as an exited one. The
+   * damage gate the counts ride is not enough for that claim: an exited row is
+   * dropped from the drawn rows, so only the fold's own rows can tell "left"
+   * from "held as exited".
+   */
+  runs: GodviewMonitorRunFacts[];
 }
 
 export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {

@@ -431,6 +431,92 @@ describe("the monitor stage", () => {
     expect(pressedView(host)).toBe("SWARM view");
   });
 
+  it("names every run of the fold on the marker — its pane, whose doing it is, drawn or not (AR-7)", async () => {
+    // A name typed at a pane's prompt is a run like any other: its row joins
+    // the pane its shell is (an INTERACTIVE cell's session, not the agent
+    // cell's) and says `user-shell`. And an ended run must be told apart from
+    // one that left: the stage drops a run that is not alive from its bodies,
+    // so the counts cannot say whether the fold still HOLDS it — this can.
+    const typed: AgentSessionSummary = {
+      ...managedSummary({
+        runtimeRunId: "run-typed",
+        kind: "claude",
+        label: "Claude",
+        status: "idle",
+        terminalSessionId: "pane-1",
+      }),
+      terminal: { hosted: "local", runtimeSessionId: "pane-1", workloadClass: "interactive" },
+      spawnedBy: "user-shell",
+    };
+    const ended = managedSummary({
+      runtimeRunId: "run-ended",
+      alive: false,
+      terminalSessionId: "pane-9",
+    });
+    const exited: AgentSessionSummary = {
+      ...ended,
+      continuation: { persisted: true, resumable: true, exited: true },
+    };
+    const quiet = managedSummary({
+      runtimeRunId: "run-quiet",
+      terminalSessionId: null,
+      monitor: false,
+    });
+    const host = await mountMonitor(
+      DEFAULT_MONITOR_VIEW_ID,
+      fakeDoor([ROWS[0] as AgentSessionSummary, typed, exited, quiet]),
+    );
+    expect(latest().runs).toEqual([
+      {
+        run: "run-claude",
+        provider: "claude",
+        terminal: "run-claude-pty",
+        spawnedBy: "app",
+        status: "working",
+        exited: false,
+        observed: true,
+        drawn: true,
+      },
+      {
+        run: "run-typed",
+        provider: "claude",
+        terminal: "pane-1",
+        spawnedBy: "user-shell",
+        status: "idle",
+        exited: false,
+        observed: true,
+        drawn: true,
+      },
+      {
+        run: "run-ended",
+        provider: "codex",
+        terminal: "pane-9",
+        spawnedBy: "app",
+        status: "idle",
+        exited: true,
+        observed: true,
+        drawn: false,
+      },
+      // no pane of this device hosts it, and nothing has spoken for it yet
+      {
+        run: "run-quiet",
+        provider: "codex",
+        spawnedBy: "app",
+        status: "idle",
+        exited: false,
+        observed: false,
+        drawn: true,
+      },
+    ]);
+    // the typed run is a body, exactly as the spawned one is: three agents
+    // drawn, and the pane it is in is no longer an unclaimed terminal row
+    expect(latest().agentBacked).toBe(3);
+    expect(latest().terminals).toBe(1);
+    expect(
+      swarmRows(host).filter((row) => row.dataset["agentBubbleSource"] === "agent").length,
+    ).toBe(3);
+  });
+
   it("says WEBGPU UNAVAILABLE rather than drawing an empty field on a device with no GPU", async () => {
     // The honest-states law where AR-5's port put it. happy-dom has no WebGPU,
     // and a swarm that answered that with a blank canvas would look exactly

@@ -375,6 +375,43 @@ describe("the sessionless door is gone (TP-D3)", () => {
   });
 });
 
+describe("the shell policy on the snapshot keeps its identity (AR-7)", () => {
+  it("hands on the SAME shell object through every publication that does not change main's answer — the deck's monitor door keys on it", async () => {
+    // The godview smoke's typed-agent row found a typed run in the fold and
+    // nowhere on the stage: each publication built a fresh `{defaultShell,
+    // home}`, the deck's door memo keys on it, and every rebuilt door
+    // restarted the monitor's fold subscription before its first frame.
+    const shells: unknown[] = [];
+    const stop = pool.subscribeTerminalPool(() => shells.push(pool.terminalPoolSnapshot().shell));
+    pool.openTerminalPool(fieldd, { sessionIds: [] });
+    await settle();
+    const dormant = pool.terminalPoolSnapshot().shell;
+    expect(dormant).toEqual({ defaultShell: "/bin/zsh", home: "/Users/test" });
+    // a birth, then its ticket: publications that change nothing about the shell
+    await pool.createTerminalSession({ workloadClass: "interactive" });
+    await settle();
+    const host = (runtimeOptions[0] as { host?: { openTicket(id: string): Promise<unknown> } })
+      .host;
+    await host?.openTicket("born-1");
+    stop();
+    expect(pool.terminalPoolSnapshot().phase).toBe("open");
+    const exposed = shells.filter((shell) => shell !== null);
+    expect(exposed.length, "the pool published more than once with a shell").toBeGreaterThan(1);
+    for (const shell of exposed) expect(shell).toBe(dormant);
+    // a CHANGED answer is a new object — identity follows the value, nothing else
+    pool.configureTerminalPool({
+      transport: "routed",
+      defaultShell: "/bin/bash",
+      home: "/Users/test",
+    });
+    expect(pool.terminalPoolSnapshot().shell).not.toBe(dormant);
+    expect(pool.terminalPoolSnapshot().shell).toEqual({
+      defaultShell: "/bin/bash",
+      home: "/Users/test",
+    });
+  });
+});
+
 describe("the route is the key (TP-L-C)", () => {
   it("keys the cell ledger by the cellBootId the ROUTED ticket answered", async () => {
     cellOf = { "b-1": "cell-b-boot-9" };

@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir, userInfo } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
+  LAYOUT,
   TerminalConfigDocument,
   TerminalConfigValidation,
   TerminalConfigWriteRefusal,
@@ -96,6 +97,14 @@ import {
   type PhysicalSoakOptions,
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
+import {
+  leakedVariables,
+  readTypedAgentCalls,
+  type StagedTypedAgent,
+  startupFilesRead,
+  TYPED_AGENT_REFUSED_ARGUMENT,
+  type TypedAgentCall,
+} from "./typed-agent";
 
 export { runTerminalDoorProbe } from "./terminal-door-probe";
 // TP-S0c — the perf lab rides the SAME test-only bundle every smoke does, so
@@ -103,6 +112,10 @@ export { runTerminalDoorProbe } from "./terminal-door-probe";
 // second artifact has to be built, excluded from packaging, and kept excluded.
 // Its code lives in its own file; only the door is here.
 export { runTerminalPerfLab, SCENARIOS as TERMINAL_PERF_SCENARIOS } from "./terminal-perf-lab";
+// AR-7 — main stages the godview smoke's typed agent BEFORE the pair boots
+// (fieldd composes an agent's executable once, at boot), so the stager is a
+// door of this bundle's like the runners are; its code lives in its own file.
+export { stageTypedAgent } from "./typed-agent";
 
 // Smoke/spike runners (ESR §5.2.6 / ESR-12): a SEPARATE build artifact
 // (dist/testing/smoke.cjs) that the production main bundle never contains —
@@ -1850,6 +1863,28 @@ interface MonitorFacts {
   usageTiles: number;
   /** AR-5: `open` · `closed`. */
   findSheet: string;
+  /** AR-7: the fold's rows, by run, as the stage received them — optional:
+   * a stage built before the field existed publishes none, and the typed-agent
+   * rows then fail on it by name rather than on a TypeError. */
+  runs?: MonitorRunFacts[];
+}
+
+/** AR-7: one run of the fold on the monitor's marker (`GodviewMonitorRunFacts`
+ * in field-app's development-console.ts, which this process cannot import). */
+interface MonitorRunFacts {
+  run: string;
+  provider: string;
+  /** the floor session the run's PTY is, when a pane here can show it */
+  terminal?: string;
+  /** `app` · `user-shell` (open) */
+  spawnedBy: string;
+  status: string;
+  /** held as an EXITED row (MF-1f) */
+  exited: boolean;
+  /** the provider has spoken: what the pane frame's mark is drawn from */
+  observed: boolean;
+  /** a body in the swarm */
+  drawn: boolean;
 }
 
 /** A running tail of one marker channel, armed BEFORE the load so a fast page
@@ -2918,6 +2953,534 @@ const persistenceOf = (
   sessionId: string,
 ): string | undefined => terminals.find((t) => t.sessionId === sessionId)?.persistence;
 
+// ---- AR-7: the typed agent ---------------------------------------------------
+
+/** Ask `read` until it answers, bounded; a timeout names what was awaited. */
+async function untilRead<T>(
+  what: string,
+  timeoutMs: number,
+  read: () => T | undefined | Promise<T | undefined>,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await read();
+    if (value !== undefined) return value;
+    await sleep(150);
+  }
+  throw new Error(`${what} did not happen within ${timeoutMs}ms`);
+}
+
+const processAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** The selector for the frame the deck portals into the pane showing a session
+ * — the frame names its session (`data-vf-pane-frame`, views' PaneFrame). */
+const frameOf = (sessionId: string): string =>
+  `.vf-godview-terminal-deck [data-vf-pane-frame="${sessionId}"]`;
+
+/** Put the caret in ONE pane — the one showing `sessionId` — the way
+ * `focusDeck` does for the first: placed, not clicked (its comment says why).
+ * The pane is found through its frame, polled because the frames land a
+ * macrotask after the panes they portal into. */
+async function focusPane(win: BrowserWindow, sessionId: string): Promise<void> {
+  win.focus();
+  win.webContents.focus();
+  const deadline = Date.now() + 20_000;
+  let seen = "";
+  while (Date.now() < deadline) {
+    seen = (await win.webContents.executeJavaScript(
+      `(() => {
+        const frame = document.querySelector(${JSON.stringify(frameOf(sessionId))});
+        if (!frame) return "no frame names the session";
+        const input = frame.closest(".ghostty-pane")?.querySelector(".terminal-input");
+        if (!input) return "the frame's pane has no input";
+        const r = input.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1) return "the input has no size";
+        input.focus();
+        return document.activeElement === input ? "ok" : "focus refused";
+      })()`,
+    )) as string;
+    if (seen === "ok") {
+      await sleep(150);
+      return;
+    }
+    await sleep(200);
+  }
+  throw new Error(`the pane showing ${sessionId} could not take keyboard focus: ${seen}`);
+}
+
+/** `typeLineUntilMarker` for ONE pane: a line that is safe to type twice,
+ * retyped until its marker lands, focus placed in that pane each time. */
+async function typeInPaneUntilMarker(
+  win: BrowserWindow,
+  sessionId: string,
+  line: string,
+  markerPath: string,
+  marker: string,
+): Promise<void> {
+  let lastFailure: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await focusPane(win, sessionId);
+    await typeTerminalLine(win, line);
+    try {
+      await waitForShellMarker(markerPath, 10_000, marker);
+      return;
+    } catch (failure) {
+      lastFailure = failure;
+    }
+  }
+  throw lastFailure instanceof Error ? lastFailure : new Error(String(lastFailure));
+}
+
+/** What the pane showing `sessionId` wears: whether the deck framed it, and
+ * whether the frame carries an agent's MARK — the badge's `.vf-pane-mark`,
+ * which the frame draws only from an agent's facts (field-app's
+ * `pane-frame-facts.ts`: a run whose provider has said nothing yields none). */
+async function paneFrameMark(
+  win: BrowserWindow,
+  sessionId: string,
+): Promise<{ framed: boolean; mark: boolean }> {
+  return (await win.webContents.executeJavaScript(
+    `(() => {
+      const frame = document.querySelector(${JSON.stringify(frameOf(sessionId))});
+      return { framed: frame !== null, mark: frame?.querySelector(".vf-pane-mark") != null };
+    })()`,
+  )) as { framed: boolean; mark: boolean };
+}
+
+/** The launcher the gateway wrote for `agentId`, read where puppeteer's
+ * spawn-through kit keeps it (its layout under the launchers' home: the
+ * provider table `launch-providers.json`, one launcher per name in `bin/`) —
+ * the command name a person types, and the REAL executable behind it.
+ * Undefined until the gateway has written it (it starts in the background of
+ * fieldd's boot). Read, never written: the kit's files are the kit's. */
+function typedLauncher(
+  home: string,
+  agentId: string,
+): { name: string; executable: string; path: string } | undefined {
+  let table: unknown;
+  try {
+    table = JSON.parse(readFileSync(join(home, "launch-providers.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(table)) return undefined;
+  for (const provider of table as Array<{
+    id?: unknown;
+    nativeInvocation?: { commands?: Array<{ name?: unknown; executable?: unknown }> };
+  }>) {
+    if (provider.id !== agentId) continue;
+    const command = provider.nativeInvocation?.commands?.[0];
+    if (typeof command?.name !== "string" || typeof command.executable !== "string") continue;
+    return {
+      name: command.name,
+      executable: command.executable,
+      path: join(home, "bin", command.name),
+    };
+  }
+  return undefined;
+}
+
+/**
+ * 14. THE TYPED AGENT (AR-7, R1 — "type it"; the plan's §9 names this row).
+ *
+ * R1 as the plan states it: in a Godview pane's shell, type the agent's name;
+ * the fold has a row for it, the pane wears the record's frame with the
+ * agent's mark, the swarm has its body — exactly as for a session the SPAWN
+ * button started — and when the agent quits, the row leaves and the pane is a
+ * shell again. fieldd's own suites prove everything below the renderer on the
+ * real floor (agent-gateway*.test.ts); what only this harness can prove is the
+ * PRODUCT: that the deck and the monitor show a typed run as they show a
+ * spawned one.
+ *
+ * The agent is the smoke's own stub (testing/typed-agent.ts): main staged it,
+ * its person and its install record before the pair booted, so no vendor's
+ * binary runs and nothing of the machine owner's is read. The step types into
+ * a pane of its OWN, split open after the gateway's launcher stands — a pane
+ * born earlier may have been born before the gateway was up, and the
+ * integration is given at birth.
+ *
+ * Five items, each its own `SMOKE_GODVIEW_TYPED` line and its own verdict key
+ * (`typedAgent1`…`typedAgent5`), and a failure names its item:
+ *   1. the pane is born integrated — the launcher leads its PATH, the name is
+ *      a command (no alias or function of anyone's), and the person's startup
+ *      files ran (ZDOTDIR was given back);
+ *   2. typed, the name is a managed run: the monitor's marker has a run whose
+ *      terminal is THAT pane and whose provenance is `user-shell`, the swarm
+ *      draws it, the pane's frame wears the mark, and the stub received the
+ *      managed launch — the recipe's own flags, none of the kit's or
+ *      VibeField's private variables, the pane's shell its parent;
+ *   3. quit, its row LEAVES — never held as an exited row — and the pane
+ *      answers at its prompt;
+ *   4. `<name> --version` is not a session: the stub runs as typed, no row;
+ *   5. `<name> --bare` is refused: VibeField's sentence naming the argument,
+ *      the kit's refused status, the stub never ran, no row.
+ *
+ * What a harness cannot read here, said rather than faked: a pane's cells.
+ * The refusal is read from the same stderr bytes zsh copies to the screen and
+ * to a file (MULTIOS), and "the pane answers" is a marker file its shell
+ * writes — the idiom of every row above.
+ */
+async function typedAgentRows(ctx: {
+  win: BrowserWindow;
+  handle: FielddHandle;
+  /** the run's user root: the launchers' home hangs off it */
+  userRoot: string;
+  staged: StagedTypedAgent;
+  deck: MarkerWatch<DeckFacts>;
+  monitorWatch: MarkerWatch<MonitorFacts>;
+  verdict: Record<string, unknown>;
+}): Promise<void> {
+  const { win, handle, staged, deck, monitorWatch, verdict } = ctx;
+  const work = staged.work;
+  const nonce = (): string => `typed-${Math.random().toString(36).slice(2, 10)}`;
+  const say = (item: number, name: string, facts: Record<string, unknown>): void => {
+    const line = { item, name, ...facts };
+    console.log(`SMOKE_GODVIEW_TYPED ${JSON.stringify(line)}`);
+    verdict[`typedAgent${item}`] = line;
+  };
+  const item = async <T>(n: number, name: string, body: () => Promise<T>): Promise<T> => {
+    try {
+      return await body();
+    } catch (error) {
+      throw new Error(
+        `typed agent, item ${n} (${name}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+  const callsSince = (from: number): TypedAgentCall[] =>
+    readTypedAgentCalls(staged.calls).slice(from);
+  /** Every run the monitor showed in `pane` since the marker at `from`. */
+  const runsInPaneSince = (from: number, pane: string): MonitorRunFacts[] =>
+    monitorWatch
+      .history()
+      .slice(from)
+      .flatMap((facts) => facts.runs ?? [])
+      .filter((run) => run.terminal === pane);
+  const readIn = (file: string): string => readFileSync(join(work, file), "utf8").trim();
+  const home = join(ctx.userRoot, ...LAYOUT.AGENT_SHIMS_DIR);
+  /** fieldd's own fold, asked over the harness's own client — for a failure
+   * message, never for a pass: it says whether a missing row is the daemon's
+   * or the renderer's. */
+  const foldNow = async (): Promise<string> => {
+    try {
+      const listed = (await handle.client.request("agent.list", {})) as {
+        sessions?: Array<{
+          runtimeRunId?: string;
+          spawnedBy?: string;
+          terminal?: { hosted?: string; runtimeSessionId?: string };
+        }>;
+      };
+      return JSON.stringify(
+        (listed.sessions ?? []).map((row) => ({
+          run: row.runtimeRunId,
+          spawnedBy: row.spawnedBy ?? "app",
+          terminal: row.terminal?.runtimeSessionId ?? row.terminal?.hosted ?? null,
+        })),
+      );
+    } catch (error) {
+      return `unread (${error instanceof Error ? error.message : String(error)})`;
+    }
+  };
+
+  // ── 1. born integrated ──
+  const { pane, shellPid, launcher } = await item(1, "born-integrated", async () => {
+    // The launcher stands, and its real executable is the STUB: what a person
+    // types can reach nothing of the owner's, managed or falling through.
+    const launcher = await untilRead("the gateway's launcher for the typed agent", 90_000, () =>
+      typedLauncher(home, staged.agentId),
+    );
+    if (canonicalPath(launcher.executable) !== canonicalPath(staged.stub)) {
+      throw new Error(
+        `the launcher's real executable is ${launcher.executable}, not the smoke's stub — the name could reach an install that is not the smoke's`,
+      );
+    }
+    // A pane of its own, born now — after the launcher, so born with it.
+    const before = await deckSettled(deck, 1_500, 60_000);
+    await focusDeck(win);
+    pressChord(win, SPLIT_CHORD.key, SPLIT_CHORD.shift);
+    const split = await deck.until(
+      (facts) => facts.panes === before.panes + 1,
+      `${SPLIT_CHORD.label} to open a pane for the typed agent`,
+      45_000,
+    );
+    const pane = split.sessionIds.find((id) => !before.sessionIds.includes(id));
+    if (pane === undefined) throw new Error("the split pane carries no new session");
+    const listed = await untilFloor(
+      handle,
+      (terminals) => terminals.some((t) => t.sessionId === pane && typeof t.pid === "number"),
+      `list the typed agent's pane ${pane} with its shell's pid`,
+      20_000,
+    );
+    const shellPid = listed.find((t) => t.sessionId === pane)?.pid as number;
+    // The typing reaches THIS pane: its own shell answers with its pid.
+    const m0 = nonce();
+    await typeInPaneUntilMarker(
+      win,
+      pane,
+      `cd ${work}; echo $$ > pid; echo ${m0} > m0`,
+      join(work, "m0"),
+      m0,
+    );
+    if (Number(readIn("pid")) !== shellPid) {
+      throw new Error(`the typing reached shell ${readIn("pid")}, not the pane's own ${shellPid}`);
+    }
+    const m1 = nonce();
+    await typeInPaneUntilMarker(
+      win,
+      pane,
+      `whence -p ${launcher.name} > p; whence -w ${launcher.name} > w; echo $PATH > path; echo z=$ZDOTDIR > z; echo ${m1} > m1`,
+      join(work, "m1"),
+      m1,
+    );
+    const resolved = readIn("p");
+    const kind = readIn("w");
+    const lead = readIn("path").split(":")[0] ?? "";
+    const zdotdir = readIn("z");
+    if (canonicalPath(resolved) !== canonicalPath(launcher.path)) {
+      throw new Error(
+        `at the prompt ${launcher.name} is ${resolved}, not the launcher ${launcher.path}`,
+      );
+    }
+    if (kind !== `${launcher.name}: command`) {
+      throw new Error(
+        `at the prompt ${launcher.name} is "${kind}" — only a command reaches the launcher`,
+      );
+    }
+    if (canonicalPath(lead) !== canonicalPath(dirname(launcher.path))) {
+      throw new Error(
+        `the pane's PATH leads with ${lead}, not the launchers' ${dirname(launcher.path)}`,
+      );
+    }
+    // The person has no ZDOTDIR of their own, and the kit's is theirs only
+    // for the shell's birth: it must be given back before their files run.
+    if (zdotdir !== "z=") throw new Error(`ZDOTDIR is still set in the pane (${zdotdir})`);
+    const read = startupFilesRead(staged.ran, shellPid);
+    if (!read.includes(".zshenv") || !read.includes(".zshrc")) {
+      throw new Error(
+        `the person's startup files did not all run in the pane's shell (read: ${JSON.stringify(read)}) — ZDOTDIR was not given back`,
+      );
+    }
+    say(1, "born-integrated", {
+      pane,
+      shellPid,
+      command: launcher.name,
+      launcherLeadsPath: true,
+      zdotdir: "the person's (none)",
+      startupFiles: read,
+    });
+    return { pane, shellPid, launcher };
+  });
+
+  // ── 2. typed, a managed run — shown as a spawned one is ──
+  const { run, stub } = await item(2, "type-it", async () => {
+    const from = readTypedAgentCalls(staged.calls).length;
+    const deckBefore = await deckSettled(deck, 1_500, 60_000);
+    const markersBefore = monitorWatch.history().length;
+    await focusPane(win, pane);
+    // ONCE: a name typed twice is a second launch, so no retyping here.
+    await typeTerminalLine(win, launcher.name);
+    const arrived = await monitorWatch
+      .until(
+        (facts) => (facts.runs ?? []).some((run) => run.terminal === pane),
+        `the monitor to show a run in the pane ${pane}`,
+        90_000,
+      )
+      .catch(async (error: unknown) => {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)} — fieldd's fold holds ${await foldNow()}; the monitor published ${monitorWatch.history().length - markersBefore} marker(s) since the name was typed`,
+        );
+      });
+    const run = arrived.runs?.find((candidate) => candidate.terminal === pane) as MonitorRunFacts;
+    if (run.spawnedBy !== "user-shell") {
+      throw new Error(`the run in the pane says spawnedBy "${run.spawnedBy}", not "user-shell"`);
+    }
+    if (run.provider !== staged.agentId) {
+      throw new Error(`the run in the pane is ${run.provider}'s, not the typed agent's`);
+    }
+    if (run.exited) throw new Error("the run arrived held as an exited row");
+    // the stub received the MANAGED launch: the recipe's own flags, in the
+    // pane's terminal, the pane's shell its parent (one pid from the prompt)
+    const stub = await untilRead("the stub to be launched as a managed session", 60_000, () =>
+      callsSince(from).find((call) => call.tty && call.argv.includes("--session-id")),
+    );
+    for (const flag of ["--session-id", "--settings"]) {
+      if (!stub.argv.includes(flag)) {
+        throw new Error(`the managed launch carried no ${flag}: ${JSON.stringify(stub.argv)}`);
+      }
+    }
+    const leaked = leakedVariables(stub);
+    if (leaked.length > 0) {
+      throw new Error(`the agent was handed variables it must never see: ${leaked.join(", ")}`);
+    }
+    if (stub.ppid !== shellPid) {
+      throw new Error(`the agent's parent is ${stub.ppid}, not the pane's shell ${shellPid}`);
+    }
+    // the swarm draws it: a body, as a spawned run has
+    const drawn = await monitorWatch.until(
+      (facts) => (facts.runs ?? []).some((each) => each.run === run.run && each.drawn),
+      "the swarm to draw the typed run",
+      20_000,
+    );
+    const bodies = (await win.webContents.executeJavaScript(
+      `document.querySelectorAll('.vf-monitor-swarm-list button[data-agent-bubble-source="agent"]').length`,
+    )) as number;
+    if (bodies < 1)
+      throw new Error("the marker says the run is drawn and the swarm lists no agent body");
+    // the pane wears the agent's frame: its mark, drawn from the agent's facts
+    const frame = await untilRead("the pane's frame to wear the agent's mark", 30_000, async () => {
+      const seen = await paneFrameMark(win, pane);
+      return seen.mark ? seen : undefined;
+    }).catch(async (error: unknown) => {
+      const latest = monitorWatch.current()?.runs?.find((each) => each.run === run.run);
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} (frame: ${JSON.stringify(await paneFrameMark(win, pane))}; the provider has ${latest?.observed === true ? "" : "NOT "}spoken for the run)`,
+      );
+    });
+    // the deck: the same pane, no other, and not an ended one
+    const deckNow = deck.current();
+    if (
+      deckNow === null ||
+      deckNow.panes !== deckBefore.panes ||
+      !deckNow.sessionIds.includes(pane)
+    ) {
+      throw new Error(
+        `the deck changed shape under a typed run (${deckBefore.panes} → ${deckNow?.panes ?? "?"} panes)`,
+      );
+    }
+    if (deckNow.exitedSessionIds?.includes(pane) === true) {
+      throw new Error("the deck shows the typed run's pane as an ended session");
+    }
+    const latest = drawn.runs?.find((each) => each.run === run.run) ?? run;
+    say(2, "type-it", {
+      run: run.run,
+      spawnedBy: run.spawnedBy,
+      status: latest.status,
+      observed: latest.observed,
+      drawn: latest.drawn,
+      bodies,
+      mark: frame.mark,
+      flags: stub.argv.filter((argument) => argument.startsWith("-")),
+      parentIsTheShell: true,
+    });
+    return { run, stub };
+  });
+
+  // ── 3. quit: the row LEAVES, and the pane is a shell again ──
+  await item(3, "quit-it", async () => {
+    const from = monitorWatch.history().length;
+    await focusPane(win, pane);
+    await typeTerminalLine(win, "exit");
+    await monitorWatch.until(
+      (facts) =>
+        facts.localState === "live" && !(facts.runs ?? []).some((each) => each.run === run.run),
+      "the typed run's row to leave the monitor",
+      60_000,
+    );
+    // Asked of EVERY marker since the quit, not of the last: an exited row
+    // that came and went would be gone from the latest line too.
+    const held = monitorWatch
+      .history()
+      .slice(from)
+      .some((facts) => (facts.runs ?? []).some((each) => each.run === run.run && each.exited));
+    if (held) {
+      throw new Error(
+        "the fold held the typed run as an EXITED row before it left — a typed run's pane is a shell, never a husk",
+      );
+    }
+    await untilRead("the stub's process to end", 20_000, () =>
+      processAlive(stub.pid) ? undefined : true,
+    );
+    // the pane answers at its prompt
+    const m3 = nonce();
+    await typeInPaneUntilMarker(win, pane, `echo ${m3} > m3`, join(work, "m3"), m3);
+    await untilRead("the pane's frame to put the agent's mark down", 20_000, async () =>
+      (await paneFrameMark(win, pane)).mark ? undefined : true,
+    );
+    const deckNow = deck.current();
+    if (deckNow?.exitedSessionIds?.includes(pane) === true) {
+      throw new Error("the deck shows the pane as an ended session: its shell is alive");
+    }
+    say(3, "quit-it", { rowLeft: true, heldExited: false, paneAnswers: true, mark: false });
+  });
+
+  // ── 4. not a session: runs as typed, and no row ──
+  await item(4, "not-a-session", async () => {
+    const from = readTypedAgentCalls(staged.calls).length;
+    const marks = monitorWatch.history().length;
+    const m4 = nonce();
+    await typeInPaneUntilMarker(
+      win,
+      pane,
+      `${launcher.name} --version; echo ${m4} > m4`,
+      join(work, "m4"),
+      m4,
+    );
+    const ran = callsSince(from).filter((call) => call.tty);
+    if (!ran.some((call) => call.argv.length === 1 && call.argv[0] === "--version")) {
+      throw new Error(
+        `the stub did not run as typed (runs since: ${JSON.stringify(ran.map((call) => call.argv))})`,
+      );
+    }
+    if (ran.some((call) => call.argv.includes("--session-id"))) {
+      throw new Error("a version query was launched as a managed session");
+    }
+    // an absence, so it is given time to be wrong in
+    await sleep(2_000);
+    const rows = runsInPaneSince(marks, pane);
+    if (rows.length > 0) {
+      throw new Error(`the monitor showed a row for a version query: ${JSON.stringify(rows)}`);
+    }
+    say(4, "not-a-session", { argv: ["--version"], ranAsTyped: true, rows: 0 });
+  });
+
+  // ── 5. refused: VibeField's sentence, and nothing ran ──
+  await item(5, "refused", async () => {
+    const from = readTypedAgentCalls(staged.calls).length;
+    const marks = monitorWatch.history().length;
+    const m5 = nonce();
+    // `2> e5 2>&1`: zsh copies the launcher's stderr to the pane AND to a file
+    // (MULTIOS), and its input and output stay the terminal — the launch is
+    // interactive, which is what a refusal is for.
+    await typeInPaneUntilMarker(
+      win,
+      pane,
+      `${launcher.name} ${TYPED_AGENT_REFUSED_ARGUMENT} 2> e5 2>&1; echo status=$? > s5; echo ${m5} > m5`,
+      join(work, "m5"),
+      m5,
+    );
+    const status = readIn("s5");
+    const said = await untilRead("the refusal's words", 10_000, () => {
+      const text = readIn("e5");
+      return text.includes("was not started") ? text : undefined;
+    });
+    const sentence = said.split("\n").find((line) => line.includes("was not started")) ?? said;
+    if (!sentence.includes(TYPED_AGENT_REFUSED_ARGUMENT)) {
+      throw new Error(`the refusal does not name ${TYPED_AGENT_REFUSED_ARGUMENT}: ${sentence}`);
+    }
+    // the kit's refused status (EX_TEMPFAIL): refused, not failed
+    if (status !== "status=75") throw new Error(`the refused launch left ${status}, not status=75`);
+    const ran = callsSince(from);
+    if (ran.length > 0) {
+      throw new Error(
+        `the stub ran for a refused launch: ${JSON.stringify(ran.map((call) => call.argv))}`,
+      );
+    }
+    await sleep(2_000);
+    const rows = runsInPaneSince(marks, pane);
+    if (rows.length > 0) {
+      throw new Error(`the monitor showed a row for a refused launch: ${JSON.stringify(rows)}`);
+    }
+    say(5, "refused", { status: 75, sentence, stubRan: false, rows: 0 });
+  });
+}
+
 /** GT-2/GT-2e: the product Godview, end to end, against the real pair.
  *
  * Everything the deck does here it does because a user asked: the overlay opens
@@ -2946,6 +3509,9 @@ export async function runSmokeGodview(opts: {
   /** GT-8b: what main's OS opener was handed — a harness records instead of
    * opening (main's `harnessShellOpens`). The link row reads it. */
   shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
+  /** AR-7: what main staged for the typed-agent rows before the pair booted
+   * (`stageTypedAgent`); absent when it staged nothing — an injected root. */
+  typedAgent?: StagedTypedAgent;
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
   const scratch = mkdtempSync(join(tmpdir(), "vf-smoke-godview-"));
@@ -3847,6 +4413,11 @@ export async function runSmokeGodview(opts: {
       //    since ghosttea 0.12.0 the spawn directory IS reported, as a plain
       //    path, until the first announcement replaces it. Where a `cd` lands
       //    still comes only from OSC 7, and that is what this row asserts.)
+      //    (ERRATA 2026-09-28, AR-7: "this user's zsh" was the machine owner's
+      //    own login zsh, startup files and history included. The pair now runs
+      //    as the smoke's PERSON (testing/typed-agent.ts), and the announcement
+      //    is their zshrc's: a precmd hook that prints OSC 7, as a terminal
+      //    app's own zshrc does. The row's claim about the FLOOR is unchanged.)
       const workdir = join(scratch, "work");
       mkdirSync(workdir, { recursive: true });
       // TP-S3f: this row is BACK in full after two eras of honest gap-marks.
@@ -4629,6 +5200,28 @@ export async function runSmokeGodview(opts: {
           `the attach changed the deck's shape (${beforeAttach.panes} → ${attached.panes} panes); GT-D17 attaches the ACTIVE pane`,
         );
       }
+    }
+
+    // ── 14. THE TYPED AGENT (AR-7, R1 — "type it") ───────────────────────
+    //
+    // Placed after the door rows for the reason 13 is placed after the
+    // recovery: it opens a pane of its own and runs an agent in it, and every
+    // row above asserts about the panes and the fold this deck had before.
+    if (opts.typedAgent === undefined) {
+      // Honest, never a silent pass: the rows need their person and stub, and
+      // main stages them only into a root this run created.
+      verdict["typedAgent"] =
+        "unavailable: nothing was staged — an injected FIELDD_DATA_DIR is someone else's root";
+    } else {
+      await typedAgentRows({
+        win,
+        handle: opts.handle,
+        userRoot: opts.root,
+        staged: opts.typedAgent,
+        deck,
+        monitorWatch,
+        verdict,
+      });
     }
 
     // ── GT-3p, REPORT-ONLY ────────────────────────────────────────────────

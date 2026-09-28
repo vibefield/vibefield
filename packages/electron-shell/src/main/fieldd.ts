@@ -40,6 +40,10 @@ export function buildSupervisor(opts: {
   /** UA-2 — the attached user this pair must serve; gates adoption and rides
    * the spawn env as FIELDD_USER_ID. */
   userId?: string;
+  /** The environment the pair is spawned with, before the shell's own
+   * variables below; this process's by default. AR-7: the godview smoke hands
+   * its person's (testing/typed-agent.ts) — nothing else passes one. */
+  environment?: Readonly<Record<string, string>>;
 }): FielddSupervisor {
   // Env overrides still win — they are how smoke harnesses and a developer
   // testing a packaged layout redirect the daemon — but the DEFAULT now comes
@@ -77,7 +81,7 @@ export function buildSupervisor(opts: {
     dataRoot: opts.root,
     spawn: { command, args: args.filter((a): a is string => a !== undefined) },
     environment: {
-      ...process.env,
+      ...(opts.environment ?? process.env),
       // Set ONLY when the command is genuinely Electron. A packaged build execs
       // a real fieldd, where the RunAsNode fuse is off and the variable is
       // ignored — asking for node mode there would be a claim the artifact

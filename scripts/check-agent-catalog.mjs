@@ -310,6 +310,11 @@ const R23B_ALLOW = [
     why: "Settings → Terminal's miniature (GT-7d): one sample agent pane drawn from a fixed frame — fixture data, never compared",
   },
   {
+    file: "packages/electron-shell/src/testing/typed-agent.ts",
+    count: 1,
+    why: "the godview smoke's typed-agent fixture (AR-7, R1's witness; test-only bundle): the one agent its stub can stand in for — a managed launch that is the typed command plus flags, an adapter that refuses --bare. Harness code selecting its own fixture, never product behaviour",
+  },
+  {
     file: "apps/ios/VibeFieldKit/Sources/FieldHistory/HistoryCorpus.swift",
     count: 23,
     why: "the History tab's sample corpus (IOS-9b, H-D4): the record's six screens drawn over fixture values until the wire carries the corpus — fixture data, never compared",
