@@ -785,12 +785,14 @@ export class AgentGatewayService {
   /** What a free shell born NOW adds to its environment so the launchers lead
    * its PATH: the kit's own answer for that shell, over this home. `undefined`
    * — the shell is born exactly as before — on win32 (the shim execs in place,
-   * which is POSIX only), until the home is written, once the gateway stops,
-   * whenever there is no launcher to offer (no launcher runtime, no offered
-   * agent), and for a home that has lost the integration's own file since:
-   * zsh pointed at a directory without it would read NO startup file of the
-   * person's, silently. Never throws — `TerminalService` does not catch, and
-   * a pane is never refused for the integration's sake.
+   * which is POSIX only), once the gateway stops, whenever there is no
+   * launcher to offer (no launcher runtime, no offered agent), and for a home
+   * without the integration's own file — not written yet, or lost since: zsh
+   * pointed at a directory without it would read NO startup file of the
+   * person's, silently. (The seam is handed this only after the home is
+   * written, in `publish`; the file's own presence is the check here.) Never
+   * throws — `TerminalService` does not catch, and a pane is never refused
+   * for the integration's sake.
    *
    * WHICH ENVIRONMENT. The kit asks for the environment the shell is born
    * with, which is the FLOOR's; fieldd has only its own and hands it that.
@@ -803,13 +805,13 @@ export class AgentGatewayService {
   readonly shellIntegration: ShellIntegration = (shell) => {
     try {
       if ((this.opts.platform ?? process.platform) === "win32") return undefined;
-      if (!this.homeWritten || this.stopping !== undefined) return undefined;
+      if (this.stopping !== undefined) return undefined;
       if (this.offered.names.length === 0) return undefined;
       if (!existsSync(spawnThroughLayout(this.home).zshenv)) {
         this.sayOnce("integration-lost", () =>
           this.logger.warn(
             "fieldd.agents.gateway_shell_integration_lost",
-            "The launchers' home has lost the shell integration's file; shells are born without it until the launchers are written again",
+            "The launchers' home is without the shell integration's file; shells are born without it until the launchers are written",
             { home: this.home },
           ),
         );

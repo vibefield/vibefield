@@ -298,10 +298,21 @@ describe.skipIf(ZSH === undefined)(
     );
 
     it(
-      "row 9 — a process in no terminal of ours asks the gateway: the launcher run by this process, under a terminal of its own, runs the real executable although the host is strict — with no argument and with one that cannot be carried — and leaves no row and nothing refused in the ledger",
+      "row 9 — a process in no terminal of ours asks the gateway: the launcher run by this process, under a terminal of its own, runs the real executable although the host is strict and a pane of ours is open — with no argument and with one that cannot be carried — and leaves no row and nothing refused in the ledger",
       async () => {
         const box = await floor({ bundle: shimScript, person: true });
         expect(await readRendezvous(box.home)).toMatchObject({ strict: true });
+        // a pane of ours is open, listed for the launchers: the outsider is
+        // not in it, and must not be placed in it
+        const pane = await bornPane(box);
+        await until(
+          async () =>
+            (await readTerminals(box.home))?.some((shell) => shell.pid === pane.pid) === true
+              ? true
+              : undefined,
+          FLOOR_WAIT_MS,
+          "the pane listed for the launchers",
+        );
         const plain = await launcherFromOutside(box, []);
         expect(plain.code).toBe(0);
         await until(() => (linesOf(box.script.realLog).length === 1 ? true : undefined));
@@ -322,6 +333,8 @@ describe.skipIf(ZSH === undefined)(
         expect(linesOf(box.script.managedLog)).toEqual([]);
         expect(foldActs(box.dataDir)).toEqual([]);
         expect(box.daemon.agentGateway?.counts().get("outside-host-terminals")).toBe(2);
+        expect(typedRow(box, pane)).toBeUndefined();
+        await answers(box, pane, "untouched");
       },
       FLOOR_BUDGET_MS,
     );
