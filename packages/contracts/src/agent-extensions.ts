@@ -44,6 +44,13 @@ import { TerminalCreateOpenResult } from "./terminal-pipeline";
 // turns it off with Codex's own switch in the other profiles. A CHANGE MADE
 // OUTSIDE VibeField (O1) is followed: the cell shows what the agent holds
 // now, and one line says who changed what, between which two reads.
+//
+// AR-S4e — A PLUGIN AN AGENT HOLDS (pass 23, D1): plugins stay with their
+// agent, and each has a page — what it brings, its version, where it came
+// from — whose acts are the agent's own: its switch, its update, its removal
+// keeping the plugin's data or with it. What the agent offers none of says
+// why, in the agent's words (only inside its app; no command for it; it
+// comes with your organization).
 
 /** Where an item comes from, as the agent keeps it (puppeteer `ExtensionOrigin`). */
 export const AgentExtensionOrigin = z.enum([
@@ -69,6 +76,11 @@ export const AgentExtensionKindSupport = z
     store: z.enum(["profile", "shared", "mixed"]),
     changes: z.enum(["command", "protocol", "folder", "in-app"]),
     read: z.boolean(),
+    /** AR-S4e — the agent's own word for the kind, where it has one: Pi's "Packages". */
+    label: z.string().min(1).max(64).optional(),
+    /** AR-S4e — sessions VibeField starts don't load them: the agent loads
+     * them only when a person runs it (OpenCode's hosted sessions run `--pure`). */
+    hostedSkips: z.literal(true).optional(),
   })
   .passthrough();
 export type AgentExtensionKindSupport = z.infer<typeof AgentExtensionKindSupport>;
@@ -86,7 +98,10 @@ export type AgentExtensionSupport = z.infer<typeof AgentExtensionSupport>;
 
 /** AR-S4c — what a person can ask of one holding (RFC 006 C2); a remote
  * server's sign-in and sign-out beside the switches. AR-S4d — `add` turns a
- * server on for an agent that holds none of it. */
+ * server on for an agent that holds none of it. AR-S4e — a plugin's `update`
+ * (the agent's own, to the newest its marketplace has) and `purge` (its
+ * removal with the data it keeps; `remove` keeps that data where the agent
+ * can). */
 export const AgentExtensionActKind = z.enum([
   "enable",
   "disable",
@@ -94,6 +109,8 @@ export const AgentExtensionActKind = z.enum([
   "sign-in",
   "sign-out",
   "add",
+  "update",
+  "purge",
 ]);
 export type AgentExtensionActKind = z.infer<typeof AgentExtensionActKind>;
 
@@ -294,6 +311,18 @@ export const AgentExtensionColumn = z
   .passthrough();
 export type AgentExtensionColumn = z.infer<typeof AgentExtensionColumn>;
 
+/** An act an agent does not offer on a plugin it holds, and why, in the
+ * agent's own words (puppeteer's reason: `in-app`, `no-command`, `not-own`,
+ * `unsupported`, …): the plugin page's sentences. */
+export const AgentExtensionActUnavailable = z
+  .object({
+    act: AgentExtensionActKind,
+    reason: z.string().min(1),
+    message: z.string().min(1),
+  })
+  .passthrough();
+export type AgentExtensionActUnavailable = z.infer<typeof AgentExtensionActUnavailable>;
+
 /** A plugin on one agent's own list (plugins stay with their agent). */
 export const AgentExtensionPlugin = z
   .object({
@@ -307,6 +336,24 @@ export const AgentExtensionPlugin = z
     marketplace: z.string().optional(),
     description: z.string().optional(),
     place: z.string().optional(),
+    /** AR-S4e — who made it, as its manifest says. */
+    author: z.string().min(1).optional(),
+    /** AR-S4e — its homepage or repository, an address with nothing secret in it. */
+    homepage: z.string().min(1).optional(),
+    /** AR-S4e — what it brings beside its servers and skills (which are
+     * holdings of their own, from the plugin): names only. */
+    brings: z
+      .object({
+        commands: z.array(z.string().min(1)).optional(),
+        agents: z.array(z.string().min(1)).optional(),
+        hooks: z.array(z.string().min(1)).optional(),
+      })
+      .passthrough()
+      .optional(),
+    /** AR-S4e — the acts its agent offers on it now. */
+    acts: z.array(AgentExtensionAct).optional(),
+    /** AR-S4e — the acts its agent offers none of, with why. */
+    unavailable: z.array(AgentExtensionActUnavailable).optional(),
   })
   .passthrough();
 export type AgentExtensionPlugin = z.infer<typeof AgentExtensionPlugin>;
@@ -345,7 +392,7 @@ export const AgentExtensionRun = z
     provider: AgentProviderId,
     /** The agent's name, for the words. */
     label: z.string().min(1),
-    kind: z.enum(["mcp-server", "skill"]),
+    kind: z.enum(["mcp-server", "skill", "plugin"]),
     /** The holding's id in the agent's own read. */
     item: z.string().min(1),
     /** The row's name. */
@@ -379,12 +426,14 @@ export type AgentExtensionValues = z.infer<typeof AgentExtensionValues>;
 /** `agents.extensions.act` — run one act; its output arrives on the subscription.
  * A sign-in is not one of them: it runs in a terminal (`agents.extensions.signIn`).
  * AR-S4d — `add` turns the row named `id` on for an agent that holds none of
- * it, from the row's definition; `values` first keeps what the row `needs`. */
+ * it, from the row's definition; `values` first keeps what the row `needs`.
+ * AR-S4e — a plugin on the agent's own list, by its id: its switch, `update`,
+ * `remove`, `purge`. */
 export const AgentsExtensionsActParams = z
   .object({
     set: AgentProfileSetId,
     provider: AgentProviderId,
-    kind: z.enum(["mcp-server", "skill"]),
+    kind: z.enum(["mcp-server", "skill", "plugin"]),
     /** The holding's id, as the lens gave it; for `add`, the row's name. */
     id: z.string().min(1).max(512),
     act: AgentExtensionActKind.exclude(["sign-in"]),

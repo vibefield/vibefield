@@ -511,6 +511,88 @@
   color: var(--vf-text-secondary);
 }
 
+/* AR-S4e — a row of an agent's own list that opens its page: its name is the
+   button (its click covers the row), a chevron after its state. */
+.vf-ext-item--open {
+  grid-template-columns: 28px minmax(0, 1fr) auto 14px;
+}
+
+.vf-ext-item--open:hover {
+  border-radius: 12px;
+  background: var(--vf-field-surface);
+}
+
+/* ── a plugin's page (AR-S4e; pass 23's D1) ── */
+
+.vf-ext-hero {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.vf-ext-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.vf-ext-tile .vf-ext-initial {
+  font-size: 16px;
+}
+
+.vf-ext-hero .vf-ext-hero-name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+/* What it adds: a part's names, each as code, wrapping. */
+.vf-ext-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 4px;
+}
+
+.vf-ext-names .vf-ext-code {
+  font-size: 11px;
+  color: var(--vf-text-secondary);
+}
+
+/* The version with the agent's own Update beside it. */
+.vf-ext-def .vf-ext-def-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.vf-ext-def-note {
+  margin-top: 10px;
+}
+
+/* The way out: Remove and Remove with its data, or why there is none. */
+.vf-ext-way-out {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vf-ext-way-out-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.vf-ext-way-out-acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* ── acts (AR-S4c) ── */
 
 /* A cell whose agent offers an act: the mark itself is the button. */

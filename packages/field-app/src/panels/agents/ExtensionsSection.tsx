@@ -28,11 +28,13 @@ import {
   type ExtensionActRequest,
   ExtensionItemView,
   type ExtensionSignInSlot,
+  PluginView,
   ProfileExtensionsView,
 } from "./ExtensionsView";
 import {
   ADD_SERVER_NAME,
   type AgentListKey,
+  type AgentListOpen,
   type ExtensionKindKey,
   skillSourceProblem,
 } from "./extensions-model";
@@ -57,7 +59,9 @@ import { SignInTerminal } from "./SignInTerminal";
 // run as the form changes, then `agents.extensions.add`, whose runs ride the
 // frames, and opens the new server's page when it answers. AR-S4d2: Add skill
 // asks `agents.extensions.planSkill` what the folder is and what each agent
-// would run as the path changes, then `agents.extensions.addSkill`.
+// would run as the path changes, then `agents.extensions.addSkill`. AR-S4e: a
+// plugin's page reads the same lens, and its acts ask `agents.extensions.act`
+// with the plugin's key, like a cell's.
 
 /** How long the form rests before its draft is planned. */
 const PLAN_REST_MS = 300;
@@ -428,7 +432,8 @@ export function AgentExtensions({
 }: {
   set: string;
   provider: string;
-  onOpen: (key: AgentListKey) => void;
+  /** A row opens the agent's own list, titled as the row is (the agent's own word for the kind). */
+  onOpen: (key: AgentListKey, title: string) => void;
 }): ReactElement {
   const { lens, error } = useExtensionLens(set);
   return <AgentExtensionsView lens={lens} provider={provider} error={error} onOpen={onOpen} />;
@@ -443,6 +448,7 @@ export function AgentExtensionList({
   profile,
   where,
   onOpenProfile,
+  onOpen,
 }: {
   set: string;
   provider: string;
@@ -451,6 +457,8 @@ export function AgentExtensionList({
   profile: string;
   where: string;
   onOpenProfile: () => void;
+  /** AR-S4e — a row opens its page: a plugin's, or a server's or skill's. */
+  onOpen?: (open: AgentListOpen) => void;
 }): ReactElement {
   const { lens, error, refreshing, refresh, now } = useExtensionLens(set);
   return (
@@ -465,6 +473,41 @@ export function AgentExtensionList({
       refreshing={refreshing}
       onRefresh={refresh}
       onOpenProfile={onOpenProfile}
+      now={now}
+      {...(onOpen !== undefined ? { onOpen } : {})}
+    />
+  );
+}
+
+/** AR-S4e — one plugin an agent holds: its page, below the agent's list. */
+export function AgentPlugin({
+  set,
+  provider,
+  id,
+  name,
+  where,
+}: {
+  set: string;
+  provider: string;
+  /** The plugin's key in its agent's read. */
+  id: string;
+  /** Its name as its row gave it. */
+  name: string;
+  where: string;
+}): ReactElement {
+  const { lens, error, refreshing, refresh, acting, act, now } = useExtensionLens(set);
+  return (
+    <PluginView
+      lens={lens}
+      provider={provider}
+      id={id}
+      name={name}
+      where={where}
+      error={error}
+      refreshing={refreshing}
+      onRefresh={refresh}
+      onAct={act}
+      acting={acting}
       now={now}
     />
   );

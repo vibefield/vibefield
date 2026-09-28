@@ -27,6 +27,7 @@ import {
   AddSkill,
   AgentExtensionList,
   AgentExtensions,
+  AgentPlugin,
   ExtensionItem,
   ProfileExtensions,
 } from "./ExtensionsSection";
@@ -35,6 +36,7 @@ import {
   addSkillSubpage,
   agentListSubpage,
   extensionItemSubpage,
+  pluginSubpage,
 } from "./ExtensionsView";
 import type { AgentListKey, ExtensionKindKey } from "./extensions-model";
 import {
@@ -69,7 +71,9 @@ import { SignInTerminal } from "./SignInTerminal";
 // AR-S4b — Extensions: below a profile's page, one server's or skill's own
 // page (a list's row name opens it); below an agent's, its own plugins,
 // servers or skills (its Extensions rows open them). Each reads the profile's
-// lens itself (ExtensionsSection.tsx).
+// lens itself (ExtensionsSection.tsx). AR-S4e: a row of an agent's own list
+// opens its page — a plugin's below the list, a server's or skill's (whose
+// way back is then that list).
 
 /** How long a closed sign-in waits for the identity read before it says so. */
 const IDENTITY_WAIT_MS = 15_000;
@@ -80,10 +84,20 @@ const UNSEEN_CHECK_MS = 3_000;
 export type ProfilesRoute =
   | { kind: "profile"; set: string }
   | { kind: "agent"; set: string; provider: string }
-  /** AR-S4b — one agent's own plugins, servers or skills, a page below the agent's */
-  | { kind: "list"; set: string; provider: string; list: AgentListKey }
-  /** AR-S4b — one server or skill of the profile, a page below the profile's */
-  | { kind: "item"; set: string; list: ExtensionKindKey; name: string }
+  /** AR-S4b — one agent's own plugins, servers or skills, a page below the agent's;
+   * AR-S4e — titled as its row was, in the agent's own word for the kind */
+  | { kind: "list"; set: string; provider: string; list: AgentListKey; title?: string }
+  /** AR-S4b — one server or skill of the profile, a page below the profile's;
+   * AR-S4e — or below an agent's own list it was opened from */
+  | {
+      kind: "item";
+      set: string;
+      list: ExtensionKindKey;
+      name: string;
+      from?: { provider: string; list: AgentListKey; title?: string };
+    }
+  /** AR-S4e — one plugin an agent holds, a page below the agent's list */
+  | { kind: "plugin"; set: string; provider: string; id: string; name: string; listTitle?: string }
   /** AR-S4d — Add server (AR-S4d2 — Add skill): one kept once for the profile, a page below the profile's */
   | { kind: "add"; set: string; list: ExtensionKindKey }
   | { kind: "new" };
@@ -221,8 +235,11 @@ export function ProfilesSection({
   const set: AgentProfileSet | undefined =
     route.kind === "new" ? undefined : feed?.sets.find((candidate) => candidate.id === route.set);
   const page = set === undefined ? undefined : profilePage(set, context);
-  // the agent a page is about: its own page, or one of its lists
-  const provider = route.kind === "agent" || route.kind === "list" ? route.provider : undefined;
+  // the agent a page is about: its own page, one of its lists, or a plugin on one
+  const provider =
+    route.kind === "agent" || route.kind === "list" || route.kind === "plugin"
+      ? route.provider
+      : undefined;
   const persona =
     provider !== undefined && set !== undefined
       ? set.personas.find((candidate) => candidate.provider === provider)
@@ -238,18 +255,40 @@ export function ProfilesSection({
       onRoute({ kind: "agent", set: route.set, provider: route.provider });
     }
   }, [route, onRoute]);
+  // AR-S4e — a plugin's page, and a server's or skill's opened from an agent's list, go back to that list
+  const backToList = useCallback((): void => {
+    if (route.kind === "plugin") {
+      onRoute({
+        kind: "list",
+        set: route.set,
+        provider: route.provider,
+        list: "plugins",
+        ...(route.listTitle !== undefined ? { title: route.listTitle } : {}),
+      });
+    } else if (route.kind === "item" && route.from !== undefined) {
+      onRoute({
+        kind: "list",
+        set: route.set,
+        provider: route.from.provider,
+        list: route.from.list,
+        ...(route.from.title !== undefined ? { title: route.from.title } : {}),
+      });
+    }
+  }, [route, onRoute]);
   const subpageKey =
     set === undefined
       ? null
       : route.kind === "agent" && row !== undefined
         ? `agent|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}`
         : route.kind === "list" && row !== undefined
-          ? `list|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}|${route.list}`
+          ? `list|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}|${route.list}|${route.title ?? ""}`
           : route.kind === "item"
-            ? `item|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${route.list}|${route.name}`
+            ? `item|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${route.list}|${route.name}|${route.from?.provider ?? ""}`
             : route.kind === "add"
               ? `add|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${route.list}`
-              : null;
+              : route.kind === "plugin" && row !== undefined
+                ? `plugin|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}|${route.id}|${route.name}`
+                : null;
   // keyed by what the header shows: a feed frame that changes nothing on it does not rebuild it
   useEffect(() => {
     if (set === undefined) {
@@ -257,9 +296,20 @@ export function ProfilesSection({
     } else if (route.kind === "agent" && row !== undefined) {
       onSubpage(profileAgentSubpage(set, row.label, backToProfile));
     } else if (route.kind === "list" && row !== undefined) {
-      onSubpage(agentListSubpage(set, row.label, route.list, backToAgent));
+      onSubpage(agentListSubpage(set, row.label, route.list, backToAgent, route.title));
     } else if (route.kind === "item") {
-      onSubpage(extensionItemSubpage(set, route.list, route.name, backToProfile));
+      onSubpage(
+        extensionItemSubpage(
+          set,
+          route.list,
+          route.name,
+          route.from !== undefined ? backToList : backToProfile,
+        ),
+      );
+    } else if (route.kind === "plugin" && row !== undefined) {
+      onSubpage(
+        pluginSubpage(set, row.label, route.name, route.listTitle ?? "Plugins", backToList),
+      );
     } else if (route.kind === "add") {
       onSubpage(
         route.list === "skills"
@@ -269,7 +319,7 @@ export function ProfilesSection({
     } else {
       onSubpage(null);
     }
-  }, [subpageKey, onSubpage, backToProfile, backToAgent]);
+  }, [subpageKey, onSubpage, backToProfile, backToAgent, backToList]);
   useEffect(() => () => onSubpage(null), [onSubpage]);
 
   // A page whose profile (or sign-in) went away closes to where it lived —
@@ -287,7 +337,7 @@ export function ProfilesSection({
       return;
     }
     if (
-      (route.kind === "agent" || route.kind === "list") &&
+      (route.kind === "agent" || route.kind === "list" || route.kind === "plugin") &&
       persona === undefined &&
       seen.current.has(`${route.set}:${route.provider}`)
     ) {
@@ -304,15 +354,20 @@ export function ProfilesSection({
         ? `item:${route.set}:${route.list}:${route.name}`
         : route.kind === "add"
           ? `add:${route.set}:${route.list}`
-          : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}${
-              route.kind === "list" ? `:${route.list}` : ""
-            }`;
+          : route.kind === "plugin"
+            ? `plugin:${route.set}:${route.provider}:${route.id}`
+            : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}${
+                route.kind === "list" ? `:${route.list}` : ""
+              }`;
   const currentRoute = useRef(routeKey);
   currentRoute.current = routeKey;
   // what each page reads usage for: an agent's own, a profile's every agent;
   // the Extensions pages show no usage
   const usageProfileIds =
-    route.kind === "list" || route.kind === "item" || route.kind === "add"
+    route.kind === "list" ||
+    route.kind === "item" ||
+    route.kind === "add" ||
+    route.kind === "plugin"
       ? []
       : route.kind === "agent"
         ? persona === undefined
@@ -803,7 +858,9 @@ export function ProfilesSection({
           <AgentExtensions
             set={set.id}
             provider={row.provider}
-            onOpen={(list) => onRoute({ kind: "list", set: set.id, provider: row.provider, list })}
+            onOpen={(list, title) =>
+              onRoute({ kind: "list", set: set.id, provider: row.provider, list, title })
+            }
           />
         }
       />
@@ -819,6 +876,41 @@ export function ProfilesSection({
         profile={set.label}
         where={inOnWords(set)}
         onOpenProfile={() => onRoute({ kind: "profile", set: set.id })}
+        onOpen={(open) =>
+          onRoute(
+            open.kind === "plugin"
+              ? {
+                  kind: "plugin",
+                  set: set.id,
+                  provider: row.provider,
+                  id: open.id,
+                  name: open.name,
+                  ...(route.title !== undefined ? { listTitle: route.title } : {}),
+                }
+              : {
+                  kind: "item",
+                  set: set.id,
+                  list: open.list,
+                  name: open.name,
+                  from: {
+                    provider: row.provider,
+                    list: route.list,
+                    ...(route.title !== undefined ? { title: route.title } : {}),
+                  },
+                },
+          )
+        }
+      />
+    );
+  } else if (route.kind === "plugin" && set !== undefined && row !== undefined) {
+    body = (
+      <AgentPlugin
+        key={`${set.id}:${row.provider}:${route.id}`}
+        set={set.id}
+        provider={row.provider}
+        id={route.id}
+        name={route.name}
+        where={inOnWords(set)}
       />
     );
   } else if (route.kind === "item" && set !== undefined) {

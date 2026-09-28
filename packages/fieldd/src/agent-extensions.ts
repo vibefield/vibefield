@@ -14,6 +14,7 @@ import {
   type McpServerDefinition,
   type McpServerItem,
   mcpServerDefinition,
+  type PluginItem,
   type SkillItem,
 } from "@vibecook/puppeteer-core";
 import {
@@ -26,6 +27,7 @@ import {
   AGENT_OPERATION_OUTPUT_BYTES,
   type AgentCatalogReaders,
   type AgentExtensionAct,
+  type AgentExtensionActUnavailable,
   type AgentExtensionChange,
   type AgentExtensionColumn,
   type AgentExtensionHolding,
@@ -120,6 +122,13 @@ import type { GrantPrincipal } from "./terminal-grants";
 // O1: every read is compared with the last one VibeField saw of the profile
 // (agent-extension-store.ts keeps it), and a difference no act of VibeField's
 // made becomes a line: who changed what, between which reads.
+//
+// PLUGINS (AR-S4e; pass 23's D1): a plugin stays on its agent's own list, and
+// carries the acts its agent offers on it — its switch, its update, its
+// removal keeping the plugin's data or with it — planned from the same read,
+// and the ones it offers none of with the agent's own words, which the
+// plugin's page says in their place. An act on one runs like any other: one
+// at a time per profile, the whole profile read again after.
 
 export interface AgentExtensionServiceOptions {
   runtime: Pick<
@@ -364,7 +373,7 @@ function sharesFolder(act: AgentExtensionAct): boolean {
 
 function actsOf(
   plans: readonly ExtensionActPlan[] | undefined,
-  item: McpServerItem | SkillItem,
+  item: McpServerItem | SkillItem | PluginItem,
   home: string,
 ): AgentExtensionAct[] {
   const acts: AgentExtensionAct[] = [];
@@ -387,6 +396,26 @@ function actsOf(
     });
   }
   return acts;
+}
+
+/**
+ * AR-S4e — the acts an agent offers none of on a plugin it holds, with its
+ * reason and words: what the plugin's page says in their place. A switch that
+ * would not change it (turning on one that is on) is no act to explain.
+ */
+function unavailableOf(
+  plans: readonly ExtensionActPlan[] | undefined,
+  item: PluginItem,
+): AgentExtensionActUnavailable[] {
+  const unavailable: AgentExtensionActUnavailable[] = [];
+  for (const plan of plans ?? []) {
+    if (plan.available || plan.act === "add") continue;
+    if (plan.target.kind !== "plugin" || plan.target.id !== item.id) continue;
+    if ((plan.act === "enable" && item.enabled) || (plan.act === "disable" && !item.enabled))
+      continue;
+    unavailable.push({ act: plan.act, reason: plan.reason, message: plan.message });
+  }
+  return unavailable;
 }
 
 /** One agent's column before anything of it is read. */
@@ -589,6 +618,8 @@ export function buildExtensionLens(input: {
     const marketplaceRows: AgentExtensionMarketplace[] = [];
     for (const item of items) {
       if (item.kind === "plugin") {
+        const acts = actsOf(agent.plans, item, input.home);
+        const unavailable = unavailableOf(agent.plans, item);
         pluginRows.push({
           id: item.id,
           name: item.name,
@@ -600,6 +631,11 @@ export function buildExtensionLens(input: {
           ...(item.marketplace !== undefined ? { marketplace: item.marketplace } : {}),
           ...(item.description !== undefined ? { description: item.description } : {}),
           ...(item.location !== undefined ? { place: place(item.location) } : {}),
+          ...(item.author !== undefined ? { author: item.author } : {}),
+          ...(item.homepage !== undefined ? { homepage: item.homepage } : {}),
+          ...(item.brings !== undefined ? { brings: structuredClone(item.brings) } : {}),
+          ...(acts.length > 0 ? { acts } : {}),
+          ...(unavailable.length > 0 ? { unavailable } : {}),
         });
       } else if (item.kind === "marketplace") {
         marketplaceRows.push({
@@ -733,7 +769,7 @@ interface RunEntry {
   id: string;
   provider: string;
   label: string;
-  kind: "mcp-server" | "skill";
+  kind: "mcp-server" | "skill" | "plugin";
   item: string;
   name: string;
   act: AgentExtensionAct["act"];
@@ -849,13 +885,16 @@ export class AgentExtensionService {
     requireVisible(this.opts.catalog, params.provider, "act on its extensions");
     const setId = params.set;
     this.refuseWhileRunning(setId);
+    if (params.kind === "plugin") return await this.actOnPlugin(params);
     if (params.act === "add") return await this.turnOn(params);
     if (params.values !== undefined) {
       throw new RpcCallError("PRECONDITION_FAILED", "values are kept only with an add", false, {
         set: setId,
       });
     }
-    const { column, found, offered } = await this.offered(setId, params);
+    // a plugin went its own way above: this is a server or a skill
+    const kind = params.kind;
+    const { column, found, offered } = await this.offered(setId, { ...params, kind });
     // a read above may have let another act start
     this.refuseWhileRunning(setId);
     // AR-S4d — a server an agent lets go keeps its definition here, so turning it on again is one click
@@ -900,6 +939,65 @@ export class AgentExtensionService {
         this.opts.store?.take(setId, params.provider, found.row.name),
       );
     // every cell says what the agents hold now: a read that began before the act finished cannot
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    return { run: projectRun(entry), receipt };
+  }
+
+  /**
+   * AR-S4e — an act on a plugin its agent holds, as the agent offered it in
+   * the last read: its switch, its update, its removal (keeping its data, or
+   * with it). A plugin is the agent's alone, so nothing of the profile's own
+   * changes with it; the whole profile is read again after, since its servers
+   * and skills come and go with it.
+   */
+  private async actOnPlugin(params: AgentsExtensionsActParams): Promise<AgentsExtensionsActResult> {
+    const setId = params.set;
+    if (params.values !== undefined) {
+      throw new RpcCallError("PRECONDITION_FAILED", "a plugin reads no values", false, {
+        set: setId,
+      });
+    }
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = this.columnIn(lens, setId, params.provider);
+    const plugin = lens.plugins[params.provider]?.find((candidate) => candidate.id === params.id);
+    if (plugin === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `${column.label} does not hold ${params.id} in this Agent Profile`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    const offered = plugin.acts?.find((candidate) => candidate.act === params.act);
+    if (offered === undefined) {
+      const why = plugin.unavailable?.find((candidate) => candidate.act === params.act);
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${column.label} offers no ${params.act} for ${plugin.name} here${why !== undefined ? `: ${why.message}` : ""}`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    // a read above may have let another act start
+    this.refuseWhileRunning(setId);
+    const { entry, receipt } = await this.runAct(
+      setId,
+      {
+        provider: params.provider,
+        label: column.label,
+        kind: "plugin",
+        item: plugin.id,
+        name: plugin.name,
+        act: params.act,
+        runs: offered.runs,
+      },
+      {
+        providerId: params.provider,
+        profileId: column.profileId,
+        target: { kind: "plugin", id: plugin.id },
+        act: params.act,
+      },
+    );
     await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
     return { run: projectRun(entry), receipt };
   }
@@ -2210,9 +2308,10 @@ export class AgentExtensionService {
     library?: string,
   ): Promise<{ plans?: ExtensionActPlan[] }> {
     if (isFailure(result)) return {};
+    // AR-S4e — a plugin's acts are planned from the same read as its servers' and skills'
     const items = result.items.filter(
-      (item): item is McpServerItem | SkillItem =>
-        item.kind === "mcp-server" || item.kind === "skill",
+      (item): item is McpServerItem | SkillItem | PluginItem =>
+        item.kind === "mcp-server" || item.kind === "skill" || item.kind === "plugin",
     );
     const held = new Set(
       result.items.filter((item) => item.kind === "mcp-server").map((item) => item.name),

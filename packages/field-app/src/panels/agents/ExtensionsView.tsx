@@ -28,12 +28,14 @@ import {
   type AddServerDraft,
   type AgentListItem,
   type AgentListKey,
+  type AgentListOpen,
   actConfirm,
   addServerChips,
   addSkillChips,
   agentExtensions,
   agentList,
   agentListTitle,
+  asksFirst,
   builtFromWords,
   changeLines,
   draftDefinition,
@@ -46,6 +48,7 @@ import {
   extensionGrid,
   extensionItem,
   extensionKindTitle,
+  pluginPage,
   readWords,
   runWords,
   sharedFolderReaders,
@@ -74,7 +77,10 @@ import { ProfileMark } from "./ProfilesView";
 // profile's skills folder, taken away again — and Codex's asks first, since
 // its copy moves to the folder every profile shares; Add skill… is a page of
 // its own. A change made outside VibeField greys its cell's corner and says
-// who changed what above the list (O1).
+// who changed what above the list (O1). AR-S4e: a row of an agent's own list
+// opens its page — a plugin's (pass 23's D1: what it brings, its version, the
+// agent's own switch, Update, Remove and Remove with its data, each removal a
+// two-step confirm), or a server's or skill's.
 
 const KINDS: ExtensionKindKey[] = ["servers", "skills"];
 
@@ -196,7 +202,7 @@ function FactLine({ code, text }: { code: string; text: string }): ReactElement 
 /** What a person asked a cell or a switch for: an act, maybe waiting on its confirm. */
 export interface ExtensionActRequest {
   provider: string;
-  kind: "mcp-server" | "skill";
+  kind: "mcp-server" | "skill" | "plugin";
   id: string;
   act: ExtensionCellAct["act"];
   /** AR-S4d — an add's values for the names its server reads, kept once in the keychain first. */
@@ -213,10 +219,6 @@ const requestOf = (
   act: act.act,
   ...(values !== undefined && Object.keys(values).length > 0 ? { values } : {}),
 });
-
-/** A click asks first when it reaches further than its cell, or when its server needs a value. */
-const asksFirst = (act: ExtensionCellAct): boolean =>
-  act.reaches.length > 0 || act.needs.length > 0;
 
 /**
  * P7: the confirm a click that reaches further than its cell opens beneath
@@ -863,8 +865,8 @@ export interface AgentExtensionsViewProps {
   lens: AgentsExtensionsListResult | null;
   provider: string;
   error?: string | null;
-  /** A row opens the agent's own list of that kind. */
-  onOpen?: (key: AgentListKey) => void;
+  /** A row opens the agent's own list of that kind, titled as the row is. */
+  onOpen?: (key: AgentListKey, title: string) => void;
 }
 
 /** The Extensions section on one agent's page in a profile. */
@@ -908,7 +910,7 @@ export function AgentExtensionsView({
                   <button
                     type="button"
                     className="vf-agents-row-open"
-                    onClick={() => onOpen(row.key)}
+                    onClick={() => onOpen(row.key, row.title)}
                   >
                     {row.title}
                   </button>
@@ -934,9 +936,20 @@ export function AgentExtensionsView({
 
 /* ── one agent's own list (pass 23), read-only ────────────────────────────── */
 
-function ItemRow({ item }: { item: AgentListItem }): ReactElement {
+function ItemRow({
+  item,
+  onOpen,
+}: {
+  item: AgentListItem;
+  /** AR-S4e — the row opens its page: a plugin's, or a server's or skill's. */
+  onOpen?: ((open: AgentListOpen) => void) | undefined;
+}): ReactElement {
+  const open = item.open !== undefined && onOpen !== undefined ? item.open : undefined;
   return (
-    <div className="vf-ext-item" data-ext-item={item.key}>
+    <div
+      className={`vf-ext-item${open !== undefined ? " vf-ext-item--open" : ""}`}
+      data-ext-item={item.key}
+    >
       <span className="vf-agents-mark vf-agents-mark--row" aria-hidden="true">
         {item.initial !== undefined ? (
           <span className="vf-ext-initial">{item.initial}</span>
@@ -945,7 +958,13 @@ function ItemRow({ item }: { item: AgentListItem }): ReactElement {
         )}
       </span>
       <span className="vf-ext-item-text">
-        <b>{item.name}</b>
+        {open !== undefined ? (
+          <button type="button" className="vf-agents-row-open" onClick={() => onOpen!(open)}>
+            {item.name}
+          </button>
+        ) : (
+          <b>{item.name}</b>
+        )}
         {(item.code !== "" || item.text !== "") && (
           <small>
             <FactLine code={item.code} text={item.text} />
@@ -955,6 +974,7 @@ function ItemRow({ item }: { item: AgentListItem }): ReactElement {
       <span className={`vf-ext-item-state${item.attention ? " vf-ext-attn" : ""}`}>
         {item.state}
       </span>
+      {open !== undefined && <Chevron />}
     </div>
   );
 }
@@ -994,6 +1014,8 @@ export interface AgentExtensionListViewProps {
   onRefresh?: () => void;
   /** pass 24: servers and skills are also on the profile's page, a column per agent. */
   onOpenProfile?: () => void;
+  /** AR-S4e — a row opens its page: a plugin's, or a server's or skill's. */
+  onOpen?: (open: AgentListOpen) => void;
   now?: Date;
 }
 
@@ -1009,10 +1031,11 @@ export function AgentExtensionListView({
   refreshing = false,
   onRefresh,
   onOpenProfile,
+  onOpen,
   now,
 }: AgentExtensionListViewProps): ReactElement {
   const model = lens === null || firstRead(lens) ? null : agentList(lens, provider, list, where);
-  const title = agentListTitle(list);
+  const title = model?.title ?? agentListTitle(list);
   return (
     <div className="vf-agents vf-agents-page vf-ext-page" data-ext-list={list}>
       {/* The page's focus target (the dialog's h1 names it too). */}
@@ -1065,7 +1088,7 @@ export function AgentExtensionListView({
               >
                 <div className="vf-ext-items" data-ext-section={section.key}>
                   {section.items.map((item) => (
-                    <ItemRow key={item.key} item={item} />
+                    <ItemRow key={item.key} item={item} onOpen={onOpen} />
                   ))}
                 </div>
               </SettingsSection>
@@ -1294,9 +1317,13 @@ export function ExtensionItemView({
             />
           )}
         </SettingsSection>
-        {lens !== null && lens.run !== undefined && lens.run.name === name && (
-          <RunView lens={lens} run={lens.run} where={where} signIn={signIn} now={now} />
-        )}
+        {lens !== null &&
+          lens.run !== undefined &&
+          lens.run.name === name &&
+          // a plugin by the same name runs on its own page
+          lens.run.kind === (list === "servers" ? "mcp-server" : "skill") && (
+            <RunView lens={lens} run={lens.run} where={where} signIn={signIn} now={now} />
+          )}
         {model.sharedFolder !== null && (
           <section className={`${borderCls} vf-ext-shared`}>
             <b>In the shared folder</b>
@@ -1319,6 +1346,251 @@ export function ExtensionItemView({
   );
 }
 
+/* ── one plugin an agent holds (AR-S4e; pass 23's D1) ─────────────────────── */
+
+export interface PluginViewProps {
+  lens: AgentsExtensionsListResult | null;
+  provider: string;
+  /** The plugin's key in its agent's read. */
+  id: string;
+  /** Its name as its row gave it: the title before the lens answers, and after it goes. */
+  name: string;
+  /** "in Work" · "on This Mac" */
+  where: string;
+  error?: string | null;
+  refreshing?: boolean;
+  onRefresh?: () => void;
+  /** The agent's own acts on it; absent, the page is read-only. */
+  onAct?: (request: ExtensionActRequest) => void;
+  acting?: boolean;
+  /** The catalog's still of a confirm: the act whose confirm is open. */
+  armed?: ExtensionActRequest;
+  now?: Date;
+}
+
+/** A plugin's page: who made it, what it brings, its version, and its agent's own acts on it. */
+export function PluginView({
+  lens,
+  provider,
+  id,
+  name,
+  where,
+  error = null,
+  refreshing = false,
+  onRefresh,
+  onAct,
+  acting = false,
+  armed: armedInitially,
+  now,
+}: PluginViewProps): ReactElement {
+  const [armedByClick, setArmed] = useState<ExtensionCellAct | null>(null);
+  const model = lens === null || firstRead(lens) ? null : pluginPage(lens, provider, id, name);
+  const acts =
+    model === null
+      ? []
+      : [model.toggle, model.update, model.remove, model.purge].filter(
+          (act): act is ExtensionCellAct => act !== null,
+        );
+  // the catalog opens a confirm by naming its act
+  const armed =
+    armedByClick ??
+    (armedInitially === undefined
+      ? null
+      : (acts.find((act) => act.act === armedInitially.act && act.id === armedInitially.id) ??
+        null));
+  const busy = acting || lens?.run?.state === "running";
+  const ask = (act: ExtensionCellAct): void => {
+    if (onAct === undefined) return;
+    if (asksFirst(act)) setArmed(act);
+    else onAct(requestOf(act));
+  };
+  const confirmFor = (act: ExtensionCellAct): ReactElement | null =>
+    armed === null || onAct === undefined || armed.act !== act.act ? null : (
+      <ActConfirm
+        key={`${armed.provider}:${armed.id}:${armed.act}`}
+        act={armed}
+        where={where}
+        context={{ goes: model?.goes ?? "", keepsData: model?.purge != null }}
+        busy={busy}
+        onConfirm={() => {
+          setArmed(null);
+          onAct(requestOf(armed));
+        }}
+        onCancel={() => setArmed(null)}
+      />
+    );
+  let body: ReactNode;
+  if (model === null) {
+    body = (
+      <p className="vf-ext-quiet" aria-busy="true">
+        {lens === null || lens.reading ? "Reading the agent…" : ""}
+      </p>
+    );
+  } else if (model.gone) {
+    body = (
+      <p className="vf-ext-empty">
+        {model.label} doesn’t hold {model.name} {where} now.
+      </p>
+    );
+  } else {
+    const run =
+      lens?.run !== undefined &&
+      lens.run.kind === "plugin" &&
+      lens.run.provider === provider &&
+      lens.run.item === id
+        ? lens.run
+        : undefined;
+    body = (
+      <>
+        <section className={`${borderCls} vf-ext-hero`} data-ext-plugin={model.id}>
+          <span className="vf-agents-mark vf-ext-tile" aria-hidden="true">
+            <span className="vf-ext-initial">{model.initial}</span>
+          </span>
+          <span className="vf-ext-item-text">
+            <b className="vf-ext-hero-name">{model.name}</b>
+            {model.sub !== "" && <small>{model.sub}</small>}
+          </span>
+          <span className="vf-ext-item-state vf-ext-item-state--cell">
+            {model.toggle !== null && onAct !== undefined && (
+              // the agent's own switch for it, in this profile
+              <UiSwitch
+                checked={model.state === "On"}
+                disabled={busy}
+                label={model.toggle.title}
+                onChange={() => ask(model.toggle!)}
+              />
+            )}
+            {model.state}
+          </span>
+        </section>
+        {model.toggle !== null && confirmFor(model.toggle)}
+        {model.description !== null && <p className="vf-ext-intro">{model.description}</p>}
+        {model.noSwitch !== null && (
+          <p className="vf-ext-quiet">
+            <Words text={model.noSwitch} />
+          </p>
+        )}
+        {model.hosted !== null && <p className="vf-ext-quiet">{model.hosted}</p>}
+        {model.parts.length > 0 && (
+          <SettingsSection title="What it adds">
+            <div className="vf-ext-items">
+              {model.parts.map((part) => (
+                <div key={part.key} className="vf-ext-item" data-ext-part={part.key}>
+                  <span className="vf-agents-mark vf-agents-mark--row" aria-hidden="true">
+                    <Glyph name={part.glyph} />
+                  </span>
+                  <span className="vf-ext-item-text">
+                    <b>{part.title}</b>
+                    <small>{part.text}</small>
+                    <span className="vf-ext-names">
+                      {part.names.map((partName) => (
+                        <code key={partName} className="vf-ext-code">
+                          {partName}
+                        </code>
+                      ))}
+                    </span>
+                  </span>
+                  <span />
+                </div>
+              ))}
+            </div>
+          </SettingsSection>
+        )}
+        {model.facts.length > 0 && (
+          <section className={`${borderCls} vf-ext-def-section`}>
+            <dl className="vf-ext-def">
+              {model.facts.map((fact) => (
+                <Fragment key={fact.term}>
+                  <dt>{fact.term}</dt>
+                  <dd className={fact.term === "Version" ? "vf-ext-def-act" : undefined}>
+                    {fact.code !== undefined ? (
+                      <code className="vf-ext-code">{fact.code}</code>
+                    ) : (
+                      <span>{fact.text}</span>
+                    )}
+                    {fact.term === "Version" && model.update !== null && onAct !== undefined && (
+                      <UiButton
+                        disabled={busy}
+                        aria-label={model.update.title}
+                        onClick={() => ask(model.update!)}
+                      >
+                        Update
+                      </UiButton>
+                    )}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+            {model.noUpdate !== null && (
+              <p className="vf-ext-quiet vf-ext-def-note">
+                <Words text={model.noUpdate} />
+              </p>
+            )}
+          </section>
+        )}
+        {model.update !== null && confirmFor(model.update)}
+        {run !== undefined && lens !== null && (
+          <RunView lens={lens} run={run} where={where} now={now} />
+        )}
+        {(model.remove !== null || model.purge !== null || model.noRemove !== null) && (
+          <section className={`${borderCls} vf-ext-way-out`}>
+            {model.remove !== null || model.purge !== null ? (
+              <div className="vf-ext-way-out-row">
+                <span className="vf-ext-item-text">
+                  <b>
+                    Remove from {model.label} {where}
+                  </b>
+                  <small>{model.goes}</small>
+                </span>
+                {onAct !== undefined && (
+                  <span className="vf-ext-way-out-acts">
+                    {model.remove !== null && (
+                      <UiButton
+                        disabled={busy}
+                        aria-label={model.remove.title}
+                        onClick={() => ask(model.remove!)}
+                      >
+                        Remove…
+                      </UiButton>
+                    )}
+                    {model.purge !== null && (
+                      <UiButton
+                        variant="danger"
+                        disabled={busy}
+                        aria-label={model.purge.title}
+                        onClick={() => ask(model.purge!)}
+                      >
+                        Remove with its data…
+                      </UiButton>
+                    )}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="vf-ext-quiet">
+                <Words text={model.noRemove!} />
+              </p>
+            )}
+            {model.remove !== null && confirmFor(model.remove)}
+            {model.purge !== null && confirmFor(model.purge)}
+          </section>
+        )}
+      </>
+    );
+  }
+  return (
+    <div className="vf-agents vf-agents-page vf-ext-page" data-ext-plugin-page={id}>
+      {/* The page's focus target (the dialog's h1 names it too). */}
+      <h2 className="sr-only" tabIndex={-1} data-agents-page-title="">
+        {model?.name ?? name}, a plugin of {model?.label ?? "the agent"} {where}
+      </h2>
+      <ErrorNotice error={error} />
+      {body}
+      <ReadFoot lens={lens} refreshing={refreshing} onRefresh={onRefresh} now={now} />
+    </div>
+  );
+}
+
 /* ── the Settings header for these pages ───────────────────────────────────── */
 
 /** An agent's own list names itself by the kind, under the agent and its profile. */
@@ -1327,9 +1599,11 @@ export function agentListSubpage(
   agentLabel: string,
   list: AgentListKey,
   onBack: () => void,
+  /** AR-S4e — the agent's own word for the kind, as its row said it (Pi's "Packages"). */
+  title?: string,
 ): SettingsSubpage {
   return {
-    title: agentListTitle(list),
+    title: title ?? agentListTitle(list),
     description: (
       <span className="vf-profiles-subhead">
         {agentLabel} ·
@@ -1359,6 +1633,29 @@ export function extensionItemSubpage(
       </span>
     ),
     backLabel: `Back to ${set.label}`,
+    onBack,
+  };
+}
+
+/** A plugin's page names itself, under its agent and its profile; back is the agent's list. */
+export function pluginSubpage(
+  set: AgentProfileSet,
+  agentLabel: string,
+  name: string,
+  /** The agent's list it opened from: "Plugins", or the agent's own word ("Packages"). */
+  listTitle: string,
+  onBack: () => void,
+): SettingsSubpage {
+  return {
+    title: name,
+    description: (
+      <span className="vf-profiles-subhead">
+        {agentLabel} ·
+        <ProfileMark set={set} size={12} />
+        {set.label}
+      </span>
+    ),
+    backLabel: `Back to ${listTitle}`,
     onBack,
   };
 }

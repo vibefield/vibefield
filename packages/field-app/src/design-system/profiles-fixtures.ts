@@ -42,6 +42,10 @@ export type ProfilesFixtureState =
   | "server signing in"
   | "skill"
   | "kept skill"
+  | "plugin"
+  | "plugin updated"
+  | "plugin removal"
+  | "plugin, no command"
   | "add server"
   | "add skill"
   | "new";
@@ -69,6 +73,10 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "server signing in",
   "skill",
   "kept skill",
+  "plugin",
+  "plugin updated",
+  "plugin removal",
+  "plugin, no command",
   "add server",
   "add skill",
   "new",

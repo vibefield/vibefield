@@ -1505,6 +1505,7 @@ export const METHODS: MethodDef[] = [
   // AR-S4c — an act: one server or skill an agent holds turned on, off or
   // out, through the agent's own command or protocol (RFC 006 C2); audited,
   // one at a time per Agent Profile, its output on the subscription above.
+  // AR-S4e — a plugin an agent holds too: its switch, its update, its removal.
   defineMethod({
     surface: "product",
     method: "agents.extensions.act",
