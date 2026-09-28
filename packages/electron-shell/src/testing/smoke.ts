@@ -4413,6 +4413,11 @@ export async function runSmokeGodview(opts: {
       //    since ghosttea 0.12.0 the spawn directory IS reported, as a plain
       //    path, until the first announcement replaces it. Where a `cd` lands
       //    still comes only from OSC 7, and that is what this row asserts.)
+      //    (ERRATA 2026-09-28, AR-7: "this user's zsh" was the machine owner's
+      //    own login zsh, startup files and history included. The pair now runs
+      //    as the smoke's PERSON (testing/typed-agent.ts), and the announcement
+      //    is their zshrc's: a precmd hook that prints OSC 7, as a terminal
+      //    app's own zshrc does. The row's claim about the FLOOR is unchanged.)
       const workdir = join(scratch, "work");
       mkdirSync(workdir, { recursive: true });
       // TP-S3f: this row is BACK in full after two eras of honest gap-marks.
