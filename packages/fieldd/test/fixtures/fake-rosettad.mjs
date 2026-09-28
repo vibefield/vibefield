@@ -35,6 +35,10 @@
 // say so — and for AR-5e it is also how a test asserts the exact query string
 // fieldd sent (the scope, `prefix`, `kind`, `limit`).
 //
+// QL (the native resume's provenance check): FAKE_ROSETTAD_RUNTIMES, a JSON
+// file of extra `/api/runtimes` rows re-read per request, so a test can say
+// which kind a scripted session's `runtime_id` names.
+//
 // QL: `/api/projects` (every `project_id` the scripted session rows name, as
 // a project rooted at the first such row's cwd — rosetta's own grouping in
 // miniature) and `/api/sessions?project=…` (the rows of one project, as the
@@ -241,7 +245,12 @@ if (mode === "silent") {
   const startedAt = Date.now();
   const censusPublished = () => Date.now() - startedAt >= censusDelayMs;
   const server = createServer((req, res) => {
-    const rows = [...discoveredRows, ...enrolledRows];
+    const extraRuntimes = scripted("FAKE_ROSETTAD_RUNTIMES", []);
+    const rows = [
+      ...discoveredRows,
+      ...enrolledRows,
+      ...(Array.isArray(extraRuntimes) ? extraRuntimes : []),
+    ];
     if (req.url === "/api/status") {
       const search = searchScript();
       json(res, {

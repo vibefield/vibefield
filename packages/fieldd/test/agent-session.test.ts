@@ -375,6 +375,9 @@ interface Box {
   attached: ScriptedAttach[];
   /** AR-4 — the file the fake rosettad serves session rows from */
   sessionsFile: string;
+  /** QL — extra `/api/runtimes` rows the fake rosettad serves (a scripted
+   * session's runtime, so the index can say which agent it belongs to) */
+  runtimesFile: string;
   /** AR-4 — one line per `/api/sessions` the fake rosettad answered: the
    * poller's own footprint, so a window in which nothing changed can say
    * whether anything was ASKED in it */
@@ -421,6 +424,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   const home = join(dataDir, "home");
   const sessionsFile = join(root, "rosetta-sessions.json");
   const requestLog = join(root, "rosetta-requests.log");
+  const runtimesFile = join(root, "rosetta-runtimes.json");
   if (restart === undefined) {
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     mkdirSync(bin);
@@ -483,6 +487,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     rosettadSpawn: fakeSpawner(config.rosettadMode ?? "ok", {
       FAKE_ROSETTAD_SESSIONS: sessionsFile,
       FAKE_ROSETTAD_REQUEST_LOG: requestLog,
+      FAKE_ROSETTAD_RUNTIMES: runtimesFile,
     }),
     rosettadHome: home,
     vibefieldRoot: root,
@@ -517,6 +522,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     sessions,
     attached,
     sessionsFile,
+    runtimesFile,
     requestLog,
     records,
     seen,
@@ -895,6 +901,59 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     expect(missing.data?.details).toMatchObject({ set: "nowhere" });
     expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
   });
+
+  it("QL-D10 hardening — a native resume takes only an id that cannot be a flag, a folder that exists, and a conversation the index files under that agent", async () => {
+    const box = await setup({ floor: "mock", catalog: FILED_CATALOG });
+    const { daemon, dataDir, envOut } = box;
+    const win = await window(daemon, DECK, "qn5");
+    await indexReady(win);
+    const refusal = async (params: Record<string, unknown>) =>
+      (await win.callErr("agent.resume", { provider: "scripted", ...params })) as RpcErrorShape;
+
+    // an id an adapter's CLI would read as a flag, or that carries anything
+    // but an id's characters, names nothing
+    for (const nativeSessionId of [
+      "--dangerously-bypass-approvals-and-sandbox",
+      "-c",
+      "conv 1",
+      "conv;rm -rf ~",
+      "conv/../x",
+      "a".repeat(257),
+    ]) {
+      const refused = await refusal({ nativeSessionId, cwd: envOut });
+      expect(refused.data?.kind, nativeSessionId).toBe("PRECONDITION_FAILED");
+      // past the contract's 256 the params never parse; within it, fieldd says why
+      if (nativeSessionId.length <= 256) {
+        expect(refused.data?.details, nativeSessionId).toMatchObject({
+          reason: "malformed-native-id",
+        });
+      }
+    }
+
+    // the folder must be an existing absolute one
+    fileConversations(box, ["conv-1"]);
+    for (const cwd of ["relative/dir", join(envOut, "not-there")]) {
+      const refused = await refusal({ nativeSessionId: "conv-1", cwd });
+      expect(refused.data?.kind, cwd).toBe("PRECONDITION_FAILED");
+      expect(refused.data?.details).toMatchObject({ reason: "missing-cwd" });
+    }
+
+    // a conversation the index has never read…
+    const unknown = await refusal({ nativeSessionId: "conv-unknown", cwd: envOut });
+    expect(unknown.data?.kind).toBe("NOT_FOUND");
+    expect(unknown.data?.details).toMatchObject({
+      nativeSessionId: "conv-unknown",
+      reason: "unknown-conversation",
+    });
+    // …or one it files under ANOTHER agent (the renderer's word is not provenance)
+    fileConversations(box, ["conv-theirs"], "claude-code");
+    const theirs = await refusal({ nativeSessionId: "conv-theirs", cwd: envOut });
+    expect(theirs.data?.kind).toBe("NOT_FOUND");
+    expect(theirs.data?.details).toMatchObject({ reason: "other-agent" });
+
+    // nothing was recorded for any of them
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
+  });
 });
 
 describe("managed sessions over the REAL floor (field-native)", () => {
@@ -1086,7 +1145,8 @@ describe("managed sessions over the REAL floor (field-native)", () => {
   }, 90_000);
 
   it("QL-D10 — a conversation resumed by its native id: refused while a run continues it; then a new run on puppeteer's continuation, recorded and audited, answered like a spawn; the exited record no longer resumes beside it", async () => {
-    const { daemon, dataDir, envOut, sessions, records } = await setup({ floor: "real" });
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG });
+    const { daemon, dataDir, envOut, sessions, records } = box;
     const win = await window(daemon, DECK, "qn3");
     const spawned = (await win.call("agent.spawn", {
       provider: "scripted",
@@ -1094,6 +1154,8 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       title: "first",
     })) as AgentSpawnResult;
     const conversation = spawned.session.sessionId;
+    // the index has read it, under the scripted agent's runtime
+    fileConversations(box, [conversation]);
     // QL — the launcher orders its agents by this device's newest record
     const launchedAt = async (): Promise<Array<[string, number | undefined]>> =>
       ((await win.call("agent.providers", {})) as AgentProvidersResult).providers
@@ -1354,6 +1416,39 @@ const rosettaRow = (nativeSessionId: string, stillForMs: number | null, child = 
   stream_state: "indexed",
 });
 
+/** QL — the catalog with the scripted row naming a rosetta kind, so the
+ * index can file a scripted conversation under the scripted agent (a native
+ * resume takes only a conversation the index files under the agent asked). */
+const FILED_CATALOG = catalogWith("scripted", {
+  seams: { puppeteer: { provider: "scripted" }, rosetta: { kind: "scripted" } },
+});
+
+/** QL — the index answers only once its daemon is up; a native resume asks it. */
+async function indexReady(win: { call(method: string, params: unknown): Promise<unknown> }) {
+  await poll(async () => {
+    const status = (await win.call("index.status", {})) as { rosettad?: { phase?: string } };
+    return status.rosettad?.phase === "ready" ? true : undefined;
+  }, 15_000);
+}
+
+/** QL — make the fake index know these conversations, each under the runtime
+ * `runtimeId` whose kind is `kind` (the scripted agent's, by default). */
+function fileConversations(
+  box: Pick<Box, "sessionsFile" | "runtimesFile">,
+  nativeIds: readonly string[],
+  kind = "scripted",
+): void {
+  const runtimeId = `rt-${kind}`;
+  writeFileSync(
+    box.runtimesFile,
+    JSON.stringify([{ id: runtimeId, kind, data_root: `~/.${kind}` }]),
+  );
+  writeFileSync(
+    box.sessionsFile,
+    JSON.stringify(nativeIds.map((id) => ({ ...rosettaRow(id, 60_000), runtime_id: runtimeId }))),
+  );
+}
+
 describe("a server's values over the REAL floor (AR-S4d)", () => {
   it("an agent VibeField starts is given the values of the servers VibeField gave it, and no other; none reaches a record or the ledger", async () => {
     const entries = new Map<string, string>();
@@ -1565,8 +1660,11 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
   }, 60_000);
 
   it("QL-D10 — a native resume under an Agent Profile runs on its sign-in for the agent; under a profile id, that persona; with neither, the agent's own folder — never the default; a profile with no sign-in for the agent refuses before anything runs", async () => {
-    const { daemon, dataDir, envOut, seen } = await setup({ floor: "real", profiles: true });
+    const box = await setup({ floor: "real", profiles: true, catalog: FILED_CATALOG });
+    const { daemon, dataDir, envOut, seen } = box;
+    fileConversations(box, ["conv-set", "conv-id", "conv-own", "conv-native", "conv-empty"]);
     const win = await window(daemon, DECK, "qn4");
+    await indexReady(win);
     const work = await signedIn(win, dataDir, "Work", { default: true });
     const underSet = (await win.call("agent.resume", {
       provider: "scripted",

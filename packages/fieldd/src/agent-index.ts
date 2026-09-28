@@ -927,6 +927,31 @@ export class IndexService {
     };
   }
 
+  /** QL-D10 (the review's hardening) — the agent whose conversation this
+   * native id is, as the INDEX files it: the canonical row for the id (the
+   * same choice `sessionByNativeId` makes), its runtime's kind, and the
+   * catalog id that kind maps to. `undefined` when the index has never read
+   * the id; `{}` when it has, but no catalog row maps its kind. A native
+   * resume takes an id only the index vouches for, and only for the agent the
+   * index says it belongs to — the renderer's word is not provenance. */
+  async nativeSessionAgent(
+    nativeSessionId: string,
+  ): Promise<{ provider?: string; profileId?: string } | undefined> {
+    this.requireReady();
+    const rows = (await this.fetchSessionRows([nativeSessionId], SESSION_FACTS_LIMIT)).filter(
+      (row) => row.native_session_id === nativeSessionId,
+    );
+    const row = rows.find((candidate) => candidate.root_session_id === candidate.id) ?? rows[0];
+    if (row === undefined) return undefined;
+    const runtimes = await this.recentRuntimeTable([row]);
+    const runtime = typeof row.runtime_id === "string" ? runtimes.get(row.runtime_id) : undefined;
+    const provider = runtime === undefined ? undefined : this.catalog.idForKind(runtime.kind);
+    return {
+      ...(provider !== undefined ? { provider } : {}),
+      ...(runtime?.profileId !== undefined ? { profileId: runtime.profileId } : {}),
+    };
+  }
+
   // ── AR-5e — the find sheet's two doors ─────────────────────────────────
   //
   // One keystroke is TWO asks, the way the reference client asks them: the

@@ -249,8 +249,16 @@ export function refusalReason(cause: unknown): string {
     }
     if (details["state"] === "terminal-alive") return "it is already running";
     if (details["state"] === "signed-out") return "its profile is signed out";
+    if (details["reason"] === "missing-cwd") return "its folder is gone";
+    if (details["reason"] === "malformed-native-id") return "its id is not one an agent can resume";
   }
-  if (refusal.kind === "NOT_FOUND") return "its profile no longer exists";
+  if (refusal.kind === "NOT_FOUND") {
+    // fieldd's native resume takes only a conversation the index files under
+    // that agent (the review's hardening); every other NOT_FOUND is a profile
+    return details["nativeSessionId"] !== undefined
+      ? "the history no longer knows it"
+      : "its profile no longer exists";
+  }
   return messageOf(cause);
 }
 

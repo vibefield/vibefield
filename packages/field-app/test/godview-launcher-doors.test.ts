@@ -384,6 +384,18 @@ describe("the verbs", () => {
       [refusal("PRECONDITION_FAILED", "x", { state: "signed-out" }), "its profile is signed out"],
       [refusal("NOT_FOUND", "no profile p"), "its profile no longer exists"],
       [
+        refusal("NOT_FOUND", "x", { nativeSessionId: "n", reason: "unknown-conversation" }),
+        "the history no longer knows it",
+      ],
+      [
+        refusal("PRECONDITION_FAILED", "x", { reason: "missing-cwd", cwd: "/gone" }),
+        "its folder is gone",
+      ],
+      [
+        refusal("PRECONDITION_FAILED", "x", { reason: "malformed-native-id" }),
+        "its id is not one an agent can resume",
+      ],
+      [
         refusal("RESOURCE_EXHAUSTED", "the floor holds its cap of sessions"),
         "the floor holds its cap of sessions",
       ],

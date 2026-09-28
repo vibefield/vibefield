@@ -5,10 +5,11 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
 import type { BuiltinProviderOptions } from "@vibecook/puppeteer-builtin-providers";
 import { createBuiltinProviders } from "@vibecook/puppeteer-builtin-providers";
@@ -481,6 +482,19 @@ interface ExitedEntry {
 interface AwaitingBoot {
   record: AgentSessionRecord;
   deadline: number;
+}
+
+/** QL-D10's native id, as it may reach an adapter's argv: a uuid, a thread
+ * or session id — letters, digits, `.`, `_`, `:` and `-`, never led by `-`
+ * (which an adapter's CLI would read as a flag). */
+const NATIVE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /** The `agents.*`/`agent.*` doors' service, the runtime's owner and the fold.
@@ -992,6 +1006,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     params: AgentResumeNativeParams,
     principal: GrantPrincipal,
   ): Promise<AgentSpawnResult> {
+    // The review's hardening: the native id becomes an argv token in the
+    // adapters (`resume <id>`), so one that could read as a flag — or carry
+    // anything but an id's characters — is refused before it names anything.
+    if (!NATIVE_SESSION_ID.test(params.nativeSessionId)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "that is not a conversation id an agent can be asked to resume",
+        false,
+        { provider: params.provider, reason: "malformed-native-id" },
+      );
+    }
     this.requireVisible(params.provider, "resume it");
     const row = this.catalog.entry(params.provider);
     const launch = this.runtime.launchProviders().find((p) => p.id === params.provider);
@@ -1021,6 +1046,29 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
     }
     const cwd = params.cwd ?? this.home;
+    if (!isAbsolute(cwd) || !isDirectory(cwd)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the conversation's folder is not a folder on this device",
+        false,
+        { provider: params.provider, reason: "missing-cwd", cwd },
+      );
+    }
+    // …and only a conversation the INDEX files under this agent: the
+    // renderer's word for which agent a native id belongs to is not provenance.
+    const filed = await this.opts.index.nativeSessionAgent(params.nativeSessionId);
+    if (filed?.provider !== params.provider) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `the agent index knows no ${this.labelFor(params.provider, params.provider)} conversation by that id`,
+        false,
+        {
+          provider: params.provider,
+          nativeSessionId: params.nativeSessionId,
+          reason: filed === undefined ? "unknown-conversation" : "other-agent",
+        },
+      );
+    }
     const identity = this.identity();
     const entry = await this.creation(profileId ?? null, async () => {
       const result = await this.runtime.resume({
