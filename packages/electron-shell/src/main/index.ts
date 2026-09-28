@@ -768,7 +768,11 @@ async function main(
   }
   const pairBundles = new Map<string, PairBundle>();
   let windowRendererBoundary: ReturnType<typeof registerWindowBootstrap> | null = null;
-  const ensurePairBundle = (userId: string, userRoot: string): PairBundle => {
+  const ensurePairBundle = (
+    userId: string,
+    userRoot: string,
+    environment?: Readonly<Record<string, string>>,
+  ): PairBundle => {
     const existing = pairBundles.get(userId);
     if (existing !== undefined) return existing;
     const sup = buildSupervisor({
@@ -779,6 +783,7 @@ async function main(
       logRoot,
       logger,
       userId,
+      ...(environment !== undefined ? { environment } : {}),
     });
     const handles = new FielddHandleCoordinator(
       (options) => sup.ensure(options),
@@ -970,7 +975,20 @@ async function main(
    * never a captured boot value (the switch reassigns it). rootReal is the
    * VibeField root and never moves. */
   let attached = user;
-  const bootBundle = ensurePairBundle(user.userId, root);
+  // AR-7 — the godview smoke types an agent's name into a pane, and nothing of
+  // the machine owner's may answer it: its person (a throwaway HOME), a stub
+  // standing in for the agent, and that stub recorded as the agent's ACTIVE
+  // install are staged into this run's OWN root before the pair boots — fieldd
+  // composes an agent's executable once, at boot — and the pair runs as the
+  // person. Never into an injected FIELDD_DATA_DIR (someone else's root), never
+  // for the direct proof; every other mode builds its pair exactly as before.
+  const typedAgent =
+    MODE === "smoke-godview" &&
+    !process.argv.includes("--terminal-direct-proof") &&
+    process.env["FIELDD_DATA_DIR"] === undefined
+      ? (await testing()).stageTypedAgent({ vibefieldRoot: user.rootReal })
+      : undefined;
+  const bootBundle = ensurePairBundle(user.userId, root, typedAgent?.environment);
   supervisor = bootBundle.supervisor;
   fielddHandles = bootBundle.handles;
   let attachmentWiring = wireAttachment(bootBundle, root);
@@ -1434,6 +1452,7 @@ async function main(
       beforeExit: closeEvidence,
       terminalDirectProof: process.argv.includes("--terminal-direct-proof"),
       ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
+      ...(typedAgent !== undefined ? { typedAgent } : {}),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({
