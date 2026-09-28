@@ -81,7 +81,7 @@
         "usage": true,
         "distribution": true,
         "personas": true,
-        "invoke": false
+        "invoke": true
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -111,7 +111,7 @@
         "usage": true,
         "distribution": true,
         "personas": true,
-        "invoke": false
+        "invoke": true
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -141,7 +141,7 @@
         "usage": false,
         "distribution": true,
         "personas": true,
-        "invoke": false
+        "invoke": true
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -171,7 +171,7 @@
         "usage": false,
         "distribution": true,
         "personas": true,
-        "invoke": false
+        "invoke": true
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -201,7 +201,7 @@
         "usage": true,
         "distribution": true,
         "personas": true,
-        "invoke": false
+        "invoke": true
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here; personas re-claimed 2026-09-25 at puppeteer 63bf175 (the adapter's profiles port declares supported again — the 2026-09-22 erratum that narrowed it is reversed)",
@@ -231,7 +231,7 @@
         "usage": false,
         "distribution": true,
         "personas": true,
-        "invoke": false
+        "invoke": true
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
@@ -261,7 +261,7 @@
         "usage": false,
         "distribution": true,
         "personas": true,
-        "invoke": false
+        "invoke": true
       },
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview: the real-daemon history join is witnessed here, a live spawn is not",

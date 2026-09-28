@@ -231,12 +231,14 @@ export const AGENT_CATALOG = [
     // grammar is not the licence, and this adapter does not classify (no
     // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
     // launcher: typed by name, it runs as the shell runs it.
+    // 2026-09-28 AR-7 grammar expansion: invoke restored after the adapter's evidence-bound
+    // classification and strict gateway matrix; preview status is unchanged.
     id: "grok",
     label: "Grok",
     status: "preview",
     seams: { puppeteer: { provider: "grok" }, rosetta: { kind: "grok" } },
     layoutRoot: "~/.grok",
-    offers: OFFERS_FULL,
+    offers: OFFERS_WITH_INVOKE,
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
@@ -250,12 +252,14 @@ export const AGENT_CATALOG = [
     // grammar is not the licence, and this adapter does not classify (no
     // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
     // launcher: typed by name, it runs as the shell runs it.
+    // 2026-09-28 AR-7 grammar expansion: invoke restored after the adapter's evidence-bound
+    // classification and strict gateway matrix; preview status is unchanged.
     id: "kimi",
     label: "Kimi Code",
     status: "preview",
     seams: { puppeteer: { provider: "kimi" }, rosetta: { kind: "kimi-code" } },
     layoutRoot: "~/.kimi-code",
-    offers: OFFERS_FULL,
+    offers: OFFERS_WITH_INVOKE,
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
@@ -268,12 +272,14 @@ export const AGENT_CATALOG = [
     // grammar is not the licence, and this adapter does not classify (no
     // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
     // launcher: typed by name, it runs as the shell runs it.
+    // 2026-09-28 AR-7 grammar expansion: invoke restored after the adapter's evidence-bound
+    // classification and strict gateway matrix; preview status is unchanged.
     id: "opencode",
     label: "OpenCode",
     status: "preview",
     seams: { puppeteer: { provider: "opencode" }, rosetta: { kind: "opencode" } },
     layoutRoot: "~/.local/share/opencode",
-    offers: OFFERS_NO_USAGE,
+    offers: { ...OFFERS_NO_USAGE, invoke: true },
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
@@ -286,12 +292,14 @@ export const AGENT_CATALOG = [
     // grammar is not the licence, and this adapter does not classify (no
     // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
     // launcher: typed by name, it runs as the shell runs it.
+    // 2026-09-28 AR-7 grammar expansion: invoke restored after the adapter's evidence-bound
+    // classification and strict gateway matrix; preview status is unchanged.
     id: "hermes",
     label: "Hermes",
     status: "preview",
     seams: { puppeteer: { provider: "hermes" }, rosetta: { kind: "hermes" } },
     layoutRoot: "~/.hermes",
-    offers: OFFERS_NO_USAGE,
+    offers: { ...OFFERS_NO_USAGE, invoke: true },
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
@@ -317,12 +325,14 @@ export const AGENT_CATALOG = [
     // grammar is not the licence, and this adapter does not classify (no
     // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
     // launcher: typed by name, it runs as the shell runs it.
+    // 2026-09-28 AR-7 grammar expansion: invoke restored after the adapter's evidence-bound
+    // classification and strict gateway matrix; preview status is unchanged.
     id: "antigravity",
     label: "Antigravity",
     status: "preview",
     seams: { puppeteer: { provider: "antigravity" }, rosetta: { kind: "antigravity" } },
     layoutRoot: "~/.gemini/antigravity-cli",
-    offers: OFFERS_FULL,
+    offers: OFFERS_WITH_INVOKE,
     admitted: "2026-09-22",
     decision:
       "AC-D6 — preview until a live spawn and history join are witnessed here; personas re-claimed 2026-09-25 at puppeteer 63bf175 (the adapter's profiles port declares supported again — the 2026-09-22 erratum that narrowed it is reversed)",
@@ -336,12 +346,14 @@ export const AGENT_CATALOG = [
     // grammar is not the licence, and this adapter does not classify (no
     // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
     // launcher: typed by name, it runs as the shell runs it.
+    // 2026-09-28 AR-7 grammar expansion: invoke restored after the adapter's evidence-bound
+    // classification and strict gateway matrix; preview status is unchanged.
     id: "copilot",
     label: "GitHub Copilot",
     status: "preview",
     seams: { puppeteer: { provider: "copilot" }, rosetta: { kind: "copilot" } },
     layoutRoot: "~/.copilot",
-    offers: OFFERS_NO_USAGE,
+    offers: { ...OFFERS_NO_USAGE, invoke: true },
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
@@ -356,12 +368,14 @@ export const AGENT_CATALOG = [
     // grammar is not the licence, and this adapter does not classify (no
     // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
     // launcher: typed by name, it runs as the shell runs it.
+    // 2026-09-28 AR-7 grammar expansion: invoke restored after the adapter's evidence-bound
+    // classification and strict gateway matrix; preview status is unchanged.
     id: "pi",
     label: "Pi",
     status: "preview",
     seams: { puppeteer: { provider: "pi" }, rosetta: { kind: "pi" } },
     layoutRoot: "~/.pi",
-    offers: OFFERS_NO_USAGE,
+    offers: { ...OFFERS_NO_USAGE, invoke: true },
     admitted: "2026-09-22",
     decision:
       "AC-D6 — preview: the real-daemon history join is witnessed here, a live spawn is not",

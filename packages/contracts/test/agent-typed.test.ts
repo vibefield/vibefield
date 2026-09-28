@@ -70,23 +70,25 @@ describe("the catalog's `invoke` (AR-7a; AR7-D15)", () => {
     );
   });
 
-  // The claims are the pin's, as wall R23 read them (puppeteer 2b83e2c): two
-  // launch providers declare a native CLI grammar whose adapter CLASSIFIES
-  // (`nativeInvocation.classifies`), seven declare one that does not, and the
-  // protocol row's declares none. AR-7a had claimed nine off the grammar's
-  // presence (puppeteer 524709b); AR7-D15 (ruled 2026-09-27) narrowed the claim
-  // and the table's rows carry the errata. A pin move that changes this is
-  // R23's to say first.
-  it("is claimed exactly by the rows whose adapter classifies — not by a grammar alone, not by the protocol row", () => {
+  // AR7-D15 requires classification, not merely a grammar's presence. The
+  // 2026-09-28 expansion supplies that port for all nine vendor adapters;
+  // R23 and fieldd's real-provider test hold this claim to the sibling pin.
+  it("claims the nine classifying vendor adapters while withholding the protocol row", () => {
     expect(rows.filter((row) => row.offers.invoke).map((row) => row.id)).toEqual([
       "claude",
       "codex",
+      "grok",
+      "kimi",
+      "opencode",
+      "hermes",
+      "antigravity",
+      "copilot",
+      "pi",
     ]);
     expect(isOffered("claude", "invoke")).toBe(true);
     expect(isOffered("codex", "invoke")).toBe(true);
-    // a preview row whose grammar does not classify gets no launcher and keeps
-    // everything else it offers
-    expect(isOffered("grok", "invoke")).toBe(false);
+    expect(isOffered("grok", "invoke")).toBe(true);
+    expect(rows.find((row) => row.id === "grok")?.status).toBe("preview");
     expect(isOffered("grok", "spawn")).toBe(true);
     expect(isOffered("acp", "invoke")).toBe(false);
     expect(isOffered("acp", "spawn")).toBe(true);
