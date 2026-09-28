@@ -253,11 +253,15 @@ export function refusalReason(cause: unknown): string {
     if (details["reason"] === "malformed-native-id") return "its id is not one an agent can resume";
   }
   if (refusal.kind === "NOT_FOUND") {
-    // fieldd's native resume takes only a conversation the index files under
-    // that agent (the review's hardening); every other NOT_FOUND is a profile
-    return details["nativeSessionId"] !== undefined
-      ? "the history no longer knows it"
-      : "its profile no longer exists";
+    // Read by what fieldd says is missing, never by the kind alone: the
+    // launcher sends no profile set, so a missing profile is only puppeteer's
+    // AGENT_PROFILE_NOT_FOUND (a row's persona deleted since it was listed);
+    // the native resume's own refusals name the conversation; anything else
+    // is fieldd's words.
+    if (details["reason"] === "unknown-conversation") return "the history no longer knows it";
+    if (details["reason"] === "other-agent") return "the history files it under another agent";
+    if (details["reason"] === "unsupported-agent") return "this agent is not offered here";
+    if (details["code"] === "AGENT_PROFILE_NOT_FOUND") return "its profile no longer exists";
   }
   return messageOf(cause);
 }

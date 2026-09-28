@@ -382,11 +382,29 @@ describe("the verbs", () => {
         "it is already running",
       ],
       [refusal("PRECONDITION_FAILED", "x", { state: "signed-out" }), "its profile is signed out"],
-      [refusal("NOT_FOUND", "no profile p"), "its profile no longer exists"],
+      [
+        refusal("NOT_FOUND", "no profile p", { provider: "a", code: "AGENT_PROFILE_NOT_FOUND" }),
+        "its profile no longer exists",
+      ],
       [
         refusal("NOT_FOUND", "x", { nativeSessionId: "n", reason: "unknown-conversation" }),
         "the history no longer knows it",
       ],
+      [
+        refusal("NOT_FOUND", "x", { nativeSessionId: "n", reason: "other-agent" }),
+        "the history files it under another agent",
+      ],
+      [
+        refusal("NOT_FOUND", "no agent a in the catalog", { reason: "unsupported-agent" }),
+        "this agent is not offered here",
+      ],
+      // a NOT_FOUND the launcher has no sentence for is fieldd's own words,
+      // never a guess that a profile went missing
+      [
+        refusal("NOT_FOUND", "no managed session run-9", { runtimeRunId: "run-9" }),
+        "no managed session run-9",
+      ],
+      [refusal("NOT_FOUND", "the agent vanished"), "the agent vanished"],
       [
         refusal("PRECONDITION_FAILED", "x", { reason: "missing-cwd", cwd: "/gone" }),
         "its folder is gone",
