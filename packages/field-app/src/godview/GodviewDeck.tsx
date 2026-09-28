@@ -1158,17 +1158,16 @@ export function GodviewDeck({
 
   /** The sessions this deck currently SHOWS, by id and nothing else (TP-L-C).
    * One list, two readers: the monitor's pane facts and the demand below. */
-  const paneSessionIds = useMemo(
-    () => (workspace?.panes ?? []).map((pane) => pane.session.id),
-    [workspace],
+  const paneSessionKey = JSON.stringify((workspace?.panes ?? []).map((pane) => pane.session.id));
+  const paneSessionIds = useMemo<readonly string[]>(
+    () => JSON.parse(paneSessionKey),
+    [paneSessionKey],
   );
 
   // PANE ZOOM (TP-D18, §9.7). The chord is claimed from ghosttea here — see
   // `use-deck-zoom.ts` for why, and `deck-zoom.ts` for what upstream's own zoom
-  // does instead. Note what this does NOT touch: demand. A zoomed deck shows
-  // one pane and keeps every other pane MOUNTED (hidden, not unmounted), so
-  // every session's view binding and its declared demand are exactly what they
-  // were — which is the difference between a zoom and upstream's remount.
+  // does instead. Hidden siblings stay mounted, but their visibility and
+  // source demand pause while the zoomed pane occupies the deck.
   const zoom = useDeckZoom(zoomHostRef, workspace?.activePaneId);
 
   // ── THE PANE FRAME (GT-6, record §07) ───────────────────────────────────
@@ -1349,6 +1348,19 @@ export function GodviewDeck({
    * 240 ms ahead of the pane it names — and ahead of the deck's own chip, which
    * reads the same helper. */
   const zoomedPaneId = zoomLayoutApplied(zoom.state.phase) ? zoom.state.paneId : null;
+  const paneVisibility = useMemo(
+    () =>
+      Object.fromEntries(
+        (workspace?.panes ?? []).map((pane) => [
+          pane.id,
+          zoomedPaneId === null || pane.id === zoomedPaneId,
+        ]),
+      ),
+    [workspace, zoomedPaneId],
+  );
+  const visibleSessionIds = (workspace?.panes ?? [])
+    .filter((pane) => paneVisibility[pane.id] !== false)
+    .map((pane) => pane.session.id);
 
   /** The terminal's INK, from the same projection the workspace is handed
    * (record §07: every figure the frame draws is mixed from the terminal's own
@@ -1370,12 +1382,9 @@ export function GodviewDeck({
   // unmounts drops every declaration in one pass, and a session nothing declares
   // is a session nothing has to advance (TP-R1).
   //
-  // What this does NOT do yet, stated plainly: reach the cell. `DeclareDemand`
-  // lands at TP-S3b with the direct connection, and until then `active: false`
-  // still leaves the source hot and the worker decoding — upstream's `setVisible`
-  // is worker-only and never reaches the daemon. The ledger is the honest record
-  // of what the tier SHOULD be; it is not yet a claim that it is.
-  useTerminalSessionViews(paneSessionIds, active ? "live" : "none");
+  // Ghosttea 0.12 routes visibility to DeclareDemand at the cell as well as
+  // suppressing worker draws; closing the overlay stops production at source.
+  useTerminalSessionViews(visibleSessionIds, active ? "live" : "none");
 
   // GT-6b — THE FLOOR'S OWN ROSTER, RE-READ WHEN THE PANES MOVE.
   //
@@ -1560,29 +1569,32 @@ export function GodviewDeck({
     zoom.state,
   ]);
 
-  const platform: GhostteaWorkspacePlatform | null =
-    shell === null
-      ? null
-      : {
-          platform: getHost().platform ?? "other",
-          // The user's real login shell, resolved by main (GT-D10). This is the
-          // value every pane is spawned with, because the workspace's own doors
-          // are the only doors — the `/bin/sh` that used to sit here was a
-          // placeholder for a path we then never took, and it was what James
-          // actually saw in a pane.
-          defaultShell: shell.defaultShell,
-          readClipboard: () => navigator.clipboard?.readText() ?? "",
-          showContextMenu: () => undefined,
-          toggleFullscreen: () => undefined,
-          // The deck's "window" is the overlay. Ghosttea calls this when the
-          // LAST pane closes, and taking the Electron window down there would
-          // close the canvas because a terminal ran out — so it closes the
-          // overlay instead, which is what the gesture meant.
-          closeWindow: () => {
-            void getHost().godview?.set(false);
+  const platform = useMemo<GhostteaWorkspacePlatform | null>(
+    () =>
+      shell === null
+        ? null
+        : {
+            platform: getHost().platform ?? "other",
+            // The user's real login shell, resolved by main (GT-D10). This is the
+            // value every pane is spawned with, because the workspace's own doors
+            // are the only doors — the `/bin/sh` that used to sit here was a
+            // placeholder for a path we then never took, and it was what James
+            // actually saw in a pane.
+            defaultShell: shell.defaultShell,
+            readClipboard: () => navigator.clipboard?.readText() ?? "",
+            showContextMenu: () => undefined,
+            toggleFullscreen: () => undefined,
+            // The deck's "window" is the overlay. Ghosttea calls this when the
+            // LAST pane closes, and taking the Electron window down there would
+            // close the canvas because a terminal ran out — so it closes the
+            // overlay instead, which is what the gesture meant.
+            closeWindow: () => {
+              void getHost().godview?.set(false);
+            },
+            onMenuAction: () => () => undefined,
           },
-          onMenuAction: () => () => undefined,
-        };
+    [shell],
+  );
 
   // GT-2b: the honest fault face. Without it, a deck whose ports never arrive
   // shows ghosttea's own raw rejection string on a dead stage with no way back
@@ -1731,6 +1743,7 @@ export function GodviewDeck({
           enableRemoteSessions={false}
           showTitlebar={false}
           active={active}
+          paneVisibility={paneVisibility}
         />
         {/* The frames follow the panes ghosttea laid out (GT-6). Mounted
             inside the zoom host so a zoomed pane keeps its frame through the

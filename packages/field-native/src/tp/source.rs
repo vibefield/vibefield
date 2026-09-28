@@ -149,11 +149,12 @@ impl SessionSource for NoSessions {
 /// endian): magic u32 @0 · version u16 @4 · flags u16 @6 · session handle u64
 /// @8 · view handle u64 @16 (today the session handle again) · session epoch
 /// u64 @24 · layout epoch u64 @32 · sequence u64 @40 · revision u64 @48 · cols
-/// u16 @56 · rows u16 @58. The door never decodes sections — it stamps, routes
+/// u16 @56 · rows u16 @58. The door reads only the header and scrollbar, never glyph/text content. It stamps, routes
 /// and forwards; the decoder stays the worker's (spec §8: TRF1 is unchanged).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Trf1Header {
     pub full_snapshot: bool,
+    pub glyph_catalog_reset: bool,
     pub session_handle: u64,
     pub view_handle: u64,
     pub session_epoch: u64,
@@ -167,8 +168,34 @@ pub struct Trf1Header {
 pub const TRF1_MAGIC: u32 = 0x3146_5254;
 pub const TRF1_HEADER_BYTES: usize = 64;
 const TRF1_FULL_SNAPSHOT: u16 = 1;
+const TRF1_GLYPH_CATALOG_RESET: u16 = 4;
 
 impl Trf1Header {
+    /// Transfer layout must describe the frame being sent, including retained
+    /// history. Read only the scrollbar section; glyph/text decoding stays in
+    /// the renderer. Every directory and payload read is bounds checked.
+    pub fn scrollback_rows(frame: &[u8]) -> Option<u64> {
+        Self::parse(frame)?;
+        let sections = u16::from_le_bytes(frame[60..62].try_into().ok()?) as usize;
+        for index in 0..sections {
+            let start = TRF1_HEADER_BYTES + index * 16;
+            let section = frame.get(start..start + 16)?;
+            if u16::from_le_bytes(section[0..2].try_into().ok()?) != 8 {
+                continue;
+            }
+            let offset = u32::from_le_bytes(section[4..8].try_into().ok()?) as usize;
+            let length = u32::from_le_bytes(section[8..12].try_into().ok()?) as usize;
+            if length < 24 {
+                return None;
+            }
+            let scrollbar = frame.get(offset..offset.checked_add(length)?)?;
+            let total = u64::from_le_bytes(scrollbar[0..8].try_into().ok()?);
+            let visible = u64::from_le_bytes(scrollbar[16..24].try_into().ok()?);
+            return total.checked_sub(visible);
+        }
+        None
+    }
+
     pub fn parse(frame: &[u8]) -> Option<Trf1Header> {
         if frame.len() < TRF1_HEADER_BYTES {
             return None;
@@ -181,6 +208,7 @@ impl Trf1Header {
         }
         Some(Trf1Header {
             full_snapshot: u16_at(6) & TRF1_FULL_SNAPSHOT != 0,
+            glyph_catalog_reset: u16_at(6) & TRF1_GLYPH_CATALOG_RESET != 0,
             session_handle: u64_at(8),
             view_handle: u64_at(16),
             session_epoch: u64_at(24),
@@ -196,6 +224,22 @@ impl Trf1Header {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transfer_history_comes_from_the_frame_and_checks_section_bounds() {
+        let mut frame = vec![0u8; 104];
+        frame[0..4].copy_from_slice(&TRF1_MAGIC.to_le_bytes());
+        frame[4..6].copy_from_slice(&1u16.to_le_bytes());
+        frame[60..62].copy_from_slice(&1u16.to_le_bytes());
+        frame[64..66].copy_from_slice(&8u16.to_le_bytes());
+        frame[68..72].copy_from_slice(&80u32.to_le_bytes());
+        frame[72..76].copy_from_slice(&24u32.to_le_bytes());
+        frame[80..88].copy_from_slice(&1540u64.to_le_bytes());
+        frame[96..104].copy_from_slice(&40u64.to_le_bytes());
+        assert_eq!(Trf1Header::scrollback_rows(&frame), Some(1500));
+        frame[68..72].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(Trf1Header::scrollback_rows(&frame), None);
+    }
 
     #[test]
     fn trf1_header_parses_the_documented_offsets() {
@@ -216,6 +260,7 @@ mod tests {
             h,
             Trf1Header {
                 full_snapshot: true,
+                glyph_catalog_reset: true,
                 session_handle: 77,
                 view_handle: 77,
                 session_epoch: 3,

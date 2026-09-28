@@ -494,12 +494,20 @@ async fn the_deck_path_seed_lease_deltas_and_credit() {
         "the PTY's output reached the frames leg as deltas"
     );
 
-    // the worker's progress keeps the lease fresh; the cell answers every SceneApplied
+    // Continuous progress records every revision without a main-thread status
+    // for every frame; the bounded periodic refresh keeps the lease alive.
+    tokio::time::sleep(Duration::from_millis(2_100)).await;
     let applied = json!({ "sceneEpoch": result["sceneEpoch"], "sceneRevision": last });
     scene_applied(&mut frames, &session_id, "act-1", &applied).await;
-    let status = expect_text(next_reply(&mut control).await, "CellActivationStatus");
-    assert_eq!(status["cellStatusSequence"], 2);
-    assert_eq!(status["input"]["state"], "allowed");
+    // The intentionally delayed acknowledgement can also produce a transient
+    // lagging status. Read through it to the refreshed, current lease.
+    loop {
+        let status = expect_text(next_reply(&mut control).await, "CellActivationStatus");
+        assert!(status["cellStatusSequence"].as_u64().unwrap() >= 2);
+        if status["input"]["state"] == "allowed" {
+            break;
+        }
+    }
 
     let snapshot = h.door.snapshot();
     assert_eq!(snapshot.activations.len(), 1);

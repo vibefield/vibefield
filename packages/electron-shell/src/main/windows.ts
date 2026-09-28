@@ -76,7 +76,11 @@ export async function loadRenderer(
   viteUrl: string,
 ): Promise<void> {
   if (mode !== "dev") {
-    await win.loadURL(APP_ENTRY_URL);
+    const url = new URL(APP_ENTRY_URL);
+    if (mode === "smoke-godview" || mode === "terminal-perf-lab") {
+      url.searchParams.set("godviewMarkers", "1");
+    }
+    await win.loadURL(url.href);
     return;
   }
   for (let i = 0; i < 40; i++) {

@@ -1,3 +1,15 @@
+/** High-rate diagnostic markers are opt-in; smoke and perf runs enable them
+ * through their renderer mode. Ordinary development and production stay quiet. */
+function godviewMarkersEnabled(): boolean {
+  if (typeof location === "undefined") return false;
+  const params = new URLSearchParams(location.search);
+  return (
+    params.get("mode") === "smoke-godview" ||
+    params.get("mode") === "terminal-perf-lab" ||
+    params.get("godviewMarkers") === "1"
+  );
+}
+
 /** Explicit smoke/development console adapter. Production evidence uses the
  * renderer MessagePort; this marker remains solely because the headless canvas
  * smoke harness observes renderer console output as its pass condition.
@@ -89,6 +101,7 @@ export interface GodviewDeckFacts {
 }
 
 export function emitGodviewDeckMarker(facts: GodviewDeckFacts): void {
+  if (!godviewMarkersEnabled()) return;
   console.log(`GODVIEW_DECK ${JSON.stringify(facts)}`);
 }
 
@@ -210,6 +223,7 @@ export interface GodviewMonitorFacts {
 }
 
 export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {
+  if (!godviewMarkersEnabled()) return;
   console.log(`GODVIEW_MONITOR ${JSON.stringify(facts)}`);
 }
 

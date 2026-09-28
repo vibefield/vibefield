@@ -3,7 +3,7 @@
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
-      "sha": "78451b9d96c7823f85e7970469b2d411d71a2513",
+      "sha": "0ba060f4684fb0cfd59610d66f9252bea2e0e256",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
@@ -30,6 +30,21 @@
       "swift": {
         "manifest": "apps/ios/VibeFieldKit/Package.swift",
         "link": "apps/ios/VibeFieldKit/.window/truffle"
+      }
+    },
+    "ghosttea": {
+      "path": "../ghosttea-0.11.2",
+      "sha": "470b9e16d991b75582d897f2e1ffcc7e619ebe68",
+      "packages": {
+        "@vibecook/ghosttea-react": "packages/ghosttea-react"
+      },
+      "patch": {
+        "ghosttea": "native/ghosttea",
+        "ghosttea-config": "native/ghosttea/crates/ghosttea-config",
+        "ghosttea-core": "native/ghosttea/crates/ghosttea-core",
+        "ghosttea-text": "native/ghosttea/crates/ghosttea-text",
+        "ghosttea-vt": "native/ghosttea/crates/ghosttea-vt",
+        "ghosttea-vt-sys": "native/ghosttea/crates/ghosttea-vt-sys"
       }
     }
   }

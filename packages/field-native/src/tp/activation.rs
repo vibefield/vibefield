@@ -4,7 +4,7 @@
 //! the control leg (`AttachControlLeg` → `ControlLegAttached`, carrying the
 //! initial demand) and then on the frames leg (`AttachFramesLeg` →
 //! `FramesLegAttached` with the TRF1 identity), the two-dimensional LEASE
-//! (`presentation × input`) answered to every `SceneApplied`, `DeclareDemand
+//! (`presentation × input`) refreshed periodically and on changes from `SceneApplied`, `DeclareDemand
 //! {none|live}` → the ghosttea view attached/detached (warm/hot), the BYTES
 //! credit ledger per frames connection with per-activation accounts, and the
 //! activation-scoped release when a leg dies.
@@ -131,6 +131,7 @@ pub struct Activation {
     pub pump_running: bool,
     pub last_unit_sent_at: Option<Instant>,
     pub last_scene_applied_at: Option<Instant>,
+    last_status_sent_at: Option<Instant>,
 }
 
 impl Activation {
@@ -383,7 +384,7 @@ impl CreditLedger {
             //
             // HALF THE WINDOW, so bulk always keeps something to seed into. The
             // §8/TP-S3d law is unharmed where it bites: URGENT_RESERVE_BYTES is
-            // sized at 8 x MAX_URGENT_PRESENTATION_UNIT_BYTES, so any window of
+            // sized at 2 x MAX_URGENT_PRESENTATION_UNIT_BYTES, so any window of
             // at least 2 x MAX_URGENT_PRESENTATION_UNIT_BYTES still reserves
             // room for a whole urgent unit, and every window a product client
             // declares (DEFAULT_CELL_RECEIVER_CAPS = 16 MiB, eight times the
@@ -635,6 +636,7 @@ impl ActivationTable {
 
     fn status_effect(a: &mut Activation) -> Effect {
         a.status_sequence += 1;
+        a.last_status_sent_at = Some(Instant::now());
         Effect::Send(
             a.control.clone(),
             tagged("CellActivationStatus", &a.status()),
@@ -1216,6 +1218,7 @@ impl ActivationTable {
             pump_running: false,
             last_unit_sent_at: None,
             last_scene_applied_at: None,
+            last_status_sent_at: None,
         };
         let reply = tagged(
             "ControlLegAttached",
@@ -1474,6 +1477,8 @@ impl ActivationTable {
             return Vec::new();
         }
         a.last_scene_applied_at = Some(Instant::now());
+        let presentation_before = a.presentation;
+        let input_before = a.input;
         let same_epoch = a
             .accepted
             .as_ref()
@@ -1493,7 +1498,18 @@ impl ActivationTable {
             }
         }
         Self::recompute_input(a, now_ms);
-        vec![Self::status_effect(a)]
+        // Progress is recorded for every frame, but unchanged leases need only
+        // refresh before their TTL. State transitions still reach main immediately.
+        if a.presentation != presentation_before
+            || a.input != input_before
+            || a.last_status_sent_at.is_none_or(|at| {
+                at.elapsed() >= Duration::from_millis(tp::PRESENTATION_STATUS_REFRESH_MS)
+            })
+        {
+            vec![Self::status_effect(a)]
+        } else {
+            Vec::new()
+        }
     }
 
     /// The pump sent a unit (a seed/catch-up transfer or a delta) ending at `revision`.
@@ -1991,6 +2007,21 @@ mod tests {
         assert_eq!(s[0]["input"]["state"], "allowed");
         assert_eq!(s[0]["acceptedContent"]["sceneRevision"], 10);
         assert_eq!(s[0]["cellStatusSequence"], 1);
+        // Stable progress updates the ledger without another renderer-main task.
+        let quiet = SceneApplied {
+            session_id: "s1".into(),
+            activation_id: "a1".into(),
+            lease_epoch: 0,
+            applied_content: SceneContentStamp {
+                scene_epoch: epoch.clone(),
+                scene_revision: 10,
+            },
+        };
+        assert!(t.scene_applied(&frames, quiet.clone(), 3_001).is_empty());
+        t.by_id.get_mut("a1").unwrap().last_status_sent_at =
+            Some(Instant::now() - Duration::from_millis(tp::PRESENTATION_STATUS_REFRESH_MS + 1));
+        perform(t.scene_applied(&frames, quiet, 3_002));
+        assert_eq!(texts(&mut crx)[0]["input"]["state"], "allowed");
         // lag: the pump is 100 revisions ahead of the last applied ⇒ suspended{lagging}
         t.unit_sent("a1", 120, false);
         perform(t.scene_applied(
