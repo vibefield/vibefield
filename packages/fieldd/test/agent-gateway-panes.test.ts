@@ -17,7 +17,14 @@
 // process under `script(1)`, which lends it a terminal of the test's own: the
 // launch is interactive, and its ancestors reach no shell of ours.
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -25,7 +32,6 @@ import {
   readRendezvous,
   readTerminals,
   SPAWN_THROUGH_EXIT_REFUSED,
-  spawnThroughLayout,
 } from "@vibecook/puppeteer-runtime/spawn-through";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { AGENT_GATEWAY_HOST_LABEL } from "../src/agent-gateway";
@@ -35,6 +41,7 @@ import {
   answers,
   auditActs,
   auditEntries,
+  auditText,
   bornPane,
   END_OF_INPUT,
   FLOOR_BUDGET_MS,
@@ -45,6 +52,7 @@ import {
   processOf,
   quiet,
   readRecord,
+  rowOf,
   screenOf,
   statusOf,
   teardownFloors,
@@ -84,6 +92,16 @@ const foldActs = (dataDir: string): string[] =>
   auditEntries(dataDir)
     .map((entry) => entry.action)
     .filter((action) => action.startsWith("agent.session."));
+
+/** How a command line left, as the pane wrote it: `status=<n>` in `path`. */
+async function statusIn(path: string): Promise<number> {
+  const text = await until(
+    () => (existsSync(path) ? readFileSync(path, "utf8").trim() || undefined : undefined),
+    FLOOR_WAIT_MS,
+    `the status in ${path}`,
+  );
+  return Number(text.replace("status=", ""));
+}
 
 /** Run the launcher from THIS process, under a terminal of the test's own, and
  * read how it left and how long it took. */
@@ -278,18 +296,284 @@ describe.skipIf(ZSH === undefined)(
       },
       FLOOR_BUDGET_MS,
     );
+
+    it(
+      "row 9 — a process in no terminal of ours asks the gateway: the launcher run by this process, under a terminal of its own, runs the real executable although the host is strict — with no argument and with one that cannot be carried — and leaves no row and nothing refused in the ledger",
+      async () => {
+        const box = await floor({ bundle: shimScript, person: true });
+        expect(await readRendezvous(box.home)).toMatchObject({ strict: true });
+        const plain = await launcherFromOutside(box, []);
+        expect(plain.code).toBe(0);
+        await until(() => (linesOf(box.script.realLog).length === 1 ? true : undefined));
+        const bogus = await launcherFromOutside(box, ["--bogus"]);
+        expect(bogus.code).toBe(0);
+        await until(() => (linesOf(box.script.realLog).length === 2 ? true : undefined));
+        expect(linesOf(box.script.realLog)).toEqual(["RUN ", "RUN --bogus"]);
+        // nothing was said to the person: it ran, as typed
+        for (const ran of [plain, bogus]) {
+          expect(ran.output).not.toContain("was not started");
+          expect(ran.output).not.toContain("waiting for");
+        }
+        // it was not ours to refuse: no row, no preparation, no record, nothing in the ledger
+        await quiet(1_000);
+        expect(box.daemon.agents.list().sessions).toEqual([]);
+        expect(box.script.prepared).toEqual([]);
+        expect(box.records.list()).toEqual([]);
+        expect(linesOf(box.script.managedLog)).toEqual([]);
+        expect(foldActs(box.dataDir)).toEqual([]);
+        expect(box.daemon.agentGateway?.counts().get("outside-host-terminals")).toBe(2);
+      },
+      FLOOR_BUDGET_MS,
+    );
+
+    it(
+      "row 11 — fieldd stops, the pane lives: the name run in the still-living shell says once that it is waiting, then is refused — after the kit's own wait when the stop withdrew the rendezvous, after fieldd's short wait when a fieldd that died left it — and the real executable never runs",
+      async () => {
+        const retryMs = 2_000;
+        const box = await floor({ bundle: shimScript, person: true, retryMs });
+        const pane = await bornPane(box, { recorded: true });
+        const rendezvous = join(box.home, "gateway.json");
+        const kept = join(box.root, "gateway.json.kept");
+        copyFileSync(rendezvous, kept);
+        // typed while fieldd is up and held at a gate until it is gone: no test
+        // reaches the floor's input door without a fieldd, and the launcher
+        // cannot tell — the pane's shell starts it, on the pane's terminal
+        const gates = [join(box.root, "go-1"), join(box.root, "go-2")];
+        const statuses = [join(box.root, "status-1"), join(box.root, "status-2")];
+        await type(
+          box,
+          pane,
+          gates
+            .map(
+              (gate, at) =>
+                `until [ -e '${gate}' ]; do sleep 0.2; done; ${TYPED_COMMAND}; echo "status=$?" > '${statuses[at]}'`,
+            )
+            .join("; "),
+        );
+        await box.daemon.stop();
+        expect(await readRendezvous(box.home)).toBeUndefined();
+        expect((await readTerminals(box.home))?.map((shell) => shell.pid)).toContain(pane.pid);
+        expect(isAlive(pane.pid)).toBe(true);
+
+        // (a) the stop withdrew the rendezvous: the launcher has only its own
+        // word (strict) and the kit's own wait
+        let shown = screenOf(pane).length;
+        writeFileSync(gates[0] as string, "");
+        expect(await statusIn(statuses[0] as string)).toBe(SPAWN_THROUGH_EXIT_REFUSED);
+        let said = screenOf(pane).slice(shown);
+        expect(said.split(`waiting for ${AGENT_GATEWAY_HOST_LABEL}`).length - 1).toBe(1);
+        expect(said).toContain(
+          `${AGENT_GATEWAY_HOST_LABEL} did not answer within ${Math.round(DEFAULT_RETRY_MS / 1_000)} s`,
+        );
+        expect(linesOf(box.script.realLog)).toEqual([]);
+
+        // (b) a fieldd that DIED leaves its rendezvous, port and all: the
+        // launcher is given fieldd's own wait
+        copyFileSync(kept, rendezvous);
+        expect(await readRendezvous(box.home)).toMatchObject({ retryMs, strict: true });
+        shown = screenOf(pane).length;
+        writeFileSync(gates[1] as string, "");
+        expect(await statusIn(statuses[1] as string)).toBe(SPAWN_THROUGH_EXIT_REFUSED);
+        said = screenOf(pane).slice(shown);
+        expect(said.split(`waiting for ${AGENT_GATEWAY_HOST_LABEL}`).length - 1).toBe(1);
+        expect(said).toContain(
+          `${AGENT_GATEWAY_HOST_LABEL} did not answer within ${Math.round(retryMs / 1_000)} s`,
+        );
+        expect(linesOf(box.script.realLog)).toEqual([]);
+        expect(linesOf(box.script.managedLog)).toEqual([]);
+        expect(box.records.list()).toEqual([]);
+      },
+      FLOOR_BUDGET_MS,
+    );
+
+    it(
+      "row 12 — fieldd comes back while a launch waits: the name run while fieldd is down waits in the pane, a second fieldd on the same root rewrites the rendezvous, and the WAITING launch is adopted by it — the fold's row, the record, the adoption in the new daemon's ledger",
+      async () => {
+        const retryMs = 120_000;
+        const first = await floor({ bundle: shimScript, person: true, retryMs });
+        const pane = await bornPane(first, { recorded: true });
+        const rendezvous = join(first.home, "gateway.json");
+        const kept = join(first.root, "gateway.json.kept");
+        copyFileSync(rendezvous, kept);
+        const before = await readRendezvous(first.home);
+        const gate = join(first.root, "go");
+        const status = join(first.root, "status");
+        await type(
+          first,
+          pane,
+          `until [ -e '${gate}' ]; do sleep 0.2; done; ${TYPED_COMMAND}; echo "status=$?" > '${status}'`,
+        );
+        await first.daemon.stop();
+        // the fieldd that died: its rendezvous still on disk, nobody on its port
+        copyFileSync(kept, rendezvous);
+        const shown = screenOf(pane).length;
+        writeFileSync(gate, "");
+        await until(
+          () =>
+            screenOf(pane).slice(shown).includes(`waiting for ${AGENT_GATEWAY_HOST_LABEL}`)
+              ? true
+              : undefined,
+          FLOOR_WAIT_MS,
+          "the launch waiting in the pane",
+        );
+        expect(existsSync(status)).toBe(false);
+
+        const second = await floor({ bundle: shimScript, person: true, retryMs, restartOf: first });
+        const after = await readRendezvous(second.home);
+        expect(after?.token).not.toBe(before?.token);
+        expect(after?.pid).toBe(process.pid);
+        const row = await adopted(second, pane);
+        expect(row).toMatchObject({
+          spawnedBy: "user-shell",
+          kind: TYPED_PROVIDER,
+          terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+        });
+        await until(() => (linesOf(second.script.managedLog).length === 1 ? true : undefined));
+        expect(linesOf(second.script.realLog)).toEqual([]);
+        const record = readRecord(second.dataDir, row.runtimeRunId);
+        expect(record).toMatchObject({
+          spawnedBy: "user-shell",
+          terminalSessionId: pane.sessionId,
+        });
+        expect(second.records.verifies(record)).toBe(true);
+        expect(isAlive(record.process?.pid as number)).toBe(true);
+        const acts = await until(() => {
+          const found = auditActs(second.dataDir, "agent.session.adopt");
+          return found.length > 0 && found[0]?.outcome !== undefined ? found : undefined;
+        });
+        expect(acts.length).toBe(1);
+        expect(acts[0]?.outcome).toMatchObject({ outcome: "succeeded" });
+        expect(auditActs(second.dataDir, "agent.session.adopt_refused")).toEqual([]);
+        // said once that it was waiting; no refusal, no second wait
+        const said = screenOf(pane).slice(shown);
+        expect(said.split(`waiting for ${AGENT_GATEWAY_HOST_LABEL}`).length - 1).toBe(1);
+        expect(said).not.toContain("not started");
+        expect(existsSync(status)).toBe(false);
+
+        // the agent ends under the new daemon; the pane is the person's still.
+        // The row is gone by its id: while the run is closing its summary
+        // already names no terminal, and the record is stamped before the
+        // row is dropped, never before the summary changes.
+        await key(second, pane, END_OF_INPUT);
+        await until(() => (rowOf(second, row.runtimeRunId) === undefined ? true : undefined));
+        expect(await statusIn(status)).toBe(0);
+        expect(readRecord(second.dataDir, row.runtimeRunId).exited).toMatchObject({
+          reason: "process-exited",
+        });
+      },
+      FLOOR_BUDGET_MS,
+    );
+
+    it(
+      "row 13 — fieldd is down and the launcher is reached from outside our panes: the real executable runs AT ONCE — without the rendezvous, and with a dead fieldd's rendezvous whose wait is minutes long — and nobody is told to wait",
+      async () => {
+        const retryMs = 120_000;
+        const box = await floor({ bundle: shimScript, person: true, retryMs });
+        const rendezvous = join(box.home, "gateway.json");
+        const kept = join(box.root, "gateway.json.kept");
+        copyFileSync(rendezvous, kept);
+        await box.daemon.stop();
+        expect(await readRendezvous(box.home)).toBeUndefined();
+
+        const withdrawn = await launcherFromOutside(box, ["-p", "x"]);
+        expect(withdrawn.code).toBe(0);
+        await until(() => (linesOf(box.script.realLog).length === 1 ? true : undefined));
+        expect(withdrawn.output).not.toContain("waiting for");
+        expect(withdrawn.output).not.toContain("not started");
+
+        copyFileSync(kept, rendezvous);
+        expect(await readRendezvous(box.home)).toMatchObject({ retryMs });
+        const stale = await launcherFromOutside(box, []);
+        expect(stale.code).toBe(0);
+        await until(() => (linesOf(box.script.realLog).length === 2 ? true : undefined));
+        expect(stale.output).not.toContain("waiting for");
+        expect(stale.output).not.toContain("not started");
+        // far under the wait a launch in one of our panes would have made
+        expect(stale.ms).toBeLessThan(retryMs / 3);
+        expect(linesOf(box.script.realLog)).toEqual(["RUN -p x", "RUN "]);
+        expect(linesOf(box.script.managedLog)).toEqual([]);
+      },
+      FLOOR_BUDGET_MS,
+    );
+
+    it(
+      "row 14 — what is not a session runs as typed, in the pane: the version flag, the one-shot flag, and the output sent to a file each run the real executable with exactly that argv — no row, no record, no preparation, nothing in the ledger",
+      async () => {
+        const box = await floor({ bundle: shimScript, person: true });
+        const pane = await bornPane(box);
+        expect(await statusOf(box, pane, `${TYPED_COMMAND} --version`, "version")).toBe(0);
+        expect(await statusOf(box, pane, `${TYPED_COMMAND} -p x`, "one-shot")).toBe(0);
+        const out = join(box.root, "out");
+        expect(await statusOf(box, pane, `${TYPED_COMMAND} > '${out}'`, "redirected")).toBe(0);
+        expect(existsSync(out)).toBe(true);
+        expect(linesOf(box.script.realLog)).toEqual(["RUN --version", "RUN -p x", "RUN "]);
+        await quiet(1_000);
+        expect(typedRow(box, pane)).toBeUndefined();
+        expect(box.daemon.agents.list().sessions).toEqual([]);
+        expect(box.records.list()).toEqual([]);
+        expect(box.script.prepared).toEqual([]);
+        expect(box.script.preparing.count).toBe(0);
+        expect(linesOf(box.script.managedLog)).toEqual([]);
+        expect(foldActs(box.dataDir)).toEqual([]);
+        const counts = box.daemon.agentGateway?.counts();
+        expect(counts?.get("passthrough")).toBe(2);
+        expect(counts?.get("not-interactive")).toBe(1);
+        // the pane is the person's shell throughout
+        await answers(box, pane, "still-mine");
+      },
+      FLOOR_BUDGET_MS,
+    );
+
+    it(
+      "row 15 — what cannot be carried is refused, in the pane: the refusal's sentence on the pane's screen names the argument, nothing ran, no row, and the ledger has the refusal by its code — and the pane is free for the name typed plain",
+      async () => {
+        const box = await floor({ bundle: shimScript, person: true });
+        const pane = await bornPane(box, { recorded: true });
+        const status = await statusOf(box, pane, `${TYPED_COMMAND} --bogus`, "bogus");
+        expect(status).toBe(SPAWN_THROUGH_EXIT_REFUSED);
+        const sentence = `${TYPED_COMMAND} was not started: a managed session cannot carry --bogus (the scripted agent has no managed form for it). Run ${TYPED_COMMAND} without it.`;
+        await until(
+          () => (screenOf(pane).includes(sentence) ? true : undefined),
+          FLOOR_WAIT_MS,
+          "the refusal on the pane's screen",
+        );
+        expect(screenOf(pane).split(sentence).length - 1).toBe(1);
+        expect(screenOf(pane)).not.toContain("waiting for");
+        // nothing ran, nothing was prepared, nothing is held
+        expect(linesOf(box.script.realLog)).toEqual([]);
+        expect(linesOf(box.script.managedLog)).toEqual([]);
+        expect(box.script.prepared).toEqual([]);
+        expect(typedRow(box, pane)).toBeUndefined();
+        expect(box.records.list()).toEqual([]);
+        const refused = await until(() => {
+          const found = auditActs(box.dataDir, "agent.session.adopt_refused");
+          return found.length > 0 && found[0]?.outcome !== undefined ? found : undefined;
+        });
+        expect(refused.length).toBe(1);
+        expect(refused[0]?.attempt).toMatchObject({
+          actor: { kind: "system" },
+          reasonCode: "REJECTED_ARGUMENT",
+          target: { kind: "agent-session", id: "pending" },
+          attrs: { provider: TYPED_PROVIDER, code: "rejected-argument", sessionId: pane.sessionId },
+        });
+        expect(refused[0]?.outcome).toMatchObject({
+          outcome: "denied",
+          reasonCode: "REJECTED_ARGUMENT",
+        });
+        expect(auditActs(box.dataDir, "agent.session.adopt")).toEqual([]);
+        // the argument is the person's: never in the ledger
+        expect(auditText(box.dataDir)).not.toContain("--bogus");
+
+        // the pane is free: the name typed plain is a managed run
+        await type(box, pane, TYPED_COMMAND);
+        const row = await adopted(box, pane);
+        expect(row.spawnedBy).toBe("user-shell");
+        await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+        await key(box, pane, END_OF_INPUT);
+        await until(() => (typedRow(box, pane) === undefined ? true : undefined));
+        expect(linesOf(box.script.realLog)).toEqual([]);
+      },
+      FLOOR_BUDGET_MS,
+    );
   },
 );
-
-// what the rows below read but the rows above do not: kept named so a row
-// that reaches for them is not a red on an import
-void copyFileSync;
-void readRendezvous;
-void DEFAULT_RETRY_MS;
-void SPAWN_THROUGH_EXIT_REFUSED;
-void spawnThroughLayout;
-void AGENT_GATEWAY_HOST_LABEL;
-void quiet;
-void screenOf;
-void launcherFromOutside;
-void foldActs;
