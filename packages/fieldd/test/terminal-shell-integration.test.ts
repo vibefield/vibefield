@@ -14,7 +14,10 @@
 // person's .zshrc puts a REAL `vf-probe` first (a version manager's shape), and
 // the typed `export PATH=…` leads with it again, so "the launcher leads" can
 // only be the precmd hook's doing, never an accident of which directory holds
-// the name. Skipped, with the reason in the title, where there is no zsh.
+// the name. A shell is born the way a pane's is — the DEFAULT login shell
+// (`-l`: macOS's /etc/zprofile runs path_helper, and the person's .zprofile
+// runs) — and, once, as an explicit zsh, the other birth `create` integrates.
+// Skipped, with the reason in the title, where there is no zsh.
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
@@ -88,13 +91,15 @@ interface Box {
   sessionId: string;
 }
 
-/** A throwaway person's startup files in `dir`, each leaving a marker. The
- * .zshrc is the brief's (history in `${ZDOTDIR:-$HOME}`, appended as typed)
- * plus compinit — whose dump is the other file fact 2 is about — and a PATH
- * edit that puts a real `vf-probe` first, recording what led at that moment. */
+/** A throwaway person's startup files in `dir`, each leaving a marker (a
+ * login shell alone reads .zprofile). The .zshrc is the brief's (history in
+ * `${ZDOTDIR:-$HOME}`, appended as typed) plus compinit — whose dump is the
+ * other file fact 2 is about — and a PATH edit that puts a real `vf-probe`
+ * first, recording what led at that moment. */
 function writeStartupFiles(dir: string, tag: string, out: string, real: string): void {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, ".zshenv"), `print -r -- ran > ${join(out, `${tag}-zshenv`)}\n`);
+  writeFileSync(join(dir, ".zprofile"), `print -r -- ran > ${join(out, `${tag}-zprofile`)}\n`);
   writeFileSync(
     join(dir, ".zshrc"),
     [
@@ -182,9 +187,20 @@ describe.skipIf(ZSH === undefined)(
   `AR-7d — a zsh VibeField births is born integrated (real field-native, real zsh)${skipped}`,
   () => {
     describe.each([
-      { environment: "names no ZDOTDIR", zdotdir: false },
-      { environment: "names a ZDOTDIR", zdotdir: true },
-    ])("the daemon's environment $environment", ({ zdotdir }) => {
+      {
+        environment: "names no ZDOTDIR",
+        birth: "the default login shell",
+        zdotdir: false,
+        login: true,
+      },
+      {
+        environment: "names a ZDOTDIR",
+        birth: "the default login shell",
+        zdotdir: true,
+        login: true,
+      },
+      { environment: "names no ZDOTDIR", birth: "an explicit zsh", zdotdir: false, login: false },
+    ])("the daemon's environment $environment — $birth", ({ zdotdir, login }) => {
       let box: Box;
       const teardown: Array<() => void | Promise<void>> = [];
       let floor: ChildProcess | undefined;
@@ -251,6 +267,8 @@ describe.skipIf(ZSH === undefined)(
         await link.connect();
         const service = new TerminalService({
           link,
+          // the person's login shell, as the daemon reads it: the zsh under test
+          defaultShell: () => zsh,
           // the daemon's getter, answered the way the gateway service will
           // answer it: the kit's integration over the shim home, for the
           // environment the shell is really born with (the floor's)
@@ -259,7 +277,8 @@ describe.skipIf(ZSH === undefined)(
         });
         teardown.push(() => service.dispose());
         await service.ensureStarted();
-        const created = await service.create({ shell: zsh, cwd: home });
+        // born as a pane is (`terminal.create {}`: the login shell, `-l`), or by name
+        const created = await service.create(login ? { cwd: home } : { shell: zsh, cwd: home });
         teardown.push(async () => {
           await service.terminate(created.sessionId);
         });
@@ -321,13 +340,17 @@ describe.skipIf(ZSH === undefined)(
         expect(await read(box, "zdotdir")).toBe(`${zdotdir ? box.dotdir : "unset"} gone`);
       }, 120_000);
 
-      it("the person's own .zshenv and .zshrc ran — and no one else's", async () => {
+      it("the person's own .zshenv, .zprofile (a login shell's alone) and .zshrc ran — and no one else's", async () => {
         expect(await read(box, `${box.tag}-zshenv`)).toBe("ran");
         expect(await read(box, `${box.tag}-rc`)).toBe("ran");
+        // a login shell reads it after /etc/zprofile (path_helper); no other shell reads it
+        if (login) expect(await read(box, `${box.tag}-zprofile`)).toBe("ran");
+        else expect(existsSync(join(box.out, `${box.tag}-zprofile`))).toBe(false);
         if (zdotdir) {
           // with a ZDOTDIR, zsh reads startup files from there, never $HOME
-          expect(existsSync(join(box.out, "home-zshenv"))).toBe(false);
-          expect(existsSync(join(box.out, "home-rc"))).toBe(false);
+          for (const marker of ["home-zshenv", "home-zprofile", "home-rc"]) {
+            expect(existsSync(join(box.out, marker))).toBe(false);
+          }
         }
       }, 120_000);
 
