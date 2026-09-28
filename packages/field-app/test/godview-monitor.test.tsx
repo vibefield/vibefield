@@ -50,6 +50,7 @@ import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
+import { setLauncherOwnsKeys } from "../src/godview/monitor/launcher-keys";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
@@ -1065,6 +1066,37 @@ describe("the profile tabs (AR-S5)", () => {
     });
     expect(passed?.defaultPrevented).toBe(false);
     expect(chosenTab(host)).toBe("all");
+  });
+
+  it("yields ⌥0…⌥n to the empty pane launcher while it owns them (QL-D2)", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const press = (code: string): KeyboardEvent => {
+      const event = new KeyboardEvent("keydown", {
+        code,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(event);
+      return event;
+    };
+    setLauncherOwnsKeys(true);
+    let passed: KeyboardEvent | undefined;
+    try {
+      await act(async () => {
+        passed = press("Digit2");
+      });
+      // untouched: the launcher's own listener decides what ⌥2 means
+      expect(passed?.defaultPrevented).toBe(false);
+      expect(chosenTab(host)).toBe("all");
+    } finally {
+      setLauncherOwnsKeys(false);
+    }
+    await act(async () => {
+      passed = press("Digit2");
+    });
+    expect(passed?.defaultPrevented).toBe(true);
+    expect(chosenTab(host)).toBe("work");
   });
 
   it("creates empty terminals independently of the selected profile filter", async () => {

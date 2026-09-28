@@ -31,6 +31,7 @@ import type { GodviewTheme } from "./GodviewTuningPanel";
 import { managedRowId, monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
+import { launcherOwnsKeys } from "./monitor/launcher-keys";
 import {
   chosenProfile,
   personaProfiles,
@@ -441,13 +442,16 @@ export function GodviewMonitor({
 
   // AR-S5 — ⌥0 is All, ⌥1…⌥n the tabs, while the strip is drawn: captured
   // like the chords above, and only for the digits that have a tab, so ⌥ and
-  // any other digit still reach the pane.
+  // any other digit still reach the pane. QL-D2: while the empty pane launcher
+  // is up in the focused pane it owns the digits (⌥n launches there), so the
+  // strip yields and leaves the event untouched.
   const tabKey = profileSets.map((set) => set.id).join(" ");
   useEffect(() => {
     if (!showTabs) return;
     const ids: (string | null)[] = [null, ...tabKey.split(" ")];
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+      if (launcherOwnsKeys()) return;
       const digit = /^Digit([0-9])$/.exec(event.code);
       if (digit === null) return;
       const index = Number(digit[1]);
