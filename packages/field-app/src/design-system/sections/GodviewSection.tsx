@@ -3,6 +3,7 @@ import { Section, Specimen } from "../catalog-ui";
 import { GodviewPreview } from "../GodviewPreview";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
 import { PaneFramePreview } from "../PaneFramePreview";
+import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 import { TerminalMirrorPreview } from "../TerminalMirrorPreview";
 import { TerminalSessionPickerPreview } from "../TerminalSessionPickerPreview";
@@ -35,6 +36,13 @@ export function GodviewSection(): ReactElement {
         bleed
       >
         <PaneFramePreview />
+      </Specimen>
+      <Specimen
+        title="Empty pane launcher — what a fresh shell offers: resume, or launch"
+        source="@vibecook/puppeteer-views/launcher/PaneLauncherChrome.tsx"
+        bleed
+      >
+        <PaneLauncherPreview />
       </Specimen>
       <Specimen
         title="Swarm bodies — every drawn state, on the package's own fixtures"

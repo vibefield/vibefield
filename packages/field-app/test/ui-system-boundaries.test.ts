@@ -182,8 +182,9 @@ describe("UI system ownership boundaries", () => {
     const mirror = source("design-system/TerminalMirrorPreview.tsx");
     const picker = source("design-system/TerminalSessionPickerPreview.tsx");
     const paneFrame = source("design-system/PaneFramePreview.tsx");
+    const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${switchScene}`;
+    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -223,6 +224,8 @@ describe("UI system ownership boundaries", () => {
       "SessionPickerView",
       "PaneFramePreview",
       "PaneFrameChrome",
+      "PaneLauncherPreview",
+      "PaneLauncherChrome",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -352,6 +355,40 @@ describe("UI system ownership boundaries", () => {
     // smoke selects on that same attribute.
     expect(preview).toMatch(/<PaneFrame\s/);
     expect(preview).not.toContain('"data-vf-narrow"');
+  });
+
+  it("keeps the empty pane launcher's styling in the views package, and its specimen an ADAPTER (QL-1)", () => {
+    // The launcher — the field, the legend, the list — is the design's drawing
+    // and ships in `@vibecook/puppeteer-views` with its own stylesheet, entering
+    // through the manifest after the frame's. A host rule for it would be a
+    // second reading of one design.
+    const manifest = source("styles.css");
+    expect(manifest).toContain('@import "@vibecook/puppeteer-views/styles/pane-launcher.css";');
+    expect(manifest.indexOf("pane-launcher.css")).toBeGreaterThan(
+      manifest.indexOf("deck-frame.css"),
+    );
+    const hostCss = [
+      source("godview/godview.css"),
+      source("design-system/styles/catalog-shell.css"),
+      source("design-system/styles/foundations.css"),
+      source("design-system/styles/scenes.css"),
+      source("design-system/styles/tweaks.css"),
+    ].join("\n");
+    expect(hostCss).not.toMatch(/\.vf-pane-launcher[\w-]*[^\n{]*\{/);
+    // What the host DOES own: the clearing's colour, which is the deck sheet's
+    // own paint (pass 3 §22), set as a token on the sheet.
+    expect(source("godview/godview.css")).toMatch(
+      /^\.vf-godview-terminal-deck \{[^}]*--vf-pane-launcher-ground:/m,
+    );
+
+    // The specimen supplies what a host supplies — a pane, the ground, door
+    // answers — and mounts the shipping chrome over the shipping projection.
+    const preview = source("design-system/PaneLauncherPreview.tsx");
+    expect(preview).toContain("PaneLauncherChrome");
+    expect(preview).toContain("launcherAgents");
+    expect(preview).toContain("buildLauncherResults");
+    expect(preview).not.toContain("<style");
+    expect(preview).not.toMatch(/className="vf-pane-launcher/);
   });
 
   it("keeps the swarm's own styling in the views package, never in godview.css (AR-5)", () => {
