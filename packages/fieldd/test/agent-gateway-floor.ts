@@ -134,6 +134,8 @@ export interface FloorConfig {
   gateway?: NonNullable<FielddConfig["agentGateway"]>;
   /** the bundled shim, which the test file builds once */
   bundle: string;
+  /** false = the row expects no launcher from this boot, and waits for none */
+  launchers?: boolean;
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -206,9 +208,23 @@ export async function floor(config: FloorConfig): Promise<Floor> {
     },
   });
   closers.push(() => daemon.stop().catch(() => undefined));
-  // the gateway's start is not a boot gate; a row waits for it here
-  await daemon.agentGateway?.start();
   const home = agentShimHome(dataDir);
+  // The gateway's start is not a boot gate, and it is the DAEMON's to begin:
+  // a row waits for what that start leaves, and never starts it itself.
+  if (daemon.agentGateway !== null && config.launchers !== false) {
+    const launcher = join(spawnThroughLayout(home).shimDirectory, TYPED_COMMAND);
+    await poll(
+      () =>
+        daemon.agentGateway?.state().listening === true &&
+        existsSync(launcher) &&
+        existsSync(join(home, "gateway.json")) &&
+        existsSync(join(home, "terminals.json"))
+          ? true
+          : undefined,
+      FLOOR_WAIT_MS,
+      "the daemon's own gateway coming up",
+    );
+  }
   return {
     root,
     dataDir,

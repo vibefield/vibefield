@@ -124,6 +124,7 @@ import {
   type,
   typedRow,
   poll as until,
+  windowOf,
 } from "./agent-gateway-floor";
 import { AGENT_SHIM_ENTRY, bundleAgentShim } from "./agent-shim-bundle";
 
@@ -2585,7 +2586,11 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
   it(
     "a daemon that hosts no gateway writes no home and listens nowhere, and what it says it offers is the catalog's own claim",
     async () => {
-      const box = await floor({ bundle: shimScript, gateway: { enabled: false } });
+      const box = await floor({
+        bundle: shimScript,
+        gateway: { enabled: false },
+        launchers: false,
+      });
       expect(box.daemon.agentGateway).toBeNull();
       await openPane(box, { path: false });
       await quiet(500);
@@ -2596,6 +2601,32 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
         expect(provider.offers?.invoke, provider.id).toBe(row?.offers.invoke);
       }
       expect(offered.providers.some((provider) => provider.offers?.invoke === true)).toBe(true);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "the doors that change an install write the launchers again: a home that lost a launcher has it back after agents.setActive and after agents.update, whatever those doors answered",
+    async () => {
+      const box = await floor({ bundle: shimScript });
+      const admin = await windowOf(box.daemon, ["agents.manage"]);
+      const launcher = join(box.shimDirectory, TYPED_COMMAND);
+      for (const door of ["agents.setActive", "agents.update"]) {
+        rmSync(launcher);
+        // the scripted agent has no install to choose or update: the door refuses
+        const answer = await admin
+          .call(door, { provider: TYPED_PROVIDER, executable: box.script.real })
+          .then(
+            () => "answered",
+            (error: { rpc?: { data?: { kind?: string } } }) => error.rpc?.data?.kind ?? "refused",
+          );
+        expect(answer, door).not.toBe("FORBIDDEN");
+        await until(() => (existsSync(launcher) ? true : undefined), FLOOR_WAIT_MS, door);
+      }
+      // and the name typed after it is a managed run
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      expect((await adopted(box, pane)).spawnedBy).toBe("user-shell");
     },
     FLOOR_BUDGET_MS,
   );
