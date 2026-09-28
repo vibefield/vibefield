@@ -2,6 +2,7 @@ import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibecook/ice
 import type { ProductSessionRosterItem } from "@vibefield/contracts";
 import { CardShell, UiButton, UnavailableState } from "@vibefield/design-kit";
 import { type ReactElement, useCallback, useEffect, useState } from "react";
+import { useGodviewOpen } from "../../godview/overlay-state";
 import { TerminalMirrorSurface } from "../mirror";
 import {
   isSessionUnavailable,
@@ -47,10 +48,10 @@ import "./mirror-widget.css";
 // host: its content plane IS the camera transform, so a card's layout box is in
 // world units and never changes with zoom. Passing the camera here would apply
 // the scale a second time on top of the plane's — a visible bug, not a
-// refinement. `culled` is left undefined for the same family of reason: the
-// widget self-observes with an IntersectionObserver against the VISUAL rect,
-// which already accounts for the plane's transform, and is right in the canvas,
-// a panel and the catalog alike.
+// refinement. Geometric culling stays with the surface's IntersectionObserver.
+// Host coverage is separate: Godview freezes the field (DESIGN.md §6 M5),
+// including mirror pixels beneath a translucent/blurred backdrop. Its covered
+// mirrors release demand and catch up when the field is uncovered.
 
 interface MirrorWidgetProps extends Record<string, unknown> {
   sessionId: string;
@@ -72,6 +73,7 @@ function readRosterOnce(): void {
 export function TerminalMirrorWidget({ entity, world }: WidgetComponentProps): ReactElement {
   const props = useWidgetProps<MirrorWidgetProps>(world, entity, TERMINAL_MIRROR_TYPE);
   const ops = useOps();
+  const godviewOpen = useGodviewOpen();
   const sessionId = props?.sessionId ?? "";
   const label = props?.label ?? "";
 
@@ -155,7 +157,11 @@ export function TerminalMirrorWidget({ entity, world }: WidgetComponentProps): R
           </div>
         ) : (
           <>
-            <TerminalMirrorSurface sessionId={sessionId} {...(label === "" ? {} : { label })} />
+            <TerminalMirrorSurface
+              sessionId={sessionId}
+              {...(godviewOpen ? { culled: true } : {})}
+              {...(label === "" ? {} : { label })}
+            />
             {/* The way back. A card bound to a session that has since exited
                 would otherwise be stuck on a dead address forever, which is the
                 one honest-state failure a mirror can still commit. */}

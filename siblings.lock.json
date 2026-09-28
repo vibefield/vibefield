@@ -35,7 +35,7 @@
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
       "repository": "https://github.com/vibecook-dev/ghosttea.git",
-      "sha": "d86e285fbaaf595b88c4a4645c00a79a4c25e8af",
+      "sha": "1496c1a3819aeb84ef0f103b48634ca898fe376d",
       "javascript": {
         "workspaces": [
           "@vibecook/ghosttea-protocol",

@@ -23,9 +23,9 @@
 // (EL8). A dirty sibling only WARNs — co-developing it is the normal state;
 // the pin is about the base revision.
 //
-// Usage: node scripts/siblings.mjs <status|pin|stamp|fetch NAME|install-js|build-js|build|bin>
+// Usage: node scripts/siblings.mjs <status|pin [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>
 //   status  print each sibling's path, HEAD, pin, and dirtiness (never fails)
-//   pin     record every sibling's current HEAD in siblings.lock.json, build
+//   pin     record the named siblings' current HEADs (all when omitted), build
 //           rosettad at it (a no-op when fresh), then prove the agent catalog
 //           against the new pins (wall R23, the rosetta half REQUIRED)
 //   stamp   one line naming each sibling's HEAD + a hash of its working-tree
@@ -566,7 +566,7 @@ function status(root) {
   return 0;
 }
 
-function pin(root) {
+export function pinSiblingHeads(root, names = []) {
   const lock = readLock(root);
   if (lock === null) {
     console.error(
@@ -574,7 +574,15 @@ function pin(root) {
     );
     return 1;
   }
+  const selected = names.length > 0 ? new Set(names) : new Set(Object.keys(lock.siblings));
+  for (const name of selected) {
+    if (!Object.hasOwn(lock.siblings, name)) {
+      console.error(`siblings:pin FAIL: unknown sibling ${name}`);
+      return 1;
+    }
+  }
   for (const [name, entry] of Object.entries(lock.siblings)) {
+    if (!selected.has(name)) continue;
     const dir = siblingDir(root, entry);
     const head = siblingHead(dir);
     if (head === null) {
@@ -611,6 +619,12 @@ function pin(root) {
     }
   }
   writeFileSync(join(root, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`);
+  return 0;
+}
+
+function pin(root, names) {
+  const pinned = pinSiblingHeads(root, names);
+  if (pinned !== 0) return pinned;
   // Wall R23 (AC-2; thinking-ar-agent-catalog.md §6): a pin is the upgrade event
   // at which a catalog decision is owed, so the catalog is proved against the
   // new pins here, with the rosetta half REQUIRED (AC-D10). A red KEEPS the new
@@ -773,7 +787,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const command = process.argv[2] ?? "status";
   const handlers = {
     status,
-    pin,
+    pin: (root) => pin(root, process.argv.slice(3)),
     stamp: (root) => {
       console.log(stamp(root));
       return 0;
@@ -787,7 +801,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const handler = handlers[command];
   if (handler === undefined) {
     console.error(
-      "usage: node scripts/siblings.mjs <status|pin|stamp|fetch NAME|install-js|build-js|build|bin>",
+      "usage: node scripts/siblings.mjs <status|pin [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>",
     );
     process.exit(2);
   }

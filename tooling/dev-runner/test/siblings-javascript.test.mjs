@@ -4,7 +4,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { buildJavaScript, fetchSibling, installJavaScript } from "../../../scripts/siblings.mjs";
+import {
+  buildJavaScript,
+  fetchSibling,
+  installJavaScript,
+  pinSiblingHeads,
+  readLock,
+} from "../../../scripts/siblings.mjs";
 
 function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), "vf-sibling-js-"));
@@ -19,6 +25,41 @@ function fixture(t) {
   };
   return { dir, root, writeLock };
 }
+
+test("a named pin preserves unrelated revisions and rejects unknown names atomically", (t) => {
+  const { dir, root } = fixture(t);
+  const checkout = join(dir, "renderer");
+  mkdirSync(checkout);
+  const git = (...args) => execFileSync("git", args, { cwd: checkout, encoding: "utf8" }).trim();
+  git("init", "--quiet");
+  git(
+    "-c",
+    "user.name=Test",
+    "-c",
+    "user.email=test@example.invalid",
+    "commit",
+    "--allow-empty",
+    "-m",
+    "fixture",
+  );
+  const head = git("rev-parse", "HEAD");
+  const lockFile = join(root, "siblings.lock.json");
+  writeFileSync(
+    lockFile,
+    JSON.stringify({
+      siblings: {
+        renderer: { path: "../renderer", sha: "old-renderer" },
+        unrelated: { path: "../absent", sha: "keep-me" },
+      },
+    }),
+  );
+  const before = readFileSync(lockFile, "utf8");
+  assert.equal(pinSiblingHeads(root, ["renderer", "typo"]), 1);
+  assert.equal(readFileSync(lockFile, "utf8"), before);
+  assert.equal(pinSiblingHeads(root, ["renderer"]), 0);
+  assert.equal(readLock(root).siblings.renderer.sha, head);
+  assert.equal(readLock(root).siblings.unrelated.sha, "keep-me");
+});
 
 test("fetch uses the lock's path and revision, preserving existing dirty checkouts", (t) => {
   const { dir, root, writeLock } = fixture(t);
