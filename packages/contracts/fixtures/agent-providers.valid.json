@@ -36,7 +36,8 @@
         "distribution": true,
         "personas": true
       },
-      "history": "indexed"
+      "history": "indexed",
+      "lastLaunchedAt": 1789232460000
     },
     {
       "id": "pi",

@@ -345,6 +345,12 @@ export const AgentProviderSummary = z
     // reader's rule at every depth)
     offers: AgentOffers.partial().passthrough().optional(),
     history: z.string().min(1).max(32).optional(),
+    /** QL (thinking-ql-empty-pane-launcher.md) — epoch ms of this device's
+     * newest session record for the agent (a spawn, a resume, or a run adopted
+     * in a pane's shell — AR-7), so a launcher can order its agents by use;
+     * absent when there is none. A fact about THIS device's records (a
+     * sign-out forgets its persona's) — never the agent's history. */
+    lastLaunchedAt: z.number().finite().optional(),
   })
   .passthrough();
 export type AgentProviderSummary = z.infer<typeof AgentProviderSummary>;

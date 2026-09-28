@@ -745,6 +745,8 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     expect(scripted).toMatchObject({ label: "Scripted", available: false, personas: [] });
     // nothing here names a path or a home
     expect(JSON.stringify(providers)).not.toContain("/");
+    // QL — nothing has been launched on this device yet
+    expect(providers.filter((p) => p.lastLaunchedAt !== undefined)).toEqual([]);
     const listed = (await win.call("agent.list", {})) as AgentListResult;
     expect(listed.sessions).toEqual([]);
     const sub = (await win.call("agent.subscribe", {})) as {
@@ -1084,7 +1086,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
   }, 90_000);
 
   it("QL-D10 — a conversation resumed by its native id: refused while a run continues it; then a new run on puppeteer's continuation, recorded and audited, answered like a spawn; the exited record no longer resumes beside it", async () => {
-    const { daemon, dataDir, envOut, sessions } = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut, sessions, records } = await setup({ floor: "real" });
     const win = await window(daemon, DECK, "qn3");
     const spawned = (await win.call("agent.spawn", {
       provider: "scripted",
@@ -1092,6 +1094,14 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       title: "first",
     })) as AgentSpawnResult;
     const conversation = spawned.session.sessionId;
+    // QL — the launcher orders its agents by this device's newest record
+    const launchedAt = async (): Promise<Array<[string, number | undefined]>> =>
+      ((await win.call("agent.providers", {})) as AgentProvidersResult).providers
+        .filter((p) => p.lastLaunchedAt !== undefined)
+        .map((p) => [p.id, p.lastLaunchedAt]);
+    expect(await launchedAt()).toEqual([
+      ["scripted", Date.parse(readRecord(dataDir, spawned.session.runtimeRunId).createdAt)],
+    ]);
 
     // a run continues the conversation: a second would be two runs on it
     const live = (await win.callErr("agent.resume", {
@@ -1149,6 +1159,14 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     });
     expect(act.outcome.outcome).toBe("succeeded");
     expect(act.outcome.attrs?.["runtimeRunId"]).toBe(resumed.session.runtimeRunId);
+    // a resume is a launch: the newest record is now the resumed run's —
+    // by when it was CREATED, not when a record was last touched (the store
+    // lists by update, and an old record is rewritten at every stamp)
+    records.write({
+      ...readRecord(dataDir, spawned.session.runtimeRunId),
+      updatedAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    expect(await launchedAt()).toEqual([["scripted", Date.parse(record.createdAt)]]);
 
     // the first run's record still stands exited — and its own resume would
     // make a second run on the conversation the launcher already continued

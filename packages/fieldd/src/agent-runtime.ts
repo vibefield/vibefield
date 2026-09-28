@@ -794,6 +794,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // until its sessions end (AR-D25)
     const profiles = (await this.runtime.profiles()).filter((p) => p.retiredAt === undefined);
     const history = await this.historyStates();
+    const launched = this.lastLaunched();
     const providers: AgentProviderSummary[] = [];
     for (const row of this.catalog.visible("desktop")) {
       const personas: AgentPersona[] = [];
@@ -801,6 +802,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         if (profile.provider === row.id) personas.push(await this.profiles.project(profile, ids));
       }
       const state = history.get(row.id);
+      const lastLaunchedAt = launched.get(row.id);
       providers.push({
         id: row.id,
         label: row.label,
@@ -810,9 +812,34 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         status: row.status,
         offers: this.offersHere(row),
         ...(state !== undefined ? { history: state } : {}),
+        ...(lastLaunchedAt !== undefined ? { lastLaunchedAt } : {}),
       });
     }
     return { providers };
+  }
+
+  /** QL — the newest session record per agent (any `spawnedBy`: a spawn, a
+   * resume, a run adopted in a pane's shell), epoch ms: the order a launcher
+   * lists its agents in. A records directory that cannot be read answers
+   * nothing rather than failing the list. */
+  private lastLaunched(): ReadonlyMap<string, number> {
+    const newest = new Map<string, number>();
+    let records: AgentSessionRecord[];
+    try {
+      records = this.records.list();
+    } catch (error) {
+      this.logger.warn("fieldd.agents.records_unreadable", "Session records could not be listed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return newest;
+    }
+    for (const record of records) {
+      const at = Date.parse(record.createdAt);
+      if (!Number.isFinite(at)) continue;
+      const held = newest.get(record.provider);
+      if (held === undefined || at > held) newest.set(record.provider, at);
+    }
+    return newest;
   }
 
   /** AR-7 — what the row offers ON THIS DEVICE, THIS RUN: the catalog's claim,
