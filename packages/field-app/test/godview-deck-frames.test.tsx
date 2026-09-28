@@ -241,6 +241,10 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
 const { configureTerminalPool, disposeTerminalPool } = await import("../src/terminal/pool");
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
+const { forgetBornShells } = await import("../src/godview/deck-launchers");
+const { launcherOwnsKeys, resetLauncherKeys } = await import(
+  "../src/godview/monitor/launcher-keys"
+);
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
 
 let root: Root | null = null;
@@ -303,9 +307,40 @@ const fieldd = {
         },
       });
     }
+    // QL-1 — the empty pane launcher's doors.
+    if (method === "agent.providers") return Promise.resolve({ providers: LAUNCHER_PROVIDERS });
+    if (method === "agent.spawn") {
+      const spawned = managedSummary({
+        runtimeRunId: "run-launched",
+        terminalSessionId: "pty-launched",
+      });
+      return Promise.resolve({
+        session: spawned,
+        terminal: {
+          sessionId: "pty-launched",
+          session: bornSummary("pty-launched", { cwd: "/home/tester/vibe-field" }),
+          ...routedTicket("pty-launched"),
+        },
+      });
+    }
+    if (method === "index.recent") return Promise.resolve({ rows: [] });
+    if (method === "index.status") return Promise.reject(new Error("no status in this fixture"));
     return Promise.reject(new Error(`unexpected method ${method}`));
   },
 };
+
+/** QL-1: one agent the launcher can start, as `agent.providers` answers it. */
+const LAUNCHER_PROVIDERS = [
+  {
+    id: "claude",
+    label: "Claude Code",
+    available: true,
+    resumable: true,
+    personas: [],
+    status: "supported",
+    offers: { spawn: true, resume: true },
+  },
+];
 
 vi.mock("@vibefield/fieldd-client/react", () => ({
   useFielddClient: () => fieldd,
@@ -998,5 +1033,98 @@ describe("the deck's pane frames", () => {
     });
     await settle();
     expect(frameFor(host, "pty-1")?.querySelector(".vf-pane-mark")).not.toBeNull();
+  });
+});
+
+describe("the empty pane launcher (QL-1)", () => {
+  const launcherFor = (host: HTMLElement, sessionId: string): HTMLElement | null =>
+    host.querySelector<HTMLElement>(`[data-vf-pane-launcher="${sessionId}"]`);
+  const pressIn = (target: Element | null, code: string): KeyboardEvent => {
+    const event = new KeyboardEvent("keydown", {
+      code,
+      key: code === "Enter" ? "Enter" : "",
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    target?.dispatchEvent(event);
+    return event;
+  };
+
+  afterEach(() => {
+    forgetBornShells();
+    resetLauncherKeys();
+  });
+
+  it("draws on a shell the deck's new-pane door opened, and never on a restored one", async () => {
+    const host = await mountDeck();
+    // pty-1 was claimed, not born here: no receipt, no launcher
+    expect(launcherFor(host, "pty-1")).toBeNull();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    expect(launcherFor(host, "born-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
+    // the focused pane's launcher owns ⌥0–⌥9, so the tab strip yields (QL-D2)
+    expect(launcherOwnsKeys()).toBe(true);
+    // the agents came from agent.providers, listed with their keys
+    expect(
+      [...host.querySelectorAll(".vf-pane-launcher-agent .vf-pane-launcher-nm")].map(
+        (name) => name.textContent,
+      ),
+    ).toEqual(["Claude Code"]);
+  });
+
+  it("draws on the workspace's first shell, which ghosttea's own receipt names", async () => {
+    runtimeBirths.add("pty-1");
+    const host = await mountDeck();
+    expect(launcherFor(host, "pty-1")).not.toBeNull();
+  });
+
+  it.each(["input", "agent", "exited"])("draws on no fresh shell with %s", async (kind) => {
+    runtimeBirths.add("pty-1");
+    if (kind === "input") usedSessions.add("pty-1");
+    if (kind === "exited") {
+      workspace.panes = [{ id: "pane-1", session: stubSession("pty-1", { exited: true }) }];
+    }
+    if (kind === "agent") foldRows = [managedSummary({ terminalSessionId: "pty-1" })];
+    const host = await mountDeck();
+    expect(launcherFor(host, "pty-1")).toBeNull();
+    expect(launcherOwnsKeys()).toBe(false);
+  });
+
+  it("opens its field on ⌥↵ and asks index.recent for the pane's own folder", async () => {
+    runtimeBirths.add("pty-1");
+    const host = await mountDeck();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Enter");
+    });
+    await settle();
+    expect(launcherFor(host, "pty-1")?.querySelector(".vf-pane-launcher.is-open")).not.toBeNull();
+    expect(requests.filter((call) => call.method === "index.recent")).toEqual([
+      {
+        method: "index.recent",
+        params: { cwd: "/home/tester/vibe-field", scope: "here", limit: 100 },
+      },
+    ]);
+  });
+
+  it("launches on ⌥1 into THIS pane, in its folder, and the reaper closes the shell it replaced", async () => {
+    runtimeBirths.add("pty-1");
+    const host = await mountDeck();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Digit1");
+    });
+    await settle();
+    // a launch sends no profile (QL-D3 as revised): fieldd resolves the default
+    expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
+      { method: "agent.spawn", params: { provider: "claude", cwd: "/home/tester/vibe-field" } },
+    ]);
+    expect(workspace.panes[0]?.session.id).toBe("pty-launched");
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
+      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    ]);
+    expect(launcherFor(host, "pty-1")).toBeNull();
+    expect(launcherOwnsKeys()).toBe(false);
   });
 });

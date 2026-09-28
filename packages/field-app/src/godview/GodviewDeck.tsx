@@ -55,6 +55,7 @@ import {
 } from "../terminal/pool";
 import { afterNextFrame, godviewColdOpen } from "./cold-open";
 import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
+import { GodviewDeckLaunchers, recordBornShell } from "./deck-launchers";
 import {
   paneCwd,
   type RestoreQuestion,
@@ -815,6 +816,7 @@ export function GodviewDeck({
       const cwd = paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
       const born = await bornSession(cwd);
       if (born === null) throw new Error("the floor did not report the session it just created");
+      recordBornShell(born.id); // QL-D7: a new pane's shell, which may show the launcher
       return born;
     },
     [bornSession, shell],
@@ -1697,6 +1699,14 @@ export function GodviewDeck({
           verbs={frameVerbs}
           frame={Frame}
           zoomedPaneId={zoomedPaneId}
+        />
+        {/* QL-1: a fresh shell's launcher, beside its frame (`deck-launchers.tsx`). */}
+        <GodviewDeckLaunchers
+          deckRef={zoomHostRef}
+          workspace={workspace}
+          paneColors={framePaneColors}
+          fallbackCwdBySession={frameFallbackCwds}
+          door={door}
         />
       </div>
     </GhostteaProvider>

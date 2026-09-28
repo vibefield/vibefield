@@ -23,6 +23,9 @@
    PU-14 and enters the same way — one row, the package's own bundle, and after
    godview.css so the record's pane rules outrank a host's older reading. */
 @import "@vibecook/puppeteer-views/styles/deck-frame.css";
+/* QL-1: the empty pane launcher, beside the frame it sits inside — the same
+   package, the same one row, after the frame's rules. */
+@import "@vibecook/puppeteer-views/styles/pane-launcher.css";
 @custom-variant dark (&:where(.dark, .dark *));
 /* Three hops from packages/field-app/src → repo root. Shared host primitives
    sit behind a workspace symlink, so auto-detection cannot see them. */
