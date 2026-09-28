@@ -1,0 +1,116 @@
+{
+  "set": "work",
+  "provider": "claude",
+  "label": "Claude",
+  "readAt": "2026-09-25T09:01:30.000Z",
+  "marketplaces": [
+    {
+      "id": "northlight",
+      "name": "northlight",
+      "source": "northlight-studio/plugins",
+      "updatedAt": "2026-09-20T10:00:00.000Z",
+      "origin": "own",
+      "count": 4
+    }
+  ],
+  "plugins": [
+    {
+      "id": "review@northlight",
+      "name": "review",
+      "marketplace": "northlight",
+      "description": "Reviews a change the way Northlight does",
+      "author": "Northlight Studio",
+      "category": "Code review",
+      "version": "1.3.0",
+      "homepage": "https://github.com/northlight-studio/plugins",
+      "brings": {
+        "commands": [
+          "review"
+        ],
+        "hooks": [
+          "PreToolUse"
+        ],
+        "skills": [
+          "house-style"
+        ]
+      },
+      "held": "review@northlight",
+      "newer": true
+    },
+    {
+      "id": "changelog@northlight",
+      "name": "changelog",
+      "marketplace": "northlight",
+      "description": "Drafts the changelog from the merged pull requests",
+      "author": "Northlight Studio",
+      "category": "Writing",
+      "version": "2.0.0",
+      "brings": {
+        "commands": [
+          "changelog"
+        ],
+        "skills": [
+          "changelog-writer"
+        ]
+      },
+      "install": {
+        "act": "install",
+        "runs": "claude plugin install changelog@northlight --scope user -y",
+        "reaches": []
+      }
+    },
+    {
+      "id": "deploy@northlight",
+      "name": "deploy",
+      "marketplace": "northlight",
+      "description": "Ships a branch to staging with one command",
+      "author": "Northlight Studio",
+      "category": "Deployment",
+      "version": "0.4.1",
+      "brings": {
+        "commands": [
+          "deploy"
+        ],
+        "hooks": [
+          "Stop"
+        ],
+        "servers": [
+          "staging"
+        ]
+      },
+      "asks": [
+        {
+          "kind": "command",
+          "command": "npx @northlight/deploy-fetch"
+        }
+      ],
+      "install": {
+        "act": "install",
+        "runs": "claude plugin install deploy@northlight --scope user",
+        "reaches": [],
+        "terminal": true
+      }
+    },
+    {
+      "id": "telemetry@northlight",
+      "name": "telemetry",
+      "marketplace": "northlight",
+      "description": "Sends session timings to Northlight's dashboard",
+      "author": "Northlight Studio",
+      "blocked": "Claude Code flagged it and took it out"
+    }
+  ],
+  "suggested": [
+    {
+      "name": "claude-plugins-official",
+      "source": "anthropics/claude-plugins-official",
+      "message": "Claude Code adds claude-plugins-official the first time it starts in this profile",
+      "add": {
+        "act": "add",
+        "runs": "claude plugin marketplace add anthropics/claude-plugins-official",
+        "reaches": []
+      }
+    }
+  ],
+  "checkedAt": "2026-09-25T09:01:20.000Z"
+}

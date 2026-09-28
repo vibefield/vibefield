@@ -180,6 +180,33 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: true,
         locality: "local",
       },
+      // AR-S4e2 — browse and install: the catalog and a source's plan only read;
+      // Check for updates runs the agents' own fetches (a mutation, audited); an
+      // act a person answers in a pane takes agent.spawn, as a sign-in does
+      {
+        method: "agents.extensions.catalog",
+        scope: "agents.manage",
+        idempotent: true,
+        locality: "local",
+      },
+      {
+        method: "agents.extensions.check",
+        scope: "agents.manage",
+        idempotent: false,
+        locality: "local",
+      },
+      {
+        method: "agents.extensions.planSource",
+        scope: "agents.manage",
+        idempotent: true,
+        locality: "local",
+      },
+      {
+        method: "agents.extensions.terminal",
+        scope: "agent.spawn",
+        idempotent: false,
+        locality: "local",
+      },
       // AR-5d — account usage: a READ of the agent plane, so it rides
       // AR-5b: the account's billing state, a credentialed call per reading —
       // its own scope, not the fold's

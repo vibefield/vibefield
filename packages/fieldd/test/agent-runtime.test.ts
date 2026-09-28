@@ -41,6 +41,7 @@ import {
   AgentsExtensionsActResult,
   AgentsExtensionsAddResult,
   AgentsExtensionsAddSkillResult,
+  AgentsExtensionsCatalogResult,
   AgentsExtensionsListResult,
   AgentsExtensionsPlanResult,
   AgentsExtensionsPlanSkillResult,
@@ -954,6 +955,182 @@ describe("Extensions (AR-S4b) — each Agent Profile's lens over its agents' own
     const audit = auditText(dataDir);
     expect(audit).toContain('"agents.extensions.act"');
     expect(audit).toContain("codex:mcp-server:linear");
+  }, 30_000);
+
+  /** Claude's extensions replaced by a store in memory: one marketplace whose
+   * catalog lists lint, installed through a stand-in for a protocol call —
+   * nothing starts a process here. */
+  function fakeCatalog() {
+    const installed = new Set<string>();
+    return (builtin: AgentProvider[]): AgentProvider[] =>
+      builtin.map((provider) => {
+        const real = provider.extensions;
+        if (real === undefined) return provider;
+        if (provider.descriptor.id !== "claude") {
+          return {
+            ...provider,
+            extensions: {
+              provider: real.provider,
+              inventory: async (profile) => ({
+                provider: profile.provider,
+                profileId: profile.id,
+                fetchedAt: "2026-09-27T09:00:00.000Z",
+                items: [],
+                source: { kind: "native-store" as const, stability: "documented" as const },
+              }),
+            },
+          };
+        }
+        return {
+          ...provider,
+          extensions: {
+            provider: real.provider,
+            plan: (_profile, item, act) =>
+              act === "install" || (item.kind === "marketplace" && act === "update")
+                ? {
+                    target: { kind: item.kind, id: item.id },
+                    act,
+                    available: true as const,
+                    runs: { kind: "protocol" as const, method: `plugin/${act}` },
+                    display: `plugin/${act} ${item.id}`,
+                    reaches: [],
+                  }
+                : extensionActUnavailable(
+                    { kind: item.kind, id: item.id },
+                    act,
+                    "no-command",
+                    "no command here",
+                  ),
+            perform: async (_profile, plan, io) => {
+              io.onOutput?.(`${plan.display}\n`);
+              if (plan.act === "install") installed.add(plan.target.id);
+              return { ok: true };
+            },
+            inventory: async (profile) => ({
+              provider: profile.provider,
+              profileId: profile.id,
+              fetchedAt: "2026-09-27T09:00:00.000Z",
+              items: [
+                {
+                  kind: "marketplace" as const,
+                  id: "northlight",
+                  name: "northlight",
+                  origin: "own" as const,
+                  enabled: true,
+                  source: "northlight/plugins",
+                },
+                ...[...installed].map((id) => ({
+                  kind: "plugin" as const,
+                  id,
+                  name: id.split("@")[0]!,
+                  origin: "own" as const,
+                  enabled: true,
+                  version: "2.0.0",
+                  marketplace: "northlight",
+                })),
+              ],
+              source: { kind: "native-store" as const, stability: "documented" as const },
+            }),
+            catalog: async (profile) => ({
+              provider: profile.provider,
+              profileId: profile.id,
+              fetchedAt: "2026-09-27T09:00:00.000Z",
+              marketplaces: [
+                {
+                  id: "northlight",
+                  name: "northlight",
+                  source: "northlight/plugins",
+                  origin: "own" as const,
+                },
+              ],
+              plugins: [
+                {
+                  id: "lint@northlight",
+                  name: "lint",
+                  marketplace: "northlight",
+                  version: "2.0.0",
+                  ...(installed.has("lint@northlight") ? { held: "lint@northlight" } : {}),
+                },
+              ],
+              source: { kind: "native-store" as const, stability: "documented" as const },
+            }),
+          },
+        };
+      });
+  }
+
+  it("browses an agent's catalog for a window holding agents.manage and installs from it through the agent's own call, audited (AR-S4e2)", async () => {
+    const { daemon, dataDir } = await setup({ providers: fakeCatalog() });
+    await ready(daemon);
+    const browse = { set: "native", provider: "claude" };
+
+    const denied = await window(daemon, ["agent.spawn"], "c1");
+    for (const [method, params] of [
+      ["agents.extensions.catalog", browse],
+      ["agents.extensions.check", browse],
+      [
+        "agents.extensions.planSource",
+        { ...browse, kind: "marketplace", source: "northlight/extra" },
+      ],
+    ] as const) {
+      expect((await denied.callErr(method, params)).data?.kind, method).toBe("FORBIDDEN_SCOPE");
+    }
+    // a pane is a spawn: agents.manage alone may act, not open one
+    const manager = await window(daemon, ["agents.manage"], "c2");
+    expect(
+      (
+        await manager.callErr("agents.extensions.terminal", {
+          ...browse,
+          kind: "plugin",
+          id: "lint@northlight",
+          act: "install",
+        })
+      ).data?.kind,
+    ).toBe("FORBIDDEN_SCOPE");
+
+    const win = await window(daemon, ALL, "c3");
+    expect((await win.callErr("agents.extensions.catalog", { set: "native" })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    const catalog = AgentsExtensionsCatalogResult.parse(
+      await win.call("agents.extensions.catalog", browse),
+    );
+    expect(catalog.marketplaces).toEqual([
+      {
+        id: "northlight",
+        name: "northlight",
+        source: "northlight/plugins",
+        origin: "own",
+        count: 1,
+      },
+    ]);
+    expect(catalog.plugins[0]).toMatchObject({
+      id: "lint@northlight",
+      install: { act: "install", runs: "plugin/install lint@northlight", reaches: [] },
+    });
+
+    const answered = AgentsExtensionsActResult.parse(
+      await win.call("agents.extensions.act", {
+        ...browse,
+        kind: "plugin",
+        id: "lint@northlight",
+        act: "install",
+      }),
+    );
+    expect(answered.receipt).toMatchObject({ status: "changed", message: "installed 2.0.0" });
+    const lens = AgentsExtensionsListResult.parse(
+      await win.call("agents.extensions.list", { set: "native" }),
+    );
+    expect(lens.plugins.claude?.map((plugin) => plugin.id)).toEqual(["lint@northlight"]);
+    // the catalog was read again after: it holds it now
+    const again = AgentsExtensionsCatalogResult.parse(
+      await win.call("agents.extensions.catalog", browse),
+    );
+    expect(again.plugins[0]).toMatchObject({ held: "lint@northlight" });
+    expect(again.plugins[0]).not.toHaveProperty("install");
+    const audit = auditText(dataDir);
+    expect(audit).toContain('"agents.extensions.act"');
+    expect(audit).toContain("claude:plugin:lint@northlight");
   }, 30_000);
 
   it("opens a server's sign-in only for a window that may open a pane, and only where the agent offers one (AR-S4c)", async () => {

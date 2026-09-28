@@ -4,6 +4,7 @@ import type {
   AgentExtensionRun,
   AgentExtensionServerDefinition,
   AgentProfileSet,
+  AgentsExtensionsCatalogResult,
   AgentsExtensionsListResult,
   AgentsExtensionsPlanSkillResult,
 } from "@vibefield/contracts";
@@ -24,6 +25,14 @@ import {
 } from "react";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { borderCls, fieldCls, labelCls, SettingsRow, SettingsSection } from "../settings-ui";
+import {
+  type BrowseGroup,
+  type BrowseRow,
+  browsePage,
+  checkConfirm,
+  listedPluginPage,
+  pluginsHead,
+} from "./browse-model";
 import {
   type AddServerDraft,
   type AgentListItem,
@@ -86,7 +95,16 @@ const KINDS: ExtensionKindKey[] = ["servers", "skills"];
 
 /** The design kit's names for these marks (pass 23 and 24 draw the kit's
  * plugin, globe and snippets): every icon here is drawn by this one component. */
-type GlyphName = "check" | "chevron" | "plugin" | "folder" | "globe" | "prompt" | "snippets";
+type GlyphName =
+  | "check"
+  | "chevron"
+  | "plugin"
+  | "folder"
+  | "globe"
+  | "prompt"
+  | "snippets"
+  | "search"
+  | "plus";
 
 function Glyph({ name, className = "vf-ext-glyph" }: { name: GlyphName; className?: string }) {
   const paths: Record<GlyphName, ReactElement> = {
@@ -104,6 +122,13 @@ function Glyph({ name, className = "vf-ext-glyph" }: { name: GlyphName; classNam
     ),
     prompt: <path d="M4.5 6.5l3.5 3.5-3.5 3.5M10 14h5.5" />,
     snippets: <path d="M6 3.5h6l3 3v10H6zM12 3.5v3h3M8.5 10h4M8.5 13h4" />,
+    search: (
+      <>
+        <circle cx="9" cy="9" r="5" />
+        <path d="m12.8 12.8 3.7 3.7" />
+      </>
+    ),
+    plus: <path d="M10 4.5v11M4.5 10h11" />,
   };
   return (
     <svg className={className} viewBox="0 0 20 20" aria-hidden="true">
@@ -202,14 +227,18 @@ function FactLine({ code, text }: { code: string; text: string }): ReactElement 
 /** What a person asked a cell or a switch for: an act, maybe waiting on its confirm. */
 export interface ExtensionActRequest {
   provider: string;
-  kind: "mcp-server" | "skill" | "plugin";
+  kind: "mcp-server" | "skill" | "plugin" | "marketplace";
   id: string;
   act: ExtensionCellAct["act"];
   /** AR-S4d — an add's values for the names its server reads, kept once in the keychain first. */
   values?: Record<string, string>;
+  /** AR-S4e2 — an install from a source, or a marketplace added from one: the source (and `id`). */
+  source?: string;
+  /** AR-S4e2 — it runs in a terminal the person answers (an install that asks first), in a pane. */
+  terminal?: boolean;
 }
 
-const requestOf = (
+export const requestOf = (
   act: ExtensionCellAct,
   values?: Record<string, string>,
 ): ExtensionActRequest => ({
@@ -218,6 +247,10 @@ const requestOf = (
   id: act.id,
   act: act.act,
   ...(values !== undefined && Object.keys(values).length > 0 ? { values } : {}),
+  // AR-S4e2 — a marketplace is added from its source, which is its id until the agent names it
+  ...(act.kind === "marketplace" && act.act === "add" ? { source: act.id } : {}),
+  // a sign-in has its own door; any other act the person answers opens a pane of its own
+  ...(act.terminal && act.act !== "sign-in" ? { terminal: true } : {}),
 });
 
 /**
@@ -520,7 +553,19 @@ function RunCard({ run, now }: { run: AgentExtensionRun; now?: Date | undefined 
   );
 }
 
-/** A server's sign-in while its pane is open: the agent's own login, live, and Cancel. */
+/** What a pane's head says it runs: a sign-in, an install, an update, a switch. */
+const paneVerb = (run: AgentExtensionRun): string =>
+  run.act === "sign-in"
+    ? `sign in to ${run.name}`
+    : run.act === "install"
+      ? `install ${run.name}`
+      : run.act === "update"
+        ? `update ${run.name}`
+        : run.act === "enable"
+          ? `turn ${run.name} on`
+          : `${run.act} ${run.name}`;
+
+/** A server's sign-in — or AR-S4e2, any act the person answers — while its pane is open: the agent's own terminal, live, and Cancel. */
 function ServerSignInCard({
   run,
   where,
@@ -542,13 +587,17 @@ function ServerSignInCard({
   return (
     <section
       className="vf-profiles-signin vf-ext-signin"
-      aria-label={`${run.label} sign-in to ${run.name}`}
+      aria-label={
+        run.act === "sign-in"
+          ? `${run.label} sign-in to ${run.name}`
+          : `${run.label}: ${paneVerb(run)}`
+      }
       data-ext-run="running"
     >
       <div className="vf-agents-output vf-profiles-signin-card">
         <header className="vf-agents-output-head">
           <span className="vf-profiles-signin-title">
-            {run.label} · sign in to {run.name} · {where.replace(/^(in|on) /u, "")}
+            {run.label} · {paneVerb(run)} · {where.replace(/^(in|on) /u, "")}
           </span>
           <span className="vf-agents-output-state" role="status">
             closes when {run.label} has been read again
@@ -620,12 +669,16 @@ function RunView({
   signIn?: ExtensionSignInSlot | undefined;
   now?: Date | undefined;
 }): ReactElement {
-  if (run.act === "sign-in" && run.state === "running") {
+  if (run.terminal !== undefined && run.state === "running") {
     return (
       <ServerSignInCard
         run={run}
         where={where}
-        note={signInNote(lens, run, where)}
+        note={
+          run.act === "sign-in"
+            ? signInNote(lens, run, where)
+            : `Answer ${run.label} in the terminal. VibeField reads ${run.label} again when it closes.`
+        }
         pane={signIn?.pane}
         cancelling={signIn?.cancelling}
         onCancel={signIn?.onCancel}
@@ -1016,6 +1069,20 @@ export interface AgentExtensionListViewProps {
   onOpenProfile?: () => void;
   /** AR-S4e — a row opens its page: a plugin's, or a server's or skill's. */
   onOpen?: (open: AgentListOpen) => void;
+  /** AR-S4e2 — Check for updates (or Update catalogs…), where the agent has catalogs. */
+  onCheck?: () => void;
+  /** AR-S4e2 — Browse…, where the agent has catalogs; a marketplace's row opens its part of it. */
+  onBrowse?: (market?: string) => void;
+  /** AR-S4e2 — an install from a source a person gives. */
+  onAct?: (request: ExtensionActRequest) => void;
+  acting?: boolean;
+  /** A running act's pane (an install that asks first), and its Cancel. */
+  signIn?: ExtensionSignInSlot;
+  /** AR-S4e2 — what the agent would run for a source being typed: the form's Runs. */
+  onPlanSource?: (source: string) => Promise<AgentExtensionOffer | null>;
+  /** The catalog's stills: the add form open with this source; the check's confirm open. */
+  adding?: string;
+  checkArmed?: boolean;
   now?: Date;
 }
 
@@ -1032,10 +1099,32 @@ export function AgentExtensionListView({
   onRefresh,
   onOpenProfile,
   onOpen,
+  onCheck,
+  onBrowse,
+  onAct,
+  acting = false,
+  signIn,
+  onPlanSource,
+  adding,
+  checkArmed = false,
   now,
 }: AgentExtensionListViewProps): ReactElement {
   const model = lens === null || firstRead(lens) ? null : agentList(lens, provider, list, where);
   const title = model?.title ?? agentListTitle(list);
+  // AR-S4e2 — the plugins list's head: Check for updates, Browse…, Add from a source
+  const head =
+    model !== null && list === "plugins" && lens !== null ? pluginsHead(lens, provider) : null;
+  const [armedCheck, setArmedCheck] = useState(checkArmed);
+  const [addOpen, setAddOpen] = useState(adding !== undefined);
+  const busy = acting || lens?.run?.state === "running";
+  const run =
+    lens?.run !== undefined &&
+    lens.run.provider === provider &&
+    list === "plugins" &&
+    (lens.run.kind === "marketplace" || (lens.run.kind === "plugin" && lens.run.act === "install"))
+      ? lens.run
+      : undefined;
+  const confirm = armedCheck && lens !== null ? checkConfirm(lens, provider, where) : null;
   return (
     <div className="vf-agents vf-agents-page vf-ext-page" data-ext-list={list}>
       {/* The page's focus target (the dialog's h1 names it too). */}
@@ -1065,6 +1154,69 @@ export function AgentExtensionListView({
               <Words text={model.unread} />
             </p>
           )}
+          {head !== null && (head.check !== null || head.browse !== null || head.add !== null) && (
+            <div className="vf-ext-list-head" data-ext-list-head="">
+              <span className={`vf-ext-list-head-words ${labelCls}`}>{head.checked}</span>
+              <span className="vf-ext-list-head-acts">
+                {head.check !== null && onCheck !== undefined && (
+                  <UiButton
+                    disabled={busy}
+                    onClick={() => (head.check!.asks ? setArmedCheck(true) : onCheck())}
+                  >
+                    {head.check.label}
+                  </UiButton>
+                )}
+                {head.add !== null && onAct !== undefined && (
+                  <UiButton disabled={busy || addOpen} onClick={() => setAddOpen(true)}>
+                    {head.add.label}
+                  </UiButton>
+                )}
+                {head.browse !== null && onBrowse !== undefined && (
+                  <UiButton onClick={() => onBrowse()}>{head.browse}</UiButton>
+                )}
+              </span>
+            </div>
+          )}
+          {confirm !== null && onCheck !== undefined && (
+            <PlainConfirm
+              question={confirm.question}
+              what={confirm.what}
+              action={confirm.action}
+              busy={busy}
+              onConfirm={() => {
+                setArmedCheck(false);
+                onCheck();
+              }}
+              onCancel={() => setArmedCheck(false)}
+            />
+          )}
+          {addOpen && head?.add != null && onAct !== undefined && (
+            <SourceForm
+              kind="plugin"
+              title={head.add.label.replace(/…$/u, "")}
+              words={head.add.words}
+              agent={model.label}
+              where={where}
+              initial={adding ?? ""}
+              busy={busy}
+              onPlan={onPlanSource}
+              onAdd={(source, offer) => {
+                setAddOpen(false);
+                onAct({
+                  provider,
+                  kind: "plugin",
+                  id: source,
+                  act: "install",
+                  source,
+                  ...(offer.terminal === true ? { terminal: true } : {}),
+                });
+              }}
+              onCancel={() => setAddOpen(false)}
+            />
+          )}
+          {run !== undefined && lens !== null && (
+            <RunView lens={lens} run={run} where={where} signIn={signIn} now={now} />
+          )}
           {model.empty !== null && <p className="vf-ext-empty">{model.empty}</p>}
           {model.sections.map((section) =>
             section.summary !== undefined ? (
@@ -1087,9 +1239,18 @@ export function AgentExtensionListView({
                 description={section.sub === "" ? undefined : section.sub}
               >
                 <div className="vf-ext-items" data-ext-section={section.key}>
-                  {section.items.map((item) => (
-                    <ItemRow key={item.key} item={item} onOpen={onOpen} />
-                  ))}
+                  {section.items.map((item) =>
+                    // AR-S4e2 — a marketplace's row opens its part of the agent's catalogs
+                    section.key === "marketplaces" && onBrowse !== undefined ? (
+                      <ItemRow
+                        key={item.key}
+                        item={{ ...item, open: { kind: "plugin", id: item.key, name: item.name } }}
+                        onOpen={() => onBrowse(item.key)}
+                      />
+                    ) : (
+                      <ItemRow key={item.key} item={item} onOpen={onOpen} />
+                    ),
+                  )}
                 </div>
               </SettingsSection>
             ),
@@ -1589,6 +1750,785 @@ export function PluginView({
       <ReadFoot lens={lens} refreshing={refreshing} onRefresh={onRefresh} now={now} />
     </div>
   );
+}
+
+/* ── AR-S4e2: browse and install (pass 23's B1 and D1) ────────────────────── */
+
+/** A confirm with its words given: the plugins list's "Update catalogs…" (P7). */
+function PlainConfirm({
+  question,
+  what,
+  action,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  question: string;
+  what: string;
+  action: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}): ReactElement {
+  const button = useRef<HTMLButtonElement>(null);
+  const questionId = useId();
+  useEffect(() => button.current?.focus(), []);
+  return (
+    <fieldset
+      className="vf-profiles-confirm-box vf-ext-confirm"
+      aria-labelledby={questionId}
+      data-ext-confirm="check"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <p id={questionId} className="vf-profiles-confirm-question">
+        {question}
+      </p>
+      <p className={`vf-profiles-confirm-what ${labelCls}`}>{what}</p>
+      <div className="vf-profiles-confirm-acts">
+        <UiButton ref={button} disabled={busy} onClick={onConfirm}>
+          {action}
+        </UiButton>
+        <UiButton disabled={busy} onClick={onCancel}>
+          Cancel
+        </UiButton>
+      </div>
+    </fieldset>
+  );
+}
+
+/**
+ * A source a person types for the agent's own install, or for its add of a
+ * marketplace: what the agent would run, planned as it is typed, then Add.
+ */
+function SourceForm({
+  kind,
+  title,
+  words,
+  agent,
+  where,
+  initial,
+  busy,
+  onPlan,
+  onAdd,
+  onCancel,
+}: {
+  kind: "plugin" | "marketplace";
+  title: string;
+  /** The agent's own words for what it takes. */
+  words: string;
+  agent: string;
+  where: string;
+  initial: string;
+  busy: boolean;
+  onPlan?: ((source: string) => Promise<AgentExtensionOffer | null>) | undefined;
+  onAdd: (source: string, act: NonNullable<AgentExtensionOffer["act"]>) => void;
+  onCancel: () => void;
+}): ReactElement {
+  const [source, setSource] = useState(initial);
+  const [offer, setOffer] = useState<AgentExtensionOffer | null>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const fieldId = useId();
+  useEffect(() => field.current?.focus(), []);
+  // what the agent would run, planned when the typing rests
+  useEffect(() => {
+    const typed = source.trim();
+    if (onPlan === undefined || typed === "") {
+      setOffer(null);
+      return;
+    }
+    let live = true;
+    const timer = setTimeout(() => {
+      onPlan(typed)
+        .then((answer) => {
+          if (live) setOffer(answer);
+        })
+        .catch(() => {
+          if (live) setOffer(null);
+        });
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [source, onPlan]);
+  const act = offer?.act;
+  const everyProfile = act?.reaches.includes("every-profile") === true;
+  return (
+    <form
+      className={`${borderCls} vf-ext-source`}
+      data-ext-source={kind}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (act !== undefined && !busy) onAdd(source.trim(), act);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <label className="vf-ext-source-label" htmlFor={fieldId}>
+        <b>{title}</b>
+        <small>{words}</small>
+      </label>
+      <div className="vf-ext-source-row">
+        <input
+          id={fieldId}
+          ref={field}
+          className={`${fieldCls} vf-ext-add-field vf-ext-mono`}
+          value={source}
+          spellCheck={false}
+          autoComplete="off"
+          disabled={busy}
+          onChange={(event) => setSource(event.target.value)}
+        />
+        <UiButton type="submit" variant="primary" disabled={busy || act === undefined}>
+          {everyProfile ? "Add to every profile" : "Add"}
+        </UiButton>
+        <UiButton disabled={busy} onClick={onCancel}>
+          Cancel
+        </UiButton>
+      </div>
+      {act !== undefined ? (
+        <p className="vf-ext-confirm-runs">
+          Runs <code className="vf-ext-code">{act.runs}</code>
+        </p>
+      ) : offer?.unavailable !== undefined ? (
+        <p className={`vf-ext-quiet ${labelCls}`}>
+          <Words text={offer.unavailable.message} />
+        </p>
+      ) : null}
+      <p className={`vf-ext-quiet ${labelCls}`}>
+        {kind === "marketplace"
+          ? `${agent} fetches its catalog now and keeps it ${where}. Only add a marketplace you trust: its plugins can run code on this Mac.`
+          : `${agent} fetches it now and keeps it ${everyProfile ? "for every profile" : where}. It runs as code on this Mac, so add only what you trust.`}
+      </p>
+    </form>
+  );
+}
+
+/** A listed plugin's row: its name opens its page; Install is one click where the agent asks nothing first. */
+function BrowseRowView({
+  row,
+  busy,
+  onOpen,
+  onInstall,
+}: {
+  row: BrowseRow;
+  busy: boolean;
+  onOpen?: ((row: BrowseRow) => void) | undefined;
+  onInstall?: ((act: ExtensionCellAct) => void) | undefined;
+}): ReactElement {
+  let right: ReactNode = null;
+  if (row.state === "installed") {
+    // installed: a check; installed with a newer one listed: the words alone, its page has Update
+    right = row.newer ? (
+      <span className="vf-ext-installed vf-ext-installed--newer">Update available</span>
+    ) : (
+      <span className="vf-ext-installed">
+        <Glyph name="check" className="vf-ext-installed-mark" />
+        Installed
+      </span>
+    );
+  } else if (row.state === "blocked") {
+    right = <span>{row.words}</span>;
+  } else if (row.state === "install" && row.install !== null && onInstall !== undefined) {
+    const install = row.install;
+    right = (
+      <UiButton disabled={busy} aria-label={install.title} onClick={() => onInstall(install)}>
+        Install
+      </UiButton>
+    );
+  } else if (row.state === "look" && onOpen !== undefined) {
+    right = (
+      <UiButton
+        disabled={busy}
+        aria-label={`Look at ${row.name} first`}
+        onClick={() => onOpen(row)}
+      >
+        Install…
+      </UiButton>
+    );
+  }
+  return (
+    <div
+      className={`vf-ext-item${onOpen !== undefined ? " vf-ext-item--open" : ""}`}
+      data-ext-listed={row.id}
+    >
+      <span className="vf-agents-mark vf-agents-mark--row" aria-hidden="true">
+        <span className="vf-ext-initial">{row.initial}</span>
+      </span>
+      <span className="vf-ext-item-text">
+        {onOpen !== undefined ? (
+          <button type="button" className="vf-agents-row-open" onClick={() => onOpen(row)}>
+            {row.name}
+          </button>
+        ) : (
+          <b>{row.name}</b>
+        )}
+        {row.text !== "" && <small>{row.text}</small>}
+      </span>
+      <span className="vf-ext-item-state vf-ext-item-state--cell">{right}</span>
+      {onOpen !== undefined && <Chevron />}
+    </div>
+  );
+}
+
+/** When the catalog was read, and the way to read it again (it reads files; nothing is fetched). */
+function CatalogFoot({
+  catalog,
+  loading,
+  onRefresh,
+}: {
+  catalog: AgentsExtensionsCatalogResult | null;
+  loading: boolean;
+  onRefresh?: (() => void) | undefined;
+}): ReactElement {
+  return (
+    <div className="vf-ext-readfoot">
+      <span>
+        {catalog?.readAt === undefined
+          ? ""
+          : `Read from what ${catalog.label} last fetched. VibeField fetches nothing itself.`}
+      </span>
+      <ReadAgain reading={loading} onRefresh={onRefresh} />
+    </div>
+  );
+}
+
+export interface BrowseViewProps {
+  lens: AgentsExtensionsListResult | null;
+  /** The agent's catalog; null while the first read is on its way. */
+  catalog: AgentsExtensionsCatalogResult | null;
+  provider: string;
+  /** "in Work" · "on This Mac" */
+  where: string;
+  error?: string | null;
+  loading?: boolean;
+  onRefresh?: () => void;
+  onAct?: (request: ExtensionActRequest) => void;
+  acting?: boolean;
+  signIn?: ExtensionSignInSlot;
+  /** A row opens its page: the installed plugin's (`held`), or the listed one's. */
+  onOpen?: (plugin: { id: string; name: string; held: string | null }) => void;
+  /** What the agent would run for a marketplace's source being typed. */
+  onPlanSource?: (source: string) => Promise<AgentExtensionOffer | null>;
+  /** The catalog's stills: a filter, a marketplace's removal confirm open, the add form open. */
+  query?: string;
+  market?: string;
+  armed?: string;
+  adding?: string;
+  now?: Date;
+}
+
+/** pass 23's B1: one list of what the agent's marketplaces list, grouped by marketplace. */
+export function BrowseView({
+  lens,
+  catalog,
+  provider,
+  where,
+  error = null,
+  loading = false,
+  onRefresh,
+  onAct,
+  acting = false,
+  signIn,
+  onOpen,
+  onPlanSource,
+  query: queryInitially = "",
+  market: marketInitially = "all",
+  armed: armedInitially,
+  adding,
+  now,
+}: BrowseViewProps): ReactElement {
+  const [query, setQuery] = useState(queryInitially);
+  const [market, setMarket] = useState(marketInitially);
+  const [armed, setArmed] = useState<ExtensionCellAct | null>(null);
+  const [addOpen, setAddOpen] = useState(adding !== undefined);
+  const model =
+    catalog === null
+      ? null
+      : browsePage(catalog, lens, where, now ?? new Date(), { query, market });
+  const label = model?.label ?? catalog?.label ?? "The agent";
+  const busy = acting || lens?.run?.state === "running";
+  const run =
+    lens?.run !== undefined &&
+    lens.run.provider === provider &&
+    (lens.run.kind === "marketplace" || lens.run.act === "install")
+      ? lens.run
+      : undefined;
+  const ask = (act: ExtensionCellAct): void => {
+    if (onAct === undefined) return;
+    if (asksFirst(act)) setArmed(act);
+    else onAct(requestOf(act));
+  };
+  // the catalog's still of a marketplace's removal confirm
+  const armedGroup =
+    armed ??
+    (armedInitially === undefined
+      ? null
+      : (model?.groups.find((group) => group.key === armedInitially)?.remove ?? null));
+  const confirmFor = (group: BrowseGroup): ReactElement | null =>
+    armedGroup === null || onAct === undefined || armedGroup.id !== group.key ? null : (
+      <ActConfirm
+        key={`${armedGroup.id}:${armedGroup.act}`}
+        act={armedGroup}
+        where={where}
+        context={{
+          installedFrom: (lens?.plugins[provider] ?? []).filter(
+            (plugin) => plugin.marketplace === group.key,
+          ).length,
+          ...(group.source !== null ? { source: group.source } : {}),
+        }}
+        busy={busy}
+        onConfirm={() => {
+          setArmed(null);
+          onAct(requestOf(armedGroup));
+        }}
+        onCancel={() => setArmed(null)}
+      />
+    );
+  const rows = (list: readonly BrowseRow[]) =>
+    list.map((row) => (
+      <BrowseRowView
+        key={row.id}
+        row={row}
+        busy={busy}
+        onOpen={
+          onOpen === undefined
+            ? undefined
+            : (open) => onOpen({ id: open.id, name: open.name, held: open.held })
+        }
+        onInstall={onAct === undefined ? undefined : (act) => onAct(requestOf(act))}
+      />
+    ));
+  const addForm =
+    addOpen && model?.addMarketplace != null && onAct !== undefined ? (
+      <SourceForm
+        kind="marketplace"
+        title="Add a marketplace"
+        words={model.addMarketplace}
+        agent={label}
+        where={where}
+        initial={adding ?? ""}
+        busy={busy}
+        onPlan={onPlanSource}
+        onAdd={(source, act) => {
+          setAddOpen(false);
+          onAct({
+            provider,
+            kind: "marketplace",
+            id: source,
+            act: "add",
+            source,
+            ...(act.terminal === true ? { terminal: true } : {}),
+          });
+        }}
+        onCancel={() => setAddOpen(false)}
+      />
+    ) : null;
+  let body: ReactNode;
+  if (model === null) {
+    body = (
+      <p className="vf-ext-quiet" aria-busy="true">
+        {loading ? `Reading ${label}’s catalogs…` : ""}
+      </p>
+    );
+  } else if (model.failure !== null) {
+    body = <p className="vf-ext-quiet">{model.failure}</p>;
+  } else if (model.empty !== null) {
+    const suggest = model.empty.suggest;
+    body = (
+      <>
+        <section className={`${borderCls} vf-ext-browse-empty`} data-ext-browse-empty="">
+          <span className="vf-ext-browse-empty-mark" aria-hidden="true">
+            <Glyph name="plugin" />
+          </span>
+          <b>{model.empty.title}</b>
+          <p className={labelCls}>{model.empty.text}</p>
+          {onAct !== undefined && (
+            <span className="vf-ext-browse-empty-acts">
+              {suggest !== null && (
+                <UiButton variant="primary" disabled={busy} onClick={() => ask(suggest)}>
+                  Add {suggest.name}
+                </UiButton>
+              )}
+              {model.addMarketplace !== null && (
+                <UiButton disabled={busy || addOpen} onClick={() => setAddOpen(true)}>
+                  Add marketplace…
+                </UiButton>
+              )}
+            </span>
+          )}
+        </section>
+        {addForm}
+        {run !== undefined && lens !== null && (
+          <RunView lens={lens} run={run} where={where} signIn={signIn} now={now} />
+        )}
+      </>
+    );
+  } else {
+    body = (
+      <>
+        <div className="vf-ext-browse-tools">
+          <label className="vf-ext-search">
+            <Glyph name="search" className="vf-ext-search-glyph" />
+            <input
+              type="search"
+              className={`${fieldCls} vf-ext-search-field`}
+              value={query}
+              placeholder={model.placeholder}
+              aria-label={model.placeholder}
+              spellCheck={false}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          {model.chips.length > 0 && (
+            // biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a fieldset of inputs
+            <div className="vf-ext-chips" role="group" aria-label="Marketplaces">
+              {model.chips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  className={`vf-ext-chip${market === chip.key ? " vf-ext-chip--on" : ""}`}
+                  aria-pressed={market === chip.key}
+                  onClick={() => setMarket(chip.key)}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {model.notice !== null && (
+          <p className="vf-ext-quiet">
+            <Words text={model.notice} />
+          </p>
+        )}
+        {run !== undefined && lens !== null && (
+          <RunView lens={lens} run={run} where={where} signIn={signIn} now={now} />
+        )}
+        {model.featured.length > 0 && (
+          <SettingsSection title="Featured" description={`As ${label} features them`}>
+            <div className="vf-ext-items" data-ext-section="featured">
+              {rows(model.featured)}
+            </div>
+          </SettingsSection>
+        )}
+        {model.groups.map((group) => (
+          <SettingsSection
+            key={group.key}
+            title={group.title}
+            description={group.sub === "" ? undefined : group.sub}
+            action={
+              onAct === undefined ||
+              (group.update === null && group.remove === null) ? undefined : (
+                <>
+                  {group.update !== null && (
+                    <UiButton
+                      disabled={busy}
+                      aria-label={group.update.title}
+                      onClick={() => ask(group.update!)}
+                    >
+                      Update catalog
+                    </UiButton>
+                  )}
+                  {group.remove !== null && (
+                    <UiButton
+                      disabled={busy}
+                      aria-label={group.remove.title}
+                      onClick={() => ask(group.remove!)}
+                    >
+                      Remove…
+                    </UiButton>
+                  )}
+                </>
+              )
+            }
+          >
+            {confirmFor(group)}
+            {group.unread !== null && <p className="vf-ext-quiet">{group.unread}</p>}
+            {group.rows.length > 0 ? (
+              <div className="vf-ext-items" data-ext-section={group.key}>
+                {rows(group.rows)}
+              </div>
+            ) : (
+              group.unread === null && <p className="vf-ext-quiet">Nothing here yet.</p>
+            )}
+          </SettingsSection>
+        ))}
+        {model.noMatch !== null && <p className="vf-ext-empty">{model.noMatch}</p>}
+        {model.addMarketplace !== null &&
+          onAct !== undefined &&
+          (addForm ?? (
+            <section className={`${borderCls} vf-ext-browse-add`}>
+              <button
+                type="button"
+                className="vf-ext-item vf-ext-item--open vf-ext-browse-add-row"
+                disabled={busy}
+                onClick={() => setAddOpen(true)}
+              >
+                <span className="vf-agents-mark vf-agents-mark--row" aria-hidden="true">
+                  <Glyph name="plus" />
+                </span>
+                <span className="vf-ext-item-text">
+                  <b>Add marketplace…</b>
+                  <small>{model.addMarketplace}</small>
+                </span>
+              </button>
+            </section>
+          ))}
+      </>
+    );
+  }
+  return (
+    <div className="vf-agents vf-agents-page vf-ext-page vf-ext-browse" data-ext-browse={provider}>
+      {/* The page's focus target (the dialog's h1 names it too). */}
+      <h2 className="sr-only" tabIndex={-1} data-agents-page-title="">
+        {model?.title ?? "Browse"}, {label} {where}
+      </h2>
+      <ErrorNotice error={error} />
+      {body}
+      <CatalogFoot catalog={catalog} loading={loading} onRefresh={onRefresh} />
+    </div>
+  );
+}
+
+export interface ListedPluginViewProps {
+  lens: AgentsExtensionsListResult | null;
+  catalog: AgentsExtensionsCatalogResult | null;
+  provider: string;
+  /** The catalog's key for it. */
+  id: string;
+  /** Its name as its row gave it. */
+  name: string;
+  where: string;
+  error?: string | null;
+  loading?: boolean;
+  onRefresh?: () => void;
+  onAct?: (request: ExtensionActRequest) => void;
+  acting?: boolean;
+  signIn?: ExtensionSignInSlot;
+  /** The catalog's still: the install's confirm open. */
+  armed?: boolean;
+  now?: Date;
+}
+
+/** pass 23's D1 before it is installed: what it is, what the agent asks first, what it would add, and Install. */
+export function ListedPluginView({
+  lens,
+  catalog,
+  provider,
+  id,
+  name,
+  where,
+  error = null,
+  loading = false,
+  onRefresh,
+  onAct,
+  acting = false,
+  signIn,
+  armed: armedInitially = false,
+  now,
+}: ListedPluginViewProps): ReactElement {
+  const model = catalog === null ? null : listedPluginPage(catalog, lens, id, name);
+  const [armedByClick, setArmed] = useState(false);
+  const armed = armedByClick || armedInitially;
+  const busy = acting || lens?.run?.state === "running";
+  const run =
+    lens?.run !== undefined &&
+    lens.run.provider === provider &&
+    lens.run.act === "install" &&
+    lens.run.item === id
+      ? lens.run
+      : undefined;
+  const install = model?.install ?? null;
+  const confirm =
+    install !== null && armed && onAct !== undefined ? (
+      <ActConfirm
+        act={install}
+        where={where}
+        busy={busy}
+        onConfirm={() => {
+          setArmed(false);
+          onAct(requestOf(install));
+        }}
+        onCancel={() => setArmed(false)}
+      />
+    ) : null;
+  let body: ReactNode;
+  if (model === null) {
+    body = (
+      <p className="vf-ext-quiet" aria-busy="true">
+        {loading ? "Reading the agent’s catalogs…" : ""}
+      </p>
+    );
+  } else if (model.gone) {
+    body = (
+      <p className="vf-ext-empty">
+        No marketplace {model.label} knows lists {model.name} {where} now.
+      </p>
+    );
+  } else {
+    const running = run?.state === "running";
+    const control =
+      model.held !== null ? (
+        <span className="vf-ext-installed">
+          <Glyph name="check" className="vf-ext-installed-mark" />
+          Installed
+        </span>
+      ) : model.blocked !== null ? (
+        <span>{model.blocked}</span>
+      ) : running ? (
+        <span>Installing…</span>
+      ) : install !== null && onAct !== undefined ? (
+        <UiButton
+          variant="primary"
+          disabled={busy}
+          aria-label={install.title}
+          onClick={() => {
+            if (actConfirm(install, where) !== null) setArmed(true);
+            else onAct(requestOf(install));
+          }}
+        >
+          {install.terminal ? "Install in a terminal…" : `Install ${where}`}
+        </UiButton>
+      ) : null;
+    body = (
+      <>
+        <section className={`${borderCls} vf-ext-hero`} data-ext-listed-plugin={model.id}>
+          <span className="vf-agents-mark vf-ext-tile" aria-hidden="true">
+            <span className="vf-ext-initial">{model.initial}</span>
+          </span>
+          <span className="vf-ext-item-text">
+            <b className="vf-ext-hero-name">{model.name}</b>
+            {model.sub !== "" && <small>{model.sub}</small>}
+          </span>
+          <span className="vf-ext-item-state vf-ext-item-state--cell">{control}</span>
+        </section>
+        {confirm}
+        {model.description !== null && <p className="vf-ext-intro">{model.description}</p>}
+        {model.why !== null && (
+          <p className="vf-ext-quiet">
+            <Words text={model.why} />
+          </p>
+        )}
+        {run !== undefined && lens !== null && (
+          <RunView lens={lens} run={run} where={where} signIn={signIn} now={now} />
+        )}
+        {model.before.length > 0 && model.held === null && (
+          <SettingsSection title="Before it runs">
+            <div className="vf-ext-items" data-ext-section="before">
+              {model.before.map((row) => (
+                <div key={row.key} className="vf-ext-item" data-ext-before={row.key}>
+                  <span className="vf-agents-mark vf-agents-mark--row" aria-hidden="true">
+                    <Glyph name={row.glyph} />
+                  </span>
+                  <span className="vf-ext-item-text">
+                    <b>{row.title}</b>
+                    <small>
+                      {row.code !== undefined && <code className="vf-ext-code">{row.code}</code>}
+                      {row.code !== undefined && " · "}
+                      {row.text}
+                    </small>
+                  </span>
+                  <span />
+                </div>
+              ))}
+            </div>
+          </SettingsSection>
+        )}
+        {model.parts.length > 0 && (
+          <SettingsSection
+            title={model.held === null ? "What it would add" : "What it adds"}
+            description="As its listing names it"
+          >
+            <div className="vf-ext-items">
+              {model.parts.map((part) => (
+                <div key={part.key} className="vf-ext-item" data-ext-part={part.key}>
+                  <span className="vf-agents-mark vf-agents-mark--row" aria-hidden="true">
+                    <Glyph name={part.glyph} />
+                  </span>
+                  <span className="vf-ext-item-text">
+                    <b>{part.title}</b>
+                    <small>{part.text}</small>
+                    <span className="vf-ext-names">
+                      {part.names.map((partName) => (
+                        <code key={partName} className="vf-ext-code">
+                          {partName}
+                        </code>
+                      ))}
+                    </span>
+                  </span>
+                  <span />
+                </div>
+              ))}
+            </div>
+          </SettingsSection>
+        )}
+        {model.facts.length > 0 && (
+          <section className={`${borderCls} vf-ext-def-section`}>
+            <dl className="vf-ext-def">
+              {model.facts.map((fact) => (
+                <Fragment key={fact.term}>
+                  <dt>{fact.term}</dt>
+                  <dd>
+                    {fact.code !== undefined ? (
+                      <code className="vf-ext-code">{fact.code}</code>
+                    ) : (
+                      <span>{fact.text}</span>
+                    )}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          </section>
+        )}
+      </>
+    );
+  }
+  return (
+    <div className="vf-agents vf-agents-page vf-ext-page" data-ext-listed-page={id}>
+      {/* The page's focus target (the dialog's h1 names it too). */}
+      <h2 className="sr-only" tabIndex={-1} data-agents-page-title="">
+        {model?.name ?? name}, listed for {model?.label ?? "the agent"} {where}
+      </h2>
+      <ErrorNotice error={error} />
+      {body}
+      <CatalogFoot catalog={catalog} loading={loading} onRefresh={onRefresh} />
+    </div>
+  );
+}
+
+/** The Browse page names itself, under its agent and its profile; back is the agent's list. */
+export function browseSubpage(
+  set: AgentProfileSet,
+  agentLabel: string,
+  title: string,
+  /** The agent's list it opened from: "Plugins", or the agent's own word ("Packages"). */
+  listTitle: string,
+  onBack: () => void,
+): SettingsSubpage {
+  return {
+    title,
+    description: (
+      <span className="vf-profiles-subhead">
+        {agentLabel} ·
+        <ProfileMark set={set} size={12} />
+        {set.label}
+      </span>
+    ),
+    backLabel: `Back to ${listTitle}`,
+    onBack,
+  };
 }
 
 /* ── the Settings header for these pages ───────────────────────────────────── */

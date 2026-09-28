@@ -25,8 +25,10 @@ import type { AgentsNotice } from "./AgentsView";
 import {
   AddServer,
   AddSkill,
+  AgentBrowse,
   AgentExtensionList,
   AgentExtensions,
+  AgentListedPlugin,
   AgentPlugin,
   ExtensionItem,
   ProfileExtensions,
@@ -35,6 +37,7 @@ import {
   addServerSubpage,
   addSkillSubpage,
   agentListSubpage,
+  browseSubpage,
   extensionItemSubpage,
   pluginSubpage,
 } from "./ExtensionsView";
@@ -96,8 +99,21 @@ export type ProfilesRoute =
       name: string;
       from?: { provider: string; list: AgentListKey; title?: string };
     }
-  /** AR-S4e — one plugin an agent holds, a page below the agent's list */
-  | { kind: "plugin"; set: string; provider: string; id: string; name: string; listTitle?: string }
+  /** AR-S4e — one plugin an agent holds, a page below the agent's list;
+   * AR-S4e2 — or one its catalogs list, opened from Browse (`from`), the
+   * installed plugin's page once the agent holds it */
+  | {
+      kind: "plugin";
+      set: string;
+      provider: string;
+      id: string;
+      name: string;
+      listTitle?: string;
+      from?: "browse";
+      market?: string;
+    }
+  /** AR-S4e2 — the agent's catalogs (pass 23's B1), a page below its list */
+  | { kind: "browse"; set: string; provider: string; listTitle?: string; market?: string }
   /** AR-S4d — Add server (AR-S4d2 — Add skill): one kept once for the profile, a page below the profile's */
   | { kind: "add"; set: string; list: ExtensionKindKey }
   | { kind: "new" };
@@ -237,7 +253,10 @@ export function ProfilesSection({
   const page = set === undefined ? undefined : profilePage(set, context);
   // the agent a page is about: its own page, one of its lists, or a plugin on one
   const provider =
-    route.kind === "agent" || route.kind === "list" || route.kind === "plugin"
+    route.kind === "agent" ||
+    route.kind === "list" ||
+    route.kind === "plugin" ||
+    route.kind === "browse"
       ? route.provider
       : undefined;
   const persona =
@@ -257,7 +276,16 @@ export function ProfilesSection({
   }, [route, onRoute]);
   // AR-S4e — a plugin's page, and a server's or skill's opened from an agent's list, go back to that list
   const backToList = useCallback((): void => {
-    if (route.kind === "plugin") {
+    if (route.kind === "plugin" && route.from === "browse") {
+      // AR-S4e2 — a plugin opened from Browse goes back to Browse
+      onRoute({
+        kind: "browse",
+        set: route.set,
+        provider: route.provider,
+        ...(route.listTitle !== undefined ? { listTitle: route.listTitle } : {}),
+        ...(route.market !== undefined ? { market: route.market } : {}),
+      });
+    } else if (route.kind === "plugin" || route.kind === "browse") {
       onRoute({
         kind: "list",
         set: route.set,
@@ -287,8 +315,10 @@ export function ProfilesSection({
             : route.kind === "add"
               ? `add|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${route.list}`
               : route.kind === "plugin" && row !== undefined
-                ? `plugin|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}|${route.id}|${route.name}`
-                : null;
+                ? `plugin|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}|${route.id}|${route.name}|${route.from ?? ""}`
+                : route.kind === "browse" && row !== undefined
+                  ? `browse|${set.id}|${set.label}|${set.glyph ?? ""}|${set.default}|${row.label}|${route.listTitle ?? ""}`
+                  : null;
   // keyed by what the header shows: a feed frame that changes nothing on it does not rebuild it
   useEffect(() => {
     if (set === undefined) {
@@ -307,8 +337,20 @@ export function ProfilesSection({
         ),
       );
     } else if (route.kind === "plugin" && row !== undefined) {
+      const listTitle = route.listTitle ?? "Plugins";
       onSubpage(
-        pluginSubpage(set, row.label, route.name, route.listTitle ?? "Plugins", backToList),
+        pluginSubpage(
+          set,
+          row.label,
+          route.name,
+          route.from === "browse" ? `Browse ${listTitle.toLowerCase()}` : listTitle,
+          backToList,
+        ),
+      );
+    } else if (route.kind === "browse" && row !== undefined) {
+      const listTitle = route.listTitle ?? "Plugins";
+      onSubpage(
+        browseSubpage(set, row.label, `Browse ${listTitle.toLowerCase()}`, listTitle, backToList),
       );
     } else if (route.kind === "add") {
       onSubpage(
@@ -337,7 +379,10 @@ export function ProfilesSection({
       return;
     }
     if (
-      (route.kind === "agent" || route.kind === "list" || route.kind === "plugin") &&
+      (route.kind === "agent" ||
+        route.kind === "list" ||
+        route.kind === "plugin" ||
+        route.kind === "browse") &&
       persona === undefined &&
       seen.current.has(`${route.set}:${route.provider}`)
     ) {
@@ -356,9 +401,11 @@ export function ProfilesSection({
           ? `add:${route.set}:${route.list}`
           : route.kind === "plugin"
             ? `plugin:${route.set}:${route.provider}:${route.id}`
-            : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}${
-                route.kind === "list" ? `:${route.list}` : ""
-              }`;
+            : route.kind === "browse"
+              ? `browse:${route.set}:${route.provider}`
+              : `${route.kind}:${route.set}:${"provider" in route ? route.provider : ""}${
+                  route.kind === "list" ? `:${route.list}` : ""
+                }`;
   const currentRoute = useRef(routeKey);
   currentRoute.current = routeKey;
   // what each page reads usage for: an agent's own, a profile's every agent;
@@ -367,7 +414,8 @@ export function ProfilesSection({
     route.kind === "list" ||
     route.kind === "item" ||
     route.kind === "add" ||
-    route.kind === "plugin"
+    route.kind === "plugin" ||
+    route.kind === "browse"
       ? []
       : route.kind === "agent"
         ? persona === undefined
@@ -876,6 +924,19 @@ export function ProfilesSection({
         profile={set.label}
         where={inOnWords(set)}
         onOpenProfile={() => onRoute({ kind: "profile", set: set.id })}
+        {...(route.list === "plugins"
+          ? {
+              // AR-S4e2 — the agent's catalogs, or one marketplace's part of them
+              onBrowse: (market?: string) =>
+                onRoute({
+                  kind: "browse",
+                  set: set.id,
+                  provider: row.provider,
+                  ...(route.title !== undefined ? { listTitle: route.title } : {}),
+                  ...(market !== undefined ? { market } : {}),
+                }),
+            }
+          : {})}
         onOpen={(open) =>
           onRoute(
             open.kind === "plugin"
@@ -903,14 +964,48 @@ export function ProfilesSection({
       />
     );
   } else if (route.kind === "plugin" && set !== undefined && row !== undefined) {
+    body =
+      route.from === "browse" ? (
+        // AR-S4e2 — listed until the agent holds it, then the installed plugin's page
+        <AgentListedPlugin
+          key={`${set.id}:${row.provider}:${route.id}:listed`}
+          set={set.id}
+          provider={row.provider}
+          id={route.id}
+          name={route.name}
+          where={inOnWords(set)}
+        />
+      ) : (
+        <AgentPlugin
+          key={`${set.id}:${row.provider}:${route.id}`}
+          set={set.id}
+          provider={row.provider}
+          id={route.id}
+          name={route.name}
+          where={inOnWords(set)}
+        />
+      );
+  } else if (route.kind === "browse" && set !== undefined && row !== undefined) {
     body = (
-      <AgentPlugin
-        key={`${set.id}:${row.provider}:${route.id}`}
+      <AgentBrowse
+        key={`${set.id}:${row.provider}:browse`}
         set={set.id}
         provider={row.provider}
-        id={route.id}
-        name={route.name}
         where={inOnWords(set)}
+        {...(route.market !== undefined ? { market: route.market } : {})}
+        onOpen={(plugin) =>
+          onRoute({
+            kind: "plugin",
+            set: set.id,
+            provider: row.provider,
+            // one it holds opens the installed plugin's page, by its id on the agent's list
+            id: plugin.held ?? plugin.id,
+            name: plugin.name,
+            from: "browse",
+            ...(route.listTitle !== undefined ? { listTitle: route.listTitle } : {}),
+            ...(route.market !== undefined ? { market: route.market } : {}),
+          })
+        }
       />
     );
   } else if (route.kind === "item" && set !== undefined) {

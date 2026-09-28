@@ -8,10 +8,14 @@ import {
   AgentsExtensionsActResult,
   AgentsExtensionsAddResult,
   AgentsExtensionsAddSkillResult,
+  AgentsExtensionsCatalogResult,
+  AgentsExtensionsCheckResult,
   AgentsExtensionsListResult,
   AgentsExtensionsPlanResult,
   AgentsExtensionsPlanSkillResult,
+  AgentsExtensionsPlanSourceResult,
   AgentsExtensionsSignInResult,
+  AgentsExtensionsTerminalResult,
 } from "../src/agent-extensions";
 import {
   AgentFieldDelta,
@@ -243,6 +247,14 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // AR-S4d2 — Add skill's answer (the name it is kept under, each agent's receipt), and the plan beside the form.
   "agents-extensions-add-skill": AgentsExtensionsAddSkillResult,
   "agents-extensions-plan-skill": AgentsExtensionsPlanSkillResult,
+  // AR-S4e2 — Claude's catalog in Work (review held with a newer version listed,
+  // changelog to install in one click, deploy's install in a terminal, telemetry
+  // flagged, the official marketplace suggested), a check's run, a typed source's
+  // plan, and an install's pane
+  "agents-extensions-catalog": AgentsExtensionsCatalogResult,
+  "agents-extensions-check": AgentsExtensionsCheckResult,
+  "agents-extensions-plan-source": AgentsExtensionsPlanSourceResult,
+  "agents-extensions-terminal": AgentsExtensionsTerminalResult,
   // AR-5d — the usage column's feed: one batch with three states beside the
   // honest empty one the door answers before the first refresh.
   "agent-usage": AgentAccountUsageBatch,

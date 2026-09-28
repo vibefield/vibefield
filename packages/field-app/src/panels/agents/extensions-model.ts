@@ -44,6 +44,9 @@ import type {
 // agent offers none, why, in the agent's words. A row of an agent's own list
 // opens its page; a kind the agent calls by a word of its own (Pi's
 // "Packages") is called that.
+//
+// AR-S4e2: an install and a marketplace's acts are the agent's own too; their
+// words are here with the rest (the Browse page's model is browse-model.ts).
 
 export type ExtensionKindKey = "servers" | "skills";
 
@@ -801,7 +804,11 @@ function listItem(key: AgentListKey, item: Held): AgentListItem {
       open: { kind: "plugin", id: plugin.id, name: plugin.name },
       glyph: "plugin",
       initial: plugin.name.slice(0, 1).toUpperCase(),
-      code: versionWords(plugin.version),
+      // AR-S4e2 — a newer one its catalog lists, as the last read of it found
+      code:
+        plugin.newer === undefined
+          ? versionWords(plugin.version)
+          : `${versionWords(plugin.version) || "installed"} → ${versionWords(plugin.newer.version) || "newer"}`,
       text: [
         plugin.marketplace === undefined ? "" : `from ${plugin.marketplace}`,
         plugin.description ?? "",
@@ -1359,7 +1366,7 @@ export function extensionItem(
    their place, why the agent offers none here, in the agent's own words. */
 
 export interface PluginPart {
-  key: "servers" | "skills" | "commands" | "agents" | "hooks";
+  key: "servers" | "skills" | "commands" | "agents" | "hooks" | "tools";
   glyph: "globe" | "snippets" | "prompt" | "plugin";
   title: string;
   /** What it is, in words, beside the names. */
@@ -1557,8 +1564,17 @@ export function pluginPage(
   );
   const lender = plugin.lender === undefined ? undefined : labelOf(lens.agents, plugin.lender);
   const facts: ExtensionItemFact[] = [
-    ...(plugin.version !== undefined
-      ? [{ term: "Version", code: versionWords(plugin.version) }]
+    ...(plugin.version !== undefined || plugin.newer !== undefined
+      ? [
+          {
+            term: "Version",
+            // AR-S4e2 — its catalog lists a newer one: what Update would take
+            code:
+              plugin.newer === undefined
+                ? versionWords(plugin.version)
+                : `${versionWords(plugin.version) || "installed"} → ${versionWords(plugin.newer.version) || "newer"}`,
+          },
+        ]
       : []),
     ...(plugin.marketplace !== undefined
       ? [
@@ -1626,7 +1642,7 @@ export function pluginPage(
 export interface ExtensionCellAct {
   provider: string;
   label: string;
-  kind: "mcp-server" | "skill" | "plugin";
+  kind: "mcp-server" | "skill" | "plugin" | "marketplace";
   /** The holding's id in the agent's own read. */
   id: string;
   name: string;
@@ -1652,7 +1668,21 @@ const TITLES: Record<AgentExtensionAct["act"], (name: string, agent: string) => 
   add: (name, agent) => `Turn ${name} on for ${agent}`,
   update: (name, agent) => `Update ${name} for ${agent}`,
   purge: (name, agent) => `Remove ${name} and its data from ${agent}`,
+  install: (name, agent) => `Install ${name} for ${agent}`,
 };
+
+/** AR-S4e2 — an act's control name: a marketplace's fetch and add read as what they do. */
+export function actTitle(
+  kind: ExtensionCellAct["kind"],
+  act: AgentExtensionAct["act"],
+  name: string,
+  agent: string,
+): string {
+  if (kind === "marketplace" && act === "update")
+    return `Fetch ${name}’s catalog again for ${agent}`;
+  if (kind === "marketplace" && act === "add") return `Add the marketplace ${name} to ${agent}`;
+  return TITLES[act](name, agent);
+}
 
 /** One act the agent offers on its holding under this row, or null when it offers none such. */
 function offerOf(
@@ -1746,6 +1776,71 @@ export interface ExtensionConfirmContext {
   goes?: string;
   /** AR-S4e — the agent can remove the plugin keeping its data, or with it: a removal says which. */
   keepsData?: boolean;
+  /** AR-S4e2 — a marketplace's removal or fetch: how many plugins the agent installed from it. */
+  installedFrom?: number;
+  /** AR-S4e2 — a marketplace's source, where it can be added from again. */
+  source?: string;
+}
+
+/**
+ * AR-S4e2 — P7 for a marketplace: its removal always asks (the red one); a
+ * fetch asks when it also updates the plugins installed from it; an add asks
+ * only when it reaches further than this profile.
+ */
+function marketplaceConfirm(
+  act: ExtensionCellAct,
+  where: string,
+  context: ExtensionConfirmContext,
+): ExtensionActConfirm | null {
+  const count = context.installedFrom ?? 0;
+  const theirs =
+    count === 0
+      ? ""
+      : count === 1
+        ? "the plugin you installed from it"
+        : `the ${count} plugins you installed from it`;
+  const shared = act.reaches.includes("shared-folder")
+    ? "Other agents read it from there too, in every profile."
+    : act.reaches.includes("every-profile")
+      ? `${act.label} keeps it for every profile, so this changes all of them.`
+      : "";
+  if (act.act === "remove") {
+    return {
+      question: `Remove ${act.name} from ${act.label} ${where}?`,
+      what: [
+        `Its catalog goes${act.reaches.includes("plugins") && theirs !== "" ? `, and so ${count === 1 ? "does" : "do"} ${theirs}` : ""}.`,
+        context.source !== undefined ? `You can add it again from ${context.source}.` : "",
+        shared,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      action: `Remove ${act.name}`,
+      danger: true,
+    };
+  }
+  if (act.act === "update" && act.reaches.includes("plugins")) {
+    return {
+      question: `Fetch ${act.name}’s catalog for ${act.label} ${where}?`,
+      what: [
+        `${act.label} updates ${theirs !== "" ? theirs : "the plugins installed from it"} from the new catalog as it fetches it.`,
+        shared,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      action: "Fetch and update",
+      danger: false,
+    };
+  }
+  if (shared === "") return null;
+  return {
+    question:
+      act.act === "add"
+        ? `Add ${act.name} to ${act.label} in every profile?`
+        : `Fetch ${act.name}’s catalog for ${act.label} in every profile?`,
+    what: shared,
+    action: act.act === "add" ? "Add it" : "Fetch it",
+    danger: false,
+  };
 }
 
 /**
@@ -1766,6 +1861,21 @@ function pluginConfirm(
       ? "Other agents load it from there too, in every profile, and change with it."
       : "",
   ].filter(Boolean);
+  if (act.act === "install") {
+    // one click unless it reaches further than this profile: the look a person asked for is the page
+    const install = act.reaches.includes("every-profile")
+      ? `${act.label} keeps its plugins in one place, so every profile gets it.`
+      : act.reaches.includes("shared-folder")
+        ? "Other agents load it from there too, in every profile."
+        : "";
+    if (install === "") return null;
+    return {
+      question: `Install ${act.name} for ${act.label} ${everywhere ? "in every profile" : where}?`,
+      what: `${install} It runs as code on this Mac.`,
+      action: "Install it",
+      danger: false,
+    };
+  }
   if (act.act === "remove" || act.act === "purge") {
     const purge = act.act === "purge";
     return {
@@ -1801,11 +1911,12 @@ function pluginConfirm(
   };
 }
 
-/** A click asks first when it reaches further than its cell, when its server needs a value, or when it removes a plugin. */
+/** A click asks first when it reaches further than its cell, when its server needs a value, or when it removes a plugin or a marketplace. */
 export const asksFirst = (act: ExtensionCellAct): boolean =>
   act.reaches.length > 0 ||
   act.needs.length > 0 ||
-  (act.kind === "plugin" && (act.act === "remove" || act.act === "purge"));
+  ((act.kind === "plugin" || act.kind === "marketplace") &&
+    (act.act === "remove" || act.act === "purge"));
 
 /** A path's folder: `~/.agents/skills/x` → `~/.agents/skills`. */
 const parentFolder = (path: string): string => path.replace(/\/[^/]+$/u, "");
@@ -1871,6 +1982,7 @@ export function actConfirm(
   context: ExtensionConfirmContext = {},
 ): ExtensionActConfirm | null {
   if (act.kind === "plugin") return pluginConfirm(act, where, context);
+  if (act.kind === "marketplace") return marketplaceConfirm(act, where, context);
   if (act.reaches.length === 0) return null;
   if (act.kind === "skill" && (act.act === "add" || act.act === "remove")) {
     return skillConfirm(act, where, context);
@@ -1940,7 +2052,17 @@ export function runWords(
   now: Date,
 ): { state: string; outcome: { tone: "neutral" | "error"; text: string } | null } {
   if (run.state === "running")
-    return { state: run.act === "sign-in" ? "Signing in…" : "Running…", outcome: null };
+    return {
+      state:
+        run.act === "sign-in"
+          ? "Signing in…"
+          : run.act === "install"
+            ? "Installing…"
+            : run.kind === "marketplace" && run.act === "update"
+              ? "Fetching…"
+              : "Running…",
+      outcome: null,
+    };
   const at = run.finishedAt === undefined ? Number.NaN : Date.parse(run.finishedAt);
   const minutes = Number.isFinite(at) ? Math.max(0, Math.round((now.getTime() - at) / 60_000)) : 0;
   const state =
@@ -1979,6 +2101,56 @@ export function runWords(
             text: signIn
               ? `${run.label} couldn’t sign in to ${run.name}: ${receipt.message}.`
               : `${run.label} couldn’t sign out of ${run.name}: ${receipt.message}.`,
+          },
+        };
+      default:
+        return { state, outcome: { tone: "error", text: `${receipt.message}.` } };
+    }
+  }
+  if (run.act === "install") {
+    switch (receipt.status) {
+      case "changed":
+        return {
+          state,
+          outcome: { tone: "neutral", text: `${run.name} is installed for ${run.label}.` },
+        };
+      case "unchanged":
+        return {
+          state,
+          outcome: {
+            tone: "neutral",
+            text: `${run.label} ran its install, but doesn’t hold ${run.name}.`,
+          },
+        };
+      case "failed":
+        return {
+          state,
+          outcome: {
+            tone: "error",
+            text: `${run.label} couldn’t install ${run.name}: ${receipt.message}.`,
+          },
+        };
+      default:
+        return { state, outcome: { tone: "error", text: `${receipt.message}.` } };
+    }
+  }
+  if (run.kind === "marketplace" && run.act !== "remove") {
+    // puppeteer's own words: "added northlight", "fetched its catalog again; … also updated review 1.2.0 → 1.3.0"
+    switch (receipt.status) {
+      case "changed":
+      case "unchanged":
+        return { state, outcome: { tone: "neutral", text: `${run.label} ${receipt.message}.` } };
+      case "unconfirmed":
+        return { state, outcome: { tone: "neutral", text: `${receipt.message}.` } };
+      case "failed":
+        return {
+          state,
+          outcome: {
+            tone: "error",
+            text:
+              run.act === "add"
+                ? `${run.label} couldn’t add ${run.name}: ${receipt.message}.`
+                : `${run.label} couldn’t fetch ${run.name}: ${receipt.message}.`,
           },
         };
       default:

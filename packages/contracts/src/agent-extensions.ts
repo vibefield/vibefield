@@ -51,6 +51,17 @@ import { TerminalCreateOpenResult } from "./terminal-pipeline";
 // keeping the plugin's data or with it. What the agent offers none of says
 // why, in the agent's words (only inside its app; no command for it; it
 // comes with your organization).
+//
+// AR-S4e2 — BROWSE AND INSTALL (pass 23, B1): what an agent could install —
+// the plugins its marketplaces list — read from the catalogs the agent already
+// fetched (never a fetch of VibeField's own), one list, each plugin with the
+// agent's own install or why not. Installing is one click unless the agent
+// asks something first (its look, a command that fetches it, consent for what
+// it may do): then the plugin's page is that look. A marketplace is the
+// agent's own too: added from a source, its catalog fetched again, removed.
+// "Check for updates" runs the agent's own fetch of each catalog, then reads
+// them again; nothing is updated by it. An agent without marketplaces takes a
+// source (a package, a repository, a folder) in its own words.
 
 /** Where an item comes from, as the agent keeps it (puppeteer `ExtensionOrigin`). */
 export const AgentExtensionOrigin = z.enum([
@@ -81,6 +92,13 @@ export const AgentExtensionKindSupport = z
     /** AR-S4e — sessions VibeField starts don't load them: the agent loads
      * them only when a person runs it (OpenCode's hosted sessions run `--pure`). */
     hostedSkips: z.literal(true).optional(),
+    /** AR-S4e2 — what the agent takes as a source, in its words: for plugins,
+     * what it installs one from (a package, a repository, a folder); for
+     * marketplaces, where it adds a catalog from. Absent: it takes none. */
+    sources: z.string().min(1).max(256).optional(),
+    /** AR-S4e2 — for plugins: the agent lists plugins it could install in
+     * catalogs VibeField can read (`agents.extensions.catalog`). */
+    catalog: z.literal(true).optional(),
   })
   .passthrough();
 export type AgentExtensionKindSupport = z.infer<typeof AgentExtensionKindSupport>;
@@ -101,7 +119,9 @@ export type AgentExtensionSupport = z.infer<typeof AgentExtensionSupport>;
  * server on for an agent that holds none of it. AR-S4e — a plugin's `update`
  * (the agent's own, to the newest its marketplace has) and `purge` (its
  * removal with the data it keeps; `remove` keeps that data where the agent
- * can). */
+ * can). AR-S4e2 — `install` (a plugin its catalog lists, or one from a
+ * source), and a marketplace's `add` (from a source), `update` (its catalog
+ * fetched again) and `remove`. */
 export const AgentExtensionActKind = z.enum([
   "enable",
   "disable",
@@ -111,6 +131,7 @@ export const AgentExtensionActKind = z.enum([
   "add",
   "update",
   "purge",
+  "install",
 ]);
 export type AgentExtensionActKind = z.infer<typeof AgentExtensionActKind>;
 
@@ -145,6 +166,9 @@ export const AgentExtensionReach = z.enum([
   "every-profile",
   /** It lives in a folder other profiles, and other agents, read. */
   "shared-folder",
+  /** AR-S4e2 — the plugins installed from a marketplace change with it: its
+   * removal takes them, its fetch updates them. */
+  "plugins",
 ]);
 export type AgentExtensionReach = z.infer<typeof AgentExtensionReach>;
 
@@ -307,6 +331,9 @@ export const AgentExtensionColumn = z
     failure: AgentExtensionFailure.optional(),
     /** When the agent answered. */
     fetchedAt: z.string().optional(),
+    /** AR-S4e2 — when "Check for updates" last fetched this agent's catalogs
+     * here, and read them again; absent: not since fieldd started. */
+    checkedAt: z.string().optional(),
   })
   .passthrough();
 export type AgentExtensionColumn = z.infer<typeof AgentExtensionColumn>;
@@ -354,6 +381,12 @@ export const AgentExtensionPlugin = z
     acts: z.array(AgentExtensionAct).optional(),
     /** AR-S4e — the acts its agent offers none of, with why. */
     unavailable: z.array(AgentExtensionActUnavailable).optional(),
+    /** AR-S4e2 — its marketplace lists a newer one than the agent holds, as the
+     * last read of the agent's catalog found it: what Update would take. */
+    newer: z
+      .object({ version: z.string().min(1).optional() })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type AgentExtensionPlugin = z.infer<typeof AgentExtensionPlugin>;
@@ -365,9 +398,17 @@ export const AgentExtensionMarketplace = z
     name: z.string().min(1),
     origin: AgentExtensionOrigin,
     enabled: z.boolean(),
+    /** AR-S4e2 — every profile of the agent reads it from one place. */
+    shared: z.literal(true).optional(),
+    /** AR-S4e2 — the agent whose marketplace this one reads (origin `borrowed`). */
+    lender: AgentProviderId.optional(),
     source: z.string().optional(),
     updatedAt: z.string().optional(),
     place: z.string().optional(),
+    /** AR-S4e2 — the agent's own acts on it: its catalog fetched again, its removal. */
+    acts: z.array(AgentExtensionAct).optional(),
+    /** AR-S4e2 — the acts its agent offers none of, with why. */
+    unavailable: z.array(AgentExtensionActUnavailable).optional(),
   })
   .passthrough();
 export type AgentExtensionMarketplace = z.infer<typeof AgentExtensionMarketplace>;
@@ -392,8 +433,9 @@ export const AgentExtensionRun = z
     provider: AgentProviderId,
     /** The agent's name, for the words. */
     label: z.string().min(1),
-    kind: z.enum(["mcp-server", "skill", "plugin"]),
-    /** The holding's id in the agent's own read. */
+    kind: z.enum(["mcp-server", "skill", "plugin", "marketplace"]),
+    /** The holding's id in the agent's own read; for an install, the catalog's
+     * key or the source given; for a marketplace's add, its source. */
     item: z.string().min(1),
     /** The row's name. */
     name: z.string().min(1),
@@ -406,7 +448,8 @@ export const AgentExtensionRun = z
     output: z.string(),
     truncated: z.boolean(),
     receipt: AgentExtensionReceipt.optional(),
-    /** A sign-in's pane while it runs: the page that asked shows it; any other can end it. */
+    /** A pane while it runs — a sign-in's, or any act the person answers in a
+     * terminal (AR-S4e2): the page that asked shows it; any other can end it. */
     terminal: z
       .object({ sessionId: z.string().min(1) })
       .passthrough()
@@ -423,21 +466,31 @@ export const AgentExtensionValues = z.record(
 );
 export type AgentExtensionValues = z.infer<typeof AgentExtensionValues>;
 
+/** A source a person gives an agent: a package, a repository, a folder, a
+ * marketplace's address. One line; puppeteer refuses a flag, and an address
+ * carrying a sign-in or a query, before anything runs. */
+export const AgentExtensionSource = z.string().min(1).max(1024);
+
 /** `agents.extensions.act` — run one act; its output arrives on the subscription.
  * A sign-in is not one of them: it runs in a terminal (`agents.extensions.signIn`).
  * AR-S4d — `add` turns the row named `id` on for an agent that holds none of
  * it, from the row's definition; `values` first keeps what the row `needs`.
  * AR-S4e — a plugin on the agent's own list, by its id: its switch, `update`,
- * `remove`, `purge`. */
+ * `remove`, `purge`. AR-S4e2 — `install`: a plugin the agent's catalog lists,
+ * by the catalog's key, or — with `source` — one from a source (`id` is the
+ * same string); a marketplace on the agent's list: `update` (its catalog
+ * fetched again), `remove`; and `add` with `source` (`id` the same string).
+ * An act whose plan runs in a terminal runs on `agents.extensions.terminal`. */
 export const AgentsExtensionsActParams = z
   .object({
     set: AgentProfileSetId,
     provider: AgentProviderId,
-    kind: z.enum(["mcp-server", "skill", "plugin"]),
+    kind: z.enum(["mcp-server", "skill", "plugin", "marketplace"]),
     /** The holding's id, as the lens gave it; for `add`, the row's name. */
-    id: z.string().min(1).max(512),
+    id: z.string().min(1).max(1024),
     act: AgentExtensionActKind.exclude(["sign-in"]),
     values: AgentExtensionValues.optional(),
+    source: AgentExtensionSource.optional(),
   })
   .passthrough();
 export type AgentsExtensionsActParams = z.infer<typeof AgentsExtensionsActParams>;
@@ -465,6 +518,18 @@ export const AgentsExtensionsSignInResult = z
   .object({ run: AgentExtensionRun, terminal: TerminalCreateOpenResult })
   .passthrough();
 export type AgentsExtensionsSignInResult = z.infer<typeof AgentsExtensionsSignInResult>;
+
+/** `agents.extensions.terminal` — AR-S4e2: an act whose plan runs in a
+ * terminal the person answers — an install that asks first (values, consent,
+ * a command to accept), an update that asks again — in a pane on the page, as
+ * a sign-in's does; the same fields as `agents.extensions.act`. The receipt
+ * arrives on the subscription when the pane ends and the profile has been read
+ * again. */
+export const AgentsExtensionsTerminalParams = AgentsExtensionsActParams.omit({ values: true });
+export type AgentsExtensionsTerminalParams = z.infer<typeof AgentsExtensionsTerminalParams>;
+
+export const AgentsExtensionsTerminalResult = AgentsExtensionsSignInResult;
+export type AgentsExtensionsTerminalResult = AgentsExtensionsSignInResult;
 
 /** `agents.extensions.add` — AR-S4d's Add server: the definition kept once for
  * the profile (and the values for the names it reads), then each named
@@ -600,6 +665,164 @@ export const AgentExtensionKeep = z
   })
   .passthrough();
 export type AgentExtensionKeep = z.infer<typeof AgentExtensionKeep>;
+
+/* ── AR-S4e2 — catalogs: what an agent could install ──────────────────────── */
+
+/** What a listed plugin asks, or has its agent do, before its code runs
+ * (puppeteer `CatalogAsk`): its look (`look`), a command it accepts first
+ * (`command`), a package manager's fetch (`fetch`), values by name
+ * (`values`), consent for what it may do (`consent`), a scan (`scan`), the
+ * apps that ask for a sign-in when first used (`sign-in`). */
+export const AgentExtensionCatalogAsk = z
+  .object({
+    kind: z.enum(["look", "command", "fetch", "values", "consent", "scan", "sign-in"]),
+    command: z.string().min(1).optional(),
+    names: z.array(z.string().min(1)).optional(),
+    capabilities: z.array(z.string().min(1)).optional(),
+    apps: z.array(z.string().min(1)).optional(),
+  })
+  .passthrough();
+export type AgentExtensionCatalogAsk = z.infer<typeof AgentExtensionCatalogAsk>;
+
+/** One plugin a marketplace lists, as a person browses it, with the agent's
+ * own install or why not. */
+export const AgentExtensionCatalogPlugin = z
+  .object({
+    /** The catalog's key: what an install names. */
+    id: z.string().min(1),
+    name: z.string().min(1),
+    /** The marketplace that lists it. */
+    marketplace: z.string().min(1),
+    description: z.string().optional(),
+    author: z.string().optional(),
+    category: z.string().optional(),
+    /** The version the catalog lists. */
+    version: z.string().optional(),
+    /** Its homepage or repository, an address with nothing secret in it. */
+    homepage: z.string().optional(),
+    /** Names only, as its listing says, before it is installed. */
+    brings: z
+      .object({
+        commands: z.array(z.string().min(1)).optional(),
+        agents: z.array(z.string().min(1)).optional(),
+        hooks: z.array(z.string().min(1)).optional(),
+        servers: z.array(z.string().min(1)).optional(),
+        skills: z.array(z.string().min(1)).optional(),
+        tools: z.array(z.string().min(1)).optional(),
+      })
+      .passthrough()
+      .optional(),
+    featured: z.literal(true).optional(),
+    asks: z.array(AgentExtensionCatalogAsk).optional(),
+    /** Why the agent won't install it here — its organization's policy — in its words. */
+    blocked: z.string().min(1).optional(),
+    /** The plugin the agent holds from it, by its id on the agent's own list: it is installed. */
+    held: z.string().min(1).optional(),
+    /** The agent holds an older one than the catalog lists. */
+    newer: z.literal(true).optional(),
+    /** The agent's own install, as its adapter planned it. */
+    install: AgentExtensionAct.optional(),
+    /** Why the agent offers no install here, in its words. */
+    unavailable: z
+      .object({ reason: z.string().min(1), message: z.string().min(1) })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type AgentExtensionCatalogPlugin = z.infer<typeof AgentExtensionCatalogPlugin>;
+
+/** One catalog the agent knows. Its acts (fetch again, remove) are on the
+ * lens's marketplace row of the same id. */
+export const AgentExtensionCatalogMarketplace = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    source: z.string().optional(),
+    /** When the agent last fetched it. */
+    updatedAt: z.string().optional(),
+    origin: AgentExtensionOrigin,
+    lender: AgentProviderId.optional(),
+    shared: z.literal(true).optional(),
+    /** Its catalog could not be read, and why: none of its plugins are listed. */
+    unread: z.string().min(1).optional(),
+    /** How many plugins it lists. */
+    count: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type AgentExtensionCatalogMarketplace = z.infer<typeof AgentExtensionCatalogMarketplace>;
+
+/** A marketplace the agent adds by itself the first time it runs in a profile,
+ * which this one lacks yet: said, and — with its agent's own add — addable now. */
+export const AgentExtensionCatalogSuggestion = z
+  .object({
+    name: z.string().min(1),
+    source: z.string().min(1).optional(),
+    message: z.string().min(1),
+    add: AgentExtensionAct.optional(),
+  })
+  .passthrough();
+export type AgentExtensionCatalogSuggestion = z.infer<typeof AgentExtensionCatalogSuggestion>;
+
+/** `agents.extensions.catalog` — what one agent of the profile could install,
+ * read from the catalogs it already fetched (a read; nothing is fetched). */
+export const AgentsExtensionsCatalogParams = z
+  .object({ set: AgentProfileSetId, provider: AgentProviderId })
+  .passthrough();
+export type AgentsExtensionsCatalogParams = z.infer<typeof AgentsExtensionsCatalogParams>;
+
+export const AgentsExtensionsCatalogResult = z
+  .object({
+    set: AgentProfileSetId,
+    provider: AgentProviderId,
+    label: z.string().min(1),
+    /** When fieldd read it; absent with a failure. */
+    readAt: z.string().optional(),
+    /** The agent's catalogs could not be read at all. */
+    failure: AgentExtensionFailure.optional(),
+    marketplaces: z.array(AgentExtensionCatalogMarketplace),
+    plugins: z.array(AgentExtensionCatalogPlugin),
+    suggested: z.array(AgentExtensionCatalogSuggestion).optional(),
+    /** When "Check for updates" last ran here for this agent. */
+    checkedAt: z.string().optional(),
+  })
+  .passthrough();
+export type AgentsExtensionsCatalogResult = z.infer<typeof AgentsExtensionsCatalogResult>;
+
+/** `agents.extensions.check` — "Check for updates": the agent's own fetch of
+ * each of its catalogs, one run on the subscription, then the profile and the
+ * catalogs read again. Nothing is installed or updated by VibeField here. */
+export const AgentsExtensionsCheckParams = z
+  .object({ set: AgentProfileSetId, provider: AgentProviderId })
+  .passthrough();
+export type AgentsExtensionsCheckParams = z.infer<typeof AgentsExtensionsCheckParams>;
+
+export const AgentsExtensionsCheckResult = z
+  .object({
+    run: AgentExtensionRun,
+    receipt: AgentExtensionReceipt,
+    /** How many plugins it holds the catalogs now list newer. */
+    updates: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type AgentsExtensionsCheckResult = z.infer<typeof AgentsExtensionsCheckResult>;
+
+/** `agents.extensions.planSource` — what the agent would run for a source a
+ * person is typing: an install from it (`plugin`), or a marketplace's add
+ * (`marketplace`); the form's "Runs". A read. */
+export const AgentsExtensionsPlanSourceParams = z
+  .object({
+    set: AgentProfileSetId,
+    provider: AgentProviderId,
+    kind: z.enum(["plugin", "marketplace"]),
+    source: AgentExtensionSource,
+  })
+  .passthrough();
+export type AgentsExtensionsPlanSourceParams = z.infer<typeof AgentsExtensionsPlanSourceParams>;
+
+export const AgentsExtensionsPlanSourceResult = z
+  .object({ offer: AgentExtensionOffer })
+  .passthrough();
+export type AgentsExtensionsPlanSourceResult = z.infer<typeof AgentsExtensionsPlanSourceResult>;
 
 /** `agents.extensions.list` — the lens for one Agent Profile. `refresh: true`
  * reads every agent again; otherwise the last read answers when there is one. */
