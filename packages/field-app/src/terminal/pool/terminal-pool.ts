@@ -223,13 +223,28 @@ let rejoinHint: readonly string[] = [];
  * not ask for its first birth until a later initialization turn. */
 let workspaceBirthTrace: TransportTrace | undefined;
 
+/** The shell policy the last snapshot carried, handed on as the SAME object
+ * while main's answer is unchanged. Readers key on it by identity — the deck's
+ * monitor door (`GodviewDeck`'s `door` memo), the workspace's platform — and a
+ * fresh `{defaultShell, home}` on every publication rebuilt that door on every
+ * view binding and every ticket, restarting the monitor's fold subscription
+ * each time: under a deck that republishes as it renders, no fold frame lived
+ * long enough to land, and a run typed in a pane never reached the stage
+ * (found by the godview smoke's typed-agent row, AR-7). */
+let publishedShell: TerminalShellPolicy | null = null;
+
 let snapshot: TerminalPoolSnapshot = buildSnapshot();
 
 function buildSnapshot(): TerminalPoolSnapshot {
   const routedShell =
     (phase === "dormant" || phase === "open") && terminalBootstrap !== null
-      ? { defaultShell: terminalBootstrap.defaultShell, home: terminalBootstrap.home }
+      ? publishedShell !== null &&
+        publishedShell.defaultShell === terminalBootstrap.defaultShell &&
+        publishedShell.home === terminalBootstrap.home
+        ? publishedShell
+        : { defaultShell: terminalBootstrap.defaultShell, home: terminalBootstrap.home }
       : null;
+  publishedShell = routedShell;
   return {
     phase,
     claimed,
