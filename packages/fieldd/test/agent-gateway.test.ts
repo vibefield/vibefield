@@ -629,8 +629,8 @@ interface Unit {
   table: Map<number, ProcessRecord>;
   /** how many times the table was read */
   reads: { count: number };
-  /** `ps` fails, or times out, while `now` is set */
-  unread: { now: boolean };
+  /** `ps` fails, or times out, while `now` is set — and for the next `times` reads */
+  unread: { now: boolean; times: number };
   catalog: AgentCatalogEntry[];
   logged: Logged[];
   ledger: Ledgered[];
@@ -701,7 +701,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
   const fold = new FoldStub();
   const table = new Map<number, ProcessRecord>();
   const reads = { count: 0 };
-  const unread = { now: false };
+  const unread = { now: false, times: 0 };
   const catalog = [...TYPED_CATALOG];
   const logged: Logged[] = [];
   const ledger: Ledgered[] = [];
@@ -735,6 +735,10 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     onShellIntegration: (integration) => integrations.push(integration),
     processTable: async () => {
       reads.count += 1;
+      if (unread.times > 0) {
+        unread.times -= 1;
+        return undefined;
+      }
       return unread.now ? undefined : table;
     },
     kit: {
@@ -2129,29 +2133,42 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
   );
 
   it(
-    "a launch while the process table cannot be read runs as typed — answered fallback although the host is strict, counted, said at warn with the pid and nothing else — and nothing is refused, prepared or recorded",
+    "B2 — a launch while the process table cannot be read: the table is asked ONCE MORE; unread twice, the launch runs as typed — answered fallback (the kit's `outside-host-terminals`, kept) although the host is strict, counted under `table-unread` and never as outside our terminals, said at warn with the pid and nothing else, nothing refused, prepared or recorded — and unread once, it is placed and adopted",
     async () => {
       const box = await unit();
       onePane(box);
       await box.gateway.start();
       box.unread.now = true;
+      const reads = box.reads.count;
       const answer = await box.launch(600);
       expect(answer).toMatchObject({ action: "fallback", code: "outside-host-terminals" });
+      expect(box.reads.count).toBe(reads + 2);
       expect(box.fold.adopted).toEqual([]);
       expect(box.fold.identities).toBe(0);
       expect(box.script.prepared).toEqual([]);
       expect(refusals(box)).toEqual([]);
       expect(box.ledger).toEqual([]);
-      const said = box.logged.filter(
-        (entry) => entry.event === "fieldd.agents.gateway_process_table_unread",
+      const unreadSaid = (): Logged[] =>
+        box.logged.filter((entry) => entry.event === "fieldd.agents.gateway_process_table_unread");
+      expect(unreadSaid().map((entry) => entry.level)).toEqual(["warn"]);
+      expect(unreadSaid()[0]?.attrs).toEqual({ pid: 600 });
+      expect(Object.fromEntries(box.gateway.counts())).toEqual({ "table-unread": 1 });
+      const counted = box.logged.filter(
+        (entry) => entry.event === "fieldd.agents.gateway_ran_as_typed",
       );
-      expect(said.map((entry) => entry.level)).toEqual(["warn"]);
-      expect(said[0]?.attrs).toEqual({ pid: 600 });
-      expect(box.gateway.counts().get("outside-host-terminals")).toBe(1);
-      // the table readable again: the same launch is placed, and adopted
+      expect(counted.map((entry) => entry.attrs)).toEqual([
+        { code: "table-unread", provider: TYPED_PROVIDER },
+      ]);
+      // unread once and readable at the retry: the same launch is placed, and adopted
       box.unread.now = false;
+      box.unread.times = 1;
+      const again = box.reads.count;
       expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      expect(box.reads.count).toBe(again + 2);
+      expect(box.unread.times).toBe(0);
       expect(box.fold.adopted.length).toBe(1);
+      expect(Object.fromEntries(box.gateway.counts())).toEqual({ "table-unread": 1 });
+      expect(unreadSaid().length).toBe(1);
     },
     PROCESS_BUDGET_MS,
   );

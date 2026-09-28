@@ -109,6 +109,11 @@ const MAX_LISTED_SHELLS = 1_024;
 /** How long a stop waits for a launch already under way to be answered. */
 const STOP_LAUNCH_WAIT_MS = 3_000;
 
+/** B2 — a process table that could not be read (a `ps` that timed out under
+ * load) is asked for ONCE more, this long later, before a launch is let run
+ * as typed for want of it. */
+const PLACE_TABLE_RETRY_MS = 500;
+
 /** A sentence is one line, well inside the kit's bound: the shim prints the
  * command's name before it and holds the whole to the same limit. */
 const REFUSAL_BUDGET = 320;
@@ -675,6 +680,11 @@ type Unplaced = "outside-host-terminals" | "table-unread" | "shell-named" | "pla
 /** Where a launch stands once asked: in a pane of ours, or not — and why not. */
 type Placement = { placed: Placed; why?: undefined } | { placed?: undefined; why: Unplaced };
 
+/** What a launch that ran as typed is counted under: the kit's code, except
+ * that a table nobody could read is its own key (B2) — the kit still answers
+ * `outside-host-terminals` for it, which is not what happened. */
+type RanAsTypedCode = SpawnThroughDeclineCode | "table-unread";
+
 /** A request that named one of our shells' OWN pid (B1): declined by the host
  * through the kit's `invalid-request` — the request's process identity does
  * not hold — and never placed. Thrown from `resolveTerminal`, which the kit
@@ -758,7 +768,7 @@ export class AgentGatewayService {
   /** the runs adopted here, by preparation — what `exec-failed` names */
   private readonly adoptions = new Map<string, { runtimeRunId: string }>();
   /** launches that ran as typed, by code (no argument, no provider's words) */
-  private readonly ranAsTyped = new Map<SpawnThroughDeclineCode, number>();
+  private readonly ranAsTyped = new Map<RanAsTypedCode, number>();
   private stopping: Promise<void> | undefined;
 
   constructor(private readonly opts: AgentGatewayOptions) {
@@ -839,8 +849,9 @@ export class AgentGatewayService {
     };
   }
 
-  /** How many launches ran as typed, by the kit's code. */
-  counts(): ReadonlyMap<SpawnThroughDeclineCode, number> {
+  /** How many launches ran as typed, by the kit's code — and by `table-unread`
+   * where nobody could say where the launch was (B2). */
+  counts(): ReadonlyMap<RanAsTypedCode, number> {
     return new Map(this.ranAsTyped);
   }
 
@@ -1269,11 +1280,21 @@ export class AgentGatewayService {
 
   private async place(pid: number): Promise<Placement> {
     try {
-      const table = await (this.opts.processTable ?? readProcessTable)();
+      const read = this.opts.processTable ?? readProcessTable;
+      let table = await read();
+      if (table === undefined) {
+        // B2 — the table unread is not "outside our terminals": `ps` times
+        // out under load. Asked once more, as the typed proof asks; still
+        // unread, the launch runs as typed (the kit's own answer, kept) and
+        // is counted under its own key, so a leak detector can tell a launch
+        // nobody could place from one that was placed outside.
+        await new Promise((resolve) => setTimeout(resolve, PLACE_TABLE_RETRY_MS));
+        table = await read();
+      }
       if (table === undefined) {
         this.logger.warn(
           "fieldd.agents.gateway_process_table_unread",
-          "The process table could not be read; the launch cannot be placed and runs as typed",
+          "The process table could not be read, twice; the launch cannot be placed and runs as typed",
           { pid },
         );
         return { why: "table-unread" };
@@ -1395,7 +1416,7 @@ export class AgentGatewayService {
         answer = this.declined(request, progress.placed, failureCode(error, progress));
       }
     }
-    await this.account(request, answer, progress.placed);
+    await this.account(request, answer, progress);
     return answer;
   }
 
@@ -1581,12 +1602,19 @@ export class AgentGatewayService {
   private async account(
     request: SpawnThroughLaunchRequest,
     answer: SpawnThroughResponse,
-    placed: Placed | undefined,
+    progress: LaunchProgress,
   ): Promise<void> {
+    const { placed } = progress;
     if (answer.action === "fallback") {
-      this.ranAsTyped.set(answer.code, (this.ranAsTyped.get(answer.code) ?? 0) + 1);
+      // B2 — the kit says "outside" for a table nobody could read; the count
+      // says what happened, and the debug line names that code and no more
+      const code: RanAsTypedCode =
+        answer.code === "outside-host-terminals" && progress.unplaced === "table-unread"
+          ? "table-unread"
+          : answer.code;
+      this.ranAsTyped.set(code, (this.ranAsTyped.get(code) ?? 0) + 1);
       this.logger.debug("fieldd.agents.gateway_ran_as_typed", "A launch ran as typed", {
-        code: answer.code,
+        code,
         provider: request.providerId,
       });
       return;
