@@ -24,34 +24,19 @@ import {
   type MonitorTerminalRecord,
   managedRowId,
 } from "./agents";
-import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
+import type { AgentSessionSummary } from "./facet-types";
 import { useAgentFold } from "./GodviewAgentsProvider";
 import type { LocalFieldState } from "./local-agent-field";
-import type { LaunchProfile } from "./profile-tabs";
 import {
   dealProjectSeqs,
   loadProjectLedger,
   type ProjectLedger,
   saveProjectLedger,
 } from "./project-ledger";
-import {
-  defaultProviderId,
-  newSessionRefusal,
-  type PersonaChoice,
-  personaChoices,
-  providerClaimsPersonas,
-  providerListed,
-  providerPickerLabel,
-} from "./provider-picker";
-import { type MonitorDoor, type MonitorFeedState, remoteRowId } from "./remote-door";
+import { type MonitorDoor, remoteRowId } from "./remote-door";
 import { useRemoteSessionField } from "./remote-session-field";
 import type { MonitorActions, MonitorAgent } from "./types";
 import { createUsageHistoryCache } from "./usage-history-cache";
-
-/** AC-4 — while the index says `unavailable` for a listed agent, the
- * providers are asked again on this clock: the daemon's census lands behind
- * its ready line with no health transition to say so. */
-const HISTORY_REASK_MS = 20_000;
 
 /**
  * Core's usage state, rebuilt from the mirror's row. The projection rides
@@ -110,8 +95,7 @@ const USAGE_CACHE_KEY = "vf-godview-usage-history-v1";
  *
  * Every verb goes through the DOOR the deck built (`MonitorDoor`): a local
  * row's select mounts its PTY in the active pane, a remote row's select
- * attaches the peer's session there, and create spawns the chrome's chosen
- * provider into it. The views still see actions; the source sees promises.
+ * attaches the peer's session there, and create opens an empty terminal in it. The views still see actions; the source sees promises.
  *
  * PF6: the subscription and the poll are opened on mount and closed on
  * unmount, and the stage that owns this hook is mounted ONLY while the overlay
@@ -129,14 +113,6 @@ export interface UseMonitorAgentsOptions {
   /** The sessions the deck's panes are showing, and the one the user is in.
    * Facts, published by the deck; the monitor reads them and drives nothing. */
   panes?: MonitorPaneFacts;
-  /** AR-S5 — the profile the bar's chosen tab names: a spawn runs under it,
-   * and is refused here, before anything runs, for an agent whose row claims
-   * personas and that it holds no sign-in for. While it is set the TAB
-   * decides the sign-in: no persona is offered and none rides the spawn. A
-   * row that denies personas runs as itself from any tab (`spawnLaunch`).
-   * Null or absent (All): the default profile, as puppeteer resolves a spawn
-   * that names none — or the persona chosen. */
-  launch?: LaunchProfile | null;
 }
 
 export interface MonitorPaneFacts {
@@ -164,30 +140,6 @@ export interface MonitorAgentsResult {
   /** How many rows each source contributed, so the stage can scope its claims
    * to the right ones (GT-D17) rather than labeling the whole field. */
   sources: MonitorSourceCounts;
-  /** What the chrome can spawn as, and which of them is chosen. Only the rows
-   * the picker lists (`providerListed`): a `declined` row is not offered. */
-  providers: readonly AgentProviderSummary[];
-  providerState: MonitorFeedState;
-  retryProviders(): void;
-  selectedProviderId: string | null;
-  selectProvider(id: string): void;
-  /** AC-4 — the persona control's choices, as drawn: the chosen row's
-   * `personaChoices` under All, and none while a profile tab is chosen (the
-   * tab decides the sign-in, AR-S5). Empty = no control is drawn. */
-  personaOptions: readonly PersonaChoice[];
-  /** AC-4 — the persona a new session is born as: a `profileId` from
-   * `personaOptions`, or "" for the native default (the spawn then carries no
-   * `profileId`) — always "" under a tab. Reset to "" whenever the provider
-   * changes. */
-  selectedPersonaId: string;
-  selectPersona(profileId: string): void;
-  /** AR-S5 — the profile the chosen row's spawn names, for the stage to say
-   * where SPAWN lands: the chosen tab's, or null — under All, and for a row
-   * that denies personas, which spawns as it does under All from every tab. */
-  spawnLaunch: LaunchProfile | null;
-  /** Spawn the chosen provider into the active pane — the chrome's own verb;
-   * `createAt` is the same act from a view's gesture. */
-  spawn(): Promise<void>;
   /** What the last verb answered, for the stage to say out loud. Cleared by
    * the stage; carried here because the actions are what produce it. */
   acknowledgement: MonitorAcknowledgement | null;
@@ -293,88 +245,23 @@ export function useMonitorAgents({
   palette,
   door = null,
   panes = NO_PANES,
-  launch = null,
 }: UseMonitorAgentsOptions): MonitorAgentsResult {
   /** Which row the user last pointed at — a preview highlight for a row no
    * pane is showing yet. Cleared when the row lands in a pane. */
   const [selectedId, setSelectedId] = useState<string>();
+  const [spawnHints, setSpawnHints] = useState<ReadonlyMap<string, { x: number; y: number }>>(
+    () => new Map(),
+  );
   const [acknowledgement, setAcknowledgement] = useState<MonitorAcknowledgement | null>(null);
   /** Row id → the replica it was attached as. Kept per ROW rather than per
    * session because the row is what survives a refresh of the mesh. */
   const [links, setLinks] = useState<ReadonlyMap<string, RemoteLink>>(() => new Map());
-  const [providers, setProviders] = useState<readonly AgentProviderSummary[]>([]);
-  const [providerState, setProviderState] = useState<MonitorFeedState>({ state: "no-door" });
-  const [providerAttempt, setProviderAttempt] = useState(0);
-  const retryProviders = useCallback(() => setProviderAttempt((attempt) => attempt + 1), []);
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
-  const [selectedPersonaId, setSelectedPersonaId] = useState("");
-
   /** THE FOLD, from the window's one subscription (AR-6 §4.1, built at GT-6).
    * This hook used to own `agent.subscribe` itself; the stream moved up to
    * `GodviewAgentsProvider` so the deck's pane frames read the same rows in the
    * same tick, and what stays here is the monitor's pure projection of them. */
   const localField = useAgentFold();
   const remoteField = useRemoteSessionField({ door });
-
-  // Failed discovery is different from an empty inventory. A retry opens a new
-  // request, and late answers from the previous door/attempt cannot overwrite it.
-  // What one can spawn as, asked per door — and again whenever the door
-  // says the index moved (AC-4, the review: the history state and the persona
-  // list are live daemon facts; a persona create bounces the daemon, and the
-  // answer asked once kept a state from a daemon that was gone). A door that
-  // cannot answer leaves the list empty and the spawn control says so;
-  // nothing is invented. AC-4: the rows the catalog does not offer are not
-  // listed, and the first choice is a row that starts sessions
-  // (`defaultProviderId`) — so a deck never opens with SPAWN withdrawn while
-  // an offered agent was on the list; a choice already made survives a
-  // re-ask while its row is still listed.
-  useEffect(() => {
-    if (door === null) {
-      setProviders([]);
-      setSelectedProviderId(null);
-      setProviderState({ state: "no-door" });
-      return;
-    }
-    let alive = true;
-    let degraded = false;
-    setProviders([]);
-    setProviderState({ state: "loading" });
-    const ask = (): void => {
-      void door
-        .providers()
-        .then((answered) => {
-          if (!alive) return;
-          const list = answered.filter(providerListed);
-          degraded = list.some((p) => p.history === "unavailable");
-          setProviders(list);
-          setProviderState({ state: "ready" });
-          setSelectedProviderId((current) => {
-            if (current !== null && list.some((p) => p.id === current)) return current;
-            return defaultProviderId(list);
-          });
-        })
-        .catch((cause: unknown) => {
-          if (!alive) return;
-          degraded = false;
-          setProviders([]);
-          setSelectedProviderId(null);
-          setProviderState({
-            state: "unavailable",
-            reason: cause instanceof Error ? cause.message : String(cause),
-          });
-        });
-    };
-    ask();
-    const stop = door.indexChanges?.(ask);
-    const clock = setInterval(() => {
-      if (degraded) ask();
-    }, HISTORY_REASK_MS);
-    return () => {
-      alive = false;
-      stop?.();
-      clearInterval(clock);
-    };
-  }, [door, providerAttempt]);
 
   /** GT-3p's damage gate, kept: the projection's INPUTS as JSON. A frame
    * that changed nothing anybody renders still arrives as a new object; the
@@ -560,8 +447,13 @@ export function useMonitorAgents({
    * the deck's face to draw, not a row). */
   const terminals = useMemo<readonly MonitorTerminalRecord[]>(
     () =>
-      [...sessions.values()].filter((session) => !session.exited).map((session) => ({ session })),
-    [sessions],
+      [...sessions.values()]
+        .filter((session) => !session.exited)
+        .map((session) => ({
+          session,
+          ...(spawnHints.has(session.id) ? { spawnHint: spawnHints.get(session.id)! } : {}),
+        })),
+    [sessions, spawnHints],
   );
   /** GT-6b — the floor's live PTYs, as the deck last read them. Keyed on the
    * facts a row draws rather than on array identity, for the same reason the
@@ -811,112 +703,33 @@ export function useMonitorAgents({
     [attachRemote, mountLocal],
   );
 
-  const selectedProvider = providers.find((p) => p.id === selectedProviderId);
-  /** The persona control's choices (AC-4), beside AR-S5's tabs until James
-   * rules on the select's fate there: under All, the chosen row's; under a
-   * chosen tab, none — the tab decides the sign-in. A persona is a sign-in
-   * INSIDE one profile, the row lists every profile's, and puppeteer refuses
-   * a spawn whose persona sits outside the profile it names (so under This
-   * Mac every managed persona would be refused). */
-  const personaOptions = useMemo<readonly PersonaChoice[]>(
-    () =>
-      selectedProvider === undefined || launch !== null ? [] : personaChoices(selectedProvider),
-    [selectedProvider, launch],
+  const createAt = useCallback(
+    async (position?: { x: number; y: number }): Promise<void> => {
+      if (door === null) {
+        announce("no terminal can be opened yet — the deck has no connection");
+        return;
+      }
+      try {
+        const outcome = await door.createTerminal();
+        if (outcome.state === "no-pane") {
+          announce("no pane to open a terminal in — open one in the deck first");
+        } else if (outcome.state === "failed") {
+          announce(`terminal could not be opened — ${outcome.reason}`);
+        } else {
+          if (position)
+            setSpawnHints((current) => new Map(current).set(outcome.sessionId, position));
+          announce("terminal opened in the active pane");
+        }
+      } catch (cause) {
+        announce(
+          `terminal could not be opened — ${cause instanceof Error ? cause.message : String(cause)}`,
+        );
+      }
+    },
+    [announce, door],
   );
-  /** The persona a spawn would actually carry: the one chosen while it is
-   * still among the drawn choices, else the native default. What the persona
-   * control shows and what the door is sent are the same value by
-   * construction — a persona that vanished from the list, or whose control a
-   * chosen tab withdrew, cannot ride along. The choice itself is kept, so
-   * All shows it again. */
-  const personaId = personaOptions.some((choice) => choice.value === selectedPersonaId)
-    ? selectedPersonaId
-    : "";
-  /** The profile the chosen row's spawn names (AR-S5): the chosen tab's —
-   * except for a row that DENIES personas (`offers.personas` false: ACP). No
-   * profile holds a sign-in for that agent, and puppeteer refuses a managed
-   * profile for an agent with no account profiles, so it spawns as itself,
-   * exactly as under All, from every tab. A row that carries no claim (a
-   * daemon before AC-3) still names the tab, as AR-S5 always sent it: absence
-   * is no claim, and that daemon runs it under the tab or refuses in its own
-   * words. */
-  const spawnLaunch = selectedProvider?.offers?.personas === false ? null : launch;
-
-  /** The birth (AR-3): the chrome's chosen provider, into the active pane.
-   * AC-4 — only where the row offers a new session: a deprecated agent (or
-   * one that denies `spawn`) is refused HERE, before the door is asked, and
-   * the refusal is said, because the views' own create gesture reaches this
-   * verb too and cannot be withdrawn. The refusals run from the catalog's
-   * word, to the install, to the profile's sign-in: an agent that is not
-   * installed is said to be so, never sent to Settings for a sign-in. */
-  const spawn = useCallback(async (): Promise<void> => {
-    if (door === null) {
-      announce("no agent can be spawned yet — the deck has no connection");
-      return;
-    }
-    const provider = selectedProvider;
-    if (provider === undefined) {
-      announce("no agent provider is available on this device");
-      return;
-    }
-    const refusal = newSessionRefusal(provider);
-    if (refusal !== null) {
-      announce(refusal);
-      return;
-    }
-    const label = providerPickerLabel(provider);
-    if (!provider.available) {
-      announce(`${label} is not installed on this device`);
-      return;
-    }
-    // AR-S5 — a profile runs only the agents it holds a sign-in for; said
-    // here in the stage's words rather than as puppeteer's refusal after a
-    // round trip (it refuses the same spawn: "<profile> has no <id> account").
-    // Only for a row that CLAIMS personas: the advice is possible only there,
-    // and a row with no claim hears the daemon's own words instead.
-    if (
-      spawnLaunch?.signedIn != null &&
-      providerClaimsPersonas(provider) &&
-      !spawnLaunch.signedIn.has(provider.id)
-    ) {
-      announce(`${spawnLaunch.label} has no ${label} sign-in — add one in Settings`);
-      return;
-    }
-    // A profile OR a persona, never both: under a tab the profile names the
-    // sign-in (`personaId` is "" there by construction); under All the
-    // persona chosen does, or neither and puppeteer's default applies.
-    const outcome = await door.spawn({
-      provider: provider.id,
-      ...(spawnLaunch !== null
-        ? { profileSet: spawnLaunch.set }
-        : personaId !== ""
-          ? { profileId: personaId }
-          : {}),
-    });
-    if (outcome.state === "no-pane") {
-      announce("no pane to spawn into — open one in the deck first");
-      return;
-    }
-    if (outcome.state === "failed") {
-      announce(`${label} could not be spawned — ${outcome.reason}`);
-      return;
-    }
-    announce(
-      spawnLaunch !== null
-        ? `${outcome.label} spawned in the active pane, under ${spawnLaunch.label}`
-        : `${outcome.label} spawned in the active pane`,
-    );
-  }, [announce, door, spawnLaunch, selectedProvider, personaId]);
-
-  const createAt = useCallback((): Promise<void> => spawn(), [spawn]);
 
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
-  const selectProvider = useCallback((id: string) => {
-    setSelectedProviderId(id);
-    // A persona belongs to one provider: a new choice starts at its default.
-    setSelectedPersonaId("");
-  }, []);
-  const selectPersona = useCallback((profileId: string) => setSelectedPersonaId(profileId), []);
   const actions = useMemo<MonitorActions>(() => ({ select, createAt }), [createAt, select]);
   const sources = useMemo<MonitorSourceCounts>(
     () => ({
@@ -940,16 +753,6 @@ export function useMonitorAgents({
     agents,
     actions,
     sources,
-    providers,
-    providerState,
-    retryProviders,
-    selectedProviderId,
-    selectProvider,
-    personaOptions,
-    selectedPersonaId: personaId,
-    selectPersona,
-    spawnLaunch,
-    spawn,
     acknowledgement,
     clearAcknowledgement,
   };

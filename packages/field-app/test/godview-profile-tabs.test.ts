@@ -3,12 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   agentProfileSet,
   chosenProfile,
-  launchProfile,
   personaProfiles,
   profileTabs,
   recedeOutside,
   showsProfileTabs,
-  spawnProfileLabel,
 } from "../src/godview/monitor/profile-tabs";
 import type { MonitorAgent } from "../src/godview/monitor/types";
 import { managedSummary } from "./managed-session-fixture";
@@ -181,22 +179,5 @@ describe("a chosen tab", () => {
         .map((a) => a.id),
     ).toEqual(["m1"]);
     expect(recedeOutside(rows, undefined, personas)).toBe(rows);
-  });
-
-  it("launches under its profile: This Mac runs any agent, a profile only the agents it holds a sign-in for", () => {
-    expect(launchProfile(undefined)).toBeNull();
-    expect(launchProfile(NATIVE)).toEqual({ set: "native", label: "This Mac", signedIn: null });
-    const work = launchProfile(WORK);
-    expect(work?.set).toBe("work");
-    expect([...(work?.signedIn ?? [])]).toEqual(["claude", "codex"]);
-  });
-
-  it("names where a spawn lands: the chosen profile, or with All the default when it holds the agent, else This Mac", () => {
-    expect(spawnProfileLabel([NATIVE], undefined, "claude")).toBeUndefined();
-    expect(spawnProfileLabel(SETS, WORK, "grok")).toBe("Work");
-    expect(spawnProfileLabel(SETS, undefined, "claude")).toBe("Personal");
-    expect(spawnProfileLabel(SETS, undefined, "codex")).toBe("This Mac");
-    const nativeDefault = [{ ...NATIVE, default: true }, { ...PERSONAL, default: false }, WORK];
-    expect(spawnProfileLabel(nativeDefault, undefined, "claude")).toBe("This Mac");
   });
 });

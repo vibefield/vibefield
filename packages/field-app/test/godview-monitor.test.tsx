@@ -15,7 +15,7 @@
  *   2. THE CLAIM — the local chip counts managed agents, in the DOM and in the
  *      marker, and nothing on the stage says "mock" any more
  *   3. PF6 — closing disposes: every interval cleared, the physics disposed
- *   4. select MOUNTS through the door; create SPAWNS through the door
+ *   4. select mounts an existing session; create opens an empty terminal
  *   5. with no door there are no rows and no invented ones
  *
  * AR-5 moved the views into `@vibecook/puppeteer-views`, and two things about
@@ -48,9 +48,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
-import type { AgentProviderSummary, AgentSessionSummary } from "../src/godview/monitor/facet-types";
+import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
-import { providerOptionText } from "../src/godview/monitor/provider-picker";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
@@ -107,36 +106,6 @@ const ROWS: readonly AgentSessionSummary[] = [
     createdAt: "2026-09-12T10:00:02.000Z",
   }),
 ];
-// AC-3 — a providers row carries the catalog's decision and claims
-const OFFERS = {
-  spawn: true,
-  resume: true,
-  reattach: false,
-  history: true,
-  usage: true,
-  distribution: true,
-  personas: true,
-};
-const PROVIDERS: readonly AgentProviderSummary[] = [
-  {
-    id: "claude",
-    label: "Claude",
-    available: true,
-    resumable: true,
-    personas: [],
-    status: "supported",
-    offers: OFFERS,
-  },
-  {
-    id: "pi",
-    label: "Pi",
-    available: false,
-    resumable: true,
-    personas: [],
-    status: "preview",
-    offers: { ...OFFERS, usage: false },
-  },
-];
 const pane = (id: string, cwd = "/project/scratch"): SessionSummary =>
   ({ id, exited: false, createdAtMs: 5, cwd, title: "zsh" }) as SessionSummary;
 /** The deck's panes: the codex agent's PTY, and one unclaimed shell. */
@@ -176,7 +145,7 @@ function emptyUsage(): AccountUsagePort {
 
 interface FakeDoor extends MonitorDoor {
   mountLocal: ReturnType<typeof vi.fn>;
-  spawn: ReturnType<typeof vi.fn>;
+  createTerminal: ReturnType<typeof vi.fn>;
   attach: ReturnType<typeof vi.fn>;
   /** Send the subscriber another frame. The fold pushes whole fields at its own
    * cadence and re-sends them for reasons that are none of the stage's
@@ -198,13 +167,7 @@ function fakeDoor(rows: readonly AgentSessionSummary[] = ROWS): FakeDoor {
       };
     }),
     push: (next) => publish?.(next),
-    providers: vi.fn(async () => PROVIDERS),
-    spawn: vi.fn(async () => ({
-      state: "spawned" as const,
-      sessionId: "born-1",
-      runtimeRunId: "run-born",
-      label: "Claude",
-    })),
+    createTerminal: vi.fn(async () => ({ state: "mounted" as const, sessionId: "born-1" })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: unreachableHistory(),
     usage: emptyUsage(),
@@ -777,53 +740,46 @@ describe("the monitor stage", () => {
     expect(ackText(host)).toContain("is in the active pane");
   });
 
-  it("create SPAWNS the chosen provider through the door — from a view's gesture and from the chrome", async () => {
+  it("opens an empty terminal through the view action, without agent or profile controls", async () => {
     const door = fakeDoor();
     const host = await mountMonitor("list", door);
-    // the chrome chose the first AVAILABLE provider
-    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Agent provider"]');
-    expect(select?.value).toBe("claude");
-    // The rows in the door's order, each in the picker's own words. The badge
-    // rules are godview-provider-picker.test.tsx's to pin; this row holds for
-    // a door before AC-3 (no decision: "Pi (not installed)") and after it (pi
-    // a preview row: "Pi · Preview (not installed)") alike.
-    expect([...(select?.options ?? [])].map((option) => option.textContent)).toEqual(
-      PROVIDERS.map(providerOptionText),
-    );
-    expect(select?.options[0]?.textContent).toBe("Claude");
-    expect(select?.options[1]?.textContent).toMatch(/^Pi\b.*\(not installed\)$/);
-
-    const create = host.querySelector<HTMLButtonElement>(".vf-monitor-list-new");
-    await act(async () => create?.click());
-    expect(door.spawn).toHaveBeenCalledTimes(1);
-    expect(door.spawn.mock.calls[0]?.[0]).toEqual({ provider: "claude" });
-    expect(ackText(host)).toContain("Claude spawned in the active pane");
-
-    const button = host.querySelector<HTMLButtonElement>(".vf-godview-spawn");
-    await act(async () => button?.click());
-    expect(door.spawn).toHaveBeenCalledTimes(2);
+    expect(host.querySelector('select[aria-label="Agent provider"]')).toBeNull();
+    expect(host.querySelector('select[aria-label="Agent persona"]')).toBeNull();
+    expect(host.querySelector(".vf-godview-spawn")).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith();
+    expect(ackText(host)).toContain("terminal opened in the active pane");
   });
 
-  it("distinguishes failed provider discovery from an empty inventory and recovers on retry", async () => {
-    const door = fakeDoor();
-    const providers = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("provider service unavailable"))
-      .mockResolvedValue(PROVIDERS);
-    door.providers = providers;
-    const host = await mountMonitor("list", door);
-    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Agent provider"]');
-    expect(select?.textContent).toContain("providers unavailable");
-    expect(host.querySelector<HTMLButtonElement>(".vf-godview-spawn")?.disabled).toBe(true);
-    const retry = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Providers unavailable · Retry",
-    );
-    expect(retry?.title).toBe("provider service unavailable");
-    await act(async () => retry?.click());
-    expect(providers).toHaveBeenCalledTimes(2);
-    expect(select?.value).toBe("claude");
-    expect(host.querySelector<HTMLButtonElement>(".vf-godview-spawn")?.disabled).toBe(false);
-    expect(host.textContent).not.toContain("Providers unavailable · Retry");
+  it("long-presses empty swarm space to open one terminal; releasing early cancels", async () => {
+    const door = fakeDoor([]);
+    const host = await mountMonitor("swarm", door);
+    const swarm = host.querySelector<HTMLElement>(".vf-monitor-swarm")!;
+    Object.defineProperty(swarm, "setPointerCapture", { value: vi.fn() });
+    Object.defineProperty(swarm, "hasPointerCapture", { value: () => false });
+    const press = (type: string) =>
+      swarm.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          pointerId: 1,
+          clientX: 250,
+          clientY: 150,
+        }),
+      );
+    await act(async () => {
+      press("pointerdown");
+      press("pointerup");
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    });
+    expect(door.createTerminal).not.toHaveBeenCalled();
+    await act(async () => {
+      press("pointerdown");
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      press("pointerup");
+    });
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith();
+    expect(ackText(host)).toContain("terminal opened in the active pane");
   });
 
   it("surfaces a failed usage subscription and retries through the same product port", async () => {
@@ -851,43 +807,31 @@ describe("the monitor stage", () => {
     expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
-  it("refuses to spawn a provider that is not installed, and says so before asking the door", async () => {
+  it("carries the deck's own words when a terminal cannot open", async () => {
     const door = fakeDoor();
-    const host = await mountMonitor("list", door);
-    const select = host.querySelector<HTMLSelectElement>('select[aria-label="Agent provider"]');
-    await act(async () => {
-      if (select) {
-        select.value = "pi";
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+    door.createTerminal.mockResolvedValueOnce({
+      state: "failed",
+      reason: "terminal capacity reached",
     });
-    await act(async () => host.querySelector<HTMLButtonElement>(".vf-godview-spawn")?.click());
-    expect(door.spawn).not.toHaveBeenCalled();
-    expect(ackText(host)).toContain("not installed");
-  });
-
-  it("carries the deck's own words when a spawn cannot land", async () => {
-    const door = fakeDoor();
-    door.spawn.mockResolvedValueOnce({ state: "failed", reason: "the floor has no agent cell" });
     const host = await mountMonitor("list", door);
     await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
-    expect(ackText(host)).toContain("the floor has no agent cell");
-    door.spawn.mockResolvedValueOnce({ state: "no-pane" });
+    expect(ackText(host)).toContain("terminal capacity reached");
+    door.createTerminal.mockResolvedValueOnce({ state: "no-pane" });
     await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
     expect(ackText(host)).toContain("no pane");
   });
 
   it("wears the package's instrument bar, with VibeField's own tools in its slots (AR-5)", async () => {
     // The header is the package's now. What is still OURS rides the two slots
-    // it offers: the bridge notice leading, and trailing the birth (the
-    // provider list and SPAWN) plus the two sheets. A test that only counted
+    // it offers: the bridge notice leading and the two trailing sheets.
+    // A test that only counted
     // the bar's own controls would pass for a bar with our tools dropped.
     const host = await mountMonitor("list", fakeDoor());
     const bar = host.querySelector(".vf-godview-header");
     expect(bar, "the instrument bar never mounted").not.toBeNull();
     expect(bar?.querySelector(".vf-godview-header-notice")).not.toBeNull();
-    expect(bar?.querySelector('select[aria-label="Agent provider"]')).not.toBeNull();
-    expect(bar?.querySelector(".vf-godview-spawn")).not.toBeNull();
+    expect(bar?.querySelector('select[aria-label="Agent provider"]')).toBeNull();
+    expect(bar?.querySelector(".vf-godview-spawn")).toBeNull();
     expect(
       bar?.querySelector('button[aria-label="Find an agent by what was said"]'),
     ).not.toBeNull();
@@ -938,14 +882,16 @@ describe("the monitor stage", () => {
     expect(themes).toEqual(["dark"]);
   });
 
-  it("with NO door: no rows, no invented ones, the state says nobody was asked, and spawn is disabled", async () => {
-    const host = await mountMonitor(DEFAULT_MONITOR_VIEW_ID, null, { sessionIds: [] });
+  it("with NO door: no invented rows and terminal creation explains the missing connection", async () => {
+    const host = await mountMonitor("list", null, { sessionIds: [] });
     expect(swarmRows(host).length).toBe(0);
     expect(latest().agents).toBe(0);
     expect(latest().localState).toBe("no-door");
     expect(latest().localClaim).toBeNull();
     expect(host.querySelector(".vf-monitor-local-chip")).toBeNull();
-    expect(host.querySelector<HTMLButtonElement>(".vf-godview-spawn")?.disabled).toBe(true);
+    expect(host.querySelector(".vf-godview-spawn")).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    expect(ackText(host)).toContain("the deck has no connection");
   });
 });
 
@@ -1121,31 +1067,16 @@ describe("the profile tabs (AR-S5)", () => {
     expect(chosenTab(host)).toBe("all");
   });
 
-  it("spawns under the chosen profile, and refuses in the stage's words an agent it holds no sign-in for", async () => {
+  it("creates empty terminals independently of the selected profile filter", async () => {
     const door = tabDoor();
     const host = await mountMonitor("list", door);
-    const spawnButton = (): HTMLButtonElement | null =>
-      host.querySelector<HTMLButtonElement>(".vf-godview-spawn");
-    // All: the default — This Mac here — as puppeteer resolves a spawn that names none
-    expect(spawnButton()?.title).toBe("spawn Claude in the active pane, under This Mac");
-    await act(async () => spawnButton()?.click());
-    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude" });
-
-    await act(async () => tabButton(host, "work")?.click());
-    expect(spawnButton()?.title).toBe("spawn Claude in the active pane, under Work");
-    await act(async () => spawnButton()?.click());
-    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude", profileSet: "work" });
-    expect(ackText(host)).toContain("Claude spawned in the active pane, under Work");
-
-    await act(async () => tabButton(host, "native")?.click());
-    await act(async () => spawnButton()?.click());
-    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude", profileSet: "native" });
-
-    const asked = door.spawn.mock.calls.length;
-    await act(async () => tabButton(host, "empty")?.click());
-    await act(async () => spawnButton()?.click());
-    expect(door.spawn.mock.calls.length).toBe(asked);
-    expect(ackText(host)).toContain("Empty has no Claude sign-in — add one in Settings");
+    for (const id of ["all", "work", "native", "empty"]) {
+      await act(async () => tabButton(host, id)?.click());
+      await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+      expect(door.createTerminal.mock.calls.at(-1)).toEqual([]);
+      expect(ackText(host)).toContain("terminal opened in the active pane");
+    }
+    expect(door.createTerminal).toHaveBeenCalledTimes(4);
   });
 
   it("says so over the stage when a tab has no sessions, and a profile deleted while chosen falls back to All", async () => {
@@ -1154,9 +1085,7 @@ describe("the profile tabs (AR-S5)", () => {
     await act(async () => tabButton(host, "empty")?.click());
     const empty = host.querySelector(".vf-monitor-profile-empty");
     expect(empty?.textContent).toContain("No sessions under Empty");
-    expect(empty?.textContent).toContain(
-      "A session started from this tab runs under this profile.",
-    );
+    expect(empty?.textContent).toContain("This tab shows sessions using this profile.");
     expect(empty?.querySelector('[data-profile-glyph="flask"]')).not.toBeNull();
     expect(host.querySelector(".vf-monitor-list")?.classList.contains("is-all-receded")).toBe(true);
     expect(counters(host)).toEqual(["0", "0", "0"]);
@@ -1165,171 +1094,5 @@ describe("the profile tabs (AR-S5)", () => {
     expect(chosenTab(host)).toBe("all");
     expect(host.querySelector(".vf-monitor-profile-empty")).toBeNull();
     expect(listRows(host).some((row) => row.receded)).toBe(false);
-  });
-});
-
-// ---- AC-4 beside AR-S5 — the persona choice and the profile tabs -------------
-//
-// Until James rules on the persona select's fate beside the tabs, the two never
-// compose: a chosen tab decides the sign-in (no persona select, no `profileId`),
-// and All keeps the persona choice (a `profileId`, no `profileSet`). The
-// providers row lists EVERY profile's sign-ins, and puppeteer refuses a spawn
-// whose persona sits outside the profile it names — so sending both was a
-// refusal for any persona outside the chosen tab, and every one under This Mac.
-
-const RESEARCH_SET = tabSet("research", "Research", [tabPersona("r-claude", "claude")], {
-  glyph: "flask",
-});
-const PERSONA_SETS = [NATIVE_SET, WORK_SET, RESEARCH_SET];
-/** A sign-in as the providers row lists it: named, and inside its profile. */
-const signIn = (profileId: string, set: string, label: string): AgentPersona => ({
-  ...tabPersona(profileId, "claude"),
-  label,
-  set,
-});
-/** claude with a sign-in in each managed profile, as the row lists them. */
-const CLAUDE_SIGNED_IN: AgentProviderSummary = {
-  id: "claude",
-  label: "Claude",
-  available: true,
-  resumable: true,
-  personas: [signIn("w-claude", "work", "Work"), signIn("r-claude", "research", "Research")],
-  status: "supported",
-  offers: OFFERS,
-};
-/** A row that DENIES personas — ACP's decision in the catalog: a protocol, a
- * sign-in nowhere, so no profile can hold one for it. */
-const DENIES_PERSONAS: AgentProviderSummary = {
-  id: "acp",
-  label: "ACP",
-  available: true,
-  resumable: true,
-  personas: [],
-  status: "preview",
-  offers: { ...OFFERS, history: false, usage: false, distribution: false, personas: false },
-};
-/** A row as a daemon before AC-3 sends it: no decision, so no claim at all. */
-const UNCLAIMED: AgentProviderSummary = {
-  id: "grok",
-  label: "Grok",
-  available: true,
-  resumable: true,
-  personas: [],
-};
-
-/** A profile door whose providers answer is `providers`, and whose spawn names
- * the session after the provider it was asked for. */
-function personaDoor(
-  providers: readonly AgentProviderSummary[],
-  sets: readonly AgentProfileSet[] = PERSONA_SETS,
-): TabDoor {
-  const door = tabDoor(sets);
-  door.providers = vi.fn(async () => providers);
-  door.spawn.mockImplementation(async (request: { provider: string }) => ({
-    state: "spawned" as const,
-    sessionId: `born-${request.provider}`,
-    runtimeRunId: `run-${request.provider}`,
-    label: providers.find((row) => row.id === request.provider)?.label ?? request.provider,
-  }));
-  return door;
-}
-
-const barSelect = (host: HTMLElement, label: string): HTMLSelectElement | null =>
-  host.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
-const spawnControl = (host: HTMLElement): HTMLButtonElement | null =>
-  host.querySelector<HTMLButtonElement>(".vf-godview-spawn");
-
-async function choose(select: HTMLSelectElement | null, value: string): Promise<void> {
-  expect(select, `no select to choose ${value} in`).not.toBeNull();
-  await act(async () => {
-    if (select === null) return;
-    select.value = value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-}
-
-describe("the persona choice beside the profile tabs (AC-4 × AR-S5)", () => {
-  it("draws no persona select under a chosen tab — the tab decides the sign-in, and the spawn names the profile only", async () => {
-    const door = personaDoor([CLAUDE_SIGNED_IN, ...PROVIDERS.slice(1)]);
-    const host = await mountMonitor("list", door);
-    // All: the row's sign-ins, the native default first
-    const personas = barSelect(host, "Agent persona");
-    expect([...(personas?.options ?? [])].map((option) => option.textContent)).toEqual([
-      "Default",
-      "Work",
-      "Research",
-    ]);
-    expect(latest().picker.personas).toBe(3);
-    await choose(personas, "r-claude");
-
-    // Work: the select goes, the marker counts no control, and the persona
-    // chosen under All does not ride along
-    await act(async () => tabButton(host, "work")?.click());
-    expect(barSelect(host, "Agent persona")).toBeNull();
-    expect(latest().picker.personas).toBe(0);
-    expect(spawnControl(host)?.title).toBe("spawn Claude in the active pane, under Work");
-    await act(async () => spawnControl(host)?.click());
-    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude", profileSet: "work" });
-    expect(ackText(host)).toBe("Claude spawned in the active pane, under Work");
-
-    // This Mac: the same, where every managed persona used to be refused
-    await act(async () => tabButton(host, "native")?.click());
-    expect(barSelect(host, "Agent persona")).toBeNull();
-    expect(latest().picker.personas).toBe(0);
-    await act(async () => spawnControl(host)?.click());
-    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "claude", profileSet: "native" });
-  });
-
-  it("keeps the persona choice under All: a persona chosen rides alone, and the tip says 'as' it and names no profile", async () => {
-    const door = personaDoor([CLAUDE_SIGNED_IN, ...PROVIDERS.slice(1)]);
-    const host = await mountMonitor("list", door);
-    expect(chosenTab(host)).toBe("all");
-    // the native default: the tip names where puppeteer's default lands
-    expect(spawnControl(host)?.title).toBe("spawn Claude in the active pane, under This Mac");
-    await choose(barSelect(host, "Agent persona"), "r-claude");
-    // the persona is its own sign-in: "as Research", and never "under This
-    // Mac", the default the spawn does not run under
-    expect(spawnControl(host)?.title).toBe("spawn Claude as Research in the active pane");
-    await act(async () => spawnControl(host)?.click());
-    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({
-      provider: "claude",
-      profileId: "r-claude",
-    });
-    expect(ackText(host)).toBe("Claude spawned in the active pane");
-  });
-
-  it("says an uninstalled agent is not installed before it says a tab holds no sign-in for it", async () => {
-    const door = tabDoor();
-    const host = await mountMonitor("list", door);
-    await act(async () => tabButton(host, "work")?.click());
-    // pi is not installed, and Work holds no pi sign-in: the install speaks
-    // first, on the tip and in the refusal alike
-    await choose(barSelect(host, "Agent provider"), "pi");
-    expect(spawnControl(host)?.title).toBe("Pi is not installed on this device");
-    await act(async () => spawnControl(host)?.click());
-    expect(door.spawn).not.toHaveBeenCalled();
-    expect(ackText(host)).toBe("Pi is not installed on this device");
-  });
-
-  it("never sends a row without the persona claim to Settings: one that denies personas spawns as itself from any tab, one that claims nothing names the tab", async () => {
-    const door = personaDoor([...PROVIDERS, DENIES_PERSONAS, UNCLAIMED], TAB_SETS);
-    const host = await mountMonitor("list", door);
-    await act(async () => tabButton(host, "work")?.click());
-    await choose(barSelect(host, "Agent provider"), "acp");
-    // Work holds no ACP sign-in, and none can exist. puppeteer refuses a
-    // managed profile for an agent with no account profiles, so the spawn is
-    // the one All sends — the agent's own folder — and the tip says so.
-    expect(spawnControl(host)?.title).toBe("spawn ACP in the active pane, under This Mac");
-    await act(async () => spawnControl(host)?.click());
-    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "acp" });
-    expect(ackText(host)).toBe("ACP spawned in the active pane");
-
-    // a daemon before AC-3 claims nothing: the tab rides as AR-S5 sent it, and
-    // a profile without the sign-in is the daemon's to refuse in its own words
-    await choose(barSelect(host, "Agent provider"), "grok");
-    expect(spawnControl(host)?.title).toBe("spawn Grok in the active pane, under Work");
-    await act(async () => spawnControl(host)?.click());
-    expect(door.spawn.mock.calls.at(-1)?.[0]).toEqual({ provider: "grok", profileSet: "work" });
-    expect(ackText(host)).toBe("Grok spawned in the active pane, under Work");
   });
 });

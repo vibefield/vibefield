@@ -291,8 +291,8 @@ const R23B_ALLOW = [
   },
   {
     file: "packages/field-app/src/design-system/godview-profiles-fixtures.ts",
-    count: 16,
-    why: "the Godview profile tabs' fixture door (AR-S5): sample providers, profile sets and sessions on the stage — fixture data, never compared",
+    count: 13,
+    why: "the Godview profile tabs' fixture door (AR-S5): sample profile sets and sessions on the stage — fixture data, never compared",
   },
   {
     file: "packages/field-app/src/design-system/extensions-fixtures.ts",

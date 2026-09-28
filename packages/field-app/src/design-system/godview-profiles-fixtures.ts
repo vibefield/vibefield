@@ -1,10 +1,5 @@
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
-import type {
-  AgentPersona,
-  AgentProfileSet,
-  AgentProviderSummary,
-  AgentSessionSummary,
-} from "@vibefield/contracts";
+import type { AgentPersona, AgentProfileSet, AgentSessionSummary } from "@vibefield/contracts";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 
 // AR-S5 — the catalog's Godview with its profile tabs, on a fixture door: the
@@ -178,12 +173,6 @@ export const PROFILE_TAB_SETS: readonly AgentProfileSet[] = [
   },
 ];
 
-const PROVIDERS: readonly AgentProviderSummary[] = [
-  { id: "claude", label: "Claude Code", available: true, resumable: true, personas: [] },
-  { id: "codex", label: "Codex", available: true, resumable: true, personas: [] },
-  { id: "grok", label: "Grok", available: true, resumable: true, personas: [] },
-];
-
 const NO_HISTORY: HistoryPort = {
   status: async () => ({ reachable: false, detail: "catalog", checkedAt: AT }),
   facts: async () => [],
@@ -211,8 +200,7 @@ export function profileTabsDoor(): MonitorDoor {
       onFrame(rows);
       return () => undefined;
     },
-    providers: async () => PROVIDERS,
-    spawn: async () => ({ state: "no-pane" }),
+    createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
     history: NO_HISTORY,
     usage: NO_USAGE,

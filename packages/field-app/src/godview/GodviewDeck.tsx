@@ -20,12 +20,7 @@ import {
   useMonitorPalette,
   zoomLayoutApplied,
 } from "@vibecook/puppeteer-views";
-import {
-  AgentInterruptResult,
-  AgentListResult,
-  AgentProvidersResult,
-  AgentSpawnResult,
-} from "@vibefield/contracts";
+import { AgentInterruptResult, AgentListResult, AgentSpawnResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type CSSProperties,
@@ -944,8 +939,7 @@ export function GodviewDeck({
       // The views never dial rosettad; the daemon's origin stays in fieldd.
       history: historyPortOver(doorClient),
       usage: usagePortOver(doorClient),
-      // AR-S5 — the Agent Profiles the bar's tabs are made of, and the one a
-      // spawn below runs under when a tab names it.
+      // The profile tabs filter existing sessions; terminal birth is independent.
       profiles: profileSetsPortOver(doorClient),
       attach: async (request) => {
         const active = workspaceRef.current?.activeSession;
@@ -1034,42 +1028,16 @@ export function GodviewDeck({
           unsubscribe?.();
         };
       },
-      providers: async () =>
-        AgentProvidersResult.parse(await fieldd.request("agent.providers", {})).providers,
-      spawn: async (request) => {
-        // Born INTO the pane the user is in (GT-D17's law for attach, kept for
-        // births): with no pane there is nowhere to put the agent, and it is
-        // said before anything is spawned.
-        const active = workspaceRef.current?.activeSession;
-        if (active === undefined) return { state: "no-pane" };
-        const cwd = paneCwd({ cwd: active.cwd }, readDeviceHost()) ?? shell?.home;
+      createTerminal: async () => {
+        const context = workspaceRef.current;
+        if (context?.activeSession === undefined) return { state: "no-pane" };
         try {
-          const answered = AgentSpawnResult.parse(
-            await fieldd.request("agent.spawn", {
-              provider: request.provider,
-              ...(request.profileId !== undefined ? { profileId: request.profileId } : {}),
-              ...(request.profileSet !== undefined ? { profileSet: request.profileSet } : {}),
-              ...(cwd !== undefined ? { cwd } : {}),
-            }),
-          );
-          // The spawn's answer is the SAME create ticket a shell birth gets:
-          // the pool adopts it (placement, primed ticket, exact summary) and
-          // the workspace mounts the summary — no second round trip, no wait
-          // on the observed inventory (GT-1).
-          const born = adoptCreatedTerminal(answered.terminal);
-          const context = workspaceRef.current;
-          if (context === undefined || context.activePaneId === undefined) {
-            // The pane went away while fieldd was answering. The agent is
-            // running and the fold shows it; a select mounts it later.
-            return { state: "no-pane" };
-          }
-          context.mountSession(born.session);
-          return {
-            state: "spawned",
-            sessionId: born.sessionId,
-            runtimeRunId: answered.session.runtimeRunId,
-            label: answered.session.label,
-          };
+          // Ghosttea owns pane placement and concurrent-birth fencing. Its
+          // createSplitSession override uses the same product door as Cmd–D.
+          const session = await context.createSessionInActivePane();
+          return session
+            ? { state: "mounted", sessionId: session.id }
+            : { state: "failed", reason: "the workspace could not open a terminal" };
         } catch (cause) {
           return {
             state: "failed",
@@ -1088,50 +1056,6 @@ export function GodviewDeck({
           () => undefined,
         );
         return run;
-      },
-      // AC-4 (the review) — the providers' answer follows the index daemon:
-      // fieldd's health stream carries its phase and generation, and a change
-      // in either is when the history state and the persona list may have
-      // moved. The snapshot only primes the comparison; a frame that repeats
-      // the same generation says nothing.
-      indexChanges: (listener) => {
-        let cancelled = false;
-        let unsubscribe: (() => void) | null = null;
-        let seen: string | null = null;
-        const generation = (payload: unknown): string => {
-          const rosettad = (payload as { rosettad?: { phase?: unknown; pid?: unknown } } | null)
-            ?.rosettad;
-          return `${String(rosettad?.phase)}:${String(rosettad?.pid)}`;
-        };
-        const watch = (payload: unknown): void => {
-          const key = generation(payload);
-          if (seen === null) {
-            seen = key;
-            return;
-          }
-          if (key === seen) return;
-          seen = key;
-          listener();
-        };
-        void fieldd
-          .subscribe("system.health.subscribe", {}, (payload) => {
-            if (!cancelled) watch(payload);
-          })
-          .then((subscription) => {
-            if (cancelled) {
-              subscription.unsubscribe();
-              return;
-            }
-            unsubscribe = subscription.unsubscribe;
-            watch(subscription.snapshot);
-          })
-          // a health stream that cannot be opened leaves the picker asked
-          // once, as before — nothing here is a state the deck draws
-          .catch(() => undefined);
-        return () => {
-          cancelled = true;
-          unsubscribe?.();
-        };
       },
     };
     async function mountLocalNow(
@@ -1153,7 +1077,7 @@ export function GodviewDeck({
         };
       }
     }
-  }, [runtime, fieldd, shell, mountSummaryNow]);
+  }, [runtime, fieldd, mountSummaryNow]);
 
   useEffect(() => {
     onRemoteDoor?.(door);

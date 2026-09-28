@@ -219,26 +219,10 @@ export interface GodviewMonitorFacts {
   profileTab: string;
   shownAgents: number;
   /**
-   * AC-4: the provider picker as the bar draws it — each listed row's id with
-   * its badge word (null where the row carries none: `supported`, or a daemon
-   * before AC-3 that decides nothing), the chosen row, whether SPAWN is offered
-   * for it, the history state beside it (null when there is nothing to say),
-   * and how many identities the persona choice offers (0 = no control drawn:
-   * the row claims none, or a profile tab is chosen and decides the sign-in).
-   * The ids are the door's own answer, never a list typed in the renderer.
-   */
-  picker: {
-    rows: Array<{ id: string; badge: string | null }>;
-    selected: string | null;
-    spawn: boolean;
-    history: string | null;
-    personas: number;
-  };
-  /**
    * AR-7: the fold's rows, one per run, as this stage received them — every
    * row, drawn or not. The counts above say how many; this says WHICH, and
    * whose pane and whose doing each is. A run typed at a pane's prompt must
-   * read here as one the SPAWN button started (a row, a body, its pane), and
+   * appear here with its row, body and pane, and
    * when it ends its row must LEAVE — never stay behind as an exited one. The
    * damage gate the counts ride is not enough for that claim: an exited row is
    * dropped from the drawn rows, so only the fold's own rows can tell "left"

@@ -4,8 +4,7 @@ import type { MonitorAgent } from "./types";
 
 // AR-S5 — the bar's profile tabs (the agents-settings record's T3), as pure
 // functions of the profiles feed and the monitor's rows: which profile a row's
-// session runs under, the strip, what a chosen tab recedes, and what a spawn
-// from it would run under. `GodviewMonitor` draws them; nothing here dials.
+// session runs under, the strip and what a chosen tab recedes. `GodviewMonitor` draws them; nothing here dials.
 
 /** The native set's id: the agents' own folders ("This Mac"). */
 export const NATIVE_PROFILE = "native";
@@ -90,45 +89,4 @@ export function recedeOutside(
   return agents.map((agent) =>
     agentProfileSet(agent, personas) === chosen ? agent : { ...agent, receded: true },
   );
-}
-
-/** What a spawn from the chosen tab runs under, and which agents it can run:
- * This Mac runs any agent in its own folder (`signedIn` null); a profile only
- * the agents it holds a sign-in for. */
-export interface LaunchProfile {
-  set: string;
-  label: string;
-  signedIn: ReadonlySet<string> | null;
-}
-
-export function launchProfile(set: AgentProfileSet | undefined): LaunchProfile | null {
-  if (set === undefined) return null;
-  return {
-    set: set.id,
-    label: set.label,
-    signedIn:
-      set.kind === "native" ? null : new Set(set.personas.map((persona) => persona.provider)),
-  };
-}
-
-/**
- * Where a spawn from the bar lands, in the words its tip says: the chosen
- * profile, or — with All chosen — the default profile when it holds a sign-in
- * for the agent, else the agent's own folder (puppeteer's rule for a spawn
- * that names none). Undefined while there are no profiles to speak of.
- */
-export function spawnProfileLabel(
-  sets: readonly AgentProfileSet[],
-  chosen: AgentProfileSet | undefined,
-  provider: string,
-): string | undefined {
-  if (!showsProfileTabs(sets)) return undefined;
-  if (chosen !== undefined) return chosen.label;
-  const native = sets.find((set) => set.kind === "native");
-  const fallback = native?.label ?? "This Mac";
-  const preferred = sets.find((set) => set.default);
-  if (preferred === undefined || preferred.kind === "native") return fallback;
-  return preferred.personas.some((persona) => persona.provider === provider)
-    ? preferred.label
-    : fallback;
 }

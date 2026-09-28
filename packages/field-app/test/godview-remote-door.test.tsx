@@ -134,7 +134,7 @@ interface FakeDoor extends MonitorDoor {
   attach: ReturnType<typeof vi.fn>;
   listHosts: ReturnType<typeof vi.fn>;
   mountLocal: ReturnType<typeof vi.fn>;
-  spawn: ReturnType<typeof vi.fn>;
+  createTerminal: ReturnType<typeof vi.fn>;
 }
 
 function fakeDoor(
@@ -149,8 +149,7 @@ function fakeDoor(
       onFrame(rows);
       return () => undefined;
     }),
-    providers: vi.fn(async () => []),
-    spawn: vi.fn(async () => ({ state: "no-pane" as const })),
+    createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: unreachableHistory(),
     usage: emptyUsage(),

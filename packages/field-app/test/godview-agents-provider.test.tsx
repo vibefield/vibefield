@@ -62,8 +62,7 @@ function foldDoor(initial: readonly AgentSessionSummary[] = []): FoldDoor {
     disposed: () => disposals,
     listHosts: vi.fn(async () => []),
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
-    providers: vi.fn(async () => []),
-    spawn: vi.fn(async () => ({ state: "no-pane" as const })),
+    createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: {
       status: async () => ({ reachable: false, detail: "no index", checkedAt: "2026-09-13" }),

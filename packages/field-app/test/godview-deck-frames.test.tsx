@@ -95,6 +95,15 @@ function WorkspaceStub({
       sessions: workspace.panes.map((pane) => pane.session),
       activePaneId: workspace.activePaneId,
       activeSession: workspace.panes.find((pane) => pane.id === workspace.activePaneId)?.session,
+      createSessionInActivePane: async () => {
+        const active = workspace.panes.find((pane) => pane.id === workspace.activePaneId)!;
+        const create = workspaceProps["createSplitSession"] as (
+          session: StubSession,
+        ) => Promise<StubSession>;
+        const born = await create(active.session);
+        workspace.mount(born);
+        return born;
+      },
       mountSession: (summary: { id: string; cwd?: string | null; exited?: boolean }) => {
         workspace.mounts.push(summary.id);
         const pane = workspace.panes.find((entry) => entry.id === workspace.activePaneId);
@@ -297,8 +306,7 @@ function foldDoor(): MonitorDoor {
         foldFrame = null;
       };
     },
-    providers: vi.fn(async () => []),
-    spawn: vi.fn(async () => ({ state: "no-pane" as const })),
+    createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: {
       status: async () => ({ reachable: false, detail: "no index", checkedAt: "2026-09-13" }),
@@ -444,6 +452,18 @@ afterEach(() => {
 });
 
 describe("the deck's pane frames", () => {
+  it("opens an empty terminal through the same product birth door as a split", async () => {
+    await mountDeck();
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await deckDoor?.createTerminal();
+    });
+    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1" });
+    expect(requests.filter((request) => request.method === "terminal.create")).toHaveLength(1);
+    expect(requests.some((request) => request.method === "agent.spawn")).toBe(false);
+    expect(workspace.mounts).toContain("born-1");
+  });
+
   it("shares each pane's colour with Swarm across duplicate sessions, replacement and pane closure", async () => {
     workspace.panes = [
       { id: "pane-1", session: stubSession("pty-1") },

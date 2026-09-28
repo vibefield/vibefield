@@ -1,7 +1,7 @@
 import type { RemoteHostSummary, SharedSessionSummary } from "@vibecook/ghosttea-protocol";
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
-import type { AgentProviderSummary, AgentSessionSummary } from "./facet-types";
+import type { AgentSessionSummary } from "./facet-types";
 
 export type MonitorFeedState =
   | { state: "no-door" | "loading" | "ready" }
@@ -21,8 +21,7 @@ export interface MonitorUsagePort extends AccountUsagePort {
  * never touches the runtime, the workspace, fieldd, or a terminal. GT-D17 then
  * asked the monitor to do two things that live entirely on the other side of
  * that line: list the mesh's sessions, and mount one in the active pane. AR-3
- * asks four more of the same shape — read fieldd's fold, list what one can
- * spawn as, spawn an agent into the active pane, mount a local session there.
+ * adds fieldd's fold, empty-terminal creation and local-session attachment.
  * This interface is how all of it happens without moving the line — it is
  * BUILT in `GodviewDeck`, where the runtime, the workspace and the fieldd
  * client are already in scope, and only the verbs travel. The views still see
@@ -47,11 +46,8 @@ export interface MonitorDoor {
    * not be opened or was lost — the field renders that as UNAVAILABLE.
    */
   observe(listener: LocalFieldListener): () => void;
-  /** AR-3 — what one can spawn as on this device (`agent.providers`). */
-  providers(): Promise<readonly AgentProviderSummary[]>;
-  /** AR-3 — spawn an agent in a PTY on the floor and mount it in the ACTIVE
-   * pane (`agent.spawn`, then the create ticket the answer carries). */
-  spawn(request: LocalSpawnRequest): Promise<LocalSpawnOutcome>;
+  /** Create an empty shell through the workspace's normal birth path. */
+  createTerminal(): Promise<LocalMountOutcome>;
   /** AR-3 — mount a LOCAL floor session (a managed agent's PTY, an unclaimed
    * terminal) in the ACTIVE pane. AR-4 — with `replacing`, in the pane that
    * is showing the PTY the session took the place of. */
@@ -63,13 +59,6 @@ export interface MonitorDoor {
   /** AR-5 — the account-usage readings the usage column draws
    * (`agents.usage` + its subscription), adapted to the views' port. */
   usage: MonitorUsagePort;
-  /** AC-4 (the review) — the door says when its `providers()` answer may
-   * have moved: the index daemon's phase or generation changed (a persona
-   * create bounces it; it comes up; it fails). The history state and the
-   * persona list are LIVE daemon facts, and a picker that asked once kept
-   * both from a daemon that was gone. Optional: a door without it is asked
-   * once, as before. Returns the dispose. */
-  indexChanges?(listener: () => void): () => void;
   /** AR-S5 — the Agent Profiles the bar's tabs are made of
    * (`agents.profileSets.subscribe`), held only while the stage is open
    * (PF6). Optional, and deliberately: a door without it draws no tabs,
@@ -100,31 +89,6 @@ export interface LocalFieldListener {
   onFrame(rows: readonly AgentSessionSummary[]): void;
   onError(reason: string): void;
 }
-
-export interface LocalSpawnRequest {
-  /** puppeteer's provider id, from the chrome's own list */
-  provider: string;
-  /** a persona (`agents.profiles.*`); absent = the default profile's sign-in,
-   * else the agent's own folder (AR-S2) */
-  profileId?: string;
-  /** AR-S5 — the Agent Profile the bar's chosen tab names (`native` = This
-   * Mac): its sign-in for the agent, refused by fieldd when it holds none */
-  profileSet?: string;
-}
-
-/**
- * What a spawn actually did, in the vocabulary the stage says out loud.
- *
- * `no-pane` is a real outcome and not an error: the agent is born INTO the pane
- * the user is in (GT-D17's law for attach, kept for births), so a deck with
- * every pane closed has nowhere to put one and is told so before anything is
- * spawned. `failed` carries fieldd's own words — a floor with no agent cell, a
- * provider with no install, the session cap.
- */
-export type LocalSpawnOutcome =
-  | { state: "spawned"; sessionId: string; runtimeRunId: string; label: string }
-  | { state: "no-pane" }
-  | { state: "failed"; reason: string };
 
 export type LocalMountOutcome =
   | { state: "mounted"; sessionId: string }
