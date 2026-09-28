@@ -5,16 +5,30 @@
 // OS-level input is ever injected). The agent is the scripted one
 // (agent-gateway-fixture.ts): no vendor's binary runs.
 //
-// A pane here is `/bin/sh`, named explicitly, so no row depends on the
-// machine's own startup files; the launcher directory is put at the head of
-// its PATH by typing the `export` a born-integrated shell would not need
-// (that integration is another lane's, and nothing here leans on it).
+// A pane here (`openPane`) is `/bin/sh`, named explicitly, so no row depends
+// on the machine's own startup files; the launcher directory is put at the
+// head of its PATH by typing the `export` a born-integrated shell would not
+// need. A pane BORN integrated (`bornPane`, AR-7b × AR-7d) is the person's
+// login shell as `terminal.create {}` births it — over a floor that runs with
+// a throwaway HOME (`person: true`), so the shell reads a throwaway person's
+// startup files and never the machine owner's — and nothing is typed to make
+// the launchers lead: the daemon's own wiring does.
 //
 // Test-local — not shipped.
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { createConnection } from "node:net";
-import { dirname, join } from "node:path";
+import { userInfo } from "node:os";
+import { basename, delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   parseSpawnThroughResponse,
@@ -61,6 +75,35 @@ export const FLOOR_BUDGET_MS = 300_000;
 
 /** End of input, as a person types it (built, never typed into this file). */
 export const END_OF_INPUT = String.fromCodePoint(4);
+
+/** A zsh on this host's PATH, for the panes born as a person's are. win32 has
+ * none to integrate: the kit's shim execs in place, which is POSIX only. */
+export function findZsh(): string | undefined {
+  if (process.platform === "win32") return undefined;
+  for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
+    if (dir === "") continue;
+    const candidate = join(dir, "zsh");
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // not here
+    }
+  }
+  return undefined;
+}
+export const ZSH = findZsh();
+
+/** The person's login shell as the daemon reads it, when it is a zsh: a pane
+ * born by default (`terminal.create {}`) is then the shell under test. */
+function loginZsh(): string | undefined {
+  try {
+    const shell = userInfo().shell;
+    return typeof shell === "string" && basename(shell) === "zsh" ? shell : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 let floors: ChildProcess[] = [];
 let roots: string[] = [];
@@ -118,6 +161,10 @@ export interface Floor {
   dataDir: string;
   /** where panes are born: a directory of the test's own, by its physical path */
   work: string;
+  /** the throwaway HOME the floor — and so every born shell — runs with, when
+   * the floor is a person's (`person: true`); its startup files leave one
+   * line per run in `<personHome>/ran` */
+  personHome?: string;
   /** the launchers' home, and the directory a pane puts at the head of its PATH */
   home: string;
   shimDirectory: string;
@@ -148,6 +195,11 @@ export interface FloorConfig {
   bundle: string;
   /** false = the row expects no launcher from this boot, and waits for none */
   launchers?: boolean;
+  /** the floor runs with a throwaway HOME and a throwaway person's startup
+   * files, as a person's panes would: what a shell BORN integrated reads. The
+   * test process's own ZDOTDIR is set aside meanwhile — the gateway hands the
+   * kit fieldd's environment, and a born shell restores that ZDOTDIR. */
+  person?: boolean;
   /** compose the agent index (a scripted rosettad) and resume-when-idle's
    * thresholds: what a run that MAY be replaced at idle is replaced by */
   index?: { afterMs: number; pollMs: number };
@@ -189,12 +241,30 @@ export async function floor(config: FloorConfig): Promise<Floor> {
   // the root is removed AFTER every floor's tree is reaped
   if (restart === undefined) roots.push(root);
   const dataDir = join(root, ...LAYOUT.USERS_DIR, "1");
+  const personHome =
+    config.person === true || restart?.personHome !== undefined ? join(root, "home") : undefined;
+  if (personHome !== undefined && restart === undefined) {
+    // a throwaway person: startup files that say they ran, and nothing else
+    // (an interactive zsh with NO .zshrc would offer its new-user wizard)
+    const ran = join(personHome, "ran");
+    mkdirSync(personHome, { recursive: true });
+    for (const file of [".zshenv", ".zprofile", ".zshrc"])
+      writeFileSync(join(personHome, file), `print -r -- ${file} >> '${ran}'\n`);
+    writeFileSync(join(personHome, ".profile"), `echo .profile >> '${ran}'\n`);
+  }
+  if (personHome !== undefined) {
+    const zdotdir = process.env["ZDOTDIR"];
+    delete process.env["ZDOTDIR"];
+    closers.push(() => {
+      if (zdotdir !== undefined) process.env["ZDOTDIR"] = zdotdir;
+    });
+  }
   if (restart === undefined) {
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     mkdirSync(join(root, "work"));
     const child = spawn(FLOOR_BIN, [], {
       env: {
-        ...process.env,
+        ...(personHome === undefined ? process.env : personEnvironment(personHome)),
         FIELD_NATIVE_DATA_DIR: dataDir,
         FIELD_LOG_DIR: join(dataDir, "logs"),
         FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
@@ -265,6 +335,7 @@ export async function floor(config: FloorConfig): Promise<Floor> {
     root,
     dataDir,
     work: realpathSync(join(root, "work")),
+    ...(personHome === undefined ? {} : { personHome }),
     home,
     shimDirectory: spawnThroughLayout(home).shimDirectory,
     daemon,
@@ -286,6 +357,22 @@ export async function floor(config: FloorConfig): Promise<Floor> {
     sessionsFile,
     requestLog,
   };
+}
+
+/** The environment a person's floor runs with — and so every shell it births
+ * (`inherit`): this process's, minus what would make a born shell look already
+ * integrated or reach outside the box (a ZDOTDIR or HISTFILE of the machine
+ * owner's, a terminal app's session hooks), plus the throwaway HOME. */
+function personEnvironment(home: string): Record<string, string> {
+  const environment: Record<string, string> = {};
+  for (const [name, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    if (name === "ZDOTDIR" || name === "HISTFILE") continue;
+    if (name.startsWith("TERM_") || name.startsWith("PUPPETEER_")) continue;
+    environment[name] = value;
+  }
+  environment["HOME"] = home;
+  return environment;
 }
 
 /** A session row of the index's, as rosetta serves it: the conversation's
@@ -425,29 +512,76 @@ export async function openPane(
     "the floor listing the pane",
   );
   const pane: Pane = { sessionId: created.sessionId, pid: listed.pid as number };
-  if (options.recorded === true) {
-    paneSeq += 1;
-    const screen = join(box.root, `screen-${paneSeq}.txt`);
-    pane.screen = screen;
-    await type(box, pane, `exec script -q -F '${screen}' /bin/sh`);
-    // `script` empties the terminal's input as it takes it over: typing is
-    // lost until it is ready, so ask until the pane answers
-    let asked = 0;
-    await poll(
-      async () => {
-        asked += 1;
-        await type(box, pane, `echo vf-ready-${asked}`);
-        await quiet(400);
-        return /^vf-ready-\d+$/mu.test(screenOf(pane)) ? true : undefined;
-      },
-      FLOOR_WAIT_MS,
-      "the recorded pane answering",
-    );
-  }
+  if (options.recorded === true) await record(box, pane);
   if (options.path !== false) {
     await type(box, pane, `export PATH='${box.shimDirectory}':"$PATH"`);
   }
   return pane;
+}
+
+/** The pane hands its terminal to `script(1)`, which runs `/bin/sh` beneath it
+ * and copies everything the pane shows into a file. The sh inherits the PATH
+ * the pane's shell exported — a born-integrated shell's, led by the launchers
+ * at its first prompt — so what is typed from here resolves as it would there. */
+async function record(box: Floor, pane: Pane): Promise<void> {
+  paneSeq += 1;
+  const screen = join(box.root, `screen-${paneSeq}.txt`);
+  pane.screen = screen;
+  await type(box, pane, `exec script -q -F '${screen}' /bin/sh`);
+  // `script` empties the terminal's input as it takes it over: typing is
+  // lost until it is ready, so ask until the pane answers
+  let asked = 0;
+  await poll(
+    async () => {
+      asked += 1;
+      await type(box, pane, `echo vf-ready-${asked}`);
+      await quiet(400);
+      return /^vf-ready-\d+$/mu.test(screenOf(pane)) ? true : undefined;
+    },
+    FLOOR_WAIT_MS,
+    "the recorded pane answering",
+  );
+}
+
+/** Birth a pane as a person's is born — `terminal.create {}`, the login shell
+ * with `-l` — when that shell is a zsh; on a host whose login shell is
+ * another, an explicit zsh from PATH, the other birth `create` integrates.
+ * Nothing is typed to make the launchers lead: the shell is BORN integrated
+ * by the daemon's own wiring, or the row is red. The pane has answered at its
+ * first prompt when this returns, so the integration's hook has run. */
+export async function bornPane(
+  box: Floor,
+  options: { recorded?: boolean } = {},
+): Promise<Pane & { integrated: boolean; login: boolean }> {
+  if (box.personHome === undefined) throw new Error("a born pane needs a person's floor");
+  const login = loginZsh() !== undefined;
+  if (!login && ZSH === undefined) throw new Error("no zsh on this host");
+  const created = (await box.win.call(
+    "terminal.create",
+    login ? { cwd: box.work } : { shell: ZSH, cwd: box.work },
+  )) as { sessionId: string };
+  const listed = await poll(
+    () => {
+      const row = box.daemon.terminals.get(created.sessionId);
+      return row?.pid === undefined ? undefined : row;
+    },
+    FLOOR_WAIT_MS,
+    "the floor listing the born pane",
+  );
+  const pane: Pane = { sessionId: created.sessionId, pid: listed.pid as number };
+  // the birth's own word, from the ledger: what the daemon says it did
+  const act = await poll(
+    () =>
+      auditActs(box.dataDir, "terminal.session.create").find(
+        (found) => found.outcome?.attrs?.["sessionId"] === created.sessionId,
+      ),
+    FLOOR_WAIT_MS,
+    "the birth in the ledger",
+  );
+  const integrated = act.outcome?.attrs?.["integrated"] === true;
+  await answers(box, pane, "born");
+  if (options.recorded === true) await record(box, pane);
+  return { ...pane, integrated, login };
 }
 
 /** The pane answers at its prompt: a line typed now runs. */

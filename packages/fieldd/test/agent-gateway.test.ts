@@ -52,6 +52,7 @@ import {
   SPAWN_THROUGH_EXIT_UNAVAILABLE,
   type SpawnThroughHost,
   type SpawnThroughResponse,
+  shellIntegrationEnvironment,
   spawnThroughLayout,
   startSpawnThroughGateway,
   writeRendezvous,
@@ -81,6 +82,7 @@ import {
   nodeCanExecInPlace,
   offeredLaunch,
   refusalReasonCode,
+  type ShellIntegration,
   shimHomeIsDurable,
   startedWithSession,
 } from "../src/agent-gateway";
@@ -637,6 +639,8 @@ interface Unit {
     rendezvous: Array<Parameters<typeof writeRendezvous>[1]>;
     hosts: SpawnThroughHost[];
   };
+  /** what AR-7d's seam was handed, in order: the answer, then `null` at the stop */
+  integrations: Array<ShellIntegration | null>;
   gateway: AgentGatewayService;
   /** a launch request, as a launcher would send it, with the real bearer */
   launch(pid: number, over?: Partial<LaunchOver>): Promise<SpawnThroughResponse | undefined>;
@@ -674,6 +678,8 @@ interface UnitOptions {
   launcher?: { command: string } | null;
   shimScript?: string;
   floor?: boolean;
+  /** the platform a shell is born on, as the row states it */
+  platform?: NodeJS.Platform;
 }
 
 async function unit(options: UnitOptions = {}): Promise<Unit> {
@@ -695,6 +701,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
   const logged: Logged[] = [];
   const ledger: Ledgered[] = [];
   const kit: Unit["kit"] = { gateway: [], materialized: [], rendezvous: [], hosts: [] };
+  const integrations: Unit["integrations"] = [];
   const audit: SystemAudit = async (mutation, effect, describe) => {
     const entry: Ledgered = { mutation };
     ledger.push(entry);
@@ -719,6 +726,8 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
       ? {}
       : { launcher: options.launcher ?? { command: process.execPath } }),
     ...(options.runtimeFacts !== undefined ? { runtimeFacts: options.runtimeFacts } : {}),
+    ...(options.platform !== undefined ? { platform: options.platform } : {}),
+    onShellIntegration: (integration) => integrations.push(integration),
     processTable: async () => {
       reads.count += 1;
       return table;
@@ -768,6 +777,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     logged,
     ledger,
     kit,
+    integrations,
     gateway,
     send,
     launch: async (pid, over = {}) => {
@@ -1373,6 +1383,195 @@ describe("the gateway's start, refresh and stop (AR-7b)", () => {
       await stopped;
       expect(box.fold.adopted.length).toBe(1);
       expect(box.fold.identities).toBe(1);
+    },
+    PROCESS_BUDGET_MS,
+  );
+});
+
+// ── a shell born integrated ──
+
+describe("a shell born integrated — the gateway answers the shell lane's seam (AR-7b × AR-7d)", () => {
+  /** fieldd's own environment, as a row states it, for as long as `during` runs. */
+  function withEnvironment<T>(over: Record<string, string | undefined>, during: () => T): T {
+    const before = Object.keys(over).map((name) => [name, process.env[name]] as const);
+    try {
+      for (const [name, value] of Object.entries(over)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+      return during();
+    } finally {
+      for (const [name, value] of before) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  }
+  const warned = (box: Unit, event: string): Logged[] =>
+    box.logged.filter((entry) => entry.event === event && entry.level === "warn");
+
+  it(
+    "the seam is handed the answer once the home is written, never twice, and is handed nothing at the stop — and the answer is the kit's own, for the shell being born, over this home, from fieldd's own environment",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      const layout = spawnThroughLayout(box.home);
+      // before the home is written nobody is handed anything, and a shell is born as before
+      expect(box.integrations).toEqual([]);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
+      expect(existsSync(layout.zshenv)).toBe(false);
+
+      await box.gateway.start();
+      expect(box.integrations).toEqual([box.gateway.shellIntegration]);
+      // what a born shell is pointed at was written BEFORE the seam was handed it
+      expect(existsSync(layout.zshenv)).toBe(true);
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(true);
+      const integration = box.integrations[0] as ShellIntegration;
+
+      withEnvironment({ ZDOTDIR: "/the/persons/own", PATH: "/usr/local/bin:/usr/bin:/bin" }, () => {
+        // zsh — the three variables, together; the person's ZDOTDIR is fieldd's own
+        expect(integration("/bin/zsh")).toEqual({
+          ZDOTDIR: layout.zshDirectory,
+          PUPPETEER_ORIGINAL_ZDOTDIR: "/the/persons/own",
+          PUPPETEER_SHIM_DIR: layout.shimDirectory,
+        });
+        // any other shell — the kit's best effort: the launchers, then fieldd's own PATH
+        expect(integration("/bin/sh")).toEqual({
+          PUPPETEER_SHIM_DIR: layout.shimDirectory,
+          PATH: `${layout.shimDirectory}:/usr/local/bin:/usr/bin:/bin`,
+        });
+        for (const shell of ["/bin/zsh", "-zsh", "/bin/bash", "/opt/homebrew/bin/fish", "/bin/sh"])
+          expect(integration(shell), shell).toEqual(
+            shellIntegrationEnvironment({ home: box.home, shell, environment: process.env }),
+          );
+      });
+      // the environment is read at every birth, never kept from the start
+      withEnvironment({ ZDOTDIR: undefined }, () =>
+        expect(integration("/bin/zsh")).toMatchObject({ PUPPETEER_ORIGINAL_ZDOTDIR: "" }),
+      );
+      // nothing in a daemon's own classes: the terminal service would drop it
+      for (const name of Object.keys({ ...integration("/bin/zsh"), ...integration("/bin/sh") }))
+        expect(name).not.toMatch(/^FIELDD?_/u);
+
+      await box.gateway.refresh();
+      expect(box.integrations.length).toBe(1);
+
+      await box.gateway.stop();
+      expect(box.integrations).toEqual([box.gateway.shellIntegration, null]);
+      // and whoever kept the answer is told nothing by it
+      expect(integration("/bin/zsh")).toBeUndefined();
+      expect(integration("/bin/sh")).toBeUndefined();
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "answers nothing on win32 although launchers stand: the shim execs in place, which is POSIX only",
+    async () => {
+      const box = await unit({ platform: "win32" });
+      onePane(box);
+      await box.gateway.start();
+      expect(box.gateway.state().names).toEqual([TYPED_COMMAND]);
+      for (const shell of ["C:\\Windows\\System32\\cmd.exe", "/bin/zsh", "/bin/sh"])
+        expect(box.gateway.shellIntegration(shell), shell).toBeUndefined();
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "answers nothing while there is no launcher to offer — no launcher's runtime, no agent offered, a row that stopped offering — and answers again when there is one",
+    async () => {
+      // no program can run a launcher; a former boot's home is written again, emptied of launchers
+      const packaged = await unit({
+        launcher: null,
+        runtimeFacts: { sea: true, electron: undefined },
+      });
+      await materializeShims({
+        home: packaged.home,
+        names: [TYPED_COMMAND],
+        script: shimScript,
+        runtime: { command: process.execPath },
+        strict: true,
+      });
+      onePane(packaged);
+      await packaged.gateway.start();
+      expect(packaged.gateway.state().names).toEqual([]);
+      expect(existsSync(spawnThroughLayout(packaged.home).zshenv)).toBe(true);
+      expect(packaged.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
+      expect(packaged.gateway.shellIntegration("/bin/sh")).toBeUndefined();
+
+      // nothing to offer and nothing of ours on the device: nothing written, nothing handed over
+      const unoffered = await unit({ provider: { classifies: false } });
+      onePane(unoffered);
+      await unoffered.gateway.start();
+      expect(existsSync(unoffered.home)).toBe(false);
+      expect(unoffered.integrations).toEqual([]);
+      expect(unoffered.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
+
+      // a row that stops offering takes the answer with it, and gives it back
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
+      const at = box.catalog.findIndex((row) => row.id === TYPED_PROVIDER);
+      const offering = box.catalog[at] as AgentCatalogEntry;
+      box.catalog[at] = { ...offering, offers: { ...offering.offers, invoke: false } };
+      await box.gateway.refresh();
+      expect(box.gateway.state().names).toEqual([]);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
+      expect(box.gateway.shellIntegration("/bin/sh")).toBeUndefined();
+      box.catalog[at] = offering;
+      await box.gateway.refresh();
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
+      // the seam was handed the answer once, whatever the launchers did since
+      expect(box.integrations).toEqual([box.gateway.shellIntegration]);
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "a home that lost the integration's file points no shell at it — said once, at warn — until the launchers are written again",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
+      const layout = spawnThroughLayout(box.home);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
+      // the OS's cleaner took the file and left the directory
+      rmSync(layout.zshenv);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
+      expect(box.gateway.shellIntegration("/bin/sh")).toBeUndefined();
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
+      const said = warned(box, "fieldd.agents.gateway_shell_integration_lost");
+      expect(said.length).toBe(1);
+      expect(said[0]?.attrs).toEqual({ home: box.home });
+      await box.gateway.refresh();
+      expect(existsSync(layout.zshenv)).toBe(true);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toMatchObject({
+        ZDOTDIR: layout.zshDirectory,
+      });
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "never throws: what the kit cannot answer is a shell born as before, said at warn",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
+      // no shell at all: the kit reads its name and throws
+      const nothing = undefined as unknown as string;
+      expect(() => box.gateway.shellIntegration(nothing)).not.toThrow();
+      expect(box.gateway.shellIntegration(nothing)).toBeUndefined();
+      expect(() =>
+        shellIntegrationEnvironment({ home: box.home, shell: nothing, environment: process.env }),
+      ).toThrow();
+      const said = warned(box, "fieldd.agents.gateway_shell_integration_failed");
+      expect(said.length).toBe(2);
+      expect(Object.keys(said[0]?.attrs ?? {})).toEqual(["error"]);
+      // and the next shell is answered
+      expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
     },
     PROCESS_BUDGET_MS,
   );

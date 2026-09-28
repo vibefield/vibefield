@@ -27,6 +27,7 @@ import {
   type SpawnThroughRequest,
   type SpawnThroughResponse,
   type SpawnThroughShimRuntime,
+  shellIntegrationEnvironment,
   spawnThroughLayout,
   spawnThroughRefusalMessage,
   startSpawnThroughGateway,
@@ -540,6 +541,11 @@ export interface GatewayTerminals {
   onSessionBorn(listener: (born: { sessionId: string; pid: number | null }) => void): () => void;
 }
 
+/** AR-7d — what a free shell is born with beyond what it inherits, answered
+ * for the executable being born (`TerminalServiceOptions.shellIntegration`);
+ * `undefined` = the shell is born exactly as before. */
+export type ShellIntegration = (shell: string) => Record<string, string> | undefined;
+
 // ── the service ──
 
 /** The kit's functions, each replaceable by a unit row that reads what it is
@@ -590,6 +596,12 @@ export interface AgentGatewayOptions {
   /** how long a launcher in one of our panes waits for a fieldd that does not
    * answer before it refuses (default: the kit's) */
   retryMs?: number | undefined;
+  /** AR-7d's seam, as the daemon lends it: handed `shellIntegration` once the
+   * shim home is written — a free shell born from then on is born with the
+   * launchers first on its PATH — and `null` when the gateway stops */
+  onShellIntegration?: ((integration: ShellIntegration | null) => void) | undefined;
+  /** test seam: the platform a shell is born on (default: this process's) */
+  platform?: NodeJS.Platform | undefined;
   /** test seam: the process table a launch is placed in (default: the kit's
    * one `ps` read, per request) */
   processTable?: (() => Promise<ProcessTable | undefined>) | undefined;
@@ -662,6 +674,8 @@ export class AgentGatewayService {
   private queue: Promise<unknown> = Promise.resolve();
   private bringingUp: Promise<void> | undefined;
   private published = false;
+  /** the home was written by THIS boot: what a born shell is pointed at is there */
+  private homeWritten = false;
   /** our shells by session; a pid is read ONCE, when the session is first seen */
   private readonly shells = new Map<string, OwnedShell>();
   /** births the inventory has not listed yet */
@@ -717,6 +731,9 @@ export class AgentGatewayService {
    * launcher waits for the fieldd that comes next. */
   stop(): Promise<void> {
     this.stopping ??= (async () => {
+      // a shell born from here on is born as before: nothing of this
+      // gateway's will answer the launcher its PATH would lead with
+      this.opts.onShellIntegration?.(null);
       for (const off of this.unlisten.splice(0)) off();
       if (this.launching.size > 0) {
         await Promise.race([
@@ -762,6 +779,52 @@ export class AgentGatewayService {
   counts(): ReadonlyMap<SpawnThroughDeclineCode, number> {
     return new Map(this.ranAsTyped);
   }
+
+  // ── a shell born integrated (AR-7d's seam) ──
+
+  /** What a free shell born NOW adds to its environment so the launchers lead
+   * its PATH: the kit's own answer for that shell, over this home. `undefined`
+   * — the shell is born exactly as before — on win32 (the shim execs in place,
+   * which is POSIX only), until the home is written, once the gateway stops,
+   * whenever there is no launcher to offer (no launcher runtime, no offered
+   * agent), and for a home that has lost the integration's own file since:
+   * zsh pointed at a directory without it would read NO startup file of the
+   * person's, silently. Never throws — `TerminalService` does not catch, and
+   * a pane is never refused for the integration's sake.
+   *
+   * WHICH ENVIRONMENT. The kit asks for the environment the shell is born
+   * with, which is the FLOOR's; fieldd has only its own and hands it that.
+   * They are the same when this fieldd spawned the floor, and can differ after
+   * a later fieldd ADOPTED it. What differs then: zsh restores the ADOPTING
+   * fieldd's `ZDOTDIR`, not the floor's; and for bash, fish and sh the kit's
+   * best-effort branch replaces the pane's PATH with `<shim dir>:<fieldd's
+   * PATH>`. The floor is not asked for its environment: that is a change to
+   * the floor, and not this slice's. */
+  readonly shellIntegration: ShellIntegration = (shell) => {
+    try {
+      if ((this.opts.platform ?? process.platform) === "win32") return undefined;
+      if (!this.homeWritten || this.stopping !== undefined) return undefined;
+      if (this.offered.names.length === 0) return undefined;
+      if (!existsSync(spawnThroughLayout(this.home).zshenv)) {
+        this.sayOnce("integration-lost", () =>
+          this.logger.warn(
+            "fieldd.agents.gateway_shell_integration_lost",
+            "The launchers' home has lost the shell integration's file; shells are born without it until the launchers are written again",
+            { home: this.home },
+          ),
+        );
+        return undefined;
+      }
+      return shellIntegrationEnvironment({ home: this.home, shell, environment: process.env });
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.gateway_shell_integration_failed",
+        "The shell integration could not be answered; the shell is born without it",
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+      return undefined;
+    }
+  };
 
   private async bringUp(): Promise<void> {
     if (this.stopping !== undefined) return;
@@ -846,6 +909,12 @@ export class AgentGatewayService {
         strict: AGENT_GATEWAY_STRICT,
         hostLabel: AGENT_GATEWAY_HOST_LABEL,
       });
+      // AR-7d — the home is written: from here a shell may be born pointed at
+      // it. Handed over once; a stop that began meanwhile has taken it back.
+      if (!this.homeWritten && this.stopping === undefined) {
+        this.homeWritten = true;
+        this.opts.onShellIntegration?.(this.shellIntegration);
+      }
     }
     if (this.gateway === undefined) {
       this.token = randomBytes(32).toString("hex");

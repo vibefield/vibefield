@@ -128,7 +128,11 @@ import {
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { createFieldSubscription } from "./agent-field";
 import { AgentFieldPublisher } from "./agent-field-publisher";
-import { type AgentGatewayOptions, AgentGatewayService } from "./agent-gateway";
+import {
+  type AgentGatewayOptions,
+  AgentGatewayService,
+  type ShellIntegration,
+} from "./agent-gateway";
 import { EnrollmentStore, IndexService } from "./agent-index";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
@@ -599,11 +603,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // its environment so the agent launchers lead its PATH: the spawn-through
   // kit's `shellIntegrationEnvironment` over the shim home, which the gateway
   // service (AR-7b, `agent-gateway.ts`) materializes. That service assigns
-  // this ref once the shim home is written (and back to null when it stops);
-  // the terminal service reads it through a getter at every birth. Until then
-  // — and in every composition without it — a shell is born exactly as before.
-  // biome-ignore lint/style/useConst: the seam — AR-7b's gateway service assigns it
-  let shellIntegrationRef: ((shell: string) => Record<string, string> | undefined) | null = null;
+  // this ref once the shim home is written (and back to null when it stops:
+  // `onShellIntegration`, where the service is built below); the terminal
+  // service reads it through a getter at every birth. Until then — and in
+  // every composition without it — a shell is born exactly as before.
+  let shellIntegrationRef: ShellIntegration | null = null;
   let devicesForAgents: DeviceService | null = null;
   // Show in Finder reaches Electron main through the shell provider, which
   // the api owns — built later in this boot, so bound through a ref too. GT-7:
@@ -1199,6 +1203,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             // the install the runtime itself launches, read for the agents
             // that are given a launcher and no other
             executables: (providers) => agents.distribution.launchExecutables(providers),
+            // AR-7d — the seam: the service's answer once its home is
+            // written, and nothing (a shell born as before) once it stops
+            onShellIntegration: (integration) => {
+              shellIntegrationRef = integration;
+            },
             ...(config.agentGateway?.shimScript !== undefined
               ? { shimScript: config.agentGateway.shimScript }
               : {}),
