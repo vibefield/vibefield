@@ -24,15 +24,9 @@
       "version": "1.3.0",
       "homepage": "https://github.com/northlight-studio/plugins",
       "brings": {
-        "commands": [
-          "review"
-        ],
-        "hooks": [
-          "PreToolUse"
-        ],
-        "skills": [
-          "house-style"
-        ]
+        "commands": ["review"],
+        "hooks": ["PreToolUse"],
+        "skills": ["house-style"]
       },
       "held": "review@northlight",
       "newer": true
@@ -46,12 +40,8 @@
       "category": "Writing",
       "version": "2.0.0",
       "brings": {
-        "commands": [
-          "changelog"
-        ],
-        "skills": [
-          "changelog-writer"
-        ]
+        "commands": ["changelog"],
+        "skills": ["changelog-writer"]
       },
       "install": {
         "act": "install",
@@ -68,15 +58,9 @@
       "category": "Deployment",
       "version": "0.4.1",
       "brings": {
-        "commands": [
-          "deploy"
-        ],
-        "hooks": [
-          "Stop"
-        ],
-        "servers": [
-          "staging"
-        ]
+        "commands": ["deploy"],
+        "hooks": ["Stop"],
+        "servers": ["staging"]
       },
       "asks": [
         {
