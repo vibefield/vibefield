@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-const SNAPSHOT_VERSION = 3;
+const SNAPSHOT_VERSION = 4;
 const BUILD_ID = /^dev-[a-f0-9]{24}$/;
 
 export class RuntimeSnapshotChangedError extends Error {
@@ -54,6 +54,7 @@ export async function stageRuntimeSnapshot({
       copyFile(paths.fielddOutput, layout.fielddOutput),
       copyFile(paths.serviceHarnessOutput, join(temporary, "fieldd", "service-harness.mjs")),
       copyFile(paths.fielddWasm, join(temporary, "fieldd", "loro_wasm_bg.wasm")),
+      copyFile(paths.agentShimOutput, join(temporary, "fieldd", "agent-shim.cjs")),
       copyFile(paths.nativeOutput, layout.nativeOutput),
       writeFile(
         join(layout.appRoot, "package.json"),

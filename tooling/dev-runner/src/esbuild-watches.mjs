@@ -2,16 +2,9 @@ import { dirname, join } from "node:path";
 import { context, formatMessages } from "esbuild";
 import { runCommand } from "./processes.mjs";
 
-export async function startEsbuildWatches({ paths, log, onArtifactChange }) {
-  const states = new Map();
-  const contexts = [];
-  let active = false;
-  let resolveReady;
-  const ready = new Promise((resolve) => {
-    resolveReady = resolve;
-  });
-
-  const definitions = [
+/** The watched bundles, as data: a test builds one exactly as the watch below does. */
+export function esbuildDefinitions(paths) {
+  return [
     {
       name: "electron-main",
       entry: paths.studioMainEntry,
@@ -62,7 +55,53 @@ export async function startEsbuildWatches({ paths, log, onArtifactChange }) {
       format: "esm",
       external: ["bufferutil", "loro-crdt", "utf-8-validate"],
     },
+    {
+      // AR-7b: fieldd's build makes a third bundle, the kit's spawn-through
+      // shim, and the gateway offers a launcher only with `agent-shim.cjs`
+      // beside the daemon's bundle. Without this build the gateway offered
+      // none under `pnpm dev`, and an agent typed in a pane ran unmanaged (the
+      // V2 lane report, draft/ar7-briefs/reports/v2-gateway-report.md, WHAT IS
+      // NOT BUILT 2). The options are that build step's, and the entry is the
+      // kit's package export resolved from fieldd's package root as the step
+      // resolves it, so the pinned kit is the one in fieldd's dependency graph;
+      // test/esbuild-watches.test.mjs compares the two flag for flag and builds
+      // both to compare the bytes. The kit's sources reach this build through
+      // esbuild's own input tracking, as they reach bin.cjs.
+      name: "fieldd-agent-shim",
+      entry: "@vibecook/puppeteer-runtime/spawn-through/shim",
+      outfile: paths.agentShimOutput,
+      cwd: dirname(dirname(paths.fielddEntry)),
+      format: "cjs",
+      target: "node22",
+    },
   ];
+}
+
+/** What one definition asks esbuild for; the watch adds only its lifecycle plugin. */
+export function esbuildOptions(definition) {
+  return {
+    absWorkingDir: definition.cwd,
+    entryPoints: [definition.entry],
+    outfile: definition.outfile,
+    bundle: true,
+    platform: "node",
+    format: definition.format,
+    target: definition.target,
+    external: definition.external,
+    define: definition.define,
+    logLevel: "silent",
+  };
+}
+
+export async function startEsbuildWatches({ paths, log, onArtifactChange }) {
+  const states = new Map();
+  const contexts = [];
+  let active = false;
+  let resolveReady;
+  const ready = new Promise((resolve) => {
+    resolveReady = resolve;
+  });
+  const definitions = esbuildDefinitions(paths);
 
   for (const definition of definitions) states.set(definition.name, "building");
 
@@ -103,18 +142,7 @@ export async function startEsbuildWatches({ paths, log, onArtifactChange }) {
           });
         },
       };
-      const buildContext = await context({
-        absWorkingDir: definition.cwd,
-        entryPoints: [definition.entry],
-        outfile: definition.outfile,
-        bundle: true,
-        platform: "node",
-        format: definition.format,
-        external: definition.external,
-        define: definition.define,
-        logLevel: "silent",
-        plugins: [plugin],
-      });
+      const buildContext = await context({ ...esbuildOptions(definition), plugins: [plugin] });
       contexts.push(buildContext);
       await buildContext.watch();
     }

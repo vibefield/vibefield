@@ -3,12 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { computeBuildId } from "./build-id.mjs";
 import { createChangeBuffer } from "./change-buffer.mjs";
-import {
-  classifyCriticalChange,
-  discoverPluginProjects,
-  rendererArtifactsOf,
-  serviceModulesOf,
-} from "./critical-changes.mjs";
+import { classifyCriticalChange, discoverPluginProjects } from "./critical-changes.mjs";
 import { watchCriticalRoots } from "./critical-watcher.mjs";
 import { acquireDevLock } from "./dev-lock.mjs";
 import { createElectronStack } from "./electron-stack.mjs";
@@ -22,6 +17,7 @@ import { readDevProduct } from "./product.mjs";
 import { createRestartCoordinator } from "./restart-coordinator.mjs";
 import { sendRunnerCommand, startRunnerCommandServer } from "./runner-command.mjs";
 import { handoffDesktopRuntime } from "./runtime-handoff.mjs";
+import { daemonPlaneInputs, shellPlaneInputs } from "./runtime-planes.mjs";
 import {
   pruneRuntimeSnapshots,
   RuntimeSnapshotChangedError,
@@ -444,28 +440,10 @@ function handleElectronExit({ code, signal }) {
 // shell-only edit restarts Electron and the new shell ADOPTS the running
 // pair through the buildId-gated probe.
 async function buildIdentity() {
-  const daemonFiles = daemonPlaneInputs();
+  const daemonFiles = daemonPlaneInputs(paths, pluginProjects);
   const daemonBuildId = await computeBuildId(repoRoot, daemonFiles);
-  const buildId = await computeBuildId(repoRoot, [...shellPlaneInputs(), ...daemonFiles]);
+  const buildId = await computeBuildId(repoRoot, [...shellPlaneInputs(paths), ...daemonFiles]);
   return { buildId, daemonBuildId };
-}
-
-function shellPlaneInputs() {
-  return [paths.mainOutput, paths.preloadOutput, paths.studioPreloadOutput];
-}
-
-function daemonPlaneInputs() {
-  return [
-    paths.fielddOutput,
-    paths.serviceHarnessOutput,
-    paths.fielddWasm,
-    paths.nativeOutput,
-    ...pluginProjects.flatMap((project) => [
-      join(repoRoot, project.manifestFile),
-      ...rendererArtifactsOf(project).map((artifact) => join(repoRoot, artifact)),
-      ...serviceModulesOf(project).map((module) => join(repoRoot, module)),
-    ]),
-  ];
 }
 
 function sameIdentity(a, b) {

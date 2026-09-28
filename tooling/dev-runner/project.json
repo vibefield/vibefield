@@ -6,6 +6,9 @@
     "dev": {
       "continuous": true,
       "cache": false
+    },
+    "test": {
+      "inputs": ["default", "^default", "{workspaceRoot}/packages/fieldd/package.json"]
     }
   }
 }

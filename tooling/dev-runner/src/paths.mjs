@@ -55,6 +55,7 @@ export const workspacePaths = Object.freeze({
   serviceHarnessEntry: join(repoRoot, "packages", "fieldd", "src", "service-worker-harness.mjs"),
   serviceHarnessOutput: join(repoRoot, "packages", "fieldd", "dist", "service-harness.mjs"),
   fielddWasm: join(repoRoot, "packages", "fieldd", "dist", "loro_wasm_bg.wasm"),
+  agentShimOutput: join(repoRoot, "packages", "fieldd", "dist", "agent-shim.cjs"),
   nativeOutput: join(repoRoot, "target", "debug", nativeName),
   contractsSource: join(repoRoot, "packages", "contracts", "src"),
   nativeSource: join(repoRoot, "packages", "field-native", "src"),
