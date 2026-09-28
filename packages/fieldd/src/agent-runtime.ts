@@ -268,6 +268,42 @@ export type SystemAudit = <T>(
   describeOutcome?: (value: T) => AuditMutationOutcome,
 ) => Promise<T>;
 
+/** AR-7 — what the fold is told about a run puppeteer ADOPTED in a terminal
+ * the person's own shell owns (the agent's name typed at one of our panes'
+ * prompts): puppeteer's own facts for the run, where it runs (the PHYSICAL
+ * path — the launcher reports its own working directory, never the shell's
+ * `PWD`), the process that became the agent and when it started, and the
+ * identity the launch was given. */
+export interface AgentAdoptionInput {
+  info: AgentSessionInfo;
+  cwd: string;
+  process: { pid: number; startedAt: string };
+  launched: { creationRequestId: string; ingress?: BoundIngress | undefined };
+}
+
+/** AR-7 — the fold's entry points for a typed run, as the gateway service
+ * (`agent-gateway.ts`) reaches them. Three and no more: the identity every
+ * birth is given (a spawn's own, AR-4), the entry, and the withdrawal. */
+export interface AgentAdoption {
+  /** the creation request and the say over the ingress a launch is prepared
+   * with, and what was bound once the adapter has reported it */
+  identity(): {
+    creationRequestId: string;
+    ingress: HostIngress;
+    launched(): { creationRequestId: string; ingress?: BoundIngress | undefined };
+  };
+  /** the adopted run enters the fold: its record written and signed, its row
+   * published, its process watched. Throws when it cannot — the caller undoes
+   * the adoption in puppeteer and refuses the person in words. */
+  adopt(input: AgentAdoptionInput): Promise<void>;
+  /** the run is over and its row leaves; the record is stamped with `exit`.
+   * A run the fold does not hold is left as it is. */
+  withdraw(
+    runtimeRunId: string,
+    exit: { exitCode: number | null; signal: string | null; reason: string },
+  ): Promise<void>;
+}
+
 export interface AgentRuntimeServiceOptions {
   /** this user's root (`FielddConfig.dataDir`): the registry, the managed roots and the session records live under it */
   userRoot: string;
