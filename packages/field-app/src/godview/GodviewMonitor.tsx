@@ -27,9 +27,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { emitGodviewMonitorMarker } from "../development-console";
+import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
 import type { GodviewTheme } from "./GodviewTuningPanel";
-import { monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
+import { managedRowId, monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
+import type { AgentSessionSummary } from "./monitor/facet-types";
+import { useAgentFold } from "./monitor/GodviewAgentsProvider";
 import {
   chosenProfile,
   launchProfile,
@@ -116,6 +118,34 @@ export function remoteUnavailableClaim(sources: MonitorSourceCounts): string | n
   return sources.remoteReason === undefined || sources.remoteReason === ""
     ? "mesh unavailable"
     : `mesh unavailable · ${sources.remoteReason}`;
+}
+
+/**
+ * AR-7 — the fold's rows as the marker names them: every run, whether the
+ * stage draws it or not. The pane is the fold's own join (`terminal`, a LOCAL
+ * row only — a peer's session id names no pane here), the provenance is the
+ * row's word with the contract's default (absent reads `app`), and `drawn` is
+ * asked of the rows the stage actually assembled, by the run — the id every
+ * managed row is keyed by (`managedRowId`).
+ */
+export function monitorRunFacts(
+  rows: readonly AgentSessionSummary[],
+  drawn: readonly Pick<MonitorAgent, "id" | "agent">[],
+): GodviewMonitorRunFacts[] {
+  const bodies = new Set(drawn.filter((row) => row.agent !== undefined).map((row) => row.id));
+  return rows.map((row) => {
+    const terminal = row.terminal?.hosted === "local" ? row.terminal.runtimeSessionId : undefined;
+    return {
+      run: row.runtimeRunId,
+      provider: row.kind,
+      ...(terminal !== undefined && terminal !== "" ? { terminal } : {}),
+      spawnedBy: row.spawnedBy ?? "app",
+      status: row.status,
+      exited: row.continuation?.exited === true,
+      observed: row.monitor !== undefined,
+      drawn: bodies.has(managedRowId(row)),
+    };
+  });
 }
 
 /** With no deck there is no daemon to ask: the sheet says HISTORY OFF, the
@@ -278,6 +308,16 @@ export function GodviewMonitor({
     [agents, chosenId, staged],
   );
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
+  // AR-7 — the fold's rows for the marker, handed on as the SAME object until
+  // a fact the marker states moves: the fold sends a whole board at fieldd's
+  // tick while an agent works, and a token count is no news to this line (the
+  // identity rule the deck's frame facts follow in `GodviewAgentsProvider`).
+  const fold = useAgentFold();
+  const runFacts = useRef<{ key: string; runs: GodviewMonitorRunFacts[] }>({ key: "", runs: [] });
+  const nextRuns = monitorRunFacts(fold.rows, agents);
+  const runsKey = JSON.stringify(nextRuns);
+  if (runsKey !== runFacts.current.key) runFacts.current = { key: runsKey, runs: nextRuns };
+  const runs = runFacts.current.runs;
   const tabs = useMemo(
     () => profileTabs(profileSets, agents, personas),
     [profileSets, agents, personas],
@@ -416,6 +456,7 @@ export function GodviewMonitor({
         history: historyClaim,
         personas: personaOptions.length,
       },
+      runs,
     });
     // the picker's facts ride on primitives (and the door's own list), never
     // on the per-render arrays derived from them
@@ -433,6 +474,7 @@ export function GodviewMonitor({
     offersSpawn,
     historyClaim,
     personaOptions.length,
+    runs,
   ]);
 
   const closeFind = useCallback((): void => setFindOpen(false), []);
