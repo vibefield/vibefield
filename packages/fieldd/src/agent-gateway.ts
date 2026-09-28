@@ -777,6 +777,12 @@ export class AgentGatewayService {
     this.home = agentShimHome(opts.userRoot);
   }
 
+  /** The launchers are POSIX only: the shim execs in place, which win32
+   * cannot (B3). Nothing of the gateway's is written or offered there. */
+  private get posix(): boolean {
+    return (this.opts.platform ?? process.platform) !== "win32";
+  }
+
   // ── lifetime ──
 
   /** Bring the gateway up: the launcher's runtime chosen, the launchers
@@ -882,7 +888,7 @@ export class AgentGatewayService {
    * the floor, and not this slice's. */
   readonly shellIntegration: ShellIntegration = (shell) => {
     try {
-      if ((this.opts.platform ?? process.platform) === "win32") return undefined;
+      if (!this.posix) return undefined;
       if (this.stopping !== undefined) return undefined;
       if (!existsSync(spawnThroughLayout(this.home).zshenv)) {
         this.sayOnce("integration-lost", () =>
@@ -912,6 +918,24 @@ export class AgentGatewayService {
       this.logger.info(
         "fieldd.agents.gateway_no_floor",
         "No terminal floor is lent to this daemon; the agent gateway is not started",
+      );
+      return;
+    }
+    if (!this.posix) {
+      // B3 — win32: no home, no launchers, no listener. A home and sh
+      // launchers nothing there can run would be written for nothing, and
+      // `agent.providers` would answer `invoke` for agents no launcher
+      // stands for. The catalog's rows stand as they are; `launchers()` is
+      // empty, so the runtime's `offersHere` withdraws `invoke` from each.
+      // Said once, at info: an honest state, not a fault.
+      this.choice = {
+        runtime: undefined,
+        reason: "the launchers are POSIX only: the shim execs in place, which win32 cannot",
+      };
+      this.logger.info(
+        "fieldd.agents.gateway_unsupported_platform",
+        "The agent launchers are POSIX only; on win32 no home is written, no launcher is offered and a typed agent runs as the shell runs it",
+        { platform: this.opts.platform ?? process.platform },
       );
       return;
     }
@@ -979,7 +1003,8 @@ export class AgentGatewayService {
    * order. With nothing to offer and no home on disk there is nothing of ours
    * on this device to keep true, and nothing is written. */
   private async publish(): Promise<void> {
-    if (this.stopping !== undefined) return;
+    // B3 — and a refresh on win32 writes nothing either
+    if (this.stopping !== undefined || !this.posix) return;
     const script = this.bundledShim();
     const runtime = this.choice?.runtime;
     this.offered =

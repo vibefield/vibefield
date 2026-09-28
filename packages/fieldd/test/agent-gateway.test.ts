@@ -1503,14 +1503,40 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
   );
 
   it(
-    "answers nothing on win32 although launchers stand: the shim execs in place, which is POSIX only",
+    "B3 — on win32 nothing is written and nothing offered: no home, no launcher, no listener, no rendezvous — the state says why, the seam is handed nothing and answers nothing, a refresh writes nothing either, and the stop has nothing to close",
     async () => {
       const box = await unit({ platform: "win32" });
       onePane(box);
       await box.gateway.start();
-      expect(box.gateway.state().names).toEqual([TYPED_COMMAND]);
+      expect(existsSync(box.home)).toBe(false);
+      expect(box.gateway.state()).toEqual({
+        home: box.home,
+        listening: false,
+        names: [],
+        launcher: {
+          reason: "the launchers are POSIX only: the shim execs in place, which win32 cannot",
+        },
+      });
+      // what `agent.providers` reads to withdraw `invoke`: no launcher stands for anyone
+      expect(box.gateway.launchers().size).toBe(0);
+      expect(box.kit.materialized).toEqual([]);
+      expect(box.kit.gateway).toEqual([]);
+      expect(box.kit.rendezvous).toEqual([]);
+      expect(box.integrations).toEqual([]);
       for (const shell of ["C:\\Windows\\System32\\cmd.exe", "/bin/zsh", "/bin/sh"])
         expect(box.gateway.shellIntegration(shell), shell).toBeUndefined();
+      const said = box.logged.filter(
+        (entry) => entry.event === "fieldd.agents.gateway_unsupported_platform",
+      );
+      expect(said.map((entry) => entry.level)).toEqual(["info"]);
+      expect(said[0]?.attrs).toEqual({ platform: "win32" });
+      await box.gateway.refresh();
+      expect(existsSync(box.home)).toBe(false);
+      expect(box.kit.materialized).toEqual([]);
+      expect(box.gateway.state().names).toEqual([]);
+      await box.gateway.stop();
+      expect(box.integrations).toEqual([null]);
+      expect(existsSync(box.home)).toBe(false);
     },
     PROCESS_BUDGET_MS,
   );
