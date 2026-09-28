@@ -1291,6 +1291,18 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // QL (thinking-ql-empty-pane-launcher.md, QL-D9) — the empty pane
+  // launcher's list: a folder's past sessions (its rosetta project) or every
+  // project's, newest first. The same consent as the two above — titles,
+  // summaries and each session's cwd are the history's content — so the same
+  // scope, and the same locality: the history is the device's own.
+  defineMethod({
+    surface: "product",
+    method: "index.recent",
+    scope: "index.search",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "index.enroll",

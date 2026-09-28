@@ -8,6 +8,10 @@ import {
   INDEX_PHASES,
   IndexEnrollmentRecord,
   IndexPhase,
+  IndexProjectsResponse,
+  IndexRecentParams,
+  IndexRecentResult,
+  IndexRecentSession,
   IndexSessionRow,
   IndexSessionsResponse,
   IndexStatus,
@@ -38,6 +42,8 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       // index.read for the roll call must not gain transcript search on an upgrade
       { method: "index.sessions", scope: "index.search", idempotent: true, locality: "local" },
       { method: "index.search", scope: "index.search", idempotent: true, locality: "local" },
+      // QL — the launcher's list is the same content, so the same consent
+      { method: "index.recent", scope: "index.search", idempotent: true, locality: "local" },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
     ]);
@@ -439,6 +445,60 @@ describe("the session rows fieldd READS from rosetta (AR-4)", () => {
     expect(IndexSessionRow.safeParse({ ...row, id: "" }).success).toBe(false);
     expect(IndexSessionsResponse.safeParse({}).success).toBe(false);
     expect(IndexSessionsResponse.safeParse({ sessions: {} }).success).toBe(false);
+  });
+
+  it("QL — reads the join columns index.recent needs, and a row without them still parses", () => {
+    const parsed = IndexSessionRow.parse({ ...row, project_id: "p-1" });
+    expect(parsed).toMatchObject({
+      runtime_id: "rt-1",
+      project_id: "p-1",
+      started_at: 1_700_000_000_000,
+    });
+    const { runtime_id, project_id, started_at, ...bare } = row;
+    expect([runtime_id, project_id, started_at]).toEqual(["rt-1", null, 1_700_000_000_000]);
+    expect(IndexSessionRow.safeParse(bare).success).toBe(true);
+    const infinite = JSON.parse('{"started_at":1e999}') as Record<string, number>;
+    expect(IndexSessionRow.safeParse({ ...row, ...infinite }).success).toBe(false);
+  });
+});
+
+describe("index.recent's shapes (QL)", () => {
+  it("params: a scope is required, the folder optional, the limit 1..500", () => {
+    expect(IndexRecentParams.safeParse({ scope: "here", cwd: "/w/app" }).success).toBe(true);
+    expect(IndexRecentParams.safeParse({ scope: "all" }).success).toBe(true);
+    expect(IndexRecentParams.safeParse({ cwd: "/w/app" }).success).toBe(false);
+    expect(IndexRecentParams.safeParse({ scope: "near" }).success).toBe(false);
+    expect(IndexRecentParams.safeParse({ scope: "all", limit: 0 }).success).toBe(false);
+    expect(IndexRecentParams.safeParse({ scope: "all", limit: 501 }).success).toBe(false);
+    expect(IndexRecentParams.safeParse({ scope: "all", limit: 500 }).success).toBe(true);
+    expect(IndexRecentParams.safeParse({ scope: "all", cwd: "" }).success).toBe(false);
+  });
+
+  it("a row is an IndexSession plus the launcher's columns; `here` is required, the rest optional, unknown keys ride through", () => {
+    const base = {
+      sessionId: "s1",
+      nativeSessionId: "nat-1",
+      rootSessionId: "s1",
+      activity: null,
+      streamState: "indexed",
+    };
+    expect(IndexRecentSession.safeParse(base).success).toBe(false);
+    const row = IndexRecentSession.parse({ ...base, here: false, future: 1 });
+    expect(row).toMatchObject({ here: false, future: 1 });
+    expect(
+      IndexRecentSession.safeParse({ ...base, here: true, provider: "not a provider id!" }).success,
+    ).toBe(false);
+    expect(
+      IndexRecentResult.parse({ rows: [], project: { id: "p", name: "app" } }).project,
+    ).toEqual({ id: "p", name: "app" });
+  });
+
+  it("rosetta's projects body: root_paths is the one column the resolution reads", () => {
+    const project = { id: "p-1", name: "app", root_paths: ["/w/app"], git_repo: null };
+    expect(IndexProjectsResponse.parse({ projects: [project] }).projects[0]).toMatchObject(project);
+    const { root_paths, ...noRoots } = project;
+    expect(root_paths).toEqual(["/w/app"]);
+    expect(IndexProjectsResponse.safeParse({ projects: [noRoots] }).success).toBe(false);
   });
 });
 

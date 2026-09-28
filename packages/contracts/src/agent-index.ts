@@ -435,6 +435,15 @@ export const IndexSessionRow = z
     summary: z.string().nullish(),
     cwd: z.string().nullish(),
     updated_at: z.number().finite().nullish(),
+    // QL (thinking-ql-empty-pane-launcher.md) — the columns `index.recent`
+    // joins on: the runtime (→ its kind → the catalog id, and → the persona
+    // an enrolled root was filed under), the project (rosetta's opaque id:
+    // the git root, worktrees grouped; null for a session with no workspace)
+    // and when the session began. Nullish for the same reason as the display
+    // columns above: none of them is identity.
+    runtime_id: z.string().nullish(),
+    project_id: z.string().nullish(),
+    started_at: z.number().finite().nullish(),
   })
   .passthrough();
 export type IndexSessionRow = z.infer<typeof IndexSessionRow>;
@@ -443,6 +452,24 @@ export type IndexSessionRow = z.infer<typeof IndexSessionRow>;
  * read fieldd parses. */
 export const IndexSessionsResponse = z.object({ sessions: z.array(IndexSessionRow) }).passthrough();
 export type IndexSessionsResponse = z.infer<typeof IndexSessionsResponse>;
+
+/** rosetta `ProjectRow`, NARROWED to what `index.recent` reads: the opaque id
+ * (derived from the project's identity root — a linked worktree's original
+ * checkout), a display name, and every root the index has SEEN the project at
+ * (the identity root and each worktree's own root, normalized, no trailing
+ * slash). */
+export const IndexProjectRow = z
+  .object({
+    id: z.string().min(1),
+    name: z.string(),
+    root_paths: z.array(z.string()),
+  })
+  .passthrough();
+export type IndexProjectRow = z.infer<typeof IndexProjectRow>;
+
+/** rosetta `ProjectsResponse` — the body of `/api/projects`. */
+export const IndexProjectsResponse = z.object({ projects: z.array(IndexProjectRow) }).passthrough();
+export type IndexProjectsResponse = z.infer<typeof IndexProjectsResponse>;
 
 /** rosetta `SessionResponse` — the body of `/api/sessions/<id>`, read only to
  * walk a hit's session UP to the root a reader navigates to (AR-5e). */
@@ -535,6 +562,68 @@ export type IndexSession = z.infer<typeof IndexSession>;
 
 export const IndexSessionsResult = z.object({ rows: z.array(IndexSession) }).passthrough();
 export type IndexSessionsResult = z.infer<typeof IndexSessionsResult>;
+
+// ── index.recent (QL — the empty pane launcher's list; thinking-ql-empty-pane-
+// launcher.md, QL-D9) ──
+//
+// A folder's past sessions, newest first: the pane's own project ("here") or
+// every project ("all"). "Here" is rosetta's project — the git root, worktrees
+// grouped — so a pane in a worktree finds the sessions of every checkout of
+// the repo; a pane outside any repo matches by folder instead (the project
+// whose root is the longest prefix of the cwd, else the sessions run in the
+// cwd or under it). Top-level sessions only: a delegated child is transcript
+// structure, never a thing a person resumes.
+
+export const INDEX_RECENT_DEFAULT_LIMIT = 100;
+
+export const IndexRecentParams = z
+  .object({
+    /** the pane's folder, absolute; absent = no folder, so nothing is "here" */
+    cwd: z.string().min(1).max(4096).optional(),
+    scope: z.enum(["here", "all"]),
+    limit: z.number().int().min(1).max(500).optional(),
+  })
+  .passthrough();
+export type IndexRecentParams = z.infer<typeof IndexRecentParams>;
+
+/** A rosetta project as the door names it: the opaque id and its name (the
+ * identity root's last segment). Never its root paths — the rows carry their
+ * own `cwd`, and the list needs a heading, not a directory listing. */
+export const IndexRecentProject = z
+  .object({ id: z.string().min(1), name: z.string() })
+  .passthrough();
+export type IndexRecentProject = z.infer<typeof IndexRecentProject>;
+
+/** One past session: `IndexSession`'s columns, plus what a launcher needs to
+ * resume it and to group it. `provider` is the CATALOG id the session's
+ * runtime kind maps to (absent when no catalog row maps it — shown, never
+ * resumable); `profileId` is the persona an ENROLLED root was filed under
+ * (absent for the agent's own folder), so a resume continues the conversation
+ * in the root that holds it. */
+export const IndexRecentSession = IndexSession.extend({
+  provider: AgentProviderId.optional(),
+  profileId: AgentProfileId.optional(),
+  /** epoch ms the session began (rosetta's `started_at`) */
+  startedAt: z.number().finite().optional(),
+  /** the session belongs to the pane's project (or, outside any project, was
+   * run in the pane's folder or under it) */
+  here: z.boolean(),
+  /** absent for a session with no workspace (rosetta's unassigned bucket) */
+  project: IndexRecentProject.optional(),
+}).passthrough();
+export type IndexRecentSession = z.infer<typeof IndexRecentSession>;
+
+/** `index.recent`'s answer: rosetta's order (conversation activity, newest
+ * first). `project` is the project the pane's folder resolved to — present
+ * even when it holds no sessions yet, so a list can name the folder it is
+ * empty for; absent when the folder belongs to no project the index knows. */
+export const IndexRecentResult = z
+  .object({
+    rows: z.array(IndexRecentSession),
+    project: IndexRecentProject.optional(),
+  })
+  .passthrough();
+export type IndexRecentResult = z.infer<typeof IndexRecentResult>;
 
 /** `index.search` — one question over the transcript history. `q` is plain
  * text (no backend query syntax); `nativeSessionIds` scopes it to the live

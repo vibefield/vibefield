@@ -24,6 +24,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CONTRACTS_VERSION,
+  IndexRecentResult,
   IndexSearchResult,
   IndexSessionsResult,
   type IndexStatus,
@@ -513,7 +514,8 @@ describe("index.search — one question over the history (AR-5e)", () => {
     const sessions = await win.call("index.sessions", { nativeSessionIds: ["nat-1"] });
     const search = await win.call("index.search", { q: "needle", nativeSessionIds: ["nat-1"] });
     const status = await win.call("index.status", {});
-    for (const answer of [sessions, search, status]) {
+    const recent = await win.call("index.recent", { cwd: "/w/one", scope: "all" });
+    for (const answer of [sessions, search, status, recent]) {
       const serialized = JSON.stringify(answer);
       expect(serialized).not.toContain(origin);
       expect(serialized).not.toContain(`:${new URL(origin).port}`);
@@ -532,6 +534,55 @@ describe("index.search — one question over the history (AR-5e)", () => {
     expect((await win.callErr("index.sessions", { nativeSessionIds: [] })).data?.kind).toBe(
       "PRECONDITION_FAILED",
     );
+    for (const params of [
+      {},
+      { scope: "near" },
+      { scope: "all", limit: 501 },
+      { scope: "here", cwd: "" },
+    ]) {
+      expect((await win.callErr("index.recent", params)).data?.kind, JSON.stringify(params)).toBe(
+        "PRECONDITION_FAILED",
+      );
+    }
+  });
+});
+
+describe("index.recent — the empty pane launcher's list (QL)", () => {
+  it("here: the folder's project (longest prefix outside a repo), asked by id; all: every top-level session, each saying whether it is here", async () => {
+    const world = await setup();
+    await ready(world.daemon);
+    const win = await windowToken(world.daemon, ["index.search"], "r1");
+    const before = world.asked().length;
+    const here = IndexRecentResult.parse(
+      await win.call("index.recent", { cwd: "/w/one/src", scope: "here", limit: 10 }),
+    );
+    expect(world.asked().slice(before)).toEqual([
+      "/api/projects",
+      "/api/sessions?project=p1&limit=10",
+    ]);
+    expect(here.project).toEqual({ id: "p1", name: "one" });
+    expect(here.rows.map((row) => [row.sessionId, row.here, row.project?.id])).toEqual([
+      ["s1", true, "p1"],
+    ]);
+    expect(here.rows[0]).toMatchObject({ startedAt: 10_000, title: "First" });
+
+    const all = IndexRecentResult.parse(
+      await win.call("index.recent", { cwd: "/w/one/src", scope: "all" }),
+    );
+    // the delegated child is transcript structure, never a row to resume
+    expect(all.rows.map((row) => [row.sessionId, row.here])).toEqual([
+      ["s1", true],
+      ["s2", false],
+      ["s3", false],
+    ]);
+  });
+
+  it("an index that is not up refuses UNAVAILABLE with its phase, as index.sessions does", async () => {
+    const world = await setup({ mode: "silent" });
+    const win = await windowToken(world.daemon, ["index.search"], "r2");
+    const error = await win.callErr("index.recent", { scope: "all" });
+    expect(error.data?.kind).toBe("UNAVAILABLE");
+    expect(error.data?.details).toMatchObject({ service: "index" });
   });
 });
 
@@ -547,7 +598,7 @@ describe("the doors' posture", () => {
       ["p2", ["index.read"]],
     ] as const) {
       const win = await windowToken(world.daemon, [...scopes], suffix);
-      for (const method of ["index.sessions", "index.search"]) {
+      for (const method of ["index.sessions", "index.search", "index.recent"]) {
         const error = await win.callErr(method, { q: "needle", nativeSessionIds: ["nat-1"] });
         expect(error.data?.kind, `${method} with ${scopes.join()}`).toBe("FORBIDDEN_SCOPE");
       }
@@ -568,7 +619,7 @@ describe("the doors' posture", () => {
       getLinkedLogin: () => TEST_LOGIN,
     });
     let called = 0;
-    for (const method of ["index.sessions", "index.search"]) {
+    for (const method of ["index.sessions", "index.search", "index.recent"]) {
       api.register(method, () => {
         called += 1;
         return {};
@@ -606,6 +657,7 @@ describe("the doors' posture", () => {
     for (const [id, method] of [
       [2, "index.sessions"],
       [3, "index.search"],
+      [4, "index.recent"],
     ] as const) {
       const res = (await call(id, method, { q: "needle", nativeSessionIds: ["nat-1"] })) as {
         error: { data: { kind: string; details: Record<string, unknown> } };

@@ -33,6 +33,8 @@ import {
   AgentsUpdateResult,
   IndexDiscovery,
   IndexEnrollmentRecord,
+  IndexRecentParams,
+  IndexRecentResult,
   IndexSearchResponse,
   IndexSearchResult,
   IndexSessionsResult,
@@ -211,6 +213,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "index-search": IndexSearchResponse,
   "index-search-result": IndexSearchResult,
   "index-sessions": IndexSessionsResult,
+  // QL — the empty pane launcher's list: a folder's sessions (a worktree's
+  // under its repo's project, a persona's with its profile) beside one with no
+  // workspace, which is never "here"; and the ask.
+  "index-recent": IndexRecentResult,
+  "index-recent-params": IndexRecentParams,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

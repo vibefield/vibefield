@@ -57,6 +57,7 @@ import {
   DocRenameParams,
   DocSetSyncIntentParams,
   IndexEnrollParams,
+  IndexRecentParams,
   IndexRetireParams,
   IndexSearchParams,
   IndexSessionsParams,
@@ -1413,6 +1414,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       return await index.search(parsed.data);
+    });
+    // QL (QL-D9) — the empty pane launcher's list: a folder's past sessions
+    // (its rosetta project) or every project's. A projection like the two
+    // above; a daemon that is not ready refuses UNAVAILABLE as they do.
+    api.register("index.recent", async (_ctx, params) => {
+      const parsed = IndexRecentParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'expected { cwd?, scope: "here" | "all", limit? (1..500) }',
+          false,
+        );
+      return await index.recent(parsed.data);
     });
     api.register("index.enroll", async (ctx, params) => {
       const parsed = IndexEnrollParams.safeParse(params);

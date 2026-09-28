@@ -35,6 +35,11 @@
 // say so — and for AR-5e it is also how a test asserts the exact query string
 // fieldd sent (the scope, `prefix`, `kind`, `limit`).
 //
+// QL: `/api/projects` (every `project_id` the scripted session rows name, as
+// a project rooted at the first such row's cwd — rosetta's own grouping in
+// miniature) and `/api/sessions?project=…` (the rows of one project, as the
+// real server filters them) — `index.recent`'s reads.
+//
 // AR-5e: `/api/search` and `/api/sessions/<id>` — the find sheet's seam,
 // scripted by FAKE_ROSETTAD_SEARCH, a JSON file re-read per request like the
 // sessions one:
@@ -306,15 +311,34 @@ if (mode === "silent") {
       json(res, { runtimes: rows });
       return;
     }
+    if (req.url === "/api/projects") {
+      logRequest(req.url);
+      const projects = new Map();
+      for (const row of sessionRows()) {
+        if (typeof row.project_id !== "string" || projects.has(row.project_id)) continue;
+        const root = typeof row.cwd === "string" ? row.cwd : `/${row.project_id}`;
+        projects.set(row.project_id, {
+          id: row.project_id,
+          name: root.split("/").filter(Boolean).at(-1) ?? row.project_id,
+          root_paths: [root],
+          git_repo: null,
+        });
+      }
+      json(res, { projects: [...projects.values()] });
+      return;
+    }
     if (req.url !== undefined && req.url.startsWith("/api/sessions?")) {
       logRequest(req.url);
       const url = new URL(req.url, "http://127.0.0.1");
       const wanted = (url.searchParams.get("native_session_id") ?? "")
         .split(",")
         .filter((id) => id !== "");
+      const project = url.searchParams.get("project");
       const limit = Number(url.searchParams.get("limit") ?? "100");
       const sessions = sessionRows().filter(
-        (row) => wanted.length === 0 || wanted.includes(row.native_session_id),
+        (row) =>
+          (wanted.length === 0 || wanted.includes(row.native_session_id)) &&
+          (project === null || row.project_id === project),
       );
       json(res, { sessions: Number.isFinite(limit) ? sessions.slice(0, limit) : sessions });
       return;

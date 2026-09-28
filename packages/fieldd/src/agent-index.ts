@@ -1,5 +1,12 @@
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import {
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import type {
   DaemonStatus,
   DiscoveriesResponse,
@@ -16,6 +23,7 @@ import {
   type AgentCatalogReaders,
   AgentKind,
   createAgentCatalogReaders,
+  INDEX_RECENT_DEFAULT_LIMIT,
   type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   IndexEnrollmentRecord as IndexEnrollmentRecordSchema,
@@ -23,6 +31,10 @@ import {
   type IndexMutationResult,
   type IndexPhase,
   IndexPhase as IndexPhaseSchema,
+  type IndexProjectRow,
+  IndexProjectsResponse,
+  type IndexRecentParams,
+  type IndexRecentResult,
   type IndexRuntimeStatus,
   type IndexSearchCapabilities,
   type IndexSearchHealth,
@@ -107,6 +119,17 @@ function routeOf(path: string): string {
 }
 /** rosetta 18 added `sessions=` (the scope) and `prefix=` (fragment widening) */
 const SESSION_SCOPE_PROTOCOL = 18;
+
+// QL — `index.recent`'s two join tables (`/api/projects`, `/api/runtimes`)
+// change only when the index meets a new repo or a runtime is enrolled, so a
+// launcher opening in pane after pane reads them from a short cache; a MISS (a
+// folder no cached project holds, a row whose runtime is not cached) re-reads
+// once, but never more often than the floor below.
+const RECENT_TABLE_TTL_MS = 30_000;
+const RECENT_TABLE_MISS_FLOOR_MS = 2_000;
+/** rosetta's own ceiling on a list (`MAX_LIMIT`): a folder outside every
+ * project is answered by filtering the newest this many sessions by cwd */
+const RECENT_SCAN_LIMIT = 1_000;
 
 export interface EnrollmentStoreOptions {
   /** the record's absolute path (LAYOUT.INDEX_ENROLLMENT_FILE under the user root) */
@@ -440,6 +463,23 @@ export interface IndexSessionFacts {
 const SESSIONS_BODY_KEYS = Object.keys(IndexSessionsResponse.shape);
 /** the same, for `/api/search` (AR-5e) */
 const SEARCH_BODY_KEYS = Object.keys(IndexSearchResponse.shape);
+/** the same, for `/api/projects` (QL) */
+const PROJECTS_BODY_KEYS = Object.keys(IndexProjectsResponse.shape);
+
+/** QL — one of `index.recent`'s cached join tables, stamped with the daemon
+ * generation it was read from and when. */
+interface RecentTable<T> {
+  pid: number | null;
+  at: number;
+  value: T;
+}
+
+/** QL — what a session's runtime says about it: rosetta's kind (→ the catalog
+ * id) and, for an enrolled root, the persona it was filed under. */
+interface RecentRuntime {
+  kind: string;
+  profileId?: string;
+}
 
 export class IndexService {
   private readonly logger: Logger;
@@ -460,6 +500,9 @@ export class IndexService {
   /** AC-D8 — a subtraction the record on disk does not carry yet (its write
    * failed inside the daemon's exit handler); retried at the next refusal */
   private publishOwed = false;
+  /** QL — `index.recent`'s join tables, per daemon generation (see RECENT_TABLE_TTL_MS) */
+  private recentProjects: RecentTable<readonly IndexProjectRow[]> | null = null;
+  private recentRuntimes: RecentTable<ReadonlyMap<string, RecentRuntime>> | null = null;
 
   constructor(private readonly opts: IndexServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -1054,6 +1097,159 @@ export class IndexService {
     return { answered: true, state, hits, clipped };
   }
 
+  // ── QL — the empty pane launcher's list ────────────────────────────────
+
+  /** `index.recent` — a folder's past sessions (scope `here`: the rosetta
+   * project the pane's folder belongs to) or every project's (`all`, each row
+   * saying whether it is here), newest first as rosetta orders them.
+   *
+   * "Here" is QL-D9: the project whose `root_paths` hold the folder's git root
+   * or its worktree group's root (found by the walk rosetta itself does, so a
+   * pane in a worktree nobody has run an agent in still finds the repo's
+   * sessions); a folder in no repo takes the project whose root is the
+   * longest prefix of it. A folder in no project at all is "here" by folder:
+   * the sessions run in it or under it. Readiness and every degraded state
+   * are `index.sessions`' own: UNAVAILABLE `{service: "index", state}`. */
+  async recent(params: IndexRecentParams): Promise<IndexRecentResult> {
+    this.requireReady();
+    const limit = params.limit ?? INDEX_RECENT_DEFAULT_LIMIT;
+    const cwd = params.cwd === undefined ? undefined : normalizeRoot(params.cwd);
+    const project = cwd === undefined ? undefined : await this.projectFor(cwd);
+    const named = project === undefined ? {} : { project: { id: project.id, name: project.name } };
+
+    let rows: IndexSessionRow[];
+    if (params.scope === "all") {
+      rows = await this.listSessions(`limit=${limit}`);
+    } else if (project !== undefined) {
+      rows = await this.listSessions(`project=${encodeURIComponent(project.id)}&limit=${limit}`);
+    } else if (cwd !== undefined) {
+      // no project to ask by: the newest sessions the index will list,
+      // filtered by folder — a folder whose sessions are all older than
+      // rosetta's list ceiling answers fewer than it holds, never wrong ones
+      rows = (await this.listSessions(`limit=${RECENT_SCAN_LIMIT}`)).filter((row) =>
+        withinFolder(row.cwd, cwd),
+      );
+    } else {
+      // no folder: nothing is here
+      return { rows: [] };
+    }
+
+    const here = (row: IndexSessionRow): boolean =>
+      project !== undefined ? row.project_id === project.id : withinFolder(row.cwd, cwd);
+    const top = rows.filter((row) => (row.parent_session_id ?? null) === null).slice(0, limit);
+    const runtimes = await this.recentRuntimeTable(top);
+    const projects =
+      params.scope === "all" && top.some((row) => typeof row.project_id === "string")
+        ? await this.recentProjectTable()
+        : project !== undefined
+          ? [project]
+          : [];
+    const projectNames = new Map(projects.map((p) => [p.id, p.name]));
+    return {
+      rows: top.map((row) => {
+        const runtime =
+          typeof row.runtime_id === "string" ? runtimes.get(row.runtime_id) : undefined;
+        const provider = runtime === undefined ? undefined : this.catalog.idForKind(runtime.kind);
+        const projectId = typeof row.project_id === "string" ? row.project_id : undefined;
+        const projectName = projectId === undefined ? undefined : projectNames.get(projectId);
+        return {
+          ...projectSession(row),
+          ...(provider !== undefined ? { provider } : {}),
+          ...(runtime?.profileId !== undefined ? { profileId: runtime.profileId } : {}),
+          ...(typeof row.started_at === "number" ? { startedAt: row.started_at } : {}),
+          here: here(row),
+          ...(projectId !== undefined && projectName !== undefined
+            ? { project: { id: projectId, name: projectName } }
+            : {}),
+        };
+      }),
+      ...named,
+    };
+  }
+
+  /** QL-D9 — the rosetta project a folder belongs to, or undefined. Tried for
+   * the folder as spelled AND as the filesystem resolves it: rosetta files a
+   * session under the cwd its agent reported (a resolved path), while a pane
+   * reports its shell's (`/tmp` where the agent said `/private/tmp`). */
+  private async projectFor(cwd: string): Promise<IndexProjectRow | undefined> {
+    const spellings = folderSpellings(cwd);
+    const repos = spellings.flatMap((dir) => {
+      const found = repoRoots(dir);
+      return found === undefined ? [] : [found.root, found.groupRoot];
+    });
+    const match = (projects: readonly IndexProjectRow[]): IndexProjectRow | undefined =>
+      repos.length > 0
+        ? projects.find((p) => p.root_paths.some((root) => repos.includes(normalizeRoot(root))))
+        : longestPrefixProject(projects, spellings);
+    const cached = match(await this.recentProjectTable());
+    if (cached !== undefined) return cached;
+    // a miss may be a repo the index met since the cache was read
+    return match(await this.recentProjectTable(RECENT_TABLE_MISS_FLOOR_MS));
+  }
+
+  /** `/api/projects`, PARSED (the resolution reads every root) and cached for
+   * this daemon generation. */
+  private async recentProjectTable(
+    maxAgeMs = RECENT_TABLE_TTL_MS,
+  ): Promise<readonly IndexProjectRow[]> {
+    const pid = this.opts.supervisor?.health().pid ?? null;
+    const held = this.recentProjects;
+    if (held !== null && held.pid === pid && Date.now() - held.at < maxAgeMs) return held.value;
+    const body = await this.getBody("/api/projects");
+    const parsed = IndexProjectsResponse.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      this.logger.warn(
+        "fieldd.index.projects_malformed",
+        "The index answered project rows fieldd cannot read",
+        { issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}` },
+      );
+      throw new RpcCallError("UNAVAILABLE", "the agent index answered malformed projects", true, {
+        service: "index",
+        state: "malformed",
+      });
+    }
+    this.noteUnknownFields("projects", body, PROJECTS_BODY_KEYS);
+    this.recentProjects = { pid, at: Date.now(), value: parsed.data.projects };
+    return parsed.data.projects;
+  }
+
+  /** `/api/runtimes` as the join `index.recent` needs — each runtime's kind,
+   * and the persona an ENROLLED root was filed under — cached for this daemon
+   * generation and re-read once when a row names a runtime it does not hold.
+   * Cast like `index.status`' read of the same body: a row that is not what
+   * the generated type promises is skipped (its sessions carry no provider),
+   * never a refusal of the list. */
+  private async recentRuntimeTable(
+    rows: readonly IndexSessionRow[],
+  ): Promise<ReadonlyMap<string, RecentRuntime>> {
+    const wanted = rows.flatMap((row) =>
+      typeof row.runtime_id === "string" ? [row.runtime_id] : [],
+    );
+    if (wanted.length === 0) return new Map();
+    const table = await this.readRuntimeTable(RECENT_TABLE_TTL_MS);
+    if (wanted.every((id) => table.has(id))) return table;
+    return await this.readRuntimeTable(RECENT_TABLE_MISS_FLOOR_MS);
+  }
+
+  private async readRuntimeTable(maxAgeMs: number): Promise<ReadonlyMap<string, RecentRuntime>> {
+    const pid = this.opts.supervisor?.health().pid ?? null;
+    const held = this.recentRuntimes;
+    if (held !== null && held.pid === pid && Date.now() - held.at < maxAgeMs) return held.value;
+    const { runtimes } = await this.get<RuntimesResponse>("/api/runtimes");
+    const table = new Map<string, RecentRuntime>();
+    for (const row of Array.isArray(runtimes) ? runtimes : []) {
+      if (typeof row?.id !== "string" || typeof row.kind !== "string") continue;
+      const profileId =
+        typeof row.data_root === "string" && isEnrolledRow(row)
+          ? this.opts.store.lookup(row).profileId
+          : undefined;
+      table.set(row.id, { kind: row.kind, ...(profileId !== undefined ? { profileId } : {}) });
+    }
+    this.recentRuntimes = { pid, at: Date.now(), value: table };
+    return table;
+  }
+
   /** A scoped question whose live runs the index has never read. A session
    * list carries no readiness, so an empty scope is not yet an answer: ask
    * the daemon, and only a serveable canonical projection whose search
@@ -1171,7 +1367,12 @@ export class IndexService {
     limit: number,
   ): Promise<IndexSessionRow[]> {
     const selector = encodeURIComponent(nativeSessionIds.join(","));
-    const body = await this.getBody(`/api/sessions?native_session_id=${selector}&limit=${limit}`);
+    return await this.listSessions(`native_session_id=${selector}&limit=${limit}`);
+  }
+
+  /** One `/api/sessions?<query>` read, parsed (see `fetchSessionRows`). */
+  private async listSessions(query: string): Promise<IndexSessionRow[]> {
+    const body = await this.getBody(`/api/sessions?${query}`);
     const parsed = IndexSessionsResponse.safeParse(body);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
@@ -1408,4 +1609,124 @@ function projectSession(row: IndexSessionRow): IndexSession {
     activity,
     streamState: row.stream_state,
   };
+}
+
+// ── QL-D9's folds: which rosetta project a pane's folder belongs to ────────
+
+/** rosetta's `ids::normalize_root`, mirrored: separators to `/`, `.` and empty
+ * segments dropped, `..` folded (never above an absolute root), no trailing
+ * slash. The spelling every `root_paths` entry and session cwd is filed under,
+ * so comparing in any other spelling would miss. */
+export function normalizeRoot(path: string): string {
+  const portable = path.replaceAll("\\", "/");
+  const absolute = portable.startsWith("/");
+  const parts: string[] = [];
+  for (const part of portable.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") {
+      const last = parts.at(-1);
+      if (last !== undefined && last !== "..") parts.pop();
+      else if (!absolute) parts.push(part);
+      continue;
+    }
+    parts.push(part);
+  }
+  const joined = parts.join("/");
+  return absolute ? `/${joined}` : joined;
+}
+
+/** The folder as spelled, and as the filesystem resolves it when that differs
+ * (a folder that does not exist has only its spelling). */
+function folderSpellings(cwd: string): string[] {
+  try {
+    const real = normalizeRoot(realpathSync(cwd));
+    return real === cwd ? [cwd] : [cwd, real];
+  } catch {
+    return [cwd];
+  }
+}
+
+/** The repository a folder is in, found the way rosetta finds it (its
+ * `pipeline/src/project.rs` `find_git_dir` + `common_git_dir`, mirrored, so the
+ * two can never disagree about a folder): the nearest ancestor holding `.git`
+ * — a directory (a checkout) or a `gitdir:` FILE (a linked worktree, or a
+ * submodule) — is the `root`; the `groupRoot` is the checkout every worktree
+ * of the repo shares (the common git dir's parent), which is the project's
+ * identity. A `.git` file that is not a `gitdir:` line ends the walk with no
+ * repo, as rosetta's does. Undefined outside any repo. Reads two small files
+ * at most; nothing here is ever answered to a caller. */
+export function repoRoots(dir: string): { root: string; groupRoot: string } | undefined {
+  let at = normalizeRoot(dir);
+  for (;;) {
+    const dotGit = join(at, ".git");
+    let gitDir: string | undefined;
+    let isDir = false;
+    try {
+      isDir = statSync(dotGit).isDirectory();
+    } catch {
+      // no `.git` here: keep walking
+    }
+    if (isDir) {
+      gitDir = dotGit;
+    } else {
+      let text: string | undefined;
+      try {
+        text = readFileSync(dotGit, "utf8");
+      } catch {
+        text = undefined;
+      }
+      if (text !== undefined) {
+        const trimmed = text.trim();
+        if (!trimmed.startsWith("gitdir:")) return undefined;
+        const target = trimmed.slice("gitdir:".length).trim();
+        gitDir = isAbsolute(target) ? target : join(at, target);
+      }
+    }
+    if (gitDir !== undefined) {
+      return { root: at, groupRoot: normalizeRoot(commonRoot(gitDir) ?? at) };
+    }
+    const parent = dirname(at);
+    if (parent === at) return undefined;
+    at = parent;
+  }
+}
+
+/** The worktree group's root from a git dir's `commondir` (absent for a
+ * checkout's own `.git`): the common dir's parent when it is a `.git`, the
+ * common dir itself for a bare repository. */
+function commonRoot(gitDir: string): string | undefined {
+  let text: string;
+  try {
+    text = readFileSync(join(gitDir, "commondir"), "utf8");
+  } catch {
+    return undefined;
+  }
+  const target = text.trim();
+  const common = normalizeRoot(isAbsolute(target) ? target : join(gitDir, target));
+  return basename(common) === ".git" ? dirname(common) : common;
+}
+
+/** A folder in no repo: the project with a root that is the folder itself or
+ * its nearest ancestor (the longest such root wins). */
+function longestPrefixProject(
+  projects: readonly IndexProjectRow[],
+  spellings: readonly string[],
+): IndexProjectRow | undefined {
+  let best: { project: IndexProjectRow; length: number } | undefined;
+  for (const project of projects) {
+    for (const raw of project.root_paths) {
+      const root = normalizeRoot(raw);
+      if (!spellings.some((cwd) => withinFolder(cwd, root))) continue;
+      if (best === undefined || root.length > best.length) best = { project, length: root.length };
+    }
+  }
+  return best?.project;
+}
+
+/** `path` is `folder` or somewhere under it (both normalized). */
+function withinFolder(path: string | null | undefined, folder: string | undefined): boolean {
+  if (typeof path !== "string" || folder === undefined || folder === "") return false;
+  const at = normalizeRoot(path);
+  if (at === folder) return true;
+  return at.startsWith(folder === "/" ? "/" : `${folder}/`);
 }
