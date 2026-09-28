@@ -48,6 +48,11 @@ import { isTypedRun, SPAWNED_BY_SHELL } from "./agent-typed-run";
 export class SessionRecordStore {
   private readonly logger: Logger;
   private key: Buffer | undefined;
+  /** QL — the newest record CREATION per provider (and the run it names),
+   * seeded from one `list()` at first ask and then kept by this store's own
+   * `write`/`remove`, which every record passes through. Undefined = not
+   * seeded, or a removal took a provider's newest (the next ask re-seeds). */
+  private launched: Map<string, { at: number; runtimeRunId: string }> | undefined;
 
   constructor(
     private readonly opts: { dir: string; keyPath: string; now: () => Date; logger?: Logger },
@@ -98,6 +103,7 @@ export class SessionRecordStore {
     writeFileSync(tmp, `${JSON.stringify(signed, null, 2)}\n`, { mode: 0o600, flag: "wx" });
     durableRenameSync(tmp, path);
     ownerOnly(path, 0o600);
+    if (this.launched !== undefined) noteLaunch(this.launched, signed);
   }
 
   /** Stamp the exit onto an existing record; a missing record is left missing. */
@@ -110,6 +116,29 @@ export class SessionRecordStore {
 
   remove(runtimeRunId: string): void {
     rmSync(this.path(runtimeRunId), { force: true });
+    if (this.launched === undefined) return;
+    for (const held of this.launched.values()) {
+      if (held.runtimeRunId === runtimeRunId) {
+        // the newest went: the one before it is on disk, not in the map
+        this.launched = undefined;
+        return;
+      }
+    }
+  }
+
+  /** QL — when each provider was last launched on this device: the newest
+   * `createdAt` (epoch ms) across the verified records, any `spawnedBy`. BY
+   * CREATION, not by `list()`'s order (`updatedAt` moves at every exit stamp).
+   * Read on every `agent.providers`, so it is NOT a directory scan: one
+   * `list()` seeds it (a throw propagates and leaves it unseeded), and this
+   * store's own writes and removals keep it. */
+  newestCreatedByProvider(): ReadonlyMap<string, number> {
+    if (this.launched === undefined) {
+      const seeded = new Map<string, { at: number; runtimeRunId: string }>();
+      for (const record of this.list()) noteLaunch(seeded, record);
+      this.launched = seeded;
+    }
+    return new Map([...this.launched].map(([provider, held]) => [provider, held.at]));
   }
 
   /** Whether the record's signature verifies against this root's key — what
@@ -270,6 +299,19 @@ function exposed(path: string): boolean {
 /** Re-assert an owner-only mode: a directory or file that pre-existed with a
  * looser mode keeps it through `mkdirSync`/`writeFileSync` (both leave an
  * existing mode alone), so the mode is set explicitly after the fact. */
+/** Keep `record`'s creation if it is its provider's newest. */
+function noteLaunch(
+  newest: Map<string, { at: number; runtimeRunId: string }>,
+  record: Pick<AgentSessionRecord, "provider" | "createdAt" | "runtimeRunId">,
+): void {
+  const at = Date.parse(record.createdAt);
+  if (!Number.isFinite(at)) return;
+  const held = newest.get(record.provider);
+  if (held === undefined || at > held.at) {
+    newest.set(record.provider, { at, runtimeRunId: record.runtimeRunId });
+  }
+}
+
 function ownerOnly(path: string, mode: 0o700 | 0o600): void {
   if (process.platform === "win32") return;
   if ((statSync(path).mode & 0o777) !== mode) chmodSync(path, mode);

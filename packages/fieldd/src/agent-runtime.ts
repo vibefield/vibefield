@@ -834,26 +834,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** QL — the newest session record per agent (any `spawnedBy`: a spawn, a
    * resume, a run adopted in a pane's shell), epoch ms: the order a launcher
-   * lists its agents in. A records directory that cannot be read answers
-   * nothing rather than failing the list. */
+   * lists its agents in. Kept in memory by the record store (seeded once, then
+   * by its own writes and removals), so a providers call reads no records. A
+   * records directory that cannot be read answers nothing rather than failing
+   * the list. */
   private lastLaunched(): ReadonlyMap<string, number> {
-    const newest = new Map<string, number>();
-    let records: AgentSessionRecord[];
     try {
-      records = this.records.list();
+      return this.records.newestCreatedByProvider();
     } catch (error) {
       this.logger.warn("fieldd.agents.records_unreadable", "Session records could not be listed", {
         error: error instanceof Error ? error.message : String(error),
       });
-      return newest;
+      return new Map();
     }
-    for (const record of records) {
-      const at = Date.parse(record.createdAt);
-      if (!Number.isFinite(at)) continue;
-      const held = newest.get(record.provider);
-      if (held === undefined || at > held) newest.set(record.provider, at);
-    }
-    return newest;
   }
 
   /** AR-7 — what the row offers ON THIS DEVICE, THIS RUN: the catalog's claim,
