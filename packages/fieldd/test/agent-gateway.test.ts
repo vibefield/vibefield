@@ -3475,6 +3475,76 @@ describe("a typed run across a fieldd restart — the REAL floor (AR-7c)", () =>
   );
 
   it(
+    "B4 — a typed run under a persona, held pending (the adapter cannot attach under a persona it does not know): a stop of that persona's sessions signals nothing — not the run, not its pane (the person's own shell) — counts it as remaining, and leaves its row and its record as they were",
+    async () => {
+      const { first, pane, row, pid } = await typedThenStopped({ attach: true });
+      await first.daemon.stop();
+      // through the STORE, so the record stays signed: the run is put under a persona,
+      // as a typed launch one day may be
+      const signed = first.records.read(row.runtimeRunId);
+      if (signed === undefined) throw new Error("no record to rewrite");
+      first.records.write({ ...signed, profileId: "persona-b4" });
+      expect(first.records.verifies(readRecord(first.dataDir, row.runtimeRunId))).toBe(true);
+
+      // the next boot proves the run and asks the adapter to attach under the persona; the
+      // adapter knows no such persona, so the run is HELD — a pending typed row under it
+      const second = await floor({ bundle: shimScript, attach: true, restartOf: first });
+      const held = await until(
+        () => {
+          const found = rowOf(second, row.runtimeRunId);
+          return found?.continuation?.reason === undefined ? undefined : found;
+        },
+        FLOOR_WAIT_MS,
+        "the typed run held under the persona",
+      );
+      expect(held).toMatchObject({
+        spawnedBy: "user-shell",
+        terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+      });
+      expect(readRecord(second.dataDir, row.runtimeRunId)).toMatchObject({
+        profileId: "persona-b4",
+        reattach: { state: "failed" },
+      });
+      const persona = new Set(["persona-b4"]);
+      expect(second.daemon.agents.liveUnder(persona)).toBe(1);
+
+      // the persona's sessions are stopped: the typed run is not among the targets, and
+      // the stop waits its deadline out and reports it remaining
+      const stop = await second.daemon.agents.stopUnder(persona);
+      expect(stop).toEqual({ stopped: 0, remaining: 1 });
+      // nothing was signalled: the run, its pane, its row and its record are as they were
+      expect(isAlive(pid)).toBe(true);
+      expect(isAlive(pane.pid)).toBe(true);
+      expect((await processOf(pid))?.parentPid).toBe(pane.pid);
+      expect(listedRow(second, pane.sessionId)?.pid).toBe(pane.pid);
+      expect(rowOf(second, row.runtimeRunId)).toMatchObject({
+        spawnedBy: "user-shell",
+        terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+      });
+      expect(readRecord(second.dataDir, row.runtimeRunId)).toMatchObject({
+        profileId: "persona-b4",
+        process: { pid },
+      });
+      expect(readRecord(second.dataDir, row.runtimeRunId).exited).toBeUndefined();
+
+      // the agent ends by the person's hand; the pane is the person's shell still
+      await key(second, pane, END_OF_INPUT);
+      await until(
+        () => (rowOf(second, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the row leaving at the agent's end",
+      );
+      await until(
+        () => (second.daemon.agents.liveUnder(persona) === 0 ? true : undefined),
+        FLOOR_WAIT_MS,
+        "nothing left under the persona",
+      );
+      await answers(second, pane, "after-the-stop");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
     "row 8 — a forged record: one edited on disk without its signature, naming a live shell, is set aside by the store — nothing is attached, and the shell is untouched",
     async () => {
       const { first, pane, row, pid } = await typedThenStopped({ attach: true });

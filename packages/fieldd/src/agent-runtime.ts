@@ -1408,12 +1408,24 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const terminals = this.opts.terminals?.() ?? null;
     const under = (id: string | undefined): boolean => id !== undefined && profileIds.has(id);
     const targets = new Set<string>();
+    // B4 — a TYPED run is never a target: its terminal is the person's own
+    // shell, which a persona's stop must never end (a typed launch carries
+    // no persona today; the day one does, this is what keeps the shell).
+    // Its process is the deck's to stop (`agent.interrupt`, which signals
+    // the recorded pid once the table proves it); while it runs it counts
+    // under the persona (`liveUnder`), so the stop reports it remaining and
+    // the sign-out is refused with the count — never with the shell ended.
+    const typed = new Set<string>();
     for (const entry of this.managed.values()) {
-      if (under(entry.info.profileId)) targets.add(entry.info.terminalSessionId);
+      if (!under(entry.info.profileId)) continue;
+      if (entry.typed !== undefined) typed.add(entry.info.runtimeRunId);
+      else targets.add(entry.info.terminalSessionId);
     }
-    for (const entry of this.pending.values()) {
+    for (const [runtimeRunId, entry] of this.pending) {
       const id = entry.record.terminalSessionId;
-      if (under(entry.record.profileId) && id !== undefined) targets.add(id);
+      if (!under(entry.record.profileId) || id === undefined) continue;
+      if (isTypedRun(entry.record)) typed.add(runtimeRunId);
+      else targets.add(id);
     }
     for (const [sessionId, pane] of this.loginPanes) {
       if (under(pane.profileId)) targets.add(sessionId);
@@ -1422,7 +1434,18 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     for (const record of this.records.list()) {
       const id = record.terminalSessionId;
       if (!under(record.profileId) || record.exited !== undefined || id === undefined) continue;
+      if (isTypedRun(record)) {
+        typed.add(record.runtimeRunId);
+        continue;
+      }
       if (terminals !== null && this.listed(terminals, id)) targets.add(id);
+    }
+    if (typed.size > 0) {
+      this.logger.info(
+        "fieldd.agents.typed_runs_not_stopped",
+        "Typed runs under these personas are left running: each lives in the person's own shell, which a stop never ends; they count as remaining until they end",
+        { count: typed.size },
+      );
     }
     let stopped = 0;
     if (terminals !== null) {
