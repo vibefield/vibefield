@@ -1023,7 +1023,8 @@
               <code>draft/thinking-ar-agent-plane.md</code> §1 and it is what every wall, every seam and every naming
               decision below exists to preserve. Read the middle column as hard as the left one: what a repository must
               never know is the load-bearing half.
-             The spawn-through row of the seam table, the R23 sentence and the typed-run paragraph under Lifetimes were read at vibe-field <code>cdad77bd</code> · puppeteer <code>2a81fc1</code> (AR-7).</p>
+             The spawn-through row of the seam table, the R23 sentence and the typed-run paragraph under Lifetimes were read at vibe-field <code>cdad77bd</code> · puppeteer <code>2a81fc1</code> (AR-7).
+             Terminal cache prewarming was integrated on 2026-09-28 against puppeteer <code>bc301ce</code>.</p>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead>
@@ -1553,7 +1554,9 @@
                         <code>terminals.json</code>), so our shells outlive fieldd: away, it waits 8 s and refuses in
                         our panes, falls through elsewhere; back, the waiting launch is adopted. A multiplexer's server
                         is not in the pane's process tree: an agent started inside tmux or screen in a pane runs
-                        unmanaged (AR7-D14, a documented limit).
+                        unmanaged (AR7-D14, a documented limit). Terminal cache prewarming uses Puppeteer's exported
+                        <code>prewarmTerminalAgents</code> helper after launcher publication and on pane birth:
+                        offered agents only, native shell accounts, background work that never gates a pane.
                       </p>
                     </td>
                     <td>

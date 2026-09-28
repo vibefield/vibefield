@@ -33,6 +33,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentInstallation, BoundIngress } from "@vibecook/puppeteer-core";
 import {
+  type AgentProvider,
   type AgentRuntime,
   createAgentRuntime,
   createFileCreationRequestRegistry,
@@ -67,7 +68,7 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { AgentDistributionService } from "../src/agent-distribution";
 import {
   AGENT_GATEWAY_HOST_LABEL,
@@ -674,6 +675,7 @@ function ask(port: number, payload: object): Promise<SpawnThroughResponse | unde
 
 interface UnitOptions {
   provider?: TypedProviderOptions;
+  prewarm?: AgentProvider["prewarm"];
   /** this process's facts for the launcher's runtime, as the row states them */
   runtimeFacts?: Partial<LauncherRuntimeFacts>;
   /** null = no runtime is configured, and the rule's other cases decide */
@@ -691,10 +693,12 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
   const work = join(root, "work");
   mkdirSync(work);
   const script = typedScript(join(root, "scripted"));
+  const provider = typedProvider(script, options.provider);
+  if (options.prewarm !== undefined) provider.prewarm = options.prewarm;
   const runtime = createAgentRuntime({
     host: noTerminalHost(),
     defaultCwd: work,
-    providers: [typedProvider(script, options.provider)],
+    providers: [provider],
     creationRegistry: createFileCreationRequestRegistry({ directory: join(root, "runs") }),
   });
   const terminals = new ListedTerminals();
@@ -824,6 +828,66 @@ function onePane(box: Unit): void {
 
 const withheldSaid = (box: Unit): Logged[] =>
   box.logged.filter((entry) => entry.event === "fieldd.agents.gateway_launcher_withheld");
+
+describe("terminal agent cache prewarming", () => {
+  it("starts in the background, coalesces pane births and refreshes, and stops scheduling at shutdown", async () => {
+    let finish: (() => void) | undefined;
+    const prewarm = vi.fn(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        }),
+    );
+    const box = await unit({ prewarm });
+    await box.gateway.start();
+    await vi.waitFor(() => expect(prewarm).toHaveBeenCalledOnce());
+    expect(box.gateway.state().listening).toBe(true);
+    expect(prewarm).toHaveBeenCalledWith({ signal: expect.any(AbortSignal) });
+
+    box.terminals.born("warm-pane", 700);
+    await box.gateway.refresh();
+    expect(prewarm).toHaveBeenCalledOnce();
+    finish?.();
+    await Promise.resolve();
+    await box.gateway.refresh();
+    expect(prewarm).toHaveBeenCalledOnce();
+
+    await box.gateway.stop();
+    box.terminals.born("after-stop", 701);
+    await box.gateway.refresh();
+    expect(prewarm).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the gateway usable after a failed prewarm and retries on the next pane", async () => {
+    const prewarm = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(undefined);
+    const box = await unit({ prewarm });
+    await box.gateway.start();
+    await vi.waitFor(() => expect(prewarm).toHaveBeenCalledOnce());
+    // Let the runtime release its failed in-flight entry before the next birth.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    box.terminals.born("retry-pane", 700);
+    await vi.waitFor(() => expect(prewarm).toHaveBeenCalledTimes(2));
+    expect(box.gateway.state().listening).toBe(true);
+    expect(box.ledger).toEqual([]);
+  });
+
+  it("does not prewarm agents that the catalog no longer offers", async () => {
+    const prewarm = vi.fn(async () => undefined);
+    const box = await unit({ prewarm });
+    const at = box.catalog.findIndex((row) => row.id === TYPED_PROVIDER);
+    const entry = box.catalog[at];
+    if (entry === undefined) throw new Error("fixture provider missing");
+    box.catalog[at] = { ...entry, offers: { ...entry.offers, invoke: false } };
+    await box.gateway.start();
+    box.terminals.born("no-launcher", 700);
+    await box.gateway.refresh();
+    expect(prewarm).not.toHaveBeenCalled();
+  });
+});
 
 // ── the offered set ──
 

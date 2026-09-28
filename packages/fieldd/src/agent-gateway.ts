@@ -5,7 +5,7 @@ import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { AgentLaunchProvider } from "@vibecook/puppeteer-core";
-import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
+import { type AgentRuntime, prewarmTerminalAgents } from "@vibecook/puppeteer-runtime";
 import {
   type AdoptedSpawnThroughSession,
   boundSpawnThroughText,
@@ -989,6 +989,7 @@ export class AgentGatewayService {
       terminals.onSessionBorn((born) => {
         if (born.pid !== null) this.born.set(born.sessionId, born.pid);
         this.shellsChanged();
+        this.prewarmAgents();
       }),
       terminals.onSessionExited((event) => {
         this.born.delete(event.sessionId);
@@ -1069,6 +1070,22 @@ export class AgentGatewayService {
       providers: this.offered.providers.map((provider) => provider.id),
       shells: this.shells.size,
     });
+    this.prewarmAgents();
+  }
+
+  private prewarmAgents(): void {
+    if (!this.published || this.stopping !== undefined) return;
+    // These shells inherit the native invocation environment. A default set
+    // for managed spawns is not an account binding on a person's shell.
+    // The shared runtime owns deduplication, throttling and cancellation.
+    void prewarmTerminalAgents({
+      runtime: this.opts.runtime,
+      providers: this.offered.providers.filter(
+        (provider) => withheldBeforeExecutable(provider, this.opts.catalog) === undefined,
+      ),
+      defaults: {},
+      available: isExecutableFile,
+    }).catch(() => undefined);
   }
 
   private bundledShim(): string | undefined {
