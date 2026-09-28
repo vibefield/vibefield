@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import {
   pruneRuntimeSnapshots,
@@ -23,6 +23,7 @@ async function fixture(t) {
     fielddOutput: join(source, "fieldd.cjs"),
     serviceHarnessOutput: join(source, "service-harness.mjs"),
     fielddWasm: join(source, "loro.wasm"),
+    agentShimOutput: join(source, "agent-shim.cjs"),
     nativeOutput: join(source, "field-native"),
   };
   await Promise.all([
@@ -32,6 +33,7 @@ async function fixture(t) {
     writeFile(paths.fielddOutput, "fieldd-one"),
     writeFile(paths.serviceHarnessOutput, "harness-one"),
     writeFile(paths.fielddWasm, "wasm-one"),
+    writeFile(paths.agentShimOutput, "shim-one"),
     writeFile(paths.nativeOutput, "native-one"),
   ]);
   await chmod(paths.nativeOutput, 0o751);
@@ -67,10 +69,50 @@ test("publishes one immutable, executable runtime generation", async (t) => {
     await readFile(join(runtime.root, "fieldd", "loro_wasm_bg.wasm"), "utf8"),
     "wasm-one",
   );
+  assert.equal(await readFile(join(runtime.root, "fieldd", "agent-shim.cjs"), "utf8"), "shim-one");
   assert.equal(await readFile(runtime.nativeOutput, "utf8"), "native-one");
 
   await writeFile(paths.mainOutput, "main-two");
   assert.equal(await readFile(join(runtime.appRoot, "main", "index.cjs"), "utf8"), "main-one");
+});
+
+test("hands the daemon fieldd's four files, the agent shim beside bin.cjs", async (t) => {
+  // The gateway looks for `agent-shim.cjs` beside the daemon's own bundle and
+  // offers no launcher without it (AR-7b), so a shim left in dist/ reaches no
+  // one: the daemon runs from this directory.
+  const { paths } = await fixture(t);
+  const runtime = await stageRuntimeSnapshot({
+    paths,
+    buildId: "dev-777777777777777777777777",
+    daemonBuildId: DAEMON_ID,
+  });
+
+  assert.equal(dirname(runtime.fielddOutput), join(runtime.root, "fieldd"));
+  assert.deepEqual((await readdir(join(runtime.root, "fieldd"))).sort(), [
+    "agent-shim.cjs",
+    "bin.cjs",
+    "loro_wasm_bg.wasm",
+    "service-harness.mjs",
+  ]);
+});
+
+test("reclaims a snapshot staged before the shim joined it rather than reusing it", async (t) => {
+  // Version 3 is the layout without `agent-shim.cjs`: served again, it would
+  // hand the daemon no shim and the gateway would offer no launcher.
+  const { paths } = await fixture(t);
+  const buildId = "dev-888888888888888888888888";
+  const destination = join(paths.runtimeRoot, buildId);
+  await mkdir(join(destination, "fieldd"), { recursive: true });
+  await writeFile(join(destination, "fieldd", "bin.cjs"), "fieldd-old");
+  await writeFile(
+    join(destination, "runtime.json"),
+    `${JSON.stringify({ version: 3, buildId, daemonBuildId: DAEMON_ID, nativeName: "field-native" })}\n`,
+  );
+
+  const runtime = await stageRuntimeSnapshot({ paths, buildId, daemonBuildId: DAEMON_ID });
+  assert.equal(runtime.root, destination);
+  assert.equal(await readFile(runtime.fielddOutput, "utf8"), "fieldd-one");
+  assert.equal(await readFile(join(runtime.root, "fieldd", "agent-shim.cjs"), "utf8"), "shim-one");
 });
 
 test("reuses an existing snapshot and preserves its recorded daemon identity", async (t) => {
