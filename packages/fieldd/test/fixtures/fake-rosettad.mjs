@@ -65,6 +65,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
+import { PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -75,7 +76,7 @@ const mode = process.env.FAKE_ROSETTAD_MODE ?? "ok";
 const announceDir = args.includes("--announce") ? flag("--announce-dir") : undefined;
 const db = flag("--db");
 const enrollPath = flag("--enroll");
-const protocol = Number(process.env.FAKE_ROSETTAD_PROTOCOL ?? "20");
+const protocol = Number(process.env.FAKE_ROSETTAD_PROTOCOL ?? PROTOCOL_VERSION);
 // the real daemon prints `ready` BEFORE it walks the roots: its census (the
 // roll call) is empty and its ingest phase `discovering` until the walk ends.
 // This knob reproduces that window for as many milliseconds as it says.

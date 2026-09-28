@@ -15,7 +15,7 @@
     },
     "rosetta": {
       "path": "../rosetta",
-      "sha": "e8d907ab28995939449181524315b72c79adab28",
+      "sha": "d3cf325ea61593d893be1702f24f009368fe6cc7",
       "packages": {
         "@rosetta/protocol": "clients/ts"
       },
@@ -35,7 +35,7 @@
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
       "repository": "https://github.com/vibecook-dev/ghosttea.git",
-      "sha": "1496c1a3819aeb84ef0f103b48634ca898fe376d",
+      "sha": "a8fffb505916fbb1a5e679b3c5c1c0fbbfb8a9fe",
       "javascript": {
         "workspaces": [
           "@vibecook/ghosttea-protocol",
