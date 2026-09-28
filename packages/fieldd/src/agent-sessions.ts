@@ -22,6 +22,7 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+import { isTypedRun, SPAWNED_BY_SHELL } from "./agent-typed-run";
 
 // The managed-session records and the fold's projection (AR-3;
 // thinking-ar-agent-plane.md §5/§7/§9 as ruled). Pure where it can be: the
@@ -288,6 +289,11 @@ export function recordForRun(input: {
   ingress?: { port: number; token: string } | undefined;
   /** AR-4 — the floor session this run replaced at a resume-when-idle */
   replaced?: string | undefined;
+  /** AR-7 — a run ADOPTED in a terminal the person's own shell owns: the
+   * process that became the agent and when it started, which a later boot
+   * compares before it re-attaches. The record then says where the run came
+   * from; a run a door started says nothing, which reads `app`. */
+  adopted?: { pid: number; startedAt: string } | undefined;
 }): AgentSessionRecord {
   const { info } = input;
   return {
@@ -311,6 +317,12 @@ export function recordForRun(input: {
     ...(input.replaced !== undefined ? { replaced: input.replaced } : {}),
     createdAt: input.now,
     updatedAt: input.now,
+    ...(input.adopted !== undefined
+      ? {
+          spawnedBy: SPAWNED_BY_SHELL,
+          process: { pid: input.adopted.pid, startedAt: input.adopted.startedAt },
+        }
+      : {}),
   };
 }
 
@@ -372,6 +384,9 @@ export interface SummarizeInput {
   stateChangedAt: string;
   lastActivityAt?: string | undefined;
   title?: string | undefined;
+  /** AR-7 — where the run came from, when it did not come from one of our
+   * doors (`user-shell`); a spawned row says nothing, which reads `app` */
+  spawnedBy?: string | undefined;
 }
 
 /** SessionSummary v2 for a managed run — pure. */
@@ -408,6 +423,7 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     ...(input.lastActivityAt !== undefined ? { lastActivityAt: input.lastActivityAt } : {}),
     ...(input.title !== undefined ? { title: input.title } : {}),
     continuation: input.record,
+    ...(input.spawnedBy !== undefined ? { spawnedBy: input.spawnedBy } : {}),
   };
 }
 
@@ -495,9 +511,14 @@ export interface SummarizePendingInput {
  * re-attach to it (AR-4): a live terminal nothing observes — `status`
  * unknown, `observationLevel` none, the continuation resumable and PENDING a
  * resume at the session's next idle (or by hand through `agent.resume`).
- * The native id is the record's, so `sessionIdBasis` says so. Pure. */
+ * The native id is the record's, so `sessionIdBasis` says so. Pure.
+ *
+ * AR-7c — a TYPED run held this way is pending NOTHING: its pane is the
+ * person's shell, so it is never replaced, at idle or by hand. The row says it
+ * is unobserved and why, offers no resume, and says where the run came from. */
 export function summarizePending(input: SummarizePendingInput): AgentSessionSummary {
   const { record } = input;
+  const typed = isTypedRun(record);
   return {
     sessionId: record.continuation.nativeSessionId,
     sessionIdBasis: "recorded",
@@ -523,11 +544,14 @@ export function summarizePending(input: SummarizePendingInput): AgentSessionSumm
     createdAt: record.createdAt,
     stateChangedAt: input.since,
     ...(record.title !== undefined ? { title: record.title } : {}),
-    continuation: {
-      persisted: true,
-      resumable: input.resumable ?? true,
-      pending: "resume-when-idle",
-      reason: input.reason,
-    },
+    continuation: typed
+      ? { persisted: true, resumable: false, reason: input.reason }
+      : {
+          persisted: true,
+          resumable: input.resumable ?? true,
+          pending: "resume-when-idle",
+          reason: input.reason,
+        },
+    ...(record.spawnedBy !== undefined ? { spawnedBy: record.spawnedBy } : {}),
   };
 }

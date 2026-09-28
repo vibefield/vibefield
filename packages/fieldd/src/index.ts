@@ -7,6 +7,14 @@ export {
   displayTail,
 } from "./agent-distribution";
 export {
+  AGENT_GATEWAY_HOST_LABEL,
+  AGENT_GATEWAY_STRICT,
+  type AgentGatewayOptions,
+  AgentGatewayService,
+  type AgentGatewayState,
+  agentShimHome,
+} from "./agent-gateway";
+export {
   AGENT_ENV_PASSTHROUGH,
   type AgentEnvironmentRequest,
   agentEnvironment,
@@ -23,6 +31,8 @@ export {
   type IndexServiceOptions,
 } from "./agent-index";
 export {
+  type AgentAdoption,
+  type AgentAdoptionInput,
   AgentRuntimeService,
   type AgentRuntimeServiceOptions,
   createProfileStore,

@@ -36,6 +36,7 @@ import {
   parseProfileRegistrySnapshot,
   type SpawnAgentResult,
 } from "@vibecook/puppeteer-runtime";
+import type { ProcessTable } from "@vibecook/puppeteer-runtime/spawn-through";
 import {
   AGENT_CATALOG,
   type AgentCapability,
@@ -90,6 +91,15 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
+import {
+  isTypedRun,
+  processIsGone,
+  readProcesses,
+  SPAWNED_BY_SHELL,
+  type TypedWatchOptions,
+  typedRunProof,
+  watchTypedProcess,
+} from "./agent-typed-run";
 import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
@@ -259,6 +269,16 @@ const RESUME_POLL_MAX_MS = 60_000;
  * already terminated, its successor not yet born) before releasing the rest. */
 const DISPOSE_REPLACEMENT_WAIT_MS = 10_000;
 
+/** AR-7c — a process table that could not be read says nothing about a
+ * typed run: it is asked again, this many times and this far apart, before
+ * the run's record is given up. */
+const TYPED_PROOF_ATTEMPTS = 3;
+const TYPED_PROOF_RETRY_MS = 500;
+
+/** AR-7 — the exit of a typed run as a vanished pid tells it: the agent is
+ * the shell's child, so there is no code and no signal to report. */
+const PROCESS_EXITED = { exitCode: null, signal: null, reason: "process-exited" } as const;
+
 /** The audit ledger's system-actor entry (`AuditService.requiredSystem`):
  * the daemon's own acts — a re-attach at boot, a resume-when-idle — are
  * mutations of a session a person will want to find in the ledger. */
@@ -267,6 +287,51 @@ export type SystemAudit = <T>(
   effect: () => Promise<T>,
   describeOutcome?: (value: T) => AuditMutationOutcome,
 ) => Promise<T>;
+
+/** AR-7 — what the fold is told about a run puppeteer ADOPTED in a terminal
+ * the person's own shell owns (the agent's name typed at one of our panes'
+ * prompts): puppeteer's own facts for the run, where it runs (the PHYSICAL
+ * path — the launcher reports its own working directory, never the shell's
+ * `PWD`), the process that became the agent and when it started, and the
+ * identity the launch was given. */
+export interface AgentAdoptionInput {
+  info: AgentSessionInfo;
+  cwd: string;
+  process: { pid: number; startedAt: string };
+  launched: { creationRequestId: string; ingress?: BoundIngress | undefined };
+}
+
+/** AR-7 — the fold's entry points for a typed run, as the gateway service
+ * (`agent-gateway.ts`) reaches them: the identity every birth is given (a
+ * spawn's own, AR-4), the entry, the withdrawal, and the release of a terminal
+ * whose typed run has already ended. */
+export interface AgentAdoption {
+  /** the creation request and the say over the ingress a launch is prepared
+   * with, and what was bound once the adapter has reported it */
+  identity(): {
+    creationRequestId: string;
+    ingress: HostIngress;
+    launched(): { creationRequestId: string; ingress?: BoundIngress | undefined };
+  };
+  /** the adopted run enters the fold: its record written and signed, its row
+   * published, its process watched. Throws when it cannot — the caller undoes
+   * the adoption in puppeteer and refuses the person in words. */
+  adopt(input: AgentAdoptionInput): Promise<void>;
+  /** the run is over and its row leaves; the record is stamped with `exit`.
+   * A run the fold does not hold is left as it is. */
+  withdraw(
+    runtimeRunId: string,
+    exit: { exitCode: number | null; signal: string | null; reason: string },
+  ): Promise<void>;
+  /** a typed run whose process has ENDED gives its terminal up now, before
+   * the next launch is adopted there. `runs` says whether a recorded process
+   * still runs — the caller's one read of the process table, which placed the
+   * launch that is asking. A terminal held by a run that lives is left held. */
+  release(
+    terminalSessionId: string,
+    runs: (process: { pid: number; startedAt: string }) => boolean,
+  ): Promise<void>;
+}
 
 export interface AgentRuntimeServiceOptions {
   /** this user's root (`FielddConfig.dataDir`): the registry, the managed roots and the session records live under it */
@@ -308,6 +373,17 @@ export interface AgentRuntimeServiceOptions {
   resumeWhenIdle?: { afterMs?: number; pollMs?: number };
   /** AR-S4d test seam: where a profile's server values are kept (default: the OS keychain) */
   secretStore?: SecretStore;
+  /** AR-7 — the agents a launcher stands for on this device NOW (the gateway
+   * service's word), LATE-BOUND: `agent.providers` then answers `invoke`
+   * only where typing the name would really be carried. Absent or null = no
+   * gateway is composed, and the catalog's own claim stands. */
+  launchers?: () => ReadonlySet<string> | null;
+  /** AR-7 test seam: the process table a typed run is proven and ended
+   * against (default: the kit's one `ps` read) */
+  processTable?: () => Promise<ProcessTable | undefined>;
+  /** AR-7 test seam: how often a typed run's pid is asked, and the grace its
+   * terminal's own exit report is given (defaults in agent-typed-run.ts) */
+  typedWatch?: TypedWatchOptions;
   now?: () => Date;
   logger?: Logger;
 }
@@ -339,6 +415,12 @@ interface ManagedEntry {
   reattached: boolean;
   /** AR-4 — the floor session this run replaced at a resume-when-idle */
   replaced?: string | undefined;
+  /** AR-7 — a TYPED run: the process that became the agent. Its presence is
+   * what the rules for a typed run read (its pane is a shell that outlives
+   * it; its end is a pid that vanished, not a floor event). */
+  typed?: { pid: number; startedAt: string } | undefined;
+  /** AR-7 — stops the watch on that pid */
+  unwatch?: (() => void) | undefined;
 }
 
 /** AR-4 — a run whose PTY outlived a fieldd that could NOT re-attach to it:
@@ -358,6 +440,9 @@ interface PendingEntry {
   resuming: boolean;
   /** consecutive idle polls the index could not answer (the backoff) */
   failures: number;
+  /** AR-7c — a typed run held pending: stops the watch on its process, which
+   * is how its row leaves (nothing replaces it, so nothing else would) */
+  unwatch?: (() => void) | undefined;
 }
 
 /** MF-1f — a run whose PROCESS ended while its PTY is still on the floor.
@@ -397,7 +482,7 @@ interface AwaitingBoot {
 
 /** The `agents.*`/`agent.*` doors' service, the runtime's owner and the fold.
  * Auditing is the caller's (the daemon wraps the mutations in `audit.required`). */
-export class AgentRuntimeService implements PersonaSessions {
+export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** puppeteer's runtime — typed as the open surface, not the built-in
    * family's: the composed providers are the built-ins plus whatever the
    * `providers` seam adds, and `spawn` takes any composed id. */
@@ -720,11 +805,23 @@ export class AgentRuntimeService implements PersonaSessions {
         resumable: row.offers.resume && launch.get(row.id)?.resume === true,
         personas,
         status: row.status,
-        offers: row.offers,
+        offers: this.offersHere(row),
         ...(state !== undefined ? { history: state } : {}),
       });
     }
     return { providers };
+  }
+
+  /** AR-7 — what the row offers ON THIS DEVICE, THIS RUN: the catalog's claim,
+   * with `invoke` withdrawn where no launcher stands for the agent (its
+   * adapter does not classify, no install was found, or no program can run a
+   * launcher here — the gateway service logs which). With no gateway composed
+   * the claim stands as the table makes it. */
+  private offersHere(row: AgentCatalogEntry): AgentCatalogEntry["offers"] {
+    if (!row.offers.invoke) return row.offers;
+    const launchers = this.opts.launchers?.() ?? null;
+    if (launchers === null || launchers.has(row.id)) return row.offers;
+    return { ...row.offers, invoke: false };
   }
 
   /** agent.catalog — the visible rows for the caller's surface (AC-3;
@@ -826,7 +923,7 @@ export class AgentRuntimeService implements PersonaSessions {
     this.requireOffered(params.provider, "spawn");
     const terminals = this.requireTerminals();
     const cwd = params.cwd ?? this.home;
-    const identity = this.newIdentity();
+    const identity = this.identity();
     const entry = await this.creation(params.profileId ?? null, async () => {
       const result = await this.runtime.spawn({
         agent: params.provider,
@@ -878,6 +975,9 @@ export class AgentRuntimeService implements PersonaSessions {
     }
     const pending = this.pending.get(record.runtimeRunId);
     if (pending !== undefined) {
+      // AR-7c — a typed run is alive in the person's own shell: the
+      // replacement would end that shell, and is refused before anything else
+      if (isTypedRun(record)) throw typedRunAlive(record);
       // AR-D25 — the replacement ends the running PTY first, and a signed-out
       // account starts nothing: refused before anything is ended
       if (!this.personaActive(record.profileId)) {
@@ -1465,10 +1565,14 @@ export class AgentRuntimeService implements PersonaSessions {
     this.logins.clear();
     for (const entry of this.managed.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
+      entry.unwatch?.();
+      entry.unwatch = undefined;
     }
     for (const entry of this.pending.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
       if (entry.poll !== undefined) clearTimeout(entry.poll);
+      entry.unwatch?.();
+      entry.unwatch = undefined;
     }
     for (const exited of this.exited.values()) {
       if (exited.backstop !== undefined) clearTimeout(exited.backstop);
@@ -1513,8 +1617,10 @@ export class AgentRuntimeService implements PersonaSessions {
   /** AR-4 — what a birth is given so the next boot can find it again: a
    * creation request id (puppeteer's durable claim) and a say over the
    * ingress, whose bound port and bearer the adapter reports BEFORE the
-   * process launches (an adapter without an ingress reports nothing). */
-  private newIdentity(): {
+   * process launches (an adapter without an ingress reports nothing).
+   * AR-7 — ONE identity for every birth: a run adopted in a caller's
+   * terminal is prepared with the same (`AgentAdoption.identity`). */
+  identity(): {
     creationRequestId: string;
     ingress: HostIngress;
     launched(): { creationRequestId: string; ingress?: BoundIngress | undefined };
@@ -1550,6 +1656,12 @@ export class AgentRuntimeService implements PersonaSessions {
       /** AR-4 — the record already exists: this run was re-attached, and the
        * inventory row that proved its PTY alive rides along */
       reattached?: { record: AgentSessionRecord; terminal: TerminalInfo } | undefined;
+      /** AR-7 — the run was ADOPTED in a terminal the person's own shell
+       * owns: the process that became the agent, and the floor's row for
+       * that terminal when it lists one */
+      adopted?:
+        | { process: { pid: number; startedAt: string }; terminal?: TerminalInfo | undefined }
+        | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -1564,6 +1676,7 @@ export class AgentRuntimeService implements PersonaSessions {
           creationRequestId: launch.creationRequestId,
           ingress: launch.ingress,
           replaced: launch.replaced,
+          adopted: launch.adopted?.process,
         }),
       );
     } else {
@@ -1584,13 +1697,19 @@ export class AgentRuntimeService implements PersonaSessions {
       stateChangedAt: now,
       status: "unknown",
       mirrorIssueLogged: false,
-      terminal: launch.reattached?.terminal,
-      seenInInventory: launch.reattached !== undefined,
+      terminal: launch.reattached?.terminal ?? launch.adopted?.terminal,
+      seenInInventory: launch.reattached !== undefined || launch.adopted?.terminal !== undefined,
       exiting: false,
       creationRequestId: launch.creationRequestId,
       ingress: launch.ingress,
       reattached: launch.reattached !== undefined,
       replaced: launch.replaced,
+      // a typed run is one from its adoption, and again at every re-attach
+      typed:
+        launch.adopted?.process ??
+        (launch.reattached !== undefined && isTypedRun(launch.reattached.record)
+          ? launch.reattached.record.process
+          : undefined),
     };
     if (this.disposed) {
       // the service stopped while this run was being born or attached: the
@@ -1607,12 +1726,16 @@ export class AgentRuntimeService implements PersonaSessions {
     const current = this.runtime.monitorState(info.runtimeRunId);
     if (current !== undefined) this.applyMonitor(entry, current);
     this.logger.info(
-      launch.reattached === undefined
-        ? "fieldd.agents.session_started"
-        : "fieldd.agents.session_reattached",
-      launch.reattached === undefined
-        ? "Managed agent session started"
-        : "Managed agent session re-attached across the restart",
+      launch.reattached !== undefined
+        ? "fieldd.agents.session_reattached"
+        : launch.adopted !== undefined
+          ? "fieldd.agents.session_adopted"
+          : "fieldd.agents.session_started",
+      launch.reattached !== undefined
+        ? "Managed agent session re-attached across the restart"
+        : launch.adopted !== undefined
+          ? "An agent typed in a pane's shell was adopted as a managed session"
+          : "Managed agent session started",
       {
         runtimeRunId: info.runtimeRunId,
         runtimeEpoch: info.runtimeEpoch,
@@ -1620,10 +1743,145 @@ export class AgentRuntimeService implements PersonaSessions {
         sessionId: info.terminalSessionId,
         ...(info.profileId !== undefined ? { profileId: info.profileId } : {}),
         ...(launch.replaced !== undefined ? { replaced: launch.replaced } : {}),
+        ...(entry.typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL, pid: entry.typed.pid } : {}),
       },
     );
     this.publish();
     return entry;
+  }
+
+  // ── a typed run (AR-7; `AgentAdoption`, the gateway service's port) ──
+
+  /** A run puppeteer ADOPTED in a terminal the person's own shell owns enters
+   * the fold: `enter()` for a run no door of ours started. The record is
+   * written and signed like every other, saying where the run came from and
+   * which process it is; the row is published; the process is watched.
+   *
+   * No ticket is minted and none could be: the terminal host keeps birth
+   * facts only for PTYs IT spawned, and the pane is already showing this
+   * shell. Nothing on this path asks for one.
+   *
+   * Throws when the run cannot enter — the gateway undoes the adoption in
+   * puppeteer and refuses the person in words. */
+  async adopt(input: AgentAdoptionInput): Promise<void> {
+    const { info } = input;
+    if (this.disposed) {
+      throw new RpcCallError("UNAVAILABLE", "the agent service is stopping", true, {
+        service: "agents",
+        state: "stopping",
+        runtimeRunId: info.runtimeRunId,
+      });
+    }
+    const agent = this.runtime.agent(info.terminalSessionId);
+    if (agent === undefined || agent.info.runtimeRunId !== info.runtimeRunId) {
+      throw new RpcCallError(
+        "INTERNAL",
+        "the runtime adopted the run but holds no agent for it",
+        false,
+        { runtimeRunId: info.runtimeRunId },
+      );
+    }
+    this.yieldTerminal(info.terminalSessionId, info.runtimeRunId, input.process);
+    const terminals = this.opts.terminals?.() ?? null;
+    const row =
+      terminals !== null && this.listed(terminals, info.terminalSessionId)
+        ? terminals.get(info.terminalSessionId)
+        : undefined;
+    const entry = this.enter(agent, {
+      cwd: input.cwd,
+      creationRequestId: input.launched.creationRequestId,
+      ingress: input.launched.ingress,
+      adopted: { process: input.process, terminal: row },
+    });
+    // A preparation slower than the launcher's patience leaves fieldd holding
+    // a run whose process gave up and left: over before it began. The watch
+    // would say so at its next poll; this says so at once.
+    if (processIsGone(input.process.pid)) {
+      await this.closeRun(info.runtimeRunId, PROCESS_EXITED);
+      return;
+    }
+    this.watchTyped(entry);
+  }
+
+  /** The run is over and its row leaves; the record is stamped with `exit`.
+   * A run the fold does not hold is left as it is. */
+  async withdraw(
+    runtimeRunId: string,
+    exit: { exitCode: number | null; signal: string | null; reason: string },
+  ): Promise<void> {
+    if (this.pending.has(runtimeRunId)) {
+      this.closePending(runtimeRunId, exit);
+      return;
+    }
+    await this.closeRun(runtimeRunId, exit);
+  }
+
+  /** A typed run's end reaches the fold a poll and a grace after it happened
+   * (the watch). A name typed again in that moment would be told that another
+   * agent holds the pane — by puppeteer, which still holds the run. So the
+   * gateway asks first, for the terminal it just placed a launch in: a typed
+   * run there whose process no longer runs is closed now. */
+  async release(
+    terminalSessionId: string,
+    runs: (process: { pid: number; startedAt: string }) => boolean,
+  ): Promise<void> {
+    const runtimeRunId = this.byTerminal.get(terminalSessionId);
+    if (runtimeRunId === undefined) return;
+    const pending = this.pending.get(runtimeRunId);
+    const typed =
+      this.managed.get(runtimeRunId)?.typed ??
+      (pending !== undefined && isTypedRun(pending.record) ? pending.record.process : undefined);
+    if (typed === undefined || runs(typed)) return;
+    await this.withdraw(runtimeRunId, PROCESS_EXITED);
+  }
+
+  /** One run per terminal, in the fold as in puppeteer. A terminal another
+   * run holds refuses the adoption — with ONE exception: a pending typed row
+   * for the SAME process (its pid and its start). That is the launcher that
+   * asked the last fieldd and never got its answer, asking the one that came
+   * next: what was adopted then never ran, and its row gives way. */
+  private yieldTerminal(
+    terminalSessionId: string,
+    runtimeRunId: string,
+    process: { pid: number; startedAt: string },
+  ): void {
+    const holder = this.byTerminal.get(terminalSessionId);
+    if (holder === undefined || holder === runtimeRunId) return;
+    const pending = this.pending.get(holder);
+    const held = pending?.record.process;
+    if (
+      pending !== undefined &&
+      isTypedRun(pending.record) &&
+      held !== undefined &&
+      held.pid === process.pid &&
+      held.startedAt === process.startedAt
+    ) {
+      this.closePending(holder, { exitCode: null, signal: null, reason: "superseded" });
+      return;
+    }
+    throw new RpcCallError("CONFLICT", "another agent's run holds this terminal", false, {
+      state: "terminal-conflict",
+      sessionId: terminalSessionId,
+      runtimeRunId: holder,
+    });
+  }
+
+  /** A typed run's end is a pid that vanished: the agent is the shell's
+   * child, and no exit event reaches fieldd for it. The kit cannot know an
+   * exit code for a process that is not its own, and none is invented. */
+  private watchTyped(entry: ManagedEntry): void {
+    const typed = entry.typed;
+    if (typed === undefined || this.disposed) return;
+    const runtimeRunId = entry.info.runtimeRunId;
+    entry.unwatch?.();
+    entry.unwatch = watchTypedProcess(
+      typed.pid,
+      () => {
+        entry.unwatch = undefined;
+        void this.closeRun(runtimeRunId, PROCESS_EXITED);
+      },
+      this.opts.typedWatch,
+    );
   }
 
   /** The door's answer for a run born THIS call: the row, and the same routed
@@ -1662,7 +1920,7 @@ export class AgentRuntimeService implements PersonaSessions {
       ...(record.continuation.state !== undefined ? { state: record.continuation.state } : {}),
     };
     const cwd = cwdOverride ?? record.cwd;
-    const identity = this.newIdentity();
+    const identity = this.identity();
     return this.creation(record.profileId ?? null, async () => {
       const result = await this.runtime.resume({
         continuation,
@@ -1708,7 +1966,14 @@ export class AgentRuntimeService implements PersonaSessions {
       if (record.exited !== undefined) {
         const id = record.terminalSessionId;
         const row = id === undefined ? undefined : rows.get(id);
-        if (row !== undefined && id !== undefined && record.reattach?.state !== "resumed") {
+        // AR-7 — nor a typed run's: the terminal it names is a live shell, and
+        // a row for a run that ended there would be a dead pane that is not one
+        if (
+          row !== undefined &&
+          id !== undefined &&
+          record.reattach?.state !== "resumed" &&
+          !isTypedRun(record)
+        ) {
           this.exited.set(record.runtimeRunId, {
             record,
             terminalSessionId: id,
@@ -1811,10 +2076,16 @@ export class AgentRuntimeService implements PersonaSessions {
     terminalId: string,
   ): Promise<void> {
     if (this.disposed) return;
-    // EL7 (AR-4b): the daemon re-attaches only to PTYs born on the agent cell.
-    // A record naming any other terminal — a shell of the user's — is not a
-    // run this daemon ever spawned, whatever the file says.
-    if (row.cell?.workloadClass !== "agent") {
+    if (isTypedRun(record)) {
+      // AR-7c — a typed run lives in the person's own shell, off the agent
+      // cell by construction: the rule beside this one would refuse every
+      // one. Its record is trusted on its OWN proof (`typedRunProof`), and
+      // what passes is only ever attached to — never replaced.
+      if (!(await this.provesTyped(record, row, terminalId))) return;
+    } else if (row.cell?.workloadClass !== "agent") {
+      // EL7 (AR-4b): the daemon re-attaches only to PTYs born on the agent
+      // cell. A record naming any other terminal — a shell of the user's —
+      // is not a run this daemon ever spawned, whatever the file says.
       this.logger.warn(
         "fieldd.agents.reattach_refused_cell",
         "A session record names a terminal that is not on the agent cell; not attached, not held",
@@ -1895,6 +2166,14 @@ export class AgentRuntimeService implements PersonaSessions {
             ingress: record.ingress,
             reattached: { record, terminal: row },
           });
+          // AR-7c — a typed run's end is still a pid that vanishes: the watch
+          // is armed again (and a process that left during the attach is an
+          // exit now, not at the next poll)
+          if (entry.typed !== undefined) {
+            if (processIsGone(entry.typed.pid)) {
+              void this.closeRun(entry.info.runtimeRunId, PROCESS_EXITED);
+            } else this.watchTyped(entry);
+          }
           return { state: "attached" as const, runtimeEpoch: entry.info.runtimeEpoch };
         }
         this.hold(record, row, terminalId, outcome.state, outcome.reason, expectedEpoch);
@@ -2002,23 +2281,90 @@ export class AgentRuntimeService implements PersonaSessions {
     };
     this.pending.set(record.runtimeRunId, entry);
     this.byTerminal.set(terminalId, record.runtimeRunId);
+    const typed = isTypedRun(held) ? held.process : undefined;
     this.logger.warn(
       "fieldd.agents.reattach_held",
-      "A managed session's PTY survived the restart but could not be re-attached; held pending, resumes when idle",
+      typed === undefined
+        ? "A managed session's PTY survived the restart but could not be re-attached; held pending, resumes when idle"
+        : "A typed agent outlived the restart and could not be re-attached; it is shown unobserved, and is never replaced",
       {
         runtimeRunId: record.runtimeRunId,
         provider: record.provider,
         sessionId: terminalId,
         state,
         reason,
+        ...(typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL, pid: typed.pid } : {}),
       },
     );
-    this.armPending(entry);
+    if (typed === undefined) this.armPending(entry);
+    else this.watchPendingTyped(entry, typed.pid);
     this.publish();
   }
 
+  /** AR-7c — a typed run held pending leaves when its PROCESS does: nothing
+   * replaces it, so no idle poll is armed, and the watch is the only way out
+   * besides the shell's own exit. */
+  private watchPendingTyped(entry: PendingEntry, pid: number): void {
+    const runtimeRunId = entry.record.runtimeRunId;
+    if (processIsGone(pid)) {
+      this.closePending(runtimeRunId, PROCESS_EXITED);
+      return;
+    }
+    entry.unwatch = watchTypedProcess(
+      pid,
+      () => {
+        entry.unwatch = undefined;
+        this.closePending(runtimeRunId, PROCESS_EXITED);
+      },
+      this.opts.typedWatch,
+    );
+  }
+
+  /** AR-7c — the typed run's proof, from ONE read of the process table. A
+   * record that does not pass is stamped as an unknown exit — the process is
+   * gone, or is not in the terminal the record names — and NOTHING is held:
+   * no row, no watch, and nothing of the terminal is touched. */
+  private async provesTyped(
+    record: AgentSessionRecord,
+    row: TerminalInfo,
+    terminalId: string,
+  ): Promise<boolean> {
+    const verified = this.records.verifies(record);
+    const read = this.opts.processTable ?? readProcesses;
+    let verdict = await typedRunProof({ record, verified, terminal: row, table: await read() });
+    for (
+      let attempt = 1;
+      attempt < TYPED_PROOF_ATTEMPTS && !verdict.holds && verdict.why === "table-unread";
+      attempt += 1
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, TYPED_PROOF_RETRY_MS));
+      if (this.disposed) return false;
+      verdict = await typedRunProof({ record, verified, terminal: row, table: await read() });
+    }
+    if (verdict.holds) return true;
+    this.records.stampExit(record.runtimeRunId, {
+      at: this.now().toISOString(),
+      exitCode: null,
+      signal: null,
+      reason: "unknown",
+    });
+    this.logger.info(
+      "fieldd.agents.typed_run_gone",
+      "A typed agent's record did not prove a run in the terminal it names; stamped, nothing held",
+      {
+        runtimeRunId: record.runtimeRunId,
+        provider: record.provider,
+        sessionId: terminalId,
+        why: verdict.why,
+      },
+    );
+    if (record.profileId !== undefined) void this.profiles.sweep();
+    return false;
+  }
+
   private armPending(entry: PendingEntry): void {
-    if (this.disposed || entry.resuming) return;
+    // AR-7c — and a typed run is never armed, whoever asks
+    if (this.disposed || entry.resuming || isTypedRun(entry.record)) return;
     const delay = Math.min(this.pollMs * 2 ** entry.failures, RESUME_POLL_MAX_MS);
     entry.poll = setTimeout(() => void this.pollPending(entry), delay);
     entry.poll.unref();
@@ -2127,6 +2473,8 @@ export class AgentRuntimeService implements PersonaSessions {
     how: "idle" | "manual",
   ): Promise<ManagedEntry> {
     const { record } = entry;
+    // AR-7c — never a typed run: the PTY this would end is the person's shell
+    if (isTypedRun(record)) throw typedRunAlive(record);
     if (entry.resuming) {
       throw new RpcCallError("PRECONDITION_FAILED", "the session is being resumed already", false, {
         runtimeRunId: record.runtimeRunId,
@@ -2279,6 +2627,8 @@ export class AgentRuntimeService implements PersonaSessions {
     if (entry === undefined || entry.resuming) return;
     if (entry.poll !== undefined) clearTimeout(entry.poll);
     if (entry.backstop !== undefined) clearTimeout(entry.backstop);
+    entry.unwatch?.();
+    entry.unwatch = undefined;
     this.pending.delete(runtimeRunId);
     if (entry.record.terminalSessionId !== undefined)
       this.byTerminal.delete(entry.record.terminalSessionId);
@@ -2331,6 +2681,10 @@ export class AgentRuntimeService implements PersonaSessions {
    * builds the same row from the record alone. */
   private holdExited(entry: ManagedEntry): void {
     if (this.disposed) return;
+    // AR-7 — a typed run's row is WITHDRAWN, never held: the exited row is for
+    // a DEAD pane that still wears a resume verb, and a typed run's pane is a
+    // live shell the person goes on using
+    if (entry.typed !== undefined) return;
     const terminalSessionId = entry.info.terminalSessionId;
     const terminals = this.opts.terminals?.() ?? null;
     // The floor's OWN listing is the only evidence that the pane is there. No
@@ -2478,6 +2832,8 @@ export class AgentRuntimeService implements PersonaSessions {
     if (entry === undefined || entry.exiting) return;
     // puppeteer withdrew the run (terminal, or the runtime is disposing): the
     // row leaves; the record stays for a resume
+    entry.unwatch?.();
+    entry.unwatch = undefined;
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
@@ -2501,6 +2857,8 @@ export class AgentRuntimeService implements PersonaSessions {
       clearTimeout(entry.backstop);
       entry.backstop = undefined;
     }
+    entry.unwatch?.();
+    entry.unwatch = undefined;
     try {
       await this.runtime.handleProcessExit(entry.info.terminalSessionId, {
         exitCode: exit.exitCode,
@@ -2608,6 +2966,7 @@ export class AgentRuntimeService implements PersonaSessions {
           ...(entry.reattached ? { reattached: true } : {}),
         },
         replaced: entry.replaced,
+        ...(entry.typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL } : {}),
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,
         lastActivityAt: entry.lastActivityAt,
@@ -2701,6 +3060,18 @@ function restoredWorkspaceRequest(
       request.resumeRoot = workspace.root;
   }
   return request;
+}
+
+/** AR-7c — what `agent.resume` (and anything that would replace a run)
+ * answers for a typed run that is alive and unobserved: the pane is the
+ * person's shell, and the only way to a managed session there is theirs. */
+function typedRunAlive(record: AgentSessionRecord): RpcCallError {
+  return new RpcCallError(
+    "PRECONDITION_FAILED",
+    "it is running in your shell; quit it and start it again to manage it",
+    false,
+    { runtimeRunId: record.runtimeRunId, state: "typed-run-alive" },
+  );
 }
 
 function isSessionFailure(

@@ -6,6 +6,7 @@ import { join } from "node:path";
 // needs only the version its supervisor holds a spawned rosettad to
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
+  AGENT_CATALOG,
   AgentCatalogParams,
   AgentInterruptParams,
   AgentResumeParams,
@@ -43,6 +44,7 @@ import {
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
   CONTRACTS_VERSION,
+  createAgentCatalogReaders,
   DeviceGetParams,
   DocCreateParams,
   type DocListResult,
@@ -126,6 +128,11 @@ import {
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import { createFieldSubscription } from "./agent-field";
 import { AgentFieldPublisher } from "./agent-field-publisher";
+import {
+  type AgentGatewayOptions,
+  AgentGatewayService,
+  type ShellIntegration,
+} from "./agent-gateway";
 import { EnrollmentStore, IndexService } from "./agent-index";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
@@ -260,6 +267,28 @@ export interface FielddConfig {
   /** AR-5d test/product seam: the account-usage polling cadence. Unset ⇒ each
    * adapter's own `refresh.pollIntervalMs` (the provider knows its quota). */
   agentUsage?: AccountUsagePollOptions;
+  /** AR-7b — the agent gateway (agent-gateway.ts): a typed agent is a managed
+   * agent. Production passes NOTHING here and the gateway is on; what is
+   * here are the test seams, and the way a layout names the program its
+   * launchers run. Nothing here reaches strictness: fieldd is a strict host
+   * and has no word that says otherwise. */
+  agentGateway?: {
+    /** false = this daemon hosts no gateway at all (a unit daemon's choice) */
+    enabled?: boolean;
+    /** the bundled shim (default: `agent-shim.cjs` beside the daemon's bundle) */
+    shimScript?: AgentGatewayOptions["shimScript"];
+    /** the launcher's runtime, named by the caller (case 1 of the rule) */
+    launcher?: AgentGatewayOptions["launcher"];
+    /** how long a launcher in one of our panes waits for a fieldd that does
+     * not answer (default: the kit's) */
+    retryMs?: AgentGatewayOptions["retryMs"];
+    /** the process table typed runs are placed, proven and ended against */
+    processTable?: AgentGatewayOptions["processTable"];
+    /** this process's facts for the launcher's runtime */
+    runtimeFacts?: AgentGatewayOptions["runtimeFacts"];
+    /** a typed run's pid watch: its cadence and its grace */
+    watch?: AgentRuntimeServiceOptions["typedWatch"];
+  };
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
@@ -393,6 +422,11 @@ export interface FielddDaemon {
   /** AR-5d — the account-usage reading behind `agents.usage(.subscribe)`;
    * tests drive its refresh directly. */
   agentUsage: AccountUsageService;
+  /** AR-7b — the agent gateway; null when this daemon hosts none. Its start
+   * is not a boot gate: `start()` answers the same promise the boot began. */
+  agentGateway: AgentGatewayService | null;
+  /** NF-3 — the floor's terminal service (tests type into a pane through it). */
+  terminals: TerminalService;
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -562,15 +596,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // getter and refuses typed until they exist. The device id likewise: the
   // device service is constructed after the api.
   let terminalsRef: TerminalService | null = null;
+  // AR-7b — the gateway service is built once the floor is lent (below); the
+  // runtime answers `invoke` from the launchers it holds, through this ref
+  let gatewayRef: AgentGatewayService | null = null;
   // AR-7d — THE SEAM FOR AR-7b. What a free shell this daemon births adds to
   // its environment so the agent launchers lead its PATH: the spawn-through
   // kit's `shellIntegrationEnvironment` over the shim home, which the gateway
   // service (AR-7b, `agent-gateway.ts`) materializes. That service assigns
-  // this ref once the shim home is written (and back to null when it stops);
-  // the terminal service reads it through a getter at every birth. Until then
-  // — and in every composition without it — a shell is born exactly as before.
-  // biome-ignore lint/style/useConst: the seam — AR-7b's gateway service assigns it
-  let shellIntegrationRef: ((shell: string) => Record<string, string> | undefined) | null = null;
+  // this ref once the shim home is written (and back to null when it stops:
+  // `onShellIntegration`, where the service is built below); the terminal
+  // service reads it through a getter at every birth. Until then — and in
+  // every composition without it — a shell is born exactly as before.
+  let shellIntegrationRef: ShellIntegration | null = null;
   let devicesForAgents: DeviceService | null = null;
   // Show in Finder reaches Electron main through the shell provider, which
   // the api owns — built later in this boot, so bound through a ref too. GT-7:
@@ -602,6 +639,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     audit: (mutation, effect, describe) => audit.requiredSystem(mutation, effect, describe),
     // AR-S4d — a profile's server values sit beside the plugins' secrets, in the keychain
     ...(config.secretStore !== undefined ? { secretStore: config.secretStore } : {}),
+    // AR-7 — `invoke` is answered from the launchers that stand; a typed run
+    // is proven and watched against the same seams the gateway places it by
+    launchers: () => gatewayRef?.launchers() ?? null,
+    ...(config.agentGateway?.processTable !== undefined
+      ? { processTable: config.agentGateway.processTable }
+      : {}),
+    ...(config.agentGateway?.watch !== undefined ? { typedWatch: config.agentGateway.watch } : {}),
     logger: logger.child({ component: "agent_runtime" }),
   });
   // AR-5d — account usage beside the runtime that owns the adapters: one
@@ -1143,6 +1187,65 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // already said, so a boot onto a quiet floor re-attaches now and not at
     // the floor's next change.
     if (terminals.observation() !== undefined) agents.handleInventory(terminals.list());
+    // AR-7b — the agent gateway, over the floor just lent: a typed agent is a
+    // managed agent. Its start reads the process table and may read an
+    // agent's install, so it is begun here and never awaited by the boot; a
+    // start that fails leaves fieldd whole and the launchers as they were.
+    const gateway =
+      config.agentGateway?.enabled === false
+        ? null
+        : new AgentGatewayService({
+            userRoot: config.dataDir,
+            runtime: agents.runtime,
+            catalog: createAgentCatalogReaders(config.agentCatalog ?? AGENT_CATALOG),
+            terminals: () => terminalsRef,
+            fold: agents,
+            // the install the runtime itself launches, read for the agents
+            // that are given a launcher and no other
+            executables: (providers) => agents.distribution.launchExecutables(providers),
+            // AR-7d — the seam: the service's answer once its home is
+            // written, and nothing (a shell born as before) once it stops
+            onShellIntegration: (integration) => {
+              shellIntegrationRef = integration;
+            },
+            ...(config.agentGateway?.shimScript !== undefined
+              ? { shimScript: config.agentGateway.shimScript }
+              : {}),
+            ...(config.agentGateway?.launcher !== undefined
+              ? { launcher: config.agentGateway.launcher }
+              : {}),
+            ...(config.agentGateway?.retryMs !== undefined
+              ? { retryMs: config.agentGateway.retryMs }
+              : {}),
+            ...(config.agentGateway?.processTable !== undefined
+              ? { processTable: config.agentGateway.processTable }
+              : {}),
+            ...(config.agentGateway?.runtimeFacts !== undefined
+              ? { runtimeFacts: config.agentGateway.runtimeFacts }
+              : {}),
+            audit: (mutation, effect, describe) => audit.requiredSystem(mutation, effect, describe),
+            logger: logger.child({ component: "agent_gateway" }),
+          });
+    gatewayRef = gateway;
+    const startGateway = (): void => {
+      gateway
+        ?.start()
+        .catch((error: unknown) =>
+          logger.error(
+            "fieldd.agents.gateway_start_failed",
+            "The agent gateway did not start; a typed agent is not managed until it does",
+            error,
+          ),
+        );
+    };
+    startGateway();
+    const refreshGateway = (): void => {
+      gateway?.refresh().catch((error: unknown) =>
+        logger.warn("fieldd.agents.gateway_refresh_failed", "The launchers were not refreshed", {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    };
 
     // T1 §1 — the tailnet door's node-id correlation. DeviceService is built
     // AFTER ProductApi, so this is a let-ref, not a closure over the const:
@@ -1657,7 +1760,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           action: "agents.update",
           target: { kind: "agent-provider", id: parsed.data.provider },
         },
-        () => agents.distribution.update(parsed.data.provider),
+        async () => {
+          try {
+            return await agents.distribution.update(parsed.data.provider);
+          } finally {
+            // AR-7b — an update can move, replace or remove the executable a
+            // launcher names (the install inventory publishes no change of
+            // its own): the launchers are written again, whatever the receipt
+            refreshGateway();
+          }
+        },
         (result) => ({
           attrs: {
             status: result.receipt.status,
@@ -1677,7 +1789,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           target: { kind: "agent-provider", id: parsed.data.provider },
           attrs: { executable: parsed.data.executable },
         },
-        () => agents.distribution.setActive(parsed.data),
+        async () => {
+          try {
+            return await agents.distribution.setActive(parsed.data);
+          } finally {
+            refreshGateway(); // AR-7b — it read the device again
+          }
+        },
         (result) => ({ attrs: { changed: result.changed } }),
       );
     });
@@ -3860,7 +3978,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           serviceHost?.stopAll() ?? Promise.resolve(),
           processes.stopAll(),
           Promise.resolve(agentUsage.stop()), // AR-5d — stop asking before the runtime goes
-          agents.dispose(),
+          // AR-7b — the gateway closes and withdraws ITS rendezvous (never the
+          // successor's) before the runs are released
+          (gateway?.stop() ?? Promise.resolve())
+            .catch(() => undefined)
+            .then(() => agents.dispose()),
           // the successor spawns its own rosettad over the SAME db — ours must
           // be gone first, and stop() resolves only after the real exit
           rosettad?.stop() ?? Promise.resolve(),
@@ -4254,6 +4376,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           runtimeDiagnostics.dispose();
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
           agentUsage.stop(); // AR-5d — the polling ends before the runtime it asks
+          // AR-7b — no launch is taken from here on: the gateway closes and its
+          // rendezvous is withdrawn, and the list of our shells STAYS (a
+          // launcher in a pane waits for the fieldd that comes next)
+          await gateway?.stop();
           await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
           index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
@@ -4330,6 +4456,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       index,
       agents,
       agentUsage,
+      agentGateway: gateway,
+      terminals,
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;
@@ -4344,6 +4472,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // `fieldd.lifecycle.ready`, so this never has a child to stop today; the
     // guard is stated so a later start-before-ready cannot leave an orphan.
     agentUsage.stop(); // AR-5d — a failed boot leaves no poller and no listener
+    await gatewayRef?.stop().catch(() => undefined); // AR-7b — nor a listener of the gateway's
     await agents.dispose();
     await rosettad?.stop();
     // The earliest supersession window, which the `stopForSupersession` listener
