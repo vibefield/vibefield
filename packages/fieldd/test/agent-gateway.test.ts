@@ -12,7 +12,7 @@
 // machine it happens to run on. A launch in those rows is a request on the
 // gateway's own socket, with the bearer read from the rendezvous the way a
 // launcher reads it.
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   chmodSync,
@@ -2168,15 +2168,39 @@ describe("a typed run's proof — what its record must show before fieldd attach
     ).toEqual({ holds: false, why: "outside-terminal" });
   });
 
-  it("ends a typed run's PROCESS only when the table shows the pid to be the process the record names", () => {
-    const table = running();
-    // nothing is signalled here: each of these answers before any signal is sent
-    expect(endTypedProcess({ pid: 600, startedAt: AGENT_STARTED }, undefined)).toBe("unknown");
-    table.delete(600);
-    expect(endTypedProcess({ pid: 600, startedAt: AGENT_STARTED }, table)).toBe("gone");
-    table.set(600, proc(600, 1, "2026-09-27T21:00:00.000Z"));
-    expect(endTypedProcess({ pid: 600, startedAt: AGENT_STARTED }, table)).toBe("not-it");
-  });
+  it(
+    "ends a typed run's PROCESS only when the table shows the pid to be the process the record names — and then with the signal asked, on that pid",
+    async () => {
+      // a pid no process can hold: whatever a broken rule did with it would reach nobody
+      const NOBODY = 3_999_999;
+      const table = running();
+      expect(endTypedProcess({ pid: NOBODY, startedAt: AGENT_STARTED }, undefined)).toBe("unknown");
+      expect(endTypedProcess({ pid: NOBODY, startedAt: AGENT_STARTED }, table)).toBe("gone");
+      table.set(NOBODY, proc(NOBODY, 1, "2026-09-27T21:00:00.000Z"));
+      expect(endTypedProcess({ pid: NOBODY, startedAt: AGENT_STARTED }, table)).toBe("not-it");
+
+      // a process of the test's own, and the start the system gives it
+      const child = spawn("/bin/sleep", ["120"], { stdio: "ignore" });
+      const ended = new Promise<NodeJS.Signals | null>((resolve) =>
+        child.once("exit", (_code, signal) => resolve(signal)),
+      );
+      cleanup.push(() => {
+        child.kill("SIGKILL");
+      });
+      const pid = child.pid as number;
+      const startedAt = await poll(async () => await processStartedAt(pid), 30_000);
+      table.set(pid, proc(pid, process.pid, startedAt));
+      // the record names another start: not that process, and it is left alone
+      expect(endTypedProcess({ pid, startedAt: "2020-02-02T02:02:02.000Z" }, table)).toBe("not-it");
+      await sleep(300);
+      expect(child.exitCode).toBeNull();
+      expect(child.signalCode).toBeNull();
+      // the record names it: signalled, and it ends by that signal
+      expect(endTypedProcess({ pid, startedAt }, table)).toBe("signalled");
+      expect(await ended).toBe("SIGTERM");
+    },
+    PROCESS_BUDGET_MS,
+  );
 });
 
 // ── the REAL floor ──
