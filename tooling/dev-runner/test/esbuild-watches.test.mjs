@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import test from "node:test";
 import { context } from "esbuild";
 import { computeBuildId } from "../src/build-id.mjs";
@@ -35,19 +35,33 @@ function shimDefinition(paths = workspacePaths) {
   return shim;
 }
 
-test("the runner builds the agent shim from fieldd's own entry, to fieldd's own outfile", async () => {
-  const shim = shimDefinition();
-  const step = await fielddShimStep();
-  // The kit's package export resolved from fieldd's package root, as the build
-  // step resolves it — never a path into the sibling — so the kit is the one in
+/** Every option of one watch that shapes its output, spelled as the esbuild CLI spells it. */
+function asCliArguments(options) {
+  return [
+    ...options.entryPoints,
+    ...(options.bundle ? ["--bundle"] : []),
+    `--platform=${options.platform}`,
+    `--format=${options.format}`,
+    ...(options.target === undefined ? [] : [`--target=${options.target}`]),
+    ...(options.external ?? []).map((name) => `--external:${name}`),
+    ...Object.entries(options.define ?? {}).map(([name, value]) => `--define:${name}=${value}`),
+    `--outfile=${relative(options.absWorkingDir, options.outfile).split(sep).join("/")}`,
+  ];
+}
+
+test("the runner builds the agent shim as fieldd's build step does, beside the daemon's bundle", async () => {
+  const options = esbuildOptions(shimDefinition());
+  const [command, ...step] = await fielddShimStep();
+  // Flag for flag, both ways: the byte witness below cannot see a flag that
+  // leaves today's bytes alone (a target the kit's syntax does not need yet).
+  assert.equal(command, "esbuild");
+  assert.deepEqual(asCliArguments(options).sort(), step.sort());
+  // The kit's package export, resolved from fieldd's package root as the step
+  // resolves it — never a path into the sibling — so the kit is the one in
   // fieldd's dependency graph.
-  assert.equal(shim.entry, step[1]);
-  assert.equal(shim.cwd, FIELDD_ROOT);
-  // The file fieldd's build writes, beside the daemon's bundle.
-  const outfile = step.find((arg) => arg.startsWith("--outfile=")).slice("--outfile=".length);
-  assert.equal(shim.outfile, join(FIELDD_ROOT, outfile));
-  assert.equal(shim.outfile, workspacePaths.agentShimOutput);
-  assert.equal(dirname(shim.outfile), dirname(workspacePaths.fielddOutput));
+  assert.equal(options.absWorkingDir, FIELDD_ROOT);
+  assert.equal(options.outfile, workspacePaths.agentShimOutput);
+  assert.equal(dirname(options.outfile), dirname(workspacePaths.fielddOutput));
 });
 
 test("a rebuilt shim moves the daemon identity, so the pair restarts as for bin.cjs", async (t) => {
