@@ -1101,7 +1101,7 @@
         </div>
         <div class="stats">
           <div class="stat"><strong>10</strong><span>fieldd agent services</span></div>
-          <div class="stat"><strong>45</strong><span>agent-plane doors</span></div>
+          <div class="stat"><strong>46</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>3</strong><span>enforced import walls</span></div>
           <div class="stat"><strong>12</strong><span>agent test suites</span></div>
         </div>
@@ -1369,7 +1369,7 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent-index.ts</span><br /><span class="native-type">1,194 lines</span></td>
-                    <td><p>The enrollment record (this user's consent) and the service behind the six <code>index.*</code> doors.</p></td>
+                    <td><p>The enrollment record (this user's consent) and the service behind the seven <code>index.*</code> doors.</p></td>
                     <td><p><code>rosettad-supervisor</code></p></td>
                     <td><p><code>@rosetta/protocol</code> response types; the routes are dialled with fieldd's own fetch</p></td>
                     <td><p><code>agent-index-search</code>, <code>-sessions</code>, <code>-walk</code></p></td>
@@ -1818,6 +1818,8 @@
               the supervisor's own retry brings the index up (AC-D8, read off the daemon's stderr and witnessed
               against the real daemon at the pin). The catalogue below counts 45 doors with
               <code>agent.catalog</code>. <span class="badge tone-built">Built</span>
+              <strong>Update 2026-09-28 (QL).</strong> 46 with <code>index.recent</code>, the empty pane
+              launcher's list; <code>agent.resume</code> also takes a conversation by its native id.
             </p>
             <h3>The reconcile</h3>
             <p class="section-note">
@@ -1846,7 +1848,9 @@
                   feed carries each profile's folder and each sign-in's, home-abbreviated, for a person to
                   read beside Show in Finder — display only: no door takes a path, and Show in Finder
                   names ids that fieldd resolves to the paths it holds. A session's own working directory
-                  does ride <code>index.sessions</code>, as the daemon reports it.
+                  does ride <code>index.sessions</code> and <code>index.recent</code>, as the daemon reports it
+                  (<code>index.recent</code> reads each project's roots to place a folder, and answers only the
+                  project's id and name).
                 </p>
               </div>
               <div class="contract-row">

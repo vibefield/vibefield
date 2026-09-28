@@ -1101,7 +1101,7 @@
           idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
         </div>
         <div class="stats">
-          <div class="stat"><strong>45</strong><span>agent-plane doors</span></div>
+          <div class="stat"><strong>46</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
           <div class="stat"><strong>15</strong><span>audited mutations</span></div>
           <div class="stat"><strong>0</strong><span>that federate</span></div>
@@ -1466,7 +1466,7 @@
                     <td><p><code>—</code> → <code>AgentProvidersResult</code></p></td>
                     <td><p><code>agent.spawn</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>the catalog's visible rows (AC-3) · <code>inspectInstallations()</code>, <code>launchProviders()</code>, the enrollment record and the roll call</p></td>
+                    <td><p>the catalog's visible rows (AC-3) · <code>inspectInstallations()</code>, <code>launchProviders()</code>, the enrollment record and the roll call · QL (2026-09-28): <code>lastLaunchedAt</code>, the newest <code>createdAt</code> among this device's session records for the agent (any <code>spawnedBy</code>), the order the empty pane launcher lists agents in</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>agent-runtime.test.ts</code></p></td>
                   </tr>
@@ -1490,10 +1490,10 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent.resume</span></td>
-                    <td><p><code>AgentResumeParams</code> (a run id, never a terminal id) → <code>AgentSpawnResult</code></p></td>
+                    <td><p><code>AgentResumeParams</code> — a run id, never a terminal id (<code>AgentResumeRunParams</code>), or, since QL-D10, a conversation by its native id (<code>AgentResumeNativeParams {provider, nativeSessionId, cwd?, profileId? | profileSet?, title?}</code>) → <code>AgentSpawnResult</code></p></td>
                     <td><p><code>agent.spawn</code></p></td>
                     <td><p>no</p></td>
-                    <td><p><code>runtime.resume()</code> with the record's opaque continuation</p></td>
+                    <td><p><code>runtime.resume()</code> with the record's opaque continuation; the native form builds puppeteer's own <code>{providerId, nativeSessionId, implementation: "native"}</code> — refused unless the catalog row offers <code>resume</code>, refused while any run continues the conversation (both forms: AR-4b's one-run law), and run under the named persona or the Agent Profile's sign-in, never the default profile</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>agent-session.test.ts</code></p></td>
                   </tr>
@@ -1605,6 +1605,7 @@
                   <tr><td><span class="route">index.status</span></td><td><p><code>—</code> → <code>IndexStatus</code></p></td><td><p><code>index.read</code></p></td><td><p>yes</p></td><td><p><code>GET /api/status</code> + <code>GET /api/runtimes</code>, folded with the supervisor's phase</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.sessions</span></td><td><p><code>IndexSessionsParams</code> → <code>IndexSessionsResult</code></p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>GET /api/sessions?native_session_id=…</code>, <code>GET /api/sessions/{id}</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.search</span></td><td><p><code>IndexSearchParams</code> → <code>IndexSearchResult</code></p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>GET /api/search?q=…</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">index.recent</span></td><td><p><code>IndexRecentParams {cwd?, scope: "here" | "all", limit?}</code> → <code>IndexRecentResult</code> (QL, 2026-09-28: the empty pane launcher's list — each row an <code>IndexSession</code> plus the catalog <code>provider</code>, the enrolled root's <code>profileId</code>, <code>startedAt</code>, <code>here</code>, <code>project</code>)</p></td><td><p><code>index.search</code></p></td><td><p>yes</p></td><td><p><code>GET /api/projects</code> (the folder's project: its git root or worktree group in <code>root_paths</code>, else the longest prefix), <code>GET /api/runtimes</code> (kind → catalog id), <code>GET /api/sessions?project=…&amp;limit=…</code> — the two tables cached per daemon generation</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.enroll</span></td><td><p><code>IndexEnrollParams</code> → <code>IndexMutationResult</code></p></td><td><p><code>index.manage</code></p></td><td><p>yes</p></td><td><p>writes <code>enrollment.json</code>, restarts the daemon when it changed — never a route</p></td><td><p><code>index</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">index.retire</span></td><td><p><code>IndexRetireParams</code> → <code>IndexMutationResult</code></p></td><td><p><code>index.manage</code></p></td><td><p>yes</p></td><td><p>the same file; the runtime's rows are kept</p></td><td><p><code>index-runtime</code></p></td><td><span class="badge tone-built">Built</span></td></tr>
                 </tbody>
@@ -1742,7 +1743,8 @@
               types), the <code>PROTOCOL_VERSION</code> constant (<code>20</code>) in one other, and
               dials the routes with its own fetch over the loopback origin the supervisor keeps private.
               rosettad's router registers 24 routes — 21 under <code>/api/</code> and 3 WebSocket routes
-              under <code>/ws/</code>. fieldd fetches six of them and opens no WebSocket at all.
+              under <code>/ws/</code>. fieldd fetches seven of them (<code>/api/projects</code> since QL,
+              2026-09-28) and opens no WebSocket at all.
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -1750,8 +1752,9 @@
                 <tbody>
                   <tr><td><span class="route">GET /api/status</span></td><td><p><code>index.status</code>; also the search-health fold</p></td><td><p><code>StatusResponse</code>, <code>DaemonStatus</code></p></td></tr>
                   <tr><td><span class="route">GET /api/discoveries</span></td><td><p><code>index.discoveries</code></p></td><td><p><code>DiscoveriesResponse</code></p></td></tr>
-                  <tr><td><span class="route">GET /api/runtimes</span></td><td><p><code>index.status</code></p></td><td><p><code>RuntimesResponse</code>, <code>RuntimeRow</code>, <code>RuntimeIngestStatus</code>, <code>RuntimeBackfill</code></p></td></tr>
-                  <tr><td><span class="route">GET /api/sessions</span>, <span class="route">/api/sessions/{id}</span></td><td><p><code>index.sessions</code></p></td><td><p>parsed against VibeField's own schemas, never cast</p></td></tr>
+                  <tr><td><span class="route">GET /api/runtimes</span></td><td><p><code>index.status</code>; <code>index.recent</code>'s kind join</p></td><td><p><code>RuntimesResponse</code>, <code>RuntimeRow</code>, <code>RuntimeIngestStatus</code>, <code>RuntimeBackfill</code></p></td></tr>
+                  <tr><td><span class="route">GET /api/sessions</span>, <span class="route">/api/sessions/{id}</span></td><td><p><code>index.sessions</code>; <code>index.recent</code> (by <code>project=</code>, or newest first)</p></td><td><p>parsed against VibeField's own schemas, never cast</p></td></tr>
+                  <tr><td><span class="route">GET /api/projects</span></td><td><p><code>index.recent</code></p></td><td><p>parsed (<code>IndexProjectsResponse</code>)</p></td></tr>
                   <tr><td><span class="route">GET /api/search</span></td><td><p><code>index.search</code></p></td><td><p>same</p></td></tr>
                   <tr><td><span class="route">--enroll FILE</span> (a CLI flag, not a route)</td><td><p><code>index.enroll</code> / <code>index.retire</code> write the file and restart the daemon</p></td><td><p>format 1, validated the way rosetta validates it</p></td></tr>
                 </tbody>
