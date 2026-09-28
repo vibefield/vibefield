@@ -168,6 +168,7 @@ let connectedSockets: string[] = [];
 const fieldd = {
   request: (method: string, params?: unknown) => {
     requests.push(method);
+    if (method === "terminal.terminate") return Promise.resolve({ terminated: true });
     if (method === "terminal.roster") return Promise.resolve({ items: rosterRows });
     if (method === "terminal.openTicket") {
       const sessionId = (params as { sessionId: string }).sessionId;
@@ -578,6 +579,31 @@ describe("the cold-open stations the pool stamps (TP-S1m)", () => {
 });
 
 describe("the roster the UI reads (TP-D4)", () => {
+  it("publishes accepted closes separately from a stale live inventory", async () => {
+    rosterRows = [{ sessionId: "fresh", workloadClass: "interactive", health: "live" }];
+    pool.openTerminalPool(fieldd, { sessionIds: [] });
+    await settle();
+    await pool.refreshTerminalRoster();
+    await pool.terminateTerminalSession("fresh");
+    await pool.refreshTerminalRoster();
+    expect(pool.terminalPoolSnapshot().closingSessionIds).toEqual(["fresh"]);
+    expect(pool.terminalPoolSnapshot().roster[0]?.health).toBe("live");
+    pool.disposeTerminalPool();
+    expect(pool.terminalPoolSnapshot().closingSessionIds).toEqual([]);
+  });
+
+  it("does not hide a shell when the close door refuses", async () => {
+    const refusing = {
+      request: async () => {
+        throw new Error("denied");
+      },
+    };
+    pool.openTerminalPool(refusing as unknown as typeof fieldd, { sessionIds: [] });
+    await settle();
+    await expect(pool.terminateTerminalSession("fresh")).rejects.toThrow("denied");
+    expect(pool.terminalPoolSnapshot().closingSessionIds).toEqual([]);
+  });
+
   it("hands consumers a placement-free projection, refused at parse if it were not", async () => {
     rosterRows = [
       { sessionId: "a-1", workloadClass: "interactive", health: "live", title: "zsh" },

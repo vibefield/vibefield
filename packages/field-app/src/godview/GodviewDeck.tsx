@@ -1,6 +1,7 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { GhostteaProvider } from "@vibecook/ghosttea-react";
 import {
+  type GhostteaPaneClose,
   GhostteaWorkspace,
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
@@ -14,7 +15,10 @@ import {
   PaneFrame,
   type PaneFrameVerbs,
   paneColours,
+  UnusedPaneSessions,
+  useDeckZoom,
   useMonitorPalette,
+  zoomLayoutApplied,
 } from "@vibecook/puppeteer-views";
 import {
   AgentInterruptResult,
@@ -49,6 +53,7 @@ import {
   type TerminalFaultPlane,
   terminalPoolSnapshot,
   terminalSessionSummary,
+  terminateTerminalSession,
   useTerminalPool,
   useTerminalPoolOpen,
   useTerminalSessionViews,
@@ -65,7 +70,6 @@ import {
   savedPaneSessionIds,
 } from "./deck-restore";
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
-import { zoomLayoutApplied } from "./deck-zoom";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import type { MonitorFloorRecord } from "./monitor/agents";
 import { historyPortOver, profileSetsPortOver, usagePortOver } from "./monitor/doors";
@@ -73,7 +77,6 @@ import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
-import { useDeckZoom } from "./use-deck-zoom";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -260,6 +263,8 @@ export function GodviewDeck({
   useTerminalPoolOpen(fieldd, { rejoin: savedPanes, trace: godviewColdOpen });
   const { runtime, shell, generation, warm } = pool;
   const error: TerminalFault | null = pool.fault;
+  // A runtime replacement loses its input history; keep earlier shells conservatively.
+  const unusedPanes = useMemo(() => new UnusedPaneSessions(), [runtime]);
   /** Published by the sidebar probe. Read only to REPORT what the deck holds
    * (the marker below); the deck does not drive panes through it any more —
    * that was the adopt sweep GT-2e deleted. */
@@ -757,9 +762,10 @@ export function GodviewDeck({
       if (cwd !== undefined && cwd !== "") bornCwd.current.set(created.sessionId, cwd);
       // The join: fieldd answers an id, the workspace mounts a summary, and the
       // floor is the one authority both read.
+      unusedPanes.created(created.sessionId);
       return terminalSessionSummary(created.sessionId);
     },
-    [],
+    [unusedPanes],
   );
 
   // A dead pane, answered with a live one (GT-D8). Armed only after consent.
@@ -1164,11 +1170,9 @@ export function GodviewDeck({
     [paneSessionKey],
   );
 
-  // PANE ZOOM (TP-D18, §9.7). The chord is claimed from ghosttea here — see
-  // `use-deck-zoom.ts` for why, and `deck-zoom.ts` for what upstream's own zoom
-  // does instead. Hidden siblings stay mounted, but their visibility and
-  // source demand pause while the zoomed pane occupies the deck.
-  const zoom = useDeckZoom(zoomHostRef, workspace?.activePaneId);
+  // The shared Puppeteer controller owns the animation and final content resize.
+  // Hidden siblings stay mounted; their visibility and source demand pause.
+  const zoom = useDeckZoom(zoomHostRef, workspace?.activePaneId, undefined, active);
 
   // ── THE PANE FRAME (GT-6, record §07) ───────────────────────────────────
   //
@@ -1187,6 +1191,31 @@ export function GodviewDeck({
   // package's stylesheet keys its pane rules on (the record's safe areas, the
   // active pane's radius, the line and the glow).
   const paneAgents = useDeckAgentFacts();
+  const closePane = useCallback(
+    ({ session, remainingSessionIds }: GhostteaPaneClose): void => {
+      if (runtime === null) return;
+      const used =
+        runtime.sessionHasInput(session.id) ||
+        session.exited ||
+        session.activity.kind === "foreground-job" ||
+        paneAgents.agents.has(session.id) ||
+        runtime.remoteSession(session.id) !== undefined;
+      if (!unusedPanes.closed(session.id, remainingSessionIds, used)) return;
+      // Closing intent is visible as soon as the audited door accepts it;
+      // the native shutdown ladder may finish after this pane has detached.
+      void terminateTerminalSession(session.id).catch((cause: unknown) =>
+        getRendererLogger()
+          .child({ component: "godview" })
+          .error(
+            "renderer.godview.unused_pane_close_failed",
+            "Could not close the unused shell",
+            cause,
+          ),
+      );
+    },
+    [paneAgents.agents, runtime, unusedPanes],
+  );
+
   /** The runs the verbs are aimed with, read at CALL time: the verbs object
    * must stay referentially stable (`DeckFrames` hands it to every frame, and a
    * fresh one per fold frame would re-render all of them), and what they need
@@ -1228,7 +1257,7 @@ export function GodviewDeck({
    * adopts it and the new PTY lands in the pane the verb was pressed in,
    * replacing the exited one (AR-4b's hand-over, reused).
    *
-   * `zoom` is this deck's own morph, never ghosttea's remount: the package
+   * `zoom` uses the shared frame animation: the package
    * hands over the pane element, and the deck's zoom takes a pane id.
    */
   const frameVerbs = useMemo<PaneFrameVerbs>(() => {
@@ -1315,7 +1344,7 @@ export function GodviewDeck({
         const paneId = pane.dataset["paneId"];
         if (paneId !== undefined) deckZoom.current.toggle(paneId);
       },
-      // The chord `useDeckZoom` claims from ghosttea, in the frame's words.
+      // Ghosttea routes its configured zoom binding to the same controller.
       zoomShortcut: getHost().platform === "darwin" ? "⌘⇧↵" : "⌃⇧↵",
     };
   }, [fieldd, mountSummaryNow]);
@@ -1337,16 +1366,8 @@ export function GodviewDeck({
     [],
   );
 
-  /** The pane the deck's own morph has zoomed. Passed explicitly because
-   * ghosttea's `is-zoomed` class is NOT the truth here: upstream's zoom
-   * remounts a pane and this deck refuses to (TP-D18), so the phase the
-   * controller is in is the only honest answer.
-   *
-   * `zoomLayoutApplied` and not "any phase but idle" (GT-6 review): the
-   * controller is `entering` for the 240 ms the morph takes, and a frame that
-   * flipped to the restore glyph on the first frame of the gesture would be
-   * 240 ms ahead of the pane it names — and ahead of the deck's own chip, which
-   * reads the same helper. */
+  // The shared controller owns fullscreen presentation from the first frame.
+  // Siblings retain their layout boxes and pause rendering while covered.
   const zoomedPaneId = zoomLayoutApplied(zoom.state.phase) ? zoom.state.paneId : null;
   const paneVisibility = useMemo(
     () =>
@@ -1429,13 +1450,15 @@ export function GodviewDeck({
   const floorRoster = useMemo<readonly MonitorFloorRecord[]>(
     () =>
       pool.roster
-        .filter((item) => item.health !== "exited")
+        .filter(
+          (item) => item.health !== "exited" && !pool.closingSessionIds.includes(item.sessionId),
+        )
         .map((item) => ({
           sessionId: item.sessionId,
           workloadClass: item.workloadClass,
           ...(item.title === undefined ? {} : { title: item.title }),
         })),
-    [pool.roster],
+    [pool.roster, pool.closingSessionIds],
   );
 
   // The pane facts the monitor reads (GT-D17). Published on CHANGE only — this
@@ -1672,22 +1695,8 @@ export function GodviewDeck({
         data-zoom-phase="idle"
         style={{ "--vf-godview-terminal-ink": ground.ink } as CSSProperties}
       >
-        {/* NOTHING IS DRAWN OVER THE DECK HERE (GT-6a, record §07). Two chips
-            used to hang in these corners — `zoom pane` at the top-left and the
-            two-step `kill session` at the top-right — and once GT-6 portalled
-            the record's frame into every pane they collided with it: the
-            readout and the badge own exactly those corners. §07 names the whole
-            of a pane's chrome (badge · readout · meter · figure · the verbs
-            under the pointer) and neither chip is in it, so both are gone
-            rather than moved (DESIGN.md §1.1: the reference is not
-            reinterpreted). The zoom SURVIVES as the frame's ⤢ verb and the
-            chord `useDeckZoom` claims. The KILL does not: ghosttea's own
-            `closePane` removes a pane from the layout and fires `onPaneClose`
-            (0.11.1 `dist/workspace/Workspace.js:516`, which VibeField does not
-            wire), so ⌘W DETACHES and the session keeps running on the floor —
-            GT-D5's split, unchanged. Ending a session therefore has no product
-            gesture after this commit; that is named as owed rather than
-            papered over. */}
+        {/* Pane chrome is shared with Puppeteer. Closing detaches used sessions;
+            a fresh shell with no input is reaped through the product door. */}
         <GhostteaWorkspace
           platform={platform}
           theme={terminalTheme}
@@ -1713,6 +1722,8 @@ export function GodviewDeck({
           // workspace still asks; it just gets its session from the product door.
           createSplitSession={createSplitSession}
           splitSizing="equal"
+          onPaneClose={closePane}
+          onTogglePaneZoom={zoom.toggle}
           initialCwd={shell.home}
           claimExistingSessions
           // STAYS OFF, and no longer as a wait (GT-D7's 2026-08-05 amendment):

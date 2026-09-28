@@ -35,6 +35,21 @@ are refused; default names include a UTC time so runs do not overwrite each othe
 
 ## Input and renderer path
 
+The pane lifecycle/geometry regression uses the same isolated Electron host:
+
+```sh
+pnpm perf:terminal pane-regression --duration 2 --rotations 1 --probe-keys 0 \
+  --out draft/terminal-perf/results/20260928-pane-example
+```
+
+It waits for the startup overlay to retire, creates three panes, closes an unused shell and
+checks both its monitor removal and eventual native exit. It checks equal surviving widths,
+fullscreen on an empty shell, retention of a used session, and eight monitor attachment switches.
+`pane-regression.json` records each animation frame's canvas identity and bitmap/display sizes,
+plus ResizeObserver deliveries. Fullscreen must keep the content fixed during motion and resize
+once at settlement; each attachment must reach input readiness. PNGs capture moving and settled
+states. These are layout and lifecycle witnesses, not physical display latency measurements.
+
 ```sh
 pnpm perf:terminal echo-probe --duration 24 --rotations 3 --probe-keys 30 \
   --ab metrics,off --out draft/terminal-perf/results/20260928-echo-example

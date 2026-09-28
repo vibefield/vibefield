@@ -5,6 +5,7 @@ import {
   type TerminalCreateParams,
   type TerminalOpenTicket,
   TerminalRosterResult,
+  TerminalTerminateResult,
   type WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
@@ -139,6 +140,8 @@ export interface TerminalPoolSnapshot {
    * placement — the contract refuses a placement key at parse. */
   readonly roster: readonly ProductSessionRosterItem[];
   readonly rosterState: TerminalRosterState;
+  /** Accepted close intents, separate from the floor's still-live shutdown ladder. */
+  readonly closingSessionIds: readonly string[];
 }
 
 /** The stations the pool can stamp on a cold-open trace. Structural on purpose:
@@ -187,6 +190,7 @@ let transportGeneration = 0;
 let grantsLanded = false;
 let roster: readonly ProductSessionRosterItem[] = [];
 let rosterState: TerminalRosterState = "unread";
+const closingSessionIds = new Set<string>();
 /** Main's one-per-renderer-generation shell policy (the transport selector
  * collapsed to the routed literal at TP-S3e). Browser harnesses omit it and
  * simply have no shell policy — and no fieldd either. */
@@ -257,6 +261,7 @@ function buildSnapshot(): TerminalPoolSnapshot {
     grantsLanded,
     roster,
     rosterState,
+    closingSessionIds: [...closingSessionIds],
   };
 }
 
@@ -933,6 +938,19 @@ function unobservedRefusal(cause: unknown): boolean {
   );
 }
 
+/** Close through the audited product door and publish the accepted intent.
+ * The floor terminates asynchronously; rereading its inventory immediately can
+ * still return a live shell. Keep the intent for this window's lifetime so an
+ * older inventory response cannot resurrect a bubble the user just closed. */
+export async function terminateTerminalSession(sessionId: string): Promise<void> {
+  const fieldd = client;
+  if (fieldd === null) throw new Error("The terminal pool is not connected");
+  TerminalTerminateResult.parse(await fieldd.request("terminal.terminate", { sessionId }));
+  if (client !== fieldd) return;
+  closingSessionIds.add(sessionId);
+  publish();
+}
+
 /**
  * Read the UI's roster projection (spec §5.3, TP-D4).
  *
@@ -1082,6 +1100,7 @@ export function disposeTerminalPool(): void {
   grantsLanded = false;
   roster = [];
   rosterState = "unread";
+  closingSessionIds.clear();
   runtimeGeneration = 0;
   transportGeneration = 0;
   terminalBootstrap = null;

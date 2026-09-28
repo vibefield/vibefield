@@ -26,12 +26,8 @@
  * `runtime.resize`. happy-dom has no layout engine, so this is the honest way to
  * hold the row in a unit suite.
  *
- * The deck also PUBLISHES the count — `zoom: {phase, commits}` on its
- * `GODVIEW_DECK` marker — so the same number is readable from a live app. Said
- * exactly: the marker carries it and no smoke row asserts on it yet; adding one
- * means teaching `electron-shell/src/testing/smoke.ts`'s `DeckFacts` the field
- * and pressing the chord twice. That is a row for whoever owns the smoke, not a
- * claim this file gets to make.
+ * The pane-regression Electron scenario separately samples the shipping canvas
+ * each animation frame and observes one content resize at settlement.
  */
 
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
@@ -41,9 +37,6 @@ import {
   TerminalSurface,
   type TerminalTheme,
 } from "@vibecook/ghosttea-react";
-import { act, createElement, useEffect, useRef } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   DeckZoomController,
   type DeckZoomHost,
@@ -51,10 +44,10 @@ import {
   ZOOM_COMMIT_GRACE_MS,
   ZOOM_DURATION_MS,
   ZOOM_REDUCED_DURATION_MS,
-  zoomReturnTransform,
-  zoomTransform,
-} from "../src/godview/deck-zoom";
-import { useDeckZoom } from "../src/godview/use-deck-zoom";
+} from "@vibecook/puppeteer-views/deck";
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -402,16 +395,16 @@ describe("the gesture — one layout commit each way (TP-R3)", () => {
 
     zoom.toggle("pane-1");
     expect(zoom.state.phase).toBe("entering");
-    // The pane is MARKED but the layout is not applied: the animation runs
-    // against the untouched grid, which is what makes it free.
+    // The frame moves while the terminal content box remains pinned.
     expect(rig.pane.hasAttribute("data-vf-zoom-pane")).toBe(true);
-    expect(rig.element.hasAttribute("data-zoom-layout")).toBe(false);
+    expect(rig.element.hasAttribute("data-zoom-layout")).toBe(true);
     expect(zoom.state.commits).toBe(0);
 
-    // The armed frame writes the target transform. Still no layout.
+    // The frame can grow without resizing the terminal underneath it.
     rig.runFrames();
-    expect(rig.element.style.getPropertyValue("--vf-zoom-scale")).not.toBe("1");
-    expect(rig.element.hasAttribute("data-zoom-layout")).toBe(false);
+    expect(rig.pane.style.getPropertyValue("--vf-zoom-content-width")).toBe("600px");
+    expect(rig.pane.style.getPropertyValue("--vf-zoom-width")).toBe("1200px");
+    expect(rig.element.hasAttribute("data-zoom-layout")).toBe(true);
     expect(zoom.state.commits).toBe(0);
 
     // Gesture end: ONE commit.
@@ -419,9 +412,7 @@ describe("the gesture — one layout commit each way (TP-R3)", () => {
     expect(zoom.state.phase).toBe("zoomed");
     expect(zoom.state.commits).toBe(1);
     expect(rig.element.getAttribute("data-zoom-layout")).toBe("pane");
-    // The transform is gone in the same write that applied the layout, so the
-    // committed state is the true box and not a scaled one.
-    expect(rig.element.style.getPropertyValue("--vf-zoom-scale")).toBe("1");
+    expect(rig.pane.style.getPropertyValue("--vf-zoom-content-width")).toBe("");
 
     // And back: one more, never two.
     zoom.toggle("pane-1");
@@ -462,8 +453,8 @@ describe("the gesture — one layout commit each way (TP-R3)", () => {
     zoom.toggle("pane-1");
     rig.runFrames();
     const event = new Event("transitionend") as TransitionEvent;
-    Object.defineProperty(event, "propertyName", { value: "transform" });
-    rig.element.dispatchEvent(event);
+    Object.defineProperty(event, "propertyName", { value: "width" });
+    rig.pane.dispatchEvent(event);
     expect(zoom.state.commits).toBe(1);
     // Nothing is still scheduled, so nothing can commit again.
     expect(rig.pending()).toBe(0);
@@ -478,7 +469,7 @@ describe("the gesture — one layout commit each way (TP-R3)", () => {
     rig.runFrames();
     const event = new Event("transitionend") as TransitionEvent;
     Object.defineProperty(event, "propertyName", { value: "opacity" });
-    rig.element.dispatchEvent(event);
+    rig.pane.dispatchEvent(event);
     expect(zoom.state.commits).toBe(0);
     expect(zoom.state.phase).toBe("entering");
   });
@@ -532,133 +523,60 @@ describe("the gesture — one layout commit each way (TP-R3)", () => {
   });
 });
 
-describe("the chord — claimed from upstream before its own listener runs", () => {
-  /** A stand-in for `GhostteaWorkspace`'s hotkey listener: registered from a
-   * PASSIVE effect onto `window` in the CAPTURE phase, which is what it does
-   * (`workspace/Workspace.js:631`). If the interception's ordering claim is
-   * wrong, this fires and upstream's remounting zoom runs. */
-  function FakeWorkspace({ onChord }: { onChord: () => void }): null {
-    useEffect(() => {
-      const listener = (event: KeyboardEvent): void => {
-        if (event.key === "Enter" && event.shiftKey && (event.metaKey || event.ctrlKey)) {
-          onChord();
-        }
-      };
-      window.addEventListener("keydown", listener, true);
-      return () => window.removeEventListener("keydown", listener, true);
-    }, [onChord]);
-    return null;
-  }
-
-  function Deck({
-    onChord,
-    onState,
-  }: {
-    onChord: () => void;
-    onState: (s: DeckZoomState) => void;
-  }) {
-    const hostRef = useRef<HTMLDivElement>(null);
-    useDeckZoom(hostRef, "pane-1", onState);
-    return createElement(
-      "div",
-      { ref: hostRef, className: "vf-deck-zoom" },
-      createElement("div", { className: "ghostty-window" }, [
-        createElement("div", { key: "p", "data-pane-id": "pane-1" }),
-      ]),
-      createElement(FakeWorkspace, { onChord }),
-    );
-  }
-
-  it("runs first and stops the workspace's own capture listener", () => {
-    let upstreamRan = 0;
-    const states: DeckZoomState[] = [];
-    act(() => {
-      root?.render(
-        createElement(Deck, {
-          onChord: () => {
-            upstreamRan += 1;
-          },
-          onState: (state) => states.push(state),
-        }),
-      );
-    });
-
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, metaKey: true }),
-      );
-    });
-
-    // Ours ran…
-    expect(states.at(-1)?.phase).toBe("entering");
-    // …and upstream's did not, so no pane was remounted underneath us.
-    expect(upstreamRan).toBe(0);
+describe("fixed terminal pixels during a moving frame", () => {
+  it("measures content before adding the fullscreen home anchor", () => {
+    const rig = testZoomHost();
+    const measure = rig.host.measure;
+    rig.host.measure = (element) => {
+      const rect = measure(element);
+      return element === rig.pane && rig.element.querySelector("[data-vf-zoom-home]")
+        ? { ...rect, height: rect.height / 2 }
+        : rect;
+    };
+    const zoom = new DeckZoomController(rig.host);
+    zoom.toggle("pane-1");
+    expect(rig.pane.style.getPropertyValue("--vf-zoom-content-height")).toBe("400px");
+    zoom.reset();
   });
 
-  it("leaves every other chord alone", () => {
-    let upstreamRan = 0;
-    const states: DeckZoomState[] = [];
-    act(() => {
-      root?.render(
-        createElement(Deck, {
-          onChord: () => {
-            upstreamRan += 1;
-          },
-          onState: (state) => states.push(state),
-        }),
-      );
-    });
-    act(() => {
-      // Enter without the modifiers, and ⌘Enter without shift: neither is the
-      // zoom, and a deck that swallowed them would eat a keystroke a terminal
-      // needs.
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true }));
-    });
-    expect(states).toEqual([]);
-    expect(upstreamRan).toBe(0);
+  it("cleans markers and pinned dimensions when reset during entry", () => {
+    const rig = testZoomHost();
+    const zoom = new DeckZoomController(rig.host);
+    zoom.toggle("pane-1");
+    rig.runFrames();
+    zoom.reset();
+    expect(rig.pane.hasAttribute("data-vf-zoom-pane")).toBe(false);
+    expect(rig.pane.style.getPropertyValue("--vf-zoom-content-width")).toBe("");
+    expect(rig.element.querySelector("[data-vf-zoom-home]")).toBeNull();
+    expect(rig.pending()).toBe(0);
   });
-});
-
-describe("the transform (DESIGN.md M2 — the subject stays where the eye left it)", () => {
-  it("carries the pane's centre onto the host's centre, covering it", () => {
-    const pane = { left: 600, top: 0, width: 600, height: 400 };
-    const host = { left: 0, top: 0, width: 1200, height: 800 };
-    const transform = zoomTransform(pane, host);
-    expect(transform.scale).toBe(2);
-    // pane centre (900, 200) → host centre (600, 400)
-    expect(transform.x + transform.scale * 900).toBeCloseTo(600);
-    expect(transform.y + transform.scale * 200).toBeCloseTo(400);
+  it("ignores a descendant transition ending before the frame", () => {
+    const rig = testZoomHost();
+    const zoom = new DeckZoomController(rig.host);
+    zoom.toggle("pane-1");
+    rig.runFrames();
+    const child = document.createElement("span");
+    rig.pane.append(child);
+    const event = new Event("transitionend", { bubbles: true });
+    Object.defineProperty(event, "propertyName", { value: "width" });
+    child.dispatchEvent(event);
+    expect(zoom.state.phase).toBe("entering");
+    expect(zoom.state.commits).toBe(0);
+    rig.runTimers();
+    expect(zoom.state.phase).toBe("zoomed");
   });
-
-  it("covers rather than fits, so no glyph is stretched", () => {
-    const transform = zoomTransform(
-      { left: 0, top: 0, width: 600, height: 100 },
-      { left: 0, top: 0, width: 1200, height: 800 },
-    );
-    // max(2, 8) — a single scalar, and the overflow is clipped by the deck.
-    expect(transform.scale).toBe(8);
-  });
-
-  it("returns the identity for a pane with no area", () => {
-    expect(
-      zoomTransform(
-        { left: 0, top: 0, width: 0, height: 0 },
-        { left: 0, top: 0, width: 10, height: 10 },
-      ),
-    ).toEqual({
-      scale: 1,
-      x: 0,
-      y: 0,
-    });
-  });
-
-  it("maps the host box back onto the saved home rect on the way out", () => {
-    const home = { left: 600, top: 0, width: 600, height: 400 };
-    const host = { left: 0, top: 0, width: 1200, height: 800 };
-    const transform = zoomReturnTransform(home, host);
-    expect(transform.scale).toBe(0.5);
-    expect(transform.x).toBe(600);
-    expect(transform.y).toBe(0);
+  it("keeps the original terminal box through repeated reversals", () => {
+    const rig = testZoomHost();
+    const zoom = new DeckZoomController(rig.host);
+    zoom.toggle("pane-1");
+    for (let i = 0; i < 4; i += 1) {
+      rig.runFrames();
+      zoom.toggle("pane-1");
+      expect(rig.pane.style.getPropertyValue("--vf-zoom-content-width")).toBe("600px");
+    }
+    rig.runFrames();
+    rig.runTimers();
+    expect(zoom.state.phase).toBe("zoomed");
+    expect(zoom.state.commits).toBe(1);
   });
 });

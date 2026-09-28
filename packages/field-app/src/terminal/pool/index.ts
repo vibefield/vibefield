@@ -53,5 +53,6 @@ export {
   terminalSessionDemand,
   terminalSessionGrants,
   terminalSessionSummary,
+  terminateTerminalSession,
 } from "./terminal-pool";
 export { useTerminalPool, useTerminalPoolOpen, useTerminalSessionViews } from "./use-terminal-pool";

@@ -84,19 +84,9 @@ export interface GodviewDeckFacts {
    * (empty exactly when `shaderEffect` is null); `shaderEffect` stays its head
    * so a harness written before the stack still reads. */
   effects: { shaderEffect: string | null; shaderEffects: string[]; animate: boolean };
-  /** TP-S2 / TP-R3: pane zoom, as the two numbers the gate is about.
-   *
-   * `phase` is where the gesture is (`idle` when there is no zoom). `commits`
-   * counts the deck's LAYOUT COMMITS — one per completed gesture, each way. A
-   * commit is the only thing that can move the zoomed pane's box, so it is the
-   * ceiling on the PTY resizes a zoom can cause: a harness pressing the chord
-   * twice and reading `commits: 2` has bounded "exactly one resize each way"
-   * from above, and the unit suite holds the other half (that one box change
-   * produces exactly one `runtime.resize`). Said exactly rather than round: a
-   * gesture REVERSED before its commit also counts one, and that one moves no
-   * box at all — the count is of commit operations, not of resizes observed.
-   * Present always, because "zero commits after N gestures" is as much a
-   * failure as too many. */
+  /** Pane content-size commits. Frame geometry animates with fixed terminal
+   * dimensions; a completed gesture releases the content box once. Physical
+   * regressions separately observe canvas identity and content resizes. */
   zoom: { phase: "idle" | "entering" | "zoomed" | "leaving"; commits: number };
 }
 

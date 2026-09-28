@@ -119,9 +119,8 @@ function WorkspaceStub({
   return (
     <>
       <Sidebar workspace={context} />
-      {/* `.ghostty-window` is the library's own wrapper, and the deck's zoom
-          measures the gesture against it — so the stub renders it too. */}
-      <div className="ghostty-window">
+      {/* Fullscreen measures the library's terminal stage. */}
+      <div className="ghostty-window terminal-host">
         {workspace.panes.map((pane) => {
           // The accent layer is ghosttea's, and the library draws it only for a
           // pane the host DEALT a colour — through this very prop. Hard-coding
@@ -554,13 +553,15 @@ describe("the deck's pane frames", () => {
     expect(verb(frame, "zoom")).not.toBeNull();
   });
 
-  it("gives a shell pane the bare badge — the folder, and no readout, mark or verb", async () => {
+  it("gives a shell pane its folder and fullscreen, without agent controls", async () => {
     const host = await mountDeck();
     const frame = frameFor(host, "pty-1");
     expect(frame?.querySelector(".vf-pane-name")?.textContent).toBe("vibe-field");
     expect(frame?.querySelector(".vf-pane-mark")).toBeNull();
     expect(frame?.querySelector(".vf-pane-readout")).toBeNull();
-    expect(frame?.querySelector(".vf-pane-verb")).toBeNull();
+    expect(verb(frame, "zoom")).not.toBeNull();
+    expect(verb(frame, "stop")).toBeNull();
+    expect(verb(frame, "resume")).toBeNull();
     expect(frame?.querySelector(".vf-pane-meter")).toBeNull();
   });
 
@@ -760,16 +761,16 @@ describe("the deck's pane frames", () => {
   });
 
   it("zooms through the deck's own morph, never ghosttea's remount", async () => {
-    // A shell pane has no verbs at all (the package's rule: no agent, nothing
-    // to act on), so the zoom is pressed on a managed one.
-    foldRows = [
-      managedSummary({ runtimeRunId: "run-1", terminalSessionId: "pty-1", status: "idle" }),
-    ];
     workspace.panes = [
       { id: "pane-1", session: stubSession("pty-1") },
       { id: "pane-2", session: stubSession("pty-2") },
     ];
     const host = await mountDeck();
+    // happy-dom has no layout engine; supply the stage and pane geometry.
+    const stage = host.querySelector<HTMLElement>(".terminal-host")!;
+    const pane = paneOf(host, "pane-1")!;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1000, 600));
+    vi.spyOn(pane, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 500, 600));
     const zoomHost = host.querySelector<HTMLElement>(".vf-deck-zoom");
     expect(zoomHost?.dataset["zoomPhase"]).toBe("idle");
     const otherPane = paneOf(host, "pane-2");
@@ -779,11 +780,11 @@ describe("the deck's pane frames", () => {
     await act(async () => zoomVerb?.click());
     expect(zoomHost?.dataset["zoomPhase"]).not.toBe("idle");
     expect(paneOf(host, "pane-1")?.hasAttribute("data-vf-zoom-pane")).toBe(true);
-    // Neighbours remain live during the morph; suspend once its layout commits.
+    // The configured workspace zoom route and the button share this controller.
+    expect(workspaceProps["onTogglePaneZoom"]).toBeTypeOf("function");
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     await act(async () => {
-      zoomHost?.dispatchEvent(
-        Object.assign(new Event("transitionend"), { propertyName: "transform" }),
-      );
+      pane.dispatchEvent(Object.assign(new Event("transitionend"), { propertyName: "width" }));
     });
     expect(zoomHost?.dataset["zoomPhase"]).toBe("zoomed");
     expect(paneOf(host, "pane-1")?.getAttribute("data-workspace-visible")).toBe("true");

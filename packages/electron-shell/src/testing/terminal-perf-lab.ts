@@ -39,6 +39,7 @@ import {
 } from "node:fs";
 import { cpus, loadavg, tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
+import { TerminalListResult } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { buildLabReport, parseLabJsonl } from "@vibefield/terminal-perf/lab-report";
 import {
@@ -55,6 +56,7 @@ import {
   sampleElectronProcesses,
   sampleProcessResources,
 } from "./plugin-runtime-physical";
+import { measureTerminalPaneRegression } from "./terminal-pane-regression";
 import { measureTerminalStartup, pasteTerminalLine } from "./terminal-startup-benchmark";
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -115,6 +117,12 @@ export interface ScenarioPlan {
 const FLOOD_RATE = 8 * 1024 * 1024;
 
 export const SCENARIOS: Readonly<Record<string, ScenarioPlan>> = {
+  "pane-regression": {
+    name: "pane-regression",
+    layout: { panes: 1, viewsPerSession: 1, hostable: true },
+    generator: { hotPanes: [], kind: "none" },
+    note: "unused-shell cleanup, used-session retention, equal closes and stable fullscreen pixels",
+  },
   startup: {
     name: "startup",
     layout: { panes: 1, viewsPerSession: 1, hostable: true },
@@ -1067,6 +1075,7 @@ export async function runTerminalPerfLab(opts: {
       rendererBackend: string;
     }>(win, "GODVIEW_COLD_OPEN ");
     const deck = new MarkerTail<DeckFacts>(win, "GODVIEW_DECK ");
+    const monitor = new MarkerTail<{ agents: number }>(win, "GODVIEW_MONITOR ");
     const direct = new MarkerTail<{ sessionId: string; inputAllowed: boolean }>(
       win,
       "GODVIEW_DIRECT_TERMINAL ",
@@ -1184,6 +1193,18 @@ export async function runTerminalPerfLab(opts: {
       "the deck to settle with a session per pane",
       60_000,
     );
+
+    if (scenarioName === "pane-regression") {
+      await measureTerminalPaneRegression({
+        win,
+        out: outDir,
+        split: () => pressChord(win, "d"),
+        close: () => pressChord(win, "w"),
+        floor: async () =>
+          TerminalListResult.parse(await opts.handle.client.request("terminal.list", {})).terminals,
+        monitorCount: () => monitor.current()?.agents,
+      });
+    }
 
     if (scenarioName === "startup") {
       if (process.platform !== "darwin")
