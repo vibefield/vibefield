@@ -59,6 +59,29 @@ export async function measureTerminalPaneRegression(options: {
     );
     await sleep(250); // Outlive the app-entry transform after the splash retires.
     await inputReady();
+    const first = (await panes())[0]!;
+    await read(`document.querySelector('[aria-label="LIST view"]').click()`);
+    await until(
+      () => read<boolean>("Boolean(document.querySelector('.vf-monitor-list-new'))"),
+      "new terminal action",
+    );
+    const firstReplacingAt = performance.now();
+    await read(`document.querySelector('.vf-monitor-list-new').click()`);
+    await until(
+      async () => (await panes())[0]?.session !== first.session,
+      "initial empty shell replaced",
+    );
+    await inputReady();
+    await until(async () => options.monitorCount() === 1, "initial empty bubble removed");
+    results.initialEmptyBubbleReplaceMs = performance.now() - firstReplacingAt;
+    await until(
+      async () => !(await options.floor()).some((row) => row.sessionId === first.session),
+      "initial empty shell exited",
+    );
+    results.initialEmptyProcessExitMs = performance.now() - firstReplacingAt;
+    // The geometry/switching witnesses below need two retained sessions.
+    await pasteTerminalLine(win, (await panes())[0]!.session, "printf 'base retention witness\\n'");
+    await sleep(150);
     await read(`document.querySelector('.terminal-input').focus()`);
     options.split();
     await until(async () => (await panes()).length === 2, "first split");
@@ -213,6 +236,34 @@ export async function measureTerminalPaneRegression(options: {
       );
       await inputReady();
     }
+    // A replacement is a detach even though the pane itself survives. The
+    // unlinked row is the other retained session; clicking it must reap only
+    // the untouched shell just created in the active split.
+    await read(`document.querySelector('.ghostty-pane.is-active .terminal-input').focus()`);
+    options.split();
+    await until(async () => (await panes()).length === 2, "replacement witness split");
+    await inputReady();
+    await until(async () => options.monitorCount() === 3, "replacement witness bubbles");
+    const replaced = (await panes()).find((pane) => pane.active)!;
+    const replacingAt = performance.now();
+    await read(`(() => {
+      const row = document.querySelector('.vf-monitor-list-row:not(.is-linked)');
+      if (!row) throw new Error('no detached session to attach');
+      row.click();
+    })()`);
+    await until(
+      async () => (await panes()).every((pane) => pane.session !== replaced.session),
+      "empty shell lost its attachment",
+    );
+    await until(async () => options.monitorCount() === 2, "replaced empty bubble removed");
+    results.unusedBubbleReplaceMs = performance.now() - replacingAt;
+    check((await panes()).length === 2, "replacement must preserve the pane");
+    await until(
+      async () => !(await options.floor()).some((row) => row.sessionId === replaced.session),
+      "replaced empty shell exited",
+    );
+    results.unusedReplacedProcessExitMs = performance.now() - replacingAt;
+    await inputReady();
     writeFileSync(join(out, "attach-settled.png"), (await win.webContents.capturePage()).toPNG());
     results.passed = true;
   } catch (error) {

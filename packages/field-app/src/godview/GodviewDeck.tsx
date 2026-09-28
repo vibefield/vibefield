@@ -1,7 +1,6 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { GhostteaProvider } from "@vibecook/ghosttea-react";
 import {
-  type GhostteaPaneClose,
   GhostteaWorkspace,
   type GhostteaWorkspaceContext,
   type GhostteaWorkspacePlatform,
@@ -27,6 +26,7 @@ import {
   type ReactElement,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -259,7 +259,7 @@ export function GodviewDeck({
   const { runtime, shell, generation, warm } = pool;
   const error: TerminalFault | null = pool.fault;
   // A runtime replacement loses its input history; keep earlier shells conservatively.
-  const unusedPanes = useMemo(() => new UnusedPaneSessions(), [runtime]);
+  const unusedPanes = useMemo(() => new UnusedPaneSessions<SessionSummary>(), [runtime]);
   /** Published by the sidebar probe. Read only to REPORT what the deck holds
    * (the marker below); the deck does not drive panes through it any more —
    * that was the adopt sweep GT-2e deleted. */
@@ -1115,18 +1115,24 @@ export function GodviewDeck({
   // package's stylesheet keys its pane rules on (the record's safe areas, the
   // active pane's radius, the line and the glow).
   const paneAgents = useDeckAgentFacts();
-  const closePane = useCallback(
-    ({ session, remainingSessionIds }: GhostteaPaneClose): void => {
-      if (runtime === null) return;
-      const used =
+  useLayoutEffect(() => {
+    if (runtime === null || workspace === undefined) return;
+    // Includes the workspace's first shell, which bypasses the split override.
+    for (const { session } of workspace.panes) {
+      if (runtime.sessionCreatedHere(session.id)) unusedPanes.created(session.id);
+    }
+    const detached = unusedPanes.update(
+      workspace.panes.map((pane) => pane.session),
+      (session) =>
         runtime.sessionHasInput(session.id) ||
         session.exited ||
         session.activity.kind === "foreground-job" ||
         paneAgents.agents.has(session.id) ||
-        runtime.remoteSession(session.id) !== undefined;
-      if (!unusedPanes.closed(session.id, remainingSessionIds, used)) return;
-      // Closing intent is visible as soon as the audited door accepts it;
-      // the native shutdown ladder may finish after this pane has detached.
+        runtime.remoteSession(session.id) !== undefined,
+    );
+    for (const session of detached) {
+      // Replacements and closes both release the final attachment. Hide the
+      // bubble while the audited door runs; a refusal restores it in the pool.
       void terminateTerminalSession(session.id).catch((cause: unknown) =>
         getRendererLogger()
           .child({ component: "godview" })
@@ -1136,9 +1142,8 @@ export function GodviewDeck({
             cause,
           ),
       );
-    },
-    [paneAgents.agents, runtime, unusedPanes],
-  );
+    }
+  }, [workspace, paneAgents.agents, runtime, unusedPanes]);
 
   /** The runs the verbs are aimed with, read at CALL time: the verbs object
    * must stay referentially stable (`DeckFrames` hands it to every frame, and a
@@ -1316,13 +1321,7 @@ export function GodviewDeck({
    * (`DEFAULT_DECK_APPEARANCE.opacity`, premultiplied by ghosttea's renderer),
    * so publishing `--vf-godview-terminal-bg` gave every reader in the tree a
    * variable nothing read. It returns with the rule that needs it, if James
-   * rules the deck should carry the tint.
-   *
-   * Errata (2026-09-28): James ruled it — the deck sheet is always the
-   * terminal's colour (DESIGN.md §8). `--vf-godview-terminal-bg` is published
-   * again, from the overlay's stage style (`godviewTerminalGroundStyle`), where
-   * the sheet that reads it lives; the panes keep their own translucent ground,
-   * which over a sheet of the same colour composites to it exactly. */
+   * rules the deck should carry the tint. */
   const ground = useMemo(() => terminalGround(terminalTheme), [terminalTheme]);
 
   // DEMAND (TP-L-E'), declared where the views are.
@@ -1652,7 +1651,6 @@ export function GodviewDeck({
           // workspace still asks; it just gets its session from the product door.
           createSplitSession={createSplitSession}
           splitSizing="equal"
-          onPaneClose={closePane}
           onTogglePaneZoom={zoom.toggle}
           initialCwd={shell.home}
           claimExistingSessions

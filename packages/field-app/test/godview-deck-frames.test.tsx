@@ -45,6 +45,7 @@ interface StubSession {
   cwd: string | null;
   cols: number;
   rows: number;
+  activity: { kind: string };
 }
 interface StubPane {
   id: string;
@@ -52,7 +53,15 @@ interface StubPane {
 }
 
 function stubSession(id: string, overrides: Partial<StubSession> = {}): StubSession {
-  return { id, exited: false, cwd: "/home/tester/vibe-field", cols: 80, rows: 24, ...overrides };
+  return {
+    id,
+    exited: false,
+    cwd: "/home/tester/vibe-field",
+    cols: 80,
+    rows: 24,
+    activity: { kind: "shell-idle" },
+    ...overrides,
+  };
 }
 
 /** The workspace's state, mutable from the test and from the deck's own door. */
@@ -179,6 +188,9 @@ vi.mock("@vibecook/ghosttea-react", () => ({
         readWrite: true,
       }),
     terminate: () => undefined,
+    sessionCreatedHere: (id: string) => runtimeBirths.has(id),
+    sessionHasInput: (id: string) => usedSessions.has(id),
+    remoteSession: (id: string) => (remoteSessions.has(id) ? {} : undefined),
   }),
   waitForGhostteaRendererPorts: () => new Promise(() => undefined),
   GhostteaProvider: ({ children }: { children: unknown }) => children,
@@ -236,6 +248,11 @@ let container: HTMLElement | null = null;
 let requests: Array<{ method: string; params: unknown }> = [];
 /** What `agent.interrupt` answers with — or, when it is an Error, throws. */
 let interruptAnswer: unknown = { accepted: true };
+let terminateAnswer: Promise<unknown> | undefined;
+let rosterRows: Array<{ sessionId: string; workloadClass: string; health: string }> = [];
+const runtimeBirths = new Set<string>();
+const usedSessions = new Set<string>();
+const remoteSessions = new Set<string>();
 let deckDoor: RemoteSessionDoor | null = null;
 /** What the fold's `observe` is currently answering with. */
 let foldRows: readonly AgentSessionSummary[] = [];
@@ -248,7 +265,9 @@ let logged: Array<{ level: "info" | "error"; event: string; message: string }> =
 const fieldd = {
   request: (method: string, params?: unknown): Promise<unknown> => {
     requests.push({ method, params });
-    if (method === "terminal.roster") return Promise.resolve({ items: [] });
+    if (method === "terminal.roster") return Promise.resolve({ items: rosterRows });
+    if (method === "terminal.terminate")
+      return terminateAnswer ?? Promise.resolve({ terminated: true });
     if (method === "terminal.openTicket") {
       return Promise.resolve(routedTicket((params as { sessionId: string }).sessionId));
     }
@@ -372,8 +391,9 @@ function PaneLinks({ panes }: { panes: MonitorPaneFacts }): ReactElement {
       {agents.map((agent) => (
         <output
           key={agent.id}
-          data-session={agent.session?.id}
+          data-session={agent.session?.id ?? agent.floorSessionId}
           data-pane-color={agent.attachment?.color}
+          data-palette-lightness={palette.tint.l}
         />
       ))}
     </div>
@@ -429,6 +449,11 @@ beforeEach(() => {
   foldRows = [];
   foldFrame = null;
   interruptAnswer = { accepted: true };
+  terminateAnswer = undefined;
+  rosterRows = [];
+  runtimeBirths.clear();
+  usedSessions.clear();
+  remoteSessions.clear();
   workspace.panes = [{ id: "pane-1", session: stubSession("pty-1") }];
   workspace.activePaneId = "pane-1";
   workspace.mounts = [];
@@ -517,6 +542,8 @@ describe("the deck's pane frames", () => {
     await vi.waitFor(
       async () => {
         await settle();
+        // Wait for the observer-driven palette publication before reading pane styles.
+        expect(host.querySelector("output")?.getAttribute("data-palette-lightness")).toBe("0.74");
         expect(colour("pane-2")).not.toBe(second);
       },
       { timeout: 3_000 },
@@ -749,6 +776,130 @@ describe("the deck's pane frames", () => {
 
     expect(workspace.panes[0]?.session.id, "the pane changed hands").toBe("pty-resumed");
     expect(asks(), "the floor is asked what is still alive").toBeGreaterThan(atMount);
+  });
+
+  it("reaps the first shell born by the runtime when its attachment is replaced", async () => {
+    runtimeBirths.add("pty-1");
+    await mountDeck();
+    await act(async () => {
+      workspace.mount(stubSession("replacement"));
+    });
+    await settle();
+    expect(requests.filter((r) => r.method === "terminal.terminate")).toEqual([
+      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    ]);
+  });
+
+  it("reaps an empty shell when another bubble takes its final attachment, before the door replies", async () => {
+    const host = await mountDeck();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    rosterRows = [{ sessionId: "born-1", workloadClass: "interactive", health: "live" }];
+    let accept!: (result: unknown) => void;
+    terminateAnswer = new Promise((resolve) => {
+      accept = resolve;
+    });
+    expect(host.querySelector('output[data-session="born-1"]')).not.toBeNull();
+
+    await act(async () => {
+      workspace.mount(stubSession("replacement"));
+    });
+    await settle();
+    expect(requests.filter((r) => r.method === "terminal.terminate")).toEqual([
+      { method: "terminal.terminate", params: { sessionId: "born-1" } },
+    ]);
+    expect(host.querySelector('output[data-session="born-1"]')).toBeNull();
+    expect(host.querySelector('output[data-session="replacement"]')).not.toBeNull();
+    await act(async () => {
+      accept({ terminated: true });
+    });
+    await settle();
+    expect(host.querySelector('output[data-session="born-1"]')).toBeNull();
+  });
+
+  it("keeps an empty shell while mirrored, then reaps it when the last pane closes", async () => {
+    await mountDeck();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    await act(async () => {
+      workspace.panes = [...workspace.panes, { id: "mirror", session: stubSession("born-1") }];
+      workspace.refresh();
+    });
+    await settle();
+    await act(async () => {
+      workspace.mount(stubSession("replacement"));
+    });
+    await settle();
+    expect(requests.filter((r) => r.method === "terminal.terminate")).toEqual([]);
+    await act(async () => {
+      workspace.panes = workspace.panes.filter((pane) => pane.id !== "mirror");
+      workspace.refresh();
+    });
+    await settle();
+    expect(requests.filter((r) => r.method === "terminal.terminate")).toHaveLength(1);
+  });
+
+  it.each(["input", "foreground", "agent", "remote"])(
+    "retains a detached shell with %s evidence",
+    async (kind) => {
+      await mountDeck();
+      await act(async () => {
+        await deckDoor?.createTerminal();
+      });
+      await settle();
+      if (kind === "input") usedSessions.add("born-1");
+      if (kind === "remote") remoteSessions.add("born-1");
+      if (kind === "foreground") {
+        await act(async () => {
+          workspace.panes[0]!.session = stubSession("born-1", {
+            activity: { kind: "foreground-job" },
+          });
+          workspace.refresh();
+        });
+        await settle();
+      }
+      if (kind === "agent") {
+        await act(async () => {
+          foldFrame?.([managedSummary({ terminalSessionId: "born-1" })]);
+        });
+        await settle();
+      }
+      await act(async () => {
+        workspace.mount(stubSession("replacement"));
+      });
+      await settle();
+      expect(requests.filter((r) => r.method === "terminal.terminate")).toEqual([]);
+    },
+  );
+
+  it("restores the detached bubble if the termination door refuses", async () => {
+    const host = await mountDeck();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    rosterRows = [{ sessionId: "born-1", workloadClass: "interactive", health: "live" }];
+    let refuse!: (cause: unknown) => void;
+    terminateAnswer = new Promise((_resolve, reject) => {
+      refuse = reject;
+    });
+    await act(async () => {
+      workspace.mount(stubSession("replacement"));
+    });
+    await settle();
+    expect(host.querySelector('output[data-session="born-1"]')).toBeNull();
+    await act(async () => {
+      refuse(new Error("denied"));
+    });
+    await settle();
+    expect(host.querySelector('output[data-session="born-1"]')).not.toBeNull();
+    expect(logged.some((line) => line.event === "renderer.godview.unused_pane_close_failed")).toBe(
+      true,
+    );
   });
 
   it("names a fresh split by the folder the deck opened it in, not 'terminal' (PU-14b)", async () => {

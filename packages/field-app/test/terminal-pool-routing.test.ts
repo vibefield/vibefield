@@ -592,6 +592,64 @@ describe("the roster the UI reads (TP-D4)", () => {
     expect(pool.terminalPoolSnapshot().closingSessionIds).toEqual([]);
   });
 
+  it("hides a pending close synchronously and coalesces duplicate detach notifications", async () => {
+    let accept!: (result: unknown) => void;
+    const reply = new Promise((resolve) => {
+      accept = resolve;
+    });
+    const request = vi.fn((method: string, params?: unknown) =>
+      method === "terminal.terminate" ? reply : fieldd.request(method, params),
+    );
+    pool.openTerminalPool({ request } as unknown as PoolClient, { sessionIds: [] });
+    await settle();
+    const first = pool.terminateTerminalSession("fresh");
+    const duplicate = pool.terminateTerminalSession("fresh");
+    expect(first).toBe(duplicate);
+    expect(pool.terminalPoolSnapshot().closingSessionIds).toEqual(["fresh"]);
+    await settle();
+    expect(request.mock.calls.filter(([method]) => method === "terminal.terminate")).toHaveLength(
+      1,
+    );
+    accept({ terminated: true });
+    await first;
+    await pool.terminateTerminalSession("fresh");
+    expect(request.mock.calls.filter(([method]) => method === "terminal.terminate")).toHaveLength(
+      1,
+    );
+  });
+
+  it("does not let an old rejection undo a new pool's pending close", async () => {
+    let rejectOld!: (cause: unknown) => void;
+    let acceptNew!: (result: unknown) => void;
+    const oldReply = new Promise((_resolve, reject) => {
+      rejectOld = reject;
+    });
+    const newReply = new Promise((resolve) => {
+      acceptNew = resolve;
+    });
+    let currentReply = oldReply;
+    const client = {
+      request: (method: string, params?: unknown) =>
+        method === "terminal.terminate" ? currentReply : fieldd.request(method, params),
+    } as unknown as PoolClient;
+    pool.openTerminalPool(client, { sessionIds: [] });
+    await settle();
+    const oldClose = pool.terminateTerminalSession("fresh");
+    const rejected = expect(oldClose).rejects.toThrow("old refusal");
+    await settle();
+    pool.disposeTerminalPool();
+    pool.openTerminalPool(client, { sessionIds: [] });
+    await settle();
+    currentReply = newReply;
+    const newClose = pool.terminateTerminalSession("fresh");
+    await settle();
+    rejectOld(new Error("old refusal"));
+    await rejected;
+    expect(pool.terminalPoolSnapshot().closingSessionIds).toEqual(["fresh"]);
+    acceptNew({ terminated: true });
+    await newClose;
+  });
+
   it("does not hide a shell when the close door refuses", async () => {
     const refusing = {
       request: async () => {

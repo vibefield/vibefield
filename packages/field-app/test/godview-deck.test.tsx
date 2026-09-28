@@ -73,6 +73,7 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       openRemoteSession: (deviceId: string, remoteSessionId: string) =>
         Promise.resolve({ id: `replica-${deviceId}-${remoteSessionId}`, readWrite: true }),
       terminate: () => undefined,
+      sessionCreatedHere: () => false,
     };
   },
   // The one-shot ports wait, as a promise that never settles: in production it

@@ -3,7 +3,7 @@
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
-      "sha": "6d03444838097fa7f759b53b0d81cbef235b7c0e",
+      "sha": "4e77add30862e474608dd264f3efa83cbd86a156",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
@@ -35,7 +35,7 @@
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
       "repository": "https://github.com/vibecook-dev/ghosttea.git",
-      "sha": "46346ec8ffd1bc2e9696caa3f20e4e6b6f1371ca",
+      "sha": "705d34c6efe4cd1ceedba19a55d26c3983e6d8c0",
       "javascript": {
         "workspaces": [
           "@vibecook/ghosttea-protocol",

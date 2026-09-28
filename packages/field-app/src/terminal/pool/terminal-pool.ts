@@ -140,7 +140,7 @@ export interface TerminalPoolSnapshot {
    * placement — the contract refuses a placement key at parse. */
   readonly roster: readonly ProductSessionRosterItem[];
   readonly rosterState: TerminalRosterState;
-  /** Accepted close intents, separate from the floor's still-live shutdown ladder. */
+  /** Pending and accepted close intents, separate from the floor's still-live shutdown ladder. */
   readonly closingSessionIds: readonly string[];
 }
 
@@ -191,6 +191,7 @@ let grantsLanded = false;
 let roster: readonly ProductSessionRosterItem[] = [];
 let rosterState: TerminalRosterState = "unread";
 const closingSessionIds = new Set<string>();
+const closingRequests = new Map<string, Promise<void>>();
 /** Main's one-per-renderer-generation shell policy (the transport selector
  * collapsed to the routed literal at TP-S3e). Browser harnesses omit it and
  * simply have no shell policy — and no fieldd either. */
@@ -938,17 +939,36 @@ function unobservedRefusal(cause: unknown): boolean {
   );
 }
 
-/** Close through the audited product door and publish the accepted intent.
- * The floor terminates asynchronously; rereading its inventory immediately can
- * still return a live shell. Keep the intent for this window's lifetime so an
- * older inventory response cannot resurrect a bubble the user just closed. */
-export async function terminateTerminalSession(sessionId: string): Promise<void> {
+/** Hide a closing shell immediately, while the audited product door runs.
+ * Roll back refusals; retain accepted intents so stale inventory responses
+ * cannot resurrect a bubble during the native shutdown ladder. */
+export function terminateTerminalSession(sessionId: string): Promise<void> {
   const fieldd = client;
-  if (fieldd === null) throw new Error("The terminal pool is not connected");
-  TerminalTerminateResult.parse(await fieldd.request("terminal.terminate", { sessionId }));
-  if (client !== fieldd) return;
+  if (fieldd === null) return Promise.reject(new Error("The terminal pool is not connected"));
+  const pending = closingRequests.get(sessionId);
+  if (pending !== undefined) return pending;
+  if (closingSessionIds.has(sessionId)) return Promise.resolve();
   closingSessionIds.add(sessionId);
+  // Defer the request until after installing its identity, including for a
+  // client that throws synchronously. Old requests must not mutate a new pool.
+  const request = Promise.resolve()
+    .then(() => fieldd.request("terminal.terminate", { sessionId }))
+    .then((result) => {
+      TerminalTerminateResult.parse(result);
+    })
+    .catch((cause: unknown) => {
+      if (closingRequests.get(sessionId) === request) {
+        closingSessionIds.delete(sessionId);
+        publish();
+      }
+      throw cause;
+    })
+    .finally(() => {
+      if (closingRequests.get(sessionId) === request) closingRequests.delete(sessionId);
+    });
+  closingRequests.set(sessionId, request);
   publish();
+  return request;
 }
 
 /**
@@ -1101,6 +1121,7 @@ export function disposeTerminalPool(): void {
   roster = [];
   rosterState = "unread";
   closingSessionIds.clear();
+  closingRequests.clear();
   runtimeGeneration = 0;
   transportGeneration = 0;
   terminalBootstrap = null;

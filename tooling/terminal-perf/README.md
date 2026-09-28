@@ -42,9 +42,11 @@ pnpm perf:terminal pane-regression --duration 2 --rotations 1 --probe-keys 0 \
   --out draft/terminal-perf/results/20260928-pane-example
 ```
 
-It waits for the startup overlay to retire, creates three panes, closes an unused shell and
-checks both its monitor removal and eventual native exit. It checks equal surviving widths,
+It waits for the startup overlay to retire, replaces the initial untouched shell, then creates
+three panes and closes an unused shell. Each checks monitor removal and eventual native exit. It checks equal surviving widths,
 fullscreen on an empty shell, retention of a used session, and eight monitor attachment switches.
+Finally it replaces an untouched split by selecting an unlinked bubble, checking immediate
+monitor cleanup and eventual native exit while the pane remains.
 `pane-regression.json` records each animation frame's canvas identity and bitmap/display sizes,
 plus ResizeObserver deliveries. Fullscreen must keep the content fixed during motion and resize
 once at settlement; each attachment must reach input readiness. PNGs capture moving and settled
