@@ -629,8 +629,8 @@ interface Unit {
   table: Map<number, ProcessRecord>;
   /** how many times the table was read */
   reads: { count: number };
-  /** `ps` fails, or times out, while `now` is set */
-  unread: { now: boolean };
+  /** `ps` fails, or times out, while `now` is set — and for the next `times` reads */
+  unread: { now: boolean; times: number };
   catalog: AgentCatalogEntry[];
   logged: Logged[];
   ledger: Ledgered[];
@@ -701,7 +701,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
   const fold = new FoldStub();
   const table = new Map<number, ProcessRecord>();
   const reads = { count: 0 };
-  const unread = { now: false };
+  const unread = { now: false, times: 0 };
   const catalog = [...TYPED_CATALOG];
   const logged: Logged[] = [];
   const ledger: Ledgered[] = [];
@@ -735,6 +735,10 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     onShellIntegration: (integration) => integrations.push(integration),
     processTable: async () => {
       reads.count += 1;
+      if (unread.times > 0) {
+        unread.times -= 1;
+        return undefined;
+      }
       return unread.now ? undefined : table;
     },
     kit: {
@@ -1473,39 +1477,75 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
   );
 
   it(
-    "is handed nothing until the home is written: a shell born while the launchers are being written is born as before, though the offered set is already decided",
+    "A2 — is handed the answer as soon as the INTEGRATION is written, ahead of the launchers: a shell born while the launchers are still being written is born integrated, and finds the launcher at its next lookup",
     async () => {
       const box = await unit({ slowHomeMs: 800 });
       onePane(box);
+      const layout = spawnThroughLayout(box.home);
       const started = box.gateway.start();
       await poll(() => (box.kit.materialized.length > 0 ? true : undefined), 5_000);
+      // the launchers are being written (slowly): the offered set is decided and no
+      // launcher stands yet — but the integration does, and the seam has it
       expect(box.gateway.state().names).toEqual([TYPED_COMMAND]);
-      expect(box.integrations).toEqual([]);
-      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
-      await started;
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(false);
+      expect(existsSync(layout.zshenv)).toBe(true);
       expect(box.integrations).toEqual([box.gateway.shellIntegration]);
-      expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
+      expect(box.gateway.shellIntegration("/bin/zsh")).toMatchObject({
+        ZDOTDIR: layout.zshDirectory,
+        PUPPETEER_SHIM_DIR: layout.shimDirectory,
+      });
+      await started;
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(true);
+      // handed over once, at the start's first write, and not again for the launchers
+      expect(box.integrations).toEqual([box.gateway.shellIntegration]);
     },
     PROCESS_BUDGET_MS,
   );
 
   it(
-    "answers nothing on win32 although launchers stand: the shim execs in place, which is POSIX only",
+    "B3 — on win32 nothing is written and nothing offered: no home, no launcher, no listener, no rendezvous — the state says why, the seam is handed nothing and answers nothing, a refresh writes nothing either, and the stop has nothing to close",
     async () => {
       const box = await unit({ platform: "win32" });
       onePane(box);
       await box.gateway.start();
-      expect(box.gateway.state().names).toEqual([TYPED_COMMAND]);
+      expect(existsSync(box.home)).toBe(false);
+      expect(box.gateway.state()).toEqual({
+        home: box.home,
+        listening: false,
+        names: [],
+        launcher: {
+          reason: "the launchers are POSIX only: the shim execs in place, which win32 cannot",
+        },
+      });
+      // what `agent.providers` reads to withdraw `invoke`: no launcher stands for anyone
+      expect(box.gateway.launchers().size).toBe(0);
+      expect(box.kit.materialized).toEqual([]);
+      expect(box.kit.gateway).toEqual([]);
+      expect(box.kit.rendezvous).toEqual([]);
+      expect(box.integrations).toEqual([]);
       for (const shell of ["C:\\Windows\\System32\\cmd.exe", "/bin/zsh", "/bin/sh"])
         expect(box.gateway.shellIntegration(shell), shell).toBeUndefined();
+      const said = box.logged.filter(
+        (entry) => entry.event === "fieldd.agents.gateway_unsupported_platform",
+      );
+      expect(said.map((entry) => entry.level)).toEqual(["info"]);
+      expect(said[0]?.attrs).toEqual({ platform: "win32" });
+      await box.gateway.refresh();
+      expect(existsSync(box.home)).toBe(false);
+      expect(box.kit.materialized).toEqual([]);
+      expect(box.gateway.state().names).toEqual([]);
+      await box.gateway.stop();
+      expect(box.integrations).toEqual([null]);
+      expect(existsSync(box.home)).toBe(false);
     },
     PROCESS_BUDGET_MS,
   );
 
   it(
-    "answers nothing while there is no launcher to offer — no launcher's runtime, no agent offered, a row that stopped offering — and answers again when there is one",
+    "A2 — answers wherever the integration stands, launcher or none — a former boot's home written again and emptied of launchers, a row that stopped offering — since a launcher that lands later is found by a shell born before it; and answers nothing only where no home is written at all: nothing to offer from, and nothing of ours on the device",
     async () => {
-      // no program can run a launcher; a former boot's home is written again, emptied of launchers
+      // no program can run a launcher; a former boot's home is written again, emptied of
+      // launchers — and still points a shell at itself
       const packaged = await unit({
         launcher: null,
         runtimeFacts: { sea: true, electron: undefined },
@@ -1519,12 +1559,19 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
       });
       onePane(packaged);
       await packaged.gateway.start();
+      const packagedLayout = spawnThroughLayout(packaged.home);
       expect(packaged.gateway.state().names).toEqual([]);
-      expect(existsSync(spawnThroughLayout(packaged.home).zshenv)).toBe(true);
-      expect(packaged.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
-      expect(packaged.gateway.shellIntegration("/bin/sh")).toBeUndefined();
+      expect(existsSync(join(packagedLayout.shimDirectory, TYPED_COMMAND))).toBe(false);
+      expect(existsSync(packagedLayout.zshenv)).toBe(true);
+      expect(packaged.integrations).toEqual([packaged.gateway.shellIntegration]);
+      expect(packaged.gateway.shellIntegration("/bin/zsh")).toMatchObject({
+        ZDOTDIR: packagedLayout.zshDirectory,
+      });
+      expect(packaged.gateway.shellIntegration("/bin/sh")).toMatchObject({
+        PUPPETEER_SHIM_DIR: packagedLayout.shimDirectory,
+      });
 
-      // nothing to offer and nothing of ours on the device: nothing written, nothing handed over
+      // nothing to offer from and nothing of ours on the device: nothing written, nothing handed over
       const unoffered = await unit({ provider: { classifies: false } });
       onePane(unoffered);
       await unoffered.gateway.start();
@@ -1532,20 +1579,29 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
       expect(unoffered.integrations).toEqual([]);
       expect(unoffered.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
 
-      // a row that stops offering takes the answer with it, and gives it back
+      // a row that stops offering takes its launcher and not the answer: a shell born
+      // meanwhile is managed the moment the row offers again and the launcher is written back
       const box = await unit();
       onePane(box);
       await box.gateway.start();
+      const layout = spawnThroughLayout(box.home);
       expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
       const at = box.catalog.findIndex((row) => row.id === TYPED_PROVIDER);
       const offering = box.catalog[at] as AgentCatalogEntry;
       box.catalog[at] = { ...offering, offers: { ...offering.offers, invoke: false } };
       await box.gateway.refresh();
       expect(box.gateway.state().names).toEqual([]);
-      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
-      expect(box.gateway.shellIntegration("/bin/sh")).toBeUndefined();
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(false);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toMatchObject({
+        ZDOTDIR: layout.zshDirectory,
+      });
+      expect(box.gateway.shellIntegration("/bin/sh")).toMatchObject({
+        PUPPETEER_SHIM_DIR: layout.shimDirectory,
+      });
       box.catalog[at] = offering;
       await box.gateway.refresh();
+      expect(box.gateway.state().names).toEqual([TYPED_COMMAND]);
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(true);
       expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
       // the seam was handed the answer once, whatever the launchers did since
       expect(box.integrations).toEqual([box.gateway.shellIntegration]);
@@ -1834,8 +1890,8 @@ describe("which of our terminals holds a process — the ancestor walk (AR-7b)",
       expect(await box.gateway.resolveTerminal({ pid: 612, parentPid: 611 })).toEqual({
         terminalSessionId: "s2",
       });
-      // the shell itself is in its own pane
-      expect(await box.gateway.resolveTerminal({ pid: 501 })).toEqual({ terminalSessionId: "s2" });
+      // B1 — the shell itself is never placed: the shell is never the agent
+      expect(await box.gateway.resolveTerminal({ pid: 501 })).toBeUndefined();
       expect(await box.gateway.resolveTerminal({ pid: 600, parentPid: 501 })).toEqual({
         terminalSessionId: "s1",
       });
@@ -2065,29 +2121,80 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
   );
 
   it(
-    "a launch while the process table cannot be read runs as typed — answered fallback although the host is strict, counted, said at warn with the pid and nothing else — and nothing is refused, prepared or recorded",
+    "B1 — the shell is never the agent: a request naming one of our shells' OWN pid is declined `invalid-request` and runs as typed — never placed, nothing prepared, adopted or ledgered, said at warn with the pid and nothing else — while the shell's child is placed and adopted as before",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
+      const answer = await box.launch(500, {
+        argv: ["--resume", "conversation-of-the-persons"],
+        cwd: join(box.root, "somewhere-private"),
+      });
+      expect(answer).toEqual({
+        action: "fallback",
+        code: "invalid-request",
+        reason: "the request names a shell of this host's, which is never the agent",
+      });
+      expect(box.fold.adopted).toEqual([]);
+      expect(box.fold.identities).toBe(0);
+      expect(box.fold.released).toEqual([]);
+      expect(box.script.prepared).toEqual([]);
+      expect(box.ledger).toEqual([]);
+      const said = box.logged.filter(
+        (entry) => entry.event === "fieldd.agents.gateway_shell_named",
+      );
+      expect(said.map((entry) => entry.level)).toEqual(["warn"]);
+      expect(said[0]?.attrs).toEqual({ pid: 500 });
+      expect(box.logged.filter((entry) => entry.level === "error")).toEqual([]);
+      const kept = JSON.stringify(box.logged);
+      expect(kept).not.toContain("conversation-of-the-persons");
+      expect(kept).not.toContain("somewhere-private");
+      expect(Object.fromEntries(box.gateway.counts())).toEqual({ "invalid-request": 1 });
+      // the same shell's child is placed and adopted
+      expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      expect(box.fold.adopted.length).toBe(1);
+      expect(box.fold.adopted[0]?.info.terminalSessionId).toBe("s1");
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "B2 — a launch while the process table cannot be read: the table is asked ONCE MORE; unread twice, the launch runs as typed — answered fallback (the kit's `outside-host-terminals`, kept) although the host is strict, counted under `table-unread` and never as outside our terminals, said at warn with the pid and nothing else, nothing refused, prepared or recorded — and unread once, it is placed and adopted",
     async () => {
       const box = await unit();
       onePane(box);
       await box.gateway.start();
       box.unread.now = true;
+      const reads = box.reads.count;
       const answer = await box.launch(600);
       expect(answer).toMatchObject({ action: "fallback", code: "outside-host-terminals" });
+      expect(box.reads.count).toBe(reads + 2);
       expect(box.fold.adopted).toEqual([]);
       expect(box.fold.identities).toBe(0);
       expect(box.script.prepared).toEqual([]);
       expect(refusals(box)).toEqual([]);
       expect(box.ledger).toEqual([]);
-      const said = box.logged.filter(
-        (entry) => entry.event === "fieldd.agents.gateway_process_table_unread",
+      const unreadSaid = (): Logged[] =>
+        box.logged.filter((entry) => entry.event === "fieldd.agents.gateway_process_table_unread");
+      expect(unreadSaid().map((entry) => entry.level)).toEqual(["warn"]);
+      expect(unreadSaid()[0]?.attrs).toEqual({ pid: 600 });
+      expect(Object.fromEntries(box.gateway.counts())).toEqual({ "table-unread": 1 });
+      const counted = box.logged.filter(
+        (entry) => entry.event === "fieldd.agents.gateway_ran_as_typed",
       );
-      expect(said.map((entry) => entry.level)).toEqual(["warn"]);
-      expect(said[0]?.attrs).toEqual({ pid: 600 });
-      expect(box.gateway.counts().get("outside-host-terminals")).toBe(1);
-      // the table readable again: the same launch is placed, and adopted
+      expect(counted.map((entry) => entry.attrs)).toEqual([
+        { code: "table-unread", provider: TYPED_PROVIDER },
+      ]);
+      // unread once and readable at the retry: the same launch is placed, and adopted
       box.unread.now = false;
+      box.unread.times = 1;
+      const again = box.reads.count;
       expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      expect(box.reads.count).toBe(again + 2);
+      expect(box.unread.times).toBe(0);
       expect(box.fold.adopted.length).toBe(1);
+      expect(Object.fromEntries(box.gateway.counts())).toEqual({ "table-unread": 1 });
+      expect(unreadSaid().length).toBe(1);
     },
     PROCESS_BUDGET_MS,
   );
@@ -2444,6 +2551,21 @@ describe("a typed run's proof — what its record must show before fieldd attach
         table: elsewhere.set(600, proc(600, 500, AGENT_STARTED)),
       }),
     ).toEqual({ holds: false, why: "outside-terminal" });
+  });
+
+  it("B1 — fails for a record whose process IS the terminal's own shell, whatever the table says: the shell is never the agent, and such a record does not re-attach", async () => {
+    // the shell's pid and its own start: everything the walk would match, at depth 0
+    expect(await proof({ record: typedRecord({ process: { pid: 500, startedAt: T0 } }) })).toEqual({
+      holds: false,
+      why: "shell-named",
+    });
+    // and before the table is even looked at
+    expect(
+      await proof({
+        record: typedRecord({ process: { pid: 500, startedAt: T0 } }),
+        table: undefined,
+      }),
+    ).toEqual({ holds: false, why: "shell-named" });
   });
 
   it(
@@ -3246,17 +3368,50 @@ describe("a typed run across a fieldd restart — the REAL floor (AR-7c)", () =>
   );
 
   it(
-    "a pane that holds an unobserved typed run: another agent typed there is refused as a conflict, and the SAME process asking again takes the run over — its row observed at last",
+    "a pane that holds an unobserved typed run: the shell ITSELF asking is no launch at all (B1 — declined, never placed, nothing refused, the held row untouched); another process in that pane is refused as a conflict; and the SAME process asking again takes the run over — its row observed at last",
     async () => {
-      const { first, pane, row, pid } = await typedThenStopped();
+      const first = await floor({ bundle: shimScript });
+      const pane = await openPane(first);
+      // a bystander in the pane — a background job of the shell's — for the row to ask with.
+      // It writes its own pid and execs the sleep in place: a `$!` typed at the pane's
+      // interactive bash (3.2) is history-expanded — "event not found" — and the line is lost.
+      const bystander = join(first.root, "bystander-pid");
+      await type(first, pane, `sh -c 'printf "%s" "$$" > ${bystander}; exec sleep 600' &`);
+      const otherPid = Number(
+        await until(
+          () => {
+            if (!existsSync(bystander)) return undefined;
+            const text = readFileSync(bystander, "utf8").trim();
+            return text === "" ? undefined : text;
+          },
+          FLOOR_WAIT_MS,
+          "the bystander's pid",
+        ),
+      );
+      await type(first, pane, TYPED_COMMAND);
+      const row = await adopted(first, pane);
+      await until(() => (linesOf(first.script.managedLog).length === 1 ? true : undefined));
+      const pid = readRecord(first.dataDir, row.runtimeRunId).process?.pid as number;
       await first.daemon.stop();
       const second = await floor({ bundle: shimScript, restartOf: first });
       await until(() =>
         rowOf(second, row.runtimeRunId)?.continuation?.reason === undefined ? undefined : true,
       );
 
-      // another process in that pane (the shell itself will do) asks for a managed run
-      const other = await askFloor(second, launchOf(second, pane.pid));
+      // the pane's shell, by its own pid: the shell is never the agent
+      const shell = await askFloor(second, launchOf(second, pane.pid));
+      expect(shell).toEqual({
+        action: "fallback",
+        code: "invalid-request",
+        reason: "the request names a shell of this host's, which is never the agent",
+      });
+      expect(second.daemon.agents.runtime.agent(pane.sessionId)).toBeUndefined();
+      expect(rowOf(second, row.runtimeRunId)?.observationLevel).toBe("none");
+      expect(auditActs(second.dataDir, "agent.session.adopt_refused")).toEqual([]);
+      expect(isAlive(pane.pid)).toBe(true);
+
+      // another process in that pane — the shell's background job — asks for a managed run
+      const other = await askFloor(second, launchOf(second, otherPid));
       expect(other).toMatchObject({
         action: "refuse",
         code: "terminal-conflict",
@@ -3315,6 +3470,76 @@ describe("a typed run across a fieldd restart — the REAL floor (AR-7c)", () =>
       expect(isAlive(pid)).toBe(true);
       expect(listedRow(second, pane.sessionId)?.pid).toBe(pane.pid);
       expect(second.daemon.agents.list().sessions).toEqual([]);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "B4 — a typed run under a persona, held pending (the adapter cannot attach under a persona it does not know): a stop of that persona's sessions signals nothing — not the run, not its pane (the person's own shell) — counts it as remaining, and leaves its row and its record as they were",
+    async () => {
+      const { first, pane, row, pid } = await typedThenStopped({ attach: true });
+      await first.daemon.stop();
+      // through the STORE, so the record stays signed: the run is put under a persona,
+      // as a typed launch one day may be
+      const signed = first.records.read(row.runtimeRunId);
+      if (signed === undefined) throw new Error("no record to rewrite");
+      first.records.write({ ...signed, profileId: "persona-b4" });
+      expect(first.records.verifies(readRecord(first.dataDir, row.runtimeRunId))).toBe(true);
+
+      // the next boot proves the run and asks the adapter to attach under the persona; the
+      // adapter knows no such persona, so the run is HELD — a pending typed row under it
+      const second = await floor({ bundle: shimScript, attach: true, restartOf: first });
+      const held = await until(
+        () => {
+          const found = rowOf(second, row.runtimeRunId);
+          return found?.continuation?.reason === undefined ? undefined : found;
+        },
+        FLOOR_WAIT_MS,
+        "the typed run held under the persona",
+      );
+      expect(held).toMatchObject({
+        spawnedBy: "user-shell",
+        terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+      });
+      expect(readRecord(second.dataDir, row.runtimeRunId)).toMatchObject({
+        profileId: "persona-b4",
+        reattach: { state: "failed" },
+      });
+      const persona = new Set(["persona-b4"]);
+      expect(second.daemon.agents.liveUnder(persona)).toBe(1);
+
+      // the persona's sessions are stopped: the typed run is not among the targets, and
+      // the stop waits its deadline out and reports it remaining
+      const stop = await second.daemon.agents.stopUnder(persona);
+      expect(stop).toEqual({ stopped: 0, remaining: 1 });
+      // nothing was signalled: the run, its pane, its row and its record are as they were
+      expect(isAlive(pid)).toBe(true);
+      expect(isAlive(pane.pid)).toBe(true);
+      expect((await processOf(pid))?.parentPid).toBe(pane.pid);
+      expect(listedRow(second, pane.sessionId)?.pid).toBe(pane.pid);
+      expect(rowOf(second, row.runtimeRunId)).toMatchObject({
+        spawnedBy: "user-shell",
+        terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+      });
+      expect(readRecord(second.dataDir, row.runtimeRunId)).toMatchObject({
+        profileId: "persona-b4",
+        process: { pid },
+      });
+      expect(readRecord(second.dataDir, row.runtimeRunId).exited).toBeUndefined();
+
+      // the agent ends by the person's hand; the pane is the person's shell still
+      await key(second, pane, END_OF_INPUT);
+      await until(
+        () => (rowOf(second, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the row leaving at the agent's end",
+      );
+      await until(
+        () => (second.daemon.agents.liveUnder(persona) === 0 ? true : undefined),
+        FLOOR_WAIT_MS,
+        "nothing left under the persona",
+      );
+      await answers(second, pane, "after-the-stop");
     },
     FLOOR_BUDGET_MS,
   );

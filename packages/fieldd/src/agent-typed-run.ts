@@ -79,6 +79,7 @@ export type TypedRunVerdict =
         | "unverified"
         | "no-process"
         | "no-shell"
+        | "shell-named"
         | "table-unread"
         | "process-gone"
         | "process-reused"
@@ -102,7 +103,8 @@ export type TypedRunVerdict =
  *  3. the recorded PROCESS is alive AND started when the record says — a pid
  *     is handed on, a start time is not;
  *  4. that process's ANCESTRY reaches the terminal's shell — the kit's own
- *     walk, matched by pid and start.
+ *     walk, matched by pid and start — and is not the shell itself (B1: the
+ *     shell is never the agent).
  *
  * All four, read from ONE read of the process table. And what a record that
  * passes may cause is one thing: an attach to a process already running in
@@ -123,6 +125,10 @@ export async function typedRunProof(input: {
   if (!input.verified) return { holds: false, why: "unverified" };
   if (record.process === undefined) return { holds: false, why: "no-process" };
   if (terminal.pid === undefined) return { holds: false, why: "no-shell" };
+  // B1 — THE SHELL IS NEVER THE AGENT: a record naming the terminal's own
+  // shell as its process would attach fieldd to the person's shell, and a
+  // stop would signal it. The kit's walk would match it at depth 0.
+  if (record.process.pid === terminal.pid) return { holds: false, why: "shell-named" };
   if (table === undefined) return { holds: false, why: "table-unread" };
   const recorded = table.get(record.process.pid);
   if (recorded === undefined) return { holds: false, why: "process-gone" };

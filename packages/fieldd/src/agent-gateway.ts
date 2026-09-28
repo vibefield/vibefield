@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { AgentLaunchProvider } from "@vibecook/puppeteer-core";
 import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
 import {
@@ -23,6 +24,7 @@ import {
   type SpawnThroughGateway,
   type SpawnThroughHost,
   type SpawnThroughLaunchRequest,
+  type SpawnThroughLayout,
   type SpawnThroughRefusal,
   type SpawnThroughRequest,
   type SpawnThroughResponse,
@@ -33,10 +35,12 @@ import {
   startSpawnThroughGateway,
   writeRendezvous,
   writeTerminals,
+  ZSH_INTEGRATION,
 } from "@vibecook/puppeteer-runtime/spawn-through";
 import { type AgentCatalogReaders, LAYOUT, type TerminalInfo } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { AgentAdoption, SystemAudit } from "./agent-runtime";
+import { SPAWNED_BY_SHELL } from "./agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 
@@ -106,6 +110,11 @@ const MAX_LISTED_SHELLS = 1_024;
 /** How long a stop waits for a launch already under way to be answered. */
 const STOP_LAUNCH_WAIT_MS = 3_000;
 
+/** B2 — a process table that could not be read (a `ps` that timed out under
+ * load) is asked for ONCE more, this long later, before a launch is let run
+ * as typed for want of it. */
+const PLACE_TABLE_RETRY_MS = 500;
+
 /** A sentence is one line, well inside the kit's bound: the shim prints the
  * command's name before it and holds the whole to the same limit. */
 const REFUSAL_BUDGET = 320;
@@ -150,6 +159,34 @@ export function shimHomeIsDurable(home: string, temp: string = tmpdir()): boolea
   const within = (parent: string, child: string): boolean =>
     child === parent || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
   return !within(resolve(temp), resolve(home)) && !within(canonicalPath(temp), canonicalPath(home));
+}
+
+/** One file of the shim home, published so no reader ever sees it
+ * half-written — the kit's own `publishFile`, which it keeps private: a temp
+ * file in the same directory, its mode set, then `rename` over the name; a
+ * file whose bytes and mode already match is left alone (a shell may be
+ * reading it at that moment). */
+async function publishFile(path: string, content: string, mode: number): Promise<void> {
+  const bytes = Buffer.from(content);
+  try {
+    const [existing, status] = await Promise.all([readFile(path), stat(path)]);
+    if (status.isFile() && (status.mode & 0o777) === mode && existing.equals(bytes)) return;
+  } catch {
+    // absent or unreadable: publish it
+  }
+  const temporary = join(
+    dirname(path),
+    `.${basename(path)}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`,
+  );
+  try {
+    await writeFile(temporary, bytes, { mode, flag: "wx" });
+    // the creation mode passes through the umask; the published file's must not
+    await chmod(temporary, mode);
+    await rename(temporary, path);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
 }
 
 // ── the launcher's runtime ──
@@ -608,6 +645,10 @@ export interface AgentGatewayOptions {
   onShellIntegration?: ((integration: ShellIntegration | null) => void) | undefined;
   /** test seam: the platform a shell is born on (default: this process's) */
   platform?: NodeJS.Platform | undefined;
+  /** test seam: the start waits here before its first write — a row's hand
+   * on the boot window (A2): a pane born before this settles is born before
+   * the integration exists */
+  hold?: Promise<void> | undefined;
   /** test seam: the process table a launch is placed in (default: the kit's
    * one `ps` read, per request) */
   processTable?: (() => Promise<ProcessTable | undefined>) | undefined;
@@ -631,10 +672,37 @@ interface Placed {
   table: ProcessTable;
 }
 
+/** Why a launch was not placed in a pane of ours. `outside-host-terminals`
+ * is the kit's own answer, and the kit answers it for the other two the
+ * host cannot say better (a table it could not read, a walk that threw);
+ * `shell-named` the host declines itself (B1). */
+type Unplaced = "outside-host-terminals" | "table-unread" | "shell-named" | "place-failed";
+
+/** Where a launch stands once asked: in a pane of ours, or not — and why not. */
+type Placement = { placed: Placed; why?: undefined } | { placed?: undefined; why: Unplaced };
+
+/** What a launch that ran as typed is counted under: the kit's code, except
+ * that a table nobody could read is its own key (B2) — the kit still answers
+ * `outside-host-terminals` for it, which is not what happened. */
+type RanAsTypedCode = SpawnThroughDeclineCode | "table-unread";
+
+/** A request that named one of our shells' OWN pid (B1): declined by the host
+ * through the kit's `invalid-request` — the request's process identity does
+ * not hold — and never placed. Thrown from `resolveTerminal`, which the kit
+ * awaits before anything is prepared, so there is nothing to undo. */
+class ShellNamedError extends Error {
+  constructor() {
+    super("the request names a shell of this host's, which is never the agent");
+    this.name = "ShellNamedError";
+  }
+}
+
 /** What one launch has established so far, for the decline fieldd makes
  * itself when a door throws. */
 interface LaunchProgress {
   placed?: Placed | undefined;
+  /** why it was not placed, when it was not */
+  unplaced?: Unplaced | undefined;
   /** puppeteer adopted the run and the fold could not enter it */
   adoptionUndone: boolean;
 }
@@ -680,8 +748,9 @@ export class AgentGatewayService {
   private queue: Promise<unknown> = Promise.resolve();
   private bringingUp: Promise<void> | undefined;
   private published = false;
-  /** the home was written by THIS boot: what a born shell is pointed at is there */
-  private homeWritten = false;
+  /** the seam was handed the answer by THIS boot: what a born shell is
+   * pointed at — the integration, never the launchers — is on disk */
+  private integrationHanded = false;
   /** our shells by session; a pid is read ONCE, when the session is first seen */
   private readonly shells = new Map<string, OwnedShell>();
   /** births the inventory has not listed yet */
@@ -700,13 +769,19 @@ export class AgentGatewayService {
   /** the runs adopted here, by preparation — what `exec-failed` names */
   private readonly adoptions = new Map<string, { runtimeRunId: string }>();
   /** launches that ran as typed, by code (no argument, no provider's words) */
-  private readonly ranAsTyped = new Map<SpawnThroughDeclineCode, number>();
+  private readonly ranAsTyped = new Map<RanAsTypedCode, number>();
   private stopping: Promise<void> | undefined;
 
   constructor(private readonly opts: AgentGatewayOptions) {
     this.logger = opts.logger ?? createNoopLogger();
     this.kit = { ...KIT, ...opts.kit };
     this.home = agentShimHome(opts.userRoot);
+  }
+
+  /** The launchers are POSIX only: the shim execs in place, which win32
+   * cannot (B3). Nothing of the gateway's is written or offered there. */
+  private get posix(): boolean {
+    return (this.opts.platform ?? process.platform) !== "win32";
   }
 
   // ── lifetime ──
@@ -781,8 +856,9 @@ export class AgentGatewayService {
     };
   }
 
-  /** How many launches ran as typed, by the kit's code. */
-  counts(): ReadonlyMap<SpawnThroughDeclineCode, number> {
+  /** How many launches ran as typed, by the kit's code — and by `table-unread`
+   * where nobody could say where the launch was (B2). */
+  counts(): ReadonlyMap<RanAsTypedCode, number> {
     return new Map(this.ranAsTyped);
   }
 
@@ -791,14 +867,17 @@ export class AgentGatewayService {
   /** What a free shell born NOW adds to its environment so the launchers lead
    * its PATH: the kit's own answer for that shell, over this home. `undefined`
    * — the shell is born exactly as before — on win32 (the shim execs in place,
-   * which is POSIX only), once the gateway stops, whenever there is no
-   * launcher to offer (no launcher runtime, no offered agent), and for a home
-   * without the integration's own file — not written yet, or lost since: zsh
-   * pointed at a directory without it would read NO startup file of the
-   * person's, silently. (The seam is handed this only after the home is
-   * written, in `publish`; the file's own presence is the check here.) Never
-   * throws — `TerminalService` does not catch, and a pane is never refused
-   * for the integration's sake.
+   * which is POSIX only), once the gateway stops, and for a home without the
+   * integration's own file — not written yet, or lost since: zsh pointed at a
+   * directory without it would read NO startup file of the person's,
+   * silently. (The seam is handed this only once the integration is on disk;
+   * the file's own presence is the check here.) A LAUNCHER IS NOT A CONDITION
+   * (A2): the integration is what a shell is born with, once, and a launcher
+   * written after its birth — at this start's end, at a refresh after an
+   * install appears, when a row offers again — is found at the shell's next
+   * lookup. Answering nothing while no launcher stood left every shell born
+   * meanwhile unmanaged for its whole life. Never throws — `TerminalService`
+   * does not catch, and a pane is never refused for the integration's sake.
    *
    * WHICH ENVIRONMENT. The kit asks for the environment the shell is born
    * with, which is the FLOOR's; fieldd has only its own and hands it that.
@@ -810,9 +889,8 @@ export class AgentGatewayService {
    * the floor, and not this slice's. */
   readonly shellIntegration: ShellIntegration = (shell) => {
     try {
-      if ((this.opts.platform ?? process.platform) === "win32") return undefined;
+      if (!this.posix) return undefined;
       if (this.stopping !== undefined) return undefined;
-      if (this.offered.names.length === 0) return undefined;
       if (!existsSync(spawnThroughLayout(this.home).zshenv)) {
         this.sayOnce("integration-lost", () =>
           this.logger.warn(
@@ -844,7 +922,50 @@ export class AgentGatewayService {
       );
       return;
     }
+    if (!this.posix) {
+      // B3 — win32: no home, no launchers, no listener. A home and sh
+      // launchers nothing there can run would be written for nothing, and
+      // `agent.providers` would answer `invoke` for agents no launcher
+      // stands for. The catalog's rows stand as they are; `launchers()` is
+      // empty, so the runtime's `offersHere` withdraws `invoke` from each.
+      // Said once, at info: an honest state, not a fault.
+      this.choice = {
+        runtime: undefined,
+        reason: "the launchers are POSIX only: the shim execs in place, which win32 cannot",
+      };
+      this.logger.info(
+        "fieldd.agents.gateway_unsupported_platform",
+        "The agent launchers are POSIX only; on win32 no home is written, no launcher is offered and a typed agent runs as the shell runs it",
+        { platform: this.opts.platform ?? process.platform },
+      );
+      return;
+    }
+    if (this.opts.hold !== undefined) await this.opts.hold;
+    if (this.stopping !== undefined) return;
     const layout = spawnThroughLayout(this.home);
+    // A2 — THE BOOT WINDOW. The integration is written FIRST, before anything
+    // slow: the launcher's runtime is chosen right below (under Electron as
+    // Node, a node on PATH is spawned and asked for its version — seconds on
+    // a loaded host) and the installs are read in `offer()` (each an agent's
+    // own version command — seconds more), and only then were the launchers
+    // written and the seam handed over. A free shell's environment is fixed
+    // at its birth, and the seam (`onShellIntegration`) decides what a shell
+    // born NOW is born with: every shell born in that window — the first pane
+    // a person opens after a boot, after every `pnpm dev` pair bounce — was
+    // unmanaged for its whole life, with nothing said. So the integration
+    // (`<home>/zsh/.zshenv` and the shim directory: all the kit's
+    // `shellIntegrationEnvironment` points a shell at) is on disk and the seam
+    // is handed over here, before either; the launchers land in the same
+    // home seconds later, and a shell born integrated finds a newly written
+    // `bin/<name>` at its next lookup (the precmd hook keeps the shim
+    // directory at PATH's head, and zsh searches PATH afresh for a name not
+    // yet in its command hash). Written only where this start could write a
+    // home at all: a bundled shim and an agent that passes the catalog and
+    // its adapter (the install read is exactly what is deferred), or a former
+    // boot's home, which is kept true either way. The hand-over is once
+    // (`handOverIntegration`); `publish` hands it over for a home first
+    // written there — a refresh after nothing was written at the start.
+    if (await this.writeIntegration(layout)) this.handOverIntegration();
     this.choice = await chooseLauncherRuntime({
       ...ownRuntimeFacts([layout.shimDirectory, process.env["PUPPETEER_SHIM_DIR"]]),
       ...this.opts.runtimeFacts,
@@ -883,7 +1004,8 @@ export class AgentGatewayService {
    * order. With nothing to offer and no home on disk there is nothing of ours
    * on this device to keep true, and nothing is written. */
   private async publish(): Promise<void> {
-    if (this.stopping !== undefined) return;
+    // B3 — and a refresh on win32 writes nothing either
+    if (this.stopping !== undefined || !this.posix) return;
     const script = this.bundledShim();
     const runtime = this.choice?.runtime;
     this.offered =
@@ -917,12 +1039,10 @@ export class AgentGatewayService {
         strict: AGENT_GATEWAY_STRICT,
         hostLabel: AGENT_GATEWAY_HOST_LABEL,
       });
-      // AR-7d — the home is written: from here a shell may be born pointed at
-      // it. Handed over once; a stop that began meanwhile has taken it back.
-      if (!this.homeWritten && this.stopping === undefined) {
-        this.homeWritten = true;
-        this.opts.onShellIntegration?.(this.shellIntegration);
-      }
+      // AR-7d — the home is written (the kit publishes the integration's file
+      // with the launchers): from here a shell may be born pointed at it —
+      // normally handed over already, at the start's first write (A2)
+      this.handOverIntegration();
     }
     if (this.gateway === undefined) {
       this.token = randomBytes(32).toString("hex");
@@ -966,11 +1086,55 @@ export class AgentGatewayService {
     return undefined;
   }
 
+  /** The agents a launcher could stand for, before any install is read: the
+   * catalog's word and the adapter's, both answered in memory. */
+  private launchCandidates(): AgentLaunchProvider[] {
+    return this.opts.runtime
+      .launchProviders()
+      .filter((provider) => withheldBeforeExecutable(provider, this.opts.catalog) === undefined);
+  }
+
+  /** The shell integration on disk, ahead of the launchers (A2): the kit's
+   * own file over the kit's own layout, published as the kit publishes it (a
+   * temp file renamed over the name; bytes that already match are left
+   * alone), so `materializeShims` — which writes the same bytes again with
+   * the launchers — leaves it too. False, and nothing written, where nothing
+   * could be offered from and nothing of ours is on the device; a former
+   * boot's home is written either way. Never throws: a home the integration
+   * cannot be written in is one the launchers will fail in too, said there. */
+  private async writeIntegration(layout: SpawnThroughLayout): Promise<boolean> {
+    const offerable = this.bundledShim() !== undefined && this.launchCandidates().length > 0;
+    if (!offerable && !existsSync(this.home)) return false;
+    try {
+      for (const directory of [layout.home, layout.shimDirectory, layout.zshDirectory]) {
+        await mkdir(directory, { recursive: true, mode: 0o700 });
+        await chmod(directory, 0o700);
+      }
+      await publishFile(layout.zshenv, ZSH_INTEGRATION, 0o600);
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.gateway_integration_unwritten",
+        "The shell integration could not be written ahead of the launchers; shells are born without it until the launchers are written",
+        { home: this.home, error: error instanceof Error ? error.message : String(error) },
+      );
+      return false;
+    }
+  }
+
+  /** AR-7d — the seam is handed the answer ONCE, the first time the
+   * integration is on disk: at the start, ahead of the launchers (A2), else at
+   * the first publish that wrote a home. A stop that began meanwhile has taken
+   * it back, and is not handed it again. */
+  private handOverIntegration(): void {
+    if (this.integrationHanded || this.stopping !== undefined) return;
+    this.integrationHanded = true;
+    this.opts.onShellIntegration?.(this.shellIntegration);
+  }
+
   private async offer(): Promise<OfferedLaunch> {
     const launchProviders = this.opts.runtime.launchProviders();
-    const asked = launchProviders
-      .filter((provider) => withheldBeforeExecutable(provider, this.opts.catalog) === undefined)
-      .map((provider) => provider.id);
+    const asked = this.launchCandidates().map((provider) => provider.id);
     let executables: ReadonlyMap<string, string> = new Map();
     if (asked.length > 0) {
       try {
@@ -1126,9 +1290,9 @@ export class AgentGatewayService {
    *
    * This is the EL7 binding. A request's pid is self-asserted — anything that
    * holds the bearer can name any pid — and the answer is given only for a
-   * terminal whose own shell is that process or an ancestor of it, matched by
-   * pid AND start time. A caller can ask for a run only in a terminal that
-   * really contains the process it names.
+   * terminal whose own shell is an ancestor of that process, matched by pid
+   * AND start time — never for the shell itself (B1). A caller can ask for a
+   * run only in a terminal that really contains the process it names.
    *
    * Never throws. When the table cannot be read nobody can say where the
    * process is, and the launch runs as typed (the kit's choice, kept). */
@@ -1136,20 +1300,30 @@ export class AgentGatewayService {
     pid: number;
     parentPid?: number | undefined;
   }): Promise<{ terminalSessionId: string } | undefined> {
-    const placed = await this.place(process.pid);
+    const { placed } = await this.place(process.pid);
     return placed === undefined ? undefined : { terminalSessionId: placed.shell.terminalSessionId };
   }
 
-  private async place(pid: number): Promise<Placed | undefined> {
+  private async place(pid: number): Promise<Placement> {
     try {
-      const table = await (this.opts.processTable ?? readProcessTable)();
+      const read = this.opts.processTable ?? readProcessTable;
+      let table = await read();
+      if (table === undefined) {
+        // B2 — the table unread is not "outside our terminals": `ps` times
+        // out under load. Asked once more, as the typed proof asks; still
+        // unread, the launch runs as typed (the kit's own answer, kept) and
+        // is counted under its own key, so a leak detector can tell a launch
+        // nobody could place from one that was placed outside.
+        await new Promise((resolve) => setTimeout(resolve, PLACE_TABLE_RETRY_MS));
+        table = await read();
+      }
       if (table === undefined) {
         this.logger.warn(
           "fieldd.agents.gateway_process_table_unread",
-          "The process table could not be read; the launch cannot be placed and runs as typed",
+          "The process table could not be read, twice; the launch cannot be placed and runs as typed",
           { pid },
         );
-        return undefined;
+        return { why: "table-unread" };
       }
       await this.enqueue(() => this.syncShells(table));
       const shell = await findOwningProcess({
@@ -1163,16 +1337,33 @@ export class AgentGatewayService {
           "A launch came from a process that is in no terminal of ours; it runs as typed",
           { pid },
         );
-        return undefined;
+        return { why: "outside-host-terminals" };
       }
-      return { shell, startedAt: table.get(pid)?.startedAt, table };
+      if (shell.pid === pid) {
+        // B1 — THE SHELL IS NEVER THE AGENT. The kit's walk begins at the
+        // asking pid itself, so one of our shells' own pid is "in" its pane
+        // at depth 0. A launcher is the shell's child, never the shell: a
+        // request naming the shell's pid — anything holding the bearer can
+        // name any pid — would pin a phantom run to that pane (a signed
+        // record, a row on the stage, `terminal-conflict` for the person's
+        // own launch there) whose stop from the deck or the phone would
+        // signal the person's SHELL. Declined, never placed — so the rule of
+        // refusal is not widened, and the name runs as typed.
+        this.logger.warn(
+          "fieldd.agents.gateway_shell_named",
+          "A launch names one of our shells' own pid; the shell is never the agent, and the request is declined",
+          { pid },
+        );
+        return { why: "shell-named" };
+      }
+      return { placed: { shell, startedAt: table.get(pid)?.startedAt, table } };
     } catch (error) {
       this.logger.warn(
         "fieldd.agents.gateway_place_failed",
         "A launch could not be placed; it runs as typed",
         { pid, error: error instanceof Error ? error.message : String(error) },
       );
-      return undefined;
+      return { why: "place-failed" };
     }
   }
 
@@ -1205,8 +1396,12 @@ export class AgentGatewayService {
         runtime: this.launchDoors(),
         strict: AGENT_GATEWAY_STRICT,
         resolveTerminal: async ({ pid }) => {
-          const placed = await this.place(pid);
-          progress.placed = placed;
+          const placement = await this.place(pid);
+          progress.placed = placement.placed;
+          progress.unplaced = placement.why;
+          // B1 — the host's own decline, through the kit: caught below
+          if (placement.why === "shell-named") throw new ShellNamedError();
+          const placed = placement.placed;
           if (placed === undefined) return undefined;
           // a typed run that ENDED in this pane a moment ago may not have
           // left it yet (its exit is a pid that vanished, seen at a poll):
@@ -1229,17 +1424,25 @@ export class AgentGatewayService {
       };
       answer = await this.kit.prepareSpawnThroughLaunch(request, host);
     } catch (error) {
-      // the kit lets a throwing door through (a disposed runtime, a fold that
-      // could not enter the run). The message goes to the log, never the pane.
-      this.logger.error(
-        "fieldd.agents.gateway_launch_failed",
-        "A typed launch failed inside the host; it is answered with a coded decline",
-        error,
-        { provider: request.providerId, placed: progress.placed !== undefined },
-      );
-      answer = this.declined(request, progress.placed, failureCode(error, progress));
+      if (error instanceof ShellNamedError) {
+        // B1 — said at `place`, with the pid and nothing else. Never placed,
+        // so never refused (the rule of refusal is not widened): the kit's
+        // own decline, and the launcher runs the name as typed.
+        answer = declineSpawnThrough({ code: "invalid-request", reason: error.message });
+      } else {
+        // the kit lets a throwing door through (a disposed runtime, a fold
+        // that could not enter the run). The message goes to the log, never
+        // the pane.
+        this.logger.error(
+          "fieldd.agents.gateway_launch_failed",
+          "A typed launch failed inside the host; it is answered with a coded decline",
+          error,
+          { provider: request.providerId, placed: progress.placed !== undefined },
+        );
+        answer = this.declined(request, progress.placed, failureCode(error, progress));
+      }
     }
-    await this.account(request, answer, progress.placed);
+    await this.account(request, answer, progress);
     return answer;
   }
 
@@ -1323,7 +1526,8 @@ export class AgentGatewayService {
         attrs: {
           provider: info.provider.id,
           sessionId: terminalSessionId,
-          spawnedBy: "user-shell",
+          // B5 — one word for the provenance: the fold's own constant
+          spawnedBy: SPAWNED_BY_SHELL,
         },
       };
       await this.audited(
@@ -1425,12 +1629,19 @@ export class AgentGatewayService {
   private async account(
     request: SpawnThroughLaunchRequest,
     answer: SpawnThroughResponse,
-    placed: Placed | undefined,
+    progress: LaunchProgress,
   ): Promise<void> {
+    const { placed } = progress;
     if (answer.action === "fallback") {
-      this.ranAsTyped.set(answer.code, (this.ranAsTyped.get(answer.code) ?? 0) + 1);
+      // B2 — the kit says "outside" for a table nobody could read; the count
+      // says what happened, and the debug line names that code and no more
+      const code: RanAsTypedCode =
+        answer.code === "outside-host-terminals" && progress.unplaced === "table-unread"
+          ? "table-unread"
+          : answer.code;
+      this.ranAsTyped.set(code, (this.ranAsTyped.get(code) ?? 0) + 1);
       this.logger.debug("fieldd.agents.gateway_ran_as_typed", "A launch ran as typed", {
-        code: answer.code,
+        code,
         provider: request.providerId,
       });
       return;
