@@ -1838,6 +1838,22 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
         ),
       ).toBe(true);
       expect(refusals(box).map((entry) => entry.mutation.reasonCode)).toEqual(["HANDLER_FAILED"]);
+
+      // a door that throws BEFORE the launch was placed: nobody can say it is a session in a
+      // pane of ours, so it runs as typed — strict or not — and nothing is refused
+      const classify = box.runtime.classifyInvocation;
+      box.runtime.classifyInvocation = () => {
+        throw new Error("the grammar fell over — at /secret/stack/frame.ts");
+      };
+      const unplaced = await box.launch(600);
+      box.runtime.classifyInvocation = classify;
+      expect(unplaced).toEqual({
+        action: "fallback",
+        code: "handler-failed",
+        reason: "the host could not complete the launch",
+      });
+      expect(refusals(box).length).toBe(1);
+      expect(box.fold.identities).toBe(1);
       expect(await box.launch(600)).toMatchObject({ action: "exec" });
     },
     PROCESS_BUDGET_MS,

@@ -1112,7 +1112,7 @@ export class AgentGatewayService {
     const progress: LaunchProgress = { adoptionUndone: false };
     let answer: SpawnThroughResponse;
     try {
-      const identity = this.opts.fold.identity();
+      let identity: ReturnType<AgentAdoption["identity"]> | undefined;
       const host: SpawnThroughHost = {
         runtime: this.launchDoors(),
         strict: AGENT_GATEWAY_STRICT,
@@ -1123,13 +1123,14 @@ export class AgentGatewayService {
             : { terminalSessionId: progress.placed.shell.terminalSessionId };
         },
         // the identity a spawn is given (AR-4): the claim the next boot
-        // restores against, and the ingress the adapter binds
-        launchOptions: () => ({
-          creationRequestId: identity.creationRequestId,
-          ingress: identity.ingress,
-        }),
+        // restores against, and the ingress the adapter binds. Asked for once
+        // per launch, and only for a session already placed in a pane of ours.
+        launchOptions: () => {
+          identity = this.opts.fold.identity();
+          return { creationRequestId: identity.creationRequestId, ingress: identity.ingress };
+        },
         refusal: (refused) => this.words(refused),
-        onAdopted: (adopted) => this.adopted(request, adopted, progress, () => identity.launched()),
+        onAdopted: (adopted) => this.adopted(request, adopted, progress, identity?.launched()),
       };
       answer = await this.kit.prepareSpawnThroughLaunch(request, host);
     } catch (error) {
@@ -1212,10 +1213,13 @@ export class AgentGatewayService {
     request: SpawnThroughLaunchRequest,
     adopted: AdoptedSpawnThroughSession,
     progress: LaunchProgress,
-    launched: () => ReturnType<ReturnType<AgentAdoption["identity"]>["launched"]>,
+    launched: ReturnType<ReturnType<AgentAdoption["identity"]>["launched"]> | undefined,
   ): Promise<void> {
     const { info, terminalSessionId, processId, preparationId } = adopted;
     try {
+      if (launched === undefined) {
+        throw new Error("the run was adopted without the identity a later boot restores against");
+      }
       const startedAt =
         progress.placed?.startedAt ??
         (await (this.opts.processStartedAt ?? processStartedAt)(processId));
@@ -1240,7 +1244,7 @@ export class AgentGatewayService {
             // held canonical so every later comparison meets the same path
             cwd: canonicalPath(request.cwd),
             process: { pid: processId, startedAt },
-            launched: launched(),
+            launched,
           }),
         () => ({ outcome: "succeeded", attrs: { runtimeEpoch: info.runtimeEpoch } }),
       );
