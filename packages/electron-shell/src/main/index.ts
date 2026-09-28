@@ -981,9 +981,10 @@ async function main(
   // install are staged into this run's OWN root before the pair boots — fieldd
   // composes an agent's executable once, at boot — and the pair runs as the
   // person. Never into an injected FIELDD_DATA_DIR (someone else's root), never
-  // for the direct proof; every other mode builds its pair exactly as before.
+  // for the direct proof. The perf lab also uses this isolated shell profile so
+  // measurements never launch or prewarm the owner's agents.
   const typedAgent =
-    MODE === "smoke-godview" &&
+    (MODE === "smoke-godview" || MODE === "terminal-perf-lab") &&
     !process.argv.includes("--terminal-direct-proof") &&
     process.env["FIELDD_DATA_DIR"] === undefined
       ? (await testing()).stageTypedAgent({ vibefieldRoot: user.rootReal })

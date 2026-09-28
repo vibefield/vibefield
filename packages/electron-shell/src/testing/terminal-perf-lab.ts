@@ -41,7 +41,11 @@ import { cpus, loadavg, tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { buildLabReport, parseLabJsonl } from "@vibefield/terminal-perf/lab-report";
-import { findStrays } from "@vibefield/terminal-perf/reap";
+import {
+  captureOwnedProcesses,
+  findOwnedStrays,
+  type OwnedProcess,
+} from "@vibefield/terminal-perf/reap";
 import { app, type BrowserWindow, contentTracing, screen } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
@@ -51,6 +55,7 @@ import {
   sampleElectronProcesses,
   sampleProcessResources,
 } from "./plugin-runtime-physical";
+import { measureTerminalStartup, pasteTerminalLine } from "./terminal-startup-benchmark";
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -110,6 +115,12 @@ export interface ScenarioPlan {
 const FLOOD_RATE = 8 * 1024 * 1024;
 
 export const SCENARIOS: Readonly<Record<string, ScenarioPlan>> = {
+  startup: {
+    name: "startup",
+    layout: { panes: 1, viewsPerSession: 1, hostable: true },
+    generator: { hotPanes: [], kind: "none" },
+    note: "repeated split-to-shell-acknowledgment, bracketed by ready-pane command controls",
+  },
   "single-pane": {
     name: "single-pane",
     layout: { panes: 1, viewsPerSession: 1, hostable: true },
@@ -284,15 +295,17 @@ const consoleText = (arg: unknown): string => {
  * two harnesses would couple a lab run's steering to a smoke row's timeouts. */
 class MarkerTail<T> {
   #latest: T | null = null;
+  readonly #byKey = new Map<string, T>();
   readonly #waiters = new Set<() => void>();
 
-  constructor(win: BrowserWindow, prefix: string) {
+  constructor(win: BrowserWindow, prefix: string, key?: (value: T) => string) {
     win.webContents.on("console-message", (...args: unknown[]) => {
       for (const arg of args) {
         const text = consoleText(arg);
         if (!text.startsWith(prefix)) continue;
         try {
           this.#latest = JSON.parse(text.slice(prefix.length)) as T;
+          if (key) this.#byKey.set(key(this.#latest), this.#latest);
         } catch {
           continue;
         }
@@ -301,14 +314,19 @@ class MarkerTail<T> {
     });
   }
 
-  current(): T | null {
-    return this.#latest;
+  current(key?: string): T | null {
+    return key === undefined ? this.#latest : (this.#byKey.get(key) ?? null);
   }
 
-  async until(predicate: (value: T) => boolean, what: string, timeoutMs: number): Promise<T> {
+  async until(
+    predicate: (value: T) => boolean,
+    what: string,
+    timeoutMs: number,
+    key?: string,
+  ): Promise<T> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const latest = this.#latest;
+      const latest = this.current(key);
       if (latest !== null && predicate(latest)) return latest;
       if (Date.now() >= deadline) {
         throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`);
@@ -411,19 +429,15 @@ async function buildLayout(
   return { panes: current, ceiling: null };
 }
 
-/** TP-S3e INSTRUMENT DEBT: this rig used to run setup lines through the UDS
- * automation door, addressed by the product ticket's legacy trio — both are
- * retired (the routed ticket carries WS doors + grants, deliberately not the
- * floor's socket/token). The sanctioned instrument door is the AR-lane
- * automation surface (fieldd-brokered `automation_input`), which does not
- * exist yet; until it does, scenarios that need pane setup fail LOUDLY here
- * rather than ride a resurrected credential. */
-async function runInPane(_handle: FielddHandle, sessionId: string, line: string): Promise<void> {
-  throw new Error(
-    `s3e-instrument-debt: cannot run ${JSON.stringify(line)} in ${sessionId} — the lab's UDS ` +
-      "automation door retired with the bridge (TP-S3e); the AR-lane automation surface is the " +
-      "named follow-up",
-  );
+/** Setup uses the same routed TerminalSurface paste/input path as a person. */
+async function runInPane(
+  win: BrowserWindow,
+  sessionId: string,
+  line: string,
+  inputReady: (id: string) => Promise<void>,
+): Promise<void> {
+  await inputReady(sessionId);
+  await pasteTerminalLine(win, sessionId, line);
 }
 
 /** The node the generators run as. `process.execPath` is Electron; with
@@ -453,6 +467,7 @@ async function startGenerator(opts: {
   plan: GeneratorPlan;
   sessionIds: readonly string[];
   seconds: number;
+  inputReady(id: string): Promise<void>;
 }): Promise<RunningGenerator> {
   const { win, plan, sessionIds } = opts;
   const targets = plan.hotPanes
@@ -467,7 +482,7 @@ async function startGenerator(opts: {
     const rate = plan.bytesPerSecond ?? FLOOD_RATE;
     for (const sessionId of targets) {
       await runInPane(
-        opts.handle,
+        opts.win,
         sessionId,
         fixtureCommand(fixturePath("flood.mjs"), [
           "--rate",
@@ -480,6 +495,7 @@ async function startGenerator(opts: {
           "--shape",
           plan.shape ?? "scroll",
         ]),
+        opts.inputReady,
       );
     }
     return {
@@ -636,15 +652,20 @@ async function injectKeys(
  *
  * The repo root is derived the way `fixturePath` derives it: `__dirname` is
  * `packages/electron-shell/dist/testing`. */
-function ownStrays(): { pid: number; kind: string }[] {
+function ownStrays(owned: readonly OwnedProcess[]): { pid: number; kind: string }[] {
   const repoRoot = join(__dirname, "..", "..", "..", "..");
-  const listing = spawnSync("/bin/ps", ["-axwwo", "pid=,command="], { encoding: "utf8" });
-  if (listing.status !== 0 || typeof listing.stdout !== "string") return [];
+  const listing = spawnSync("/bin/ps", ["-axwwo", "pid=,ppid=,lstart=,command="], {
+    encoding: "utf8",
+  });
+  if (listing.status !== 0 || typeof listing.stdout !== "string")
+    throw new Error("cannot verify benchmark process identities");
   const mine = new Set<number>([process.pid, ...app.getAppMetrics().map((metric) => metric.pid)]);
-  return findStrays(listing.stdout, repoRoot, [...mine]).map((stray) => ({
-    pid: stray.pid,
-    kind: stray.kind,
-  }));
+  return findOwnedStrays(listing.stdout, repoRoot, owned)
+    .filter((stray) => !mine.has(stray.pid))
+    .map((stray) => ({
+      pid: stray.pid,
+      kind: stray.kind,
+    }));
 }
 
 // ---- leaving, unconditionally -------------------------------------------------
@@ -929,6 +950,26 @@ export async function runTerminalPerfLab(opts: {
   const probeInjection = process.env["VF_PERF_PROBE_INJECT"] === "os" ? "os" : "window";
 
   mkdirSync(outDir, { recursive: true });
+  const captureOwnership = (previous: readonly OwnedProcess[] = []): OwnedProcess[] => {
+    if (opts.handle.ownership !== "spawned")
+      throw new Error("a benchmark must own its daemon pair");
+    const roots = [process.pid, opts.handle.childPid, opts.handle.info.nativePid].filter(
+      (pid): pid is number => typeof pid === "number",
+    );
+    const listing = spawnSync("/bin/ps", ["-axwwo", "pid=,ppid=,lstart=,command="], {
+      encoding: "utf8",
+    });
+    if (listing.status !== 0) throw new Error("cannot record benchmark process ownership");
+    const captured = captureOwnedProcesses(listing.stdout, roots);
+    const owned = [
+      ...new Map(
+        [...previous, ...captured].map((row) => [`${row.pid}:${row.startedAt}`, row]),
+      ).values(),
+    ];
+    writeFileSync(join(outDir, "owned-processes.json"), `${JSON.stringify(owned)}\n`);
+    return owned;
+  };
+  let ownedProcesses: OwnedProcess[] = [];
   // THE OUTER DEADLINE, armed before a single process is spawned. Every arm, wait
   // and teardown step below has its own bound; this is the one that holds when
   // one of those bounds is the thing that broke.
@@ -964,6 +1005,7 @@ export async function runTerminalPerfLab(opts: {
   });
 
   try {
+    ownedProcesses = captureOwnership();
     if (scenario === undefined) {
       throw new Error(
         `unknown scenario "${scenarioName}"; known: ${Object.keys(SCENARIOS).join(", ")}`,
@@ -1025,6 +1067,19 @@ export async function runTerminalPerfLab(opts: {
       rendererBackend: string;
     }>(win, "GODVIEW_COLD_OPEN ");
     const deck = new MarkerTail<DeckFacts>(win, "GODVIEW_DECK ");
+    const direct = new MarkerTail<{ sessionId: string; inputAllowed: boolean }>(
+      win,
+      "GODVIEW_DIRECT_TERMINAL ",
+      (value) => value.sessionId,
+    );
+    const inputReady = async (id: string): Promise<void> => {
+      await direct.until(
+        (value) => value.inputAllowed,
+        "the terminal transport to accept input",
+        30_000,
+        id,
+      );
+    };
     const bridge = new MarkerTail<{ installed: boolean }>(win, "TERMINAL_PERF_LAB ");
     const canvas = new MarkerTail<Record<string, unknown>>(win, "CANVAS_READY ");
 
@@ -1130,6 +1185,22 @@ export async function runTerminalPerfLab(opts: {
       60_000,
     );
 
+    if (scenarioName === "startup") {
+      if (process.platform !== "darwin")
+        throw new Error("startup split/close chords are currently qualified on macOS");
+      await measureTerminalStartup({
+        win,
+        out: outDir,
+        count: envNumber("VF_PERF_STARTUP_SAMPLES", 10),
+        current: () => deck.current(),
+        inputReady,
+        until: (predicate, what, timeout) => deck.until(predicate, what, timeout),
+        split: () => pressChord(win, "d"),
+        close: () => pressChord(win, "w"),
+      });
+      emit({ kind: "startup-benchmark", at: Date.now(), artifact: "startup.json" });
+    }
+
     const totalSeconds = Math.ceil((armNames.length * rotations * armMs) / 1000) + 30;
 
     // The echo fixture goes into pane 0 for the probe scenario, before the arms
@@ -1138,7 +1209,7 @@ export async function runTerminalPerfLab(opts: {
     if (scenarioName === "echo-probe" && settled.sessionIds[0] !== undefined) {
       echoOut = join(outDir, "echo-fixture.jsonl");
       await runInPane(
-        opts.handle,
+        win,
         settled.sessionIds[0],
         fixtureCommand(fixturePath("echo-probe.mjs"), [
           "--out",
@@ -1146,8 +1217,19 @@ export async function runTerminalPerfLab(opts: {
           "--seconds",
           String(totalSeconds),
         ]),
+        inputReady,
       );
-      await sleep(1_500); // let the fixture reach its read loop
+      const fixtureDeadline = Date.now() + 15_000;
+      for (;;) {
+        try {
+          const header = JSON.parse(readFileSync(echoOut, "utf8").split("\n")[0] ?? "");
+          if (header.kind === "start") break;
+        } catch {
+          // The file can exist briefly before its header has been written.
+        }
+        if (Date.now() >= fixtureDeadline) throw new Error("echo fixture did not become ready");
+        await sleep(20);
+      }
       emit({ kind: "echo-fixture", at: Date.now(), out: echoOut, seconds: totalSeconds });
     }
 
@@ -1157,6 +1239,7 @@ export async function runTerminalPerfLab(opts: {
       plan: scenario.generator,
       sessionIds: settled.sessionIds,
       seconds: totalSeconds,
+      inputReady,
     });
     emit({ kind: "generator", at: Date.now(), which: generator.kind, detail: generator.detail });
 
@@ -1274,7 +1357,7 @@ export async function runTerminalPerfLab(opts: {
     // quit handlers, so anything that must happen has to happen above it. The
     // bound matters because a wedged daemon must not hang the lab forever; what
     // survives the bound is named in the record and reaped by the driver's
-    // `--reap`, which matches on this worktree's path.
+    // `--reap --owned`, which verifies recorded PID/start identities and executable paths.
     // Every step below is individually guarded and the exit is UNCONDITIONAL.
     // `guard` is the rule in one function: nothing in here may prevent leaving.
     disarmWatchdog();
@@ -1312,6 +1395,9 @@ export async function runTerminalPerfLab(opts: {
 
     const ptysBefore = startingPtys;
     let teardownNote = "clean";
+    await guard("recording owned processes", () => {
+      ownedProcesses = captureOwnership(ownedProcesses);
+    });
     // The daemons first: they are what outlives this process if it does not.
     const disposed = await guard("supervisor.dispose()", async () => {
       let timedOut = false;
@@ -1342,13 +1428,13 @@ export async function runTerminalPerfLab(opts: {
     // WHOSE ptys are still out? The count alone cannot say: this machine is
     // shared, and another agent opening three shells during a run leaves the
     // number above its baseline through no fault of ours. So the AUTHORITATIVE
-    // signal is whether any of THIS worktree's own floors, cells or fieldd
+    // signal is whether any recorded process owned by THIS run
     // survived teardown — the pty count is the corroborating evidence, reported
     // either way. (The same matcher the driver's `--reap` uses, and the same one
     // `reap.test.ts` pins against its decoys.)
     let survivors: { pid: number; kind: string }[] = [];
-    await guard("counting survivors", () => {
-      survivors = ownStrays();
+    const survivorAudit = await guard("counting survivors", () => {
+      survivors = ownStrays(ownedProcesses);
     });
     emit({
       kind: "pty-census",
@@ -1361,18 +1447,21 @@ export async function runTerminalPerfLab(opts: {
       settled: settled.returned,
       // Zero is the claim that matters; the pty delta above may be somebody
       // else's shells on a shared machine.
-      survivingProcesses: survivors.length,
+      survivingProcesses: survivorAudit === "ok" ? survivors.length : null,
       survivingKinds: survivors.map((stray) => stray.kind),
       // Named separately because it is the one that took the machine down and
       // the first thing a reader will look for.
-      survivingLabElectrons: survivors.filter((stray) => stray.kind === "electron").length,
-      note: teardownNote,
+      survivingLabElectrons:
+        survivorAudit === "ok"
+          ? survivors.filter((stray) => stray.kind === "electron").length
+          : null,
+      note: survivorAudit === "ok" ? teardownNote : survivorAudit,
     });
     if (survivors.length > 0) {
       failures.push(
-        `${survivors.length} process(es) of this worktree survived teardown ` +
+        `${survivors.length} recorded process(es) of this run survived teardown ` +
           `(${survivors.map((s) => s.kind).join(", ")}; ${teardownNote}) — ` +
-          "run `pnpm perf:terminal --reap`",
+          `run pnpm perf:terminal --reap --owned ${join(outDir, "owned-processes.json")}`,
       );
     }
 

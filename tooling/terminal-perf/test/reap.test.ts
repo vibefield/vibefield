@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findStrays, orderForReaping } from "../src/reap";
+import { captureOwnedProcesses, findOwnedStrays, findStrays, orderForReaping } from "../src/reap";
 
 // Every row here is a process that WOULD BE SENT SIGKILL if the matcher were
 // wrong. Two of them are the decoys the first version killed.
@@ -10,6 +10,32 @@ const JAMES = "/Users/x/Projects/project100/vibe-field";
 const ELECTRON = `${ROOT}/node_modules/.pnpm/electron@43/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`;
 
 const ps = (...lines: string[]): string => lines.join("\n");
+
+describe("run ownership inside a shared checkout", () => {
+  const born = "Mon Sep 28 12:00:00 2026";
+  const listing = ps(
+    `10 1 ${born} ${ELECTRON} . --terminal-perf-lab`,
+    `11 10 ${born} ${ROOT}/target/debug/field-native`,
+    `12 11 ${born} ${ROOT}/target/debug/field-terminal-host`,
+    `20 1 ${born} ${ROOT}/target/debug/field-native`,
+  );
+
+  it("records only the run's ancestry, sparing another app in the same checkout", () => {
+    const owned = captureOwnedProcesses(listing, [10]);
+    expect(owned.map((row) => row.pid)).toEqual([10, 11, 12]);
+    expect(findOwnedStrays(listing, ROOT, owned).map((row) => row.pid)).toEqual([10, 11, 12]);
+  });
+
+  it("retains orphan identity after the parent exits and refuses a reused pid", () => {
+    const owned = captureOwnedProcesses(listing, [10]);
+    const after = ps(
+      `12 1 ${born} ${ROOT}/target/debug/field-terminal-host`,
+      `11 1 Mon Sep 28 12:01:00 2026 ${ROOT}/target/debug/field-native`,
+    );
+    expect(findOwnedStrays(after, ROOT, owned).map((row) => row.pid)).toEqual([12]);
+    expect(findOwnedStrays(after, ROOT, [])).toEqual([]);
+  });
+});
 
 describe("findStrays — what it CLAIMS", () => {
   it("finds a floor and a cell executed directly", () => {

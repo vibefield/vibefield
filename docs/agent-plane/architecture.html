@@ -1024,7 +1024,11 @@
               decision below exists to preserve. Read the middle column as hard as the left one: what a repository must
               never know is the load-bearing half.
              The spawn-through row of the seam table, the R23 sentence and the typed-run paragraph under Lifetimes were read at vibe-field <code>cdad77bd</code> · puppeteer <code>2a81fc1</code> (AR-7).
-             Terminal cache prewarming was integrated on 2026-09-28 against puppeteer <code>bc301ce</code>.</p>
+             Terminal cache prewarming was integrated on 2026-09-28 against puppeteer <code>bc301ce</code>.
+             Startup measurements now separate shell execution readiness from adapter preparation;
+             <code>tooling/terminal-perf/README.md</code> owns the host benchmark and Puppeteer’s spawn-through-hosts guide owns the native benchmark.
+             Optional model names do not gate native thread readiness; history replay on resumed threads still does.
+             The startup implementation is pinned at puppeteer <code>1d02fa5</code>; whole-pin verification is currently blocked by unrelated Rosetta checkout drift (LANDED, TP startup benchmarks).</p>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead>

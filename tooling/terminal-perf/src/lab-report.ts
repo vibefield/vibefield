@@ -918,8 +918,8 @@ function renderMarkdown(
       `| returned | ${String(census["returned"] ?? "—")} |`,
       `| ptys still out after teardown | ${leaked} |`,
       `| returned within the wait | ${census["settled"] === true ? "yes" : "no (45s)"} |`,
-      `| **this worktree's surviving lab Electrons** | **${String(census["survivingLabElectrons"] ?? "—")}** |`,
-      `| **this worktree's surviving processes (all)** | **${String(census["survivingProcesses"] ?? "—")}** |`,
+      `| **this run's recorded surviving Electrons** | **${String(census["survivingLabElectrons"] ?? "—")}** |`,
+      `| **this run's recorded surviving processes** | **${String(census["survivingProcesses"] ?? "—")}** |`,
       `| teardown | ${String(census["note"])} |`,
       "",
       Number(census["survivingProcesses"] ?? 0) > 0
@@ -927,8 +927,8 @@ function renderMarkdown(
             `${String(census["survivingProcesses"])} of its own processes survived teardown ` +
             `(${((census["survivingKinds"] ?? []) as string[]).join(", ")}). Every number above ` +
             "describes a machine that was also holding this run's leftovers. Run " +
-            "`pnpm perf:terminal --reap` and re-measure."
-        : "> Clean: nothing of this run survived its teardown. The pty delta is the corroborating " +
+            "`pnpm perf:terminal --reap --owned <run>/owned-processes.json` and re-measure."
+        : "> Clean: no recorded process of this run survived its teardown. The pty delta is the corroborating " +
             "evidence, not the claim — this machine is shared, so another agent's shells can hold " +
             "the count above the baseline through no fault of the run. (`/dev/ttys*` nodes are also " +
             "released LAZILY: an earlier fixed 1.5s sleep reported a four-pty leak on a run that had " +

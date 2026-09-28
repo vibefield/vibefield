@@ -17,11 +17,11 @@
 // ran it": the rows in `reap.test.ts` are the decoys that would have been killed
 // by the first version.
 //
-// TWO RULES, and both are narrowing:
+// Cleanup first requires recorded PID/start-time ownership. The executable
+// classifier below adds TWO narrowing rules; by itself it is only a census:
 //
 //  1. ABSOLUTE PATH PREFIX. Every candidate must carry this worktree's own
-//     absolute path. That alone excludes every sibling worktree and James's own
-//     checkout — a matcher keyed on `field-native` would be a fleet-wide kill
+//     absolute path. That excludes other checkouts — a matcher keyed on `field-native` would be a fleet-wide kill
 //     switch.
 //  2. EXECUTABLE POSITION. The path must be the thing being RUN, not merely
 //     mentioned. The first version used `command.includes(path)`, which would
@@ -36,14 +36,58 @@ export interface StrayProcess {
   readonly command: string;
 }
 
+export interface OwnedProcess {
+  readonly pid: number;
+  readonly startedAt: string;
+}
+
+/** `ps -axwwo pid=,ppid=,lstart=,command=`. Executable location alone
+ * cannot distinguish a lab from another app launched in the same checkout. */
+function processRows(listing: string): Array<OwnedProcess & { parent: number; command: string }> {
+  return listing.split("\n").flatMap((line) => {
+    const fields = line.trim().split(/\s+/u);
+    const pid = Number(fields[0]);
+    const parent = Number(fields[1]);
+    if (fields.length < 8 || !Number.isInteger(pid) || pid <= 0 || !Number.isInteger(parent))
+      return [];
+    return [
+      { pid, parent, startedAt: fields.slice(2, 7).join(" "), command: fields.slice(7).join(" ") },
+    ];
+  });
+}
+
+/** Capture ancestry while the owned parents are alive; detached children can
+ * be recognized after their parent exits without claiming another app. */
+export function captureOwnedProcesses(listing: string, roots: readonly number[]): OwnedProcess[] {
+  const rows = processRows(listing);
+  const owned = new Set(roots);
+  for (;;) {
+    const before = owned.size;
+    for (const row of rows) if (owned.has(row.parent)) owned.add(row.pid);
+    if (owned.size === before) break;
+  }
+  return rows.filter((row) => owned.has(row.pid)).map(({ pid, startedAt }) => ({ pid, startedAt }));
+}
+
+/** A reused pid, another run, or an unrecorded process is never a kill target. */
+export function findOwnedStrays(
+  listing: string,
+  repoRoot: string,
+  owned: readonly OwnedProcess[],
+): StrayProcess[] {
+  const identities = new Map(owned.map((row) => [row.pid, row.startedAt]));
+  const matching = processRows(listing).filter((row) => identities.get(row.pid) === row.startedAt);
+  return findStrays(matching.map((row) => `${row.pid} ${row.command}`).join("\n"), repoRoot);
+}
+
 /** Suffixes under the worktree root, with the role each one plays.
  *
  * `electron` is FIRST because it is the one that took the machine down: the
  * leak was 45 lab Electron PARENTS, each still holding its detached floor and
  * that floor's cells. A reaper that knew only about daemons would have reported
  * a clean machine while 45 apps sat on it. The path is the pnpm-installed
- * binary inside this worktree's own `node_modules`, so it names lab Electrons
- * and can never reach another worktree's or a packaged VibeField. */
+ * binary inside this worktree's own `node_modules`, so it classifies checkout Electrons. Recorded ownership further distinguishes
+ * this run from a user app launched with the very same binary. */
 export const ELECTRON_SUFFIX = "/node_modules/.pnpm/";
 
 export const STRAY_PATTERNS: readonly { kind: StrayKind; suffix: string }[] = [

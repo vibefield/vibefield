@@ -59,13 +59,6 @@ const fd = openSync(out, "a");
 const t0 = process.hrtime.bigint();
 const wallAtT0 = Date.now();
 
-// The header ties this run's monotonic origin to wall time ONCE, so a reader can
-// place these nanoseconds beside the rig's without either side guessing.
-writeSync(
-  fd,
-  `${JSON.stringify({ kind: "start", monotonicOriginNs: t0.toString(), wallMs: wallAtT0, pid: process.pid, cols: process.stdout.columns ?? null, rows: process.stdout.rows ?? null, dsr })}\n`,
-);
-
 /** The one control character this fixture speaks: ESC, U+001B. */
 const ESC = String.fromCharCode(0x1b);
 
@@ -177,6 +170,15 @@ const timer = setTimeout(() => finish("duration"), Math.max(1, seconds) * 1000);
 timer.unref?.();
 process.on("SIGTERM", () => finish("sigterm"));
 process.on("SIGINT", () => finish("sigint"));
+
+// Published only after raw input and its handlers are ready. The lab waits for
+// this record before probing; there is no guessed startup sleep.
+// The header ties this run's monotonic origin to wall time ONCE, so a reader can
+// place these nanoseconds beside the rig's without either side guessing.
+writeSync(
+  fd,
+  `${JSON.stringify({ kind: "start", monotonicOriginNs: t0.toString(), wallMs: wallAtT0, pid: process.pid, cols: process.stdout.columns ?? null, rows: process.stdout.rows ?? null, dsr })}\n`,
+);
 
 if (!quiet) {
   // ONE line, written before the clock matters, so the operator can see the

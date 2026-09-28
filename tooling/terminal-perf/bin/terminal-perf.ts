@@ -20,6 +20,7 @@
 // can see foreign on-screen windows unless that flag is present.
 
 import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -42,7 +43,13 @@ import {
   renderControlReport,
   summarizeArm,
 } from "../src/native-control.ts";
-import { findStrays, orderForReaping, type StrayProcess } from "../src/reap.ts";
+import {
+  findOwnedStrays,
+  findStrays,
+  type OwnedProcess,
+  orderForReaping,
+  type StrayProcess,
+} from "../src/reap.ts";
 import { analyzeTrace, renderTraceAnalysis, type TraceEvent } from "../src/trace-analysis.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -64,10 +71,9 @@ const resultsHome =
 // cases teardown cannot cover: a hard kill, a crash before `finally`, a wedged
 // daemon that outlasts the dispose bound.
 //
-// IT MATCHES ON THIS WORKTREE'S ABSOLUTE PATH and nothing else. Every process it
-// will ever signal carries `<repoRoot>/` in its argv, so it cannot reach another
-// worktree's floors, and it certainly cannot reach James's. A reaper that
-// matched on `field-native` alone would be a fleet-wide kill switch.
+// Ownership is recorded while the run's parents are alive. Cleanup requires
+// the same PID/start time and an executable under this checkout. A checkout
+// path alone can belong to a running user app or another concurrent test.
 
 function currentStrays(): StrayProcess[] {
   const listing = spawnSync("/bin/ps", ["-axwwo", "pid=,command="], { encoding: "utf8" });
@@ -75,12 +81,33 @@ function currentStrays(): StrayProcess[] {
   return findStrays(listing.stdout, repoRoot, [process.pid, process.ppid]);
 }
 
-/** SIGTERM, wait, SIGKILL. fieldd FIRST so nothing respawns behind the kill,
- * then the floor, then any cell that outlived it. */
-function reapStrays(strays: readonly StrayProcess[]): number {
+function readOwnership(file: string): OwnedProcess[] {
+  const value: unknown = JSON.parse(readFileSync(file, "utf8"));
+  if (
+    !Array.isArray(value) ||
+    !value.every(
+      (row) => row && Number.isInteger(row.pid) && row.pid > 0 && typeof row.startedAt === "string",
+    )
+  ) {
+    throw new Error("invalid benchmark process ownership record");
+  }
+  return value as OwnedProcess[];
+}
+
+function currentOwned(owned: readonly OwnedProcess[]): StrayProcess[] {
+  const listing = spawnSync("/bin/ps", ["-axwwo", "pid=,ppid=,lstart=,command="], {
+    encoding: "utf8",
+  });
+  if (listing.status !== 0) throw new Error("cannot verify benchmark process identities");
+  return findOwnedStrays(listing.stdout, repoRoot, owned);
+}
+
+/** SIGTERM, wait, SIGKILL; recheck identity before each signal. */
+function reapStrays(strays: readonly StrayProcess[], owned: readonly OwnedProcess[]): number {
   let signalled = 0;
   for (const stray of orderForReaping(strays)) {
     try {
+      if (!currentOwned(owned).some((row) => row.pid === stray.pid)) continue;
       process.kill(stray.pid, "SIGTERM");
       signalled += 1;
     } catch {
@@ -90,6 +117,7 @@ function reapStrays(strays: readonly StrayProcess[]): number {
   if (signalled > 0) spawnSync("sleep", ["3"]);
   for (const stray of strays) {
     try {
+      if (!currentOwned(owned).some((row) => row.pid === stray.pid)) continue;
       process.kill(stray.pid, 0);
       process.kill(stray.pid, "SIGKILL");
     } catch {
@@ -128,7 +156,7 @@ if (has("help") || (positional.length === 0 && !has("reap"))) {
   --rotations <n>         interleaved rotations (default 3)
   --arm-seconds <s>       seconds per arm per rotation (derived from --duration)
   --probe-keys <n>        keystrokes injected per arm (window-local, safe)
-  --out <dir>             results directory (default <home>/<YYYYMMDD>-<scenario>)
+  --out <dir>             empty results directory (default <home>/<UTC stamp>-<scenario>)
   --native-control        ALSO run the Ghostty A-vs-A (needs --i-have-the-display)
   --i-have-the-display    acknowledge that OS-level key injection types into
                           whatever window has focus on this machine
@@ -137,7 +165,7 @@ if (has("help") || (positional.length === 0 && !has("reap"))) {
   --control-gap-ms <ms>   gap between control keystrokes (default 40)
   --font-size <n>         font size for BOTH control arms (default 13)
   --refresh-hz <n>        the display's refresh, recorded as fixture identity (default 120)
-  --reap                  kill THIS worktree's leftover floors/cells/fieldd and exit
+  --reap --owned <file>   stop only processes recorded in a run's owned-processes.json
   --no-build              skip the builds and use what is on disk
   --keep-trace            keep the raw Perfetto trace (hundreds of MB); by
                           default it is analysed and then deleted
@@ -152,36 +180,40 @@ scenarios: run with an unknown one to have the lab list them.
 }
 
 if (has("reap")) {
-  const strays = currentStrays();
+  const ownershipFile = flag("owned");
+  if (ownershipFile === null)
+    throw new Error(
+      "--reap requires --owned <run>/owned-processes.json; checkout paths do not prove ownership",
+    );
+  const owned = readOwnership(ownershipFile);
+  const strays = currentOwned(owned);
   if (strays.length === 0) {
-    process.stdout.write(`nothing of ${repoRoot} is running; ${ptyCount()} ptys on the machine\n`);
+    process.stdout.write(
+      `no recorded owned process is running; ${ptyCount()} ptys on the machine\n`,
+    );
     process.exit(0);
   }
   process.stdout.write(`reaping ${strays.length} stray process(es) from ${repoRoot}:\n`);
   for (const stray of strays) process.stdout.write(`  ${stray.kind.padEnd(6)} ${stray.pid}\n`);
   const before = ptyCount();
-  reapStrays(strays);
+  reapStrays(strays, owned);
   spawnSync("sleep", ["2"]);
   process.stdout.write(`ptys ${before} -> ${ptyCount()}\n`);
   process.exit(0);
 }
 
-// THE PRE-FLIGHT REFUSAL. A scenario started on top of a previous run's floors
-// measures both of them, and every pty the old one holds is one this one cannot
-// have — against a system-wide ceiling of 511. So the driver stops rather than
-// adding to the pile, and names the command that clears it.
+// Existing checkout processes are host context, never proof of a leaked lab.
 const stale = currentStrays();
 if (stale.length > 0) {
   const byKind = new Map<string, number>();
   for (const stray of stale) byKind.set(stray.kind, (byKind.get(stray.kind) ?? 0) + 1);
   process.stderr.write(
-    `\nREFUSED: ${stale.length} process(es) from a previous run of this worktree are still alive ` +
+    `\nHost context: ${stale.length} process(es) from this worktree are already alive ` +
       `(${[...byKind].map(([k, n]) => `${n} ${k}`).join(", ")}), holding ptys against this ` +
       `machine's system-wide ceiling of 511 (${ptyCount()} in use now).\n\n` +
-      `  pnpm perf:terminal --reap\n\n` +
-      `clears them. Starting a scenario on top of them would measure both runs.\n`,
+      `They may belong to a running app or another test. They will not be reaped; ` +
+      `the benchmark records this shared host load.\n`,
   );
-  process.exit(2);
 }
 
 const scenario = positional[0] as string;
@@ -193,8 +225,13 @@ const armSeconds = Number(
   flag("arm-seconds", String(Math.max(4, Math.round(duration / (arms.length * rotations))))),
 );
 const probeKeys = Number(flag("probe-keys", scenario === "echo-probe" ? "60" : "40"));
-const stamp = new Date().toISOString().slice(0, 10).replace(/-/gu, "");
-const outDir = flag("out", join(resultsHome, `${stamp}-${scenario}`)) as string;
+const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/gu, "");
+const outDir = resolve(flag("out", join(resultsHome, `${stamp}-${scenario}`)) as string);
+if (existsSync(outDir) && readdirSync(outDir).length > 0) {
+  throw new Error(
+    "the results directory must be empty; preserve prior evidence and choose a new --out",
+  );
+}
 
 // ---- build -------------------------------------------------------------------
 
@@ -302,6 +339,54 @@ if (!existsSync(join(labRenderer, "index.html"))) {
 // ---- launch ------------------------------------------------------------------
 
 mkdirSync(outDir, { recursive: true });
+
+// Hash the actual built inputs before launch, including --no-build runs. Git
+// HEAD alone cannot identify a dirty working tree or an old native binary.
+const digest = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
+const builtInputs = [
+  "packages/electron-shell/dist/main/index.cjs",
+  "packages/electron-shell/dist/preload/index.cjs",
+  "packages/electron-shell/dist/testing/smoke.cjs",
+  "packages/fieldd/dist/bin.cjs",
+  "target/debug/field-native",
+  "target/debug/field-terminal-host",
+  "siblings.lock.json",
+  "tooling/terminal-perf/fixture/echo-probe.mjs",
+  "tooling/terminal-perf/fixture/flood.mjs",
+  "tooling/terminal-perf/bin/terminal-perf.ts",
+];
+const inputHashes = Object.fromEntries(
+  builtInputs.map((file) => [file, digest(readFileSync(join(repoRoot, file)))]),
+);
+const rendererHashes = Object.fromEntries(
+  readdirSync(labRenderer, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const file = join(entry.parentPath, entry.name);
+      return [file.slice(labRenderer.length + 1), digest(readFileSync(file))];
+    }),
+);
+writeFileSync(
+  join(outDir, "source.json"),
+  `${JSON.stringify(
+    {
+      revision: execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repoRoot,
+        encoding: "utf8",
+      }).trim(),
+      trackedDiffSha256: digest(
+        execFileSync("git", ["diff", "--binary", "HEAD", "--"], {
+          cwd: repoRoot,
+          maxBuffer: 32 * 1024 * 1024,
+        }),
+      ),
+      builtInputsSha256: inputHashes,
+      rendererSha256: rendererHashes,
+    },
+    null,
+    2,
+  )}\n`,
+);
 
 const hostFacts = {
   host: hostname(),
@@ -417,10 +502,13 @@ process.stdout.write(`\nlab exited ${exitCode}; artifacts in ${reported}\n`);
 // detached floor underneath it. So the driver looks at the machine, waits a
 // bounded moment for a clean shutdown to finish, and reaps what is left rather
 // than leaving it for the next agent to find.
-let lingering = currentStrays();
+const ownershipFile = join(outDir, "owned-processes.json");
+const ownershipRecorded = existsSync(ownershipFile);
+const owned = ownershipRecorded ? readOwnership(ownershipFile) : [];
+let lingering = currentOwned(owned);
 for (let attempt = 0; attempt < 10 && lingering.length > 0; attempt += 1) {
   spawnSync("sleep", ["1"]);
-  lingering = currentStrays();
+  lingering = currentOwned(owned);
 }
 if (lingering.length > 0) {
   const byKind = new Map<string, number>();
@@ -429,16 +517,18 @@ if (lingering.length > 0) {
     `\nterminal-perf: ${lingering.length} process(es) outlived the run ` +
       `(${[...byKind].map(([kind, n]) => `${n} ${kind}`).join(", ")}) — reaping them now\n`,
   );
-  reapStrays(lingering);
+  reapStrays(lingering, owned);
   spawnSync("sleep", ["2"]);
-  const stillThere = currentStrays();
+  const stillThere = currentOwned(owned);
   process.stdout.write(
     stillThere.length === 0
       ? `terminal-perf: reaped; ${ptyCount()} ptys on the machine\n`
       : `terminal-perf: ${stillThere.length} process(es) SURVIVED the reap — investigate\n`,
   );
+} else if (ownershipRecorded) {
+  process.stdout.write(`terminal-perf: no recorded owned process survived; ${ptyCount()} ptys\n`);
 } else {
-  process.stdout.write(`terminal-perf: nothing outlived the run; ${ptyCount()} ptys\n`);
+  process.stderr.write("terminal-perf: missing ownership snapshot; cleanup cannot be verified\n");
 }
 
 // ---- the trace, reduced ------------------------------------------------------
