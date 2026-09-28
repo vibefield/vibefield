@@ -15,7 +15,7 @@
     },
     "rosetta": {
       "path": "../rosetta",
-      "sha": "e8d907ab28995939449181524315b72c79adab28",
+      "sha": "d3cf325ea61593d893be1702f24f009368fe6cc7",
       "packages": {
         "@rosetta/protocol": "clients/ts"
       },
