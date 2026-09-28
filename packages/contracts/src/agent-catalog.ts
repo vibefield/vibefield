@@ -69,13 +69,19 @@ export const AGENT_VISIBLE_STATUSES = ["supported", "preview", "deprecated"] as 
  * continuation into a new run (the launch descriptor's `resume`); `history` is
  * rosetta's index over the agent's on-disk ledger; `usage` the account-usage
  * port; `distribution` installs and updates; `personas` puppeteer profiles.
- * `invoke` (AR-7a) claims that typing the agent's name in one of our panes'
- * shells gives a MANAGED session: puppeteer's launch provider declares the
- * agent's native CLI grammar (`nativeInvocation`, which R23 reads from the
- * pin), its spawn-through shim carries the typed command to fieldd's gateway,
- * and the run is prepared from that grammar and adopted in the terminal that
- * holds it (`prepareInvocation` → `adoptPrepared`). Only a row that claims it
- * is given a launcher; any other name runs as the shell would run it. */
+ * `invoke` (AR-7a; narrowed by AR7-D15, ruled 2026-09-27) claims a LAUNCHER:
+ * typing the agent's name in one of our panes' shells reaches fieldd's gateway
+ * through puppeteer's spawn-through shim, and a session is prepared from the
+ * agent's native CLI grammar and adopted, managed, in the terminal that holds
+ * it (`prepareInvocation` → `adoptPrepared`). VibeField is STRICT in its own
+ * panes (AR7-D1): a session the managed launch cannot carry is refused, never
+ * run unmanaged. So the claim needs an adapter that CLASSIFIES what is typed
+ * (`nativeInvocation.classifies`, which R23 reads from the pin): a version
+ * query, a one-shot and an agent that lives elsewhere run as typed (a one-shot
+ * is a regular command, AR7-D12), and only a session is managed or refused. A
+ * grammar that does not classify cannot tell `--version` from a session, so
+ * its row does not claim it; a row that does not claim it gets no launcher,
+ * and its name runs as the shell would run it. */
 export const AgentOffers = z.object({
   spawn: z.boolean(),
   resume: z.boolean(),
@@ -166,9 +172,12 @@ const OFFERS_FULL: AgentOffers = {
   usage: true,
   distribution: true,
   personas: true,
-  invoke: true,
+  invoke: false,
 };
 const OFFERS_NO_USAGE: AgentOffers = { ...OFFERS_FULL, usage: false };
+// `invoke` is claimed a row at a time: a launcher goes only to an agent whose
+// adapter classifies (AR7-D15), as R23 reads the pin.
+const OFFERS_WITH_INVOKE: AgentOffers = { ...OFFERS_FULL, invoke: true };
 
 export const AGENT_CATALOG = [
   {
@@ -179,12 +188,15 @@ export const AGENT_CATALOG = [
     // `legacy-verified` in puppeteer's ledger.
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): a grammar is not the
+    // licence; the claim stands because the adapter classifies
+    // (`nativeInvocation.classifies: true` at puppeteer 2b83e2c; R23 reads it).
     id: "claude",
     label: "Claude Code",
     status: "supported",
     seams: { puppeteer: { provider: "claude" }, rosetta: { kind: "claude-code" } },
     layoutRoot: "~/.claude",
-    offers: { ...OFFERS_FULL, reattach: true },
+    offers: { ...OFFERS_WITH_INVOKE, reattach: true },
     admitted: "2026-09-22",
     decision: "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here",
     surfaces: { desktop: true, phone: true },
@@ -195,12 +207,15 @@ export const AGENT_CATALOG = [
     // real-daemon join row for codex is owed with AC-3 (the slate's note).
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): a grammar is not the
+    // licence; the claim stands because the adapter classifies
+    // (`nativeInvocation.classifies: true` at puppeteer 2b83e2c; R23 reads it).
     id: "codex",
     label: "Codex",
     status: "supported",
     seams: { puppeteer: { provider: "codex" }, rosetta: { kind: "codex" } },
     layoutRoot: "~/.codex",
-    offers: OFFERS_FULL,
+    offers: OFFERS_WITH_INVOKE,
     admitted: "2026-09-22",
     decision:
       "AC-D6 — supported: spawn witnessed here, the join on the scripted daemon; real-daemon join owed",
@@ -212,6 +227,10 @@ export const AGENT_CATALOG = [
     // repo yet; upstream `baseline-pending`.
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): `invoke` WITHDRAWN — a
+    // grammar is not the licence, and this adapter does not classify (no
+    // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
+    // launcher: typed by name, it runs as the shell runs it.
     id: "grok",
     label: "Grok",
     status: "preview",
@@ -227,6 +246,10 @@ export const AGENT_CATALOG = [
     // (`kimi` / `kimi-code`) — exactly the seam column's job.
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): `invoke` WITHDRAWN — a
+    // grammar is not the licence, and this adapter does not classify (no
+    // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
+    // launcher: typed by name, it runs as the shell runs it.
     id: "kimi",
     label: "Kimi Code",
     status: "preview",
@@ -241,6 +264,10 @@ export const AGENT_CATALOG = [
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): `invoke` WITHDRAWN — a
+    // grammar is not the licence, and this adapter does not classify (no
+    // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
+    // launcher: typed by name, it runs as the shell runs it.
     id: "opencode",
     label: "OpenCode",
     status: "preview",
@@ -255,6 +282,10 @@ export const AGENT_CATALOG = [
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): `invoke` WITHDRAWN — a
+    // grammar is not the licence, and this adapter does not classify (no
+    // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
+    // launcher: typed by name, it runs as the shell runs it.
     id: "hermes",
     label: "Hermes",
     status: "preview",
@@ -282,6 +313,10 @@ export const AGENT_CATALOG = [
     // enabled_kinds).
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): `invoke` WITHDRAWN — a
+    // grammar is not the licence, and this adapter does not classify (no
+    // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
+    // launcher: typed by name, it runs as the shell runs it.
     id: "antigravity",
     label: "Antigravity",
     status: "preview",
@@ -297,6 +332,10 @@ export const AGENT_CATALOG = [
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): `invoke` WITHDRAWN — a
+    // grammar is not the licence, and this adapter does not classify (no
+    // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
+    // launcher: typed by name, it runs as the shell runs it.
     id: "copilot",
     label: "GitHub Copilot",
     status: "preview",
@@ -313,6 +352,10 @@ export const AGENT_CATALOG = [
     // `~/.pi` is the layout root, `~/.pi/agent` binds — PU-7); the spawn is not.
     // 2026-09-27 AR-7a: `invoke` added — the pin's launch provider declares its
     // native CLI grammar (`nativeInvocation`, puppeteer 524709b; R23 reads it).
+    // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): `invoke` WITHDRAWN — a
+    // grammar is not the licence, and this adapter does not classify (no
+    // `nativeInvocation.classifies` at puppeteer 2b83e2c; R23 reads it). No
+    // launcher: typed by name, it runs as the shell runs it.
     id: "pi",
     label: "Pi",
     status: "preview",
