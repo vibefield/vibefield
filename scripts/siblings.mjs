@@ -27,7 +27,8 @@
 //   status  print each sibling's path, HEAD, pin, and dirtiness (never fails)
 //   pin     record the named siblings' current HEADs (all when omitted), build
 //           rosettad at it (a no-op when fresh), then prove the agent catalog
-//           against the new pins (wall R23, the rosetta half REQUIRED)
+//           against the new pins (wall R23, the rosetta half REQUIRED).
+//           Every checkout must match its resulting pin before the build/gate.
 //   stamp   one line naming each sibling's HEAD + a hash of its working-tree
 //           state — the Nx `sharedGlobals` runtime input
 //   fetch   clone a named sibling at its pin; never reset an existing checkout
@@ -625,6 +626,35 @@ export function pinSiblingHeads(root, names = []) {
 function pin(root, names) {
   const pinned = pinSiblingHeads(root, names);
   if (pinned !== 0) return pinned;
+  // A named upgrade leaves other pins intact, but the build and catalog gate
+  // read the available checkouts. Never report their HEADs as proof of a
+  // different recorded revision. As with a red catalog gate, keep the new pin
+  // and fail loudly; changing an unrelated checkout or pin is not ours to do.
+  const lock = readLock(root);
+  let revisionsMatch = true;
+  for (const [name, entry] of Object.entries(lock.siblings)) {
+    const dir = siblingDir(root, entry);
+    const head = siblingHead(dir);
+    if (head === null) {
+      console.error(`siblings:pin FAIL: ${name} is not a git checkout at ${dir}`);
+      revisionsMatch = false;
+    } else if (head !== entry.sha) {
+      console.error(
+        `siblings:pin FAIL: ${name} HEAD ${head.slice(0, 12)} differs from pin ${entry.sha.slice(0, 12)}`,
+      );
+      revisionsMatch = false;
+    } else if (siblingDirty(dir)) {
+      console.warn(
+        `siblings:pin WARN: ${name} working tree is dirty — the catalog gate uses uncommitted edits`,
+      );
+    }
+  }
+  if (!revisionsMatch) {
+    console.error(
+      `siblings:pin: the selected pins ARE recorded in ${LOCK_FILE}, but a checkout differs from its resulting pin — build and wall R23 not run; sync it to the pin or deliberately include it in pnpm siblings:pin NAME...`,
+    );
+    return 1;
+  }
   // Wall R23 (AC-2; thinking-ar-agent-catalog.md §6): a pin is the upgrade event
   // at which a catalog decision is owed, so the catalog is proved against the
   // new pins here, with the rosetta half REQUIRED (AC-D10). A red KEEPS the new
