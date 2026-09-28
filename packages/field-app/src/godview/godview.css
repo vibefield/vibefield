@@ -30,6 +30,8 @@
   --pane-access-bg: rgba(247, 247, 247, 0.8);
   --crt-scanline: rgba(0, 0, 0, 0.08);
   --crt-vignette: rgba(0, 0, 0, 0.15);
+  --deck-shadow: var(--vf-godview-light-deck-shadow);
+  --deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-light-terminal-bg));
   color-scheme: light;
 }
 
@@ -60,6 +62,8 @@
   --pane-access-bg: rgba(22, 24, 29, 0.82);
   --crt-scanline: rgba(0, 0, 0, 0.3);
   --crt-vignette: rgba(0, 0, 0, 0.75);
+  --deck-shadow: var(--vf-godview-dark-deck-shadow);
+  --deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-dark-terminal-bg));
   color-scheme: dark;
 }
 
@@ -423,14 +427,22 @@
   background: var(--control-hover-bg);
 }
 
+/* The monitor's height is its TUNED height (the floor, 170px under it) plus
+   whatever the deck's edge has been dragged DOWN by (DESIGN.md §8,
+   `deck-edge.ts`): dragged up, the shift is negative, this adds nothing, and
+   the deck slides over the monitor instead. No bottom rule of its own — the
+   deck sheet's ring is the one edge between the two, and a straight line here
+   would cut across the sheet's rounded corners. */
 .vf-godview-monitor-stage {
   position: relative;
   width: 100%;
-  height: var(--vf-monitor-stage-height, 35%);
-  min-height: 170px;
-  flex: 0 0 var(--vf-monitor-stage-height, 35%);
+  min-height: 0;
+  flex: 0 0
+    calc(
+      max(var(--vf-monitor-stage-height, 35%), 170px) +
+      max(0px, var(--vf-godview-deck-shift, 0px))
+    );
   overflow: hidden;
-  border-bottom: 1px solid var(--panel-border);
   /* The overlay owns the glass. Painting a second opaque panel here made the
      stage-opacity control visually inert. */
   background: transparent;
@@ -583,6 +595,100 @@
 .vf-monitor-empty small {
   color: var(--text-faint);
   font-size: 9px;
+}
+
+/* ── THE DECK SHEET (DESIGN.md §8, 2026-09-28) ────────────────────────────
+   One card over the monitor, its top edge a tab: rounded top corners, the
+   hairline as a ring (the ring's sides and foot fall outside the stage and are
+   clipped by it, so only the top edge and its curves draw), and §5's Sheet
+   shadow cast up onto the stage beneath. Above the monitor's chrome (7) and
+   its popups (9), under the bar (20) and the CRT layers (30).
+
+   The ground is the TERMINAL's (James, 2026-09-28): `--vf-godview-terminal-bg`,
+   published from the same projection the panes are handed (`deck-theme.ts`),
+   with the §2.7 terminal grounds as the per-mode fallback. A pane paints its
+   own ground translucent (the viewer's pane opacity), and a translucent colour
+   over a sheet of the same colour composites to that colour exactly — so the
+   lip, the gaps between panes and the panes read as one surface. The sheet
+   takes the stage's glass: opaque at the default backdrop, and thinned with the
+   rest of Godview when the viewer thins it. Over the monitor it hides the
+   bodies as much as Godview hides the field.
+
+   Dragged up, the shift is negative and becomes the sheet's margin: the flex
+   column gives the deck that much more height and the sheet rides up over the
+   monitor, which keeps its own. */
+.vf-godview-terminal-deck {
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  margin-top: min(0px, var(--vf-godview-deck-shift, 0px));
+  border-radius: var(--vf-godview-deck-radius) var(--vf-godview-deck-radius) 0 0;
+  background: color-mix(
+    in srgb,
+    var(--deck-ground) var(--vf-godview-stage-opacity, 100%),
+    transparent
+  );
+  box-shadow:
+    var(--deck-shadow),
+    0 0 0 1px var(--panel-border);
+}
+
+/* The tab's band. At least the radius tall, so no pane corner meets the curve
+   and nothing inside the sheet has to be clipped to it. */
+.vf-godview-deck-lip {
+  position: relative;
+  flex: 0 0 var(--vf-godview-deck-lip);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The whole top edge is the handle, not only the grip — and it reaches a few
+   pixels above the sheet, so the edge can be caught from the monitor's side. */
+.vf-godview-deck-lip[role="separator"] {
+  outline: none;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.vf-godview-deck-lip[role="separator"]::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+/* The island's pull bar at instrument scale, on the text ramp: faint at rest,
+   muted under the pointer, main while held. */
+.vf-godview-deck-grip {
+  width: var(--vf-godview-deck-grip-width);
+  height: var(--vf-godview-deck-grip-height);
+  border-radius: 999px;
+  background: var(--text-faint);
+  transition: background-color 120ms ease;
+}
+
+.vf-godview-deck-lip[role="separator"]:hover .vf-godview-deck-grip {
+  background: var(--text-muted);
+}
+
+.vf-godview-deck-lip[data-dragging="true"] .vf-godview-deck-grip {
+  background: var(--text-main);
+}
+
+.vf-godview-deck-lip:focus-visible .vf-godview-deck-grip {
+  outline: 1px solid var(--text-main);
+  outline-offset: 2px;
+}
+
+/* The box every deck face fills (`inset: 0` — the deck, its faults, the
+   unavailable notice), under the lip. */
+.vf-godview-terminal-deck-body {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 /* A live WebGPU canvas may be promoted above ordinary DOM overlays on macOS.

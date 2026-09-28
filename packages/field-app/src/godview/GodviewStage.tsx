@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { GodviewDeckEdge } from "./GodviewDeckEdge";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 
 export interface GodviewStageProps {
@@ -10,6 +11,9 @@ export interface GodviewStageProps {
   monitor?: ReactNode;
   tuningPanel?: ReactNode;
   deck: ReactNode;
+  /** The deck's movable edge (DESIGN.md §8, 2026-09-28). Absent, the lip is
+   * drawn and the edge stays at rest — the Settings miniature is a picture. */
+  deckEdge?: { persist: boolean };
   className?: string;
 }
 
@@ -25,6 +29,7 @@ export function GodviewStage({
   monitor,
   tuningPanel,
   deck,
+  deckEdge,
   className = "",
 }: GodviewStageProps): ReactElement {
   return (
@@ -40,11 +45,22 @@ export function GodviewStage({
       <div className="vf-godview-vignette" aria-hidden="true" />
       {monitor}
       {tuningPanel}
+      {/* The deck is a sheet over the monitor (§8): its lip is the tab along
+          the top edge, and the body is the positioned box every deck face
+          fills (`inset: 0`), so the faces never learn the lip is there. */}
       <section
         className="vf-godview-terminal-deck relative min-h-0 flex-1"
         aria-label="Terminal panes"
       >
-        {deck}
+        {deckEdge ? (
+          <GodviewDeckEdge
+            persist={deckEdge.persist}
+            monitorPresent={monitor !== undefined && monitor !== null && monitor !== false}
+          />
+        ) : (
+          <div className="vf-godview-deck-lip" aria-hidden="true" />
+        )}
+        <div className="vf-godview-terminal-deck-body">{deck}</div>
       </section>
     </div>
   );

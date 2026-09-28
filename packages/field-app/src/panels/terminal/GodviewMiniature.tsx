@@ -416,6 +416,8 @@ export function GodviewMiniature({
               "--vf-scanline-opacity": stage[SCANLINE_OPACITY_KEY] ?? 0.4,
               "--vf-vignette-opacity": stage[VIGNETTE_OPACITY_KEY] ?? 1,
               "--vf-godview-terminal-ink": theme.foreground,
+              // The deck sheet's ground is the terminal's (DESIGN.md §8).
+              "--vf-godview-terminal-bg": theme.background,
             } as CSSProperties
           }
           {...(size.monitor > 0 ? { monitor: <Monitor /> } : {})}

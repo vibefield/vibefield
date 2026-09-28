@@ -1,7 +1,7 @@
 import { monitorParameterDefaults, monitorViewFor } from "@vibecook/puppeteer-views";
 import { type CSSProperties, type ReactElement, useMemo, useState } from "react";
 import { useDeckAppearance } from "../godview/deck-appearance";
-import { godviewBackdropStyle } from "../godview/deck-theme";
+import { godviewBackdropStyle, godviewTerminalGroundStyle } from "../godview/deck-theme";
 import { GodviewMonitor } from "../godview/GodviewMonitor";
 import { GodviewStage, GodviewUnavailableDeck } from "../godview/GodviewStage";
 import {
@@ -38,6 +38,7 @@ export function GodviewPreview({ door = null }: { door?: MonitorDoor | null } = 
   const screenStyle = {
     ...godviewTuningStyle(tuning),
     ...godviewBackdropStyle(appearance),
+    ...godviewTerminalGroundStyle(appearance, theme),
     "--vf-monitor-stage-height": "35%",
     "--vf-scanline-density": "2px",
     "--vf-scanline-opacity": 0.4,
@@ -83,6 +84,8 @@ export function GodviewPreview({ door = null }: { door?: MonitorDoor | null } = 
               onResetMonitor={() => undefined}
             />
           }
+          // The shipping edge, live on the page and forgotten with it.
+          deckEdge={{ persist: false }}
           deck={<GodviewUnavailableDeck />}
         />
       </div>

@@ -164,3 +164,21 @@ export function godviewBackdropStyle(
     "--vf-godview-stage-blur": `${appearance.backdropBlur}px`,
   };
 }
+
+/** The deck sheet's ground (DESIGN.md §8, 2026-09-28 — James: the deck is
+ * always the terminal's own colour). The background of the SAME projection the
+ * workspace is handed, so a catalog theme, the per-mode choice and the reference
+ * palettes all reach the sheet exactly as they reach the panes. The alpha is
+ * dropped: the sheet takes the stage's glass (`--vf-godview-stage-opacity`), and
+ * a pane's own translucent ground over a sheet of its own colour composites to
+ * that colour exactly — which is what makes the lip, the gaps and the panes one
+ * surface. Readers: the overlay, the catalog's stage. */
+export function godviewTerminalGroundStyle(
+  appearance: DeckAppearance,
+  godviewTheme: GodviewTheme,
+): Record<"--vf-godview-terminal-bg", string> {
+  return {
+    "--vf-godview-terminal-bg": terminalGround(godviewTerminalTheme(appearance, godviewTheme))
+      .background,
+  };
+}

@@ -39,7 +39,8 @@ monospace controls, a gridded agent stage, stark monochrome status bodies, a par
 deck in light mode, a graphite terminal deck in dark mode, and the reference scanline/vignette
 treatment. VibeField keeps its own host mechanics, honest mock label, and renderer-native terminal
 alpha, but does not reinterpret that reference through rounded cards, colorful agent fills, or
-floating pills. The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
+floating pills — with ONE named exception, the terminal deck's sheet edge (§8, 2026-09-28,
+James). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
 composites those status-body colors at 72% by default so they remain legible glass over the field;
 the temporary system-control panel exposes that alpha for live tuning.
 
@@ -159,6 +160,13 @@ the general chrome palette.
 | idle body / text | `#E5E5E5 / #666666` | `#2A2A2A / #AAAAAA` |
 | working body / text | `#222222 / #FFFFFF` | `#EEEEEE / #111111` |
 | terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
+| deck sheet shadow (§8, the deck's edge) | `0 -20px 40px rgba(0,0,0,0.08)` | `0 -20px 40px rgba(0,0,0,0.4)` |
+
+The deck sheet's shadow is §5's *Sheet* recipe, keyed to Godview's OWN mode switch rather than
+the app's theme (Godview can be dark over a light field). Its geometry: top corners
+`--vf-godview-deck-radius` 12px; the lip (the band the grip sits in) `--vf-godview-deck-lip`
+14px — never less than the radius, so no pane corner meets the curve; the grip
+`--vf-godview-deck-grip` 36×4, fully round — the island's pull bar (§8) at instrument scale.
 
 ### 2.8 Identity — the face
 
@@ -641,6 +649,25 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   CONFLICT names both sides ("Use the file's version" · "Save mine over it") — never a
   silent clobber. This-window settings on the same page apply as they change; the scope tag
   is what tells the two apart.
+- **Godview's terminal deck is a sheet over the monitor** (2026-09-28, James — §1.1's one
+  named departure from the reference). The deck is one card whose top edge is a tab: rounded
+  top corners, §2.3's hairline as a ring, and the Sheet shadow (§2.7's row) cast UP onto the
+  monitor, so the stage reads as lying beneath it. **The card's ground is always the terminal's
+  own background** (James, 2026-09-28): `--vf-godview-terminal-bg`, projected from the same
+  theme the panes are handed (a catalog theme, the per-mode choice, or §2.7's terminal
+  grounds), at the stage's glass (`--vf-godview-stage-opacity`). A pane's translucent ground
+  over a sheet of its own colour composites to that colour exactly, so lip, gaps and panes are
+  one surface — at the default opaque backdrop; a viewer who thins the backdrop thins the
+  sheet with the rest of Godview, and the panes then read a shade denser than the lip (the
+  panes cannot shed their ground: ghosttea draws inverse video and glyph backdrops from it).
+  Over the monitor the card occludes the bodies exactly as much as Godview occludes the field. **The edge moves:** a
+  grip in the lip (`role="separator"`, ↑/↓ 24px, ⇧ ×4, Home/End, double-click to rest) drags it.
+  Downward the monitor grows and the swarm's field grows with it; upward the monitor does NOT
+  shrink — its tuned height (`Monitor height`, 35%, 170px floor) is its minimum — and the sheet
+  slides OVER it, up to the bar's bottom edge, the bodies still moving beneath. The deck keeps
+  at least 120px. Terminals resize live (rows only, so no reflow of history). The position is
+  the viewer's (`localStorage`), re-clamped to each window, never a shared setting. No
+  transition on the edge: every frame of an animated edge would be a PTY resize.
 - **The terminal preview is Godview in miniature** (GT-7): a preview of how terminals will
   look mounts Godview's OWN parts over a depiction of the canvas — `GodviewStage` with the
   saved backdrop, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted

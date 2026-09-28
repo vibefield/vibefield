@@ -4,7 +4,7 @@ import { getHost } from "../host";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
-import { godviewBackdropStyle } from "./deck-theme";
+import { godviewBackdropStyle, godviewTerminalGroundStyle } from "./deck-theme";
 import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
 import { GodviewStage, GodviewUnavailableDeck } from "./GodviewStage";
@@ -32,6 +32,9 @@ import { useGodviewOpen } from "./overlay-state";
  * smoke sets it to measure a genuinely cold open, and the only supported value
  * is the one that disables. Nothing in the UI writes it. */
 const PREWARM_STORAGE_KEY = "vf-godview-prewarm-v1";
+
+/** Stable, so the stage's props do not change identity per render. */
+const DECK_EDGE_PERSISTED = { persist: true } as const;
 
 function prewarmEnabled(): boolean {
   try {
@@ -178,6 +181,8 @@ export function GodviewOverlay(): ReactElement | null {
     ...godviewTuningStyle(tuning),
     // GT-7: the backdrop is the viewer's own, read from the saved appearance.
     ...godviewBackdropStyle(appearance),
+    // The deck sheet wears the terminal's own ground (DESIGN.md §8).
+    ...godviewTerminalGroundStyle(appearance, theme),
     "--vf-monitor-stage-height": `${monitor.stageHeight}%`,
     "--vf-scanline-density": `${stage[SCANLINE_DENSITY_KEY] ?? 2}px`,
     "--vf-scanline-opacity": stage[SCANLINE_OPACITY_KEY] ?? 0.4,
@@ -232,6 +237,8 @@ export function GodviewOverlay(): ReactElement | null {
             onResetMonitor={monitor.resetParameters}
           />
         }
+        // The sheet's edge is this viewer's, remembered (DESIGN.md §8).
+        deckEdge={DECK_EDGE_PERSISTED}
         deck={
           terminalAvailable ? (
             <GodviewDeck
