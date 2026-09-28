@@ -666,10 +666,32 @@ interface Placed {
   table: ProcessTable;
 }
 
+/** Why a launch was not placed in a pane of ours. `outside-host-terminals`
+ * is the kit's own answer, and the kit answers it for the other two the
+ * host cannot say better (a table it could not read, a walk that threw);
+ * `shell-named` the host declines itself (B1). */
+type Unplaced = "outside-host-terminals" | "table-unread" | "shell-named" | "place-failed";
+
+/** Where a launch stands once asked: in a pane of ours, or not — and why not. */
+type Placement = { placed: Placed; why?: undefined } | { placed?: undefined; why: Unplaced };
+
+/** A request that named one of our shells' OWN pid (B1): declined by the host
+ * through the kit's `invalid-request` — the request's process identity does
+ * not hold — and never placed. Thrown from `resolveTerminal`, which the kit
+ * awaits before anything is prepared, so there is nothing to undo. */
+class ShellNamedError extends Error {
+  constructor() {
+    super("the request names a shell of this host's, which is never the agent");
+    this.name = "ShellNamedError";
+  }
+}
+
 /** What one launch has established so far, for the decline fieldd makes
  * itself when a door throws. */
 interface LaunchProgress {
   placed?: Placed | undefined;
+  /** why it was not placed, when it was not */
+  unplaced?: Unplaced | undefined;
   /** puppeteer adopted the run and the fold could not enter it */
   adoptionUndone: boolean;
 }
@@ -1231,9 +1253,9 @@ export class AgentGatewayService {
    *
    * This is the EL7 binding. A request's pid is self-asserted — anything that
    * holds the bearer can name any pid — and the answer is given only for a
-   * terminal whose own shell is that process or an ancestor of it, matched by
-   * pid AND start time. A caller can ask for a run only in a terminal that
-   * really contains the process it names.
+   * terminal whose own shell is an ancestor of that process, matched by pid
+   * AND start time — never for the shell itself (B1). A caller can ask for a
+   * run only in a terminal that really contains the process it names.
    *
    * Never throws. When the table cannot be read nobody can say where the
    * process is, and the launch runs as typed (the kit's choice, kept). */
@@ -1241,11 +1263,11 @@ export class AgentGatewayService {
     pid: number;
     parentPid?: number | undefined;
   }): Promise<{ terminalSessionId: string } | undefined> {
-    const placed = await this.place(process.pid);
+    const { placed } = await this.place(process.pid);
     return placed === undefined ? undefined : { terminalSessionId: placed.shell.terminalSessionId };
   }
 
-  private async place(pid: number): Promise<Placed | undefined> {
+  private async place(pid: number): Promise<Placement> {
     try {
       const table = await (this.opts.processTable ?? readProcessTable)();
       if (table === undefined) {
@@ -1254,7 +1276,7 @@ export class AgentGatewayService {
           "The process table could not be read; the launch cannot be placed and runs as typed",
           { pid },
         );
-        return undefined;
+        return { why: "table-unread" };
       }
       await this.enqueue(() => this.syncShells(table));
       const shell = await findOwningProcess({
@@ -1268,16 +1290,33 @@ export class AgentGatewayService {
           "A launch came from a process that is in no terminal of ours; it runs as typed",
           { pid },
         );
-        return undefined;
+        return { why: "outside-host-terminals" };
       }
-      return { shell, startedAt: table.get(pid)?.startedAt, table };
+      if (shell.pid === pid) {
+        // B1 — THE SHELL IS NEVER THE AGENT. The kit's walk begins at the
+        // asking pid itself, so one of our shells' own pid is "in" its pane
+        // at depth 0. A launcher is the shell's child, never the shell: a
+        // request naming the shell's pid — anything holding the bearer can
+        // name any pid — would pin a phantom run to that pane (a signed
+        // record, a row on the stage, `terminal-conflict` for the person's
+        // own launch there) whose stop from the deck or the phone would
+        // signal the person's SHELL. Declined, never placed — so the rule of
+        // refusal is not widened, and the name runs as typed.
+        this.logger.warn(
+          "fieldd.agents.gateway_shell_named",
+          "A launch names one of our shells' own pid; the shell is never the agent, and the request is declined",
+          { pid },
+        );
+        return { why: "shell-named" };
+      }
+      return { placed: { shell, startedAt: table.get(pid)?.startedAt, table } };
     } catch (error) {
       this.logger.warn(
         "fieldd.agents.gateway_place_failed",
         "A launch could not be placed; it runs as typed",
         { pid, error: error instanceof Error ? error.message : String(error) },
       );
-      return undefined;
+      return { why: "place-failed" };
     }
   }
 
@@ -1310,8 +1349,12 @@ export class AgentGatewayService {
         runtime: this.launchDoors(),
         strict: AGENT_GATEWAY_STRICT,
         resolveTerminal: async ({ pid }) => {
-          const placed = await this.place(pid);
-          progress.placed = placed;
+          const placement = await this.place(pid);
+          progress.placed = placement.placed;
+          progress.unplaced = placement.why;
+          // B1 — the host's own decline, through the kit: caught below
+          if (placement.why === "shell-named") throw new ShellNamedError();
+          const placed = placement.placed;
           if (placed === undefined) return undefined;
           // a typed run that ENDED in this pane a moment ago may not have
           // left it yet (its exit is a pid that vanished, seen at a poll):
@@ -1334,15 +1377,23 @@ export class AgentGatewayService {
       };
       answer = await this.kit.prepareSpawnThroughLaunch(request, host);
     } catch (error) {
-      // the kit lets a throwing door through (a disposed runtime, a fold that
-      // could not enter the run). The message goes to the log, never the pane.
-      this.logger.error(
-        "fieldd.agents.gateway_launch_failed",
-        "A typed launch failed inside the host; it is answered with a coded decline",
-        error,
-        { provider: request.providerId, placed: progress.placed !== undefined },
-      );
-      answer = this.declined(request, progress.placed, failureCode(error, progress));
+      if (error instanceof ShellNamedError) {
+        // B1 — said at `place`, with the pid and nothing else. Never placed,
+        // so never refused (the rule of refusal is not widened): the kit's
+        // own decline, and the launcher runs the name as typed.
+        answer = declineSpawnThrough({ code: "invalid-request", reason: error.message });
+      } else {
+        // the kit lets a throwing door through (a disposed runtime, a fold
+        // that could not enter the run). The message goes to the log, never
+        // the pane.
+        this.logger.error(
+          "fieldd.agents.gateway_launch_failed",
+          "A typed launch failed inside the host; it is answered with a coded decline",
+          error,
+          { provider: request.providerId, placed: progress.placed !== undefined },
+        );
+        answer = this.declined(request, progress.placed, failureCode(error, progress));
+      }
     }
     await this.account(request, answer, progress.placed);
     return answer;

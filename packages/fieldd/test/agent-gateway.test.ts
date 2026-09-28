@@ -1860,8 +1860,8 @@ describe("which of our terminals holds a process — the ancestor walk (AR-7b)",
       expect(await box.gateway.resolveTerminal({ pid: 612, parentPid: 611 })).toEqual({
         terminalSessionId: "s2",
       });
-      // the shell itself is in its own pane
-      expect(await box.gateway.resolveTerminal({ pid: 501 })).toEqual({ terminalSessionId: "s2" });
+      // B1 — the shell itself is never placed: the shell is never the agent
+      expect(await box.gateway.resolveTerminal({ pid: 501 })).toBeUndefined();
       expect(await box.gateway.resolveTerminal({ pid: 600, parentPid: 501 })).toEqual({
         terminalSessionId: "s1",
       });
@@ -2086,6 +2086,44 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
       expect(counted.every((entry) => entry.level === "debug")).toBe(true);
       expect(counted[1]?.attrs).toEqual({ code: "passthrough", provider: TYPED_PROVIDER });
       expect(JSON.stringify(box.logged)).not.toContain("say hi");
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "B1 — the shell is never the agent: a request naming one of our shells' OWN pid is declined `invalid-request` and runs as typed — never placed, nothing prepared, adopted or ledgered, said at warn with the pid and nothing else — while the shell's child is placed and adopted as before",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
+      const answer = await box.launch(500, {
+        argv: ["--resume", "conversation-of-the-persons"],
+        cwd: join(box.root, "somewhere-private"),
+      });
+      expect(answer).toEqual({
+        action: "fallback",
+        code: "invalid-request",
+        reason: "the request names a shell of this host's, which is never the agent",
+      });
+      expect(box.fold.adopted).toEqual([]);
+      expect(box.fold.identities).toBe(0);
+      expect(box.fold.released).toEqual([]);
+      expect(box.script.prepared).toEqual([]);
+      expect(box.ledger).toEqual([]);
+      const said = box.logged.filter(
+        (entry) => entry.event === "fieldd.agents.gateway_shell_named",
+      );
+      expect(said.map((entry) => entry.level)).toEqual(["warn"]);
+      expect(said[0]?.attrs).toEqual({ pid: 500 });
+      expect(box.logged.filter((entry) => entry.level === "error")).toEqual([]);
+      const kept = JSON.stringify(box.logged);
+      expect(kept).not.toContain("conversation-of-the-persons");
+      expect(kept).not.toContain("somewhere-private");
+      expect(Object.fromEntries(box.gateway.counts())).toEqual({ "invalid-request": 1 });
+      // the same shell's child is placed and adopted
+      expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      expect(box.fold.adopted.length).toBe(1);
+      expect(box.fold.adopted[0]?.info.terminalSessionId).toBe("s1");
     },
     PROCESS_BUDGET_MS,
   );
@@ -2470,6 +2508,21 @@ describe("a typed run's proof — what its record must show before fieldd attach
         table: elsewhere.set(600, proc(600, 500, AGENT_STARTED)),
       }),
     ).toEqual({ holds: false, why: "outside-terminal" });
+  });
+
+  it("B1 — fails for a record whose process IS the terminal's own shell, whatever the table says: the shell is never the agent, and such a record does not re-attach", async () => {
+    // the shell's pid and its own start: everything the walk would match, at depth 0
+    expect(await proof({ record: typedRecord({ process: { pid: 500, startedAt: T0 } }) })).toEqual({
+      holds: false,
+      why: "shell-named",
+    });
+    // and before the table is even looked at
+    expect(
+      await proof({
+        record: typedRecord({ process: { pid: 500, startedAt: T0 } }),
+        table: undefined,
+      }),
+    ).toEqual({ holds: false, why: "shell-named" });
   });
 
   it(
@@ -3272,17 +3325,50 @@ describe("a typed run across a fieldd restart — the REAL floor (AR-7c)", () =>
   );
 
   it(
-    "a pane that holds an unobserved typed run: another agent typed there is refused as a conflict, and the SAME process asking again takes the run over — its row observed at last",
+    "a pane that holds an unobserved typed run: the shell ITSELF asking is no launch at all (B1 — declined, never placed, nothing refused, the held row untouched); another process in that pane is refused as a conflict; and the SAME process asking again takes the run over — its row observed at last",
     async () => {
-      const { first, pane, row, pid } = await typedThenStopped();
+      const first = await floor({ bundle: shimScript });
+      const pane = await openPane(first);
+      // a bystander in the pane — a background job of the shell's — for the row to ask with.
+      // It writes its own pid and execs the sleep in place: a `$!` typed at the pane's
+      // interactive bash (3.2) is history-expanded — "event not found" — and the line is lost.
+      const bystander = join(first.root, "bystander-pid");
+      await type(first, pane, `sh -c 'printf "%s" "$$" > ${bystander}; exec sleep 600' &`);
+      const otherPid = Number(
+        await until(
+          () => {
+            if (!existsSync(bystander)) return undefined;
+            const text = readFileSync(bystander, "utf8").trim();
+            return text === "" ? undefined : text;
+          },
+          FLOOR_WAIT_MS,
+          "the bystander's pid",
+        ),
+      );
+      await type(first, pane, TYPED_COMMAND);
+      const row = await adopted(first, pane);
+      await until(() => (linesOf(first.script.managedLog).length === 1 ? true : undefined));
+      const pid = readRecord(first.dataDir, row.runtimeRunId).process?.pid as number;
       await first.daemon.stop();
       const second = await floor({ bundle: shimScript, restartOf: first });
       await until(() =>
         rowOf(second, row.runtimeRunId)?.continuation?.reason === undefined ? undefined : true,
       );
 
-      // another process in that pane (the shell itself will do) asks for a managed run
-      const other = await askFloor(second, launchOf(second, pane.pid));
+      // the pane's shell, by its own pid: the shell is never the agent
+      const shell = await askFloor(second, launchOf(second, pane.pid));
+      expect(shell).toEqual({
+        action: "fallback",
+        code: "invalid-request",
+        reason: "the request names a shell of this host's, which is never the agent",
+      });
+      expect(second.daemon.agents.runtime.agent(pane.sessionId)).toBeUndefined();
+      expect(rowOf(second, row.runtimeRunId)?.observationLevel).toBe("none");
+      expect(auditActs(second.dataDir, "agent.session.adopt_refused")).toEqual([]);
+      expect(isAlive(pane.pid)).toBe(true);
+
+      // another process in that pane — the shell's background job — asks for a managed run
+      const other = await askFloor(second, launchOf(second, otherPid));
       expect(other).toMatchObject({
         action: "refuse",
         code: "terminal-conflict",
