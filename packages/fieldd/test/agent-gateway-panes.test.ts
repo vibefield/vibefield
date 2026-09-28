@@ -94,6 +94,15 @@ const foldActs = (dataDir: string): string[] =>
     .filter((action) => action.startsWith("agent.session."));
 
 /** How a command line left, as the pane wrote it: `status=<n>` in `path`. */
+/** A file a typed line wrote, once it holds something: the shell's `>` creates
+ * the file BEFORE the command writes it, so an empty read is "not yet", never an
+ * answer (a poll that took `''` for one went red once under load). */
+function written(file: string): string | undefined {
+  if (!existsSync(file)) return undefined;
+  const text = readFileSync(file, "utf8");
+  return text === "" ? undefined : text;
+}
+
 async function statusIn(path: string): Promise<number> {
   const text = await until(
     () => (existsSync(path) ? readFileSync(path, "utf8").trim() || undefined : undefined),
@@ -151,10 +160,7 @@ describe.skipIf(ZSH === undefined)(
         });
         // the throwaway person's own startup files ran — never the machine owner's
         const ran = await until(
-          () => {
-            const file = join(box.personHome as string, "ran");
-            return existsSync(file) ? readFileSync(file, "utf8") : undefined;
-          },
+          () => written(join(box.personHome as string, "ran")),
           FLOOR_WAIT_MS,
           "the person's startup files",
         );
@@ -165,18 +171,12 @@ describe.skipIf(ZSH === undefined)(
         // at the first prompt the name IS the launcher, and the launchers lead
         const resolved = join(box.root, "resolved");
         await type(box, pane, `command -v ${TYPED_COMMAND} > '${resolved}'`);
-        await until(
-          () => (existsSync(resolved) ? readFileSync(resolved, "utf8").trim() : undefined),
-          FLOOR_WAIT_MS,
-          "the name resolving",
-        ).then((path) => expect(path).toBe(join(box.shimDirectory, TYPED_COMMAND)));
+        await until(() => written(resolved)?.trim(), FLOOR_WAIT_MS, "the name resolving").then(
+          (path) => expect(path).toBe(join(box.shimDirectory, TYPED_COMMAND)),
+        );
         const path = join(box.root, "path");
         await type(box, pane, `printf '%s' "$PATH" > '${path}'`);
-        const led = await until(
-          () => (existsSync(path) ? readFileSync(path, "utf8") : undefined),
-          FLOOR_WAIT_MS,
-          "the pane's PATH",
-        );
+        const led = await until(() => written(path), FLOOR_WAIT_MS, "the pane's PATH");
         expect(led.split(":")[0]).toBe(box.shimDirectory);
         expect(led.split(":").filter((entry) => entry === box.shimDirectory).length).toBe(1);
 
@@ -261,11 +261,7 @@ describe.skipIf(ZSH === undefined)(
         });
         const path = join(bare.root, "path");
         await type(bare, pane, `printf '%s|%s' "$PATH" "$PUPPETEER_SHIM_DIR" > '${path}'`);
-        const seen = await until(
-          () => (existsSync(path) ? readFileSync(path, "utf8") : undefined),
-          FLOOR_WAIT_MS,
-          "the bare pane's PATH",
-        );
+        const seen = await until(() => written(path), FLOOR_WAIT_MS, "the bare pane's PATH");
         expect(seen.split(":")).not.toContain(bare.shimDirectory);
         expect(seen.endsWith("|")).toBe(true);
         // and the name is nobody's
@@ -287,11 +283,7 @@ describe.skipIf(ZSH === undefined)(
         expect(isAlive(before.pid)).toBe(true);
         const kept = join(box.root, "kept");
         await type(box, before, `printf '%s' "$PATH" > '${kept}'`);
-        const led = await until(
-          () => (existsSync(kept) ? readFileSync(kept, "utf8") : undefined),
-          FLOOR_WAIT_MS,
-          "the earlier pane's PATH",
-        );
+        const led = await until(() => written(kept), FLOOR_WAIT_MS, "the earlier pane's PATH");
         expect(led.split(":")[0]).toBe(box.shimDirectory);
       },
       FLOOR_BUDGET_MS,
