@@ -3512,7 +3512,7 @@ function fakeFloorService(
 /** Absolute programs that EXIST — all the create/spawn pre-flight asks — named
  * like a shell, like a program that is not one, and like an agent. Empty
  * files: this floor runs nothing. */
-function programs(): { zsh: string; cat: string; agent: string } {
+function programs(): { zsh: string; bash: string; cat: string; agent: string } {
   const bin = join(makeDataDir(), "bin");
   mkdirSync(bin);
   const at = (name: string): string => {
@@ -3520,7 +3520,7 @@ function programs(): { zsh: string; cat: string; agent: string } {
     writeFileSync(path, "");
     return path;
   };
-  return { zsh: at("zsh"), cat: at("cat"), agent: at("agent") };
+  return { zsh: at("zsh"), bash: at("bash"), cat: at("cat"), agent: at("agent") };
 }
 
 describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
@@ -3554,7 +3554,12 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
     // asked once per birth, with the executable being born
     expect(asked).toEqual(["/bin/zsh", zsh]);
 
-    // the DEFAULT is the person's own login shell: asked whatever its name
+    // AR7-D3 (RULED 2026-09-28): zsh ONLY. A default login shell that is not zsh
+    // is born plain, honestly — `integrated: false`, the integration never asked
+    // — and so is an explicit bash: the kit could only send a PATH once for
+    // them, which a profile that prepends the real binary undoes while the
+    // ledger would still say "integrated". The rows that pinned "asked whatever
+    // its name" pinned the defect.
     const other = fakeFloorService(floor, {
       defaultShell: () => "/opt/shells/nu",
       shellIntegration: (shell) => {
@@ -3562,8 +3567,13 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
         return INTEGRATION;
       },
     });
-    expect((await other.create({})).integrated).toBe(true);
-    expect(asked.at(-1)).toBe("/opt/shells/nu");
+    expect((await other.create({})).integrated).toBe(false);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "inherit" });
+    const { bash } = programs();
+    expect((await other.create({ shell: bash })).integrated).toBe(false);
+    expect(floor.createOptions()?.["executable"]).toBe(bash);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "inherit" });
+    expect(asked).toEqual(["/bin/zsh", zsh]);
   });
 
   it("an explicit program that is not a shell gets nothing, and the integration is never asked", async () => {

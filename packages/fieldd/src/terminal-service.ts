@@ -182,7 +182,13 @@ export interface TerminalServiceOptions {
  * nothing there except carry the launcher directory into everything it starts
  * (the leak of the plan's fact 7): it gets none. The DEFAULT shell is the
  * person's own login shell and is asked for whatever its name. */
-const INTERACTIVE_SHELLS: ReadonlySet<string> = new Set(["zsh", "bash", "fish", "sh"]);
+/** AR7-D3 (RULED 2026-09-28, "go with your recommendations"): the first landing integrates
+ * ZSH ONLY. The kit's zsh integration is a ZDOTDIR hand-off whose precmd hook keeps the
+ * launcher directory at PATH's head at EVERY prompt, so a profile that reorders PATH cannot
+ * undo it; for bash, fish and sh the kit could only send a PATH once, at birth, which a
+ * profile that prepends the real binary undoes — and `integrated: true` would still have
+ * been said. Those shells are born plain until their own hooks exist (a later slice). */
+const INTEGRATED_SHELL = "zsh";
 
 /** Free-shell spawn geometry until an attached view claims resize authority
  * (03·A: the active view owns cols/rows; nothing has attached yet at birth). */
@@ -713,10 +719,10 @@ export class TerminalService {
    * not its endpoints: the daemon needs to know where to mint from, not to be
    * handed the credential to mint.
    *
-   * AR-7d — a free shell (the default, or an explicit one named in
-   * `INTERACTIVE_SHELLS`) is born with `shellIntegration`'s variables as
-   * inherit-mode `overrides`, and the answer says whether it was (`integrated`,
-   * the audit's fact — never the variables). */
+   * AR-7d — a free zsh (the default when the login shell is zsh, or an explicit
+   * zsh) is born with `shellIntegration`'s variables as inherit-mode
+   * `overrides`, and the answer says whether it was (`integrated`, the audit's
+   * fact — never the variables). Any other shell is born plain (AR7-D3). */
   async create(params: TerminalCreateParams): Promise<{
     sessionId: string;
     session: TerminalRuntimeSession;
@@ -767,9 +773,7 @@ export class TerminalService {
     const executable = params.shell ?? this.defaultShell();
     const scrollbackBytes = classScrollbackBytes(params.workloadClass);
     const overrides =
-      !explicit || INTERACTIVE_SHELLS.has(basename(executable))
-        ? this.integrationFor(executable)
-        : undefined;
+      basename(executable) === INTEGRATED_SHELL ? this.integrationFor(executable) : undefined;
     const born = await this.birth(cell, client, executable, {
       executable,
       args: explicit ? [] : ["-l"],

@@ -3,7 +3,7 @@
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
-      "sha": "d1945095dcbd9971c58c196239f846d572b069cb",
+      "sha": "f1472dfb3b2f974725441ed1b7279ca971323653",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
