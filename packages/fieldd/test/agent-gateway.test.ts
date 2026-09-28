@@ -1473,18 +1473,27 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
   );
 
   it(
-    "is handed nothing until the home is written: a shell born while the launchers are being written is born as before, though the offered set is already decided",
+    "A2 — is handed the answer as soon as the INTEGRATION is written, ahead of the launchers: a shell born while the launchers are still being written is born integrated, and finds the launcher at its next lookup",
     async () => {
       const box = await unit({ slowHomeMs: 800 });
       onePane(box);
+      const layout = spawnThroughLayout(box.home);
       const started = box.gateway.start();
       await poll(() => (box.kit.materialized.length > 0 ? true : undefined), 5_000);
+      // the launchers are being written (slowly): the offered set is decided and no
+      // launcher stands yet — but the integration does, and the seam has it
       expect(box.gateway.state().names).toEqual([TYPED_COMMAND]);
-      expect(box.integrations).toEqual([]);
-      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
-      await started;
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(false);
+      expect(existsSync(layout.zshenv)).toBe(true);
       expect(box.integrations).toEqual([box.gateway.shellIntegration]);
-      expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
+      expect(box.gateway.shellIntegration("/bin/zsh")).toMatchObject({
+        ZDOTDIR: layout.zshDirectory,
+        PUPPETEER_SHIM_DIR: layout.shimDirectory,
+      });
+      await started;
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(true);
+      // handed over once, at the start's first write, and not again for the launchers
+      expect(box.integrations).toEqual([box.gateway.shellIntegration]);
     },
     PROCESS_BUDGET_MS,
   );
@@ -1503,9 +1512,10 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
   );
 
   it(
-    "answers nothing while there is no launcher to offer — no launcher's runtime, no agent offered, a row that stopped offering — and answers again when there is one",
+    "A2 — answers wherever the integration stands, launcher or none — a former boot's home written again and emptied of launchers, a row that stopped offering — since a launcher that lands later is found by a shell born before it; and answers nothing only where no home is written at all: nothing to offer from, and nothing of ours on the device",
     async () => {
-      // no program can run a launcher; a former boot's home is written again, emptied of launchers
+      // no program can run a launcher; a former boot's home is written again, emptied of
+      // launchers — and still points a shell at itself
       const packaged = await unit({
         launcher: null,
         runtimeFacts: { sea: true, electron: undefined },
@@ -1519,12 +1529,19 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
       });
       onePane(packaged);
       await packaged.gateway.start();
+      const packagedLayout = spawnThroughLayout(packaged.home);
       expect(packaged.gateway.state().names).toEqual([]);
-      expect(existsSync(spawnThroughLayout(packaged.home).zshenv)).toBe(true);
-      expect(packaged.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
-      expect(packaged.gateway.shellIntegration("/bin/sh")).toBeUndefined();
+      expect(existsSync(join(packagedLayout.shimDirectory, TYPED_COMMAND))).toBe(false);
+      expect(existsSync(packagedLayout.zshenv)).toBe(true);
+      expect(packaged.integrations).toEqual([packaged.gateway.shellIntegration]);
+      expect(packaged.gateway.shellIntegration("/bin/zsh")).toMatchObject({
+        ZDOTDIR: packagedLayout.zshDirectory,
+      });
+      expect(packaged.gateway.shellIntegration("/bin/sh")).toMatchObject({
+        PUPPETEER_SHIM_DIR: packagedLayout.shimDirectory,
+      });
 
-      // nothing to offer and nothing of ours on the device: nothing written, nothing handed over
+      // nothing to offer from and nothing of ours on the device: nothing written, nothing handed over
       const unoffered = await unit({ provider: { classifies: false } });
       onePane(unoffered);
       await unoffered.gateway.start();
@@ -1532,20 +1549,29 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
       expect(unoffered.integrations).toEqual([]);
       expect(unoffered.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
 
-      // a row that stops offering takes the answer with it, and gives it back
+      // a row that stops offering takes its launcher and not the answer: a shell born
+      // meanwhile is managed the moment the row offers again and the launcher is written back
       const box = await unit();
       onePane(box);
       await box.gateway.start();
+      const layout = spawnThroughLayout(box.home);
       expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
       const at = box.catalog.findIndex((row) => row.id === TYPED_PROVIDER);
       const offering = box.catalog[at] as AgentCatalogEntry;
       box.catalog[at] = { ...offering, offers: { ...offering.offers, invoke: false } };
       await box.gateway.refresh();
       expect(box.gateway.state().names).toEqual([]);
-      expect(box.gateway.shellIntegration("/bin/zsh")).toBeUndefined();
-      expect(box.gateway.shellIntegration("/bin/sh")).toBeUndefined();
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(false);
+      expect(box.gateway.shellIntegration("/bin/zsh")).toMatchObject({
+        ZDOTDIR: layout.zshDirectory,
+      });
+      expect(box.gateway.shellIntegration("/bin/sh")).toMatchObject({
+        PUPPETEER_SHIM_DIR: layout.shimDirectory,
+      });
       box.catalog[at] = offering;
       await box.gateway.refresh();
+      expect(box.gateway.state().names).toEqual([TYPED_COMMAND]);
+      expect(existsSync(join(layout.shimDirectory, TYPED_COMMAND))).toBe(true);
       expect(box.gateway.shellIntegration("/bin/zsh")).toBeDefined();
       // the seam was handed the answer once, whatever the launchers did since
       expect(box.integrations).toEqual([box.gateway.shellIntegration]);

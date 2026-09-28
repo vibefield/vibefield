@@ -26,12 +26,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   DEFAULT_RETRY_MS,
   readRendezvous,
   readTerminals,
   SPAWN_THROUGH_EXIT_REFUSED,
+  spawnThroughLayout,
 } from "@vibecook/puppeteer-runtime/spawn-through";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { AGENT_GATEWAY_HOST_LABEL } from "../src/agent-gateway";
@@ -285,6 +286,127 @@ describe.skipIf(ZSH === undefined)(
         await type(box, before, `printf '%s' "$PATH" > '${kept}'`);
         const led = await until(() => written(kept), FLOOR_WAIT_MS, "the earlier pane's PATH");
         expect(led.split(":")[0]).toBe(box.shimDirectory);
+      },
+      FLOOR_BUDGET_MS,
+    );
+
+    it(
+      "A2 — the boot window: a pane born before the integration exists is bare and the ledger says so; the integration is written before the launcher's runtime is even probed, so a pane born while that probe is still out is born integrated and leads with the launchers' directory, and — the name typed once the launcher lands — holds a managed run; the earlier pane is bare for life",
+      async () => {
+        // the daemon's start, in the row's hand twice: before the gateway's first write, and
+        // at the launcher-runtime probe — under Electron as Node the rule asks the node on
+        // fieldd's PATH for its version, the spawn that takes seconds on a loaded host
+        let begin = (): void => undefined;
+        const held = new Promise<void>((resolve) => {
+          begin = resolve;
+        });
+        let answerProbe = (): void => undefined;
+        const probing = new Promise<void>((resolve) => {
+          answerProbe = resolve;
+        });
+        try {
+          const box = await floor({
+            bundle: shimScript,
+            person: true,
+            // the row waits for the launcher itself, once it lets the probe answer
+            launchers: false,
+            gateway: {
+              hold: held,
+              runtimeFacts: {
+                electron: "boot-window",
+                path: dirname(process.execPath),
+                probe: async () => {
+                  await probing;
+                  return process.versions.node;
+                },
+              },
+            },
+          });
+          const layout = spawnThroughLayout(box.home);
+          const launcher = join(box.shimDirectory, TYPED_COMMAND);
+
+          // 1. before the integration exists: born bare, and honestly so
+          expect(existsSync(layout.zshenv)).toBe(false);
+          const before = await bornPane(box);
+          expect(before.integrated).toBe(false);
+          expect(birthOf(box, before.sessionId)).toEqual({
+            sessionId: before.sessionId,
+            integrated: false,
+          });
+          expect(existsSync(layout.zshenv)).toBe(false);
+
+          // 2. the start runs as far as its probe: the integration is on disk and the seam
+          //    has it, and no launcher stands yet
+          begin();
+          await until(
+            () => (existsSync(layout.zshenv) ? true : undefined),
+            FLOOR_WAIT_MS,
+            "the integration written ahead of the probe",
+          );
+          expect(existsSync(launcher)).toBe(false);
+          expect(box.daemon.agentGateway?.state()).toMatchObject({ listening: false, names: [] });
+          const during = await bornPane(box);
+          expect(during.integrated).toBe(true);
+          expect(birthOf(box, during.sessionId)).toEqual({
+            sessionId: during.sessionId,
+            integrated: true,
+          });
+          // the probe is still out: the pane was born INSIDE the window
+          expect(existsSync(launcher)).toBe(false);
+          expect(box.daemon.agentGateway?.state().names).toEqual([]);
+          // it leads with the launchers' directory already; the name is nobody's yet
+          const path = join(box.root, "path-in-the-window");
+          await type(box, during, `printf '%s' "$PATH" > '${path}'`);
+          const led = await until(() => written(path), FLOOR_WAIT_MS, "the window pane's PATH");
+          expect(led.split(":")[0]).toBe(box.shimDirectory);
+          expect(await statusOf(box, during, `command -v ${TYPED_COMMAND}`, "nobody-yet")).not.toBe(
+            0,
+          );
+
+          // 3. the probe answers: the launcher lands in the same home
+          answerProbe();
+          await until(
+            () =>
+              box.daemon.agentGateway?.state().listening === true &&
+              existsSync(launcher) &&
+              existsSync(join(box.home, "gateway.json")) &&
+              existsSync(join(box.home, "terminals.json"))
+                ? true
+                : undefined,
+            FLOOR_WAIT_MS,
+            "the launcher landing",
+          );
+          expect(box.daemon.agentGateway?.state().names).toEqual([TYPED_COMMAND]);
+          // the pane born in the window finds it at its next lookup, and typed, the name is a
+          // managed run in that pane
+          await type(box, during, TYPED_COMMAND);
+          const row = await adopted(box, during);
+          expect(row).toMatchObject({
+            spawnedBy: "user-shell",
+            tier: "managed",
+            kind: TYPED_PROVIDER,
+            terminal: { hosted: "local", runtimeSessionId: during.sessionId },
+          });
+          expect(readRecord(box.dataDir, row.runtimeRunId)).toMatchObject({
+            spawnedBy: "user-shell",
+            terminalSessionId: during.sessionId,
+          });
+          await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+          expect(linesOf(box.script.realLog)).toEqual([]);
+          // the pane born before the integration is bare for life: a shell's environment is
+          // fixed at its birth, and this one's had nothing of the launchers' in it
+          expect(
+            await statusOf(box, before, `command -v ${TYPED_COMMAND}`, "bare-for-life"),
+          ).not.toBe(0);
+
+          await key(box, during, END_OF_INPUT);
+          await until(() => (typedRow(box, during) === undefined ? true : undefined));
+          await answers(box, during, "after-the-window");
+        } finally {
+          // a red row must not leave the daemon's start held: its stop waits behind it
+          begin();
+          answerProbe();
+        }
       },
       FLOOR_BUDGET_MS,
     );

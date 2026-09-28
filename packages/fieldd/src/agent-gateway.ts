@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { AgentLaunchProvider } from "@vibecook/puppeteer-core";
 import type { AgentRuntime } from "@vibecook/puppeteer-runtime";
 import {
@@ -23,6 +24,7 @@ import {
   type SpawnThroughGateway,
   type SpawnThroughHost,
   type SpawnThroughLaunchRequest,
+  type SpawnThroughLayout,
   type SpawnThroughRefusal,
   type SpawnThroughRequest,
   type SpawnThroughResponse,
@@ -33,6 +35,7 @@ import {
   startSpawnThroughGateway,
   writeRendezvous,
   writeTerminals,
+  ZSH_INTEGRATION,
 } from "@vibecook/puppeteer-runtime/spawn-through";
 import { type AgentCatalogReaders, LAYOUT, type TerminalInfo } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -150,6 +153,34 @@ export function shimHomeIsDurable(home: string, temp: string = tmpdir()): boolea
   const within = (parent: string, child: string): boolean =>
     child === parent || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
   return !within(resolve(temp), resolve(home)) && !within(canonicalPath(temp), canonicalPath(home));
+}
+
+/** One file of the shim home, published so no reader ever sees it
+ * half-written — the kit's own `publishFile`, which it keeps private: a temp
+ * file in the same directory, its mode set, then `rename` over the name; a
+ * file whose bytes and mode already match is left alone (a shell may be
+ * reading it at that moment). */
+async function publishFile(path: string, content: string, mode: number): Promise<void> {
+  const bytes = Buffer.from(content);
+  try {
+    const [existing, status] = await Promise.all([readFile(path), stat(path)]);
+    if (status.isFile() && (status.mode & 0o777) === mode && existing.equals(bytes)) return;
+  } catch {
+    // absent or unreadable: publish it
+  }
+  const temporary = join(
+    dirname(path),
+    `.${basename(path)}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`,
+  );
+  try {
+    await writeFile(temporary, bytes, { mode, flag: "wx" });
+    // the creation mode passes through the umask; the published file's must not
+    await chmod(temporary, mode);
+    await rename(temporary, path);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
 }
 
 // ── the launcher's runtime ──
@@ -608,6 +639,10 @@ export interface AgentGatewayOptions {
   onShellIntegration?: ((integration: ShellIntegration | null) => void) | undefined;
   /** test seam: the platform a shell is born on (default: this process's) */
   platform?: NodeJS.Platform | undefined;
+  /** test seam: the start waits here before its first write — a row's hand
+   * on the boot window (A2): a pane born before this settles is born before
+   * the integration exists */
+  hold?: Promise<void> | undefined;
   /** test seam: the process table a launch is placed in (default: the kit's
    * one `ps` read, per request) */
   processTable?: (() => Promise<ProcessTable | undefined>) | undefined;
@@ -680,8 +715,9 @@ export class AgentGatewayService {
   private queue: Promise<unknown> = Promise.resolve();
   private bringingUp: Promise<void> | undefined;
   private published = false;
-  /** the home was written by THIS boot: what a born shell is pointed at is there */
-  private homeWritten = false;
+  /** the seam was handed the answer by THIS boot: what a born shell is
+   * pointed at — the integration, never the launchers — is on disk */
+  private integrationHanded = false;
   /** our shells by session; a pid is read ONCE, when the session is first seen */
   private readonly shells = new Map<string, OwnedShell>();
   /** births the inventory has not listed yet */
@@ -791,14 +827,17 @@ export class AgentGatewayService {
   /** What a free shell born NOW adds to its environment so the launchers lead
    * its PATH: the kit's own answer for that shell, over this home. `undefined`
    * — the shell is born exactly as before — on win32 (the shim execs in place,
-   * which is POSIX only), once the gateway stops, whenever there is no
-   * launcher to offer (no launcher runtime, no offered agent), and for a home
-   * without the integration's own file — not written yet, or lost since: zsh
-   * pointed at a directory without it would read NO startup file of the
-   * person's, silently. (The seam is handed this only after the home is
-   * written, in `publish`; the file's own presence is the check here.) Never
-   * throws — `TerminalService` does not catch, and a pane is never refused
-   * for the integration's sake.
+   * which is POSIX only), once the gateway stops, and for a home without the
+   * integration's own file — not written yet, or lost since: zsh pointed at a
+   * directory without it would read NO startup file of the person's,
+   * silently. (The seam is handed this only once the integration is on disk;
+   * the file's own presence is the check here.) A LAUNCHER IS NOT A CONDITION
+   * (A2): the integration is what a shell is born with, once, and a launcher
+   * written after its birth — at this start's end, at a refresh after an
+   * install appears, when a row offers again — is found at the shell's next
+   * lookup. Answering nothing while no launcher stood left every shell born
+   * meanwhile unmanaged for its whole life. Never throws — `TerminalService`
+   * does not catch, and a pane is never refused for the integration's sake.
    *
    * WHICH ENVIRONMENT. The kit asks for the environment the shell is born
    * with, which is the FLOOR's; fieldd has only its own and hands it that.
@@ -812,7 +851,6 @@ export class AgentGatewayService {
     try {
       if ((this.opts.platform ?? process.platform) === "win32") return undefined;
       if (this.stopping !== undefined) return undefined;
-      if (this.offered.names.length === 0) return undefined;
       if (!existsSync(spawnThroughLayout(this.home).zshenv)) {
         this.sayOnce("integration-lost", () =>
           this.logger.warn(
@@ -844,7 +882,32 @@ export class AgentGatewayService {
       );
       return;
     }
+    if (this.opts.hold !== undefined) await this.opts.hold;
+    if (this.stopping !== undefined) return;
     const layout = spawnThroughLayout(this.home);
+    // A2 — THE BOOT WINDOW. The integration is written FIRST, before anything
+    // slow: the launcher's runtime is chosen right below (under Electron as
+    // Node, a node on PATH is spawned and asked for its version — seconds on
+    // a loaded host) and the installs are read in `offer()` (each an agent's
+    // own version command — seconds more), and only then were the launchers
+    // written and the seam handed over. A free shell's environment is fixed
+    // at its birth, and the seam (`onShellIntegration`) decides what a shell
+    // born NOW is born with: every shell born in that window — the first pane
+    // a person opens after a boot, after every `pnpm dev` pair bounce — was
+    // unmanaged for its whole life, with nothing said. So the integration
+    // (`<home>/zsh/.zshenv` and the shim directory: all the kit's
+    // `shellIntegrationEnvironment` points a shell at) is on disk and the seam
+    // is handed over here, before either; the launchers land in the same
+    // home seconds later, and a shell born integrated finds a newly written
+    // `bin/<name>` at its next lookup (the precmd hook keeps the shim
+    // directory at PATH's head, and zsh searches PATH afresh for a name not
+    // yet in its command hash). Written only where this start could write a
+    // home at all: a bundled shim and an agent that passes the catalog and
+    // its adapter (the install read is exactly what is deferred), or a former
+    // boot's home, which is kept true either way. The hand-over is once
+    // (`handOverIntegration`); `publish` hands it over for a home first
+    // written there — a refresh after nothing was written at the start.
+    if (await this.writeIntegration(layout)) this.handOverIntegration();
     this.choice = await chooseLauncherRuntime({
       ...ownRuntimeFacts([layout.shimDirectory, process.env["PUPPETEER_SHIM_DIR"]]),
       ...this.opts.runtimeFacts,
@@ -917,12 +980,10 @@ export class AgentGatewayService {
         strict: AGENT_GATEWAY_STRICT,
         hostLabel: AGENT_GATEWAY_HOST_LABEL,
       });
-      // AR-7d — the home is written: from here a shell may be born pointed at
-      // it. Handed over once; a stop that began meanwhile has taken it back.
-      if (!this.homeWritten && this.stopping === undefined) {
-        this.homeWritten = true;
-        this.opts.onShellIntegration?.(this.shellIntegration);
-      }
+      // AR-7d — the home is written (the kit publishes the integration's file
+      // with the launchers): from here a shell may be born pointed at it —
+      // normally handed over already, at the start's first write (A2)
+      this.handOverIntegration();
     }
     if (this.gateway === undefined) {
       this.token = randomBytes(32).toString("hex");
@@ -966,11 +1027,55 @@ export class AgentGatewayService {
     return undefined;
   }
 
+  /** The agents a launcher could stand for, before any install is read: the
+   * catalog's word and the adapter's, both answered in memory. */
+  private launchCandidates(): AgentLaunchProvider[] {
+    return this.opts.runtime
+      .launchProviders()
+      .filter((provider) => withheldBeforeExecutable(provider, this.opts.catalog) === undefined);
+  }
+
+  /** The shell integration on disk, ahead of the launchers (A2): the kit's
+   * own file over the kit's own layout, published as the kit publishes it (a
+   * temp file renamed over the name; bytes that already match are left
+   * alone), so `materializeShims` — which writes the same bytes again with
+   * the launchers — leaves it too. False, and nothing written, where nothing
+   * could be offered from and nothing of ours is on the device; a former
+   * boot's home is written either way. Never throws: a home the integration
+   * cannot be written in is one the launchers will fail in too, said there. */
+  private async writeIntegration(layout: SpawnThroughLayout): Promise<boolean> {
+    const offerable = this.bundledShim() !== undefined && this.launchCandidates().length > 0;
+    if (!offerable && !existsSync(this.home)) return false;
+    try {
+      for (const directory of [layout.home, layout.shimDirectory, layout.zshDirectory]) {
+        await mkdir(directory, { recursive: true, mode: 0o700 });
+        await chmod(directory, 0o700);
+      }
+      await publishFile(layout.zshenv, ZSH_INTEGRATION, 0o600);
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.gateway_integration_unwritten",
+        "The shell integration could not be written ahead of the launchers; shells are born without it until the launchers are written",
+        { home: this.home, error: error instanceof Error ? error.message : String(error) },
+      );
+      return false;
+    }
+  }
+
+  /** AR-7d — the seam is handed the answer ONCE, the first time the
+   * integration is on disk: at the start, ahead of the launchers (A2), else at
+   * the first publish that wrote a home. A stop that began meanwhile has taken
+   * it back, and is not handed it again. */
+  private handOverIntegration(): void {
+    if (this.integrationHanded || this.stopping !== undefined) return;
+    this.integrationHanded = true;
+    this.opts.onShellIntegration?.(this.shellIntegration);
+  }
+
   private async offer(): Promise<OfferedLaunch> {
     const launchProviders = this.opts.runtime.launchProviders();
-    const asked = launchProviders
-      .filter((provider) => withheldBeforeExecutable(provider, this.opts.catalog) === undefined)
-      .map((provider) => provider.id);
+    const asked = this.launchCandidates().map((provider) => provider.id);
     let executables: ReadonlyMap<string, string> = new Map();
     if (asked.length > 0) {
       try {

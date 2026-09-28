@@ -288,6 +288,9 @@ export interface FielddConfig {
     runtimeFacts?: AgentGatewayOptions["runtimeFacts"];
     /** a typed run's pid watch: its cadence and its grace */
     watch?: AgentRuntimeServiceOptions["typedWatch"];
+    /** the gateway's start waits here before its first write (A2's row: a
+     * pane born before the integration exists) */
+    hold?: AgentGatewayOptions["hold"];
   };
   /** Development-only identity used to prevent adopting output from a stale build. */
   buildId?: string;
@@ -1188,9 +1191,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // the floor's next change.
     if (terminals.observation() !== undefined) agents.handleInventory(terminals.list());
     // AR-7b — the agent gateway, over the floor just lent: a typed agent is a
-    // managed agent. Its start reads the process table and may read an
-    // agent's install, so it is begun here and never awaited by the boot; a
-    // start that fails leaves fieldd whole and the launchers as they were.
+    // managed agent. Its start probes the launcher's runtime, reads the
+    // process table and may read an agent's install, so it is begun here and
+    // never awaited by the boot; its FIRST write is the shell integration,
+    // ahead of all three (A2), so a pane born a moment from now is born
+    // integrated and not bare for life. A start that fails leaves fieldd
+    // whole and the launchers as they were.
     const gateway =
       config.agentGateway?.enabled === false
         ? null
@@ -1223,6 +1229,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(config.agentGateway?.runtimeFacts !== undefined
               ? { runtimeFacts: config.agentGateway.runtimeFacts }
               : {}),
+            ...(config.agentGateway?.hold !== undefined ? { hold: config.agentGateway.hold } : {}),
             audit: (mutation, effect, describe) => audit.requiredSystem(mutation, effect, describe),
             logger: logger.child({ component: "agent_gateway" }),
           });
