@@ -20,8 +20,13 @@
 //     Per provider: the ports (createSession ⇒ spawn · launch.provider.resume ⇒
 //     resume · attachSession ⇒ reattach · accountUsage ⇒ usage · distribution ⇒
 //     distribution · a profiles port that declares support.supported ⇒ personas
-//     · launch.provider.nativeInvocation ⇒ invoke, AR-7a: the adapter's native
-//     CLI grammar, what `runtime.launchProviders()` hands a spawn-through host)
+//     · launch.provider.nativeInvocation.classifies ⇒ invoke: the adapter's
+//     native CLI grammar, what `runtime.launchProviders()` hands a
+//     spawn-through host, AND the adapter CLASSIFIES what is typed — AR-7a read
+//     the grammar's presence; AR7-D15 (ruled 2026-09-27) narrowed it, because
+//     a strict host refuses in its panes what it cannot manage, and an adapter
+//     that cannot tell a version query from a session would have its
+//     `--version` refused)
 //     and the native layout root, read the way fieldd's `kindFor` reads it
 //     (agent-runtime.ts: `runtime.profiles(id)` → the native-default profile →
 //     `runtime.profileObservationRoot`) and folded to `~/…` as fieldd's `tilde`
@@ -167,7 +172,7 @@ const PORT_FOR = {
   usage: "accountUsage",
   distribution: "distribution",
   personas: "profiles",
-  invoke: "launch.provider.nativeInvocation",
+  invoke: "launch.provider.nativeInvocation.classifies",
 };
 /** The capabilities rosetta supplies: a claim to one needs a rosetta seam
  * (history-seam) and a kind the pin registers (kind-registered). */
@@ -651,12 +656,18 @@ function tilde(path, home, separator = sep) {
  * the profiles port only when that port declares support: the registry lists no
  * profile for, and onboarding refuses to create one for, a provider whose port
  * says `supported: false` (puppeteer runtime/src/profiles/{registry,onboarding}.ts).
- * `invoke` is the launch provider's declared `nativeInvocation` — the runtime
- * refuses to compose one without the adapter's normalizer (runtime.ts), so a
- * provider that composes with it is one `prepareInvocation` can carry. */
+ * `invoke` is a declared `nativeInvocation` whose adapter CLASSIFIES
+ * (`classifies: true`; absent reads false, as puppeteer's schema says). The
+ * runtime refuses to compose a grammar without the adapter's normalizer
+ * (runtime.ts), so a provider that composes with one is one `prepareInvocation`
+ * can carry — but a grammar alone is no longer the capability (AR7-D15):
+ * VibeField is a strict host, refusing in its panes what it cannot manage, and
+ * a normalizer that does not classify answers `rejected` for a version query as
+ * for a session it cannot carry, so a launcher over it would refuse `--version`.
+ * One that classifies tells a utility, a one-shot and an agent that lives
+ * elsewhere apart from a session, and those run as typed. */
 function portsOf(provider) {
   const profilesPort = provider.profiles !== undefined && provider.profiles !== null;
-  const nativeInvocation = provider.launch?.provider?.nativeInvocation;
   return {
     id: provider.descriptor.id,
     label: provider.descriptor.label,
@@ -667,7 +678,7 @@ function portsOf(provider) {
       usage: provider.accountUsage !== undefined && provider.accountUsage !== null,
       distribution: provider.distribution !== undefined && provider.distribution !== null,
       personas: profilesPort && provider.profiles.provider?.support?.supported === true,
-      invoke: nativeInvocation !== undefined && nativeInvocation !== null,
+      invoke: provider.launch?.provider?.nativeInvocation?.classifies === true,
     },
     profilesPort,
   };
@@ -1829,11 +1840,13 @@ function selfTestVerdicts(check) {
     JSON.stringify(refused),
   );
 
-  // The invoke rule (AR-7a): a typed name becomes a managed session only through
-  // the launch provider's native-invocation grammar — the protocol shape at the
-  // 2026-09-27 pin composes a launch port with none. A claim without it is red;
-  // an offered row that leaves it unclaimed warns; a deprecated or declined row
-  // has already decided.
+  // The invoke rule (AR-7a; narrowed by AR7-D15, ruled 2026-09-27): a typed name
+  // gets a launcher only through the launch provider's native-invocation
+  // grammar, and only where its adapter CLASSIFIES what is typed — a grammar that
+  // does not is no claim (the port reader's rows below), and neither is a launch
+  // port with none (the protocol shape). A claim without it is red; an offered
+  // row that leaves it unclaimed warns; a deprecated or declined row has already
+  // decided.
   const typing = {
     ok: true,
     providers: [
@@ -1854,11 +1867,11 @@ function selfTestVerdicts(check) {
     { ok: true, kinds: new Map() },
   );
   check(
-    "invoke is the launch provider's nativeInvocation: claimed without it is red, left unclaimed on an offered row warns, on a deprecated or declined one is quiet",
+    "invoke is the launch provider's nativeInvocation.classifies: claimed without it is red, left unclaimed on an offered row warns, on a deprecated or declined one is quiet",
     JSON.stringify(typed.map((f) => `${f.level} ${f.cls} ${f.subject}`).sort()) ===
       JSON.stringify(["FAIL pin-claim phi", "WARN candidate tau"]) &&
       typed.every((f) => f.message.includes("`invoke`")) &&
-      typed.every((f) => f.message.includes("`launch.provider.nativeInvocation`")),
+      typed.every((f) => f.message.includes("`launch.provider.nativeInvocation.classifies`")),
     JSON.stringify(typed),
   );
 
@@ -1913,6 +1926,7 @@ async function selfTestReaders(check) {
         nativeInvocation: {
           commands: [{ name: "full", executable: "/h/bin/full" }],
           environmentVariables: [],
+          classifies: true,
         },
       },
     },
@@ -1943,6 +1957,33 @@ async function selfTestReaders(check) {
       ports(refusing) === "spawn" &&
       portsOf(refusing).profilesPort === true,
     `${ports(full)} | ${ports(bare)} | ${ports(refusing)}`,
+  );
+  // AR7-D15: a native grammar whose adapter does not classify — the seven
+  // preview agents' shape at the 2026-09-28 pin (puppeteer 2b83e2c) — is no
+  // launcher for a strict host. `classifies` absent reads false (puppeteer's
+  // schema), and a declared false is the same answer, so neither the grammar's
+  // presence nor the key's is the capability.
+  const grammar = (id, extra) =>
+    provider(id, {
+      launch: {
+        provider: {
+          id,
+          label: id,
+          resume: true,
+          nativeInvocation: {
+            commands: [{ name: id, executable: `/h/bin/${id}` }],
+            environmentVariables: [],
+            ...extra,
+          },
+        },
+      },
+    });
+  const unsaid = grammar("unsaid", {});
+  const unclassified = grammar("unclassified", { classifies: false });
+  check(
+    "invoke needs a grammar that CLASSIFIES: a nativeInvocation without classifies: true (absent, or false) is not invoke",
+    ports(unsaid) === "spawn resume" && ports(unclassified) === "spawn resume",
+    `${ports(unsaid)} | ${ports(unclassified)}`,
   );
 
   const runtime = {

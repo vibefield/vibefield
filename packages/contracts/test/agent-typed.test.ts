@@ -20,6 +20,9 @@ const fixture = (name: string): Record<string, unknown> =>
 // our panes' shells becomes a managed session through puppeteer's spawn-through
 // shim) and of the runtime inspector's one verb (thinking-ar7-typed-agents.md
 // §5.1). Wire truth only: the daemon's handlers and the renderer come after.
+// Erratum 2026-09-28: AR-9a was WITHDRAWN (AR7-D9, ruled 2026-09-27: the
+// inspector is puppeteer's dev panel) and its verb never reached this base, so
+// the file holds AR-7a alone.
 
 describe("LAYOUT (AR-7)", () => {
   it("the spawn-through shim's home lives under this user's agents/ tree", () => {
@@ -29,38 +32,62 @@ describe("LAYOUT (AR-7)", () => {
   });
 });
 
-describe("the catalog's `invoke` (AR-7a)", () => {
+describe("the catalog's `invoke` (AR-7a; AR7-D15)", () => {
   const rows = AgentCatalogEntry.array().parse(AGENT_CATALOG);
   // the first row, typed as a row, and its offers as a desktop from before
   // AR-7a sent them
   const base = AgentCatalogEntry.parse(AGENT_CATALOG[0]);
   const { invoke: _unsent, ...olderOffers } = base.offers;
+  // The seam rule for this claim (agent-catalog.test.ts's "a claim needs its
+  // seam"; R23's pin-claim at preflight): a launcher is puppeteer's to give, so
+  // a row that claims one names a puppeteer provider.
+  const seamProblem = (row: AgentCatalogEntry) =>
+    row.offers.invoke && row.seams.puppeteer === null
+      ? `\`${row.id}\` claims \`invoke\` with no puppeteer seam`
+      : undefined;
 
   it("is a capability every row decides — required on the table, a puppeteer claim", () => {
     expect(AGENT_CAPABILITIES).toContain("invoke");
     for (const row of rows) {
       expect(typeof row.offers.invoke, row.id).toBe("boolean");
-      if (row.offers.invoke) expect(row.seams.puppeteer, row.id).not.toBeNull();
+      expect(seamProblem(row), row.id).toBeUndefined();
     }
     expect(() => AgentCatalogEntry.parse({ ...base, offers: olderOffers })).toThrow();
   });
 
-  // The claims are the 2026-09-27 pin's (puppeteer 524709b), as wall R23 read
-  // them: nine launch providers declare a native CLI grammar; the protocol
-  // row's does not. A pin move that changes this is R23's to say first.
-  it("is claimed by the rows whose launch provider declares a native grammar, and not by the protocol row", () => {
+  it("a row that claims it with no puppeteer seam is refused by the seam rule", () => {
+    const none = Object.fromEntries(AGENT_CAPABILITIES.map((c) => [c, false]));
+    const seamless = AgentCatalogEntry.parse({
+      ...base,
+      id: "seamless",
+      seams: { puppeteer: null, rosetta: base.seams.rosetta },
+      offers: { ...none, invoke: true },
+    });
+    expect(seamProblem(seamless)).toBe("`seamless` claims `invoke` with no puppeteer seam");
+    // the claim is the whole fault: the same row claiming nothing passes
+    expect(seamProblem({ ...seamless, offers: { ...seamless.offers, invoke: false } })).toBe(
+      undefined,
+    );
+  });
+
+  // The claims are the pin's, as wall R23 read them (puppeteer 2b83e2c): two
+  // launch providers declare a native CLI grammar whose adapter CLASSIFIES
+  // (`nativeInvocation.classifies`), seven declare one that does not, and the
+  // protocol row's declares none. AR-7a had claimed nine off the grammar's
+  // presence (puppeteer 524709b); AR7-D15 (ruled 2026-09-27) narrowed the claim
+  // and the table's rows carry the errata. A pin move that changes this is
+  // R23's to say first.
+  it("is claimed exactly by the rows whose adapter classifies — not by a grammar alone, not by the protocol row", () => {
     expect(rows.filter((row) => row.offers.invoke).map((row) => row.id)).toEqual([
       "claude",
       "codex",
-      "grok",
-      "kimi",
-      "opencode",
-      "hermes",
-      "antigravity",
-      "copilot",
-      "pi",
     ]);
     expect(isOffered("claude", "invoke")).toBe(true);
+    expect(isOffered("codex", "invoke")).toBe(true);
+    // a preview row whose grammar does not classify gets no launcher and keeps
+    // everything else it offers
+    expect(isOffered("grok", "invoke")).toBe(false);
+    expect(isOffered("grok", "spawn")).toBe(true);
     expect(isOffered("acp", "invoke")).toBe(false);
     expect(isOffered("acp", "spawn")).toBe(true);
   });
