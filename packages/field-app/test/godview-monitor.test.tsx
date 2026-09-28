@@ -50,7 +50,7 @@ import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
-import { monitorHoldsKeys, setLauncherOwnsKeys } from "../src/godview/monitor/launcher-keys";
+import { monitorHoldsKeys, takeLauncherKeys } from "../src/godview/monitor/launcher-keys";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
@@ -1068,32 +1068,49 @@ describe("the profile tabs (AR-S5)", () => {
     expect(chosenTab(host)).toBe("all");
   });
 
-  it("yields ⌥0…⌥n to the empty pane launcher while it owns them (QL-D2)", async () => {
+  it("yields ⌥0…⌥n to the empty pane launcher only for keys routed into its pane (QL-D2)", async () => {
     const host = await mountMonitor("list", tabDoor());
-    const press = (code: string): KeyboardEvent => {
+    // the pane whose launcher owns the keys, with its terminal's textarea
+    const pane = document.createElement("div");
+    const textarea = document.createElement("textarea");
+    pane.append(textarea);
+    document.body.append(pane);
+    const press = (code: string, at: EventTarget): KeyboardEvent => {
       const event = new KeyboardEvent("keydown", {
         code,
         altKey: true,
         bubbles: true,
         cancelable: true,
       });
-      window.dispatchEvent(event);
+      at.dispatchEvent(event);
       return event;
     };
-    setLauncherOwnsKeys(true);
+    const giveBack = takeLauncherKeys(() => pane);
     let passed: KeyboardEvent | undefined;
     try {
       await act(async () => {
-        passed = press("Digit2");
+        passed = press("Digit2", textarea);
       });
-      // untouched: the launcher's own listener decides what ⌥2 means
+      // untouched: the launcher's own listener decides what ⌥2 means there
       expect(passed?.defaultPrevented).toBe(false);
       expect(chosenTab(host)).toBe("all");
+      // the focus in the monitor (or anywhere outside that pane): the strip's
+      await act(async () => {
+        passed = press("Digit2", host);
+      });
+      expect(passed?.defaultPrevented).toBe(true);
+      expect(chosenTab(host)).toBe("work");
+      await act(async () => {
+        passed = press("Digit0", window);
+      });
+      expect(passed?.defaultPrevented).toBe(true);
+      expect(chosenTab(host)).toBe("all");
     } finally {
-      setLauncherOwnsKeys(false);
+      giveBack();
+      pane.remove();
     }
     await act(async () => {
-      passed = press("Digit2");
+      passed = press("Digit2", window);
     });
     expect(passed?.defaultPrevented).toBe(true);
     expect(chosenTab(host)).toBe("work");

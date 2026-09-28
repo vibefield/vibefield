@@ -11,6 +11,7 @@ import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type ReactElement,
   type RefObject,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -24,8 +25,8 @@ import { launcherAgents, launcherPortOver } from "./launcher-doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import {
   monitorHoldsKeys,
-  setLauncherOwnsKeys,
   subscribeMonitorHoldsKeys,
+  takeLauncherKeys,
 } from "./monitor/launcher-keys";
 import type { MonitorDoor } from "./monitor/remote-door";
 
@@ -273,6 +274,41 @@ export function GodviewDeckLaunchers({
   // launchers rest and own no key until it closes.
   const monitorHolds = useSyncExternalStore(subscribeMonitorHoldsKeys, monitorHoldsKeys);
 
+  // QL-D2: while the focused pane's launcher owns the keys, the claim names
+  // THAT pane — found at event time by the launcher's own hook
+  // (`data-vf-pane-launcher`, portalled straight into the pane element) — so
+  // the monitor's strip yields only the keys routed into it.
+  const ownerSession = useRef<string | undefined>(undefined);
+  ownerSession.current = monitorHolds
+    ? undefined
+    : panes.find((pane) => pane.id === workspace?.activePaneId)?.session.id;
+  const giveBack = useRef<(() => void) | null>(null);
+  const onOwnsKeysChange = useCallback(
+    (owns: boolean): void => {
+      giveBack.current?.();
+      giveBack.current = null;
+      if (!owns) return;
+      giveBack.current = takeLauncherKeys(() => {
+        const sessionId = ownerSession.current;
+        if (sessionId === undefined) return null;
+        for (const launcher of deckRef.current?.querySelectorAll<HTMLElement>(
+          "[data-vf-pane-launcher]",
+        ) ?? []) {
+          if (launcher.dataset["vfPaneLauncher"] === sessionId) return launcher.parentElement;
+        }
+        return null;
+      });
+    },
+    [deckRef],
+  );
+  useEffect(
+    () => () => {
+      giveBack.current?.();
+      giveBack.current = null;
+    },
+    [],
+  );
+
   // Mounted for the deck's whole life, not only while a pane is fresh: the
   // mounter remembers which launchers were put away with ⎋ and which shells
   // it saw input reach, and a remount would forget both.
@@ -288,7 +324,7 @@ export function GodviewDeckLaunchers({
       agents={agents}
       port={port}
       hasInput={(id) => runtime?.sessionHasInput(id) === true}
-      onOwnsKeysChange={setLauncherOwnsKeys}
+      onOwnsKeysChange={onOwnsKeysChange}
     />
   );
 }

@@ -4,30 +4,55 @@
 // (⌥n launches the nth agent into that pane); at every other time the profile
 // tab strip keeps them (⌥0 All, ⌥n the nth tab). The launcher lives under the
 // deck and the strip under the monitor — siblings in the overlay — so the one
-// fact they share is this flag: `DeckLaunchers`' `onOwnsKeysChange` sets it,
-// and the monitor's ⌥-digit listener yields (returns without touching the
-// event) while it is set.
+// fact they share is this: `DeckLaunchers`' `onOwnsKeysChange` takes a CLAIM
+// naming where the owning launcher's pane is, and the monitor's ⌥-digit
+// listener yields (returns without touching the event) only for a key whose
+// target is inside that pane (`launcherOwnsKeyEvent`). The launcher's own
+// listener takes only keys routed into its pane, so the two agree: with the
+// focus in the monitor, or in any input outside that pane, the strip keeps
+// its digits even while a launcher is up (the review's finding 3 — a bare
+// flag had made ⌥digits dead everywhere while the active pane showed one).
 //
-// A counter rather than a boolean: every launcher mounter reports its own
-// ownership with a set and a matching clear, and two decks (a remount racing
-// its predecessor's cleanup) must not have the second's `true` erased by the
-// first's `false`.
+// Claims rather than a boolean: every launcher mounter takes its own and
+// gives back only that one, so two decks (a remount racing its predecessor's
+// cleanup) never have the second's take erased by the first's give-back.
 
-let owners = 0;
+/** Where the owning launcher's pane element is, asked at event time. */
+export type LauncherKeysWhere = () => Element | null | undefined;
 
-/** The launcher in the focused pane took (true) or gave back (false) the keys. */
-export function setLauncherOwnsKeys(owns: boolean): void {
-  owners = Math.max(0, owners + (owns ? 1 : -1));
+const claims = new Set<{ where: LauncherKeysWhere }>();
+
+/** The launcher in the focused pane took the keys; call the answer to give
+ * them back (idempotent). */
+export function takeLauncherKeys(where: LauncherKeysWhere): () => void {
+  const claim = { where };
+  claims.add(claim);
+  return () => {
+    claims.delete(claim);
+  };
 }
 
-/** Whether a launcher owns ⌥0–⌥9 and ⌥↵ right now. Read at event time. */
+/** Whether any launcher holds a claim right now (it owns the keys routed into
+ * its pane). */
 export function launcherOwnsKeys(): boolean {
-  return owners > 0;
+  return claims.size > 0;
 }
 
-/** Tests only: forget every owner and every hold. */
+/** Whether THIS key is the launcher's: its target is inside the pane of a
+ * launcher that holds the keys. Read at event time by the monitor's ⌥-digit
+ * listener, which yields exactly these. */
+export function launcherOwnsKeyEvent(event: Pick<Event, "target">): boolean {
+  const target = event.target;
+  if (typeof Node === "undefined" || !(target instanceof Node)) return false;
+  for (const claim of claims) {
+    if (claim.where()?.contains(target) === true) return true;
+  }
+  return false;
+}
+
+/** Tests only: forget every claim and every hold. */
 export function resetLauncherKeys(): void {
-  owners = 0;
+  claims.clear();
   monitorHolds = 0;
 }
 

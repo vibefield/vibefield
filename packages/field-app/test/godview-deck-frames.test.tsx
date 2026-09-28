@@ -243,9 +243,8 @@ const { configureTerminalPool, disposeTerminalPool, retryTerminalPool } = await 
 );
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
-const { launcherOwnsKeys, resetLauncherKeys, setMonitorHoldsKeys } = await import(
-  "../src/godview/monitor/launcher-keys"
-);
+const { launcherOwnsKeyEvent, launcherOwnsKeys, resetLauncherKeys, setMonitorHoldsKeys } =
+  await import("../src/godview/monitor/launcher-keys");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
 
 let root: Root | null = null;
@@ -1118,6 +1117,27 @@ describe("the empty pane launcher (QL-1)", () => {
     const host = await mountDeck();
     expect(launcherFor(host, "pty-1")).toBeNull();
     expect(launcherOwnsKeys()).toBe(false);
+  });
+
+  it("claims only the keys routed into its own pane — the monitor and the other panes keep theirs", async () => {
+    runtimeBirths.add("pty-1");
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-2") },
+    ];
+    const host = await mountDeck();
+    expect(launcherFor(host, "pty-1")).not.toBeNull();
+    const textarea = document.createElement("textarea");
+    paneOf(host, "pane-1")?.append(textarea);
+    expect(launcherOwnsKeyEvent({ target: textarea })).toBe(true);
+    expect(launcherOwnsKeyEvent({ target: paneOf(host, "pane-2") })).toBe(false);
+    expect(launcherOwnsKeyEvent({ target: document.body })).toBe(false);
+    // the focus moves to the pane with no launcher: it claims nothing at all
+    workspace.activePaneId = "pane-2";
+    workspace.refresh();
+    await settle();
+    expect(launcherOwnsKeys()).toBe(false);
+    expect(launcherOwnsKeyEvent({ target: textarea })).toBe(false);
   });
 
   it("opens its field on ⌥↵ and asks index.recent for the pane's own folder", async () => {
