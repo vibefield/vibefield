@@ -40,6 +40,7 @@ import {
 import { type AgentCatalogReaders, LAYOUT, type TerminalInfo } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { AgentAdoption, SystemAudit } from "./agent-runtime";
+import { SPAWNED_BY_SHELL } from "./agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 
@@ -1525,7 +1526,8 @@ export class AgentGatewayService {
         attrs: {
           provider: info.provider.id,
           sessionId: terminalSessionId,
-          spawnedBy: "user-shell",
+          // B5 — one word for the provenance: the fold's own constant
+          spawnedBy: SPAWNED_BY_SHELL,
         },
       };
       await this.audited(
