@@ -50,7 +50,7 @@ import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
-import { setLauncherOwnsKeys } from "../src/godview/monitor/launcher-keys";
+import { monitorHoldsKeys, setLauncherOwnsKeys } from "../src/godview/monitor/launcher-keys";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
@@ -1097,6 +1097,20 @@ describe("the profile tabs (AR-S5)", () => {
     });
     expect(passed?.defaultPrevented).toBe(true);
     expect(chosenTab(host)).toBe("work");
+  });
+
+  it("holds the keys over a fresh pane's launcher while the find sheet is up (QL-D2's other half)", async () => {
+    await mountMonitor("list", tabDoor());
+    const find = (): void => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { code: "KeyF", key: "f", metaKey: true, bubbles: true }),
+      );
+    };
+    expect(monitorHoldsKeys()).toBe(false);
+    await act(async () => find());
+    expect(monitorHoldsKeys()).toBe(true);
+    await act(async () => find());
+    expect(monitorHoldsKeys()).toBe(false);
   });
 
   it("creates empty terminals independently of the selected profile filter", async () => {

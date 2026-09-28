@@ -242,7 +242,7 @@ const { configureTerminalPool, disposeTerminalPool } = await import("../src/term
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
 const { forgetBornShells } = await import("../src/godview/deck-launchers");
-const { launcherOwnsKeys, resetLauncherKeys } = await import(
+const { launcherOwnsKeys, resetLauncherKeys, setMonitorHoldsKeys } = await import(
   "../src/godview/monitor/launcher-keys"
 );
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
@@ -1107,6 +1107,28 @@ describe("the empty pane launcher (QL-1)", () => {
         params: { cwd: "/home/tester/vibe-field", scope: "here", limit: 100 },
       },
     ]);
+  });
+
+  it("yields ⎋ to a monitor sheet over the stage — the find sheet's Escape is the sheet's", async () => {
+    runtimeBirths.add("pty-1");
+    const host = await mountDeck();
+    expect(launcherOwnsKeys()).toBe(true);
+    await act(async () => setMonitorHoldsKeys(true));
+    await settle();
+    expect(launcherOwnsKeys()).toBe(false);
+    let escaped: KeyboardEvent | undefined;
+    await act(async () => {
+      escaped = pressIn(paneOf(host, "pane-1"), "Escape");
+    });
+    await settle();
+    expect(escaped?.defaultPrevented).toBe(false);
+    // the launcher rests, and was not put away by a key it never owned
+    expect(
+      launcherFor(host, "pty-1")?.querySelector(".vf-pane-launcher.is-resting"),
+    ).not.toBeNull();
+    await act(async () => setMonitorHoldsKeys(false));
+    await settle();
+    expect(launcherOwnsKeys()).toBe(true);
   });
 
   it("launches on ⌥1 into THIS pane, in its folder, and the reaper closes the shell it replaced", async () => {

@@ -8,13 +8,25 @@ import {
   AgentProvidersResult,
 } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
-import { type ReactElement, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { getRendererLogger } from "../logging";
 import { adoptCreatedTerminal, useTerminalPool } from "../terminal/pool";
 import { paneCwd, readDeviceHost } from "./deck-restore";
 import { launcherAgents, launcherPortOver } from "./launcher-doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
-import { setLauncherOwnsKeys } from "./monitor/launcher-keys";
+import {
+  monitorHoldsKeys,
+  setLauncherOwnsKeys,
+  subscribeMonitorHoldsKeys,
+} from "./monitor/launcher-keys";
 import type { MonitorDoor } from "./monitor/remote-door";
 
 // THE EMPTY PANE LAUNCHER'S HOST (QL-1, thinking-ql-empty-pane-launcher.md;
@@ -243,6 +255,10 @@ export function GodviewDeckLaunchers({
     [fieldd, door],
   );
 
+  // A monitor sheet over the stage (the find sheet) holds the keyboard: the
+  // launchers rest and own no key until it closes.
+  const monitorHolds = useSyncExternalStore(subscribeMonitorHoldsKeys, monitorHoldsKeys);
+
   // Mounted for the deck's whole life, not only while a pane is fresh: the
   // mounter remembers which launchers were put away with ⎋ and which shells
   // it saw input reach, and a remount would forget both.
@@ -251,7 +267,7 @@ export function GodviewDeckLaunchers({
     <DeckLaunchers
       deckRef={deckRef}
       panes={panes}
-      activePaneId={workspace.activePaneId}
+      activePaneId={monitorHolds ? null : workspace.activePaneId}
       freshSessionIds={freshShells}
       cwdBySession={cwdBySession}
       paneColors={paneColors}

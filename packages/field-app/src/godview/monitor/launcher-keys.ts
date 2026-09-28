@@ -25,7 +25,39 @@ export function launcherOwnsKeys(): boolean {
   return owners > 0;
 }
 
-/** Tests only: forget every owner. */
+/** Tests only: forget every owner and every hold. */
 export function resetLauncherKeys(): void {
   owners = 0;
+  monitorHolds = 0;
+}
+
+// ── the other direction: the monitor's own sheet holds the keys ──
+//
+// Found by the godview smoke (its find-sheet row): ⌘F opens the find sheet
+// with the keyboard still in the terminal, and the sheet closes on a window
+// Escape. With a fresh pane focused, the launcher's capture listener took that
+// Escape as "put the launcher away" and stopped it, so the sheet never closed.
+// While the monitor has a sheet up over the stage, the launcher yields its
+// keys (the deck hands it no active pane), exactly as the tab strip yields
+// the digits to it.
+
+let monitorHolds = 0;
+const holdListeners = new Set<() => void>();
+
+/** A monitor sheet (the find sheet) opened (true) or closed (false). */
+export function setMonitorHoldsKeys(holds: boolean): void {
+  const before = monitorHolds > 0;
+  monitorHolds = Math.max(0, monitorHolds + (holds ? 1 : -1));
+  if (before !== monitorHolds > 0) for (const listener of holdListeners) listener();
+}
+
+/** Whether a monitor sheet holds the keyboard right now. */
+export function monitorHoldsKeys(): boolean {
+  return monitorHolds > 0;
+}
+
+/** For `useSyncExternalStore`: the deck re-renders when the hold flips. */
+export function subscribeMonitorHoldsKeys(listener: () => void): () => void {
+  holdListeners.add(listener);
+  return () => holdListeners.delete(listener);
 }

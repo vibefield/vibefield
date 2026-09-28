@@ -9,8 +9,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   launcherOwnsKeys,
+  monitorHoldsKeys,
   resetLauncherKeys,
   setLauncherOwnsKeys,
+  setMonitorHoldsKeys,
+  subscribeMonitorHoldsKeys,
 } from "../src/godview/monitor/launcher-keys";
 
 afterEach(() => resetLauncherKeys());
@@ -37,5 +40,18 @@ describe("launcher-keys", () => {
     setLauncherOwnsKeys(false);
     setLauncherOwnsKeys(true);
     expect(launcherOwnsKeys()).toBe(true);
+  });
+
+  it("tells the deck when a monitor sheet takes or gives back the keyboard, once per flip", () => {
+    const heard: boolean[] = [];
+    const stop = subscribeMonitorHoldsKeys(() => heard.push(monitorHoldsKeys()));
+    setMonitorHoldsKeys(true);
+    setMonitorHoldsKeys(true); // a second holder: no flip
+    setMonitorHoldsKeys(false);
+    setMonitorHoldsKeys(false);
+    stop();
+    setMonitorHoldsKeys(true); // unsubscribed
+    expect(heard).toEqual([true, false]);
+    expect(monitorHoldsKeys()).toBe(true);
   });
 });

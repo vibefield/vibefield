@@ -31,7 +31,7 @@ import type { GodviewTheme } from "./GodviewTuningPanel";
 import { managedRowId, monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
-import { launcherOwnsKeys } from "./monitor/launcher-keys";
+import { launcherOwnsKeys, setMonitorHoldsKeys } from "./monitor/launcher-keys";
 import {
   chosenProfile,
   personaProfiles,
@@ -244,6 +244,13 @@ export function GodviewMonitor({
   }, [usagePort]);
   const claimsRef = useRef<HTMLDivElement>(null);
   const [findOpen, setFindOpen] = useState(false);
+  // QL-D2's other half: while the find sheet is up, its Escape is the sheet's,
+  // not a fresh pane's launcher's (`launcher-keys.ts`).
+  useEffect(() => {
+    if (!findOpen) return;
+    setMonitorHoldsKeys(true);
+    return () => setMonitorHoldsKeys(false);
+  }, [findOpen]);
   /** What the swarm is painting with, read off its own element (AR-5). */
   const [swarmRenderer, setSwarmRenderer] = useState("none");
   /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */

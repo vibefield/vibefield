@@ -3980,6 +3980,75 @@ export async function runSmokeGodview(opts: {
     verdict["splitPaneTrail"] = await persistence.untilSeen(splitSession);
     verdict["firstPaneTrail"] = await persistence.untilSeen(freeShell);
 
+    // 4a. THE EMPTY PANE LAUNCHER (QL-1). The split is a shell the deck's own
+    //     new-pane door opened, with no input yet, so its pane shows the
+    //     launcher; ⌥↵ opens the field (and asks `index.recent`), ⎋ closes it,
+    //     a second ⎋ puts the launcher away so the rows below meet the shell
+    //     exactly as before. Keys are DOM events dispatched in the page at the
+    //     pane's own textarea — the launcher's window capture listener is what
+    //     is under test, not the OS's delivery (and nothing reaches the OS).
+    {
+      const launcher = `document.querySelector('[data-vf-pane-launcher="${splitSession}"]')`;
+      const press = (code: string, key: string, altKey: boolean): Promise<unknown> =>
+        win.webContents.executeJavaScript(
+          `(() => {
+            const pane = ${launcher}?.closest('.ghostty-pane');
+            const target = pane?.querySelector('textarea') ?? pane;
+            if (!target) return false;
+            target.dispatchEvent(new KeyboardEvent('keydown', {
+              code: ${JSON.stringify(code)}, key: ${JSON.stringify(key)}, altKey: ${altKey},
+              bubbles: true, cancelable: true,
+            }));
+            return true;
+          })()`,
+          true,
+        );
+      const launcherState = `(() => {
+        const host = ${launcher};
+        const block = host?.querySelector('.vf-pane-launcher');
+        return {
+          shown: block != null,
+          open: block?.classList.contains('is-open') ?? false,
+          agents: host?.querySelectorAll('.vf-pane-launcher-agent').length ?? 0,
+          focusInField: document.activeElement?.closest('.vf-pane-launcher') != null,
+        };
+      })()`;
+      await waitForRendererFact(
+        win,
+        `the split pane ${splitSession} to show the empty pane launcher`,
+        20_000,
+        `${launcher}?.querySelector('.vf-pane-launcher') != null`,
+        launcherState,
+      );
+      await press("Enter", "Enter", true);
+      await waitForRendererFact(
+        win,
+        "⌥↵ to open the launcher's field and take the keyboard into it",
+        10_000,
+        `(() => { const s = ${launcherState}; return s.open && s.focusInField; })()`,
+        launcherState,
+      );
+      await press("Escape", "Escape", false);
+      await waitForRendererFact(
+        win,
+        "⎋ to close the launcher's field",
+        10_000,
+        `(() => { const s = ${launcherState}; return s.shown && !s.open; })()`,
+        launcherState,
+      );
+      await press("Escape", "Escape", false);
+      await waitForRendererFact(
+        win,
+        "a second ⎋ to put the launcher away",
+        10_000,
+        `${launcher} == null`,
+        launcherState,
+      );
+      verdict["launcherShown"] = true;
+      verdict["launcherFieldOpened"] = true;
+      verdict["launcherDismissed"] = true;
+    }
+
     // 4b. THE FLIP ITSELF (GT-D11), on the birth class that still has one.
     //
     //     Deck panes stopped being that class at TP-S1r: they are born through
