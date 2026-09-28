@@ -1131,15 +1131,19 @@ export class IndexService {
    * "Here" is QL-D9: the project whose `root_paths` hold the folder's git root
    * or its worktree group's root (found by the walk rosetta itself does, so a
    * pane in a worktree nobody has run an agent in still finds the repo's
-   * sessions); a folder in no repo takes the project whose root is the
-   * longest prefix of it. A folder in no project at all is "here" by folder:
-   * the sessions run in it or under it. Readiness and every degraded state
+   * sessions); a folder in no repo takes only the project rooted at exactly
+   * it (rosetta roots every non-repo cwd's project there, so an ancestor's —
+   * home's — is never this folder's). A folder with no project of its own is
+   * "here" by folder: the sessions run in it or under it. Readiness and every degraded state
    * are `index.sessions`' own: UNAVAILABLE `{service: "index", state}`. */
   async recent(params: IndexRecentParams): Promise<IndexRecentResult> {
     this.requireReady();
     const limit = params.limit ?? INDEX_RECENT_DEFAULT_LIMIT;
     const cwd = params.cwd === undefined ? undefined : normalizeRoot(params.cwd);
-    const project = cwd === undefined ? undefined : await this.projectFor(cwd);
+    const spellings = cwd === undefined ? [] : folderSpellings(cwd);
+    const inFolder = (row: IndexSessionRow): boolean =>
+      spellings.some((folder) => withinFolder(row.cwd, folder));
+    const project = cwd === undefined ? undefined : await this.projectFor(spellings);
     const named = project === undefined ? {} : { project: { id: project.id, name: project.name } };
 
     let rows: IndexSessionRow[];
@@ -1151,16 +1155,14 @@ export class IndexService {
       // no project to ask by: the newest sessions the index will list,
       // filtered by folder — a folder whose sessions are all older than
       // rosetta's list ceiling answers fewer than it holds, never wrong ones
-      rows = (await this.listSessions(`limit=${RECENT_SCAN_LIMIT}`)).filter((row) =>
-        withinFolder(row.cwd, cwd),
-      );
+      rows = (await this.listSessions(`limit=${RECENT_SCAN_LIMIT}`)).filter(inFolder);
     } else {
       // no folder: nothing is here
       return { rows: [] };
     }
 
     const here = (row: IndexSessionRow): boolean =>
-      project !== undefined ? row.project_id === project.id : withinFolder(row.cwd, cwd);
+      project !== undefined ? row.project_id === project.id : inFolder(row);
     const top = rows.filter((row) => (row.parent_session_id ?? null) === null).slice(0, limit);
     const runtimes = await this.recentRuntimeTable(top);
     const projects =
@@ -1192,20 +1194,26 @@ export class IndexService {
     };
   }
 
-  /** QL-D9 — the rosetta project a folder belongs to, or undefined. Tried for
-   * the folder as spelled AND as the filesystem resolves it: rosetta files a
-   * session under the cwd its agent reported (a resolved path), while a pane
-   * reports its shell's (`/tmp` where the agent said `/private/tmp`). */
-  private async projectFor(cwd: string): Promise<IndexProjectRow | undefined> {
-    const spellings = folderSpellings(cwd);
+  /** QL-D9 — the rosetta project a folder belongs to, or undefined: in a repo,
+   * the project holding its git root or its worktree group's root; outside
+   * one, the project rooted at exactly the folder. Tried for the folder as
+   * spelled AND as the filesystem resolves it: rosetta files a session under
+   * the cwd its agent reported (a resolved path), while a pane reports its
+   * shell's (`/tmp` where the agent said `/private/tmp`, `/users/…` on a
+   * case-insensitive volume). */
+  private async projectFor(spellings: readonly string[]): Promise<IndexProjectRow | undefined> {
     const repos = spellings.flatMap((dir) => {
       const found = repoRoots(dir);
       return found === undefined ? [] : [found.root, found.groupRoot];
     });
+    // Outside a repo only the folder's OWN project answers: rosetta makes every
+    // non-repo cwd a project rooted at exactly that cwd (`pipeline/src/
+    // project.rs` `project`), so an ancestor's project (home's, most often) is
+    // another folder's sessions, never this one's. No exact root: the caller
+    // falls back to the cwd-prefix filter (QL-D9).
+    const roots = repos.length > 0 ? repos : spellings;
     const match = (projects: readonly IndexProjectRow[]): IndexProjectRow | undefined =>
-      repos.length > 0
-        ? projects.find((p) => p.root_paths.some((root) => repos.includes(normalizeRoot(root))))
-        : longestPrefixProject(projects, spellings);
+      projects.find((p) => p.root_paths.some((root) => roots.includes(normalizeRoot(root))));
     const cached = match(await this.recentProjectTable());
     if (cached !== undefined) return cached;
     // a miss may be a repo the index met since the cache was read
@@ -1661,10 +1669,14 @@ export function normalizeRoot(path: string): string {
 }
 
 /** The folder as spelled, and as the filesystem resolves it when that differs
- * (a folder that does not exist has only its spelling). */
+ * (a folder that does not exist has only its spelling). The NATIVE realpath:
+ * JS's `realpathSync` resolves symlinks but keeps the input's case, so on a
+ * case-insensitive volume (APFS's default) `/users/j/app` stays lowercase and
+ * never meets the `/Users/j/app` rosetta filed; the OS's realpath(3) answers
+ * the name as stored. */
 function folderSpellings(cwd: string): string[] {
   try {
-    const real = normalizeRoot(realpathSync(cwd));
+    const real = normalizeRoot(realpathSync.native(cwd));
     return real === cwd ? [cwd] : [cwd, real];
   } catch {
     return [cwd];
@@ -1729,23 +1741,6 @@ function commonRoot(gitDir: string): string | undefined {
   const target = text.trim();
   const common = normalizeRoot(isAbsolute(target) ? target : join(gitDir, target));
   return basename(common) === ".git" ? dirname(common) : common;
-}
-
-/** A folder in no repo: the project with a root that is the folder itself or
- * its nearest ancestor (the longest such root wins). */
-function longestPrefixProject(
-  projects: readonly IndexProjectRow[],
-  spellings: readonly string[],
-): IndexProjectRow | undefined {
-  let best: { project: IndexProjectRow; length: number } | undefined;
-  for (const project of projects) {
-    for (const raw of project.root_paths) {
-      const root = normalizeRoot(raw);
-      if (!spellings.some((cwd) => withinFolder(cwd, root))) continue;
-      if (best === undefined || root.length > best.length) best = { project, length: root.length };
-    }
-  }
-  return best?.project;
 }
 
 /** `path` is `folder` or somewhere under it (both normalized). */

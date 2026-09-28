@@ -548,13 +548,13 @@ describe("index.search — one question over the history (AR-5e)", () => {
 });
 
 describe("index.recent — the empty pane launcher's list (QL)", () => {
-  it("here: the folder's project (longest prefix outside a repo), asked by id; all: every top-level session, each saying whether it is here", async () => {
+  it("here: the folder's project (the one rooted at it, outside a repo), asked by id; all: every top-level session, each saying whether it is here", async () => {
     const world = await setup();
     await ready(world.daemon);
     const win = await windowToken(world.daemon, ["index.search"], "r1");
     const before = world.asked().length;
     const here = IndexRecentResult.parse(
-      await win.call("index.recent", { cwd: "/w/one/src", scope: "here", limit: 10 }),
+      await win.call("index.recent", { cwd: "/w/one", scope: "here", limit: 10 }),
     );
     expect(world.asked().slice(before)).toEqual([
       "/api/projects",
@@ -567,7 +567,7 @@ describe("index.recent — the empty pane launcher's list (QL)", () => {
     expect(here.rows[0]).toMatchObject({ startedAt: 10_000, title: "First" });
 
     const all = IndexRecentResult.parse(
-      await win.call("index.recent", { cwd: "/w/one/src", scope: "all" }),
+      await win.call("index.recent", { cwd: "/w/one", scope: "all" }),
     );
     // the delegated child is transcript structure, never a row to resume
     expect(all.rows.map((row) => [row.sessionId, row.here])).toEqual([

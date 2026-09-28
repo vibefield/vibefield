@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectRow, RuntimeRow, SessionRow } from "@rosetta/protocol";
@@ -317,20 +317,58 @@ describe("IndexService.recent — here (QL-D9)", () => {
     expect((await index.recent({ cwd: alias, scope: "here" })).project?.id).toBe("p-main");
   });
 
-  it("a folder in no repo: the project whose root is its longest prefix", async () => {
+  it("a folder in no repo: only the project rooted at exactly it — an ancestor's is another folder's", async () => {
     const { index, daemon, asked } = service();
     const base = scratch("plain");
-    const deep = join(base, "a", "b", "c");
+    const deep = join(base, "a", "b");
     mkdirSync(deep, { recursive: true });
     daemon.projects = [
       project("p-a", "a", join(base, "a")),
-      project("p-ab", "b", join(base, "a", "b")),
-      // a sibling that merely shares a string prefix is not an ancestor
+      project("p-ab", "b", deep),
+      // a sibling that merely shares a string prefix is not the folder
       project("p-abc", "bc", join(base, "a", "bc")),
     ];
     const result = await index.recent({ cwd: deep, scope: "here", limit: 5 });
     expect(result.project).toEqual({ id: "p-ab", name: "b" });
     expect(asked()).toContain("sessions?project=p-ab&limit=5");
+  });
+
+  it("a folder under home (itself a project, as rosetta makes every non-repo cwd one) is never filed under home's project", async () => {
+    const { index, daemon, asked } = service();
+    const home = scratch("home");
+    const folder = join(home, "notes");
+    mkdirSync(join(folder, "2026"), { recursive: true });
+    daemon.projects = [project("p-home", "home", home)];
+    daemon.sessions = [
+      session({ id: "s-home", native_session_id: "n0", project_id: "p-home", cwd: home }),
+      session({ id: "s-in", native_session_id: "n1", cwd: folder }),
+      session({ id: "s-under", native_session_id: "n2", cwd: join(folder, "2026") }),
+    ];
+    const result = await index.recent({ cwd: folder, scope: "here", limit: 10 });
+    expect(result.project).toBeUndefined();
+    // the cwd-prefix filter (QL-D9), never `project=p-home`
+    expect(asked().filter((ask) => ask.startsWith("sessions"))).toEqual(["sessions?limit=1000"]);
+    expect(result.rows.map((r) => r.sessionId)).toEqual(["s-in", "s-under"]);
+  });
+
+  it("the folder as a case-insensitive volume spells it still finds the project rosetta filed", async () => {
+    const { index, daemon } = service();
+    const base = scratch("case");
+    const main = checkout(join(base, "app"));
+    mkdirSync(join(main, "src"));
+    const shouted = join(base, "APP", "src");
+    // only where the volume folds case (APFS's default); elsewhere there is no such folder
+    if (!existsSync(shouted)) return;
+    daemon.projects = [project("p-app", "app", main)];
+    expect((await index.recent({ cwd: shouted, scope: "here" })).project?.id).toBe("p-app");
+    // and outside a repo, the folder filter meets the stored case too
+    const plain = join(scratch("case"), "notes");
+    mkdirSync(plain);
+    daemon.projects = [];
+    daemon.sessions = [session({ id: "s-in", native_session_id: "n1", cwd: plain })];
+    const upper = join(plain, "..", "NOTES");
+    const rows = (await index.recent({ cwd: upper, scope: "here" })).rows;
+    expect(rows.map((r) => [r.sessionId, r.here])).toEqual([["s-in", true]]);
   });
 
   it("a repo no project holds is not claimed by an ancestor's project — it is a folder of its own", async () => {

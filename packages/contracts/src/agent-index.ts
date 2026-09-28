@@ -570,8 +570,9 @@ export type IndexSessionsResult = z.infer<typeof IndexSessionsResult>;
 // every project ("all"). "Here" is rosetta's project — the git root, worktrees
 // grouped — so a pane in a worktree finds the sessions of every checkout of
 // the repo; a pane outside any repo matches by folder instead (the project
-// whose root is the longest prefix of the cwd, else the sessions run in the
-// cwd or under it). Top-level sessions only: a delegated child is transcript
+// rooted at exactly the cwd — rosetta roots every non-repo cwd's project there,
+// so an ancestor's, home's most often, is never this folder's — else the
+// sessions run in the cwd or under it). Top-level sessions only: a delegated child is transcript
 // structure, never a thing a person resumes.
 
 export const INDEX_RECENT_DEFAULT_LIMIT = 100;
