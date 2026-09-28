@@ -43,32 +43,46 @@ import type { MonitorDoor } from "./monitor/remote-door";
 /* ── the gate (QL-D7 as revised 2026-09-28) ─────────────────────────────── */
 
 /**
- * The shells born through the deck's own new-pane door (`createSplitSession`).
- * Ghosttea's own birth receipt (`sessionCreatedHere`) covers the workspace's
- * first shell, which it creates itself; a split is born through fieldd's
- * `terminal.create` and REGISTERED with the runtime, which ghosttea (rightly)
- * does not count as a birth — so the deck says so here, once per split. A
- * rehydrated pane is not recorded: a restored layout's shells never qualify.
+ * The shells born through the deck's own new-pane door (`createSplitSession`),
+ * PER RUNTIME. Ghosttea's own birth receipt (`sessionCreatedHere`) covers the
+ * workspace's first shell, which it creates itself; a split is born through
+ * fieldd's `terminal.create` and REGISTERED with the runtime, which ghosttea
+ * (rightly) does not count as a birth — so the deck says so here, once per
+ * split. A rehydrated pane is not recorded: a restored layout's shells never
+ * qualify.
+ *
+ * Keyed by the runtime the split was born under, because every other fact the
+ * gate reads is that runtime's: `sessionHasInput` and `sessionCreatedHere` are
+ * its memory, and the deck's reaper (`UnusedPaneSessions`) is rebuilt with it.
+ * A pool retry replaces the runtime and forgets which shells had input; a
+ * module-wide record would have outlived that and shown the launcher over a
+ * USED shell, and a launch there would replace a PTY the new reaper never
+ * held a receipt for — a leak. Under the new runtime the old splits are
+ * simply not born here, exactly as the reaper treats them.
  */
-const bornShells = new Set<string>();
+const bornShells = new WeakMap<object, Set<string>>();
 
-/** The deck's new-pane door made this shell (one line in `createSplitSession`). */
-export function recordBornShell(sessionId: string): void {
-  bornShells.add(sessionId);
+/** The deck's new-pane door made this shell under `runtime` (one line in
+ * `createSplitSession`). No runtime yet, no record: nothing could say later
+ * whether it had input. */
+export function recordBornShell(runtime: object | null, sessionId: string): void {
+  if (runtime === null) return;
+  let born = bornShells.get(runtime);
+  if (born === undefined) {
+    born = new Set();
+    bornShells.set(runtime, born);
+  }
+  born.add(sessionId);
 }
 
-/** Born in this view: the deck's record of its splits, or ghosttea's own
- * receipt for the births it made (the workspace's first shell). */
+/** Born in this view, under THIS runtime: the deck's record of its splits, or
+ * ghosttea's own receipt for the births it made (the workspace's first shell). */
 export function bornInThisView(
-  runtime: Pick<GhostteaTerminalRuntime, "sessionCreatedHere"> | null,
+  runtime: (object & Pick<GhostteaTerminalRuntime, "sessionCreatedHere">) | null,
 ): (sessionId: string) => boolean {
-  return (sessionId) =>
-    bornShells.has(sessionId) || runtime?.sessionCreatedHere(sessionId) === true;
-}
-
-/** Tests only. */
-export function forgetBornShells(): void {
-  bornShells.clear();
+  if (runtime === null) return () => false;
+  const born = bornShells.get(runtime);
+  return (sessionId) => born?.has(sessionId) === true || runtime.sessionCreatedHere(sessionId);
 }
 
 /** What the gate asks of the session's world, apart from its summary. */

@@ -238,10 +238,11 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
   },
 }));
 
-const { configureTerminalPool, disposeTerminalPool } = await import("../src/terminal/pool");
+const { configureTerminalPool, disposeTerminalPool, retryTerminalPool } = await import(
+  "../src/terminal/pool"
+);
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
-const { forgetBornShells } = await import("../src/godview/deck-launchers");
 const { launcherOwnsKeys, resetLauncherKeys, setMonitorHoldsKeys } = await import(
   "../src/godview/monitor/launcher-keys"
 );
@@ -1052,7 +1053,6 @@ describe("the empty pane launcher (QL-1)", () => {
   };
 
   afterEach(() => {
-    forgetBornShells();
     resetLauncherKeys();
   });
 
@@ -1073,6 +1073,33 @@ describe("the empty pane launcher (QL-1)", () => {
         (name) => name.textContent,
       ),
     ).toEqual(["Claude Code"]);
+  });
+
+  it("never draws on a split born under a runtime a pool retry replaced — its input history went with it", async () => {
+    const host = await mountDeck();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    expect(launcherFor(host, "born-1")).not.toBeNull();
+    // typed into, so the launcher goes and the reaper will never close it
+    usedSessions.add("born-1");
+    workspace.refresh();
+    await settle();
+    expect(launcherFor(host, "born-1")).toBeNull();
+    // the pool's recovery door: a replacement runtime, which remembers no input
+    await act(async () => retryTerminalPool(["born-1"]));
+    usedSessions.clear();
+    workspace.refresh();
+    await settle();
+    expect(launcherFor(host, "born-1")).toBeNull();
+    expect(launcherOwnsKeys()).toBe(false);
+    // ⌥1 over it is the shell's, so no agent replaces (and leaks) the used shell
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Digit1");
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([]);
   });
 
   it("draws on the workspace's first shell, which ghosttea's own receipt names", async () => {

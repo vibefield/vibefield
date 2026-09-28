@@ -816,10 +816,10 @@ export function GodviewDeck({
       const cwd = paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
       const born = await bornSession(cwd);
       if (born === null) throw new Error("the floor did not report the session it just created");
-      recordBornShell(born.id); // QL-D7: a new pane's shell, which may show the launcher
+      recordBornShell(runtime, born.id); // QL-D7: a new pane's shell, which may show the launcher
       return born;
     },
-    [bornSession, shell],
+    [bornSession, shell, runtime],
   );
 
   /**

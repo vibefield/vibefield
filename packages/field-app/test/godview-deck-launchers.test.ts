@@ -9,17 +9,14 @@
  * receipt and never qualify. Pure: the deck supplies the facts.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   bornInThisView,
   type FreshShellFacts,
-  forgetBornShells,
   freshShellIds,
   launcherCwds,
   recordBornShell,
 } from "../src/godview/deck-launchers";
-
-afterEach(() => forgetBornShells());
 
 function facts(
   overrides: Partial<Record<keyof FreshShellFacts, readonly string[]>>,
@@ -63,11 +60,25 @@ describe("the fresh shells", () => {
   });
 
   it("reads a split's birth from the deck's record and the first shell's from ghosttea's receipt", () => {
-    recordBornShell("split");
-    const bornHere = bornInThisView({ sessionCreatedHere: (id) => id === "first" });
+    const runtime = { sessionCreatedHere: (id: string) => id === "first" };
+    recordBornShell(runtime, "split");
+    const bornHere = bornInThisView(runtime);
     expect(["split", "first", "restored"].map(bornHere)).toEqual([true, true, false]);
-    // no runtime yet: only the deck's own record
-    expect(["split", "first"].map(bornInThisView(null))).toEqual([true, false]);
+    // no runtime yet: nothing is born here, and nothing is recorded
+    recordBornShell(null, "early");
+    expect(["split", "first", "early"].map(bornInThisView(null))).toEqual([false, false, false]);
+  });
+
+  it("forgets a split's birth when the runtime is replaced — the reaper and the input history go with it", () => {
+    const before = { sessionCreatedHere: () => false };
+    const after = { sessionCreatedHere: () => false };
+    recordBornShell(before, "split");
+    expect(bornInThisView(before)("split")).toBe(true);
+    // a pool retry: the new runtime never saw the split's input, and the new
+    // reaper holds no receipt for it, so the gate must not either
+    expect(bornInThisView(after)("split")).toBe(false);
+    recordBornShell(after, "split-2");
+    expect(bornInThisView(before)("split-2")).toBe(false);
   });
 });
 
