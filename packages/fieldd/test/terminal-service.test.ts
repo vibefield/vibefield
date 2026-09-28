@@ -3656,4 +3656,79 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
     expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "clean", variables });
     expect(asked).toEqual([]);
   });
+
+  /** A daemon over the mock mgmt server whose one keyed cell is the fake
+   * floor (the GT-5b row's composition), with the AR-7d seam as given. */
+  async function daemonOverFakeFloor(
+    terminalShellIntegration?: (shell: string) => Record<string, string> | undefined,
+  ) {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.terminalRoutes = keyedRoutes(1, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-ar7d",
+        endpoints: floor.endpoints,
+        workloadClass: "interactive",
+        role: "class",
+        grantKey: KEY_I,
+        doors: {
+          controlUrl: "ws://127.0.0.1:50017/control",
+          framesUrl: "ws://127.0.0.1:50017/frames",
+        },
+      },
+    ]);
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({
+      dataDir,
+      controlPort: 0,
+      dataPort: 0,
+      ...(terminalShellIntegration === undefined ? {} : { terminalShellIntegration }),
+    });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["terminal.attach"], "ar7d-daemon");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+    const createOutcomes = async () =>
+      (await readAuditRecords(dataDir))
+        .filter((r) => r.action === "terminal.session.create" && r.phase === "outcome")
+        .map((r) => r.attrs);
+    return { dataDir, floor, rpc, createOutcomes };
+  }
+
+  it("the daemon's seam reaches the floor, and the create's audit outcome says `integrated` — a fact, never the variables", async () => {
+    const { cat } = programs();
+    const asked: string[] = [];
+    const { dataDir, floor, rpc, createOutcomes } = await daemonOverFakeFloor((shell) => {
+      asked.push(shell);
+      return INTEGRATION;
+    });
+    const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+    const program = TerminalCreateOpenResult.parse(
+      await rpc.call("terminal.create", { shell: cat }),
+    );
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "inherit" });
+    // asked for the default login shell's birth only
+    expect(asked).toHaveLength(1);
+    expect(await createOutcomes()).toEqual([
+      { sessionId: shell.sessionId, integrated: true },
+      { sessionId: program.sessionId, integrated: false },
+    ]);
+    const ledger = JSON.stringify(await readAuditRecords(dataDir));
+    for (const value of Object.values(INTEGRATION).filter((v) => v !== "")) {
+      expect(ledger).not.toContain(value);
+    }
+  });
+
+  it("a daemon with nothing to answer the seam — the gateway not yet up — births a shell exactly as before", async () => {
+    const { floor, rpc, createOutcomes } = await daemonOverFakeFloor();
+    const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    expect(await createOutcomes()).toEqual([{ sessionId: shell.sessionId, integrated: false }]);
+  });
 });
