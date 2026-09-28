@@ -13,6 +13,8 @@ export default defineConfig({
   resolve: { dedupe: ["react", "react-dom"] },
   test: {
     environment: "happy-dom",
+    // Tests that inspect smoke markers opt in exactly as the Electron rig does.
+    environmentOptions: { happyDOM: { url: "http://localhost:3000/?godviewMarkers=1" } },
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     setupFiles: ["./test/setup.ts"],
     server: {

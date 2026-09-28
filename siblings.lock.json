@@ -3,7 +3,7 @@
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
-      "sha": "2b83e2c01f396b3de9d3736b69f32e1988976d6d",
+      "sha": "bd8b6aded9996b9609bdd5e818136bfa4c4b765e",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
@@ -30,6 +30,30 @@
       "swift": {
         "manifest": "apps/ios/VibeFieldKit/Package.swift",
         "link": "apps/ios/VibeFieldKit/.window/truffle"
+      }
+    },
+    "ghosttea": {
+      "path": "../ghosttea-0.11.2",
+      "repository": "https://github.com/vibecook-dev/ghosttea.git",
+      "sha": "1496c1a3819aeb84ef0f103b48634ca898fe376d",
+      "javascript": {
+        "workspaces": [
+          "@vibecook/ghosttea-protocol",
+          "@vibecook/ghosttea-frame",
+          "@vibecook/ghosttea",
+          "@vibecook/ghosttea-react"
+        ]
+      },
+      "packages": {
+        "@vibecook/ghosttea-react": "packages/ghosttea-react"
+      },
+      "patch": {
+        "ghosttea": "native/ghosttea",
+        "ghosttea-config": "native/ghosttea/crates/ghosttea-config",
+        "ghosttea-core": "native/ghosttea/crates/ghosttea-core",
+        "ghosttea-text": "native/ghosttea/crates/ghosttea-text",
+        "ghosttea-vt": "native/ghosttea/crates/ghosttea-vt",
+        "ghosttea-vt-sys": "native/ghosttea/crates/ghosttea-vt-sys"
       }
     }
   }

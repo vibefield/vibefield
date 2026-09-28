@@ -21,7 +21,10 @@ import type {
 // changelog-writer in its skills folder (Claude and Grok link to it; Codex's
 // turn would move it to the shared folder); sql-review is still Claude's own;
 // Grok dropped sql-review outside VibeField; FIXTURE_SKILL_PLAN is
-// Add skill's read of pdf-forms.
+// Add skill's read of pdf-forms. AR-S4e: Claude's review plugin carries its
+// agent's acts, the account's security-guidance and OpenCode's wakatime say
+// why they have none, and FIXTURE_PLUGIN_RUN is review's update as the plugin
+// act fixture (agents-extensions-plugin-act.valid.json) has it.
 
 /** The catalog's "now" for the lists: two minutes after the read. */
 export const FIXTURE_EXTENSIONS_NOW = new Date("2026-09-25T09:02:10.000Z");
@@ -58,7 +61,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
         },
       },
       counts: {
-        plugins: 1,
+        plugins: 2,
         marketplaces: 1,
         mcpServers: 4,
         skills: 4,
@@ -142,6 +145,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
           store: "shared",
           changes: "command",
           read: true,
+          hostedSkips: true,
         },
         mcpServers: {
           store: "shared",
@@ -155,7 +159,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
         },
       },
       counts: {
-        plugins: 0,
+        plugins: 1,
         marketplaces: 0,
         mcpServers: 0,
         skills: 0,
@@ -661,6 +665,68 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
         version: "3f9c2a1b7d04",
         marketplace: "northlight",
         description: "Reviews against the house style",
+        place:
+          "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/plugins/cache/northlight/review/3f9c2a1b7d04",
+        author: "Northlight Studio",
+        homepage: "https://github.com/northlight-studio/plugins",
+        brings: {
+          commands: ["review", "triage"],
+          agents: ["reviewer"],
+          hooks: ["PreToolUse"],
+        },
+        acts: [
+          {
+            act: "disable",
+            runs: "claude plugin disable review@northlight --scope user",
+            reaches: [],
+          },
+          {
+            act: "remove",
+            runs: "claude plugin uninstall review@northlight --scope user --keep-data",
+            reaches: [],
+          },
+          {
+            act: "purge",
+            runs: "claude plugin uninstall review@northlight --scope user",
+            reaches: [],
+          },
+          {
+            act: "update",
+            runs: "claude plugin update review@northlight --scope user",
+            reaches: [],
+          },
+        ],
+      },
+      {
+        id: "security-guidance@synced",
+        name: "security-guidance",
+        origin: "managed",
+        enabled: true,
+        description: "Warns before an edit that opens a common security hole",
+        place:
+          "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/plugins/synced/security-guidance",
+        unavailable: [
+          {
+            act: "disable",
+            reason: "not-own",
+            message: "It comes with your Claude account, from claude.ai, and changes there",
+          },
+          {
+            act: "remove",
+            reason: "not-own",
+            message: "It comes with your Claude account, from claude.ai, and changes there",
+          },
+          {
+            act: "purge",
+            reason: "not-own",
+            message: "It comes with your Claude account, from claude.ai, and changes there",
+          },
+          {
+            act: "update",
+            reason: "not-own",
+            message: "It comes with your Claude account, from claude.ai, and changes there",
+          },
+        ],
       },
     ],
     codex: [
@@ -672,6 +738,66 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
         version: "26.909.12148",
         marketplace: "openai-primary-runtime",
         description: "Create and edit documents",
+        acts: [
+          {
+            act: "disable",
+            runs: "config/value/write plugins.documents@openai-primary-runtime.enabled = false",
+            reaches: [],
+          },
+          {
+            act: "remove",
+            runs: "codex plugin remove documents@openai-primary-runtime",
+            reaches: [],
+          },
+        ],
+        unavailable: [
+          {
+            act: "purge",
+            reason: "unsupported",
+            message: "Codex removes a plugin one way, with `codex plugin remove`",
+          },
+          {
+            act: "update",
+            reason: "no-command",
+            message: "Codex brings its plugins up to date when their marketplace is upgraded",
+          },
+        ],
+      },
+    ],
+    opencode: [
+      {
+        id: "opencode-wakatime",
+        name: "opencode-wakatime",
+        origin: "own",
+        enabled: true,
+        shared: true,
+        place: "~/.config/opencode/opencode.json",
+        unavailable: [
+          {
+            act: "disable",
+            reason: "no-command",
+            message:
+              "OpenCode has no switch for a plugin: it loads every plugin in its config's plugin list",
+          },
+          {
+            act: "remove",
+            reason: "no-command",
+            message:
+              "OpenCode has no command that removes a plugin: it is an entry in the plugin list of its one config, which every profile reads",
+          },
+          {
+            act: "purge",
+            reason: "no-command",
+            message:
+              "OpenCode has no command that removes a plugin: it is an entry in the plugin list of its one config, which every profile reads",
+          },
+          {
+            act: "update",
+            reason: "no-command",
+            message:
+              "OpenCode installs a plugin's package as it starts; a pinned version changes only in its config",
+          },
+        ],
       },
     ],
   },
@@ -702,6 +828,30 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
 };
 
 /** An act the catalog shows finished: Codex's postgres turned off (the act fixture's run). */
+/** AR-S4e — review's update, finished: the second read found a newer commit. */
+export const FIXTURE_PLUGIN_RUN: AgentExtensionRun = {
+  id: "act-9b21",
+  provider: "claude",
+  label: "Claude",
+  kind: "plugin",
+  item: "review@northlight",
+  name: "review",
+  act: "update",
+  runs: "claude plugin update review@northlight --scope user",
+  state: "finished",
+  startedAt: "2026-09-27T10:12:00.000Z",
+  finishedAt: "2026-09-27T10:12:04.000Z",
+  output:
+    "Updating review@northlight…\nUpdated review@northlight to 9a8b7c6d5e4f. Restart to apply.\n",
+  truncated: false,
+  receipt: {
+    status: "changed",
+    message: "updated 3f9c2a1b7d04 → 9a8b7c6d5e4f",
+    exitCode: 0,
+    finishedAt: "2026-09-27T10:12:04.000Z",
+  },
+};
+
 export const FIXTURE_EXTENSION_RUN: AgentExtensionRun = {
   id: "act-7f3a",
   provider: "codex",

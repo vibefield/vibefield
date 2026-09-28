@@ -30,7 +30,7 @@
         }
       },
       "counts": {
-        "plugins": 1,
+        "plugins": 2,
         "marketplaces": 1,
         "mcpServers": 4,
         "skills": 4
@@ -113,7 +113,8 @@
         "plugins": {
           "store": "shared",
           "changes": "command",
-          "read": true
+          "read": true,
+          "hostedSkips": true
         },
         "mcpServers": {
           "store": "shared",
@@ -127,7 +128,7 @@
         }
       },
       "counts": {
-        "plugins": 0,
+        "plugins": 1,
         "marketplaces": 0,
         "mcpServers": 0,
         "skills": 0
@@ -618,7 +619,67 @@
         "enabled": true,
         "version": "3f9c2a1b7d04",
         "marketplace": "northlight",
-        "description": "Reviews against the house style"
+        "description": "Reviews against the house style",
+        "place": "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/plugins/cache/northlight/review/3f9c2a1b7d04",
+        "author": "Northlight Studio",
+        "homepage": "https://github.com/northlight-studio/plugins",
+        "brings": {
+          "commands": ["review", "triage"],
+          "agents": ["reviewer"],
+          "hooks": ["PreToolUse"]
+        },
+        "acts": [
+          {
+            "act": "disable",
+            "runs": "claude plugin disable review@northlight --scope user",
+            "reaches": []
+          },
+          {
+            "act": "remove",
+            "runs": "claude plugin uninstall review@northlight --scope user --keep-data",
+            "reaches": []
+          },
+          {
+            "act": "purge",
+            "runs": "claude plugin uninstall review@northlight --scope user",
+            "reaches": []
+          },
+          {
+            "act": "update",
+            "runs": "claude plugin update review@northlight --scope user",
+            "reaches": []
+          }
+        ]
+      },
+      {
+        "id": "security-guidance@synced",
+        "name": "security-guidance",
+        "origin": "managed",
+        "enabled": true,
+        "description": "Warns before an edit that opens a common security hole",
+        "place": "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/plugins/synced/security-guidance",
+        "unavailable": [
+          {
+            "act": "disable",
+            "reason": "not-own",
+            "message": "It comes with your Claude account, from claude.ai, and changes there"
+          },
+          {
+            "act": "remove",
+            "reason": "not-own",
+            "message": "It comes with your Claude account, from claude.ai, and changes there"
+          },
+          {
+            "act": "purge",
+            "reason": "not-own",
+            "message": "It comes with your Claude account, from claude.ai, and changes there"
+          },
+          {
+            "act": "update",
+            "reason": "not-own",
+            "message": "It comes with your Claude account, from claude.ai, and changes there"
+          }
+        ]
       }
     ],
     "codex": [
@@ -629,7 +690,63 @@
         "enabled": true,
         "version": "26.909.12148",
         "marketplace": "openai-primary-runtime",
-        "description": "Create and edit documents"
+        "description": "Create and edit documents",
+        "acts": [
+          {
+            "act": "disable",
+            "runs": "config/value/write plugins.documents@openai-primary-runtime.enabled = false",
+            "reaches": []
+          },
+          {
+            "act": "remove",
+            "runs": "codex plugin remove documents@openai-primary-runtime",
+            "reaches": []
+          }
+        ],
+        "unavailable": [
+          {
+            "act": "purge",
+            "reason": "unsupported",
+            "message": "Codex removes a plugin one way, with `codex plugin remove`"
+          },
+          {
+            "act": "update",
+            "reason": "no-command",
+            "message": "Codex brings its plugins up to date when their marketplace is upgraded"
+          }
+        ]
+      }
+    ],
+    "opencode": [
+      {
+        "id": "opencode-wakatime",
+        "name": "opencode-wakatime",
+        "origin": "own",
+        "enabled": true,
+        "shared": true,
+        "place": "~/.config/opencode/opencode.json",
+        "unavailable": [
+          {
+            "act": "disable",
+            "reason": "no-command",
+            "message": "OpenCode has no switch for a plugin: it loads every plugin in its config's plugin list"
+          },
+          {
+            "act": "remove",
+            "reason": "no-command",
+            "message": "OpenCode has no command that removes a plugin: it is an entry in the plugin list of its one config, which every profile reads"
+          },
+          {
+            "act": "purge",
+            "reason": "no-command",
+            "message": "OpenCode has no command that removes a plugin: it is an entry in the plugin list of its one config, which every profile reads"
+          },
+          {
+            "act": "update",
+            "reason": "no-command",
+            "message": "OpenCode installs a plugin's package as it starts; a pinned version changes only in its config"
+          }
+        ]
       }
     ]
   },

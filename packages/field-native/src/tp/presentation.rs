@@ -19,7 +19,9 @@
 //!   is exactly the spec's "coalesced delta bounded by the model".
 //! - A transfer is CHUNKED to `maxChunkBytes` and always COMPLETES: a starved
 //!   chunk waits for credit (bounded by `maxActivationCatchupMs`, else the
-//!   activation stops `{overload}` — never a livelock, never a false ready).
+//!   activation stops `{overload}` instead of waiting forever).
+//! - An oversized catalog-reset frame is already self-contained: transfer it
+//!   directly. Refreshing in response would make two viewers refresh each other.
 //! - Frames for other sessions on a shared hub are skipped by handle; the
 //!   worker validates the TRF1 identity it was told at attach (`trfIdentity`).
 
@@ -201,6 +203,17 @@ async fn run_pump<H: PumpHost>(
                         continue;
                     }
                     let Some(header) = Trf1Header::parse(&packet) else { continue };
+                    // A refresh from another viewer is already self-contained.
+                    // Reuse it instead of forcing a second refresh: otherwise
+                    // two viewers of a large idle pane refresh each other forever.
+                    if packet.len() as u64 > pump.start.max_urgent_unit_bytes
+                        && header.full_snapshot && header.glyph_catalog_reset
+                    {
+                        if matches!(pump.transfer(&packet, &header).await, Step::End) {
+                            break;
+                        }
+                        continue;
+                    }
                     match pump.delta(&packet, &header) {
                         Ok(true) => {}
                         Ok(false) => { needs_full = true; }
@@ -304,15 +317,22 @@ impl<H: PumpHost> Pump<H> {
                     if packet.session_handle != self.start.session_handle {
                         continue;
                     }
-                    if Trf1Header::parse(&packet).is_some_and(|h| h.full_snapshot) {
+                    if Trf1Header::parse(&packet)
+                        .is_some_and(|h| h.full_snapshot && h.glyph_catalog_reset)
+                    {
                         break packet;
                     }
                 }
             }
         };
         let header = Trf1Header::parse(&packet).expect("checked above");
+        self.transfer(&packet, &header).await
+    }
+
+    /// Send a self-contained frame without asking the engine to shape it again.
+    async fn transfer(&mut self, packet: &[u8], header: &Trf1Header) -> Step {
         let kind = if self.first_seed { "seed" } else { "catchup" };
-        let bytes: &[u8] = &packet;
+        let bytes = packet;
         let total = bytes.len();
         let chunk = self.start.max_chunk_bytes.max(1);
         let chunk_count = total.div_ceil(chunk).max(1);
@@ -333,7 +353,10 @@ impl<H: PumpHost> Pump<H> {
             "kind": kind,
             "totalBytes": total,
             "chunkCount": chunk_count,
-            "targetLayout": { "cols": header.cols, "rows": header.rows, "scrollbackRows": 0 },
+            "targetLayout": {
+                "cols": header.cols, "rows": header.rows,
+                "scrollbackRows": Trf1Header::scrollback_rows(bytes).unwrap_or(0),
+            },
             "checksum": { "alg": "crc32c", "value": crc32c(bytes) },
         });
         if self
@@ -454,5 +477,123 @@ impl<H: PumpHost> Pump<H> {
             .out
             .send(Outbound::Bulk(unit))
             .map_err(|_| ())
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use ghosttea::session::{Persistence, SpawnOptions};
+    use ghosttea::{SessionEnvironment, SessionProgramKind, TerminationSource, TextEngine};
+    use std::collections::HashMap;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct ReadyHost {
+        seeds: AtomicUsize,
+    }
+
+    impl PumpHost for ReadyHost {
+        fn try_admit(&self, _: u64, _: &str, _: u64, _: UnitClass) -> Admission {
+            Admission::Admitted
+        }
+        fn can_admit(&self, _: u64, _: &str, _: u64, _: UnitClass) -> Admission {
+            Admission::Admitted
+        }
+        fn unit_sent(&self, _: &str, _: u64, seed: bool) {
+            if seed {
+                self.seeds.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        fn presentation_stopped(&self, _: &str, reason: &'static str) {
+            panic!("unexpected stop: {reason}");
+        }
+        fn wants_frames(&self, _: &str) -> bool {
+            true
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn two_viewers_reuse_oversized_refreshes_without_feedback() {
+        let hub = FrameHub::new(32);
+        let session = Session::spawn(
+            SpawnOptions {
+                executable: "/bin/sh".into(),
+                args: vec!["-c".into(), "exec sleep 30".into()],
+                cwd: None,
+                env: HashMap::new(),
+                environment: Some(SessionEnvironment::Clean {
+                    variables: HashMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
+                }),
+                cols: 120,
+                rows: 40,
+                persistence: Persistence::KeepUntilExit,
+                program_kind: SessionProgramKind::Application,
+                owner_id: None,
+                scrollback_bytes: None,
+            },
+            hub.clone(),
+            Arc::new(Mutex::new(TextEngine::discover().unwrap())),
+            Arc::new(|_, _| {}),
+        )
+        .unwrap();
+        let (mut frames, _) = hub.subscribe();
+        session.refresh().unwrap();
+        let header = Trf1Header::parse(&frames.recv().await.unwrap()).unwrap();
+        let host = Arc::new(ReadyHost::default());
+        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let drain = tokio::spawn(async move { while received.recv().await.is_some() {} });
+        let mut pumps = Vec::new();
+        for viewer in 1..=2 {
+            pumps.push(spawn_pump(
+                host.clone(),
+                PumpStart {
+                    activation_id: format!("viewer-{viewer}"),
+                    session_id: session.id(),
+                    lease_epoch: 0,
+                    connection_id: viewer,
+                    credit_epoch: 1,
+                    frames: LegRef {
+                        connection_id: viewer,
+                        leg_generation: 1,
+                        out: out.clone(),
+                        bulk_credit: None,
+                    },
+                    session: session.clone(),
+                    hub: hub.clone(),
+                    session_handle: header.session_handle,
+                    scene_epoch: SceneEpoch {
+                        cell_boot_id: "oversize-test".into(),
+                        model_generation: header.session_epoch,
+                    },
+                    max_chunk_bytes: 1024,
+                    // Force the oversized path independently of fonts/frame size.
+                    max_urgent_unit_bytes: 1,
+                    seed_wait: Duration::from_secs(5),
+                    catchup_bound: Duration::from_secs(5),
+                },
+            ));
+        }
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while host.seeds.load(Ordering::SeqCst) < 2 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let before = hub.current_ordinal();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let after = hub.current_ordinal();
+        for pump in pumps {
+            pump.stop();
+            pump.task.await.unwrap();
+        }
+        drain.abort();
+        session.terminate(TerminationSource::User).unwrap();
+        assert_eq!(
+            after, before,
+            "idle viewers must not manufacture engine frames"
+        );
     }
 }

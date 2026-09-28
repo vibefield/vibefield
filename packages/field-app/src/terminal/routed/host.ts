@@ -183,24 +183,44 @@ export function createRoutedTerminalHost(
       clearTimeout(held);
       heldRemovals.delete(sessionId);
     }
+    invalidateInventory();
+    primedTickets.delete(sessionId);
+    activations.delete(sessionId);
+    input.releaseSession(sessionId);
     boundRuntime?.applySessionEvent({ type: "removed", sessionId });
     custodians.delete(sessionId);
     exitApplied.delete(sessionId);
+    options.onTerminated?.(sessionId);
   };
 
-  /** The coalesced authoritative read (petition G24 §sizing): ONE in-flight
-   * `terminal.sessions` snapshot serves every per-session lookup in the same
-   * refresh turn — N panes refreshing after a frame commit cost one wire read,
-   * not N. A read that starts after settle is a fresh snapshot; the runtime's
-   * own 200ms cadence is the debounce. */
+  // All panes share one short-lived inventory, including staggered refreshes.
+  // Lifecycle resync bypasses it: authoritative absence must never be cached.
   let inventoryRead: Promise<Map<string, SessionSummary>> | null = null;
-  const readInventory = (): Promise<Map<string, SessionSummary>> => {
+  let inventory: Map<string, SessionSummary> | null = null;
+  let inventoryAt = 0;
+  let inventoryGeneration = 0;
+  const invalidateInventory = (): void => {
+    inventory = null;
+    inventoryRead = null;
+    inventoryGeneration += 1;
+  };
+  const readInventory = (fresh = false): Promise<Map<string, SessionSummary>> => {
+    if (!fresh && inventory !== null && Date.now() - inventoryAt < 200) {
+      return Promise.resolve(inventory);
+    }
     if (inventoryRead === null) {
-      inventoryRead = listRuntimeSessions(options.fieldd)
-        .then((sessions) => new Map(sessions.map((session) => [session.id, session])))
+      const generation = inventoryGeneration;
+      const read = listRuntimeSessions(options.fieldd)
+        .then((sessions) => {
+          if (generation !== inventoryGeneration) return readInventory();
+          inventory = new Map(sessions.map((session) => [session.id, session]));
+          inventoryAt = Date.now();
+          return inventory;
+        })
         .finally(() => {
-          inventoryRead = null;
+          if (inventoryRead === read) inventoryRead = null;
         });
+      inventoryRead = read;
     }
     return inventoryRead;
   };
@@ -210,7 +230,8 @@ export function createRoutedTerminalHost(
    * against the authoritative inventory: present ids get their full summary
    * re-applied, absent ids are removals the bus lost. */
   const resyncCustody = async (cellBootId: string): Promise<void> => {
-    const inventory = await readInventory();
+    invalidateInventory();
+    const inventory = await readInventory(true);
     if (disposed) return;
     for (const [sessionId, custodian] of [...custodians]) {
       if (custodian !== cellBootId) continue;
@@ -255,6 +276,7 @@ export function createRoutedTerminalHost(
       return;
     }
     if (event.kind === "exited") {
+      invalidateInventory();
       boundRuntime?.applySessionEvent({
         type: "exited",
         sessionId: event.sessionId,
@@ -346,6 +368,7 @@ export function createRoutedTerminalHost(
         );
         options.onTerminated?.(sessionId);
       } finally {
+        invalidateInventory();
         primedTickets.delete(sessionId);
         custodians.delete(sessionId);
         input.releaseSession(sessionId);
@@ -360,6 +383,7 @@ export function createRoutedTerminalHost(
     primeTicket: (sessionId, ticket) => {
       if (disposed) throw new Error("the routed terminal host is disposed");
       const parsed = requireDirectTicket(sessionId, ticket);
+      invalidateInventory();
       primedTickets.set(sessionId, parsed);
       custodians.set(sessionId, parsed.route.cellBootId);
     },

@@ -33,6 +33,7 @@ import {
   FIXTURE_EXTENSION_SIGNING_IN,
   FIXTURE_EXTENSIONS,
   FIXTURE_EXTENSIONS_NOW,
+  FIXTURE_PLUGIN_RUN,
   FIXTURE_SKILL_PLAN,
 } from "../src/design-system/extensions-fixtures";
 import {
@@ -47,6 +48,7 @@ import {
   AgentExtensionListView,
   AgentExtensionsView,
   ExtensionItemView,
+  PluginView,
   ProfileExtensionsView,
 } from "../src/panels/agents/ExtensionsView";
 import {
@@ -61,6 +63,7 @@ import {
   extensionGrid,
   extensionItem,
   holdingWords,
+  pluginPage,
   readWords,
   runWords,
   sharedFolderReaders,
@@ -93,6 +96,11 @@ const SIGN_IN = AgentsExtensionsSignInResult.parse(
 
 it("draws the catalog from the contracts fixture itself", () => {
   expect(FIXTURE_EXTENSIONS).toEqual(RAW);
+  // AR-S4e — a plugin's update, as the plugin act fixture has it
+  const pluginAct = JSON.parse(
+    readFileSync(join(dirname(FIXTURE), "agents-extensions-plugin-act.valid.json"), "utf8"),
+  ) as { run: unknown };
+  expect(FIXTURE_PLUGIN_RUN).toEqual(pluginAct.run);
 });
 
 const cellOf = (key: "servers" | "skills", name: string, provider: string) =>
@@ -220,7 +228,7 @@ describe("one agent's Extensions (pass 23)", () => {
 
   it("counts what each agent holds, what it borrows included, and says only the exceptions", () => {
     expect(rowsOf("claude")).toEqual([
-      ["Plugins", "1", ""],
+      ["Plugins", "2", ""],
       ["MCP servers", "4", ""],
       ["Skills", "4", ""],
     ]);
@@ -244,8 +252,9 @@ describe("one agent's Extensions (pass 23)", () => {
       lacks: null,
       failure: null,
     });
+    // AR-S4e — OpenCode's plugins load only when a person runs it: its hosted sessions skip them
     expect(rowsOf("opencode")).toEqual([
-      ["Plugins", "None", ""],
+      ["Plugins", "1", "Sessions VibeField starts don’t load them"],
       ["MCP servers", "None", "Changed only inside OpenCode"],
       ["Skills", "None", "Not all could be read"],
     ]);
@@ -334,6 +343,7 @@ describe("one agent's Extensions (pass 23)", () => {
     const plugins = agentList(LENS, "claude", "plugins", "in Work");
     expect(plugins?.sections.map((section) => section.title)).toEqual([
       "Installed",
+      "From your organization",
       "Marketplaces",
     ]);
     expect(plugins?.sections[0]?.items[0]).toMatchObject({
@@ -341,7 +351,7 @@ describe("one agent's Extensions (pass 23)", () => {
       code: "3f9c2a1",
       text: "from northlight · Reviews against the house style",
     });
-    expect(plugins?.sections[1]?.items[0]).toMatchObject({ code: "northlight-studio/plugins" });
+    expect(plugins?.sections[2]?.items[0]).toMatchObject({ code: "northlight-studio/plugins" });
     // one config for every profile, and a read that could not cover it all
     expect(agentList(LENS, "opencode", "skills", "in Work")).toMatchObject({
       intro: "OpenCode keeps its skills in one place, for every profile.",
@@ -687,7 +697,7 @@ describe("an agent's Extensions, its lists and an item's page, drawn", () => {
     expect(rows[1]?.textContent).toContain("All from Claude on This Mac");
     expect(rows[1]?.querySelector(".vf-agents-value")?.textContent).toBe("1");
     await act(async () => rows[1]?.querySelector<HTMLButtonElement>("button")?.click());
-    expect(onOpen).toHaveBeenCalledWith("servers");
+    expect(onOpen).toHaveBeenCalledWith("servers", "MCP servers");
     await act(async () =>
       root?.render(createElement(AgentExtensionsView, { lens: LENS, provider: "kimi", onOpen })),
     );
@@ -1798,5 +1808,305 @@ describe("AddSkill (the controller)", () => {
     );
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     expect(onDone).toHaveBeenCalledWith("pdf-forms");
+  });
+});
+
+describe("a plugin an agent holds (AR-S4e), the model", () => {
+  const FOLDER =
+    "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/plugins/cache/northlight/review/3f9c2a1b7d04";
+
+  it("pages Claude's own plugin: who made it, what it brings, its version, and its agent's acts", () => {
+    const page = pluginPage(LENS, "claude", "review@northlight");
+    expect(page).toMatchObject({
+      name: "review",
+      initial: "R",
+      sub: "Northlight Studio · northlight",
+      description: "Reviews against the house style",
+      state: "On",
+      noSwitch: null,
+      hosted: null,
+      noRemove: null,
+      noUpdate: null,
+      gone: false,
+    });
+    expect(page.toggle).toMatchObject({
+      kind: "plugin",
+      act: "disable",
+      runs: "claude plugin disable review@northlight --scope user",
+      title: "Turn review off for Claude",
+    });
+    expect(page.update?.runs).toBe("claude plugin update review@northlight --scope user");
+    expect(page.remove?.runs).toBe(
+      "claude plugin uninstall review@northlight --scope user --keep-data",
+    );
+    expect(page.purge?.title).toBe("Remove review and its data from Claude");
+    // its skill is the agent's holding from it; the rest its folder names
+    expect(page.parts.map((part) => [part.key, part.title, part.names])).toEqual([
+      ["skills", "1 skill", ["house-style"]],
+      ["commands", "2 commands", ["review", "triage"]],
+      ["agents", "1 agent", ["reviewer"]],
+      ["hooks", "Hooks", ["PreToolUse"]],
+    ]);
+    expect(page.goes).toBe(
+      "What it brings goes with it: 1 skill, 2 commands, 1 agent and its hooks.",
+    );
+    expect(page.facts).toEqual([
+      { term: "Version", code: "3f9c2a1" },
+      { term: "Marketplace", text: "northlight · northlight-studio/plugins" },
+      { term: "Home page", code: "https://github.com/northlight-studio/plugins" },
+      { term: "Kept in", code: FOLDER },
+    ]);
+  });
+
+  it("says once, in the agent's words, why there is no switch, update or removal", () => {
+    const synced = pluginPage(LENS, "claude", "security-guidance@synced");
+    expect(synced).toMatchObject({
+      toggle: null,
+      update: null,
+      remove: null,
+      purge: null,
+      noSwitch: "It comes with your Claude account, from claude.ai, and changes there",
+      // the same sentence is not said three times
+      noRemove: null,
+      noUpdate: null,
+    });
+    const codex = pluginPage(LENS, "codex", "documents@openai-primary-runtime");
+    expect(codex.toggle?.runs).toBe(
+      "config/value/write plugins.documents@openai-primary-runtime.enabled = false",
+    );
+    expect(codex).toMatchObject({
+      update: null,
+      purge: null,
+      noUpdate: "Codex brings its plugins up to date when their marketplace is upgraded",
+    });
+    expect(codex.remove?.runs).toBe("codex plugin remove documents@openai-primary-runtime");
+    const opencode = pluginPage(LENS, "opencode", "opencode-wakatime");
+    expect(opencode).toMatchObject({
+      toggle: null,
+      remove: null,
+      hosted:
+        "Sessions VibeField starts run OpenCode without its plugins; it loads them when you run it yourself.",
+      noSwitch:
+        "OpenCode has no switch for a plugin: it loads every plugin in its config's plugin list",
+      noRemove:
+        "OpenCode has no command that removes a plugin: it is an entry in the plugin list of its one config, which every profile reads",
+      noUpdate:
+        "OpenCode installs a plugin's package as it starts; a pinned version changes only in its config",
+    });
+    expect(opencode.facts).toContainEqual({
+      term: "Profiles",
+      text: "Every OpenCode profile reads it from there",
+    });
+    expect(pluginPage(LENS, "claude", "gone@northlight", "gone")).toMatchObject({
+      name: "gone",
+      gone: true,
+    });
+  });
+
+  it("asks before a removal, says whether its data stays, and before an update that reaches other agents", () => {
+    const page = pluginPage(LENS, "claude", "review@northlight");
+    const context = { goes: page.goes, keepsData: page.purge !== null };
+    expect(actConfirm(page.remove!, "in Work", context)).toEqual({
+      question: "Remove review from Claude in Work?",
+      what: "What it brings goes with it: 1 skill, 2 commands, 1 agent and its hooks. Its stored data stays, so installing it again picks up where it left off. New sessions start without it; sessions running now keep it until they end.",
+      action: "Remove review",
+      danger: false,
+    });
+    expect(actConfirm(page.purge!, "in Work", context)).toMatchObject({
+      question: "Remove review and its data from Claude in Work?",
+      action: "Remove review and its data",
+      danger: true,
+    });
+    expect(actConfirm(page.purge!, "in Work", context)?.what).toContain(
+      "Its stored data is deleted too.",
+    );
+    // Codex has one removal: nothing is promised about data it may not keep
+    const codex = pluginPage(LENS, "codex", "documents@openai-primary-runtime");
+    expect(
+      actConfirm(codex.remove!, "in Work", { goes: codex.goes, keepsData: codex.purge !== null })
+        ?.what,
+    ).toBe(
+      "Its files go with it. New sessions start without it; sessions running now keep it until they end.",
+    );
+    // a switch or an update that stays in this profile runs at once
+    expect(actConfirm(page.update!, "in Work")).toBeNull();
+    expect(actConfirm(page.toggle!, "in Work")).toBeNull();
+    // This Mac's Claude: Grok loads its plugins too
+    expect(actConfirm({ ...page.update!, reaches: ["shared-folder"] }, "on This Mac")).toEqual({
+      question: "Update review for Claude on This Mac?",
+      what: "Other agents load it from there too, in every profile, and change with it.",
+      action: "Update it",
+      danger: false,
+    });
+  });
+
+  it("words a plugin's update and removal with its data in the run card", () => {
+    const run = {
+      ...FIXTURE_EXTENSION_RUN,
+      provider: "claude",
+      label: "Claude",
+      kind: "plugin" as const,
+      item: "review@northlight",
+      name: "review",
+    };
+    const finished = (
+      act: "update" | "purge",
+      status: "changed" | "unchanged" | "failed",
+      message: string,
+    ) =>
+      runWords(
+        { ...run, act, receipt: { status, message, finishedAt: run.finishedAt! } },
+        new Date(run.finishedAt!),
+      ).outcome?.text;
+    expect(finished("update", "changed", "updated 1.2.0 → 1.3.0")).toBe(
+      "review is updated for Claude.",
+    );
+    expect(finished("update", "unchanged", "Claude still holds 1.3.0")).toBe(
+      "There’s no newer review: Claude still holds 1.3.0.",
+    );
+    expect(finished("update", "failed", "exited with 1")).toBe(
+      "Claude couldn’t update review: exited with 1.",
+    );
+    expect(finished("purge", "changed", "removed with its data")).toBe(
+      "review and its data are gone from Claude.",
+    );
+  });
+
+  it("calls a kind by the agent's own word, and opens each row of its list", () => {
+    const lens = structuredClone(LENS);
+    lens.agents.find((column) => column.provider === "claude")!.support.plugins!.label = "Packages";
+    expect(agentExtensions(lens, "claude")?.rows[0]?.title).toBe("Packages");
+    const packages = agentList(lens, "claude", "plugins", "in Work");
+    expect(packages?.title).toBe("Packages");
+    expect(packages?.sections[0]?.items[0]?.open).toEqual({
+      kind: "plugin",
+      id: "review@northlight",
+      name: "review",
+    });
+    // a marketplace opens nothing yet
+    expect(packages?.sections.at(-1)?.items[0]?.open).toBeUndefined();
+    expect(
+      agentList(LENS, "claude", "servers", "in Work")?.sections[0]?.items[0]?.open,
+    ).toMatchObject({
+      kind: "item",
+      list: "servers",
+    });
+  });
+});
+
+describe("a plugin's page, drawn (AR-S4e)", () => {
+  const buttonNamed = (name: string) =>
+    [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (candidate) =>
+        candidate.textContent === name || candidate.getAttribute("aria-label") === name,
+    );
+
+  it("runs an update at once, and asks before each removal", async () => {
+    const onAct = vi.fn();
+    await mount(
+      createElement(PluginView, {
+        lens: LENS,
+        provider: "claude",
+        id: "review@northlight",
+        name: "review",
+        where: "in Work",
+        onAct,
+      }),
+    );
+    expect(container?.querySelector("[data-ext-plugin]")?.textContent).toContain(
+      "Northlight Studio · northlight",
+    );
+    expect(container?.textContent).toContain("What it adds");
+    expect(container?.textContent).toContain("house-style");
+    await act(async () => buttonNamed("Update review for Claude")?.click());
+    expect(onAct).toHaveBeenLastCalledWith({
+      provider: "claude",
+      kind: "plugin",
+      id: "review@northlight",
+      act: "update",
+    });
+    onAct.mockClear();
+    await act(async () => buttonNamed("Remove review from Claude")?.click());
+    expect(onAct).not.toHaveBeenCalled();
+    const confirm = container?.querySelector("[data-ext-confirm]");
+    expect(confirm?.textContent).toContain("Remove review from Claude in Work?");
+    expect(confirm?.textContent).toContain("Its stored data stays");
+    expect(confirm?.textContent).toContain(
+      "claude plugin uninstall review@northlight --scope user --keep-data",
+    );
+    await act(async () => buttonNamed("Remove review")?.click());
+    expect(onAct).toHaveBeenLastCalledWith({
+      provider: "claude",
+      kind: "plugin",
+      id: "review@northlight",
+      act: "remove",
+    });
+    await act(async () => buttonNamed("Remove review and its data from Claude")?.click());
+    expect(container?.querySelector("[data-ext-confirm]")?.textContent).toContain(
+      "Remove review and its data from Claude in Work?",
+    );
+    await act(async () => buttonNamed("Remove review and its data")?.click());
+    expect(onAct).toHaveBeenLastCalledWith({
+      provider: "claude",
+      kind: "plugin",
+      id: "review@northlight",
+      act: "purge",
+    });
+  });
+
+  it("says why where the agent offers nothing, and that hosted sessions skip it", async () => {
+    await mount(
+      createElement(PluginView, {
+        lens: LENS,
+        provider: "opencode",
+        id: "opencode-wakatime",
+        name: "opencode-wakatime",
+        where: "in Work",
+        onAct: vi.fn(),
+      }),
+    );
+    // no switch, no update, no removal: nothing to press
+    expect(container?.querySelectorAll("button")).toHaveLength(0);
+    expect(container?.textContent).toContain("OpenCode has no switch for a plugin");
+    expect(container?.textContent).toContain("OpenCode has no command that removes a plugin");
+    expect(container?.textContent).toContain(
+      "Sessions VibeField starts run OpenCode without its plugins",
+    );
+  });
+
+  it("opens a plugin's page, or a server's, from an agent's own list", async () => {
+    const onOpen = vi.fn();
+    await mount(
+      createElement(AgentExtensionListView, {
+        lens: LENS,
+        provider: "claude",
+        agent: "Claude",
+        list: "plugins",
+        profile: "Work",
+        where: "in Work",
+        onOpen,
+      }),
+    );
+    await act(async () => buttonNamed("review")?.click());
+    expect(onOpen).toHaveBeenLastCalledWith({
+      kind: "plugin",
+      id: "review@northlight",
+      name: "review",
+    });
+    await act(async () =>
+      root?.render(
+        createElement(AgentExtensionListView, {
+          lens: LENS,
+          provider: "claude",
+          agent: "Claude",
+          list: "servers",
+          profile: "Work",
+          where: "in Work",
+          onOpen,
+        }),
+      ),
+    );
+    await act(async () => buttonNamed("linear")?.click());
+    expect(onOpen).toHaveBeenLastCalledWith({ kind: "item", list: "servers", name: "linear" });
   });
 });

@@ -11,6 +11,7 @@ import type {
   ExtensionProvider,
   McpServerDefinition,
   McpServerItem,
+  PluginItem,
   SkillItem,
 } from "@vibecook/puppeteer-core";
 import type { StartedExtensionAct } from "@vibecook/puppeteer-runtime";
@@ -354,14 +355,14 @@ function stubRuntime(options: {
   plans?: (
     provider: string,
     profileId: string | undefined,
-    items: ReadonlyArray<McpServerItem | SkillItem>,
+    items: ReadonlyArray<McpServerItem | SkillItem | PluginItem>,
     adds?: ReadonlyArray<{ name: string; definition: McpServerDefinition }>,
   ) => Promise<ExtensionActPlan[] | ExtensionFailure>;
   act?: (request: {
     providerId: string;
     profileId?: string;
-    target: { kind: "mcp-server" | "skill"; id: string };
-    act: "enable" | "disable" | "remove" | "sign-out" | "add";
+    target: { kind: "mcp-server" | "skill" | "plugin"; id: string };
+    act: "enable" | "disable" | "remove" | "sign-out" | "add" | "update" | "purge";
     definition?: McpServerDefinition;
     onOutput?: (chunk: string) => void;
   }) => Promise<ExtensionActReceipt>;
@@ -565,7 +566,7 @@ describe("AgentExtensionService acts (AR-S4c)", () => {
     const plans = async (
       _provider: string,
       _profileId: string | undefined,
-      items: ReadonlyArray<McpServerItem | SkillItem>,
+      items: ReadonlyArray<McpServerItem | SkillItem | PluginItem>,
     ): Promise<ExtensionActPlan[]> =>
       items.flatMap((item) =>
         (["enable", "disable", "remove"] as const).map((act) => ({
@@ -727,6 +728,185 @@ describe("AgentExtensionService acts (AR-S4c)", () => {
   });
 });
 
+describe("AgentExtensionService plugins (AR-S4e)", () => {
+  /** Claude's own review plugin, at the version the stub's "store" says, and the account's synced one. */
+  function claudeWithPlugins() {
+    let version = "1.2.0";
+    const review = (): PluginItem => ({
+      kind: "plugin",
+      id: "review@northlight",
+      name: "review",
+      origin: "own",
+      enabled: true,
+      version,
+      marketplace: "northlight",
+      location: `${ROOT}/claude/plugins/cache/northlight/review/${version}`,
+      author: "Northlight Studio",
+      homepage: "https://github.com/northlight-studio/plugins",
+      brings: { commands: ["review"], hooks: ["PreToolUse"] },
+    });
+    const synced: PluginItem = {
+      kind: "plugin",
+      id: "security-guidance@synced",
+      name: "security-guidance",
+      origin: "managed",
+      enabled: true,
+    };
+    const plans = async (
+      _provider: string,
+      _profileId: string | undefined,
+      items: ReadonlyArray<McpServerItem | SkillItem | PluginItem>,
+    ): Promise<ExtensionActPlan[]> =>
+      items.flatMap((item) =>
+        (["enable", "disable", "remove", "purge", "update"] as const).map(
+          (act): ExtensionActPlan =>
+            item.origin !== "own"
+              ? {
+                  target: { kind: item.kind, id: item.id },
+                  act,
+                  available: false,
+                  reason: "not-own",
+                  message: "It comes with your Claude account, from claude.ai, and changes there",
+                }
+              : {
+                  target: { kind: item.kind, id: item.id },
+                  act,
+                  available: true,
+                  runs: { kind: "command", argv: ["claude", "plugin", act, item.id] },
+                  display: `claude plugin ${act} ${item.id}`,
+                  reaches: [],
+                },
+        ),
+      );
+    const { runtime, runExtensionAct } = stubRuntime({
+      sets: { work: ["claude"] },
+      read: async (provider, profileId) => ({
+        ...inventory(provider, [review(), synced]),
+        profileId,
+      }),
+      plans,
+      act: async (request) => {
+        request.onOutput?.("Updating review@northlight…\n");
+        version = "1.3.0";
+        return {
+          provider: "claude",
+          profileId: request.profileId ?? "work-claude",
+          target: request.target,
+          act: request.act,
+          status: "changed",
+          startedAt: NOW,
+          finishedAt: NOW,
+          display: `claude plugin ${request.act} ${request.target.id}`,
+          message: "updated 1.2.0 → 1.3.0",
+        };
+      },
+    });
+    return { runtime, runExtensionAct };
+  }
+
+  it("keeps each plugin on its agent's list with what it brings, the acts its agent offers, and why not the rest", async () => {
+    const lens = AgentsExtensionsListResult.parse(
+      await service(claudeWithPlugins().runtime).list("work"),
+    );
+    const [review, synced] = lens.plugins.claude ?? [];
+    expect(review).toMatchObject({
+      id: "review@northlight",
+      author: "Northlight Studio",
+      homepage: "https://github.com/northlight-studio/plugins",
+      brings: { commands: ["review"], hooks: ["PreToolUse"] },
+      place:
+        "~/Library/Application Support/VibeField/agents/profiles/work/claude/plugins/cache/northlight/review/1.2.0",
+    });
+    // turning on one that is on changes nothing, so it is neither offered nor explained
+    expect(review?.acts?.map((act) => act.act)).toEqual(["disable", "remove", "purge", "update"]);
+    expect(review?.acts?.[3]).toEqual({
+      act: "update",
+      runs: "claude plugin update review@northlight",
+      reaches: [],
+    });
+    expect(review).not.toHaveProperty("unavailable");
+    expect(synced).not.toHaveProperty("acts");
+    expect(synced?.unavailable?.map((entry) => [entry.act, entry.reason])).toEqual([
+      ["disable", "not-own"],
+      ["remove", "not-own"],
+      ["purge", "not-own"],
+      ["update", "not-own"],
+    ]);
+  });
+
+  it("updates a plugin through its agent's own command, then reads the profile again", async () => {
+    const { runtime, runExtensionAct } = claudeWithPlugins();
+    const extensions = service(runtime);
+    const answered = AgentsExtensionsActResult.parse(
+      await extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "review@northlight",
+        act: "update",
+      }),
+    );
+    expect(runExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: "claude",
+        profileId: "work-claude",
+        target: { kind: "plugin", id: "review@northlight" },
+        act: "update",
+      }),
+    );
+    expect(answered.run).toMatchObject({
+      kind: "plugin",
+      item: "review@northlight",
+      name: "review",
+      act: "update",
+      runs: "claude plugin update review@northlight",
+      state: "finished",
+      output: "Updating review@northlight…",
+    });
+    expect(answered.receipt).toMatchObject({ status: "changed", message: "updated 1.2.0 → 1.3.0" });
+    const after = AgentsExtensionsListResult.parse(await extensions.list("work"));
+    expect(after.plugins.claude?.[0]?.version).toBe("1.3.0");
+  });
+
+  it("refuses an act the agent offers none of in its own words, a plugin it does not hold, and values", async () => {
+    const { runtime, runExtensionAct } = claudeWithPlugins();
+    const extensions = service(runtime);
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "security-guidance@synced",
+        act: "remove",
+      }),
+    ).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      message:
+        "Claude offers no remove for security-guidance here: It comes with your Claude account, from claude.ai, and changes there",
+    });
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "gone@northlight",
+        act: "update",
+      }),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "review@northlight",
+        act: "update",
+        values: { TOKEN: "x" },
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    expect(runExtensionAct).not.toHaveBeenCalled();
+  });
+});
+
 describe("AgentExtensionService sign-ins (AR-S4c)", () => {
   const PRINCIPAL = { kind: "shell-main" } as GrantPrincipal;
   const TICKET = { sessionId: "pty-sign-in" } as unknown as TerminalCreateOpenResult;
@@ -738,7 +918,7 @@ describe("AgentExtensionService sign-ins (AR-S4c)", () => {
     const plans = async (
       _provider: string,
       _profileId: string | undefined,
-      items: ReadonlyArray<McpServerItem | SkillItem>,
+      items: ReadonlyArray<McpServerItem | SkillItem | PluginItem>,
     ): Promise<ExtensionActPlan[]> =>
       items.flatMap((item) =>
         (["enable", "disable", "remove", "sign-in", "sign-out"] as const).map((act) => {

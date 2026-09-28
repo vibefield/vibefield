@@ -9,7 +9,9 @@ import {
   agentListSubpage,
   ExtensionItemView,
   extensionItemSubpage,
+  PluginView,
   ProfileExtensionsView,
+  pluginSubpage,
 } from "../panels/agents/ExtensionsView";
 import type { AgentListKey, ExtensionKindKey } from "../panels/agents/extensions-model";
 import {
@@ -28,6 +30,7 @@ import {
   FIXTURE_EXTENSION_SIGNING_IN,
   FIXTURE_EXTENSIONS,
   FIXTURE_EXTENSIONS_NOW,
+  FIXTURE_PLUGIN_RUN,
   FIXTURE_SKILL_PLAN,
 } from "./extensions-fixtures";
 import {
@@ -65,6 +68,33 @@ const ITEMS: Partial<Record<ProfilesFixtureState, { list: ExtensionKindKey; name
   skill: { list: "skills", name: "release-notes" },
   // AR-S4d2 — a skill Work keeps once: its folder, and each agent's link as its switch
   "kept skill": { list: "skills", name: "changelog-writer" },
+};
+
+/** AR-S4e: one plugin an agent holds, on its own page — Claude's review (updated
+ * just now; its removal with its data asked), and OpenCode's, with no act of its own. */
+const REVIEW = { provider: "claude", agent: "Claude", id: "review@northlight", name: "review" };
+const PLUGINS: Partial<
+  Record<
+    ProfilesFixtureState,
+    {
+      provider: string;
+      agent: string;
+      id: string;
+      name: string;
+      updated?: boolean;
+      armed?: "purge";
+    }
+  >
+> = {
+  plugin: REVIEW,
+  "plugin updated": { ...REVIEW, updated: true },
+  "plugin removal": { ...REVIEW, armed: "purge" },
+  "plugin, no command": {
+    provider: "opencode",
+    agent: "OpenCode",
+    id: "opencode-wakatime",
+    name: "opencode-wakatime",
+  },
 };
 
 /** The Settings header each state wears (the panel supplies it in the product). */
@@ -110,6 +140,7 @@ export function ProfilesSettingsPreview({
   const agentLabel = agent?.label;
   const list = LISTS[state];
   const item = ITEMS[state];
+  const plugin = PLUGINS[state];
 
   useEffect(() => {
     onSubpage(
@@ -119,13 +150,15 @@ export function ProfilesSettingsPreview({
           ? agentListSubpage(FIXTURE_WORK, list.agent, list.list, inert)
           : item !== undefined
             ? extensionItemSubpage(FIXTURE_WORK, item.list, item.name, inert)
-            : state === "add server"
-              ? addServerSubpage(FIXTURE_WORK, inert)
-              : state === "add skill"
-                ? addSkillSubpage(FIXTURE_WORK, inert)
-                : null,
+            : plugin !== undefined
+              ? pluginSubpage(FIXTURE_WORK, plugin.agent, plugin.name, "Plugins", inert)
+              : state === "add server"
+                ? addServerSubpage(FIXTURE_WORK, inert)
+                : state === "add skill"
+                  ? addSkillSubpage(FIXTURE_WORK, inert)
+                  : null,
     );
-  }, [agentLabel, list, item, state, onSubpage]);
+  }, [agentLabel, list, item, plugin, state, onSubpage]);
   useEffect(() => () => onSubpage(null), [onSubpage]);
 
   if (state === "new") return <NewProfileView onCancel={inert} onCreate={inert} />;
@@ -193,7 +226,54 @@ export function ProfilesSettingsPreview({
         where={inOnWords(FIXTURE_WORK)}
         onRefresh={inert}
         onOpenProfile={inert}
+        onOpen={inert}
         now={FIXTURE_EXTENSIONS_NOW}
+      />
+    );
+  }
+  if (plugin !== undefined) {
+    // "plugin updated": the read after the update holds the newer commit, and the run card says so
+    const lens = plugin.updated
+      ? {
+          ...FIXTURE_EXTENSIONS,
+          plugins: {
+            ...FIXTURE_EXTENSIONS.plugins,
+            [plugin.provider]: (FIXTURE_EXTENSIONS.plugins[plugin.provider] ?? []).map((held) =>
+              held.id === plugin.id
+                ? {
+                    ...held,
+                    version: "9a8b7c6d5e4f",
+                    // an update lands in a folder of the new version's
+                    ...(held.place !== undefined
+                      ? { place: held.place.replace(/[^/]+$/u, "9a8b7c6d5e4f") }
+                      : {}),
+                  }
+                : held,
+            ),
+          },
+          run: FIXTURE_PLUGIN_RUN,
+        }
+      : FIXTURE_EXTENSIONS;
+    return (
+      <PluginView
+        lens={lens}
+        provider={plugin.provider}
+        id={plugin.id}
+        name={plugin.name}
+        where={inOnWords(FIXTURE_WORK)}
+        onRefresh={inert}
+        onAct={inert}
+        now={FIXTURE_EXTENSIONS_NOW}
+        {...(plugin.armed !== undefined
+          ? {
+              armed: {
+                provider: plugin.provider,
+                kind: "plugin",
+                id: plugin.id,
+                act: plugin.armed,
+              },
+            }
+          : {})}
       />
     );
   }

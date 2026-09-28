@@ -578,12 +578,13 @@ function recordRoutedTicket(sessionId: string, ticket: TerminalOpenTicket): void
     },
     resolvedAt: Date.now(),
   });
+  const changed = !grantsLanded || !routedCells.has(ticket.route.cellBootId as CellBootId);
   routedCells.add(ticket.route.cellBootId as CellBootId);
   grantsLanded = true;
-  publish();
+  if (changed) publish();
 }
 
-/** Exact inverse of the routed session-private records after a confirmed kill. */
+/** Drop private records after a confirmed kill or authoritative removal. */
 function forgetRoutedSession(sessionId: string): void {
   createdSummaries.delete(sessionId);
   const cell = placements.cellFor(sessionId);

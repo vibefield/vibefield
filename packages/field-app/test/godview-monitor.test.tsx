@@ -526,7 +526,16 @@ describe("the monitor stage", () => {
     const swarm = host.querySelector(".vf-monitor-swarm");
     expect(swarm?.getAttribute("data-swarm-renderer")).toBe("unavailable");
     expect(swarm?.querySelector(".vf-monitor-empty")?.textContent).toContain("WEBGPU UNAVAILABLE");
-    expect(latest().swarmRenderer).toBe("unavailable");
+    // The marker follows this attribute through a MutationObserver task.
+    await vi.waitFor(
+      async () => {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        expect(latest().swarmRenderer).toBe("unavailable");
+      },
+      { timeout: 3_000 },
+    );
     // …and the physics still ran: what is missing is the painter, not the world.
     expect(latest().swarmPhysics).toBe("inline");
   });

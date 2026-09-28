@@ -40,6 +40,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - uses: ./.github/actions/prepare-ghosttea
       - run: pnpm install --frozen-lockfile
 
       # No Nx Cloud connection or token: local deterministic caching only.

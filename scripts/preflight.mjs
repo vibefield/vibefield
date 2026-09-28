@@ -101,6 +101,7 @@ const PIN_EXPECTATIONS = [
     file: "pnpm-workspace.yaml",
     re: /"@vibecook\/ghosttea-react":\s*0\.12\.0/,
     label: '"@vibecook/ghosttea-react": 0.12.0',
+    package: "@vibecook/ghosttea-react",
   },
   {
     file: "pnpm-workspace.yaml",
@@ -124,7 +125,15 @@ const PIN_EXPECTATIONS = [
 // drift apart. Its registry-mode branch carries the same rule for the one case
 // this table could not see anyway: a patch row still standing after the LAST
 // lock entry goes (W-D8), when there is no lock left to derive anything from.
-for (const { file, re, label } of PIN_EXPECTATIONS) {
+for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
+  // A co-development window replaces this registry pin with a revision-backed
+  // link. The sibling checks below verify the exact path and checkout revision.
+  if (
+    packageName &&
+    Object.values(readLock(root)?.siblings ?? {}).some((entry) => entry.packages?.[packageName])
+  ) {
+    continue;
+  }
   try {
     const text = readFileSync(resolve(root, file), "utf8");
     if (!re.test(text)) problems.push(`EL8 pin missing or drifted in ${file}: expected ${label}`);
@@ -153,9 +162,17 @@ for (const { file, re, label } of PIN_EXPECTATIONS) {
   // Keys and values may be bare, double- or single-quoted (pnpm rewrites the
   // file in its own style when it edits overrides) — match all three.
   const unquote = (s) => s.replace(/^(['"])(.*)\1$/, "$2");
-  const family = [
-    ...yaml.matchAll(/^\s*['"]?(@vibecook\/puppeteer-[a-z-]+|@rosetta\/[a-z-]+)['"]?:\s*(\S+)/gm),
-  ].map(([line, name, value]) => [line, name, unquote(value)]);
+  const declaredPackages = new Set(
+    Object.values(lock?.siblings ?? {}).flatMap((entry) => Object.keys(entry.packages ?? {})),
+  );
+  const family = [...yaml.matchAll(/^\s*['"]?(@[a-z-]+\/[a-z-]+)['"]?:\s*(\S+)/gm)]
+    .map(([line, name, value]) => [line, name, unquote(value)])
+    .filter(
+      ([, name, value]) =>
+        /^@vibecook\/puppeteer-|^@rosetta\//.test(name) ||
+        declaredPackages.has(name) ||
+        value.startsWith("link:"),
+    );
   if (lock === null) {
     // Registry mode: no link: row may exist without a lock behind it.
     for (const [, name, value] of family) {

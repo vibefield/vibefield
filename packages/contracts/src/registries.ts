@@ -159,9 +159,9 @@ export const PRODUCT_API_LIMITS = {
 
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
  * seam (so they live in the genned registry, one authority both planes read).
- * THE fleet-memory lever — and a BYTE cap, not a row cap: styled 80-col
- * content costs ≈721B/row vs ≈62B plain (spike BASE-1), an order of magnitude
- * of retained history for the same bytes. Agents < interactive. */
+ * This is a byte cap, not a row cap. The 2026-09-27 review corrects BASE-1's
+ * plain-row estimate: at 120 columns both plain and styled rows cost roughly
+ * 1–1.3 KiB; depth depends strongly on width. Agents < interactive. */
 export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
   AGENT: 2 * 1024 * 1024,
   INTERACTIVE: 10 * 1024 * 1024,
@@ -282,7 +282,7 @@ export const TERMINAL_PIPELINE = {
   // a (bulk) catch-up transfer.
   URGENT_RESERVE_BYTES: 2_097_152,
   MAX_BULK_BYTES_ADMITTED_AHEAD: 4_194_304,
-  MAX_URGENT_PRESENTATION_UNIT_BYTES: 262_144,
+  MAX_URGENT_PRESENTATION_UNIT_BYTES: 1_048_576,
 } as const;
 
 /** TPv3 — WebSocket close codes on the cell doors (terminal-pipeline-v3 §5.1):

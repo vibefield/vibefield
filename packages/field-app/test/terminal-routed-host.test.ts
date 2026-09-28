@@ -310,11 +310,16 @@ describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () =
     // …absence is `null` (no update), never an invented removal…
     await expect(second).resolves.toBeNull();
 
-    // …and a read AFTER settle is a fresh snapshot, not a stale cache.
+    // Staggered panes within the cadence reuse the completed read too.
+    await expect(binding.host.getSession?.("sess-1")).resolves.toEqual(summary);
+    expect(requests).toHaveBeenCalledTimes(1);
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 201);
     const third = binding.host.getSession?.("sess-1");
     expect(requests).toHaveBeenCalledTimes(2);
     resolvers[1]?.({ sessions: [summary] });
     await expect(third).resolves.toEqual(summary);
+    now.mockRestore();
+    binding.dispose();
   });
 
   it("a rejected inventory read rejects the turn and the next turn retries fresh", async () => {
@@ -334,8 +339,10 @@ describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () =
   });
 
   it("applies exited and removed through the runtime door, custody-checked", () => {
+    const onTerminated = vi.fn();
     const binding = createRoutedTerminalHost({
       fieldd: { request: vi.fn() } as unknown as FielddClient,
+      onTerminated,
     });
     const { runtime, applySessionEvent } = runtimeStub();
     binding.bind(runtime);
@@ -393,6 +400,7 @@ describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () =
       context,
     );
     expect(applySessionEvent).toHaveBeenCalledWith({ type: "removed", sessionId: "sess-1" });
+    expect(onTerminated).toHaveBeenCalledExactlyOnceWith("sess-1");
   });
 
   it("holds a removed that outran its exited, restoring the intended order (the verb-kill shape)", () => {

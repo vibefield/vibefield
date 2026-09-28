@@ -1270,7 +1270,7 @@ describe("Extensions below a profile and an agent (AR-S4b)", () => {
     // AR-S4c's fixture adds notion: Claude holds four servers in Work; AR-S4d2's, a link
     // to the skill Work keeps: four skills
     expect(kinds.map((row) => row.querySelector(".vf-agents-value")?.textContent)).toEqual([
-      "1",
+      "2",
       "4",
       "4",
     ]);
@@ -1280,6 +1280,7 @@ describe("Extensions below a profile and an agent (AR-S4b)", () => {
       set: "work",
       provider: "claude",
       list: "servers",
+      title: "MCP servers",
     });
 
     await section.render({
@@ -1315,6 +1316,78 @@ describe("Extensions below a profile and an agent (AR-S4b)", () => {
     expect(container?.querySelectorAll("[data-ext-agent]")).toHaveLength(5);
     itemHead.onBack();
     expect(section.onRoute).toHaveBeenLastCalledWith({ kind: "profile", set: "work" });
+    // the Extensions pages show no usage, so opening one reads none
+    expect(f.calls("agents.usage")).toHaveLength(usageReads);
+  });
+
+  it("AR-S4e — a plugin row opens its page below the list, and a server row its page, each leading back to the list", async () => {
+    const f = fake(doors(), USAGE_BATCH, LENS);
+    const section = await mountSection(f.client, {
+      feed: feed([NATIVE, WORK]),
+      route: { kind: "list", set: "work", provider: "claude", list: "plugins", title: "Plugins" },
+    });
+    await click(button("review"));
+    expect(section.onRoute).toHaveBeenLastCalledWith({
+      kind: "plugin",
+      set: "work",
+      provider: "claude",
+      id: "review@northlight",
+      name: "review",
+      listTitle: "Plugins",
+    });
+    const usageReads = f.calls("agents.usage").length;
+    await section.render({
+      route: {
+        kind: "plugin",
+        set: "work",
+        provider: "claude",
+        id: "review@northlight",
+        name: "review",
+        listTitle: "Plugins",
+      },
+    });
+    const pluginHead = section.onSubpage.mock.calls.at(-1)?.[0];
+    expect(pluginHead).toMatchObject({ title: "review", backLabel: "Back to Plugins" });
+    expect(text()).toContain("What it adds");
+    expect(container?.querySelector("[data-ext-plugin-page]")).not.toBeNull();
+    pluginHead.onBack();
+    expect(section.onRoute).toHaveBeenLastCalledWith({
+      kind: "list",
+      set: "work",
+      provider: "claude",
+      list: "plugins",
+      title: "Plugins",
+    });
+
+    await section.render({
+      route: {
+        kind: "list",
+        set: "work",
+        provider: "claude",
+        list: "servers",
+        title: "MCP servers",
+      },
+    });
+    await click(button("linear"));
+    const fromList = {
+      kind: "item",
+      set: "work",
+      list: "servers",
+      name: "linear",
+      from: { provider: "claude", list: "servers", title: "MCP servers" },
+    } as const;
+    expect(section.onRoute).toHaveBeenLastCalledWith(fromList);
+    await section.render({ route: fromList });
+    const itemHead = section.onSubpage.mock.calls.at(-1)?.[0];
+    expect(itemHead).toMatchObject({ title: "linear" });
+    itemHead.onBack();
+    expect(section.onRoute).toHaveBeenLastCalledWith({
+      kind: "list",
+      set: "work",
+      provider: "claude",
+      list: "servers",
+      title: "MCP servers",
+    });
     // the Extensions pages show no usage, so opening one reads none
     expect(f.calls("agents.usage")).toHaveLength(usageReads);
   });

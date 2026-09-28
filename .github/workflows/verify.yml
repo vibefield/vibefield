@@ -85,6 +85,12 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      # The public Ghosttea pin supplies Cargo patches and generated React dist.
+      # Fetch before rust-cache asks Cargo to resolve the patched workspace.
+      - uses: ./.github/actions/prepare-ghosttea
+        with:
+          build: "false"
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -131,7 +137,7 @@ jobs:
       # rosettad from the pinned sibling (rustup picks its rust-toolchain.toml). The fieldd
       # supervisor's kill matrix runs against a scripted daemon in every gate; the one row
       # against the REAL binary is opt-in through FIELDD_ROSETTAD_BIN, and CI opts in.
-      - name: Build rosettad from the rosetta sibling
+      - name: Build rosettad and the Ghosttea renderer from their pinned siblings
         run: pnpm siblings:build
       - name: Name the built rosettad for the live supervisor rows
         # `set -e` + a separate assignment: a `bin` that fails (not built) fails THIS step,

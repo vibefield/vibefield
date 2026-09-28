@@ -1,0 +1,29 @@
+{
+  "run": {
+    "id": "act-9b21",
+    "provider": "claude",
+    "label": "Claude",
+    "kind": "plugin",
+    "item": "review@northlight",
+    "name": "review",
+    "act": "update",
+    "runs": "claude plugin update review@northlight --scope user",
+    "state": "finished",
+    "startedAt": "2026-09-27T10:12:00.000Z",
+    "finishedAt": "2026-09-27T10:12:04.000Z",
+    "output": "Updating review@northlight…\nUpdated review@northlight to 9a8b7c6d5e4f. Restart to apply.\n",
+    "truncated": false,
+    "receipt": {
+      "status": "changed",
+      "message": "updated 3f9c2a1b7d04 → 9a8b7c6d5e4f",
+      "exitCode": 0,
+      "finishedAt": "2026-09-27T10:12:04.000Z"
+    }
+  },
+  "receipt": {
+    "status": "changed",
+    "message": "updated 3f9c2a1b7d04 → 9a8b7c6d5e4f",
+    "exitCode": 0,
+    "finishedAt": "2026-09-27T10:12:04.000Z"
+  }
+}

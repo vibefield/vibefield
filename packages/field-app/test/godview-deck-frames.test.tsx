@@ -79,8 +79,10 @@ const workspace = {
 function WorkspaceStub({
   sidebar: Sidebar,
   decoratePane,
+  paneVisibility,
 }: {
   sidebar: ComponentType<{ workspace: unknown }>;
+  paneVisibility?: Readonly<Record<string, boolean>>;
   decoratePane?: (
     session: StubSession,
     paneId: string,
@@ -133,6 +135,7 @@ function WorkspaceStub({
               key={pane.id}
               className={`ghostty-pane${pane.id === workspace.activePaneId ? " is-active" : ""}`}
               data-pane-id={pane.id}
+              data-workspace-visible={paneVisibility?.[pane.id] !== false}
               {...(face?.color !== undefined ? { "data-pane-accent": "" } : {})}
               style={
                 face?.color !== undefined
@@ -185,6 +188,7 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
     return (
       <WorkspaceStub
         sidebar={props["sidebar"] as ComponentType<{ workspace: unknown }>}
+        paneVisibility={props["paneVisibility"] as Readonly<Record<string, boolean>>}
         decoratePane={
           props["decoratePane"] as (
             session: StubSession,
@@ -342,6 +346,10 @@ function installHost(): void {
 }
 
 async function settle(): Promise<void> {
+  // Theme facts follow DOM mutations through a MutationObserver task.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   for (let i = 0; i < 6; i++) {
     await act(async () => {
       await Promise.resolve();
@@ -487,8 +495,13 @@ describe("the deck's pane frames", () => {
       document.documentElement.style.setProperty("--tint-l", "0.74");
       document.documentElement.classList.add("godview-test-dark");
     });
-    await settle();
-    expect(colour("pane-2")).not.toBe(second);
+    await vi.waitFor(
+      async () => {
+        await settle();
+        expect(colour("pane-2")).not.toBe(second);
+      },
+      { timeout: 3_000 },
+    );
     expect(ring("pty-1")).toBe(colour("pane-2"));
     expect(frameFor(host, "pty-3")?.style.getPropertyValue("--pane-color")).toBe(colour("pane-3"));
   });
@@ -752,14 +765,30 @@ describe("the deck's pane frames", () => {
     foldRows = [
       managedSummary({ runtimeRunId: "run-1", terminalSessionId: "pty-1", status: "idle" }),
     ];
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-2") },
+    ];
     const host = await mountDeck();
     const zoomHost = host.querySelector<HTMLElement>(".vf-deck-zoom");
     expect(zoomHost?.dataset["zoomPhase"]).toBe("idle");
+    const otherPane = paneOf(host, "pane-2");
+    expect(otherPane?.getAttribute("data-workspace-visible")).toBe("true");
     const zoomVerb = verb(frameFor(host, "pty-1"), "zoom");
     expect(zoomVerb).not.toBeNull();
     await act(async () => zoomVerb?.click());
     expect(zoomHost?.dataset["zoomPhase"]).not.toBe("idle");
     expect(paneOf(host, "pane-1")?.hasAttribute("data-vf-zoom-pane")).toBe(true);
+    // Neighbours remain live during the morph; suspend once its layout commits.
+    await act(async () => {
+      zoomHost?.dispatchEvent(
+        Object.assign(new Event("transitionend"), { propertyName: "transform" }),
+      );
+    });
+    expect(zoomHost?.dataset["zoomPhase"]).toBe("zoomed");
+    expect(paneOf(host, "pane-1")?.getAttribute("data-workspace-visible")).toBe("true");
+    expect(paneOf(host, "pane-2")).toBe(otherPane);
+    expect(otherPane?.getAttribute("data-workspace-visible")).toBe("false");
   });
 
   it("says where a peer's session lives, from the attach that put it there", async () => {

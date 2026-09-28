@@ -8,6 +8,11 @@ members = ["packages/field-native"]
 # inside that directory (`apps/desktop/native/windows/screenshot-helper/README.md`).
 exclude = ["apps/desktop/native/windows/screenshot-helper"]
 
+# Terminal parsing and shaping are hot even in development. Keep field-native
+# incremental/debuggable while compiling its dependencies at production speed.
+[profile.dev.package."*"]
+opt-level = 3
+
 [workspace.dependencies]
 # EL8 — version lockstep: exactly one truffle-core revision across every crate in
 # this workspace (a borrowed Arc<Node> is type-incompatible across revisions), and
@@ -194,3 +199,15 @@ ghosttea = "=0.12.0"
 # the RFC 025 window above could move the requirement to 0.7.13, and its exit
 # move it again to 0.7.14, with no resolver conflict either time, where GT-4a's
 # attempt to add a crate pinned at =0.7.11 was refused outright.
+
+# Godview performance co-development window (2026-09-27): native row reuse,
+# fallback caching and nonblocking model access during PTY input. The React
+# worker comes from the same revision in siblings.lock.json. Close this window
+# by publishing these changes, advancing the exact pins and removing the paths.
+[patch.crates-io]
+ghosttea = { path = "../ghosttea-0.11.2/native/ghosttea" }
+ghosttea-config = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-config" }
+ghosttea-core = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-core" }
+ghosttea-text = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-text" }
+ghosttea-vt = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-vt" }
+ghosttea-vt-sys = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-vt-sys" }

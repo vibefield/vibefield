@@ -12,5 +12,5 @@
   "creditAccountDrainTtlMs": 5000,
   "urgentReserveBytes": 2097152,
   "maxBulkBytesAdmittedAhead": 4194304,
-  "maxUrgentPresentationUnitBytes": 262144
+  "maxUrgentPresentationUnitBytes": 1048576
 }

@@ -37,6 +37,13 @@ import type {
 // moves to the folder every profile shares, after a confirm that names who
 // else loads it). O1: a change made outside VibeField marks its cell with a
 // grey dot, and one line above the list says who changed what.
+//
+// AR-S4e: a plugin on an agent's own list opens its page (pass 23's D1): who
+// made it, what it brings, its version, and its agent's own acts — its
+// switch, its update, its removal keeping its data or with it — or, where the
+// agent offers none, why, in the agent's words. A row of an agent's own list
+// opens its page; a kind the agent calls by a word of its own (Pi's
+// "Packages") is called that.
 
 export type ExtensionKindKey = "servers" | "skills";
 
@@ -701,6 +708,7 @@ export function agentExtensions(
       partial ? "Not all could be read" : "",
       support.store === "shared" && !allShared ? "Shared by every profile" : "",
       support.changes === "in-app" ? `Changed only inside ${label}` : "",
+      support.hostedSkips === true ? "Sessions VibeField starts don’t load them" : "",
       lent.length === 0
         ? ""
         : counted.length > 0
@@ -712,7 +720,8 @@ export function agentExtensions(
     const total = counted.length + lent.length;
     return {
       key,
-      title: words.title,
+      // the agent's own word for the kind, where it has one (Pi's "Packages")
+      title: support.label ?? words.title,
       glyph,
       value: total > 0 ? String(total) : "None",
       attention: asking === undefined ? "" : `${asking.name} asks you to sign in`,
@@ -735,9 +744,16 @@ export function agentExtensions(
   };
 }
 
+/** AR-S4e — where a row of an agent's own list opens: a plugin's page, or a server's or skill's. */
+export type AgentListOpen =
+  | { kind: "plugin"; id: string; name: string }
+  | { kind: "item"; list: ExtensionKindKey; name: string };
+
 export interface AgentListItem {
   key: string;
   name: string;
+  /** Where the row opens; none for a marketplace. */
+  open?: AgentListOpen;
   /** A plugin's initial on its tile; a server at an address or a program; a skill. */
   glyph: "plugin" | "globe" | "prompt" | "snippets";
   initial?: string;
@@ -782,6 +798,7 @@ function listItem(key: AgentListKey, item: Held): AgentListItem {
     return {
       key: plugin.id,
       name: plugin.name,
+      open: { kind: "plugin", id: plugin.id, name: plugin.name },
       glyph: "plugin",
       initial: plugin.name.slice(0, 1).toUpperCase(),
       code: versionWords(plugin.version),
@@ -801,6 +818,7 @@ function listItem(key: AgentListKey, item: Held): AgentListItem {
     return {
       key: holding.id,
       name: item.name,
+      open: { kind: "item", list: "servers", name: item.name },
       glyph: holding.transport === "stdio" ? "prompt" : "globe",
       code: holding.target ?? "",
       text: [
@@ -830,6 +848,7 @@ function listItem(key: AgentListKey, item: Held): AgentListItem {
   return {
     key: holding.id,
     name: item.name,
+    open: { kind: "item", list: "skills", name: item.name },
     glyph: "snippets",
     code: "",
     text: item.description ?? "",
@@ -868,14 +887,24 @@ export function agentList(
   }
   const shared = support.store === "shared";
   const inApp = support.changes === "in-app";
+  // the agent's own word for the kind, where it has one (Pi's "Packages")
+  const many = support.label === undefined ? words.many : lowerTitle(support.label);
   const intro =
-    shared && inApp
-      ? `${label} keeps its ${words.many} in one place for every profile, and changes them only inside its app.`
-      : shared
-        ? `${label} keeps its ${words.many} in one place, for every profile.`
-        : inApp
-          ? `${label} changes its ${words.many} only inside its app.`
-          : null;
+    [
+      shared && inApp
+        ? `${label} keeps its ${many} in one place for every profile, and changes them only inside its app.`
+        : shared
+          ? `${label} keeps its ${many} in one place, for every profile.`
+          : inApp
+            ? `${label} changes its ${many} only inside its app.`
+            : "",
+      // OpenCode's hosted sessions run without them (puppeteer's `hostedSkips`)
+      support.hostedSkips === true
+        ? `Sessions VibeField starts run ${label} without them; it loads them when you run it yourself.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ") || null;
   const held = heldOf(lens, provider, key);
   const of = (test: (item: Held) => boolean) =>
     held.filter(test).map((item) => listItem(key, item));
@@ -930,9 +959,10 @@ export function agentList(
   push(
     key === "plugins"
       ? {
+          // pass 23: turned on by the organization or the account, kept in step with it; some it requires
           key: "managed",
-          title: "Required by your organization",
-          sub: "Your organization installs these; they change with it.",
+          title: "From your organization",
+          sub: "Your organization or your account turns these on, and they change there.",
           items: of((item) => item.origin === "managed"),
         }
       : {
@@ -994,7 +1024,7 @@ export function agentList(
   const partial = column.unread?.find((entry) => entry.kind === words.kind);
   return {
     key,
-    title: words.title,
+    title: support.label ?? words.title,
     label,
     intro,
     sections,
@@ -1322,6 +1352,268 @@ export function extensionItem(
   };
 }
 
+/* ── one plugin an agent holds (AR-S4e; pass 23's D1) ───────────────────────
+   A plugin row on an agent's own list opens its page: who made it and where
+   it came from, what it brings, its version, and the agent's own acts on it —
+   its switch, its update, its removal keeping its data or with it — or, in
+   their place, why the agent offers none here, in the agent's own words. */
+
+export interface PluginPart {
+  key: "servers" | "skills" | "commands" | "agents" | "hooks";
+  glyph: "globe" | "snippets" | "prompt" | "plugin";
+  title: string;
+  /** What it is, in words, beside the names. */
+  text: string;
+  /** Its names, each set as code. */
+  names: string[];
+}
+
+export interface PluginPageModel {
+  provider: string;
+  /** The agent's name. */
+  label: string;
+  id: string;
+  name: string;
+  initial: string;
+  /** Who made it and where it came from. */
+  sub: string;
+  description: string | null;
+  /** The agent's switch for it; null where it offers none here. */
+  toggle: ExtensionCellAct | null;
+  state: "On" | "Off";
+  /** Why there is no switch, in the agent's words. */
+  noSwitch: string | null;
+  /** Sessions VibeField starts don't load it (OpenCode's hosted sessions). */
+  hosted: string | null;
+  parts: PluginPart[];
+  /** What goes with it when it is removed, for the confirm. */
+  goes: string;
+  facts: ExtensionItemFact[];
+  update: ExtensionCellAct | null;
+  /** Why there is no update, where that isn't already said. */
+  noUpdate: string | null;
+  remove: ExtensionCellAct | null;
+  purge: ExtensionCellAct | null;
+  /** Why there is no removal, where that isn't already said. */
+  noRemove: string | null;
+  /** Its agent no longer holds it, or is no longer in the profile. */
+  gone: boolean;
+}
+
+function pluginAct(
+  column: AgentExtensionColumn,
+  plugin: AgentExtensionPlugin,
+  kind: AgentExtensionAct["act"],
+): ExtensionCellAct | null {
+  const offer = plugin.acts?.find((candidate) => candidate.act === kind);
+  if (offer === undefined) return null;
+  return {
+    provider: column.provider,
+    label: column.label,
+    kind: "plugin",
+    id: plugin.id,
+    name: plugin.name,
+    act: offer.act,
+    runs: offer.runs,
+    reaches: [...offer.reaches],
+    terminal: offer.terminal === true,
+    needs: [],
+    title: TITLES[offer.act](plugin.name, column.label),
+  };
+}
+
+/** The page of one plugin its agent holds, or a page that says it is gone. */
+export function pluginPage(
+  lens: AgentsExtensionsListResult,
+  provider: string,
+  id: string,
+  /** The plugin's name as its row gave it, for a page whose plugin is gone. */
+  fallbackName = id,
+): PluginPageModel {
+  const column = lens.agents.find((candidate) => candidate.provider === provider);
+  const plugin = lens.plugins[provider]?.find((candidate) => candidate.id === id);
+  const label = column?.label ?? provider;
+  if (column === undefined || plugin === undefined) {
+    return {
+      provider,
+      label,
+      id,
+      name: fallbackName,
+      initial: fallbackName.slice(0, 1).toUpperCase(),
+      sub: "",
+      description: null,
+      toggle: null,
+      state: "Off",
+      noSwitch: null,
+      hosted: null,
+      parts: [],
+      goes: "",
+      facts: [],
+      update: null,
+      noUpdate: null,
+      remove: null,
+      purge: null,
+      noRemove: null,
+      gone: true,
+    };
+  }
+  const why = (act: AgentExtensionAct["act"]): string | null =>
+    plugin.unavailable?.find((candidate) => candidate.act === act)?.message ?? null;
+  const toggle = pluginAct(column, plugin, plugin.enabled ? "disable" : "enable");
+  const noSwitch = toggle === null ? why(plugin.enabled ? "disable" : "enable") : null;
+  const said = new Set(noSwitch === null ? [] : [noSwitch]);
+  const unsaid = (text: string | null): string | null => {
+    if (text === null || said.has(text)) return null;
+    said.add(text);
+    return text;
+  };
+  const remove = pluginAct(column, plugin, "remove");
+  const purge = pluginAct(column, plugin, "purge");
+  const noRemove = remove === null && purge === null ? unsaid(why("remove")) : null;
+  const update = pluginAct(column, plugin, "update");
+  const noUpdate = update === null ? unsaid(why("update")) : null;
+
+  // what it brings: its servers and skills are the agent's holdings from it; the rest its folder names
+  const fromIt = (rows: readonly AgentExtensionRow[]): string[] =>
+    rows
+      .filter((row) => row.cells[provider]?.some((holding) => holding.plugin === plugin.id))
+      .map((row) => row.name);
+  const servers = fromIt(lens.servers);
+  const skills = fromIt(lens.skills);
+  const commands = plugin.brings?.commands ?? [];
+  const agents = plugin.brings?.agents ?? [];
+  const hooks = plugin.brings?.hooks ?? [];
+  const parts: PluginPart[] = [
+    ...(skills.length > 0
+      ? [
+          {
+            key: "skills" as const,
+            glyph: "snippets" as const,
+            title: plural(skills.length, "skill", "skills"),
+            text: `${label} loads ${skills.length === 1 ? "it" : "them"} when a task calls for ${skills.length === 1 ? "it" : "them"}`,
+            names: skills,
+          },
+        ]
+      : []),
+    ...(servers.length > 0
+      ? [
+          {
+            key: "servers" as const,
+            glyph: "globe" as const,
+            title: plural(servers.length, "MCP server", "MCP servers"),
+            text: `${label} connects to ${servers.length === 1 ? "it" : "them"} for tools`,
+            names: servers,
+          },
+        ]
+      : []),
+    ...(commands.length > 0
+      ? [
+          {
+            key: "commands" as const,
+            glyph: "prompt" as const,
+            title: plural(commands.length, "command", "commands"),
+            text: "Typed in a session",
+            names: commands,
+          },
+        ]
+      : []),
+    ...(agents.length > 0
+      ? [
+          {
+            key: "agents" as const,
+            glyph: "plugin" as const,
+            title: plural(agents.length, "agent", "agents"),
+            text: `${label} hands work to ${agents.length === 1 ? "it" : "them"}`,
+            names: agents,
+          },
+        ]
+      : []),
+    ...(hooks.length > 0
+      ? [
+          {
+            key: "hooks" as const,
+            glyph: "prompt" as const,
+            title: "Hooks",
+            text: "It runs commands of its own at these moments",
+            names: hooks,
+          },
+        ]
+      : []),
+  ];
+  const brought = [
+    skills.length > 0 ? plural(skills.length, "skill", "skills") : "",
+    servers.length > 0 ? plural(servers.length, "MCP server", "MCP servers") : "",
+    commands.length > 0 ? plural(commands.length, "command", "commands") : "",
+    agents.length > 0 ? plural(agents.length, "agent", "agents") : "",
+    hooks.length > 0 ? "its hooks" : "",
+  ].filter(Boolean);
+  const goes =
+    brought.length > 0
+      ? `What it brings goes with it: ${listWords(brought)}.`
+      : "Its files go with it.";
+
+  const market = lens.marketplaces[provider]?.find(
+    (candidate) => candidate.id === plugin.marketplace,
+  );
+  const lender = plugin.lender === undefined ? undefined : labelOf(lens.agents, plugin.lender);
+  const facts: ExtensionItemFact[] = [
+    ...(plugin.version !== undefined
+      ? [{ term: "Version", code: versionWords(plugin.version) }]
+      : []),
+    ...(plugin.marketplace !== undefined
+      ? [
+          {
+            term: "Marketplace",
+            text:
+              market?.source !== undefined
+                ? `${plugin.marketplace} · ${market.source}`
+                : plugin.marketplace,
+          },
+        ]
+      : []),
+    ...(plugin.homepage !== undefined ? [{ term: "Home page", code: plugin.homepage }] : []),
+    // its folder, or the config file that names it (OpenCode's)
+    ...(plugin.place !== undefined ? [{ term: "Kept in", code: plugin.place }] : []),
+    ...(plugin.shared === true || column.support.plugins?.store === "shared"
+      ? [{ term: "Profiles", text: `Every ${label} profile reads it from there` }]
+      : []),
+  ];
+  const kind =
+    column.support.plugins?.label === undefined
+      ? "plugins"
+      : lowerTitle(column.support.plugins.label);
+  return {
+    provider,
+    label,
+    id: plugin.id,
+    name: plugin.name,
+    initial: plugin.name.slice(0, 1).toUpperCase(),
+    sub: [
+      plugin.author ?? "",
+      lender !== undefined ? `From ${lender} on This Mac` : (plugin.marketplace ?? ""),
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    description: plugin.description ?? null,
+    toggle,
+    state: plugin.enabled ? "On" : "Off",
+    noSwitch,
+    hosted:
+      column.support.plugins?.hostedSkips === true
+        ? `Sessions VibeField starts run ${label} without its ${kind}; it loads them when you run it yourself.`
+        : null,
+    parts,
+    goes,
+    facts,
+    update,
+    noUpdate,
+    remove,
+    purge,
+    noRemove,
+    gone: false,
+  };
+}
+
 /* ── acts (AR-S4c): what a cell's click runs ─────────────────────────────────
    A holding carries the acts its agent offers (RFC 006 C2, planned by its
    adapter). A click on an "on" cell turns it off — or, for an agent with no
@@ -1334,7 +1626,7 @@ export function extensionItem(
 export interface ExtensionCellAct {
   provider: string;
   label: string;
-  kind: "mcp-server" | "skill";
+  kind: "mcp-server" | "skill" | "plugin";
   /** The holding's id in the agent's own read. */
   id: string;
   name: string;
@@ -1358,6 +1650,8 @@ const TITLES: Record<AgentExtensionAct["act"], (name: string, agent: string) => 
   "sign-in": (name, agent) => `Sign in to ${name} for ${agent}`,
   "sign-out": (name, agent) => `Sign out of ${name} for ${agent}`,
   add: (name, agent) => `Turn ${name} on for ${agent}`,
+  update: (name, agent) => `Update ${name} for ${agent}`,
+  purge: (name, agent) => `Remove ${name} and its data from ${agent}`,
 };
 
 /** One act the agent offers on its holding under this row, or null when it offers none such. */
@@ -1448,7 +1742,70 @@ export interface ExtensionConfirmContext {
   readers?: Array<{ provider: string; label: string }>;
   /** The other profiles, and theirs. */
   elsewhere?: Array<{ profile: string; agents: string[] }>;
+  /** AR-S4e — a plugin's removal: what goes with it, in a sentence. */
+  goes?: string;
+  /** AR-S4e — the agent can remove the plugin keeping its data, or with it: a removal says which. */
+  keepsData?: boolean;
 }
+
+/**
+ * AR-S4e — P7 for a plugin: a removal always asks (Remove keeps its data where
+ * the agent can, Remove with its data is the red one); an update or a switch
+ * asks only when it reaches further than this profile.
+ */
+function pluginConfirm(
+  act: ExtensionCellAct,
+  where: string,
+  context: ExtensionConfirmContext,
+): ExtensionActConfirm | null {
+  const everywhere = act.reaches.includes("every-profile");
+  const scope = everywhere ? "in every profile" : where;
+  const reach = [
+    everywhere ? `${act.label} keeps its plugins in one place, so this changes every profile.` : "",
+    act.reaches.includes("shared-folder")
+      ? "Other agents load it from there too, in every profile, and change with it."
+      : "",
+  ].filter(Boolean);
+  if (act.act === "remove" || act.act === "purge") {
+    const purge = act.act === "purge";
+    return {
+      question: purge
+        ? `Remove ${act.name} and its data from ${act.label} ${scope}?`
+        : `Remove ${act.name} from ${act.label} ${scope}?`,
+      what: [
+        context.goes ?? "",
+        purge
+          ? "Its stored data is deleted too."
+          : context.keepsData === true
+            ? "Its stored data stays, so installing it again picks up where it left off."
+            : "",
+        "New sessions start without it; sessions running now keep it until they end.",
+        ...reach,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      action: purge ? `Remove ${act.name} and its data` : `Remove ${act.name}`,
+      danger: purge,
+    };
+  }
+  if (reach.length === 0) return null;
+  return {
+    question:
+      act.act === "update"
+        ? `Update ${act.name} for ${act.label} ${scope}?`
+        : `Turn ${act.name} ${act.act === "enable" ? "on" : "off"} for ${act.label} ${scope}?`,
+    what: reach.join(" "),
+    action:
+      act.act === "update" ? "Update it" : act.act === "enable" ? "Turn it on" : "Turn it off",
+    danger: false,
+  };
+}
+
+/** A click asks first when it reaches further than its cell, when its server needs a value, or when it removes a plugin. */
+export const asksFirst = (act: ExtensionCellAct): boolean =>
+  act.reaches.length > 0 ||
+  act.needs.length > 0 ||
+  (act.kind === "plugin" && (act.act === "remove" || act.act === "purge"));
 
 /** A path's folder: `~/.agents/skills/x` → `~/.agents/skills`. */
 const parentFolder = (path: string): string => path.replace(/\/[^/]+$/u, "");
@@ -1513,6 +1870,7 @@ export function actConfirm(
   where: string,
   context: ExtensionConfirmContext = {},
 ): ExtensionActConfirm | null {
+  if (act.kind === "plugin") return pluginConfirm(act, where, context);
   if (act.reaches.length === 0) return null;
   if (act.kind === "skill" && (act.act === "add" || act.act === "remove")) {
     return skillConfirm(act, where, context);
@@ -1666,7 +2024,11 @@ export function runWords(
               ? `${run.name} is on for ${run.label}.`
               : run.act === "disable"
                 ? `${run.name} is off for ${run.label}.`
-                : `${run.name} is gone from ${run.label}.`,
+                : run.act === "update"
+                  ? `${run.name} is updated for ${run.label}.`
+                  : run.act === "purge"
+                    ? `${run.name} and its data are gone from ${run.label}.`
+                    : `${run.name} is gone from ${run.label}.`,
         },
       };
     case "unchanged":
@@ -1674,7 +2036,11 @@ export function runWords(
         state,
         outcome: {
           tone: "neutral",
-          text: `${run.label} ran it, and still holds ${run.name} as before: ${receipt.message}.`,
+          // puppeteer's words for an update that found nothing newer: "Claude still holds 1.3.0"
+          text:
+            run.act === "update"
+              ? `There’s no newer ${run.name}: ${receipt.message}.`
+              : `${run.label} ran it, and still holds ${run.name} as before: ${receipt.message}.`,
         },
       };
     case "failed":
@@ -1682,7 +2048,10 @@ export function runWords(
         state,
         outcome: {
           tone: "error",
-          text: `${run.label} couldn’t change ${run.name}: ${receipt.message}.`,
+          text:
+            run.act === "update"
+              ? `${run.label} couldn’t update ${run.name}: ${receipt.message}.`
+              : `${run.label} couldn’t change ${run.name}: ${receipt.message}.`,
         },
       };
     default:
