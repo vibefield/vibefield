@@ -1,7 +1,7 @@
 // AR-7b: the runner builds fieldd's third bundle, the agent shim. The gateway
 // offers a launcher only with `agent-shim.cjs` beside the daemon's bundle, so
 // without this definition nothing typed in a pane under `pnpm dev` is managed.
-// The witness reads fieldd's build script, which is why this target's Nx inputs
+// These rows read fieldd's build script, which is why this target's Nx inputs
 // name packages/fieldd/package.json (project.json).
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";

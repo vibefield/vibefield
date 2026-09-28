@@ -64,9 +64,9 @@ export function esbuildDefinitions(paths) {
       // NOT BUILT 2). The options are that build step's, and the entry is the
       // kit's package export resolved from fieldd's package root as the step
       // resolves it, so the pinned kit is the one in fieldd's dependency graph;
-      // test/esbuild-watches.test.mjs builds both and compares the bytes. The
-      // kit's sources reach this build through esbuild's own input tracking, as
-      // they reach bin.cjs.
+      // test/esbuild-watches.test.mjs compares the two flag for flag and builds
+      // both to compare the bytes. The kit's sources reach this build through
+      // esbuild's own input tracking, as they reach bin.cjs.
       name: "fieldd-agent-shim",
       entry: "@vibecook/puppeteer-runtime/spawn-through/shim",
       outfile: paths.agentShimOutput,
