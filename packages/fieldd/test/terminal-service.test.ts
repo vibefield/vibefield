@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import {
   CONTRACTS_VERSION,
   type DeviceInfo,
+  ENV_PREFIXES,
   grantSigningInput,
   isPipeEndpoint,
   METHODS,
@@ -55,6 +56,7 @@ import {
   projectConfigSnapshot,
   type TerminalConfigShell,
   TerminalService,
+  type TerminalServiceOptions,
 } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath } from "./link-fixture";
@@ -3478,5 +3480,255 @@ describe("TP-S1 — the session-addressed grant model", () => {
     const unobserved = await cold.callErr("terminal.roster", {});
     expect(unobserved.data?.kind).toBe("UNAVAILABLE");
     expect((unobserved.data?.details as { state?: string } | undefined)?.state).toBe("unobserved");
+  });
+});
+
+/** AR-7d — the kit's zsh answer, spelled as the floor must receive it. The
+ * values are the fake's: nothing on this floor runs a shell (the real zsh
+ * rows are terminal-shell-integration.test.ts). */
+const INTEGRATION = {
+  ZDOTDIR: "/shims/zsh",
+  PUPPETEER_ORIGINAL_ZDOTDIR: "",
+  PUPPETEER_SHIM_DIR: "/shims/bin",
+};
+
+/** A service over the fake floor alone, the G16 row's shape. */
+function fakeFloorService(
+  floor: { endpoints: TerminalEndpoints },
+  opts: Omit<TerminalServiceOptions, "link"> = {},
+): TerminalService {
+  const service = new TerminalService({
+    link: {
+      subscribe: async () => ({ snapshot: {} }),
+      terminalEndpoints: floor.endpoints,
+      on: () => undefined,
+    },
+    ...opts,
+  });
+  cleanup.push(() => service.dispose());
+  return service;
+}
+
+/** Absolute programs that EXIST — all the create/spawn pre-flight asks — named
+ * like a shell, like a program that is not one, and like an agent. Empty
+ * files: this floor runs nothing. */
+function programs(): { zsh: string; cat: string; agent: string } {
+  const bin = join(makeDataDir(), "bin");
+  mkdirSync(bin);
+  const at = (name: string): string => {
+    const path = join(bin, name);
+    writeFileSync(path, "");
+    return path;
+  };
+  return { zsh: at("zsh"), cat: at("cat"), agent: at("agent") };
+}
+
+describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
+  it("the integration's variables reach the floor for the default login shell and for an explicit zsh", async () => {
+    const floor = await startFakeFloor();
+    const { zsh } = programs();
+    const asked: string[] = [];
+    const service = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      shellIntegration: (shell) => {
+        asked.push(shell);
+        return INTEGRATION;
+      },
+    });
+    const byDefault = await service.create({});
+    expect(floor.createOptions()?.["executable"]).toBe("/bin/zsh");
+    expect(floor.createOptions()?.["args"]).toEqual(["-l"]);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+    expect(byDefault.integrated).toBe(true);
+    const byName = await service.create({ shell: zsh });
+    expect(floor.createOptions()?.["executable"]).toBe(zsh);
+    expect(floor.createOptions()?.["args"]).toEqual([]);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+    expect(byName.integrated).toBe(true);
+    // asked once per birth, with the executable being born
+    expect(asked).toEqual(["/bin/zsh", zsh]);
+
+    // the DEFAULT is the person's own login shell: asked whatever its name
+    const other = fakeFloorService(floor, {
+      defaultShell: () => "/opt/shells/nu",
+      shellIntegration: (shell) => {
+        asked.push(shell);
+        return INTEGRATION;
+      },
+    });
+    expect((await other.create({})).integrated).toBe(true);
+    expect(asked.at(-1)).toBe("/opt/shells/nu");
+  });
+
+  it("an explicit program that is not a shell gets nothing, and the integration is never asked", async () => {
+    const floor = await startFakeFloor();
+    const { cat } = programs();
+    const asked: string[] = [];
+    const service = fakeFloorService(floor, {
+      shellIntegration: (shell) => {
+        asked.push(shell);
+        return INTEGRATION;
+      },
+    });
+    const born = await service.create({ shell: cat });
+    expect(floor.createOptions()?.["executable"]).toBe(cat);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "inherit" });
+    expect(born.integrated).toBe(false);
+    expect(asked).toEqual([]);
+  });
+
+  it("no integration — absent, or answering undefined — is the bare inherit mode, byte for byte", async () => {
+    const floor = await startFakeFloor();
+    const bare = fakeFloorService(floor, { defaultShell: () => "/bin/zsh" });
+    expect((await bare.create({})).integrated).toBe(false);
+    // the exact bytes every shell was born with before AR-7d
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "inherit" });
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+
+    // read at EACH birth: undefined until what answers it is up (the daemon
+    // builds the gateway late in its boot), then the integration
+    let answer: Record<string, string> | undefined;
+    const late = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      shellIntegration: () => answer,
+    });
+    expect((await late.create({})).integrated).toBe(false);
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    answer = INTEGRATION;
+    expect((await late.create({})).integrated).toBe(true);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+  });
+
+  it("a variable in a daemon's own class is dropped and named in the log — never its value (EL7)", async () => {
+    const floor = await startFakeFloor();
+    const logs: CapturedLog[] = [];
+    const reserved = Object.fromEntries(
+      ENV_PREFIXES.map((prefix) => [`${prefix}PROBE`, "a-daemon-secret"]),
+    );
+    const service = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      logger: captureLogger(logs),
+      shellIntegration: () => ({ ...INTEGRATION, ...reserved }),
+    });
+    expect((await service.create({})).integrated).toBe(true);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+    const dropped = logs.filter(
+      (log) => log.event === "fieldd.terminal.shell_integration_reserved",
+    );
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]?.attrs?.["dropped"]).toEqual(Object.keys(reserved));
+    expect(JSON.stringify(logs)).not.toContain("a-daemon-secret");
+
+    // an answer of nothing but reserved names adds nothing at all
+    const only = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      shellIntegration: () => reserved,
+    });
+    expect((await only.create({})).integrated).toBe(false);
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+  });
+
+  it("an agent's spawn is untouched: its CLEAN environment carries none of the integration", async () => {
+    const floor = await startFakeFloor();
+    const { agent } = programs();
+    const asked: string[] = [];
+    const service = fakeFloorService(floor, {
+      shellIntegration: (shell) => {
+        asked.push(shell);
+        return INTEGRATION;
+      },
+    });
+    const variables = { HOME: "/home/agent", TERM: "xterm-256color" };
+    await service.spawn({ command: agent, args: ["--flag"], cwd: dirname(agent), variables });
+    expect(floor.createOptions()?.["executable"]).toBe(agent);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "clean", variables });
+    expect(asked).toEqual([]);
+  });
+
+  /** A daemon over the mock mgmt server whose one keyed cell is the fake
+   * floor (the GT-5b row's composition), with the AR-7d seam as given. */
+  async function daemonOverFakeFloor(
+    terminalShellIntegration?: (shell: string) => Record<string, string> | undefined,
+  ) {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.terminalRoutes = keyedRoutes(1, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-ar7d",
+        endpoints: floor.endpoints,
+        workloadClass: "interactive",
+        role: "class",
+        grantKey: KEY_I,
+        doors: {
+          controlUrl: "ws://127.0.0.1:50017/control",
+          framesUrl: "ws://127.0.0.1:50017/frames",
+        },
+      },
+    ]);
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({
+      dataDir,
+      controlPort: 0,
+      dataPort: 0,
+      ...(terminalShellIntegration === undefined ? {} : { terminalShellIntegration }),
+    });
+    cleanup.push(() => daemon.stop());
+    const grant = daemon.tokens.mint(["terminal.attach"], "ar7d-daemon");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+    const createOutcomes = async () =>
+      (await readAuditRecords(dataDir))
+        .filter((r) => r.action === "terminal.session.create" && r.phase === "outcome")
+        .map((r) => r.attrs);
+    return { dataDir, floor, rpc, createOutcomes };
+  }
+
+  it("the daemon's seam reaches the floor, and the create's audit outcome says `integrated` — a fact, never the variables", async () => {
+    const { cat } = programs();
+    const asked: string[] = [];
+    const { dataDir, floor, rpc, createOutcomes } = await daemonOverFakeFloor((shell) => {
+      asked.push(shell);
+      return INTEGRATION;
+    });
+    const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+    const program = TerminalCreateOpenResult.parse(
+      await rpc.call("terminal.create", { shell: cat }),
+    );
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "inherit" });
+    // asked for the default login shell's birth only
+    expect(asked).toHaveLength(1);
+    expect(await createOutcomes()).toEqual([
+      { sessionId: shell.sessionId, integrated: true },
+      { sessionId: program.sessionId, integrated: false },
+    ]);
+    const ledger = JSON.stringify(await readAuditRecords(dataDir));
+    for (const value of Object.values(INTEGRATION).filter((v) => v !== "")) {
+      expect(ledger).not.toContain(value);
+    }
+  });
+
+  it("a daemon with nothing to answer the seam — the gateway not yet up — births a shell exactly as before", async () => {
+    const { floor, rpc, createOutcomes } = await daemonOverFakeFloor();
+    const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    expect(await createOutcomes()).toEqual([{ sessionId: shell.sessionId, integrated: false }]);
   });
 });

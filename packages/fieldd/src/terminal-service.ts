@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, constants as fsConstants } from "node:fs";
 import { type FileHandle, open, rm } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import {
   type AutomationInputResult,
   GhostteaAutomationClient,
@@ -13,6 +13,7 @@ import {
 import {
   CELL_SUPERVISION,
   type CellEndpointSet,
+  ENV_PREFIXES,
   ObservedState,
   type RemoteCellEndpointSet,
   type RouteBinding,
@@ -163,7 +164,25 @@ export interface TerminalServiceOptions {
    * null, the file actions answer UNAVAILABLE in the broker's own words — the
    * state they are in when Electron main has not registered. */
   shell?: () => TerminalConfigShell | null;
+  /** AR-7d — the variables a FREE shell is born with beyond what it inherits,
+   * answered for the executable being born: puppeteer's
+   * `shellIntegrationEnvironment` over the shim home, so the agent launchers
+   * lead the shell's PATH at its first prompt while the person's `ZDOTDIR`,
+   * history file and completion dump stay their own. A GETTER, like `shell`
+   * and `remoteEndpoints`: what answers it (the gateway service, AR-7b) is
+   * built later in the daemon's boot. Absent, or answering `undefined`, a
+   * shell is born exactly as before. Agent-class spawns never consult it. */
+  shellIntegration?: (shell: string) => Record<string, string> | undefined;
 }
+
+/** AR-7d — what "a shell" means to `create`: the interactive shells a person
+ * types commands into, by executable basename. The integration is for them
+ * alone. An explicit program outside this list (tests spawn `/bin/cat`) reads
+ * no shell's startup files and draws no prompt, so the variables would do
+ * nothing there except carry the launcher directory into everything it starts
+ * (the leak of the plan's fact 7): it gets none. The DEFAULT shell is the
+ * person's own login shell and is asked for whatever its name. */
+const INTERACTIVE_SHELLS: ReadonlySet<string> = new Set(["zsh", "bash", "fish", "sh"]);
 
 /** Free-shell spawn geometry until an attached view claims resize authority
  * (03·A: the active view owns cols/rows; nothing has attached yet at birth). */
@@ -692,11 +711,17 @@ export class TerminalService {
    * composes the two rather than this method quietly handing out a credential —
    * which is why the answer names the CELL the session landed on (TC-S3) and
    * not its endpoints: the daemon needs to know where to mint from, not to be
-   * handed the credential to mint. */
+   * handed the credential to mint.
+   *
+   * AR-7d — a free shell (the default, or an explicit one named in
+   * `INTERACTIVE_SHELLS`) is born with `shellIntegration`'s variables as
+   * inherit-mode `overrides`, and the answer says whether it was (`integrated`,
+   * the audit's fact — never the variables). */
   async create(params: TerminalCreateParams): Promise<{
     sessionId: string;
     session: TerminalRuntimeSession;
     cellBootId?: string | undefined;
+    integrated: boolean;
   }> {
     // TC-D6(d) — the per-pair session cap at the create seam, counted from the
     // observed inventory WHEN THERE IS ONE. Before the first observation the
@@ -741,11 +766,19 @@ export class TerminalService {
     const explicit = params.shell !== undefined;
     const executable = params.shell ?? this.defaultShell();
     const scrollbackBytes = classScrollbackBytes(params.workloadClass);
-    return await this.birth(cell, client, executable, {
+    const overrides =
+      !explicit || INTERACTIVE_SHELLS.has(basename(executable))
+        ? this.integrationFor(executable)
+        : undefined;
+    const born = await this.birth(cell, client, executable, {
       executable,
       args: explicit ? [] : ["-l"],
       cwd: params.cwd ?? homedir(),
-      environment: { mode: "inherit" },
+      // ghosttea applies `overrides` AFTER the floor's private-prefix strip
+      // (`SessionEnvironment::Inherit` in its session.rs), so they reach the
+      // shell whatever their names — `integrationFor` is the fence. None to
+      // add sends the bare mode, byte-identical to a shell born before AR-7d.
+      environment: overrides === undefined ? { mode: "inherit" } : { mode: "inherit", overrides },
       cols: SPAWN_COLS,
       rows: SPAWN_ROWS,
       persistence: normalizePersistence(params.persistence),
@@ -755,6 +788,34 @@ export class TerminalService {
       // the wire either (exactOptionalPropertyTypes agrees)
       ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
     });
+    return { ...born, integrated: overrides !== undefined };
+  }
+
+  /** AR-7d — the integration's answer for one shell, minus every variable in a
+   * daemon's own classes (`ENV_PREFIXES`): each one dropped is named in the
+   * log, its value never. The floor strips those classes from what a shell
+   * INHERITS but applies overrides after that strip, so this is the only fence
+   * between the integration and a pane (EL7) — case-folded on win32, where the
+   * environment itself folds. `undefined` when nothing is left to add. */
+  private integrationFor(executable: string): Record<string, string> | undefined {
+    const answer = this.opts.shellIntegration?.(executable);
+    if (answer === undefined) return undefined;
+    const fold = process.platform === "win32";
+    const prefixes = fold ? ENV_PREFIXES.map((prefix) => prefix.toUpperCase()) : ENV_PREFIXES;
+    const overrides: Record<string, string> = {};
+    const dropped: string[] = [];
+    for (const [name, value] of Object.entries(answer)) {
+      const probe = fold ? name.toUpperCase() : name;
+      if (prefixes.some((prefix) => probe.startsWith(prefix))) dropped.push(name);
+      else overrides[name] = value;
+    }
+    if (dropped.length > 0)
+      this.logger.warn(
+        "fieldd.terminal.shell_integration_reserved",
+        "The shell integration named variables in a daemon's own classes; they were dropped",
+        { dropped },
+      );
+    return Object.keys(overrides).length === 0 ? undefined : overrides;
   }
 
   /** AR-3 — an AGENT's PTY (design-01 §5.1 `agent.spawn`; EL7): born on the

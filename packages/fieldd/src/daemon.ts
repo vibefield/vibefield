@@ -217,6 +217,10 @@ export interface FielddConfig {
   /** TC-S2 test seam: the terminal cell-birth wait budget (production
    * defaults to the cell's genned hello deadline). */
   terminalBirthWaitMs?: number;
+  /** AR-7d test seam: what a free shell this daemon births adds to its
+   * environment (`TerminalServiceOptions.shellIntegration`). Production
+   * answers from the gateway service (AR-7b) through `shellIntegrationRef`. */
+  terminalShellIntegration?: (shell: string) => Record<string, string> | undefined;
   /** pid of a field-native the caller spawned (recorded in product.json for cleanup tooling) */
   nativePid?: number;
   /** TC-D1 — re-runs the caller's spawn (bin.ts's exact env composition) so
@@ -591,6 +595,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // AR-7b — the gateway service is built once the floor is lent (below); the
   // runtime answers `invoke` from the launchers it holds, through this ref
   let gatewayRef: AgentGatewayService | null = null;
+  // AR-7d — THE SEAM FOR AR-7b. What a free shell this daemon births adds to
+  // its environment so the agent launchers lead its PATH: the spawn-through
+  // kit's `shellIntegrationEnvironment` over the shim home, which the gateway
+  // service (AR-7b, `agent-gateway.ts`) materializes. That service assigns
+  // this ref once the shim home is written (and back to null when it stops);
+  // the terminal service reads it through a getter at every birth. Until then
+  // — and in every composition without it — a shell is born exactly as before.
+  // biome-ignore lint/style/useConst: the seam — AR-7b's gateway service assigns it
+  let shellIntegrationRef: ((shell: string) => Record<string, string> | undefined) | null = null;
   let devicesForAgents: DeviceService | null = null;
   // Show in Finder reaches Electron main through the shell provider, which
   // the api owns — built later in this boot, so bound through a ref too. GT-7:
@@ -1151,6 +1164,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // GT-7 — Import file… / Export… / Reveal: the api's internal shell
       // doors, read at call time (the api is built after this service).
       shell: () => shellApi,
+      // AR-7d — read at every birth: the test seam, else the gateway's answer
+      // (`shellIntegrationRef` above; null until AR-7b's service sets it).
+      shellIntegration: (shell) =>
+        (config.terminalShellIntegration ?? shellIntegrationRef)?.(shell),
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
@@ -2529,7 +2546,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         async () => await terminals.create(parsed.data),
         // no `ticketMinted` here any more: nothing has been minted yet, and an
         // attr claiming otherwise was true only because the nesting made it so.
-        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.sessionId } }),
+        // AR-7d — `integrated`: whether the shell was born with the shell
+        // integration's variables. A fact of the birth, so it rides the
+        // outcome; the variables themselves are never recorded.
+        (result) => ({
+          outcome: "succeeded",
+          attrs: { sessionId: result.sessionId, integrated: result.integrated },
+        }),
       );
       const opened = await audit.required(
         ctx,
