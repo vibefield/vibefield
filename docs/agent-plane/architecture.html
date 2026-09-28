@@ -1023,7 +1023,7 @@
               <code>draft/thinking-ar-agent-plane.md</code> §1 and it is what every wall, every seam and every naming
               decision below exists to preserve. Read the middle column as hard as the left one: what a repository must
               never know is the load-bearing half.
-            </p>
+             The spawn-through row of the seam table, the R23 sentence and the typed-run paragraph under Lifetimes were read at vibe-field <code>cdad77bd</code> · puppeteer <code>2a81fc1</code> (AR-7).</p>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead>
@@ -1161,7 +1161,7 @@
                 table: <code>AGENT_CATALOG</code> in <code>packages/contracts/src/agent-catalog.ts</code> DECIDES which agents
                 VibeField supports — one hand-maintained row per agent (our label, <code>status</code>, puppeteer's provider id
                 and rosetta's kind as seam columns, the layout root, <code>offers</code>, <code>surfaces</code>, the decision
-                trail), held to both pins by wall R23 at preflight (AC-D1…AC-D11). The session join is unchanged; the roll call
+                trail), held to both pins by wall R23 at preflight (AC-D1…AC-D11); since AR-7 a row's <code>invoke</code> means its adapter classifies its own grammar (<code>nativeInvocation.classifies</code>) and is what earns it a launcher. The session join is unchanged; the roll call
                 is the witness; the wire grammar stays open. <span class="badge tone-built">Built</span>
               </p>
             </div>
@@ -1307,7 +1307,7 @@
           <section id="seams">
             <h2>Seams</h2>
             <p class="section-note">
-              A seam is a place where one repository's code meets another's under a named interface. There are nine.
+              A seam is a place where one repository's code meets another's under a named interface. There are ten.
               For each: who owns the interface, who implements it, the file on each side, what crosses, and whether it
               is built. The rule that makes the triad replaceable is that every joint below is a contract, never an
               import of internals — puppeteer sits behind <code>AgentHost</code> and the monitor schema, rosetta behind
@@ -1525,6 +1525,41 @@
                       </p>
                     </td>
                     <td><span class="badge tone-built">Built</span><p>TM <code>bbe551a5</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the spawn-through gateway</span></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>puppeteer/packages/runtime/src/host/spawn-through/</code> — <code>protocol</code>,
+                        <code>prepare</code>, <code>gateway</code>, <code>rendezvous</code>, <code>terminals</code>,
+                        <code>shim-main</code><br />
+                        <code>packages/fieldd/src/agent-gateway.ts</code> · <code>agent-typed-run.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        A name typed in a pane. The launcher the pane's PATH leads with runs the kit's shim, which asks
+                        fieldd's gateway over loopback — the bearer from the 0600 rendezvous, one JSON
+                        <code>launch</code> request: the command, its argv, cwd, pid and start time, whether it is
+                        interactive — and obeys one answer: <code>exec</code> (the managed recipe: argv, environment,
+                        the run's id; the run adopted into the fold as <code>spawnedBy: user-shell</code>),
+                        <code>fallback</code> (run exactly as typed: a version query, a one-shot run, a launch outside
+                        our terminals — fieldd keeps nothing), or <code>refuse</code> (one sentence under VibeField's
+                        name, a code, <code>placed</code>). Strict from the first landing: in a pane VibeField owns an
+                        interactive session runs managed or not at all; nothing else is ever refused. The shim reads
+                        three files every time (<code>gateway.json</code>, <code>launch-providers.json</code>,
+                        <code>terminals.json</code>), so our shells outlive fieldd: away, it waits 8 s and refuses in
+                        our panes, falls through elsewhere; back, the waiting launch is adopted. A multiplexer's server
+                        is not in the pane's process tree: an agent started inside tmux or screen in a pane runs
+                        unmanaged (AR7-D14, a documented limit).
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-built">Built</span>
+                      <p>AR-7 <code>cdad77bd</code>; puppeteer <code>2a81fc1</code> (PU-17 the kit, PU-9a the grammars). The seam's owner is puppeteer's <code>docs/guides/spawn-through-hosts.md</code>.</p>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1965,6 +2000,19 @@
                 </tbody>
               </table>
             </div>
+            <h3>A typed run across the same lifetimes (AR-7)</h3>
+            <p class="section-note">
+              A typed agent lives on the INTERACTIVE cell the pane already had — no agent cell is minted — so its
+              ceiling is the pane's. Across a fieldd restart it re-attaches on its own proof
+              (<code>agent-typed-run.ts</code>, <code>typedRunProof</code>: the signed record, the pid with the same
+              start time, its ancestry under a listed shell) and is never replaced or ended by the re-attach; when the
+              process leaves, the exit watch withdraws the row and the pane is a shell again. What changes across a
+              restart lives in files the shim reads every time, never in a shell's environment; the list of our
+              shells (<code>terminals.json</code>) is rewritten at every birth, exit and inventory change. Limits: a
+              pane born before the landing is never integrated (its environment was fixed at birth); after a later
+              fieldd adopts the floor, zsh panes restore that fieldd's ZDOTDIR and non-zsh panes get its PATH; fieldd
+              away, a name typed in our pane waits 8 s and is refused, a version query included.
+            </p>
             <h3>How the re-attach works, and what it costs</h3>
             <p class="section-note">
               puppeteer's own recovery is resume-respawn, and an adapter's hook endpoint is ephemeral and baked into the

@@ -1448,6 +1448,13 @@
             </p>
 
             <h3 id="cat-agent">agent.* — managed sessions and the fold</h3>
+            <p class="section-note">
+              AR-7 adds no door here: a typed run enters the fold through fieldd's spawn-through gateway (a loopback
+              surface for the kit's shim, the bearer in a 0600 file under <code>agents/shims</code>), never through
+              JSON-RPC; on the wire it is an ordinary row with <code>spawnedBy: "user-shell"</code> and a
+              <code>process {pid, startedAt}</code> on its record. <code>agent.interrupt</code> reaches it; a resume of
+              one that is running in its shell is answered <code>PRECONDITION_FAILED</code>.
+            </p>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead>
@@ -1622,7 +1629,7 @@
                 <thead><tr><th>Door</th><th>Result</th><th>Idem</th><th>Why the agent plane needs it</th></tr></thead>
                 <tbody>
                   <tr><td><span class="route">terminal.openTicket</span></td><td><p><code>TerminalOpenTicket</code></p></td><td><p><strong>no</strong></p></td><td><p>The mint for an existing session — how a fold row's <code>terminal.runtimeSessionId</code> becomes a mounted pane. Every mint is a fresh audited grant.</p></td></tr>
-                  <tr><td><span class="route">terminal.create</span></td><td><p><code>TerminalCreateOpenResult</code></p></td><td><p>no</p></td><td><p>The atomic birth-plus-ticket, so a spawn mounts without a second inventory round trip.</p></td></tr>
+                  <tr><td><span class="route">terminal.create</span></td><td><p><code>TerminalCreateOpenResult</code></p></td><td><p>no</p></td><td><p>The atomic birth-plus-ticket, so a spawn mounts without a second inventory round trip. Since AR-7 the shell it births is integrated by fieldd itself (the launcher home at the head of PATH, the person's own ZDOTDIR restored by the integration) — nothing new on the wire.</p></td></tr>
                   <tr><td><span class="route">terminal.renewAttach</span></td><td><p><code>TerminalRenewAttachResult</code></p></td><td><p>yes</p></td><td><p>A compare-and-set on the generation the caller holds, idempotent by request id, so a retried renewal returns the grant it already got.</p></td></tr>
                   <tr><td><span class="route">terminal.terminate</span></td><td><p>—</p></td><td><p>yes</p></td><td><p>Closes an agent's pane. Idempotent by intent: terminating an already-exited session is the normal race when the ladder and a click converge.</p></td></tr>
                   <tr><td><span class="route">terminal.list · sessions · roster · get</span></td><td><p>inventories</p></td><td><p>yes</p></td><td><p>Four doors over three projections for three readers, with <code>get</code> answering one row. The fold joins against the inventory; the roster is the UI's view and carries no placement.</p></td></tr>
@@ -1715,6 +1722,8 @@
                   <tr><td><p><code>inspectInstallations</code> · <code>planUpdate</code> · <code>checkReleases</code> · <code>availableUpdate</code> · <code>updateInstallation({onOutput})</code> · <code>distributionProviders</code></p></td><td><p><code>agents.installs</code>, <code>.releases</code> (a kept check re-judged with <code>availableUpdate</code>), <code>.update</code> and the operations feed; transcripts under the machine scope</p></td></tr>
                   <tr><td><p><code>createAccountUsageMonitor</code> · <code>AccountUsageBatch</code></p></td><td><p><code>agents.usage</code> and its subscription, through the EL7 projection</p></td></tr>
                   <tr><td><p><code>HistoryPort</code> · <code>AccountUsagePort</code> (<code>puppeteer-views</code>)</p></td><td><p><code>packages/field-app/src/godview/monitor/doors.ts</code> — adapters over fieldd's doors; the views dial nothing</p></td></tr>
+                  <tr><td><p><code>@vibecook/puppeteer-runtime/spawn-through</code>: <code>startSpawnThroughGateway</code> · <code>prepareSpawnThroughLaunch</code> · <code>materializeShims</code> · <code>writeRendezvous</code> · <code>writeTerminals</code> · <code>shellIntegrationEnvironment</code></p></td><td><p><code>agent-gateway.ts</code> — the spawn-through gateway (AR-7); not a JSON-RPC door: a loopback HTTP surface under the bearer in the 0600 rendezvous, one JSON request per launch, EL2-clean</p></td></tr>
+                  <tr><td><p><code>AgentNativeInvocationResolution</code> · <code>nativeInvocation.classifies</code> · <code>AgentLaunchRefusedError</code> (Core); <code>classifyInvocation</code> · <code>prepareInvocation</code> (runtime)</p></td><td><p>the catalog's <code>invoke</code> (= <code>classifies</code>, wall R23) and the gateway's classify-before-place order; an adapter's own refusal reaches the pane in its words</p></td></tr>
                   <tr><td><p><code>dispose({detach})</code></p></td><td><p>a graceful stop releases the runs; the PTYs and claims survive</p></td></tr>
                 </tbody>
               </table>

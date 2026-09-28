@@ -1302,7 +1302,7 @@
           <section id="services">
             <h2>fieldd's agent services</h2>
             <p class="section-note">
-              Ten modules under <code>packages/fieldd/src/</code> carry the agent plane. They form a
+              Twelve modules under <code>packages/fieldd/src/</code> carry the agent plane. They form a
               shallow graph: the runtime service is the hub, the index service is its consent
               dependency, and everything else hangs off the fold it publishes.
             </p>
@@ -1345,6 +1345,20 @@
                     <td><p><code>terminal-service</code></p></td>
                     <td><p><code>AgentHost</code>, <code>TerminalSpec</code>, <code>buildAgentEnvironment</code></p></td>
                     <td><p><code>agent-session.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent-gateway.ts</span><br /><span class="native-type">1,698 lines</span></td>
+                    <td><p>AR-7's gateway over puppeteer's spawn-through kit: the launchers offered for the catalog's <code>invoke</code> rows whose active install has an absolute executable; the launcher's runtime by one rule (a configured runtime, a real Node with <code>process.execve</code>, the first <code>node</code> on fieldd's PATH, or none — Electron-as-Node stalls); the shell integration handed to the terminal service so a pane is born integrated; <code>terminals.json</code> from the floor's inventory; one sentence per refusal code under VibeField's name; the adoption of a typed run into the fold as <code>spawnedBy: user-shell</code>. Strict from one constant, <code>AGENT_GATEWAY_STRICT</code>.</p></td>
+                    <td><p><code>agent-runtime</code> (the adoption door), <code>terminal-service</code>, <code>agent-typed-run</code></p></td>
+                    <td><p><code>startSpawnThroughGateway</code>, <code>prepareSpawnThroughLaunch</code>, <code>materializeShims</code>, <code>writeRendezvous</code>, <code>writeTerminals</code>, <code>shellIntegrationEnvironment</code>, <code>spawnThroughRefusalMessage</code></p></td>
+                    <td><p><code>agent-gateway.test.ts</code>, <code>agent-gateway-panes.test.ts</code> (the real floor)</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent-typed-run.ts</span><br /><span class="native-type">171 lines</span></td>
+                    <td><p>What a typed run is to the fold: the <code>user-shell</code> provenance, the exit watch that withdraws the row (250 ms), and the re-attach proof — the signed record, the pid with the same start time, its ancestry under a listed shell — that a restart trusts instead of replacing the terminal.</p></td>
+                    <td><p>the kit's process table</p></td>
+                    <td><p><code>readProcessTable</code>, <code>findOwningProcess</code></p></td>
+                    <td><p><code>agent-gateway.test.ts</code>, <code>agent-gateway-panes.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent-sessions.ts</span><br /><span class="native-type">524 lines</span></td>
@@ -1480,6 +1494,16 @@
                 <p>
                   The class is <code>keep-until-explicit-close</code>, not <code>keep-until-exit</code>:
                   an agent that finishes leaves a pane with its final screen and a resume verb on it.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>A typed run lives on the interactive cell (AR-7)</strong>
+                <p>
+                  A name typed in a pane's shell becomes a managed run on THAT pane — no agent cell is minted, the
+                  shell keeps its class, and the row is withdrawn when the agent leaves rather than left as an
+                  exited husk. Its re-attach after a fieldd restart trusts the run's own proof and never replaces
+                  the terminal. An agent started inside tmux or screen in the pane is not in the pane's process
+                  tree and runs unmanaged (AR7-D14).
                 </p>
               </div>
             </div>
@@ -2033,7 +2057,7 @@
           <section id="sequences">
             <h2>Sequences</h2>
             <p class="section-note">
-              Four paths worth reading end to end. Each names the doors and the files, so a maintainer can
+              Five paths worth reading end to end. Each names the doors and the files, so a maintainer can
               start at any arrow.
             </p>
 
@@ -2316,6 +2340,19 @@
                 </div>
               </div>
             </div>
+                      <h3>(e) Typed — a name in a pane becomes a managed run (AR-7)</h3>
+            <p class="section-note">
+              No door opens this one; the person's shell does. Read it with the spawn-through row of the umbrella's
+              seam table.
+            </p>
+            <ol>
+              <li>The pane was born integrated: fieldd's gateway handed the terminal service the kit's shell integration, so the pane's zsh keeps the person's own ZDOTDIR and startup files and leads its PATH with the launcher home (<code>agents/shims/bin</code>) at every prompt.</li>
+              <li>The person types <code>claude</code>. The launcher runs the kit's shim on a real Node; the shim reads <code>gateway.json</code> and <code>launch-providers.json</code> and sends one <code>launch</code> request over loopback with the bearer.</li>
+              <li>fieldd classifies before anything else (<code>classifyInvocation</code>, the adapter's own grammar): a version query or a one-shot run is answered <code>fallback</code> at once and runs exactly as typed — fieldd keeps nothing of it.</li>
+              <li>A session: the gateway places the pid under a listed shell (<code>terminals.json</code>, ancestry by pid and start time). Outside our terminals → <code>fallback</code>. In one of ours, an argument the managed launch cannot carry, or the adapter's own refusal → <code>refuse</code>: one sentence on the pane's screen under VibeField's name, exit 75.</li>
+              <li>Otherwise <code>prepareInvocation</code> builds the managed recipe — the person's own configuration plus management (Claude's session id and a settings layer with the hooks; Codex's private app-server) — fieldd adopts the run into the fold as <code>spawnedBy: user-shell</code> on that pane (audited <code>agent.session.adopt</code>) and answers <code>exec</code>; the shim execs the real binary in place with the shell's environment plus the recipe's.</li>
+              <li>The fold publishes: the pane wears the mark, the swarm has a body, the monitor's row says whose doing it is. The exit watch withdraws the row when the agent leaves; the pane is a shell again.</li>
+            </ol>
           </section>
 
           <section id="sources">

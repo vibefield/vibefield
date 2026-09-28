@@ -46,7 +46,7 @@ Main-tracked:
 - `CLAUDE.md` — the laws condensed, the workspace taxonomy, the sibling mode, the commands. **current**
 - [`docs/ROADMAP.md`](ROADMAP.md) — now/next, rewritten in place at each milestone; the AR row names the next rung. **current**
 - [`docs/LANDED.md`](LANDED.md) — the append-only ledger; every `## AR-` entry is this plane's build history with its revision and witness. **current**
-- [`docs/DECISIONS.md`](DECISIONS.md) — the decision index; AR-D1…D14 and AR-D15…D22 carry this plane's rulings and amendments. **current**
+- [`docs/DECISIONS.md`](DECISIONS.md) — the decision index; AR-D1…D14 and AR-D15…D22 carry this plane's rulings and amendments; AR7-D1…D16 the typed agent's slate. **current**
 - `DESIGN.md` · [`docs/UI_SYSTEM.md`](UI_SYSTEM.md) — art direction, and where it lives in code. Any view in this plane defers to them. **current**
 
 Design corpus (`draft/`, tracked on the local-only `dev-local` branch, never on main):
@@ -57,6 +57,9 @@ Design corpus (`draft/`, tracked on the local-only `dev-local` branch, never on 
 - `draft/thinking-ar-agent-catalog.md` — the agent CATALOG: which agents VibeField supports, decided by hand in
   `packages/contracts/src/agent-catalog.ts` and held to both pins by wall R23; the slate AC-D1…AC-D11; §13 as built.
   **RULED + BUILT 2026-09-22** (LANDED §AC)
+- `draft/thinking-ar7-typed-agents.md` — a typed agent is a managed agent: the eight facts, the rule of refusal,
+  the slate AR7-D1…D16 (six ruled by James), the build table and the witnesses. **RULED + BUILT 2026-09-27/28**
+  (LANDED §AR-7)
 - `draft/thinking-ar-views-port.md` — the views port as built. `draft/thinking-ar-approvals-prompts.md` — the design AR-6 will run. **current**
 - `draft/design-00…design-04` — the governing specification in authority order. The agent plane defers to these for mechanics. **current**
 
@@ -73,6 +76,9 @@ Its own map is `docs/README.md`, which sorts documents by whether they are autho
 - `docs/agent-management-api.html` — provider management, account profiles, quota usage, native service contracts. **current**
 - `docs/agent-aggregation-api.html` — history and search from the runtime's side: native-session joins, external-daemon ownership, protocol compatibility. **current**
 - `docs/guides/` — adapting an agent · surface adaptation · the normalization devkit. **current**
+- `docs/guides/spawn-through-hosts.md` — the spawn-through kit for hosts: what a host answers, the rule of refusal
+  (strict refuses only a session, interactive, in the host's own terminal), the codes and the host's words, the two
+  lifetimes, the tmux limit. The seam's OWNER; VibeField's gateway is its consumer. **current**
 - `docs/archive/` — rationale for archaeology, not an implementation contract. `draft/` — unfinished adaptation plans and audits. **historical / in flight**
 
 ### rosetta — agent history
