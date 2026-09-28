@@ -1,0 +1,30 @@
+{
+  "run": {
+    "id": "act-c4e1",
+    "provider": "claude",
+    "label": "Claude",
+    "kind": "marketplace",
+    "item": "northlight",
+    "name": "northlight",
+    "act": "update",
+    "runs": "claude plugin marketplace update northlight",
+    "state": "finished",
+    "startedAt": "2026-09-25T09:01:10.000Z",
+    "finishedAt": "2026-09-25T09:01:20.000Z",
+    "output": "Updating marketplace northlight…\n✔ Successfully updated marketplace: northlight",
+    "truncated": false,
+    "receipt": {
+      "status": "changed",
+      "message": "fetched its catalog again",
+      "exitCode": 0,
+      "finishedAt": "2026-09-25T09:01:20.000Z"
+    }
+  },
+  "receipt": {
+    "status": "changed",
+    "message": "fetched its catalog again",
+    "exitCode": 0,
+    "finishedAt": "2026-09-25T09:01:20.000Z"
+  },
+  "updates": 1
+}

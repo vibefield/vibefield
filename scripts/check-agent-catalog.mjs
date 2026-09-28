@@ -287,8 +287,8 @@ const R23B_ALLOW = [
   },
   {
     file: "packages/field-app/src/design-system/extensions-fixtures.ts",
-    count: 12,
-    why: "Extensions' fixture lens for the design catalog (AR-S4b), the contracts fixture's twin, and its runs (AR-S4c: an act, a server's sign-in; AR-S4d2: a skill's owner, a change made outside VibeField; AR-S4e: a plugin's update) — fixture data, never compared",
+    count: 15,
+    why: "Extensions' fixture lens for the design catalog (AR-S4b), the contracts fixture's twin, and its runs (AR-S4c: an act, a server's sign-in; AR-S4d2: a skill's owner, a change made outside VibeField; AR-S4e: a plugin's update; AR-S4e2: an agent's catalog, a check's run and an install's pane, each the contracts fixture's twin) — fixture data, never compared",
   },
   {
     file: "packages/field-app/src/design-system/ProfilesSettingsPreview.tsx",

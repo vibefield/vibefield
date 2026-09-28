@@ -46,6 +46,14 @@ export type ProfilesFixtureState =
   | "plugin updated"
   | "plugin removal"
   | "plugin, no command"
+  | "plugins, checked"
+  | "add package"
+  | "browse"
+  | "browse, no marketplaces"
+  | "marketplace removal"
+  | "add marketplace"
+  | "plugin to install"
+  | "install in a terminal"
   | "add server"
   | "add skill"
   | "new";
@@ -77,10 +85,26 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "plugin updated",
   "plugin removal",
   "plugin, no command",
+  "plugins, checked",
+  "add package",
+  "browse",
+  "browse, no marketplaces",
+  "marketplace removal",
+  "add marketplace",
+  "plugin to install",
+  "install in a terminal",
   "add server",
   "add skill",
   "new",
 ];
+
+/** AR-S4e2 — deploy's install in its pane: a still of Claude Code asking to run the command its source names. */
+export const FIXTURE_INSTALL_PANE_OUTPUT = [
+  "Installing deploy@northlight…",
+  "This plugin's source runs a command to fetch it:",
+  "  npx @northlight/deploy-fetch",
+  "Run it? (y/N) ",
+].join("\n");
 
 /** The catalog's "now": the usage lines' now line stays put whatever day it is opened. */
 export const FIXTURE_PROFILES_NOW = new Date(2026, 8, 23, 12, 0, 0);

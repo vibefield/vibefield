@@ -5,12 +5,15 @@ import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
 import {
   type AgentProfile,
   EXTENSION_SKILL_FOLDER_NAME,
+  type ExtensionActItem,
   type ExtensionActPlan,
+  type ExtensionCatalog,
   type ExtensionFailure,
   type ExtensionInventory,
   type ExtensionItem,
   type ExtensionOrigin,
   type ExtensionProvider,
+  type MarketplaceItem,
   type McpServerDefinition,
   type McpServerItem,
   mcpServerDefinition,
@@ -28,6 +31,7 @@ import {
   type AgentCatalogReaders,
   type AgentExtensionAct,
   type AgentExtensionActUnavailable,
+  type AgentExtensionCatalogPlugin,
   type AgentExtensionChange,
   type AgentExtensionColumn,
   type AgentExtensionHolding,
@@ -46,13 +50,21 @@ import {
   type AgentsExtensionsAddResult,
   type AgentsExtensionsAddSkillParams,
   type AgentsExtensionsAddSkillResult,
+  type AgentsExtensionsCatalogParams,
+  type AgentsExtensionsCatalogResult,
+  type AgentsExtensionsCheckParams,
+  type AgentsExtensionsCheckResult,
   type AgentsExtensionsListResult,
   type AgentsExtensionsPlanParams,
   type AgentsExtensionsPlanResult,
   type AgentsExtensionsPlanSkillParams,
   type AgentsExtensionsPlanSkillResult,
+  type AgentsExtensionsPlanSourceParams,
+  type AgentsExtensionsPlanSourceResult,
   type AgentsExtensionsSignInParams,
   type AgentsExtensionsSignInResult,
+  type AgentsExtensionsTerminalParams,
+  type AgentsExtensionsTerminalResult,
   ENV_PREFIXES,
   type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
@@ -129,6 +141,19 @@ import type { GrantPrincipal } from "./terminal-grants";
 // and the ones it offers none of with the agent's own words, which the
 // plugin's page says in their place. An act on one runs like any other: one
 // at a time per profile, the whole profile read again after.
+//
+// BROWSE AND INSTALL (AR-S4e2; pass 23's B1): an agent's PLUGIN CATALOG — what
+// its marketplaces list — is read from the catalogs it already fetched, on
+// demand (the Browse page), never on a timer and never with a fetch of
+// fieldd's own. Each listed plugin carries the agent's own install or why
+// not, planned from that read against what the agent holds; the read is kept
+// per agent, so the profile's frames can say which held plugins have a newer
+// version listed. "Check for updates" runs the agent's own fetch of each of
+// its catalogs in one run, then reads the profile and the catalog again. A
+// marketplace is acted on like a plugin: added from a source, fetched again,
+// removed. An act whose plan runs in a terminal the person answers — an
+// install that asks for values or consent — runs in a pane, as a sign-in
+// does (`agents.extensions.terminal`).
 
 export interface AgentExtensionServiceOptions {
   runtime: Pick<
@@ -138,6 +163,7 @@ export interface AgentExtensionServiceOptions {
     | "profileProviders"
     | "extensionProviders"
     | "extensionInventory"
+    | "extensionCatalog"
     | "extensionActPlans"
     | "runExtensionAct"
     | "startExtensionAct"
@@ -373,13 +399,14 @@ function sharesFolder(act: AgentExtensionAct): boolean {
 
 function actsOf(
   plans: readonly ExtensionActPlan[] | undefined,
-  item: McpServerItem | SkillItem | PluginItem,
+  item: ExtensionActItem,
   home: string,
 ): AgentExtensionAct[] {
   const acts: AgentExtensionAct[] = [];
   const signedIn = item.kind === "mcp-server" && item.auth === "signed-in";
   for (const plan of plans ?? []) {
-    if (!plan.available || plan.act === "add") continue;
+    // an add or an install is an offer for what the agent does not hold, never an act on a holding
+    if (!plan.available || plan.act === "add" || plan.act === "install") continue;
     if (plan.target.kind !== item.kind || plan.target.id !== item.id) continue;
     if ((plan.act === "enable" && item.enabled) || (plan.act === "disable" && !item.enabled))
       continue;
@@ -402,15 +429,16 @@ function actsOf(
  * AR-S4e — the acts an agent offers none of on a plugin it holds, with its
  * reason and words: what the plugin's page says in their place. A switch that
  * would not change it (turning on one that is on) is no act to explain.
+ * AR-S4e2 — a marketplace's too: its fetch and its removal.
  */
 function unavailableOf(
   plans: readonly ExtensionActPlan[] | undefined,
-  item: PluginItem,
+  item: PluginItem | MarketplaceItem,
 ): AgentExtensionActUnavailable[] {
   const unavailable: AgentExtensionActUnavailable[] = [];
   for (const plan of plans ?? []) {
-    if (plan.available || plan.act === "add") continue;
-    if (plan.target.kind !== "plugin" || plan.target.id !== item.id) continue;
+    if (plan.available || plan.act === "add" || plan.act === "install") continue;
+    if (plan.target.kind !== item.kind || plan.target.id !== item.id) continue;
     if ((plan.act === "enable" && item.enabled) || (plan.act === "disable" && !item.enabled))
       continue;
     unavailable.push({ act: plan.act, reason: plan.reason, message: plan.message });
@@ -543,12 +571,13 @@ export function serverDefinitions(
   return definitions;
 }
 
-/** An empty cell's offer: the agent's own add, or why it cannot take the server or the skill. */
+/** An empty cell's offer: the agent's own add, or why it cannot take the server or the skill.
+ * AR-S4e2 — a typed source's too: its install, or a marketplace's add. */
 function offerOf(plan: ExtensionActPlan, home: string): AgentExtensionOffer {
   return plan.available
     ? {
         act: {
-          act: "add",
+          act: plan.act,
           runs: plan.display,
           reaches: [...plan.reaches],
           ...(plan.runs.kind === "terminal" ? { terminal: true as const } : {}),
@@ -638,14 +667,21 @@ export function buildExtensionLens(input: {
           ...(unavailable.length > 0 ? { unavailable } : {}),
         });
       } else if (item.kind === "marketplace") {
+        // AR-S4e2 — its catalog fetched again, its removal: the agent's own, from the same read
+        const acts = actsOf(agent.plans, item, input.home);
+        const unavailable = unavailableOf(agent.plans, item);
         marketplaceRows.push({
           id: item.id,
           name: item.name,
           origin: item.origin,
           enabled: item.enabled,
+          ...(item.shared ? { shared: true as const } : {}),
+          ...(item.lender !== undefined ? { lender: item.lender } : {}),
           ...(item.source !== undefined ? { source: item.source } : {}),
           ...(item.updatedAt !== undefined ? { updatedAt: item.updatedAt } : {}),
           ...(item.location !== undefined ? { place: place(item.location) } : {}),
+          ...(acts.length > 0 ? { acts } : {}),
+          ...(unavailable.length > 0 ? { unavailable } : {}),
         });
       }
     }
@@ -760,6 +796,218 @@ export function buildExtensionLens(input: {
   };
 }
 
+/**
+ * What an agent holds of plugins and marketplaces, as the lens has it, in the
+ * shape a pure plan checks an offer against: an install of one it holds, or a
+ * marketplace added from a source it already reads, is `held`.
+ */
+function heldItems(lens: Frame, provider: string): ExtensionActItem[] {
+  return [
+    ...(lens.plugins[provider] ?? []).map(
+      (plugin): PluginItem => ({
+        kind: "plugin",
+        id: plugin.id,
+        name: plugin.name,
+        origin: plugin.origin,
+        enabled: plugin.enabled,
+      }),
+    ),
+    ...(lens.marketplaces[provider] ?? []).map(
+      (market): MarketplaceItem => ({
+        kind: "marketplace",
+        id: market.id,
+        name: market.name,
+        origin: market.origin,
+        enabled: market.enabled,
+        ...(market.source !== undefined ? { source: market.source } : {}),
+      }),
+    ),
+  ];
+}
+
+/** "Check for updates" as one receipt: each catalog's fetch, the ones that failed named. */
+function checkReceipt(
+  label: string,
+  receipts: readonly AgentExtensionReceipt[],
+  finishedAt: string,
+): AgentExtensionReceipt {
+  if (receipts.length === 0) {
+    return {
+      status: "unchanged",
+      message: `${label} fetches none of its catalogs itself; they were read again`,
+      finishedAt,
+    };
+  }
+  if (receipts.length === 1) return receipts[0]!;
+  const failed = receipts.filter((receipt) => receipt.status === "failed");
+  const changed = receipts.filter((receipt) => receipt.status === "changed").length;
+  const status: AgentExtensionReceipt["status"] =
+    failed.length === receipts.length
+      ? "failed"
+      : changed > 0
+        ? "changed"
+        : receipts.every((receipt) => receipt.status === "unconfirmed")
+          ? "unconfirmed"
+          : "unchanged";
+  return {
+    status,
+    message:
+      failed.length > 0
+        ? `${failed.length} of ${receipts.length} catalogs could not be fetched`
+        : changed > 0
+          ? `fetched ${receipts.length} catalogs; ${changed} of them had something new`
+          : `fetched ${receipts.length} catalogs`,
+    finishedAt,
+  };
+}
+
+/** The act a plan runs, as a person reads it, or nothing when the agent offers none. */
+function actOf(plan: ExtensionActPlan | undefined, home: string): AgentExtensionAct | undefined {
+  if (plan === undefined || !plan.available) return undefined;
+  return {
+    act: plan.act,
+    runs: plan.display,
+    reaches: [...plan.reaches],
+    ...(plan.runs.kind === "terminal" ? { terminal: true as const } : {}),
+    ...movesOf(plan, home),
+  };
+}
+
+/**
+ * AR-S4e2 — one agent's plugin catalog as the Browse page draws it: each
+ * marketplace with how many plugins it lists, each plugin with the agent's own
+ * install or why not (planned from the same read, against what the agent
+ * holds), and the marketplaces the agent adds by itself later, with its own add
+ * where a host may make it now. Pure.
+ */
+export function projectCatalog(input: {
+  set: string;
+  provider: string;
+  label: string;
+  readAt: string;
+  catalog: ExtensionCatalog;
+  /** The adapter's plans for this read: each listed plugin's install, each suggestion's add. */
+  plans: readonly ExtensionActPlan[];
+  checkedAt?: string;
+  home: string;
+}): AgentsExtensionsCatalogResult {
+  const counts = new Map<string, number>();
+  for (const plugin of input.catalog.plugins) {
+    counts.set(plugin.marketplace, (counts.get(plugin.marketplace) ?? 0) + 1);
+  }
+  // a folder a catalog comes from crosses home-abbreviated, like every place
+  const sourceOf = (source: string) =>
+    source.startsWith("/") ? abbreviateHome(source, input.home) : source;
+  const marketplaces = input.catalog.marketplaces.map((market) => ({
+    id: market.id,
+    name: market.name,
+    origin: market.origin,
+    ...(market.source !== undefined ? { source: sourceOf(market.source) } : {}),
+    ...(market.updatedAt !== undefined ? { updatedAt: market.updatedAt } : {}),
+    ...(market.lender !== undefined ? { lender: market.lender } : {}),
+    ...(market.shared ? { shared: true as const } : {}),
+    ...(market.unread !== undefined ? { unread: market.unread } : {}),
+    count: counts.get(market.id) ?? 0,
+  }));
+  const plugins = input.catalog.plugins.map((plugin): AgentExtensionCatalogPlugin => {
+    const plan = input.plans.find(
+      (candidate) =>
+        candidate.act === "install" &&
+        candidate.target.kind === "plugin" &&
+        candidate.target.id === plugin.id,
+    );
+    const install = actOf(plan, input.home);
+    return {
+      id: plugin.id,
+      name: plugin.name,
+      marketplace: plugin.marketplace,
+      ...(plugin.description !== undefined ? { description: plugin.description } : {}),
+      ...(plugin.author !== undefined ? { author: plugin.author } : {}),
+      ...(plugin.category !== undefined ? { category: plugin.category } : {}),
+      ...(plugin.version !== undefined ? { version: plugin.version } : {}),
+      ...(plugin.homepage !== undefined ? { homepage: plugin.homepage } : {}),
+      ...(plugin.brings !== undefined ? { brings: structuredClone(plugin.brings) } : {}),
+      ...(plugin.featured ? { featured: true as const } : {}),
+      ...(plugin.asks !== undefined && plugin.asks.length > 0
+        ? { asks: structuredClone(plugin.asks) }
+        : {}),
+      ...(plugin.blocked !== undefined ? { blocked: plugin.blocked } : {}),
+      ...(plugin.held !== undefined ? { held: plugin.held } : {}),
+      ...(plugin.newer ? { newer: true as const } : {}),
+      ...(install !== undefined ? { install } : {}),
+      // an install of one it holds is no act to explain: the row says it is installed
+      ...(plan !== undefined && !plan.available && plan.reason !== "held"
+        ? { unavailable: { reason: plan.reason, message: plan.message } }
+        : {}),
+    };
+  });
+  const suggested = (input.catalog.suggested ?? []).map((suggestion) => {
+    const add =
+      suggestion.source === undefined
+        ? undefined
+        : actOf(
+            input.plans.find(
+              (candidate) =>
+                candidate.act === "add" &&
+                candidate.target.kind === "marketplace" &&
+                candidate.target.id === suggestion.source,
+            ),
+            input.home,
+          );
+    return {
+      name: suggestion.name,
+      ...(suggestion.source !== undefined ? { source: suggestion.source } : {}),
+      message: suggestion.message,
+      ...(add !== undefined ? { add } : {}),
+    };
+  });
+  return {
+    set: input.set,
+    provider: input.provider,
+    label: input.label,
+    readAt: input.readAt,
+    marketplaces,
+    plugins,
+    ...(suggested.length > 0 ? { suggested } : {}),
+    ...(input.checkedAt !== undefined ? { checkedAt: input.checkedAt } : {}),
+  };
+}
+
+/**
+ * AR-S4e2 — a profile's lens with what the last read of each agent's catalog
+ * said: a held plugin its catalog lists newer, and when "Check for updates"
+ * last ran for the agent. Pure; the lens itself is left as it is.
+ */
+export function annotateLens(
+  lens: Frame,
+  catalogs: ReadonlyMap<string, AgentsExtensionsCatalogResult>,
+  checked: ReadonlyMap<string, string>,
+): Frame {
+  if (catalogs.size === 0 && checked.size === 0) return lens;
+  const plugins: Frame["plugins"] = {};
+  for (const [provider, rows] of Object.entries(lens.plugins)) {
+    const listed = catalogs.get(provider)?.plugins ?? [];
+    plugins[provider] = rows.map((row) => {
+      const entry = listed.find(
+        (candidate) => candidate.newer === true && (candidate.held ?? candidate.id) === row.id,
+      );
+      if (entry === undefined) return row;
+      return {
+        ...row,
+        newer: entry.version !== undefined ? { version: entry.version } : {},
+      };
+    });
+  }
+  return {
+    ...lens,
+    agents: lens.agents.map((column) => {
+      const at = checked.get(column.provider);
+      return at === undefined ? column : { ...column, checkedAt: at };
+    }),
+    plugins,
+  };
+}
+
 /** A run's output frames coalesce to this tick. */
 const RUN_TICK_MS = 16;
 /** The raw output kept per run, rendered at projection (as the update runs do). */
@@ -769,7 +1017,7 @@ interface RunEntry {
   id: string;
   provider: string;
   label: string;
-  kind: "mcp-server" | "skill" | "plugin";
+  kind: "mcp-server" | "skill" | "plugin" | "marketplace";
   item: string;
   name: string;
   act: AgentExtensionAct["act"];
@@ -858,6 +1106,10 @@ export class AgentExtensionService {
   private readonly copies = new Map<string, Map<string, SkillCopy>>();
   /** O1 — the cells VibeField turned, per profile, and when: a read does not call their change outside */
   private readonly touched = new Map<string, Map<string, number>>();
+  /** AR-S4e2 — each profile's last read of each agent's plugin catalog, by provider */
+  private readonly catalogs = new Map<string, Map<string, AgentsExtensionsCatalogResult>>();
+  /** AR-S4e2 — when "Check for updates" last ran, per profile, by provider */
+  private readonly checked = new Map<string, Map<string, string>>();
   private readonly now: () => Date;
   private readonly logger: Logger;
   private disposed = false;
@@ -885,6 +1137,22 @@ export class AgentExtensionService {
     requireVisible(this.opts.catalog, params.provider, "act on its extensions");
     const setId = params.set;
     this.refuseWhileRunning(setId);
+    if (params.source !== undefined && params.source !== params.id) {
+      throw new RpcCallError("PRECONDITION_FAILED", "a source is its own id", false, {
+        set: setId,
+      });
+    }
+    // AR-S4e2 — a marketplace, and an install from a catalog or a source
+    if (params.kind === "marketplace") return await this.actOnMarketplace(params);
+    if (params.kind === "plugin" && params.act === "install") return await this.install(params);
+    if (params.source !== undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "a source goes only with an install or a marketplace's add",
+        false,
+        { set: setId },
+      );
+    }
     if (params.kind === "plugin") return await this.actOnPlugin(params);
     if (params.act === "add") return await this.turnOn(params);
     if (params.values !== undefined) {
@@ -978,6 +1246,7 @@ export class AgentExtensionService {
         { set: setId, provider: params.provider },
       );
     }
+    this.refuseTerminal(offered, setId, params.provider);
     // a read above may have let another act start
     this.refuseWhileRunning(setId);
     const { entry, receipt } = await this.runAct(
@@ -998,8 +1267,435 @@ export class AgentExtensionService {
         act: params.act,
       },
     );
-    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    await this.afterPluginAct(setId, column);
     return { run: projectRun(entry), receipt };
+  }
+
+  /**
+   * AR-S4e2 — an act on a marketplace its agent holds (its catalog fetched
+   * again, its removal), as the agent offered it in the last read; or a
+   * marketplace added from a source a person gave, planned against what the
+   * agent holds. The profile and the agent's catalog are read again after.
+   */
+  private async actOnMarketplace(
+    params: AgentsExtensionsActParams,
+  ): Promise<AgentsExtensionsActResult> {
+    const setId = params.set;
+    if (params.values !== undefined) {
+      throw new RpcCallError("PRECONDITION_FAILED", "a marketplace reads no values", false, {
+        set: setId,
+      });
+    }
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = this.columnIn(lens, setId, params.provider);
+    let offered: AgentExtensionAct;
+    let name: string;
+    if (params.act === "add") {
+      if (params.source === undefined) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "a marketplace is added from its source",
+          false,
+          {
+            set: setId,
+          },
+        );
+      }
+      offered = await this.sourceOffer(lens, column, "marketplace", params.source);
+      name = params.source;
+    } else {
+      const market = lens.marketplaces[params.provider]?.find(
+        (candidate) => candidate.id === params.id,
+      );
+      if (market === undefined) {
+        throw new RpcCallError(
+          "NOT_FOUND",
+          `${column.label} has no marketplace ${params.id} in this Agent Profile`,
+          false,
+          { set: setId, provider: params.provider },
+        );
+      }
+      const act = market.acts?.find((candidate) => candidate.act === params.act);
+      if (act === undefined) {
+        const why = market.unavailable?.find((candidate) => candidate.act === params.act);
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `${column.label} offers no ${params.act} for ${market.name} here${why !== undefined ? `: ${why.message}` : ""}`,
+          false,
+          { set: setId, provider: params.provider },
+        );
+      }
+      offered = act;
+      name = market.name;
+    }
+    this.refuseTerminal(offered, setId, params.provider);
+    this.refuseWhileRunning(setId);
+    const { entry, receipt } = await this.runAct(
+      setId,
+      {
+        provider: params.provider,
+        label: column.label,
+        kind: "marketplace",
+        item: params.id,
+        name,
+        act: params.act,
+        runs: offered.runs,
+      },
+      {
+        providerId: params.provider,
+        profileId: column.profileId,
+        target: { kind: "marketplace", id: params.id },
+        act: params.act,
+        ...(params.source !== undefined ? { source: params.source } : {}),
+      },
+    );
+    await this.afterPluginAct(setId, column);
+    return { run: projectRun(entry), receipt };
+  }
+
+  /**
+   * AR-S4e2 — an install: a plugin the agent's catalog listed at the last read
+   * of it here, with the install its agent offered; or one from a source a
+   * person gave, for an agent that takes one. The profile and the agent's
+   * catalog are read again after.
+   */
+  private async install(params: AgentsExtensionsActParams): Promise<AgentsExtensionsActResult> {
+    const setId = params.set;
+    if (params.values !== undefined) {
+      throw new RpcCallError("PRECONDITION_FAILED", "an install reads no values", false, {
+        set: setId,
+      });
+    }
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = this.columnIn(lens, setId, params.provider);
+    const { offered, name } = await this.installOffer(lens, column, params);
+    this.refuseTerminal(offered, setId, params.provider);
+    this.refuseWhileRunning(setId);
+    const { entry, receipt } = await this.runAct(
+      setId,
+      {
+        provider: params.provider,
+        label: column.label,
+        kind: "plugin",
+        item: params.id,
+        name,
+        act: "install",
+        runs: offered.runs,
+      },
+      {
+        providerId: params.provider,
+        profileId: column.profileId,
+        target: { kind: "plugin", id: params.id },
+        act: "install",
+        ...(params.source !== undefined ? { source: params.source } : {}),
+      },
+    );
+    await this.afterPluginAct(setId, column);
+    return { run: projectRun(entry), receipt };
+  }
+
+  /**
+   * The install an agent offers for a plugin its catalog listed at the last
+   * read here (read now when there is none), or for a source a person gave —
+   * or the door's refusal in the agent's words.
+   */
+  private async installOffer(
+    lens: Frame,
+    column: AgentExtensionColumn,
+    params: { set: string; provider: string; id: string; source?: string | undefined },
+  ): Promise<{ offered: AgentExtensionAct; name: string }> {
+    const setId = params.set;
+    if (params.source !== undefined) {
+      return {
+        offered: await this.sourceOffer(lens, column, "plugin", params.source),
+        name: params.source,
+      };
+    }
+    const catalog =
+      this.catalogs.get(setId)?.get(params.provider) ?? (await this.readCatalog(setId, column));
+    const listed = catalog.plugins.find((candidate) => candidate.id === params.id);
+    if (listed === undefined) {
+      throw new RpcCallError(
+        "NOT_FOUND",
+        `no marketplace ${column.label} knows lists ${params.id} in this Agent Profile`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    if (listed.install === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        listed.held !== undefined
+          ? `${column.label} already has ${listed.name} in this Agent Profile`
+          : `${column.label} offers no install for ${listed.name} here${listed.unavailable !== undefined ? `: ${listed.unavailable.message}` : ""}`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    return { offered: listed.install, name: listed.name };
+  }
+
+  /**
+   * What an agent would run for a source a person gave — an install from it,
+   * or a marketplace's add — planned against what the last read found the
+   * agent holding (never a read of its own: reading some agents starts one).
+   */
+  private async sourceOffer(
+    lens: Frame,
+    column: AgentExtensionColumn,
+    kind: "plugin" | "marketplace",
+    source: string,
+  ): Promise<AgentExtensionAct> {
+    const plan = await this.sourcePlan(lens, column, kind, source);
+    if (plan === undefined) {
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        `${column.label}'s ${kind === "plugin" ? "install" : "marketplace add"} could not be planned`,
+        true,
+        { provider: column.provider },
+      );
+    }
+    if (!plan.available) {
+      throw new RpcCallError("PRECONDITION_FAILED", plan.message, false, {
+        provider: column.provider,
+        reason: plan.reason,
+      });
+    }
+    return actOf(plan, this.opts.home)!;
+  }
+
+  /** The adapter's plan for a source, against the last read; undefined when it could not plan. */
+  private async sourcePlan(
+    lens: Frame,
+    column: AgentExtensionColumn,
+    kind: "plugin" | "marketplace",
+    source: string,
+  ): Promise<ExtensionActPlan | undefined> {
+    try {
+      const plans = await this.opts.runtime.extensionActPlans(
+        column.provider,
+        column.profileId,
+        heldItems(lens, column.provider),
+        undefined,
+        undefined,
+        {
+          sources: kind === "plugin" ? { plugins: [source] } : { marketplaces: [source] },
+          only: true,
+        },
+      );
+      if (!Array.isArray(plans)) return undefined;
+      return plans.find(
+        (candidate) =>
+          candidate.act === (kind === "plugin" ? "install" : "add") &&
+          candidate.target.kind === kind &&
+          candidate.target.id === source,
+      );
+    } catch (error) {
+      this.logger.warn("fieldd.agents.extension_plans_failed", "Planning a source failed", {
+        provider: column.provider,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return undefined;
+    }
+  }
+
+  /** An act the person answers in a terminal runs on `agents.extensions.terminal`, never here. */
+  private refuseTerminal(offered: AgentExtensionAct, setId: string, provider: string): void {
+    if (offered.terminal !== true) return;
+    throw new RpcCallError(
+      "PRECONDITION_FAILED",
+      `${offered.runs} runs in a terminal the person answers`,
+      false,
+      { set: setId, provider, reason: "terminal" },
+    );
+  }
+
+  /**
+   * After an act on a plugin or a marketplace: the profile read again, and the
+   * agent's catalog too when one was read here (what it lists as installed and
+   * newer has moved with it).
+   */
+  private async afterPluginAct(setId: string, column: AgentExtensionColumn): Promise<void> {
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    if (this.catalogs.get(setId)?.has(column.provider) === true) {
+      await this.readCatalog(setId, column, true).catch((error: unknown) =>
+        this.logger.warn("fieldd.agents.extension_catalog_failed", "A catalog read failed", {
+          set: setId,
+          provider: column.provider,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  /**
+   * `agents.extensions.catalog` (AR-S4e2): what one agent of the profile could
+   * install, read from the catalogs it already fetched — a read, nothing is
+   * fetched — each listed plugin with the agent's own install or why not.
+   */
+  async catalog(params: AgentsExtensionsCatalogParams): Promise<AgentsExtensionsCatalogResult> {
+    requireVisible(this.opts.catalog, params.provider, "browse its plugins");
+    const lens = this.lenses.get(params.set) ?? (await this.read(params.set));
+    const column = this.columnIn(lens, params.set, params.provider);
+    return await this.readCatalog(params.set, column, true);
+  }
+
+  /**
+   * `agents.extensions.check` (AR-S4e2): "Check for updates" — the agent's own
+   * fetch of each of its catalogs it fetches itself, one run on the frames,
+   * then the profile and the catalog read again. Nothing else is changed by
+   * VibeField; an agent whose fetch also updates what it installed from there
+   * (the act says so beforehand) does that itself.
+   */
+  async check(params: AgentsExtensionsCheckParams): Promise<AgentsExtensionsCheckResult> {
+    requireVisible(this.opts.catalog, params.provider, "check its plugins for updates");
+    const setId = params.set;
+    this.refuseWhileRunning(setId);
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = this.columnIn(lens, setId, params.provider);
+    const fetches = (lens.marketplaces[params.provider] ?? []).flatMap((market) => {
+      const act = market.acts?.find(
+        (candidate) => candidate.act === "update" && candidate.terminal !== true,
+      );
+      return act === undefined ? [] : [{ market, act }];
+    });
+    this.refuseWhileRunning(setId);
+    const one = fetches.length === 1 ? fetches[0] : undefined;
+    const { entry, receipt } = await this.runActs(
+      setId,
+      {
+        provider: params.provider,
+        label: column.label,
+        kind: "marketplace",
+        item: one?.market.id ?? "*",
+        name: one?.market.name ?? `${column.label}'s catalogs`,
+        act: "update",
+        runs:
+          fetches.length === 0
+            ? `${column.label}'s catalogs, read again`
+            : fetches.map((fetch) => fetch.act.runs).join(" · "),
+      },
+      async (act, say) => {
+        const receipts: AgentExtensionReceipt[] = [];
+        for (const fetch of fetches) {
+          const done = await act(
+            {
+              providerId: params.provider,
+              profileId: column.profileId,
+              target: { kind: "marketplace", id: fetch.market.id },
+              act: "update",
+            },
+            { shows: one !== undefined },
+          );
+          if (one === undefined) say(`${fetch.market.name}: ${done.message}`);
+          receipts.push(done);
+        }
+        return checkReceipt(column.label, receipts, this.now().toISOString());
+      },
+    );
+    const checks = this.checked.get(setId) ?? new Map<string, string>();
+    checks.set(params.provider, this.now().toISOString());
+    this.checked.set(setId, checks);
+    await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
+    const catalog = await this.readCatalog(setId, column, true);
+    return {
+      run: projectRun(entry),
+      receipt,
+      updates: catalog.plugins.filter((plugin) => plugin.newer === true).length,
+    };
+  }
+
+  /**
+   * `agents.extensions.planSource` (AR-S4e2): what the agent would run for a
+   * source a person is typing — an install from it, or a marketplace's add —
+   * planned against the last read: the form's "Runs". A read.
+   */
+  async planSource(
+    params: AgentsExtensionsPlanSourceParams,
+  ): Promise<AgentsExtensionsPlanSourceResult> {
+    requireVisible(this.opts.catalog, params.provider, "plan what it would run");
+    const lens = this.lenses.get(params.set) ?? (await this.read(params.set));
+    const column = this.columnIn(lens, params.set, params.provider);
+    const plan = await this.sourcePlan(lens, column, params.kind, params.source);
+    if (plan === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${column.label} takes no source like that`,
+        false,
+        { provider: params.provider },
+      );
+    }
+    return { offer: offerOf(plan, this.opts.home) };
+  }
+
+  /** One agent's plugin catalog read now, projected with its installs, and kept for the profile's frames. */
+  private async readCatalog(
+    setId: string,
+    column: AgentExtensionColumn,
+    fresh = false,
+  ): Promise<AgentsExtensionsCatalogResult> {
+    const result = await this.opts.runtime.extensionCatalog(
+      column.provider,
+      column.profileId,
+      fresh ? { fresh: true } : undefined,
+    );
+    const readAt = this.now().toISOString();
+    const checkedAt = this.checked.get(setId)?.get(column.provider);
+    const kept = this.catalogs.get(setId) ?? new Map<string, AgentsExtensionsCatalogResult>();
+    if ("status" in result) {
+      kept.delete(column.provider);
+      return {
+        set: setId,
+        provider: column.provider,
+        label: column.label,
+        failure: { status: result.status, message: result.message, retryable: result.retryable },
+        marketplaces: [],
+        plugins: [],
+        ...(checkedAt !== undefined ? { checkedAt } : {}),
+      };
+    }
+    const lens = this.lenses.get(setId);
+    let plans: ExtensionActPlan[] = [];
+    try {
+      const sources = (result.suggested ?? []).flatMap((suggestion) =>
+        suggestion.source === undefined ? [] : [suggestion.source],
+      );
+      const answer = await this.opts.runtime.extensionActPlans(
+        column.provider,
+        column.profileId,
+        lens === undefined ? [] : heldItems(lens, column.provider),
+        undefined,
+        undefined,
+        {
+          installs: result.plugins,
+          ...(sources.length > 0 ? { sources: { marketplaces: sources } } : {}),
+          only: true,
+        },
+      );
+      if (Array.isArray(answer)) plans = answer;
+    } catch (error) {
+      // no installs is a safe answer: the list stays one to read
+      this.logger.warn("fieldd.agents.extension_plans_failed", "Planning installs failed", {
+        provider: column.provider,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const projected = projectCatalog({
+      set: setId,
+      provider: column.provider,
+      label: column.label,
+      readAt,
+      catalog: result,
+      plans,
+      ...(checkedAt !== undefined ? { checkedAt } : {}),
+      home: this.opts.home,
+    });
+    if (this.disposed) return projected;
+    kept.set(column.provider, projected);
+    this.catalogs.set(setId, kept);
+    // the plugin rows say what it lists newer now
+    if (lens !== undefined) this.emit(setId, this.frameOf(setId, lens));
+    return projected;
   }
 
   /**
@@ -1432,6 +2128,153 @@ export class AgentExtensionService {
   }
 
   /**
+   * `agents.extensions.terminal` (AR-S4e2): an act whose plan runs in a
+   * terminal the person answers — an install that asks for values or consent,
+   * an update that asks again, a switch that asks consent — in a pane on the
+   * floor, as a server's sign-in is: the caller's ticket, the run on the
+   * frames until the pane ends, then the receipt, the profile and the agent's
+   * catalog read again.
+   */
+  async terminal(
+    params: AgentsExtensionsTerminalParams,
+    principal: GrantPrincipal,
+  ): Promise<AgentsExtensionsTerminalResult> {
+    requireVisible(this.opts.catalog, params.provider, "run its act in a terminal");
+    const panes = this.opts.panes;
+    if (panes === undefined) {
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "agent terminals are not hosted: this daemon lends no terminal floor",
+        false,
+        { service: "agents", state: "no-terminal-host" },
+      );
+    }
+    const setId = params.set;
+    this.refuseWhileRunning(setId);
+    if (params.source !== undefined && params.source !== params.id) {
+      throw new RpcCallError("PRECONDITION_FAILED", "a source is its own id", false, {
+        set: setId,
+      });
+    }
+    const lens = this.lenses.get(setId) ?? (await this.read(setId));
+    const column = this.columnIn(lens, setId, params.provider);
+    const { offered, name } = await this.terminalOffer(lens, column, params);
+    if (offered.terminal !== true) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${offered.runs} runs without a terminal: ask agents.extensions.act`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    }
+    this.refuseWhileRunning(setId);
+    const started = await this.opts.runtime.startExtensionAct({
+      providerId: params.provider,
+      profileId: column.profileId,
+      target: { kind: params.kind, id: params.id },
+      act: params.act,
+      ...(params.source !== undefined ? { source: params.source } : {}),
+    });
+    if (!("runtimeSessionId" in started)) {
+      // puppeteer read the agent again and it no longer offers this, or the terminal would not start
+      throw new RpcCallError(
+        started.status === "unavailable" ? "PRECONDITION_FAILED" : "UNAVAILABLE",
+        `${offered.runs} did not start: ${started.message}`,
+        started.status !== "unavailable",
+        { set: setId, provider: params.provider },
+      );
+    }
+    const sessionId = started.runtimeSessionId;
+    let terminal: TerminalCreateOpenResult;
+    try {
+      terminal = panes.open(sessionId, principal);
+    } catch (error) {
+      // a pane no ticket can reach is an act nobody could answer: it ends here
+      await panes.close(sessionId).catch(() => undefined);
+      throw error;
+    }
+    const entry: RunEntry = {
+      id: randomUUID(),
+      provider: params.provider,
+      label: column.label,
+      kind: params.kind,
+      item: params.id,
+      name,
+      act: params.act,
+      runs: started.display,
+      state: "running",
+      startedAt: started.startedAt,
+      raw: "",
+      dropped: false,
+      sessionId,
+    };
+    const timer = setTimeout(
+      () => void this.settleSignIn(sessionId, undefined),
+      this.opts.signInWaitMs ?? SIGN_IN_WAIT_MS,
+    );
+    timer.unref?.();
+    this.runs.set(setId, entry);
+    this.signIns.set(sessionId, { setId, started, entry, timer });
+    this.publishRun(setId);
+    this.logger.info("fieldd.agents.extension_terminal", "An extension act's pane opened", {
+      set: setId,
+      provider: params.provider,
+      act: params.act,
+      sessionId,
+    });
+    return { run: projectRun(entry), terminal };
+  }
+
+  /** The act a terminal door runs, as the agent offered it in the last read (or its catalog's) — or the refusal. */
+  private async terminalOffer(
+    lens: Frame,
+    column: AgentExtensionColumn,
+    params: AgentsExtensionsTerminalParams,
+  ): Promise<{ offered: AgentExtensionAct; name: string }> {
+    const setId = params.set;
+    const refuse = (name: string, why?: string): never => {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${column.label} offers no ${params.act} for ${name} here${why !== undefined ? `: ${why}` : ""}`,
+        false,
+        { set: setId, provider: params.provider },
+      );
+    };
+    if (params.kind === "plugin" && params.act === "install") {
+      return await this.installOffer(lens, column, params);
+    }
+    if (params.kind === "marketplace" && params.act === "add") {
+      if (params.source === undefined) return refuse(params.id);
+      return {
+        offered: await this.sourceOffer(lens, column, "marketplace", params.source),
+        name: params.source,
+      };
+    }
+    if (params.kind === "plugin" || params.kind === "marketplace") {
+      const rows = params.kind === "plugin" ? lens.plugins : lens.marketplaces;
+      const found = rows[params.provider]?.find((candidate) => candidate.id === params.id);
+      if (found === undefined) {
+        throw new RpcCallError(
+          "NOT_FOUND",
+          `${column.label} does not hold ${params.id} in this Agent Profile`,
+          false,
+          { set: setId, provider: params.provider },
+        );
+      }
+      const act = found.acts?.find((candidate) => candidate.act === params.act);
+      if (act === undefined) {
+        return refuse(
+          found.name,
+          found.unavailable?.find((candidate) => candidate.act === params.act)?.message,
+        );
+      }
+      return { offered: act, name: found.name };
+    }
+    const { found, offered } = await this.offered(setId, { ...params, kind: params.kind });
+    return { offered, name: found.row.name };
+  }
+
+  /**
    * The floor's exit facts: a sign-in's pane ended (the person finished, or
    * cancelled — `requestedTermination`), or one whose wait ran out finally
    * did. True when the pane was a sign-in's.
@@ -1485,6 +2328,7 @@ export class AgentExtensionService {
    */
   profilesChanged(): void {
     this.lenses.clear();
+    this.catalogs.clear();
     for (const setId of this.subscribers.keys()) this.readInBackground(setId);
   }
 
@@ -1498,12 +2342,19 @@ export class AgentExtensionService {
     this.waitedOut.clear();
     this.subscribers.clear();
     this.lenses.clear();
+    this.catalogs.clear();
+    this.checked.clear();
   }
 
-  /** A profile's frame: its lens, and its act while one runs or the last that did. */
+  /** A profile's frame: its lens, what its agents' catalogs say of it, and its act while one runs or the last that did. */
   private frameOf(setId: string, lens: Frame): Frame {
     const run = this.runs.get(setId);
-    return run === undefined ? lens : { ...lens, run: projectRun(run) };
+    const annotated = annotateLens(
+      lens,
+      this.catalogs.get(setId) ?? new Map(),
+      this.checked.get(setId) ?? new Map(),
+    );
+    return run === undefined ? annotated : { ...annotated, run: projectRun(run) };
   }
 
   /** The holding an act names, and the act its agent offered on it in the last read — or the door's refusal. */
@@ -2008,6 +2859,13 @@ export class AgentExtensionService {
       act: entry.act,
       status: receipt.status,
     });
+    const column = this.lenses
+      .get(setId)
+      ?.agents.find((candidate) => candidate.provider === entry.provider);
+    if ((entry.kind === "plugin" || entry.kind === "marketplace") && column !== undefined) {
+      await this.afterPluginAct(setId, column);
+      return;
+    }
     await this.read(setId, true).catch((error: unknown) => this.readFailed(setId, error));
   }
 
@@ -2308,11 +3166,9 @@ export class AgentExtensionService {
     library?: string,
   ): Promise<{ plans?: ExtensionActPlan[] }> {
     if (isFailure(result)) return {};
-    // AR-S4e — a plugin's acts are planned from the same read as its servers' and skills'
-    const items = result.items.filter(
-      (item): item is McpServerItem | SkillItem | PluginItem =>
-        item.kind === "mcp-server" || item.kind === "skill" || item.kind === "plugin",
-    );
+    // AR-S4e — a plugin's acts are planned from the same read as its servers' and skills';
+    // AR-S4e2 — and a marketplace's (its fetch, its removal)
+    const items: ExtensionActItem[] = result.items;
     const held = new Set(
       result.items.filter((item) => item.kind === "mcp-server").map((item) => item.name),
     );

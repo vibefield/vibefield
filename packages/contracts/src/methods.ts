@@ -1560,6 +1560,39 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // AR-S4e2 — browse and install: an agent's catalog read from what it already
+  // fetched (nothing is fetched by the read), "Check for updates" (the agent's
+  // own fetch of each catalog, audited, one run at a time), what a typed source
+  // would run (a read), and an act the person answers in a pane — an install
+  // that asks for values or consent — which takes `agent.spawn` as a sign-in does.
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.catalog",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.check",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.planSource",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "agents.extensions.terminal",
+    scope: "agent.spawn",
+    idempotent: false,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "agents.usage",

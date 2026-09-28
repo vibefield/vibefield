@@ -5,10 +5,12 @@ import type {
   AgentProfile,
   ExtensionActPlan,
   ExtensionActReceipt,
+  ExtensionCatalog,
   ExtensionFailure,
   ExtensionInventory,
   ExtensionItem,
   ExtensionProvider,
+  MarketplaceItem,
   McpServerDefinition,
   McpServerItem,
   PluginItem,
@@ -18,6 +20,8 @@ import type { StartedExtensionAct } from "@vibecook/puppeteer-runtime";
 import {
   AGENT_CATALOG_READERS,
   AgentsExtensionsActResult,
+  AgentsExtensionsCatalogResult,
+  AgentsExtensionsCheckResult,
   AgentsExtensionsListResult,
   type TerminalCreateOpenResult,
 } from "@vibefield/contracts";
@@ -357,21 +361,34 @@ function stubRuntime(options: {
     profileId: string | undefined,
     items: ReadonlyArray<McpServerItem | SkillItem | PluginItem>,
     adds?: ReadonlyArray<{ name: string; definition: McpServerDefinition }>,
+    skills?: unknown,
+    offers?: {
+      installs?: ReadonlyArray<ExtensionCatalog["plugins"][number]>;
+      sources?: { plugins?: readonly string[]; marketplaces?: readonly string[] };
+      only?: boolean;
+    },
   ) => Promise<ExtensionActPlan[] | ExtensionFailure>;
   act?: (request: {
     providerId: string;
     profileId?: string;
-    target: { kind: "mcp-server" | "skill" | "plugin"; id: string };
-    act: "enable" | "disable" | "remove" | "sign-out" | "add" | "update" | "purge";
+    target: { kind: "mcp-server" | "skill" | "plugin" | "marketplace"; id: string };
+    act: "enable" | "disable" | "remove" | "sign-out" | "add" | "update" | "purge" | "install";
     definition?: McpServerDefinition;
+    source?: string;
     onOutput?: (chunk: string) => void;
   }) => Promise<ExtensionActReceipt>;
   start?: (request: {
     providerId: string;
     profileId?: string;
-    target: { kind: "mcp-server" | "skill"; id: string };
-    act: "sign-in";
+    target: { kind: "mcp-server" | "skill" | "plugin" | "marketplace"; id: string };
+    act: "sign-in" | "install" | "update" | "enable";
+    source?: string;
   }) => Promise<StartedExtensionAct | ExtensionActReceipt>;
+  catalog?: (
+    provider: string,
+    profileId: string,
+    options?: { fresh?: boolean },
+  ) => Promise<ExtensionCatalog | ExtensionFailure>;
   settle?: (
     started: StartedExtensionAct,
     ended?: { exitCode?: number | null; stopped?: boolean },
@@ -415,6 +432,16 @@ function stubRuntime(options: {
       { id: "codex", label: "Codex", support: SUPPORT.codex! },
     ],
     extensionInventory,
+    extensionCatalog: vi.fn(
+      options.catalog ??
+        (async (provider: string) =>
+          ({
+            status: "unsupported",
+            provider,
+            message: `${provider} has no catalog to read`,
+            retryable: false,
+          }) satisfies ExtensionFailure),
+    ),
     extensionActPlans: vi.fn(options.plans ?? (async () => [])),
     runExtensionAct: vi.fn(
       options.act ??
@@ -440,6 +467,7 @@ function stubRuntime(options: {
       typeof AgentExtensionService
     >[0]["runtime"],
     extensionInventory,
+    extensionCatalog: runtime.extensionCatalog,
     extensionActPlans: runtime.extensionActPlans,
     runExtensionAct: runtime.runExtensionAct,
     startExtensionAct: runtime.startExtensionAct,
@@ -1582,5 +1610,563 @@ describe("AgentExtensionService adding once (AR-S4d)", () => {
       cells: {},
       offers: { claude: { act: { act: "add" } }, codex: { act: { act: "add" } } },
     });
+  });
+});
+
+describe("AgentExtensionService catalogs and installs (AR-S4e2)", () => {
+  const PRINCIPAL = { kind: "shell-main" } as GrantPrincipal;
+  const TICKET = { sessionId: "pty-install" } as unknown as TerminalCreateOpenResult;
+
+  /**
+   * Claude holding one marketplace and the review plugin from it; its catalog
+   * lists review newer, lint to install, telemetry its organization blocks, and
+   * shell-helper, whose install asks the person to accept a command. The stub's
+   * "store" moves the way Claude's own commands would.
+   */
+  function claudeWithCatalog() {
+    const state = {
+      updatedAt: "2026-09-26T09:00:00.000Z",
+      plugins: new Map<string, string>([["review@northlight", "1.2.0"]]),
+      marketplaces: new Map<string, string>([["northlight", "northlight/plugins"]]),
+    };
+    const items = (): ExtensionItem[] => [
+      ...[...state.marketplaces].map(
+        ([id, source]): MarketplaceItem => ({
+          kind: "marketplace",
+          id,
+          name: id,
+          origin: "own",
+          enabled: true,
+          source,
+          updatedAt: state.updatedAt,
+        }),
+      ),
+      ...[...state.plugins].map(
+        ([id, version]): PluginItem => ({
+          kind: "plugin",
+          id,
+          name: id.split("@")[0]!,
+          origin: "own",
+          enabled: true,
+          version,
+          marketplace: "northlight",
+        }),
+      ),
+    ];
+    const catalog = async (_provider: string, profileId: string): Promise<ExtensionCatalog> => ({
+      provider: "claude",
+      profileId,
+      fetchedAt: NOW,
+      marketplaces: [...state.marketplaces].map(([id, source]) => ({
+        id,
+        name: id,
+        source,
+        origin: "own" as const,
+        updatedAt: state.updatedAt,
+      })),
+      plugins: (
+        [
+          {
+            id: "review@northlight",
+            name: "review",
+            marketplace: "northlight",
+            version: "1.3.0",
+            held: "review@northlight",
+            ...(state.plugins.get("review@northlight") !== "1.3.0" ? { newer: true as const } : {}),
+          },
+          {
+            id: "lint@northlight",
+            name: "lint",
+            marketplace: "northlight",
+            version: "2.0.0",
+            description: "Lints what you write",
+            brings: { commands: ["lint"], skills: ["style"] },
+            ...(state.plugins.has("lint@northlight") ? { held: "lint@northlight" } : {}),
+          },
+          {
+            id: "telemetry@northlight",
+            name: "telemetry",
+            marketplace: "northlight",
+            blocked: "Your organization turned it off in Claude Code",
+          },
+          {
+            id: "shell-helper@northlight",
+            name: "shell-helper",
+            marketplace: "northlight",
+            asks: [{ kind: "command", command: "npx shell-helper fetch" }],
+          },
+        ] satisfies ExtensionCatalog["plugins"]
+      ).filter((plugin) => state.marketplaces.has(plugin.marketplace)),
+      suggested: [
+        {
+          name: "claude-plugins-official",
+          source: "anthropics/claude-plugins-official",
+          message:
+            "Claude Code adds claude-plugins-official the first time it starts in this profile",
+        },
+      ],
+      source: { kind: "native-store", stability: "documented" },
+    });
+    const command = (
+      target: { kind: "plugin" | "marketplace"; id: string },
+      act: ExtensionActPlan["act"],
+      argv: string[],
+      reaches: Array<"plugins"> = [],
+      terminal = false,
+    ): ExtensionActPlan => ({
+      target,
+      act,
+      available: true,
+      runs: { kind: terminal ? "terminal" : "command", argv },
+      display: argv.join(" "),
+      reaches,
+    });
+    const plans = async (
+      _provider: string,
+      _profileId: string | undefined,
+      held: ReadonlyArray<McpServerItem | SkillItem | PluginItem | MarketplaceItem>,
+      _adds?: unknown,
+      _skills?: unknown,
+      offers?: {
+        installs?: ReadonlyArray<ExtensionCatalog["plugins"][number]>;
+        sources?: { plugins?: readonly string[]; marketplaces?: readonly string[] };
+        only?: boolean;
+      },
+    ): Promise<ExtensionActPlan[]> => {
+      const out: ExtensionActPlan[] = [];
+      if (offers?.only !== true) {
+        for (const item of held) {
+          if (item.kind !== "marketplace") continue;
+          const target = { kind: "marketplace" as const, id: item.id };
+          out.push(
+            command(target, "update", ["claude", "plugin", "marketplace", "update", item.id]),
+          );
+          out.push(
+            command(
+              target,
+              "remove",
+              ["claude", "plugin", "marketplace", "remove", item.id],
+              ["plugins"],
+            ),
+          );
+        }
+      }
+      for (const listed of offers?.installs ?? []) {
+        const target = { kind: "plugin" as const, id: listed.id };
+        if (listed.held !== undefined) {
+          out.push({
+            target,
+            act: "install",
+            available: false,
+            reason: "held",
+            message: "Claude already has it",
+          });
+        } else if (listed.blocked !== undefined) {
+          out.push({
+            target,
+            act: "install",
+            available: false,
+            reason: "blocked",
+            message: listed.blocked,
+          });
+        } else {
+          const asks = listed.asks?.some((ask) => ask.kind === "command") === true;
+          out.push(
+            command(
+              target,
+              "install",
+              [
+                "claude",
+                "plugin",
+                "install",
+                listed.id,
+                "--scope",
+                "user",
+                ...(asks ? [] : ["-y"]),
+              ],
+              [],
+              asks,
+            ),
+          );
+        }
+      }
+      for (const source of offers?.sources?.plugins ?? []) {
+        out.push({
+          target: { kind: "plugin", id: source },
+          act: "install",
+          available: false,
+          reason: "unsupported",
+          message: "Claude installs a plugin from a marketplace",
+        });
+      }
+      for (const source of offers?.sources?.marketplaces ?? []) {
+        const target = { kind: "marketplace" as const, id: source };
+        out.push(
+          [...state.marketplaces.values()].includes(source)
+            ? {
+                target,
+                act: "add",
+                available: false,
+                reason: "held",
+                message: "Claude already has it",
+              }
+            : command(target, "add", ["claude", "plugin", "marketplace", "add", source]),
+        );
+      }
+      return out;
+    };
+    const stub = stubRuntime({
+      sets: { work: ["claude"] },
+      read: async (provider, profileId) => ({ ...inventory(provider, items()), profileId }),
+      plans,
+      catalog,
+      act: async (request) => {
+        const base = {
+          provider: "claude",
+          profileId: request.profileId ?? "work-claude",
+          target: request.target,
+          act: request.act,
+          startedAt: NOW,
+          finishedAt: NOW,
+        };
+        if (request.target.kind === "plugin" && request.act === "install") {
+          state.plugins.set(request.target.id, "2.0.0");
+          return {
+            ...base,
+            status: "changed",
+            display: `claude plugin install ${request.target.id}`,
+            message: "installed 2.0.0",
+          };
+        }
+        if (request.target.kind === "marketplace" && request.act === "update") {
+          state.updatedAt = "2026-09-27T09:00:00.000Z";
+          state.plugins.set("review@northlight", "1.3.0");
+          return { ...base, status: "changed", message: "fetched its catalog again" };
+        }
+        if (request.target.kind === "marketplace" && request.act === "add") {
+          state.marketplaces.set("northlight-extra", request.source!);
+          return { ...base, status: "changed", message: "added northlight-extra" };
+        }
+        if (request.target.kind === "marketplace" && request.act === "remove") {
+          state.marketplaces.delete(request.target.id);
+          return { ...base, status: "changed", message: "removed" };
+        }
+        throw new Error(`no ${request.act} expected`);
+      },
+      start: async (request) => ({
+        runtimeSessionId: "pty-install",
+        providerId: "claude",
+        profileId: "work-claude",
+        target: request.target,
+        act: request.act,
+        display: `claude plugin install ${request.target.id} --scope user`,
+        reaches: [],
+        startedAt: NOW,
+        known: [...state.plugins.keys()],
+      }),
+    });
+    const panes = {
+      open: vi.fn<ExtensionSignInPanes["open"]>(() => TICKET),
+      close: vi.fn<ExtensionSignInPanes["close"]>(async () => undefined),
+    };
+    const make = () =>
+      new AgentExtensionService({
+        runtime: stub.runtime,
+        catalog: AGENT_CATALOG_READERS,
+        home: HOME,
+        now: () => new Date(NOW),
+        panes,
+      });
+    return { ...stub, state, panes, make };
+  }
+
+  it("reads an agent's catalog: each plugin with its install or why not, the ones it holds, what each marketplace lists", async () => {
+    const { make, extensionCatalog, extensionActPlans } = claudeWithCatalog();
+    const extensions = make();
+    const catalog = AgentsExtensionsCatalogResult.parse(
+      await extensions.catalog({ set: "work", provider: "claude" }),
+    );
+    expect(catalog.marketplaces).toEqual([
+      {
+        id: "northlight",
+        name: "northlight",
+        origin: "own",
+        source: "northlight/plugins",
+        updatedAt: "2026-09-26T09:00:00.000Z",
+        count: 4,
+      },
+    ]);
+    const byId = new Map(catalog.plugins.map((plugin) => [plugin.id, plugin]));
+    // one it holds is installed, with a newer version listed: no install, and nothing to explain
+    expect(byId.get("review@northlight")).toMatchObject({ held: "review@northlight", newer: true });
+    expect(byId.get("review@northlight")).not.toHaveProperty("install");
+    expect(byId.get("review@northlight")).not.toHaveProperty("unavailable");
+    expect(byId.get("lint@northlight")).toMatchObject({
+      brings: { commands: ["lint"], skills: ["style"] },
+      install: {
+        act: "install",
+        runs: "claude plugin install lint@northlight --scope user -y",
+        reaches: [],
+      },
+    });
+    expect(byId.get("telemetry@northlight")).toMatchObject({
+      unavailable: { reason: "blocked", message: "Your organization turned it off in Claude Code" },
+    });
+    expect(byId.get("shell-helper@northlight")?.install).toMatchObject({ terminal: true });
+    // the official marketplace it lacks can be added now, by Claude's own add
+    expect(catalog.suggested).toEqual([
+      {
+        name: "claude-plugins-official",
+        source: "anthropics/claude-plugins-official",
+        message:
+          "Claude Code adds claude-plugins-official the first time it starts in this profile",
+        add: {
+          act: "add",
+          runs: "claude plugin marketplace add anthropics/claude-plugins-official",
+          reaches: [],
+        },
+      },
+    ]);
+    expect(extensionCatalog).toHaveBeenCalledWith("claude", "work-claude", { fresh: true });
+    // installs were planned from what the lens holds, without planning acts on it again
+    expect(extensionActPlans).toHaveBeenLastCalledWith(
+      "claude",
+      "work-claude",
+      expect.any(Array),
+      undefined,
+      undefined,
+      expect.objectContaining({ only: true }),
+    );
+    // the profile's plugin rows say what the catalog lists newer
+    const lens = AgentsExtensionsListResult.parse(await extensions.list("work"));
+    expect(lens.plugins.claude?.[0]).toMatchObject({
+      id: "review@northlight",
+      newer: { version: "1.3.0" },
+    });
+  });
+
+  it("installs a listed plugin through its agent's own command, then reads the profile and the catalog again", async () => {
+    const { make, runExtensionAct, extensionCatalog } = claudeWithCatalog();
+    const extensions = make();
+    await extensions.catalog({ set: "work", provider: "claude" });
+    const answered = AgentsExtensionsActResult.parse(
+      await extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "lint@northlight",
+        act: "install",
+      }),
+    );
+    expect(runExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "plugin", id: "lint@northlight" },
+        act: "install",
+      }),
+    );
+    expect(answered.run).toMatchObject({
+      kind: "plugin",
+      item: "lint@northlight",
+      name: "lint",
+      act: "install",
+    });
+    expect(answered.receipt).toMatchObject({ status: "changed", message: "installed 2.0.0" });
+    expect(extensionCatalog).toHaveBeenCalledTimes(2);
+    const lens = AgentsExtensionsListResult.parse(await extensions.list("work"));
+    expect(lens.plugins.claude?.map((plugin) => plugin.id)).toContain("lint@northlight");
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "ghost@northlight",
+        act: "install",
+      }),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "telemetry@northlight",
+        act: "install",
+      }),
+    ).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      message:
+        "Claude offers no install for telemetry here: Your organization turned it off in Claude Code",
+    });
+  });
+
+  it("runs an install that asks first in a pane the person answers, never on the act door", async () => {
+    const { make, runExtensionAct, startExtensionAct, panes } = claudeWithCatalog();
+    const extensions = make();
+    await extensions.catalog({ set: "work", provider: "claude" });
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "shell-helper@northlight",
+        act: "install",
+      }),
+    ).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      details: expect.objectContaining({ reason: "terminal" }),
+    });
+    expect(runExtensionAct).not.toHaveBeenCalled();
+    const opened = await extensions.terminal(
+      {
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "shell-helper@northlight",
+        act: "install",
+      },
+      PRINCIPAL,
+    );
+    expect(startExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "plugin", id: "shell-helper@northlight" },
+        act: "install",
+      }),
+    );
+    expect(panes.open).toHaveBeenCalledWith("pty-install", PRINCIPAL);
+    expect(opened.run).toMatchObject({
+      kind: "plugin",
+      name: "shell-helper",
+      act: "install",
+      state: "running",
+      terminal: { sessionId: "pty-install" },
+    });
+    // one act at a time: the profile is held while the pane is open
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        id: "lint@northlight",
+        act: "install",
+      }),
+    ).rejects.toMatchObject({ kind: "CONFLICT" });
+  });
+
+  it("plans a typed source against what the agent holds, and adds a marketplace from one", async () => {
+    const { make, runExtensionAct } = claudeWithCatalog();
+    const extensions = make();
+    expect(
+      await extensions.planSource({
+        set: "work",
+        provider: "claude",
+        kind: "plugin",
+        source: "npm:x",
+      }),
+    ).toEqual({
+      offer: {
+        unavailable: {
+          reason: "unsupported",
+          message: "Claude installs a plugin from a marketplace",
+        },
+      },
+    });
+    expect(
+      await extensions.planSource({
+        set: "work",
+        provider: "claude",
+        kind: "marketplace",
+        source: "northlight/plugins",
+      }),
+    ).toEqual({ offer: { unavailable: { reason: "held", message: "Claude already has it" } } });
+    const added = AgentsExtensionsActResult.parse(
+      await extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "marketplace",
+        id: "northlight/extra",
+        source: "northlight/extra",
+        act: "add",
+      }),
+    );
+    expect(runExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { kind: "marketplace", id: "northlight/extra" },
+        act: "add",
+        source: "northlight/extra",
+      }),
+    );
+    expect(added.run).toMatchObject({
+      kind: "marketplace",
+      name: "northlight/extra",
+      runs: "claude plugin marketplace add northlight/extra",
+    });
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "marketplace",
+        id: "northlight/extra",
+        source: "northlight/other",
+        act: "add",
+      }),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+  });
+
+  it("checks for updates with each marketplace's own fetch in one run, then says when and how many are newer", async () => {
+    const { make, runExtensionAct } = claudeWithCatalog();
+    const extensions = make();
+    const checked = AgentsExtensionsCheckResult.parse(
+      await extensions.check({ set: "work", provider: "claude" }),
+    );
+    expect(runExtensionAct).toHaveBeenCalledTimes(1);
+    expect(runExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { kind: "marketplace", id: "northlight" }, act: "update" }),
+    );
+    expect(checked.run).toMatchObject({
+      kind: "marketplace",
+      item: "northlight",
+      act: "update",
+      state: "finished",
+    });
+    expect(checked.receipt).toMatchObject({
+      status: "changed",
+      message: "fetched its catalog again",
+    });
+    // the fetch took review to 1.3.0 by itself: nothing is listed newer now
+    expect(checked.updates).toBe(0);
+    const lens = AgentsExtensionsListResult.parse(await extensions.list("work"));
+    expect(lens.agents[0]?.checkedAt).toBe(NOW);
+    expect(lens.plugins.claude?.[0]).not.toHaveProperty("newer");
+  });
+
+  it("removes a marketplace only as its agent offers, and refuses one it does not have", async () => {
+    const { make, runExtensionAct } = claudeWithCatalog();
+    const extensions = make();
+    const lens = AgentsExtensionsListResult.parse(await extensions.list("work"));
+    expect(lens.marketplaces.claude?.[0]?.acts?.map((act) => [act.act, act.reaches])).toEqual([
+      ["update", []],
+      ["remove", ["plugins"]],
+    ]);
+    const removed = AgentsExtensionsActResult.parse(
+      await extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "marketplace",
+        id: "northlight",
+        act: "remove",
+      }),
+    );
+    expect(removed.receipt).toMatchObject({ status: "changed", message: "removed" });
+    expect(runExtensionAct).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { kind: "marketplace", id: "northlight" }, act: "remove" }),
+    );
+    await expect(
+      extensions.act({
+        set: "work",
+        provider: "claude",
+        kind: "marketplace",
+        id: "gone",
+        act: "remove",
+      }),
+    ).rejects.toMatchObject({ kind: "NOT_FOUND" });
   });
 });

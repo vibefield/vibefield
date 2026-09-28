@@ -1,9 +1,11 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: an agent's own variable syntax, shown as the agent would run it
 import type {
   AgentExtensionRun,
+  AgentsExtensionsCatalogResult,
   AgentsExtensionsListResult,
   AgentsExtensionsPlanResult,
   AgentsExtensionsPlanSkillResult,
+  AgentsExtensionsPlanSourceResult,
 } from "@vibefield/contracts";
 
 // Extensions on fixture data (AR-S4b): the lens fieldd sends for the "Work"
@@ -24,7 +26,10 @@ import type {
 // Add skill's read of pdf-forms. AR-S4e: Claude's review plugin carries its
 // agent's acts, the account's security-guidance and OpenCode's wakatime say
 // why they have none, and FIXTURE_PLUGIN_RUN is review's update as the plugin
-// act fixture (agents-extensions-plugin-act.valid.json) has it.
+// act fixture (agents-extensions-plugin-act.valid.json) has it. AR-S4e2:
+// Claude's northlight marketplace carries its fetch and its removal, the
+// agents that install from a source say what they take, and Claude's catalog,
+// a check's run, an install's pane and a source's plan follow below.
 
 /** The catalog's "now" for the lists: two minutes after the read. */
 export const FIXTURE_EXTENSIONS_NOW = new Date("2026-09-25T09:02:10.000Z");
@@ -43,11 +48,14 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
           store: "profile",
           changes: "command",
           read: true,
+          catalog: true,
         },
         marketplaces: {
           store: "profile",
           changes: "command",
           read: true,
+          sources:
+            "A GitHub repository (owner/repo), a git address, a folder, or the address of a marketplace.json",
         },
         mcpServers: {
           store: "profile",
@@ -77,6 +85,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
           store: "profile",
           changes: "command",
           read: true,
+          catalog: true,
         },
         marketplaces: {
           store: "mixed",
@@ -111,6 +120,8 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
           store: "mixed",
           changes: "command",
           read: true,
+          sources: "A folder on this Mac",
+          catalog: true,
         },
         marketplaces: {
           store: "mixed",
@@ -146,6 +157,7 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
           changes: "command",
           read: true,
           hostedSkips: true,
+          sources: "An npm package, or a folder with a package.json",
         },
         mcpServers: {
           store: "shared",
@@ -810,6 +822,18 @@ export const FIXTURE_EXTENSIONS: AgentsExtensionsListResult = {
         enabled: true,
         source: "northlight-studio/plugins",
         updatedAt: "2026-09-20T10:00:00.000Z",
+        acts: [
+          {
+            act: "update",
+            runs: "claude plugin marketplace update northlight",
+            reaches: [],
+          },
+          {
+            act: "remove",
+            runs: "claude plugin marketplace remove northlight",
+            reaches: ["plugins"],
+          },
+        ],
       },
     ],
   },
@@ -990,6 +1014,165 @@ export const FIXTURE_SKILL_PLAN: AgentsExtensionsPlanSkillResult = {
         reason: "unread",
         message: "extension inventory failed for kimi",
       },
+    },
+  },
+};
+
+// AR-S4e2 — Claude's catalog in Work, as the catalog fixture
+// (agents-extensions-catalog.valid.json) has it: review held with a newer
+// version listed, changelog to install in one click, deploy's install in a
+// terminal (its source is a command Claude asks the person to accept),
+// telemetry flagged, and the official marketplace Work lacks, suggested.
+export const FIXTURE_CATALOG: AgentsExtensionsCatalogResult = {
+  set: "work",
+  provider: "claude",
+  label: "Claude",
+  readAt: "2026-09-25T09:01:30.000Z",
+  marketplaces: [
+    {
+      id: "northlight",
+      name: "northlight",
+      source: "northlight-studio/plugins",
+      updatedAt: "2026-09-20T10:00:00.000Z",
+      origin: "own",
+      count: 4,
+    },
+  ],
+  plugins: [
+    {
+      id: "review@northlight",
+      name: "review",
+      marketplace: "northlight",
+      description: "Reviews a change the way Northlight does",
+      author: "Northlight Studio",
+      category: "Code review",
+      version: "1.3.0",
+      homepage: "https://github.com/northlight-studio/plugins",
+      brings: {
+        commands: ["review"],
+        hooks: ["PreToolUse"],
+        skills: ["house-style"],
+      },
+      held: "review@northlight",
+      newer: true,
+    },
+    {
+      id: "changelog@northlight",
+      name: "changelog",
+      marketplace: "northlight",
+      description: "Drafts the changelog from the merged pull requests",
+      author: "Northlight Studio",
+      category: "Writing",
+      version: "2.0.0",
+      brings: {
+        commands: ["changelog"],
+        skills: ["changelog-writer"],
+      },
+      install: {
+        act: "install",
+        runs: "claude plugin install changelog@northlight --scope user -y",
+        reaches: [],
+      },
+    },
+    {
+      id: "deploy@northlight",
+      name: "deploy",
+      marketplace: "northlight",
+      description: "Ships a branch to staging with one command",
+      author: "Northlight Studio",
+      category: "Deployment",
+      version: "0.4.1",
+      brings: {
+        commands: ["deploy"],
+        hooks: ["Stop"],
+        servers: ["staging"],
+      },
+      asks: [
+        {
+          kind: "command",
+          command: "npx @northlight/deploy-fetch",
+        },
+      ],
+      install: {
+        act: "install",
+        runs: "claude plugin install deploy@northlight --scope user",
+        reaches: [],
+        terminal: true,
+      },
+    },
+    {
+      id: "telemetry@northlight",
+      name: "telemetry",
+      marketplace: "northlight",
+      description: "Sends session timings to Northlight's dashboard",
+      author: "Northlight Studio",
+      blocked: "Claude Code flagged it and took it out",
+    },
+  ],
+  suggested: [
+    {
+      name: "claude-plugins-official",
+      source: "anthropics/claude-plugins-official",
+      message: "Claude Code adds claude-plugins-official the first time it starts in this profile",
+      add: {
+        act: "add",
+        runs: "claude plugin marketplace add anthropics/claude-plugins-official",
+        reaches: [],
+      },
+    },
+  ],
+  checkedAt: "2026-09-25T09:01:20.000Z",
+};
+
+/** "Check for updates" as the check fixture (agents-extensions-check.valid.json) has it. */
+export const FIXTURE_CHECK_RUN: AgentExtensionRun = {
+  id: "act-c4e1",
+  provider: "claude",
+  label: "Claude",
+  kind: "marketplace",
+  item: "northlight",
+  name: "northlight",
+  act: "update",
+  runs: "claude plugin marketplace update northlight",
+  state: "finished",
+  startedAt: "2026-09-25T09:01:10.000Z",
+  finishedAt: "2026-09-25T09:01:20.000Z",
+  output: "Updating marketplace northlight…\n✔ Successfully updated marketplace: northlight",
+  truncated: false,
+  receipt: {
+    status: "changed",
+    message: "fetched its catalog again",
+    exitCode: 0,
+    finishedAt: "2026-09-25T09:01:20.000Z",
+  },
+};
+
+/** deploy's install in its pane, as the terminal fixture (agents-extensions-terminal.valid.json) has it. */
+export const FIXTURE_INSTALL_PANE: AgentExtensionRun = {
+  id: "act-d7a2",
+  provider: "claude",
+  label: "Claude",
+  kind: "plugin",
+  item: "deploy@northlight",
+  name: "deploy",
+  act: "install",
+  runs: "claude plugin install deploy@northlight --scope user",
+  state: "running",
+  startedAt: "2026-09-25T09:01:40.000Z",
+  output: "",
+  truncated: false,
+  terminal: {
+    sessionId: "sess-01J8Z4D2",
+  },
+};
+
+/** What Add marketplace's form is told Claude would run, as the source-plan fixture has it. */
+export const FIXTURE_SOURCE_PLAN: AgentsExtensionsPlanSourceResult = {
+  offer: {
+    act: {
+      act: "add",
+      runs: "claude plugin marketplace add northlight-studio/labs",
+      reaches: [],
     },
   },
 };

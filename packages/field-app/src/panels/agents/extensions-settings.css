@@ -851,3 +851,178 @@
   font-size: 12px;
   color: var(--vf-text-tertiary);
 }
+
+/* AR-S4e2 — browse and install (pass 23's B1 and D1). */
+
+/* The plugins list's head: when updates were checked, and the agent's own acts. */
+.vf-ext-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.vf-ext-list-head-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A source a person types: the agent's own words for what it takes, Runs, then Add. */
+.vf-ext-source {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vf-ext-source-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-source-label b {
+  font-weight: 500;
+  color: var(--vf-text-primary);
+}
+
+.vf-ext-source-label small {
+  font-size: 11px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-ext-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.vf-ext-source-row .vf-ext-add-field {
+  flex: 1;
+  min-width: 18ch;
+}
+
+/* Search and the marketplaces' chips, above the list. */
+.vf-ext-browse-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vf-ext-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.vf-ext-search .vf-ext-search-glyph {
+  position: absolute;
+  left: 11px;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--vf-text-tertiary);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.vf-ext-search .vf-ext-search-field {
+  width: 100%;
+  padding-left: 32px;
+}
+
+.vf-ext-browse .vf-ext-chip {
+  padding: 0 12px;
+}
+
+/* Installed, in a listed row's place for its button. */
+.vf-ext-installed {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--vf-text-tertiary);
+  white-space: nowrap;
+}
+
+.vf-ext-installed--newer {
+  color: var(--vf-text-secondary);
+}
+
+.vf-ext-installed .vf-ext-installed-mark {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--vf-green);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* No marketplace yet: the kit's empty state, one sentence and its acts. */
+.vf-ext-browse-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+}
+
+.vf-ext-browse-empty b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vf-text-primary);
+}
+
+.vf-ext-browse-empty p {
+  margin: 0;
+  max-width: 52ch;
+}
+
+.vf-ext-browse-empty-mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px dashed var(--vf-hairline-strong);
+  border-radius: 999px;
+}
+
+.vf-ext-browse-empty-mark svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: var(--vf-text-tertiary);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.vf-ext-browse-empty-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+/* Add marketplace…: a row that is one button. */
+.vf-ext-browse-add-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-ext-browse-add-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

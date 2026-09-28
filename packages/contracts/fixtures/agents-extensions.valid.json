@@ -11,12 +11,14 @@
         "plugins": {
           "store": "profile",
           "changes": "command",
-          "read": true
+          "read": true,
+          "catalog": true
         },
         "marketplaces": {
           "store": "profile",
           "changes": "command",
-          "read": true
+          "read": true,
+          "sources": "A GitHub repository (owner/repo), a git address, a folder, or the address of a marketplace.json"
         },
         "mcpServers": {
           "store": "profile",
@@ -45,7 +47,8 @@
         "plugins": {
           "store": "profile",
           "changes": "command",
-          "read": true
+          "read": true,
+          "catalog": true
         },
         "marketplaces": {
           "store": "mixed",
@@ -79,7 +82,9 @@
         "plugins": {
           "store": "mixed",
           "changes": "command",
-          "read": true
+          "read": true,
+          "sources": "A folder on this Mac",
+          "catalog": true
         },
         "marketplaces": {
           "store": "mixed",
@@ -114,7 +119,8 @@
           "store": "shared",
           "changes": "command",
           "read": true,
-          "hostedSkips": true
+          "hostedSkips": true,
+          "sources": "An npm package, or a folder with a package.json"
         },
         "mcpServers": {
           "store": "shared",
@@ -183,11 +189,18 @@
       "definition": {
         "transport": "stdio",
         "command": "npx",
-        "args": ["-y", "@upstash/context7-mcp"],
-        "env": ["CONTEXT7_API_KEY"]
+        "args": [
+          "-y",
+          "@upstash/context7-mcp"
+        ],
+        "env": [
+          "CONTEXT7_API_KEY"
+        ]
       },
       "kept": true,
-      "needs": ["CONTEXT7_API_KEY"],
+      "needs": [
+        "CONTEXT7_API_KEY"
+      ],
       "offers": {
         "claude": {
           "act": {
@@ -214,7 +227,9 @@
           "act": {
             "act": "add",
             "runs": "opencode mcp add context7 --env CONTEXT7_API_KEY={env:CONTEXT7_API_KEY} -- npx -y @upstash/context7-mcp",
-            "reaches": ["every-profile"]
+            "reaches": [
+              "every-profile"
+            ]
           }
         }
       }
@@ -231,14 +246,19 @@
             "place": "~/Library/Application Support/VibeField/agents/profiles/work/claude-0b7e2c4d/.claude.json",
             "transport": "http",
             "target": "https://mcp.linear.app/mcp",
-            "headers": ["Authorization"],
+            "headers": [
+              "Authorization"
+            ],
             "auth": "signed-in",
             "version": 0,
             "acts": [
               {
                 "act": "remove",
                 "runs": "claude mcp remove --scope user linear",
-                "reaches": ["definition", "sign-in"]
+                "reaches": [
+                  "definition",
+                  "sign-in"
+                ]
               }
             ]
           }
@@ -251,8 +271,12 @@
             "place": "~/Library/Application Support/VibeField/agents/profiles/work/codex-7a10c3e2/config.toml",
             "transport": "http",
             "target": "https://mcp.linear.app/mcp",
-            "env": ["LINEAR_TOKEN"],
-            "headers": ["Authorization"],
+            "env": [
+              "LINEAR_TOKEN"
+            ],
+            "headers": [
+              "Authorization"
+            ],
             "version": 1,
             "acts": [
               {
@@ -263,7 +287,9 @@
               {
                 "act": "remove",
                 "runs": "codex mcp remove linear",
-                "reaches": ["definition"]
+                "reaches": [
+                  "definition"
+                ]
               }
             ]
           }
@@ -278,7 +304,9 @@
             "place": "~/.claude.json",
             "transport": "http",
             "target": "https://mcp.linear.app/mcp",
-            "headers": ["Authorization"],
+            "headers": [
+              "Authorization"
+            ],
             "version": 0
           }
         ]
@@ -300,7 +328,10 @@
               {
                 "act": "remove",
                 "runs": "claude mcp remove --scope user notion",
-                "reaches": ["definition", "sign-in"]
+                "reaches": [
+                  "definition",
+                  "sign-in"
+                ]
               },
               {
                 "act": "sign-in",
@@ -329,12 +360,16 @@
               {
                 "act": "remove",
                 "runs": "codex mcp remove notion",
-                "reaches": ["definition"]
+                "reaches": [
+                  "definition"
+                ]
               },
               {
                 "act": "sign-in",
                 "runs": "codex mcp login notion",
-                "reaches": ["every-profile"],
+                "reaches": [
+                  "every-profile"
+                ],
                 "terminal": true
               }
             ]
@@ -357,7 +392,9 @@
           "act": {
             "act": "add",
             "runs": "opencode mcp add notion --url https://mcp.notion.com/mcp",
-            "reaches": ["every-profile"]
+            "reaches": [
+              "every-profile"
+            ]
           }
         }
       }
@@ -373,13 +410,17 @@
             "enabled": true,
             "transport": "stdio",
             "target": "npx -y @modelcontextprotocol/server-postgres postgresql://•••@localhost/dev",
-            "env": ["PGPASSWORD"],
+            "env": [
+              "PGPASSWORD"
+            ],
             "version": 0,
             "acts": [
               {
                 "act": "remove",
                 "runs": "claude mcp remove --scope user postgres",
-                "reaches": ["definition"]
+                "reaches": [
+                  "definition"
+                ]
               }
             ]
           }
@@ -391,7 +432,9 @@
             "enabled": false,
             "transport": "stdio",
             "target": "uvx postgres-mcp --access-mode=restricted",
-            "env": ["DATABASE_URI"],
+            "env": [
+              "DATABASE_URI"
+            ],
             "version": 1,
             "acts": [
               {
@@ -402,7 +445,9 @@
               {
                 "act": "remove",
                 "runs": "codex mcp remove postgres",
-                "reaches": ["definition"]
+                "reaches": [
+                  "definition"
+                ]
               }
             ]
           }
@@ -472,7 +517,9 @@
           "act": {
             "act": "add",
             "runs": "move ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer → ~/.agents/skills/changelog-writer\nlink ~/.agents/skills/changelog-writer → ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer",
-            "reaches": ["shared-folder"],
+            "reaches": [
+              "shared-folder"
+            ],
             "moves": "~/.agents/skills/changelog-writer"
           }
         },
@@ -480,7 +527,9 @@
           "act": {
             "act": "add",
             "runs": "link ~/Library/Application Support/VibeField/agents/skills/work/changelog-writer → ~/.config/opencode/skills/changelog-writer",
-            "reaches": ["every-profile"]
+            "reaches": [
+              "every-profile"
+            ]
           }
         }
       }
@@ -589,7 +638,9 @@
           "act": {
             "act": "add",
             "runs": "move ~/Library/Application Support/VibeField/agents/skills/work/sql-review → ~/.agents/skills/sql-review\nlink ~/.agents/skills/sql-review → ~/Library/Application Support/VibeField/agents/skills/work/sql-review",
-            "reaches": ["shared-folder"],
+            "reaches": [
+              "shared-folder"
+            ],
             "moves": "~/.agents/skills/sql-review"
           }
         },
@@ -604,7 +655,9 @@
           "act": {
             "act": "add",
             "runs": "link ~/Library/Application Support/VibeField/agents/skills/work/sql-review → ~/.config/opencode/skills/sql-review",
-            "reaches": ["every-profile"]
+            "reaches": [
+              "every-profile"
+            ]
           }
         }
       }
@@ -624,9 +677,16 @@
         "author": "Northlight Studio",
         "homepage": "https://github.com/northlight-studio/plugins",
         "brings": {
-          "commands": ["review", "triage"],
-          "agents": ["reviewer"],
-          "hooks": ["PreToolUse"]
+          "commands": [
+            "review",
+            "triage"
+          ],
+          "agents": [
+            "reviewer"
+          ],
+          "hooks": [
+            "PreToolUse"
+          ]
         },
         "acts": [
           {
@@ -758,11 +818,27 @@
         "origin": "own",
         "enabled": true,
         "source": "northlight-studio/plugins",
-        "updatedAt": "2026-09-20T10:00:00.000Z"
+        "updatedAt": "2026-09-20T10:00:00.000Z",
+        "acts": [
+          {
+            "act": "update",
+            "runs": "claude plugin marketplace update northlight",
+            "reaches": []
+          },
+          {
+            "act": "remove",
+            "runs": "claude plugin marketplace remove northlight",
+            "reaches": [
+              "plugins"
+            ]
+          }
+        ]
       }
     ]
   },
-  "values": ["LINEAR_TOKEN"],
+  "values": [
+    "LINEAR_TOKEN"
+  ],
   "library": "~/Library/Application Support/VibeField/agents/skills/work",
   "changes": [
     {

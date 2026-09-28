@@ -14,11 +14,15 @@ import {
   AgentsExtensionsActParams,
   AgentsExtensionsAddParams,
   AgentsExtensionsAddSkillParams,
+  AgentsExtensionsCatalogParams,
+  AgentsExtensionsCheckParams,
   AgentsExtensionsListParams,
   AgentsExtensionsPlanParams,
   AgentsExtensionsPlanSkillParams,
+  AgentsExtensionsPlanSourceParams,
   AgentsExtensionsSignInParams,
   AgentsExtensionsSubscribeParams,
+  AgentsExtensionsTerminalParams,
   AgentsInstallsParams,
   AgentsProfileSetsCreateParams,
   AgentsProfileSetsDeleteParams,
@@ -1500,13 +1504,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           "expected { set, provider, kind, id, act }",
           false,
         );
+      // AR-S4e2 — a source a person typed (a folder, an address) is not recorded
+      const item = parsed.data.source !== undefined ? "source" : parsed.data.id;
       return await audit.required(
         ctx,
         {
           action: "agents.extensions.act",
           target: {
             kind: "agent-extension",
-            id: `${parsed.data.provider}:${parsed.data.kind}:${parsed.data.id}`.slice(0, 256),
+            id: `${parsed.data.provider}:${parsed.data.kind}:${item}`.slice(0, 256),
           },
           attrs: { set: parsed.data.set, act: parsed.data.act },
         },
@@ -1611,6 +1617,68 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { set, from }", false);
       return await agents.extensions.planSkill(parsed.data);
+    });
+    // AR-S4e2 — what one agent could install, from the catalogs it already fetched: a read
+    api.register("agents.extensions.catalog", async (_ctx, params) => {
+      const parsed = AgentsExtensionsCatalogParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, provider }", false);
+      return await agents.extensions.catalog(parsed.data);
+    });
+    // AR-S4e2 — "Check for updates": the agent's own fetch of each catalog, audited like an act
+    api.register("agents.extensions.check", async (ctx, params) => {
+      const parsed = AgentsExtensionsCheckParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { set, provider }", false);
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.extensions.check",
+          target: {
+            kind: "agent-extension",
+            id: `${parsed.data.provider}:marketplace:catalogs`.slice(0, 256),
+          },
+          attrs: { set: parsed.data.set },
+        },
+        () => agents.extensions.check(parsed.data),
+        (result) => ({ attrs: { status: result.receipt.status, updates: result.updates } }),
+      );
+    });
+    // AR-S4e2 — what a typed source would run, before anything runs: a read
+    api.register("agents.extensions.planSource", async (_ctx, params) => {
+      const parsed = AgentsExtensionsPlanSourceParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { set, provider, kind, source }",
+          false,
+        );
+      return await agents.extensions.planSource(parsed.data);
+    });
+    // AR-S4e2 — an act the person answers in a pane (an install that asks first),
+    // as a sign-in is: it takes `agent.spawn`, audited; a typed source is not recorded
+    api.register("agents.extensions.terminal", async (ctx, params) => {
+      const parsed = AgentsExtensionsTerminalParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { set, provider, kind, id, act }",
+          false,
+        );
+      const item = parsed.data.source !== undefined ? "source" : parsed.data.id;
+      return await audit.required(
+        ctx,
+        {
+          action: "agents.extensions.terminal",
+          target: {
+            kind: "agent-extension",
+            id: `${parsed.data.provider}:${parsed.data.kind}:${item}`.slice(0, 256),
+          },
+          attrs: { set: parsed.data.set, act: parsed.data.act },
+        },
+        () => agents.extensions.terminal(parsed.data, ctx.principal),
+        (result) => ({ outcome: "succeeded", attrs: { sessionId: result.terminal.sessionId } }),
+      );
     });
     api.register("agents.installs", async (_ctx, params) => {
       const parsed = AgentsInstallsParams.safeParse(params ?? {});

@@ -1,0 +1,9 @@
+{
+  "offer": {
+    "act": {
+      "act": "add",
+      "runs": "claude plugin marketplace add northlight-studio/labs",
+      "reaches": []
+    }
+  }
+}

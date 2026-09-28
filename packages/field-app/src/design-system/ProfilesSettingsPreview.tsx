@@ -7,8 +7,11 @@ import {
   addServerSubpage,
   addSkillSubpage,
   agentListSubpage,
+  BrowseView,
+  browseSubpage,
   ExtensionItemView,
   extensionItemSubpage,
+  ListedPluginView,
   PluginView,
   ProfileExtensionsView,
   pluginSubpage,
@@ -24,17 +27,22 @@ import {
 import { agentRow, inOnWords, profilePage, signInNote } from "../panels/agents/profiles-model";
 import type { SettingsSubpage } from "../panels/SettingsDialog";
 import {
+  FIXTURE_CATALOG,
+  FIXTURE_CHECK_RUN,
   FIXTURE_EXTENSION_PLAN,
   FIXTURE_EXTENSION_RUN,
   FIXTURE_EXTENSION_RUNNING,
   FIXTURE_EXTENSION_SIGNING_IN,
   FIXTURE_EXTENSIONS,
   FIXTURE_EXTENSIONS_NOW,
+  FIXTURE_INSTALL_PANE,
   FIXTURE_PLUGIN_RUN,
   FIXTURE_SKILL_PLAN,
+  FIXTURE_SOURCE_PLAN,
 } from "./extensions-fixtures";
 import {
   FIXTURE_DEMO,
+  FIXTURE_INSTALL_PANE_OUTPUT,
   FIXTURE_NATIVE,
   FIXTURE_PROFILES_CONTEXT,
   FIXTURE_PROFILES_NOW,
@@ -97,6 +105,62 @@ const PLUGINS: Partial<
   },
 };
 
+/**
+ * AR-S4e2: browse and install — Claude's Plugins list after a check (review
+ * has a newer version listed), OpenCode's with Add plugin's form open, Claude's
+ * catalogs (and a profile with no marketplace yet, a marketplace's removal
+ * asked, Add marketplace's form), a listed plugin to install in one click, and
+ * one whose install runs in a terminal the person answers.
+ */
+const CHECKED = {
+  ...FIXTURE_EXTENSIONS,
+  agents: FIXTURE_EXTENSIONS.agents.map((column) =>
+    column.provider === REVIEW.provider
+      ? { ...column, checkedAt: FIXTURE_CHECK_RUN.finishedAt }
+      : column,
+  ),
+  plugins: {
+    ...FIXTURE_EXTENSIONS.plugins,
+    [REVIEW.provider]: (FIXTURE_EXTENSIONS.plugins[REVIEW.provider] ?? []).map((held) =>
+      held.id === REVIEW.id ? { ...held, newer: { version: "1.3.0" } } : held,
+    ),
+  },
+  run: FIXTURE_CHECK_RUN,
+};
+/** The agent in Work that installs a plugin from a source a person gives, as the fixture lens says. */
+const SOURCE_AGENT = FIXTURE_EXTENSIONS.agents.find(
+  (column) =>
+    column.support.plugins?.sources !== undefined && column.support.plugins.catalog !== true,
+);
+/** The two states that open an agent's own list at its head: kept here, so each render holds the same object. */
+const HEAD_LISTS: Partial<
+  Record<ProfilesFixtureState, { provider: string; agent: string; list: AgentListKey }>
+> = {
+  "plugins, checked": { provider: REVIEW.provider, agent: REVIEW.agent, list: "plugins" },
+  ...(SOURCE_AGENT !== undefined
+    ? {
+        "add package": {
+          provider: SOURCE_AGENT.provider,
+          agent: SOURCE_AGENT.label,
+          list: "plugins" as const,
+        },
+      }
+    : {}),
+};
+const BROWSE: Partial<
+  Record<ProfilesFixtureState, { query?: string; empty?: boolean; armed?: string; adding?: string }>
+> = {
+  browse: {},
+  "browse, no marketplaces": { empty: true },
+  "marketplace removal": { armed: "northlight" },
+  "add marketplace": { adding: "northlight-studio/labs" },
+};
+const LISTED: Partial<Record<ProfilesFixtureState, { id: string; name: string; pane?: boolean }>> =
+  {
+    "plugin to install": { id: "changelog@northlight", name: "changelog" },
+    "install in a terminal": { id: "deploy@northlight", name: "deploy", pane: true },
+  };
+
 /** The Settings header each state wears (the panel supplies it in the product). */
 export function profilesPreviewHead(state: ProfilesFixtureState): {
   head: { title: string; description: string } | null;
@@ -138,27 +202,33 @@ export function ProfilesSettingsPreview({
     return persona === undefined ? undefined : agentRow(context, persona);
   }, [state, context]);
   const agentLabel = agent?.label;
-  const list = LISTS[state];
+  const list = LISTS[state] ?? HEAD_LISTS[state];
   const item = ITEMS[state];
   const plugin = PLUGINS[state];
+  const browse = BROWSE[state];
+  const listed = LISTED[state];
 
   useEffect(() => {
     onSubpage(
       agentLabel !== undefined
         ? profileAgentSubpage(FIXTURE_WORK, agentLabel, inert)
-        : list !== undefined
-          ? agentListSubpage(FIXTURE_WORK, list.agent, list.list, inert)
-          : item !== undefined
-            ? extensionItemSubpage(FIXTURE_WORK, item.list, item.name, inert)
-            : plugin !== undefined
-              ? pluginSubpage(FIXTURE_WORK, plugin.agent, plugin.name, "Plugins", inert)
-              : state === "add server"
-                ? addServerSubpage(FIXTURE_WORK, inert)
-                : state === "add skill"
-                  ? addSkillSubpage(FIXTURE_WORK, inert)
-                  : null,
+        : browse !== undefined
+          ? browseSubpage(FIXTURE_WORK, REVIEW.agent, "Browse plugins", "Plugins", inert)
+          : listed !== undefined
+            ? pluginSubpage(FIXTURE_WORK, REVIEW.agent, listed.name, "Browse plugins", inert)
+            : list !== undefined
+              ? agentListSubpage(FIXTURE_WORK, list.agent, list.list, inert)
+              : item !== undefined
+                ? extensionItemSubpage(FIXTURE_WORK, item.list, item.name, inert)
+                : plugin !== undefined
+                  ? pluginSubpage(FIXTURE_WORK, plugin.agent, plugin.name, "Plugins", inert)
+                  : state === "add server"
+                    ? addServerSubpage(FIXTURE_WORK, inert)
+                    : state === "add skill"
+                      ? addSkillSubpage(FIXTURE_WORK, inert)
+                      : null,
     );
-  }, [agentLabel, list, item, plugin, state, onSubpage]);
+  }, [agentLabel, list, item, plugin, browse, listed, state, onSubpage]);
   useEffect(() => () => onSubpage(null), [onSubpage]);
 
   if (state === "new") return <NewProfileView onCancel={inert} onCreate={inert} />;
@@ -215,10 +285,55 @@ export function ProfilesSettingsPreview({
       />
     );
   }
+  if (browse !== undefined) {
+    const catalog = browse.empty
+      ? { ...FIXTURE_CATALOG, marketplaces: [], plugins: [] }
+      : FIXTURE_CATALOG;
+    return (
+      <BrowseView
+        lens={FIXTURE_EXTENSIONS}
+        catalog={catalog}
+        provider={REVIEW.provider}
+        where={inOnWords(FIXTURE_WORK)}
+        onRefresh={inert}
+        onAct={inert}
+        onOpen={inert}
+        onPlanSource={async () => FIXTURE_SOURCE_PLAN.offer}
+        now={FIXTURE_EXTENSIONS_NOW}
+        {...(browse.armed !== undefined ? { armed: browse.armed } : {})}
+        {...(browse.adding !== undefined ? { adding: browse.adding } : {})}
+      />
+    );
+  }
+  if (listed !== undefined) {
+    return (
+      <ListedPluginView
+        lens={
+          listed.pane ? { ...FIXTURE_EXTENSIONS, run: FIXTURE_INSTALL_PANE } : FIXTURE_EXTENSIONS
+        }
+        catalog={FIXTURE_CATALOG}
+        provider={REVIEW.provider}
+        id={listed.id}
+        name={listed.name}
+        where={inOnWords(FIXTURE_WORK)}
+        onRefresh={inert}
+        onAct={inert}
+        now={FIXTURE_EXTENSIONS_NOW}
+        {...(listed.pane
+          ? {
+              signIn: {
+                pane: <pre className="vf-agents-output-text">{FIXTURE_INSTALL_PANE_OUTPUT}</pre>,
+                onCancel: inert,
+              },
+            }
+          : {})}
+      />
+    );
+  }
   if (list !== undefined) {
     return (
       <AgentExtensionListView
-        lens={FIXTURE_EXTENSIONS}
+        lens={state === "plugins, checked" ? CHECKED : FIXTURE_EXTENSIONS}
         provider={list.provider}
         agent={list.agent}
         list={list.list}
@@ -227,7 +342,19 @@ export function ProfilesSettingsPreview({
         onRefresh={inert}
         onOpenProfile={inert}
         onOpen={inert}
+        onCheck={inert}
+        onBrowse={inert}
+        onAct={inert}
+        onPlanSource={async () => ({
+          // OpenCode keeps its plugins in one config, so an install reaches every profile
+          act: {
+            act: "install",
+            runs: "opencode plugin opencode-notify --global --pure",
+            reaches: ["every-profile"],
+          },
+        })}
         now={FIXTURE_EXTENSIONS_NOW}
+        {...(state === "add package" ? { adding: "opencode-notify" } : {})}
       />
     );
   }
