@@ -31,7 +31,7 @@ import { createConnection } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { BoundIngress } from "@vibecook/puppeteer-core";
+import type { AgentInstallation, BoundIngress } from "@vibecook/puppeteer-core";
 import {
   type AgentRuntime,
   createAgentRuntime,
@@ -44,6 +44,7 @@ import {
   type ProcessRecord,
   parseSpawnThroughResponse,
   prepareSpawnThroughLaunch,
+  processStartedAt,
   readLaunchProviders,
   readRendezvous,
   readTerminals,
@@ -56,12 +57,16 @@ import {
   writeRendezvous,
 } from "@vibecook/puppeteer-runtime/spawn-through";
 import {
+  AGENT_CATALOG_READERS,
   type AgentCatalogEntry,
+  type AgentProvidersResult,
+  type AgentSessionSummary,
   createAgentCatalogReaders,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { AgentDistributionService } from "../src/agent-distribution";
 import {
   AGENT_GATEWAY_HOST_LABEL,
   AGENT_GATEWAY_STRICT,
@@ -86,6 +91,7 @@ import {
 } from "../src/agent-runtime";
 import type { AuditMutation, AuditMutationOutcome } from "../src/audit-service";
 import {
+  linesOf,
   TYPED_CATALOG,
   TYPED_COMMAND,
   TYPED_PROVIDER,
@@ -94,6 +100,31 @@ import {
   typedProvider,
   typedScript,
 } from "./agent-gateway-fixture";
+import {
+  adopted,
+  answers,
+  auditActs,
+  auditText,
+  END_OF_INPUT,
+  FLOOR_BUDGET_MS,
+  FLOOR_WAIT_MS,
+  floor,
+  isAlive,
+  key,
+  listedRow,
+  openPane,
+  processOf,
+  quiet,
+  readRecord,
+  recordPath,
+  rowOf,
+  screenOf,
+  statusOf,
+  teardownFloors,
+  type,
+  typedRow,
+  poll as until,
+} from "./agent-gateway-floor";
 import { AGENT_SHIM_ENTRY, bundleAgentShim } from "./agent-shim-bundle";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -124,7 +155,9 @@ afterEach(async () => {
     }
   }
   cleanup = [];
-});
+  // every floor's whole tree is reaped, and only then its root removed
+  await teardownFloors();
+}, 60_000);
 
 /** Run a program to its end: what it printed and how it left. */
 function run(
@@ -511,6 +544,20 @@ class FoldStub implements AgentAdoption {
   async withdraw(runtimeRunId: string, exit: { reason: string }): Promise<void> {
     this.withdrawn.push({ runtimeRunId, reason: exit.reason });
   }
+  /** the runs this fold holds, by terminal: what `release` is asked about */
+  held = new Map<string, { pid: number; startedAt: string }>();
+  released: string[] = [];
+  async release(
+    terminalSessionId: string,
+    runs: (process: { pid: number; startedAt: string }) => boolean,
+  ): Promise<void> {
+    const held = this.held.get(terminalSessionId);
+    if (held === undefined || runs(held)) return;
+    this.held.delete(terminalSessionId);
+    this.released.push(terminalSessionId);
+    await this.onRelease?.(terminalSessionId);
+  }
+  onRelease: ((terminalSessionId: string) => Promise<void>) | undefined;
 }
 
 interface Logged {
@@ -942,6 +989,60 @@ describe("who is given a launcher — the offered set (AR-7b)", () => {
     },
     PROCESS_BUDGET_MS,
   );
+});
+
+describe("the executable a launcher names — the install the runtime itself launches (AR-7b)", () => {
+  const install = (over: Partial<AgentInstallation>): AgentInstallation => ({
+    provider: "claude",
+    executable: "/Users/test/.local/bin/agent",
+    realPath: "/Users/test/.local/share/agent/versions/2.1.0",
+    version: "2.1.0",
+    method: "native-installer",
+    autoUpdate: "enabled",
+    detectedAt: "2026-09-27T09:00:00.000Z",
+    warnings: [],
+    origin: "path",
+    active: true,
+    ...over,
+  });
+
+  it("answers the ACTIVE install's absolute path for the agents asked, reads no other agent's install, and answers nothing for an agent with none", async () => {
+    const asked: Array<string | undefined> = [];
+    const installs: AgentInstallation[] = [
+      install({ provider: "claude", active: false, executable: "/opt/other/agent" }),
+      install({ provider: "claude" }),
+      // configured by a bare name: the file that runs is what a launcher can name
+      install({ provider: "codex", executable: "agent-by-name", realPath: "/opt/bin/agent-real" }),
+      install({ provider: "pi", active: false }),
+    ];
+    const service = new AgentDistributionService({
+      runtime: {
+        inspectInstallations: async (request: { providerId?: string } = {}) => {
+          asked.push(request.providerId);
+          return installs.filter((found) => found.provider === request.providerId);
+        },
+      } as unknown as AgentRuntime,
+      catalog: AGENT_CATALOG_READERS,
+      store: null,
+      revealPath: () => null,
+      now: () => new Date(),
+      logger: capturingLogger([]),
+    });
+    const answered = await service.launchExecutables([
+      "claude",
+      "codex",
+      "pi",
+      "not-in-the-catalog",
+    ]);
+    expect([...answered]).toEqual([
+      ["claude", "/Users/test/.local/bin/agent"],
+      ["codex", "/opt/bin/agent-real"],
+    ]);
+    // an agent the catalog does not show is never read; nor is any agent nobody asked about
+    expect(asked).toEqual(["claude", "codex", "pi"]);
+    expect([...(await service.launchExecutables([]))]).toEqual([]);
+    expect(asked.length).toBe(3);
+  });
 });
 
 // ── start, refresh, stop ──
@@ -1746,7 +1847,10 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
       box.table.set(601, proc(601, 500));
       await box.gateway.start();
       expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      // the fold holds that run, and its process runs
+      box.fold.held.set("s1", { pid: 600, startedAt: "2026-09-27T20:05:00.000Z" });
       const second = await box.launch(601);
+      expect(box.fold.released).toEqual([]);
       expect(second).toMatchObject({
         action: "refuse",
         code: "terminal-conflict",
@@ -1760,6 +1864,45 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
       expect(refusals(box).map((entry) => entry.mutation.reasonCode)).toEqual([
         "TERMINAL_CONFLICT",
       ]);
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "a typed run that ENDED in the pane a moment ago gives the pane up before the next launch is adopted there — also when a later process holds its pid — so a name typed again at once is never told the pane is taken",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
+      // what the real fold does when it lets a run go
+      box.fold.onRelease = async (terminalSessionId) => {
+        await box.runtime.handleProcessExit(terminalSessionId, {
+          exitCode: null,
+          signal: null,
+          reason: "process-exited",
+        });
+      };
+      expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      box.fold.held.set("s1", { pid: 600, startedAt: "2026-09-27T20:05:00.000Z" });
+      // the agent quits; its exit has not reached the fold; the name is typed again
+      box.table.delete(600);
+      box.table.set(602, proc(602, 500, "2026-09-27T20:06:00.000Z"));
+      expect(await box.launch(602)).toMatchObject({ action: "exec" });
+      expect(box.fold.released).toEqual(["s1"]);
+      expect(box.fold.adopted.map((run) => run.process.pid)).toEqual([600, 602]);
+
+      // the same, when the system has handed the pid on: a start is its own
+      box.fold.held.set("s1", { pid: 602, startedAt: "2026-09-27T20:06:00.000Z" });
+      box.table.set(602, proc(602, 1, "2026-09-27T20:30:00.000Z"));
+      box.table.set(603, proc(603, 500, "2026-09-27T20:31:00.000Z"));
+      expect(await box.launch(603)).toMatchObject({ action: "exec" });
+      expect(box.fold.released).toEqual(["s1", "s1"]);
+      // what is not a session, and what is in no pane of ours, asks the fold nothing
+      box.fold.held.set("s1", { pid: 1, startedAt: "never" });
+      box.table.set(700, proc(700, 1));
+      await box.launch(603, { argv: ["--version"] });
+      await box.launch(700);
+      expect(box.fold.released).toEqual(["s1", "s1"]);
     },
     PROCESS_BUDGET_MS,
   );
@@ -1926,5 +2069,534 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
       expect(box.kit.hosts).toEqual([]);
     },
     PROCESS_BUDGET_MS,
+  );
+});
+
+// ── the REAL floor ──
+//
+// From here a name is TYPED: a field-native the row spawns, a fieldd on it, a
+// shell born through `terminal.create`, the launcher the gateway wrote, the
+// kit's shim, and the scripted agent's recipe exec'd in place.
+
+const REFUSED_BY_THE_KIT = 75;
+
+describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
+  it(
+    "row 1 — type it: the fold has a row for the pane's own shell, the record is signed and carries the process, the home is owner-only, and the ledger has the adoption",
+    async () => {
+      const box = await floor({ bundle: shimScript });
+      const births: Array<{ sessionId: string; pid: number | null }> = [];
+      box.daemon.terminals.onSessionBorn((born) => births.push(born));
+      const pane = await openPane(box);
+      // the birth was told the moment the floor answered it, with the shell's pid
+      expect(births).toEqual([{ sessionId: pane.sessionId, pid: pane.pid }]);
+
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      expect(row).toMatchObject({
+        spawnedBy: "user-shell",
+        tier: "managed",
+        kind: TYPED_PROVIDER,
+        label: "Scripted",
+        terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+        continuation: { persisted: true, resumable: false },
+      });
+      // the pane is the person's shell: never the agent cell's
+      expect(row.terminal?.workloadClass).not.toBe("agent");
+      expect(listedRow(box, pane.sessionId)?.cell?.workloadClass).not.toBe("agent");
+
+      // ── the record ──
+      const record = readRecord(box.dataDir, row.runtimeRunId);
+      expect(record).toMatchObject({
+        provider: TYPED_PROVIDER,
+        spawnedBy: "user-shell",
+        terminalSessionId: pane.sessionId,
+        // the launcher's own directory, by its physical path
+        cwd: box.work,
+        creationRequestId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+        ingress: box.script.prepared[0]?.ingress,
+      });
+      expect(record.signature).toMatch(/^[0-9a-f]{64}$/u);
+      expect(box.records.verifies(record)).toBe(true);
+      expect(record.exited).toBeUndefined();
+      expect(mode(recordPath(box.dataDir, row.runtimeRunId))).toBe(0o600);
+
+      // ── the process: ONE pid from the prompt to the agent, the shell its parent ──
+      const adoptedProcess = record.process;
+      if (adoptedProcess === undefined) throw new Error("the record carries no process");
+      const running = await until(
+        async () => {
+          const seen = await processOf(adoptedProcess.pid);
+          return seen?.command.endsWith("cat") === true ? seen : undefined;
+        },
+        FLOOR_WAIT_MS,
+        "the recipe running in the launcher's pid",
+      );
+      expect(running.parentPid).toBe(pane.pid);
+      expect(adoptedProcess.startedAt).toBe(await processStartedAt(adoptedProcess.pid));
+      // the recipe ran, managed; the real executable did not
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+      expect(linesOf(box.script.managedLog)).toEqual([`MANAGED ${row.sessionId}`]);
+      expect(linesOf(box.script.realLog)).toEqual([]);
+      expect(box.script.prepared[0]).toMatchObject({ cwd: box.work, adoptedIn: pane.sessionId });
+
+      // ── the home: owner-only, under the user's root ──
+      expect(box.home).toBe(join(box.dataDir, "agents", "shims"));
+      expect(mode(box.home)).toBe(0o700);
+      expect(mode(box.shimDirectory)).toBe(0o700);
+      for (const file of ["gateway.json", "launch-providers.json", "terminals.json"])
+        expect(mode(join(box.home, file)), file).toBe(0o600);
+      expect(mode(join(box.shimDirectory, TYPED_COMMAND))).toBe(0o700);
+      expect((await readTerminals(box.home))?.map((shell) => shell.pid)).toContain(pane.pid);
+      expect(await readRendezvous(box.home)).toMatchObject({
+        strict: true,
+        hostLabel: AGENT_GATEWAY_HOST_LABEL,
+        pid: process.pid,
+      });
+
+      // ── what fieldd says it offers: `invoke` where a launcher stands, and nowhere else ──
+      const offered = (await box.win.call("agent.providers", {})) as AgentProvidersResult;
+      const invoke = Object.fromEntries(
+        offered.providers.map((provider) => [provider.id, provider.offers?.invoke]),
+      );
+      expect(invoke[TYPED_PROVIDER]).toBe(true);
+      const others = Object.entries(invoke).filter(([id]) => id !== TYPED_PROVIDER);
+      // the table claims it for them; no launcher stands for them on this device
+      expect(others.length).toBeGreaterThan(0);
+      expect(TYPED_CATALOG.filter((row) => row.offers.invoke).length).toBeGreaterThan(1);
+      expect(others.every(([, offers]) => offers === false)).toBe(true);
+      expect([...(box.daemon.agentGateway?.launchers() ?? [])]).toEqual([TYPED_PROVIDER]);
+
+      // ── the ledger ──
+      const acts = await until(() => {
+        const found = auditActs(box.dataDir, "agent.session.adopt");
+        return found.length > 0 && found[0]?.outcome !== undefined ? found : undefined;
+      });
+      expect(acts.length).toBe(1);
+      expect(acts[0]?.attempt).toMatchObject({
+        actor: { kind: "system" },
+        target: { kind: "agent-session", id: row.runtimeRunId },
+        attrs: { provider: TYPED_PROVIDER, sessionId: pane.sessionId, spawnedBy: "user-shell" },
+      });
+      expect(acts[0]?.outcome).toMatchObject({ outcome: "succeeded" });
+      expect(auditActs(box.dataDir, "agent.session.adopt_refused")).toEqual([]);
+      // never the bearer, the ingress's bearer, the directory or the recipe
+      const ledger = auditText(box.dataDir);
+      const bearer = (await readRendezvous(box.home))?.token ?? "";
+      expect(bearer).toMatch(/^[0-9a-f]{64}$/u);
+      expect(ledger).not.toContain(bearer);
+      expect(ledger).not.toContain("typed-bearer");
+      expect(ledger).not.toContain(box.work);
+      expect(ledger).not.toContain("exec /bin/cat");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "row 2 — it exits, the shell stays: the row is WITHDRAWN (never held as an exited row), the record is stamped, and the pane answers at its prompt",
+    async () => {
+      const box = await floor({ bundle: shimScript });
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      const record = readRecord(box.dataDir, row.runtimeRunId);
+      const pid = record.process?.pid as number;
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+
+      // the agent ends the way a person ends it: end of input at its prompt
+      await key(box, pane, END_OF_INPUT);
+      await until(
+        () => (rowOf(box, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the row leaving",
+      );
+      expect(box.daemon.agents.list().sessions).toEqual([]);
+      expect(isAlive(pid)).toBe(false);
+      const stamped = readRecord(box.dataDir, row.runtimeRunId);
+      // a vanished pid tells no code and no signal, and none is invented
+      expect(stamped.exited).toMatchObject({
+        reason: "process-exited",
+        exitCode: null,
+        signal: null,
+      });
+      expect(box.records.verifies(stamped)).toBe(true);
+      // the shell: still listed, still the same process, still answering
+      expect(listedRow(box, pane.sessionId)?.pid).toBe(pane.pid);
+      expect(isAlive(pane.pid)).toBe(true);
+      await answers(box, pane, "alive");
+      // and nothing brings the row back while the pane lives
+      await quiet(2_000);
+      expect(box.daemon.agents.list().sessions).toEqual([]);
+      // puppeteer holds no run for that terminal: the next name typed there is a new one
+      expect(box.daemon.agents.runtime.agent(pane.sessionId)).toBeUndefined();
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "row 3 — the shell exits under it: the run closes through the floor's own exit, the row leaves, and the record carries the terminal's word",
+    async () => {
+      // The floor ends a terminal by a ladder (an interrupt, then signals), so
+      // the agent's process is gone seconds before the shell is. The watch's
+      // grace is what gives the terminal's own report its turn: here it is
+      // long, so the run can only have closed through the terminal's exit.
+      const box = await floor({ bundle: shimScript, gateway: { watch: { graceMs: 30_000 } } });
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      const pid = readRecord(box.dataDir, row.runtimeRunId).process?.pid as number;
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+      expect(isAlive(pid)).toBe(true);
+
+      const terminatedAt = Date.now();
+      expect(await box.win.call("terminal.terminate", { sessionId: pane.sessionId })).toEqual({
+        terminated: true,
+      });
+      await until(
+        () => (rowOf(box, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the row leaving",
+      );
+      await until(() => (listedRow(box, pane.sessionId) === undefined ? true : undefined));
+      await until(() => (isAlive(pid) ? undefined : true));
+      expect(isAlive(pane.pid)).toBe(false);
+      const stamped = await until(() => {
+        const record = readRecord(box.dataDir, row.runtimeRunId);
+        return record.exited === undefined ? undefined : record;
+      });
+      // the floor said how the TERMINAL ended; a vanished pid could only have said that it did
+      expect(stamped.exited?.reason).not.toBe("process-exited");
+      expect(stamped.exited?.reason).not.toBe("unknown");
+      expect(Date.parse(stamped.exited?.at ?? "") - terminatedAt).toBeLessThan(30_000);
+      expect(box.daemon.agents.list().sessions).toEqual([]);
+      expect(box.daemon.agents.runtime.agent(pane.sessionId)).toBeUndefined();
+      // the list of our shells follows the pane out
+      await until(async () =>
+        (await readTerminals(box.home))?.some((shell) => shell.pid === pane.pid) === true
+          ? undefined
+          : true,
+      );
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "row 4 — a second launch after the first ended is a NEW run; a launch while one is live is REFUSED on the pane's screen, nothing runs, and the ledger has the conflict",
+    async () => {
+      const box = await floor({ bundle: shimScript });
+      // a recorded pane: what it shows is read from its own record, and the
+      // launcher is a grandchild of the session's process
+      const pane = await openPane(box, { recorded: true });
+      await type(box, pane, TYPED_COMMAND);
+      const first = await adopted(box, pane);
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+      await key(box, pane, END_OF_INPUT);
+      await until(() => (rowOf(box, first.runtimeRunId) === undefined ? true : undefined));
+
+      // the same name, in the same shell, again — held live in the background this time
+      await type(box, pane, `${TYPED_COMMAND} &`);
+      const second = await adopted(box, pane);
+      expect(second.runtimeRunId).not.toBe(first.runtimeRunId);
+      expect(second.sessionId).not.toBe(first.sessionId);
+      expect(second.spawnedBy).toBe("user-shell");
+      await until(() => (linesOf(box.script.managedLog).length === 2 ? true : undefined));
+      const live = readRecord(box.dataDir, second.runtimeRunId).process?.pid as number;
+      expect(isAlive(live)).toBe(true);
+
+      // a second process under the same shell, while that one lives
+      const status = await statusOf(box, pane, TYPED_COMMAND, "conflict");
+      expect(status).toBe(REFUSED_BY_THE_KIT);
+      const sentence = `${TYPED_COMMAND} was not started: another agent is already running in this pane. Quit it first, or open another pane.`;
+      await until(
+        () => (screenOf(pane).includes(sentence) ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the refusal on the pane's screen",
+      );
+      // said once, on one line
+      expect(screenOf(pane).split(sentence).length - 1).toBe(1);
+      // nothing ran: not the real executable, not a third recipe
+      expect(linesOf(box.script.realLog)).toEqual([]);
+      expect(linesOf(box.script.managedLog).length).toBe(2);
+      // the run that holds the pane is untouched
+      expect(rowOf(box, second.runtimeRunId)?.spawnedBy).toBe("user-shell");
+      expect(isAlive(live)).toBe(true);
+      expect(box.daemon.agents.list().sessions.length).toBe(1);
+
+      const refused = await until(() => {
+        const found = auditActs(box.dataDir, "agent.session.adopt_refused");
+        return found.length > 0 && found[0]?.outcome !== undefined ? found : undefined;
+      });
+      expect(refused.length).toBe(1);
+      expect(refused[0]?.attempt).toMatchObject({
+        actor: { kind: "system" },
+        reasonCode: "TERMINAL_CONFLICT",
+        target: { kind: "agent-session", id: "pending" },
+        attrs: { provider: TYPED_PROVIDER, code: "terminal-conflict", sessionId: pane.sessionId },
+      });
+      expect(refused[0]?.outcome).toMatchObject({
+        outcome: "denied",
+        reasonCode: "TERMINAL_CONFLICT",
+      });
+      expect(auditActs(box.dataDir, "agent.session.adopt").length).toBe(2);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "the pane is free the moment the agent ends: the same name typed again AT ONCE is a new managed run, though the first run's exit had not reached the fold",
+    async () => {
+      // a grace this long holds the first run in the fold well past its end
+      const box = await floor({ bundle: shimScript, gateway: { watch: { graceMs: 60_000 } } });
+      const pane = await openPane(box, { recorded: true });
+      await type(box, pane, TYPED_COMMAND);
+      const first = await adopted(box, pane);
+      const firstPid = readRecord(box.dataDir, first.runtimeRunId).process?.pid as number;
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+
+      await key(box, pane, END_OF_INPUT);
+      await type(box, pane, TYPED_COMMAND);
+      const second = await until(
+        () => {
+          const row = typedRow(box, pane);
+          return row !== undefined && row.runtimeRunId !== first.runtimeRunId ? row : undefined;
+        },
+        FLOOR_WAIT_MS,
+        "the second run entering the fold",
+      );
+      await until(() => (linesOf(box.script.managedLog).length === 2 ? true : undefined));
+      expect(isAlive(firstPid)).toBe(false);
+      expect(rowOf(box, first.runtimeRunId)).toBeUndefined();
+      expect(readRecord(box.dataDir, first.runtimeRunId).exited).toMatchObject({
+        reason: "process-exited",
+      });
+      expect(second.spawnedBy).toBe("user-shell");
+      expect(box.daemon.agents.list().sessions.map((row) => row.runtimeRunId)).toEqual([
+        second.runtimeRunId,
+      ]);
+      // nothing was refused, and nothing ran unmanaged
+      expect(auditActs(box.dataDir, "agent.session.adopt_refused")).toEqual([]);
+      expect(linesOf(box.script.realLog)).toEqual([]);
+      expect(screenOf(pane)).not.toContain("was not started");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "the stop verb reaches a typed run unchanged: agent.interrupt writes to the pane the run is in, the agent ends, and the shell stays",
+    async () => {
+      const box = await floor({ bundle: shimScript });
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      const pid = readRecord(box.dataDir, row.runtimeRunId).process?.pid as number;
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+
+      expect(await box.win.call("agent.interrupt", { runtimeRunId: row.runtimeRunId })).toEqual({
+        accepted: true,
+      });
+      // the interrupt is the pane's own: what runs in its foreground takes it
+      await until(() => (isAlive(pid) ? undefined : true), FLOOR_WAIT_MS, "the agent ending");
+      await until(() => (rowOf(box, row.runtimeRunId) === undefined ? true : undefined));
+      expect(readRecord(box.dataDir, row.runtimeRunId).exited?.reason).toBe("process-exited");
+      expect(isAlive(pane.pid)).toBe(true);
+      await answers(box, pane, "after-the-interrupt");
+      // a run that is over refuses the verb the way any other does
+      const refused = (await box.win
+        .call("agent.interrupt", { runtimeRunId: row.runtimeRunId })
+        .then(
+          () => undefined,
+          (error: { rpc?: { data?: { details?: unknown } } }) => error.rpc?.data?.details,
+        )) as { state?: string } | undefined;
+      expect(refused?.state).toBe("not-alive");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "resume of a typed run that ended is the ordinary resume: a NEW run in a NEW terminal on the agent cell, which says nothing of where it came from — and the person's shell is not touched",
+    async () => {
+      const box = await floor({ bundle: shimScript });
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      const typed = await adopted(box, pane);
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+      // a live typed run refuses a resume the way any live run does
+      const live = (await box.win.call("agent.resume", { runtimeRunId: typed.runtimeRunId }).then(
+        () => undefined,
+        (error: { rpc?: { data?: { details?: unknown } } }) => error.rpc?.data?.details,
+      )) as { state?: string } | undefined;
+      expect(live?.state).toBe("terminal-alive");
+
+      await key(box, pane, END_OF_INPUT);
+      await until(() => (rowOf(box, typed.runtimeRunId) === undefined ? true : undefined));
+
+      const resumed = (await box.win.call("agent.resume", {
+        runtimeRunId: typed.runtimeRunId,
+      })) as { session: AgentSessionSummary; terminal: { sessionId: string } };
+      expect(resumed.session.runtimeRunId).not.toBe(typed.runtimeRunId);
+      // the conversation continued: the vendor's own id, carried from the record
+      expect(resumed.session.sessionId).toBe(typed.sessionId);
+      expect(box.script.created).toEqual([
+        { runtimeSessionId: resumed.terminal.sessionId, resume: typed.sessionId },
+      ]);
+      // `app`: a door started it, and the row and the record say nothing
+      expect(resumed.session.spawnedBy).toBeUndefined();
+      expect(resumed.terminal.sessionId).not.toBe(pane.sessionId);
+      const record = readRecord(box.dataDir, resumed.session.runtimeRunId);
+      expect(record.spawnedBy).toBeUndefined();
+      expect(record.process).toBeUndefined();
+      expect(record.terminalSessionId).toBe(resumed.terminal.sessionId);
+      const born = await until(() => {
+        const row = listedRow(box, resumed.terminal.sessionId);
+        return row?.cell === undefined ? undefined : row;
+      });
+      expect(born.cell?.workloadClass).toBe("agent");
+      // the typed record names its successor, and is not continued twice
+      expect(readRecord(box.dataDir, typed.runtimeRunId).reattach).toMatchObject({
+        state: "resumed",
+        replacedBy: resumed.session.runtimeRunId,
+      });
+      // the pane the agent was typed in is the person's shell: listed, alive, answering
+      expect(listedRow(box, pane.sessionId)?.pid).toBe(pane.pid);
+      await answers(box, pane, "after-the-resume");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "a store that fails at adoption: nothing of the run is left — no run in puppeteer, no row in the fold — the person is refused in words, nothing ran, and the pane is free",
+    async () => {
+      const box = await floor({ bundle: shimScript });
+      const pane = await openPane(box, { recorded: true });
+      // the records' directory cannot be made: a file stands where it would be
+      const sessions = join(box.dataDir, "agents", "sessions");
+      expect(existsSync(sessions)).toBe(false);
+      writeFileSync(sessions, "in the way");
+
+      const status = await statusOf(box, pane, TYPED_COMMAND, "store");
+      expect(status).toBe(REFUSED_BY_THE_KIT);
+      const sentence = `${TYPED_COMMAND} was not started: VibeField could not record it as a managed session. Run ${TYPED_COMMAND} again.`;
+      await until(() => (screenOf(pane).includes(sentence) ? true : undefined));
+      // the error's own words never reach the pane
+      expect(screenOf(pane)).not.toMatch(/ENOTDIR|EEXIST|not a directory|sessions/u);
+      expect(box.daemon.agents.list().sessions).toEqual([]);
+      expect(box.daemon.agents.runtime.agent(pane.sessionId)).toBeUndefined();
+      expect(linesOf(box.script.managedLog)).toEqual([]);
+      expect(linesOf(box.script.realLog)).toEqual([]);
+      const runtimeRunId = auditActs(box.dataDir, "agent.session.adopt")[0]?.attempt.target.id;
+      expect(runtimeRunId).toMatch(/^[0-9a-f-]{36}$/u);
+      expect(box.daemon.agents.runtime.monitorState(runtimeRunId as string)).toBeUndefined();
+      expect(auditActs(box.dataDir, "agent.session.adopt")[0]?.outcome?.outcome).toBe("failed");
+      expect(
+        auditActs(box.dataDir, "agent.session.adopt_refused").map((act) => act.attempt.reasonCode),
+      ).toEqual(["ADOPT_FAILED"]);
+
+      // the store can write again, and the same name is a managed run
+      rmSync(sessions);
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      expect(row.spawnedBy).toBe("user-shell");
+      expect(row.runtimeRunId).not.toBe(runtimeRunId);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "adoption of a pid that is already dead withdraws at once: a launcher that left during a slow preparation leaves a stamped record and no row",
+    async () => {
+      const box = await floor({
+        bundle: shimScript,
+        provider: { prepareDelayMs: 4_000 },
+        // nothing of this row may be the watch's doing
+        gateway: { watch: { graceMs: 120_000 } },
+      });
+      const pane = await openPane(box);
+      const pidFile = join(box.root, "launcher.pid");
+      await type(box, pane, `${TYPED_COMMAND} & echo $! > '${pidFile}'`);
+      const launcher = Number(
+        await until(() =>
+          existsSync(pidFile) ? readFileSync(pidFile, "utf8").trim() || undefined : undefined,
+        ),
+      );
+      // the preparation is under way; the launcher is killed under it
+      await until(() => (box.script.preparing.count === 0 ? undefined : true));
+      expect(box.script.prepared).toEqual([]);
+      process.kill(launcher, "SIGKILL");
+      await until(() => (isAlive(launcher) ? undefined : true));
+
+      const record = await until(
+        () => {
+          const records = box.records.list();
+          return records[0]?.exited === undefined ? undefined : records[0];
+        },
+        FLOOR_WAIT_MS,
+        "the record of the run that never ran",
+      );
+      expect(record).toMatchObject({
+        spawnedBy: "user-shell",
+        terminalSessionId: pane.sessionId,
+        process: { pid: launcher },
+        exited: { reason: "process-exited", exitCode: null, signal: null },
+      });
+      // at once: the stamp follows the record's birth by moments, not by a grace
+      expect(Date.parse(record.exited?.at ?? "") - Date.parse(record.createdAt)).toBeLessThan(
+        5_000,
+      );
+      expect(box.daemon.agents.list().sessions).toEqual([]);
+      expect(box.daemon.agents.runtime.agent(pane.sessionId)).toBeUndefined();
+      expect(linesOf(box.script.managedLog)).toEqual([]);
+      expect(linesOf(box.script.realLog)).toEqual([]);
+      await answers(box, pane, "after-the-dead-launcher");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "exec-failed: a recipe the launcher cannot run — the row is withdrawn, the record says so, nothing runs unmanaged, and the pane is free",
+    async () => {
+      const box = await floor({
+        bundle: shimScript,
+        provider: { recipeCommand: "/nonexistent/vf-scripted-recipe" },
+      });
+      const pane = await openPane(box, { recorded: true });
+      const status = await statusOf(box, pane, TYPED_COMMAND, "exec-failed");
+      // a strict host's launcher refuses; it never falls through to the real executable
+      expect(status).toBe(REFUSED_BY_THE_KIT);
+      expect(linesOf(box.script.realLog)).toEqual([]);
+      expect(linesOf(box.script.managedLog)).toEqual([]);
+      await until(() => (screenOf(pane).includes("not started") ? true : undefined));
+
+      const record = await until(() => {
+        const records = box.records.list();
+        return records[0]?.exited === undefined ? undefined : records[0];
+      });
+      expect(record).toMatchObject({
+        spawnedBy: "user-shell",
+        terminalSessionId: pane.sessionId,
+        exited: { reason: "exec-failed", exitCode: null, signal: null },
+      });
+      expect(box.daemon.agents.list().sessions).toEqual([]);
+      expect(box.daemon.agents.runtime.agent(pane.sessionId)).toBeUndefined();
+      await answers(box, pane, "after-exec-failed");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "a daemon that hosts no gateway writes no home and listens nowhere, and what it says it offers is the catalog's own claim",
+    async () => {
+      const box = await floor({ bundle: shimScript, gateway: { enabled: false } });
+      expect(box.daemon.agentGateway).toBeNull();
+      await openPane(box, { path: false });
+      await quiet(500);
+      expect(existsSync(box.home)).toBe(false);
+      const offered = (await box.win.call("agent.providers", {})) as AgentProvidersResult;
+      for (const provider of offered.providers) {
+        const row = TYPED_CATALOG.find((candidate) => candidate.id === provider.id);
+        expect(provider.offers?.invoke, provider.id).toBe(row?.offers.invoke);
+      }
+      expect(offered.providers.some((provider) => provider.offers?.invoke === true)).toBe(true);
+    },
+    FLOOR_BUDGET_MS,
   );
 });

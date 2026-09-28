@@ -69,6 +69,8 @@ export interface TypedScript {
   /** one line per MANAGED launch that really ran its recipe */
   managedLog: string;
   prepared: TypedPrepared[];
+  /** preparations the adapter has BEGUN (a slow one is under way before it is made) */
+  preparing: { count: number };
   attached: TypedAttach[];
   /** sessions a door started (`createSession`) */
   created: Array<{ runtimeSessionId: string; resume: string | undefined }>;
@@ -84,7 +86,16 @@ export function typedScript(directory: string): TypedScript {
     writeFileSync(real, `#!/bin/sh\nprintf 'RUN %s\\n' "$*" >> '${realLog}'\n`, { mode: 0o755 });
     chmodSync(real, 0o755);
   }
-  return { directory, real, realLog, managedLog, prepared: [], attached: [], created: [] };
+  return {
+    directory,
+    real,
+    realLog,
+    managedLog,
+    prepared: [],
+    preparing: { count: 0 },
+    attached: [],
+    created: [],
+  };
 }
 
 /** The lines a log holds (none when it was never written). */
@@ -152,6 +163,9 @@ export interface TypedProviderOptions {
   executable?: string;
   /** how long the adapter takes to prepare (a slow preparation) */
   prepareDelayMs?: number;
+  /** the program the recipe names (default `/bin/sh`): one that does not
+   * exist is a recipe the launcher cannot run */
+  recipeCommand?: string;
 }
 
 export function typedProvider(
@@ -180,6 +194,7 @@ export function typedProvider(
     },
     async prepareSession(session: AgentProviderSessionOptions) {
       const n = ++counter;
+      script.preparing.count += 1;
       if (options.prepareDelayMs !== undefined) {
         await new Promise((resolve) => setTimeout(resolve, options.prepareDelayMs));
       }
@@ -197,7 +212,7 @@ export function typedProvider(
       return {
         sessionId,
         launch: {
-          command: "/bin/sh",
+          command: options.recipeCommand ?? "/bin/sh",
           args: ["-c", `echo "MANAGED ${sessionId}" >> '${script.managedLog}'; exec /bin/cat`],
           cwd: session.cwd,
           env: { SCRIPTED_TYPED: sessionId },

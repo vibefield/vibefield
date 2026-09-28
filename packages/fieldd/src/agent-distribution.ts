@@ -241,6 +241,37 @@ export class AgentDistributionService {
     );
   }
 
+  /** AR-7b — the executable each of these agents' MANAGED launch runs on this
+   * device, as an absolute path: the install the runtime itself launches
+   * (puppeteer's `active` — the executable the providers were composed with
+   * when the machine record named one at this boot, else the first the search
+   * path resolves). The gateway service names it in each launcher's table, so
+   * a launch that runs as typed and a launch that is managed run the SAME
+   * install, and a managed launch never resolves back into a launcher.
+   *
+   * Read for the agents asked and no other — reading an install runs the
+   * agent's own version command — and only for an agent the catalog shows.
+   * The inventory is the one puppeteer holds: the doors that change an
+   * install (`update`, `setActive`) read the device again themselves. */
+  async launchExecutables(providers: readonly string[]): Promise<ReadonlyMap<string, string>> {
+    const executables = new Map<string, string>();
+    for (const provider of providers) {
+      if (!this.opts.catalog.isVisible(provider)) continue;
+      const installations = await this.opts.runtime.inspectInstallations({
+        providerId: provider,
+      });
+      const active = installations.find((install) => install.active);
+      if (active === undefined) continue;
+      // the path a person would name (a launcher a PATH resolves, which an
+      // update re-points), else the file that runs
+      executables.set(
+        provider,
+        isAbsolute(active.executable) ? active.executable : active.realPath,
+      );
+    }
+    return executables;
+  }
+
   /** The agent's own oracle always; the declared network detectors only when
    * this call or the provider's recorded preference says so. A check that
    * consulted anything is KEPT in the machine record; `cached: true` runs

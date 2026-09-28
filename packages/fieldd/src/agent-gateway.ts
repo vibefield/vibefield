@@ -37,6 +37,7 @@ import { type AgentCatalogReaders, LAYOUT, type TerminalInfo } from "@vibefield/
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { AgentAdoption, SystemAudit } from "./agent-runtime";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
+import { RpcCallError } from "./native-link";
 
 // A TYPED AGENT IS A MANAGED AGENT (AR-7b; thinking-ar7-typed-agents.md §5.2,
 // design-04 §8.4/§8.5 as amended 2026-09-12): the agent's name typed at the
@@ -608,6 +609,8 @@ interface Placed {
   shell: OwnedShell;
   /** when the asking process started, as the table that placed it read it */
   startedAt: string | undefined;
+  /** that table: one read, for everything this launch asks of it */
+  table: ProcessTable;
 }
 
 /** What one launch has established so far, for the decline fieldd makes
@@ -616,6 +619,14 @@ interface LaunchProgress {
   placed?: Placed | undefined;
   /** puppeteer adopted the run and the fold could not enter it */
   adoptionUndone: boolean;
+}
+
+/** The kit's code for a launch that failed inside the host: the fold's own
+ * word when it found the terminal held by another run (a run puppeteer does
+ * not hold — one this boot could not re-attach to), else what was under way. */
+function failureCode(error: unknown, progress: LaunchProgress): SpawnThroughDeclineCode {
+  if (error instanceof RpcCallError && error.kind === "CONFLICT") return "terminal-conflict";
+  return progress.adoptionUndone ? "adopt-failed" : "handler-failed";
 }
 
 /** THE RULE OF REFUSAL, as the kit holds it (`prepare.ts`), for the one
@@ -1077,7 +1088,7 @@ export class AgentGatewayService {
         );
         return undefined;
       }
-      return { shell, startedAt: table.get(pid)?.startedAt };
+      return { shell, startedAt: table.get(pid)?.startedAt, table };
     } catch (error) {
       this.logger.warn(
         "fieldd.agents.gateway_place_failed",
@@ -1117,10 +1128,17 @@ export class AgentGatewayService {
         runtime: this.launchDoors(),
         strict: AGENT_GATEWAY_STRICT,
         resolveTerminal: async ({ pid }) => {
-          progress.placed = await this.place(pid);
-          return progress.placed === undefined
-            ? undefined
-            : { terminalSessionId: progress.placed.shell.terminalSessionId };
+          const placed = await this.place(pid);
+          progress.placed = placed;
+          if (placed === undefined) return undefined;
+          // a typed run that ENDED in this pane a moment ago may not have
+          // left it yet (its exit is a pid that vanished, seen at a poll):
+          // it leaves now, or this launch would be told the pane is taken
+          await this.opts.fold.release(
+            placed.shell.terminalSessionId,
+            (process) => placed.table.get(process.pid)?.startedAt === process.startedAt,
+          );
+          return { terminalSessionId: placed.shell.terminalSessionId };
         },
         // the identity a spawn is given (AR-4): the claim the next boot
         // restores against, and the ingress the adapter binds. Asked for once
@@ -1142,11 +1160,7 @@ export class AgentGatewayService {
         error,
         { provider: request.providerId, placed: progress.placed !== undefined },
       );
-      answer = this.declined(
-        request,
-        progress.placed,
-        progress.adoptionUndone ? "adopt-failed" : "handler-failed",
-      );
+      answer = this.declined(request, progress.placed, failureCode(error, progress));
     }
     await this.account(request, answer, progress.placed);
     return answer;

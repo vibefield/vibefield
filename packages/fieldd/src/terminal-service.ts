@@ -104,6 +104,13 @@ export interface AgentTerminalSpec {
   rows?: number | undefined;
 }
 
+/** AR-7 — a session this service birthed, as the floor answered it: its id
+ * and the pid of the process it runs (null when the floor gave none). */
+export interface TerminalBirth {
+  sessionId: string;
+  pid: number | null;
+}
+
 /** AR-3 — puppeteer's `TerminalAutomationOperation`, spelled here so the
  * service depends on no agent package. */
 export type AgentTerminalAutomation =
@@ -283,6 +290,11 @@ export class TerminalService {
   /** AR-3 — every applied inventory, for consumers that diff it (the managed-
    * session backstop: a PTY that left the inventory has exited). */
   private readonly inventoryListeners = new Set<(terminals: readonly TerminalInfo[]) => void>();
+  /** AR-7 — every birth this service made, at the moment the floor answered
+   * it: the inventory lists a session one reconcile tick later, and whoever
+   * must know a pane's shell before that (the agent gateway places a launcher
+   * typed in that tick) learns it here. */
+  private readonly birthListeners = new Set<(born: TerminalBirth) => void>();
 
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -839,6 +851,14 @@ export class TerminalService {
     return () => this.inventoryListeners.delete(listener);
   }
 
+  /** AR-7 — every session this service births (`create` and `spawn`), with
+   * the pid the floor gave its process. Only births made HERE: a session the
+   * workspace made for itself is learned from the inventory. */
+  onSessionBorn(listener: (born: TerminalBirth) => void): () => void {
+    this.birthListeners.add(listener);
+    return () => this.birthListeners.delete(listener);
+  }
+
   /** The one birth: ask the cell's client, answer the session it made or
    * classify the refusal (create's body since NF-3, shared with spawn). */
   private async birth(
@@ -854,14 +874,24 @@ export class TerminalService {
     try {
       const summary = await client.createSession(options);
       if (cell.key !== LEGACY_CELL_KEY) this.bornIn.set(summary.id, cell.key);
+      // The routed renderer needs the engine's real decimal handle before it
+      // can mount. Carry the summary from the birth that already has it;
+      // waiting for observed inventory here would recreate GT-1's race.
+      const session = TerminalRuntimeSession.parse(summary);
+      for (const listener of [...this.birthListeners]) {
+        try {
+          listener({ sessionId: session.id, pid: session.pid });
+        } catch (error) {
+          this.logger.warn("fieldd.terminal.birth_listener_failed", "A birth listener threw", {
+            error: errorMessage(error),
+          });
+        }
+      }
       // The cell that took it, for the daemon's nested mint. The legacy key
       // names no cell — there is no row to name — and the mirror answers there.
       return {
         sessionId: summary.id,
-        // The routed renderer needs the engine's real decimal handle before it
-        // can mount. Carry the summary from the birth that already has it;
-        // waiting for observed inventory here would recreate GT-1's race.
-        session: TerminalRuntimeSession.parse(summary),
+        session,
         ...(cell.key === LEGACY_CELL_KEY ? {} : { cellBootId: cell.key }),
       };
     } catch (error) {
