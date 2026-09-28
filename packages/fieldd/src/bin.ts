@@ -43,6 +43,11 @@ async function main(): Promise<void> {
   // Empty means unset (a runner that resolved no binary exports ""): the
   // honest "unconfigured", never a spawn of "" that fails as ENOENT.
   const rosettadBin = process.env["FIELDD_ROSETTAD_BIN"] || undefined;
+  // AR-7 — a harness's seam, never the product's: the PATH the agents' install
+  // inventory searches (`FielddConfig.agentSearchPath`; unset = this process's
+  // PATH). The godview smoke points it at its stub's own directory, so no
+  // install of the machine owner's is found, inspected or run by its daemon.
+  const agentSearchPath = process.env["FIELDD_AGENT_SEARCH_PATH"];
   const allowedOrigins = [
     "file://",
     ...(process.env["FIELDD_ALLOWED_ORIGINS"]?.split(",").filter(Boolean) ?? []),
@@ -128,6 +133,7 @@ async function main(): Promise<void> {
     ...(nativePid !== undefined ? { nativePid } : {}),
     ...(spawnNative !== undefined ? { nativeSpawner: spawnNative } : {}),
     ...(rosettadBin !== undefined ? { rosettadBin } : {}),
+    ...(agentSearchPath !== undefined ? { agentSearchPath } : {}),
     // AR-S1c — this is the product's daemon: read the agents' installs at boot.
     agentInventoryWarm: true,
     ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),
