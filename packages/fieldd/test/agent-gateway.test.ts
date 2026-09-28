@@ -60,6 +60,7 @@ import {
   AGENT_CATALOG_READERS,
   type AgentCatalogEntry,
   type AgentProvidersResult,
+  type AgentSessionRecord,
   type AgentSessionSummary,
   createAgentCatalogReaders,
   type TerminalInfo,
@@ -89,6 +90,7 @@ import {
   noTerminalHost,
   type SystemAudit,
 } from "../src/agent-runtime";
+import { endTypedProcess, typedRunProof } from "../src/agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "../src/audit-service";
 import {
   linesOf,
@@ -103,14 +105,19 @@ import {
 import {
   adopted,
   answers,
+  ask as askFloor,
   auditActs,
+  auditEntries,
   auditText,
   END_OF_INPUT,
   FLOOR_BUDGET_MS,
   FLOOR_WAIT_MS,
   floor,
+  indexedSession,
+  indexRequests,
   isAlive,
   key,
+  launchOf,
   listedRow,
   openPane,
   processOf,
@@ -2073,6 +2080,105 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
   );
 });
 
+// ── a typed run's proof ──
+
+describe("a typed run's proof — what its record must show before fieldd attaches to it (AR-7c)", () => {
+  const AGENT_STARTED = "2026-09-27T20:05:00.000Z";
+  const typedRecord = (over: Partial<AgentSessionRecord> = {}): AgentSessionRecord => ({
+    format: 1,
+    runtimeRunId: "run-1",
+    runtimeEpoch: 1,
+    provider: TYPED_PROVIDER,
+    cwd: "/work",
+    terminalSessionId: "s1",
+    continuation: { providerId: TYPED_PROVIDER, nativeSessionId: "native-1" },
+    createdAt: AGENT_STARTED,
+    updatedAt: AGENT_STARTED,
+    spawnedBy: "user-shell",
+    process: { pid: 600, startedAt: AGENT_STARTED },
+    ...over,
+  });
+  const pane: TerminalInfo = { sessionId: "s1", pid: 500, createdAt: BORN };
+  const running = (): Map<number, ProcessRecord> =>
+    new Map([
+      [500, proc(500, 77)],
+      [600, proc(600, 500, AGENT_STARTED)],
+    ]);
+  const proof = (over: Partial<Parameters<typeof typedRunProof>[0]> = {}) =>
+    typedRunProof({
+      record: typedRecord(),
+      verified: true,
+      terminal: pane,
+      table: running(),
+      ...over,
+    });
+
+  it("holds for a process that runs, started when the record says, under the shell of the terminal the record names — directly, or through a shell the person started there", async () => {
+    expect(await proof()).toEqual({ holds: true, shellPid: 500 });
+    const nested = running();
+    nested.set(550, proc(550, 500));
+    nested.set(600, proc(600, 550, AGENT_STARTED));
+    expect(await proof({ table: nested })).toEqual({ holds: true, shellPid: 500 });
+  });
+
+  it("fails for a record the store did not verify, whatever else it says", async () => {
+    expect(await proof({ verified: false })).toEqual({ holds: false, why: "unverified" });
+  });
+
+  it("fails without a process on the record, without a shell on the terminal, and without a process table", async () => {
+    const { process: _none, ...processless } = typedRecord();
+    expect(await proof({ record: processless })).toEqual({ holds: false, why: "no-process" });
+    expect(await proof({ terminal: { sessionId: "s1", createdAt: BORN } })).toEqual({
+      holds: false,
+      why: "no-shell",
+    });
+    expect(await proof({ table: undefined })).toEqual({ holds: false, why: "table-unread" });
+  });
+
+  it("fails for a process that is gone, and for a pid a LATER process holds: a pid is handed on, a start time is not", async () => {
+    const gone = running();
+    gone.delete(600);
+    expect(await proof({ table: gone })).toEqual({ holds: false, why: "process-gone" });
+    const reused = running();
+    reused.set(600, proc(600, 500, "2026-09-27T21:00:00.000Z"));
+    expect(await proof({ table: reused })).toEqual({ holds: false, why: "process-reused" });
+    // a start the table could not read proves nothing
+    const unread = running();
+    unread.set(600, proc(600, 500, undefined));
+    expect(await proof({ table: unread })).toEqual({ holds: false, why: "process-reused" });
+  });
+
+  it("fails for a process that runs OUTSIDE the terminal the record names: another pane's, an editor's, one whose shell is gone", async () => {
+    const elsewhere = running();
+    elsewhere.set(501, proc(501, 77));
+    elsewhere.set(600, proc(600, 501, AGENT_STARTED));
+    expect(await proof({ table: elsewhere })).toEqual({ holds: false, why: "outside-terminal" });
+    const reparented = running();
+    reparented.set(600, proc(600, 1, AGENT_STARTED));
+    expect(await proof({ table: reparented })).toEqual({ holds: false, why: "outside-terminal" });
+    const shellGone = running();
+    shellGone.delete(500);
+    expect(await proof({ table: shellGone })).toEqual({ holds: false, why: "no-shell" });
+    // the record names a terminal that is another live shell of ours: the process is not in it
+    expect(
+      await proof({
+        terminal: { sessionId: "s2", pid: 501, createdAt: BORN },
+        table: elsewhere.set(600, proc(600, 500, AGENT_STARTED)),
+      }),
+    ).toEqual({ holds: false, why: "outside-terminal" });
+  });
+
+  it("ends a typed run's PROCESS only when the table shows the pid to be the process the record names", () => {
+    const table = running();
+    // nothing is signalled here: each of these answers before any signal is sent
+    expect(endTypedProcess({ pid: 600, startedAt: AGENT_STARTED }, undefined)).toBe("unknown");
+    table.delete(600);
+    expect(endTypedProcess({ pid: 600, startedAt: AGENT_STARTED }, table)).toBe("gone");
+    table.set(600, proc(600, 1, "2026-09-27T21:00:00.000Z"));
+    expect(endTypedProcess({ pid: 600, startedAt: AGENT_STARTED }, table)).toBe("not-it");
+  });
+});
+
 // ── the REAL floor ──
 //
 // From here a name is TYPED: a field-native the row spawns, a fieldd on it, a
@@ -2627,6 +2733,346 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
       const pane = await openPane(box);
       await type(box, pane, TYPED_COMMAND);
       expect((await adopted(box, pane)).spawnedBy).toBe("user-shell");
+    },
+    FLOOR_BUDGET_MS,
+  );
+});
+
+// ── a typed run across a fieldd restart ──
+
+describe("a typed run across a fieldd restart — the REAL floor (AR-7c)", () => {
+  /** A typed run, live in a pane, and the fieldd that adopted it stopped. */
+  async function typedThenStopped(config: Omit<Parameters<typeof floor>[0], "bundle"> = {}) {
+    const first = await floor({ bundle: shimScript, ...config });
+    const pane = await openPane(first);
+    await type(first, pane, TYPED_COMMAND);
+    const row = await adopted(first, pane);
+    await until(() => (linesOf(first.script.managedLog).length === 1 ? true : undefined));
+    const record = readRecord(first.dataDir, row.runtimeRunId);
+    const pid = record.process?.pid as number;
+    return { first, pane, row, record, pid };
+  }
+  const detailsOf = (call: Promise<unknown>) =>
+    call.then(
+      () => undefined,
+      (error: { message?: string; rpc?: { data?: { kind?: string; details?: unknown } } }) => ({
+        message: error.message,
+        kind: error.rpc?.data?.kind,
+        details: error.rpc?.data?.details as { state?: string } | undefined,
+      }),
+    );
+
+  it(
+    "row 5 — restart fieldd under it (the adapter attaches): the stop RELEASES the run, the next boot re-attaches it at the next epoch, the row says reattached, and the pid watch is armed again",
+    async () => {
+      const { first, pane, row, record, pid } = await typedThenStopped({ attach: true });
+      await first.daemon.stop();
+      // released, not ended: the agent runs, its record is not stamped, the pane lives
+      expect(isAlive(pid)).toBe(true);
+      expect(readRecord(first.dataDir, row.runtimeRunId).exited).toBeUndefined();
+      expect(isAlive(pane.pid)).toBe(true);
+      // the gateway is gone and says so; the list of our shells stays for the launchers
+      expect(await readRendezvous(first.home)).toBeUndefined();
+      expect((await readTerminals(first.home))?.map((shell) => shell.pid)).toContain(pane.pid);
+
+      const second = await floor({ bundle: shimScript, attach: true, restartOf: first });
+      const again = await until(
+        () => {
+          const found = rowOf(second, row.runtimeRunId);
+          return found?.continuation?.reattached === true ? found : undefined;
+        },
+        FLOOR_WAIT_MS,
+        "the run re-attached",
+      );
+      expect(again).toMatchObject({
+        spawnedBy: "user-shell",
+        runtimeEpoch: row.runtimeEpoch + 1,
+        sessionId: row.sessionId,
+        terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+        continuation: { persisted: true, resumable: false, reattached: true },
+      });
+      expect(second.script.attached).toEqual([
+        { runtimeSessionId: pane.sessionId, sessionId: row.sessionId, ingress: record.ingress },
+      ]);
+      const kept = readRecord(second.dataDir, row.runtimeRunId);
+      expect(kept).toMatchObject({
+        spawnedBy: "user-shell",
+        process: record.process,
+        runtimeEpoch: row.runtimeEpoch + 1,
+        reattach: { state: "attached" },
+      });
+      expect(second.records.verifies(kept)).toBe(true);
+      const acts = await until(() => {
+        const found = auditActs(second.dataDir, "agent.session.reattach");
+        return found[0]?.outcome === undefined ? undefined : found;
+      });
+      expect(acts.length).toBe(1);
+      expect(acts[0]?.attempt.actor.kind).toBe("system");
+      expect(acts[0]?.outcome?.outcome).toBe("succeeded");
+      // the same process, never touched
+      expect(isAlive(pid)).toBe(true);
+      expect((await processOf(pid))?.parentPid).toBe(pane.pid);
+
+      // the watch is armed again: the agent ends, and THIS fieldd sees it
+      await key(second, pane, END_OF_INPUT);
+      await until(
+        () => (rowOf(second, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the row leaving at the agent's end",
+      );
+      expect(readRecord(second.dataDir, row.runtimeRunId).exited).toMatchObject({
+        reason: "process-exited",
+      });
+      expect(second.daemon.agents.list().sessions).toEqual([]);
+      await answers(second, pane, "after-the-restart");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "row 6 — restart fieldd under it (the adapter cannot attach): the run is shown unobserved and is NEVER replaced — not at idle, where a run a door started IS, and not by hand — and its row leaves when its process does",
+    async () => {
+      const index = { afterMs: 1_000, pollMs: 200 };
+      const { first, pane, row, pid } = await typedThenStopped({ index });
+      // the control: a run one of our doors started, by the same adapter, in the same boot
+      const app = (await first.win.call("agent.spawn", {
+        provider: TYPED_PROVIDER,
+        cwd: first.work,
+      })) as { session: AgentSessionSummary; terminal: { sessionId: string } };
+      await until(() => listedRow(first, app.terminal.sessionId));
+      await first.daemon.stop();
+      // the index says BOTH conversations have been still for a minute
+      writeFileSync(
+        first.sessionsFile,
+        JSON.stringify([
+          indexedSession(row.sessionId, 60_000),
+          indexedSession(app.session.sessionId, 60_000),
+        ]),
+      );
+
+      const second = await floor({ bundle: shimScript, restartOf: first, index });
+      const held = await until(
+        () => {
+          const found = rowOf(second, row.runtimeRunId);
+          return found?.continuation?.reason === undefined ? undefined : found;
+        },
+        FLOOR_WAIT_MS,
+        "the typed run held",
+      );
+      expect(held).toMatchObject({
+        spawnedBy: "user-shell",
+        status: "unknown",
+        observationLevel: "none",
+        terminal: { hosted: "local", runtimeSessionId: pane.sessionId },
+        continuation: { persisted: true, resumable: false },
+      });
+      expect(held.continuation?.reason).toContain("cannot attach");
+      // pending NOTHING: no word on the row promises a resume
+      expect(held.continuation).not.toHaveProperty("pending");
+
+      // the control IS replaced at idle, by the daemon itself …
+      const resumed = await until(
+        () =>
+          auditActs(second.dataDir, "agent.session.resume").find(
+            (act) =>
+              act.attempt.target.id === app.session.runtimeRunId &&
+              act.outcome?.outcome === "succeeded",
+          ),
+        FLOOR_WAIT_MS,
+        "the door's run resumed at idle",
+      );
+      expect(resumed.attempt.actor.kind).toBe("system");
+      await until(() =>
+        listedRow(second, app.terminal.sessionId) === undefined ? true : undefined,
+      );
+      // … so the index was asked, and the thresholds were met — for that run only
+      const asked = indexRequests(second);
+      expect(asked.some((line) => line.includes(app.session.sessionId))).toBe(true);
+      expect(asked.some((line) => line.includes(row.sessionId))).toBe(false);
+
+      // by hand: refused, in words a person can act on
+      const refused = await detailsOf(
+        second.win.call("agent.resume", { runtimeRunId: row.runtimeRunId }),
+      );
+      expect(refused?.kind).toBe("PRECONDITION_FAILED");
+      expect(refused?.details?.state).toBe("typed-run-alive");
+      expect(refused?.message).toBe(
+        "it is running in your shell; quit it and start it again to manage it",
+      );
+
+      // the person's shell and their agent: never ended, by anything
+      await quiet(3_000);
+      expect(indexRequests(second).some((line) => line.includes(row.sessionId))).toBe(false);
+      expect(listedRow(second, pane.sessionId)?.pid).toBe(pane.pid);
+      expect(isAlive(pane.pid)).toBe(true);
+      expect(isAlive(pid)).toBe(true);
+      expect(rowOf(second, row.runtimeRunId)?.continuation?.reason).toContain("cannot attach");
+      expect(readRecord(second.dataDir, row.runtimeRunId).exited).toBeUndefined();
+      const ledger = auditEntries(second.dataDir);
+      expect(
+        ledger.filter(
+          (entry) =>
+            entry.target.id === row.runtimeRunId &&
+            (entry.action === "agent.session.resume" ||
+              entry.action === "terminal.session.terminate"),
+        ),
+      ).toEqual([
+        // the refused resume by hand is in the ledger as the caller's attempt, and failed
+        expect.objectContaining({ action: "agent.session.resume", phase: "attempt" }),
+        expect.objectContaining({ action: "agent.session.resume", outcome: "failed" }),
+      ]);
+      expect(
+        ledger.filter(
+          (entry) =>
+            entry.target.id === pane.sessionId && entry.action === "terminal.session.terminate",
+        ),
+      ).toEqual([]);
+
+      // the row leaves when the process does
+      await key(second, pane, END_OF_INPUT);
+      await until(
+        () => (rowOf(second, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the held row leaving at the agent's end",
+      );
+      expect(readRecord(second.dataDir, row.runtimeRunId).exited).toMatchObject({
+        reason: "process-exited",
+      });
+      await answers(second, pane, "after-the-held-run");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "a pane that holds an unobserved typed run: another agent typed there is refused as a conflict, and the SAME process asking again takes the run over — its row observed at last",
+    async () => {
+      const { first, pane, row, pid } = await typedThenStopped();
+      await first.daemon.stop();
+      const second = await floor({ bundle: shimScript, restartOf: first });
+      await until(() =>
+        rowOf(second, row.runtimeRunId)?.continuation?.reason === undefined ? undefined : true,
+      );
+
+      // another process in that pane (the shell itself will do) asks for a managed run
+      const other = await askFloor(second, launchOf(second, pane.pid));
+      expect(other).toMatchObject({
+        action: "refuse",
+        code: "terminal-conflict",
+        placed: true,
+        message: `${TYPED_COMMAND} was not started: another agent is already running in this pane. Quit it first, or open another pane.`,
+      });
+      expect(second.daemon.agents.runtime.agent(pane.sessionId)).toBeUndefined();
+      expect(rowOf(second, row.runtimeRunId)?.observationLevel).toBe("none");
+
+      // the launcher that asked the last fieldd, asking the one that came next
+      const same = await askFloor(second, launchOf(second, pid));
+      expect(same).toMatchObject({ action: "exec" });
+      const taken = await until(() => {
+        const found = typedRow(second, pane);
+        return found !== undefined && found.runtimeRunId !== row.runtimeRunId ? found : undefined;
+      });
+      expect(taken).toMatchObject({ spawnedBy: "user-shell" });
+      expect(taken.observationLevel).not.toBe("none");
+      expect(rowOf(second, row.runtimeRunId)).toBeUndefined();
+      expect(readRecord(second.dataDir, row.runtimeRunId).exited?.reason).toBe("superseded");
+      expect(readRecord(second.dataDir, taken.runtimeRunId).process?.pid).toBe(pid);
+      expect(isAlive(pid)).toBe(true);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "row 7 — a reused pid: a record whose process started at ANOTHER time is stamped at the next boot, and nothing is attached, held or ended",
+    async () => {
+      const { first, pane, row, pid } = await typedThenStopped({ attach: true });
+      await first.daemon.stop();
+      // through the STORE, so the record stays signed: only the start time is another's
+      const signed = first.records.read(row.runtimeRunId);
+      if (signed?.process === undefined) throw new Error("no record to rewrite");
+      first.records.write({
+        ...signed,
+        process: { pid: signed.process.pid, startedAt: "2020-02-02T02:02:02.000Z" },
+      });
+      expect(first.records.verifies(readRecord(first.dataDir, row.runtimeRunId))).toBe(true);
+
+      const second = await floor({ bundle: shimScript, attach: true, restartOf: first });
+      const stamped = await until(
+        () => {
+          const record = readRecord(second.dataDir, row.runtimeRunId);
+          return record.exited === undefined ? undefined : record;
+        },
+        FLOOR_WAIT_MS,
+        "the record stamped",
+      );
+      expect(stamped.exited).toMatchObject({ reason: "unknown", exitCode: null, signal: null });
+      expect(second.script.attached).toEqual([]);
+      expect(second.daemon.agents.list().sessions).toEqual([]);
+      expect(auditActs(second.dataDir, "agent.session.reattach")).toEqual([]);
+      // nothing was ended: the process the pid belongs to, and the pane
+      await quiet(1_500);
+      expect(isAlive(pid)).toBe(true);
+      expect(listedRow(second, pane.sessionId)?.pid).toBe(pane.pid);
+      expect(second.daemon.agents.list().sessions).toEqual([]);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "row 8 — a forged record: one edited on disk without its signature, naming a live shell, is set aside by the store — nothing is attached, and the shell is untouched",
+    async () => {
+      const { first, pane, row, pid } = await typedThenStopped({ attach: true });
+      const bystander = await openPane(first, { path: false });
+      await first.daemon.stop();
+      // a same-user process points the record at another live shell of ours, and at that
+      // shell's own process — everything the proof would ask for, without the signature
+      const path = recordPath(first.dataDir, row.runtimeRunId);
+      const forged = JSON.parse(readFileSync(path, "utf8")) as AgentSessionRecord;
+      const started = await processStartedAt(bystander.pid);
+      forged.terminalSessionId = bystander.sessionId;
+      forged.process = { pid: bystander.pid, startedAt: started ?? "" };
+      writeFileSync(path, `${JSON.stringify(forged, null, 2)}\n`, { mode: 0o600 });
+
+      const second = await floor({ bundle: shimScript, attach: true, restartOf: first });
+      await until(
+        () => (existsSync(path) ? undefined : true),
+        FLOOR_WAIT_MS,
+        "the record set aside",
+      );
+      const aside = readdirSync(dirname(path)).filter((name) => name.includes(".forged-"));
+      expect(aside.length).toBe(1);
+      expect(second.records.list()).toEqual([]);
+      expect(second.script.attached).toEqual([]);
+      await quiet(1_500);
+      expect(second.daemon.agents.list().sessions).toEqual([]);
+      expect(auditActs(second.dataDir, "agent.session.reattach")).toEqual([]);
+      for (const shell of [pane, bystander]) {
+        expect(listedRow(second, shell.sessionId)?.pid).toBe(shell.pid);
+        expect(isAlive(shell.pid)).toBe(true);
+      }
+      expect(isAlive(pid)).toBe(true);
+      await answers(second, bystander, "after-the-forgery");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "a typed run that ENDED is not brought back by a restart: no row for it, exited or otherwise, though its terminal is a live shell the floor still lists",
+    async () => {
+      const { first, pane, row } = await typedThenStopped({ attach: true });
+      await key(first, pane, END_OF_INPUT);
+      await until(() => (rowOf(first, row.runtimeRunId) === undefined ? true : undefined));
+      await first.daemon.stop();
+      const second = await floor({ bundle: shimScript, attach: true, restartOf: first });
+      await answers(second, pane, "after-the-second-boot");
+      await quiet(2_500);
+      expect(second.daemon.agents.list().sessions).toEqual([]);
+      expect(second.script.attached).toEqual([]);
+      expect(listedRow(second, pane.sessionId)?.pid).toBe(pane.pid);
+      // and the name typed there again is a new managed run
+      await type(second, pane, TYPED_COMMAND);
+      const next = await adopted(second, pane);
+      expect(next.runtimeRunId).not.toBe(row.runtimeRunId);
+      expect(next.spawnedBy).toBe("user-shell");
     },
     FLOOR_BUDGET_MS,
   );

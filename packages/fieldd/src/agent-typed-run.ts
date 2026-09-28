@@ -1,6 +1,7 @@
 import {
   findOwningProcess,
   type ProcessTable,
+  readProcessTable,
   watchProcessExit,
 } from "@vibecook/puppeteer-runtime/spawn-through";
 import type { AgentSessionRecord, AgentSpawnedBy, TerminalInfo } from "@vibefield/contracts";
@@ -51,6 +52,12 @@ export function watchTypedProcess(
     },
     onExit,
   );
+}
+
+/** One read of the whole process table — the kit's (`ps`, once): every pid,
+ * its parent, and when it started. Undefined when `ps` cannot say. */
+export function readProcesses(): Promise<ProcessTable | undefined> {
+  return readProcessTable();
 }
 
 /** Whether no process holds the pid now. A pid that belongs to someone else

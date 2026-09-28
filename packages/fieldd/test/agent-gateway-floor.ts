@@ -13,9 +13,15 @@
 // Test-local — not shipped.
 import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { createConnection } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnThroughLayout } from "@vibecook/puppeteer-runtime/spawn-through";
+import {
+  parseSpawnThroughResponse,
+  readRendezvous,
+  type SpawnThroughResponse,
+  spawnThroughLayout,
+} from "@vibecook/puppeteer-runtime/spawn-through";
 import {
   AgentSessionRecord,
   type AgentSessionSummary,
@@ -43,8 +49,10 @@ import {
 } from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
-const REPO = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = join(HERE, "../../..");
 const FLOOR_BIN = nativeBinPath(REPO);
+const FAKE_ROSETTAD = join(HERE, "fixtures", "fake-rosettad.mjs");
 
 /** What a row on a loaded host is given to see an effect: no row asserts speed. */
 export const FLOOR_WAIT_MS = 60_000;
@@ -121,6 +129,10 @@ export interface Floor {
   /** a window that may make panes, read the fold and resume a run */
   win: WsRpc;
   config: FloorConfig;
+  /** the file the scripted index serves its session rows from */
+  sessionsFile: string;
+  /** one line per read the scripted index answered */
+  requestLog: string;
 }
 
 export interface FloorConfig {
@@ -136,6 +148,9 @@ export interface FloorConfig {
   bundle: string;
   /** false = the row expects no launcher from this boot, and waits for none */
   launchers?: boolean;
+  /** compose the agent index (a scripted rosettad) and resume-when-idle's
+   * thresholds: what a run that MAY be replaced at idle is replaced by */
+  index?: { afterMs: number; pollMs: number };
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -190,12 +205,33 @@ export async function floor(config: FloorConfig): Promise<Floor> {
     await waitForMgmtEndpoint(dataDir, 30_000);
   }
   const script = restart?.script ?? typedScript(join(root, "scripted"));
+  const sessionsFile = join(root, "rosetta-sessions.json");
+  const requestLog = join(root, "rosetta-requests.log");
+  const indexHome = join(dataDir, "home");
+  if (config.index !== undefined) mkdirSync(indexHome, { recursive: true });
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
     dataPort: 0,
     secretStore: keychain(),
     vibefieldRoot: root,
+    ...(config.index === undefined
+      ? {}
+      : {
+          rosettadBin: "/stand-in/rosettad",
+          rosettadSpawn: ((_bin: string, args: readonly string[], options: object) =>
+            spawn(process.execPath, [FAKE_ROSETTAD, ...args], {
+              ...options,
+              env: {
+                ...process.env,
+                FAKE_ROSETTAD_MODE: "ok",
+                FAKE_ROSETTAD_SESSIONS: sessionsFile,
+                FAKE_ROSETTAD_REQUEST_LOG: requestLog,
+              },
+            })) as unknown as typeof spawn,
+          rosettadHome: indexHome,
+          agentResumeWhenIdle: config.index,
+        }),
     agentCatalog: TYPED_CATALOG,
     // the scripted agent and no other: nothing of any vendor's is composed
     agentProviders: () => [
@@ -247,8 +283,87 @@ export async function floor(config: FloorConfig): Promise<Floor> {
       "terminal.attach",
     ]),
     config,
+    sessionsFile,
+    requestLog,
   };
 }
+
+/** A session row of the index's, as rosetta serves it: the conversation's
+ * canonical row, still for `stillForMs`. */
+export const indexedSession = (nativeSessionId: string, stillForMs: number) => ({
+  id: `rs-${nativeSessionId}`,
+  native_session_id: nativeSessionId,
+  runtime_id: "rt-scripted",
+  project_id: null,
+  cwd: null,
+  parent_session_id: null,
+  delegation: null,
+  root_session_id: `rs-${nativeSessionId}`,
+  role: "main",
+  title: null,
+  summary: null,
+  started_at: Date.now() - stillForMs - 60_000,
+  updated_at: Date.now(),
+  activity: { first_at: Date.now() - stillForMs - 60_000, last_at: Date.now() - stillForMs },
+  stream_state: "indexed",
+});
+
+/** What the scripted index was asked, one line per read. */
+export const indexRequests = (box: Floor): string[] =>
+  existsSync(box.requestLog)
+    ? readFileSync(box.requestLog, "utf8")
+        .split("\n")
+        .filter((line) => line !== "")
+    : [];
+
+/** One request on the gateway's own socket, with the bearer the rendezvous
+ * holds — what anything of this user's can send. */
+export async function ask(
+  box: Floor,
+  payload: Record<string, unknown>,
+): Promise<SpawnThroughResponse | undefined> {
+  const rendezvous = await readRendezvous(box.home);
+  if (rendezvous === undefined) throw new Error("no rendezvous to ask by");
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: rendezvous.host, port: rendezvous.port });
+    let text = "";
+    socket.setEncoding("utf8");
+    socket.once("connect", () =>
+      socket.write(`${JSON.stringify({ token: rendezvous.token, ...payload })}\n`),
+    );
+    socket.on("data", (chunk: string) => {
+      text += chunk;
+    });
+    socket.on("error", () => undefined);
+    socket.once("close", () => {
+      const line = text.split("\n")[0];
+      if (line === undefined || line === "") return resolve(undefined);
+      try {
+        resolve(parseSpawnThroughResponse(JSON.parse(line)));
+      } catch {
+        resolve(undefined);
+      }
+    });
+  });
+}
+
+/** A launch, as a launcher in `cwd` would ask for it. */
+export const launchOf = (
+  box: Floor,
+  pid: number,
+  over: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  type: "launch",
+  providerId: "scripted",
+  cwd: box.work,
+  argv: [],
+  environment: {},
+  pid,
+  parentPid: 1,
+  command: TYPED_COMMAND,
+  interactive: true,
+  ...over,
+});
 
 // ── a pane, and a person at it ──
 
