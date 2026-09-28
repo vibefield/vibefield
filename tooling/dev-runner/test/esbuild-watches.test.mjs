@@ -28,12 +28,15 @@ async function fielddShimStep() {
 }
 
 function shimDefinition(paths = workspacePaths) {
-  return esbuildDefinitions(paths).find((definition) => definition.name === "fieldd-agent-shim");
+  const shim = esbuildDefinitions(paths).find(
+    (definition) => definition.name === "fieldd-agent-shim",
+  );
+  assert.ok(shim, "no fieldd-agent-shim definition: under pnpm dev the gateway offers no launcher");
+  return shim;
 }
 
 test("the runner builds the agent shim from fieldd's own entry, to fieldd's own outfile", async () => {
   const shim = shimDefinition();
-  assert.ok(shim, "no fieldd-agent-shim definition: under pnpm dev the gateway offers no launcher");
   const step = await fielddShimStep();
   // The kit's package export resolved from fieldd's package root, as the build
   // step resolves it — never a path into the sibling — so the kit is the one in
