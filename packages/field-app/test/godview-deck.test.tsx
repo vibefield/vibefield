@@ -39,6 +39,11 @@ let deviceWarm: () => Promise<{ backend: string }> = () => Promise.resolve({ bac
 const workspaceMounts: Array<Record<string, unknown>> = [];
 
 vi.mock("@vibecook/ghosttea-react", () => ({
+  // QL-2: the deck hands the launch ghosttea's fixed cell metrics.
+  CELL_WIDTH: 7.83,
+  LINE_HEIGHT: 19,
+  ORIGIN_X: 2,
+  ORIGIN_Y: 2,
   createGhostteaTerminalRuntime: () => {
     const runtime = { id: runtimes.length, disposed: false };
     runtimes.push(runtime);

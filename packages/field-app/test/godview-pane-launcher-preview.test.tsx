@@ -28,6 +28,10 @@ const specimen = (host: HTMLElement, id: string): HTMLElement[] => [
   ...host.querySelectorAll<HTMLElement>(`[data-vf-pane-launcher="catalog-${id}"]`),
 ];
 
+const launchSpecimen = (host: HTMLElement, id: string): HTMLElement[] => [
+  ...host.querySelectorAll<HTMLElement>(`[data-vf-pane-launch="catalog-${id}"]`),
+];
+
 describe("the empty pane launcher's catalog specimen", () => {
   it("shows every §19 face on both grounds, with the host's ground token set", () => {
     const host = render();
@@ -42,11 +46,13 @@ describe("the empty pane launcher's catalog specimen", () => {
       "no-match",
       "catching-up",
       "not-answering",
-      "launching",
       "narrow",
       "short",
     ]) {
       expect(specimen(host, id), id).toHaveLength(2);
+    }
+    for (const id of ["launch-starting", "launch-opening"]) {
+      expect(launchSpecimen(host, id), id).toHaveLength(2);
     }
     const decks = [...host.querySelectorAll<HTMLElement>(".vf-ds-pane-frame-deck")];
     expect(decks).toHaveLength(2);
@@ -103,9 +109,20 @@ describe("the empty pane launcher's catalog specimen", () => {
     expect(
       specimen(host, "not-answering")[0]?.querySelector(".vf-pane-launcher-empty")?.textContent,
     ).toContain("isn’t answering");
+    // QL-2: the launch's faces are the shipping chrome at a moment of the wait.
+    const starting = launchSpecimen(host, "launch-starting")[0];
+    expect(starting?.className).toBe("vf-pane-launch is-starting is-lit is-waiting");
+    expect(starting?.querySelector(".vf-pane-launch-caption span")?.textContent).toBe(
+      "starting · 2.4s",
+    );
     expect(
-      specimen(host, "launching")[0]?.querySelector(".vf-pane-launcher-agent.is-press"),
+      starting?.querySelector(".vf-pane-launch-mark svg, .vf-pane-launch-mark span"),
     ).not.toBeNull();
+    const opening = launchSpecimen(host, "launch-opening")[0];
+    expect(opening?.className).toBe("vf-pane-launch is-opening is-lit is-waiting");
+    expect(opening?.querySelector(".vf-pane-launch-caption span")?.textContent).toBe(
+      "opening · 3.1s",
+    );
     expect(specimen(host, "short")[0]?.querySelector(".vf-pane-launcher.is-short")).not.toBeNull();
   });
 
@@ -124,6 +141,7 @@ describe("the empty pane launcher's catalog specimen", () => {
     const pane = document.createElement("div");
     document.body.append(pane);
     const root = createRoot(document.createElement("div"));
+    const onLaunch = vi.fn();
     const port: LauncherPort = {
       recent: vi.fn(async () => ({ status: { readiness: "ready" as const }, sessions: [] })),
       launch: vi.fn(async () => ({ accepted: true as const })),
@@ -141,7 +159,7 @@ describe("the empty pane launcher's catalog specimen", () => {
           scope="here"
           onScopeChange={() => undefined}
           onUsed={() => undefined}
-          onDone={() => undefined}
+          onLaunch={onLaunch}
           register={() => undefined}
         />,
       );
@@ -155,5 +173,6 @@ describe("the empty pane launcher's catalog specimen", () => {
     expect(componentSays).toBeDefined();
     expect(catalogSays).toBe(componentSays);
     expect(port.launch).not.toHaveBeenCalled();
+    expect(onLaunch).not.toHaveBeenCalled();
   });
 });

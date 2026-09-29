@@ -3038,6 +3038,190 @@ async function typeInPaneUntilMarker(
   throw lastFailure instanceof Error ? lastFailure : new Error(String(lastFailure));
 }
 
+/** One read of a pane's launch, for the launch rows. */
+interface LaunchSample {
+  ms: number;
+  launch: string | null;
+  held: string | null;
+  caption: string | null;
+}
+
+/**
+ * THE LAUNCH (QL-2, the Minimal Pane Frame's pass 4 §27, look C · Cells). A
+ * fresh pane's launcher launches the smoke's stub — the one agent installed
+ * here, every other agent's install being absent — and the launch is read
+ * from the click to the stub's first frame:
+ *   1. in the click's frame (after React's commit, before any animation frame):
+ *      the launch is in the pane, the launcher is leaving, and the badge's own
+ *      mark is held (C1, C6);
+ *   2. it waits as the contract says: no indicator before 320ms (C5), and it
+ *      lets the pane go only once the stub runs there and has drawn (C3);
+ *   3. let go, the pane is the stub's, the attribute is off, and the frame
+ *      wears the stub's mark, visible (C6).
+ * The stub is then sent `exit`, so the rows after this one meet the deck as
+ * they would have. The phase times are reported, never budgeted: they move
+ * with the machine's load.
+ */
+async function launchRows(ctx: {
+  win: BrowserWindow;
+  deck: MarkerWatch<DeckFacts>;
+  verdict: Record<string, unknown>;
+}): Promise<void> {
+  const { win, deck, verdict } = ctx;
+  const evaluate = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const fail = (what: string, facts?: unknown): Error =>
+    new Error(`the launch: ${what}${facts === undefined ? "" : ` — ${JSON.stringify(facts)}`}`);
+
+  // A pane of its own, born now through the deck's door: a fresh shell.
+  const before = await deckSettled(deck, 1_500, 60_000);
+  await focusDeck(win);
+  pressChord(win, SPLIT_CHORD.key, SPLIT_CHORD.shift);
+  const split = await deck.until(
+    (facts) => facts.panes === before.panes + 1,
+    `${SPLIT_CHORD.label} to open a pane for the launch`,
+    45_000,
+  );
+  const shell = split.sessionIds.find((id) => !before.sessionIds.includes(id));
+  if (shell === undefined) throw fail("the split pane carries no new session");
+  const hostSelector = JSON.stringify(`[data-vf-pane-launcher="${shell}"]`);
+
+  const offered = await untilRead(
+    "the fresh pane's launcher, with an agent it can launch",
+    30_000,
+    async () => {
+      const read = await evaluate<
+        { index: number; label: string; paneId: string } | { offered: number } | null
+      >(
+        `(() => {
+        const host = document.querySelector(${hostSelector});
+        if (!host) return null;
+        const rows = [...host.querySelectorAll(".vf-pane-launcher-agent")];
+        const index = rows.findIndex((row) => !row.classList.contains("is-off"));
+        if (index < 0) return { offered: rows.length };
+        return {
+          index,
+          label: rows[index].querySelector(".vf-pane-launcher-nm")?.textContent ?? "",
+          paneId: host.closest("[data-pane-id]")?.getAttribute("data-pane-id") ?? "",
+        };
+      })()`,
+      );
+      return read === null ? undefined : read;
+    },
+  );
+  if (!("index" in offered)) throw fail("no agent can launch from this launcher", offered);
+  const paneSelector = JSON.stringify(`[data-pane-id="${offered.paneId}"]`);
+
+  // 1. The click's frame: read after React's commit (a microtask), before any frame.
+  const first = await evaluate<{
+    launch: string | null;
+    leaving: boolean | null;
+    held: string | null;
+    framePassed: boolean;
+  }>(
+    `(async () => {
+      const pane = document.querySelector(${paneSelector});
+      let framePassed = false;
+      requestAnimationFrame(() => { framePassed = true; });
+      pane.querySelector(${hostSelector}).querySelectorAll(".vf-pane-launcher-agent")[${offered.index}].click();
+      window.__vfLaunchClickAt = performance.now();
+      await Promise.resolve();
+      await Promise.resolve();
+      return {
+        launch: pane.querySelector("[data-vf-pane-launch]")?.className ?? null,
+        leaving: pane.querySelector(".vf-pane-launcher")?.classList.contains("is-leaving") ?? null,
+        held: pane.getAttribute("data-vf-launching"),
+        framePassed,
+      };
+    })()`,
+  );
+  if (first.framePassed) throw fail("an animation frame passed before the first read", first);
+  if (first.launch === null || !first.launch.includes("is-depart")) {
+    throw fail("C1: the launch was not in the pane in the click's frame", first);
+  }
+  if (first.leaving !== true) throw fail("C1: the launcher did not leave with the click", first);
+  if (first.held !== "held") throw fail("C6: the badge's mark was not held", first);
+
+  // 2. Every phase, until the pane is let go.
+  const phases: Array<{ ms: number; launch: string | null; held: string | null }> = [];
+  const captions: string[] = [];
+  const deadline = Date.now() + 60_000;
+  let landed: LaunchSample | undefined;
+  while (landed === undefined) {
+    const now = await evaluate<LaunchSample>(
+      `(() => {
+        const pane = document.querySelector(${paneSelector});
+        return {
+          ms: performance.now() - window.__vfLaunchClickAt,
+          launch: pane?.querySelector("[data-vf-pane-launch]")?.className ?? null,
+          held: pane?.getAttribute("data-vf-launching") ?? null,
+          caption: pane?.querySelector(".vf-pane-launch-caption span")?.textContent ?? null,
+        };
+      })()`,
+    );
+    const last = phases.at(-1);
+    if (last === undefined || last.launch !== now.launch || last.held !== now.held) {
+      phases.push({ ms: Math.round(now.ms), launch: now.launch, held: now.held });
+    }
+    if (now.caption !== null && captions.at(-1) !== now.caption) captions.push(now.caption);
+    if (now.launch === null) landed = now;
+    else if (Date.now() > deadline) throw fail("the launch never let the pane go", phases);
+    else await sleep(40);
+  }
+  const waiting = phases.find((phase) => phase.launch?.includes("is-waiting") === true);
+  if (waiting !== undefined && waiting.ms < 300) {
+    throw fail("C5: the indicator came before 320ms", phases);
+  }
+  if (landed.held !== null)
+    throw fail("C6: the pane kept data-vf-launching after the launch", landed);
+  // It went home on the agent's first frame: it never turned back (a refusal)
+  // or let go as if its agent had left the pane before drawing.
+  const astray = phases.find((phase) => /\bis-(refused|left)\b/.test(phase.launch ?? ""));
+  if (astray !== undefined || !phases.some((phase) => phase.launch?.includes("is-home") === true)) {
+    throw fail("the launch did not go home on the agent's first frame", phases);
+  }
+
+  // 3. Let go: the pane shows the stub's session, and its frame wears the mark.
+  const agent = await untilRead("the launched stub's session in the pane", 30_000, async () => {
+    const read = await evaluate<{ session: string | null; mark: string | null }>(
+      `(() => {
+        const pane = document.querySelector(${paneSelector});
+        const frame = pane?.querySelector("[data-vf-pane-frame]");
+        const mark = frame?.querySelector(".vf-pane-mark");
+        return {
+          session: frame?.getAttribute("data-vf-pane-frame") ?? null,
+          mark: mark ? getComputedStyle(mark).visibility : null,
+        };
+      })()`,
+    );
+    return read.session !== null && read.session !== shell && read.mark !== null ? read : undefined;
+  });
+  if (agent.mark !== "visible")
+    throw fail("C6: the frame's mark stayed hidden after the launch", agent);
+
+  const line = {
+    agent: offered.label,
+    first,
+    phases,
+    captions: captions.slice(0, 12),
+    landedMs: Math.round(landed.ms),
+    indicator: waiting === undefined ? "none (drawn before 320ms)" : `from ${waiting.ms}ms`,
+  };
+  console.log(`SMOKE_GODVIEW_LAUNCH ${JSON.stringify(line)}`);
+  verdict["launch"] = line;
+
+  // The stub leaves as a person would leave it.
+  const session = agent.session as string;
+  await focusPane(win, session);
+  await typeTerminalLine(win, "exit");
+  await deck.until(
+    (facts) =>
+      !facts.sessionIds.includes(session) || facts.exitedSessionIds?.includes(session) === true,
+    "the launched stub to leave its pane",
+    30_000,
+  );
+}
+
 /** What the pane showing `sessionId` wears: whether the deck framed it, and
  * whether the frame carries an agent's MARK — the badge's `.vf-pane-mark`,
  * which the frame draws only from an agent's facts (field-app's
@@ -5291,6 +5475,8 @@ export async function runSmokeGodview(opts: {
         monitorWatch,
         verdict,
       });
+      // ── 14b. THE LAUNCH (QL-2) — the same stub, launched from a fresh pane's launcher.
+      await launchRows({ win, deck, verdict });
     }
 
     // ── GT-3p, REPORT-ONLY ────────────────────────────────────────────────

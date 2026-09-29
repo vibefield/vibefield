@@ -1,13 +1,18 @@
 import {
   buildLauncherResults,
   cantLaunchLine,
+  LAUNCH_PATCH_RADIUS,
   type LauncherBusy,
   type LauncherHistoryStatus,
   type LauncherScope,
   type LauncherSession,
   type LauncherWordHit,
+  launchCaption,
+  launchCentre,
   launcherFolder,
+  launchReach,
   orderAgents,
+  PaneLaunchChrome,
   PaneLauncherChrome,
 } from "@vibecook/puppeteer-views/launcher";
 import { AGENT_CATALOG, type AgentProviderSummary } from "@vibefield/contracts";
@@ -134,6 +139,8 @@ interface LauncherSpecimen {
   failure?: string;
   width?: number;
   height?: number;
+  /** A launch in this pane (QL-2): the launch's face instead of the launcher's. */
+  launch?: { phase: "starting" | "opening"; elapsedMs: number };
 }
 
 const READY: LauncherHistoryStatus = { readiness: "ready" };
@@ -204,9 +211,15 @@ const SPECIMENS: readonly LauncherSpecimen[] = [
     sessions: [],
   },
   {
-    id: "launching",
-    caption: "⌥2 pressed — the row fills in the pane colour until the launch answers",
-    busy: { kind: "launch", index: 1 },
+    id: "launch-starting",
+    caption:
+      "⌥2 — the launcher left toward the mark in the click's frame; the cell grid wakes around it while the agent starts",
+    launch: { phase: "starting", elapsedMs: 2_400 },
+  },
+  {
+    id: "launch-opening",
+    caption: "the agent runs in the pane — the grid reaches the corners until its first frame",
+    launch: { phase: "opening", elapsedMs: 3_100 },
   },
   { id: "narrow", caption: "narrow — under 250px, five marks and Resume…", width: 240 },
   { id: "short", caption: "short — under 220px tall, the marks in one row", height: 200 },
@@ -236,6 +249,9 @@ function Specimen({
         })
       : undefined;
   const height = specimen.height ?? 300;
+  const width = specimen.width ?? 380;
+  const launching = AGENTS[1];
+  const centre = launchCentre(width, height);
   return (
     <figure className="vf-ds-pane-frame-figure">
       {/* The host's pane, standing in for ghosttea's: its class, the colour
@@ -247,30 +263,52 @@ function Specimen({
         style={
           {
             position: "relative",
-            width: specimen.width ?? 380,
+            width,
             height,
             background: ground.background,
             "--ghostty-pane-color": PANE_COLOR,
           } as CSSProperties
         }
       >
-        <PaneLauncherChrome
-          sessionId={`catalog-${specimen.id}`}
-          agents={AGENTS}
-          folder={folder}
-          color={PANE_COLOR}
-          active={specimen.active ?? true}
-          short={height < 220}
-          open={specimen.open === true}
-          query={query}
-          scope={scope}
-          {...(results ? { results } : {})}
-          highlight={results && results.rows.length > 0 ? 0 : -1}
-          {...(specimen.history ? { history: specimen.history } : {})}
-          {...(specimen.hoverIndex !== undefined ? { hoverIndex: specimen.hoverIndex } : {})}
-          {...(specimen.busy ? { busy: specimen.busy } : {})}
-          {...(specimen.failure ? { failure: specimen.failure } : {})}
-        />
+        {specimen.launch && launching ? (
+          // The launch the shipping deck draws, at one moment of its wait: the
+          // agent is the catalog's second row, as ⌥2 would launch it.
+          <PaneLaunchChrome
+            launchId={`catalog-${specimen.id}`}
+            verb="launch"
+            providerId={launching.providerId}
+            label={launching.label}
+            phase={specimen.launch.phase}
+            caption={launchCaption("launch", specimen.launch.phase, specimen.launch.elapsedMs)}
+            color={PANE_COLOR}
+            centre={centre}
+            reach={
+              specimen.launch.phase === "opening"
+                ? launchReach(width, height, centre)
+                : LAUNCH_PATCH_RADIUS
+            }
+            lit
+            waiting
+          />
+        ) : (
+          <PaneLauncherChrome
+            sessionId={`catalog-${specimen.id}`}
+            agents={AGENTS}
+            folder={folder}
+            color={PANE_COLOR}
+            active={specimen.active ?? true}
+            short={height < 220}
+            open={specimen.open === true}
+            query={query}
+            scope={scope}
+            {...(results ? { results } : {})}
+            highlight={results && results.rows.length > 0 ? 0 : -1}
+            {...(specimen.history ? { history: specimen.history } : {})}
+            {...(specimen.hoverIndex !== undefined ? { hoverIndex: specimen.hoverIndex } : {})}
+            {...(specimen.busy ? { busy: specimen.busy } : {})}
+            {...(specimen.failure ? { failure: specimen.failure } : {})}
+          />
+        )}
       </div>
       <figcaption>{specimen.caption}</figcaption>
     </figure>

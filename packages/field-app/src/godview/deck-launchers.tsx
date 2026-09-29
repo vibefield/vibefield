@@ -1,7 +1,11 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { GhostteaTerminalRuntime } from "@vibecook/ghosttea-react";
 import type { GhostteaWorkspaceContext } from "@vibecook/ghosttea-react/workspace";
-import { DeckLaunchers, type LauncherOutcome } from "@vibecook/puppeteer-views/launcher";
+import {
+  DeckLaunchers,
+  type LauncherOutcome,
+  watchDrawnSessions,
+} from "@vibecook/puppeteer-views/launcher";
 import {
   type AgentProfileSet,
   type AgentProviderSummary,
@@ -284,7 +288,8 @@ export function GodviewDeckLaunchers({
           }
           if (outcome.state === "mounted") {
             if (!onReplaced(replacing, born.sessionId)) rollback();
-            return { accepted: true };
+            // Named, so the launch waits for this terminal's first frame (QL-2).
+            return { accepted: true, sessionId: born.sessionId };
           }
           rollback();
           const reason = outcome.state === "failed" ? outcome.reason : "no pane is open";
@@ -301,6 +306,14 @@ export function GodviewDeckLaunchers({
         },
       }),
     [fieldd, door, onReplaced, prepareReplacement],
+  );
+
+  // QL-2: the launch lands on the agent's first frame, which the runtime
+  // publishes per session (ghosttea's `session-drawn`); a runtime without it
+  // lands the launch at the port's answer.
+  const watchFirstFrame = useMemo(
+    () => (runtime === null ? undefined : watchDrawnSessions(runtime)),
+    [runtime],
   );
 
   // A monitor sheet over the stage (the find sheet) holds the keyboard. The
@@ -358,6 +371,7 @@ export function GodviewDeckLaunchers({
       agents={agents}
       port={port}
       hasInput={(id) => runtime?.sessionHasInput(id) === true}
+      {...(watchFirstFrame !== undefined ? { watchFirstFrame } : {})}
     />
   );
 }

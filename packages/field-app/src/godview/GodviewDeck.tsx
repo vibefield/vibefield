@@ -1,5 +1,5 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
-import { GhostteaProvider } from "@vibecook/ghosttea-react";
+import { CELL_WIDTH, GhostteaProvider, LINE_HEIGHT, ORIGIN_X } from "@vibecook/ghosttea-react";
 import {
   GhostteaWorkspace,
   type GhostteaWorkspaceContext,
@@ -118,6 +118,15 @@ import "@vibecook/ghosttea-react/workspace.css";
  * R6 reserves for contracts — GT-0 caught a storage key squatting there, and
  * R6 catches this comment too if it spells the prefix out. */
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
+
+/** The terminal's cell grid, in ghosttea's own fixed metrics: the pitch the
+ * launch draws its dots on (QL-2, `pane-launcher.css` "the launch"), so the
+ * dots sit one per cell rather than on a copied number. */
+const TERMINAL_CELL_STYLE = {
+  "--vf-terminal-cell-width": `${CELL_WIDTH}px`,
+  "--vf-terminal-cell-height": `${LINE_HEIGHT}px`,
+  "--vf-terminal-cell-origin": `${ORIGIN_X}px`,
+} as const;
 
 // The deck used to carry a SPAWN_COLS/SPAWN_ROWS pair here, because
 // `runtime.createSession` takes a geometry and a pane being rehydrated has no
@@ -1733,7 +1742,7 @@ export function GodviewDeck({
         // removes only what it added.
         className={`vf-deck-zoom ${DECK_FRAMED_CLASS}`}
         data-zoom-phase="idle"
-        style={{ "--vf-godview-terminal-ink": ground.ink } as CSSProperties}
+        style={{ "--vf-godview-terminal-ink": ground.ink, ...TERMINAL_CELL_STYLE } as CSSProperties}
       >
         {/* Pane chrome is shared with Puppeteer. Closing detaches used sessions;
             a fresh shell with no input is reaped through the product door. */}

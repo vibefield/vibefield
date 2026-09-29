@@ -178,6 +178,11 @@ function WorkspaceStub({
 }
 
 vi.mock("@vibecook/ghosttea-react", () => ({
+  // QL-2: the deck hands the launch ghosttea's fixed cell metrics.
+  CELL_WIDTH: 7.83,
+  LINE_HEIGHT: 19,
+  ORIGIN_X: 2,
+  ORIGIN_Y: 2,
   createGhostteaTerminalRuntime: () => ({
     addEventListener: (type: string, listener: EventListener) =>
       runtimeEvents.addEventListener(type, listener),

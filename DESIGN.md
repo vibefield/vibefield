@@ -170,7 +170,8 @@ the app's theme (Godview can be dark over a light field). Its geometry: top corn
 The empty pane launcher's clearing (QL-1, pass 3 §22) is the sheet's own paint, but never
 thinner than `--vf-godview-launcher-clearing-floor` 92% of the ground: a viewer who thins the
 stage thins the sheet, and at the sheet's glass the prompt beneath would read through the
-launcher's rows. At the default opaque backdrop the floor changes nothing.
+launcher's rows. At the default opaque backdrop the floor changes nothing. A launch (QL-2, §8)
+covers its pane with the same paint and the same floor while it waits.
 
 ### 2.8 Identity — the face
 
@@ -344,6 +345,11 @@ Three easings, by name — new curves require a reason recorded here:
 Choreography constants: staggered entrances `26ms/item` (cap 400ms); content reveal delay
 `140–200ms` behind its container; lift/hold response poll ≤ 60ms ("snappy — the lift must
 read as an immediate response to the hold").
+
+Loops are for an indicator waiting on a fact it cannot predict, never for decoration (QL-2's
+launch, §8): a **breath** — `ease-in-out`, alternate, 1.1s, scale 1 → 1.06 — and a repeating
+**travel** on the island curve (the launch's ripple, 1.1s). Both stop the moment the fact
+arrives, and neither runs under reduced motion.
 
 **Motion laws:**
 - **M1 — One element morphs.** A role change (pill→sheet, plus→close, proxy→widget) is one
@@ -672,6 +678,32 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   at least 120px. Terminals resize live (rows only, so no reflow of history). The position is
   the viewer's (`localStorage`), re-clamped to each window, never a shared setting. No
   transition on the edge: every frame of an animated edge would be a PTY resize.
+- **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
+  James picked look C · Cells from the Minimal Pane Frame's pass 4). The click (or ⌥n, or ↵ on a
+  past session) answers in its own frame: the launcher shrinks to 0.94 toward the clicked mark
+  (160ms, island) as it fades (160ms, `ease-out`), and that mark — the same element to the eye —
+  hops to the pane's middle (46% down) on the pop spring (400ms, a spawn pop-in, §6), 11 → 26px, in
+  the pane colour. The terminal's own ground covers the pane; under it, the pane's cell grid as
+  dots, one per terminal cell (ghosttea's pitch, clipped to the grid's area so no dot enters the
+  frame's bands), a dot about 2px across (radius 1.05px, feathered to 1.55px) at ink 20%. **Three
+  facts move it and nothing else:** at 320ms the grid wakes in a 100px patch around the mark and a
+  band of dots in the pane colour (85%) ripples out every 1.1s (island) while the mark breathes
+  (§6); when the agent's process is running in the pane the grid reaches past the corners (560ms,
+  island); on its first frame a last ripple opens the ground from the mark (480ms, island) and the
+  mark flies into the badge's slot (420ms, island, from 140ms), turning the badge's colour as it
+  arrives. The caption under the mark is the agent's label (11px 600, ink 72%) over `starting` or
+  `opening` (`resuming` for a resume) and, from 1.5s, the seconds (9.5px, ink 42%, tabular) — honest
+  state, never a progress bar it cannot back up. A launch drawn inside 320ms shows no indicator at
+  all; a first frame that has not come 3s after the agent runs releases the pane anyway. The frame
+  holds the badge's own mark back while the launch's is out (`data-vf-launching`), so there is never
+  a second mark. A refusal drains the grid into the mark (240ms), lifts the ground, and hops the
+  mark back to its row (360ms) as the launcher returns with the reason in fieldd's words. An agent
+  that leaves its pane before its first frame (it exited at once, and the pane has a fresh shell
+  again) lets the pane go at once: the grid drains, the mark goes out in the middle (160ms, to half
+  size), and the launcher there says it exited before it opened. While it waits, a resized pane
+  keeps the mark and the grid at its middle (240ms, island). Reduced motion: no travel and no loops;
+  what changes fades in 100ms (the reveal is the ground's fade, the badge's slot opens at once) and
+  the seconds still count. Colour: ink and the pane colour only — no orange, no green.
 - **The terminal preview is Godview in miniature** (GT-7): a preview of how terminals will
   look mounts Godview's OWN parts over a depiction of the canvas — `GodviewStage` with the
   saved backdrop, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
