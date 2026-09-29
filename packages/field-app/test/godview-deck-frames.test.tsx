@@ -1156,6 +1156,35 @@ describe("the empty pane launcher (QL-1)", () => {
     ]);
   });
 
+  it("never hands a launch or a list the floor's raw cwd — another host's OSC 7 URL is no folder here", async () => {
+    // this Mac's name, learned from one of its own shells
+    localStorage.setItem("vf-godview-device-host-v1", "this-mac");
+    runtimeBirths.add("pty-1");
+    // a local shell that announced a folder on ANOTHER machine (an ssh session)
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1", { cwd: "file://other-mac/Users/peer/src" }) },
+    ];
+    const host = await mountDeck();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Enter");
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "index.recent")).toEqual([
+      { method: "index.recent", params: { scope: "here", limit: 100 } },
+    ]);
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Escape");
+    });
+    await settle();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Digit1");
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
+      { method: "agent.spawn", params: { provider: "claude" } },
+    ]);
+  });
+
   it("yields ⎋ to a monitor sheet over the stage — the find sheet's Escape is the sheet's", async () => {
     runtimeBirths.add("pty-1");
     const host = await mountDeck();

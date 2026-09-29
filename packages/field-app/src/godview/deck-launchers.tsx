@@ -191,6 +191,21 @@ export function GodviewDeckLaunchers({
     [cwdKey, fallbackCwdBySession],
   );
 
+  // The panes as the launchers see them: each session's folder is the one
+  // above or none. `DeckLaunchers` falls back to a pane summary's own `cwd`,
+  // and that is the floor's raw OSC 7 value — a `file://` URL, another host's
+  // path when the shell announced one from an ssh session — which no launch or
+  // list may be given. A local pane whose folder `paneCwd` cannot read has none.
+  const paneKey = panes.map((pane) => `${pane.id}\t${pane.session.id}`).join("\n");
+  const launcherPanes = useMemo(
+    () =>
+      panes.map((pane) => ({
+        id: pane.id,
+        session: { id: pane.session.id, cwd: cwdBySession.get(pane.session.id) ?? null },
+      })),
+    [paneKey, cwdBySession],
+  );
+
   // The agents: asked when a launcher appears (and whenever the set of fresh
   // panes changes), so `lastLaunchedAt` is as new as the launch before it.
   // Nothing is asked while no pane is fresh.
@@ -318,7 +333,7 @@ export function GodviewDeckLaunchers({
   return (
     <DeckLaunchers
       deckRef={deckRef}
-      panes={panes}
+      panes={launcherPanes}
       activePaneId={monitorHolds ? null : workspace.activePaneId}
       freshSessionIds={freshShells}
       cwdBySession={cwdBySession}
