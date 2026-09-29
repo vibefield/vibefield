@@ -1,5 +1,6 @@
 import {
   buildLauncherResults,
+  cantLaunchLine,
   type LauncherBusy,
   type LauncherHistoryStatus,
   type LauncherScope,
@@ -150,12 +151,9 @@ const SPECIMENS: readonly LauncherSpecimen[] = [
     id: "cant-launch",
     caption: "an agent that can't start here — its reason where the key was, and a click says so",
     hoverIndex: unavailable,
-    // puppeteer's `PaneLauncher` builds this sentence on a click and exports
-    // no wording; the specimen test clicks the real component and holds this
-    // copy to what it says
-    ...(unavailableAgent !== undefined
-      ? { failure: `${unavailableAgent.label} can’t launch: ${unavailableAgent.unavailable}` }
-      : {}),
+    // the launcher's own sentence (the specimen test also clicks the real
+    // component and holds the two together)
+    ...(unavailableAgent !== undefined ? { failure: cantLaunchLine(unavailableAgent) } : {}),
   },
   {
     id: "resting",

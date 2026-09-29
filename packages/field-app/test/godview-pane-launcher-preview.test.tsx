@@ -110,11 +110,10 @@ describe("the empty pane launcher's catalog specimen", () => {
   });
 
   it("says can't-launch in the SHIPPING launcher's own words — the real component, clicked, is the source", async () => {
-    // The sentence is built inside puppeteer's `PaneLauncher` (no export to
-    // import it from), and the catalog's face is static markup, so the face
-    // carries a copy. This pins the copy to the component: the real launcher,
-    // mounted in a pane and its unavailable agent clicked, must say the same
-    // sentence with the same label and reason, or this row is red.
+    // The catalog's face is static markup built with the launcher's own
+    // `cantLaunchLine`; this holds it to what the COMPONENT says on a click:
+    // the real launcher, mounted in a pane and its unavailable agent clicked,
+    // must say the same sentence with the same label and reason.
     const [cant] = specimen(render(), "cant-launch");
     const off = cant?.querySelector(".vf-pane-launcher-agent.is-off");
     const label = off?.querySelector(".vf-pane-launcher-nm")?.textContent ?? "";

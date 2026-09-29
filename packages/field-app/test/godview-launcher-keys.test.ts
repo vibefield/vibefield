@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 /**
  * QL-D2 — the one fact the launcher and the profile tab strip share: who owns
- * ⌥0–⌥9 and ⌥↵. The launcher's side (it claims the keys, naming its pane,
- * while the focused pane shows a launcher) and the monitor's (its ⌥-digit
- * listener yields the keys routed into that pane) are both tested where they
- * live; this is the claim itself.
+ * ⌥0–⌥9 and ⌥↵. The deck's side (it claims the keys routed into panes that
+ * show a launcher) and the monitor's (its ⌥-digit listener yields exactly
+ * those) are both tested where they live; this is the claim itself.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -38,7 +37,7 @@ describe("launcher-keys", () => {
     const { pane, textarea } = scene();
     expect(launcherOwnsKeys()).toBe(false);
     expect(launcherOwnsKeyEvent({ target: textarea })).toBe(false);
-    const giveBack = takeLauncherKeys(() => pane);
+    const giveBack = takeLauncherKeys((target) => pane.contains(target));
     expect(launcherOwnsKeys()).toBe(true);
     expect(launcherOwnsKeyEvent({ target: textarea })).toBe(true);
     giveBack();
@@ -49,7 +48,7 @@ describe("launcher-keys", () => {
 
   it("owns only the keys routed into the claiming pane — never the monitor's, never another input's", () => {
     const { pane, textarea, outside } = scene();
-    takeLauncherKeys(() => pane);
+    takeLauncherKeys((target) => pane.contains(target));
     expect(launcherOwnsKeyEvent({ target: textarea })).toBe(true);
     expect(launcherOwnsKeyEvent({ target: pane })).toBe(true);
     expect(launcherOwnsKeyEvent({ target: outside })).toBe(false);
@@ -58,10 +57,10 @@ describe("launcher-keys", () => {
     expect(launcherOwnsKeyEvent({ target: null })).toBe(false);
   });
 
-  it("asks where the pane is at event time, so a pane that went owns nothing", () => {
+  it("asks at event time, so a pane whose launcher went owns nothing", () => {
     const { pane, textarea } = scene();
     let where: HTMLElement | null = pane;
-    takeLauncherKeys(() => where);
+    takeLauncherKeys((target) => where?.contains(target) === true);
     expect(launcherOwnsKeyEvent({ target: textarea })).toBe(true);
     where = null;
     expect(launcherOwnsKeyEvent({ target: textarea })).toBe(false);
@@ -69,8 +68,8 @@ describe("launcher-keys", () => {
 
   it("keeps each claim its own, so a remount's take is not erased by its predecessor's late give-back", () => {
     const { pane, textarea } = scene();
-    const oldDeck = takeLauncherKeys(() => pane);
-    const newDeck = takeLauncherKeys(() => pane);
+    const oldDeck = takeLauncherKeys((target) => pane.contains(target));
+    const newDeck = takeLauncherKeys((target) => pane.contains(target));
     oldDeck();
     expect(launcherOwnsKeyEvent({ target: textarea })).toBe(true);
     newDeck();

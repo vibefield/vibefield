@@ -1140,7 +1140,7 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(launcherOwnsKeys()).toBe(false);
   });
 
-  it("claims only the keys routed into its own pane — the monitor and the other panes keep theirs", async () => {
+  it("claims only the keys routed into a pane that shows a launcher — the monitor and the other panes keep theirs", async () => {
     runtimeBirths.add("pty-1");
     workspace.panes = [
       { id: "pane-1", session: stubSession("pty-1") },
@@ -1153,11 +1153,23 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(launcherOwnsKeyEvent({ target: textarea })).toBe(true);
     expect(launcherOwnsKeyEvent({ target: paneOf(host, "pane-2") })).toBe(false);
     expect(launcherOwnsKeyEvent({ target: document.body })).toBe(false);
-    // the focus moves to the pane with no launcher: it claims nothing at all
+    // another pane selected: pane-1's launcher rests, and a key that still
+    // reaches pane-1 is still its launcher's (it takes the keys of the pane
+    // that holds them); pane-2's keys stay the strip's
     workspace.activePaneId = "pane-2";
     workspace.refresh();
     await settle();
-    expect(launcherOwnsKeys()).toBe(false);
+    expect(
+      launcherFor(host, "pty-1")?.querySelector(".vf-pane-launcher.is-resting"),
+    ).not.toBeNull();
+    expect(launcherOwnsKeyEvent({ target: textarea })).toBe(true);
+    expect(launcherOwnsKeyEvent({ target: paneOf(host, "pane-2") })).toBe(false);
+    // put away (⎋ in its pane): its pane's keys are the shell's and the strip's again
+    await act(async () => {
+      pressIn(textarea, "Escape");
+    });
+    await settle();
+    expect(launcherFor(host, "pty-1")).toBeNull();
     expect(launcherOwnsKeyEvent({ target: textarea })).toBe(false);
   });
 
@@ -1219,13 +1231,34 @@ describe("the empty pane launcher (QL-1)", () => {
     });
     await settle();
     expect(escaped?.defaultPrevented).toBe(false);
-    // the launcher rests, and was not put away by a key it never owned
-    expect(
-      launcherFor(host, "pty-1")?.querySelector(".vf-pane-launcher.is-resting"),
-    ).not.toBeNull();
+    // under the sheet the launcher is not drawn (a key into its pane would be
+    // its, selected or not); it was not put away by a key it never saw
+    expect(launcherFor(host, "pty-1")).toBeNull();
     await act(async () => setMonitorHoldsKeys(false));
     await settle();
     expect(launcherOwnsKeys()).toBe(true);
+    expect(launcherFor(host, "pty-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
+  });
+
+  it("selects a resting pane when its launcher is clicked — the portal's pointer never reaches ghosttea's pane", async () => {
+    runtimeBirths.add("pty-1");
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-2") },
+    ];
+    workspace.activePaneId = "pane-2";
+    const host = await mountDeck();
+    const resting = launcherFor(host, "pty-1");
+    expect(resting?.querySelector(".vf-pane-launcher.is-resting")).not.toBeNull();
+    await act(async () => {
+      const field = resting?.querySelector<HTMLElement>(".vf-pane-launcher-field");
+      field?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+      field?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+      field?.click();
+    });
+    await settle();
+    expect(workspace.activePaneId).toBe("pane-1");
+    expect(launcherFor(host, "pty-1")?.querySelector(".vf-pane-launcher.is-resting")).toBeNull();
   });
 
   it("lands a launch in the launcher's OWN pane when the fresh shell is mirrored in another", async () => {

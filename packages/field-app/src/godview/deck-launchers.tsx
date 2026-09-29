@@ -144,6 +144,8 @@ export function launcherCwds(
 
 /* ── the host ──────────────────────────────────────────────────────────── */
 
+const NO_SESSIONS: ReadonlySet<string> = new Set();
+
 export interface GodviewDeckLaunchersProps {
   /** The deck element `DeckFrames` finds its panes under. */
   deckRef: RefObject<HTMLElement | null>;
@@ -287,43 +289,43 @@ export function GodviewDeckLaunchers({
     [fieldd, door],
   );
 
-  // A monitor sheet over the stage (the find sheet) holds the keyboard: the
-  // launchers rest and own no key until it closes.
+  // A monitor sheet over the stage (the find sheet) holds the keyboard. The
+  // launchers' one key listener gives each key to the launcher of the pane
+  // that HOLDS it, selected or not, so resting them is not enough: while the
+  // sheet is up they are not drawn at all (no fresh shell is handed down), and
+  // come back as they were — the mounter still remembers what was put away.
   const monitorHolds = useSyncExternalStore(subscribeMonitorHoldsKeys, monitorHoldsKeys);
+  const handedShells = monitorHolds ? NO_SESSIONS : freshShells;
 
-  // QL-D2: while the focused pane's launcher owns the keys, the claim names
-  // THAT pane — found at event time by the launcher's own hook
-  // (`data-vf-pane-launcher`, portalled straight into the pane element) — so
-  // the monitor's strip yields only the keys routed into it.
-  const ownerSession = useRef<string | undefined>(undefined);
-  ownerSession.current = monitorHolds
-    ? undefined
-    : panes.find((pane) => pane.id === workspace?.activePaneId)?.session.id;
-  const giveBack = useRef<(() => void) | null>(null);
-  const onOwnsKeysChange = useCallback(
-    (owns: boolean): void => {
-      giveBack.current?.();
-      giveBack.current = null;
-      if (!owns) return;
-      giveBack.current = takeLauncherKeys(() => {
-        const sessionId = ownerSession.current;
-        if (sessionId === undefined) return null;
-        for (const launcher of deckRef.current?.querySelectorAll<HTMLElement>(
-          "[data-vf-pane-launcher]",
-        ) ?? []) {
-          if (launcher.dataset["vfPaneLauncher"] === sessionId) return launcher.parentElement;
-        }
-        return null;
-      });
+  // QL-D2: a key routed into a pane that shows a launcher is that launcher's,
+  // so the monitor's strip yields exactly those. The claim is held while any
+  // launcher can be up, and asks the DOM at event time which panes show one
+  // (the launcher's own hook, `data-vf-pane-launcher`, portalled straight into
+  // the pane element): a launcher put away or used is no longer there.
+  const claiming = handedShells.size > 0;
+  useEffect(() => {
+    if (!claiming) return;
+    return takeLauncherKeys((target) => {
+      for (const launcher of deckRef.current?.querySelectorAll<HTMLElement>(
+        "[data-vf-pane-launcher]",
+      ) ?? []) {
+        if (launcher.parentElement?.contains(target) === true) return true;
+      }
+      return false;
+    });
+  }, [claiming, deckRef]);
+
+  // Activating a pane is the workspace's own verb; a click inside a launcher
+  // (a portal) never reaches ghosttea's pane pointer handler, so the launcher
+  // asks for it (DeckLaunchers' `onActivatePane`).
+  const onActivatePane = useCallback(
+    (paneId: string): void => {
+      const pane = workspace?.panes.find((candidate) => candidate.id === paneId);
+      if (pane !== undefined && workspace?.activePaneId !== paneId) {
+        workspace?.activateSession(pane.session.id);
+      }
     },
-    [deckRef],
-  );
-  useEffect(
-    () => () => {
-      giveBack.current?.();
-      giveBack.current = null;
-    },
-    [],
+    [workspace],
   );
 
   // Mounted for the deck's whole life, not only while a pane is fresh: the
@@ -335,13 +337,13 @@ export function GodviewDeckLaunchers({
       deckRef={deckRef}
       panes={launcherPanes}
       activePaneId={monitorHolds ? null : workspace.activePaneId}
-      freshSessionIds={freshShells}
+      onActivatePane={onActivatePane}
+      freshSessionIds={handedShells}
       cwdBySession={cwdBySession}
       paneColors={paneColors}
       agents={agents}
       port={port}
       hasInput={(id) => runtime?.sessionHasInput(id) === true}
-      onOwnsKeysChange={onOwnsKeysChange}
     />
   );
 }

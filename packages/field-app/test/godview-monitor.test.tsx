@@ -1085,7 +1085,7 @@ describe("the profile tabs (AR-S5)", () => {
       at.dispatchEvent(event);
       return event;
     };
-    const giveBack = takeLauncherKeys(() => pane);
+    const giveBack = takeLauncherKeys((target) => pane.contains(target));
     let passed: KeyboardEvent | undefined;
     try {
       await act(async () => {
