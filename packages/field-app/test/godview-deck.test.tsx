@@ -49,6 +49,11 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       // that announced a backend would be asserting about its own stub.
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
+      // The launcher's gate and the clean-exit handoff ask these of every
+      // pane (22e4e16c): this deck's shells never had input and none is a
+      // peer's replica.
+      sessionHasInput: () => false,
+      remoteSession: () => undefined,
       rendererBackend: "test",
       dispose: () => {
         runtime.disposed = true;
