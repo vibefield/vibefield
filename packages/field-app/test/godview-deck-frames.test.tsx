@@ -42,6 +42,7 @@ import { bornSummary, routedTicket } from "./routed-terminal-fixture";
 interface StubSession {
   id: string;
   exited: boolean;
+  exitOutcome: "completed" | "crashed" | null;
   cwd: string | null;
   cols: number;
   rows: number;
@@ -56,6 +57,7 @@ function stubSession(id: string, overrides: Partial<StubSession> = {}): StubSess
   return {
     id,
     exited: false,
+    exitOutcome: null,
     cwd: "/home/tester/vibe-field",
     cols: 80,
     rows: 24,
@@ -104,6 +106,14 @@ function WorkspaceStub({
       sessions: workspace.panes.map((pane) => pane.session),
       activePaneId: workspace.activePaneId,
       activeSession: workspace.panes.find((pane) => pane.id === workspace.activePaneId)?.session,
+      replaceSession: (expectedId: string, summary: StubSession) => {
+        const targets = workspace.panes.filter((pane) => pane.session.id === expectedId);
+        if (targets.length === 0) return false;
+        for (const pane of targets) pane.session = stubSession(summary.id, summary);
+        workspace.mounts.push(summary.id);
+        setVersion((current) => current + 1);
+        return true;
+      },
       createSessionInActivePane: async () => {
         const active = workspace.panes.find((pane) => pane.id === workspace.activePaneId)!;
         const create = workspaceProps["createSplitSession"] as (
@@ -253,6 +263,7 @@ let requests: Array<{ method: string; params: unknown }> = [];
 /** What `agent.interrupt` answers with — or, when it is an Error, throws. */
 let interruptAnswer: unknown = { accepted: true };
 let terminateAnswer: Promise<unknown> | undefined;
+let createAnswer: Promise<unknown> | undefined;
 let rosterRows: Array<{ sessionId: string; workloadClass: string; health: string }> = [];
 const runtimeBirths = new Set<string>();
 const usedSessions = new Set<string>();
@@ -276,6 +287,7 @@ const fieldd = {
       return Promise.resolve(routedTicket((params as { sessionId: string }).sessionId));
     }
     if (method === "terminal.create") {
+      if (createAnswer) return createAnswer;
       return Promise.resolve({
         sessionId: "born-1",
         // A shell that has not drawn its first prompt has announced no OSC 7,
@@ -485,6 +497,7 @@ beforeEach(() => {
   foldFrame = null;
   interruptAnswer = { accepted: true };
   terminateAnswer = undefined;
+  createAnswer = undefined;
   rosterRows = [];
   runtimeBirths.clear();
   usedSessions.clear();
@@ -760,7 +773,129 @@ describe("the deck's pane frames", () => {
     ).toHaveLength(1);
   });
 
-  it("resumes an ended run and hands its pane the new terminal", async () => {
+  it("returns a completed agent to a fresh shell and launcher in the same background pane", async () => {
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("working-shell") },
+      { id: "mirror", session: stubSession("pty-1") },
+    ];
+    workspace.activePaneId = "pane-2";
+    foldRows = [managedSummary({ terminalSessionId: "pty-1", alive: false })];
+    const host = await mountDeck();
+    // A SessionEnd hook alone cannot replace a PTY that has not actually exited.
+    expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(0);
+    await act(async () => {
+      for (const pane of workspace.panes) {
+        if (pane.session.id === "pty-1")
+          pane.session = stubSession("pty-1", { exited: true, exitOutcome: "completed" });
+      }
+      workspace.refresh();
+    });
+    await settle();
+    expect(workspace.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
+      ["pane-1", "born-1"],
+      ["pane-2", "working-shell"],
+      ["mirror", "born-1"],
+    ]);
+    expect(workspace.activePaneId).toBe("pane-2");
+    expect(requests.filter((call) => call.method === "terminal.create")).toEqual([
+      {
+        method: "terminal.create",
+        params: { cwd: "/project/vibe-field", workloadClass: "interactive" },
+      },
+    ]);
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
+      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    ]);
+    expect(frameFor(host, "pty-1")).toBeNull();
+    expect(verb(frameFor(host, "born-1"), "resume")).toBeNull();
+    expect(paneOf(host, "pane-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
+    expect(foldRows).toHaveLength(1); // Session history was not deleted.
+  });
+
+  it.each(["shell", "remote", "crash"])("does not reset a %s on exit", async (kind) => {
+    workspace.panes = [
+      {
+        id: "pane-1",
+        session: stubSession("pty-1", {
+          exited: true,
+          exitOutcome: kind === "crash" ? "crashed" : "completed",
+        }),
+      },
+    ];
+    if (kind !== "shell") foldRows = [managedSummary({ terminalSessionId: "pty-1", alive: false })];
+    if (kind === "remote") remoteSessions.add("pty-1");
+    await mountDeck();
+    expect(workspace.panes[0]?.session.id).toBe("pty-1");
+    expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(0);
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toHaveLength(0);
+  });
+
+  it("retains the ended pane if a fresh shell cannot be created", async () => {
+    workspace.panes = [
+      {
+        id: "pane-1",
+        session: stubSession("pty-1", {
+          exited: true,
+          exitOutcome: "completed",
+        }),
+      },
+    ];
+    foldRows = [managedSummary({ terminalSessionId: "pty-1", alive: false })];
+    createAnswer = Promise.reject(new Error("floor unavailable"));
+    await mountDeck();
+    expect(workspace.panes[0]?.session.id).toBe("pty-1");
+    expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(1);
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toHaveLength(0);
+    expect(logged.some((line) => line.event === "renderer.godview.agent_exit_shell_failed")).toBe(
+      true,
+    );
+  });
+
+  it.each(["closed", "reassigned", "unmounted"])(
+    "releases a late replacement when its pane was %s",
+    async (change) => {
+      let finish!: (value: unknown) => void;
+      createAnswer = new Promise((resolve) => {
+        finish = resolve;
+      });
+      workspace.panes = [
+        { id: "pane-1", session: stubSession("pty-1", { exited: true, exitOutcome: "completed" }) },
+        { id: "pane-2", session: stubSession("working-shell") },
+      ];
+      workspace.activePaneId = "pane-2";
+      foldRows = [managedSummary({ terminalSessionId: "pty-1", alive: false })];
+      await mountDeck();
+      expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(1);
+      await act(async () => {
+        if (change === "unmounted") {
+          root?.unmount();
+          root = null;
+        } else {
+          workspace.panes =
+            change === "closed"
+              ? workspace.panes.slice(1)
+              : [{ id: "pane-1", session: stubSession("other-agent") }, workspace.panes[1]!];
+          workspace.refresh();
+        }
+      });
+      await act(async () =>
+        finish({
+          sessionId: "born-1",
+          session: bornSummary("born-1"),
+          ...routedTicket("born-1"),
+        }),
+      );
+      await settle();
+      expect(workspace.mounts).toEqual([]);
+      expect(workspace.activePaneId).toBe("pane-2");
+      expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
+        { method: "terminal.terminate", params: { sessionId: "born-1" } },
+      ]);
+    },
+  );
+
+  it("resumes an ended run with unknown exit outcome and hands its pane the new terminal", async () => {
     workspace.panes = [{ id: "pane-1", session: stubSession("pty-1", { exited: true }) }];
     foldRows = [
       managedSummary({

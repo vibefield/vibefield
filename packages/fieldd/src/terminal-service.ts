@@ -837,6 +837,12 @@ export class TerminalService {
    * 150 ms of the process ending (MEASURED at MF-1f), and the fold's exited
    * row had nothing to be hosted by.
    *
+   * Correction (2026-09-28): a completed native exit now returns attached
+   * panes to a fresh shell/launcher. The renderer releases this ended PTY
+   * through terminal.terminate AFTER conditional replacement succeeds. The
+   * retention class still protects the handoff and failed-exit diagnostics;
+   * conversation history does not depend on retaining terminal bytes.
+   *
    * What bounds it is unchanged: the AGENT scrollback cap still caps the bytes
    * retained, and the husk is reaped at both ends — `agent.resume` terminates
    * it once the successor holds the pane (agent-runtime.ts), and closing or

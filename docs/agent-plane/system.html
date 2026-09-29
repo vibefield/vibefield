@@ -1490,10 +1490,18 @@
                 </p>
               </div>
               <div class="contract-row">
-                <strong>Agent panes persist</strong>
+                <strong>Agent exits return the pane to a shell</strong>
                 <p>
                   The class is <code>keep-until-explicit-close</code>, not <code>keep-until-exit</code>:
-                  an agent that finishes leaves a pane with its final screen and a resume verb on it.
+                  custody survives long enough for the renderer to replace the ended PTY safely.
+                  <strong>Correction 2026-09-28:</strong> a local managed agent's confirmed
+                  <code>completed</code> native exit creates a fresh interactive shell in the same
+                  folder and conditionally replaces its current pane attachments. Pane identity,
+                  layout, focus and fullscreen stay intact; the empty-pane launcher returns.
+                  The audited <code>terminal.terminate</code> door then releases the old PTY.
+                  Conversation history remains resumable. Failed exits retain their diagnostic
+                  surface; monitor liveness alone never replaces a live process. A late birth
+                  whose pane closed or changed is released without mounting elsewhere.
                 </p>
               </div>
               <div class="contract-row">
@@ -1618,7 +1626,7 @@
             <p class="section-note">
               The fold holds managed runs, <em>pending</em> runs (a live PTY this boot could not
               re-attach to, resumable), and <em>exited</em> runs whose PTY the floor still lists — the
-              dead pane the deck is still showing, which keeps its resume verb. All three project to
+              diagnostic pane or an exit awaiting shell replacement. All three project to
               one <code>AgentSessionSummary</code>; a reader never branches on provenance.
             </p>
             <div class="callout warning">

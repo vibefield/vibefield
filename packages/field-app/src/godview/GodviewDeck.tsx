@@ -15,6 +15,7 @@ import {
   type PaneFrameVerbs,
   paneColours,
   UnusedPaneSessions,
+  useCompletedAgentPanes,
   useDeckZoom,
   useMonitorPalette,
   zoomLayoutApplied,
@@ -1123,6 +1124,32 @@ export function GodviewDeck({
   // package's stylesheet keys its pane rules on (the record's safe areas, the
   // active pane's radius, the line and the glow).
   const paneAgents = useDeckAgentFacts();
+  useCompletedAgentPanes(
+    runtime,
+    (workspace?.panes ?? [])
+      .map((pane) => pane.session)
+      .filter(
+        (session) =>
+          paneAgents.runs.has(session.id) && runtime?.remoteSession(session.id) === undefined,
+      ),
+    {
+      createShell: (session) =>
+        createSplitSession({
+          ...session,
+          cwd: paneAgents.agents.get(session.id)?.cwd ?? session.cwd,
+        }),
+      replaceSession: (id, next) => workspaceRef.current?.replaceSession(id, next) ?? false,
+      releaseSession: terminateTerminalSession,
+      onError: (cause) =>
+        getRendererLogger()
+          .child({ component: "godview" })
+          .error(
+            "renderer.godview.agent_exit_shell_failed",
+            "Could not return the ended agent pane to a shell",
+            cause,
+          ),
+    },
+  );
   useLayoutEffect(() => {
     if (runtime === null || workspace === undefined) return;
     // Includes the workspace's first shell, which bypasses the split override.
