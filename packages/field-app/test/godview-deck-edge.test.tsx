@@ -361,6 +361,7 @@ describe("the deck sheet's stylesheet", () => {
       "--vf-godview-deck-lip",
       "--vf-godview-deck-grip-width",
       "--vf-godview-deck-grip-height",
+      "--vf-godview-launcher-clearing-floor",
     ]) {
       expect(tokens, token).toMatch(new RegExp(`^\\s*${token}:`, "m"));
     }

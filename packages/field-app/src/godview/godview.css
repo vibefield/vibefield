@@ -633,11 +633,14 @@
     0 0 0 1px var(--panel-border);
   /* QL-1: the empty pane launcher's clearing is this sheet's own paint (pass 3
      §22 "in VibeField's sheet: the sheet's tint instead of the ground"), so a
-     thinned stage thins the clearing with it. The launcher's stylesheet reads
-     the token; the rule for the clearing stays the package's. */
+     thinned stage thins the clearing with it — down to a FLOOR (DESIGN.md
+     §2.7, `--vf-godview-launcher-clearing-floor`): under it the prompt the
+     launcher stands on reads through the rows. The launcher's stylesheet
+     reads the token; the rule for the clearing stays the package's. */
   --vf-pane-launcher-ground: color-mix(
     in srgb,
-    var(--deck-ground) var(--vf-godview-stage-opacity, 100%),
+    var(--deck-ground)
+      max(var(--vf-godview-stage-opacity, 100%), var(--vf-godview-launcher-clearing-floor)),
     transparent
   );
 }

@@ -380,6 +380,11 @@ describe("UI system ownership boundaries", () => {
     expect(source("godview/godview.css")).toMatch(
       /^\.vf-godview-terminal-deck \{[^}]*--vf-pane-launcher-ground:/m,
     );
+    // …never thinner than DESIGN.md §2.7's floor, whatever the stage's glass:
+    // the prompt the launcher stands on must not read through its rows
+    expect(source("godview/godview.css")).toMatch(
+      /--vf-pane-launcher-ground: color-mix\([^;]*max\(var\(--vf-godview-stage-opacity, 100%\), var\(--vf-godview-launcher-clearing-floor\)\)/,
+    );
 
     // The specimen supplies what a host supplies — a pane, the ground, door
     // answers — and mounts the shipping chrome over the shipping projection.

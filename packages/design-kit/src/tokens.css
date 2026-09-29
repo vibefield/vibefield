@@ -154,6 +154,9 @@
   --vf-godview-dark-deck-shadow: 0 -20px 40px rgb(0 0 0 / 40%);
   --vf-godview-deck-radius: 12px;
   --vf-godview-deck-lip: 14px;
+  /* §2.7 — the launcher's clearing is never thinner than this, whatever the
+     stage's glass: the prompt beneath must not read through its rows */
+  --vf-godview-launcher-clearing-floor: 92%;
   --vf-godview-deck-grip-width: 36px;
   --vf-godview-deck-grip-height: 4px;
 
