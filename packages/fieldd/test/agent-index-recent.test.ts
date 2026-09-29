@@ -485,6 +485,13 @@ describe("IndexService.recent — the join", () => {
     ]);
     // a persona's root is fieldd's business: no row names it
     expect(JSON.stringify(rows)).not.toContain(personaRoot);
+    // …and the native resume's provenance reads the SAME join: the agent and
+    // the persona the index files each conversation under (EL7 — agent.resume
+    // runs it only there)
+    expect(await index.nativeSessionAgent("n1")).toEqual({ provider: ROW.id });
+    expect(await index.nativeSessionAgent("n2")).toEqual({ provider: ROW.id, profileId: "p-work" });
+    expect(await index.nativeSessionAgent("n3")).toEqual({});
+    expect(await index.nativeSessionAgent("n-never")).toBeUndefined();
   });
 
   it("the tables are read once and served from the cache; a new daemon generation reads them again", async () => {

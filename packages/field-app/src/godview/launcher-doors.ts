@@ -251,6 +251,7 @@ export function refusalReason(cause: unknown): string {
     if (details["state"] === "resuming") return "it is already being resumed";
     if (details["state"] === "signed-out") return "its profile is signed out";
     if (details["reason"] === "missing-cwd") return "its folder is gone";
+    if (details["reason"] === "other-profile") return "it is held under another profile";
     if (details["reason"] === "malformed-native-id") return "its id is not one an agent can resume";
   }
   if (refusal.kind === "NOT_FOUND") {

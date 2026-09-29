@@ -410,6 +410,10 @@ describe("the verbs", () => {
       ],
       [refusal("NOT_FOUND", "the agent vanished"), "the agent vanished"],
       [
+        refusal("PRECONDITION_FAILED", "x", { nativeSessionId: "n", reason: "other-profile" }),
+        "it is held under another profile",
+      ],
+      [
         refusal("PRECONDITION_FAILED", "x", { reason: "missing-cwd", cwd: "/gone" }),
         "its folder is gone",
       ],

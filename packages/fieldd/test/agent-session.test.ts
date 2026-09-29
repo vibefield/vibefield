@@ -1687,28 +1687,46 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     await win.call("terminal.terminate", { sessionId: native.terminal.sessionId });
   }, 60_000);
 
-  it("QL-D10 — a native resume under an Agent Profile runs on its sign-in for the agent; under a profile id, that persona; with neither, the agent's own folder — never the default; a profile with no sign-in for the agent refuses before anything runs", async () => {
+  it("QL-D10 — a native resume runs where the index files the conversation: in the agent's own folder when it is filed there, never the default profile; naming another persona (by id or by its Agent Profile) refuses, as does a profile with no sign-in for the agent — before anything runs", async () => {
     const box = await setup({ floor: "real", profiles: true, catalog: FILED_CATALOG });
     const { daemon, dataDir, envOut, seen } = box;
-    fileConversations(box, ["conv-set", "conv-id", "conv-own", "conv-native", "conv-empty"]);
+    // every conversation here is filed in the agent's own folder (`~/.scripted`,
+    // no enrolled root, so no persona)
+    fileConversations(box, ["conv-own", "conv-native", "conv-empty"]);
     const win = await window(daemon, DECK, "qn4");
     await indexReady(win);
     const work = await signedIn(win, dataDir, "Work", { default: true });
-    const underSet = (await win.call("agent.resume", {
+    const before = seen.length;
+
+    // EL7 (the review's finding 8): the persona is the index's, never the
+    // caller's — Work does not hold this conversation, however it is named
+    for (const named of [{ profileId: work.profileId }, { profileSet: work.set }]) {
+      const refused = await win.callErr("agent.resume", {
+        provider: "scripted",
+        nativeSessionId: "conv-own",
+        cwd: envOut,
+        ...named,
+      });
+      expect(refused.data?.kind, JSON.stringify(named)).toBe("PRECONDITION_FAILED");
+      expect(refused.data?.details).toMatchObject({
+        nativeSessionId: "conv-own",
+        reason: "other-profile",
+      });
+    }
+    // an Agent Profile with no sign-in for the agent refuses as it resolves
+    const made = (await win.call("agents.profileSets.create", {
+      label: "Empty",
+    })) as AgentsProfileSetsSetResult;
+    const empty = await win.callErr("agent.resume", {
       provider: "scripted",
-      nativeSessionId: "conv-set",
+      nativeSessionId: "conv-empty",
       cwd: envOut,
-      profileSet: work.set,
-    })) as AgentSpawnResult;
-    expect(seen.at(-1)?.id).toBe(work.profileId);
-    expect(underSet.session.profileId).toBe(work.profileId);
-    const underId = (await win.call("agent.resume", {
-      provider: "scripted",
-      nativeSessionId: "conv-id",
-      cwd: envOut,
-      profileId: work.profileId,
-    })) as AgentSpawnResult;
-    expect(seen.at(-1)?.id).toBe(work.profileId);
+      profileSet: made.set.id,
+    });
+    expect(empty.data?.kind).toBe("NOT_FOUND");
+    expect(empty.message).toContain("Empty has no Scripted sign-in");
+    expect(seen.length).toBe(before);
+
     // Work is the DEFAULT, and a resume that names nothing still continues in
     // the agent's own folder: the conversation lives where it was born
     const own = (await win.call("agent.resume", {
@@ -1718,6 +1736,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     })) as AgentSpawnResult;
     expect(seen.at(-1)).toBeUndefined();
     expect(own.session.profileId).toBeUndefined();
+    // …as does naming the agent's own folder by its Agent Profile
     const native = (await win.call("agent.resume", {
       provider: "scripted",
       nativeSessionId: "conv-native",
@@ -1725,22 +1744,9 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
       profileSet: "native",
     })) as AgentSpawnResult;
     expect(seen.at(-1)).toBeUndefined();
+    expect(native.session.profileId).toBeUndefined();
 
-    const made = (await win.call("agents.profileSets.create", {
-      label: "Empty",
-    })) as AgentsProfileSetsSetResult;
-    const before = seen.length;
-    const refused = await win.callErr("agent.resume", {
-      provider: "scripted",
-      nativeSessionId: "conv-empty",
-      cwd: envOut,
-      profileSet: made.set.id,
-    });
-    expect(refused.data?.kind).toBe("NOT_FOUND");
-    expect(refused.message).toContain("Empty has no Scripted sign-in");
-    expect(seen.length).toBe(before);
-
-    for (const run of [underSet, underId, own, native]) {
+    for (const run of [own, native]) {
       await win.call("terminal.terminate", { sessionId: run.terminal.sessionId });
     }
   }, 60_000);

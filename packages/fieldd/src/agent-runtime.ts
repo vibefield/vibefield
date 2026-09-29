@@ -1082,6 +1082,24 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         },
       );
     }
+    // …and only under the persona the index files it under (EL7, the review's
+    // finding 8): a resume continues where the conversation LIVES, and an
+    // enrolled root is one persona's. The persona the caller named (by id, or
+    // by its Agent Profile's sign-in) must be that one — no persona where the
+    // index files it in the agent's own folder. The renderer's word for the
+    // persona is no more provenance than its word for the agent.
+    if (filed.profileId !== profileId) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the conversation is held under another profile than the one named",
+        false,
+        {
+          provider: params.provider,
+          nativeSessionId: params.nativeSessionId,
+          reason: "other-profile",
+        },
+      );
+    }
     const identity = this.identity();
     const entry = await this.creation(profileId ?? null, async () => {
       const result = await this.runtime.resume({
