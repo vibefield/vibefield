@@ -556,6 +556,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * that persona (its sign-in lands in the root) for as long as it lives,
    * past the verification's timeout. */
   private readonly loginPanes = new Map<string, { profileId: string; since: string }>();
+  /** QL — the conversations a resume is starting right now ("provider\0native
+   * id"), claimed before its first await (`claimConversation`). */
+  private readonly resumingConversations = new Set<string>();
   /** AR-S2 — creations in flight (a spawn or resume puppeteer has not
    * answered yet), by token, with the persona they named; null = none named,
    * so the default set decides and it may be any. */
@@ -1029,6 +1032,23 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const terminals = this.requireTerminals();
     const running = this.runContinuing(params.provider, params.nativeSessionId);
     if (running !== undefined) throw conversationRunning(running);
+    // …and no other resume is STARTING it: the checks below await, and a run
+    // only becomes visible to `runContinuing` once it is entered, so two calls
+    // racing through that window would both start one. Claimed here, before
+    // the first await; given back once the run is entered or the call failed.
+    const release = this.claimConversation(params.provider, params.nativeSessionId);
+    try {
+      return await this.resumeNativeClaimed(params, principal, terminals);
+    } finally {
+      release();
+    }
+  }
+
+  private async resumeNativeClaimed(
+    params: AgentResumeNativeParams,
+    principal: GrantPrincipal,
+    terminals: TerminalService,
+  ): Promise<AgentSpawnResult> {
     const profileId = await this.resumeProfile(params);
     if (!this.personaActive(profileId)) {
       throw new RpcCallError(
@@ -1106,6 +1126,36 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
     }
     return account.id;
+  }
+
+  /** QL — claim a conversation for the resume now starting it, or refuse
+   * when another resume (either form) already holds it: AR-4b's one-run law
+   * over the window `runContinuing` cannot see, between a resume's checks and
+   * its run being entered. Synchronous, so a caller claims before it awaits;
+   * the answer gives the claim back. */
+  private claimConversation(
+    providerId: string,
+    nativeSessionId: string,
+    runtimeRunId?: string,
+  ): () => void {
+    const key = `${providerId}\u0000${nativeSessionId}`;
+    if (this.resumingConversations.has(key)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the conversation is already being resumed in another session",
+        false,
+        {
+          provider: providerId,
+          nativeSessionId,
+          ...(runtimeRunId !== undefined ? { runtimeRunId } : {}),
+          state: "resuming",
+        },
+      );
+    }
+    this.resumingConversations.add(key);
+    return () => {
+      this.resumingConversations.delete(key);
+    };
   }
 
   /** AR-4b's one-run law across both forms: the run (live, or pending a
@@ -1214,7 +1264,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     );
     if (running !== undefined) throw conversationRunning(running);
     const husk = this.exited.get(record.runtimeRunId)?.terminalSessionId;
-    const entry = await this.resumeFromRecord(record, params.cwd, husk);
+    // and no resume of either form is starting it right now (claimed before
+    // the await, as the native form claims it)
+    const release = this.claimConversation(
+      record.continuation.providerId,
+      record.continuation.nativeSessionId,
+      record.runtimeRunId,
+    );
+    let entry: ManagedEntry;
+    try {
+      entry = await this.resumeFromRecord(record, params.cwd, husk);
+    } finally {
+      release();
+    }
     // MF-1f — the record names its successor, and the exited row goes: two
     // runs on one native conversation is the state AR-4b forbids, and without
     // this mark a second `agent.resume` on the same record would have made
@@ -2689,6 +2751,26 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * resume is ledgered by its door with the caller as the actor; only the
    * daemon's own idle resume is ledgered here, as the system. */
   private async replacePending(
+    entry: PendingEntry,
+    cwdOverride: string | undefined,
+    how: "idle" | "manual",
+  ): Promise<ManagedEntry> {
+    // QL — the replacement takes the run out of `pending` before its new run
+    // is entered, so for that window `runContinuing` cannot see it: it holds
+    // the conversation's claim instead, as a resume of either form does.
+    const release = this.claimConversation(
+      entry.record.continuation.providerId,
+      entry.record.continuation.nativeSessionId,
+      entry.record.runtimeRunId,
+    );
+    try {
+      return await this.replacePendingClaimed(entry, cwdOverride, how);
+    } finally {
+      release();
+    }
+  }
+
+  private async replacePendingClaimed(
     entry: PendingEntry,
     cwdOverride: string | undefined,
     how: "idle" | "manual",

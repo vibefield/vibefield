@@ -954,6 +954,34 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     // nothing was recorded for any of them
     expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
   });
+
+  it("QL-D10 — two native resumes of one conversation racing through the checks: the second is refused while the first holds it, and the claim is given back after", async () => {
+    const box = await setup({ floor: "mock", catalog: FILED_CATALOG });
+    const { daemon, envOut } = box;
+    const win = await window(daemon, DECK, "qn6");
+    await indexReady(win);
+    fileConversations(box, ["conv-race"]);
+    const resume = () =>
+      win.callErr("agent.resume", {
+        provider: "scripted",
+        nativeSessionId: "conv-race",
+        cwd: envOut,
+      }) as Promise<RpcErrorShape>;
+    // both sent before either answers: the first awaits the index (and then a
+    // birth the mock floor never makes) with the conversation claimed
+    const [first, second] = await Promise.all([resume(), resume()]);
+    expect(second.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(second.data?.details).toMatchObject({
+      provider: "scripted",
+      nativeSessionId: "conv-race",
+      state: "resuming",
+    });
+    // the first went on past every check (no floor to start it on here)
+    expect(first.data?.details).not.toMatchObject({ state: "resuming" });
+    // …and gave the claim back when it failed: the next resume is not refused for it
+    const after = await resume();
+    expect(after.data?.details).not.toMatchObject({ state: "resuming" });
+  });
 });
 
 describe("managed sessions over the REAL floor (field-native)", () => {

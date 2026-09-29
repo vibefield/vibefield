@@ -248,6 +248,7 @@ export function refusalReason(cause: unknown): string {
         : "this agent can’t start sessions here";
     }
     if (details["state"] === "terminal-alive") return "it is already running";
+    if (details["state"] === "resuming") return "it is already being resumed";
     if (details["state"] === "signed-out") return "its profile is signed out";
     if (details["reason"] === "missing-cwd") return "its folder is gone";
     if (details["reason"] === "malformed-native-id") return "its id is not one an agent can resume";

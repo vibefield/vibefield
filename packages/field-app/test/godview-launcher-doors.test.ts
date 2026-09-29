@@ -381,6 +381,10 @@ describe("the verbs", () => {
         refusal("PRECONDITION_FAILED", "x", { runtimeRunId: "run-9", state: "terminal-alive" }),
         "it is already running",
       ],
+      [
+        refusal("PRECONDITION_FAILED", "x", { nativeSessionId: "n", state: "resuming" }),
+        "it is already being resumed",
+      ],
       [refusal("PRECONDITION_FAILED", "x", { state: "signed-out" }), "its profile is signed out"],
       [
         refusal("NOT_FOUND", "no profile p", { provider: "a", code: "AGENT_PROFILE_NOT_FOUND" }),
