@@ -246,19 +246,21 @@ export function GodviewDeckLaunchers({
       launcherPortOver({
         client: fieldd,
         providers: () => providersRef.current,
-        place: async (terminal, replacing): Promise<LauncherOutcome> => {
+        place: async (terminal, { paneId, replacing }): Promise<LauncherOutcome> => {
           if (door === null) return { accepted: false, reason: "the deck is not connected" };
           // The answer carries the SAME create ticket a shell birth gets: the
           // pool adopts it and the pane showing the fresh shell takes it
           // (AR-4b's hand-over, as the frame's resume verb does it).
           const born = adoptCreatedTerminal(terminal);
-          const outcome = await door.mountLocal(born.sessionId, { replacing });
+          // THIS pane: a mirrored fresh shell shows in several, and the
+          // launcher that was used is the one whose pane takes the agent
+          const outcome = await door.mountLocal(born.sessionId, { replacing, paneId });
           if (outcome.state === "mounted") return { accepted: true };
           const reason = outcome.state === "failed" ? outcome.reason : "no pane is open";
           log().info(
             "renderer.godview.launcher_unmounted",
             "the agent started, but the launcher's pane could not take it",
-            { sessionId: born.sessionId, replacing, state: outcome.state, reason },
+            { sessionId: born.sessionId, paneId, replacing, state: outcome.state, reason },
           );
           // Said as what happened: the agent IS running, and the monitor has it.
           return {

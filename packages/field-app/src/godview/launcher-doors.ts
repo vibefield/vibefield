@@ -42,10 +42,11 @@ export interface LauncherPortDeps {
   providers(): readonly AgentProviderSummary[];
   /**
    * Hand a born terminal (the spawn's or the resume's create ticket) to the
-   * pane showing `replacing`, the fresh shell the launcher sat on (QL-D8).
-   * The deck's: it adopts the ticket and mounts through its serialized door.
+   * launcher's own pane (`paneId`), in place of `replacing`, the fresh shell
+   * the launcher sat on (QL-D8). The deck's: it adopts the ticket and mounts
+   * through its serialized door.
    */
-  place(terminal: unknown, replacing: string): Promise<LauncherOutcome>;
+  place(terminal: unknown, where: { paneId: string; replacing: string }): Promise<LauncherOutcome>;
 }
 
 /** What a row says when it has no title: the design's own words (§22). */
@@ -290,9 +291,12 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
   const facts = new Map<string, ResumeFacts>();
   const listed = { here: [] as string[], all: [] as string[] };
 
-  const place = async (answered: unknown, replacing: string): Promise<LauncherOutcome> => {
+  const place = async (
+    answered: unknown,
+    where: { paneId: string; replacing: string },
+  ): Promise<LauncherOutcome> => {
     const result = AgentSpawnResult.parse(answered);
-    return await deps.place(result.terminal, replacing);
+    return await deps.place(result.terminal, where);
   };
 
   return {
@@ -379,7 +383,7 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
       } catch (cause) {
         return { accepted: false, reason: refusalReason(cause) };
       }
-      return await place(answered, request.sessionId);
+      return await place(answered, { paneId: request.paneId, replacing: request.sessionId });
     },
 
     async resume(request) {
@@ -400,7 +404,7 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
       } catch (cause) {
         return { accepted: false, reason: refusalReason(cause) };
       }
-      return await place(answered, request.sessionId);
+      return await place(answered, { paneId: request.paneId, replacing: request.sessionId });
     },
   };
 }

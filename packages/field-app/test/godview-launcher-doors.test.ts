@@ -320,7 +320,11 @@ describe("the verbs", () => {
       cwd: "/repo",
     });
     expect(request).toHaveBeenCalledWith("agent.spawn", { provider: "claude", cwd: "/repo" });
-    expect(place).toHaveBeenCalledWith((SPAWNED as { terminal: unknown }).terminal, "shell-1");
+    // THIS pane, in place of the shell it sat on
+    expect(place).toHaveBeenCalledWith((SPAWNED as { terminal: unknown }).terminal, {
+      paneId: "pane-1",
+      replacing: "shell-1",
+    });
     expect(outcome).toEqual({ accepted: true });
   });
 
@@ -349,11 +353,14 @@ describe("the verbs", () => {
       title: "Launcher gate",
     });
 
-    await launcher.resume({ paneId: "p", sessionId: "shell-2", session: claude, cwd: "/pane" });
+    await launcher.resume({ paneId: "p-2", sessionId: "shell-2", session: claude, cwd: "/pane" });
     const last = request.mock.lastCall?.[1] as Record<string, unknown>;
     expect(last).not.toHaveProperty("profileId");
     expect(last).not.toHaveProperty("profileSet");
-    expect(place).toHaveBeenLastCalledWith((SPAWNED as { terminal: unknown }).terminal, "shell-2");
+    expect(place).toHaveBeenLastCalledWith((SPAWNED as { terminal: unknown }).terminal, {
+      paneId: "p-2",
+      replacing: "shell-2",
+    });
   });
 
   it("refuses a row it never listed rather than guessing its agent", async () => {

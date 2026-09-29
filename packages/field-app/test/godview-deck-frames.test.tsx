@@ -1178,6 +1178,26 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(launcherOwnsKeys()).toBe(true);
   });
 
+  it("lands a launch in the launcher's OWN pane when the fresh shell is mirrored in another", async () => {
+    runtimeBirths.add("pty-1");
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-1") },
+    ];
+    workspace.activePaneId = "pane-2";
+    const host = await mountDeck();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-2"), "Digit1");
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "agent.spawn")).toHaveLength(1);
+    // pane-2's launcher was used, so pane-2 takes the agent; pane-1 keeps the shell
+    expect(workspace.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
+      ["pane-1", "pty-1"],
+      ["pane-2", "pty-launched"],
+    ]);
+  });
+
   it("launches on ⌥1 into THIS pane, in its folder, and the reaper closes the shell it replaced", async () => {
     runtimeBirths.add("pty-1");
     const host = await mountDeck();

@@ -839,7 +839,11 @@ export function GodviewDeck({
    * the frame verbs can both hold it without being rebuilt.
    */
   const mountSummaryNow = useCallback(
-    async (summary: SessionSummary, replacing: string | undefined): Promise<LocalMountOutcome> => {
+    async (
+      summary: SessionSummary,
+      replacing: string | undefined,
+      paneId?: string,
+    ): Promise<LocalMountOutcome> => {
       const paneShows = (sessionId: string): boolean =>
         workspaceRef.current?.panes.some((pane) => pane.session.id === sessionId) === true;
       // Read AFTER whatever round trip produced the summary: the panes and the
@@ -853,7 +857,9 @@ export function GodviewDeck({
           ? { state: "mounted", sessionId }
           : { state: "failed", reason: "the workspace did not take the mount" };
       }
-      const target = context.panes.find((pane) => pane.session.id === replacing);
+      const target = context.panes.find(
+        (pane) => pane.session.id === replacing && (paneId === undefined || pane.id === paneId),
+      );
       if (target === undefined)
         return { state: "failed", reason: "no pane shows the replaced terminal any more" };
       const previous = context.activeSession?.id;
@@ -1071,7 +1077,7 @@ export function GodviewDeck({
         const summary = await terminalSessionSummary(sessionId);
         if (summary === null)
           return { state: "failed", reason: "the floor does not list this session" };
-        return await mountSummaryNow(summary, options?.replacing);
+        return await mountSummaryNow(summary, options?.replacing, options?.paneId);
       } catch (cause) {
         return {
           state: "failed",

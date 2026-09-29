@@ -79,6 +79,10 @@ export interface ProfileSetsPort {
  * pane. Ignored when no pane shows `replacing`. */
 export interface LocalMountOptions {
   replacing?: string;
+  /** With `replacing`: the ONE pane to land in (QL — the launcher's own pane,
+   * where a mirrored shell shows in several); refused if that pane no longer
+   * shows the replaced terminal. Without it, the first pane showing it. */
+  paneId?: string;
 }
 
 /** The name GT-4 gave the two-verb door; kept for the call sites that only
