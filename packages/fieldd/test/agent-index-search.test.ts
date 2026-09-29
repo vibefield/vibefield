@@ -577,6 +577,17 @@ describe("index.recent — the empty pane launcher's list (QL)", () => {
     ]);
   });
 
+  it("a relative folder names no folder: refused before the index is asked", async () => {
+    const world = await setup();
+    await ready(world.daemon);
+    const win = await windowToken(world.daemon, ["index.search"], "r3");
+    const before = world.asked().length;
+    const error = await win.callErr("index.recent", { cwd: "w/one", scope: "here" });
+    expect(error.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(error.message).toContain("absolute");
+    expect(world.asked().slice(before)).toEqual([]);
+  });
+
   it("an index that is not up refuses UNAVAILABLE with its phase, as index.sessions does", async () => {
     const world = await setup({ mode: "silent" });
     const win = await windowToken(world.daemon, ["index.search"], "r2");

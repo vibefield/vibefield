@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAbsoluteDesktopPath } from "./paths";
 
 // AR-1 — the agent index (rosetta) and the agent runtime's distribution and
 // persona doors (puppeteer): the wire shapes behind `index.*` and `agents.*`
@@ -579,8 +580,15 @@ export const INDEX_RECENT_DEFAULT_LIMIT = 100;
 
 export const IndexRecentParams = z
   .object({
-    /** the pane's folder, absolute; absent = no folder, so nothing is "here" */
-    cwd: z.string().min(1).max(4096).optional(),
+    /** the pane's folder, ABSOLUTE (POSIX, a drive or UNC — a relative path
+     * names no folder fieldd could resolve, and would be resolved against
+     * fieldd's own cwd); absent = no folder, so nothing is "here" */
+    cwd: z
+      .string()
+      .min(1)
+      .max(4096)
+      .refine(isAbsoluteDesktopPath, "expected an absolute folder path")
+      .optional(),
     scope: z.enum(["here", "all"]),
     limit: z.number().int().min(1).max(500).optional(),
   })

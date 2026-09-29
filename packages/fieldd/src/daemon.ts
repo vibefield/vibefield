@@ -1424,7 +1424,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          'expected { cwd?, scope: "here" | "all", limit? (1..500) }',
+          'expected { cwd? (an absolute folder), scope: "here" | "all", limit? (1..500) }',
           false,
         );
       return await index.recent(parsed.data);

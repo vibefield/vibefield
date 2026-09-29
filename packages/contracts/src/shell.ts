@@ -11,6 +11,7 @@ import {
   SurfaceReuseKeyV1,
   SurfaceSourceDescriptorV1,
 } from "./live-surfaces";
+import { isAbsoluteDesktopPath } from "./paths";
 import { PluginId } from "./plugins";
 import { ScreenshotShortcutState } from "./screenshot";
 import { TERMINAL_LINK_MAX_CHARS } from "./terminal";
@@ -296,14 +297,6 @@ export const ShellDialogPickFolderParams = z
   .object({ purpose: z.literal("artifact.publish") })
   .passthrough();
 export type ShellDialogPickFolderParams = z.infer<typeof ShellDialogPickFolderParams>;
-
-/** An absolute path on this desktop: POSIX, a drive, or UNC; never a NUL. */
-function isAbsoluteDesktopPath(path: string): boolean {
-  return (
-    !path.includes("\0") &&
-    (path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\/]+[\\/]/.test(path))
-  );
-}
 
 const ShellAbsoluteFolderPath = z
   .string()

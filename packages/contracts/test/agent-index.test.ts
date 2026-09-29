@@ -463,7 +463,7 @@ describe("the session rows fieldd READS from rosetta (AR-4)", () => {
 });
 
 describe("index.recent's shapes (QL)", () => {
-  it("params: a scope is required, the folder optional, the limit 1..500", () => {
+  it("params: a scope is required, the folder optional and absolute, the limit 1..500", () => {
     expect(IndexRecentParams.safeParse({ scope: "here", cwd: "/w/app" }).success).toBe(true);
     expect(IndexRecentParams.safeParse({ scope: "all" }).success).toBe(true);
     expect(IndexRecentParams.safeParse({ cwd: "/w/app" }).success).toBe(false);
@@ -472,6 +472,13 @@ describe("index.recent's shapes (QL)", () => {
     expect(IndexRecentParams.safeParse({ scope: "all", limit: 501 }).success).toBe(false);
     expect(IndexRecentParams.safeParse({ scope: "all", limit: 500 }).success).toBe(true);
     expect(IndexRecentParams.safeParse({ scope: "all", cwd: "" }).success).toBe(false);
+    // the folder is absolute, or it is no folder at all
+    for (const cwd of ["relative/dir", "./app", "~/app", "app", "/w/a\0b"]) {
+      expect(IndexRecentParams.safeParse({ scope: "here", cwd }).success, cwd).toBe(false);
+    }
+    for (const cwd of ["/", "C:\\Users\\kim", "D:/w", "\\\\host\\share"]) {
+      expect(IndexRecentParams.safeParse({ scope: "here", cwd }).success, cwd).toBe(true);
+    }
   });
 
   it("a row is an IndexSession plus the launcher's columns; `here` is required, the rest optional, unknown keys ride through", () => {
