@@ -4,8 +4,7 @@
  *
  * A pane shows the empty pane launcher while its session was born in this view
  * (the deck's new-pane door, or the workspace's first shell — ghosttea's birth
- * receipt), has no agent facet, has not exited, has had no input, runs no
- * foreground job and is not a peer's. Restored and attached sessions have no
+ * receipt), has no agent facet, has not exited, has had no input and is not a peer's. Restored and attached sessions have no
  * receipt and never qualify. Pure: the deck supplies the facts.
  */
 
@@ -42,7 +41,7 @@ describe("the fresh shells", () => {
     { id: "peer", exited: false, activity: { kind: "idle" } },
   ];
 
-  it("admits only a shell born here with no agent, no input, no exit, no job, not a peer's", () => {
+  it("admits only a shell born here with no agent, no input, no exit, not a peer's", () => {
     const fresh = freshShellIds(
       sessions,
       facts({
@@ -52,7 +51,7 @@ describe("the fresh shells", () => {
         isRemote: ["peer"],
       }),
     );
-    expect([...fresh].sort()).toEqual(["first", "split"]);
+    expect([...fresh].sort()).toEqual(["busy", "first", "split"]);
   });
 
   it("never admits a restored or attached session, however empty", () => {

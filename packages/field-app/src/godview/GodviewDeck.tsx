@@ -56,7 +56,7 @@ import {
 } from "../terminal/pool";
 import { afterNextFrame, godviewColdOpen } from "./cold-open";
 import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
-import { GodviewDeckLaunchers, recordBornShell } from "./deck-launchers";
+import { bornInThisView, GodviewDeckLaunchers, recordBornShell } from "./deck-launchers";
 import {
   paneCwd,
   type RestoreQuestion,
@@ -271,6 +271,14 @@ export function GodviewDeck({
    * publishes a fresh one on every pane change — so an attach reads the current
    * one at call time instead of closing over whichever existed at build time. */
   const workspaceRef = useRef<GhostteaWorkspaceContext>(undefined);
+  const [terminalVisualIds, setTerminalVisualIds] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  const transferBubble = useCallback((previous: string, next: string): void => {
+    setTerminalVisualIds((current) =>
+      new Map(current).set(next, current.get(previous) ?? previous),
+    );
+  }, []);
   /** AR-4b — the door's mounts, one at a time (see `mountLocal`). */
   const mountQueue = useRef<Promise<unknown>>(Promise.resolve());
   /** The deck's own wrapper — the element pane zoom writes its phase onto. It
@@ -1124,6 +1132,9 @@ export function GodviewDeck({
   // package's stylesheet keys its pane rules on (the record's safe areas, the
   // active pane's radius, the line and the glow).
   const paneAgents = useDeckAgentFacts();
+  const paneRuns = useRef(paneAgents.runs);
+  paneRuns.current = paneAgents.runs;
+
   useCompletedAgentPanes(
     runtime,
     (workspace?.panes ?? [])
@@ -1138,7 +1149,11 @@ export function GodviewDeck({
           ...session,
           cwd: paneAgents.agents.get(session.id)?.cwd ?? session.cwd,
         }),
-      replaceSession: (id, next) => workspaceRef.current?.replaceSession(id, next) ?? false,
+      replaceSession: (id, next) => {
+        const replaced = workspaceRef.current?.replaceSession?.(id, next) ?? false;
+        if (replaced) transferBubble(id, next.id);
+        return replaced;
+      },
       releaseSession: terminateTerminalSession,
       onError: (cause) =>
         getRendererLogger()
@@ -1150,35 +1165,96 @@ export function GodviewDeck({
           ),
     },
   );
+  const shellUsed = useCallback(
+    (session: SessionSummary): boolean =>
+      runtime?.sessionHasInput(session.id) === true ||
+      session.exited ||
+      paneAgents.runs.has(session.id) ||
+      runtime?.remoteSession(session.id) !== undefined,
+    [runtime, paneAgents.runs],
+  );
+  const releaseUnusedShell = useCallback((sessionId: string, onFailure?: () => void): void => {
+    void terminateTerminalSession(sessionId).catch((cause: unknown) => {
+      onFailure?.();
+      getRendererLogger()
+        .child({ component: "godview" })
+        .error(
+          "renderer.godview.unused_pane_close_failed",
+          "Could not close the unused shell",
+          cause,
+        );
+    });
+  }, []);
   useLayoutEffect(() => {
     if (runtime === null || workspace === undefined) return;
-    // Includes the workspace's first shell, which bypasses the split override.
+    const bornHere = bornInThisView(runtime);
     for (const { session } of workspace.panes) {
-      if (runtime.sessionCreatedHere(session.id)) unusedPanes.created(session.id);
+      if (bornHere(session.id)) unusedPanes.created(session.id);
     }
-    const detached = unusedPanes.update(
+    for (const session of unusedPanes.update(
       workspace.panes.map((pane) => pane.session),
-      (session) =>
-        runtime.sessionHasInput(session.id) ||
-        session.exited ||
-        session.activity.kind === "foreground-job" ||
-        paneAgents.agents.has(session.id) ||
-        runtime.remoteSession(session.id) !== undefined,
-    );
-    for (const session of detached) {
-      // Replacements and closes both release the final attachment. Hide the
-      // bubble while the audited door runs; a refusal restores it in the pool.
-      void terminateTerminalSession(session.id).catch((cause: unknown) =>
-        getRendererLogger()
-          .child({ component: "godview" })
-          .error(
-            "renderer.godview.unused_pane_close_failed",
-            "Could not close the unused shell",
-            cause,
-          ),
+      shellUsed,
+      (session) => session.activity.kind === "foreground-job",
+    ))
+      releaseUnusedShell(session.id);
+  }, [workspace, runtime, unusedPanes, shellUsed, releaseUnusedShell]);
+  useEffect(() => {
+    if (runtime === null) return;
+    const observe = (event: Event): void => {
+      const session = (event as CustomEvent<SessionSummary>).detail;
+      for (const ready of unusedPanes.observe(
+        session,
+        shellUsed(session),
+        session.activity.kind === "foreground-job",
+      )) {
+        releaseUnusedShell(ready.id);
+      }
+    };
+    runtime.addEventListener("session-metadata", observe);
+    return () => runtime.removeEventListener("session-metadata", observe);
+  }, [runtime, unusedPanes, shellUsed, releaseUnusedShell]);
+  const prepareLauncherReplacement = useCallback(
+    (previous: string, next: string): (() => void) => {
+      const showing =
+        workspaceRef.current?.panes.filter((pane) => pane.session.id === previous) ?? [];
+      if (
+        runtime === null ||
+        showing.length !== 1 ||
+        !bornInThisView(runtime)(previous) ||
+        runtime.sessionHasInput(previous) ||
+        paneRuns.current.has(previous) ||
+        runtime.remoteSession(previous) !== undefined
+      )
+        return () => undefined;
+      transferBubble(previous, next);
+      // The monitor can publish the agent before the workspace finishes mounting.
+      // Reserve its body now; failed placement restores distinct terminal bodies.
+      return () => setTerminalVisualIds((current) => new Map(current).set(next, next));
+    },
+    [runtime, transferBubble],
+  );
+  const onLauncherReplaced = useCallback(
+    (previous: string, next: string): boolean => {
+      // Check the committed workspace, not the launch-time render. A mirror or
+      // input delivered while the agent started must keep its original shell.
+      if (
+        runtime === null ||
+        !bornInThisView(runtime)(previous) ||
+        runtime.sessionHasInput(previous) ||
+        paneRuns.current.has(previous) ||
+        runtime.remoteSession(previous) !== undefined ||
+        workspaceRef.current?.panes.some((pane) => pane.session.id === previous)
+      )
+        return false;
+      unusedPanes.release(previous);
+      transferBubble(previous, next);
+      releaseUnusedShell(previous, () =>
+        setTerminalVisualIds((current) => new Map(current).set(next, next)),
       );
-    }
-  }, [workspace, paneAgents.agents, runtime, unusedPanes]);
+      return true;
+    },
+    [runtime, unusedPanes, transferBubble, releaseUnusedShell],
+  );
 
   /** The runs the verbs are aimed with, read at CALL time: the verbs object
    * must stay referentially stable (`DeckFrames` hands it to every frame, and a
@@ -1189,8 +1265,6 @@ export function GodviewDeck({
    * review): `useDeckZoom` returns a fresh object every render, so naming it in
    * the memo's dependencies rebuilt the verbs on every render and this ref
    * bought nothing. */
-  const paneRuns = useRef(paneAgents.runs);
-  paneRuns.current = paneAgents.runs;
   const deckZoom = useRef(zoom);
   deckZoom.current = zoom;
 
@@ -1443,6 +1517,7 @@ export function GodviewDeck({
     // and a gate keyed on ids alone froze them at the last pane change (an
     // exited pane stayed a live row; a terminal's activity never moved).
     const key = [
+      [...terminalVisualIds].map(([id, visualId]) => `${id}:${visualId}`).join("\u0000"),
       sessionIds.join("\u0000"),
       activeSessionId ?? "",
       paneIds.join("\u0000"),
@@ -1475,8 +1550,9 @@ export function GodviewDeck({
       sessions,
       // …and every live PTY the floor holds (GT-6b), pane or no pane.
       floor: floorRoster,
+      terminalVisualIds,
     });
-  }, [paneSessionIds, workspace, onPanes, floorRoster, framePaneColors]);
+  }, [paneSessionIds, workspace, onPanes, floorRoster, framePaneColors, terminalVisualIds]);
 
   /** The pane's face, plus the monitor link (GT-D17).
    *
@@ -1735,6 +1811,8 @@ export function GodviewDeck({
         />
         {/* QL-1: a fresh shell's launcher, beside its frame (`deck-launchers.tsx`). */}
         <GodviewDeckLaunchers
+          onReplaced={onLauncherReplaced}
+          prepareReplacement={prepareLauncherReplacement}
           deckRef={zoomHostRef}
           workspace={workspace}
           paneColors={framePaneColors}

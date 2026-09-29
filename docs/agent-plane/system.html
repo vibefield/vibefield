@@ -1505,6 +1505,17 @@
                 </p>
               </div>
               <div class="contract-row">
+                <strong>Empty-pane launcher handoff (2026-09-28 correction)</strong>
+                <p>A shell's startup foreground job is temporary activity, not lifetime input evidence.
+                  The shared <code>UnusedPaneSessions</code> retains its birth receipt and defers a
+                  detached busy shell until native idle metadata. An accepted launcher replacement
+                  explicitly releases the unused source through <code>terminal.terminate</code> after
+                  its last attachment moves; mirrored or used shells stay alive. The successor inherits
+                  a separate <code>visualId</code>, so Swarm keeps its body while runtime, action and
+                  usage identities remain unchanged. Restored shells are never inferred unused.
+                  A new shell is also released if an agent-exit replacement throws.</p>
+              </div>
+              <div class="contract-row">
                 <strong>A typed run lives on the interactive cell (AR-7)</strong>
                 <p>
                   A name typed in a pane's shell becomes a managed run on THAT pane — no agent cell is minted, the

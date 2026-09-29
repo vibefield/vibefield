@@ -116,6 +116,7 @@ export interface UseMonitorAgentsOptions {
 }
 
 export interface MonitorPaneFacts {
+  terminalVisualIds?: ReadonlyMap<string, string>;
   sessionIds: readonly string[];
   activeSessionId?: string;
   /** The panes themselves, parallel to `sessionIds` (AR-5): a pane owns a
@@ -424,6 +425,7 @@ export function useMonitorAgents({
 
   /** Unread is a fold over successive projections (the package's ledger). */
   const unreadRef = useRef<UnreadLedger>(EMPTY_UNREAD_LEDGER);
+  const visualIdsRef = useRef<ReadonlyMap<string, string>>(new Map());
 
   /** A pane link is only true while a pane is actually showing the replica: the
    * user can close that pane, and a bubble still drawn as linked would be the
@@ -491,10 +493,15 @@ export function useMonitorAgents({
       usage: usage.histories,
       sessions,
       attachments,
+      visualIds: panes.terminalVisualIds,
+      previousVisualIds: visualIdsRef.current,
       nowMs,
       ...(panes.activeSessionId !== undefined ? { activeSessionId: panes.activeSessionId } : {}),
       ...(selectedId !== undefined ? { previewSelectedId: selectedId } : {}),
     });
+    visualIdsRef.current = new Map(
+      assembled.map((agent) => [agent.id, agent.visualId ?? agent.id]),
+    );
     const ledger = reconcileUnread(
       unreadRef.current,
       assembled.map((agent) => {
@@ -527,6 +534,7 @@ export function useMonitorAgents({
     sessions,
     attachments,
     panes.activeSessionId,
+    panes.terminalVisualIds,
     usageStep,
     usageSeed,
   ]);

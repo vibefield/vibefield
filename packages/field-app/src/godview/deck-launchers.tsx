@@ -38,8 +38,8 @@ import type { MonitorDoor } from "./monitor/remote-door";
 // doors (`launcher-doors.ts`). A launch or a resume lands in the launcher's own
 // pane through the deck's door (`mountLocal` with `replacing`, serialized with
 // every other mount); the fresh shell it replaces then has no pane, no input
-// and a birth receipt, which is exactly what the deck's reaper closes through
-// `terminal.terminate` (QL-D8 as revised: the reaper, not a second close).
+// and a birth receipt. The deck explicitly finishes that handoff after mount;
+// the pool coalesces it with any final-attachment cleanup already in flight.
 
 /* ── the gate (QL-D7 as revised 2026-09-28) ─────────────────────────────── */
 
@@ -105,9 +105,8 @@ type GateSession = Pick<SessionSummary, "id"> & {
 
 /**
  * The sessions whose panes may show a launcher: born in this view, no agent
- * facet, not exited, no input from this view, no foreground job (the same
- * "used" the deck's reaper reads, so the two can never disagree about which
- * shells are still empty). Restored and attached sessions have no birth
+ * facet, not exited, no input from this view. Startup jobs do not make a shell
+ * used or dismiss its launcher. Restored and attached sessions have no birth
  * receipt, so they never qualify.
  */
 export function freshShellIds(
@@ -117,7 +116,7 @@ export function freshShellIds(
   const fresh = new Set<string>();
   for (const session of sessions) {
     if (!facts.bornHere(session.id)) continue;
-    if (session.exited === true || session.activity?.kind === "foreground-job") continue;
+    if (session.exited === true) continue;
     if (facts.hasAgent(session.id) || facts.hasInput(session.id) || facts.isRemote(session.id)) {
       continue;
     }
@@ -156,6 +155,8 @@ export interface GodviewDeckLaunchersProps {
   fallbackCwdBySession: ReadonlyMap<string, string>;
   /** The deck's door: its serialized mount and the Agent Profiles feed. */
   door: MonitorDoor | null;
+  onReplaced(previousSessionId: string, nextSessionId: string): boolean;
+  prepareReplacement(previousSessionId: string, nextSessionId: string): () => void;
 }
 
 function log() {
@@ -168,6 +169,8 @@ export function GodviewDeckLaunchers({
   paneColors,
   fallbackCwdBySession,
   door,
+  onReplaced,
+  prepareReplacement,
 }: GodviewDeckLaunchersProps): ReactElement | null {
   const fieldd = useFielddClient();
   const { runtime } = useTerminalPool();
@@ -178,7 +181,7 @@ export function GodviewDeckLaunchers({
   const fresh = freshShellIds(sessions, {
     bornHere: bornInThisView(runtime),
     hasInput: (id) => runtime?.sessionHasInput(id) === true,
-    hasAgent: (id) => paneAgents.agents.has(id),
+    hasAgent: (id) => paneAgents.runs.has(id),
     isRemote: (id) => runtime?.remoteSession(id) !== undefined,
   });
   const freshKey = [...fresh].sort().join("\n");
@@ -271,8 +274,19 @@ export function GodviewDeckLaunchers({
           const born = adoptCreatedTerminal(terminal);
           // THIS pane: a mirrored fresh shell shows in several, and the
           // launcher that was used is the one whose pane takes the agent
-          const outcome = await door.mountLocal(born.sessionId, { replacing, paneId });
-          if (outcome.state === "mounted") return { accepted: true };
+          const rollback = prepareReplacement(replacing, born.sessionId);
+          let outcome: Awaited<ReturnType<MonitorDoor["mountLocal"]>>;
+          try {
+            outcome = await door.mountLocal(born.sessionId, { replacing, paneId });
+          } catch (cause) {
+            rollback();
+            throw cause;
+          }
+          if (outcome.state === "mounted") {
+            if (!onReplaced(replacing, born.sessionId)) rollback();
+            return { accepted: true };
+          }
+          rollback();
           const reason = outcome.state === "failed" ? outcome.reason : "no pane is open";
           log().info(
             "renderer.godview.launcher_unmounted",
@@ -286,7 +300,7 @@ export function GodviewDeckLaunchers({
           };
         },
       }),
-    [fieldd, door],
+    [fieldd, door, onReplaced, prepareReplacement],
   );
 
   // A monitor sheet over the stage (the find sheet) holds the keyboard. The

@@ -98,6 +98,8 @@ export interface AssembleMonitorAgentsInput {
   usage?: ReadonlyMap<string, UsageHistory>;
   /** Live summaries, so a terminal placeholder reflects current activity rather than launch state. */
   sessions?: ReadonlyMap<string, SessionSummary>;
+  visualIds?: ReadonlyMap<string, string> | undefined;
+  previousVisualIds?: ReadonlyMap<string, string> | undefined;
   /** The panes showing each session, by session id — the deck's facts (record §02). */
   attachments?: ReadonlyMap<string, PaneAttachment>;
   /** The session showing in the pane the user is working in — the DECK's fact. */
@@ -134,8 +136,9 @@ function withPaneSummary(
  * that leaves it hosting none, a fieldd restart that gives it a new epoch. The
  * floor session id is none of those: it is the PTY, and a row keyed by it
  * became a DIFFERENT row the moment the run was resumed — which the swarm reads
- * as the bubble dying and a stranger being born (it keys its physics bodies by
- * `agent.id`) and the chrome reads as a preview highlight pointing at nothing.
+ * as a different row. The chrome reads that as a preview highlight pointing at
+ * nothing. Spatial continuity now has its own `visualId`, so a shell can grow
+ * into an agent without changing runtime/action identity.
  *
  * The pane join is a SEPARATE field and stays one: `agent.session?.id`, and the
  * fold's own `terminal.runtimeSessionId`, are what the deck↔monitor join and
@@ -379,19 +382,37 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
     monitorAgentFromRemote(record, input.colours),
   );
 
-  return [...agents, ...terminals, ...floor, ...remotes].map((agent) => {
-    // A pane shows a LOCAL session: the row's own, or, for a peer's row, the
-    // replica the attach put there. The same question, asked of the id that
-    // exists.
-    const localId = agent.session?.id ?? agent.remote?.localSessionId;
-    const attachment = localId === undefined ? undefined : input.attachments?.get(localId);
-    const mounted = localId !== undefined && input.activeSessionId === localId;
-    return {
-      ...agent,
-      active: mounted || input.previewSelectedId === agent.id,
-      ...(attachment ? { attachment } : {}),
-    };
-  });
+  const visuals = new Set<string>();
+  return [...agents, ...terminals, ...floor, ...remotes]
+    .map((agent) => {
+      // A pane shows a LOCAL session: the row's own, or, for a peer's row, the
+      // replica the attach put there. The same question, asked of the id that
+      // exists.
+      const localId =
+        agent.session?.id ??
+        agent.remote?.localSessionId ??
+        agent.agent?.summary.terminal?.runtimeSessionId ??
+        agent.floorSessionId;
+      const attachment = localId === undefined ? undefined : input.attachments?.get(localId);
+      const mounted = localId !== undefined && input.activeSessionId === localId;
+      return {
+        ...agent,
+        visualId:
+          (localId === undefined ? undefined : input.visualIds?.get(localId)) ??
+          input.previousVisualIds?.get(agent.id) ??
+          (agent.remote ? agent.id : localId) ??
+          agent.id,
+        active: mounted || input.previewSelectedId === agent.id,
+        ...(attachment ? { attachment } : {}),
+      };
+    })
+    .filter((agent) => {
+      // During a launcher handoff the managed row takes over the same body while
+      // the old shell's final attachment/roster removal is still committing.
+      if (visuals.has(agent.visualId)) return false;
+      visuals.add(agent.visualId);
+      return true;
+    });
 }
 
 /** Agent-backed only: the status shortcuts navigate agents, not bare terminals.

@@ -7655,3 +7655,12 @@ A managed agent launched as the PTY root has no parent shell to return to. MF-1g
 Puppeteer's Godview retains its existing main-owned shell birth, uses the same atomic workspace replacement instead of reloading for mirrored/background handoffs, and records that shell's birth for the launcher and unused-shell reaper. There is no second birth authority. This closes QL-1's “launcher returning after an agent exits” limit for clean exits of managed root-agent PTYs; an agent invoked inside a live shell still returns naturally to that shell.
 
 Validation: Ghosttea workspace tests and typecheck/build, shared Puppeteer lifecycle tests, Godview tests/typecheck/bundle, and VibeField deck/launcher/pool integration suites. Exact counts and native smoke evidence are in `draft/terminal-perf/results/20260928-agent-exit/REPORT.md`. The repository-wide verify gate remains blocked by unrelated Rosetta checkout/pin drift; that pin is not changed by this slice.
+
+
+## GT — empty-shell ownership and launcher bubble continuity (2026-09-28)
+
+The reported empty monitor bubbles were live orphaned shell PTYs. The live inventory matched three idle shells and two Codex agents; the own-action audit showed no termination request for those shells. Shell startup foreground jobs had permanently consumed unused-shell birth receipts, and VibeField's launcher depended only on that reaper.
+
+Puppeteer's shared receipt now separates lifetime use from transient startup activity and follows native metadata for detached busy shells. VibeField explicitly releases the last unused launcher source, coalescing through its audited terminal pool. Both hosts reserve and transfer a separate spatial bubble identity before mount, preserve runtime/action/usage identity, keep mirrors and shells used during an in-flight launch, and undo the reservation on failure. A throwing clean-exit mounter releases its successful shell birth. Puppeteer's existing main attachment ledger is the sole PTY termination owner, avoiding competing renderer termination.
+
+Evidence and validation: `draft/terminal-perf/results/20260928-empty-bubble-investigation/REPORT.md`. The final isolated Electron launcher smoke passes: one inherited agent bubble, old shell gone, subsequent pane input usable. Full verify remains stopped by unrelated Rosetta revision drift; the palette fixture remains intermittent. Restored shells are not retroactively inferred unused; the three previously leaked live shells were inspected, not terminated blindly.

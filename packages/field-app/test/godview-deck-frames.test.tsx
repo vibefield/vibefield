@@ -179,8 +179,10 @@ function WorkspaceStub({
 
 vi.mock("@vibecook/ghosttea-react", () => ({
   createGhostteaTerminalRuntime: () => ({
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
+    addEventListener: (type: string, listener: EventListener) =>
+      runtimeEvents.addEventListener(type, listener),
+    removeEventListener: (type: string, listener: EventListener) =>
+      runtimeEvents.removeEventListener(type, listener),
     rendererBackend: "test",
     dispose: () => undefined,
     connect: () => Promise.resolve(),
@@ -264,8 +266,10 @@ let requests: Array<{ method: string; params: unknown }> = [];
 let interruptAnswer: unknown = { accepted: true };
 let terminateAnswer: Promise<unknown> | undefined;
 let createAnswer: Promise<unknown> | undefined;
+let spawnGate: Promise<void> | undefined;
 let rosterRows: Array<{ sessionId: string; workloadClass: string; health: string }> = [];
 const runtimeBirths = new Set<string>();
+const runtimeEvents = new EventTarget();
 const usedSessions = new Set<string>();
 const remoteSessions = new Set<string>();
 let deckDoor: RemoteSessionDoor | null = null;
@@ -326,14 +330,14 @@ const fieldd = {
         runtimeRunId: "run-launched",
         terminalSessionId: "pty-launched",
       });
-      return Promise.resolve({
+      return (spawnGate ?? Promise.resolve()).then(() => ({
         session: spawned,
         terminal: {
           sessionId: "pty-launched",
           session: bornSummary("pty-launched", { cwd: "/home/tester/vibe-field" }),
           ...routedTicket("pty-launched"),
         },
-      });
+      }));
     }
     if (method === "index.recent") return Promise.resolve({ rows: [] });
     if (method === "index.status") return Promise.reject(new Error("no status in this fixture"));
@@ -439,6 +443,7 @@ function PaneLinks({ panes }: { panes: MonitorPaneFacts }): ReactElement {
         <output
           key={agent.id}
           data-session={agent.session?.id ?? agent.floorSessionId}
+          data-visual-id={agent.visualId}
           data-pane-color={agent.attachment?.color}
           data-palette-lightness={palette.tint.l}
         />
@@ -498,6 +503,7 @@ beforeEach(() => {
   interruptAnswer = { accepted: true };
   terminateAnswer = undefined;
   createAnswer = undefined;
+  spawnGate = undefined;
   rosterRows = [];
   runtimeBirths.clear();
   usedSessions.clear();
@@ -1013,6 +1019,26 @@ describe("the deck's pane frames", () => {
     expect(requests.filter((r) => r.method === "terminal.terminate")).toHaveLength(1);
   });
 
+  it("cleans a shell closed during startup when native idle metadata arrives after detach", async () => {
+    runtimeBirths.add("pty-1");
+    workspace.panes[0]!.session.activity = { kind: "foreground-job" };
+    await mountDeck();
+    await act(async () => {
+      workspace.mount(stubSession("replacement"));
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
+    await act(async () => {
+      runtimeEvents.dispatchEvent(
+        new CustomEvent("session-metadata", { detail: stubSession("pty-1") }),
+      );
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
+      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    ]);
+  });
+
   it.each(["input", "foreground", "agent", "remote"])(
     "retains a detached shell with %s evidence",
     async (kind) => {
@@ -1409,6 +1435,10 @@ describe("the empty pane launcher (QL-1)", () => {
     });
     await settle();
     expect(requests.filter((call) => call.method === "agent.spawn")).toHaveLength(1);
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
+    expect(
+      host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
+    ).toBe("pty-launched");
     // pane-2's launcher was used, so pane-2 takes the agent; pane-1 keeps the shell
     expect(workspace.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
       ["pane-1", "pty-1"],
@@ -1431,7 +1461,74 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
       { method: "terminal.terminate", params: { sessionId: "pty-1" } },
     ]);
+    expect(
+      host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
+    ).toBe("pty-1");
     expect(launcherFor(host, "pty-1")).toBeNull();
     expect(launcherOwnsKeys()).toBe(false);
+  });
+  it("launches during shell startup without stranding its shell or changing the bubble identity", async () => {
+    runtimeBirths.add("pty-1");
+    workspace.panes[0]!.session.activity = { kind: "foreground-job" };
+    const host = await mountDeck();
+    expect(launcherFor(host, "pty-1")).not.toBeNull();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Digit1");
+    });
+    await settle();
+    expect(workspace.panes[0]?.session.id).toBe("pty-launched");
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([
+      { method: "terminal.terminate", params: { sessionId: "pty-1" } },
+    ]);
+    expect(
+      host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
+    ).toBe("pty-1");
+  });
+  it("keeps a shell that receives input while a click launch is in flight", async () => {
+    runtimeBirths.add("pty-1");
+    let accept!: () => void;
+    spawnGate = new Promise<void>((resolve) => {
+      accept = resolve;
+    });
+    const host = await mountDeck();
+    await act(async () => {
+      launcherFor(host, "pty-1")
+        ?.querySelector<HTMLButtonElement>(".vf-pane-launcher-agent")
+        ?.click();
+    });
+    expect(requests.filter((call) => call.method === "agent.spawn")).toHaveLength(1);
+    usedSessions.add("pty-1");
+    await act(async () => {
+      accept();
+    });
+    await settle();
+    expect(workspace.panes[0]?.session.id).toBe("pty-launched");
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
+    expect(
+      host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
+    ).toBe("pty-launched");
+  });
+
+  it("restores distinct bubbles when the audited shell release is refused", async () => {
+    runtimeBirths.add("pty-1");
+    let refuse!: (cause: Error) => void;
+    terminateAnswer = new Promise((_resolve, reject) => {
+      refuse = reject;
+    });
+    const host = await mountDeck();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Digit1");
+    });
+    await settle();
+    expect(
+      host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
+    ).toBe("pty-1");
+    await act(async () => {
+      refuse(new Error("termination refused"));
+    });
+    await settle();
+    expect(
+      host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
+    ).toBe("pty-launched");
   });
 });

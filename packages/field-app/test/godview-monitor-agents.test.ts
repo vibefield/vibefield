@@ -63,6 +63,48 @@ describe("monitor agent assembly", () => {
     expect(assembled.map((agent) => Boolean(agent.agent))).toEqual([true, true, false]);
   });
 
+  it("keeps spatial identity while actions and usage retain the managed run id", () => {
+    const before = assembleMonitorAgents({
+      ...PURE,
+      managed: [],
+      terminals: [{ session: session("shell") }],
+    });
+    const after = assembleMonitorAgents({
+      ...PURE,
+      managed: [managed("run", "agent-pty")],
+      terminals: [],
+      visualIds: new Map([["agent-pty", "shell"]]),
+    });
+    expect(before[0]?.visualId).toBe("shell");
+    expect(after[0]).toMatchObject({ id: "run", visualId: "shell" });
+    const typed = assembleMonitorAgents({
+      ...PURE,
+      managed: [managed("run", "shell")],
+      terminals: [],
+    });
+    expect(typed[0]).toMatchObject({ id: "run", visualId: "shell" });
+  });
+
+  it("keeps a run's bubble through subsequent PTY replacements", () => {
+    const [agent] = assembleMonitorAgents({
+      ...PURE,
+      managed: [managed("run", "resumed-pty")],
+      terminals: [],
+      previousVisualIds: new Map([["run", "original-shell"]]),
+    });
+    expect(agent).toMatchObject({ id: "run", visualId: "original-shell" });
+  });
+
+  it("shows one body while a launcher handoff still has the old shell in the roster", () => {
+    const rows = assembleMonitorAgents({
+      ...PURE,
+      managed: [managed("run", "agent-pty")],
+      terminals: [{ session: session("shell") }],
+      visualIds: new Map([["agent-pty", "shell"]]),
+    });
+    expect(rows.map((row) => [row.id, row.visualId])).toEqual([["run", "shell"]]);
+  });
+
   it("drops a terminal placeholder once an agent claims its session", () => {
     const assembled = assembleMonitorAgents({
       ...PURE,
