@@ -1101,6 +1101,27 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([]);
   });
 
+  it("never draws on a peer's pane — attached from the mesh, or a replica the runtime says is remote", async () => {
+    const host = await mountDeck();
+    await act(async () => {
+      await deckDoor?.attach({ deviceId: "mini", deviceName: "mini", remoteSessionId: "s1" });
+    });
+    await settle();
+    // the replica is framed (so its pane is there) and shows no launcher
+    expect(frameFor(host, "replica-mini-s1")).not.toBeNull();
+    expect(launcherFor(host, "replica-mini-s1")).toBeNull();
+    expect(launcherOwnsKeys()).toBe(false);
+  });
+
+  it("never draws on a remote replica even with a birth receipt", async () => {
+    runtimeBirths.add("pty-1");
+    remoteSessions.add("pty-1");
+    const host = await mountDeck();
+    expect(frameFor(host, "pty-1")).not.toBeNull();
+    expect(launcherFor(host, "pty-1")).toBeNull();
+    expect(launcherOwnsKeys()).toBe(false);
+  });
+
   it("draws on the workspace's first shell, which ghosttea's own receipt names", async () => {
     runtimeBirths.add("pty-1");
     const host = await mountDeck();
