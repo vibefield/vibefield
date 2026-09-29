@@ -619,6 +619,11 @@ export const IndexRecentSession = IndexSession.extend({
   here: z.boolean(),
   /** absent for a session with no workspace (rosetta's unassigned bucket) */
   project: IndexRecentProject.optional(),
+  /** whether `cwd` is an existing folder on THIS device when fieldd answered:
+   * `false` is a conversation whose folder is gone (a resume there is refused
+   * `missing-cwd`), so a launcher withholds ↵ and says why. Absent when the
+   * row has no cwd — and from an older daemon, which said nothing. */
+  cwdExists: z.boolean().optional(),
 }).passthrough();
 export type IndexRecentSession = z.infer<typeof IndexRecentSession>;
 

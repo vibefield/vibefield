@@ -279,6 +279,7 @@ describe("IndexService.recent — here (QL-D9)", () => {
         startedAt: 1_700_000_000_500,
         here: true,
         project: { id: "p-app", name: "app" },
+        cwdExists: true,
       },
     ]);
   });
@@ -406,6 +407,29 @@ describe("IndexService.recent — here (QL-D9)", () => {
     const { index, urls } = service();
     expect(await index.recent({ scope: "here" })).toEqual({ rows: [] });
     expect(urls).toEqual([]);
+  });
+
+  it("each row says whether its folder is still here: gone, relative, or none at all", async () => {
+    const { index, daemon } = service();
+    const base = scratch("plain");
+    const here = join(base, "here");
+    mkdirSync(here);
+    daemon.sessions = [
+      session({ id: "s-here", native_session_id: "n1", cwd: here }),
+      session({ id: "s-gone", native_session_id: "n2", cwd: join(base, "gone") }),
+      session({ id: "s-relative", native_session_id: "n3", cwd: "here" }),
+      session({ id: "s-none", native_session_id: "n4", cwd: null }),
+    ];
+    const rows = (await index.recent({ scope: "all" })).rows;
+    expect(rows.map((r) => [r.sessionId, r.cwdExists])).toEqual([
+      ["s-here", true],
+      ["s-gone", false],
+      // names no folder on this device (it would stat fieldd's own cwd)
+      ["s-relative", false],
+      // no folder to ask about: nothing said
+      ["s-none", undefined],
+    ]);
+    expect(rows.find((r) => r.sessionId === "s-none")).not.toHaveProperty("cwdExists");
   });
 
   it("a delegated child that reaches the list is dropped — the launcher resumes conversations, not transcript structure", async () => {

@@ -13,7 +13,7 @@ import { AGENT_CATALOG, type AgentProviderSummary } from "@vibefield/contracts";
 import type { CSSProperties, ReactElement } from "react";
 import { DEFAULT_DECK_APPEARANCE } from "../godview/deck-appearance";
 import { godviewTerminalTheme, terminalGround } from "../godview/deck-theme";
-import { launcherAgents } from "../godview/launcher-doors";
+import { launcherAgents, launcherSession } from "../godview/launcher-doors";
 
 /**
  * THE EMPTY PANE LAUNCHER, as the deck ships it (QL-1, Minimal Pane Frame
@@ -88,13 +88,25 @@ const SESSIONS: readonly LauncherSession[] = [
     here: false,
     cwd: "/Users/j/src/rosetta",
   }),
-  session("s5", "Ledger import from the old checkout", {
-    agoMs: 30 * DAY,
-    here: false,
-    cwd: "/Users/j/src/old-ledger",
-    resumable: false,
-    unresumable: "folder is gone",
-  }),
+  // the gone folder is fieldd's answer, not the catalog's words: an
+  // `index.recent` row saying its folder is not on this device, through the
+  // shipping projection
+  launcherSession(
+    {
+      sessionId: "s5",
+      nativeSessionId: "catalog-s5",
+      rootSessionId: "s5",
+      title: "Ledger import from the old checkout",
+      cwd: "/Users/j/src/old-ledger",
+      updatedAt: NOW - 30 * DAY,
+      activity: { firstAt: NOW - 30 * DAY - HOUR, lastAt: NOW - 30 * DAY },
+      streamState: "indexed",
+      ...(FIRST !== undefined ? { provider: FIRST } : {}),
+      here: false,
+      cwdExists: false,
+    },
+    PROVIDERS,
+  ),
 ];
 
 const WORD_HITS: readonly LauncherWordHit[] = [

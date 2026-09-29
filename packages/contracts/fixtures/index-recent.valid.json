@@ -19,7 +19,8 @@
       "project": {
         "id": "p_4e2a91c0",
         "name": "vibe-field"
-      }
+      },
+      "cwdExists": true
     },
     {
       "sessionId": "s_1f9e8d7c",
@@ -39,7 +40,8 @@
       "project": {
         "id": "p_4e2a91c0",
         "name": "vibe-field"
-      }
+      },
+      "cwdExists": false
     },
     {
       "sessionId": "s_0a4b5c6d",

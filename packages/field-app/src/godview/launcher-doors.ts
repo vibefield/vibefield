@@ -52,6 +52,9 @@ export interface LauncherPortDeps {
 /** What a row says when it has no title: the design's own words (§22). */
 export const UNTITLED_SESSION = "untitled session";
 
+/** Why ↵ is withheld on a row whose folder is gone from this device (§22). */
+export const FOLDER_GONE = "folder is gone";
+
 /* ── the agents (QL-D6, QL-D3 as revised 2026-09-28) ──────────────────── */
 
 const within = (statuses: readonly string[], status: string): boolean => statuses.includes(status);
@@ -124,13 +127,16 @@ export function launcherAgents(
 /** Why ↵ is withheld on a row, or undefined when it resumes. The door's
  * `resumable` already folds the catalog's `offers.resume` in (AC-3). */
 function unresumable(
-  row: Pick<IndexRecentSession, "provider" | "nativeSessionId">,
+  row: Pick<IndexRecentSession, "provider" | "nativeSessionId" | "cwdExists">,
   providers: readonly AgentProviderSummary[],
 ): string | undefined {
   if (row.provider === undefined || row.nativeSessionId === "") return "can’t resume";
   const provider = providers.find((candidate) => candidate.id === row.provider);
   if (provider === undefined || !agentVisible(provider)) return "not offered here";
   if (!provider.resumable) return "can’t resume";
+  // fieldd's own answer (a resume there is refused `missing-cwd`); before the
+  // install, which a person can fix — a gone folder they cannot, from here
+  if (row.cwdExists === false) return FOLDER_GONE;
   if (!provider.available) return "not installed";
   return undefined;
 }

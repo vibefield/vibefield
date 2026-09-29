@@ -1172,6 +1172,17 @@ export class IndexService {
           ? [project]
           : [];
     const projectNames = new Map(projects.map((p) => [p.id, p.name]));
+    // whether each row's folder is still here — a resume into a gone one is
+    // refused `missing-cwd`, so the list says so first (one stat per folder)
+    const folders = new Map<string, boolean>();
+    const exists = (cwd: string): boolean => {
+      let held = folders.get(cwd);
+      if (held === undefined) {
+        held = isDirectory(cwd);
+        folders.set(cwd, held);
+      }
+      return held;
+    };
     return {
       rows: top.map((row) => {
         const runtime =
@@ -1187,6 +1198,10 @@ export class IndexService {
           here: here(row),
           ...(projectId !== undefined && projectName !== undefined
             ? { project: { id: projectId, name: projectName } }
+            : {}),
+          // a relative cwd names no folder here (it would stat fieldd's own)
+          ...(typeof row.cwd === "string" && row.cwd !== ""
+            ? { cwdExists: isAbsolute(row.cwd) && exists(row.cwd) }
             : {}),
         };
       }),

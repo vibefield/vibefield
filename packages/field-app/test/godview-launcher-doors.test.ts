@@ -20,6 +20,7 @@ import {
 } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
+  FOLDER_GONE,
   historyStatusFromRefusal,
   type LauncherPortDeps,
   launcherAgents,
@@ -143,6 +144,29 @@ describe("index.recent → the launcher's sessions", () => {
         claude.map((row) => ({ ...row, status: "declined" })),
       ),
     ).toMatchObject({ resumable: false, unresumable: "not offered here" });
+  });
+
+  it("withholds ↵ where fieldd says the folder is gone — and only where it says so", () => {
+    const [first] = rows;
+    if (first === undefined) throw new Error("fixture has rows");
+    // the fixture's first row: its folder is here
+    expect(first.cwdExists).toBe(true);
+    expect(launcherSession(first, WITH_CODEX)).toMatchObject({ resumable: true });
+    expect(launcherSession({ ...first, cwdExists: false }, WITH_CODEX)).toMatchObject({
+      resumable: false,
+      unresumable: FOLDER_GONE,
+    });
+    // an older daemon says nothing, and nothing is withheld for it
+    const { cwdExists: _said, ...unsaid } = first;
+    expect(launcherSession(unsaid, WITH_CODEX)).toMatchObject({ resumable: true });
+    // a gone folder outranks a missing install: installing would not bring it back
+    const claude = WITH_CODEX.filter((row) => row.id === "claude");
+    expect(
+      launcherSession(
+        { ...first, cwdExists: false },
+        claude.map((row) => ({ ...row, available: false })),
+      ),
+    ).toMatchObject({ unresumable: FOLDER_GONE });
   });
 });
 
