@@ -2355,6 +2355,15 @@
               Unsupported interactive options are refused by name; help, utilities, one-shot runs, and external
               sessions pass through. ACP has no native command grammar and receives no launcher.
             </p>
+            <p class="section-note">
+              <strong>Correction 2026-09-28 — classification review.</strong> A mode-looking flag alone did not prove
+              passthrough in three of the new grammars. Puppeteer <code>0181f10</code> resolves final flag values, required
+              input and native interface precedence before claiming a non-interactive route; exact entry shortcuts
+              do not acquire inline aliases. The consumer regressions in
+              <code>packages/fieldd/test/agent-gateway-catalog.test.ts</code> prove these cases reach custody and are
+              refused in an owned interactive pane. Classification and vendor details remain in Puppeteer;
+              fieldd's strict policy is unchanged.
+            </p>
             <ol>
               <li>The pane was born integrated: fieldd's gateway handed the terminal service the kit's shell integration, so the pane's zsh keeps the person's own ZDOTDIR and startup files and leads its PATH with the launcher home (<code>agents/shims/bin</code>) at every prompt.</li>
               <li>The person types <code>claude</code>. The launcher runs the kit's shim on a real Node; the shim reads <code>gateway.json</code> and <code>launch-providers.json</code> and sends one <code>launch</code> request over loopback with the bearer.</li>

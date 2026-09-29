@@ -183,7 +183,8 @@ has no gap; all four views are spine content; the History view has no send box a
 pane-only. The build order was re-cut: AR-3 spawn + fold + persisted continuations → AR-4 stable
 ingress/re-attach → AR-5 the views port (AR-D13a, PU-5 with the injected history port) → AR-6
 approvals + prompts → AR-7 the typed agent, managed (LANDED 2026-09-28; strict grammar
-coverage now includes all nine vendor agents) → AR-8 the History view (spine,
+coverage now includes all nine vendor agents; classification review fixes cancelled utility flags,
+conditional one-shot modes and exact native shortcuts) → AR-8 the History view (spine,
 behind RO-1, brought forward now). **AR-3 LANDED 2026-09-12 (`6b5e1612`):** the runtime is lent the
 floor — the AgentHost over `TerminalService.spawn` with a clean allow-listed environment, the fold
 (`agent.list`/`agent.subscribe`), the four doors, the continuation persisted per managed session,

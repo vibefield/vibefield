@@ -103,4 +103,36 @@ describe("the pinned builtin grammars earn VibeField's catalog launchers", () =>
       expect(resolveTerminal).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    ["opencode", ["--help", "--help=false"]],
+    ["opencode", ["--version", "--version=false"]],
+    ["opencode", ["--help", "false"]],
+    ["hermes", ["chat", "--quiet"]],
+    ["hermes", ["chat", "--oneshot"]],
+    ["hermes", ["--oneshot", ""]],
+    ["hermes", ["chat", "--tui", "-q", "hello", "--oneshot"]],
+    ["antigravity", ["--version=true"]],
+  ] as const)("%s mode regression %j is refused in a Godview pane", async (id, argv) => {
+    const runtime = runtimeFor(tmpdir());
+    const prepare = vi.spyOn(runtime, "prepareInvocation");
+    const resolveTerminal = vi.fn(async () => ({ terminalSessionId: "pane" }));
+    const result = await prepareSpawnThroughLaunch(
+      {
+        type: "launch",
+        token: "test",
+        providerId: id,
+        cwd: tmpdir(),
+        argv: [...argv],
+        environment: {},
+        pid: 456,
+        parentPid: 123,
+        interactive: true,
+      },
+      { runtime, strict: AGENT_GATEWAY_STRICT, resolveTerminal, onAdopted: vi.fn() },
+    );
+    expect(result).toMatchObject({ action: "refuse", code: "rejected-argument", placed: true });
+    expect(resolveTerminal).toHaveBeenCalledOnce();
+    expect(prepare).not.toHaveBeenCalled();
+  });
 });
