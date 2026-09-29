@@ -9,9 +9,14 @@
  * card in the catalog.
  */
 
+import { type LauncherPort, PaneLauncher } from "@vibecook/puppeteer-views/launcher";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PaneLauncherPreview } from "../src/design-system/PaneLauncherPreview";
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function render(): HTMLElement {
   const host = document.createElement("div");
@@ -102,5 +107,54 @@ describe("the empty pane launcher's catalog specimen", () => {
       specimen(host, "launching")[0]?.querySelector(".vf-pane-launcher-agent.is-press"),
     ).not.toBeNull();
     expect(specimen(host, "short")[0]?.querySelector(".vf-pane-launcher.is-short")).not.toBeNull();
+  });
+
+  it("says can't-launch in the SHIPPING launcher's own words — the real component, clicked, is the source", async () => {
+    // The sentence is built inside puppeteer's `PaneLauncher` (no export to
+    // import it from), and the catalog's face is static markup, so the face
+    // carries a copy. This pins the copy to the component: the real launcher,
+    // mounted in a pane and its unavailable agent clicked, must say the same
+    // sentence with the same label and reason, or this row is red.
+    const [cant] = specimen(render(), "cant-launch");
+    const off = cant?.querySelector(".vf-pane-launcher-agent.is-off");
+    const label = off?.querySelector(".vf-pane-launcher-nm")?.textContent ?? "";
+    const reason = off?.querySelector("small")?.textContent ?? "";
+    const catalogSays = cant?.querySelector(".vf-pane-launcher-failure")?.textContent;
+    expect(label).not.toBe("");
+
+    const pane = document.createElement("div");
+    document.body.append(pane);
+    const root = createRoot(document.createElement("div"));
+    const port: LauncherPort = {
+      recent: vi.fn(async () => ({ status: { readiness: "ready" as const }, sessions: [] })),
+      launch: vi.fn(async () => ({ accepted: true as const })),
+      resume: vi.fn(async () => ({ accepted: true as const })),
+    };
+    await act(async () => {
+      root.render(
+        <PaneLauncher
+          pane={pane}
+          paneId="pane-1"
+          sessionId="shell-1"
+          active
+          agents={[{ providerId: "catalog-agent", label, unavailable: reason }]}
+          port={port}
+          scope="here"
+          onScopeChange={() => undefined}
+          onUsed={() => undefined}
+          onDone={() => undefined}
+          register={() => undefined}
+        />,
+      );
+    });
+    await act(async () => {
+      pane.querySelector<HTMLButtonElement>(".vf-pane-launcher-agent")?.click();
+    });
+    const componentSays = pane.querySelector(".vf-pane-launcher-failure")?.textContent;
+    act(() => root.unmount());
+    pane.remove();
+    expect(componentSays).toBeDefined();
+    expect(catalogSays).toBe(componentSays);
+    expect(port.launch).not.toHaveBeenCalled();
   });
 });
