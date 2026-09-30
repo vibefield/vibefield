@@ -189,6 +189,31 @@ export const AGENT_FIELD = {
   STORE_EXPIRY_MS: 30_000,
 } as const;
 
+/** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
+ * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
+ * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept
+ * cursor resumes and beyond which it resets; a reader compares a key digest
+ * every DIGEST_INTERVAL_MS (DIGEST_ALGORITHM over the sorted keys) and resets
+ * on a mismatch — never repairs. MIN_INTERVAL_MS is the default per-subscriber
+ * floor on deltas; a table may set a slower one of its own. */
+export const ROWS = {
+  SNAPSHOT_PAGE_BYTES: 256 * 1024,
+  JOURNAL_DEPTH: 4096,
+  MIN_INTERVAL_MS: 100,
+  DIGEST_INTERVAL_MS: 60_000,
+  DIGEST_ALGORITHM: "sha256",
+} as const;
+
+/** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
+ * one receipt per idempotency key for RECEIPT_TTL_MS, at most
+ * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded
+ * `outcome-unknown` after FORWARD_TIMEOUT_MS and read back by the retry. */
+export const FORWARDING = {
+  RECEIPT_JOURNAL_DEPTH: 1024,
+  RECEIPT_TTL_MS: 24 * 60 * 60 * 1000,
+  FORWARD_TIMEOUT_MS: 15_000,
+} as const;
+
 /** TC-S2 — the floor's supervision budget for a `field-terminal-host` cell
  * (TC-D3's extraction; NO panic-abort until custody separates at TC-S4).
  * The shape mirrors NATIVE_SUPERVISION one level down. HELLO covers a cold
