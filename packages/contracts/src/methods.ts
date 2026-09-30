@@ -1818,6 +1818,14 @@ export const METHODS: MethodDef[] = [
   // byte for byte, `{projection: "field"}` answers the content-free projection
   // as a snapshot plus deltas at a per-subscriber floor. One door, one scope —
   // a phone watching the field is watching the fold, at a phone's cadence.
+  // DS-3 (2026-09-30, DS-D4) — `stream`, not `local`: the mesh board's
+  // upstreams are this very door on each self desktop, asked by a PEER daemon
+  // (`peer-fieldd`), which the D36 wall refuses on a `local` method. What stays
+  // local is the handler's to hold: the `full` projection is refused to a peer,
+  // and so is `scope: "mesh"` (a peer reads a device's OWN board; aggregation
+  // is for this device's clients, DS-L4). DS-2's census reclassifies the agent
+  // reads as a set (design-04 §7's 2026-09-30 note); this row is its first
+  // member, and that reclass supersedes this comment when both land.
   defineMethod({
     surface: "product",
     method: "agent.subscribe",

@@ -18,10 +18,13 @@ import {
   AgentsExtensionsTerminalResult,
 } from "../src/agent-extensions";
 import {
+  AgentDeskRow,
   AgentFieldDelta,
   AgentFieldSlice,
   AgentFieldSnapshot,
   AgentInterruptResult,
+  AgentMeshFrame,
+  AgentMeshOpen,
 } from "../src/agent-field";
 import {
   AgentDistributionRecord,
@@ -295,6 +298,13 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-field-snapshot": AgentFieldSnapshot,
   "agent-field-delta": AgentFieldDelta,
   "agent-field-slice": AgentFieldSlice,
+  // DS-3 — the desk row (the field row plus the reply line, the blocker's
+  // question and the cost, each bounded), the mesh board's open (every self
+  // desktop, an asleep one keeping its board, one never heard carrying none)
+  // and its frames in order (a delta, a device going stale, its reset, live).
+  "agent-desk-row": AgentDeskRow,
+  "agent-mesh-open": AgentMeshOpen,
+  "agent-mesh-frames": z.array(AgentMeshFrame),
   // Both arms of the interrupt's union: the refusal carries the FLOOR's own
   // word, never a sentence composed at the door.
   "agent-interrupt": AgentInterruptResult,

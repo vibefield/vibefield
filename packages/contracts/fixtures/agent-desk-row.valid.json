@@ -1,0 +1,49 @@
+{
+  "runtimeRunId": "run-studio-q",
+  "revision": 9,
+  "kind": "claude",
+  "label": "Claude Code",
+  "tier": "managed",
+  "device": "dev-01HQ9S7UD1",
+  "status": "blocked",
+  "statusSince": "2026-09-30T21:14:02.000Z",
+  "stateChangedAt": "2026-09-30T21:14:02.000Z",
+  "createdAt": "2026-09-30T20:51:40.000Z",
+  "lastActivityAt": "2026-09-30T21:14:02.000Z",
+  "alive": true,
+  "blockers": [
+    {
+      "id": "q-7c1a",
+      "kind": "question",
+      "since": "2026-09-30T21:14:02.000Z",
+      "question": "Should the board keep a sleeping desktop greyed, or drop its rows after thirty days?"
+    }
+  ],
+  "lastAssistantMessage": {
+    "text": "I have the multiplexer relaying each desktop verbatim. Before I wire the filter: one question about sleeping desktops.",
+    "at": "2026-09-30T21:14:01.000Z",
+    "final": true
+  },
+  "usage": {
+    "cumulativeTokens": 412880,
+    "burnRatePerMin": 2210,
+    "costUsd": 4.04,
+    "costCoverage": "complete"
+  },
+  "context": {
+    "usedPercent": 41
+  },
+  "model": {
+    "id": "claude-opus-5",
+    "displayName": "Opus 5"
+  },
+  "project": {
+    "name": "vibe-field",
+    "branch": "ds/c"
+  },
+  "terminal": {
+    "hosted": "local",
+    "runtimeSessionId": "pty-s9",
+    "workloadClass": "agent"
+  }
+}

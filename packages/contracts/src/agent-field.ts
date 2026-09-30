@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { AgentProfileId, AgentProviderId } from "./agent-index";
 import { AgentSessionTerminal, AgentStatus, AgentTier } from "./agent-session";
+import {
+  MeshScope,
+  meshRowsFrame,
+  meshRowsOpen,
+  type RowsDelta,
+  type RowsDeviceState,
+  RowsEpoch,
+  type RowsSnapshot,
+} from "./rows";
 
 // MF-1 (thinking-godview-mobile-first.md §5/§10.1) — the FIELD projection: the
 // fold's row with its content removed, small enough for a phone's radio and
@@ -112,30 +121,113 @@ export const AgentFieldRow = z
   .passthrough();
 export type AgentFieldRow = z.infer<typeof AgentFieldRow>;
 
+// DS-3 (`thinking-desktop-sync-plane.md` §6.2, DS-D4 RULED 2026-09-30) — the
+// DESK projection: the field row plus the three things a person at another of
+// their own desktops reads a run by — the reply line, what a blocker is asking,
+// and the cost. Content is allowed here because its audience is one person's
+// own DESKTOPS (the mesh board's upstreams are self peers only); the phone
+// reads `field`, content-free (SP-L4). Every text is bounded by
+// `AGENT_FIELD.DESK_TEXT_CHARS`: the row says what a run said, never the whole
+// of it — the transcript is History's, by ticket (DS-7).
+
+/** The run's latest reply, bounded: puppeteer's `MonitorAssistantMessageState`
+ * with its text cut to the registry's bound. `at` and `final` are optional
+ * because the mirror carries the message as an open object (`agent-session.ts`)
+ * and a projection never invents a clock or a verdict it was not given. */
+export const AgentDeskMessage = z
+  .object({
+    text: z.string(),
+    at: z.string().optional(),
+    /** false while the reply is still streaming */
+    final: z.boolean().optional(),
+  })
+  .passthrough();
+export type AgentDeskMessage = z.infer<typeof AgentDeskMessage>;
+
+/** A blocker as the desk sees it: the field's content-free blocker plus the
+ * first question a `question` blocker asks (`questions[0].prompt`), bounded. */
+export const AgentDeskBlocker = AgentFieldBlocker.extend({
+  question: z.string().optional(),
+}).passthrough();
+export type AgentDeskBlocker = z.infer<typeof AgentDeskBlocker>;
+
+/** The desk row. A desk row IS a field row (every field fact, same keys), so a
+ * reader of `AgentFieldRow` reads it and keeps the rest as passthrough. */
+export const AgentDeskRow = AgentFieldRow.extend({
+  lastAssistantMessage: AgentDeskMessage.optional(),
+  blockers: z.array(AgentDeskBlocker),
+  usage: z
+    .object({
+      cumulativeTokens: z.number().optional(),
+      burnRatePerMin: z.number().optional(),
+      /** puppeteer's estimate of API-equivalent USD for observed work — never
+       * an invoice (its own words, `MonitorUsageAggregate.costUsd`) */
+      costUsd: z.number().optional(),
+      /** puppeteer's own word for how much of the work was priced
+       * (`complete` · `partial` · `unavailable`), open here */
+      costCoverage: z.string().optional(),
+    })
+    .passthrough()
+    .optional(),
+}).passthrough();
+export type AgentDeskRow = z.infer<typeof AgentDeskRow>;
+
+/** Which board a subscription reads. `full` is the fold's whole row, LOCAL ONLY
+ * (it never federates, DS-D4); `field` the content-free row (the phone's,
+ * `AGENT_FIELD.MIN_INTERVAL_MS`); `desk` the field row plus the reply line,
+ * the blocker's question and the cost (windows,
+ * `AGENT_FIELD.DESK_MIN_INTERVAL_MS`). */
+export const AgentProjection = z.enum(["full", "field", "desk"]);
+export type AgentProjection = z.infer<typeof AgentProjection>;
+
 /** `agent.subscribe`'s options. Absent or `full` is TODAY's subscription,
  * unchanged byte for byte — the desktop's renderer reads whole `rows` arrays
  * and must not learn a new frame shape to keep working. */
 export const AgentSubscribeParams = z
   .object({
-    projection: z.enum(["full", "field"]).optional(),
-    /** field only; default `AGENT_FIELD.MIN_INTERVAL_MS`. A per-subscriber
-     * trailing-edge floor, like the fold's own tick. */
+    projection: AgentProjection.optional(),
+    /** DS-3 — `local` (the default: today's callers never move) is THIS
+     * daemon's board; `mesh` is every self desktop the roster lists,
+     * multiplexed by this daemon (DS-L4): the open answers `AgentMeshOpen`,
+     * later frames are `AgentMeshFrame`. `field` and `desk` only. */
+    scope: MeshScope.optional(),
+    /** field and desk only; default `AGENT_FIELD.MIN_INTERVAL_MS` (field) or
+     * `AGENT_FIELD.DESK_MIN_INTERVAL_MS` (desk), and never below the desk's
+     * floor for a desk board. A per-subscriber trailing-edge floor, like the
+     * fold's own tick. */
     minIntervalMs: z.number().int().min(16).max(60_000).optional(),
+    /** DS-3 — field and desk only, `local` scope. After this long with no frame
+     * the source sends a HEARTBEAT: an empty delta whose `since` equals its
+     * `revision` (no upserts, no removals — it moves nothing a reader holds).
+     * A reader across a link asks for it so a quiet board and a dead stream
+     * stop looking alike (DS-L8); the mesh board's upstreams ask for
+     * `AGENT_FIELD.MESH_HEARTBEAT_MS`. Absent: no heartbeat, today's stream. */
+    heartbeatMs: z.number().int().min(250).max(60_000).optional(),
   })
   .passthrough();
 export type AgentSubscribeParams = z.infer<typeof AgentSubscribeParams>;
 
-/** The first frame of a field subscription, and what a re-subscribe answers. */
+/** The first frame of a field subscription, and what a re-subscribe answers.
+ *
+ * DS-3 — `epoch` names the revision CHAIN the frame belongs to (DS-L3's table
+ * identity): fieldd ALWAYS sends it, as its boot id plus the chain's ordinal,
+ * because two subscriptions in one boot are two chains whose revisions must
+ * never be compared. It is OPTIONAL in the schema, deliberately: the kit's
+ * mirrored goldens and every phone already shipped parse frames without it,
+ * and a required field added to a shared schema has broken adoption before. */
 export const AgentFieldSnapshot = z
-  .object({ revision: z.number().int(), rows: z.array(AgentFieldRow) })
+  .object({ epoch: RowsEpoch.optional(), revision: z.number().int(), rows: z.array(AgentFieldRow) })
   .passthrough();
 export type AgentFieldSnapshot = z.infer<typeof AgentFieldSnapshot>;
 
 /** Every later frame. It applies ON TOP OF `since`: a client whose own
  * revision is not `since` has lost a frame and re-subscribes for a fresh
- * snapshot — the tolerant reader's own rule, never an ack protocol. */
+ * snapshot — the tolerant reader's own rule, never an ack protocol. `epoch`
+ * as on the snapshot; a delta whose epoch is not the one the reader holds is
+ * a gap too. */
 export const AgentFieldDelta = z
   .object({
+    epoch: RowsEpoch.optional(),
     since: z.number().int(),
     revision: z.number().int(),
     upserts: z.array(AgentFieldRow),
@@ -143,6 +235,41 @@ export const AgentFieldDelta = z
   })
   .passthrough();
 export type AgentFieldDelta = z.infer<typeof AgentFieldDelta>;
+
+/** DS-3 — the OPEN answer of `agent.subscribe {scope: "mesh"}` (DS-D4): every
+ * self desktop the roster lists, each with its state, when that was
+ * established, and — once it has answered — its own board at its own
+ * `{epoch, revision}`. Rows are keyed `{device, runtimeRunId}`. The daemon
+ * MULTIPLEXES and never re-folds: a peer's revisions arrive as the peer
+ * numbered them. A `desk` board's rows are `AgentDeskRow`s, which parse here
+ * as field rows with the rest passed through. */
+export const AgentMeshOpen = meshRowsOpen(AgentFieldRow);
+/** One device's entry in the open. Written out rather than inferred: the
+ * passthrough inference gives every arm a string index signature, and a
+ * reader's `"snapshot" in entry` would then narrow to `unknown`. The schema
+ * above is the authority; a parsed value is assignable to these. */
+export interface AgentMeshDevice {
+  device: string;
+  state: RowsDeviceState;
+  /** ISO-8601 — when `state` was last established */
+  asOf: string;
+  snapshot?: RowsSnapshot<AgentFieldRow> | undefined;
+}
+export interface AgentMeshOpen {
+  devices: AgentMeshDevice[];
+}
+
+/** DS-3 — a later frame of the mesh board: one device's delta, relayed
+ * verbatim · one device's snapshot (that device's reset — the reader REPLACES
+ * its copy of that device and nothing else) · one device's state changing. A
+ * device that stops answering sends only the state change: its last board
+ * stays with the reader, greyed (DS-L8), never an empty board in its place. */
+export const AgentMeshFrame = meshRowsFrame(AgentFieldRow);
+/** The frame's three arms, written out for the same reason as the open's. */
+export type AgentMeshFrame =
+  | { device: string; delta: RowsDelta<AgentFieldRow> }
+  | { device: string; snapshot: RowsSnapshot<AgentFieldRow> }
+  | { device: string; state: RowsDeviceState; asOf: string };
 
 /** One device's slice of `field.agents.v1` (D4's hybrid). `expiresAt` is the
  * honesty clause: a desktop that dies without clearing its slice leaves rows a

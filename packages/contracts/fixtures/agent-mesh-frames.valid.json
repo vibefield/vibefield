@@ -1,0 +1,162 @@
+[
+  {
+    "device": "dev-01HQ9S7UD1",
+    "delta": {
+      "epoch": "fieldd-9b04c1e27a6d5f30.7",
+      "since": 40,
+      "revision": 41,
+      "upserts": [
+        {
+          "runtimeRunId": "run-studio-q",
+          "revision": 10,
+          "kind": "claude",
+          "label": "Claude Code",
+          "tier": "managed",
+          "device": "dev-01HQ9S7UD1",
+          "status": "working",
+          "statusSince": "2026-09-30T21:15:20.000Z",
+          "stateChangedAt": "2026-09-30T21:15:20.000Z",
+          "createdAt": "2026-09-30T20:51:40.000Z",
+          "lastActivityAt": "2026-09-30T21:15:20.000Z",
+          "alive": true,
+          "blockers": [],
+          "lastAssistantMessage": {
+            "text": "Keeping it greyed; wiring the filter now.",
+            "at": "2026-09-30T21:15:20.000Z",
+            "final": false
+          },
+          "usage": {
+            "cumulativeTokens": 412880,
+            "burnRatePerMin": 2210,
+            "costUsd": 4.04,
+            "costCoverage": "complete"
+          },
+          "context": {
+            "usedPercent": 41
+          },
+          "model": {
+            "id": "claude-opus-5",
+            "displayName": "Opus 5"
+          },
+          "project": {
+            "name": "vibe-field",
+            "branch": "ds/c"
+          },
+          "terminal": {
+            "hosted": "local",
+            "runtimeSessionId": "pty-s9",
+            "workloadClass": "agent"
+          }
+        }
+      ],
+      "removed": []
+    }
+  },
+  {
+    "device": "dev-01HQ9S7UD1",
+    "state": "stale",
+    "asOf": "2026-09-30T21:16:03.000Z"
+  },
+  {
+    "device": "dev-01HQ9S7UD1",
+    "snapshot": {
+      "epoch": "fieldd-9b04c1e27a6d5f30.8",
+      "revision": 1,
+      "rows": [
+        {
+          "runtimeRunId": "run-studio-q",
+          "revision": 1,
+          "kind": "claude",
+          "label": "Claude Code",
+          "tier": "managed",
+          "device": "dev-01HQ9S7UD1",
+          "status": "working",
+          "statusSince": "2026-09-30T21:15:20.000Z",
+          "stateChangedAt": "2026-09-30T21:15:20.000Z",
+          "createdAt": "2026-09-30T20:51:40.000Z",
+          "lastActivityAt": "2026-09-30T21:15:20.000Z",
+          "alive": true,
+          "blockers": [],
+          "lastAssistantMessage": {
+            "text": "Keeping it greyed; wiring the filter now.",
+            "at": "2026-09-30T21:15:20.000Z",
+            "final": false
+          },
+          "usage": {
+            "cumulativeTokens": 412880,
+            "burnRatePerMin": 2210,
+            "costUsd": 4.04,
+            "costCoverage": "complete"
+          },
+          "context": {
+            "usedPercent": 41
+          },
+          "model": {
+            "id": "claude-opus-5",
+            "displayName": "Opus 5"
+          },
+          "project": {
+            "name": "vibe-field",
+            "branch": "ds/c"
+          },
+          "terminal": {
+            "hosted": "local",
+            "runtimeSessionId": "pty-s9",
+            "workloadClass": "agent"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "device": "dev-01HQ9S7UD1",
+    "state": "live",
+    "asOf": "2026-09-30T21:16:04.000Z"
+  },
+  {
+    "device": "dev-01HQ8ZK4M7",
+    "delta": {
+      "epoch": "fieldd-5d1e2a7c90b3f418.2",
+      "since": 4,
+      "revision": 5,
+      "upserts": [],
+      "removed": ["run-here-w"]
+    }
+  },
+  {
+    "device": "dev-01HQA1RL4P",
+    "snapshot": {
+      "epoch": "fieldd-c3a9e0d7b1f24856.1",
+      "revision": 1,
+      "rows": [
+        {
+          "runtimeRunId": "run-air-i",
+          "revision": 1,
+          "kind": "claude",
+          "label": "Claude Code",
+          "tier": "managed",
+          "device": "dev-01HQA1RL4P",
+          "status": "idle",
+          "statusSince": "2026-09-30T18:40:00.000Z",
+          "stateChangedAt": "2026-09-30T18:40:00.000Z",
+          "createdAt": "2026-09-30T17:05:12.000Z",
+          "alive": true,
+          "blockers": [],
+          "lastAssistantMessage": {
+            "text": "Done: the rosetta grant is on its branch.",
+            "at": "2026-09-30T18:39:58.000Z",
+            "final": true
+          },
+          "project": {
+            "name": "rosetta"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "device": "dev-01HQA1RL4P",
+    "state": "live",
+    "asOf": "2026-09-30T21:17:00.000Z"
+  }
+]

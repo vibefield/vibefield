@@ -181,12 +181,25 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * clearing its slice leaves rows behind, so the publisher stamps
  * `expiresAt = now + STORE_EXPIRY_MS` and refreshes it every
  * STORE_HEARTBEAT_MS while it has rows. EXPIRY ≥ 3 × HEARTBEAT so two lost
- * heartbeats do not blank a live desktop's field on a reader. */
+ * heartbeats do not blank a live desktop's field on a reader.
+ *
+ * DS-3 (the mesh board, DS-D4; design-06 §8 "the board's cadence floors") —
+ * DESK_MIN_INTERVAL_MS is the desk projection's floor (windows; a caller may
+ * ask slower, never faster); DESK_TEXT_CHARS bounds every text a desk row
+ * carries (the reply line, a blocker's question). MESH_HEARTBEAT_MS is the
+ * heartbeat the mesh board asks each peer's upstream for (an empty delta
+ * after that long without a frame), and a peer unheard for MESH_STALE_BEATS
+ * of them reads `stale`: the board's own cadence is quiet when nothing moves,
+ * so without a beat an idle desktop and a dead stream would look alike. */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
   STORE_HEARTBEAT_MS: 10_000,
   STORE_EXPIRY_MS: 30_000,
+  DESK_MIN_INTERVAL_MS: 100,
+  DESK_TEXT_CHARS: 280,
+  MESH_HEARTBEAT_MS: 1_000,
+  MESH_STALE_BEATS: 3,
 } as const;
 
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot

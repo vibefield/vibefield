@@ -41,6 +41,9 @@ describe("agent.* registry rows (AR-3)", () => {
     // the floor and the run, reached by routing with `device` — the fold's
     // reads stream, and the owner's offer lists (providers, catalog) federate.
     // Scopes and idempotency are unchanged.
+    // DS-3 (2026-09-30) needs the same `stream` on `agent.subscribe`: the mesh
+    // board's upstreams are this door asked by a peer daemon, which the D36
+    // wall refuses on a `local` method — both lanes set it, landed here once.
     expect(rows("agent.")).toEqual([
       {
         method: "agent.providers",
