@@ -1065,6 +1065,11 @@ export function GodviewDeck({
       // client of a cell's own door instead. So this door reports zero hosts on
       // every poll, and the monitor's remote half can only ever be `serving`
       // with nothing in it.
+      // *Correction 2026-09-30 (SB §9):* under the routed runtime ghosttea's
+      // `listRemoteHosts` THROWS ("Remote-host discovery is not part of the
+      // routed host contract", ghosttea-react runtime.ts) rather than answering
+      // zero hosts, and `openRemoteSession` throws likewise, so `door.attach`
+      // is dead in production.
       //
       // NOT DELETED HERE, because it is not a contained deletion. Behind it are
       // `monitor/remote-session-field.ts`, `monitor/remote-door.ts` and their
