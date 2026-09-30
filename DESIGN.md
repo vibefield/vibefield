@@ -347,8 +347,10 @@ Choreography constants: staggered entrances `26ms/item` (cap 400ms); content rev
 read as an immediate response to the hold").
 
 One more plain curve, with its reason: a **retract** goes back along the way it came on
-`ease-in` (the spawn bloom's buds, 180ms, §8) — it accelerates home, the pop's reverse (M4).
-Leaving things never wait out an entrance's reveal delay.
+`cubic-bezier(0.4, 0, 1, 1)` — an ease-in, a hair sharper off the mark than CSS's `ease-in`
+(0.42, 0, 1, 1) — with its fade on `ease` (the spawn bloom's buds, 180ms, §8; the prototype's
+stylesheet said 200ms, its constants table 180, and the table is the authority) — it accelerates
+home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay.
 
 Loops are for an indicator waiting on a fact it cannot predict, never for decoration (QL-2's
 launch, §8): a **breath** — `ease-in-out`, alternate, 1.1s, scale 1 → 1.06 — and a repeating
@@ -708,50 +710,57 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   keeps the mark and the grid at its middle (240ms, island). Reduced motion: no travel and no loops;
   what changes fades in 100ms (the reveal is the ground's fade, the badge's slot opens at once) and
   the seconds still count. Colour: ink and the pane colour only — no orange, no green.
-- **Hold, reach, let go — the spawn bloom** (SB, ruled 2026-09-30 by James on the page *Hold, Reach,
-  Let Go*; the record is `thinking-spawn-bloom.md`). A long press on the swarm's empty ground keeps the
-  hold ring as the **hub** and blooms around it the choices a new terminal can be born under: the
-  **desktops** (only when there are two or more), and, reaching one, its **Agent Profiles**. One desktop
-  blooms its profiles at once; one desktop with one profile does not bloom — the hold creates at once, as
-  before. **Letting go commits the path so far:** the hub is this desktop under its default profile, a
-  desktop its default, a profile exactly that; open ground or ⎋ opens nothing. The bud let go on grows
-  into the new body where it stands (M1, M2) while the rest go back along their spokes (M4). **Geometry**
-  (puppeteer's `views/swarm/bloom` constants are the numbers): ring one 92px from the hub, buds 48px, 42°
-  apart (narrowed to fit 220°); ring two 80px from its desktop, buds 42px, 40° apart. The arc opens UP and
-  turns in 15° steps only as far as the field's edge or the chrome forces it, never moving the centre, and
-  the turn is chosen in strict order — the buds fit, then their labels, then every desktop has room for its
-  profiles to bloom onward (never back toward the hub), then the open desktop keeps its label. Selection is
-  by DIRECTION past a 22px dead zone (sectors at most ±26°); past the ring by 64px is open ground; a
-  desktop opens on reach (12px short of its ring) and closes 34px inside it; a new ring ignores the pointer
-  for 90ms. **Buds** are clear discs (white, `#242424` in the dark) with a 1.25px ring at 22% ink, the
-  profile tabs' own glyphs (filled = the default) and orange dot; a desktop is its initial in the body type
-  (there is no desktop mark; the laptop already means This Mac); the one pointed at inverts to ink and
-  lifts to 1.16× (`--vf-ease-lift`, 180ms), the nearest leans in by up to 6%, an open desktop is ringed
-  (2px) and its siblings step back to .62; a desktop that cannot take a terminal keeps its place, faint and
-  dashed, with its reason. **Labels** (9.5px mono 800, 78% ink, haloed in the ground, 8px off the rim)
-  do not sit on anything: one that would touch another bud at its hot size, another label, the hub, a spoke
-  or the field's edge moves round its own bud 15° at a time to the nearest clear place, then keeps only the
-  name; an open desktop's label boxed in by its profiles gives way. (Only a hold pressed against the
-  field's edge, where no turn clears everything, can leave a label on the least-crowded place.) **The words** say what letting go does
-  as a verb and a noun, huge (800, −0.04em; up to 72px, 6.6% of the field's longer side, down to 22px),
-  the noun at full ink and the verb at 40% — *New terminal*, *Open on mini*, *Open as Work*, *Air is
-  asleep*, *Cancel*, and *Opening as Work* for 460ms after letting go — over one mono line of where and
-  under whom; they stand in the field's widest empty space, 40px clear of the bloom, stay put while the
-  pointer moves, change as a new slate (150ms in, 120ms out), and are the live region. A peer's own
-  profile reads **Default**. **The field goes quiet** (SB-D8): every body sinks under a veil of the
+- **Hold, reach, let go — the spawn bloom** (SB, ruled 2026-09-30 by James on the page *Hold, Reach, Let
+  Go*; the record is `thinking-spawn-bloom.md`). A long press on the swarm's empty ground keeps the hold
+  ring as the **hub** and blooms around it the choices a new terminal can be born under: the **desktops**
+  (only when there are two or more), and, reaching one, its **Agent Profiles**. One desktop blooms its
+  profiles at once; one desktop with one profile does not bloom — the hold creates at once, as before,
+  under that one profile (the pane keeps it, so its launches and typed agents answer alike). **Letting go
+  commits the path so far:** the hub is this desktop under its default profile, a desktop its default, a
+  profile exactly that; open ground or ⎋ opens nothing. The bud let go on grows into the new body where it
+  stands (M1, M2) while the rest go back along their spokes (M4). **Geometry** (puppeteer's
+  `views/swarm/bloom` constants are the numbers): ring one 92px from the hub, buds 48px, 42° apart
+  (narrowed to fit 220°); ring two 80px from its desktop, buds 42px, 40° apart. The arc opens UP and turns
+  in 15° steps only as far as the field's edge or the chrome forces it, never moving the centre, and the
+  turn is chosen in strict order — the buds fit, then their labels, then every desktop has room for its
+  profiles to bloom onward (never back toward the hub), then the open desktop keeps its label. Selection
+  is by DIRECTION past a 22px dead zone (sectors at most ±26°); past the ring by 64px is open ground; a
+  desktop opens on reach (12px short of its ring) and closes 34px inside it; a new ring ignores the
+  pointer for 90ms. **Buds** are clear discs (white, `#242424` in the dark) with a 1.25px ring at 22% ink,
+  the profile tabs' own glyphs (filled = the default) and orange dot; a desktop is its initial in the body
+  type (there is no desktop mark; the laptop already means This Mac); the one pointed at inverts to ink
+  and lifts to 1.16× (`--vf-ease-lift`, 180ms), the nearest leans in by up to 6%, an open desktop is
+  ringed (2px) and its siblings step back (scale .9, the bud at .62, its label at .58); a desktop that
+  cannot take a terminal keeps its place, faint and dashed, with its reason. **Labels** (the name in 9.5px
+  mono 700 at 78% ink over a 7.5px 800 state line, haloed in the ground, 8px off the rim) do not sit on
+  anything: one that would touch another bud at its hot size, another label, the hub, a spoke or the
+  field's edge moves round its own bud 15° at a time to the nearest clear place, then keeps only the name;
+  an open desktop's label boxed in by its profiles gives way. (Only a hold pressed against the field's
+  edge, where no turn clears everything, can leave a label on the least-crowded place.) **The words** say
+  what letting go does as a verb and a noun, huge (800, −0.04em; up to 72px, 6.6% of the field's longer
+  side, down to 22px), the noun at full ink and the verb at 40% — *New terminal*, *Open on mini*, *Open as
+  Work*, *Air is asleep*, *Cancel*, and *Opening as Work* for 460ms after letting go — over one mono line
+  of where and under whom; they stand in the field's widest empty space, 40px clear of the bloom, stay put
+  while the pointer moves, change as a new slate (150ms in, 120ms out), and are the live region. A peer's
+  own profile reads **Default**. **The field goes quiet** (SB-D8): every body sinks under a veil of the
   monitor's own ground at 80% except the sessions under what is pointed at, which stay above it, and solid
-  clearings (16px past the bloom's farthest bud or label, and under the words; feathered 44px and 64px) cut
-  out everything beneath, so nothing shows through the bloom; the hub is drawn above them. **Motion:** buds
-  pop out centre-first on `--vf-ease-pop` (280ms, 26ms apart), labels 140ms behind; back along the spoke
-  on `ease-in` (180ms, §6), their labels with them. The born body stands where it was let go, hollow, until
-  the terminal arrives; after 320ms its dashes turn and it reads OPENING (inside 320ms nothing indicates,
-  as QL-2). **Other doors:** a secondary click on empty ground opens it held open (move, click; ⎋ or open
-  ground puts it away); the swarm's hidden list's `＋ New terminal…` opens it for keys (←/→ move, ↵ opens a
+  clearings (16px past the bloom's farthest bud or label, and under the words; feathered 44px and 64px)
+  cut out everything beneath, so nothing shows through the bloom; the hub is drawn above them. **Motion:**
+  buds pop out centre-first on `--vf-ease-pop` (280ms, 26ms apart), labels 140ms behind; back along the
+  spoke on the retract curve (180ms, §6), their labels with them. The born body stands where it was let go
+  — moved in from the field's edge only as far as the terminal's own body will stand, so nothing jumps
+  when it arrives — hollow, until the terminal arrives; after 320ms its dashes turn and it reads OPENING
+  (inside 320ms nothing indicates, as QL-2). A refused birth goes back at once; one the host answered
+  whose terminal is still missing 4s later, or one the host never answers within 30s, goes back then.
+  **Other doors:** a secondary click on empty ground opens it held open (move, click; ⎋ or open ground
+  puts it away); the swarm's hidden list's `＋ New terminal…` opens it for keys (←/→ move, ↵ opens a
   desktop or commits, 1–9 pick, 0 the hub, ⎋ backs out) and it holds the keys while open; the list view's
-  `＋ TERMINAL` offers the same tree as a two-step menu. The empty notice says to hold empty ground. A
-  terminal born under a profile names it on its body (glyph and name, where the desktop has more than one)
-  and its empty-pane launcher reads `New · Under Work`, an agent the profile has no sign-in for marked
-  `no sign-in`. Reduced motion: no travel, overshoot or turning; 90ms fades; the body appears.
+  `＋ TERMINAL` offers the same tree as a two-step menu, in the bloom's order, the keys landing on the
+  default. The empty notice says to hold empty ground, and so does a hint under a pointer held still (3px)
+  over empty ground for 1.2s — the first three times after the app starts. A terminal born under a profile
+  names it on its body (glyph and name, where the desktop has more than one) and its empty-pane launcher
+  reads `New · Under Work`, an agent the profile has no sign-in for marked `no sign-in`. Reduced motion:
+  no travel, overshoot or turning; 90ms fades; the body appears.
 - **The terminal preview is Godview in miniature** (GT-7): a preview of how terminals will
   look mounts Godview's OWN parts over a depiction of the canvas — `GodviewStage` with the
   saved backdrop, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
