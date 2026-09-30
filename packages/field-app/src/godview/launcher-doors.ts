@@ -40,6 +40,13 @@ export interface LauncherPortDeps {
   /** The latest `agent.providers` rows, read at call time: whether a past
    * session's agent can resume it here is the row's `resumable`. */
   providers(): readonly AgentProviderSummary[];
+  /** SB-3 — the Agent Profile a pane's shell was born under, by that shell's
+   * session id (fieldd's record, the pool's): a launch there runs under it
+   * (QL-D3 as revised). Undefined for a shell under none. */
+  profileSetOf?(sessionId: string): string | undefined;
+  /** SB-3 — the Agent Profiles as the feed last had them, for the refusal
+   * clauses' names ("Work has no Codex sign-in"). */
+  profileSets?(): readonly Pick<AgentProfileSet, "id" | "label">[];
   /**
    * Hand a born terminal (the spawn's or the resume's create ticket) to the
    * launcher's own pane (`paneId`), in place of `replacing`, the fresh shell
@@ -54,6 +61,10 @@ export const UNTITLED_SESSION = "untitled session";
 
 /** Why ↵ is withheld on a row whose folder is gone from this device (§22). */
 export const FOLDER_GONE = "folder is gone";
+
+/** Why an agent cannot launch in a pane whose profile holds no sign-in for it
+ * (SB-3, DESIGN §8): the launcher prints "Codex can’t launch: no sign-in". */
+export const NO_SIGN_IN = "no sign-in";
 
 /* ── the agents (QL-D6, QL-D3 as revised 2026-09-28) ──────────────────── */
 
@@ -106,20 +117,42 @@ export function launchPreview(
  * `lastLaunchedAt`), each with its label, its last launch, why it cannot
  * launch (an agent not installed on this device is listed and says so), and
  * the preview line.
+ *
+ * `under` is the Agent Profile a pane's shell was born under (SB-3): a launch
+ * there runs under it, so the preview names it (`Claude Code · Work`), and an
+ * agent a managed profile holds no sign-in for is `no sign-in` — puppeteer
+ * would refuse it, and the launcher says so before anyone asks. This Mac (the
+ * native set) is every agent's own folder: every agent launches there as it
+ * does today.
  */
 export function launcherAgents(
   providers: readonly AgentProviderSummary[],
   profileSets: readonly Pick<AgentProfileSet, "id" | "label" | "default">[] = [],
+  under?: Pick<AgentProfileSet, "label" | "kind" | "personas">,
 ): LauncherAgent[] {
   return providers
     .filter((provider) => agentVisible(provider) && agentStartsSessions(provider))
-    .map((provider) => ({
-      providerId: provider.id,
-      label: provider.label,
-      ...(provider.lastLaunchedAt !== undefined ? { lastLaunchedAt: provider.lastLaunchedAt } : {}),
-      ...(provider.available ? {} : { unavailable: "not installed" }),
-      preview: launchPreview(provider, profileSets),
-    }));
+    .map((provider) => {
+      const noSignIn =
+        under?.kind === "managed" &&
+        !under.personas.some((persona) => persona.provider === provider.id);
+      return {
+        providerId: provider.id,
+        label: provider.label,
+        ...(provider.lastLaunchedAt !== undefined
+          ? { lastLaunchedAt: provider.lastLaunchedAt }
+          : {}),
+        ...(!provider.available
+          ? { unavailable: "not installed" }
+          : noSignIn
+            ? { unavailable: NO_SIGN_IN }
+            : {}),
+        preview:
+          under === undefined
+            ? launchPreview(provider, profileSets)
+            : `${provider.label} · ${under.label}`,
+      };
+    });
 }
 
 /* ── the list: index.recent → LauncherSession ─────────────────────────── */
@@ -239,13 +272,23 @@ async function searchStatus(client: LauncherDoorClient): Promise<LauncherHistory
 
 /* ── the verbs' refusals ──────────────────────────────────────────────── */
 
+/** SB-3 — what a launch in a bound pane named: the pane's profile and the
+ * agent, as a person reads them (the feed's label, the catalog's). */
+export interface LaunchUnder {
+  set: string;
+  agent: string;
+}
+
 /**
  * fieldd's refusal of a launch or a resume, as the clause the launcher puts
  * after "didn't launch:" / "didn't resume:". The three documented refusals of
  * the native resume (and the spawn's matching ones) get plain sentences; any
- * other refusal is carried in fieldd's own words.
+ * other refusal is carried in fieldd's own words. A launch in a pane born under
+ * an Agent Profile (`under`, SB-3) sent that set, so a missing profile is then
+ * about IT: puppeteer's "Work has no codex account" reads "Work has no Codex
+ * sign-in", in the catalog's label.
  */
-export function refusalReason(cause: unknown): string {
+export function refusalReason(cause: unknown, under?: LaunchUnder): string {
   const refusal = refusalOf(cause);
   const details = refusal.details ?? {};
   if (refusal.kind === "PRECONDITION_FAILED") {
@@ -270,7 +313,22 @@ export function refusalReason(cause: unknown): string {
     if (details["reason"] === "unknown-conversation") return "the history no longer knows it";
     if (details["reason"] === "other-agent") return "the history files it under another agent";
     if (details["reason"] === "unsupported-agent") return "this agent is not offered here";
-    if (details["code"] === "AGENT_PROFILE_NOT_FOUND") return "its profile no longer exists";
+    if (details["code"] === "AGENT_PROFILE_NOT_FOUND") {
+      if (under === undefined) return "its profile no longer exists";
+      // puppeteer's words for the set this launch named, read by what they
+      // are about — the agent it holds no account for, a set it never had,
+      // an agent that cannot hold one at all — else fieldd's own
+      const message = messageOf(cause);
+      const provider = details["provider"];
+      if (typeof provider === "string" && message.endsWith(` has no ${provider} account`)) {
+        return `${under.set} has no ${under.agent} sign-in`;
+      }
+      if (message.startsWith("unknown profile set")) return "its profile no longer exists";
+      if (message.startsWith("agent provider does not expose account profiles")) {
+        return `${under.set} cannot hold a ${under.agent} sign-in`;
+      }
+      return message;
+    }
   }
   return messageOf(cause);
 }
@@ -288,10 +346,12 @@ interface ResumeFacts {
 /**
  * The port. `recent` asks `index.recent` (and `index.status` beside it, for
  * the catching-up line); `words` asks `index.search` over the sessions the
- * last list named; `launch` is `agent.spawn` in the pane's folder under no
- * profile (QL-D3 as revised); `resume` is `agent.resume`'s native form with
- * the ROW's persona, or none — never a tab's: a resume continues where the
- * conversation lives, and another profile's folder does not hold it.
+ * last list named; `launch` is `agent.spawn` in the pane's folder, under the
+ * Agent Profile the pane's shell was born under (QL-D3 as revised again, SB-3:
+ * a pane with a profile launches under it) and under none in any other pane;
+ * `resume` is `agent.resume`'s native form with the ROW's persona, or none —
+ * never a tab's or a pane's: a resume continues where the conversation lives,
+ * and another profile's folder does not hold it.
  */
 export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
   const facts = new Map<string, ResumeFacts>();
@@ -380,14 +440,27 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
     },
 
     async launch(request) {
+      // the shell this launcher sits on, and so the pane's profile
+      const profileSet = deps.profileSetOf?.(request.sessionId);
       let answered: unknown;
       try {
         answered = await deps.client.request("agent.spawn", {
           provider: request.providerId,
           ...(request.cwd !== undefined ? { cwd: request.cwd } : {}),
+          ...(profileSet !== undefined ? { profileSet } : {}),
         });
       } catch (cause) {
-        return { accepted: false, reason: refusalReason(cause) };
+        const under =
+          profileSet === undefined
+            ? undefined
+            : {
+                set:
+                  deps.profileSets?.().find((set) => set.id === profileSet)?.label ?? "its profile",
+                agent:
+                  deps.providers().find((provider) => provider.id === request.providerId)?.label ??
+                  request.providerId,
+              };
+        return { accepted: false, reason: refusalReason(cause, under) };
       }
       return await place(answered, { paneId: request.paneId, replacing: request.sessionId });
     },

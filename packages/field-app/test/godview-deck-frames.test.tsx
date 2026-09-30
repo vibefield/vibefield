@@ -286,6 +286,11 @@ let createAnswer: Promise<unknown> | undefined;
 /** SB-2's fieldd answers a bound create with the set it applied; an older one
  * ignores the field and births unbound (`false`). */
 let bindsProfiles = true;
+/** SB-3 — what `agents.profileSets.subscribe` answers; null: no feed (the
+ * subscription is refused, as a fixture without one always was). */
+let profileSetsFeed: unknown[] | null = null;
+/** Agents the fixture's `agent.providers` lists beside Claude. */
+let extraProviders: unknown[] = [];
 let spawnGate: Promise<void> | undefined;
 let rosterRows: Array<{ sessionId: string; workloadClass: string; health: string }> = [];
 const runtimeBirths = new Set<string>();
@@ -346,7 +351,9 @@ const fieldd = {
       });
     }
     // QL-1 — the empty pane launcher's doors.
-    if (method === "agent.providers") return Promise.resolve({ providers: LAUNCHER_PROVIDERS });
+    if (method === "agent.providers") {
+      return Promise.resolve({ providers: [...LAUNCHER_PROVIDERS, ...extraProviders] });
+    }
     if (method === "agent.spawn") {
       const spawned = managedSummary({
         runtimeRunId: "run-launched",
@@ -364,6 +371,16 @@ const fieldd = {
     if (method === "index.recent") return Promise.resolve({ rows: [] });
     if (method === "index.status") return Promise.reject(new Error("no status in this fixture"));
     return Promise.reject(new Error(`unexpected method ${method}`));
+  },
+  subscribe: (method: string): Promise<unknown> => {
+    if (method === "agents.profileSets.subscribe" && profileSetsFeed !== null) {
+      return Promise.resolve({
+        subId: "profile-sets",
+        snapshot: { sets: profileSetsFeed, signIn: [], identity: [], signOut: [], reading: false },
+        unsubscribe: () => undefined,
+      });
+    }
+    return Promise.reject(new Error(`unexpected subscription ${method}`));
   },
 };
 
@@ -526,6 +543,8 @@ beforeEach(() => {
   terminateAnswer = undefined;
   createAnswer = undefined;
   bindsProfiles = true;
+  profileSetsFeed = null;
+  extraProviders = [];
   spawnGate = undefined;
   rosterRows = [];
   runtimeBirths.clear();
@@ -1554,6 +1573,92 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(
       host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
     ).toBe("pty-launched");
+  });
+
+  it("names the profile a pane was born under — New · Under Work — marks an agent it holds no sign-in for, and launches under it (SB-3)", async () => {
+    const at = "2026-09-30T00:00:00.000Z";
+    profileSetsFeed = [
+      {
+        id: "native",
+        kind: "native",
+        label: "This Mac",
+        default: false,
+        createdAt: at,
+        personas: [],
+      },
+      {
+        id: "work",
+        kind: "managed",
+        label: "Work",
+        glyph: "briefcase",
+        default: true,
+        createdAt: at,
+        personas: [
+          {
+            profileId: "w-claude",
+            provider: "claude",
+            label: "Claude",
+            kind: "managed",
+            createdAt: at,
+          },
+        ],
+      },
+    ];
+    extraProviders = [
+      {
+        id: "codex",
+        label: "Codex",
+        available: true,
+        resumable: true,
+        personas: [],
+        status: "supported",
+        offers: { spawn: true, resume: true, personas: true },
+      },
+    ];
+    const host = await mountDeck();
+    await act(async () => {
+      await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    await settle();
+    const launcher = launcherFor(host, "born-1");
+    expect(launcher, "a bound birth is a fresh shell like any other").not.toBeNull();
+    expect(launcher?.querySelector(".vf-pane-launcher-cap-under")?.textContent).toContain(
+      "Under Work",
+    );
+    expect(launcher?.querySelector('[data-profile-glyph="briefcase"]')).not.toBeNull();
+    expect(launcher?.querySelector('[title="Codex · no sign-in"]')).not.toBeNull();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-1"), "Digit1");
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
+      {
+        method: "agent.spawn",
+        params: { provider: "claude", cwd: "/home/tester/vibe-field", profileSet: "work" },
+      },
+    ]);
+  });
+
+  it("keeps the plain caption in a pane born under no profile, even with profiles to name (SB-3)", async () => {
+    runtimeBirths.add("pty-1");
+    const at = "2026-09-30T00:00:00.000Z";
+    profileSetsFeed = [
+      {
+        id: "native",
+        kind: "native",
+        label: "This Mac",
+        default: true,
+        createdAt: at,
+        personas: [],
+      },
+      { id: "work", kind: "managed", label: "Work", default: false, createdAt: at, personas: [] },
+    ];
+    const host = await mountDeck();
+    await settle();
+    const launcher = launcherFor(host, "pty-1");
+    expect(launcher).not.toBeNull();
+    expect(launcher?.querySelector(".vf-pane-launcher-cap-under")).toBeNull();
+    expect(launcher?.querySelector("[data-profile-glyph]")).toBeNull();
   });
 });
 

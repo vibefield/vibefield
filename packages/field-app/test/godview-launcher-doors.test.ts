@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type AgentPersona,
   type AgentProviderSummary,
   AgentProvidersResult,
   IndexRecentResult,
@@ -27,6 +28,7 @@ import {
   launcherPortOver,
   launcherSession,
   launchPreview,
+  NO_SIGN_IN,
   refusalReason,
   UNTITLED_SESSION,
 } from "../src/godview/launcher-doors";
@@ -518,6 +520,106 @@ describe("the agents", () => {
     // a row that claims no personas runs as itself whatever the default is
     expect(launchPreview({ ...signedIn, offers: { personas: false } }, [work])).toBe(
       "Claude Code · its defaults",
+    );
+  });
+});
+
+// ---- SB-3 — a pane born under an Agent Profile launches under it --------------
+
+describe("the launcher in a pane born under a profile (SB-3)", () => {
+  const signIn = (provider: string): AgentPersona => ({
+    profileId: `w-${provider}`,
+    provider,
+    label: provider,
+    kind: "managed",
+    createdAt: "2026-09-30T00:00:00.000Z",
+  });
+  const WORK = { label: "Work", kind: "managed" as const, personas: [signIn("claude")] };
+  const NATIVE = { label: "This Mac", kind: "native" as const, personas: [] };
+
+  it("lists the pane's agents: one its profile holds no sign-in for is `no sign-in`, and the preview names the profile", () => {
+    const agents = launcherAgents(WITH_CODEX, [], WORK);
+    expect(agents).toEqual([
+      {
+        providerId: "claude",
+        label: "Claude Code",
+        lastLaunchedAt: 1789232460000,
+        preview: "Claude Code · Work",
+      },
+      // not installed is the more basic reason, and it stays
+      { providerId: "pi", label: "Pi", unavailable: "not installed", preview: "Pi · Work" },
+      { providerId: "codex", label: "Codex", unavailable: NO_SIGN_IN, preview: "Codex · Work" },
+    ]);
+    // This Mac is every agent's own folder: every agent launches as today
+    const native = launcherAgents(WITH_CODEX, [], NATIVE);
+    expect(native.filter((agent) => agent.unavailable === NO_SIGN_IN)).toEqual([]);
+    expect(native.map((agent) => agent.preview)).toEqual([
+      "Claude Code · This Mac",
+      "Pi · This Mac",
+      "Codex · This Mac",
+    ]);
+  });
+
+  it("launches under the pane's profile, and under none in a pane born under none", async () => {
+    const { deps: port, request } = deps({ "agent.spawn": SPAWNED });
+    const launcher = launcherPortOver({
+      ...port,
+      profileSetOf: (sessionId) => (sessionId === "work-shell" ? "work" : undefined),
+    });
+    await launcher.launch({
+      paneId: "p",
+      sessionId: "work-shell",
+      providerId: "claude",
+      cwd: "/repo",
+    });
+    expect(request).toHaveBeenLastCalledWith("agent.spawn", {
+      provider: "claude",
+      cwd: "/repo",
+      profileSet: "work",
+    });
+    await launcher.launch({
+      paneId: "p2",
+      sessionId: "bare-shell",
+      providerId: "claude",
+      cwd: "/r",
+    });
+    expect(request).toHaveBeenLastCalledWith("agent.spawn", { provider: "claude", cwd: "/r" });
+  });
+
+  it("says a bound launch's refusal about the pane's profile, in the catalog's label", async () => {
+    const profileNotFound = (message: string): Error =>
+      refusal("NOT_FOUND", message, { provider: "codex", code: "AGENT_PROFILE_NOT_FOUND" });
+    const cases: [Error, string][] = [
+      [profileNotFound("Work has no codex account"), "Work has no Codex sign-in"],
+      [profileNotFound("unknown profile set: work"), "its profile no longer exists"],
+      [
+        profileNotFound("agent provider does not expose account profiles: codex"),
+        "Work cannot hold a Codex sign-in",
+      ],
+      // anything else about the set is fieldd's own words
+      [profileNotFound("account profiles could not be read"), "account profiles could not be read"],
+    ];
+    for (const [cause, sentence] of cases) {
+      expect(refusalReason(cause, { set: "Work", agent: "Codex" })).toBe(sentence);
+      const { deps: port, place } = deps({
+        "agent.spawn": () => {
+          throw cause;
+        },
+      });
+      const launcher = launcherPortOver({
+        ...port,
+        profileSetOf: () => "work",
+        profileSets: () => [{ id: "work", label: "Work" }],
+      });
+      expect(await launcher.launch({ paneId: "p", sessionId: "s", providerId: "codex" })).toEqual({
+        accepted: false,
+        reason: sentence,
+      });
+      expect(place).not.toHaveBeenCalled();
+    }
+    // a launch that named no set keeps the old reading: a persona gone since
+    expect(refusalReason(profileNotFound("Work has no codex account"))).toBe(
+      "its profile no longer exists",
     );
   });
 });

@@ -4,6 +4,7 @@ import type { GhostteaWorkspaceContext } from "@vibecook/ghosttea-react/workspac
 import {
   DeckLaunchers,
   type LauncherOutcome,
+  type LauncherUnder,
   watchDrawnSessions,
 } from "@vibecook/puppeteer-views/launcher";
 import {
@@ -23,7 +24,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { getRendererLogger } from "../logging";
-import { adoptCreatedTerminal, useTerminalPool } from "../terminal/pool";
+import { adoptCreatedTerminal, terminalSessionProfileSet, useTerminalPool } from "../terminal/pool";
 import { paneCwd, readDeviceHost } from "./deck-restore";
 import { launcherAgents, launcherPortOver } from "./launcher-doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
@@ -177,7 +178,9 @@ export function GodviewDeckLaunchers({
   prepareReplacement,
 }: GodviewDeckLaunchersProps): ReactElement | null {
   const fieldd = useFielddClient();
-  const { runtime } = useTerminalPool();
+  // SB-3: the pool's record of which shell was born under which Agent Profile
+  // (fieldd's words) — the launcher in a bound pane launches under it
+  const { runtime, profileSets: boundSets } = useTerminalPool();
   const paneAgents = useDeckAgentFacts();
   const panes = workspace?.panes ?? [];
   const sessions = panes.map((pane) => pane.session as GateSession & SessionSummary);
@@ -241,9 +244,12 @@ export function GodviewDeckLaunchers({
     };
   }, [fieldd, freshKey]);
 
-  // The Agent Profiles, for the preview line's name of the default one. Held
-  // only while a launcher is up (PF6's rule for the stage's own feeds).
+  // The Agent Profiles, for the preview line's name of the default one and a
+  // bound pane's own caption and agents (SB-3). Held only while a launcher is
+  // up (PF6's rule for the stage's own feeds).
   const [profileSets, setProfileSets] = useState<readonly AgentProfileSet[]>([]);
+  const profileSetsRef = useRef(profileSets);
+  profileSetsRef.current = profileSets;
   const anyFresh = freshKey !== "";
   useEffect(() => {
     if (door?.profiles === undefined || !anyFresh) return;
@@ -263,6 +269,29 @@ export function GodviewDeckLaunchers({
 
   const agents = useMemo(() => launcherAgents(providers, profileSets), [providers, profileSets]);
 
+  // SB-3 — the launcher in a pane born under an Agent Profile (QL-D3 revised:
+  // it launches under it): `New · Under Work`, and that profile's agents — an
+  // agent it holds no sign-in for is `no sign-in`. A desktop with one profile
+  // has no choice to name, and a set the feed does not list (not read yet, or
+  // deleted since) names nothing: the launch still carries the pane's set, and
+  // fieldd's refusal says the rest.
+  const paneUnder = useCallback(
+    ({ sessionId }: { paneId: string; sessionId: string }): LauncherUnder | undefined => {
+      const id = boundSets.get(sessionId);
+      if (id === undefined || profileSets.length <= 1) return undefined;
+      const set = profileSets.find((candidate) => candidate.id === id);
+      if (set === undefined) return undefined;
+      return {
+        label: set.label,
+        ...(set.glyph !== undefined ? { glyph: set.glyph } : {}),
+        kind: set.kind,
+        isDefault: set.default,
+        agents: launcherAgents(providers, profileSets, set),
+      };
+    },
+    [boundSets, profileSets, providers],
+  );
+
   // The port, memoized on the connection alone: the launcher re-asks its list
   // whenever the port's identity changes.
   const port = useMemo(
@@ -270,6 +299,8 @@ export function GodviewDeckLaunchers({
       launcherPortOver({
         client: fieldd,
         providers: () => providersRef.current,
+        profileSetOf: terminalSessionProfileSet,
+        profileSets: () => profileSetsRef.current,
         place: async (terminal, { paneId, replacing }): Promise<LauncherOutcome> => {
           if (door === null) return { accepted: false, reason: "the deck is not connected" };
           // The answer carries the SAME create ticket a shell birth gets: the
@@ -369,6 +400,7 @@ export function GodviewDeckLaunchers({
       cwdBySession={cwdBySession}
       paneColors={paneColors}
       agents={agents}
+      paneUnder={paneUnder}
       port={port}
       hasInput={(id) => runtime?.sessionHasInput(id) === true}
       {...(watchFirstFrame !== undefined ? { watchFirstFrame } : {})}
