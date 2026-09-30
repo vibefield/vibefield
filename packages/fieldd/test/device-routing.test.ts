@@ -33,7 +33,11 @@ async function api(forwarder = vi.fn()) {
     getLinkedLogin: () => TEST_LOGIN,
   });
   a.setDeviceRouting(() => OWN_ID, forwarder);
-  a.register("device.list", (ctx, params) => ({ principal: ctx.principal, params }));
+  a.register("device.list", (ctx, params) => ({
+    principal: ctx.principal,
+    params,
+    onBehalfOf: ctx.onBehalfOf,
+  }));
   a.registerSubscription("device.subscribe", () => ({ snapshot: [], dispose: () => {} }));
   const port = await a.listen();
   cleanup.push(() => a.close());
@@ -128,6 +132,8 @@ describe("the device? routing hook (C5/D35)", () => {
       "device.list",
       { device: "dev-b" },
       expect.anything(),
+      // DS-L7 — who the call is for rides beside it; a read carries no key
+      { onBehalfOf: expect.objectContaining({ deviceId: OWN_ID }) },
     );
   });
 
@@ -332,5 +338,182 @@ describe("the device? subscription hop (C6-5/D35)", () => {
     };
     expect(res.error.data.kind).toBe("UNAVAILABLE");
     expect(res.error.data.details.state).toBe("offline");
+  });
+});
+
+// DS-L7 / DS-D15 (2026-09-30) — the forwarding envelope at the door. A peer's
+// `onBehalfOf` is stripped from the params and recorded on the call's context
+// (the audit actor reads it there); any other caller carrying either member is
+// refused before anything runs; the routing hop builds `onBehalfOf` from the
+// CALLING context, never from the call's params.
+describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
+  const behalf = { clientKind: "renderer", deviceId: "dev-peer-a", windowId: "win-1" };
+
+  it("a peer's envelope is stripped from the params and recorded on the call, beside the node that dialled", async () => {
+    const { port } = await api();
+    const ws = await dial(port, `/t/${SECRET}`, {
+      "Tailscale-User-Login": TEST_LOGIN,
+      "Tailscale-Node-Id": "node-peer-a",
+    });
+    await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
+    const res = (await call(ws, 2, "device.list", { onBehalfOf: behalf, extra: 1 })) as {
+      result: { principal: unknown; params: unknown; onBehalfOf: unknown };
+    };
+    // authorized as the peer daemon — the principal is unchanged by the envelope
+    expect(res.result.principal).toEqual({
+      kind: "peer-fieldd",
+      deviceId: "dev-peer-a",
+      tailscaleId: "node-peer-a",
+    });
+    // recorded as the window behind it; the method never sees the member
+    expect(res.result.onBehalfOf).toEqual(behalf);
+    expect(res.result.params).toEqual({ extra: 1 });
+    // provenance is per CALL: the next call on the same socket carries none
+    const bare = (await call(ws, 3, "device.list", {})) as { result: { onBehalfOf?: unknown } };
+    expect(bare.result.onBehalfOf).toBeUndefined();
+  });
+
+  it("reads a peer's envelope tolerantly: a newer client kind is recorded, an unreadable restatement or key is refused", async () => {
+    const { port } = await api();
+    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
+    await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
+    const newer = (await call(ws, 2, "device.list", {
+      onBehalfOf: { clientKind: "ios-watch", deviceId: "dev-peer-a", futureField: { x: 1 } },
+    })) as { result: { onBehalfOf: unknown } };
+    // a kind this build does not know is kept; a member it does not know is not
+    expect(newer.result.onBehalfOf).toEqual({ clientKind: "ios-watch", deviceId: "dev-peer-a" });
+
+    const nameless = (await call(ws, 3, "device.list", {
+      onBehalfOf: { clientKind: "renderer" },
+    })) as { error: { data: { kind: string; details: Record<string, unknown> } } };
+    expect(nameless.error.data.kind).toBe("PRECONDITION_FAILED");
+    expect(nameless.error.data.details).toMatchObject({ reason: "malformed onBehalfOf" });
+
+    const oversized = (await call(ws, 4, "device.list", {
+      onBehalfOf: { clientKind: "renderer", deviceId: "d".repeat(257) },
+    })) as { error: { data: { kind: string } } };
+    expect(oversized.error.data.kind).toBe("PRECONDITION_FAILED");
+
+    const shortKey = (await call(ws, 5, "device.list", { idempotencyKey: "short" })) as {
+      error: { data: { kind: string; details: Record<string, unknown> } };
+    };
+    expect(shortKey.error.data.kind).toBe("PRECONDITION_FAILED");
+    expect(shortKey.error.data.details).toMatchObject({ reason: "malformed idempotencyKey" });
+  });
+
+  it("a caller that is not a peer daemon carrying either member is refused before anything runs", async () => {
+    const forwarder = vi.fn(async () => ({ forwarded: true }));
+    const { a, port } = await api(forwarder);
+    let served = 0;
+    a.register("device.get", () => {
+      served += 1;
+      return {};
+    });
+    const local = await dial(port, "/");
+    await call(
+      local,
+      1,
+      "system.hello",
+      hello({ clientKind: "renderer", credential: "good-token" }),
+    );
+    const cases: Array<[number, string, Record<string, unknown>]> = [
+      [2, "device.get", { deviceId: "x", onBehalfOf: behalf }],
+      [3, "device.get", { deviceId: "x", idempotencyKey: "k-0123456789" }],
+      // routed: refused before the forwarder, so nothing crosses to the peer
+      [4, "device.list", { device: "dev-b", onBehalfOf: behalf }],
+    ];
+    for (const [id, method, params] of cases) {
+      const res = (await call(local, id, method, params)) as {
+        error: { data: { kind: string; details: Record<string, unknown> } };
+      };
+      expect(res.error.data.kind, `${method} ${JSON.stringify(params)}`).toBe(
+        "PRECONDITION_FAILED",
+      );
+      expect(res.error.data.details).toMatchObject({
+        reason: "forwarding envelope from a non-peer",
+      });
+    }
+    expect(served).toBe(0);
+    expect(forwarder).not.toHaveBeenCalled();
+
+    // the NAME collides with a LOCAL door's own retry key (surface.open,
+    // artifact.publish/update own an `idempotencyKey` param): on a local
+    // method the member is the method's, and it passes through untouched
+    a.register("system.health", (_ctx, params) => ({ params }));
+    const own = (await call(local, 5, "system.health", { idempotencyKey: "surface-retry-1" })) as {
+      result: { params: unknown };
+    };
+    expect(own.result.params).toEqual({ idempotencyKey: "surface-retry-1" });
+
+    // the phone's door is a tailnet principal, not a peer daemon: refused too
+    const phone = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
+    await call(phone, 1, "system.hello", hello({ clientKind: "ios" }));
+    const fromPhone = (await call(phone, 2, "device.list", { onBehalfOf: behalf })) as {
+      error: { data: { kind: string } };
+    };
+    expect(fromPhone.error.data.kind).toBe("PRECONDITION_FAILED");
+  });
+
+  it("the routing hop says who the call is for from the CALLING context — the window, never the params", async () => {
+    const forwarder = vi.fn(async () => ({ ok: true }));
+    const a = new ProductApi({
+      port: 0,
+      tokens: {
+        verify: (t) =>
+          t === "window-token"
+            ? {
+                tokenId: "tk-win",
+                scopes: ["workspace.read"],
+                label: "w",
+                rendererParticipant: { participantId: "window-7", incarnation: "gen-1" },
+              }
+            : t === "cli-token"
+              ? { tokenId: "tk-cli", scopes: ["workspace.read"], label: "cli" }
+              : null,
+      },
+      userId: "user-1",
+    });
+    a.setDeviceRouting(() => OWN_ID, forwarder);
+    a.register("device.list", () => ({}));
+    const port = await a.listen();
+    cleanup.push(() => a.close());
+
+    const win = await dial(port, "/");
+    await call(
+      win,
+      1,
+      "system.hello",
+      hello({ clientKind: "renderer", credential: "window-token" }),
+    );
+    await call(win, 2, "device.list", { device: "dev-b" });
+    // the renderer participant IS the window (stable for one BrowserWindow)
+    expect(forwarder).toHaveBeenLastCalledWith(
+      "dev-b",
+      "device.list",
+      { device: "dev-b" },
+      expect.anything(),
+      {
+        onBehalfOf: {
+          clientKind: "renderer",
+          deviceId: OWN_ID,
+          windowId: "window-7",
+          userId: "user-1",
+        },
+      },
+    );
+
+    const cli = await dial(port, "/");
+    await call(cli, 1, "system.hello", hello({ clientKind: "debug", credential: "cli-token" }));
+    await call(cli, 2, "device.list", { device: "dev-b" });
+    // no participant: the connection's own opaque id names it
+    const last = forwarder.mock.calls.at(-1) as unknown[];
+    expect(last[4]).toEqual({
+      onBehalfOf: {
+        clientKind: "debug",
+        deviceId: OWN_ID,
+        windowId: expect.stringMatching(/^conn_/),
+        userId: "user-1",
+      },
+    });
   });
 });

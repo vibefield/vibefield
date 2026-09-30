@@ -3914,7 +3914,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     api.setDeviceRouting(
       () => devices.currentDeviceId(),
-      (device, method, params) => peers.request(device, method, params),
+      // DS-L7/DS-D15 — the envelope (who the call is for, and a mutation's
+      // idempotency key) rides beside the params; this closure used to drop
+      // the calling context, so the owner recorded two devices as one
+      (device, method, params, _ctx, envelope) => peers.request(device, method, params, envelope),
       (device, method, params, _ctx, emit) => federatedSubs.attach(device, method, params, emit),
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster

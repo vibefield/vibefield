@@ -329,9 +329,13 @@ export type Principal =
   // UA-4 (spec §7.3, UA-D5): a WhoIs-verified tailnet peer whose login does
   // NOT match the stored link — empty scope grant, only guestOk methods
   // answer. The polite door: an honest "no access", never a socket slam.
-  | { kind: "tailnet-guest"; login: string }
+  // DS-D15 (2026-09-30) — `tailscaleId` on the two other tailnet-door kinds
+  // too: the sidecar-injected WhoIs node id, a TRANSPORT fact recorded so the
+  // audit actor names the node that dialled (never set from a claim; absent
+  // when an older sidecar proxied the hop).
+  | { kind: "tailnet-guest"; login: string; tailscaleId?: string }
   | { kind: "mcp-agent"; sessionId: string; scopes: string[] }
-  | { kind: "peer-fieldd"; deviceId: string }
+  | { kind: "peer-fieldd"; deviceId: string; tailscaleId?: string }
   | { kind: "plugin"; id: string; scopes: string[]; tokenId?: string }; // design-03 D20
 
 export type Transport =
@@ -353,4 +357,28 @@ export interface CallerContext {
   /** Server-side call lifetime. ProductAPI aborts it when the owning transport
    * closes; providers use it only for best-effort cancellation. */
   signal?: AbortSignal;
+  /** DS-L7 / DS-D15 — who a FORWARDED call is for, as the forwarding daemon
+   * restated it (`forwarding.ts` OnBehalfOf, read tolerantly at the door).
+   * Present only on a call whose principal is `peer-fieldd` and whose params
+   * carried the envelope; the door strips it from the params. RECORDED — the
+   * audit actor names it beside the calling node — and never authority: no
+   * gate may read it to grant anything. */
+  onBehalfOf?: ForwardedFor;
+  /** DS-D15 — provenance facts about the product CONNECTION this call rode,
+   * fixed at hello: an opaque per-connection id and the kind the hello
+   * CLAIMED. Read only to say who a call is for when this daemon forwards it
+   * (`onBehalfOf` on the peer's side); never read by a gate — `clientKind`
+   * above is the one a gate may restrict on. */
+  connection?: { id: string; helloClientKind: ClientKind };
+}
+
+/** DS-L7 — the tolerant reading of a peer's `OnBehalfOf`: the same four
+ * members with `clientKind` widened to a bounded string, so a newer peer's
+ * client kind is recorded rather than refused (tolerant reader). Bounded at
+ * the door so a restatement always fits an audit record. */
+export interface ForwardedFor {
+  clientKind: string;
+  deviceId: string;
+  windowId?: string;
+  userId?: string;
 }

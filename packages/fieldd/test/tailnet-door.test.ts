@@ -138,7 +138,13 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; deviceId: string } };
     };
-    expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-roster" });
+    // DS-D15 (2026-09-30) — the node id is KEPT beside the device it correlated
+    // to, so the audit actor names the node that dialled (never the claim)
+    expect(probe.result.principal).toEqual({
+      kind: "peer-fieldd",
+      deviceId: "dev-roster",
+      tailscaleId: "nQRJl4CNTRL",
+    });
   });
 
   it("T1: a correlation miss keeps the C5 claim fallback (mixed fleet)", async () => {
@@ -157,7 +163,14 @@ describe("the tailnet door (C3 provenance auth)", () => {
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; deviceId: string } };
     };
-    expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-claimed" });
+    // DS-D15 — the claim labels the device, and the node the sidecar named is
+    // recorded beside it: a ledger reader can tell a claimed id from a
+    // correlated one by whether the node maps to it
+    expect(probe.result.principal).toEqual({
+      kind: "peer-fieldd",
+      deviceId: "dev-claimed",
+      tailscaleId: "nUNKNOWN01",
+    });
   });
 
   it("T1: the node id names the device, not the software — a non-fieldd caller stays tailnet", async () => {

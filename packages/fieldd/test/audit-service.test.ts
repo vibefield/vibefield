@@ -430,3 +430,67 @@ describe("LOG-L6 append-only audit ledger", () => {
     });
   });
 });
+
+describe("DS-D15 — the actor names the node and the client behind a forwarded call", () => {
+  it("a peer daemon's forwarded act records the calling node and the window it acted for", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-ds2-actor" });
+    await service.start();
+    const forwarded: CallerContext = {
+      principal: { kind: "peer-fieldd", deviceId: "dev-a", tailscaleId: "node-a" },
+      transport: "ws-tailnet",
+      receivedAt: Date.now(),
+      onBehalfOf: { clientKind: "renderer", deviceId: "dev-a", windowId: "window-7" },
+    };
+    await service.required(
+      forwarded,
+      {
+        action: "agent.session.interrupt",
+        target: { kind: "agent-session", id: "run-1" },
+      },
+      () => ({ accepted: true }),
+    );
+    // the same call without the envelope, from a node the sidecar did not name
+    const bare: CallerContext = {
+      principal: { kind: "peer-fieldd", deviceId: "dev-b" },
+      transport: "ws-tailnet",
+      receivedAt: Date.now(),
+    };
+    await service.required(
+      bare,
+      { action: "agent.session.interrupt", target: { kind: "agent-session", id: "run-2" } },
+      () => ({ accepted: true }),
+    );
+    // a phone on the tailnet door: login AND node
+    const phone: CallerContext = {
+      principal: { kind: "tailnet", login: "me@example.com", self: true, tailscaleId: "node-p" },
+      transport: "ws-tailnet",
+      receivedAt: Date.now(),
+    };
+    await service.required(
+      phone,
+      { action: "agent.session.interrupt", target: { kind: "agent-session", id: "run-3" } },
+      () => ({ accepted: true }),
+    );
+    await service.close();
+
+    const all = await records(service.root);
+    const actors = all.filter((r) => r.phase === "attempt").map((r) => r.actor);
+    expect(actors).toEqual([
+      {
+        kind: "peer-fieldd",
+        id: "dev-a",
+        nodeId: "node-a",
+        onBehalfOf: { clientKind: "renderer", deviceId: "dev-a", windowId: "window-7" },
+      },
+      { kind: "peer-fieldd", id: "dev-b" },
+      { kind: "tailnet", id: "me@example.com", nodeId: "node-p" },
+    ]);
+    // the outcome row carries the same two names as its attempt
+    const outcome = all.find((r) => r.phase === "outcome" && r.target.id === "run-1");
+    expect(outcome?.actor).toMatchObject({
+      nodeId: "node-a",
+      onBehalfOf: { windowId: "window-7" },
+    });
+  });
+});

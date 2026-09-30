@@ -1,8 +1,9 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import {
   type CallerContext,
+  type ClientKind,
   CONTRACTS_VERSION,
   type ErrorKind,
   Hello,
@@ -21,6 +22,13 @@ import {
   TAILNET_SCOPES,
 } from "@vibefield/contracts";
 import { type WebSocket, WebSocketServer } from "ws";
+import {
+  forwardProvenance,
+  nonPeerEnvelopeRefusal,
+  type OutboundEnvelope,
+  readPeerEnvelope,
+  splitForwardEnvelope,
+} from "./forward-envelope";
 import { RpcCallError } from "./native-link";
 import { ShellProviderBroker, type ShellProviderTransport } from "./shell-provider";
 
@@ -97,11 +105,16 @@ export interface ProductApiOptions {
   getLinkedLogin?: () => string | null;
 }
 
+/** DS-L7/DS-D15 — `envelope` is what the forwarding hop adds beside the
+ * method's params: `onBehalfOf`, built from the CALLING context (never from
+ * the params), and on a mutation the `idempotencyKey` the owner journals its
+ * receipt under. The forwarder puts it on the wire (PeerLink.request). */
 export type DeviceForwarder = (
   device: string,
   method: string,
   params: unknown,
   ctx: CallerContext,
+  envelope: OutboundEnvelope,
 ) => Promise<unknown>;
 
 /** C6-5/D35 — the subscription half of the `device?` convention: installs a
@@ -153,6 +166,9 @@ interface ConnState {
    * transport-derived DEVICE identity. null on the same door means an older
    * sidecar proxied the request, never an anonymous caller. */
   tailnetNodeId: string | null;
+  /** DS-D15 — an opaque id for this connection, minted at upgrade: the window
+   * a forwarded call names when the grant carries no renderer participant. */
+  connectionId: string;
   /** live subscriptions on this connection: subId → dispose */
   subs: Map<string, () => void>;
   abortController: AbortController;
@@ -470,6 +486,7 @@ export class ProductApi extends EventEmitter {
       scopes: [],
       tailnetLogin: door?.login ?? null,
       tailnetNodeId: door?.nodeId ?? null,
+      connectionId: `conn_${randomBytes(9).toString("base64url")}`,
       subs: new Map(),
       abortController: new AbortController(),
       shellTransport,
@@ -575,6 +592,13 @@ export class ProductApi extends EventEmitter {
         ws.close(1008, "user mismatch");
         return;
       }
+      // DS-D15 — the connection's provenance, fixed at hello and carried on
+      // every principal's context: read only to say who a call is for when
+      // this daemon forwards it, never by a gate.
+      const connection: { id: string; helloClientKind: ClientKind } = {
+        id: state.connectionId,
+        helloClientKind: parsed.data.clientKind,
+      };
       const token = parsed.data.credential;
       const grant = typeof token === "string" ? this.opts.tokens.verify(token) : null;
       if (grant) {
@@ -608,6 +632,7 @@ export class ProductApi extends EventEmitter {
           receivedAt: Date.now(),
           clientKind: parsed.data.clientKind, // §11.2 kind gate reads it (restrict-only)
           signal: state.abortController.signal,
+          connection,
         };
       } else if (state.tailnetLogin !== null) {
         // UA-4 — the stored-login comparison law (spec §7.3, UA-D5/UA-D13):
@@ -635,10 +660,16 @@ export class ProductApi extends EventEmitter {
           state.authed = true;
           state.scopes = [...TAILNET_GUEST_SCOPES];
           state.ctx = {
-            principal: { kind: "tailnet-guest", login: state.tailnetLogin },
+            principal: {
+              kind: "tailnet-guest",
+              login: state.tailnetLogin,
+              // DS-D15 — the node that dialled, so a guest's refusals name it
+              ...(state.tailnetNodeId !== null ? { tailscaleId: state.tailnetNodeId } : {}),
+            },
             transport: "ws-tailnet",
             receivedAt: Date.now(),
             signal: state.abortController.signal,
+            connection,
           };
         } else {
           // the sidecar-proxied door: identity is the WhoIs-verified login; the
@@ -665,7 +696,13 @@ export class ProductApi extends EventEmitter {
           state.scopes = [...TAILNET_SCOPES];
           state.ctx = {
             principal: peer
-              ? { kind: "peer-fieldd", deviceId: deviceId as string }
+              ? {
+                  kind: "peer-fieldd",
+                  deviceId: deviceId as string,
+                  // DS-D15 — the audit actor names the NODE: the id the
+                  // sidecar injected, recorded beside the correlated device
+                  ...(state.tailnetNodeId !== null ? { tailscaleId: state.tailnetNodeId } : {}),
+                }
               : {
                   // UA-P-0a — reaching here means the login MATCHED the stored
                   // one, so `self` is unconditionally true. It used to be
@@ -681,6 +718,7 @@ export class ProductApi extends EventEmitter {
             transport: "ws-tailnet",
             receivedAt: Date.now(),
             signal: state.abortController.signal,
+            connection,
           };
         }
       } else {
@@ -810,13 +848,50 @@ export class ProductApi extends EventEmitter {
       );
       return;
     }
+    // DS-L7 / DS-D15 (2026-09-30) — the forwarding envelope. `onBehalfOf` and
+    // `idempotencyKey` beside a method's params are the PEER LINK's to add: a
+    // `peer-fieldd` caller's are read (tolerantly — forward-envelope.ts),
+    // stripped from the params, and the provenance rides this call's context so
+    // the audit actor names the window behind the calling node. Authority does
+    // not move: the principal stays the peer daemon, scoped by the preset it
+    // was granted at hello. Any other caller carrying either member is refused
+    // before anything runs — a window cannot assert who it is acting for.
+    const baseCtx = state.ctx;
+    if (!baseCtx) return; // unreachable past the authed gate; keeps the type honest
+    let callCtx: CallerContext = baseCtx;
+    let callParams: unknown = params;
+    let inboundKey: string | undefined;
+    // the envelope's KEY is read on the forwardable surface only: on a `local`
+    // door `idempotencyKey` is the method's own retry key (surface.open,
+    // artifact.publish/update) and passes through untouched
+    const envelope = splitForwardEnvelope(params, { readKey: def.locality !== "local" });
+    if (envelope.carried) {
+      if (baseCtx.principal.kind !== "peer-fieldd") {
+        const refusal = nonPeerEnvelopeRefusal(method);
+        reply(this.err(id, refusal.kind, refusal.message, false, refusal.details));
+        return;
+      }
+      const read = readPeerEnvelope(envelope);
+      if (!read.ok) {
+        reply(
+          this.err(id, "PRECONDITION_FAILED", "malformed forwarding envelope", false, {
+            method,
+            reason: read.reason,
+          }),
+        );
+        return;
+      }
+      callParams = envelope.rest;
+      if (read.onBehalfOf !== undefined) callCtx = { ...baseCtx, onBehalfOf: read.onBehalfOf };
+      inboundKey = read.idempotencyKey;
+    }
     try {
       // C5/D35 — the `device?` convention: route AFTER the local scope check
       // (above), BEFORE execution. Own id strips and serves locally; a foreign
       // id forwards whole. C6-5: a device on a subscription installs the
       // federated proxy — same wire shape as a local subscription (subId +
       // <base>.delta/.snapshot frames), the payloads being the PEER's.
-      const device = (params as { device?: unknown } | null | undefined)?.device;
+      const device = (callParams as { device?: unknown } | null | undefined)?.device;
       if (
         typeof device === "string" &&
         def.locality === "local" &&
@@ -874,11 +949,14 @@ export class ProductApi extends EventEmitter {
                   params: { subId, payload },
                 });
             };
+            // DS-2 — a federated subscription carries no `onBehalfOf`: its
+            // upstream is SHARED by every local reader (ref-counted per
+            // {device, method, params}, PF6), so it is this daemon's own read
             const { snapshot, dispose } = await subForwarder(
               device,
               method,
-              params,
-              state.ctx,
+              callParams,
+              callCtx,
               emit,
             );
             state.subs.set(subId, () => {
@@ -888,16 +966,25 @@ export class ProductApi extends EventEmitter {
             reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
             return;
           }
-          const result = await forwarder(device, method, params, state.ctx);
+          // DS-L7 — who the call is for, from the CALLING context (a peer's
+          // relayed call restates what that peer said); never from params
+          const outbound: OutboundEnvelope = {
+            onBehalfOf: forwardProvenance(callCtx, {
+              deviceId: this.ownDeviceId?.() ?? "",
+              userId: this.opts.userId,
+            }),
+            ...(inboundKey !== undefined ? { idempotencyKey: inboundKey } : {}),
+          };
+          const result = await forwarder(device, method, callParams, callCtx, outbound);
           reply({ jsonrpc: "2.0", id, result });
           return;
         }
         // device === self: strip the routing key, serve locally
-        const { device: _self, ...rest } = params as Record<string, unknown>;
-        await this.execute(ws, state, id, method, rest, handler, subHandler, reply);
+        const { device: _self, ...rest } = callParams as Record<string, unknown>;
+        await this.execute(ws, state, callCtx, id, method, rest, handler, subHandler, reply);
         return;
       }
-      await this.execute(ws, state, id, method, params, handler, subHandler, reply);
+      await this.execute(ws, state, callCtx, id, method, callParams, handler, subHandler, reply);
     } catch (e) {
       if (e instanceof RpcCallError) {
         reply(this.err(id, e.kind as ErrorKind, e.message, e.retryable, e.details));
@@ -913,6 +1000,7 @@ export class ProductApi extends EventEmitter {
   private async execute(
     ws: WebSocket,
     state: ConnState,
+    ctx: CallerContext,
     id: unknown,
     method: string,
     params: unknown,
@@ -920,8 +1008,6 @@ export class ProductApi extends EventEmitter {
     subHandler: SubscriptionHandler | undefined,
     reply: (v: unknown) => void,
   ): Promise<void> {
-    const ctx = state.ctx;
-    if (!ctx) return; // unreachable past the authed gate; keeps the type honest
     if (subHandler) {
       const refusal = this.subscriptionBudgetRefusal(state, id);
       if (refusal !== null) {

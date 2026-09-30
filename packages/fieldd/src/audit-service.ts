@@ -117,23 +117,58 @@ function targetForAudit(target: AuditTargetV1): AuditTargetV1 {
   }
 }
 
-function actorFor(ctx: CallerContext): AuditPrincipalV1 {
+/** DS-D15 (2026-09-30) — the actor names the NODE as well as the principal:
+ * every tailnet-door kind carries the WhoIs node id the sidecar injected (a
+ * transport fact), and a `peer-fieldd` call that carried the forwarding
+ * envelope carries the window or phone behind it (DS-L7: authorized as the
+ * peer daemon, recorded as the client it acted for). The record used to name
+ * the login alone, which read two devices of one person as one. */
+export function actorFor(ctx: CallerContext): AuditPrincipalV1 {
+  const base = baseActorFor(ctx);
+  const behalf = ctx.onBehalfOf;
+  if (behalf === undefined) return base;
+  return {
+    ...base,
+    onBehalfOf: {
+      clientKind: behalf.clientKind,
+      deviceId: behalf.deviceId,
+      ...(behalf.windowId !== undefined ? { windowId: behalf.windowId } : {}),
+      ...(behalf.userId !== undefined ? { userId: behalf.userId } : {}),
+    },
+  };
+}
+
+function baseActorFor(ctx: CallerContext): AuditPrincipalV1 {
   switch (ctx.principal.kind) {
     case "shell-main":
       return { kind: "shell-main", id: ctx.principal.tokenId };
     case "local-token":
       return { kind: "local-token", id: ctx.principal.tokenId };
     case "tailnet":
-      return { kind: "tailnet", id: ctx.principal.login };
+      return withNode({ kind: "tailnet", id: ctx.principal.login }, ctx.principal.tailscaleId);
     case "tailnet-guest":
-      return { kind: "tailnet-guest", id: ctx.principal.login };
+      return withNode(
+        { kind: "tailnet-guest", id: ctx.principal.login },
+        ctx.principal.tailscaleId,
+      );
     case "mcp-agent":
       return { kind: "mcp-agent", id: ctx.principal.sessionId };
     case "peer-fieldd":
-      return { kind: "peer-fieldd", id: ctx.principal.deviceId };
+      return withNode(
+        { kind: "peer-fieldd", id: ctx.principal.deviceId },
+        ctx.principal.tailscaleId,
+      );
     case "plugin":
       return { kind: "plugin", id: ctx.principal.id };
   }
+}
+
+function withNode(actor: AuditPrincipalV1, nodeId: string | undefined): AuditPrincipalV1 {
+  // bounded like every audit identity (LogBoundedIdentityV1): an id that would
+  // not fit is left out rather than failing the act's audit closed
+  return nodeId !== undefined && nodeId.length > 0 && nodeId.length <= 256
+    ? { ...actor, nodeId }
+    : actor;
 }
 
 function failureReason(error: unknown): string {

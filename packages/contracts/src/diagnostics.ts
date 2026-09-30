@@ -215,6 +215,22 @@ export const CrashArtifactViewedV1 = z
   .strip();
 export type CrashArtifactViewedV1 = z.infer<typeof CrashArtifactViewedV1>;
 
+/** DS-L7 / DS-D15 (2026-09-30) — who a forwarded call was FOR, as the
+ * forwarding daemon restated it (`forwarding.ts` OnBehalfOf). `clientKind` is a
+ * bounded string, not the enum, so a newer peer's kind is recorded rather than
+ * lost; `.strip()` so nothing a peer adds beside the four members enters the
+ * ledger. Provenance only — the actor's `kind`/`id` remain the principal that
+ * was authorized. */
+export const AuditOnBehalfOfV1 = z
+  .object({
+    clientKind: z.string().min(1).max(64),
+    deviceId: LogBoundedIdentityV1,
+    windowId: LogBoundedIdentityV1.optional(),
+    userId: LogBoundedIdentityV1.optional(),
+  })
+  .strip();
+export type AuditOnBehalfOfV1 = z.infer<typeof AuditOnBehalfOfV1>;
+
 export const AuditPrincipalV1 = z
   .object({
     kind: z.enum([
@@ -229,6 +245,15 @@ export const AuditPrincipalV1 = z
     ]),
     id: LogBoundedIdentityV1.optional(),
     label: z.string().max(256).optional(),
+    /** DS-D15 — the tailnet NODE that dialled: the WhoIs node id the sidecar
+     * injected at the door (a transport fact, never a claim). Set for the three
+     * tailnet-door kinds when the sidecar supplied it; absent means an older
+     * sidecar proxied the hop, so `id` rests on the correlation or the claim. */
+    nodeId: LogBoundedIdentityV1.optional(),
+    /** DS-L7 — set on a `peer-fieldd` actor whose call carried the forwarding
+     * envelope: the window or phone behind the peer daemon. Additive; audit is
+     * local-read, so no reader crosses a version. */
+    onBehalfOf: AuditOnBehalfOfV1.optional(),
   })
   .passthrough();
 export type AuditPrincipalV1 = z.infer<typeof AuditPrincipalV1>;

@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { FielddClient, FielddRpcError, type WsCtor } from "@vibefield/fieldd-client";
+import { type OutboundEnvelope, withEnvelope } from "./forward-envelope";
 import { RpcCallError } from "./native-link";
 
 // PeerLink (design-04 §3.2, D32 — C5 P1 core): fieldd⇄fieldd connections, the
@@ -91,8 +92,15 @@ export class PeerLink extends EventEmitter {
   }
 
   /** Forward one call to a peer. Throws RpcCallError shapes ProductApi maps
-   * straight back to the original caller. */
-  async request(deviceId: string, method: string, params: unknown): Promise<unknown> {
+   * straight back to the original caller. DS-L7/DS-D15 — `envelope` rides
+   * beside the method's params (`onBehalfOf`, and a mutation's
+   * `idempotencyKey`); the peer's door strips and records it. */
+  async request(
+    deviceId: string,
+    method: string,
+    params: unknown,
+    envelope?: OutboundEnvelope,
+  ): Promise<unknown> {
     if (this.disposed) throw new RpcCallError("UNAVAILABLE", "peer link disposed", false);
     if (deviceId === this.opts.ownDeviceId())
       throw new RpcCallError("PRECONDITION_FAILED", "device is self — routing bug", false);
@@ -100,10 +108,11 @@ export class PeerLink extends EventEmitter {
       throw new RpcCallError("INCOMPATIBLE", "peer contracts major mismatch", false, {
         device: deviceId,
       });
+    const wire = withEnvelope(params, envelope);
     const link = this.ensureLink(deviceId);
     link.lastUsed = this.now();
     try {
-      return await this.withDeadline(link.client.request(method, params), deviceId);
+      return await this.withDeadline(link.client.request(method, wire), deviceId);
     } catch (e) {
       throw this.mapPeerError(e, deviceId);
     }
@@ -154,6 +163,10 @@ export class PeerLink extends EventEmitter {
     params: unknown,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
     onDrop: () => void,
+    /** DS-L7 — provenance for an upstream opened FOR one client. The shared
+     * federated upstreams (ref-counted per {device, method, params}) pass
+     * none: they are the daemon's own reads. */
+    envelope?: OutboundEnvelope,
   ): Promise<PeerSubscription> {
     if (this.disposed) throw new RpcCallError("UNAVAILABLE", "peer link disposed", false);
     if (deviceId === this.opts.ownDeviceId())
@@ -162,11 +175,12 @@ export class PeerLink extends EventEmitter {
       throw new RpcCallError("INCOMPATIBLE", "peer contracts major mismatch", false, {
         device: deviceId,
       });
+    const wire = withEnvelope(params, envelope);
     const link = this.ensureLink(deviceId);
     link.lastUsed = this.now();
     let upstream: { snapshot: unknown; unsubscribe: () => void };
     try {
-      upstream = await this.withDeadline(link.client.subscribe(method, params, onEvent), deviceId);
+      upstream = await this.withDeadline(link.client.subscribe(method, wire, onEvent), deviceId);
     } catch (e) {
       throw this.mapPeerError(e, deviceId);
     }
