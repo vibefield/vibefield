@@ -173,7 +173,26 @@ export interface TerminalServiceOptions {
    * built later in the daemon's boot. Absent, or answering `undefined`, a
    * shell is born exactly as before. Agent-class spawns never consult it. */
   shellIntegration?: (shell: string) => Record<string, string> | undefined;
+  /** SB-2 (AR-7g) — what a shell born under an Agent Profile inherits: the
+   * daemon answers from the agent runtime (the set, its sign-ins, puppeteer's
+   * `profileBindingEnvironment` over them). Asked only for a create that
+   * names a set, and before the floor is touched. Absent, such a create is
+   * UNAVAILABLE — never an unbound shell in its place. */
+  profileBinding?: (profileSet: string) => Promise<TerminalProfileBinding>;
 }
+
+/** SB-2 (AR-7g) — one Agent Profile's binding, as the agent runtime answers it
+ * for a birth. The variables are OPAQUE (AR-L1): VibeField never branches on,
+ * names or records one — they pass the fence and reach the shell, nothing else.
+ * The native set is `bound` with none: its agents run in their own folders. */
+export type TerminalProfileBinding =
+  | { state: "bound"; label: string; variables: Record<string, string> }
+  /** no set by that id (never made, or deleted since) */
+  | { state: "unknown" }
+  /** the agent runtime could not be asked */
+  | { state: "unavailable"; reason: string }
+  /** the set exists and its binding could not be made */
+  | { state: "failed"; label: string; reason: string };
 
 /** AR-7d — what "a shell" means to `create`: the interactive shells a person
  * types commands into, by executable basename. The integration is for them
@@ -189,6 +208,28 @@ export interface TerminalServiceOptions {
  * profile that prepends the real binary undoes — and `integrated: true` would still have
  * been said. Those shells are born plain until their own hooks exist (a later slice). */
 const INTEGRATED_SHELL = "zsh";
+
+/** THE FENCE (EL7) — AR-7d's, and since SB-2 the binding's too. The floor
+ * strips a daemon's own classes (`ENV_PREFIXES`) from what a shell INHERITS but
+ * applies `overrides` after that strip, so this is the only thing between an
+ * override and a pane: every variable in those classes is dropped here —
+ * case-folded on win32, where the environment itself folds. Answers what is
+ * kept and the names dropped; the caller decides what its log may say. */
+function fenceOverrides(answer: Record<string, string>): {
+  kept: Record<string, string>;
+  dropped: string[];
+} {
+  const fold = process.platform === "win32";
+  const prefixes = fold ? ENV_PREFIXES.map((prefix) => prefix.toUpperCase()) : ENV_PREFIXES;
+  const kept: Record<string, string> = {};
+  const dropped: string[] = [];
+  for (const [name, value] of Object.entries(answer)) {
+    const probe = fold ? name.toUpperCase() : name;
+    if (prefixes.some((prefix) => probe.startsWith(prefix))) dropped.push(name);
+    else kept[name] = value;
+  }
+  return { kept, dropped };
+}
 
 /** Free-shell spawn geometry until an attached view claims resize authority
  * (03·A: the active view owns cols/rows; nothing has attached yet at birth). */
@@ -722,12 +763,23 @@ export class TerminalService {
    * AR-7d — a free zsh (the default when the login shell is zsh, or an explicit
    * zsh) is born with `shellIntegration`'s variables as inherit-mode
    * `overrides`, and the answer says whether it was (`integrated`, the audit's
-   * fact — never the variables). Any other shell is born plain (AR7-D3). */
+   * fact — never the variables). Any other shell is born plain (AR7-D3).
+   *
+   * SB-2 (AR-7g) — a create that names a `profileSet` is born under that Agent
+   * Profile: its binding's variables join the overrides through the same fence,
+   * whatever the executable (the caller asked for this birth; an agent the
+   * shell starts runs on the profile's accounts because the shell's
+   * environment says so, AR7-D6). The binding is resolved BEFORE the floor is
+   * touched, and a set that is gone, a runtime that cannot answer or a binding
+   * that cannot be made refuses the create in fieldd's words — never an unbound
+   * shell in its place. `bound` is the audit's fact; the variables never are. */
   async create(params: TerminalCreateParams): Promise<{
     sessionId: string;
     session: TerminalRuntimeSession;
     cellBootId?: string | undefined;
     integrated: boolean;
+    bound: boolean;
+    profileSet?: string | undefined;
   }> {
     // TC-D6(d) — the per-pair session cap at the create seam, counted from the
     // observed inventory WHEN THERE IS ONE. Before the first observation the
@@ -762,6 +814,10 @@ export class TerminalService {
     // business — a second resolver would only disagree with the real one.
     if (params.shell !== undefined && isAbsolute(params.shell) && !existsSync(params.shell))
       throw new RpcCallError("NOT_FOUND", `shell not found: ${params.shell}`, false);
+    // SB-2 — the binding first, while nothing has reached the floor: every
+    // refusal it can make leaves no session behind.
+    const profileSet = params.profileSet;
+    const binding = profileSet === undefined ? undefined : await this.bindingFor(profileSet);
     // TC-S3 — the class is the PLACEMENT: it picks the cell this session is
     // born in, through the create-target discipline. The routing default is the
     // contract's tolerant-reader default (`TerminalCreateParams`: absent =
@@ -772,16 +828,18 @@ export class TerminalService {
     const explicit = params.shell !== undefined;
     const executable = params.shell ?? this.defaultShell();
     const scrollbackBytes = classScrollbackBytes(params.workloadClass);
-    const overrides =
+    const integration =
       basename(executable) === INTEGRATED_SHELL ? this.integrationFor(executable) : undefined;
+    const overrides = this.overridesFor(binding, integration);
     const born = await this.birth(cell, client, executable, {
       executable,
       args: explicit ? [] : ["-l"],
       cwd: params.cwd ?? homedir(),
       // ghosttea applies `overrides` AFTER the floor's private-prefix strip
       // (`SessionEnvironment::Inherit` in its session.rs), so they reach the
-      // shell whatever their names — `integrationFor` is the fence. None to
-      // add sends the bare mode, byte-identical to a shell born before AR-7d.
+      // shell whatever their names — `fenceOverrides` is the fence, for the
+      // integration and the binding alike. None to add sends the bare mode,
+      // byte-identical to a shell born before AR-7d.
       environment: overrides === undefined ? { mode: "inherit" } : { mode: "inherit", overrides },
       cols: SPAWN_COLS,
       rows: SPAWN_ROWS,
@@ -792,34 +850,115 @@ export class TerminalService {
       // the wire either (exactOptionalPropertyTypes agrees)
       ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
     });
-    return { ...born, integrated: overrides !== undefined };
+    return {
+      ...born,
+      integrated: integration !== undefined,
+      bound: binding !== undefined,
+      ...(profileSet === undefined ? {} : { profileSet }),
+    };
   }
 
-  /** AR-7d — the integration's answer for one shell, minus every variable in a
-   * daemon's own classes (`ENV_PREFIXES`): each one dropped is named in the
-   * log, its value never. The floor strips those classes from what a shell
-   * INHERITS but applies overrides after that strip, so this is the only fence
-   * between the integration and a pane (EL7) — case-folded on win32, where the
-   * environment itself folds. `undefined` when nothing is left to add. */
+  /** AR-7d — the integration's answer for one shell, through the fence: each
+   * variable dropped is named in the log, its value never. `undefined` when
+   * nothing is left to add. */
   private integrationFor(executable: string): Record<string, string> | undefined {
     const answer = this.opts.shellIntegration?.(executable);
     if (answer === undefined) return undefined;
-    const fold = process.platform === "win32";
-    const prefixes = fold ? ENV_PREFIXES.map((prefix) => prefix.toUpperCase()) : ENV_PREFIXES;
-    const overrides: Record<string, string> = {};
-    const dropped: string[] = [];
-    for (const [name, value] of Object.entries(answer)) {
-      const probe = fold ? name.toUpperCase() : name;
-      if (prefixes.some((prefix) => probe.startsWith(prefix))) dropped.push(name);
-      else overrides[name] = value;
-    }
+    const { kept, dropped } = fenceOverrides(answer);
     if (dropped.length > 0)
       this.logger.warn(
         "fieldd.terminal.shell_integration_reserved",
         "The shell integration named variables in a daemon's own classes; they were dropped",
         { dropped },
       );
-    return Object.keys(overrides).length === 0 ? undefined : overrides;
+    return Object.keys(kept).length === 0 ? undefined : kept;
+  }
+
+  /** SB-2 (AR-7g) — the variables a shell born under `profileSet` inherits,
+   * through the SAME fence as the integration's (EL7). The binding is opaque to
+   * VibeField (AR-L1), so what the fence drops is COUNTED in the log and never
+   * named — no name of the binding's is written anywhere, and no value ever.
+   * The native set answers no variables and is still a bound birth. Every
+   * other answer refuses the create, in fieldd's words:
+   *  · no such set — NOT_FOUND, "that profile no longer exists";
+   *  · no runtime to ask, or one that could not answer — UNAVAILABLE;
+   *  · a binding that could not be made — PRECONDITION_FAILED, "<label> could
+   *    not be bound: <reason>". */
+  private async bindingFor(profileSet: string): Promise<Record<string, string>> {
+    let answer: TerminalProfileBinding;
+    const resolve = this.opts.profileBinding;
+    if (resolve === undefined) {
+      answer = { state: "unavailable", reason: "no agent runtime is composed" };
+    } else {
+      try {
+        answer = await resolve(profileSet);
+      } catch (error) {
+        answer = { state: "unavailable", reason: errorMessage(error) };
+      }
+    }
+    switch (answer.state) {
+      case "bound": {
+        const { kept, dropped } = fenceOverrides(answer.variables);
+        if (dropped.length > 0)
+          this.logger.warn(
+            "fieldd.terminal.profile_binding_reserved",
+            "A profile's binding named variables in a daemon's own classes; they were dropped",
+            { profileSet, dropped: dropped.length },
+          );
+        return kept;
+      }
+      case "unknown":
+        throw new RpcCallError("NOT_FOUND", "that profile no longer exists", false, {
+          set: profileSet,
+        });
+      case "unavailable":
+        this.logger.warn(
+          "fieldd.terminal.profile_binding_unavailable",
+          "A terminal was asked for under a profile the agent runtime could not read; it was not opened",
+          { profileSet, reason: answer.reason },
+        );
+        throw new RpcCallError("UNAVAILABLE", "Agent Profiles cannot be read right now", true, {
+          service: "agents",
+          state: "runtime-unavailable",
+          set: profileSet,
+        });
+      case "failed":
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `${answer.label} could not be bound: ${answer.reason}`,
+          false,
+          { set: profileSet },
+        );
+    }
+  }
+
+  /** SB-2 — the one set of overrides a birth sends: the binding's variables,
+   * then the integration's over them. On a name both set, the integration wins
+   * — it is what keeps the pane's launchers first — and the collision is
+   * counted in the log, never named (the binding is opaque, AR-L1). Names
+   * compare case-folded on win32, where the environment folds. */
+  private overridesFor(
+    binding: Record<string, string> | undefined,
+    integration: Record<string, string> | undefined,
+  ): Record<string, string> | undefined {
+    if (binding === undefined) return integration;
+    const fold = process.platform === "win32";
+    const key = (name: string): string => (fold ? name.toUpperCase() : name);
+    const taken = new Set(Object.keys(integration ?? {}).map(key));
+    const merged: Record<string, string> = {};
+    let shadowed = 0;
+    for (const [name, value] of Object.entries(binding)) {
+      if (taken.has(key(name))) shadowed += 1;
+      else merged[name] = value;
+    }
+    if (shadowed > 0)
+      this.logger.warn(
+        "fieldd.terminal.profile_binding_shadowed",
+        "A profile's binding and the shell integration set the same variables; the integration's were kept",
+        { shadowed },
+      );
+    Object.assign(merged, integration);
+    return Object.keys(merged).length === 0 ? undefined : merged;
   }
 
   /** AR-3 — an AGENT's PTY (design-01 §5.1 `agent.spawn`; EL7): born on the

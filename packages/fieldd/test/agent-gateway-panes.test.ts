@@ -158,6 +158,7 @@ describe.skipIf(ZSH === undefined)(
         expect(birthOf(box, pane.sessionId)).toEqual({
           sessionId: pane.sessionId,
           integrated: true,
+          bound: false,
         });
         // the throwaway person's own startup files ran — never the machine owner's
         const ran = await until(
@@ -259,6 +260,7 @@ describe.skipIf(ZSH === undefined)(
         expect(birthOf(bare, pane.sessionId)).toEqual({
           sessionId: pane.sessionId,
           integrated: false,
+          bound: false,
         });
         const path = join(bare.root, "path");
         await type(bare, pane, `printf '%s|%s' "$PATH" "$PUPPETEER_SHIM_DIR" > '${path}'`);
@@ -279,6 +281,7 @@ describe.skipIf(ZSH === undefined)(
         expect(birthOf(box, after.sessionId)).toEqual({
           sessionId: after.sessionId,
           integrated: false,
+          bound: false,
         });
         // the shell born before the stop keeps its own integration
         expect(isAlive(before.pid)).toBe(true);
@@ -332,6 +335,7 @@ describe.skipIf(ZSH === undefined)(
           expect(birthOf(box, before.sessionId)).toEqual({
             sessionId: before.sessionId,
             integrated: false,
+            bound: false,
           });
           expect(existsSync(layout.zshenv)).toBe(false);
 
@@ -350,6 +354,7 @@ describe.skipIf(ZSH === undefined)(
           expect(birthOf(box, during.sessionId)).toEqual({
             sessionId: during.sessionId,
             integrated: true,
+            bound: false,
           });
           // the probe is still out: the pane was born INSIDE the window
           expect(existsSync(launcher)).toBe(false);
