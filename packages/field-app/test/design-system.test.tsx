@@ -260,19 +260,32 @@ describe("design system page", () => {
     expect(bloom.querySelector(".vf-monitor-swarm")?.getAttribute("data-swarm-renderer")).toBe(
       "unavailable",
     );
-    expect(bloom.querySelectorAll(".vf-monitor-swarm-list li button")).toHaveLength(3);
+    expect(
+      bloom.querySelectorAll(".vf-monitor-swarm-list li button:not([data-swarm-new-terminal])"),
+    ).toHaveLength(3);
     expect(bloom.querySelector('[data-profile-tab="work"]')).not.toBeNull();
     expect(bloom.querySelector('[data-profile-tab="demo"]')).not.toBeNull();
 
-    // The list view: its ＋ asks the fixture door, which answers `mounted`, and
-    // the catalog keeps the birth as a deck would — a new terminal row.
+    // The hidden list's keys door is there, beside the bodies.
+    expect(bloom.querySelector("[data-swarm-new-terminal]")).not.toBeNull();
+
+    // The list view: its ＋ opens the same tree as a two-step menu (SB-D11);
+    // choosing Work asks the fixture door, which answers `mounted` under it,
+    // and the catalog keeps the birth as a deck would — a new terminal row.
     const list = container?.querySelector<HTMLElement>("[data-spawn-bloom-list-catalog]");
     if (!list) throw new Error("Spawn bloom list catalog not found");
     const before = list.querySelectorAll(".vf-monitor-list-row").length;
     await act(async () => list.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    const menu = list.querySelector('[role="menu"][aria-label="New terminal"]');
+    expect(
+      Array.from(menu?.querySelectorAll('[data-bloom-bud-kind="profile"]') ?? []).map((item) =>
+        item.getAttribute("data-bloom-bud-id"),
+      ),
+    ).toEqual(["work", "native", "demo"]);
+    await act(async () => menu?.querySelector<HTMLElement>('[data-bloom-bud-id="work"]')?.click());
     expect(list.querySelectorAll(".vf-monitor-list-row")).toHaveLength(before + 1);
     expect(list.querySelector(".vf-monitor-ack")?.textContent).toBe(
-      "terminal opened in the active pane",
+      "terminal opened under Work in the active pane",
     );
   });
 

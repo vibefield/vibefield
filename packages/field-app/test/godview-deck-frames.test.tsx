@@ -15,7 +15,11 @@
  * provider the overlay mounts in production.
  */
 
-import { useMonitorPalette } from "@vibecook/puppeteer-views";
+import {
+  monitorParameterDefaults,
+  monitorViewFor,
+  useMonitorPalette,
+} from "@vibecook/puppeteer-views";
 import { FielddRpcError } from "@vibefield/fieldd-client";
 import {
   act,
@@ -271,6 +275,7 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
 const { configureTerminalPool, disposeTerminalPool, retryTerminalPool, terminalPoolSnapshot } =
   await import("../src/terminal/pool");
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
+const { GodviewMonitor } = await import("../src/godview/GodviewMonitor");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
 const { launcherOwnsKeyEvent, launcherOwnsKeys, resetLauncherKeys, setMonitorHoldsKeys } =
   await import("../src/godview/monitor/launcher-keys");
@@ -1836,5 +1841,105 @@ describe("births under an Agent Profile (SB-3)", () => {
       await splitDoor()(stubSession("pty-1"), "vertical");
     });
     expect(creates().map((params) => params["profileSet"])).toEqual([undefined]);
+  });
+
+  it("carries a let-go on Work from the swarm's bloom through the deck's own door to terminal.create {profileSet}, and says so", async () => {
+    const at = "2026-09-30T00:00:00.000Z";
+    profileSetsFeed = [
+      {
+        id: "native",
+        kind: "native",
+        label: "This Mac",
+        default: true,
+        createdAt: at,
+        personas: [],
+      },
+      { id: "work", kind: "managed", label: "Work", default: false, createdAt: at, personas: [] },
+    ];
+    /** The overlay's composition: the deck hands its door to the monitor. */
+    function Overlay(): ReactElement {
+      const [door, setDoor] = useState<MonitorDoor | null>(null);
+      const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
+      const view = monitorViewFor("swarm");
+      return (
+        <>
+          <GodviewDeck
+            active
+            theme="light"
+            onPanes={setPanes}
+            onRemoteDoor={(next) => {
+              deckDoor = next;
+              setDoor(next);
+            }}
+          />
+          <GodviewMonitor
+            view={view}
+            parameters={monitorParameterDefaults(view.parameterGroups)}
+            door={door}
+            panes={panes}
+          />
+        </>
+      );
+    }
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={foldDoor()}>
+          <Overlay />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    const field = container.querySelector<HTMLElement>(".vf-monitor-swarm");
+    if (field === null) throw new Error("the monitor's swarm never mounted");
+    Object.defineProperty(field, "clientWidth", { value: 1280, configurable: true });
+    Object.defineProperty(field, "clientHeight", { value: 720, configurable: true });
+    Object.defineProperty(field, "setPointerCapture", { value: vi.fn() });
+    Object.defineProperty(field, "hasPointerCapture", { value: () => false });
+    Object.defineProperty(field, "releasePointerCapture", { value: vi.fn() });
+    const pointer = (type: string, x: number, y: number): void => {
+      field.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          pointerId: 1,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    };
+    await act(async () => {
+      pointer("pointermove", 640, 420);
+      pointer("pointerdown", 640, 420);
+      await new Promise((resolve) => setTimeout(resolve, 650));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+    const bud = container.querySelector<HTMLElement>(
+      '[data-bloom-bud-kind="profile"][data-bloom-bud-id="work"]',
+    );
+    if (bud === null) throw new Error("the hold bloomed no Work bud");
+    const px = (name: string): number => Number.parseFloat(bud.style.getPropertyValue(name));
+    const work = {
+      x: px("--vf-bloom-tx") + px("--vf-bloom-d") / 2,
+      y: px("--vf-bloom-ty") + px("--vf-bloom-d") / 2,
+    };
+    await act(async () => {
+      pointer("pointermove", work.x, work.y);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      pointer("pointerup", work.x, work.y);
+    });
+    await settle();
+    expect(creates()).toEqual([
+      { cwd: "/home/tester/vibe-field", workloadClass: "interactive", profileSet: "work" },
+    ]);
+    expect(workspace.mounts).toContain("born-1");
+    expect(container.querySelector(".vf-monitor-ack")?.textContent).toBe(
+      "terminal opened under Work in the active pane",
+    );
   });
 });

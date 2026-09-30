@@ -814,7 +814,7 @@ describe("the monitor stage", () => {
   it("carries the deck's own words when a terminal cannot open, then rejects with them", async () => {
     // Asked as a view asks (`actions.createAt`), through the probe: a create
     // that opened nothing REJECTS after its words, so a view puts its pending
-    // body away at once (SB-3) — and the pinned list's ＋ does not catch yet.
+    // body away at once (SB-3); the views catch it at every call site.
     const door = fakeDoor();
     door.createTerminal.mockResolvedValueOnce({
       state: "failed",
@@ -1243,14 +1243,23 @@ describe("the profile tabs (AR-S5)", () => {
     expect(listRows(host).find((row) => row.project === "work-shell")?.receded).toBe(true);
   });
 
-  it("creates empty terminals independently of the selected profile filter", async () => {
+  it("creates a terminal under the profile the menu chose, never the selected tab's (SB-3)", async () => {
     const door = tabDoor();
+    door.createTerminal.mockImplementation(async (request?: { profileSet?: string }) => ({
+      state: "mounted" as const,
+      sessionId: "born-1",
+      ...(request?.profileSet !== undefined ? { profileSet: request.profileSet } : {}),
+    }));
     const host = await mountMonitor("list", door);
     for (const id of ["all", "work", "native", "empty"]) {
       await act(async () => tabButton(host, id)?.click());
+      // ＋ TERMINAL opens the spawn bloom's tree (SB-D11); the tab chooses nothing
       await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
-      expect(door.createTerminal.mock.calls.at(-1)).toEqual([]);
-      expect(ackText(host)).toContain("terminal opened in the active pane");
+      await act(async () =>
+        host.querySelector<HTMLElement>('[role="menu"] [data-bloom-bud-id="work"]')?.click(),
+      );
+      expect(door.createTerminal.mock.calls.at(-1)).toEqual([{ profileSet: "work" }]);
+      expect(ackText(host)).toBe("terminal opened under Work in the active pane");
     }
     expect(door.createTerminal).toHaveBeenCalledTimes(4);
   });
@@ -1533,5 +1542,284 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
     await createAt({ x: 10, y: 10 });
     expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith();
     expect(ackText(host)).toBe("terminal opened in the active pane");
+  });
+});
+
+// ---- SB-3 — the spawn bloom, driven ---------------------------------------------
+//
+// happy-dom is the one place the bloom can be driven at pointer level (the views
+// package's own tests are static markup and pure reducers): the real stage, the
+// real swarm and list views, the real bloom, and a door whose create answers
+// under the profile it was asked for. The ground is empty — no rows — so every
+// press lands on it; the field is sized by hand (happy-dom lays nothing out).
+
+/** A door with the tabs' three profiles (This Mac the default) and no rows. */
+function bloomDoor(sets: readonly AgentProfileSet[] = TAB_SETS): TabDoor {
+  const door = fakeDoor([]);
+  door.createTerminal.mockImplementation(async (request?: { profileSet?: string }) => ({
+    state: "mounted" as const,
+    sessionId: "born-1",
+    ...(request?.profileSet !== undefined ? { profileSet: request.profileSet } : {}),
+  }));
+  let listener: ((next: readonly AgentProfileSet[]) => void) | null = null;
+  return Object.assign(door, {
+    profiles: {
+      subscribe: (next: (value: readonly AgentProfileSet[]) => void) => {
+        listener = next;
+        next(sets);
+        return () => {
+          listener = null;
+        };
+      },
+    },
+    pushSets: (next: readonly AgentProfileSet[]) => listener?.(next),
+  });
+}
+
+const NO_PANES: MonitorPaneFacts = { sessionIds: [] };
+const HOLD_AT = { x: 640, y: 420 };
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function mountBloom(
+  door: TabDoor,
+  view = "swarm",
+): Promise<{ host: HTMLElement; field: HTMLElement }> {
+  const host = await mountMonitor(view, door, NO_PANES);
+  const field = host.querySelector<HTMLElement>(".vf-monitor-swarm") as HTMLElement;
+  if (field !== null) {
+    // what a laid-out stage would say; the bloom's geometry reads the field's size
+    Object.defineProperty(field, "clientWidth", { value: 1280, configurable: true });
+    Object.defineProperty(field, "clientHeight", { value: 720, configurable: true });
+    Object.defineProperty(field, "setPointerCapture", { value: vi.fn() });
+    Object.defineProperty(field, "hasPointerCapture", { value: () => false });
+    Object.defineProperty(field, "releasePointerCapture", { value: vi.fn() });
+  }
+  return { host, field };
+}
+
+const pointer = (
+  field: HTMLElement,
+  type: "pointerdown" | "pointermove" | "pointerup",
+  at: { x: number; y: number },
+  button = 0,
+): void => {
+  field.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      button,
+      buttons: type === "pointerup" ? 0 : button === 0 ? 1 : 2,
+      pointerId: 1,
+      clientX: at.x,
+      clientY: at.y,
+    }),
+  );
+};
+const bloomOf = (host: HTMLElement): HTMLElement | null => host.querySelector(".vf-bloom");
+const budOf = (host: HTMLElement, kind: string, id: string): HTMLElement | null =>
+  host.querySelector<HTMLElement>(`[data-bloom-bud-kind="${kind}"][data-bloom-bud-id="${id}"]`);
+/** A bud's centre in the field, from the geometry it was drawn with. */
+const centreOf = (bud: HTMLElement | null): { x: number; y: number } => {
+  if (bud === null) throw new Error("no such bud");
+  const px = (name: string): number => Number.parseFloat(bud.style.getPropertyValue(name));
+  const d = px("--vf-bloom-d");
+  return { x: px("--vf-bloom-tx") + d / 2, y: px("--vf-bloom-ty") + d / 2 };
+};
+
+/** Press on the empty ground and hold past 520 ms; then wait out the new
+ * ring's 90 ms, when a hand still moving would pick the wrong bud. */
+async function holdOpen(host: HTMLElement, field: HTMLElement): Promise<void> {
+  await act(async () => {
+    pointer(field, "pointermove", HOLD_AT);
+    pointer(field, "pointerdown", HOLD_AT);
+    await wait(650);
+  });
+  expect(bloomOf(host)?.getAttribute("data-bloom-state")).toBe("open");
+  await act(async () => {
+    await wait(120);
+  });
+}
+
+describe("the spawn bloom, driven (SB-3)", () => {
+  it("blooms this desktop's profiles on a long press, and letting go on Work opens a terminal under it", async () => {
+    const door = bloomDoor();
+    const { host, field } = await mountBloom(door);
+    await holdOpen(host, field);
+    expect(
+      [...host.querySelectorAll('[data-bloom-bud-kind="profile"]')].map((bud) =>
+        bud.getAttribute("data-bloom-bud-id"),
+      ),
+    ).toEqual(["native", "work", "empty"]);
+    const work = centreOf(budOf(host, "profile", "work"));
+    await act(async () => {
+      pointer(field, "pointermove", { x: (HOLD_AT.x + work.x) / 2, y: (HOLD_AT.y + work.y) / 2 });
+      pointer(field, "pointermove", work);
+      await wait(40);
+    });
+    expect(bloomOf(host)?.getAttribute("data-bloom-target")).toBe("profile:work");
+    await act(async () => {
+      pointer(field, "pointerup", work);
+      await wait(20);
+    });
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({ profileSet: "work" });
+    expect(ackText(host)).toBe("terminal opened under Work in the active pane");
+    expect(bloomOf(host)?.getAttribute("data-bloom-state")).toBe("committed");
+  });
+
+  it("opens the desktop's default on the hub, and nothing on open ground", async () => {
+    const door = bloomDoor();
+    const { host, field } = await mountBloom(door);
+    await holdOpen(host, field);
+    await act(async () => {
+      pointer(field, "pointerup", HOLD_AT);
+      await wait(20);
+    });
+    // This Mac is the tabs' default: the hub is this desktop under it
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({ profileSet: "native" });
+    await act(async () => {
+      await wait(700);
+    });
+    await holdOpen(host, field);
+    const away = { x: HOLD_AT.x, y: HOLD_AT.y + 260 };
+    await act(async () => {
+      pointer(field, "pointermove", { x: HOLD_AT.x, y: HOLD_AT.y + 130 });
+      pointer(field, "pointermove", away);
+      await wait(40);
+    });
+    expect(bloomOf(host)?.getAttribute("data-bloom-target")).toBe("none");
+    await act(async () => {
+      pointer(field, "pointerup", away);
+      await wait(20);
+    });
+    expect(door.createTerminal).toHaveBeenCalledTimes(1);
+    expect(bloomOf(host)?.getAttribute("data-bloom-state")).toBe("cancelled");
+  });
+
+  it("holds the bloom open on a secondary click, and a click on a profile commits it", async () => {
+    const door = bloomDoor();
+    const { host, field } = await mountBloom(door);
+    await act(async () => {
+      field.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          button: 2,
+          clientX: HOLD_AT.x,
+          clientY: HOLD_AT.y,
+        }),
+      );
+      await wait(120);
+    });
+    expect(bloomOf(host)?.getAttribute("data-bloom-state")).toBe("open");
+    expect(bloomOf(host)?.getAttribute("data-bloom-mode")).toBe("sticky");
+    const empty = centreOf(budOf(host, "profile", "empty"));
+    await act(async () => {
+      pointer(field, "pointermove", empty);
+      await wait(40);
+      pointer(field, "pointerdown", empty);
+      await wait(20);
+    });
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({ profileSet: "empty" });
+  });
+
+  it("opens for the keys from the swarm's hidden ＋ New terminal…, and ↵ commits the focused profile", async () => {
+    const door = bloomDoor();
+    const { host } = await mountBloom(door);
+    const newTerminal = host.querySelector<HTMLButtonElement>("[data-swarm-new-terminal]");
+    expect(newTerminal?.textContent).toContain("New terminal");
+    await act(async () => {
+      newTerminal?.click();
+      await wait(120);
+    });
+    expect(bloomOf(host)?.getAttribute("data-bloom-mode")).toBe("keys");
+    const menu = host.querySelector<HTMLElement>(".vf-bloom-menu");
+    const key = (name: string): void => {
+      menu?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }),
+      );
+    };
+    await act(async () => {
+      key("ArrowRight");
+      await wait(20);
+    });
+    const aimed = bloomOf(host)?.getAttribute("data-bloom-target");
+    await act(async () => {
+      key("Enter");
+      await wait(20);
+    });
+    expect(aimed).toMatch(/^profile:/);
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({
+      profileSet: aimed?.slice("profile:".length),
+    });
+  });
+
+  it("creates at once under a desktop's only profile — one profile is no choice", async () => {
+    const door = bloomDoor([NATIVE_SET]);
+    const { host, field } = await mountBloom(door);
+    await act(async () => {
+      pointer(field, "pointermove", HOLD_AT);
+      pointer(field, "pointerdown", HOLD_AT);
+      await wait(650);
+    });
+    expect(bloomOf(host)?.getAttribute("data-bloom-state") ?? "idle").not.toBe("open");
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({ profileSet: "native" });
+    expect(ackText(host)).toBe("terminal opened in the active pane");
+  });
+
+  it("keeps ⌥2 from the profile tabs while a keys bloom has the keyboard", async () => {
+    const door = bloomDoor();
+    const { host } = await mountBloom(door);
+    expect(chosenTab(host)).toBe("all");
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("[data-swarm-new-terminal]")?.click();
+      await wait(120);
+    });
+    const menu = host.querySelector<HTMLElement>(".vf-bloom-menu");
+    expect(menu?.getAttribute("data-bloom-holds-keys")).toBe("true");
+    const alt2 = new KeyboardEvent("keydown", {
+      code: "Digit2",
+      key: "2",
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    await act(async () => {
+      (document.activeElement ?? menu)?.dispatchEvent(alt2);
+      await wait(20);
+    });
+    // the strip's capture listener yielded it: whatever the bloom made of it,
+    // the chosen tab is still All
+    expect(chosenTab(host)).toBe("all");
+  });
+
+  it("says fieldd's words for a failed ＋ TERMINAL, and the views catch its rejection", async () => {
+    // no profiles feed: no menu, the list's ＋ creates at once, as before
+    const door = fakeDoor([]);
+    door.createTerminal.mockResolvedValueOnce({
+      state: "failed",
+      reason: "terminal capacity reached",
+    });
+    const host = await mountMonitor("list", door, NO_PANES);
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click();
+      await wait(20);
+    });
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith();
+    expect(ackText(host)).toBe("terminal could not be opened — terminal capacity reached");
+  });
+
+  it("offers the same tree under the list's ＋ TERMINAL, in two steps", async () => {
+    const door = bloomDoor();
+    const { host } = await mountBloom(door, "list");
+    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    const menu = host.querySelector('[role="menu"][aria-label="New terminal"]');
+    expect(menu).not.toBeNull();
+    expect(door.createTerminal).not.toHaveBeenCalled();
+    await act(async () =>
+      menu
+        ?.querySelector<HTMLElement>('[data-bloom-bud-kind="profile"][data-bloom-bud-id="work"]')
+        ?.click(),
+    );
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({ profileSet: "work" });
+    expect(ackText(host)).toBe("terminal opened under Work in the active pane");
   });
 });
