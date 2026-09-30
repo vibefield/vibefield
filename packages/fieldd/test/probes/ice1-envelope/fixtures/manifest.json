@@ -1,0 +1,103 @@
+{
+  "spike": "DS-5 ICE1 envelope, 2026-09-30",
+  "ice": "0.11.0",
+  "loro": "1.13.8",
+  "devices": {
+    "A": {
+      "storage": [
+        {
+          "call": "put",
+          "file": "a-checkpoint-0.ice1"
+        },
+        {
+          "call": "append",
+          "file": "a-update-1.loro"
+        },
+        {
+          "call": "append",
+          "file": "a-update-2.loro"
+        },
+        {
+          "call": "append",
+          "file": "a-update-3.loro"
+        },
+        {
+          "call": "put",
+          "file": "a-checkpoint-1.ice1"
+        }
+      ],
+      "tap": [
+        {
+          "seq": 1,
+          "appendedAs": "a-update-1.loro"
+        },
+        {
+          "seq": 2,
+          "appendedAs": "a-update-2.loro"
+        },
+        {
+          "seq": 3,
+          "appendedAs": "a-update-3.loro"
+        },
+        {
+          "seq": 4,
+          "appendedAs": null,
+          "file": "a-tap-4.loro"
+        },
+        {
+          "seq": 5,
+          "appendedAs": null,
+          "file": "a-tap-5.loro"
+        }
+      ],
+      "widgets": 5
+    },
+    "B": {
+      "storage": [
+        {
+          "call": "put",
+          "file": "b-checkpoint-0.ice1"
+        },
+        {
+          "call": "append",
+          "file": "b-update-1.loro"
+        },
+        {
+          "call": "append",
+          "file": "b-update-2.loro"
+        }
+      ],
+      "tap": [
+        {
+          "seq": 1,
+          "appendedAs": "b-update-1.loro"
+        },
+        {
+          "seq": 2,
+          "appendedAs": "b-update-2.loro"
+        }
+      ],
+      "widgets": 4
+    }
+  },
+  "merged": {
+    "file": "merged-roundtrip.ice1",
+    "headerFrom": "a-checkpoint-1.ice1",
+    "oplogVersion": {
+      "6036510176875920655": 14,
+      "510829504163391488": 43
+    },
+    "iceOpenedWidgets": 7
+  },
+  "livePush": {
+    "file": "push-to-window-a.loro",
+    "windowFrom": {
+      "510829504163391488": 43
+    },
+    "widgetsBefore": 5,
+    "widgetsAfter": 7,
+    "quarantined": null,
+    "rejournaledAppends": 1,
+    "rejournaledIsPush": true
+  }
+}
