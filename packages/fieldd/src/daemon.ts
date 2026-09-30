@@ -56,6 +56,7 @@ import {
   type DocOpenResult,
   DocRenameParams,
   DocSetSyncIntentParams,
+  IdempotencyKey,
   IndexEnrollParams,
   IndexRecentParams,
   IndexRetireParams,
@@ -3921,6 +3922,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       (device, method, params, _ctx, emit) => federatedSubs.attach(device, method, params, emit),
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
+    // DS-2 (DS-D15) — the receipt of one of THIS daemon's keyed forwards, so a
+    // UI can show applied / refused / outcome-unknown; the retry is the same
+    // call carrying the same key (forward-receipts.ts), never this door.
+    api.register("forward.receipt", (_ctx, params) => {
+      const key = IdempotencyKey.safeParse(
+        (params as { idempotencyKey?: unknown } | null | undefined)?.idempotencyKey,
+      );
+      if (!key.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { idempotencyKey }", false);
+      const receipt = peers.receipts.get(key.data);
+      if (receipt === undefined)
+        throw new RpcCallError("NOT_FOUND", "no forward with that key is journaled here", false, {
+          idempotencyKey: key.data,
+        });
+      return receipt;
+    });
 
     // AH-1 — the artifact serving foundation. Constructed HERE (before the supersession
     // closure below references it — a superseding takeover can fire before

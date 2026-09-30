@@ -7,6 +7,7 @@ import {
   CONTRACTS_VERSION,
   type ErrorKind,
   Hello,
+  IdempotencyKey,
   MESH_CONTROL_LIMITS,
   METHODS,
   type MethodDef,
@@ -29,6 +30,7 @@ import {
   readPeerEnvelope,
   splitForwardEnvelope,
 } from "./forward-envelope";
+import { forwardDigest, mintForwardKey, OwnerForwardJournal } from "./forward-receipts";
 import { RpcCallError } from "./native-link";
 import { ShellProviderBroker, type ShellProviderTransport } from "./shell-provider";
 
@@ -103,6 +105,9 @@ export interface ProductApiOptions {
    * unlinked or pre-capture. Read fresh at every hello, so a capture landing
    * mid-uptime activates the comparison law without a restart. */
   getLinkedLogin?: () => string | null;
+  /** DS-2 — the owner's receipt journal for keyed forwarded mutations; tests
+   * inject one to read it, a daemon takes the default. */
+  forwardReceipts?: OwnerForwardJournal;
 }
 
 /** DS-L7/DS-D15 — `envelope` is what the forwarding hop adds beside the
@@ -385,8 +390,15 @@ export class ProductApi extends EventEmitter {
     reply({ jsonrpc: "2.0", id, result });
   }
 
+  /** DS-2 — every keyed forwarded mutation this daemon OWNS runs through it:
+   * applied once per {calling peer, key}; a retry reads the outcome. */
+  private readonly ownerReceipts: OwnerForwardJournal;
+
   constructor(private readonly opts: ProductApiOptions) {
     super();
+    this.ownerReceipts =
+      opts.forwardReceipts ??
+      new OwnerForwardJournal({ device: () => this.ownDeviceId?.() ?? "unknown" });
   }
 
   /** C5/D35 — arm the `device?` routing pair (set post-construction: PeerLink
@@ -854,8 +866,10 @@ export class ProductApi extends EventEmitter {
     // stripped from the params, and the provenance rides this call's context so
     // the audit actor names the window behind the calling node. Authority does
     // not move: the principal stays the peer daemon, scoped by the preset it
-    // was granted at hello. Any other caller carrying either member is refused
-    // before anything runs — a window cannot assert who it is acting for.
+    // was granted at hello. Any other caller carrying `onBehalfOf` is refused
+    // before anything runs — a window cannot assert who it is acting for — and
+    // may carry the key only on a mutation it routes to another device (DS-2,
+    // below).
     const baseCtx = state.ctx;
     if (!baseCtx) return; // unreachable past the authed gate; keeps the type honest
     let callCtx: CallerContext = baseCtx;
@@ -865,12 +879,40 @@ export class ProductApi extends EventEmitter {
     // door `idempotencyKey` is the method's own retry key (surface.open,
     // artifact.publish/update) and passes through untouched
     const envelope = splitForwardEnvelope(params, { readKey: def.locality !== "local" });
-    if (envelope.carried) {
-      if (baseCtx.principal.kind !== "peer-fieldd") {
+    if (envelope.carried && baseCtx.principal.kind !== "peer-fieldd") {
+      // DS-2 — the ONE member a caller that is not a peer daemon may carry: the
+      // key of a MUTATION it routes to another device. That key is what the
+      // forward's receipt is bound to — the caller's own, or the one an
+      // `outcome-unknown` answer handed back, which is how the retry reads the
+      // owner's receipt instead of applying twice. `onBehalfOf` is never a
+      // caller's to assert, and a key on anything served here (or on a read)
+      // has no receipt to bind to.
+      const target = (envelope.rest as { device?: unknown } | null | undefined)?.device;
+      const routedMutation =
+        !envelope.hasOnBehalfOf &&
+        def.idempotent === false &&
+        def.subscription !== true &&
+        typeof target === "string" &&
+        this.forwarder !== null &&
+        target !== this.ownDeviceId?.();
+      if (!routedMutation) {
         const refusal = nonPeerEnvelopeRefusal(method);
         reply(this.err(id, refusal.kind, refusal.message, false, refusal.details));
         return;
       }
+      const key = IdempotencyKey.safeParse(envelope.rawIdempotencyKey);
+      if (!key.success) {
+        reply(
+          this.err(id, "PRECONDITION_FAILED", "malformed forwarding envelope", false, {
+            method,
+            reason: "malformed idempotencyKey",
+          }),
+        );
+        return;
+      }
+      callParams = envelope.rest;
+      inboundKey = key.data;
+    } else if (envelope.carried) {
       const read = readPeerEnvelope(envelope);
       if (!read.ok) {
         reply(
@@ -892,6 +934,15 @@ export class ProductApi extends EventEmitter {
       // federated proxy — same wire shape as a local subscription (subId +
       // <base>.delta/.snapshot frames), the payloads being the PEER's.
       const device = (callParams as { device?: unknown } | null | undefined)?.device;
+      // DS-2 — a PEER's keyed mutation served here runs through the owner's
+      // receipt journal: applied once, its retry answered from the receipt
+      const receiptKey =
+        inboundKey !== undefined &&
+        def.idempotent === false &&
+        def.subscription !== true &&
+        callCtx.principal.kind === "peer-fieldd"
+          ? inboundKey
+          : undefined;
       if (
         typeof device === "string" &&
         def.locality === "local" &&
@@ -968,12 +1019,16 @@ export class ProductApi extends EventEmitter {
           }
           // DS-L7 — who the call is for, from the CALLING context (a peer's
           // relayed call restates what that peer said); never from params
+          // DS-2 — every forwarded MUTATION carries a key (the caller's, a
+          // relaying peer's, else a fresh one); a read carries none
+          const idempotencyKey =
+            def.idempotent === false ? (inboundKey ?? mintForwardKey()) : undefined;
           const outbound: OutboundEnvelope = {
             onBehalfOf: forwardProvenance(callCtx, {
               deviceId: this.ownDeviceId?.() ?? "",
               userId: this.opts.userId,
             }),
-            ...(inboundKey !== undefined ? { idempotencyKey: inboundKey } : {}),
+            ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
           };
           const result = await forwarder(device, method, callParams, callCtx, outbound);
           reply({ jsonrpc: "2.0", id, result });
@@ -981,10 +1036,32 @@ export class ProductApi extends EventEmitter {
         }
         // device === self: strip the routing key, serve locally
         const { device: _self, ...rest } = callParams as Record<string, unknown>;
-        await this.execute(ws, state, callCtx, id, method, rest, handler, subHandler, reply);
+        await this.execute(
+          ws,
+          state,
+          callCtx,
+          id,
+          method,
+          rest,
+          handler,
+          subHandler,
+          reply,
+          receiptKey,
+        );
         return;
       }
-      await this.execute(ws, state, callCtx, id, method, callParams, handler, subHandler, reply);
+      await this.execute(
+        ws,
+        state,
+        callCtx,
+        id,
+        method,
+        callParams,
+        handler,
+        subHandler,
+        reply,
+        receiptKey,
+      );
     } catch (e) {
       if (e instanceof RpcCallError) {
         reply(this.err(id, e.kind as ErrorKind, e.message, e.retryable, e.details));
@@ -1007,6 +1084,7 @@ export class ProductApi extends EventEmitter {
     handler: Handler | undefined,
     subHandler: SubscriptionHandler | undefined,
     reply: (v: unknown) => void,
+    receiptKey?: string,
   ): Promise<void> {
     if (subHandler) {
       const refusal = this.subscriptionBudgetRefusal(state, id);
@@ -1040,7 +1118,22 @@ export class ProductApi extends EventEmitter {
       }
       return;
     }
-    const result = await handler!(ctx, params);
+    const run = handler!;
+    if (receiptKey !== undefined && ctx.principal.kind === "peer-fieldd") {
+      const result = await this.ownerReceipts.run(
+        {
+          peer: ctx.principal.deviceId,
+          key: receiptKey,
+          method,
+          digest: forwardDigest(params),
+          ...(ctx.onBehalfOf !== undefined ? { onBehalfOf: ctx.onBehalfOf } : {}),
+        },
+        async () => await run(ctx, params),
+      );
+      reply({ jsonrpc: "2.0", id, result });
+      return;
+    }
+    const result = await run(ctx, params);
     reply({ jsonrpc: "2.0", id, result });
   }
 

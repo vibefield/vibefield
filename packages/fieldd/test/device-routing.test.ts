@@ -517,3 +517,92 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
     });
   });
 });
+
+// DS-2 — the one envelope member a window may carry: the key of a MUTATION it
+// routes to another device (its own, or the one an outcome-unknown answer
+// handed back — which is how a retry reads the owner's receipt). A forwarded
+// mutation without one gets a fresh key; a read gets none.
+describe("the forwarded mutation's key (DS-2)", () => {
+  async function writer(forwarder = vi.fn(async () => ({ ok: true }))) {
+    const a = new ProductApi({
+      port: 0,
+      tokens: {
+        verify: (t) =>
+          t === "writer-token"
+            ? { tokenId: "tk-w", scopes: ["doc.read", "doc.write"], label: "w" }
+            : null,
+      },
+    });
+    a.setDeviceRouting(() => OWN_ID, forwarder);
+    let local = 0;
+    a.register("doc.create", () => {
+      local += 1;
+      return { local: true };
+    });
+    a.register("doc.list", () => ({ docs: [] }));
+    const port = await a.listen();
+    cleanup.push(() => a.close());
+    const ws = await dial(port, "/");
+    await call(
+      ws,
+      1,
+      "system.hello",
+      hello({ clientKind: "renderer", credential: "writer-token" }),
+    );
+    return { ws, forwarder, localCalls: () => local };
+  }
+
+  it("every forwarded mutation carries a key: a fresh one, or the caller's own", async () => {
+    const { ws, forwarder } = await writer();
+    await call(ws, 2, "doc.create", { device: "dev-b", name: "x" });
+    const minted = forwarder.mock.calls.at(-1) as unknown[];
+    expect(minted[2]).toEqual({ device: "dev-b", name: "x" });
+    expect(minted[4]).toMatchObject({ idempotencyKey: expect.stringMatching(/^fk_/) });
+
+    await call(ws, 3, "doc.create", {
+      device: "dev-b",
+      name: "x",
+      idempotencyKey: "retry-key-0001",
+    });
+    const echoed = forwarder.mock.calls.at(-1) as unknown[];
+    expect(echoed[2]).toEqual({ device: "dev-b", name: "x" }); // the key left the params
+    expect(echoed[4]).toMatchObject({ idempotencyKey: "retry-key-0001" });
+
+    await call(ws, 4, "doc.list", { device: "dev-b" });
+    const read = forwarder.mock.calls.at(-1) as unknown[];
+    expect(read[4]).not.toHaveProperty("idempotencyKey"); // a read carries none
+  });
+
+  it("a key anywhere else has no receipt to bind to and is refused", async () => {
+    const { ws, forwarder, localCalls } = await writer();
+    const cases: Array<[string, Record<string, unknown>, string]> = [
+      // a read, even routed
+      ["doc.list", { device: "dev-b", idempotencyKey: "retry-key-0001" }, "non-peer"],
+      // a mutation this daemon serves itself
+      ["doc.create", { name: "x", idempotencyKey: "retry-key-0001" }, "non-peer"],
+      ["doc.create", { device: OWN_ID, name: "x", idempotencyKey: "retry-key-0001" }, "non-peer"],
+      // the key beside a restatement: onBehalfOf is never a caller's
+      [
+        "doc.create",
+        { device: "dev-b", name: "x", idempotencyKey: "retry-key-0001", onBehalfOf: {} },
+        "non-peer",
+      ],
+      // a key the contract would not journal
+      ["doc.create", { device: "dev-b", name: "x", idempotencyKey: "short" }, "malformed"],
+    ];
+    let id = 10;
+    for (const [method, params, why] of cases) {
+      const res = (await call(ws, id++, method, params)) as {
+        error: { data: { kind: string; details: { reason: string } } };
+      };
+      expect(res.error.data.kind, `${method} ${JSON.stringify(params)}`).toBe(
+        "PRECONDITION_FAILED",
+      );
+      expect(res.error.data.details.reason).toBe(
+        why === "non-peer" ? "forwarding envelope from a non-peer" : "malformed idempotencyKey",
+      );
+    }
+    expect(forwarder).not.toHaveBeenCalled();
+    expect(localCalls()).toBe(0);
+  });
+});

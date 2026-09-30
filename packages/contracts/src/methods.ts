@@ -580,6 +580,21 @@ export const METHODS: MethodDef[] = [
     locality: "sync",
     subscription: true,
   }),
+  // DS-2 (DS-D15, 2026-09-30) — the receipt of a keyed forwarded mutation, as
+  // THIS daemon knows it: applied, refused, or outcome-unknown (the forward
+  // left and its answer was lost), with `inFlight` while an attempt is out.
+  // Local: it reads this daemon's journal of its own forwards
+  // (forward-receipts.ts), so a UI can show the state; the retry is the same
+  // call carrying the same `idempotencyKey`, answered from the OWNER's
+  // receipt. Scope-free like system.health: the key is unguessable, the
+  // answer names only the call it was handed back for.
+  defineMethod({
+    surface: "product",
+    method: "forward.receipt",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
 
   // PLUG-P2 — PluginRegistry (plugin spec §21.3/§22.1). Registry truth is
   // per-device (install-set sync is P7's D29 doc, not method federation), so

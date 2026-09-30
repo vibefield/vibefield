@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
+import { FORWARDING } from "@vibefield/contracts";
 import { FielddClient, FielddRpcError, type WsCtor } from "@vibefield/fieldd-client";
 import { type OutboundEnvelope, withEnvelope } from "./forward-envelope";
+import { CallerForwardJournal, forwardDigest } from "./forward-receipts";
 import { RpcCallError } from "./native-link";
 
 // PeerLink (design-04 §3.2, D32 — C5 P1 core): fieldd⇄fieldd connections, the
@@ -35,6 +37,14 @@ import { RpcCallError } from "./native-link";
 // peer's answer. Deferred inside D32 (thinking-c5): inbound/outbound dedup by
 // lower-deviceId-wins, the federated subscription manager, idempotencyKey (all
 // P2 or first-mutation gated).
+//
+// DS-2 (2026-09-30): the idempotencyKey half is built. A forwarded call carries
+// the forwarding envelope beside its params (`onBehalfOf`, and a mutation's
+// key — forward-envelope.ts); a keyed forward is journaled in `receipts`
+// (forward-receipts.ts), and one that left without an answer reads
+// `outcome-unknown` rather than a plain failure. A reply the peer's door SENT
+// is its answer whatever its kind — only the client's own transport failures
+// drop the link.
 
 export type PeerLinkState = "dialing" | "connected" | "incompatible";
 
@@ -51,7 +61,28 @@ export interface PeerLinkOptions {
   webSocket?: WsCtor;
   idleCloseMs?: number;
   callTimeoutMs?: number;
+  /** DS-2 — the deadline of a KEYED forwarded mutation, after which a sent
+   * forward reads `outcome-unknown` (default FORWARDING.FORWARD_TIMEOUT_MS) */
+  forwardTimeoutMs?: number;
   now?: () => number;
+}
+
+/** A reply the peer's DOOR sent: the client builds it from a JSON-RPC error
+ * frame, which always carries a code. The client's own transport failures
+ * ("connection closed", "not connected", a dead client) never do. */
+function isRemoteAnswer(e: unknown): boolean {
+  return e instanceof FielddRpcError && e.code !== undefined;
+}
+
+/** The one transport failure that PROVES a request never left: the client had
+ * no socket to send it on. */
+function isNeverSent(e: unknown): boolean {
+  return (
+    e instanceof FielddRpcError &&
+    e.code === undefined &&
+    e.kind === "UNAVAILABLE" &&
+    e.message === "not connected"
+  );
 }
 
 interface Link {
@@ -81,6 +112,9 @@ export class PeerLink extends EventEmitter {
   private readonly callTimeoutMs: number;
   private sweeper: ReturnType<typeof setInterval>;
   private disposed = false;
+  /** DS-2 — this daemon's own keyed forwards: in flight, applied, refused, or
+   * `outcome-unknown` (sent, answer lost). `forward.receipt` reads it. */
+  readonly receipts = new CallerForwardJournal({ now: () => this.now() });
 
   constructor(private readonly opts: PeerLinkOptions) {
     super();
@@ -108,6 +142,9 @@ export class PeerLink extends EventEmitter {
       throw new RpcCallError("INCOMPATIBLE", "peer contracts major mismatch", false, {
         device: deviceId,
       });
+    const key = envelope?.idempotencyKey;
+    if (envelope !== undefined && key !== undefined)
+      return await this.requestKeyed(deviceId, method, params, envelope, key);
     const wire = withEnvelope(params, envelope);
     const link = this.ensureLink(deviceId);
     link.lastUsed = this.now();
@@ -115,6 +152,67 @@ export class PeerLink extends EventEmitter {
       return await this.withDeadline(link.client.request(method, wire), deviceId);
     } catch (e) {
       throw this.mapPeerError(e, deviceId);
+    }
+  }
+
+  /** DS-2 — a keyed forwarded MUTATION. The receipt journal hears how the
+   * attempt ended: a result (`applied`), the owner's own refusal (`refused`),
+   * or — when the request LEFT and no answer came back, the link cut or the
+   * FORWARD_TIMEOUT_MS deadline passed — `outcome-unknown`, surfaced as
+   * UNAVAILABLE {device, state: "outcome-unknown", idempotencyKey}: never
+   * success, never a plain failure. An attempt that never left (no endpoint,
+   * the dial failed before the link was ready) is forgotten — nothing reached
+   * the owner. The retry is the same call with the same key; the owner answers
+   * it from its own receipt, so it applies once. */
+  private async requestKeyed(
+    deviceId: string,
+    method: string,
+    params: unknown,
+    envelope: OutboundEnvelope,
+    key: string,
+  ): Promise<unknown> {
+    const wire = withEnvelope(params, envelope);
+    const attempt = this.receipts.begin(key, {
+      device: deviceId,
+      method,
+      digest: forwardDigest(params),
+      ...(envelope.onBehalfOf !== undefined ? { onBehalfOf: envelope.onBehalfOf } : {}),
+    });
+    let sent = false;
+    try {
+      const link = this.ensureLink(deviceId);
+      link.lastUsed = this.now();
+      const result = await this.withDeadline(
+        (async () => {
+          await link.client.ready();
+          // from here the request is on the wire within the same microtask
+          // chain — the deadline (a timer) cannot fall between the two
+          sent = true;
+          attempt.sent();
+          return await link.client.request(method, wire);
+        })(),
+        deviceId,
+        this.opts.forwardTimeoutMs ?? FORWARDING.FORWARD_TIMEOUT_MS,
+      );
+      attempt.applied();
+      return result;
+    } catch (e) {
+      const mapped = this.mapPeerError(e, deviceId);
+      if (!sent || isNeverSent(e)) {
+        attempt.unsent();
+        throw mapped;
+      }
+      if (isRemoteAnswer(e)) {
+        attempt.refused(mapped.kind);
+        throw mapped;
+      }
+      attempt.lost();
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the forward was cut before an answer; its outcome is unknown",
+        true,
+        { device: deviceId, state: "outcome-unknown", idempotencyKey: key },
+      );
     }
   }
 
@@ -132,6 +230,14 @@ export class PeerLink extends EventEmitter {
           device: deviceId,
         });
       }
+      // DS-2 — a reply the peer's DOOR sent is the peer's answer, whatever its
+      // kind: an owner saying UNAVAILABLE {service, state} about its OWN
+      // dependency answered, and the link is fine. Only the client's own
+      // transport failures (no JSON-RPC code) mean the peer did not answer.
+      // (This used to drop the link and rewrite the owner's honest state as
+      // "unreachable".)
+      if (isRemoteAnswer(e))
+        return new RpcCallError(e.kind as never, e.message, e.retryable, e.details);
       if (e.kind === "UNAVAILABLE" || e.kind === "TIMEOUT") {
         this.dropLink(deviceId);
         return new RpcCallError("UNAVAILABLE", `peer unreachable: ${e.message}`, true, {
@@ -262,7 +368,7 @@ export class PeerLink extends EventEmitter {
     return link;
   }
 
-  private withDeadline<T>(p: Promise<T>, deviceId: string): Promise<T> {
+  private withDeadline<T>(p: Promise<T>, deviceId: string, ms = this.callTimeoutMs): Promise<T> {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         // a stale socket is the usual suspect — drop it so the next call re-dials
@@ -273,7 +379,7 @@ export class PeerLink extends EventEmitter {
             state: "unreachable",
           }),
         );
-      }, this.callTimeoutMs);
+      }, ms);
       p.then(
         (v) => {
           clearTimeout(t);
