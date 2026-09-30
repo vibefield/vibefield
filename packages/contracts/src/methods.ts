@@ -1034,6 +1034,9 @@ export const METHODS: MethodDef[] = [
   // by federating its bytes (those ride TSP1, native-plane). The rest of the
   // design-01 terminal ideas (subscribe, remote TSP1 endpoint info) are
   // deferred and deliberately undeclared — declared == shipped (D36).
+  // *Correction 2026-09-30 (SB §9):* since AR-4b (2026-09-13) the product API REFUSES a foreign
+  // `device` on every `local` method before the forwarder (product-api.ts, D36), so nothing here is
+  // reached by routing today; a routable birth is the sync plane's to add (DS-2, the spawn bloom's SB-6).
   defineMethod({
     surface: "product",
     method: "terminal.list",
@@ -1138,6 +1141,9 @@ export const METHODS: MethodDef[] = [
   // locality "local": the file is this device's, beside this device's floor.
   // A remote device's config is reached by ROUTING the call, never by
   // federating a path that means something different on each machine.
+  // *Correction 2026-09-30 (SB §9):* since AR-4b (2026-09-13) the product API REFUSES a foreign
+  // `device` on every `local` method before the forwarder (product-api.ts, D36), so nothing here is
+  // reached by routing today; a routable birth is the sync plane's to add (DS-2, the spawn bloom's SB-6).
   defineMethod({
     surface: "product",
     method: "terminal.config.read",
@@ -1690,6 +1696,9 @@ export const METHODS: MethodDef[] = [
   // first. locality "local" like the rest of agent.*: the params name a RUN,
   // and fieldd reaches its PTY through the record it minted for it — a peer's
   // run is stopped by ROUTING the call (D35), never by federating this one.
+  // *Correction 2026-09-30 (SB §9):* since AR-4b (2026-09-13) the product API REFUSES a foreign
+  // `device` on every `local` method before the forwarder (product-api.ts, D36), so nothing here is
+  // reached by routing today; a routable birth is the sync plane's to add (DS-2, the spawn bloom's SB-6).
   defineMethod({
     surface: "product",
     method: "agent.interrupt",

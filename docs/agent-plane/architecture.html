@@ -1555,7 +1555,9 @@
                         <code>fallback</code> (run exactly as typed: a version query, a one-shot run, a launch outside
                         our terminals — fieldd keeps nothing), or <code>refuse</code> (one sentence under VibeField's
                         name, a code, <code>placed</code>). Strict from the first landing: in a pane VibeField owns an
-                        interactive session runs managed or not at all; nothing else is ever refused. The shim reads
+                        interactive session runs managed or not at all; nothing else is ever refused. In a pane born under an
+                        Agent Profile, a typed agent that profile has no sign-in for is refused too, before anything is
+                        prepared (SB-D7; the profile binding row). The shim reads
                         three files every time (<code>gateway.json</code>, <code>launch-providers.json</code>,
                         <code>terminals.json</code>), so our shells outlive fieldd: away, it waits 8 s and refuses in
                         our panes, falls through elsewhere; back, the waiting launch is adopted. A multiplexer's server
@@ -1568,6 +1570,39 @@
                     <td>
                       <span class="badge tone-built">Built</span>
                       <p>AR-7 <code>cdad77bd</code>; puppeteer <code>2a81fc1</code> (PU-17 the kit, PU-9a the grammars). The seam's owner is puppeteer's <code>docs/guides/spawn-through-hosts.md</code>.</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the profile binding (AR-7g)</span></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span></td>
+                    <td><span class="badge tone-vibefield">fieldd</span></td>
+                    <td>
+                      <p>
+                        <code>runtime.profileSet</code> · <code>runtime.profileBindingEnvironment</code><br />
+                        <code>packages/fieldd/src/terminal-bindings.ts</code> · <code>terminal-service.ts</code> ·
+                        <code>agent-gateway.ts</code>
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        A pane born under an Agent Profile. <code>terminal.create {profileSet}</code> (the spawn bloom,
+                        SB-D6) expands the profile to its active sign-ins (<code>runtime.profileSet</code>, one per agent)
+                        and asks puppeteer for their binding (<code>profileBindingEnvironment</code> — an opaque map that
+                        VibeField never reads, AR-L1), merged into the shell's inherit overrides through the same fence as
+                        the shell integration: reserved prefixes dropped and counted, never named; on a name both set, the
+                        integration wins. This Mac binds nothing and is still a bound birth. A bound birth needs
+                        <code>agent.spawn</code> as well, because the shell runs agents under that profile's sign-ins.
+                        fieldd keeps which shell was born under which profile (<code>fieldd/terminal-bindings.json</code>,
+                        0600, pruned with the inventory) and says it on the create's answer and the roster. A typed agent
+                        reads the binding from the shell's environment (AR7-D6); one the profile has no sign-in for is
+                        refused by the gateway before anything is prepared, naming the fix (SB-D7). Frozen at birth: a
+                        sign-in added later does not reach an open shell, and inherit mode cannot unset a variable the
+                        floor's own environment already holds.
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-built">Built</span>
+                      <p>SB-2 <code>79aae4ba</code> … <code>e6344830</code>. This row owns the seam; upstream, puppeteer's <code>docs/agent-management-api.html</code> and RFC 006 ("the pane is the profile boundary").</p>
                     </td>
                   </tr>
                 </tbody>
@@ -2262,7 +2297,12 @@
                   <tr>
                     <td><strong>AR-7</strong></td>
                     <td><p>The mandatory shim gateway. Typing an agent's name in one of our panes must produce a managed session: a gateway failure is a refusal or a retry with a message, never an unmanaged exec.</p></td>
-                    <td><span class="badge tone-designed">Designed</span><p>AR-D10 amended; PU-9 upstream</p></td>
+                    <td><span class="badge tone-built">Built</span><p>AR-D10 amended; PU-9 upstream. <em>Correction 2026-09-30:</em> this row still said Designed after AR-7 landed (2026-09-28, vibe-field <code>08645f19</code>, its rulings <code>a2953557</code>; LANDED §AR-7).</p></td>
+                  </tr>
+                  <tr>
+                    <td><strong>AR-7g</strong></td>
+                    <td><p>Profile-bound panes: a pane born under an Agent Profile carries its binding, so the launcher's launches and typed agents both run under it (the spawn bloom's SB-D6), and a typed agent it has no sign-in for is refused, naming the fix (SB-D7).</p></td>
+                    <td><span class="badge tone-built">Built</span><p>SB-2; the profile binding seam row</p></td>
                   </tr>
                   <tr>
                     <td><strong>AR-8</strong></td>
