@@ -1,4 +1,5 @@
 import { type ZodTypeAny, z } from "zod";
+import { AgentProfileSetId } from "./agent-index";
 import { CellEndpointSet, TerminalWorkloadClass } from "./envelope";
 import { TERMINAL_PIPELINE, TERMINAL_PIPELINE_CLOSE_CODES } from "./registries";
 import {
@@ -464,6 +465,9 @@ export const TerminalCreateOpenResult = z
     sessionId: z.string().min(1),
     /** The exact engine summary needed to mount before inventory catches up. */
     session: TerminalRuntimeSession,
+    /** SB-2 — the Agent Profile a bound shell was born under (the create's
+     * own `profileSet`, as fieldd applied it); absent for an unbound shell. */
+    profileSet: AgentProfileSetId.optional(),
   })
   .merge(TerminalOpenTicket)
   .passthrough();
@@ -525,6 +529,11 @@ export const ProductSessionRosterItem = z
       })
       .passthrough()
       .optional(),
+    /** SB-2 — the Agent Profile the shell was born under, from fieldd's own
+     * record (it survives a fieldd restart); absent for an unbound shell. A
+     * profile deleted since still names its set here: the shell holds what
+     * it was born with, and a typed launch there says the profile is gone. */
+    profileSet: AgentProfileSetId.optional(),
   })
   .passthrough()
   .refine(

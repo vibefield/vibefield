@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentProfileSetId } from "./agent-index";
 import { TerminalWorkloadClass } from "./envelope";
 import { ObservedTerminal } from "./mgmt";
 
@@ -163,9 +164,45 @@ export const TerminalCreateParams = z
      * — and, since TC-S3, WHICH CELL hosts the session (the placement hint).
      * Absent = "interactive", the generous cap — the tolerant-reader default. */
     workloadClass: TerminalWorkloadClass.optional(),
+    /** SB-2 (AR-7g) — the Agent Profile the shell is born under: fieldd
+     * expands the set to its sign-ins and the shell inherits their binding
+     * environment (opaque to VibeField, AR-L1), so an agent typed there runs
+     * on that profile's accounts. The native set binds nothing and is still
+     * a bound birth. A caller must ALSO hold `agent.spawn` (EL7). Absent = an
+     * unbound shell, exactly as before — which is also what a fieldd older
+     * than this field does with it (the object passes it through unread). */
+    profileSet: AgentProfileSetId.optional(),
   })
   .passthrough();
 export type TerminalCreateParams = z.infer<typeof TerminalCreateParams>;
+
+/** SB-2 — one shell fieldd birthed under an Agent Profile: the session and the
+ * set. Never the variables (they are the set's to hold and a shell's to
+ * inherit; nothing of them is recorded). */
+export const TerminalBinding = z
+  .object({
+    sessionId: z.string().min(1),
+    profileSet: AgentProfileSetId,
+    /** when fieldd recorded the birth (ISO 8601) */
+    boundAt: z.string(),
+  })
+  .passthrough();
+export type TerminalBinding = z.infer<typeof TerminalBinding>;
+
+/** SB-2 — `users/<fuid>/fieldd/terminal-bindings.json` (LAYOUT
+ * `TERMINAL_BINDINGS_FILE`), fieldd-owned and private (0600): which shells
+ * were born bound. Nothing below fieldd can hold it — the floor's session
+ * options carry an owner label and nothing else — and the floor outlives
+ * fieldd, so the record is on disk: a restarted fieldd still reports a
+ * surviving shell's profile, and prunes the rows whose sessions are gone. A
+ * reader keeps each row that parses and sets aside each that does not. */
+export const TerminalBindingsFile = z
+  .object({
+    version: z.literal(1),
+    bindings: z.array(TerminalBinding),
+  })
+  .passthrough();
+export type TerminalBindingsFile = z.infer<typeof TerminalBindingsFile>;
 
 /** TC-D6(c) — the per-class scrollback caps live in the genned registry (one
  * authority both planes read); re-exported here beside the param they govern. */

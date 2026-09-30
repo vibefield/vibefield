@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "bindings": [
+    {
+      "sessionId": "sess-01J8Z3K9",
+      "profileSet": "work",
+      "boundAt": "2026-09-30T04:15:00.000Z"
+    },
+    {
+      "sessionId": "sess-01J8Z3M2",
+      "profileSet": "native",
+      "boundAt": "2026-09-30T04:16:30.000Z"
+    }
+  ]
+}

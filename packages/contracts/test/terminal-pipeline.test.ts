@@ -5,7 +5,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CellEndpointSet, TerminalRouteSnapshot } from "../src/envelope";
 import { TERMINAL_PIPELINE } from "../src/registries";
-import { TerminalRuntimeSession, TerminalRuntimeSessionsResult } from "../src/terminal";
+import {
+  TerminalBindingsFile,
+  TerminalCreateParams,
+  TerminalRuntimeSession,
+  TerminalRuntimeSessionsResult,
+} from "../src/terminal";
 import {
   AttachControlLeg,
   CellActivationStatus,
@@ -295,6 +300,48 @@ describe("the roster projection refuses placement (TP-L-C)", () => {
       false,
     );
     expect(ProductSessionRosterItem.safeParse({ ...item, cellBootId: "x" }).success).toBe(false);
+  });
+});
+
+describe("SB-2 — the profile a shell was born under (AR-7g)", () => {
+  it("terminal.create names a set by puppeteer's set grammar; absent is an unbound shell", () => {
+    const bound = TerminalCreateParams.parse(fixture("terminal-create-params.bound.json"));
+    expect(bound.profileSet).toBe("work");
+    expect(
+      TerminalCreateParams.parse(fixture("terminal-create-params.valid.json")).profileSet,
+    ).toBe(undefined);
+    // a set id is a directory name: a label is not one
+    for (const profileSet of ["Work", "work profile", "", "-work", "a".repeat(49)]) {
+      expect(TerminalCreateParams.safeParse({ profileSet }).success, profileSet).toBe(false);
+    }
+  });
+
+  it("the create's answer and the roster say which set a bound shell was born under — and still never where it lives", () => {
+    const created = TerminalCreateOpenResult.parse(fixture("tp-create-open.bound.json"));
+    expect(created.profileSet).toBe("work");
+    expect(TerminalCreateOpenResult.parse(fixture("tp-create-open.valid.json")).profileSet).toBe(
+      undefined,
+    );
+    const item = fixture("tp-roster-item.bound.json");
+    expect(ProductSessionRosterItem.parse(item).profileSet).toBe("work");
+    // the placement refusal holds for a bound row as for any other
+    expect(ProductSessionRosterItem.safeParse({ ...item, cellBootId: "x" }).success).toBe(false);
+    expect(ProductSessionRosterItem.safeParse({ ...item, profileSet: "Work" }).success).toBe(false);
+  });
+
+  it("fieldd's record holds the session and the set — a row that is not one fails the file's schema", () => {
+    const file = TerminalBindingsFile.parse(fixture("terminal-bindings.valid.json"));
+    expect(file.bindings.map((row) => [row.sessionId, row.profileSet])).toEqual([
+      ["sess-01J8Z3K9", "work"],
+      ["sess-01J8Z3M2", "native"],
+    ]);
+    expect(TerminalBindingsFile.safeParse({ ...file, version: 2 }).success).toBe(false);
+    expect(
+      TerminalBindingsFile.safeParse({
+        ...file,
+        bindings: [{ sessionId: "s", profileSet: "Not A Set", boundAt: "x" }],
+      }).success,
+    ).toBe(false);
   });
 });
 

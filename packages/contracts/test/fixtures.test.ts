@@ -102,7 +102,7 @@ import {
   ScreenshotHelperCommand,
   ScreenshotHelperEvent,
 } from "../src/screenshot";
-import { TerminalCreateParams } from "../src/terminal";
+import { TerminalBindingsFile, TerminalCreateParams } from "../src/terminal";
 import {
   AttachControlLeg,
   AttachFramesLeg,
@@ -193,6 +193,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // reader's hello value alone).
   "terminal-routes-stream": TerminalRoutesStreamPayload,
   "terminal-create-params": TerminalCreateParams,
+  // SB-2 — fieldd's record of which shells were born under an Agent Profile
+  // (`users/<fuid>/fieldd/terminal-bindings.json`); fieldd's store writes this
+  // shape and its test parses what it wrote with the same schema.
+  "terminal-bindings": TerminalBindingsFile,
   // SNAP-D2 — the screenshot helper's stdout line and the shell's answer; the
   // Swift harness and the Rust crate parse these same files.
   "screenshot-helper-event": ScreenshotHelperEvent,
