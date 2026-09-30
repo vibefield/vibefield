@@ -17,6 +17,8 @@ import {
   type CellGrantKey,
   clientIdFor,
   connectionSetIdFor,
+  isSelfPeerDaemon,
+  isSelfPrincipal,
   isSelfTailnetPrincipal,
   mintedClientId,
   projectRoster,
@@ -77,9 +79,48 @@ describe("clientId and rights derive from the principal, never from the caller's
     expect(rightsFor({ kind: "plugin", tokenId: "t" })).toEqual(["read"]);
   });
 
-  // TM-D3 — the self peer joins the table.
-  it("a self peer reads and TYPES, and never holds geometry", () => {
-    expect(rightsFor(SELF)).toEqual(["input", "read"]);
+  // DS-D5, ruled 2026-09-30 with James's note: "the latest focused pane takes
+  // full control include resizing, LWW. no matter it is local pane, remote
+  // desktop pane or mobile pane". TM-D3 minted this row `[input, read]`.
+  it("a self peer reads, types and holds geometry — the pane focused last takes the seat", () => {
+    expect(rightsFor(SELF)).toEqual(["geometry", "input", "read"]);
+    expect(rightsFor({ ...SELF, tailscaleId: "nodekey:aaaa" })).toEqual([
+      "geometry",
+      "input",
+      "read",
+    ]);
+  });
+
+  // DS-4 — a window on ANOTHER desktop reaches this mint through its own
+  // daemon, forwarded: the principal here is that daemon, `peer-fieldd`, which
+  // ProductApi mints only for a login-matched (self) peer.
+  it("a self peer DAEMON forwarding for a window is minted the self set", () => {
+    const daemon = { kind: "peer-fieldd", deviceId: "dev-b" };
+    expect(isSelfPeerDaemon(daemon)).toBe(true);
+    expect(rightsFor(daemon)).toEqual(["geometry", "input", "read"]);
+  });
+
+  it("every self principal gets exactly one set, and nobody gets geometryAdmin", () => {
+    const self = [
+      WINDOW,
+      { kind: "shell-main", tokenId: "t" },
+      SELF,
+      { kind: "peer-fieldd", deviceId: "dev-b" },
+    ];
+    for (const principal of self) {
+      expect(isSelfPrincipal(principal), principal.kind).toBe(true);
+      expect(rightsFor(principal), principal.kind).toEqual(["geometry", "input", "read"]);
+    }
+    const others = [
+      GUEST,
+      { kind: "tailnet", login: "me@example.com" },
+      { kind: "plugin", tokenId: "t" },
+      { kind: "mcp-agent", tokenId: "t" },
+    ];
+    for (const principal of others) {
+      expect(isSelfPrincipal(principal), principal.kind).toBe(false);
+      expect(rightsFor(principal), principal.kind).toEqual(["read"]);
+    }
   });
 
   it("`self` is the ONLY thing that lifts a tailnet principal's rights", () => {
@@ -137,8 +178,9 @@ describe("clientId and rights derive from the principal, never from the caller's
     // `clientIdFor` used to test for "tailnet-peer", which has never existed;
     // the real kind is `peer-fieldd`, it carries a deviceId and NO login, so it
     // fell through to the constant "peer-fieldd" — one identity for every peer
-    // daemon. Unreachable today (locality refuses it before a mint), fixed so
-    // the slice that opens that door does not inherit it.
+    // daemon. Unreachable then (locality refused it before a mint), fixed so
+    // the slice that opens that door does not inherit it — DS-4 opened it
+    // (2026-09-30): a forwarded `terminal.openTicket` is minted for this id.
     expect(clientIdFor({ kind: "peer-fieldd", deviceId: "dev-01H" })).toBe("peer-fieldd:dev-01H");
     expect(clientIdFor({ kind: "peer-fieldd", deviceId: "dev-A" })).not.toBe(
       clientIdFor({ kind: "peer-fieldd", deviceId: "dev-B" }),

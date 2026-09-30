@@ -3422,7 +3422,8 @@ describe("TP-S1 — the session-addressed grant model", () => {
       controlUrl: "ws://mock.ts.net:9422/cell/cell-f/control",
       framesUrl: "ws://mock.ts.net:9422/cell/cell-f/frames",
     });
-    expect(created.attachGrant.claims.rights).toEqual(["input", "read"]);
+    // DS-D5 — every self principal, the phone included, holds geometry by lease
+    expect(created.attachGrant.claims.rights).toEqual(["geometry", "input", "read"]);
     // the grants are the cell's own, exactly as for a window
     expect(created.route).toEqual({ cellBootId: "cell-f", routeRevision: 9 });
     expect(verifies(KEY_I, created.attachGrant)).toBe(true);

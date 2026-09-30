@@ -168,7 +168,7 @@ async function serving(daemon: FielddDaemon): Promise<void> {
 }
 
 describe("TM-2 — a self peer is told to dial the tailnet, a window the loopback", () => {
-  it("answers the self peer with the cell's tailnet doors and [input, read]", async () => {
+  it("answers the self peer with the cell's tailnet doors and [geometry, input, read]", async () => {
     const { daemon, mock } = await boot();
     await serving(daemon);
     const rpc = await dialAsTailnet(daemon, mock, LOGIN);
@@ -186,9 +186,11 @@ describe("TM-2 — a self peer is told to dial the tailnet, a window the loopbac
     expect(JSON.stringify(ticket.endpoints)).not.toContain("127.0.0.1");
     expect(JSON.stringify(ticket.endpoints)).not.toContain(String(CELL_DOOR));
 
-    // TM-D3: read and TYPE, and no geometry — a phone must not resize the
-    // desktop's own pane under the person sitting at it
-    expect(ticket.attachGrant.claims.rights).toEqual(["input", "read"]);
+    // DS-D5 (2026-09-30, James's note): the last focused pane takes the seat,
+    // the phone's included — TM-D3 minted `[input, read]` here, "a phone must
+    // not resize the desktop's own pane", and the ruling reversed it: the
+    // right lets the phone's host TAKE the seat when the phone has focus
+    expect(ticket.attachGrant.claims.rights).toEqual(["geometry", "input", "read"]);
     // the grants are minted exactly as for a window: same audience, same key
     expect(ticket.route).toEqual({ cellBootId: "cell-i", routeRevision: 3 });
     expect(ticket.attachGrant.claims.audienceCellBootId).toBe("cell-i");

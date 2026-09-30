@@ -57,6 +57,41 @@ export function isSelfTailnetPrincipal(principal: GrantPrincipal): boolean {
   return principal.kind === "tailnet" && principal.self === true;
 }
 
+/** DS-4 — a peer DAEMON of this person's: the one kind that reaches a terminal
+ * mint FORWARDING for a window (or the phone) on another of their desktops
+ * (`thinking-desktop-sync-plane.md` §6.3; design-06 §6).
+ *
+ * Self by construction, not by a flag: ProductApi mints `peer-fieldd` ONLY
+ * inside its tailnet branch's login-MATCHED arm (`product-api.ts`, the UA-4
+ * comparison law) — a colleague's daemon is a `tailnet-guest` like any other
+ * guest and never gets here. The kind itself is the hello's claim, and that is
+ * why this widens nothing: the same verified login may hello as `ios` and be a
+ * `tailnet` self principal with the same rights, so kind is a label between
+ * two claims of ONE transport identity, never a boundary.
+ *
+ * design-06 §6 also says "a peer daemon acting for no one gets `[read]`".
+ * Telling "for no one" from "for a window" needs `onBehalfOf` at the owner
+ * (DS-2, lane ds-b — `contracts/src/forwarding.ts`); until it lands, nothing a
+ * daemon does on its own account calls a terminal door, and the FORWARDING
+ * daemon refuses to carry a mint for a caller it would itself mint read-only
+ * (`terminal-service.ts` `forwardVia`), so a local restriction never launders
+ * through a peer. */
+export function isSelfPeerDaemon(principal: GrantPrincipal): boolean {
+  return principal.kind === "peer-fieldd";
+}
+
+/** DS-D5 — every principal that IS this person: a window here, a self peer on
+ * another of their devices (the phone), and a self peer daemon forwarding for a
+ * window on another of their desktops. */
+export function isSelfPrincipal(principal: GrantPrincipal): boolean {
+  return (
+    principal.kind === "local-token" ||
+    principal.kind === "shell-main" ||
+    isSelfTailnetPrincipal(principal) ||
+    isSelfPeerDaemon(principal)
+  );
+}
+
 /** spec §5.1 "Who mints clientId": never UI code. A renderer window's
  * principal carries the participant main minted per webContents generation
  * (`bootstrap.ts`), so the id is bound to the window token and NON-REUSED
@@ -104,34 +139,45 @@ export function clientIdFor(principal: GrantPrincipal): string {
   // Unreachable today (locality refuses `peer-fieldd` before a mint is
   // possible), which is why it is corrected now rather than left as a trap for
   // the slice that opens that door.
+  // *DS-4 (2026-09-30) is that slice:* `terminal.openTicket`/`renewAttach` are
+  // routable to the owner, so a forwarding daemon IS minted here. One id per
+  // peer daemon is still one client for EVERY window behind it — two windows on
+  // desktop B attaching one session of A's would share a connection set and an
+  // attach ledger, the E-F2 ping-pong again. The fix keys this arm on the window
+  // behind the call (`onBehalfOf.windowId`), which reaches the owner with DS-2
+  // (lane ds-b); one window per session per peer is exact until then.
   if (principal.kind === "peer-fieldd" && principal.deviceId !== undefined)
     return `peer-fieldd:${principal.deviceId}`;
   if (principal.tokenId !== undefined) return `${principal.kind}:${principal.tokenId}`;
   return principal.kind;
 }
 
-/** Rights per principal (spec §5.1; the v1 posture). A window (local token,
- * shell-main) may read, type and hold geometry; anything else — a tailnet
- * guest, a plugin — reads only. `geometryAdmin` is never minted in v1
- * (TP-D25: admin displacement is TP-S4). Sorted, as JCS requires.
+/** Rights per principal (spec §5.1). Every SELF principal (`isSelfPrincipal`)
+ * may read, type and hold geometry; anything else — a tailnet guest, an
+ * unlinked tailnet peer, a plugin, an `mcp-agent` — reads only. `geometryAdmin`
+ * is never minted in v1 (TP-D25: admin displacement is TP-S4). Sorted, as JCS
+ * requires.
  *
- * TM-D3 — a WhoIs-verified SELF peer may read and TYPE, and holds no geometry.
- * Both halves are deliberate:
- *   · `input` granted nothing new when it landed: `terminal.mirrorWriteGrant`
- *     was already handing a self peer the floor's mirror-write capability
- *     automatically, once per connection (MF-2) — a durable bearer on disk, with
- *     no expiry and no per-client revocation. TM-3 deleted that door and the key
- *     behind it on 2026-09-14, so this line is no longer the second way a self
- *     peer comes by the right to type. It is the only one, which is TP-D21's
- *     whole point: per client, per session, expiring, revocable by generation.
- *   · `geometry` stays with WINDOWS. The lease decides the PTY's cols and rows,
- *     and a phone taking it would resize the desktop's own pane under the
- *     person sitting at it. A remote viewer renders what the holder sized. */
+ * DS-D5, RULED 2026-09-30 with James's note — "i thought this is settled long
+ * time ago, which is the latest focused pane takes full control include
+ * resizing, LWW. no matter it is local pane, remote desktop pane or mobile
+ * pane" — so the phone and a window on another desktop are minted `geometry`
+ * exactly as a window here is. The lease still arbitrates ONE holder at a time
+ * (TPv3 §6): the right lets a pane TAKE the seat when its host sees it focused
+ * (the cell's take, `activation.rs` `transfer_geometry`); a pane that does not
+ * hold the seat renders what the holder sized, and a `controlsResize:false`
+ * mirror never claims at all.
+ *
+ * What this replaced (TM-D3 as landed 2026-09-14): a self peer was minted
+ * `[input, read]` and `geometry` stayed with windows, on the reasoning that "a
+ * phone taking it would resize the desktop's own pane under the person sitting
+ * at it". The ruling answers that reasoning: the person is at ONE screen at a
+ * time, the last one they focused, and it follows them. The `input` half's
+ * history still stands — TM-3 deleted `terminal.mirrorWriteGrant`, the durable
+ * bearer that used to hand a self peer the right to type, so this per-client,
+ * per-session, expiring grant is the only way any principal comes by it. */
 export function rightsFor(principal: GrantPrincipal): SessionAttachRight[] {
-  if (principal.kind === "local-token" || principal.kind === "shell-main")
-    return ["geometry", "input", "read"];
-  if (isSelfTailnetPrincipal(principal)) return ["input", "read"];
-  return ["read"];
+  return isSelfPrincipal(principal) ? ["geometry", "input", "read"] : ["read"];
 }
 
 /** Provisional until the post-S0 numeric checkpoint (spec §16). The transport

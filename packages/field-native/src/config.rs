@@ -17,7 +17,8 @@ pub const TERMINAL_MESH_ENV: &str = "FIELD_NATIVE_TERMINAL_MESH";
 // mirror-write capability's env home, with the mint and the file it named. The
 // write right is no longer a durable secret on disk that every same-uid process
 // can read; it is a claim in a per-client, expiring, revocable attach grant
-// (`rights: ["input", "read"]`, minted by fieldd for a WhoIs-verified self peer).
+// (`rights: ["input", "read"]`, minted by fieldd for a WhoIs-verified self peer;
+// `["geometry", "input", "read"]` since 2026-09-30, DS-4 — DS-D5's note).
 // Nothing in this process ever compared the string — the reader retired with the
 // TSP1 adapter at TM-1 — and since TM-5 nothing off-device asks for it either.
 

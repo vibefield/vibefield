@@ -1193,6 +1193,9 @@ export const METHODS: MethodDef[] = [
   // `terminal.openTicket`/`terminal.create` already mints — per client, per
   // session, expiring, revocable by generation — so a WhoIs-verified self peer
   // is minted `rights: ["input", "read"]` and there is nothing left to ask for.
+  // *(2026-09-30, DS-4: a self peer is minted `["geometry", "input", "read"]`
+  // since DS-D5's note — the last focused pane takes the seat; the retirement
+  // below is unchanged, and `rightsFor` is still the only door to `input`.)*
   // The audit action `capability.mirror_write.grant` retired with the door;
   // `AuditActionV1` is a regex, not an enumeration, so this is the only place
   // that names it. `MIRROR_WRITE_GRANT_ADMITTED_PRINCIPALS` and its refusal
