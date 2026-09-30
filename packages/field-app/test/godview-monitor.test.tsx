@@ -1130,6 +1130,26 @@ describe("the profile tabs (AR-S5)", () => {
     expect(monitorHoldsKeys()).toBe(false);
   });
 
+  it("keeps a shell born under Work in the Work tab, and an unbound one recedes (SB-3)", async () => {
+    const panes: MonitorPaneFacts = {
+      sessionIds: ["work-shell", "bare-shell"],
+      activeSessionId: "bare-shell",
+      sessions: [
+        pane("work-shell", "/project/work-shell"),
+        pane("bare-shell", "/project/bare-shell"),
+      ],
+      // the pool's record, fieldd's words
+      profileSets: new Map([["work-shell", "work"]]),
+    };
+    const host = await mountMonitor("list", tabDoor(), panes);
+    await act(async () => tabButton(host, "work")?.click());
+    const rows = listRows(host);
+    expect(rows.find((row) => row.project === "work-shell")?.receded).toBe(false);
+    expect(rows.find((row) => row.project === "bare-shell")?.receded).toBe(true);
+    await act(async () => tabButton(host, "native")?.click());
+    expect(listRows(host).find((row) => row.project === "work-shell")?.receded).toBe(true);
+  });
+
   it("creates empty terminals independently of the selected profile filter", async () => {
     const door = tabDoor();
     const host = await mountMonitor("list", door);

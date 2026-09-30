@@ -63,6 +63,26 @@ describe("monitor agent assembly", () => {
     expect(assembled.map((agent) => Boolean(agent.agent))).toEqual([true, true, false]);
   });
 
+  it("SB-3: a terminal row and a floor row carry the Agent Profile their shell was born under, in fieldd's words", () => {
+    const assembled = assembleMonitorAgents({
+      ...PURE,
+      managed: [],
+      terminals: [{ session: session("work-shell") }, { session: session("bare-shell") }],
+      floor: [{ sessionId: "unpaned-work", workloadClass: "interactive" }],
+      profileSets: new Map([
+        ["work-shell", "work"],
+        ["unpaned-work", "work"],
+      ]),
+    });
+    expect(assembled.map((agent) => [agent.id, agent.profileSet])).toEqual([
+      ["work-shell", "work"],
+      ["bare-shell", undefined],
+      ["unpaned-work", "work"],
+    ]);
+    // a shell under none carries no key at all, rather than an undefined one
+    expect("profileSet" in (assembled[1] ?? {})).toBe(false);
+  });
+
   it("keeps spatial identity while actions and usage retain the managed run id", () => {
     const before = assembleMonitorAgents({
       ...PURE,

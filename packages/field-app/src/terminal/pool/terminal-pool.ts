@@ -140,6 +140,10 @@ export interface TerminalPoolSnapshot {
    * placement — the contract refuses a placement key at parse. */
   readonly roster: readonly ProductSessionRosterItem[];
   readonly rosterState: TerminalRosterState;
+  /** SB-3 — which shells were born under which Agent Profile (session id →
+   * set id), in fieldd's words: its create answers for the births this window
+   * asked for, its roster for the rest. The same object until it changes. */
+  readonly profileSets: ReadonlyMap<string, string>;
   /** Pending and accepted close intents, separate from the floor's still-live shutdown ladder. */
   readonly closingSessionIds: readonly string[];
 }
@@ -229,6 +233,17 @@ const createdSummaries = new Map<string, SessionSummary>();
  * and no more), so the renderer never infers one — a shell absent here is
  * unbound, or not yet known to be bound. */
 const sessionProfileSets = new Map<string, string>();
+/** The record as the snapshot hands it out: replaced, never mutated, so a
+ * reader keyed on identity sees a change exactly when there is one. */
+let profileSetsView: ReadonlyMap<string, string> = new Map();
+
+/** Write one row of the record (undefined: the shell is under none). */
+function recordProfileSet(sessionId: string, profileSet: string | undefined): void {
+  if (sessionProfileSets.get(sessionId) === profileSet) return;
+  if (profileSet === undefined) sessionProfileSets.delete(sessionId);
+  else sessionProfileSets.set(sessionId, profileSet);
+  profileSetsView = new Map(sessionProfileSets);
+}
 /** The client the pool mints with, remembered from the first ask so the ladder
  * and the retry do not need one handed to them at the moment of a bridge event
  * — which is not a moment any React tree is guaranteed to exist. */
@@ -282,6 +297,7 @@ function buildSnapshot(): TerminalPoolSnapshot {
     grantsLanded,
     roster,
     rosterState,
+    profileSets: profileSetsView,
     closingSessionIds: [...closingSessionIds],
   };
 }
@@ -615,7 +631,7 @@ function recordRoutedTicket(sessionId: string, ticket: TerminalOpenTicket): void
 /** Drop private records after a confirmed kill or authoritative removal. */
 function forgetRoutedSession(sessionId: string): void {
   createdSummaries.delete(sessionId);
-  sessionProfileSets.delete(sessionId);
+  recordProfileSet(sessionId, undefined);
   const cell = placements.cellFor(sessionId);
   placements.forgetSession(sessionId);
   if (
@@ -850,7 +866,7 @@ export async function createTerminalSession(
     throw cause;
   }
   const read = readCreateTicket(raw, Date.now());
-  if (read.profileSet !== undefined) sessionProfileSets.set(read.sessionId, read.profileSet);
+  if (read.profileSet !== undefined) recordProfileSet(read.sessionId, read.profileSet);
   trace?.mark("ticket");
   placements.record(read.placement);
   grantsLanded = true;
@@ -891,7 +907,7 @@ export function adoptCreatedTerminal(raw: unknown): {
   session: SessionSummary;
 } {
   const read = readCreateTicket(raw, Date.now());
-  if (read.profileSet !== undefined) sessionProfileSets.set(read.sessionId, read.profileSet);
+  if (read.profileSet !== undefined) recordProfileSet(read.sessionId, read.profileSet);
   placements.record(read.placement);
   grantsLanded = true;
   rejoinHint = [...new Set([...rejoinHint, read.sessionId])];
@@ -1062,6 +1078,11 @@ export async function refreshTerminalRoster(
     roster = TerminalRosterResult.parse(await fieldd.request("terminal.roster", {})).items;
     trace?.mark("roster");
     rosterState = "observed";
+    // SB-3 — the join: fieldd's record of each listed shell's Agent Profile
+    // (SB-2 keeps it on disk, so it outlives this window and fieldd both). A
+    // listed shell without one is under none; an unlisted one keeps what its
+    // create answered.
+    for (const item of roster) recordProfileSet(item.sessionId, item.profileSet);
   } catch (cause) {
     roster = [];
     rosterState = unobservedRefusal(cause) ? "unobserved" : "unavailable";
@@ -1165,6 +1186,7 @@ export function disposeTerminalPool(): void {
   routedCells.clear();
   createdSummaries.clear();
   sessionProfileSets.clear();
+  profileSetsView = new Map();
   demand.clear();
   projected.clear();
   pending = null;

@@ -38,6 +38,7 @@ import {
   profileTabs,
   recedeOutside,
   showsProfileTabs,
+  withProfileSets,
 } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
 import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
@@ -257,15 +258,15 @@ export function GodviewMonitor({
   const [usageTiles, setUsageTiles] = useState(-1);
   const personas = useMemo(() => personaProfiles(profileSets), [profileSets]);
   const chosenId = chosen?.id;
+  /** SB-3 — every row says the profile it runs under (`profileSet`), the set
+   * the tabs compute: the spawn bloom lights the rows under what it points at. */
+  const rows = useMemo(() => withProfileSets(agents, personas), [agents, personas]);
   /** The rows as the stage draws them: every one, the chosen profile's as
    * they are and the rest receded — still in the physics, in their places. */
-  const staged = useMemo(
-    () => recedeOutside(agents, chosenId, personas),
-    [agents, chosenId, personas],
-  );
+  const staged = useMemo(() => recedeOutside(rows, chosenId, personas), [rows, chosenId, personas]);
   const shown = useMemo(
-    () => (chosenId === undefined ? agents : staged.filter((agent) => agent.receded !== true)),
-    [agents, chosenId, staged],
+    () => (chosenId === undefined ? rows : staged.filter((agent) => agent.receded !== true)),
+    [rows, chosenId, staged],
   );
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
   // AR-7 — the fold's rows for the marker, handed on as the SAME object until
@@ -279,8 +280,8 @@ export function GodviewMonitor({
   if (runsKey !== runFacts.current.key) runFacts.current = { key: runsKey, runs: nextRuns };
   const runs = runFacts.current.runs;
   const tabs = useMemo(
-    () => profileTabs(profileSets, agents, personas),
-    [profileSets, agents, personas],
+    () => profileTabs(profileSets, rows, personas),
+    [profileSets, rows, personas],
   );
   /** A tab with no sessions under it says so over the stage; with no sessions
    * at all the view's own empty state speaks instead. */

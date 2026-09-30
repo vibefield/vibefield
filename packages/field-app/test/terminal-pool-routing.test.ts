@@ -23,6 +23,7 @@
  */
 
 import { ProductSessionRosterItem } from "@vibefield/contracts";
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
@@ -727,5 +728,121 @@ describe("the roster the UI reads (TP-D4)", () => {
     // fieldd's own honest refusal before its first observation. An empty list
     // here would be a lie about the floor.
     expect(pool.terminalPoolSnapshot().rosterState).toBe("unobserved");
+  });
+});
+
+describe("which shell was born under which Agent Profile (SB-3)", () => {
+  /** fieldd after SB-2: a bound create is answered with the set it applied. */
+  const binding = {
+    request: async (method: string, params?: unknown) => {
+      const answer = await fieldd.request(method, params);
+      const profileSet = (params as { profileSet?: string } | undefined)?.profileSet;
+      return method === "terminal.create" && profileSet !== undefined
+        ? { ...(answer as Record<string, unknown>), profileSet }
+        : answer;
+    },
+  } as unknown as PoolClient;
+
+  it("records a bound create's answer and the roster's word for the rest, as one map that changes only when they do", async () => {
+    pool.openTerminalPool(binding, { sessionIds: [] });
+    await settle();
+    const bound = await pool.createTerminalSession({
+      workloadClass: "interactive",
+      profileSet: "work",
+    });
+    const plain = await pool.createTerminalSession({ workloadClass: "interactive" });
+    expect(bound.profileSet).toBe("work");
+    expect(plain.profileSet).toBeUndefined();
+    expect(pool.terminalSessionProfileSet(bound.sessionId)).toBe("work");
+    expect([...pool.terminalPoolSnapshot().profileSets]).toEqual([[bound.sessionId, "work"]]);
+    const before = pool.terminalPoolSnapshot().profileSets;
+    // The roster names the set of a shell this window did not birth (another
+    // window's, a restart's), and is the record for every shell it lists.
+    rosterRows = [
+      {
+        sessionId: "elsewhere",
+        workloadClass: "interactive",
+        health: "live",
+        profileSet: "personal",
+      },
+      {
+        sessionId: bound.sessionId,
+        workloadClass: "interactive",
+        health: "live",
+        profileSet: "work",
+      },
+    ];
+    await pool.refreshTerminalRoster();
+    expect(pool.terminalSessionProfileSet("elsewhere")).toBe("personal");
+    expect(pool.terminalPoolSnapshot().profileSets).not.toBe(before);
+    const same = pool.terminalPoolSnapshot().profileSets;
+    await pool.refreshTerminalRoster();
+    expect(pool.terminalPoolSnapshot().profileSets).toBe(same);
+    // listed without one: under none; unlisted: what its create answered
+    rosterRows = [{ sessionId: "elsewhere", workloadClass: "interactive", health: "live" }];
+    await pool.refreshTerminalRoster();
+    expect(pool.terminalSessionProfileSet("elsewhere")).toBeUndefined();
+    expect(pool.terminalSessionProfileSet(bound.sessionId)).toBe("work");
+    pool.disposeTerminalPool();
+    expect(pool.terminalPoolSnapshot().profileSets.size).toBe(0);
+  });
+
+  it("hands a refused birth back to the asker and keeps its phase — but the opening birth and an unreachable fieldd fault", async () => {
+    let answer: "answer" | "refuse" | "unreachable" = "answer";
+    const client = {
+      request: (method: string, params?: unknown) => {
+        if (method === "terminal.create" && answer === "refuse") {
+          return Promise.reject(
+            new FielddRpcError(
+              "PRECONDITION_FAILED",
+              "Work could not be bound: its folder is gone",
+              false,
+              { set: "work" },
+              -32009,
+            ),
+          );
+        }
+        if (method === "terminal.create" && answer === "unreachable") {
+          return Promise.reject(new FielddRpcError("UNAVAILABLE", "not connected", true));
+        }
+        return fieldd.request(method, params);
+      },
+    } as unknown as PoolClient;
+    pool.openTerminalPool(client, { sessionIds: [] });
+    await settle();
+    await pool.createTerminalSession({ workloadClass: "interactive" });
+    expect(pool.terminalPoolSnapshot().phase).toBe("open");
+
+    answer = "refuse";
+    await expect(
+      pool.createTerminalSession({ workloadClass: "interactive", profileSet: "work" }),
+    ).rejects.toThrow("Work could not be bound: its folder is gone");
+    expect(pool.terminalPoolSnapshot().fault).toBeNull();
+    expect(pool.terminalPoolSnapshot().phase).toBe("open");
+
+    // the deck's opening birth: nothing else would say why
+    await expect(
+      pool.createTerminalSession({ workloadClass: "interactive" }, undefined, { opening: true }),
+    ).rejects.toThrow("Work could not be bound");
+    expect(pool.terminalPoolSnapshot().fault?.plane).toBe("fieldd");
+
+    pool.disposeTerminalPool();
+    pool.configureTerminalPool({
+      transport: "routed",
+      defaultShell: "/bin/zsh",
+      home: "/Users/test",
+    });
+    answer = "answer";
+    pool.openTerminalPool(client, { sessionIds: [] });
+    await settle();
+    await pool.createTerminalSession({ workloadClass: "interactive" });
+    answer = "unreachable";
+    await expect(pool.createTerminalSession({ workloadClass: "interactive" })).rejects.toThrow(
+      "not connected",
+    );
+    expect(pool.terminalPoolSnapshot().fault).toEqual({
+      plane: "fieldd",
+      message: "not connected",
+    });
   });
 });

@@ -21,10 +21,14 @@ export function personaProfiles(sets: readonly AgentProfileSet[]): ReadonlyMap<s
  *
  * fieldd's word first (`profileSet`, puppeteer's own record of the set the
  * run was born under); then the set its sign-in is listed in; a local agent
- * with neither runs in the agent's own folder, which is This Mac. A bare
- * terminal and a peer's session run under no profile of this device's: under
- * a chosen tab they recede. A sign-in the feed no longer lists (signed out,
- * its sessions still running) is unknown here rather than guessed.
+ * with neither runs in the agent's own folder, which is This Mac. A terminal
+ * runs under the profile its shell was born under (SB-3 — the row's own
+ * `profileSet`, fieldd's record): a Work shell stays under Work. A bare,
+ * unbound terminal and a peer's session run under no profile of this
+ * device's: under a chosen tab they recede, and so does a shell whose profile
+ * has since been deleted (its id names no tab). A sign-in the feed no longer
+ * lists (signed out, its sessions still running) is unknown here rather than
+ * guessed.
  */
 export function agentProfileSet(
   agent: MonitorAgent,
@@ -32,10 +36,32 @@ export function agentProfileSet(
 ): string | undefined {
   if (agent.remote !== undefined) return undefined;
   const facet = agent.agent;
-  if (facet === undefined) return undefined;
+  if (facet === undefined) return agent.profileSet;
   if (facet.profileSet !== undefined) return facet.profileSet;
   if (facet.profileId !== undefined) return personas.get(facet.profileId);
   return NATIVE_PROFILE;
+}
+
+/**
+ * The rows with the profile each runs under on the row itself (SB-3): the
+ * views' `MonitorAgent.profileSet`, which the spawn bloom lights by (SB-D8) and
+ * a terminal's body names. An agent row carries the set the tabs compute
+ * (`agentProfileSet`); a terminal already carries its shell's. A row whose set
+ * is unchanged is handed on as the same object.
+ */
+export function withProfileSets(
+  agents: readonly MonitorAgent[],
+  personas: ReadonlyMap<string, string>,
+): readonly MonitorAgent[] {
+  return agents.map((agent) => {
+    const profileSet = agentProfileSet(agent, personas);
+    if (profileSet === agent.profileSet) return agent;
+    if (profileSet === undefined) {
+      const { profileSet: _dropped, ...rest } = agent;
+      return rest;
+    }
+    return { ...agent, profileSet };
+  });
 }
 
 /** The strip is worth drawing once a profile besides This Mac exists: All

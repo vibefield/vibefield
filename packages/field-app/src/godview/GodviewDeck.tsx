@@ -1623,6 +1623,9 @@ export function GodviewDeck({
       // …and the floor's roster, or a session that became unpaned would never
       // reach the monitor: the panes did not change when the roster did.
       ...floorRoster.map((row) => `${row.sessionId}:${row.workloadClass}:${row.title ?? ""}`),
+      // …and which shells were born under which Agent Profile (SB-3): a roster
+      // read can name a set for a pane the deck did not birth.
+      [...pool.profileSets].map(([id, set]) => `${id}=${set}`).join("\u0000"),
     ].join("\u0001");
     if (key === lastPaneFacts.current) return;
     lastPaneFacts.current = key;
@@ -1644,8 +1647,18 @@ export function GodviewDeck({
       // …and every live PTY the floor holds (GT-6b), pane or no pane.
       floor: floorRoster,
       terminalVisualIds,
+      // …and the Agent Profile each shell was born under (SB-3, fieldd's words)
+      profileSets: pool.profileSets,
     });
-  }, [paneSessionIds, workspace, onPanes, floorRoster, framePaneColors, terminalVisualIds]);
+  }, [
+    paneSessionIds,
+    workspace,
+    onPanes,
+    floorRoster,
+    framePaneColors,
+    terminalVisualIds,
+    pool.profileSets,
+  ]);
 
   /** The pane's face, plus the monitor link (GT-D17).
    *

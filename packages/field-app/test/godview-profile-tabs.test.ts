@@ -7,6 +7,7 @@ import {
   profileTabs,
   recedeOutside,
   showsProfileTabs,
+  withProfileSets,
 } from "../src/godview/monitor/profile-tabs";
 import type { MonitorAgent } from "../src/godview/monitor/types";
 import { managedSummary } from "./managed-session-fixture";
@@ -179,5 +180,56 @@ describe("a chosen tab", () => {
         .map((a) => a.id),
     ).toEqual(["m1"]);
     expect(recedeOutside(rows, undefined, personas)).toBe(rows);
+  });
+});
+
+describe("a terminal born under a profile (SB-3)", () => {
+  const shell = (id: string, profileSet?: string): MonitorAgent =>
+    ({ ...row(id, null), ...(profileSet !== undefined ? { profileSet } : {}) }) as MonitorAgent;
+
+  it("runs under the profile its shell was born under, so a chosen Work tab keeps a Work shell", () => {
+    const rows = [shell("work-shell", "work"), shell("bare"), shell("orphan", "deleted-set")];
+    expect(agentProfileSet(rows[0]!, personas)).toBe("work");
+    expect(agentProfileSet(rows[1]!, personas)).toBeUndefined();
+    expect(
+      recedeOutside(rows, "work", personas).map((agent) => [agent.id, agent.receded === true]),
+    ).toEqual([
+      ["work-shell", false],
+      ["bare", true],
+      ["orphan", true],
+    ]);
+    // A set deleted since recedes under every tab, like an unbound shell, and
+    // lights no tab's dot.
+    for (const tab of ["native", "personal", "work"]) {
+      expect(recedeOutside(rows, tab, personas)[2]?.receded).toBe(true);
+    }
+    const blockedOrphan = { ...shell("x", "deleted-set"), status: "blocked" } as MonitorAgent;
+    expect(profileTabs(SETS, [blockedOrphan], personas).some((tab) => tab.blocked)).toBe(false);
+  });
+
+  it("puts on every row the set the tabs compute, and hands an unchanged row on as itself", () => {
+    const rows = [
+      row("w1", { profileSet: "work" }),
+      row("p1", { profileId: "p-claude" }),
+      row("m1", {}),
+      shell("s1", "work"),
+      shell("t1"),
+      row("gone", { profileId: "signed-out" }),
+    ];
+    const stamped = withProfileSets(rows, personas);
+    expect(stamped.map((agent) => [agent.id, agent.profileSet])).toEqual([
+      ["w1", "work"],
+      ["p1", "personal"],
+      ["m1", "native"],
+      ["s1", "work"],
+      ["t1", undefined],
+      ["gone", undefined],
+    ]);
+    expect(stamped[3]).toBe(rows[3]);
+    expect(stamped[4]).toBe(rows[4]);
+    expect(withProfileSets(stamped, personas).every((agent, i) => agent === stamped[i])).toBe(true);
+    // a row whose set is no longer known drops the one it carried
+    const stale = { ...row("stale", { profileId: "signed-out" }), profileSet: "work" };
+    expect("profileSet" in (withProfileSets([stale], personas)[0] ?? {})).toBe(false);
   });
 });

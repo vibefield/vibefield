@@ -133,6 +133,10 @@ export interface MonitorPaneFacts {
    * live PTY the floor holds, pane or no pane. The monitor keeps the ones no
    * pane is showing, so a session the deck displaced is still reachable. */
   floor?: readonly MonitorFloorRecord[];
+  /** SB-3 — which shells were born under which Agent Profile: the pool's
+   * record in fieldd's words (its create answers for births here, its roster
+   * for the rest). The same map until it changes. */
+  profileSets?: ReadonlyMap<string, string>;
 }
 
 export interface MonitorAgentsResult {
@@ -493,6 +497,7 @@ export function useMonitorAgents({
       usage: usage.histories,
       sessions,
       attachments,
+      ...(panes.profileSets !== undefined ? { profileSets: panes.profileSets } : {}),
       visualIds: panes.terminalVisualIds,
       previousVisualIds: visualIdsRef.current,
       nowMs,
@@ -535,6 +540,7 @@ export function useMonitorAgents({
     attachments,
     panes.activeSessionId,
     panes.terminalVisualIds,
+    panes.profileSets,
     usageStep,
     usageSeed,
   ]);

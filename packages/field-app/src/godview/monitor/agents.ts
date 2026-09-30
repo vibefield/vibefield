@@ -36,6 +36,8 @@ export interface MonitorTerminalRecord {
   session: SessionSummary;
   cwd?: string;
   spawnHint?: { x: number; y: number };
+  /** SB-3 — the Agent Profile its shell was born under, in fieldd's words. */
+  profileSet?: string;
 }
 
 /**
@@ -61,6 +63,8 @@ export interface MonitorFloorRecord {
   workloadClass: "agent" | "interactive";
   /** The floor's title for the session, when it has one. */
   title?: string;
+  /** SB-3 — the Agent Profile its shell was born under, in fieldd's words. */
+  profileSet?: string;
 }
 
 /** A peer's session, and where it landed here if it has (GT-D17). */
@@ -87,6 +91,10 @@ export interface AssembleMonitorAgentsInput {
   /** The mesh's half of the field. Empty is the honest answer with no floor
    * serving — there are no placeholder peers and no invented hosts. */
   remotes?: readonly MonitorRemoteRecord[];
+  /** SB-3 — which shells were born under which Agent Profile (session id →
+   * set id): the pool's record, fieldd's words — its create answers and its
+   * roster. A terminal row carries its shell's; a shell under none carries none. */
+  profileSets?: ReadonlyMap<string, string>;
   /** The live tokens' tint and ramp, passed IN rather than read here so this
    * whole module stays a pure function — the reference's property, kept, and
    * the reason its tests need no renderer. */
@@ -225,7 +233,7 @@ export function monitorAgentFromTerminal(
   record: MonitorTerminalRecord,
   colours: MonitorColours,
 ): MonitorAgent {
-  const { session, cwd, spawnHint } = record;
+  const { session, cwd, spawnHint, profileSet } = record;
   const path = cwd ?? session.cwd ?? undefined;
   return {
     id: session.id,
@@ -238,6 +246,7 @@ export function monitorAgentFromTerminal(
     active: false,
     ...(path ? { cwd: path } : {}),
     ...(spawnHint ? { spawnHint } : {}),
+    ...(profileSet !== undefined ? { profileSet } : {}),
   };
 }
 
@@ -275,6 +284,7 @@ export function monitorAgentFromFloor(
       record.workloadClass === "agent" ? "agent PTY · in no pane" : "on the floor · in no pane",
     color: colours.neutral,
     active: false,
+    ...(record.profileSet !== undefined ? { profileSet: record.profileSet } : {}),
   };
 }
 
@@ -358,11 +368,21 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
     if (terminal?.runtimeSessionId !== undefined) claimed.add(terminal.runtimeSessionId);
     if (terminal?.replaced !== undefined) claimed.add(terminal.replaced);
   }
+  // SB-3: a terminal row carries the Agent Profile its shell was born under,
+  // from the pool's record (fieldd's words), never inferred here.
+  const bornUnder = (sessionId: string): { profileSet?: string } => {
+    const profileSet = input.profileSets?.get(sessionId);
+    return profileSet === undefined ? {} : { profileSet };
+  };
   const terminals = input.terminals
     .filter((terminal) => !claimed.has(terminal.session.id))
     .map((terminal) =>
       monitorAgentFromTerminal(
-        { ...terminal, session: input.sessions?.get(terminal.session.id) ?? terminal.session },
+        {
+          ...terminal,
+          session: input.sessions?.get(terminal.session.id) ?? terminal.session,
+          ...bornUnder(terminal.session.id),
+        },
         input.colours,
       ),
     );
@@ -377,7 +397,7 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
   }
   const floor = (input.floor ?? [])
     .filter((row) => !paned.has(row.sessionId) && !claimed.has(row.sessionId))
-    .map((row) => monitorAgentFromFloor(row, input.colours));
+    .map((row) => monitorAgentFromFloor({ ...row, ...bornUnder(row.sessionId) }, input.colours));
   const remotes = (input.remotes ?? []).map((record) =>
     monitorAgentFromRemote(record, input.colours),
   );
