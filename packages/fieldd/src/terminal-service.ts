@@ -57,6 +57,7 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRename, type Logger } from "@vibefield/logging";
 import { RpcCallError, terminalCreateTarget } from "./native-link";
+import { TerminalBindingStore, type TerminalProfileBinding } from "./terminal-bindings";
 import {
   type CellGrantKey,
   type GrantPrincipal,
@@ -179,20 +180,13 @@ export interface TerminalServiceOptions {
    * names a set, and before the floor is touched. Absent, such a create is
    * UNAVAILABLE — never an unbound shell in its place. */
   profileBinding?: (profileSet: string) => Promise<TerminalProfileBinding>;
+  /** SB-2 — fieldd's record of which shells were born bound (session → set):
+   * the daemon's is on disk under the user root, so it outlives a restart;
+   * absent = one kept in memory. */
+  bindings?: TerminalBindingStore;
 }
 
-/** SB-2 (AR-7g) — one Agent Profile's binding, as the agent runtime answers it
- * for a birth. The variables are OPAQUE (AR-L1): VibeField never branches on,
- * names or records one — they pass the fence and reach the shell, nothing else.
- * The native set is `bound` with none: its agents run in their own folders. */
-export type TerminalProfileBinding =
-  | { state: "bound"; label: string; variables: Record<string, string> }
-  /** no set by that id (never made, or deleted since) */
-  | { state: "unknown" }
-  /** the agent runtime could not be asked */
-  | { state: "unavailable"; reason: string }
-  /** the set exists and its binding could not be made */
-  | { state: "failed"; label: string; reason: string };
+export type { TerminalProfileBinding };
 
 /** AR-7d — what "a shell" means to `create`: the interactive shells a person
  * types commands into, by executable basename. The integration is for them
@@ -361,9 +355,14 @@ export class TerminalService {
    * must know a pane's shell before that (the agent gateway places a launcher
    * typed in that tick) learns it here. */
   private readonly birthListeners = new Set<(born: TerminalBirth) => void>();
+  /** SB-2 — which shells were born under an Agent Profile (session → set):
+   * recorded at the birth, reported by the create and the roster, ended by
+   * the inventory that no longer lists the session. */
+  private readonly bindings: TerminalBindingStore;
 
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
+    this.bindings = opts.bindings ?? new TerminalBindingStore({ logger: this.logger });
     // The link has usually paired BEFORE this service exists (the daemon builds
     // it after `native.connect()`), so the cells in hand at construction are the
     // baseline. Without seeding them, the first replacement after every boot
@@ -462,6 +461,8 @@ export class TerminalService {
           this.terminals = parsed.data.terminals;
           // a placed session follows its tag from here on (see `bornIn`)
           for (const terminal of this.terminals) this.bornIn.delete(terminal.sessionId);
+          // SB-2 — a bound shell's record ends with its session
+          this.bindings.observe(this.terminals.map((terminal) => terminal.sessionId));
           // Kept, not discarded (GT-5b): these two fields are what let a
           // consumer tell an inventory apart from a LATER floor's, and their
           // presence is also the flag that `list`/`get` are answerable at all.
@@ -576,13 +577,15 @@ export class TerminalService {
    * on — id + the authoritative birth summary + the routed ticket spread. The
    * legacy nested `ticket` retired at TP-S3e; a legacy floor (no cell tag) has
    * no doors to mint against and is UNAVAILABLE like every other keyless cell
-   * — the session exists, and the reader's face says the transport does not. */
+   * — the session exists, and the reader's face says the transport does not.
+   * SB-2 — a bound shell's answer names the set it was born under. */
   createOpenResult(
     principal: GrantPrincipal,
     created: {
       sessionId: string;
       session: TerminalRuntimeSession;
       cellBootId?: string | undefined;
+      profileSet?: string | undefined;
     },
   ): TerminalCreateOpenResponse {
     if (created.cellBootId === undefined)
@@ -596,6 +599,7 @@ export class TerminalService {
     return {
       sessionId: created.sessionId,
       session: created.session,
+      ...(created.profileSet === undefined ? {} : { profileSet: created.profileSet }),
       ...this.ticketFor(cell, principal, created.sessionId),
     };
   }
@@ -627,13 +631,21 @@ export class TerminalService {
   }
 
   /** TP-D4 — the UI's roster projection (no placement). Refuses before the
-   * first observation exactly like `list` (GT-5b's honesty). */
+   * first observation exactly like `list` (GT-5b's honesty). SB-2 — each
+   * bound shell's row names the set it was born under. */
   roster(): TerminalRosterResult {
     this.requireObserved();
     return {
-      items: projectRoster(this.terminals),
+      items: projectRoster(this.terminals, (sessionId) => this.bindings.profileSetOf(sessionId)),
       ...(this.lastObservation === undefined ? {} : { observation: this.lastObservation }),
     };
+  }
+
+  /** SB-2 — the Agent Profile a shell this fieldd birthed was born under, from
+   * its record (so a restart still knows); undefined for an unbound shell and
+   * for any session fieldd did not birth. */
+  profileSetOf(sessionId: string): string | undefined {
+    return this.bindings.profileSetOf(sessionId);
   }
 
   /** The one routed-ticket assembly (TP-S3e): grants + doors or an honest
@@ -850,6 +862,9 @@ export class TerminalService {
       // the wire either (exactOptionalPropertyTypes agrees)
       ...(scrollbackBytes === undefined ? {} : { scrollbackBytes }),
     });
+    // SB-2 — the record, the moment the floor answered: the shell exists and
+    // holds its binding whatever happens to the answer after this
+    if (profileSet !== undefined) this.bindings.bind(born.sessionId, profileSet);
     return {
       ...born,
       integrated: integration !== undefined,
@@ -1727,6 +1742,9 @@ export class TerminalService {
       // the birth cell outlives the exit: a listener below may close the husk (see `bornIn`)
       const { sessionId } = event;
       setTimeout(() => this.bornIn.delete(sessionId), BORN_IN_EXIT_GRACE_MS).unref?.();
+      // SB-2 — a bound birth that ended before any inventory listed it waits
+      // no longer: the next inventory without it ends its record
+      this.bindings.exited(sessionId);
       for (const listener of [...this.exitListeners]) {
         try {
           listener(event);

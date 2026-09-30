@@ -19,6 +19,7 @@ import {
   ENV_PREFIXES,
   grantSigningInput,
   isPipeEndpoint,
+  LAYOUT,
   METHODS,
   type Scope,
   SHELL_PROVIDER_METHODS,
@@ -28,6 +29,7 @@ import {
   SOCKETS,
   TERMINAL_CONFIG_MAX_BYTES,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
+  TerminalBindingsFile,
   TerminalConfigConflict,
   TerminalConfigDocument,
   TerminalConfigExportResult,
@@ -53,6 +55,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, NativeLink, RpcCallError } from "../src/index";
 import { terminalCreateTarget } from "../src/native-link";
+import { TerminalBindingStore } from "../src/terminal-bindings";
 import {
   blockingConfigDiagnostics,
   projectConfigSnapshot,
@@ -4028,5 +4031,128 @@ describe("SB-2 — a shell born under its profile (AR-7g, the fake floor)", () =
       integrated: false,
       bound: true,
     });
+  });
+});
+
+/** A service over the fake floor whose link serves an inventory the row
+ * publishes — the first reading at subscribe, each later one as the floor's
+ * news. */
+function inventoriedService(
+  floor: { endpoints: TerminalEndpoints },
+  rows: Array<Record<string, unknown>>,
+  opts: Omit<TerminalServiceOptions, "link"> = {},
+): { service: TerminalService; publish: (rows: Array<Record<string, unknown>>) => void } {
+  let current = observed(rows);
+  let emit: ((payload: unknown, kind: "snapshot" | "delta") => void) | undefined;
+  const service = new TerminalService({
+    link: {
+      subscribe: async (_method, _params, onEvent) => {
+        emit = onEvent;
+        return { snapshot: current };
+      },
+      terminalEndpoints: floor.endpoints,
+      on: () => undefined,
+    },
+    ...opts,
+  });
+  cleanup.push(() => service.dispose());
+  return {
+    service,
+    publish: (next) => {
+      current = observed(next);
+      emit?.(current, "delta");
+    },
+  };
+}
+
+describe("SB-2 — fieldd's record of a bound shell: the answer, the roster, a restart (the fake floor)", () => {
+  it("the create's answer and the roster say the set; a new service over the same record (fieldd restarted) still says it while the floor lists the session; the record ends when the floor stops listing it", async () => {
+    const floor = await startFakeFloor();
+    const { cat } = programs();
+    const file = join(makeDataDir(), ...LAYOUT.TERMINAL_BINDINGS_FILE);
+    const first = inventoriedService(floor, [], {
+      profileBinding: bindingSeam({ work: WORK }).profileBinding,
+      bindings: new TerminalBindingStore({ file }),
+    });
+    await first.service.ensureStarted();
+    const born = await first.service.create({ shell: cat, profileSet: "work" });
+    expect(born.profileSet).toBe("work");
+    expect(first.service.profileSetOf(born.sessionId)).toBe("work");
+    first.publish([
+      { sessionId: born.sessionId, pid: 42 },
+      { sessionId: "not-ours", pid: 43 },
+    ]);
+    const roster = TerminalRosterResult.parse(first.service.roster());
+    expect(roster.items.map((item) => [item.sessionId, item.profileSet])).toEqual([
+      [born.sessionId, "work"],
+      ["not-ours", undefined],
+    ]);
+
+    // fieldd restarts; the floor — and the shell — did not
+    const second = inventoriedService(floor, [{ sessionId: born.sessionId, pid: 42 }], {
+      bindings: new TerminalBindingStore({ file }),
+    });
+    await second.service.ensureStarted();
+    expect(second.service.roster().items[0]?.profileSet).toBe("work");
+    expect(second.service.profileSetOf(born.sessionId)).toBe("work");
+    // the shell ends: the floor stops listing it, and the record lets it go
+    second.publish([]);
+    expect(second.service.profileSetOf(born.sessionId)).toBeUndefined();
+    expect(TerminalBindingsFile.parse(JSON.parse(readFileSync(file, "utf8"))).bindings).toEqual([]);
+  });
+
+  it("a bound shell that ends before any inventory lists it: the floor's exit ends the wait, and the next inventory ends its record", async () => {
+    const floor = await startFakeFloor();
+    const { cat } = programs();
+    const { service, publish } = inventoriedService(floor, [], {
+      profileBinding: bindingSeam({ work: WORK }).profileBinding,
+    });
+    await service.ensureStarted();
+    const born = await service.create({ shell: cat, profileSet: "work" });
+    // an inventory that predates the birth: the birth is inside its window
+    publish([]);
+    expect(service.profileSetOf(born.sessionId)).toBe("work");
+    const exited = new Promise<void>((resolve) => {
+      service.onSessionExited(() => resolve());
+    });
+    floor.exit(born.sessionId);
+    await exited;
+    publish([]);
+    expect(service.profileSetOf(born.sessionId)).toBeUndefined();
+  });
+
+  it("through the daemon: the create's answer names the set, the roster says it once the floor lists the session, and the record on disk holds the session and the set — never a variable", async () => {
+    const { cat } = programs();
+    const { dataDir, mock, rpc, rpcWith } = await daemonOverFakeFloor(
+      undefined,
+      bindingSeam({ work: WORK }).profileBinding,
+    );
+    const spawner = await rpcWith(["terminal.attach", "agent.spawn"]);
+    const bound = TerminalCreateOpenResult.parse(
+      await spawner.call("terminal.create", { shell: cat, profileSet: "work" }),
+    );
+    expect(bound.profileSet).toBe("work");
+    const unbound = TerminalCreateOpenResult.parse(
+      await rpc.call("terminal.create", { shell: cat }),
+    );
+    expect(unbound).not.toHaveProperty("profileSet");
+    mock.pushObserved(observed([{ sessionId: bound.sessionId, pid: 42 }]));
+    // the daemon applies the floor's news on its own time: ask until it has
+    let row: TerminalRosterResult["items"][number] | undefined;
+    for (let tries = 0; row === undefined && tries < 200; tries += 1) {
+      const roster = TerminalRosterResult.parse(await rpc.call("terminal.roster", {}));
+      row = roster.items.find((item) => item.sessionId === bound.sessionId);
+      if (row === undefined) await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(row?.profileSet).toBe("work");
+    const text = readFileSync(join(dataDir, ...LAYOUT.TERMINAL_BINDINGS_FILE), "utf8");
+    expect(
+      TerminalBindingsFile.parse(JSON.parse(text)).bindings.map((binding) => [
+        binding.sessionId,
+        binding.profileSet,
+      ]),
+    ).toEqual([[bound.sessionId, "work"]]);
+    for (const secret of [...Object.keys(BINDING), ...Object.values(BINDING)])
+      expect(text).not.toContain(secret);
   });
 });

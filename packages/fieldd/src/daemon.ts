@@ -194,7 +194,7 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { createSurfaceService } from "./surface-service";
-import { runtimeProfileBinding } from "./terminal-bindings";
+import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
 import { serveAllowGlob, TERMINAL_SERVE_ID, TerminalServeDriver } from "./terminal-serve";
 import { type TerminalProfileBinding, TerminalService } from "./terminal-service";
@@ -1190,6 +1190,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // sign-ins and puppeteer's binding over them, from the agent runtime
       // this daemon composed (the test seam, else the runtime's own answer)
       profileBinding: config.terminalProfileBinding ?? runtimeProfileBinding(agents.runtime),
+      // SB-2 — which shells were born bound, on disk under this user's root:
+      // the floor outlives fieldd, and so must the record of what it holds
+      bindings: new TerminalBindingStore({
+        file: join(config.dataDir, ...LAYOUT.TERMINAL_BINDINGS_FILE),
+        logger: logger.child({ component: "terminal.bindings" }),
+      }),
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
