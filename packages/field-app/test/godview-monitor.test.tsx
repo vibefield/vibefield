@@ -32,6 +32,8 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   type AccountUsagePort,
+  type AgentMonitorProps,
+  type AgentMonitorView,
   DEFAULT_MONITOR_VIEW_ID,
   type HistoryPort,
   monitorParameterDefaults,
@@ -42,7 +44,7 @@ import {
   type SwarmPhysicsDriver,
 } from "@vibecook/puppeteer-views/physics";
 import type { AgentPersona, AgentProfileSet } from "@vibefield/contracts";
-import { act } from "react";
+import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
@@ -52,6 +54,7 @@ import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
 import { monitorHoldsKeys, takeLauncherKeys } from "../src/godview/monitor/launcher-keys";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
+import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
 import { managedSummary } from "./managed-session-fixture";
@@ -1177,5 +1180,183 @@ describe("the profile tabs (AR-S5)", () => {
     expect(chosenTab(host)).toBe("all");
     expect(host.querySelector(".vf-monitor-profile-empty")).toBeNull();
     expect(listRows(host).some((row) => row.receded)).toBe(false);
+  });
+});
+
+// ---- SB-3 — the spawn menu, and the create it asks for ---------------------------
+//
+// The bloom's own surface (P1b) is not in this pin, so these rows read what the
+// stage hands a view through a PROBE — a view that records its props — and
+// drive `createAt(position, target)` exactly as the bloom and the list's menu
+// will: the menu from the tabs' feed, the create under the chosen set, and
+// every outcome said, a refusal in fieldd's own words.
+
+let probed: AgentMonitorProps | null = null;
+function Probe(props: AgentMonitorProps): ReactElement {
+  probed = props;
+  return <div className="probe-view" />;
+}
+const PROBE_VIEW: AgentMonitorView = {
+  ...monitorViewFor("list"),
+  id: "probe",
+  Component: Probe,
+};
+
+async function mountProbe(
+  door: MonitorDoor,
+  panes: MonitorPaneFacts = PANES,
+): Promise<HTMLElement> {
+  probed = null;
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await renderProbe(door, panes);
+  return container;
+}
+
+async function renderProbe(door: MonitorDoor, panes: MonitorPaneFacts): Promise<void> {
+  await act(async () => {
+    root?.render(
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor
+          view={PROBE_VIEW}
+          parameters={monitorParameterDefaults(PROBE_VIEW.parameterGroups)}
+          door={door}
+          panes={panes}
+        />
+      </GodviewAgentsProvider>,
+    );
+  });
+}
+
+/** A feed that has not answered yet, and answers when told. */
+function slowTabDoor(): TabDoor {
+  const door = fakeDoor(TAB_ROWS);
+  let listener: ((next: readonly AgentProfileSet[]) => void) | null = null;
+  return Object.assign(door, {
+    profiles: {
+      subscribe: (next: (sets: readonly AgentProfileSet[]) => void) => {
+        listener = next;
+        return () => {
+          listener = null;
+        };
+      },
+    },
+    pushSets: (next: readonly AgentProfileSet[]) => listener?.(next),
+  });
+}
+
+const createAt = async (
+  position?: { x: number; y: number },
+  target?: { deviceId?: string; profileSet?: string },
+): Promise<void> => {
+  await act(async () => {
+    await probed?.actions.createAt(position, target);
+  });
+};
+
+describe("the spawn menu and the create it asks for (SB-3)", () => {
+  it("offers no menu without a profiles feed — a hold creates at once, as before", async () => {
+    await mountProbe(fakeDoor());
+    expect(probed).not.toBeNull();
+    expect(probed?.spawnMenu).toBeUndefined();
+  });
+
+  it("offers this desktop, reading until the feed answers, then its profiles — the same menu object until it changes", async () => {
+    const door = slowTabDoor();
+    await mountProbe(door);
+    expect(probed?.spawnMenu?.devices).toEqual([
+      { id: HERE_DEVICE_ID, label: "This desktop", self: true, state: "reading" },
+    ]);
+    await act(async () => door.pushSets(TAB_SETS));
+    const menu = probed?.spawnMenu;
+    expect(menu?.devices[0]?.state).toBe("ready");
+    expect(menu?.devices[0]?.profiles?.map((profile) => profile.id)).toEqual([
+      "native",
+      "work",
+      "empty",
+    ]);
+    // Codex is blocked under Work (the tabs' orange dot), Claude signed in there
+    expect(menu?.devices[0]?.profiles?.[1]).toMatchObject({
+      label: "Work",
+      glyph: "briefcase",
+      blocked: true,
+      signedIn: ["Claude Code"],
+    });
+    await act(async () => door.pushSets([...TAB_SETS]));
+    expect(probed?.spawnMenu).toBe(menu);
+  });
+
+  it("opens a terminal under the chosen profile, says so, and keeps the release point as the spawn hint", async () => {
+    const door = tabDoor();
+    door.createTerminal.mockResolvedValue({
+      state: "mounted",
+      sessionId: "born-1",
+      profileSet: "work",
+    });
+    const host = await mountProbe(door);
+    await createAt({ x: 120.5, y: 80.25 }, { deviceId: HERE_DEVICE_ID, profileSet: "work" });
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({ profileSet: "work" });
+    expect(ackText(host)).toBe("terminal opened under Work in the active pane");
+    // the deck republishes its panes with the new shell in the active one
+    await renderProbe(door, {
+      sessionIds: ["born-1"],
+      activeSessionId: "born-1",
+      sessions: [pane("born-1", "/project/born")],
+      profileSets: new Map([["born-1", "work"]]),
+    });
+    const born = probed?.agents.find((agent) => agent.id === "born-1");
+    // the views match the body drawn at the release point by this, so it is
+    // the position as given — never rounded
+    expect(born?.spawnHint).toEqual({ x: 120.5, y: 80.25 });
+    expect(born?.profileSet).toBe("work");
+  });
+
+  it("carries fieldd's own words when a profile birth is refused", async () => {
+    const door = tabDoor();
+    door.createTerminal.mockResolvedValue({
+      state: "failed",
+      reason: "that profile no longer exists",
+    });
+    const host = await mountProbe(door);
+    await createAt({ x: 10, y: 10 }, { profileSet: "work" });
+    expect(ackText(host)).toBe(
+      "terminal could not be opened under Work — that profile no longer exists",
+    );
+  });
+
+  it("keeps the shell an older daemon births unbound, and says it is not under the profile", async () => {
+    const door = tabDoor();
+    door.createTerminal.mockResolvedValue({ state: "mounted", sessionId: "born-1" });
+    const host = await mountProbe(door);
+    await createAt({ x: 10, y: 10 }, { profileSet: "work" });
+    expect(ackText(host)).toBe(
+      "terminal opened, but not under Work — this VibeField daemon cannot open terminals under a profile yet",
+    );
+  });
+
+  it("says the plain sentence on a desktop with one profile, which is no choice", async () => {
+    const door = tabDoor([NATIVE_SET]);
+    door.createTerminal.mockResolvedValue({
+      state: "mounted",
+      sessionId: "born-1",
+      profileSet: "native",
+    });
+    const host = await mountProbe(door);
+    await createAt({ x: 10, y: 10 }, { deviceId: HERE_DEVICE_ID, profileSet: "native" });
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({ profileSet: "native" });
+    expect(ackText(host)).toBe("terminal opened in the active pane");
+  });
+
+  it("asks no other desktop for a terminal, and a create with no target is unbound", async () => {
+    const door = tabDoor();
+    const host = await mountProbe(door);
+    await createAt({ x: 10, y: 10 }, { deviceId: "mini", profileSet: "work" });
+    expect(door.createTerminal).not.toHaveBeenCalled();
+    expect(ackText(host)).toBe("that desktop cannot take a terminal from here yet");
+    // the hub while this desktop's profiles are still being read, a host with no menu
+    await createAt({ x: 10, y: 10 });
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith();
+    expect(ackText(host)).toBe("terminal opened in the active pane");
   });
 });

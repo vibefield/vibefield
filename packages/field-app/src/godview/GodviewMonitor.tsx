@@ -41,7 +41,8 @@ import {
   withProfileSets,
 } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
-import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
+import { spawnMenuOf } from "./monitor/spawn-menu";
+import type { AgentMonitorView, MonitorAgent, MonitorSpawnMenu } from "./monitor/types";
 import {
   type MonitorPaneFacts,
   type MonitorSourceCounts,
@@ -207,16 +208,25 @@ export function GodviewMonitor({
   // AR-S5 — THE PROFILE TABS (the agents-settings record's T3). The feed is
   // the one Settings reads, held only while this stage is (PF6). A chosen tab
   // keeps its profile's sessions and recedes every other one, the counters
-  // count what it shows. Terminal creation is independent of the chosen tab.
+  // count what it shows. Terminal creation is independent of the chosen tab:
+  // a new terminal's profile is the spawn bloom's to choose (SB-3), never the
+  // tab's.
   const [profileSets, setProfileSets] = useState<readonly AgentProfileSet[]>([]);
+  /** Whether the feed has answered at all: until it has, the spawn menu's
+   * desktop is `reading` — an empty list is an answer, and not the same one. */
+  const [profileSetsRead, setProfileSetsRead] = useState(false);
   const [profileTab, setProfileTab] = useState<string | null>(null);
   const profilesPort = door?.profiles;
   useEffect(() => {
+    setProfileSetsRead(false);
     if (profilesPort === undefined) {
       setProfileSets([]);
       return;
     }
-    return profilesPort.subscribe(setProfileSets);
+    return profilesPort.subscribe((sets) => {
+      setProfileSets(sets);
+      setProfileSetsRead(true);
+    });
   }, [profilesPort]);
   const showTabs = showsProfileTabs(profileSets);
   const chosen = useMemo(() => chosenProfile(profileSets, profileTab), [profileSets, profileTab]);
@@ -225,6 +235,7 @@ export function GodviewMonitor({
     palette,
     door,
     ...(panes ? { panes } : {}),
+    profiles: profileSets,
   });
   const chromeRef = useRef<HTMLDivElement>(null);
   const usagePort = door?.usage;
@@ -283,6 +294,23 @@ export function GodviewMonitor({
     () => profileTabs(profileSets, rows, personas),
     [profileSets, rows, personas],
   );
+  /** SB-3 — what a new terminal can be born under, for the spawn bloom (and
+   * the list's menu): this desktop and its Agent Profiles (SB-D9). A host with
+   * no feed offers no menu, and a hold creates at once, as before. Handed on as
+   * the SAME object until what it says changes. */
+  const nextSpawnMenu =
+    profilesPort === undefined
+      ? undefined
+      : spawnMenuOf(profileSetsRead ? profileSets : null, tabs);
+  const spawnMenuKey = nextSpawnMenu === undefined ? "" : JSON.stringify(nextSpawnMenu);
+  const spawnMenuRef = useRef<{ key: string; menu: MonitorSpawnMenu | undefined }>({
+    key: "",
+    menu: undefined,
+  });
+  if (spawnMenuRef.current.key !== spawnMenuKey) {
+    spawnMenuRef.current = { key: spawnMenuKey, menu: nextSpawnMenu };
+  }
+  const spawnMenu = spawnMenuRef.current.menu;
   /** A tab with no sessions under it says so over the stage; with no sessions
    * at all the view's own empty state speaks instead. */
   const emptyUnder =
@@ -555,6 +583,7 @@ export function GodviewMonitor({
             parameters={parameters}
             actions={actions}
             palette={palette}
+            {...(spawnMenu !== undefined ? { spawnMenu } : {})}
           />
         </SwarmPhysicsProvider>
         {emptyUnder !== undefined ? (

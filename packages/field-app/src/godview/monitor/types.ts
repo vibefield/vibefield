@@ -24,6 +24,8 @@ export type {
   MonitorActions,
   MonitorRemoteFacet,
   MonitorSession,
+  MonitorSpawnMenu,
+  MonitorSpawnTarget,
   MonitorTheme,
   PaneAttachment,
 } from "@vibecook/puppeteer-views";

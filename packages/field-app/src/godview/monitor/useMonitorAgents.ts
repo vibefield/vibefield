@@ -14,6 +14,7 @@ import {
   type UsageLedger,
   type UsageLedgerKey,
 } from "@vibecook/puppeteer-views";
+import type { AgentProfileSet } from "@vibefield/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { blockerTool, projectKey, projectLabel } from "./agent-status";
 import {
@@ -35,7 +36,8 @@ import {
 } from "./project-ledger";
 import { type MonitorDoor, remoteRowId } from "./remote-door";
 import { useRemoteSessionField } from "./remote-session-field";
-import type { MonitorActions, MonitorAgent } from "./types";
+import { targetsHere } from "./spawn-menu";
+import type { MonitorActions, MonitorAgent, MonitorSpawnTarget } from "./types";
 import { createUsageHistoryCache } from "./usage-history-cache";
 
 /**
@@ -113,6 +115,10 @@ export interface UseMonitorAgentsOptions {
   /** The sessions the deck's panes are showing, and the one the user is in.
    * Facts, published by the deck; the monitor reads them and drives nothing. */
   panes?: MonitorPaneFacts;
+  /** SB-3 — the Agent Profiles as the stage's feed last had them: what the
+   * acknowledgements call a birth's profile ("opened under Work"). Empty while
+   * there is no feed. */
+  profiles?: readonly AgentProfileSet[];
 }
 
 export interface MonitorPaneFacts {
@@ -246,10 +252,13 @@ function rowsKey(rows: readonly AgentSessionSummary[]): string {
     .join("\u0002");
 }
 
+const NO_PROFILES: readonly AgentProfileSet[] = [];
+
 export function useMonitorAgents({
   palette,
   door = null,
   panes = NO_PANES,
+  profiles = NO_PROFILES,
 }: UseMonitorAgentsOptions): MonitorAgentsResult {
   /** Which row the user last pointed at — a preview highlight for a row no
    * pane is showing yet. Cleared when the row lands in a pane. */
@@ -717,30 +726,60 @@ export function useMonitorAgents({
     [attachRemote, mountLocal],
   );
 
+  /**
+   * A new terminal, in the active pane (SB-3): under the Agent Profile the
+   * spawn bloom or the list's menu chose, else unbound — a hold with no menu
+   * creates exactly as before it. The views match the body they drew at the
+   * release point to the row by `spawnHint`, so the position is kept as given.
+   * Every outcome is said, a refusal in fieldd's own words; a shell an older
+   * daemon could not bind is kept, and said to be unbound.
+   */
   const createAt = useCallback(
-    async (position?: { x: number; y: number }): Promise<void> => {
+    async (position?: { x: number; y: number }, target?: MonitorSpawnTarget): Promise<void> => {
       if (door === null) {
         announce("no terminal can be opened yet — the deck has no connection");
         return;
       }
+      // SB-D9: this desktop alone takes a terminal from here, until SB-6.
+      if (!targetsHere(target)) {
+        announce("that desktop cannot take a terminal from here yet");
+        return;
+      }
+      const profileSet = target?.profileSet;
+      const label =
+        profileSet === undefined ? undefined : profiles.find((set) => set.id === profileSet)?.label;
+      const under = label === undefined ? "" : ` under ${label}`;
       try {
-        const outcome = await door.createTerminal();
+        const outcome = await (profileSet === undefined
+          ? door.createTerminal()
+          : door.createTerminal({ profileSet }));
         if (outcome.state === "no-pane") {
           announce("no pane to open a terminal in — open one in the deck first");
         } else if (outcome.state === "failed") {
-          announce(`terminal could not be opened — ${outcome.reason}`);
+          announce(`terminal could not be opened${under} — ${outcome.reason}`);
         } else {
           if (position)
             setSpawnHints((current) => new Map(current).set(outcome.sessionId, position));
-          announce("terminal opened in the active pane");
+          if (profileSet !== undefined && outcome.profileSet === undefined) {
+            // asked with a profile, answered without one: a daemon older than
+            // the binding (SB-2) births unbound — the shell is kept
+            announce(
+              `terminal opened, but not under ${label ?? "that profile"} — this VibeField daemon cannot open terminals under a profile yet`,
+            );
+          } else if (outcome.profileSet !== undefined && profiles.length > 1) {
+            announce(`terminal opened${under} in the active pane`);
+          } else {
+            // one profile is no choice, and the plain sentence says it all
+            announce("terminal opened in the active pane");
+          }
         }
       } catch (cause) {
         announce(
-          `terminal could not be opened — ${cause instanceof Error ? cause.message : String(cause)}`,
+          `terminal could not be opened${under} — ${cause instanceof Error ? cause.message : String(cause)}`,
         );
       }
     },
-    [announce, door],
+    [announce, door, profiles],
   );
 
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
