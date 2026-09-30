@@ -576,6 +576,8 @@ afterEach(() => {
   document.documentElement.style.removeProperty("--tint-c");
   document.documentElement.classList.remove("godview-test-dark");
   vi.restoreAllMocks();
+  // a row that records the palette's observers stubs the class; never leak it
+  vi.unstubAllGlobals();
 });
 
 describe("the deck's pane frames", () => {
@@ -592,6 +594,29 @@ describe("the deck's pane frames", () => {
   });
 
   it("shares each pane's colour with Swarm across duplicate sessions, replacement and pane closure", async () => {
+    // The palette re-reads the theme through a MutationObserver on <html>.
+    // happy-dom (20.11) hands each observed node its report callback through a
+    // WeakRef nothing else holds, so a collection mid-test can silence it (this
+    // row went red 3 in 4 alone on 2026-09-30, and green 4 in 4 with a larger
+    // young generation). The observers stay real — the frames follow the panes
+    // through theirs — and the ones watching <html> are also RECORDED, so the
+    // theme change below can be delivered to them as a live observer would.
+    const Real = globalThis.MutationObserver;
+    const watchingRoot: Array<{ observer: MutationObserver; callback: MutationCallback }> = [];
+    class RecordingObserver extends Real {
+      readonly #callback: MutationCallback;
+      constructor(callback: MutationCallback) {
+        super(callback);
+        this.#callback = callback;
+      }
+      override observe(target: Node, options?: MutationObserverInit): void {
+        super.observe(target, options);
+        if (target === document.documentElement) {
+          watchingRoot.push({ observer: this, callback: this.#callback });
+        }
+      }
+    }
+    vi.stubGlobal("MutationObserver", RecordingObserver);
     workspace.panes = [
       { id: "pane-1", session: stubSession("pty-1") },
       { id: "pane-2", session: stubSession("pty-2") },
@@ -643,6 +668,10 @@ describe("the deck's pane frames", () => {
     });
     await vi.waitFor(
       async () => {
+        // the class change, as the palette's observer would have heard it
+        await act(async () => {
+          for (const { observer, callback } of watchingRoot) callback([], observer);
+        });
         await settle();
         // Wait for the observer-driven palette publication before reading pane styles.
         expect(host.querySelector("output")?.getAttribute("data-palette-lightness")).toBe("0.74");
