@@ -165,6 +165,24 @@ interface PendingBirth {
   refusal?: string;
 }
 
+/** SB-3 — how long a BOUND relaunch waits before asking again, when fieldd
+ * refused it for now: 250 ms doubling, ~7.75 s of waiting, about 10 s with the
+ * asks. Then the drop policy stands. */
+const RELAUNCH_RETRY_MS: readonly number[] = [250, 500, 1_000, 2_000, 4_000];
+
+/** fieldd refused, and said to ask again: its UNAVAILABLE answer marked
+ * `retryable` (SB-2's "Agent Profiles cannot be read right now" — its agent
+ * runtime not answering yet, which is the relaunch's startup race). An answer,
+ * so it carries the wire's numeric code; a request that never reached fieldd
+ * carries none and is not this. */
+function refusedForNow(cause: unknown): boolean {
+  if (typeof cause !== "object" || cause === null) return false;
+  const refusal = cause as { kind?: unknown; retryable?: unknown; code?: unknown };
+  return (
+    refusal.kind === "UNAVAILABLE" && refusal.retryable === true && typeof refusal.code === "number"
+  );
+}
+
 /** The workspace publishes its context to its sidebar and nowhere else, so the
  * sidebar slot is how an embedder observes and drives panes. It renders
  * nothing: this deck's chrome is the overlay's, not a second sidebar. */
@@ -853,26 +871,38 @@ export function GodviewDeck({
       // creation, as a plain path that `paneCwd` takes as it is. Home is now the
       // fallback for a peer's pane, a Windows drive path, and an older floor.
       const cwd = paneCwd(context.meta, readDeviceHost()) ?? shell.home;
-      // SB-3: re-bound. A set deleted since is fieldd's refusal, and the pane
-      // goes like any other that cannot be refilled — never an unbound shell
-      // in a bound one's place.
+      // SB-3: re-bound. A bound relaunch fieldd refuses FOR NOW (its agent
+      // runtime not answering yet — the startup race) is asked again with a
+      // backoff; a set deleted since (NOT_FOUND) or any other refusal is the
+      // answer, and the pane goes like any other that cannot be refilled —
+      // never an unbound shell in a bound one's place.
       const profileSet = paneProfileSet(context.meta);
-      try {
-        const born = await bornSession(cwd, profileSet);
-        if (born !== null) paneSets.current.set(context.paneId, profileSet ?? null);
-        return born;
-      } catch (cause) {
-        // Drop-and-collapse is the library's own answer to a null, and it is
-        // the honest one: a pane that cannot be refilled should not be drawn as
-        // though it were. The failure is LOUD in the log and quiet on screen.
-        getRendererLogger()
-          .child({ component: "godview" })
-          .error(
-            "renderer.godview.rehydrate_failed",
-            `A saved pane could not be relaunched at ${cwd}`,
-            cause,
-          );
-        return null;
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          const born = await bornSession(cwd, profileSet);
+          if (born !== null) paneSets.current.set(context.paneId, profileSet ?? null);
+          return born;
+        } catch (cause) {
+          const wait =
+            profileSet !== undefined && refusedForNow(cause)
+              ? RELAUNCH_RETRY_MS[attempt]
+              : undefined;
+          if (wait !== undefined) {
+            await new Promise((resolve) => setTimeout(resolve, wait));
+            continue;
+          }
+          // Drop-and-collapse is the library's own answer to a null, and it is
+          // the honest one: a pane that cannot be refilled should not be drawn
+          // as though it were. The failure is LOUD in the log and quiet on screen.
+          getRendererLogger()
+            .child({ component: "godview" })
+            .error(
+              "renderer.godview.rehydrate_failed",
+              `A saved pane could not be relaunched at ${cwd}${profileSet === undefined ? "" : ` under ${profileSet}`}`,
+              cause,
+            );
+          return null;
+        }
       }
     },
     [bornSession, shell],

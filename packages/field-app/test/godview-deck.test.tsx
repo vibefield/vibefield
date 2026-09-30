@@ -17,6 +17,7 @@
  * loop driven by event ORDER.
  */
 
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import { act, type ComponentType, type ReactElement, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -900,6 +901,86 @@ describe("every birth goes through the product door (TP-S1)", () => {
       rehydrate?.({ meta: { cwd: "/repo/api" }, sessionId: "dead-1", paneId: "pane-1" }),
     );
     expect(requests.filter((method) => method === "terminal.create").length).toBe(before + 1);
+  });
+
+  it("asks a bound relaunch again while fieldd cannot read its profiles yet, and drops one whose set is gone — never unbound (SB-3)", async () => {
+    saveLayout(["alive-1", "dead-1"]);
+    floor = [{ sessionId: "alive-1" }];
+    await mountDeck();
+    const restore = [...(container?.querySelectorAll("button") ?? [])].find(
+      (button) => button.textContent === "restore",
+    );
+    await act(async () => restore?.click());
+    await settle();
+    const answer = fieldd.request;
+    let refuse: "for-now" | "gone" = "for-now";
+    let refusals = 2;
+    const calls = vi
+      .spyOn(fieldd, "request")
+      .mockImplementation((method: string, params?: unknown): Promise<unknown> => {
+        if (method === "terminal.create" && refusals > 0) {
+          refusals -= 1;
+          return Promise.reject(
+            refuse === "for-now"
+              ? new FielddRpcError(
+                  "UNAVAILABLE",
+                  "Agent Profiles cannot be read right now",
+                  true,
+                  { service: "agents", state: "runtime-unavailable", set: "work" },
+                  -32004,
+                )
+              : new FielddRpcError(
+                  "NOT_FOUND",
+                  "that profile no longer exists",
+                  false,
+                  { set: "work" },
+                  -32001,
+                ),
+          );
+        }
+        return answer(method, params);
+      });
+    const created = (): unknown[] =>
+      calls.mock.calls.filter(([method]) => method === "terminal.create").map(([, p]) => p);
+    const rehydrate = workspaceMounts[0]?.["onRehydratePane"] as (context: {
+      meta: unknown;
+      sessionId: string;
+      paneId: string;
+    }) => Promise<{ id: string } | null>;
+    const bound = { cwd: "/repo/api", workloadClass: "interactive", profileSet: "work" };
+    let born: { id: string } | null = null;
+    // the startup race: refused for now twice, then born under Work
+    await act(async () => {
+      born = await rehydrate({
+        meta: { cwd: "/repo/api", profileSet: "work" },
+        sessionId: "dead-1",
+        paneId: "pane-1",
+      });
+    });
+    expect(born).not.toBeNull();
+    expect(created()).toEqual([bound, bound, bound]);
+    // a set deleted since is the answer: asked once, and the pane goes
+    refuse = "gone";
+    refusals = 1;
+    await act(async () => {
+      born = await rehydrate({
+        meta: { cwd: "/repo/api", profileSet: "work" },
+        sessionId: "dead-1",
+        paneId: "pane-1",
+      });
+    });
+    expect(born).toBeNull();
+    expect(created()).toHaveLength(4);
+    // the retry is the bound relaunch's: an unbound one is not asked again
+    refuse = "for-now";
+    refusals = 1;
+    await act(async () => {
+      born = await rehydrate({ meta: { cwd: "/repo/api" }, sessionId: "dead-1", paneId: "pane-1" });
+    });
+    expect(born).toBeNull();
+    expect(created()).toHaveLength(5);
+    expect(created().at(-1)).toEqual({ cwd: "/repo/api", workloadClass: "interactive" });
+    calls.mockRestore();
   });
 
   it("relaunches a pane under the Agent Profile its meta names, and the relaunched shell's meta names it again (SB-3)", async () => {
