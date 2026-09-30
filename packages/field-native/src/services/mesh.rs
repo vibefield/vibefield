@@ -53,6 +53,7 @@
 use crate::config::NativeConfig;
 use crate::contracts::{MeshMode, UnitHealth, UnitState};
 use crate::manager::NativeService;
+use crate::services::mesh_egress::{self, EgressBackend};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -123,6 +124,15 @@ struct Shared {
     /// constructed headlessly; it is OR'd with the real one and NOTHING in the
     /// product ever writes it.
     node_presence_forced: watch::Sender<bool>,
+    /// DS-1 — the egress substrate (`services/mesh_egress.rs`): the
+    /// unsupported arm in production today, a fake in tests. Behind a mutex
+    /// only so a test can install its fake; production never swaps it.
+    egress: Mutex<Arc<dyn EgressBackend>>,
+    /// DS-1 — bumped whenever the egress route table moves (an add, a remove,
+    /// a teardown's reset). A WATCH, so `route.subscribe` forwarders coalesce
+    /// bursts and re-read the whole table: the table is the payload, never an
+    /// edge, so a skipped intermediate state loses nothing.
+    egress_changes: watch::Sender<u64>,
 }
 
 /// E-F1 — a subscription to `node_present()`: "is a tailnet node installed?",
@@ -223,6 +233,37 @@ impl MeshHandle {
     #[doc(hidden)]
     pub fn force_node_presence_for_tests(&self, present: bool) {
         self.shared.node_presence_forced.send_replace(present);
+    }
+
+    /// DS-1 — the egress substrate the facade answers from.
+    pub fn egress(&self) -> Arc<dyn EgressBackend> {
+        self.shared.egress.lock().unwrap().clone()
+    }
+
+    /// DS-1 — a receiver woken whenever the egress route table moves.
+    pub fn egress_changes(&self) -> watch::Receiver<u64> {
+        self.shared.egress_changes.subscribe()
+    }
+
+    /// DS-1 — the facade moved the table (an add or a remove took effect).
+    pub fn note_egress_changed(&self) {
+        self.shared
+            .egress_changes
+            .send_modify(|generation| *generation += 1);
+    }
+
+    /// DS-1 TEST SEAM — install an egress arm, for tests only.
+    ///
+    /// Production builds `mesh_egress::default_backend()` at construction and
+    /// never swaps it. A test installs `FakeEgress` here and pairs it with
+    /// [`Self::force_node_presence_for_tests`], because the same wall stands:
+    /// no node can be built headlessly, so what such a test witnesses is the
+    /// FACADE — the verbs, the refusals, the table, the reset and its stream —
+    /// with real loopback sockets, not tsnet's egress. The live witness is the
+    /// petition window's hardware run (two desktops, the Tailscale app quit).
+    #[doc(hidden)]
+    pub fn install_egress_for_tests(&self, backend: Arc<dyn EgressBackend>) {
+        *self.shared.egress.lock().unwrap() = backend;
     }
 
     /// The gateway's own health, for a consumer that must decide whether
@@ -378,6 +419,13 @@ impl MeshHandle {
         self.shared.stores.lock().await.clear();
         self.shared.serves.lock().await.clear();
         *self.shared.login_allow.lock().unwrap() = Vec::new();
+        // DS-1 — egress routes are listeners the SIDECAR bound for this node,
+        // so they die with it; the table is rebuilt-not-persisted like the
+        // serves above. Pushed only when something was dropped: an empty
+        // table resetting to empty tells no reader anything.
+        if self.egress().reset().await > 0 {
+            self.note_egress_changed();
+        }
         drop(had); // node drop kills the sidecar (kill_on_drop)
     }
 
@@ -460,6 +508,8 @@ impl MeshUnit {
                 }),
                 node: watch::channel(None).0,
                 node_presence_forced: watch::channel(false).0,
+                egress: Mutex::new(mesh_egress::default_backend()),
+                egress_changes: watch::channel(0).0,
                 ping,
                 stores: tokio::sync::Mutex::new(HashMap::new()),
                 serves: tokio::sync::Mutex::new(HashMap::new()),
@@ -494,6 +544,14 @@ impl NativeService for MeshUnit {
     }
 
     async fn start(&self) -> anyhow::Result<()> {
+        // DS-1 — which egress substrate this floor answers from, once per boot,
+        // so a log reader can tell "no egress" from "egress failed".
+        tracing::info!(
+            event = "field_native.mesh.egress.backend",
+            component = "mesh",
+            arm = self.handle().egress().arm(),
+            "egress backend selected"
+        );
         // UA-P-0a (D1) — boot no longer brings a node up. The posture derives
         // from fieldd's link, and fieldd asks for it over the mgmt channel; the
         // floor's own default is OFFLINE, which is the honest state of an

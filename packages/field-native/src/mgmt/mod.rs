@@ -21,6 +21,8 @@ mod diagnostics;
 /// `terminal_cell_route_probe` row that dials a cell route). Nothing else in
 /// the module is part of that surface.
 pub mod mesh;
+/// DS-1 — the egress verbs, dispatched from `mesh::handle` ahead of its node gate.
+mod mesh_egress;
 
 use crate::config::MeshPlan;
 use crate::contracts::{DesiredState, Hello, TerminalRouteSnapshot, TerminalRoutesStreamPayload};

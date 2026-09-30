@@ -2,6 +2,7 @@ pub mod lane_transport;
 mod lossy_lane;
 pub mod mesh;
 pub mod mesh_bridge;
+pub mod mesh_egress;
 pub mod stubs;
 pub mod terminal;
 pub mod terminal_client;

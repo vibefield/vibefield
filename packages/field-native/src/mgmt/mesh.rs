@@ -74,6 +74,14 @@ pub async fn handle(
         handle_lane(state, tx, method, params, id).await;
         return;
     }
+    // DS-1 — egress answers BEFORE the node gate, for the reason the order of
+    // its own refusals states (`mesh_egress.rs`): `egress-unsupported` is a
+    // fact about this floor's sidecar that holds with or without a node, and
+    // the node gate's generic UNAVAILABLE would hide it.
+    if method.starts_with("native.mesh.egress.") {
+        super::mesh_egress::handle(state, tx, method, params, id).await;
+        return;
+    }
     if method == "native.mesh.retire" {
         // UA-3 unlink — answered BEFORE the node gate, like lane control:
         // retiring a half-authed or disabled mesh must still archive its

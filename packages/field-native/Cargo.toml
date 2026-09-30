@@ -48,5 +48,13 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_System_Threading",
 ] }
 
+[features]
+# DS-1 — the REAL egress arm (`services/mesh_egress.rs`, `TruffleEgress`),
+# written against the RFC 026 API the wave plan names. OFF by default and it
+# must stay off: truffle-core =0.7.14 (the EL8 pin above) has no egress, so the
+# arm does not compile against it. Turning it on is the petition window's
+# deliberate act, beside the pin move — never a casual build flag.
+truffle-egress = []
+
 [dev-dependencies]
 tempfile = "3.27.0"
