@@ -1,0 +1,18 @@
+{
+  "deviceId": "01J9ZSTUDIO0000000000000000",
+  "docs": [
+    {
+      "docId": "6f1c2b0e-7c1a-4f0e-9d0b-2b8f5a1c3d4e",
+      "baseEpoch": 0,
+      "headVersion": "AQfOAQ==",
+      "fresh": true,
+      "heldSince": 1790000000000
+    },
+    {
+      "docId": "0b7e8a52-39c4-4b8e-8f3a-6d2e1c9a7b10",
+      "baseEpoch": 0,
+      "fresh": false,
+      "heldSince": 1790000100000
+    }
+  ]
+}

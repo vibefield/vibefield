@@ -77,6 +77,8 @@ import {
   SupportBundleManifestV1,
 } from "../src/diagnostics";
 import {
+  DocHoldersSlice,
+  DocLibraryEntry,
   DocMeta,
   DocOpenResult,
   DocRegistryEntry,
@@ -182,6 +184,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "mesh-egress-route-ref": MeshEgressRouteRef,
   "mesh-egress-route-table": MeshEgressRouteTable,
   "doc-registry-entry": DocRegistryEntry,
+  "doc-holders-slice": DocHoldersSlice,
+  "doc-library-entry": DocLibraryEntry,
   "doc-open-result": DocOpenResult,
   "doc-rename-params": DocRenameParams,
   "doc-meta": DocMeta,

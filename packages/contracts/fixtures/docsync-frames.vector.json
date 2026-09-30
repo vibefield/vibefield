@@ -1,0 +1,37 @@
+{
+  "description": "DS-5 doc-sync frames (2026-09-30): the wire bytes of the two additive kinds, a legacy UPDATE for contrast, the UPDATE chunked at 33 bytes (two slices), and a kind newer than DS-5. Pinned by test/docsync-frames.test.ts: the DS-5 reader decodes every frame; the pre-DS-5 reader (decodeDocSyncRecord, unchanged) decodes the legacy one and refuses the rest by its own meta law.",
+  "update": {
+    "kind": 2,
+    "meta": {
+      "baseEpoch": 0,
+      "engineSchema": 2,
+      "savedAt": 1700000000000
+    },
+    "payloadHex": "000102ff",
+    "frameHex": "02000000387b226261736545706f6368223a302c22656e67696e65536368656d61223a322c2273617665644174223a313730303030303030303030307d000102ff"
+  },
+  "version": {
+    "kind": 4,
+    "meta": {
+      "baseEpoch": 0,
+      "hasCheckpoint": true,
+      "loro": 1
+    },
+    "payloadHex": "010702",
+    "frameHex": "040000002d7b226261736545706f6368223a302c22686173436865636b706f696e74223a747275652c226c6f726f223a317d010702",
+    "peer": "7",
+    "counter": 1
+  },
+  "chunks": {
+    "chunkBytes": 33,
+    "of": "update",
+    "frameHex": [
+      "05000000367b227472616e73666572223a22742d31222c22696e646578223a302c22636f756e74223a322c22627974654c656e677468223a36357d02000000387b226261736545706f6368223a302c22656e67696e65536368656d61",
+      "05000000367b227472616e73666572223a22742d31222c22696e646578223a312c22636f756e74223a322c22627974654c656e677468223a36357d223a322c2273617665644174223a313730303030303030303030307d000102ff"
+    ]
+  },
+  "future": {
+    "kind": 9,
+    "frameHex": "09000000207b22616e797468696e67223a2261206e6577657220706565722073617973227d0707"
+  }
+}

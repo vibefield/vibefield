@@ -38,14 +38,84 @@ export const DocRegistryEntry = z
      * direction). Intent is per DEVICE until doc existence replicates — the
      * named C6-4 debt — and nothing here pretends otherwise. */
     syncIntent: DocSyncIntent.optional(),
+    /** DS-5 — epoch ms the canvas was created (the library's `createdAt`).
+     * Absent on entries written before the library existed. */
+    createdAt: z.number().int().optional(),
   })
   .passthrough();
 export type DocRegistryEntry = z.infer<typeof DocRegistryEntry>;
 
+// ---- DS-5 — the library and the holders (DS-D6, thinking-desktop-sync-plane §5.2) ----
+
+/** One canvas as the LIBRARY knows it — a user-scope SYSTEM document that every
+ * linked desktop holds and merges (per-field last-writer-wins), so a canvas
+ * created on one desktop exists on the others, a rename made offline
+ * converges, and `syncIntent` converges with it (UA-D7's named follow-up). */
+export const DocLibraryEntry = z
+  .object({
+    docId: z.string().uuid(),
+    name: z.string(),
+    createdAt: z.number().int(),
+    /** epoch ms of the delete; a tombstoned canvas is gone from every list. */
+    tombstone: z.number().int().optional(),
+    syncIntent: DocSyncIntent.optional(),
+    engineSchema: z.number().int().nullable(),
+    baseEpoch: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type DocLibraryEntry = z.infer<typeof DocLibraryEntry>;
+
+/** One held document, in a device's holders slice. */
+export const DocHolding = z
+  .object({
+    docId: z.string().uuid(),
+    baseEpoch: z.number().int().nonnegative(),
+    /** base64 of the host's encoded Loro version vector — what this holder has
+     * (the compaction watermark's input, DS §5.3). Absent while the document is
+     * held in opaque custody (an envelope the fixed rule cannot lift). */
+    headVersion: z.string().optional(),
+    /** This holder knows of nothing it lacks from any peer it has heard from. */
+    fresh: z.boolean(),
+    heldSince: z.number().int(),
+  })
+  .passthrough();
+export type DocHolding = z.infer<typeof DocHolding>;
+
+/** `field.docs.v1` — DEVICE-OWNED (DS-L2): who holds what is a fact, and it
+ * expires with its publisher. CHANGED 2026-09-30 (DS-5): this store name was
+ * the local registry's file name and never a published slice; the file keeps
+ * the name on disk, and the store carries this shape. */
+export const DocHoldersSlice = z
+  .object({
+    deviceId: z.string(),
+    docs: z.array(DocHolding),
+  })
+  .passthrough();
+export type DocHoldersSlice = z.infer<typeof DocHoldersSlice>;
+
+/** A canvas the library lists that THIS device does not hold — a `local`
+ * canvas living on another desktop (DS-D7): listed, not openable here. */
+export const DocElsewhere = z
+  .object({
+    docId: z.string().uuid(),
+    name: z.string(),
+    /** deviceIds whose holders slice names it; empty when no holder is heard. */
+    homes: z.array(z.string()),
+  })
+  .passthrough();
+export type DocElsewhere = z.infer<typeof DocElsewhere>;
+
 export const DocCreateParams = z.object({ name: z.string().min(1) }).passthrough();
 export type DocCreateParams = z.infer<typeof DocCreateParams>;
 
-export const DocListResult = z.object({ docs: z.array(DocRegistryEntry) }).passthrough();
+export const DocListResult = z
+  .object({
+    docs: z.array(DocRegistryEntry),
+    /** DS-5 — library canvases held on another desktop only. Additive: a
+     * reader that does not know the field keeps its `docs` list unchanged. */
+    elsewhere: z.array(DocElsewhere).optional(),
+  })
+  .passthrough();
 export type DocListResult = z.infer<typeof DocListResult>;
 
 export const DocOpenParams = z.object({ docId: z.string().uuid() }).passthrough();
@@ -56,6 +126,12 @@ export const DocRenameParams = z
   .object({ docId: z.string().uuid(), name: z.string().min(1) })
   .passthrough();
 export type DocRenameParams = z.infer<typeof DocRenameParams>;
+
+/** doc.delete params (DS-5) — a TOMBSTONE in the library: the canvas leaves
+ * every desktop's list and its lanes stop. The bytes stay on disk; deleting is
+ * an act, and undoing one is not a settings undo (D29′ must never resurrect it). */
+export const DocDeleteParams = z.object({ docId: z.string().uuid() }).passthrough();
+export type DocDeleteParams = z.infer<typeof DocDeleteParams>;
 
 /** doc.setSyncIntent params (UA-D7) — a posture edit, not a content one: the
  * service updates syncIntent and leaves updatedAt alone, exactly as rename does. */
@@ -95,8 +171,21 @@ export type DocMeta = z.infer<typeof DocMeta>;
 
 // ---- :9411 lane control payloads (JSON bodies of control frames; see doclane.ts) ----
 
+/** What a lane client may declare it can take unasked (DS-5). */
+export const DOC_LANE_ACCEPTS = {
+  /** `LANE_FRAME.DOC_PUSH` — live updates the host merged from a peer. */
+  PUSH: "push",
+} as const;
+
 /** First frame on a lane socket. Anything else (or an invalid ticket) drops the socket. */
-export const LaneHello = z.object({ ticket: z.string() }).passthrough();
+export const LaneHello = z
+  .object({
+    ticket: z.string(),
+    /** DS-5 — frame capabilities the client handles unasked. Absent means none:
+     * a pre-DS-5 client is never pushed to. */
+    accepts: z.array(z.string()).optional(),
+  })
+  .passthrough();
 export type LaneHello = z.infer<typeof LaneHello>;
 
 export const LaneHelloOk = z
@@ -104,6 +193,8 @@ export const LaneHelloOk = z
     docId: z.string().uuid(),
     hasDoc: z.boolean(),
     meta: DocMeta.optional(),
+    /** DS-5 — true when fieldd will push this window live updates. */
+    pushes: z.boolean().optional(),
   })
   .passthrough();
 export type LaneHelloOk = z.infer<typeof LaneHelloOk>;

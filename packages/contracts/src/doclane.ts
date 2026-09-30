@@ -27,6 +27,13 @@ export const LANE_FRAME = {
   PRESENCE_PUBLISH: 10,
   /** fieldd → renderer: unsolicited opaque presence snapshot from this doc room. */
   PRESENCE_PUSH: 11,
+  /** DS-5 — fieldd → renderer: an unsolicited Loro update the host merged from
+   * a peer, exported FROM what this window already holds, so it applies
+   * without a pending import (strata quarantines a store on one). Sent ONLY to
+   * a client whose HELLO declared `accepts: ["push"]`: a pre-DS-5 client hands
+   * every non-presence frame to its pending reply waiter, and an unasked-for
+   * frame there would fail an in-flight save. */
+  DOC_PUSH: 12,
 } as const;
 export type LaneFrameKind = (typeof LANE_FRAME)[keyof typeof LANE_FRAME];
 

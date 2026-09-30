@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { LANE_MAX_FRAME_BYTES } from "./doclane";
+import { MESHDATA_HEADER_BYTES, MESHDATA_MAX_FRAME_BYTES } from "./meshdata";
 
 // The doc-sync lane's payload shape (C6-3f, design-02 §3.5 + D5).
 //
@@ -31,8 +33,24 @@ export const DOC_SYNC_RECORD = {
    *
    * Both sides send one on lane establishment and each pushes the difference;
    * there is deliberately no WANT reply, because the receiver of a HAVE already
-   * knows everything needed to compute it. */
+   * knows everything needed to compute it.
+   *
+   * CORRECTED 2026-09-30 (DS-5, DS-D18 RULED (a)): "impossible here" was true of
+   * an opaque daemon and stopped being true when fieldd became a Loro-level
+   * host. HAVE stays for peers that predate DS-5; two DS-5 peers speak VERSION. */
   HAVE: 3,
+  /** DS-5 — what this device's Loro host holds, as Loro's own ENCODED version
+   * vector (`VersionVector.encode()`). The receiver answers with exactly what
+   * the sender lacks — `export({mode: "update", from})`, preceded by the
+   * checkpoint envelope when the sender holds none — as ordinary SNAPSHOT and
+   * UPDATE records. Sent BEFORE the HAVE on lane establishment, so a DS-5
+   * receiver knows to ignore the HAVE that follows it. */
+  VERSION: 4,
+  /** DS-5 — one slice of a record too large for a MeshData frame (8 MiB):
+   * the slices are the ENCODED inner record, reassembled whole and then read
+   * like any other record. Chunks ride their own lane (design-02 §3.3's "own
+   * lane per snapshot"), so a bootstrap never queues live edits behind it. */
+  CHUNK: 5,
 } as const;
 
 /** u8 kind + u32 metaLen. */
@@ -199,6 +217,143 @@ export function decodeDocSyncRecord(data: Uint8Array): DocSyncRecord {
     // COPY, not a view. The caller parks these in a journal write; a view would
     // retain the whole lane read for the life of the record (the C6-3e
     // watermark finding, one layer up).
+    payload: data.slice(metaEnd),
+  };
+}
+
+// ---- DS-5 — the Loro-level host's kinds (DS-D18, thinking-desktop-sync-plane §5.1) ----
+//
+// ADDITIVE, and old peers stay whole. The two new kinds carry metas WITHOUT the
+// legacy `engineSchema`/`savedAt` — neither means anything for a version vector
+// or a slice — so a pre-DS-5 `decodeDocSyncRecord` refuses them by its own meta
+// law, logs `record_undecodable`, and keeps the lane: the degradation it was
+// written for ("a peer running a newer build should degrade, not disconnect").
+// A DS-5 reader goes through `decodeDocSyncFrame`, which reads ANY kind and
+// leaves the meta to the kind's own schema — so a kind newer still is ignored,
+// never fatal. `test/docsync-frames.test.ts` holds both halves to fixtures.
+
+/** The Loro binary-encoding family this tree speaks (loro-crdt 1.x, EL8's one
+ * resolution). DS-L9 / risk 4: skew is honest — a peer declaring another family
+ * is not merged with, it is refused and reported. */
+export const DOC_SYNC_LORO_ENCODING = 1;
+
+/** The most one lane send may carry: a MeshData frame minus its own header. */
+export const DOC_SYNC_MAX_RECORD_BYTES = MESHDATA_MAX_FRAME_BYTES - MESHDATA_HEADER_BYTES;
+
+/** One CHUNK's slice of the inner record. 1 MiB keeps a paced sender well under
+ * MeshLaneLink's 4 MiB send watermark and the receiver's orphan buffer. */
+export const DOC_SYNC_CHUNK_BYTES = 1024 * 1024;
+
+/** The largest record a receiver reassembles — the renderer's own lane ceiling,
+ * because a document no window could be handed is not worth holding in memory. */
+export const DOC_SYNC_MAX_TRANSFER_BYTES = LANE_MAX_FRAME_BYTES;
+
+export const DocSyncVersionMeta = z
+  .object({
+    /** The compaction epoch the version belongs to (S4): versions from two
+     * epochs are two lineages, and neither side answers across the fence. */
+    baseEpoch: z.number().int().nonnegative(),
+    /** Does the sender hold a base a renderer can open? A canvas holder without
+     * a checkpoint is bootstrapped with the checkpoint envelope first; a raw Loro
+     * system document has no checkpoint species and always says true. */
+    hasCheckpoint: z.boolean(),
+    /** `DOC_SYNC_LORO_ENCODING` of the sender (DS-L9). */
+    loro: z.number().int().positive(),
+  })
+  .passthrough();
+export type DocSyncVersionMeta = z.infer<typeof DocSyncVersionMeta>;
+
+export const DocSyncChunkMeta = z
+  .object({
+    /** Sender-minted transfer id; unique per sender for the transfer's life. */
+    transfer: z.string().min(1).max(64),
+    index: z.number().int().nonnegative(),
+    count: z.number().int().positive(),
+    /** Length of the WHOLE encoded inner record — the reassembly's bound. */
+    byteLength: z.number().int().positive(),
+  })
+  .passthrough();
+export type DocSyncChunkMeta = z.infer<typeof DocSyncChunkMeta>;
+
+/** Any record, read without judging its kind: the DS-5 reader's entry point. */
+export interface DocSyncFrame {
+  kind: number;
+  /** The meta as JSON — each kind parses it with its own schema. */
+  meta: Record<string, unknown>;
+  payload: Uint8Array;
+}
+
+function encodeFrame(kind: number, meta: object, payload: Uint8Array): Uint8Array {
+  if (!Number.isInteger(kind) || kind < 0 || kind > 255) {
+    throw new Error(`doc-sync kind out of u8 range: ${kind}`);
+  }
+  const metaBytes = new TextEncoder().encode(JSON.stringify(meta));
+  const out = new Uint8Array(DOC_SYNC_HEADER_BYTES + metaBytes.byteLength + payload.byteLength);
+  const view = new DataView(out.buffer);
+  view.setUint8(0, kind);
+  view.setUint32(1, metaBytes.byteLength);
+  out.set(metaBytes, DOC_SYNC_HEADER_BYTES);
+  out.set(payload, DOC_SYNC_HEADER_BYTES + metaBytes.byteLength);
+  return out;
+}
+
+/** A VERSION record: the encoded version vector is the whole payload. */
+export function encodeDocSyncVersion(meta: DocSyncVersionMeta, version: Uint8Array): Uint8Array {
+  return encodeFrame(DOC_SYNC_RECORD.VERSION, DocSyncVersionMeta.parse(meta), version);
+}
+
+/** Split one ENCODED record into CHUNK records. A record that already fits is
+ * the caller's to send whole — chunking is for what a frame cannot carry. */
+export function chunkDocSyncRecord(
+  record: Uint8Array,
+  transfer: string,
+  chunkBytes: number = DOC_SYNC_CHUNK_BYTES,
+): Uint8Array[] {
+  if (!Number.isSafeInteger(chunkBytes) || chunkBytes <= 0) {
+    throw new Error(`doc-sync chunk size must be a positive integer: ${chunkBytes}`);
+  }
+  if (record.byteLength === 0) throw new Error("doc-sync: nothing to chunk");
+  const count = Math.ceil(record.byteLength / chunkBytes);
+  const out: Uint8Array[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const slice = record.subarray(
+      index * chunkBytes,
+      Math.min(record.byteLength, (index + 1) * chunkBytes),
+    );
+    out.push(
+      encodeFrame(
+        DOC_SYNC_RECORD.CHUNK,
+        { transfer, index, count, byteLength: record.byteLength },
+        slice,
+      ),
+    );
+  }
+  return out;
+}
+
+/** Tolerant reader for every kind, known or not. It refuses only structural
+ * garbage — a short header, a meta that runs past the record, meta that is not
+ * a JSON object — and never judges a kind it does not know. */
+export function decodeDocSyncFrame(data: Uint8Array): DocSyncFrame {
+  if (data.byteLength < DOC_SYNC_HEADER_BYTES) {
+    throw new Error(`doc-sync record shorter than header: ${data.byteLength} bytes`);
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const metaLen = view.getUint32(1);
+  const metaEnd = DOC_SYNC_HEADER_BYTES + metaLen;
+  if (metaEnd > data.byteLength) {
+    throw new Error(`doc-sync meta declares ${metaLen} bytes, past the record`);
+  }
+  const meta: unknown = JSON.parse(
+    new TextDecoder().decode(data.subarray(DOC_SYNC_HEADER_BYTES, metaEnd)),
+  );
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) {
+    throw new Error("doc-sync meta is not a JSON object");
+  }
+  return {
+    kind: view.getUint8(0),
+    meta: meta as Record<string, unknown>,
+    // COPY — the same watermark reason as decodeDocSyncRecord.
     payload: data.slice(metaEnd),
   };
 }
