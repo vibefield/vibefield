@@ -34,7 +34,7 @@ import {
   type ProjectLedger,
   saveProjectLedger,
 } from "./project-ledger";
-import { type MonitorDoor, remoteRowId } from "./remote-door";
+import { type LocalMountOutcome, type MonitorDoor, remoteRowId } from "./remote-door";
 import { useRemoteSessionField } from "./remote-session-field";
 import { targetsHere } from "./spawn-menu";
 import type { MonitorActions, MonitorAgent, MonitorSpawnTarget } from "./types";
@@ -775,18 +775,23 @@ export function useMonitorAgents({
    * creates exactly as before it. The views match the body they drew at the
    * release point to the row by `spawnHint`, so the position is kept as given.
    * Every outcome is said, a refusal in fieldd's own words; a shell an older
-   * daemon could not bind is kept, and said to be unbound.
+   * daemon could not bind is kept, and said to be unbound. A create that opened
+   * nothing then REJECTS with the sentence it said, so a view's pending body is
+   * put away at once rather than waiting its birth out.
    */
   const createAt = useCallback(
     async (position?: { x: number; y: number }, target?: MonitorSpawnTarget): Promise<void> => {
+      /** Said, then thrown: nothing opened. */
+      const refuse = (sentence: string): Error => {
+        announce(sentence);
+        return new Error(sentence);
+      };
       if (door === null) {
-        announce("no terminal can be opened yet — the deck has no connection");
-        return;
+        throw refuse("no terminal can be opened yet — the deck has no connection");
       }
       // SB-D9: this desktop alone takes a terminal from here, until SB-6.
       if (!targetsHere(target)) {
-        announce("that desktop cannot take a terminal from here yet");
-        return;
+        throw refuse("that desktop cannot take a terminal from here yet");
       }
       const profileSet = target?.profileSet;
       const label =
@@ -801,38 +806,38 @@ export function useMonitorAgents({
         pendingSpawns.current = pendingSpawns.current.filter((pending) => pending !== spawn);
         setSpawnsVersion((version) => version + 1);
       };
+      let outcome: LocalMountOutcome;
       try {
-        const outcome = await (profileSet === undefined
+        outcome = await (profileSet === undefined
           ? door.createTerminal()
           : door.createTerminal({ profileSet }));
-        landed();
-        if (outcome.state === "no-pane") {
-          announce("no pane to open a terminal in — open one in the deck first");
-        } else if (outcome.state === "failed") {
-          announce(`terminal could not be opened${under} — ${outcome.reason}`);
-        } else {
-          // the door's answer names the session: its row keeps the position
-          // from here on, whichever row claimed it first
-          if (position)
-            setSpawnHints((current) => new Map(current).set(outcome.sessionId, position));
-          if (profileSet !== undefined && outcome.profileSet === undefined) {
-            // asked with a profile, answered without one: a daemon older than
-            // the binding (SB-2) births unbound — the shell is kept
-            announce(
-              `terminal opened, but not under ${label ?? "that profile"} — this VibeField daemon cannot open terminals under a profile yet`,
-            );
-          } else if (outcome.profileSet !== undefined && profiles.length > 1) {
-            announce(`terminal opened${under} in the active pane`);
-          } else {
-            // one profile is no choice, and the plain sentence says it all
-            announce("terminal opened in the active pane");
-          }
-        }
       } catch (cause) {
         landed();
-        announce(
+        throw refuse(
           `terminal could not be opened${under} — ${cause instanceof Error ? cause.message : String(cause)}`,
         );
+      }
+      landed();
+      if (outcome.state === "no-pane") {
+        throw refuse("no pane to open a terminal in — open one in the deck first");
+      }
+      if (outcome.state === "failed") {
+        throw refuse(`terminal could not be opened${under} — ${outcome.reason}`);
+      }
+      // the door's answer names the session: its row keeps the position from
+      // here on, whichever row claimed it first
+      if (position) setSpawnHints((current) => new Map(current).set(outcome.sessionId, position));
+      if (profileSet !== undefined && outcome.profileSet === undefined) {
+        // asked with a profile, answered without one: a daemon older than the
+        // binding (SB-2) births unbound — the shell is kept
+        announce(
+          `terminal opened, but not under ${label ?? "that profile"} — this VibeField daemon cannot open terminals under a profile yet`,
+        );
+      } else if (outcome.profileSet !== undefined && profiles.length > 1) {
+        announce(`terminal opened${under} in the active pane`);
+      } else {
+        // one profile is no choice, and the plain sentence says it all
+        announce("terminal opened in the active pane");
       }
     },
     [announce, door, profiles],

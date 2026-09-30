@@ -811,17 +811,24 @@ describe("the monitor stage", () => {
     expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
-  it("carries the deck's own words when a terminal cannot open", async () => {
+  it("carries the deck's own words when a terminal cannot open, then rejects with them", async () => {
+    // Asked as a view asks (`actions.createAt`), through the probe: a create
+    // that opened nothing REJECTS after its words, so a view puts its pending
+    // body away at once (SB-3) — and the pinned list's ＋ does not catch yet.
     const door = fakeDoor();
     door.createTerminal.mockResolvedValueOnce({
       state: "failed",
       reason: "terminal capacity reached",
     });
-    const host = await mountMonitor("list", door);
-    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
-    expect(ackText(host)).toContain("terminal capacity reached");
+    const host = await mountProbe(door);
+    await expect(createAt()).rejects.toThrow(
+      "terminal could not be opened — terminal capacity reached",
+    );
+    expect(ackText(host)).toBe("terminal could not be opened — terminal capacity reached");
     door.createTerminal.mockResolvedValueOnce({ state: "no-pane" });
-    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    await expect(createAt()).rejects.toThrow(
+      "no pane to open a terminal in — open one in the deck first",
+    );
     expect(ackText(host)).toContain("no pane");
   });
 
@@ -894,8 +901,7 @@ describe("the monitor stage", () => {
     expect(latest().localClaim).toBeNull();
     expect(host.querySelector(".vf-monitor-local-chip")).toBeNull();
     expect(host.querySelector(".vf-godview-spawn")).toBeNull();
-    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
-    expect(ackText(host)).toContain("the deck has no connection");
+    // creation with no door: a probe row below asks it and reads its words
   });
 });
 
@@ -1203,7 +1209,7 @@ const PROBE_VIEW: AgentMonitorView = {
 };
 
 async function mountProbe(
-  door: MonitorDoor,
+  door: MonitorDoor | null,
   panes: MonitorPaneFacts = PANES,
 ): Promise<HTMLElement> {
   probed = null;
@@ -1214,7 +1220,7 @@ async function mountProbe(
   return container;
 }
 
-async function renderProbe(door: MonitorDoor, panes: MonitorPaneFacts): Promise<void> {
+async function renderProbe(door: MonitorDoor | null, panes: MonitorPaneFacts): Promise<void> {
   await act(async () => {
     root?.render(
       <GodviewAgentsProvider door={door}>
@@ -1246,13 +1252,21 @@ function slowTabDoor(): TabDoor {
   });
 }
 
+/** A view's `createAt`, inside `act`: a rejection is caught there and thrown
+ * after it, so the words it said are committed before the caller reads them. */
 const createAt = async (
   position?: { x: number; y: number },
   target?: { deviceId?: string; profileSet?: string },
 ): Promise<void> => {
+  let failure: unknown;
   await act(async () => {
-    await probed?.actions.createAt(position, target);
+    try {
+      await probed?.actions.createAt(position, target);
+    } catch (cause) {
+      failure = cause;
+    }
   });
+  if (failure !== undefined) throw failure;
 };
 
 describe("the spawn menu and the create it asks for (SB-3)", () => {
@@ -1388,10 +1402,16 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
       reason: "that profile no longer exists",
     });
     const host = await mountProbe(door);
-    await createAt({ x: 10, y: 10 }, { profileSet: "work" });
-    expect(ackText(host)).toBe(
-      "terminal could not be opened under Work — that profile no longer exists",
-    );
+    const sentence = "terminal could not be opened under Work — that profile no longer exists";
+    await expect(createAt({ x: 10, y: 10 }, { profileSet: "work" })).rejects.toThrow(sentence);
+    expect(ackText(host)).toBe(sentence);
+  });
+
+  it("says, then rejects, when there is no deck to open a terminal in", async () => {
+    const host = await mountProbe(null, { sessionIds: [] });
+    const sentence = "no terminal can be opened yet — the deck has no connection";
+    await expect(createAt({ x: 10, y: 10 })).rejects.toThrow(sentence);
+    expect(ackText(host)).toBe(sentence);
   });
 
   it("keeps the shell an older daemon births unbound, and says it is not under the profile", async () => {
@@ -1420,7 +1440,9 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
   it("asks no other desktop for a terminal, and a create with no target is unbound", async () => {
     const door = tabDoor();
     const host = await mountProbe(door);
-    await createAt({ x: 10, y: 10 }, { deviceId: "mini", profileSet: "work" });
+    await expect(
+      createAt({ x: 10, y: 10 }, { deviceId: "mini", profileSet: "work" }),
+    ).rejects.toThrow("that desktop cannot take a terminal from here yet");
     expect(door.createTerminal).not.toHaveBeenCalled();
     expect(ackText(host)).toBe("that desktop cannot take a terminal from here yet");
     // the hub while this desktop's profiles are still being read, a host with no menu
