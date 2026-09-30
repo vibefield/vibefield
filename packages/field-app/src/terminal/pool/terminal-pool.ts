@@ -171,6 +171,20 @@ export interface TerminalSessionView {
 export interface CreatedTerminalSession {
   readonly sessionId: string;
   readonly availability: SessionAvailability;
+  /** SB-2 — the Agent Profile fieldd bound the shell to, as it applied it.
+   * Absent for an unbound shell — and for a bound ASK a fieldd older than the
+   * binding answered: it ignores the field and births unbound, and the asker
+   * says so rather than killing a shell it just made. */
+  readonly profileSet?: string | undefined;
+}
+
+/** How one birth is asked for, beside its wire params. */
+export interface CreateTerminalOptions {
+  /** This birth OPENS the deck — its first shell, with no transport open yet.
+   * Nothing else on screen could say why it was refused, so a refusal faults
+   * the pool (the deck's fault face in fieldd's words), exactly as a transport
+   * failure does. Every other birth's refusal is its own (SB-3). */
+  readonly opening?: boolean;
 }
 
 // ── the singleton's state ───────────────────────────────────────────────────
@@ -209,6 +223,12 @@ const routedCells = new Set<CellBootId>();
  * service answer for the session's product lifetime. Termination/disposal are
  * the inverses, so repeat readers never fall back to an observation race. */
 const createdSummaries = new Map<string, SessionSummary>();
+/** SB-3 — which shells were born under which Agent Profile, in fieldd's words
+ * and nobody else's: a create's answer for the births this window asked for.
+ * Nothing below fieldd can hold it (ghosttea's sessions carry an owner label
+ * and no more), so the renderer never infers one — a shell absent here is
+ * unbound, or not yet known to be bound. */
+const sessionProfileSets = new Map<string, string>();
 /** The client the pool mints with, remembered from the first ask so the ladder
  * and the retry do not need one handed to them at the moment of a bridge event
  * — which is not a moment any React tree is guaranteed to exist. */
@@ -551,6 +571,8 @@ async function createRoutedWorkspaceSession(
       workloadClass: "interactive",
     },
     workspaceBirthTrace,
+    // the workspace's own first shell: nothing else is on screen to say why
+    { opening: true },
   );
   const summary = await terminalSessionSummary(created.sessionId, 1);
   if (summary === null) throw new Error("the floor did not report the session it just created");
@@ -593,6 +615,7 @@ function recordRoutedTicket(sessionId: string, ticket: TerminalOpenTicket): void
 /** Drop private records after a confirmed kill or authoritative removal. */
 function forgetRoutedSession(sessionId: string): void {
   createdSummaries.delete(sessionId);
+  sessionProfileSets.delete(sessionId);
   const cell = placements.cellFor(sessionId);
   placements.forgetSession(sessionId);
   if (
@@ -621,6 +644,19 @@ class TransportPlaneError extends Error {
     super(cause instanceof Error ? cause.message : String(cause));
     this.name = "TransportPlaneError";
   }
+}
+
+/**
+ * fieldd ANSWERED the request (SB-3): its refusal came back over the wire as a
+ * JSON-RPC error, which always carries a numeric `code` (`FielddRpcError`'s),
+ * as opposed to a request that never reached it — the client's own "not
+ * connected" / "connection closed", which carry none. An answer is about that
+ * one request and says nothing about the plane.
+ */
+function answeredByFieldd(cause: unknown): boolean {
+  if (typeof cause !== "object" || cause === null) return false;
+  const answer = cause as { code?: unknown; kind?: unknown };
+  return typeof answer.code === "number" && typeof answer.kind === "string";
 }
 
 function transportFault(plane: TerminalFaultPlane, cause: unknown): void {
@@ -782,10 +818,19 @@ async function adopt(options: {
  *
  * The pool does not decide to spawn a shell. A consumer asks; the consumer that
  * asks is the one holding the consent gate.
+ *
+ * SB-3 — a REFUSAL is an answer, not a fault. fieldd refusing one birth (a
+ * profile deleted since it was offered, a binding it could not make, a scope
+ * this window lacks, the floor's cap) says nothing about the plane, and the
+ * deck's other shells are exactly as they were — so the pool keeps its phase,
+ * and the error goes back to the asker, who says fieldd's words where the
+ * gesture happened. The pool faults when fieldd could not be reached at all,
+ * and when this birth is the deck's `opening` one.
  */
 export async function createTerminalSession(
   params: TerminalCreateParams = {},
   trace?: TransportTrace,
+  options: CreateTerminalOptions = {},
 ): Promise<CreatedTerminalSession> {
   const fieldd = client;
   if (fieldd === null) throw new Error("the terminal pool has no fieldd client");
@@ -798,13 +843,14 @@ export async function createTerminalSession(
     trace?.mark("mintAsk");
     raw = await fieldd.request("terminal.create", params);
   } catch (cause) {
-    // The CONTROL plane refused. field-native holds the PTYs and outlives
+    // The CONTROL plane failed. field-native holds the PTYs and outlives
     // fieldd, so this says nothing about the shells that are already running —
     // which is exactly what the face's second line has to get right (GT-5c).
-    transportFault("fieldd", cause);
+    if (options.opening === true || !answeredByFieldd(cause)) transportFault("fieldd", cause);
     throw cause;
   }
   const read = readCreateTicket(raw, Date.now());
+  if (read.profileSet !== undefined) sessionProfileSets.set(read.sessionId, read.profileSet);
   trace?.mark("ticket");
   placements.record(read.placement);
   grantsLanded = true;
@@ -817,7 +863,18 @@ export async function createTerminalSession(
   fault = null;
   spentReason = null;
   publish();
-  return { sessionId: read.sessionId, availability: { ready: true } };
+  return {
+    sessionId: read.sessionId,
+    availability: { ready: true },
+    ...(read.profileSet !== undefined ? { profileSet: read.profileSet } : {}),
+  };
+}
+
+/** SB-3 — the Agent Profile fieldd said this shell was born under, or
+ * undefined for one it did not (an unbound shell, or one this window has not
+ * been told about). */
+export function terminalSessionProfileSet(sessionId: string): string | undefined {
+  return sessionProfileSets.get(sessionId);
 }
 
 /**
@@ -834,6 +891,7 @@ export function adoptCreatedTerminal(raw: unknown): {
   session: SessionSummary;
 } {
   const read = readCreateTicket(raw, Date.now());
+  if (read.profileSet !== undefined) sessionProfileSets.set(read.sessionId, read.profileSet);
   placements.record(read.placement);
   grantsLanded = true;
   rejoinHint = [...new Set([...rejoinHint, read.sessionId])];
@@ -1106,6 +1164,7 @@ export function disposeTerminalPool(): void {
   placements.clear();
   routedCells.clear();
   createdSummaries.clear();
+  sessionProfileSets.clear();
   demand.clear();
   projected.clear();
   pending = null;

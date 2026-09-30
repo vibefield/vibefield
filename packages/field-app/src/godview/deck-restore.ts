@@ -1,3 +1,5 @@
+import { AgentProfileSetId } from "@vibefield/contracts";
+
 // The restore question, as arithmetic (GT-3, GT-D8 as amended).
 //
 // Layer 1 of restore is the workspace's own localStorage layout; layer 2 —
@@ -203,6 +205,19 @@ export function paneCwd(meta: unknown, localHost?: string | null): string | null
   } catch {
     return null;
   }
+}
+
+/**
+ * The Agent Profile a saved pane's shell was born under (SB-3), for its
+ * relaunch to be born under it again — `paneMeta`'s fourth field. Only a set id
+ * the contract admits is read back (the layout document lives in viewer
+ * storage, and a relaunch hands it to fieldd); a peer's pane has none here.
+ */
+export function paneProfileSet(meta: unknown): string | undefined {
+  const record = meta as { profileSet?: unknown; remoteDevice?: unknown } | null;
+  if (typeof record?.remoteDevice === "string" && record.remoteDevice !== "") return undefined;
+  const parsed = AgentProfileSetId.safeParse(record?.profileSet);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** The consent face's fact line. Sentence-shaped rather than a template with

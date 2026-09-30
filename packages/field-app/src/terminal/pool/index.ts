@@ -22,6 +22,7 @@ export {
   adoptCreatedTerminal,
   bindTerminalSessionView,
   type CreatedTerminalSession,
+  type CreateTerminalOptions,
   configureTerminalPool,
   createTerminalSession,
   disposeTerminalPool,
@@ -52,6 +53,7 @@ export {
   terminalSessionAvailability,
   terminalSessionDemand,
   terminalSessionGrants,
+  terminalSessionProfileSet,
   terminalSessionSummary,
   terminateTerminalSession,
 } from "./terminal-pool";

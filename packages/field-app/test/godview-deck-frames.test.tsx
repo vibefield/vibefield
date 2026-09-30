@@ -16,6 +16,7 @@
  */
 
 import { useMonitorPalette } from "@vibecook/puppeteer-views";
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import {
   act,
   type ComponentType,
@@ -72,6 +73,9 @@ const workspace = {
   activePaneId: "",
   /** Every session the deck asked the workspace to show, in order. */
   mounts: [] as string[],
+  /** Ghosttea's concurrent-birth fence, closed: `createSessionInActivePane`
+   * answers `undefined` without asking the override at all. */
+  fenced: false,
   /** The live context's `mountSession`, so a test can land a birth the way
    * ghosttea lands what `createSplitSession` answers. */
   mount: (_summary: { id: string; cwd?: string | null }): void => undefined,
@@ -118,10 +122,19 @@ function WorkspaceStub({
         const active = workspace.panes.find((pane) => pane.id === workspace.activePaneId)!;
         const create = workspaceProps["createSplitSession"] as (
           session: StubSession,
+          axis: "horizontal" | "vertical",
         ) => Promise<StubSession>;
-        const born = await create(active.session);
-        workspace.mount(born);
-        return born;
+        // Ghosttea's own shape (its Workspace.js): the override is called
+        // first and synchronously, and its throw is caught and answered
+        // `undefined` — the swallow SB-3's door has to see through.
+        if (workspace.fenced) return undefined;
+        try {
+          const born = await create(active.session, "horizontal");
+          workspace.mount(born);
+          return born;
+        } catch {
+          return undefined;
+        }
       },
       mountSession: (summary: { id: string; cwd?: string | null; exited?: boolean }) => {
         workspace.mounts.push(summary.id);
@@ -255,9 +268,8 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
   },
 }));
 
-const { configureTerminalPool, disposeTerminalPool, retryTerminalPool } = await import(
-  "../src/terminal/pool"
-);
+const { configureTerminalPool, disposeTerminalPool, retryTerminalPool, terminalPoolSnapshot } =
+  await import("../src/terminal/pool");
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
 const { launcherOwnsKeyEvent, launcherOwnsKeys, resetLauncherKeys, setMonitorHoldsKeys } =
@@ -271,6 +283,9 @@ let requests: Array<{ method: string; params: unknown }> = [];
 let interruptAnswer: unknown = { accepted: true };
 let terminateAnswer: Promise<unknown> | undefined;
 let createAnswer: Promise<unknown> | undefined;
+/** SB-2's fieldd answers a bound create with the set it applied; an older one
+ * ignores the field and births unbound (`false`). */
+let bindsProfiles = true;
 let spawnGate: Promise<void> | undefined;
 let rosterRows: Array<{ sessionId: string; workloadClass: string; health: string }> = [];
 const runtimeBirths = new Set<string>();
@@ -297,6 +312,7 @@ const fieldd = {
     }
     if (method === "terminal.create") {
       if (createAnswer) return createAnswer;
+      const profileSet = (params as { profileSet?: string } | undefined)?.profileSet;
       return Promise.resolve({
         sessionId: "born-1",
         // A shell that has not drawn its first prompt has announced no OSC 7,
@@ -305,6 +321,7 @@ const fieldd = {
         // directory from creation, so this `cwd: null` is an older floor's.)
         session: bornSummary("born-1", { cwd: null }),
         ...routedTicket("born-1"),
+        ...(profileSet !== undefined && bindsProfiles ? { profileSet } : {}),
       });
     }
     if (method === "agent.interrupt") {
@@ -508,6 +525,7 @@ beforeEach(() => {
   interruptAnswer = { accepted: true };
   terminateAnswer = undefined;
   createAnswer = undefined;
+  bindsProfiles = true;
   spawnGate = undefined;
   rosterRows = [];
   runtimeBirths.clear();
@@ -516,6 +534,7 @@ beforeEach(() => {
   workspace.panes = [{ id: "pane-1", session: stubSession("pty-1") }];
   workspace.activePaneId = "pane-1";
   workspace.mounts = [];
+  workspace.fenced = false;
   localStorage.clear();
   document.documentElement.style.setProperty("--tint-l", "0.6");
   document.documentElement.style.setProperty("--tint-c", "0.15");
@@ -1535,5 +1554,143 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(
       host.querySelector('[data-session="pty-launched"]')?.getAttribute("data-visual-id"),
     ).toBe("pty-launched");
+  });
+});
+
+// ---- SB-3 — births under an Agent Profile --------------------------------------
+//
+// The spawn bloom's choice reaches the floor through the deck's ONE birth door:
+// the door's ask rides a ref into ghosttea's synchronous call of the override,
+// a split and the agent-exit shell are born under the set of the shell they
+// follow, and a refusal is fieldd's answer to one birth — never the pool's fault.
+
+/** The params of every `terminal.create` the deck sent, in order. */
+const creates = (): Array<Record<string, unknown>> =>
+  requests
+    .filter((call) => call.method === "terminal.create")
+    .map((call) => call.params as Record<string, unknown>);
+const splitDoor = (): ((session: StubSession, axis: string) => Promise<unknown>) =>
+  workspaceProps["createSplitSession"] as (session: StubSession, axis: string) => Promise<unknown>;
+
+describe("births under an Agent Profile (SB-3)", () => {
+  it("opens a terminal under the asked profile through the same birth door, and names the set fieldd applied", async () => {
+    await mountDeck();
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1", profileSet: "work" });
+    expect(creates()).toEqual([
+      { cwd: "/home/tester/vibe-field", workloadClass: "interactive", profileSet: "work" },
+    ]);
+    expect(workspace.mounts).toContain("born-1");
+  });
+
+  it("keeps the shell an older fieldd births unbound, and answers without a set", async () => {
+    bindsProfiles = false;
+    await mountDeck();
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1" });
+    expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
+  });
+
+  it("gives a ⌘D split the set of the shell it splits; an unbound shell's split and the door's plain create get none", async () => {
+    await mountDeck();
+    await act(async () => {
+      await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    await act(async () => {
+      await splitDoor()(stubSession("born-1"), "vertical");
+    });
+    await act(async () => {
+      await splitDoor()(stubSession("pty-1"), "vertical");
+    });
+    // the door's own ask is the whole answer, even from a bound pane
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    expect(creates().map((params) => params["profileSet"])).toEqual([
+      "work",
+      "work",
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("returns an ended agent's pane to a shell under the set its run was born under", async () => {
+    foldRows = [managedSummary({ terminalSessionId: "pty-1", alive: false, profileSet: "work" })];
+    await mountDeck();
+    await act(async () => {
+      workspace.panes[0]!.session = stubSession("pty-1", {
+        exited: true,
+        exitOutcome: "completed",
+      });
+      workspace.refresh();
+    });
+    await settle();
+    expect(creates()).toEqual([
+      { cwd: "/project/vibe-field", workloadClass: "interactive", profileSet: "work" },
+    ]);
+  });
+
+  it("hands the door fieldd's own words for a refused birth and faults nothing — the next birth goes through", async () => {
+    const host = await mountDeck();
+    const phase = terminalPoolSnapshot().phase;
+    createAnswer = Promise.reject(
+      new FielddRpcError(
+        "NOT_FOUND",
+        "that profile no longer exists",
+        false,
+        { set: "work" },
+        -32004,
+      ),
+    );
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    await settle();
+    // defect 2: not "the workspace could not open a terminal"
+    expect(outcome).toEqual({ state: "failed", reason: "that profile no longer exists" });
+    // defect 1: the deck is not faulted for an answer
+    expect(host.querySelector(".vf-godview-deck-fault")).toBeNull();
+    expect(terminalPoolSnapshot().fault).toBeNull();
+    expect(terminalPoolSnapshot().phase).toBe(phase);
+    expect(workspace.panes[0]?.session.id).toBe("pty-1");
+    createAnswer = undefined;
+    await act(async () => {
+      outcome = await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1", profileSet: "work" });
+  });
+
+  it("still faults the pool when fieldd could not be reached at all", async () => {
+    const host = await mountDeck();
+    // the client's own error for a request that never reached fieldd: no wire code
+    createAnswer = Promise.reject(new FielddRpcError("UNAVAILABLE", "connection closed", true));
+    await act(async () => {
+      await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    await settle();
+    expect(terminalPoolSnapshot().fault).toEqual({ plane: "fieldd", message: "connection closed" });
+    expect(host.querySelector(".vf-godview-deck-fault")).not.toBeNull();
+  });
+
+  it("drops the ask of a birth ghosttea fenced, so the next split does not take it", async () => {
+    await mountDeck();
+    workspace.fenced = true;
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    expect(outcome).toEqual({ state: "failed", reason: "the workspace could not open a terminal" });
+    workspace.fenced = false;
+    await act(async () => {
+      await splitDoor()(stubSession("pty-1"), "vertical");
+    });
+    expect(creates().map((params) => params["profileSet"])).toEqual([undefined]);
   });
 });

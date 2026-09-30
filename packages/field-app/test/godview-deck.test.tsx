@@ -221,10 +221,13 @@ const fieldd = {
     if (method === "terminal.create") {
       const sessionId = `born-${floor.length + 1}`;
       floor = [...floor, { sessionId }];
+      // SB-2: a bound create is answered with the set fieldd applied
+      const profileSet = (params as { profileSet?: string } | undefined)?.profileSet;
       return Promise.resolve({
         sessionId,
         session: bornSummary(sessionId),
         ...routedTicket(sessionId),
+        ...(profileSet !== undefined ? { profileSet } : {}),
       });
     }
     if (method === "terminal.roster") {
@@ -897,6 +900,52 @@ describe("every birth goes through the product door (TP-S1)", () => {
       rehydrate?.({ meta: { cwd: "/repo/api" }, sessionId: "dead-1", paneId: "pane-1" }),
     );
     expect(requests.filter((method) => method === "terminal.create").length).toBe(before + 1);
+  });
+
+  it("relaunches a pane under the Agent Profile its meta names, and the relaunched shell's meta names it again (SB-3)", async () => {
+    saveLayout(["alive-1", "dead-1"]);
+    floor = [{ sessionId: "alive-1" }];
+    await mountDeck();
+    const restore = [...(container?.querySelectorAll("button") ?? [])].find(
+      (button) => button.textContent === "restore",
+    );
+    await act(async () => restore?.click());
+    await settle();
+    const calls = vi.spyOn(fieldd, "request");
+    const created = (): unknown[] =>
+      calls.mock.calls.filter(([method]) => method === "terminal.create").map(([, p]) => p);
+    const rehydrate = workspaceMounts[0]?.["onRehydratePane"] as (context: {
+      meta: unknown;
+      sessionId: string;
+      paneId: string;
+    }) => Promise<{ id: string } | null>;
+    let born: { id: string } | null = null;
+    await act(async () => {
+      born = await rehydrate({
+        meta: { cwd: "/repo/api", profileSet: "work" },
+        sessionId: "dead-1",
+        paneId: "pane-1",
+      });
+    });
+    expect(created()).toEqual([
+      { cwd: "/repo/api", workloadClass: "interactive", profileSet: "work" },
+    ]);
+    const paneMeta = workspaceMounts[0]?.["paneMeta"] as (session: unknown) => unknown;
+    expect(paneMeta({ id: (born as { id: string } | null)?.id, cwd: "/repo/api" })).toEqual({
+      cwd: "/repo/api",
+      profileSet: "work",
+    });
+    // A set id the contract does not admit never reaches fieldd: the viewer's
+    // storage holds the layout, and a relaunch is not the place to trust it.
+    await act(async () => {
+      await rehydrate({
+        meta: { cwd: "/repo/api", profileSet: "Not a set!" },
+        sessionId: "dead-1",
+        paneId: "pane-1",
+      });
+    });
+    expect(created().at(-1)).toEqual({ cwd: "/repo/api", workloadClass: "interactive" });
+    calls.mockRestore();
   });
 });
 

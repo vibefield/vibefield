@@ -31,7 +31,9 @@ export interface MonitorUsagePort extends AccountUsagePort {
  * workspace context, a session object, or a client — so no view can grow a
  * second session authority (GT-D10) by reaching one field further than it
  * should. Widening this file is deliberate each time, and reviewed as such:
- * AR-3 is the second widening, and it is the one GT-D17 named as coming.
+ * AR-3 is the second widening, and it is the one GT-D17 named as coming. The
+ * spawn bloom (SB-3) is the third: `createTerminal` takes the Agent Profile a
+ * shell is born under — a set id, a noun of fieldd's, never a binding.
  */
 export interface MonitorDoor {
   /** The mesh as the floor currently sees it. Rejects when the floor cannot be
@@ -46,8 +48,10 @@ export interface MonitorDoor {
    * not be opened or was lost — the field renders that as UNAVAILABLE.
    */
   observe(listener: LocalFieldListener): () => void;
-  /** Create an empty shell through the workspace's normal birth path. */
-  createTerminal(): Promise<LocalMountOutcome>;
+  /** Create an empty shell through the workspace's normal birth path — under
+   * an Agent Profile when the request names one (SB-3). A refusal is an
+   * outcome (`failed`, in fieldd's own words), never a throw. */
+  createTerminal(request?: TerminalBirthRequest): Promise<LocalMountOutcome>;
   /** AR-3 — mount a LOCAL floor session (a managed agent's PTY, an unclaimed
    * terminal) in the ACTIVE pane. AR-4 — with `replacing`, in the pane that
    * is showing the PTY the session took the place of. */
@@ -73,6 +77,13 @@ export interface ProfileSetsPort {
   subscribe(listener: (sets: readonly AgentProfileSet[]) => void): () => void;
 }
 
+/** SB-3 — what a new terminal is born under. */
+export interface TerminalBirthRequest {
+  /** An Agent Profile SET id (`"native"` is This Mac, still a bound birth):
+   * fieldd binds the shell to it (SB-2). Absent: an unbound shell, as before. */
+  profileSet?: string;
+}
+
 /** AR-4 — a mount that takes a PTY's place: the run was resumed into a new
  * PTY (the fold's row names the old one under `terminal.replaced`), and the
  * pane that holds the old one is handed the new one rather than the active
@@ -95,7 +106,14 @@ export interface LocalFieldListener {
 }
 
 export type LocalMountOutcome =
-  | { state: "mounted"; sessionId: string }
+  | {
+      state: "mounted";
+      sessionId: string;
+      /** A birth's Agent Profile, as fieldd applied it (SB-3) — present only
+       * when the shell was born bound. Asked for and absent: the daemon could
+       * not bind it (older than SB-2), and the shell is unbound. */
+      profileSet?: string;
+    }
   | { state: "no-pane" }
   | { state: "failed"; reason: string };
 

@@ -48,6 +48,7 @@ import {
   type TerminalFault,
   type TerminalFaultPlane,
   terminalPoolSnapshot,
+  terminalSessionProfileSet,
   terminalSessionSummary,
   terminateTerminalSession,
   useTerminalPool,
@@ -59,6 +60,7 @@ import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import { bornInThisView, GodviewDeckLaunchers, recordBornShell } from "./deck-launchers";
 import {
   paneCwd,
+  paneProfileSet,
   type RestoreQuestion,
   readDeviceHost,
   rememberDeviceHost,
@@ -151,6 +153,15 @@ function deckFaultConsequence(plane: TerminalFaultPlane): string {
   return plane === "fieldd"
     ? "your shells are still running — field-native outlives fieldd, and the deck rejoins them when the control plane answers"
     : "the sessions are unreachable from here until the bridge is back";
+}
+
+/** SB-3 — a birth the door asked for, on its way to the `createSplitSession`
+ * override: the Agent Profile it is born under (undefined: unbound, as the
+ * door's plain create always was), and fieldd's words when it was refused —
+ * ghosttea swallows the override's throw, so they come back this way. */
+interface PendingBirth {
+  readonly profileSet: string | undefined;
+  refusal?: string;
 }
 
 /** The workspace publishes its context to its sidebar and nowhere else, so the
@@ -536,7 +547,11 @@ export function GodviewDeck({
         .map((session) => session.sessionId);
       if (await openDormantTransport(alive, godviewColdOpen)) return;
       try {
-        await createTerminalSession({ workloadClass: "interactive" }, godviewColdOpen);
+        // The deck's opening shell: a refusal here leaves nothing else to draw,
+        // so it faults the pool (SB-3 keeps that for the opening birth alone).
+        await createTerminalSession({ workloadClass: "interactive" }, godviewColdOpen, {
+          opening: true,
+        });
       } catch (cause) {
         // The pool has already published the fault and the deck is already
         // drawing its face; this only says so in the log with the deck's voice.
@@ -688,6 +703,27 @@ export function GodviewDeck({
   // outside the deck no longer auto-surfaces. It returns as deliberate AR/GT-5
   // work driven by `session-created`, not as a `listSessions` poll.
 
+  // SB-3 — THE BIRTH'S PROFILE. A shell is born under an Agent Profile when the
+  // door asks for one (the spawn bloom, the list's menu), or when it takes the
+  // place of a session that has one: a split and the agent-exit shell inherit
+  // the pane's, a relaunch reads it back from `paneMeta`. The door's ask cannot
+  // ride ghosttea's `createSessionInActivePane()` — it takes no arguments — but
+  // ghosttea calls this deck's `createSplitSession` override FIRST and
+  // synchronously inside it, so a ref set just before the call is what the
+  // override reads (and clears) before its first await.
+  const pendingBirth = useRef<PendingBirth | null>(null);
+  /** Each agent PTY's run set, from the deck facts (kept current below, where
+   * the facts are read). */
+  const runProfileSets = useRef<ReadonlyMap<string, string>>(new Map());
+  /** The set a shell that takes this session's place is born under, in
+   * fieldd's words only: its own birth's record, else the set the agent in it
+   * ran under. None for an unbound shell — and never a guess. */
+  const inheritedProfileSet = useCallback(
+    (sessionId: string): string | undefined =>
+      terminalSessionProfileSet(sessionId) ?? runProfileSets.current.get(sessionId),
+    [],
+  );
+
   // LAYER 2 OF RESTORE (GT-D8 as amended): the durable meaning of a pane, which
   // its session id alone does not carry. Ghosttea persists whatever this
   // returns inside its own layout document and hands it back on rehydration —
@@ -726,15 +762,23 @@ export function GodviewDeck({
       // is the only place the renderer can learn its own hostname — no contract
       // carries one. A replica's cwd must never reach this: it names the peer.
       if (remoteDevice === undefined) rememberDeviceHost(session.cwd);
+      // `profileSet` is the fourth (SB-3): the Agent Profile the pane's shell
+      // was born under, so its relaunch is born under it again. A peer's pane
+      // is under none of this device's.
+      const profileSet =
+        session.id === undefined || remoteDevice !== undefined
+          ? undefined
+          : inheritedProfileSet(session.id);
       return {
         ...(typeof session.cwd === "string" && session.cwd !== "" ? { cwd: session.cwd } : {}),
         ...(typeof session.title === "string" && session.title !== ""
           ? { title: session.title }
           : {}),
         ...(remoteDevice !== undefined ? { remoteDevice } : {}),
+        ...(profileSet !== undefined ? { profileSet } : {}),
       };
     },
-    [],
+    [inheritedProfileSet],
   );
 
   // A BIRTH, through the one product door (TP-S1).
@@ -764,12 +808,15 @@ export function GodviewDeck({
   // so the same end state is reached by saying it once instead of by saying the
   // opposite and being corrected.
   const bornSession = useCallback(
-    async (cwd: string | undefined): Promise<SessionSummary | null> => {
+    async (cwd: string | undefined, profileSet?: string): Promise<SessionSummary | null> => {
       const created = await createTerminalSession({
         ...(cwd !== undefined ? { cwd } : {}),
         // TC-D6(c): the class is the scrollback cap AND the placement hint. A
         // pane a person types into is interactive by definition.
         workloadClass: "interactive",
+        // SB-3: born under an Agent Profile — fieldd binds it (SB-2) or
+        // refuses in its own words, and a refusal faults nothing (the pool's)
+        ...(profileSet !== undefined ? { profileSet } : {}),
       });
       // The folder this pane was born in, remembered for its badge until the
       // shell announces one of its own (PU-14b).
@@ -798,8 +845,12 @@ export function GodviewDeck({
       // creation, as a plain path that `paneCwd` takes as it is. Home is now the
       // fallback for a peer's pane, a Windows drive path, and an older floor.
       const cwd = paneCwd(context.meta, readDeviceHost()) ?? shell.home;
+      // SB-3: re-bound. A set deleted since is fieldd's refusal, and the pane
+      // goes like any other that cannot be refilled — never an unbound shell
+      // in a bound one's place.
+      const profileSet = paneProfileSet(context.meta);
       try {
-        return await bornSession(cwd);
+        return await bornSession(cwd, profileSet);
       } catch (cause) {
         // Drop-and-collapse is the library's own answer to a null, and it is
         // the honest one: a pane that cannot be refilled should not be drawn as
@@ -831,13 +882,27 @@ export function GodviewDeck({
    * drawn as though it were. */
   const createSplitSession = useCallback(
     async (activeSession: DeckSession): Promise<SessionSummary> => {
+      // SB-3: the door's ask, taken (and cleared) before the first await, so a
+      // ⌘D after it cannot inherit it. With none — a ⌘D split, the agent-exit
+      // shell — the new shell is born under the set of the one it follows.
+      const birth = pendingBirth.current;
+      pendingBirth.current = null;
+      const profileSet = birth !== null ? birth.profileSet : inheritedProfileSet(activeSession.id);
       const cwd = paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
-      const born = await bornSession(cwd);
+      let born: SessionSummary | null;
+      try {
+        born = await bornSession(cwd, profileSet);
+      } catch (cause) {
+        // Ghosttea catches this throw and answers `undefined`; the door's
+        // `failed` carries fieldd's own words from here instead (SB-3).
+        if (birth !== null) birth.refusal = cause instanceof Error ? cause.message : String(cause);
+        throw cause;
+      }
       if (born === null) throw new Error("the floor did not report the session it just created");
       recordBornShell(runtime, born.id); // QL-D7: a new pane's shell, which may show the launcher
       return born;
     },
-    [bornSession, shell, runtime],
+    [bornSession, shell, runtime, inheritedProfileSet],
   );
 
   /**
@@ -1054,17 +1119,35 @@ export function GodviewDeck({
           unsubscribe?.();
         };
       },
-      createTerminal: async () => {
+      createTerminal: async (request) => {
         const context = workspaceRef.current;
         if (context?.activeSession === undefined) return { state: "no-pane" };
+        // SB-3: the ask rides the pending-birth ref into the override (above).
+        const birth: PendingBirth = { profileSet: request?.profileSet };
+        pendingBirth.current = birth;
         try {
           // Ghosttea owns pane placement and concurrent-birth fencing. Its
           // createSplitSession override uses the same product door as Cmd–D.
-          const session = await context.createSessionInActivePane();
-          return session
-            ? { state: "mounted", sessionId: session.id }
-            : { state: "failed", reason: "the workspace could not open a terminal" };
+          const opening = context.createSessionInActivePane();
+          // A birth ghosttea fenced (another one in flight) never reached the
+          // override, and its ask must not wait there for the next ⌘D.
+          if (pendingBirth.current === birth) pendingBirth.current = null;
+          const session = await opening;
+          if (!session) {
+            // A refusal is fieldd's to word, and the override kept its words.
+            return {
+              state: "failed",
+              reason: birth.refusal ?? "the workspace could not open a terminal",
+            };
+          }
+          const bound = terminalSessionProfileSet(session.id);
+          return {
+            state: "mounted",
+            sessionId: session.id,
+            ...(bound !== undefined ? { profileSet: bound } : {}),
+          };
         } catch (cause) {
+          if (pendingBirth.current === birth) pendingBirth.current = null;
           return {
             state: "failed",
             reason: cause instanceof Error ? cause.message : String(cause),
@@ -1143,6 +1226,7 @@ export function GodviewDeck({
   const paneAgents = useDeckAgentFacts();
   const paneRuns = useRef(paneAgents.runs);
   paneRuns.current = paneAgents.runs;
+  runProfileSets.current = paneAgents.profileSets;
 
   useCompletedAgentPanes(
     runtime,

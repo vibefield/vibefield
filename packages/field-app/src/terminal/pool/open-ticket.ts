@@ -69,6 +69,9 @@ export function readOpenTicket(sessionId: string, raw: unknown, now: number): Re
 export interface ReadCreate extends ReadTicket {
   readonly sessionId: string;
   readonly session: SessionSummary;
+  /** SB-2 — the Agent Profile the shell was born under, as fieldd applied it;
+   * absent for an unbound shell (and from a fieldd that cannot bind one). */
+  readonly profileSet?: string | undefined;
 }
 
 /** Read `terminal.create`'s answer. */
@@ -79,5 +82,6 @@ export function readCreateTicket(raw: unknown, now: number): ReadCreate {
     session: asSessionSummary(answered.session),
     placement: placementOf(answered.sessionId, answered, now),
     routedTicket: routedTicketOf(answered),
+    ...(answered.profileSet !== undefined ? { profileSet: answered.profileSet } : {}),
   };
 }
