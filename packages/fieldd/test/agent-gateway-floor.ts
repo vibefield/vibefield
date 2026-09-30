@@ -548,18 +548,23 @@ async function record(box: Floor, pane: Pane): Promise<void> {
  * another, an explicit zsh from PATH, the other birth `create` integrates.
  * Nothing is typed to make the launchers lead: the shell is BORN integrated
  * by the daemon's own wiring, or the row is red. The pane has answered at its
- * first prompt when this returns, so the integration's hook has run. */
+ * first prompt when this returns, so the integration's hook has run.
+ * `profileSet` (SB-2): the pane is born under that Agent Profile, and the
+ * answer says what the daemon said of it (`bound`, the create's `profileSet`). */
 export async function bornPane(
   box: Floor,
-  options: { recorded?: boolean } = {},
-): Promise<Pane & { integrated: boolean; login: boolean }> {
+  options: { recorded?: boolean; profileSet?: string } = {},
+): Promise<
+  Pane & { integrated: boolean; login: boolean; bound: boolean; profileSet?: string | undefined }
+> {
   if (box.personHome === undefined) throw new Error("a born pane needs a person's floor");
   const login = loginZsh() !== undefined;
   if (!login && ZSH === undefined) throw new Error("no zsh on this host");
-  const created = (await box.win.call(
-    "terminal.create",
-    login ? { cwd: box.work } : { shell: ZSH, cwd: box.work },
-  )) as { sessionId: string };
+  const created = (await box.win.call("terminal.create", {
+    ...(login ? {} : { shell: ZSH }),
+    cwd: box.work,
+    ...(options.profileSet === undefined ? {} : { profileSet: options.profileSet }),
+  })) as { sessionId: string; profileSet?: string };
   const listed = await poll(
     () => {
       const row = box.daemon.terminals.get(created.sessionId);
@@ -579,9 +584,10 @@ export async function bornPane(
     "the birth in the ledger",
   );
   const integrated = act.outcome?.attrs?.["integrated"] === true;
+  const bound = act.outcome?.attrs?.["bound"] === true;
   await answers(box, pane, "born");
   if (options.recorded === true) await record(box, pane);
-  return { ...pane, integrated, login };
+  return { ...pane, integrated, login, bound, profileSet: created.profileSet };
 }
 
 /** The pane answers at its prompt: a line typed now runs. */

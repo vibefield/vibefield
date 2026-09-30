@@ -44,7 +44,6 @@ import type {
   AgentProfile,
   BoundIngress,
   ExtensionService,
-  ProfileService,
   PromptReceipt,
   PromptSubmission,
 } from "@vibecook/puppeteer-core";
@@ -89,6 +88,7 @@ import {
   shortTmpRoot,
   waitForMgmtEndpoint,
 } from "./native-harness";
+import { scriptedProfiles } from "./scripted-profiles";
 import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -189,41 +189,6 @@ function scriptedBinding(
     async dispose() {},
   };
 }
-/** AR-S2 — an account capability for the scripted provider, so a sign-in can
- * hold a LIVE session: its root is bound through a variable of its own, its
- * identity is whatever this says, and its native default points nowhere real. */
-function scriptedProfiles(): ProfileService {
-  return {
-    provider: {
-      id: "scripted",
-      label: "Scripted",
-      support: {
-        supported: true,
-        identity: "native-status",
-        sharedSurfaces: [],
-        nativeDefaultRoot: "/nonexistent/.scripted",
-      },
-    },
-    bindingEnvironment: (profile: AgentProfile): Record<string, string> =>
-      profile.kind === "managed" ? { SCRIPTED_HOME: profile.dataRoot } : {},
-    observationRoot: (profile: AgentProfile) => profile.dataRoot,
-    // returns at once, unless a row asks for a login that stays open
-    loginInvocation: (_profile, options) => ({
-      command: "/bin/sh",
-      args: ["-c", process.env["SCRIPTED_LOGIN"] ?? "exit 0"],
-      cwd: options.cwd,
-    }),
-    async verify() {
-      return {
-        loggedIn: true,
-        email: "scripted@example.test",
-        verifiedAt: new Date().toISOString(),
-        source: { kind: "native-status", stability: "documented" },
-      };
-    },
-  };
-}
-
 /** AR-S4c — the scripted agent's one remote server, `linear`: it asks for a
  * sign-in until its sign-in — a shell in a pane on the floor — leaves `mark`. */
 function scriptedExtensions(mark: string): ExtensionService {
