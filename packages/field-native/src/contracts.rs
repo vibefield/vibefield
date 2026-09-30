@@ -3538,6 +3538,577 @@ impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json:
         Self(value)
     }
 }
+#[doc = "`MeshEgressLoopbackAddress`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^(?:127\\\\.0\\\\.0\\\\.1|\\\\[::1\\\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshEgressLoopbackAddress(::std::string::String);
+impl ::std::ops::Deref for MeshEgressLoopbackAddress {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshEgressLoopbackAddress> for ::std::string::String {
+    fn from(value: MeshEgressLoopbackAddress) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshEgressLoopbackAddress {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(
+            || {
+                :: regress :: Regex :: new ("^(?:127\\.0\\.0\\.1|\\[::1\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$") . unwrap ()
+            },
+        );
+        if PATTERN.find(value).is_none() {
+            return Err ("doesn't match pattern \"^(?:127\\.0\\.0\\.1|\\[::1\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$\"" . into ()) ;
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshEgressLoopbackAddress {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshEgressLoopbackAddress {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshEgressLoopbackAddress {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshEgressLoopbackAddress {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`MeshEgressProxy`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"address\","]
+#[doc = "    \"credential\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"address\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressLoopbackAddress\""]
+#[doc = "    },"]
+#[doc = "    \"credential\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 1024,"]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshEgressProxy {
+    pub address: MeshEgressLoopbackAddress,
+    pub credential: MeshEgressProxyCredential,
+}
+impl MeshEgressProxy {
+    pub fn builder() -> builder::MeshEgressProxy {
+        Default::default()
+    }
+}
+#[doc = "`MeshEgressProxyCredential`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 1024,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshEgressProxyCredential(::std::string::String);
+impl ::std::ops::Deref for MeshEgressProxyCredential {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshEgressProxyCredential> for ::std::string::String {
+    fn from(value: MeshEgressProxyCredential) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshEgressProxyCredential {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 1024usize {
+            return Err("longer than 1024 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshEgressProxyCredential {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshEgressProxyCredential {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshEgressProxyCredential {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshEgressProxyCredential {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`MeshEgressRoute`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"id\","]
+#[doc = "    \"listen\","]
+#[doc = "    \"target\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"id\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressRouteId\""]
+#[doc = "    },"]
+#[doc = "    \"listen\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressLoopbackAddress\""]
+#[doc = "    },"]
+#[doc = "    \"target\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressTarget\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshEgressRoute {
+    pub id: MeshEgressRouteId,
+    pub listen: MeshEgressLoopbackAddress,
+    pub target: MeshEgressTarget,
+}
+impl MeshEgressRoute {
+    pub fn builder() -> builder::MeshEgressRoute {
+        Default::default()
+    }
+}
+#[doc = "`MeshEgressRouteAddParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"id\","]
+#[doc = "    \"target\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"id\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressRouteId\""]
+#[doc = "    },"]
+#[doc = "    \"login\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 256,"]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"target\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressTarget\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshEgressRouteAddParams {
+    pub id: MeshEgressRouteId,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub login: ::std::option::Option<MeshEgressRouteAddParamsLogin>,
+    pub target: MeshEgressTarget,
+}
+impl MeshEgressRouteAddParams {
+    pub fn builder() -> builder::MeshEgressRouteAddParams {
+        Default::default()
+    }
+}
+#[doc = "`MeshEgressRouteAddParamsLogin`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 256,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshEgressRouteAddParamsLogin(::std::string::String);
+impl ::std::ops::Deref for MeshEgressRouteAddParamsLogin {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshEgressRouteAddParamsLogin> for ::std::string::String {
+    fn from(value: MeshEgressRouteAddParamsLogin) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshEgressRouteAddParamsLogin {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 256usize {
+            return Err("longer than 256 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshEgressRouteAddParamsLogin {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshEgressRouteAddParamsLogin {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshEgressRouteAddParamsLogin {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshEgressRouteAddParamsLogin {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`MeshEgressRouteBound`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"id\","]
+#[doc = "    \"listen\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"id\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressRouteId\""]
+#[doc = "    },"]
+#[doc = "    \"listen\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressLoopbackAddress\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshEgressRouteBound {
+    pub id: MeshEgressRouteId,
+    pub listen: MeshEgressLoopbackAddress,
+}
+impl MeshEgressRouteBound {
+    pub fn builder() -> builder::MeshEgressRouteBound {
+        Default::default()
+    }
+}
+#[doc = "`MeshEgressRouteId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshEgressRouteId(::std::string::String);
+impl ::std::ops::Deref for MeshEgressRouteId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshEgressRouteId> for ::std::string::String {
+    fn from(value: MeshEgressRouteId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshEgressRouteId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$").unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshEgressRouteId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshEgressRouteId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshEgressRouteId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshEgressRouteId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`MeshEgressRouteRef`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"id\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"id\": {"]
+#[doc = "      \"$ref\": \"#/definitions/MeshEgressRouteId\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshEgressRouteRef {
+    pub id: MeshEgressRouteId,
+}
+impl MeshEgressRouteRef {
+    pub fn builder() -> builder::MeshEgressRouteRef {
+        Default::default()
+    }
+}
+#[doc = "`MeshEgressRouteTable`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"routes\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"routes\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/MeshEgressRoute\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct MeshEgressRouteTable {
+    pub routes: ::std::vec::Vec<MeshEgressRoute>,
+}
+impl MeshEgressRouteTable {
+    pub fn builder() -> builder::MeshEgressRouteTable {
+        Default::default()
+    }
+}
+#[doc = "`MeshEgressTarget`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 259,"]
+#[doc = "  \"pattern\": \"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\\\\[[0-9A-Fa-f:.]{2,45}\\\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshEgressTarget(::std::string::String);
+impl ::std::ops::Deref for MeshEgressTarget {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshEgressTarget> for ::std::string::String {
+    fn from(value: MeshEgressTarget) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshEgressTarget {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 259usize {
+            return Err("longer than 259 characters".into());
+        }
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> = ::std::sync::LazyLock::new(
+            || {
+                :: regress :: Regex :: new ("^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\\[[0-9A-Fa-f:.]{2,45}\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$") . unwrap ()
+            },
+        );
+        if PATTERN.find(value).is_none() {
+            return Err ("doesn't match pattern \"^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\\[[0-9A-Fa-f:.]{2,45}\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$\"" . into ()) ;
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshEgressTarget {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshEgressTarget {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshEgressTarget {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshEgressTarget {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "`MeshLaneClass`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -9254,6 +9825,330 @@ pub mod builder {
                 stream: Ok(value.stream),
                 v: Ok(value.v),
                 writer_state: Ok(value.writer_state),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshEgressProxy {
+        address: ::std::result::Result<super::MeshEgressLoopbackAddress, ::std::string::String>,
+        credential: ::std::result::Result<super::MeshEgressProxyCredential, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshEgressProxy {
+        fn default() -> Self {
+            Self {
+                address: Err("no value supplied for address".to_string()),
+                credential: Err("no value supplied for credential".to_string()),
+            }
+        }
+    }
+    impl MeshEgressProxy {
+        pub fn address<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressLoopbackAddress>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.address = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for address: {e}"));
+            self
+        }
+        pub fn credential<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressProxyCredential>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.credential = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for credential: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshEgressProxy> for super::MeshEgressProxy {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshEgressProxy,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                address: value.address?,
+                credential: value.credential?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshEgressProxy> for MeshEgressProxy {
+        fn from(value: super::MeshEgressProxy) -> Self {
+            Self {
+                address: Ok(value.address),
+                credential: Ok(value.credential),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshEgressRoute {
+        id: ::std::result::Result<super::MeshEgressRouteId, ::std::string::String>,
+        listen: ::std::result::Result<super::MeshEgressLoopbackAddress, ::std::string::String>,
+        target: ::std::result::Result<super::MeshEgressTarget, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshEgressRoute {
+        fn default() -> Self {
+            Self {
+                id: Err("no value supplied for id".to_string()),
+                listen: Err("no value supplied for listen".to_string()),
+                target: Err("no value supplied for target".to_string()),
+            }
+        }
+    }
+    impl MeshEgressRoute {
+        pub fn id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressRouteId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for id: {e}"));
+            self
+        }
+        pub fn listen<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressLoopbackAddress>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.listen = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for listen: {e}"));
+            self
+        }
+        pub fn target<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressTarget>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.target = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for target: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshEgressRoute> for super::MeshEgressRoute {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshEgressRoute,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                id: value.id?,
+                listen: value.listen?,
+                target: value.target?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshEgressRoute> for MeshEgressRoute {
+        fn from(value: super::MeshEgressRoute) -> Self {
+            Self {
+                id: Ok(value.id),
+                listen: Ok(value.listen),
+                target: Ok(value.target),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshEgressRouteAddParams {
+        id: ::std::result::Result<super::MeshEgressRouteId, ::std::string::String>,
+        login: ::std::result::Result<
+            ::std::option::Option<super::MeshEgressRouteAddParamsLogin>,
+            ::std::string::String,
+        >,
+        target: ::std::result::Result<super::MeshEgressTarget, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshEgressRouteAddParams {
+        fn default() -> Self {
+            Self {
+                id: Err("no value supplied for id".to_string()),
+                login: Ok(Default::default()),
+                target: Err("no value supplied for target".to_string()),
+            }
+        }
+    }
+    impl MeshEgressRouteAddParams {
+        pub fn id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressRouteId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for id: {e}"));
+            self
+        }
+        pub fn login<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::MeshEgressRouteAddParamsLogin>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.login = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for login: {e}"));
+            self
+        }
+        pub fn target<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressTarget>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.target = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for target: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshEgressRouteAddParams> for super::MeshEgressRouteAddParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshEgressRouteAddParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                id: value.id?,
+                login: value.login?,
+                target: value.target?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshEgressRouteAddParams> for MeshEgressRouteAddParams {
+        fn from(value: super::MeshEgressRouteAddParams) -> Self {
+            Self {
+                id: Ok(value.id),
+                login: Ok(value.login),
+                target: Ok(value.target),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshEgressRouteBound {
+        id: ::std::result::Result<super::MeshEgressRouteId, ::std::string::String>,
+        listen: ::std::result::Result<super::MeshEgressLoopbackAddress, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshEgressRouteBound {
+        fn default() -> Self {
+            Self {
+                id: Err("no value supplied for id".to_string()),
+                listen: Err("no value supplied for listen".to_string()),
+            }
+        }
+    }
+    impl MeshEgressRouteBound {
+        pub fn id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressRouteId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for id: {e}"));
+            self
+        }
+        pub fn listen<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressLoopbackAddress>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.listen = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for listen: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshEgressRouteBound> for super::MeshEgressRouteBound {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshEgressRouteBound,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                id: value.id?,
+                listen: value.listen?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshEgressRouteBound> for MeshEgressRouteBound {
+        fn from(value: super::MeshEgressRouteBound) -> Self {
+            Self {
+                id: Ok(value.id),
+                listen: Ok(value.listen),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshEgressRouteRef {
+        id: ::std::result::Result<super::MeshEgressRouteId, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshEgressRouteRef {
+        fn default() -> Self {
+            Self {
+                id: Err("no value supplied for id".to_string()),
+            }
+        }
+    }
+    impl MeshEgressRouteRef {
+        pub fn id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressRouteId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshEgressRouteRef> for super::MeshEgressRouteRef {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshEgressRouteRef,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self { id: value.id? })
+        }
+    }
+    impl ::std::convert::From<super::MeshEgressRouteRef> for MeshEgressRouteRef {
+        fn from(value: super::MeshEgressRouteRef) -> Self {
+            Self { id: Ok(value.id) }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct MeshEgressRouteTable {
+        routes:
+            ::std::result::Result<::std::vec::Vec<super::MeshEgressRoute>, ::std::string::String>,
+    }
+    impl ::std::default::Default for MeshEgressRouteTable {
+        fn default() -> Self {
+            Self {
+                routes: Err("no value supplied for routes".to_string()),
+            }
+        }
+    }
+    impl MeshEgressRouteTable {
+        pub fn routes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::MeshEgressRoute>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.routes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for routes: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<MeshEgressRouteTable> for super::MeshEgressRouteTable {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: MeshEgressRouteTable,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                routes: value.routes?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::MeshEgressRouteTable> for MeshEgressRouteTable {
+        fn from(value: super::MeshEgressRouteTable) -> Self {
+            Self {
+                routes: Ok(value.routes),
             }
         }
     }

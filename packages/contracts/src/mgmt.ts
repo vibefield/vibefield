@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { TerminalCellRole, TerminalRouteCell, TerminalWorkloadClass } from "./envelope";
+import { UnavailableDetails } from "./errors";
+import { PORTS } from "./registries";
 
 // Management channel (design-01 §5.2, M2 subset): native.lifecycle.* + the mesh
 // facade P0 subset (peers / store / serve). Laws honored here:
@@ -558,3 +560,171 @@ export const MeshLaneClosed = z
   })
   .passthrough();
 export type MeshLaneClosed = z.infer<typeof MeshLaneClosed>;
+
+// ---- egress (DS-1 · design-02 §2.4's egress bullet · design-06 §3 · petition T7 = truffle RFC 026) ----
+//
+// The mirror image of `serve`. Serving publishes a loopback port ONTO the
+// tailnet; egress lets a process on THIS desktop reach a peer THROUGH its own
+// node, so no desktop-to-desktop path depends on the operating system's
+// Tailscale app (DS-L5). Three rungs, all in the sidecar, so bytes cross a
+// process boundary once per side as they do inbound:
+//
+//   E1 `proxy`      the node's own authenticated SOCKS5 (tsnet `Loopback()`);
+//                   fieldd's PeerLink dials a peer's door through it.
+//   E2 `route.*`    a loopback listener with a FIXED tailnet target, one per
+//                   peer door; a renderer dials a remote cell as it dials a
+//                   local one.
+//   E3 `httpProxy`  an authenticated HTTP CONNECT proxy for the artifact and
+//                   browser partition (Chromium cannot authenticate to SOCKS5).
+//
+// CONTROL ONLY: an address, a credential, a route row. Nothing that rides an
+// egress path ever crosses this channel (EL2).
+//
+// Until the sidecar speaks RFC 026 the floor answers every verb
+// `UNAVAILABLE {service: "mesh", state: "egress-unsupported"}`. That is a
+// capability fact, not a transient: fieldd keeps dialling over the OS network
+// and says so once per link (`mesh.egress.fallback_os_network`).
+
+/** The egress registry. Generated into Rust (`registries::mesh_egress`) so the
+ * floor's belt and fieldd's suspenders read ONE list, never two copies. */
+export const MESH_EGRESS = {
+  /** `UnavailableDetails.service` on every egress refusal. */
+  SERVICE: "mesh",
+  /** The sidecar predates RFC 026. A CAPABILITY fact that holds for the
+   * floor's whole life, so a reader falls back instead of retrying. */
+  STATE_UNSUPPORTED: "egress-unsupported",
+  /** Egress exists, but no node is installed right now (the posture is
+   * offline, or the node is starting or rebuilding). */
+  STATE_MESH_DOWN: "mesh-down",
+  /** tsnet's loopback SOCKS5 username (`tsnet/tsnet.go:451-455` at v1.102.3;
+   * the credential is the password). The answer carries only the password
+   * because the username is tsnet's constant, not a secret. */
+  SOCKS_USERNAME: "tsnet",
+  /** DS-L6 — the ONLY tailnet ports an unauthenticated loopback route may
+   * target: doors that demand their own grant. A terminal cell verifies a MAC
+   * on its first frame; the product door trusts the node's login and is
+   * reached only through the authenticated proxy (E1), never through a route.
+   * A new row here is a claim about a door's authentication, made in review. */
+  ROUTABLE_PORTS: [PORTS.TERMINAL_CELLS_SERVE],
+} as const;
+
+/** 1–65535 with no leading zero, as a PATTERN rather than a refinement so the
+ * generated Rust twin checks the same rule (typify carries `pattern`; a zod
+ * refinement never reaches it). */
+const EGRESS_PORT =
+  "(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])";
+
+/** A listener the floor bound for this desktop: a LITERAL loopback address and
+ * a port. Never a name: a name is resolved, a resolver can be pointed
+ * elsewhere, and whoever answered would be handed the credential. */
+export const MESH_EGRESS_LOOPBACK_PATTERN = `^(?:127\\.0\\.0\\.1|\\[::1\\]):${EGRESS_PORT}$`;
+export const MeshEgressLoopbackAddress = z
+  .string()
+  .regex(new RegExp(MESH_EGRESS_LOOPBACK_PATTERN), "a literal loopback host:port");
+export type MeshEgressLoopbackAddress = z.infer<typeof MeshEgressLoopbackAddress>;
+
+/** A route's FIXED tailnet target, `<peer-fqdn-or-ip>:<port>`: a DNS name
+ * (MagicDNS), a dotted IPv4, or a bracketed IPv6. Syntax only. Whether the
+ * target is a peer the node's login gate admits is the sidecar's refusal to
+ * make (RFC 026 E2); which PORTS may be routed at all is DS-L6's
+ * (`MESH_EGRESS.ROUTABLE_PORTS`), enforced by the floor. */
+export const MESH_EGRESS_TARGET_PATTERN = `^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\\[[0-9A-Fa-f:.]{2,45}\\]):${EGRESS_PORT}$`;
+export const MeshEgressTarget = z
+  .string()
+  .max(259)
+  .regex(new RegExp(MESH_EGRESS_TARGET_PATTERN), "<peer-fqdn-or-ip>:<port>");
+export type MeshEgressTarget = z.infer<typeof MeshEgressTarget>;
+
+/** A route's name. The CALLER mints it (fieldd keys one per `{peer, port}`),
+ * so an add replayed after a reconnect names the same route instead of
+ * binding a second listener. A conservative charset, because the sidecar
+ * carries it as its own key. */
+export const MESH_EGRESS_ROUTE_ID_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$";
+export const MeshEgressRouteId = z.string().regex(new RegExp(MESH_EGRESS_ROUTE_ID_PATTERN));
+export type MeshEgressRouteId = z.infer<typeof MeshEgressRouteId>;
+
+/** `native.mesh.egress.proxy {}` (E1, SOCKS5) and `native.mesh.egress.httpProxy {}`
+ * (E3, HTTP CONNECT): one answer shape for both, where the proxy listens and
+ * the credential it demands. The credential is the only secret on this seam.
+ * It rides the paired channel once per ask and lives in fieldd's memory,
+ * never a log, a file or an environment (EL7). */
+export const MeshEgressProxy = z
+  .object({
+    address: MeshEgressLoopbackAddress,
+    credential: z.string().min(1).max(1024),
+  })
+  .passthrough();
+export type MeshEgressProxy = z.infer<typeof MeshEgressProxy>;
+
+/** `native.mesh.egress.route.add`: bind a loopback listener whose every
+ * connection is dialled, through the node, to `target`. Idempotent per id:
+ * the same id with the same target answers the route already bound, and the
+ * same id with ANOTHER target is a CONFLICT, because a route never silently
+ * re-aims. `login` is an optional allow-glob the sidecar checks against the
+ * target's WhoIs at bind (RFC 026 E2's option). */
+export const MeshEgressRouteAddParams = z
+  .object({
+    id: MeshEgressRouteId,
+    target: MeshEgressTarget,
+    login: z.string().min(1).max(256).optional(),
+  })
+  .passthrough();
+export type MeshEgressRouteAddParams = z.infer<typeof MeshEgressRouteAddParams>;
+
+/** `route.add`'s answer: the loopback address a local process dials. */
+export const MeshEgressRouteBound = z
+  .object({
+    id: MeshEgressRouteId,
+    listen: MeshEgressLoopbackAddress,
+  })
+  .passthrough();
+export type MeshEgressRouteBound = z.infer<typeof MeshEgressRouteBound>;
+
+/** `route.remove`'s params AND its answer: a route is named by its id alone.
+ * An unknown id is NOT_FOUND, exactly as `serve.remove` answers, so a caller
+ * releasing a route that a node rebuild already dropped reads it as done. */
+export const MeshEgressRouteRef = z
+  .object({
+    id: MeshEgressRouteId,
+  })
+  .passthrough();
+export type MeshEgressRouteRef = z.infer<typeof MeshEgressRouteRef>;
+
+/** One row of the route table. */
+export const MeshEgressRoute = z
+  .object({
+    id: MeshEgressRouteId,
+    target: MeshEgressTarget,
+    listen: MeshEgressLoopbackAddress,
+  })
+  .passthrough();
+export type MeshEgressRoute = z.infer<typeof MeshEgressRoute>;
+
+/** `route.list`'s answer, and the snapshot of `route.subscribe`. The table is
+ * REBUILT-NOT-PERSISTED like every facade table (design-02 §2.4): a node
+ * teardown or rebuild empties it, and the subscription says so with a fresh
+ * snapshot. That snapshot is the facade's `reset` in the P5 idiom, and it is
+ * how fieldd learns that every listen address it handed out is dead. */
+export const MeshEgressRouteTable = z
+  .object({
+    routes: z.array(MeshEgressRoute),
+  })
+  .passthrough();
+export type MeshEgressRouteTable = z.infer<typeof MeshEgressRouteTable>;
+
+/** The facade's two degraded answers, as `UNAVAILABLE` details
+ * (`MESH_EGRESS.STATE_*` says what each means). `gatewayState` rides beside
+ * `mesh-down` with the mesh unit's own word, so a reader can say WHY without
+ * asking twice. TS-side only: the floor writes these details as JSON, and the
+ * `error-data.egress-*` goldens pin what it writes on both sides. */
+export const MeshEgressUnavailableState = z.enum([
+  MESH_EGRESS.STATE_UNSUPPORTED,
+  MESH_EGRESS.STATE_MESH_DOWN,
+]);
+export type MeshEgressUnavailableState = z.infer<typeof MeshEgressUnavailableState>;
+export const MeshEgressUnavailableDetails = UnavailableDetails.extend({
+  service: z.literal(MESH_EGRESS.SERVICE),
+  state: MeshEgressUnavailableState,
+  gatewayState: UnitState.optional(),
+}).passthrough();
+export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableDetails>;

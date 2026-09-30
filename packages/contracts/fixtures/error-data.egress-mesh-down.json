@@ -1,0 +1,5 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": true,
+  "details": { "service": "mesh", "state": "mesh-down", "gatewayState": "disabled" }
+}

@@ -71,6 +71,15 @@ import {
   DesiredTerminal,
   DesiredWorker,
   MeshConfig,
+  MeshEgressLoopbackAddress,
+  MeshEgressProxy,
+  MeshEgressRoute,
+  MeshEgressRouteAddParams,
+  MeshEgressRouteBound,
+  MeshEgressRouteId,
+  MeshEgressRouteRef,
+  MeshEgressRouteTable,
+  MeshEgressTarget,
   MeshLaneClass,
   MeshLaneClosed,
   MeshLaneCloseRequest,
@@ -165,6 +174,19 @@ const BASE_SHARED = {
   MeshLaneCloseRequest,
   MeshLanePeerOpened,
   MeshLaneClosed,
+  // DS-1 — egress. The three constrained strings are embedded by several
+  // shapes each (the loopback address by the proxy answer, the bound route and
+  // the table row), so every one is named for the usual typify reason; the
+  // row is embedded by the table.
+  MeshEgressLoopbackAddress,
+  MeshEgressTarget,
+  MeshEgressRouteId,
+  MeshEgressProxy,
+  MeshEgressRouteAddParams,
+  MeshEgressRouteBound,
+  MeshEgressRouteRef,
+  MeshEgressRoute,
+  MeshEgressRouteTable,
 } as const;
 
 // Logging/diagnostics (LOG-42) — ONLY the native-consumed subset. Audit,
@@ -223,6 +245,11 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "mesh-lane-close-request": MeshLaneCloseRequest,
   "mesh-lane-peer-opened": MeshLanePeerOpened,
   "mesh-lane-closed": MeshLaneClosed,
+  "mesh-egress-proxy": MeshEgressProxy,
+  "mesh-egress-route-add-params": MeshEgressRouteAddParams,
+  "mesh-egress-route-bound": MeshEgressRouteBound,
+  "mesh-egress-route-ref": MeshEgressRouteRef,
+  "mesh-egress-route-table": MeshEgressRouteTable,
   "log-record-v1": LogRecordV1,
   "logging-health-v1": LoggingHealthV1,
   "diagnostic-log-snapshot-v1": DiagnosticLogSnapshotV1,

@@ -1,0 +1,14 @@
+{
+  "routes": [
+    {
+      "id": "egress-01ARZ3NDEKTSV4RRFFQ69G5FAV-9422",
+      "target": "truffle-vibefield-studio.tail1234.ts.net:9422",
+      "listen": "127.0.0.1:53211"
+    },
+    {
+      "id": "egress-01BX5ZZKBKACTAV9WEVGEMMVRZ-9422",
+      "target": "[fd7a:115c:a1e0::3]:9422",
+      "listen": "[::1]:53212"
+    }
+  ]
+}

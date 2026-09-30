@@ -5,6 +5,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { MESH_EGRESS } from "../src/mgmt";
 import {
   APP_ID,
   CELL_ISOLATION,
@@ -53,6 +54,17 @@ const lines: string[] = [
   "",
   "pub mod mesh_control_limits {",
   ...Object.entries(MESH_CONTROL_LIMITS).map(([k, v]) => `    pub const ${k}: usize = ${v};`),
+  "}",
+  "",
+  "/// DS-1 — the egress facade's registry (contracts mgmt.ts `MESH_EGRESS`): the",
+  "/// refusal vocabulary and DS-L6's routable ports, one list for the floor's",
+  "/// belt and fieldd's suspenders.",
+  "pub mod mesh_egress {",
+  ...Object.entries(MESH_EGRESS).map(([k, v]) =>
+    Array.isArray(v)
+      ? `    pub const ${k}: &[u16] = &[${v.join(", ")}];`
+      : `    pub const ${k}: &str = "${v}";`,
+  ),
   "}",
   "",
   "/// TC-D6(c) — per-class scrollback BYTE caps, enforced at the native create",

@@ -449,6 +449,65 @@ export const METHODS: MethodDef[] = [
     subscription: true,
   }),
 
+  // DS-1 — EGRESS (design-02 §2.4's egress bullet; shapes in mgmt.ts). The
+  // mirror image of `serve`: a desktop reaches a peer THROUGH its own node, so
+  // no desktop-to-desktop path needs the OS Tailscale app (DS-L5). CONTROL
+  // only, like lanes: an address, a credential, a route row. Until truffle
+  // ships RFC 026 the floor answers every one of these `UNAVAILABLE {service:
+  // "mesh", state: "egress-unsupported"}`, and fieldd falls back honestly.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.egress.proxy",
+    scope: null,
+    // the node's loopback proxy is started once and answers the same address
+    // and credential for the node's lifetime
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.egress.route.add",
+    scope: null,
+    // the caller mints the id: the same id and target answers the bound route,
+    // another target under that id is a CONFLICT (a route never re-aims)
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.egress.route.remove",
+    scope: null,
+    // an unknown id is NOT_FOUND, which a releasing caller reads as done —
+    // the same contract as `serve.remove`
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.egress.route.list",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  // The route table's stream. A node teardown or rebuild empties the table
+  // (rebuilt-not-persisted), and the fresh snapshot this pushes is the
+  // facade's `reset`: every listen address fieldd handed out is dead.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.egress.route.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.egress.httpProxy",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+
   // B3 — DocumentService, P0 local-only subset (design-01 §5.1, M4; design-02 §5 fence).
   // The rest of the doc.* catalog (subscribeRegistry/close/delete/compact/export/import)
   // is deferred and deliberately undeclared — the lint enforces declared == shipped.

@@ -5,10 +5,11 @@
 // ignore-unknown IS the tolerant reader; field-native never echoes those shapes.
 use field_native::contracts::{
     DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, Hello, HelloAck,
-    LogRecordV1, LoggingHealthV1, MeshLaneCloseRequest, MeshLaneClosed, MeshLaneOpenRequest,
-    MeshLanePeerOpened, MeshSelfIdentity, NativeHealth, ObservedState, PeerInfo, RpcRequest,
-    RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
-    TerminalRoutesStreamPayload,
+    LogRecordV1, LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
+    MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
+    MeshLaneOpenRequest, MeshLanePeerOpened, MeshSelfIdentity, NativeHealth, ObservedState,
+    PeerInfo, RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot,
+    TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -159,6 +160,47 @@ fn mesh_lane_fixtures() {
     roundtrip::<MeshLaneCloseRequest>("mesh-lane-close-request.valid.json", true);
     roundtrip::<MeshLanePeerOpened>("mesh-lane-peer-opened.valid.json", true);
     roundtrip::<MeshLaneClosed>("mesh-lane-closed.valid.json", true);
+}
+
+#[test]
+fn mesh_egress_fixtures() {
+    // DS-1 — the egress facade. field-native EMITS the proxy answer, the bound
+    // route, the removal echo and the table (list AND the subscription's
+    // snapshot, whose empty form is the facade's reset), so all four are
+    // strict. The add params are inbound only; strict costs nothing there
+    // and pins that `login` survives the trip.
+    roundtrip::<MeshEgressProxy>("mesh-egress-proxy.valid.json", true);
+    roundtrip::<MeshEgressRouteAddParams>("mesh-egress-route-add-params.valid.json", true);
+    roundtrip::<MeshEgressRouteBound>("mesh-egress-route-bound.valid.json", true);
+    roundtrip::<MeshEgressRouteRef>("mesh-egress-route-ref.valid.json", true);
+    roundtrip::<MeshEgressRouteTable>("mesh-egress-route-table.valid.json", true);
+    roundtrip::<MeshEgressRouteTable>("mesh-egress-route-table.reset.json", true);
+    // The two degraded answers ride ErrorData, whose details are opaque here:
+    // the floor writes them as JSON (`mgmt/mesh_egress.rs`), and its own unit
+    // test holds that JSON to these same files.
+    roundtrip::<ErrorData>("error-data.egress-unsupported.json", true);
+    roundtrip::<ErrorData>("error-data.egress-mesh-down.json", true);
+
+    // The patterns are the contract's, carried by typify into regress: the
+    // Rust twin must refuse what zod refuses, or the belt is only on one side.
+    let mut named = load("mesh-egress-proxy.valid.json");
+    named["address"] = Value::String("localhost:41641".into());
+    assert!(
+        serde_json::from_value::<MeshEgressProxy>(named).is_err(),
+        "a proxy address must be a literal loopback, never a name"
+    );
+    let mut aimed = load("mesh-egress-route-add-params.valid.json");
+    aimed["target"] = Value::String("ws://studio.tail1234.ts.net:9422".into());
+    assert!(
+        serde_json::from_value::<MeshEgressRouteAddParams>(aimed).is_err(),
+        "a route target is host:port, never a URL"
+    );
+    let mut port = load("mesh-egress-route-add-params.valid.json");
+    port["target"] = Value::String("studio.tail1234.ts.net:65536".into());
+    assert!(serde_json::from_value::<MeshEgressRouteAddParams>(port).is_err());
+    let mut id = load("mesh-egress-route-ref.valid.json");
+    id["id"] = Value::String("a/b".into());
+    assert!(serde_json::from_value::<MeshEgressRouteRef>(id).is_err());
 }
 
 #[test]

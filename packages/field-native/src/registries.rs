@@ -51,6 +51,17 @@ pub mod mesh_control_limits {
     pub const PRODUCT_QUEUED_BYTES: usize = 134217728;
 }
 
+/// DS-1 — the egress facade's registry (contracts mgmt.ts `MESH_EGRESS`): the
+/// refusal vocabulary and DS-L6's routable ports, one list for the floor's
+/// belt and fieldd's suspenders.
+pub mod mesh_egress {
+    pub const SERVICE: &str = "mesh";
+    pub const STATE_UNSUPPORTED: &str = "egress-unsupported";
+    pub const STATE_MESH_DOWN: &str = "mesh-down";
+    pub const SOCKS_USERNAME: &str = "tsnet";
+    pub const ROUTABLE_PORTS: &[u16] = &[9422];
+}
+
 /// TC-D6(c) — per-class scrollback BYTE caps, enforced at the native create
 /// seam (agents < interactive; the fleet-memory lever).
 pub mod terminal_scrollback_class_bytes {

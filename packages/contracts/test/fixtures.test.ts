@@ -81,6 +81,11 @@ import { ErrorData } from "../src/errors";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import {
   DesiredState,
+  MeshEgressProxy,
+  MeshEgressRouteAddParams,
+  MeshEgressRouteBound,
+  MeshEgressRouteRef,
+  MeshEgressRouteTable,
   MeshLaneClosed,
   MeshLaneCloseRequest,
   MeshLaneOpenRequest,
@@ -158,6 +163,14 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "mesh-lane-close-request": MeshLaneCloseRequest,
   "mesh-lane-peer-opened": MeshLanePeerOpened,
   "mesh-lane-closed": MeshLaneClosed,
+  // DS-1 — the egress facade (mgmt.ts). The table has TWO fixtures on purpose:
+  // a bound table (a MagicDNS target and a bracketed IPv6 one) and the EMPTY
+  // snapshot a node teardown pushes, which is the facade's reset.
+  "mesh-egress-proxy": MeshEgressProxy,
+  "mesh-egress-route-add-params": MeshEgressRouteAddParams,
+  "mesh-egress-route-bound": MeshEgressRouteBound,
+  "mesh-egress-route-ref": MeshEgressRouteRef,
+  "mesh-egress-route-table": MeshEgressRouteTable,
   "doc-registry-entry": DocRegistryEntry,
   "doc-open-result": DocOpenResult,
   "doc-rename-params": DocRenameParams,

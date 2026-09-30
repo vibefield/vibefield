@@ -981,6 +981,121 @@
       ],
       "additionalProperties": true
     },
+    "MeshEgressLoopbackAddress": {
+      "type": "string",
+      "pattern": "^(?:127\\.0\\.0\\.1|\\[::1\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+    },
+    "MeshEgressTarget": {
+      "type": "string",
+      "maxLength": 259,
+      "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\\[[0-9A-Fa-f:.]{2,45}\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+    },
+    "MeshEgressRouteId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "MeshEgressProxy": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "$ref": "#/definitions/MeshEgressLoopbackAddress"
+        },
+        "credential": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "address",
+        "credential"
+      ],
+      "additionalProperties": true
+    },
+    "MeshEgressRouteAddParams": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/MeshEgressRouteId"
+        },
+        "target": {
+          "$ref": "#/definitions/MeshEgressTarget"
+        },
+        "login": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "id",
+        "target"
+      ],
+      "additionalProperties": true
+    },
+    "MeshEgressRouteBound": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/MeshEgressRouteId"
+        },
+        "listen": {
+          "$ref": "#/definitions/MeshEgressLoopbackAddress"
+        }
+      },
+      "required": [
+        "id",
+        "listen"
+      ],
+      "additionalProperties": true
+    },
+    "MeshEgressRouteRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/MeshEgressRouteId"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": true
+    },
+    "MeshEgressRoute": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/MeshEgressRouteId"
+        },
+        "target": {
+          "$ref": "#/definitions/MeshEgressTarget"
+        },
+        "listen": {
+          "$ref": "#/definitions/MeshEgressLoopbackAddress"
+        }
+      },
+      "required": [
+        "id",
+        "target",
+        "listen"
+      ],
+      "additionalProperties": true
+    },
+    "MeshEgressRouteTable": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MeshEgressRoute"
+          }
+        }
+      },
+      "required": [
+        "routes"
+      ],
+      "additionalProperties": true
+    },
     "LogAttributesV1": {
       "type": "object",
       "additionalProperties": {
