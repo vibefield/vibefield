@@ -729,9 +729,10 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   lifts to 1.16× (`--vf-ease-lift`, 180ms), the nearest leans in by up to 6%, an open desktop is ringed
   (2px) and its siblings step back to .62; a desktop that cannot take a terminal keeps its place, faint and
   dashed, with its reason. **Labels** (9.5px mono 800, 78% ink, haloed in the ground, 8px off the rim)
-  never sit on anything: one that would touch another bud at its hot size, another label, the hub, a spoke
+  do not sit on anything: one that would touch another bud at its hot size, another label, the hub, a spoke
   or the field's edge moves round its own bud 15° at a time to the nearest clear place, then keeps only the
-  name; an open desktop's label boxed in by its profiles gives way. **The words** say what letting go does
+  name; an open desktop's label boxed in by its profiles gives way. (Only a hold pressed against the
+  field's edge, where no turn clears everything, can leave a label on the least-crowded place.) **The words** say what letting go does
   as a verb and a noun, huge (800, −0.04em; up to 72px, 6.6% of the field's longer side, down to 22px),
   the noun at full ink and the verb at 40% — *New terminal*, *Open on mini*, *Open as Work*, *Air is
   asleep*, *Cancel*, and *Opening as Work* for 460ms after letting go — over one mono line of where and
