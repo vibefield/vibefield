@@ -604,6 +604,12 @@ export const LAYOUT = {
   PAIRING_FILE: ["native", "pairing"],
   MESH_STATE_DIR: ["native", "mesh"],
   LINK_FILE: ["fieldd", "link.json"],
+  /** SB-2 (AR-7g) — which shells fieldd birthed under an Agent Profile
+   * (`TerminalBindingsFile`, 0600): session → profile set, never a variable.
+   * fieldd's, because nothing below it can hold a session's metadata, and on
+   * disk because the floor outlives fieldd — a restarted fieldd still says
+   * which profile a surviving shell was born under. */
+  TERMINAL_BINDINGS_FILE: ["fieldd", "terminal-bindings.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
   // `TERMINAL_MIRROR_WRITE_FILE` = `native/terminal-mirror-write.key`, MF-2a's

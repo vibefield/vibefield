@@ -33,6 +33,7 @@ import type {
 } from "@vibecook/puppeteer-runtime";
 import type { AgentCatalogEntry } from "@vibefield/contracts";
 import { catalogWith } from "./agent-catalog-fixture";
+import { SCRIPTED_ROOT_VARIABLE, scriptedProfiles } from "./scripted-profiles";
 
 /** The name a person types. */
 export const TYPED_COMMAND = "vf-scripted";
@@ -166,6 +167,11 @@ export interface TypedProviderOptions {
   /** the program the recipe names (default `/bin/sh`): one that does not
    * exist is a recipe the launcher cannot run */
   recipeCommand?: string;
+  /** SB-2 — the agent can hold a sign-in in an Agent Profile (the scripted
+   * account capability, agent-session.test.ts's): its root variable is on the
+   * launch allow-list, so a launch carries it and puppeteer attributes the
+   * run to the sign-in whose root it names */
+  profiles?: boolean;
 }
 
 export function typedProvider(
@@ -179,6 +185,7 @@ export function typedProvider(
   });
   return {
     descriptor: { id: TYPED_PROVIDER, label: "Scripted" },
+    ...(options.profiles === true ? { profiles: scriptedProfiles() } : {}),
     launch: {
       provider: {
         id: TYPED_PROVIDER,
@@ -186,7 +193,7 @@ export function typedProvider(
         resume: true,
         nativeInvocation: {
           commands: [{ name: TYPED_COMMAND, executable: options.executable ?? script.real }],
-          environmentVariables: [],
+          environmentVariables: options.profiles === true ? [SCRIPTED_ROOT_VARIABLE] : [],
           ...(options.classifies === false ? {} : { classifies: true }),
         },
       },

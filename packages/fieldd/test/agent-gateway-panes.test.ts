@@ -21,6 +21,7 @@ import {
   copyFileSync,
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -34,6 +35,7 @@ import {
   SPAWN_THROUGH_EXIT_REFUSED,
   spawnThroughLayout,
 } from "@vibecook/puppeteer-runtime/spawn-through";
+import { LAYOUT, TerminalRosterResult } from "@vibefield/contracts";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { AGENT_GATEWAY_HOST_LABEL } from "../src/agent-gateway";
 import { linesOf, TYPED_COMMAND, TYPED_PROVIDER } from "./agent-gateway-fixture";
@@ -63,6 +65,7 @@ import {
   ZSH,
 } from "./agent-gateway-floor";
 import { bundleAgentShim } from "./agent-shim-bundle";
+import { SCRIPTED_ROOT_VARIABLE } from "./scripted-profiles";
 
 /** A loaded host takes seconds to start a process: no row here asserts speed
  * except where the row is ABOUT not waiting, and then against a wait that is
@@ -158,6 +161,7 @@ describe.skipIf(ZSH === undefined)(
         expect(birthOf(box, pane.sessionId)).toEqual({
           sessionId: pane.sessionId,
           integrated: true,
+          bound: false,
         });
         // the throwaway person's own startup files ran — never the machine owner's
         const ran = await until(
@@ -259,6 +263,7 @@ describe.skipIf(ZSH === undefined)(
         expect(birthOf(bare, pane.sessionId)).toEqual({
           sessionId: pane.sessionId,
           integrated: false,
+          bound: false,
         });
         const path = join(bare.root, "path");
         await type(bare, pane, `printf '%s|%s' "$PATH" "$PUPPETEER_SHIM_DIR" > '${path}'`);
@@ -279,6 +284,7 @@ describe.skipIf(ZSH === undefined)(
         expect(birthOf(box, after.sessionId)).toEqual({
           sessionId: after.sessionId,
           integrated: false,
+          bound: false,
         });
         // the shell born before the stop keeps its own integration
         expect(isAlive(before.pid)).toBe(true);
@@ -332,6 +338,7 @@ describe.skipIf(ZSH === undefined)(
           expect(birthOf(box, before.sessionId)).toEqual({
             sessionId: before.sessionId,
             integrated: false,
+            bound: false,
           });
           expect(existsSync(layout.zshenv)).toBe(false);
 
@@ -350,6 +357,7 @@ describe.skipIf(ZSH === undefined)(
           expect(birthOf(box, during.sessionId)).toEqual({
             sessionId: during.sessionId,
             integrated: true,
+            bound: false,
           });
           // the probe is still out: the pane was born INSIDE the window
           expect(existsSync(launcher)).toBe(false);
@@ -699,6 +707,122 @@ describe.skipIf(ZSH === undefined)(
         await key(box, pane, END_OF_INPUT);
         await until(() => (typedRow(box, pane) === undefined ? true : undefined));
         expect(linesOf(box.script.realLog)).toEqual([]);
+      },
+      FLOOR_BUDGET_MS,
+    );
+  },
+);
+
+describe.skipIf(ZSH === undefined)(
+  `a pane BORN under an Agent Profile — the REAL floor (SB-2 × SB-D7)${skipped}`,
+  () => {
+    /** A managed Agent Profile made through the daemon's own doors, holding a
+     * scripted sign-in when `signedIn`: its set, and the sign-in's root. */
+    async function profileOf(
+      box: Awaited<ReturnType<typeof floor>>,
+      label: string,
+      signedIn: boolean,
+    ): Promise<{ set: string; profileId?: string; root?: string }> {
+      const made = (await box.win.call("agents.profileSets.create", { label })) as {
+        set: { id: string };
+      };
+      if (!signedIn) return { set: made.set.id };
+      const { persona } = (await box.win.call("agents.profiles.create", {
+        set: made.set.id,
+        provider: TYPED_PROVIDER,
+      })) as { persona: { profileId: string } };
+      const folder = join(box.dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, made.set.id);
+      const root = join(folder, readdirSync(folder)[0] as string);
+      return { set: made.set.id, profileId: persona.profileId, root };
+    }
+
+    it(
+      "born under a profile that holds the sign-in: the shell's environment holds the binding, the answer, the ledger and the roster say which set — and the name typed there is a managed run attributed to it",
+      async () => {
+        const box = await floor({ bundle: shimScript, person: true, provider: { profiles: true } });
+        const work = await profileOf(box, "Work", true);
+        const pane = await bornPane(box, { profileSet: work.set });
+        expect(pane).toMatchObject({ integrated: true, bound: true, profileSet: work.set });
+        expect(birthOf(box, pane.sessionId)).toEqual({
+          sessionId: pane.sessionId,
+          integrated: true,
+          bound: true,
+        });
+        // the binding reached the shell, beside the integration
+        const bound = join(box.root, "bound");
+        await type(box, pane, `printf '%s' "$${SCRIPTED_ROOT_VARIABLE}" > '${bound}'`);
+        expect(await until(() => written(bound), FLOOR_WAIT_MS, "the pane's binding")).toBe(
+          work.root,
+        );
+        const path = join(box.root, "path");
+        await type(box, pane, `printf '%s' "$PATH" > '${path}'`);
+        const led = await until(() => written(path), FLOOR_WAIT_MS, "the pane's PATH");
+        expect(led.split(":")[0]).toBe(box.shimDirectory);
+        const roster = TerminalRosterResult.parse(await box.win.call("terminal.roster", {}));
+        expect(roster.items.find((item) => item.sessionId === pane.sessionId)?.profileSet).toBe(
+          work.set,
+        );
+
+        // typed: adopted, and puppeteer's attribution labels the run with the set
+        await type(box, pane, TYPED_COMMAND);
+        const row = await adopted(box, pane);
+        expect(row).toMatchObject({ spawnedBy: "user-shell", profileSet: work.set });
+        expect(row.profileId).toBe(work.profileId);
+        expect(auditActs(box.dataDir, "agent.session.adopt_refused")).toEqual([]);
+        await key(box, pane, END_OF_INPUT);
+        await until(() => (typedRow(box, pane) === undefined ? true : undefined));
+        // the variables are the shell's alone: never in the ledger
+        expect(auditText(box.dataDir)).not.toContain(work.root as string);
+      },
+      FLOOR_BUDGET_MS,
+    );
+
+    it(
+      "born under a profile with NO sign-in for the agent: typed, it is refused in the pane with VibeField's sentence — nothing ran, nothing prepared, the ledger has the set and why — while an unbound pane on the same floor runs it managed, unchanged",
+      async () => {
+        const box = await floor({ bundle: shimScript, person: true, provider: { profiles: true } });
+        const work = await profileOf(box, "Work", false);
+        const pane = await bornPane(box, { profileSet: work.set, recorded: true });
+        expect(pane.bound).toBe(true);
+        const status = await statusOf(box, pane, TYPED_COMMAND, "no-sign-in");
+        expect(status).toBe(SPAWN_THROUGH_EXIT_REFUSED);
+        const sentence = `${TYPED_COMMAND} was not started: Work has no Scripted sign-in (Settings → Agents). Change that, then run ${TYPED_COMMAND} again.`;
+        await until(
+          () => (screenOf(pane).includes(sentence) ? true : undefined),
+          FLOOR_WAIT_MS,
+          "the refusal on the pane's screen",
+        );
+        expect(linesOf(box.script.realLog)).toEqual([]);
+        expect(linesOf(box.script.managedLog)).toEqual([]);
+        expect(box.script.preparing.count).toBe(0);
+        expect(typedRow(box, pane)).toBeUndefined();
+        const refused = await until(() => {
+          const found = auditActs(box.dataDir, "agent.session.adopt_refused");
+          return found.length > 0 && found[0]?.outcome !== undefined ? found : undefined;
+        });
+        expect(refused.length).toBe(1);
+        expect(refused[0]?.attempt).toMatchObject({
+          reasonCode: "LAUNCH_REFUSED",
+          attrs: {
+            provider: TYPED_PROVIDER,
+            code: "launch-refused",
+            sessionId: pane.sessionId,
+            profileSet: work.set,
+            reason: "PROFILE_HAS_NO_SIGN_IN",
+          },
+        });
+        expect(refused[0]?.outcome).toMatchObject({ outcome: "denied" });
+
+        // an unbound pane on the same floor: the shell's environment decides, as before
+        const plain = await bornPane(box);
+        expect(plain.bound).toBe(false);
+        await type(box, plain, TYPED_COMMAND);
+        const row = await adopted(box, plain);
+        expect(row.spawnedBy).toBe("user-shell");
+        expect(row.profileSet).not.toBe(work.set);
+        await key(box, plain, END_OF_INPUT);
+        await until(() => (typedRow(box, plain) === undefined ? true : undefined));
+        expect(auditActs(box.dataDir, "agent.session.adopt_refused").length).toBe(1);
       },
       FLOOR_BUDGET_MS,
     );

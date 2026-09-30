@@ -194,9 +194,10 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { createSurfaceService } from "./surface-service";
+import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
 import { serveAllowGlob, TERMINAL_SERVE_ID, TerminalServeDriver } from "./terminal-serve";
-import { TerminalService } from "./terminal-service";
+import { type TerminalProfileBinding, TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
 
 // fieldd bootstrap (design-02 §3.6, P0 slice): tokens → NativeLink (pair +
@@ -231,6 +232,10 @@ export interface FielddConfig {
    * environment (`TerminalServiceOptions.shellIntegration`). Production
    * answers from the gateway service (AR-7b) through `shellIntegrationRef`. */
   terminalShellIntegration?: (shell: string) => Record<string, string> | undefined;
+  /** SB-2 test seam: how a shell born under an Agent Profile is bound
+   * (`TerminalServiceOptions.profileBinding`). Production answers from the
+   * agent runtime (`runtimeProfileBinding`, terminal-bindings.ts). */
+  terminalProfileBinding?: (profileSet: string) => Promise<TerminalProfileBinding>;
   /** pid of a field-native the caller spawned (recorded in product.json for cleanup tooling) */
   nativePid?: number;
   /** TC-D1 — re-runs the caller's spawn (bin.ts's exact env composition) so
@@ -1181,6 +1186,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // (`shellIntegrationRef` above; null until AR-7b's service sets it).
       shellIntegration: (shell) =>
         (config.terminalShellIntegration ?? shellIntegrationRef)?.(shell),
+      // SB-2 (AR-7g) — a shell born under an Agent Profile: the set, its
+      // sign-ins and puppeteer's binding over them, from the agent runtime
+      // this daemon composed (the test seam, else the runtime's own answer)
+      profileBinding: config.terminalProfileBinding ?? runtimeProfileBinding(agents.runtime),
+      // SB-2 — which shells were born bound, on disk under this user's root:
+      // the floor outlives fieldd, and so must the record of what it holds
+      bindings: new TerminalBindingStore({
+        file: join(config.dataDir, ...LAYOUT.TERMINAL_BINDINGS_FILE),
+        logger: logger.child({ component: "terminal.bindings" }),
+      }),
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
@@ -2660,17 +2675,44 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.workloadClass !== undefined
               ? { workloadClass: parsed.data.workloadClass }
               : {}),
+            // SB-2 — the Agent Profile asked for: the set's id, never a variable
+            ...(parsed.data.profileSet !== undefined ? { profileSet: parsed.data.profileSet } : {}),
           },
         },
-        async () => await terminals.create(parsed.data),
+        async () => {
+          // SB-2 (EL7) — A BOUND BIRTH NEEDS SPAWN RIGHTS. A shell born under
+          // a profile runs every agent it starts on that profile's accounts,
+          // so the caller must hold `agent.spawn` as well as the door's own
+          // `terminal.attach` (the renderer holds both). Read off the principal
+          // as daemon.ts reads every in-handler scope: a principal with no
+          // `scopes` (a tailnet one — its grant is connection state) holds
+          // none here. Inside the effect, so a refused bound birth is a
+          // RECORDED attempt with a failed outcome, and nothing reached the floor.
+          if (parsed.data.profileSet !== undefined) {
+            const scopes = (ctx.principal as { scopes?: string[] }).scopes ?? [];
+            if (!scopes.includes("agent.spawn"))
+              throw new RpcCallError(
+                "FORBIDDEN_SCOPE",
+                "opening a terminal under a profile requires agent.spawn",
+                false,
+                { required: "agent.spawn" },
+              );
+          }
+          return await terminals.create(parsed.data);
+        },
         // no `ticketMinted` here any more: nothing has been minted yet, and an
         // attr claiming otherwise was true only because the nesting made it so.
         // AR-7d — `integrated`: whether the shell was born with the shell
-        // integration's variables. A fact of the birth, so it rides the
-        // outcome; the variables themselves are never recorded.
+        // integration's variables. SB-2 — `bound`: whether it was born under
+        // an Agent Profile (the native set included). Facts of the birth, so
+        // they ride the outcome; the variables themselves are never recorded.
         (result) => ({
           outcome: "succeeded",
-          attrs: { sessionId: result.sessionId, integrated: result.integrated },
+          attrs: {
+            sessionId: result.sessionId,
+            integrated: result.integrated,
+            bound: result.bound,
+          },
         }),
       );
       const opened = await audit.required(

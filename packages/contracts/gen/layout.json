@@ -58,6 +58,10 @@
     "fieldd",
     "link.json"
   ],
+  "TERMINAL_BINDINGS_FILE": [
+    "fieldd",
+    "terminal-bindings.json"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

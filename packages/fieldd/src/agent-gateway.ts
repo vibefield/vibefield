@@ -582,6 +582,9 @@ export interface GatewayTerminals {
   onInventory(listener: (terminals: readonly TerminalInfo[]) => void): () => void;
   onSessionExited(listener: (event: { sessionId: string }) => void): () => void;
   onSessionBorn(listener: (born: { sessionId: string; pid: number | null }) => void): () => void;
+  /** SB-2 — the Agent Profile a shell was born under (fieldd's record);
+   * undefined for an unbound shell. Absent = every shell reads as unbound. */
+  profileSetOf?(sessionId: string): string | undefined;
 }
 
 /** AR-7d — what a free shell is born with beyond what it inherits, answered
@@ -705,7 +708,19 @@ interface LaunchProgress {
   unplaced?: Unplaced | undefined;
   /** puppeteer adopted the run and the fold could not enter it */
   adoptionUndone: boolean;
+  /** SB-D7 — the pane's profile refused the agent: the set, and why */
+  profileRefusal?: { profileSet: string; reason: ProfileRefusalReason } | undefined;
 }
+
+/** SB-D7 — why a pane's Agent Profile refused a typed agent, as the ledger
+ * spells it (and as the refusal's own code, puppeteer's `refusal.code`). */
+type ProfileRefusalReason =
+  | "PROFILE_HAS_NO_SIGN_IN"
+  | "PROFILE_CANNOT_HOLD_SIGN_IN"
+  | "PROFILE_GONE";
+
+/** What puppeteer's `prepareInvocation` answers, a refusal included. */
+type PreparedInvocation = Awaited<ReturnType<AgentRuntime["prepareInvocation"]>>;
 
 /** The kit's code for a launch that failed inside the host: the fold's own
  * word when it found the terminal held by another run (a run puppeteer does
@@ -1410,7 +1425,7 @@ export class AgentGatewayService {
     try {
       let identity: ReturnType<AgentAdoption["identity"]> | undefined;
       const host: SpawnThroughHost = {
-        runtime: this.launchDoors(),
+        runtime: this.launchDoors(progress),
         strict: AGENT_GATEWAY_STRICT,
         resolveTerminal: async ({ pid }) => {
           const placement = await this.place(pid);
@@ -1466,8 +1481,9 @@ export class AgentGatewayService {
   /** puppeteer's launch doors as this host lends them to the kit: the agents
    * offered NOW — the launchers' own table, held to the catalog's word at this
    * moment, so a row that stopped offering `invoke` since the launchers were
-   * written is declined as an agent that is not offered. */
-  private launchDoors(): SpawnThroughHost["runtime"] {
+   * written is declined as an agent that is not offered. SB-D7 — and no
+   * preparation for an agent the pane's Agent Profile has no sign-in for. */
+  private launchDoors(progress: LaunchProgress): SpawnThroughHost["runtime"] {
     const { runtime, catalog } = this.opts;
     return {
       launchProviders: () =>
@@ -1475,10 +1491,76 @@ export class AgentGatewayService {
           (provider) => withheldBeforeExecutable(provider, catalog) === undefined,
         ),
       classifyInvocation: (invocation) => runtime.classifyInvocation(invocation),
-      prepareInvocation: (options) => runtime.prepareInvocation(options),
+      prepareInvocation: async (options) =>
+        (await this.profileRefusal(progress, options.providerId)) ??
+        (await runtime.prepareInvocation(options)),
       adoptPrepared: (preparationId, options) => runtime.adoptPrepared(preparationId, options),
       cancelPrepared: (preparationId) => runtime.cancelPrepared(preparationId),
     };
+  }
+
+  /** SB-D7 (RULED 2026-09-30: refuse) — A TYPED AGENT THE PANE'S PROFILE HAS NO
+   * SIGN-IN FOR IS REFUSED. A pane born under a MANAGED Agent Profile carries
+   * that profile's binding (SB-2), which routes only the agents the profile
+   * holds a sign-in for; any other agent typed there would run on This Mac's
+   * sign-in behind the pane's back — and `codex login` there would sign in
+   * This Mac, not the profile. So the kit is answered with puppeteer's own
+   * refusal (`AGENT_LAUNCH_REFUSED`, the one code whose sentence carries its
+   * reason: the pane prints "codex was not started: <reason>. Change that,
+   * then run codex again."), before anything is prepared:
+   *  · the set holds no sign-in for the agent — "Work has no Codex sign-in
+   *    (Settings → Agents)";
+   *  · the agent cannot hold a sign-in in a profile at all — "Work cannot hold
+   *    a Codex sign-in (open a terminal under This Mac)";
+   *  · the set is gone (deleted after the pane was born) — "the profile this
+   *    terminal was opened under no longer exists (open a new terminal)".
+   * The set's label and the agent's CATALOG label; never a vendor's word.
+   * Unbound and This Mac panes are untouched (AR7-D6: the shell's environment
+   * decides), and a pane whose set HAS the sign-in needs nothing — the binding
+   * routes the agent and puppeteer's attribution labels the run with the set.
+   * Placement is the kit's, before any preparation: `progress.placed` is this
+   * launch's own pane. */
+  private async profileRefusal(
+    progress: LaunchProgress,
+    providerId: string,
+  ): Promise<PreparedInvocation | undefined> {
+    const sessionId = progress.placed?.shell.terminalSessionId;
+    if (sessionId === undefined) return undefined;
+    const profileSet = this.opts.terminals()?.profileSetOf?.(sessionId);
+    if (profileSet === undefined) return undefined;
+    const { runtime, catalog } = this.opts;
+    const agent = catalog.entry(providerId)?.label ?? providerId;
+    const refuse = (reason: ProfileRefusalReason, sentence: string): PreparedInvocation => {
+      progress.profileRefusal = { profileSet, reason };
+      return {
+        error: {
+          code: "AGENT_LAUNCH_REFUSED",
+          message: boundSpawnThroughText(sentence),
+          refusal: { code: reason },
+        },
+      };
+    };
+    const info = await runtime.profileSet(profileSet);
+    if (info === undefined)
+      return refuse(
+        "PROFILE_GONE",
+        "the profile this terminal was opened under no longer exists (open a new terminal)",
+      );
+    if (info.set.kind === "native") return undefined;
+    if (info.profiles.some((account) => account.provider === providerId)) return undefined;
+    const holdsSignIns = runtime
+      .profileProviders()
+      .some((provider) => provider.id === providerId && provider.support.supported);
+    if (holdsSignIns)
+      return refuse(
+        "PROFILE_HAS_NO_SIGN_IN",
+        `${info.set.label} has no ${agent} sign-in (Settings → Agents)`,
+      );
+    const native = (await runtime.profileSets()).find((set) => set.set.kind === "native");
+    return refuse(
+      "PROFILE_CANNOT_HOLD_SIGN_IN",
+      `${info.set.label} cannot hold a ${agent} sign-in (open a terminal under ${native?.set.label ?? "the default profile"})`,
+    );
   }
 
   /** A decline fieldd makes itself, for a launch that failed inside the host.
@@ -1665,10 +1747,19 @@ export class AgentGatewayService {
     }
     if (answer.action !== "refuse") return;
     const reasonCode = refusalReasonCode(answer.code);
+    // SB-D7 — a refusal the pane's profile made names the set and why
+    const profile =
+      progress.profileRefusal === undefined
+        ? {}
+        : {
+            profileSet: progress.profileRefusal.profileSet,
+            reason: progress.profileRefusal.reason,
+          };
     this.logger.info("fieldd.agents.gateway_refused", "A typed launch was refused", {
       code: answer.code,
       provider: request.providerId,
       ...(placed !== undefined ? { sessionId: placed.shell.terminalSessionId } : {}),
+      ...profile,
     });
     try {
       await this.audited(
@@ -1681,6 +1772,7 @@ export class AgentGatewayService {
             provider: request.providerId,
             code: answer.code,
             ...(placed !== undefined ? { sessionId: placed.shell.terminalSessionId } : {}),
+            ...profile,
           },
         },
         async () => undefined,

@@ -37,6 +37,7 @@ import {
   type AgentRuntime,
   createAgentRuntime,
   createFileCreationRequestRegistry,
+  createFileProfileStore,
 } from "@vibecook/puppeteer-runtime";
 import {
   boundSpawnThroughText,
@@ -137,6 +138,7 @@ import {
   windowOf,
 } from "./agent-gateway-floor";
 import { AGENT_SHIM_ENTRY, bundleAgentShim } from "./agent-shim-bundle";
+import { SCRIPTED_ROOT_VARIABLE } from "./scripted-profiles";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -488,8 +490,14 @@ class ListedTerminals implements GatewayTerminals {
   private readonly exits = new Set<(event: { sessionId: string }) => void>();
   private readonly births = new Set<(born: { sessionId: string; pid: number | null }) => void>();
 
+  /** SB-2 — the Agent Profile each pane was born under (fieldd's record) */
+  readonly bound = new Map<string, string>();
+
   observation(): unknown {
     return this.observed ? { bootId: "boot", generation: 1 } : undefined;
+  }
+  profileSetOf(sessionId: string): string | undefined {
+    return this.bound.get(sessionId);
   }
   list(): readonly TerminalInfo[] {
     if (!this.observed) throw new Error("the floor has not been observed");
@@ -611,6 +619,8 @@ interface Ledgered {
 
 interface LaunchOver {
   argv: string[];
+  /** what the launcher carried from the pane's environment (its allow-list) */
+  environment: Record<string, string>;
   interactive: boolean;
   providerId: string;
   token: string;
@@ -686,6 +696,9 @@ interface UnitOptions {
   platform?: NodeJS.Platform;
   /** the home takes this long to write (a slow disk) */
   slowHomeMs?: number;
+  /** SB-2 — the runtime keeps an Agent Profile registry in the row's own root
+   * (never the machine owner's): a row that makes sets and sign-ins */
+  registry?: boolean;
 }
 
 async function unit(options: UnitOptions = {}): Promise<Unit> {
@@ -700,6 +713,14 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     defaultCwd: work,
     providers: [provider],
     creationRegistry: createFileCreationRequestRegistry({ directory: join(root, "runs") }),
+    ...(options.registry === true
+      ? {
+          profiles: {
+            store: createFileProfileStore({ path: join(root, "profiles.json") }),
+            rootsDirectory: join(root, "profiles"),
+          },
+        }
+      : {}),
   });
   const terminals = new ListedTerminals();
   const fold = new FoldStub();
@@ -803,7 +824,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
         providerId: over.providerId ?? TYPED_PROVIDER,
         cwd: over.cwd ?? work,
         argv: over.argv ?? [],
-        environment: {},
+        environment: over.environment ?? {},
         pid,
         parentPid: 1,
         command: over.command ?? TYPED_COMMAND,
@@ -2524,6 +2545,179 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
       expect(box.fold.adopted).toEqual([]);
       expect(box.ledger).toEqual([]);
       expect(box.kit.hosts).toEqual([]);
+    },
+    PROCESS_BUDGET_MS,
+  );
+});
+
+// ── SB-D7: the pane's Agent Profile ──
+
+describe("SB-D7 — a typed agent the pane's Agent Profile cannot run is refused (the real kit, puppeteer's real runtime)", () => {
+  const refusals = (box: Unit): Ledgered[] =>
+    box.ledger.filter((entry) => entry.mutation.action === "agent.session.adopt_refused");
+
+  /** A managed Agent Profile named `label`, holding a scripted sign-in when
+   * `signedIn` — made through puppeteer's own doors, in the row's registry. */
+  async function profileOf(
+    box: Unit,
+    label: string,
+    signedIn: boolean,
+  ): Promise<{ set: string; root?: string }> {
+    const made = await box.runtime.createProfileSet({ label });
+    if ("status" in made) throw new Error(made.message);
+    if (!signedIn) return { set: made.set.id };
+    const account = await box.runtime.createProfile({
+      providerId: TYPED_PROVIDER,
+      set: made.set.id,
+    });
+    if ("status" in account) throw new Error(account.message);
+    return { set: made.set.id, root: account.dataRoot };
+  }
+
+  it(
+    "a pane born under a profile with no sign-in for the agent: refused in VibeField's sentence — the set's label and the catalog's — before anything is prepared, and the ledger has the set and why",
+    async () => {
+      const box = await unit({ registry: true, provider: { profiles: true } });
+      onePane(box);
+      const work = await profileOf(box, "Work", false);
+      box.terminals.bound.set("s1", work.set);
+      await box.gateway.start();
+      const answer = await box.launch(600);
+      expect(answer).toEqual({
+        action: "refuse",
+        code: "launch-refused",
+        reason: "Work has no Scripted sign-in (Settings → Agents)",
+        message: `${TYPED_COMMAND} was not started: Work has no Scripted sign-in (Settings → Agents). Change that, then run ${TYPED_COMMAND} again.`,
+        placed: true,
+      });
+      // nothing was prepared, adopted or entered
+      expect(box.script.preparing.count).toBe(0);
+      expect(box.fold.adopted).toEqual([]);
+      expect(refusals(box)).toEqual([
+        {
+          mutation: {
+            action: "agent.session.adopt_refused",
+            target: { kind: "agent-session", id: "pending" },
+            reasonCode: "LAUNCH_REFUSED",
+            attrs: {
+              provider: TYPED_PROVIDER,
+              code: "launch-refused",
+              sessionId: "s1",
+              profileSet: work.set,
+              reason: "PROFILE_HAS_NO_SIGN_IN",
+            },
+          },
+          outcome: { outcome: "denied", reasonCode: "LAUNCH_REFUSED" },
+        },
+      ]);
+      // a regular command is still a regular command there (AR7-D12)
+      expect(await box.launch(600, { argv: ["--version"] })).toMatchObject({
+        action: "fallback",
+        code: "passthrough",
+      });
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "a pane whose profile HAS the sign-in needs nothing: adopted, and puppeteer's attribution labels the run with the set",
+    async () => {
+      const box = await unit({ registry: true, provider: { profiles: true } });
+      onePane(box);
+      const work = await profileOf(box, "Work", true);
+      box.terminals.bound.set("s1", work.set);
+      await box.gateway.start();
+      // the launcher carries the pane's binding (the root variable is on the allow-list)
+      const answer = await box.launch(600, {
+        environment: { [SCRIPTED_ROOT_VARIABLE]: work.root as string },
+      });
+      expect(answer).toMatchObject({ action: "exec" });
+      const adopted = box.fold.adopted[0] as AgentAdoptionInput;
+      expect(adopted.info.profileSetId).toBe(work.set);
+      expect(refusals(box)).toEqual([]);
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "an agent that cannot hold a sign-in in a profile at all, in a pane born under one: refused, pointing at This Mac by its own label — and in a pane born under This Mac it runs",
+    async () => {
+      // the scripted agent WITHOUT the account capability
+      const box = await unit({ registry: true });
+      onePane(box);
+      box.terminals.lists([
+        { sessionId: "s1", pid: 500 },
+        { sessionId: "s2", pid: 501 },
+      ]);
+      box.table.set(501, proc(501, 77));
+      box.table.set(601, proc(601, 501, "2026-09-27T20:05:00.000Z"));
+      const work = await profileOf(box, "Work", false);
+      const native = (await box.runtime.profileSets()).find((set) => set.set.kind === "native");
+      box.terminals.bound.set("s1", work.set);
+      box.terminals.bound.set("s2", native?.set.id as string);
+      await box.gateway.start();
+      const answer = await box.launch(600);
+      expect(answer).toMatchObject({
+        action: "refuse",
+        code: "launch-refused",
+        message: `${TYPED_COMMAND} was not started: Work cannot hold a Scripted sign-in (open a terminal under ${native?.set.label}). Change that, then run ${TYPED_COMMAND} again.`,
+      });
+      expect(refusals(box)[0]?.mutation.attrs).toMatchObject({
+        profileSet: work.set,
+        reason: "PROFILE_CANNOT_HOLD_SIGN_IN",
+      });
+      expect(box.script.preparing.count).toBe(0);
+      // This Mac holds no sign-in of this agent's either — and needs none: it is the agent's own folder
+      expect(await box.launch(601)).toMatchObject({ action: "exec" });
+      expect(refusals(box).length).toBe(1);
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "a pane whose profile was deleted since it was born: refused — the profile is gone, open a new terminal",
+    async () => {
+      const box = await unit({ registry: true, provider: { profiles: true } });
+      onePane(box);
+      box.terminals.bound.set("s1", "deleted-since");
+      await box.gateway.start();
+      const answer = await box.launch(600);
+      expect(answer).toMatchObject({
+        action: "refuse",
+        code: "launch-refused",
+        message: `${TYPED_COMMAND} was not started: the profile this terminal was opened under no longer exists (open a new terminal). Change that, then run ${TYPED_COMMAND} again.`,
+      });
+      expect(refusals(box)[0]?.mutation.attrs).toMatchObject({
+        profileSet: "deleted-since",
+        reason: "PROFILE_GONE",
+      });
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "unbound and This Mac panes are unchanged (AR7-D6 — the shell's environment decides): adopted, even while a profile without the sign-in exists",
+    async () => {
+      const box = await unit({ registry: true, provider: { profiles: true } });
+      box.terminals.lists([
+        { sessionId: "s1", pid: 500 },
+        { sessionId: "s2", pid: 501 },
+      ]);
+      box.table.set(500, proc(500, 77));
+      box.table.set(501, proc(501, 77));
+      box.table.set(600, proc(600, 500, "2026-09-27T20:05:00.000Z"));
+      box.table.set(601, proc(601, 501, "2026-09-27T20:05:00.000Z"));
+      await profileOf(box, "Work", false);
+      const native = (await box.runtime.profileSets()).find((set) => set.set.kind === "native");
+      box.terminals.bound.set("s2", native?.set.id as string);
+      await box.gateway.start();
+      expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      expect(await box.launch(601)).toMatchObject({ action: "exec" });
+      expect(box.fold.adopted.map((adopted) => adopted.info.terminalSessionId)).toEqual([
+        "s1",
+        "s2",
+      ]);
+      expect(refusals(box)).toEqual([]);
     },
     PROCESS_BUDGET_MS,
   );

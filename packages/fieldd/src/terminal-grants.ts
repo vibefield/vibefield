@@ -361,12 +361,21 @@ export function connectionSetIdFor(clientId: string, cellBootId: string): string
  * inventory can honestly say today: a row in the observed inventory is a live
  * session; `recovering`/`exited` arrive with custody's per-session state in a
  * later slice. Provenance is unknown to fieldd until the AR track joins agent
- * sessions to their hosts, so it is omitted rather than guessed. */
-export function projectRoster(terminals: readonly TerminalInfo[]): ProductSessionRosterItem[] {
-  return terminals.map((row) => ({
-    sessionId: row.sessionId,
-    workloadClass: row.cell?.workloadClass ?? "interactive",
-    health: "live" as const,
-    ...(row.title === undefined ? {} : { title: row.title }),
-  }));
+ * sessions to their hosts, so it is omitted rather than guessed. SB-2 — the
+ * Agent Profile a shell was born under, from fieldd's own record, where it
+ * has one. */
+export function projectRoster(
+  terminals: readonly TerminalInfo[],
+  profileSetOf: (sessionId: string) => string | undefined = () => undefined,
+): ProductSessionRosterItem[] {
+  return terminals.map((row) => {
+    const profileSet = profileSetOf(row.sessionId);
+    return {
+      sessionId: row.sessionId,
+      workloadClass: row.cell?.workloadClass ?? "interactive",
+      health: "live" as const,
+      ...(row.title === undefined ? {} : { title: row.title }),
+      ...(profileSet === undefined ? {} : { profileSet }),
+    };
+  });
 }

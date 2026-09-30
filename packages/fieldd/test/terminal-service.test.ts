@@ -19,7 +19,9 @@ import {
   ENV_PREFIXES,
   grantSigningInput,
   isPipeEndpoint,
+  LAYOUT,
   METHODS,
+  type Scope,
   SHELL_PROVIDER_METHODS,
   type ShellDialogPickFileResult,
   type ShellDialogSaveFileResult,
@@ -27,6 +29,7 @@ import {
   SOCKETS,
   TERMINAL_CONFIG_MAX_BYTES,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
+  TerminalBindingsFile,
   TerminalConfigConflict,
   TerminalConfigDocument,
   TerminalConfigExportResult,
@@ -37,6 +40,7 @@ import {
   TerminalConfigWriteRefusal,
   TerminalConfigWriteResult,
   TerminalCreateOpenResult,
+  type TerminalCreateParams,
   type TerminalCreateResult,
   type TerminalEndpoints,
   type TerminalInfo,
@@ -51,10 +55,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, NativeLink, RpcCallError } from "../src/index";
 import { terminalCreateTarget } from "../src/native-link";
+import { TerminalBindingStore } from "../src/terminal-bindings";
 import {
   blockingConfigDiagnostics,
   projectConfigSnapshot,
   type TerminalConfigShell,
+  type TerminalProfileBinding,
   TerminalService,
   type TerminalServiceOptions,
 } from "../src/terminal-service";
@@ -3523,6 +3529,54 @@ function programs(): { zsh: string; bash: string; cat: string; agent: string } {
   return { zsh: at("zsh"), bash: at("bash"), cat: at("cat"), agent: at("agent") };
 }
 
+/** A daemon over the mock mgmt server whose one keyed cell is the fake floor
+ * (the GT-5b row's composition), with the AR-7d and SB-2 seams as given. The
+ * window it answers holds `terminal.attach` alone; `rpcWith` opens another
+ * holding exactly the scopes it is given. */
+async function daemonOverFakeFloor(
+  terminalShellIntegration?: (shell: string) => Record<string, string> | undefined,
+  terminalProfileBinding?: (profileSet: string) => Promise<TerminalProfileBinding>,
+) {
+  const dataDir = makeDataDir();
+  const mock = await startMock(dataDir);
+  const floor = await startFakeFloor();
+  mock.terminalRoutes = keyedRoutes(1, [
+    {
+      cellInstanceId: 1,
+      cellBootId: "cell-ar7d",
+      endpoints: floor.endpoints,
+      workloadClass: "interactive",
+      role: "class",
+      grantKey: KEY_I,
+      doors: {
+        controlUrl: "ws://127.0.0.1:50017/control",
+        framesUrl: "ws://127.0.0.1:50017/frames",
+      },
+    },
+  ]);
+  mock.observedState = observed([]);
+  const daemon = await bootstrap({
+    dataDir,
+    controlPort: 0,
+    dataPort: 0,
+    ...(terminalShellIntegration === undefined ? {} : { terminalShellIntegration }),
+    ...(terminalProfileBinding === undefined ? {} : { terminalProfileBinding }),
+  });
+  cleanup.push(() => daemon.stop());
+  const rpcWith = async (scopes: Scope[]): Promise<WsRpc> => {
+    const grant = daemon.tokens.mint(scopes, "ar7d-daemon");
+    const opened = await openRpc(daemon.controlPort);
+    await helloAs(opened, grant.token);
+    return opened;
+  };
+  const rpc = await rpcWith(["terminal.attach"]);
+  const createRecords = async () =>
+    (await readAuditRecords(dataDir)).filter((r) => r.action === "terminal.session.create");
+  const createOutcomes = async () =>
+    (await createRecords()).filter((r) => r.phase === "outcome").map((r) => r.attrs);
+  return { dataDir, mock, floor, daemon, rpc, rpcWith, createRecords, createOutcomes };
+}
+
 describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
   it("the integration's variables reach the floor for the default login shell and for an explicit zsh", async () => {
     const floor = await startFakeFloor();
@@ -3667,46 +3721,6 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
     expect(asked).toEqual([]);
   });
 
-  /** A daemon over the mock mgmt server whose one keyed cell is the fake
-   * floor (the GT-5b row's composition), with the AR-7d seam as given. */
-  async function daemonOverFakeFloor(
-    terminalShellIntegration?: (shell: string) => Record<string, string> | undefined,
-  ) {
-    const dataDir = makeDataDir();
-    const mock = await startMock(dataDir);
-    const floor = await startFakeFloor();
-    mock.terminalRoutes = keyedRoutes(1, [
-      {
-        cellInstanceId: 1,
-        cellBootId: "cell-ar7d",
-        endpoints: floor.endpoints,
-        workloadClass: "interactive",
-        role: "class",
-        grantKey: KEY_I,
-        doors: {
-          controlUrl: "ws://127.0.0.1:50017/control",
-          framesUrl: "ws://127.0.0.1:50017/frames",
-        },
-      },
-    ]);
-    mock.observedState = observed([]);
-    const daemon = await bootstrap({
-      dataDir,
-      controlPort: 0,
-      dataPort: 0,
-      ...(terminalShellIntegration === undefined ? {} : { terminalShellIntegration }),
-    });
-    cleanup.push(() => daemon.stop());
-    const grant = daemon.tokens.mint(["terminal.attach"], "ar7d-daemon");
-    const rpc = await openRpc(daemon.controlPort);
-    await helloAs(rpc, grant.token);
-    const createOutcomes = async () =>
-      (await readAuditRecords(dataDir))
-        .filter((r) => r.action === "terminal.session.create" && r.phase === "outcome")
-        .map((r) => r.attrs);
-    return { dataDir, floor, rpc, createOutcomes };
-  }
-
   it("the daemon's seam reaches the floor, and the create's audit outcome says `integrated` — a fact, never the variables", async () => {
     const { cat } = programs();
     const asked: string[] = [];
@@ -3726,8 +3740,8 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
     // asked for the default login shell's birth only
     expect(asked).toHaveLength(1);
     expect(await createOutcomes()).toEqual([
-      { sessionId: shell.sessionId, integrated: true },
-      { sessionId: program.sessionId, integrated: false },
+      { sessionId: shell.sessionId, integrated: true, bound: false },
+      { sessionId: program.sessionId, integrated: false, bound: false },
     ]);
     const ledger = JSON.stringify(await readAuditRecords(dataDir));
     for (const value of Object.values(INTEGRATION).filter((v) => v !== "")) {
@@ -3739,6 +3753,406 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
     const { floor, rpc, createOutcomes } = await daemonOverFakeFloor();
     const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
     expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
-    expect(await createOutcomes()).toEqual([{ sessionId: shell.sessionId, integrated: false }]);
+    expect(await createOutcomes()).toEqual([
+      { sessionId: shell.sessionId, integrated: false, bound: false },
+    ]);
+  });
+});
+
+/** SB-2 — a profile's binding as a runtime answers it. The NAMES are the fake's
+ * own — VibeField spells no vendor's variable, in a test either (AR-L1) — and
+ * the values say where they came from, so a row can look for them anywhere. */
+const BINDING = {
+  VF_PROBE_ROOT: "/profiles/work/probe-0001",
+  VF_PROBE_MODE: "managed-probe-value",
+};
+
+/** A binding seam that answers from `answers` (an unknown set otherwise) and
+ * remembers every set it was asked for. */
+function bindingSeam(answers: Record<string, TerminalProfileBinding>): {
+  asked: string[];
+  profileBinding: (profileSet: string) => Promise<TerminalProfileBinding>;
+} {
+  const asked: string[] = [];
+  return {
+    asked,
+    profileBinding: async (profileSet) => {
+      asked.push(profileSet);
+      return answers[profileSet] ?? { state: "unknown" };
+    },
+  };
+}
+
+const WORK: TerminalProfileBinding = { state: "bound", label: "Work", variables: BINDING };
+
+describe("SB-2 — a shell born under its profile (AR-7g, the fake floor)", () => {
+  it("a bound birth: the binding's variables reach the floor beneath the integration's, and the answer says bound and which set — the binding asked once", async () => {
+    const floor = await startFakeFloor();
+    const seam = bindingSeam({ work: WORK });
+    const service = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      shellIntegration: () => INTEGRATION,
+      profileBinding: seam.profileBinding,
+    });
+    const born = await service.create({ profileSet: "work" });
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: { ...BINDING, ...INTEGRATION },
+    });
+    expect(born).toMatchObject({ integrated: true, bound: true, profileSet: "work" });
+    expect(seam.asked).toEqual(["work"]);
+
+    // an unbound birth never asks, and carries nothing of it
+    const plain = await service.create({});
+    expect(plain.bound).toBe(false);
+    expect(plain).not.toHaveProperty("profileSet");
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+    expect(seam.asked).toEqual(["work"]);
+  });
+
+  it("the binding is the caller's ask whatever the executable: a shell the integration skips and a program that is no shell are born bound", async () => {
+    const floor = await startFakeFloor();
+    const { bash, cat } = programs();
+    const seam = bindingSeam({ work: WORK });
+    const service = fakeFloorService(floor, {
+      shellIntegration: () => INTEGRATION,
+      profileBinding: seam.profileBinding,
+    });
+    for (const shell of [bash, cat]) {
+      const born = await service.create({ shell, profileSet: "work" });
+      expect(floor.createOptions()?.["executable"]).toBe(shell);
+      expect(floor.createOptions()?.["environment"]).toStrictEqual({
+        mode: "inherit",
+        overrides: BINDING,
+      });
+      expect(born).toMatchObject({ integrated: false, bound: true, profileSet: "work" });
+    }
+    expect(seam.asked).toEqual(["work", "work"]);
+  });
+
+  it("the native set binds nothing and is still a bound birth — the bare inherit mode, byte for byte, or the integration alone", async () => {
+    const floor = await startFakeFloor();
+    const { bash, zsh } = programs();
+    const service = fakeFloorService(floor, {
+      shellIntegration: () => INTEGRATION,
+      profileBinding: bindingSeam({
+        native: { state: "bound", label: "This Mac", variables: {} },
+      }).profileBinding,
+    });
+    const plain = await service.create({ shell: bash, profileSet: "native" });
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    expect(plain).toMatchObject({ integrated: false, bound: true, profileSet: "native" });
+    const integrated = await service.create({ shell: zsh, profileSet: "native" });
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+    expect(integrated).toMatchObject({ integrated: true, bound: true, profileSet: "native" });
+  });
+
+  it("on a name both set, the integration wins — counted in the log; no name or value of the binding's is written", async () => {
+    const floor = await startFakeFloor();
+    const logs: CapturedLog[] = [];
+    const service = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      logger: captureLogger(logs),
+      shellIntegration: () => INTEGRATION,
+      profileBinding: bindingSeam({
+        work: {
+          state: "bound",
+          label: "Work",
+          variables: { ...BINDING, ZDOTDIR: "/profiles/work/zdotdir-probe" },
+        },
+      }).profileBinding,
+    });
+    expect((await service.create({ profileSet: "work" })).bound).toBe(true);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: { ...BINDING, ...INTEGRATION },
+    });
+    const shadowed = logs.filter((log) => log.event === "fieldd.terminal.profile_binding_shadowed");
+    expect(shadowed).toHaveLength(1);
+    expect(shadowed[0]?.attrs).toEqual({ shadowed: 1 });
+    const written = JSON.stringify(logs);
+    for (const text of [...Object.keys(BINDING), ...Object.values(BINDING)])
+      expect(written).not.toContain(text);
+    expect(written).not.toContain("zdotdir-probe");
+  });
+
+  it("the fence (EL7): a variable in a daemon's own classes is dropped from the binding and COUNTED — never named, never its value", async () => {
+    const floor = await startFakeFloor();
+    const { bash } = programs();
+    const logs: CapturedLog[] = [];
+    const reserved = Object.fromEntries(
+      ENV_PREFIXES.map((prefix) => [`${prefix}PROBE`, "a-daemon-secret"]),
+    );
+    const service = fakeFloorService(floor, {
+      logger: captureLogger(logs),
+      profileBinding: bindingSeam({
+        work: { state: "bound", label: "Work", variables: { ...BINDING, ...reserved } },
+        reserved: { state: "bound", label: "Reserved", variables: reserved },
+      }).profileBinding,
+    });
+    expect((await service.create({ shell: bash, profileSet: "work" })).bound).toBe(true);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: BINDING,
+    });
+    const dropped = logs.filter((log) => log.event === "fieldd.terminal.profile_binding_reserved");
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]?.attrs).toEqual({ profileSet: "work", dropped: ENV_PREFIXES.length });
+    const written = JSON.stringify(logs);
+    expect(written).not.toContain("a-daemon-secret");
+    for (const name of Object.keys(reserved)) expect(written).not.toContain(name);
+
+    // a binding of nothing but reserved names adds nothing, and the birth is still bound
+    const only = await service.create({ shell: bash, profileSet: "reserved" });
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    expect(only).toMatchObject({ bound: true, profileSet: "reserved" });
+  });
+
+  it("refusals reach no floor — a set that is gone, a runtime that cannot answer (said, thrown or absent), a binding that cannot be made — each in fieldd's words, never an unbound shell", async () => {
+    const floor = await startFakeFloor();
+    const service = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      shellIntegration: () => INTEGRATION,
+      profileBinding: async (profileSet) => {
+        if (profileSet === "busy") return { state: "unavailable", reason: "runtime disposed" };
+        if (profileSet === "throws") throw new Error("the registry could not be read");
+        if (profileSet === "broken")
+          return { state: "failed", label: "Work", reason: "binds scripted more than once" };
+        return { state: "unknown" };
+      },
+    });
+    const refusal = async (params: TerminalCreateParams): Promise<RpcCallError> => {
+      const error = await service.create(params).then(
+        () => undefined,
+        (thrown: unknown) => thrown,
+      );
+      if (!(error instanceof RpcCallError)) throw new Error("expected a typed refusal");
+      return error;
+    };
+    const gone = await refusal({ profileSet: "gone" });
+    expect([gone.kind, gone.message, gone.retryable]).toEqual([
+      "NOT_FOUND",
+      "that profile no longer exists",
+      false,
+    ]);
+    expect(gone.details).toEqual({ set: "gone" });
+    for (const profileSet of ["busy", "throws"]) {
+      const unavailable = await refusal({ profileSet });
+      expect([unavailable.kind, unavailable.retryable]).toEqual(["UNAVAILABLE", true]);
+      expect(unavailable.details).toEqual({
+        service: "agents",
+        state: "runtime-unavailable",
+        set: profileSet,
+      });
+    }
+    const broken = await refusal({ profileSet: "broken" });
+    expect([broken.kind, broken.message]).toEqual([
+      "PRECONDITION_FAILED",
+      "Work could not be bound: binds scripted more than once",
+    ]);
+    // nothing reached the floor: no birth, and not even a control connection
+    expect(floor.createOptions()).toBeUndefined();
+    expect(floor.connections()).toBe(0);
+
+    // no runtime composed at all: the same honest UNAVAILABLE
+    const bare = fakeFloorService(floor, { defaultShell: () => "/bin/zsh" });
+    const none = await bare.create({ profileSet: "work" }).catch((thrown: unknown) => thrown);
+    expect(none).toBeInstanceOf(RpcCallError);
+    expect((none as RpcCallError).kind).toBe("UNAVAILABLE");
+    expect(floor.createOptions()).toBeUndefined();
+    expect(floor.connections()).toBe(0);
+  });
+
+  it("through the daemon: a bound birth needs agent.spawn too — refused FORBIDDEN_SCOPE before the binding is asked, a recorded attempt naming the set; with it the shell is bound and the ledger says the set and `bound`, never a variable", async () => {
+    const { cat } = programs();
+    const seam = bindingSeam({ work: WORK });
+    const { dataDir, floor, rpc, rpcWith, createRecords, createOutcomes } =
+      await daemonOverFakeFloor(undefined, seam.profileBinding);
+    // terminal.attach alone: the door's own scope, and not enough for a bound birth
+    const refused = await rpc.callErr("terminal.create", { shell: cat, profileSet: "work" });
+    expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(refused.data?.details).toEqual({ required: "agent.spawn" });
+    expect(seam.asked).toEqual([]);
+    expect(floor.createOptions()).toBeUndefined();
+    // the attempt names the set asked for (the shell path is the ledger's own
+    // alias of it: temp directories are written as `<temp>`)
+    const attempt = (await createRecords()).find((r) => r.phase === "attempt");
+    expect(Object.keys(attempt?.attrs ?? {}).sort()).toEqual(["profileSet", "shell"]);
+    expect(attempt?.attrs?.["profileSet"]).toBe("work");
+    const failed = (await createRecords()).find((r) => r.phase === "outcome");
+    expect(failed?.outcome).toBe("failed");
+    // …and the same window may still open an unbound shell
+    const unbound = TerminalCreateOpenResult.parse(
+      await rpc.call("terminal.create", { shell: cat }),
+    );
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+
+    const spawner = await rpcWith(["terminal.attach", "agent.spawn"]);
+    const bound = TerminalCreateOpenResult.parse(
+      await spawner.call("terminal.create", { shell: cat, profileSet: "work" }),
+    );
+    expect(seam.asked).toEqual(["work"]);
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: BINDING,
+    });
+    const outcomes = await createOutcomes();
+    expect(outcomes.at(-2)).toEqual({
+      sessionId: unbound.sessionId,
+      integrated: false,
+      bound: false,
+    });
+    expect(outcomes.at(-1)).toEqual({ sessionId: bound.sessionId, integrated: false, bound: true });
+    const ledger = JSON.stringify(await readAuditRecords(dataDir));
+    for (const text of [...Object.keys(BINDING), ...Object.values(BINDING)])
+      expect(ledger).not.toContain(text);
+  });
+
+  it("through the daemon, the production wiring: the agent runtime's own registry answers — a set it never made is NOT_FOUND, This Mac is a bound birth that binds nothing", async () => {
+    const { cat } = programs();
+    const { floor, rpcWith, createOutcomes } = await daemonOverFakeFloor();
+    const spawner = await rpcWith(["terminal.attach", "agent.spawn"]);
+    const gone = await spawner.callErr("terminal.create", { shell: cat, profileSet: "never-made" });
+    expect(gone.data?.kind).toBe("NOT_FOUND");
+    expect(gone.message).toBe("that profile no longer exists");
+    expect(floor.createOptions()).toBeUndefined();
+    const native = TerminalCreateOpenResult.parse(
+      await spawner.call("terminal.create", { shell: cat, profileSet: "native" }),
+    );
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    expect((await createOutcomes()).at(-1)).toEqual({
+      sessionId: native.sessionId,
+      integrated: false,
+      bound: true,
+    });
+  });
+});
+
+/** A service over the fake floor whose link serves an inventory the row
+ * publishes — the first reading at subscribe, each later one as the floor's
+ * news. */
+function inventoriedService(
+  floor: { endpoints: TerminalEndpoints },
+  rows: Array<Record<string, unknown>>,
+  opts: Omit<TerminalServiceOptions, "link"> = {},
+): { service: TerminalService; publish: (rows: Array<Record<string, unknown>>) => void } {
+  let current = observed(rows);
+  let emit: ((payload: unknown, kind: "snapshot" | "delta") => void) | undefined;
+  const service = new TerminalService({
+    link: {
+      subscribe: async (_method, _params, onEvent) => {
+        emit = onEvent;
+        return { snapshot: current };
+      },
+      terminalEndpoints: floor.endpoints,
+      on: () => undefined,
+    },
+    ...opts,
+  });
+  cleanup.push(() => service.dispose());
+  return {
+    service,
+    publish: (next) => {
+      current = observed(next);
+      emit?.(current, "delta");
+    },
+  };
+}
+
+describe("SB-2 — fieldd's record of a bound shell: the answer, the roster, a restart (the fake floor)", () => {
+  it("the create's answer and the roster say the set; a new service over the same record (fieldd restarted) still says it while the floor lists the session; the record ends when the floor stops listing it", async () => {
+    const floor = await startFakeFloor();
+    const { cat } = programs();
+    const file = join(makeDataDir(), ...LAYOUT.TERMINAL_BINDINGS_FILE);
+    const first = inventoriedService(floor, [], {
+      profileBinding: bindingSeam({ work: WORK }).profileBinding,
+      bindings: new TerminalBindingStore({ file }),
+    });
+    await first.service.ensureStarted();
+    const born = await first.service.create({ shell: cat, profileSet: "work" });
+    expect(born.profileSet).toBe("work");
+    expect(first.service.profileSetOf(born.sessionId)).toBe("work");
+    first.publish([
+      { sessionId: born.sessionId, pid: 42 },
+      { sessionId: "not-ours", pid: 43 },
+    ]);
+    const roster = TerminalRosterResult.parse(first.service.roster());
+    expect(roster.items.map((item) => [item.sessionId, item.profileSet])).toEqual([
+      [born.sessionId, "work"],
+      ["not-ours", undefined],
+    ]);
+
+    // fieldd restarts; the floor — and the shell — did not
+    const second = inventoriedService(floor, [{ sessionId: born.sessionId, pid: 42 }], {
+      bindings: new TerminalBindingStore({ file }),
+    });
+    await second.service.ensureStarted();
+    expect(second.service.roster().items[0]?.profileSet).toBe("work");
+    expect(second.service.profileSetOf(born.sessionId)).toBe("work");
+    // the shell ends: the floor stops listing it, and the record lets it go
+    second.publish([]);
+    expect(second.service.profileSetOf(born.sessionId)).toBeUndefined();
+    expect(TerminalBindingsFile.parse(JSON.parse(readFileSync(file, "utf8"))).bindings).toEqual([]);
+  });
+
+  it("a bound shell that ends before any inventory lists it: the floor's exit ends the wait, and the next inventory ends its record", async () => {
+    const floor = await startFakeFloor();
+    const { cat } = programs();
+    const { service, publish } = inventoriedService(floor, [], {
+      profileBinding: bindingSeam({ work: WORK }).profileBinding,
+    });
+    await service.ensureStarted();
+    const born = await service.create({ shell: cat, profileSet: "work" });
+    // an inventory that predates the birth: the birth is inside its window
+    publish([]);
+    expect(service.profileSetOf(born.sessionId)).toBe("work");
+    const exited = new Promise<void>((resolve) => {
+      service.onSessionExited(() => resolve());
+    });
+    floor.exit(born.sessionId);
+    await exited;
+    publish([]);
+    expect(service.profileSetOf(born.sessionId)).toBeUndefined();
+  });
+
+  it("through the daemon: the create's answer names the set, the roster says it once the floor lists the session, and the record on disk holds the session and the set — never a variable", async () => {
+    const { cat } = programs();
+    const { dataDir, mock, rpc, rpcWith } = await daemonOverFakeFloor(
+      undefined,
+      bindingSeam({ work: WORK }).profileBinding,
+    );
+    const spawner = await rpcWith(["terminal.attach", "agent.spawn"]);
+    const bound = TerminalCreateOpenResult.parse(
+      await spawner.call("terminal.create", { shell: cat, profileSet: "work" }),
+    );
+    expect(bound.profileSet).toBe("work");
+    const unbound = TerminalCreateOpenResult.parse(
+      await rpc.call("terminal.create", { shell: cat }),
+    );
+    expect(unbound).not.toHaveProperty("profileSet");
+    mock.pushObserved(observed([{ sessionId: bound.sessionId, pid: 42 }]));
+    // the daemon applies the floor's news on its own time: ask until it has
+    let row: TerminalRosterResult["items"][number] | undefined;
+    for (let tries = 0; row === undefined && tries < 200; tries += 1) {
+      const roster = TerminalRosterResult.parse(await rpc.call("terminal.roster", {}));
+      row = roster.items.find((item) => item.sessionId === bound.sessionId);
+      if (row === undefined) await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(row?.profileSet).toBe("work");
+    const text = readFileSync(join(dataDir, ...LAYOUT.TERMINAL_BINDINGS_FILE), "utf8");
+    expect(
+      TerminalBindingsFile.parse(JSON.parse(text)).bindings.map((binding) => [
+        binding.sessionId,
+        binding.profileSet,
+      ]),
+    ).toEqual([[bound.sessionId, "work"]]);
+    for (const secret of [...Object.keys(BINDING), ...Object.values(BINDING)])
+      expect(text).not.toContain(secret);
   });
 });
