@@ -787,6 +787,43 @@ describe("which shell was born under which Agent Profile (SB-3)", () => {
     expect(pool.terminalPoolSnapshot().profileSets.size).toBe(0);
   });
 
+  it("knows a shell from an agent's PTY: a create's answer and the roster's interactive rows, never an adopted spawn", async () => {
+    pool.openTerminalPool(binding, { sessionIds: [] });
+    await settle();
+    const bound = await pool.createTerminalSession({
+      workloadClass: "interactive",
+      profileSet: "work",
+    });
+    const plain = await pool.createTerminalSession({ workloadClass: "interactive" });
+    expect(pool.terminalShellBirth(bound.sessionId)).toBe("work");
+    // born unbound is an answer, not an unknown
+    expect(pool.terminalShellBirth(plain.sessionId)).toBeNull();
+    // an agent's PTY, handed over by a spawn, is no shell of the pool's
+    const adopted = pool.adoptCreatedTerminal({
+      sessionId: "agent-pty",
+      session: runtimeSummary("agent-pty"),
+      ...directTicket("cell-a-boot-1", "agent-pty"),
+    });
+    expect(pool.terminalShellBirth(adopted.sessionId)).toBeUndefined();
+    rosterRows = [
+      {
+        sessionId: "other-window",
+        workloadClass: "interactive",
+        health: "live",
+        profileSet: "demo",
+      },
+      { sessionId: "unbound-elsewhere", workloadClass: "interactive", health: "live" },
+      { sessionId: "an-agent", workloadClass: "agent", health: "live" },
+    ];
+    await pool.refreshTerminalRoster();
+    expect(pool.terminalShellBirth("other-window")).toBe("demo");
+    expect(pool.terminalShellBirth("unbound-elsewhere")).toBeNull();
+    expect(pool.terminalShellBirth("an-agent")).toBeUndefined();
+    expect(pool.terminalShellBirth("never-heard-of")).toBeUndefined();
+    pool.disposeTerminalPool();
+    expect(pool.terminalShellBirth(bound.sessionId)).toBeUndefined();
+  });
+
   it("hands a refused birth back to the asker and keeps its phase — but the opening birth and an unreachable fieldd fault", async () => {
     let answer: "answer" | "refuse" | "unreachable" = "answer";
     const client = {

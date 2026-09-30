@@ -1725,7 +1725,9 @@ describe("births under an Agent Profile (SB-3)", () => {
     ]);
   });
 
-  it("returns an ended agent's pane to a shell under the set its run was born under", async () => {
+  it("keeps an unbound pane unbound after its agent exits, even one whose run was under a profile", async () => {
+    // the pane's shell was born under none; the agent ran under Work (the
+    // default set, QL-D3) — the run never decides the pane's binding
     foldRows = [managedSummary({ terminalSessionId: "pty-1", alive: false, profileSet: "work" })];
     await mountDeck();
     await act(async () => {
@@ -1736,9 +1738,46 @@ describe("births under an Agent Profile (SB-3)", () => {
       workspace.refresh();
     });
     await settle();
-    expect(creates()).toEqual([
-      { cwd: "/project/vibe-field", workloadClass: "interactive", profileSet: "work" },
-    ]);
+    expect(creates()).toEqual([{ cwd: "/project/vibe-field", workloadClass: "interactive" }]);
+    const paneMeta = workspaceProps["paneMeta"] as (session: unknown, paneId: string) => unknown;
+    expect(paneMeta(stubSession("pty-1"), "pane-1")).not.toHaveProperty("profileSet");
+  });
+
+  it("keeps a Work pane Work — its ⌘D split, its agent-exit shell and its meta — whatever its agent ran under", async () => {
+    await mountDeck();
+    // the pane's shell is born under Work…
+    await act(async () => {
+      await deckDoor?.createTerminal({ profileSet: "work" });
+    });
+    await settle();
+    // …and an agent that ran under This Mac takes its place in the pane
+    await act(async () => {
+      foldFrame?.([
+        managedSummary({ terminalSessionId: "agent-pty", alive: true, profileSet: "native" }),
+      ]);
+      workspace.panes[0]!.session = stubSession("agent-pty");
+      workspace.refresh();
+    });
+    await settle();
+    const paneMeta = workspaceProps["paneMeta"] as (session: unknown, paneId: string) => unknown;
+    expect(paneMeta(stubSession("agent-pty"), "pane-1")).toMatchObject({ profileSet: "work" });
+    // ⌘D copies the SOURCE pane's set, not the agent's run's
+    await act(async () => {
+      await splitDoor()(stubSession("agent-pty"), "vertical");
+    });
+    // the agent exits: its pane returns to a shell under the pane's own set
+    await act(async () => {
+      foldFrame?.([
+        managedSummary({ terminalSessionId: "agent-pty", alive: false, profileSet: "native" }),
+      ]);
+      workspace.panes[0]!.session = stubSession("agent-pty", {
+        exited: true,
+        exitOutcome: "completed",
+      });
+      workspace.refresh();
+    });
+    await settle();
+    expect(creates().map((params) => params["profileSet"])).toEqual(["work", "work", "work"]);
   });
 
   it("hands the door fieldd's own words for a refused birth and faults nothing — the next birth goes through", async () => {

@@ -55,28 +55,9 @@ export interface AgentFold {
 export interface DeckAgentFacts {
   agents: ReadonlyMap<string, PaneFrameAgent>;
   runs: ReadonlyMap<string, string>;
-  /** SB-3 — the Agent Profile each agent PTY's run was born under, in fieldd's
-   * words (the row's `profileSet`): what a shell that takes its place — the
-   * agent-exit shell, a split, a relaunch — is born under. */
-  profileSets: ReadonlyMap<string, string>;
 }
 
-const EMPTY_DECK_FACTS: DeckAgentFacts = {
-  agents: new Map(),
-  runs: new Map(),
-  profileSets: new Map(),
-};
-
-/** SB-3 — each agent PTY's run set, by the floor session the PTY is. */
-export function runProfileSets(
-  byTerminal: ReadonlyMap<string, AgentSessionSummary>,
-): ReadonlyMap<string, string> {
-  const sets = new Map<string, string>();
-  for (const [sessionId, row] of byTerminal) {
-    if (row.profileSet !== undefined) sets.set(sessionId, row.profileSet);
-  }
-  return sets;
-}
+const EMPTY_DECK_FACTS: DeckAgentFacts = { agents: new Map(), runs: new Map() };
 
 const AgentFoldContext = createContext<AgentFold | undefined>(undefined);
 const DeckAgentFactsContext = createContext<DeckAgentFacts | undefined>(undefined);
@@ -148,11 +129,10 @@ export function GodviewAgentsProvider({
   const deckKey = useRef("");
   const agents = paneFrameAgents(fold.byTerminal);
   const runs = runIdsBySession(fold.byTerminal);
-  const profileSets = runProfileSets(fold.byTerminal);
-  const key = `${paneFrameFactsKey(agents, runs)}\u0003${[...profileSets].join("\u0002")}`;
+  const key = paneFrameFactsKey(agents, runs);
   if (key !== deckKey.current) {
     deckKey.current = key;
-    deckFacts.current = { agents, runs, profileSets };
+    deckFacts.current = { agents, runs };
   }
 
   return (

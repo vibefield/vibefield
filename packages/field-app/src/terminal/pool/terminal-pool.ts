@@ -236,6 +236,12 @@ const sessionProfileSets = new Map<string, string>();
 /** The record as the snapshot hands it out: replaced, never mutated, so a
  * reader keyed on identity sees a change exactly when there is one. */
 let profileSetsView: ReadonlyMap<string, string> = new Map();
+/** SB-3 — which sessions are SHELLS (born by `terminal.create`) and the Agent
+ * Profile each was born under, `null` for one born unbound: a create's answer
+ * for the births this window asked for, the roster's interactive rows for the
+ * rest. An agent's PTY is not a shell and never appears here — which is what
+ * lets a pane keep its own set while an agent runs in it. */
+const shellBirths = new Map<string, string | null>();
 
 /** Write one row of the record (undefined: the shell is under none). */
 function recordProfileSet(sessionId: string, profileSet: string | undefined): void {
@@ -632,6 +638,7 @@ function recordRoutedTicket(sessionId: string, ticket: TerminalOpenTicket): void
 function forgetRoutedSession(sessionId: string): void {
   createdSummaries.delete(sessionId);
   recordProfileSet(sessionId, undefined);
+  shellBirths.delete(sessionId);
   const cell = placements.cellFor(sessionId);
   placements.forgetSession(sessionId);
   if (
@@ -867,6 +874,7 @@ export async function createTerminalSession(
   }
   const read = readCreateTicket(raw, Date.now());
   if (read.profileSet !== undefined) recordProfileSet(read.sessionId, read.profileSet);
+  shellBirths.set(read.sessionId, read.profileSet ?? null);
   trace?.mark("ticket");
   placements.record(read.placement);
   grantsLanded = true;
@@ -891,6 +899,14 @@ export async function createTerminalSession(
  * been told about). */
 export function terminalSessionProfileSet(sessionId: string): string | undefined {
   return sessionProfileSets.get(sessionId);
+}
+
+/** SB-3 — for a SHELL (a session born by `terminal.create`), the Agent Profile
+ * it was born under, or `null` for one born unbound; `undefined` for a session
+ * not known to be a shell — an agent's PTY, a peer's replica, a session this
+ * window has not been told about. */
+export function terminalShellBirth(sessionId: string): string | null | undefined {
+  return shellBirths.get(sessionId);
 }
 
 /**
@@ -1082,7 +1098,12 @@ export async function refreshTerminalRoster(
     // (SB-2 keeps it on disk, so it outlives this window and fieldd both). A
     // listed shell without one is under none; an unlisted one keeps what its
     // create answered.
-    for (const item of roster) recordProfileSet(item.sessionId, item.profileSet);
+    for (const item of roster) {
+      recordProfileSet(item.sessionId, item.profileSet);
+      if (item.workloadClass === "interactive") {
+        shellBirths.set(item.sessionId, item.profileSet ?? null);
+      }
+    }
   } catch (cause) {
     roster = [];
     rosterState = unobservedRefusal(cause) ? "unobserved" : "unavailable";
@@ -1187,6 +1208,7 @@ export function disposeTerminalPool(): void {
   createdSummaries.clear();
   sessionProfileSets.clear();
   profileSetsView = new Map();
+  shellBirths.clear();
   demand.clear();
   projected.clear();
   pending = null;

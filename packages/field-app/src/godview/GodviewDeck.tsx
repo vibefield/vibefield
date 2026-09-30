@@ -50,6 +50,7 @@ import {
   terminalPoolSnapshot,
   terminalSessionProfileSet,
   terminalSessionSummary,
+  terminalShellBirth,
   terminateTerminalSession,
   useTerminalPool,
   useTerminalPoolOpen,
@@ -704,25 +705,29 @@ export function GodviewDeck({
   // work driven by `session-created`, not as a `listSessions` poll.
 
   // SB-3 — THE BIRTH'S PROFILE. A shell is born under an Agent Profile when the
-  // door asks for one (the spawn bloom, the list's menu), or when it takes the
-  // place of a session that has one: a split and the agent-exit shell inherit
-  // the pane's, a relaunch reads it back from `paneMeta`. The door's ask cannot
+  // door asks for one (the spawn bloom, the list's menu), or under its PANE's:
+  // a ⌘D split copies its source pane's, the agent-exit shell takes its own
+  // pane's, a relaunch reads it back from `paneMeta`. The door's ask cannot
   // ride ghosttea's `createSessionInActivePane()` — it takes no arguments — but
   // ghosttea calls this deck's `createSplitSession` override FIRST and
   // synchronously inside it, so a ref set just before the call is what the
   // override reads (and clears) before its first await.
   const pendingBirth = useRef<PendingBirth | null>(null);
-  /** Each agent PTY's run set, from the deck facts (kept current below, where
-   * the facts are read). */
-  const runProfileSets = useRef<ReadonlyMap<string, string>>(new Map());
-  /** The set a shell that takes this session's place is born under, in
-   * fieldd's words only: its own birth's record, else the set the agent in it
-   * ran under. None for an unbound shell — and never a guess. */
-  const inheritedProfileSet = useCallback(
-    (sessionId: string): string | undefined =>
-      terminalSessionProfileSet(sessionId) ?? runProfileSets.current.get(sessionId),
-    [],
-  );
+
+  // THE PANE IS THE PROFILE BOUNDARY (RFC 006). A pane's Agent Profile is the
+  // one ITS SHELL was born under, as fieldd's create answer (or its roster, for
+  // a shell born elsewhere) said: followed whenever the pane shows a shell, and
+  // KEPT while an agent's PTY shows there. An agent's run never decides a
+  // pane's binding — an unbound pane stays unbound after its agent exits, even
+  // one that ran under the default set (QL-D3), and a Work pane stays Work
+  // whatever a resumed run ran under. A pane with no record (a restored agent
+  // pane) is unbound; `null` records a shell born unbound.
+  const paneSets = useRef(new Map<string, string | null>());
+  const paneSetOf = useCallback((paneId: string, sessionId: string): string | undefined => {
+    const shell = terminalShellBirth(sessionId);
+    if (shell !== undefined) paneSets.current.set(paneId, shell);
+    return paneSets.current.get(paneId) ?? undefined;
+  }, []);
 
   // LAYER 2 OF RESTORE (GT-D8 as amended): the durable meaning of a pane, which
   // its session id alone does not carry. Ghosttea persists whatever this
@@ -739,7 +744,7 @@ export function GodviewDeck({
   // Stable identity, and it matters: ghosttea's persist effect depends on this
   // prop, so a fresh arrow per render would rewrite localStorage every render.
   const paneMeta = useCallback(
-    (session: { id?: string; cwd?: string | null; title?: string | null }) => {
+    (session: { id?: string; cwd?: string | null; title?: string | null }, paneId?: string) => {
       // Only DEFINED fields: an explicit `undefined` would serialize away anyway,
       // and a null cwd persisted as `"cwd": null` is a value a reader has to
       // learn to disbelieve.
@@ -762,13 +767,16 @@ export function GodviewDeck({
       // is the only place the renderer can learn its own hostname — no contract
       // carries one. A replica's cwd must never reach this: it names the peer.
       if (remoteDevice === undefined) rememberDeviceHost(session.cwd);
-      // `profileSet` is the fourth (SB-3): the Agent Profile the pane's shell
-      // was born under, so its relaunch is born under it again. A peer's pane
-      // is under none of this device's.
+      // `profileSet` is the fourth (SB-3): the Agent Profile the PANE is under
+      // — the set its shell was born under, kept while an agent runs there — so
+      // its relaunch is born under it again. A peer's pane is under none of
+      // this device's.
       const profileSet =
         session.id === undefined || remoteDevice !== undefined
           ? undefined
-          : inheritedProfileSet(session.id);
+          : paneId !== undefined
+            ? paneSetOf(paneId, session.id)
+            : (terminalShellBirth(session.id) ?? undefined);
       return {
         ...(typeof session.cwd === "string" && session.cwd !== "" ? { cwd: session.cwd } : {}),
         ...(typeof session.title === "string" && session.title !== ""
@@ -778,7 +786,7 @@ export function GodviewDeck({
         ...(profileSet !== undefined ? { profileSet } : {}),
       };
     },
-    [inheritedProfileSet],
+    [paneSetOf],
   );
 
   // A BIRTH, through the one product door (TP-S1).
@@ -850,7 +858,9 @@ export function GodviewDeck({
       // in a bound one's place.
       const profileSet = paneProfileSet(context.meta);
       try {
-        return await bornSession(cwd, profileSet);
+        const born = await bornSession(cwd, profileSet);
+        if (born !== null) paneSets.current.set(context.paneId, profileSet ?? null);
+        return born;
       } catch (cause) {
         // Drop-and-collapse is the library's own answer to a null, and it is
         // the honest one: a pane that cannot be refilled should not be drawn as
@@ -883,11 +893,21 @@ export function GodviewDeck({
   const createSplitSession = useCallback(
     async (activeSession: DeckSession): Promise<SessionSummary> => {
       // SB-3: the door's ask, taken (and cleared) before the first await, so a
-      // ⌘D after it cannot inherit it. With none — a ⌘D split, the agent-exit
-      // shell — the new shell is born under the set of the one it follows.
+      // ⌘D after it cannot inherit it. With none, the new shell is born under
+      // its SOURCE PANE's set: the active pane for a ⌘D split, the pane the
+      // agent exited in for the agent-exit shell — never the agent's own run's.
       const birth = pendingBirth.current;
       pendingBirth.current = null;
-      const profileSet = birth !== null ? birth.profileSet : inheritedProfileSet(activeSession.id);
+      let profileSet = birth?.profileSet;
+      if (birth === null) {
+        const context = workspaceRef.current;
+        const panes = context?.panes ?? [];
+        const source =
+          panes.find(
+            (pane) => pane.id === context?.activePaneId && pane.session.id === activeSession.id,
+          ) ?? panes.find((pane) => pane.session.id === activeSession.id);
+        profileSet = source === undefined ? undefined : paneSetOf(source.id, activeSession.id);
+      }
       const cwd = paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
       let born: SessionSummary | null;
       try {
@@ -902,7 +922,7 @@ export function GodviewDeck({
       recordBornShell(runtime, born.id); // QL-D7: a new pane's shell, which may show the launcher
       return born;
     },
-    [bornSession, shell, runtime, inheritedProfileSet],
+    [bornSession, shell, runtime, paneSetOf],
   );
 
   /**
@@ -1226,7 +1246,6 @@ export function GodviewDeck({
   const paneAgents = useDeckAgentFacts();
   const paneRuns = useRef(paneAgents.runs);
   paneRuns.current = paneAgents.runs;
-  runProfileSets.current = paneAgents.profileSets;
 
   useCompletedAgentPanes(
     runtime,
@@ -1591,6 +1610,21 @@ export function GodviewDeck({
         })),
     [pool.roster, pool.closingSessionIds],
   );
+
+  // SB-3: each pane's set follows the shells it shows (`paneSetOf`) — asked
+  // again when the roster names a shell born elsewhere — and a closed pane's
+  // record goes with it.
+  useEffect(() => {
+    if (workspace === undefined) return;
+    const shown = new Set<string>();
+    for (const pane of workspace.panes) {
+      shown.add(pane.id);
+      paneSetOf(pane.id, pane.session.id);
+    }
+    for (const paneId of [...paneSets.current.keys()]) {
+      if (!shown.has(paneId)) paneSets.current.delete(paneId);
+    }
+  }, [workspace, paneSetOf, pool.roster]);
 
   // The pane facts the monitor reads (GT-D17). Published on CHANGE only — this
   // fires on every workspace republish, and an unchanged array would re-run the
