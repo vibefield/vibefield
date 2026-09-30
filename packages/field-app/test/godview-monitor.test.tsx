@@ -1312,6 +1312,75 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
     expect(born?.profileSet).toBe("work");
   });
 
+  it("stamps the release point on the first NEW terminal row, before the door answers — never on a row it had", async () => {
+    const door = tabDoor();
+    let answer!: (outcome: unknown) => void;
+    door.createTerminal.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    await mountProbe(door, {
+      sessionIds: ["old-shell"],
+      activeSessionId: "old-shell",
+      sessions: [pane("old-shell")],
+    });
+    const row = (id: string) => probed?.agents.find((agent) => agent.id === id);
+    let creating: void | Promise<void>;
+    await act(async () => {
+      creating = probed?.actions.createAt({ x: 321.25, y: 123.75 }, { profileSet: "work" });
+    });
+    // the new shell reaches the stage (the deck's panes) before the door answers
+    await renderProbe(door, {
+      sessionIds: ["old-shell", "born-1"],
+      activeSessionId: "born-1",
+      sessions: [pane("old-shell"), pane("born-1", "/project/born")],
+    });
+    // as given, unrounded: the views match it to half a pixel
+    expect(row("born-1")?.spawnHint).toEqual({ x: 321.25, y: 123.75 });
+    expect(row("old-shell")?.spawnHint).toBeUndefined();
+    await act(async () => {
+      answer({ state: "mounted", sessionId: "born-1", profileSet: "work" });
+      await creating;
+    });
+    expect(row("born-1")?.spawnHint).toEqual({ x: 321.25, y: 123.75 });
+  });
+
+  it("takes a first appearance through the roster too, and the door's answer corrects a claim that was another's", async () => {
+    const door = tabDoor();
+    let answer!: (outcome: unknown) => void;
+    door.createTerminal.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    await mountProbe(door, { sessionIds: [] });
+    const row = (id: string) => probed?.agents.find((agent) => agent.id === id);
+    let creating: void | Promise<void>;
+    await act(async () => {
+      creating = probed?.actions.createAt({ x: 10.5, y: 20.5 });
+    });
+    // another window's shell reaches the roster first, and takes the point…
+    const stranger = { sessionId: "stranger", workloadClass: "interactive" as const };
+    await renderProbe(door, { sessionIds: [], floor: [stranger] });
+    expect(row("stranger")?.spawnHint).toEqual({ x: 10.5, y: 20.5 });
+    // …until the door names the session it made
+    await act(async () => {
+      answer({ state: "mounted", sessionId: "born-2" });
+      await creating;
+    });
+    await renderProbe(door, {
+      sessionIds: ["born-2"],
+      activeSessionId: "born-2",
+      sessions: [pane("born-2")],
+      floor: [stranger],
+    });
+    expect(row("stranger")?.spawnHint).toBeUndefined();
+    expect(row("born-2")?.spawnHint).toEqual({ x: 10.5, y: 20.5 });
+  });
+
   it("carries fieldd's own words when a profile birth is refused", async () => {
     const door = tabDoor();
     door.createTerminal.mockResolvedValue({

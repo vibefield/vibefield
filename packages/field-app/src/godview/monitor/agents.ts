@@ -65,6 +65,9 @@ export interface MonitorFloorRecord {
   title?: string;
   /** SB-3 — the Agent Profile its shell was born under, in fieldd's words. */
   profileSet?: string;
+  /** SB-3 — where a create in flight asked for it, when this row is its first
+   * appearance (a new shell can reach the stage through the roster first). */
+  spawnHint?: { x: number; y: number };
 }
 
 /** A peer's session, and where it landed here if it has (GT-D17). */
@@ -285,6 +288,7 @@ export function monitorAgentFromFloor(
     color: colours.neutral,
     active: false,
     ...(record.profileSet !== undefined ? { profileSet: record.profileSet } : {}),
+    ...(record.spawnHint !== undefined ? { spawnHint: record.spawnHint } : {}),
   };
 }
 

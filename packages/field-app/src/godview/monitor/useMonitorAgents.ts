@@ -185,6 +185,15 @@ interface RemoteLink {
   localSessionId: string;
 }
 
+/** SB-3 — a create in flight: where it was asked for (as given, unrounded), the
+ * local sessions a terminal row stood for when it started, and the row that
+ * has taken its position. */
+interface PendingSpawn {
+  readonly position: { x: number; y: number };
+  readonly known: ReadonlySet<string>;
+  claimed?: string;
+}
+
 const NO_PANES: MonitorPaneFacts = { sessionIds: [] };
 
 /** AR-4b — how many times a replacement's hand-over is retried before the
@@ -460,15 +469,44 @@ export function useMonitorAgents({
   /** The deck's panes, as terminal rows: the projection drops the ones a
    * managed row claims. A pane whose session exited stays out (a dead pane is
    * the deck's face to draw, not a row). */
+  /**
+   * SB-3 — a new terminal's spawn hint, from its row's FIRST appearance. The
+   * views' physics reads a row's `spawnHint` only when it CREATES the body, and
+   * the new shell's row can reach the stage (a pane's summary, the roster)
+   * before the door answers — a hint stamped only on the answer came too late,
+   * and the body landed away from where it was asked for. So while a create is
+   * in flight, the first NEW local terminal row seen after it started (one no
+   * row stood for then) takes its position; the door's answer stamps the
+   * session it names (`spawnHints`), which corrects a claim that was another's.
+   */
+  const pendingSpawns = useRef<PendingSpawn[]>([]);
+  const [spawnsVersion, setSpawnsVersion] = useState(0);
+  const localTerminalIds = useRef<ReadonlySet<string>>(new Set());
+  localTerminalIds.current = new Set([
+    ...paneSessionIds,
+    ...(panes.floor ?? []).map((row) => row.sessionId),
+  ]);
+  const hintFor = (sessionId: string): { x: number; y: number } | undefined => {
+    const answered = spawnHints.get(sessionId);
+    if (answered !== undefined) return answered;
+    const spawns = pendingSpawns.current;
+    const claim = spawns.find((spawn) => spawn.claimed === sessionId);
+    if (claim !== undefined) return claim.position;
+    const open = spawns.find((spawn) => spawn.claimed === undefined);
+    if (open === undefined || open.known.has(sessionId)) return undefined;
+    open.claimed = sessionId;
+    return open.position;
+  };
   const terminals = useMemo<readonly MonitorTerminalRecord[]>(
     () =>
       [...sessions.values()]
         .filter((session) => !session.exited)
-        .map((session) => ({
-          session,
-          ...(spawnHints.has(session.id) ? { spawnHint: spawnHints.get(session.id)! } : {}),
-        })),
-    [sessions, spawnHints],
+        .map((session) => {
+          const spawnHint = hintFor(session.id);
+          return { session, ...(spawnHint !== undefined ? { spawnHint } : {}) };
+        }),
+    // the claims' own clock rides along: `hintFor` reads the claims it versions
+    [sessions, spawnHints, spawnsVersion],
   );
   /** GT-6b — the floor's live PTYs, as the deck last read them. Keyed on the
    * facts a row draws rather than on array identity, for the same reason the
@@ -477,9 +515,14 @@ export function useMonitorAgents({
     (panes.floor ?? []).map((row) => [row.sessionId, row.workloadClass, row.title ?? ""]),
   );
   const floor = useMemo<readonly MonitorFloorRecord[]>(
-    () => panes.floor ?? [],
+    () =>
+      (panes.floor ?? []).map((row) => {
+        // a new shell can reach the stage through the roster first (SB-3)
+        const spawnHint = hintFor(row.sessionId);
+        return spawnHint === undefined ? row : { ...row, spawnHint };
+      }),
     // keyed by the facts above, not by the array the deck handed over
-    [floorKey],
+    [floorKey, spawnHints, spawnsVersion],
   );
 
   const agents = useMemo(() => {
@@ -749,15 +792,27 @@ export function useMonitorAgents({
       const label =
         profileSet === undefined ? undefined : profiles.find((set) => set.id === profileSet)?.label;
       const under = label === undefined ? "" : ` under ${label}`;
+      // SB-3: while in flight, the first new terminal row takes this position
+      const spawn: PendingSpawn | undefined =
+        position === undefined ? undefined : { position, known: localTerminalIds.current };
+      if (spawn !== undefined) pendingSpawns.current = [...pendingSpawns.current, spawn];
+      const landed = (): void => {
+        if (spawn === undefined) return;
+        pendingSpawns.current = pendingSpawns.current.filter((pending) => pending !== spawn);
+        setSpawnsVersion((version) => version + 1);
+      };
       try {
         const outcome = await (profileSet === undefined
           ? door.createTerminal()
           : door.createTerminal({ profileSet }));
+        landed();
         if (outcome.state === "no-pane") {
           announce("no pane to open a terminal in — open one in the deck first");
         } else if (outcome.state === "failed") {
           announce(`terminal could not be opened${under} — ${outcome.reason}`);
         } else {
+          // the door's answer names the session: its row keeps the position
+          // from here on, whichever row claimed it first
           if (position)
             setSpawnHints((current) => new Map(current).set(outcome.sessionId, position));
           if (profileSet !== undefined && outcome.profileSet === undefined) {
@@ -774,6 +829,7 @@ export function useMonitorAgents({
           }
         }
       } catch (cause) {
+        landed();
         announce(
           `terminal could not be opened${under} — ${cause instanceof Error ? cause.message : String(cause)}`,
         );
