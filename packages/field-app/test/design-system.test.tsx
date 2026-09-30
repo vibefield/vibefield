@@ -269,7 +269,8 @@ describe("design system page", () => {
     // The hidden list's keys door is there, beside the bodies.
     expect(bloom.querySelector("[data-swarm-new-terminal]")).not.toBeNull();
 
-    // The list view: its ＋ opens the same tree as a two-step menu (SB-D11);
+    // The list view: its ＋ opens the same tree as a two-step menu (SB-D11), in
+    // the bloom's order (the feed's) with the keys landing on the default;
     // choosing Work asks the fixture door, which answers `mounted` under it,
     // and the catalog keeps the birth as a deck would — a new terminal row.
     const list = container?.querySelector<HTMLElement>("[data-spawn-bloom-list-catalog]");
@@ -281,7 +282,8 @@ describe("design system page", () => {
       Array.from(menu?.querySelectorAll('[data-bloom-bud-kind="profile"]') ?? []).map((item) =>
         item.getAttribute("data-bloom-bud-id"),
       ),
-    ).toEqual(["work", "native", "demo"]);
+    ).toEqual(["native", "work", "demo"]);
+    expect(document.activeElement?.getAttribute("data-bloom-bud-id")).toBe("work");
     await act(async () => menu?.querySelector<HTMLElement>('[data-bloom-bud-id="work"]')?.click());
     expect(list.querySelectorAll(".vf-monitor-list-row")).toHaveLength(before + 1);
     expect(list.querySelector(".vf-monitor-ack")?.textContent).toBe(
