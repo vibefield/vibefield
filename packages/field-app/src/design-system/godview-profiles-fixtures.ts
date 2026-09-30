@@ -1,6 +1,11 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
-import type { AgentPersona, AgentProfileSet, AgentSessionSummary } from "@vibefield/contracts";
+import {
+  AGENT_CATALOG,
+  type AgentPersona,
+  type AgentProfileSet,
+  type AgentSessionSummary,
+} from "@vibefield/contracts";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
 
@@ -230,39 +235,44 @@ export function profileTabsDoor(): MonitorDoor {
 // ---- SB-3 — the spawn bloom's fixture --------------------------------------------
 //
 // This desktop with three Agent Profiles, as the brief's catalog entry asks:
-// This Mac (Claude's own folder signed in), Work — the default, with one of its
-// agents blocked (the bud's orange dot) — and Demo, holding no sign-in at all.
+// This Mac (one agent's own folder signed in), Work — the default, with one of
+// its agents blocked (the bud's orange dot) — and Demo, holding no sign-in at all.
 // Its create answers `mounted` under the profile asked for, so a hold in Studio
 // blooms and commits; the catalog keeps the births as a deck's pane facts, so
-// the new body arrives where it was let go. Examples, not anyone's; nothing
-// spawns.
+// the new body arrives where it was let go. The agents are the catalog's own
+// rows (the first two it offers profile sign-ins for), so no agent id is written
+// here (R23b). Examples, not anyone's; nothing spawns.
+
+const PROFILED_AGENTS = AGENT_CATALOG.filter((row) => row.offers.personas);
+const FIRST_AGENT = PROFILED_AGENTS[0] ?? AGENT_CATALOG[0];
+const SECOND_AGENT = PROFILED_AGENTS[1] ?? FIRST_AGENT;
 
 const SPAWN_ROWS: readonly RowSpec[] = [
   {
     run: "run-billing-api",
-    kind: "codex",
-    label: "Codex",
+    kind: SECOND_AGENT.id,
+    label: SECOND_AGENT.label,
     project: "billing-api",
     status: "blocked",
-    model: "gpt-5 · med",
+    model: "deep · med",
     profileSet: "work",
   },
   {
     run: "run-refactor-auth",
-    kind: "claude",
-    label: "Claude Code",
+    kind: FIRST_AGENT.id,
+    label: FIRST_AGENT.label,
     project: "refactor-auth",
     status: "working",
-    model: "opus · high",
+    model: "deep · high",
     profileSet: "work",
   },
   {
     run: "run-dotfiles",
-    kind: "claude",
-    label: "Claude Code",
+    kind: FIRST_AGENT.id,
+    label: FIRST_AGENT.label,
     project: "dotfiles",
     status: "idle",
-    model: "sonnet · low",
+    model: "light · low",
     profileSet: "native",
   },
 ];
@@ -274,7 +284,7 @@ export const SPAWN_BLOOM_SETS: readonly AgentProfileSet[] = [
     label: "This Mac",
     default: false,
     createdAt: AT,
-    personas: [persona("claude:native-default", "claude", "native-default", true)],
+    personas: [persona(`${FIRST_AGENT.id}:native-default`, FIRST_AGENT.id, "native-default", true)],
   },
   {
     id: "work",
@@ -283,7 +293,10 @@ export const SPAWN_BLOOM_SETS: readonly AgentProfileSet[] = [
     glyph: "briefcase",
     default: true,
     createdAt: AT,
-    personas: [persona("work-claude", "claude"), persona("work-codex", "codex")],
+    personas: [
+      persona(`work-${FIRST_AGENT.id}`, FIRST_AGENT.id),
+      persona(`work-${SECOND_AGENT.id}`, SECOND_AGENT.id),
+    ],
   },
   {
     id: "demo",
