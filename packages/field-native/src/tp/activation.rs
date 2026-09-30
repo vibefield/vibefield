@@ -797,31 +797,55 @@ impl ActivationTable {
         })
     }
 
-    /// `TransferGeometry` — the current holder (or a `geometryAdmin` caller) hands
-    /// the seat to `to`, committing a resize as one engine claim.
+    /// `TransferGeometry` — ONE cell-side transition that revokes the seat,
+    /// grants it to `to` and commits the resize as one engine claim.
+    ///
+    /// Three callers may make it (TPv3 §6, the Authorization bullet as amended
+    /// 2026-09-30): the current holder's own client (a hand-off), a caller whose
+    /// grant carries `geometryAdmin`, and — THE TAKE — any caller whose own grant
+    /// carries `geometry`, when the destination is ITSELF. The take is the one
+    /// clause DS-D5's note added (James: "the latest focused pane takes full
+    /// control include resizing, LWW. no matter it is local pane, remote desktop
+    /// pane or mobile pane"): the HOST decides when a pane takes — on focus — and
+    /// the cell only authorizes it, so focus still mints nothing here (TP-D2) and a
+    /// `controlsResize:false` mirror, which never sends the verb, never takes.
+    /// Every other fence holds for all three: `from` must be the LIVE holder, the
+    /// revision must match, and the destination must hold a presenting,
+    /// geometry-capable view. So a take is exactly one CAS and one committed
+    /// resize, and a stale one is refused with the holder and revision a runtime
+    /// needs to try once more (the cell announces a new holder to the CALLER
+    /// only — `geometry_finalize` — so a displaced holder learns it from a
+    /// refusal like these, never from a push).
     pub fn transfer_geometry(&mut self, leg: &LegRef, msg: TransferGeometry) -> GeometryDecision {
-        // Phase 1 — the caller and its authority.
-        let (caller_is_admin, caller_client, caller_activation_id) =
-            match self.by_id.get(&msg.activation_id) {
-                Some(a)
-                    if a.control.connection_id == leg.connection_id
-                        && a.session_id == msg.session_id =>
-                {
-                    (
-                        a.has_right(AttachRight::GeometryAdmin),
-                        a.client_id.clone(),
-                        a.activation_id.clone(),
-                    )
-                }
-                _ => {
-                    return GeometryDecision::Refuse(Self::geometry_refuse(
-                        leg,
-                        "NOT_HOLDER",
-                        None,
-                        None,
-                    ))
-                }
-            };
+        // Phase 1 — the caller (its own control leg, this session) and its
+        // standing. A caller with none of the three is refused BEFORE the
+        // destination or the lease is examined, and told nothing about either:
+        // like a claim's RIGHT_MISSING, the holder and the revision are echoed
+        // only to a caller that could act on them (phase 3's refusals).
+        let (may_transfer, caller_activation_id) = match self.by_id.get(&msg.activation_id) {
+            Some(a)
+                if a.control.connection_id == leg.connection_id
+                    && a.session_id == msg.session_id =>
+            {
+                // the holder's own client (phase 3 proves `from` is live) · an
+                // admin · a TAKE: the destination is the caller, on its own right
+                let holder = a.client_id == msg.from.client_id;
+                let admin = a.has_right(AttachRight::GeometryAdmin);
+                let take = msg.to.client_id == a.client_id && a.has_right(AttachRight::Geometry);
+                (holder || admin || take, a.activation_id.clone())
+            }
+            _ => {
+                return GeometryDecision::Refuse(Self::geometry_refuse(
+                    leg,
+                    "NOT_HOLDER",
+                    None,
+                    None,
+                ))
+            }
+        };
+        if !may_transfer {
+            return GeometryDecision::Refuse(Self::geometry_refuse(leg, "NOT_HOLDER", None, None));
+        }
         // Phase 2 — the destination must hold a geometry-capable, presenting view.
         let Some(dest_id) = self
             .by_key
@@ -849,8 +873,11 @@ impl ActivationTable {
         }
         let (dest_view_id, dest_epoch) = dest.view.clone().expect("checked");
         let dest_client = dest.client_id.clone();
-        // Phase 3 — the lease: the `from` must be the live holder, the caller its
-        // client (or admin), and the revision must match.
+        // Phase 3 — the lease: whatever the caller's standing, the `from` must be
+        // the LIVE holder (client, view AND the cell-minted generation) and the
+        // revision must match. For the holder's own client that is what proves it
+        // holds; for an admin and a taker it is what makes the hand-over one CAS
+        // against the seat as it is, never as the caller last saw it.
         let lease = self.geometry.entry(msg.session_id.clone()).or_default();
         let holder_wire = lease.holder.as_ref().map(HolderRecord::wire);
         let from_is_holder = lease.holder.as_ref().is_some_and(|h| {
@@ -858,8 +885,7 @@ impl ActivationTable {
                 && h.view_id == msg.from.view_id
                 && h.holder_generation == msg.from.holder_generation
         });
-        let authorized = from_is_holder && (caller_is_admin || caller_client == msg.from.client_id);
-        if lease.holder.is_none() || !authorized {
+        if !from_is_holder {
             return GeometryDecision::Refuse(Self::geometry_refuse(
                 leg,
                 "NOT_HOLDER",
@@ -2568,7 +2594,7 @@ mod tests {
     }
 
     #[test]
-    fn geometry_right_seat_occupancy_and_holder_only_transfer() {
+    fn geometry_right_seat_occupancy_and_a_third_party_transfer_needs_the_holder_or_admin() {
         let mut t = ActivationTable::new("cb");
         let a = attach_live_with_view(
             &mut t,
@@ -2631,10 +2657,26 @@ mod tests {
             "SEAT_HELD"
         );
 
-        // a transfer by a NON-holder (B) is refused.
-        let stranger_transfer = TransferGeometry {
+        // a third client C that could hold the seat, and an admin D that holds none.
+        let _c = attach_live_with_view(
+            &mut t,
+            "win:3#1",
+            "s1",
+            "c1",
+            3,
+            &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
+        );
+        let d = attach_live_with_view(
+            &mut t,
+            "win:4#1",
+            "s1",
+            "d1",
+            4,
+            &[AttachRight::Read, AttachRight::GeometryAdmin],
+        );
+        let a_to_c = |activation_id: &str| TransferGeometry {
             session_id: "s1".into(),
-            activation_id: "b1".into(),
+            activation_id: activation_id.into(),
             lease_epoch: 0,
             from: GeometryHolder {
                 client_id: "win:1#1".into(),
@@ -2642,17 +2684,29 @@ mod tests {
                 holder_generation: 1,
             },
             to: GeometryClaimant {
-                client_id: "win:2#1".into(),
-                view_id: "mount-b".into(),
+                client_id: "win:3#1".into(),
+                view_id: "mount-c".into(),
             },
             expect_revision: 1,
             cols: 90,
             rows: 30,
         };
-        assert_eq!(
-            refused(t.transfer_geometry(&b, stranger_transfer))["code"],
-            "NOT_HOLDER"
-        );
+
+        // B holds `geometry` but is neither the holder nor an admin: its right
+        // lets it TAKE the seat for itself (the next test), never hand it to a
+        // THIRD party. Refused before the destination or the lease is read, so
+        // nothing about either is echoed.
+        let refusal = refused(t.transfer_geometry(&b, a_to_c("b1")));
+        assert_eq!(refusal["code"], "NOT_HOLDER");
+        assert!(refusal.get("currentHolder").is_none());
+        assert!(refusal.get("geometryRevision").is_none());
+
+        // …while a `geometryAdmin` caller that holds nothing may (TP-D25 still
+        // mints no admin; the cell keeps the clause for TP-S4). A PURE decision:
+        // not finalized, so the lease below is untouched by it.
+        let p = proceed(t.transfer_geometry(&d, a_to_c("d1")));
+        assert_eq!(p.ghosttea_view_id, "c1");
+        assert_eq!(p.client_id, "win:3#1");
 
         // the HOLDER (A) transfers the seat to B: one engine claim, B holds gen 2.
         let transfer = TransferGeometry {
@@ -2695,6 +2749,292 @@ mod tests {
                 ["code"],
             "SEAT_HELD"
         );
+    }
+
+    fn take(
+        caller_activation: &str,
+        from: (&str, &str, u64),
+        to: (&str, &str),
+        expect_revision: u64,
+        (cols, rows): (u16, u16),
+    ) -> TransferGeometry {
+        TransferGeometry {
+            session_id: "s1".into(),
+            activation_id: caller_activation.into(),
+            lease_epoch: 0,
+            from: GeometryHolder {
+                client_id: from.0.into(),
+                view_id: from.1.into(),
+                holder_generation: from.2,
+            },
+            to: GeometryClaimant {
+                client_id: to.0.into(),
+                view_id: to.1.into(),
+            },
+            expect_revision,
+            cols,
+            rows,
+        }
+    }
+
+    /// DS-D5's note (James, 2026-09-30): "the latest focused pane takes full
+    /// control include resizing, LWW" — the TAKE, TPv3 §6's Authorization bullet
+    /// widened by one clause. A `geometry` grant may transfer the LIVE holder's
+    /// seat to ITSELF: one CAS, one engine claim, one committed resize, and the
+    /// seat goes back the same way when the other pane is focused again.
+    #[test]
+    fn geometry_take_a_geometry_right_caller_takes_the_held_seat_for_itself() {
+        let mut t = ActivationTable::new("cb");
+        let full = [AttachRight::Read, AttachRight::Input, AttachRight::Geometry];
+        // A — this desktop's window; B — a pane on another desktop (or the phone),
+        // minted the same rights as every self principal (DS-D5).
+        let a = attach_live_with_view(&mut t, "win:1#1", "s1", "a1", 1, &full);
+        let b = attach_live_with_view(&mut t, "tailnet:me#node-b", "s1", "b1", 2, &full);
+        let (sink_a, mut rx_a) = leg(1);
+        let (sink_b, mut rx_b) = leg(2);
+
+        // An EMPTY seat is not taken, it is claimed: a take names a holder that
+        // does not exist → NOT_HOLDER with no holder, at revision 0 (the runtime
+        // answers an empty seat with `ClaimGeometry`).
+        let refusal = refused(t.transfer_geometry(
+            &b,
+            take(
+                "b1",
+                ("win:1#1", "mount-a", 1),
+                ("tailnet:me#node-b", "mount-b"),
+                0,
+                (90, 30),
+            ),
+        ));
+        assert_eq!(refusal["code"], "NOT_HOLDER");
+        assert!(refusal.get("currentHolder").is_none());
+        assert_eq!(refusal["geometryRevision"], 0);
+
+        // A claims and holds the seat: generation 1, revision 1.
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0)));
+        perform(t.geometry_finalize(
+            &sink_a,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 100,
+                rows: 40,
+            },
+        ));
+        texts(&mut rx_a);
+
+        // B mounts knowing nothing, so its claim names revision 0 and is refused
+        // STALE_REVISION — and the refusal carries what a take needs: the live
+        // holder and the revision (this is how B's runtime learns the seat).
+        let held = refused(t.claim_geometry(
+            &b,
+            claim("tailnet:me#node-b", "s1", "b1", "mount-b", 90, 30, 0),
+        ));
+        assert_eq!(held["code"], "STALE_REVISION");
+        assert_eq!(held["currentHolder"]["clientId"], "win:1#1");
+        assert_eq!(held["currentHolder"]["viewId"], "mount-a");
+        assert_eq!(held["currentHolder"]["holderGeneration"], 1);
+        assert_eq!(held["geometryRevision"], 1);
+
+        // B is FOCUSED → its host takes: a transfer from the live holder TO B, on
+        // B's own `geometry` right. ONE decision carrying ONE engine op — a claim
+        // on B's own view at B's size.
+        let p = proceed(t.transfer_geometry(
+            &b,
+            take(
+                "b1",
+                ("win:1#1", "mount-a", 1),
+                ("tailnet:me#node-b", "mount-b"),
+                1,
+                (90, 30),
+            ),
+        ));
+        assert_eq!(p.ghosttea_view_id, "b1");
+        assert_eq!(p.client_id, "tailnet:me#node-b");
+        assert_eq!(p.claimant_view_id, "mount-b");
+        assert_eq!(p.base_revision, 1);
+        assert!(matches!(p.op, GeometryOp::Claim { cols: 90, rows: 30 }));
+        perform(t.geometry_finalize(
+            &sink_b,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 6,
+                cols: 90,
+                rows: 30,
+            },
+        ));
+        let committed = texts(&mut rx_b).pop().expect("the taker is told");
+        assert_eq!(committed["type"], "GeometryCommitted");
+        assert_eq!(committed["holder"]["clientId"], "tailnet:me#node-b");
+        assert_eq!(committed["holder"]["viewId"], "mount-b");
+        assert_eq!(committed["holder"]["holderGeneration"], 2);
+        // exactly ONE step: one CAS, one committed resize
+        assert_eq!(committed["geometryRevision"], 2);
+        assert_eq!(committed["cols"], 90);
+
+        // A — displaced — learns the new holder from its next verb (its own
+        // pane's resize is a re-claim), and that verb resizes nothing: A renders
+        // what B sized until A is focused again.
+        let moved =
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 1)));
+        assert_eq!(moved["code"], "STALE_REVISION");
+        assert_eq!(moved["currentHolder"]["clientId"], "tailnet:me#node-b");
+        assert_eq!(moved["currentHolder"]["holderGeneration"], 2);
+        assert_eq!(moved["geometryRevision"], 2);
+        let moved =
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 2)));
+        assert_eq!(moved["code"], "SEAT_HELD");
+
+        // Focus back on A takes it back the same way — one step again.
+        let p = proceed(t.transfer_geometry(
+            &a,
+            take(
+                "a1",
+                ("tailnet:me#node-b", "mount-b", 2),
+                ("win:1#1", "mount-a"),
+                2,
+                (100, 40),
+            ),
+        ));
+        assert_eq!(p.ghosttea_view_id, "a1");
+        perform(t.geometry_finalize(
+            &sink_a,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 7,
+                cols: 100,
+                rows: 40,
+            },
+        ));
+        let back = texts(&mut rx_a).pop().unwrap();
+        assert_eq!(back["holder"]["clientId"], "win:1#1");
+        assert_eq!(back["holder"]["holderGeneration"], 3);
+        assert_eq!(back["geometryRevision"], 3);
+
+        // A STALE take is refused with the seat as it is — the holder and the
+        // revision a runtime needs to try once more — and moves nothing.
+        let stale = refused(t.transfer_geometry(
+            &b,
+            take(
+                "b1",
+                ("win:1#1", "mount-a", 3),
+                ("tailnet:me#node-b", "mount-b"),
+                2,
+                (90, 30),
+            ),
+        ));
+        assert_eq!(stale["code"], "STALE_REVISION");
+        assert_eq!(stale["currentHolder"]["holderGeneration"], 3);
+        assert_eq!(stale["geometryRevision"], 3);
+        // …and so is a take naming a holder generation that is gone.
+        let gone = refused(t.transfer_geometry(
+            &b,
+            take(
+                "b1",
+                ("win:1#1", "mount-a", 1),
+                ("tailnet:me#node-b", "mount-b"),
+                3,
+                (90, 30),
+            ),
+        ));
+        assert_eq!(gone["code"], "NOT_HOLDER");
+        assert_eq!(gone["currentHolder"]["clientId"], "win:1#1");
+        assert_eq!(gone["currentHolder"]["holderGeneration"], 3);
+        assert_eq!(gone["geometryRevision"], 3);
+
+        // A take needs a presenting view of the caller's own: with B's view
+        // detached (demand none) there is nothing to resize.
+        t.view_detached("b1");
+        assert_eq!(
+            refused(t.transfer_geometry(
+                &b,
+                take(
+                    "b1",
+                    ("win:1#1", "mount-a", 3),
+                    ("tailnet:me#node-b", "mount-b"),
+                    3,
+                    (90, 30)
+                ),
+            ))["code"],
+            "DESTINATION_INELIGIBLE"
+        );
+
+        // Through all of it the seat is A's at generation 3: A's own re-claim is
+        // still a RESIZE of that seat.
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 110, 40, 3)));
+        assert!(matches!(
+            p.op,
+            GeometryOp::Resize {
+                control_epoch: 7,
+                ..
+            }
+        ));
+    }
+
+    /// The take is the `geometry` right's, and ONLY its: a grant without it —
+    /// a read-only viewer, or a pre-DS-4 phone minted `[input, read]` (TM-D3 as
+    /// first landed) — cannot take the seat for itself, and is told nothing.
+    #[test]
+    fn geometry_take_without_the_geometry_right_is_not_holder_and_moves_nothing() {
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(
+            &mut t,
+            "win:1#1",
+            "s1",
+            "a1",
+            1,
+            &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
+        );
+        let viewer = attach_live_with_view(&mut t, "win:5#1", "s1", "r1", 5, &[AttachRight::Read]);
+        let typist = attach_live_with_view(
+            &mut t,
+            "tailnet:me#node-p",
+            "s1",
+            "p1",
+            6,
+            &[AttachRight::Read, AttachRight::Input],
+        );
+        let (sink_a, _rx_a) = leg(1);
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0)));
+        perform(t.geometry_finalize(
+            &sink_a,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 100,
+                rows: 40,
+            },
+        ));
+
+        for (leg_ref, activation, client) in [
+            (&viewer, "r1", "win:5#1"),
+            (&typist, "p1", "tailnet:me#node-p"),
+        ] {
+            let refusal = refused(t.transfer_geometry(
+                leg_ref,
+                take(
+                    activation,
+                    ("win:1#1", "mount-a", 1),
+                    (client, "mount-x"),
+                    1,
+                    (80, 24),
+                ),
+            ));
+            assert_eq!(refusal["code"], "NOT_HOLDER", "{client}");
+            assert!(refusal.get("currentHolder").is_none(), "{client}");
+            assert!(refusal.get("geometryRevision").is_none(), "{client}");
+        }
+
+        // the seat is A's, untouched: revision 1, generation 1, a re-claim resizes
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 120, 40, 1)));
+        assert_eq!(p.base_revision, 1);
+        assert!(matches!(
+            p.op,
+            GeometryOp::Resize {
+                control_epoch: 5,
+                ..
+            }
+        ));
     }
 
     #[test]

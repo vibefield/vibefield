@@ -853,6 +853,274 @@ async fn geometry_claim_resizes_the_real_pty_and_reclaim_holds_the_generation() 
     h.door.shutdown().await;
 }
 
+/// DS-4 (DS-D5's note, TPv3 §6 amended 2026-09-30) — THE TAKE over the real door
+/// and a REAL PTY: two clients present one session, A holds the seat, and B —
+/// the pane the person focused, on another desktop or the phone — transfers
+/// the live holder's seat TO ITSELF on its own `geometry` right. One verb, one
+/// engine claim, exactly one committed resize (the engine's layout epoch moves
+/// by one), the commit answered on B's control leg only; focus back on A takes
+/// it back the same way.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_take_moves_a_held_seat_to_the_focused_client_with_one_resize() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let full = ["geometry", "input", "read"];
+    let (mut control_a, frames_a) =
+        present_as(&h, "win:1#1", "set-ta", &session_id, "act-a", &full).await;
+    let (mut control_b, frames_b) =
+        present_as(&h, "win:2#1", "set-tb", &session_id, "act-b", &full).await;
+
+    // A claims the empty seat at 100x40.
+    send_json(
+        &mut control_a,
+        json!({
+            "type": "ClaimGeometry",
+            "sessionId": session_id, "activationId": "act-a", "leaseEpoch": 0,
+            "claimant": { "clientId": "win:1#1", "viewId": "mount-a" },
+            "cols": 100, "rows": 40, "expectRevision": 0,
+        }),
+    )
+    .await;
+    let held = next_geometry(&mut control_a, "GeometryCommitted").await;
+    assert_eq!(held["holder"]["holderGeneration"], 1);
+    let (_ctl, cols, rows, epoch_held) = session.control_state();
+    assert_eq!((cols, rows), (100, 40));
+
+    // B mounts knowing nothing: its claim is refused, and the refusal names the
+    // live holder and the revision — all B's runtime needs for a take.
+    send_json(
+        &mut control_b,
+        json!({
+            "type": "ClaimGeometry",
+            "sessionId": session_id, "activationId": "act-b", "leaseEpoch": 0,
+            "claimant": { "clientId": "win:2#1", "viewId": "mount-b" },
+            "cols": 90, "rows": 30, "expectRevision": 0,
+        }),
+    )
+    .await;
+    let refused = next_geometry(&mut control_b, "GeometryRefused").await;
+    assert_eq!(refused["currentHolder"]["clientId"], "win:1#1");
+    let from = refused["currentHolder"].clone();
+    let revision = refused["geometryRevision"].as_u64().unwrap();
+    assert_eq!(
+        session.control_state().1,
+        100,
+        "a refused claim never resizes"
+    );
+
+    // B is focused: its host TAKES — a transfer from the live holder to B.
+    send_json(
+        &mut control_b,
+        json!({
+            "type": "TransferGeometry",
+            "sessionId": session_id, "activationId": "act-b", "leaseEpoch": 0,
+            "from": from,
+            "to": { "clientId": "win:2#1", "viewId": "mount-b" },
+            "expectRevision": revision, "cols": 90, "rows": 30,
+        }),
+    )
+    .await;
+    let taken = next_geometry(&mut control_b, "GeometryCommitted").await;
+    assert_eq!(taken["holder"]["clientId"], "win:2#1");
+    assert_eq!(taken["holder"]["viewId"], "mount-b");
+    assert_eq!(taken["holder"]["holderGeneration"], 2);
+    assert_eq!(taken["geometryRevision"], revision + 1);
+    let (controller, cols, rows, epoch_taken) = session.control_state();
+    assert_eq!((cols, rows), (90, 30), "the engine committed B's size");
+    assert_eq!(epoch_taken, epoch_held + 1, "exactly ONE committed resize");
+    let controller = controller.expect("the engine seats B");
+    assert_eq!(controller.client_id, "win:2#1");
+    assert_eq!(controller.view_id, "act-b");
+
+    // The displaced holder is TOLD NOTHING on its leg (the commit answers the
+    // caller only) — it renders what B sized and learns the seat from a refusal.
+    let heard = drain_texts(&mut control_a, Duration::from_millis(400)).await;
+    assert!(
+        heard
+            .iter()
+            .all(|m| m["type"] != "GeometryCommitted" && m["type"] != "GeometryRefused"),
+        "A's leg carried a geometry verdict it never asked for: {heard:?}"
+    );
+
+    // Focus back on A takes it back: one more step, one more resize.
+    send_json(
+        &mut control_a,
+        json!({
+            "type": "TransferGeometry",
+            "sessionId": session_id, "activationId": "act-a", "leaseEpoch": 0,
+            "from": taken["holder"].clone(),
+            "to": { "clientId": "win:1#1", "viewId": "mount-a" },
+            "expectRevision": taken["geometryRevision"].clone(), "cols": 100, "rows": 40,
+        }),
+    )
+    .await;
+    let back = next_geometry(&mut control_a, "GeometryCommitted").await;
+    assert_eq!(back["holder"]["clientId"], "win:1#1");
+    assert_eq!(back["holder"]["holderGeneration"], 3);
+    let (_ctl, cols, rows, epoch_back) = session.control_state();
+    assert_eq!((cols, rows), (100, 40));
+    assert_eq!(epoch_back, epoch_taken + 1, "exactly ONE committed resize");
+
+    drop((frames_a, frames_b));
+    h.door.shutdown().await;
+}
+
+/// DS-4 — the take on a read-only grant: refused `NOT_HOLDER` over the real
+/// door, nothing echoed, and the PTY never moves.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_take_without_the_geometry_right_is_refused_and_never_resizes() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control_a, _frames_a) = present_as(
+        &h,
+        "win:1#1",
+        "set-ra",
+        &session_id,
+        "act-a",
+        &["geometry", "input", "read"],
+    )
+    .await;
+    let (mut control_r, _frames_r) =
+        present_as(&h, "win:3#1", "set-rr", &session_id, "act-r", &["read"]).await;
+    send_json(
+        &mut control_a,
+        json!({
+            "type": "ClaimGeometry",
+            "sessionId": session_id, "activationId": "act-a", "leaseEpoch": 0,
+            "claimant": { "clientId": "win:1#1", "viewId": "mount-a" },
+            "cols": 100, "rows": 40, "expectRevision": 0,
+        }),
+    )
+    .await;
+    let held = next_geometry(&mut control_a, "GeometryCommitted").await;
+    let (_ctl, _c, _r, epoch_held) = session.control_state();
+
+    send_json(
+        &mut control_r,
+        json!({
+            "type": "TransferGeometry",
+            "sessionId": session_id, "activationId": "act-r", "leaseEpoch": 0,
+            "from": held["holder"].clone(),
+            "to": { "clientId": "win:3#1", "viewId": "mount-r" },
+            "expectRevision": held["geometryRevision"].clone(), "cols": 80, "rows": 24,
+        }),
+    )
+    .await;
+    let refused = next_geometry(&mut control_r, "GeometryRefused").await;
+    assert_eq!(refused["code"], "NOT_HOLDER");
+    assert!(refused.get("currentHolder").is_none());
+    let (controller, cols, rows, epoch_after) = session.control_state();
+    assert_eq!((cols, rows), (100, 40));
+    assert_eq!(epoch_after, epoch_held);
+    assert_eq!(controller.expect("A still seated").client_id, "win:1#1");
+    h.door.shutdown().await;
+}
+
+/// One client's legs, attached live and PRESENTING (seed → applied → status),
+/// the deck's path for a client other than the harness's default `win:1#1`.
+async fn present_as(
+    h: &Harness,
+    client: &str,
+    set: &str,
+    session_id: &str,
+    activation_id: &str,
+    rights: &[&str],
+) -> (Ws, Ws) {
+    let grant = h.minter.transport(TransportSpec {
+        client_id: client,
+        connection_set_id: set,
+        channels: &["control", "frames"],
+        generation: 1,
+        nonce: set,
+        issued_at: None,
+        expires_at: None,
+        audience: None,
+    });
+    let mut control = dial(&h.door.control_url()).await;
+    send_json(
+        &mut control,
+        serde_json::from_str(&hello("control", &grant, None)).unwrap(),
+    )
+    .await;
+    expect_text(next_reply(&mut control).await, "ConnectionAccepted");
+    let mut frames = dial(&h.door.frames_url()).await;
+    send_json(
+        &mut frames,
+        serde_json::from_str(&hello("frames", &grant, Some(caps(4_000_000, 2_000_000)))).unwrap(),
+    )
+    .await;
+    expect_text(next_reply(&mut frames).await, "ConnectionAccepted");
+
+    let now = field_native::tp::unix_ms();
+    let claims = json!({
+        "audienceCellBootId": h.minter.cell_boot_id,
+        "clientId": client,
+        "sessionId": session_id,
+        "routeRevision": 3,
+        "grantGeneration": 1,
+        "rights": rights,
+        "issuedAt": now - 1_000,
+        "expiresAt": now + 600_000 - 1_000,
+    });
+    let protected = json!({
+        "v": 1, "typ": "SessionAttachGrant", "iss": "fieldd", "alg": "HS256",
+        "kid": { "cellBootId": h.minter.cell_boot_id, "keyGeneration": 1 },
+    });
+    let mac = h.minter.sign(&protected, &claims);
+    let attach = json!({ "protected": protected, "claims": claims, "mac": mac });
+    send_json(
+        &mut control,
+        json!({
+            "type": "AttachControlLeg",
+            "activationId": activation_id,
+            "attachGrant": attach,
+            "initialDemand": { "mode": "live" },
+        }),
+    )
+    .await;
+    expect_text(next_reply(&mut control).await, "ControlLegAttached");
+    send_json(
+        &mut frames,
+        json!({ "type": "AttachFramesLeg", "activationId": activation_id, "attachGrant": attach }),
+    )
+    .await;
+    expect_text(next_reply(&mut frames).await, "FramesLegAttached");
+    let (_kind, _base, result, _bytes, _hdrs) = receive_transfer(&mut frames).await;
+    scene_applied(&mut frames, session_id, activation_id, &result).await;
+    loop {
+        let status = expect_text(next_reply(&mut control).await, "CellActivationStatus");
+        if status["presentation"]["state"] == "presenting" {
+            break;
+        }
+    }
+    (control, frames)
+}
+
+/// The next geometry verdict on a control leg, skipping the lease's own
+/// status traffic (a resize can move another activation's presentation).
+async fn next_geometry(control: &mut Ws, type_: &str) -> Value {
+    loop {
+        match next_reply(control).await {
+            Reply::Text(v) if v["type"] == "CellActivationStatus" => continue,
+            reply => return expect_text(reply, type_),
+        }
+    }
+}
+
+/// Every text message a leg carries within `within`, without failing on quiet.
+async fn drain_texts(ws: &mut Ws, within: Duration) -> Vec<Value> {
+    let mut texts = Vec::new();
+    let deadline = tokio::time::Instant::now() + within;
+    while let Ok(Some(Ok(message))) = tokio::time::timeout_at(deadline, ws.next()).await {
+        if let Message::Text(t) = message {
+            texts.push(serde_json::from_str(t.as_str()).expect("JSON"));
+        }
+    }
+    texts
+}
+
 /// TP-S3c — the frames-leg attach reports the HONEST seed reason: a resume whose
 /// `from` names a different `SceneEpoch` is a migration (`epoch-changed`); a
 /// same-epoch resume is viable but the dormant-cursor resume is capability-gated

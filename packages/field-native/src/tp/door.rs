@@ -20,7 +20,9 @@
 //! On an ACCEPTED leg: control — `AttachControlLeg` (the attach grant verified,
 //! the attach high-water admitted, the table decides), `DeclareDemand`, and the
 //! geometry verbs `ClaimGeometry`/`ReleaseGeometry`/`TransferGeometry` (S3c —
-//! the cell owns the seat, ghosttea commits the resize; see `handle_geometry`);
+//! the cell owns the seat, ghosttea commits the resize; see `handle_geometry`;
+//! a `TransferGeometry` to the caller itself is DS-4's TAKE, authorized in
+//! `ActivationTable::transfer_geometry` and carried here unchanged);
 //! frames — `AttachFramesLeg`, `TransportCredit`, `SceneApplied`,
 //! `CalibrationPing` (echoed as a `calibration` unit; doubles as the frames
 //! heartbeat). Where the sessions come from is the `SessionSource` (source.rs):

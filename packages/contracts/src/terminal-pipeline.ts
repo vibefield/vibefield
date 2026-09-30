@@ -1045,7 +1045,13 @@ export const ReleaseGeometry = z
   .passthrough();
 export type ReleaseGeometry = z.infer<typeof ReleaseGeometry>;
 
-/** ONE cell-side transition that revokes, grants and commits the resize. */
+/** ONE cell-side transition that revokes, grants and commits the resize.
+ * Who may send it (TPv3 §6, amended 2026-09-30 — DS-D5's note): the holder's
+ * own client, a `geometryAdmin` grant, or — THE TAKE — any `geometry` grant
+ * whose `to` is ITSELF (the host sends it when a controller pane gains focus;
+ * the last focused pane holds the seat, LWW). `from` must be the live holder
+ * and `expectRevision` current for all three; a refusal echoes both to a
+ * caller that could act on them. The shape did not change for the take. */
 export const TransferGeometry = z
   .object({
     ...ActivationTriple,
