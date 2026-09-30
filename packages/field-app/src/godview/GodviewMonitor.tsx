@@ -31,7 +31,11 @@ import type { GodviewTheme } from "./GodviewTuningPanel";
 import { managedRowId, monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
-import { launcherOwnsKeyEvent, setMonitorHoldsKeys } from "./monitor/launcher-keys";
+import {
+  bloomOwnsKeyEvent,
+  launcherOwnsKeyEvent,
+  setMonitorHoldsKeys,
+} from "./monitor/launcher-keys";
 import {
   chosenProfile,
   personaProfiles,
@@ -391,6 +395,34 @@ export function GodviewMonitor({
     return () => observer.disconnect();
   }, [view.id]);
 
+  // SB-3 — while the spawn bloom is open the monitor holds the keys, as it does
+  // while the find sheet is up (QL-D2's other half): the deck's launchers stand
+  // aside, so a HOLD bloom's ⎋ — the swarm's own window listener, which does not
+  // move the focus — is never first taken by a launcher in the focused pane.
+  // Read off the bloom's own DOM (`data-bloom-state`), observed like the renderer.
+  const [bloomOpen, setBloomOpen] = useState(false);
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof MutationObserver === "undefined") return;
+    const read = (): void => {
+      setBloomOpen(stage.querySelector('.vf-bloom[data-bloom-state="open"]') !== null);
+    };
+    const observer = new MutationObserver(read);
+    observer.observe(stage, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-bloom-state"],
+    });
+    read();
+    return () => observer.disconnect();
+  }, [view.id]);
+  useEffect(() => {
+    if (!bloomOpen) return;
+    setMonitorHoldsKeys(true);
+    return () => setMonitorHoldsKeys(false);
+  }, [bloomOpen]);
+
   // The usage column's tiles, counted off the chrome slot the same way: the
   // column is the package's, its batch arrives on the door's schedule, and a
   // harness wants the count as a fact rather than a screenshot.
@@ -457,6 +489,8 @@ export function GodviewMonitor({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+      // SB-3: a spawn bloom that has the keyboard holds every key
+      if (bloomOwnsKeyEvent(event)) return;
       // ⌘F summons Find (AR-5, D6): the sheet over the stage, the reference's chord.
       if (event.code === "KeyF") {
         event.preventDefault();
@@ -489,6 +523,8 @@ export function GodviewMonitor({
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
       if (launcherOwnsKeyEvent(event)) return;
+      // SB-3: nor does it take ⌥-digits from a spawn bloom that has the keyboard
+      if (bloomOwnsKeyEvent(event)) return;
       const digit = /^Digit([0-9])$/.exec(event.code);
       if (digit === null) return;
       const index = Number(digit[1]);

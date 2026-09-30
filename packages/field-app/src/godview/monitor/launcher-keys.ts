@@ -37,6 +37,21 @@ export function launcherOwnsKeys(): boolean {
   return claims.size > 0;
 }
 
+/** SB-3 — the spawn bloom's own mark on the menu that has the keyboard: while
+ * a bloom is held open or opened for the keys, it holds every key (the views'
+ * contract, `data-bloom-holds-keys="true"`). */
+const BLOOM_HOLDS_KEYS = "[data-bloom-holds-keys]";
+
+/** Whether THIS key is the spawn bloom's: its target is inside the bloom that
+ * holds the keyboard. The host's capture listeners yield exactly these, as they
+ * yield a launcher's — a key they took first would never reach the bloom. */
+export function bloomOwnsKeyEvent(event: Pick<Event, "target">): boolean {
+  const target = event.target;
+  if (typeof Node === "undefined" || !(target instanceof Node)) return false;
+  const element = target instanceof Element ? target : target.parentElement;
+  return element?.closest(BLOOM_HOLDS_KEYS) != null;
+}
+
 /** Whether THIS key is a launcher's: its target is inside a pane showing one.
  * Read at event time by the monitor's ⌥-digit listener, which yields exactly
  * these. */

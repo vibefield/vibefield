@@ -1125,6 +1125,90 @@ describe("the profile tabs (AR-S5)", () => {
     expect(chosenTab(host)).toBe("work");
   });
 
+  it("yields every key to a spawn bloom that has the keyboard — ⌥2 switches no tab, ⌘F opens no sheet (SB-3)", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const stage = host.querySelector<HTMLElement>('section[aria-label^="Agent monitor"]');
+    // the bloom's menu as the views mark it while it holds the keys (P1b)
+    const menu = document.createElement("div");
+    menu.setAttribute("data-bloom-holds-keys", "true");
+    menu.tabIndex = -1;
+    const bud = document.createElement("div");
+    bud.setAttribute("role", "menuitem");
+    menu.appendChild(bud);
+    stage?.appendChild(menu);
+    const press = (init: KeyboardEventInit, at: EventTarget): KeyboardEvent => {
+      const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+      at.dispatchEvent(event);
+      return event;
+    };
+    let passed: KeyboardEvent | undefined;
+    try {
+      await act(async () => {
+        passed = press({ code: "Digit2", key: "2", altKey: true }, bud);
+      });
+      expect(passed?.defaultPrevented).toBe(false);
+      expect(chosenTab(host)).toBe("all");
+      await act(async () => {
+        passed = press({ code: "KeyF", key: "f", metaKey: true }, bud);
+      });
+      expect(passed?.defaultPrevented).toBe(false);
+      // the find sheet did not open (it would hold the keys if it had)
+      expect(monitorHoldsKeys()).toBe(false);
+    } finally {
+      menu.remove();
+    }
+    // the same key anywhere else is the strip's, as before
+    await act(async () => {
+      passed = press({ code: "Digit2", key: "2", altKey: true }, window);
+    });
+    expect(passed?.defaultPrevented).toBe(true);
+    expect(chosenTab(host)).toBe("work");
+  });
+
+  it("holds the keys while a spawn bloom is open, so the deck's launchers stand aside for its ⎋ (SB-3)", async () => {
+    // The stage reads the bloom's state through a MutationObserver. happy-dom
+    // (20.11) hands each observed node its report callback through a WeakRef
+    // nothing else holds, so a collection mid-file silences the observer — the
+    // observer's word is delivered by hand here, and the stage's own reading of
+    // it (and what it does about it) is what is under test.
+    const observers = new Set<{ callback: MutationCallback }>();
+    class HandDeliveredObserver {
+      constructor(readonly callback: MutationCallback) {}
+      observe(): void {
+        observers.add(this);
+      }
+      disconnect(): void {
+        observers.delete(this);
+      }
+      takeRecords(): MutationRecord[] {
+        return [];
+      }
+    }
+    vi.stubGlobal("MutationObserver", HandDeliveredObserver);
+    const deliver = async (): Promise<void> => {
+      await act(async () => {
+        for (const observer of [...observers]) {
+          observer.callback([], observer as unknown as MutationObserver);
+        }
+      });
+    };
+    const host = await mountMonitor("list", tabDoor());
+    const stage = host.querySelector<HTMLElement>('section[aria-label^="Agent monitor"]');
+    const bloom = document.createElement("div");
+    bloom.className = "vf-bloom";
+    bloom.setAttribute("data-bloom-state", "idle");
+    stage?.appendChild(bloom);
+    await deliver();
+    expect(monitorHoldsKeys()).toBe(false);
+    bloom.setAttribute("data-bloom-state", "open");
+    await deliver();
+    expect(monitorHoldsKeys()).toBe(true);
+    bloom.setAttribute("data-bloom-state", "committed");
+    await deliver();
+    expect(monitorHoldsKeys()).toBe(false);
+    bloom.remove();
+  });
+
   it("holds the keys over a fresh pane's launcher while the find sheet is up (QL-D2's other half)", async () => {
     await mountMonitor("list", tabDoor());
     const find = (): void => {
