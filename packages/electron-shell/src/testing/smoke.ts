@@ -1,11 +1,21 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
+  catalogEntry,
   LAYOUT,
   TerminalConfigDocument,
   TerminalConfigValidation,
@@ -3665,6 +3675,359 @@ async function typedAgentRows(ctx: {
   });
 }
 
+/** SB-3 — the managed Agent Profile the spawn bloom row makes, by its label. */
+const BLOOM_PROFILE_LABEL = "Smoke Work";
+
+/** What the bloom says about itself, for a failure's evidence. */
+const BLOOM_DIAGNOSIS = `(() => {
+  const bloom = document.querySelector(".vf-bloom");
+  return JSON.stringify({
+    state: bloom?.getAttribute("data-bloom-state") ?? null,
+    mode: bloom?.getAttribute("data-bloom-mode") ?? null,
+    target: bloom?.getAttribute("data-bloom-target") ?? null,
+    buds: [...document.querySelectorAll("[data-bloom-bud-kind]")].map(
+      (bud) => bud.getAttribute("data-bloom-bud-kind") + ":" + bud.getAttribute("data-bloom-bud-id"),
+    ),
+  });
+})()`;
+
+/** fieldd's roster, as the UI reads it (TP-D4): ids, and the set a shell was
+ * born under (SB-2). */
+async function bloomRoster(
+  handle: FielddHandle,
+): Promise<Array<{ sessionId: string; profileSet?: string }>> {
+  const answer = (await handle.client.request("terminal.roster", {})) as {
+    items?: Array<{ sessionId: string; profileSet?: string }>;
+  };
+  return answer.items ?? [];
+}
+
+/**
+ * A point on the swarm's EMPTY ground, found the way a person's pointer finds
+ * it: moved there, no body answers (the swarm's hover title stays away), and
+ * the point is the swarm's own (no chrome over it). The swarm's bodies drift
+ * on a canvas this harness cannot read, so the ground is probed, never assumed;
+ * lower points first, leaving the arc room to open up.
+ */
+async function swarmEmptyGround(win: BrowserWindow): Promise<{ x: number; y: number }> {
+  const field = (await win.webContents.executeJavaScript(
+    `(() => {
+      const swarm = document.querySelector(".vf-godview-monitor-stage .vf-monitor-swarm");
+      if (!swarm) return null;
+      const r = swarm.getBoundingClientRect();
+      return { left: r.left, top: r.top, width: r.width, height: r.height };
+    })()`,
+    true,
+  )) as { left: number; top: number; width: number; height: number } | null;
+  if (field === null) throw new Error("the stage shows no swarm to hold on");
+  for (const fy of [0.72, 0.6, 0.84, 0.5]) {
+    for (const fx of [0.5, 0.36, 0.64, 0.22, 0.78]) {
+      const at = {
+        x: Math.round(field.left + field.width * fx),
+        y: Math.round(field.top + field.height * fy),
+      };
+      win.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+      await sleep(160);
+      const empty = (await win.webContents.executeJavaScript(
+        `document.querySelector(".vf-monitor-swarm-tooltip") === null &&
+          document.elementFromPoint(${at.x}, ${at.y})?.closest(".vf-monitor-swarm") != null`,
+        true,
+      )) as boolean;
+      if (empty) return at;
+    }
+  }
+  throw new Error(
+    `no empty ground on a ${Math.round(field.width)}×${Math.round(field.height)} swarm`,
+  );
+}
+
+/**
+ * THE SPAWN BLOOM (SB-3). A hold on the swarm's empty ground blooms this
+ * desktop's Agent Profiles, and letting go on one births a shell UNDER it —
+ * the host's whole chain, against the real pair:
+ *   1. a managed Agent Profile made through the door (`agents.profileSets.create`)
+ *      reaches the stage: its tab;
+ *   2. pressed and held on empty ground (Electron input events into this
+ *      window, never the OS's), the swarm blooms; moved onto the profile's bud
+ *      and let go, a shell is born there: fieldd's roster names the set, the
+ *      deck shows it in the active pane (its shape unchanged), the stage says
+ *      "opened under <set>", and the swarm lists it;
+ *   3. its pane's launcher reads `Under <set>`, and the typed agent — the
+ *      smoke's stub, the one agent installed — reads `no sign-in` there;
+ *   4. typed in that pane, the agent is refused in VibeField's sentence
+ *      (SB-D7): the profile holds no sign-in for it — the kit's refused status,
+ *      and the stub never ran.
+ * What a harness cannot read here, said rather than faked: the body PAINTED at
+ * the release point. The smoke window may have no WebGPU (`swarmRenderer`
+ * unavailable), and the swarm's positions live on a canvas either way; the
+ * swarm's row for the born shell is the witness.
+ */
+async function spawnBloomRows(ctx: {
+  win: BrowserWindow;
+  handle: FielddHandle;
+  /** the run's user root: the typed agent's launchers hang off it */
+  userRoot: string;
+  staged: StagedTypedAgent | undefined;
+  deck: MarkerWatch<DeckFacts>;
+  verdict: Record<string, unknown>;
+}): Promise<void> {
+  const { win, handle, staged, deck, verdict } = ctx;
+  const evaluate = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const say = (item: number, name: string, facts: Record<string, unknown>): void => {
+    const line = { item, name, ...facts };
+    console.log(`SMOKE_GODVIEW_BLOOM ${JSON.stringify(line)}`);
+    verdict[`spawnBloom${item}`] = line;
+  };
+  const item = async <T>(n: number, name: string, body: () => Promise<T>): Promise<T> => {
+    try {
+      return await body();
+    } catch (error) {
+      throw new Error(
+        `the spawn bloom, item ${n} (${name}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+
+  // ── 1. a profile made through the door reaches the stage ──
+  const set = await item(1, "profile-made", async () => {
+    const answer = (await handle.client.request("agents.profileSets.create", {
+      label: BLOOM_PROFILE_LABEL,
+      glyph: "briefcase",
+    })) as { set?: { id?: unknown } };
+    const id = answer.set?.id;
+    if (typeof id !== "string") {
+      throw new Error(`agents.profileSets.create answered no set: ${JSON.stringify(answer)}`);
+    }
+    await waitForRendererFact(
+      win,
+      `the profile tabs to offer ${BLOOM_PROFILE_LABEL}`,
+      30_000,
+      `document.querySelector('[data-profile-tab=${JSON.stringify(id)}]') !== null`,
+      `JSON.stringify([...document.querySelectorAll("[data-profile-tab]")].map((tab) => tab.getAttribute("data-profile-tab")))`,
+    );
+    say(1, "profile-made", { set: id, label: BLOOM_PROFILE_LABEL });
+    return { id, label: BLOOM_PROFILE_LABEL };
+  });
+
+  // ── 2. held, reached, let go: a shell born under it ──
+  const born = await item(2, "hold-reach-let-go", async () => {
+    const before = await deckSettled(deck, 1_500, 60_000);
+    const listed = new Set((await bloomRoster(handle)).map((row) => row.sessionId));
+    const ground = await swarmEmptyGround(win);
+    // pressed where the pointer already rests (a far move and a press with no
+    // pause can coalesce), and held past the 520 ms the swarm waits for
+    win.webContents.sendInputEvent({
+      type: "mouseDown",
+      x: ground.x,
+      y: ground.y,
+      button: "left",
+      clickCount: 1,
+    });
+    await sleep(700);
+    await waitForRendererFact(
+      win,
+      "the hold to bloom",
+      10_000,
+      `document.querySelector(".vf-bloom")?.getAttribute("data-bloom-state") === "open"`,
+      BLOOM_DIAGNOSIS,
+    );
+    // a new ring ignores the pointer for 90 ms: a hand still moving picks wrong
+    await sleep(150);
+    const bud = await evaluate<{ x: number; y: number } | null>(
+      `(() => {
+        const bud = document.querySelector('[data-bloom-bud-kind="profile"][data-bloom-bud-id=${JSON.stringify(set.id)}]');
+        if (!bud) return null;
+        const r = bud.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      })()`,
+    );
+    if (bud === null) {
+      throw new Error(
+        `the bloom offers no bud for ${set.label}: ${await evaluate(BLOOM_DIAGNOSIS)}`,
+      );
+    }
+    // toward it with the button still down, crossing the dead zone in one move
+    for (const k of [0.4, 0.75, 1]) {
+      win.webContents.sendInputEvent({
+        type: "mouseMove",
+        x: Math.round(ground.x + (bud.x - ground.x) * k),
+        y: Math.round(ground.y + (bud.y - ground.y) * k),
+        button: "left",
+        modifiers: ["leftbuttondown"],
+      });
+      await sleep(80);
+    }
+    await waitForRendererFact(
+      win,
+      `the bloom to point at ${set.label}`,
+      5_000,
+      `document.querySelector(".vf-bloom")?.getAttribute("data-bloom-target") === ${JSON.stringify(`profile:${set.id}`)}`,
+      BLOOM_DIAGNOSIS,
+    );
+    win.webContents.sendInputEvent({
+      type: "mouseUp",
+      x: bud.x,
+      y: bud.y,
+      button: "left",
+      clickCount: 1,
+    });
+    // fieldd's own record of the birth: a new shell, bound to the set
+    const bound = await untilRead(
+      `fieldd's roster to name a new shell born under ${set.label}`,
+      30_000,
+      async () =>
+        (await bloomRoster(handle)).find(
+          (row) => row.profileSet === set.id && !listed.has(row.sessionId),
+        ),
+    );
+    const shown = await deck.until(
+      (facts) => facts.activeSessionId === bound.sessionId,
+      "the deck to show the born shell in the active pane",
+      30_000,
+    );
+    if (shown.panes !== before.panes) {
+      throw new Error(
+        `the birth changed the deck's shape (${before.panes} → ${shown.panes} panes)`,
+      );
+    }
+    const ack = await untilRead("the stage to say where the terminal opened", 10_000, async () => {
+      const text = await readMonitorAck(win);
+      return text.includes("opened") ? text : undefined;
+    });
+    if (ack !== `terminal opened under ${set.label} in the active pane`) {
+      throw new Error(`the stage said "${ack}", not that it opened under ${set.label}`);
+    }
+    // …and the swarm has it: the born shell's own row. A door birth keeps its
+    // own id as its visual (only a launcher's hand-over passes a body on), and
+    // the fresh shell it displaced is reaped — so a count of terminal rows can
+    // stay level, and only the row itself is the witness.
+    const bornRow = `.vf-monitor-swarm-list button[data-agent-bubble-id="${bound.sessionId}"]`;
+    await waitForRendererFact(
+      win,
+      "the swarm to list the born shell",
+      20_000,
+      `document.querySelector(${JSON.stringify(bornRow)}) !== null`,
+      `JSON.stringify([...document.querySelectorAll(".vf-monitor-swarm-list button")].map((row) => [row.getAttribute("data-agent-bubble-id"), row.getAttribute("data-agent-bubble-source")]))`,
+    );
+    say(2, "hold-reach-let-go", {
+      heldAt: ground,
+      letGoAt: bud,
+      sessionId: bound.sessionId,
+      profileSet: bound.profileSet,
+      ack,
+      listedInSwarm: true,
+    });
+    return bound.sessionId;
+  });
+
+  // ── 3. its pane's launcher: Under <set>, and the typed agent no sign-in ──
+  const agentLabel =
+    staged === undefined ? undefined : (catalogEntry(staged.agentId)?.label ?? staged.agentId);
+  await item(3, "launcher-under", async () => {
+    const host = JSON.stringify(`[data-vf-pane-launcher="${born}"]`);
+    const read = await untilRead(
+      `the born pane's launcher to say it is under ${set.label}`,
+      30_000,
+      async () => {
+        const facts = await evaluate<{
+          caption: string;
+          rows: Array<{ title: string; off: boolean }>;
+        } | null>(
+          `(() => {
+            const host = document.querySelector(${host});
+            if (!host) return null;
+            return {
+              caption: host.querySelector(".vf-pane-launcher-cap-under")?.textContent ?? "",
+              rows: [...host.querySelectorAll(".vf-pane-launcher-agent")].map((row) => ({
+                title: row.getAttribute("title") ?? "",
+                off: row.classList.contains("is-off"),
+              })),
+            };
+          })()`,
+        );
+        return facts?.caption.includes(`Under ${set.label}`) === true ? facts : undefined;
+      },
+    );
+    if (agentLabel !== undefined) {
+      const row = read.rows.find((candidate) => candidate.title === `${agentLabel} · no sign-in`);
+      if (row === undefined || !row.off) {
+        throw new Error(
+          `${agentLabel} is not "no sign-in" under ${set.label}: ${JSON.stringify(read.rows)}`,
+        );
+      }
+    }
+    say(3, "launcher-under", {
+      caption: read.caption,
+      noSignIn: agentLabel ?? "unavailable: nothing was staged",
+    });
+  });
+
+  // ── 4. typed there: refused in VibeField's sentence (SB-D7) ──
+  if (staged === undefined) {
+    say(4, "typed-refused", {
+      unavailable: "nothing was staged — an injected FIELDD_DATA_DIR is someone else's root",
+    });
+    return;
+  }
+  await item(4, "typed-refused", async () => {
+    const home = join(ctx.userRoot, ...LAYOUT.AGENT_SHIMS_DIR);
+    const launcher = await untilRead("the gateway's launcher for the typed agent", 30_000, () =>
+      typedLauncher(home, staged.agentId),
+    );
+    // The pane first: its shell answers from the work folder (the fresh
+    // pane's launcher gives way as the typing reaches the shell), so the
+    // line below is typed into a settled prompt.
+    const settled = `bloom-${Math.random().toString(36).slice(2, 10)}`;
+    await typeInPaneUntilMarker(
+      win,
+      born,
+      `cd ${staged.work}; echo ${settled} > m8`,
+      join(staged.work, "m8"),
+      settled,
+    );
+    const from = readTypedAgentCalls(staged.calls).length;
+    const marker = `bloom-${Math.random().toString(36).slice(2, 10)}`;
+    // `2> e9 2>&1`: zsh copies the launcher's stderr to the pane AND to a file
+    // (MULTIOS) — the idiom the typed agent's own refusal row reads it by
+    await typeInPaneUntilMarker(
+      win,
+      born,
+      `${launcher.name} 2> e9 2>&1; echo status=$? > s9; echo ${marker} > m9`,
+      join(staged.work, "m9"),
+      marker,
+    );
+    const inWork = (): string => JSON.stringify(readdirSync(staged.work));
+    const said = await untilRead("the refusal's words", 10_000, () => {
+      const file = join(staged.work, "e9");
+      if (!existsSync(file)) return undefined;
+      const text = readFileSync(file, "utf8");
+      return text.includes("was not started") ? text : undefined;
+    }).catch((error: unknown) => {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} (the work folder holds ${inWork()})`,
+      );
+    });
+    const status = readFileSync(join(staged.work, "s9"), "utf8").trim();
+    const sentence = said.split("\n").find((line) => line.includes("was not started")) ?? said;
+    // either reading of SB-D7: no sign-in in the profile, or one it cannot hold
+    if (
+      !sentence.includes(`${set.label} has no `) &&
+      !sentence.includes(`${set.label} cannot hold `)
+    ) {
+      throw new Error(`the refusal is not about ${set.label} (SB-D7): ${sentence}`);
+    }
+    if (status !== "status=75") throw new Error(`the refused launch left ${status}, not status=75`);
+    const ran = readTypedAgentCalls(staged.calls).slice(from);
+    if (ran.length > 0) {
+      throw new Error(
+        `the stub ran for a refused launch: ${JSON.stringify(ran.map((call) => call.argv))}`,
+      );
+    }
+    say(4, "typed-refused", { status: 75, sentence, stubRan: false });
+  });
+}
+
 /** GT-2/GT-2e: the product Godview, end to end, against the real pair.
  *
  * Everything the deck does here it does because a user asked: the overlay opens
@@ -5478,6 +5841,18 @@ export async function runSmokeGodview(opts: {
       // ── 14b. THE LAUNCH (QL-2) — the same stub, launched from a fresh pane's launcher.
       await launchRows({ win, deck, verdict });
     }
+
+    // ── 15. THE SPAWN BLOOM (SB-3) — a hold's bloom, a shell born under a
+    // profile, its launcher, and the typed agent it refuses. After the typed
+    // rows, so the pane it births is born with the gateway's launcher standing.
+    await spawnBloomRows({
+      win,
+      handle: opts.handle,
+      userRoot: opts.root,
+      staged: opts.typedAgent,
+      deck,
+      verdict,
+    });
 
     // ── GT-3p, REPORT-ONLY ────────────────────────────────────────────────
     // Everything below records numbers and asserts nothing. A performance row
