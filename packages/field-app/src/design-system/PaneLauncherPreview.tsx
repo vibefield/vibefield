@@ -6,6 +6,7 @@ import {
   type LauncherHistoryStatus,
   type LauncherScope,
   type LauncherSession,
+  type LauncherUnder,
   type LauncherWordHit,
   launchCaption,
   launchCentre,
@@ -19,7 +20,7 @@ import { AGENT_CATALOG, type AgentProviderSummary } from "@vibefield/contracts";
 import type { CSSProperties, ReactElement } from "react";
 import { DEFAULT_DECK_APPEARANCE } from "../godview/deck-appearance";
 import { godviewTerminalTheme, terminalGround } from "../godview/deck-theme";
-import { launcherAgents, launcherSession } from "../godview/launcher-doors";
+import { launcherAgents, launcherSession, NO_SIGN_IN } from "../godview/launcher-doors";
 
 /**
  * THE EMPTY PANE LAUNCHER, as the deck ships it (QL-1, Minimal Pane Frame
@@ -60,6 +61,31 @@ const PROVIDERS: readonly AgentProviderSummary[] = AGENT_CATALOG.map((row, index
 }));
 
 const AGENTS = orderAgents(launcherAgents(PROVIDERS)).slice(0, 10);
+
+/** SB-3 — a shell born under Work, the desktop's default profile: Work holds
+ * sign-ins for the catalog's first two agents, so every other agent reads
+ * `no sign-in` there, through the same shipping projection. */
+const UNDER_WORK: LauncherUnder = {
+  label: "Work",
+  glyph: "briefcase",
+  kind: "managed",
+  isDefault: true,
+  agents: orderAgents(
+    launcherAgents(PROVIDERS, [], {
+      label: "Work",
+      kind: "managed",
+      personas: PROVIDERS.slice(0, 2).map((provider) => ({
+        profileId: `work-${provider.id}`,
+        provider: provider.id,
+        label: provider.label,
+        kind: "managed" as const,
+        createdAt: "2026-09-28T00:00:00.000Z",
+      })),
+    }),
+  ).slice(0, 10),
+};
+const noSignIn = UNDER_WORK.agents?.findIndex((agent) => agent.unavailable === NO_SIGN_IN) ?? -1;
+const noSignInAgent = UNDER_WORK.agents?.[noSignIn];
 const FIRST = AGENTS[0]?.providerId;
 const SECOND = AGENTS[1]?.providerId;
 
@@ -141,6 +167,8 @@ interface LauncherSpecimen {
   height?: number;
   /** A launch in this pane (QL-2): the launch's face instead of the launcher's. */
   launch?: { phase: "starting" | "opening"; elapsedMs: number };
+  /** The Agent Profile the pane's shell was born under (SB-3), with its agents. */
+  under?: LauncherUnder;
 }
 
 const READY: LauncherHistoryStatus = { readiness: "ready" };
@@ -221,6 +249,19 @@ const SPECIMENS: readonly LauncherSpecimen[] = [
     caption: "the agent runs in the pane — the grid reaches the corners until its first frame",
     launch: { phase: "opening", elapsedMs: 3_100 },
   },
+  {
+    id: "under-work",
+    caption:
+      "a shell born under Work — New · Under Work, Work's own agents, and one it holds no sign-in for, off",
+    under: UNDER_WORK,
+  },
+  {
+    id: "under-work-no-sign-in",
+    caption: "…and a click on that one says why — the launch would run under Work, which has none",
+    under: UNDER_WORK,
+    hoverIndex: noSignIn,
+    ...(noSignInAgent !== undefined ? { failure: cantLaunchLine(noSignInAgent) } : {}),
+  },
   { id: "narrow", caption: "narrow — under 250px, five marks and Resume…", width: 240 },
   { id: "short", caption: "short — under 220px tall, the marks in one row", height: 200 },
 ];
@@ -235,6 +276,7 @@ function Specimen({
   const scope = specimen.scope ?? "here";
   const query = specimen.query ?? "";
   const folder = launcherFolder(CWD);
+  const agents = specimen.under?.agents ?? AGENTS;
   const sessions = specimen.sessions === undefined ? SESSIONS : specimen.sessions;
   const results =
     specimen.open === true && sessions !== false
@@ -244,7 +286,7 @@ function Specimen({
           query,
           scope,
           folder,
-          agents: AGENTS,
+          agents,
           nowMs: NOW,
         })
       : undefined;
@@ -293,7 +335,8 @@ function Specimen({
         ) : (
           <PaneLauncherChrome
             sessionId={`catalog-${specimen.id}`}
-            agents={AGENTS}
+            agents={agents}
+            {...(specimen.under ? { under: specimen.under } : {})}
             folder={folder}
             color={PANE_COLOR}
             active={specimen.active ?? true}

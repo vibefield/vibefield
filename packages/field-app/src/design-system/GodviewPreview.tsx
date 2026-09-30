@@ -13,6 +13,7 @@ import {
 } from "../godview/GodviewTuningPanel";
 import { GodviewAgentsProvider } from "../godview/monitor/GodviewAgentsProvider";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
+import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
 
 /** Runtime-free composition of the production Godview shell and monitor. The
  * terminal bridge is deliberately absent and therefore renders the same honest
@@ -21,9 +22,19 @@ import type { MonitorDoor } from "../godview/monitor/remote-door";
  * opens because it draws without WebGPU, which a catalog host may lack (the
  * swarm's bodies have their own page, on the shipping view). A `door` — the
  * profile tabs' fixture (AR-S5) — puts a fold and its profiles on the stage;
- * without one nobody is asked, and the stage says so. */
-export function GodviewPreview({ door = null }: { door?: MonitorDoor | null } = {}): ReactElement {
-  const [viewId, setViewId] = useState("list");
+ * without one nobody is asked, and the stage says so. `panes` are a deck's facts
+ * as a fixture keeps them (the spawn bloom's births, SB-3), and `initialView`
+ * opens another view — the swarm, where a host has WebGPU to draw it. */
+export function GodviewPreview({
+  door = null,
+  panes,
+  initialView = "list",
+}: {
+  door?: MonitorDoor | null;
+  panes?: MonitorPaneFacts;
+  initialView?: string;
+} = {}): ReactElement {
+  const [viewId, setViewId] = useState(initialView);
   const [theme, setTheme] = useState<GodviewTheme>("light");
   const [tuningOpen, setTuningOpen] = useState(false);
   const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning("light"));
@@ -62,6 +73,7 @@ export function GodviewPreview({ door = null }: { door?: MonitorDoor | null } = 
               view={view}
               parameters={parameters}
               door={door}
+              {...(panes !== undefined ? { panes } : {})}
               theme={theme}
               tuningOpen={tuningOpen}
               onSelectView={setViewId}

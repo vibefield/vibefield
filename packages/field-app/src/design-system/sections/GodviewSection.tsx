@@ -4,6 +4,7 @@ import { GodviewPreview } from "../GodviewPreview";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
 import { PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
+import { SpawnBloomPreview } from "../SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 import { TerminalMirrorPreview } from "../TerminalMirrorPreview";
 import { TerminalSessionPickerPreview } from "../TerminalSessionPickerPreview";
@@ -28,6 +29,24 @@ export function GodviewSection(): ReactElement {
       >
         <div data-godview-profiles-catalog="">
           <GodviewPreview door={profilesDoor} />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Spawn bloom — hold empty ground, reach a profile, let go"
+        source="@vibecook/puppeteer-views/views/swarm/AgentSwarm.tsx"
+        bleed
+      >
+        <div data-spawn-bloom-catalog="">
+          <SpawnBloomPreview view="swarm" />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Spawn bloom — the list's ＋ TERMINAL offers the same tree, in two steps"
+        source="@vibecook/puppeteer-views/views/list/AgentList.tsx"
+        bleed
+      >
+        <div data-spawn-bloom-list-catalog="">
+          <SpawnBloomPreview view="list" />
         </div>
       </Specimen>
       <Specimen

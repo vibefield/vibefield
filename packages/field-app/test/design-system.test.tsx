@@ -251,6 +251,45 @@ describe("design system page", () => {
     expect(frame("posture").textContent).toContain("This daemon is not reporting preferences");
   });
 
+  it("mounts the spawn bloom on the shipping monitor with its fixture door, and a create lands as a new terminal (SB-3)", async () => {
+    const bloom = container?.querySelector<HTMLElement>("[data-spawn-bloom-catalog]");
+    if (!bloom) throw new Error("Spawn bloom catalog not found");
+    // The SHIPPING swarm view: happy-dom has no WebGPU, so it draws its honest
+    // line and its keyboard list — the fixture's three agents — and the profile
+    // tabs the fixture's managed profiles call for.
+    expect(bloom.querySelector(".vf-monitor-swarm")?.getAttribute("data-swarm-renderer")).toBe(
+      "unavailable",
+    );
+    expect(bloom.querySelectorAll(".vf-monitor-swarm-list li button")).toHaveLength(3);
+    expect(bloom.querySelector('[data-profile-tab="work"]')).not.toBeNull();
+    expect(bloom.querySelector('[data-profile-tab="demo"]')).not.toBeNull();
+
+    // The list view: its ＋ asks the fixture door, which answers `mounted`, and
+    // the catalog keeps the birth as a deck would — a new terminal row.
+    const list = container?.querySelector<HTMLElement>("[data-spawn-bloom-list-catalog]");
+    if (!list) throw new Error("Spawn bloom list catalog not found");
+    const before = list.querySelectorAll(".vf-monitor-list-row").length;
+    await act(async () => list.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    expect(list.querySelectorAll(".vf-monitor-list-row")).toHaveLength(before + 1);
+    expect(list.querySelector(".vf-monitor-ack")?.textContent).toBe(
+      "terminal opened in the active pane",
+    );
+  });
+
+  it("shows the launcher of a pane born under a profile — New · Under Work, and an agent with no sign-in (SB-3)", () => {
+    const captions = Array.from(container?.querySelectorAll(".vf-pane-launcher-cap-under") ?? []);
+    // two specimens, each in the light and the dark deck
+    expect(captions).toHaveLength(4);
+    for (const caption of captions) expect(caption.textContent).toContain("Under Work");
+    expect(
+      captions[0]?.parentElement?.parentElement?.querySelector('[data-profile-glyph="briefcase"]'),
+    ).not.toBeNull();
+    expect(
+      container?.querySelector('.vf-pane-launcher-agent.is-off[title$="· no sign-in"]'),
+    ).not.toBeNull();
+    expect(container?.textContent).toContain("can’t launch: no sign-in");
+  });
+
   it("keeps the swarm's state matrix live and inspectable", async () => {
     const catalog = container?.querySelector<HTMLElement>("[data-swarm-bodies-catalog]");
     if (!catalog) throw new Error("Swarm bodies catalog not found");
