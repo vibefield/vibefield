@@ -12,9 +12,88 @@ import {
   diffFieldRows,
   FieldProjection,
   folderNameOf,
+  malformedBoardAsk,
   projectFieldRow,
+  refuseBoardAsk,
 } from "../src/agent-field";
 import { managedSummary as summary } from "./agent-field-summary";
+
+// S2 (the landing review, 2026-10-01) — who may ask which board, as ONE pure
+// function the handler and the subscription forwarder both ask: every refusal,
+// and the asks that stand, by principal kind.
+describe("refuseBoardAsk — who may ask which board", () => {
+  const refused = (principal: string, ask: Parameters<typeof refuseBoardAsk>[1]) => {
+    const error = refuseBoardAsk(principal, ask);
+    return error === null
+      ? null
+      : { kind: error.kind, retryable: error.retryable, details: error.details };
+  };
+
+  it("keeps the full fold on its device: refused to a peer, to the mesh, and with a cadence it cannot honour", () => {
+    // absent params ARE the full fold
+    expect(refused("peer-fieldd", {})).toEqual({
+      kind: "FORBIDDEN_SCOPE",
+      retryable: false,
+      details: { projection: "full" },
+    });
+    expect(refused("peer-fieldd", { projection: "full" })?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(refused("local-token", { projection: "full", scope: "mesh" })?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect(refused("local-token", { projection: "full", minIntervalMs: 250 })?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect(refused("local-token", { heartbeatMs: 1_000 })?.kind).toBe("PRECONDITION_FAILED");
+    // …and a window, the shell and the phone read it here as they always have
+    for (const principal of ["local-token", "shell-main", "tailnet", "plugin"])
+      expect(refused(principal, {}), principal).toBeNull();
+  });
+
+  it("keeps the desk off the phone (SP-L4) — and serves it to a window and a self peer daemon", () => {
+    expect(refused("tailnet", { projection: "desk" })).toEqual({
+      kind: "FORBIDDEN_SCOPE",
+      retryable: false,
+      details: { projection: "desk" },
+    });
+    expect(refused("tailnet", { projection: "desk", scope: "mesh" })?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(refused("local-token", { projection: "desk" })).toBeNull();
+    expect(refused("peer-fieldd", { projection: "desk", minIntervalMs: 100 })).toBeNull();
+    expect(refused("local-token", { projection: "desk", scope: "mesh" })).toBeNull();
+  });
+
+  it("keeps the mesh for this desktop's clients (DS-L4), without a heartbeat", () => {
+    for (const projection of ["field", "desk"] as const) {
+      expect(refused("peer-fieldd", { projection, scope: "mesh" }), projection).toEqual({
+        kind: "FORBIDDEN_SCOPE",
+        retryable: false,
+        details: { scope: "mesh" },
+      });
+      expect(
+        refused("local-token", { projection, scope: "mesh", heartbeatMs: 1_000 }),
+        projection,
+      ).toMatchObject({ kind: "PRECONDITION_FAILED" });
+    }
+    expect(refused("tailnet", { projection: "field", scope: "mesh" })).toBeNull();
+    expect(refused("local-token", { projection: "field", scope: "mesh" })).toBeNull();
+  });
+
+  it("lets the content-free field through for everyone who reaches the door", () => {
+    for (const principal of ["tailnet", "local-token", "peer-fieldd", "shell-main"]) {
+      expect(refused(principal, { projection: "field" }), principal).toBeNull();
+      expect(
+        refused(principal, { projection: "field", minIntervalMs: 250, heartbeatMs: 1_000 }),
+        principal,
+      ).toBeNull();
+    }
+  });
+
+  it("says what a malformed ask should have been", () => {
+    const error = malformedBoardAsk();
+    expect(error.kind).toBe("PRECONDITION_FAILED");
+    expect(error.retryable).toBe(false);
+    expect(error.message).toContain('projection?: "full" | "field" | "desk"');
+  });
+});
 
 // MF-1 (§5, §10.2) — the field projection, its revision counters, and one
 // subscriber's cadence. The fold rows come from `agent-field-summary.ts`,

@@ -141,7 +141,13 @@ import {
   pluginLogProvenance,
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
-import { createFieldSubscription, projectDeskRow, projectFieldRow } from "./agent-field";
+import {
+  createFieldSubscription,
+  malformedBoardAsk,
+  projectDeskRow,
+  projectFieldRow,
+  refuseBoardAsk,
+} from "./agent-field";
 import { AgentFieldPublisher } from "./agent-field-publisher";
 import {
   type AgentGatewayOptions,
@@ -2368,56 +2374,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // door (`mesh-board.ts`, DS-D4).
     api.registerSubscription("agent.subscribe", (ctx, params, emit) => {
       const parsed = AgentSubscribeParams.safeParse(params ?? {});
-      if (!parsed.success)
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          'expected { projection?: "full" | "field" | "desk", scope?: "local" | "mesh", minIntervalMs?: number, heartbeatMs?: number }',
-          false,
-        );
+      if (!parsed.success) throw malformedBoardAsk();
+      // S2 (the landing review, 2026-10-01) — who may ask which board lives in
+      // ONE function, because the subscription forwarder below asks it too, of
+      // the caller a routed ask is for (`agent-field.ts` `refuseBoardAsk`): the
+      // full fold stays on its device, the desk is for desktops (SP-L4), the
+      // mesh is this desktop's clients' (DS-L4), and an unhonourable cadence
+      // option is refused (MF-1h).
+      const refusal = refuseBoardAsk(ctx.principal.kind, parsed.data);
+      if (refusal !== null) throw refusal;
       const { minIntervalMs, heartbeatMs } = parsed.data;
       const projection = parsed.data.projection ?? "full";
       const scope = parsed.data.scope ?? "local";
-      const principal = ctx.principal.kind;
       if (projection === "full") {
-        // DS-D4 — the whole fold row stays on its device. The door became
-        // `stream` for the board's sake (a peer daemon asks it), so the wall
-        // that used to refuse a peer outright is this line for `full`.
-        if (principal === "peer-fieldd")
-          throw new RpcCallError(
-            "FORBIDDEN_SCOPE",
-            "the full projection is local to its device; a peer reads field or desk (DS-D4)",
-            false,
-            { projection },
-          );
-        if (scope === "mesh")
-          throw new RpcCallError(
-            "PRECONDITION_FAILED",
-            "the mesh board is the field or desk projection; full is local to its device",
-            false,
-          );
-        // MF-1h — an option that cannot be honoured is refused, not ignored: a
-        // caller that asked for a cadence and silently got the desktop's 16 ms
-        // tick would have no way to learn it asked the wrong question.
-        if (minIntervalMs !== undefined || heartbeatMs !== undefined)
-          throw new RpcCallError(
-            "PRECONDITION_FAILED",
-            `${minIntervalMs !== undefined ? "minIntervalMs" : "heartbeatMs"} applies to the field projection and the desk projection`,
-            false,
-          );
         const dispose = agents.subscribe((rows) => emit(rows));
         return { snapshot: agents.list(), dispose };
       }
-      // SP-L4 — every subscription a phone opens is content-free. The desk's
-      // content is for this person's DESKTOPS: a window here, or a self peer
-      // daemon relaying its board to a window there. Decided by the
-      // principal's kind, never by its transport.
-      if (projection === "desk" && principal === "tailnet")
-        throw new RpcCallError(
-          "FORBIDDEN_SCOPE",
-          "the desk projection carries content for this person's desktops; a phone reads field (SP-L4)",
-          false,
-          { projection },
-        );
       const floor =
         projection === "desk"
           ? Math.max(
@@ -2426,23 +2398,6 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             )
           : (minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS);
       if (scope === "mesh") {
-        // DS-L4 — a peer reads a device's OWN board; aggregation is for this
-        // device's clients. A peer asking for the mesh would be one daemon
-        // aggregating another's aggregate, and two desktops asking each other
-        // would loop.
-        if (principal === "peer-fieldd")
-          throw new RpcCallError(
-            "FORBIDDEN_SCOPE",
-            "a peer reads a desktop's own board; the mesh board is this desktop's clients' (DS-L4)",
-            false,
-            { scope },
-          );
-        if (heartbeatMs !== undefined)
-          throw new RpcCallError(
-            "PRECONDITION_FAILED",
-            "heartbeatMs is asked of one desktop's board; the mesh board states each desktop's liveness itself",
-            false,
-          );
         if (meshBoard === null)
           throw new RpcCallError("UNAVAILABLE", "the mesh board is not ready yet", true, {
             service: "mesh-board",
@@ -4362,7 +4317,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       terminals.forwardVia((device, method, params, _ctx, envelope) =>
         peers.request(device, method, params, envelope),
       ),
-      (device, method, params, _ctx, emit) => federatedSubs.attach(device, method, params, emit),
+      // S2 (the landing review, 2026-10-01) — a routed board ask is judged for
+      // the CALLER here, before it is carried: the owner sees this daemon's
+      // `peer-fieldd` principal, never the phone behind it, so a phone asking
+      // `desk` of another desktop through its home would otherwise be served
+      // the content SP-L4 withholds. A routed `field` from the phone, and a
+      // window's routed `desk`, are carried as before.
+      (device, method, params, ctx, emit) => {
+        if (method === "agent.subscribe") {
+          const ask = AgentSubscribeParams.safeParse(params ?? {});
+          if (!ask.success) throw malformedBoardAsk();
+          const refusal = refuseBoardAsk(ctx.principal.kind, ask.data);
+          if (refusal !== null) throw refusal;
+        }
+        return federatedSubs.attach(device, method, params, emit);
+      },
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
     // DS-2 (DS-D15) — the receipt of one of THIS daemon's keyed forwards, so a

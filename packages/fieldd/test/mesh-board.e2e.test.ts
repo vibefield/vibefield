@@ -506,4 +506,51 @@ describe("DS-3 — the mesh board across two real daemons", () => {
     const wrong = await onA.callErr("agent.subscribe", { projection: "full", scope: "mesh" });
     expect(wrong.data?.kind).toBe("PRECONDITION_FAILED");
   }, 60_000);
+
+  // S2 (the landing review, 2026-10-01) — the desk-to-phone refusal held at the
+  // door the phone dialled and not past it: routed `{device: "dev-b"}`, A
+  // forwarded the ask whole, B saw A's `peer-fieldd` (which may read the desk)
+  // and served the reply line, the blocker's question and the cost to a phone.
+  // A judges a routed board ask for its CALLER before carrying it now.
+  it("a routed board ask is judged for its caller: the phone's desk is refused at its home, its field is carried, a window's desk is carried", async () => {
+    const { A, B } = await bootPair();
+    // the phone on its HOME's door (A): a WhoIs-verified self login, not a daemon
+    const ws = new WebSocket(A.door, { headers: { "Tailscale-User-Login": TEST_LOGIN } });
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const phone = new WsRpc(ws);
+    await phone.call("system.hello", {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind: "ios",
+    });
+
+    const desk = await phone.callErr("agent.subscribe", { device: "dev-b", projection: "desk" });
+    expect(desk.data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(desk.data?.details).toEqual({ projection: "desk" });
+    // refused HERE: nothing was carried to B, no upstream stands for it
+    expect(A.daemon.federatedSubs.size).toBe(0);
+
+    // the content-free field is the phone's, and it is carried as before
+    const field = (await phone.call("agent.subscribe", {
+      device: "dev-b",
+      projection: "field",
+    })) as { snapshot: { epoch?: string; rows: Array<{ runtimeRunId: string }> } };
+    expect(field.snapshot.rows.map((row) => row.runtimeRunId)).toEqual([B.run]);
+    expect(field.snapshot.epoch?.startsWith(`${B.daemon.bootId}.`)).toBe(true);
+    expect(A.daemon.federatedSubs.size).toBe(1);
+
+    // a window here asks B's desk through A, and B serves it to A's daemon
+    // (the mid-wave ruling: the desk is for this person's desktops)
+    const onA = await windowOn(A.daemon);
+    const windowDesk = (await onA.call("agent.subscribe", {
+      device: "dev-b",
+      projection: "desk",
+    })) as { snapshot: { epoch?: string; rows: Array<{ runtimeRunId: string }> } };
+    expect(windowDesk.snapshot.rows.map((row) => row.runtimeRunId)).toEqual([B.run]);
+    expect(windowDesk.snapshot.epoch?.startsWith(`${B.daemon.bootId}.`)).toBe(true);
+  }, 60_000);
 });

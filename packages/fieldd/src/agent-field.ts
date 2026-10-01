@@ -8,7 +8,103 @@ import {
   type AgentFieldSnapshot,
   type AgentListResult,
   type AgentSessionSummary,
+  type AgentSubscribeParams,
 } from "@vibefield/contracts";
+import { RpcCallError } from "./native-link";
+
+/** `agent.subscribe`'s answer to params that do not parse — the handler's, and
+ * the subscription forwarder's for a routed ask (`refuseBoardAsk`). */
+export function malformedBoardAsk(): RpcCallError {
+  return new RpcCallError(
+    "PRECONDITION_FAILED",
+    'expected { projection?: "full" | "field" | "desk", scope?: "local" | "mesh", minIntervalMs?: number, heartbeatMs?: number }',
+    false,
+  );
+}
+
+/**
+ * WHO may ask WHICH board, in one place (the landing review, S2, 2026-10-01).
+ *
+ * `agent.subscribe`'s refusals used to live in its handler, and a routed ask
+ * (`{device}`) never reaches the handler on THIS daemon: ProductApi forwards it
+ * whole to the owner, which sees this daemon's `peer-fieldd` principal and not
+ * the caller behind it. So a phone could ask `desk` of another desktop through
+ * its home and be served the content SP-L4 withholds from it. The handler asks
+ * this of its own caller, and the subscription forwarder asks it of the CALLER
+ * before carrying the ask — the one place that caller's kind is known.
+ *
+ *  · `full` stays on its device: a peer is refused it, the mesh is never asked
+ *    for it, and the cadence options it cannot honour are refused (MF-1h);
+ *  · `desk` carries content for this person's DESKTOPS — a window, or a self
+ *    peer daemon relaying to one; a phone (`tailnet`) reads `field` (SP-L4);
+ *  · `scope: "mesh"` is this desktop's clients' aggregate: a peer reads a
+ *    desktop's OWN board (DS-L4), and the mesh states each desktop's liveness
+ *    itself, so `heartbeatMs` is refused there.
+ *
+ * Pure: the caller's principal kind and the parsed ask in, the refusal (or
+ * null) out. Availability (the mesh board not built yet) is not a refusal and
+ * stays with the handler.
+ */
+export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): RpcCallError | null {
+  const projection = ask.projection ?? "full";
+  const scope = ask.scope ?? "local";
+  const { minIntervalMs, heartbeatMs } = ask;
+  if (projection === "full") {
+    // DS-D4 — the whole fold row stays on its device. The door became `stream`
+    // for the board's sake (a peer daemon asks it), so the wall that used to
+    // refuse a peer outright is this line for `full`.
+    if (principal === "peer-fieldd")
+      return new RpcCallError(
+        "FORBIDDEN_SCOPE",
+        "the full projection is local to its device; a peer reads field or desk (DS-D4)",
+        false,
+        { projection },
+      );
+    if (scope === "mesh")
+      return new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the mesh board is the field or desk projection; full is local to its device",
+        false,
+      );
+    // MF-1h — an option that cannot be honoured is refused, not ignored: a
+    // caller that asked for a cadence and silently got the desktop's 16 ms tick
+    // would have no way to learn it asked the wrong question.
+    if (minIntervalMs !== undefined || heartbeatMs !== undefined)
+      return new RpcCallError(
+        "PRECONDITION_FAILED",
+        `${minIntervalMs !== undefined ? "minIntervalMs" : "heartbeatMs"} applies to the field projection and the desk projection`,
+        false,
+      );
+    return null;
+  }
+  // SP-L4 — every subscription a phone opens is content-free. Decided by the
+  // principal's kind, never by its transport.
+  if (projection === "desk" && principal === "tailnet")
+    return new RpcCallError(
+      "FORBIDDEN_SCOPE",
+      "the desk projection carries content for this person's desktops; a phone reads field (SP-L4)",
+      false,
+      { projection },
+    );
+  if (scope === "mesh") {
+    // DS-L4 — a peer asking for the mesh would be one daemon aggregating
+    // another's aggregate, and two desktops asking each other would loop.
+    if (principal === "peer-fieldd")
+      return new RpcCallError(
+        "FORBIDDEN_SCOPE",
+        "a peer reads a desktop's own board; the mesh board is this desktop's clients' (DS-L4)",
+        false,
+        { scope },
+      );
+    if (heartbeatMs !== undefined)
+      return new RpcCallError(
+        "PRECONDITION_FAILED",
+        "heartbeatMs is asked of one desktop's board; the mesh board states each desktop's liveness itself",
+        false,
+      );
+  }
+  return null;
+}
 
 // MF-1 (thinking-godview-mobile-first.md §5/§10.2) — the FIELD projection: the
 // fold's rows with their content removed, and the revision machinery that lets
