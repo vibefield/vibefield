@@ -18,9 +18,11 @@ import {
   decodeDocSyncFrame,
   encodeDocSyncHave,
   encodeDocSyncRecord,
+  encodeDocSyncVersion,
   MESHDATA_INBOUND_LANE_ID_BASE,
   type MeshSyncPosture,
 } from "@vibefield/contracts";
+import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveSyncIntent } from "../src/app-preferences";
 import { contentIdOf, DocumentService } from "../src/doc-service";
@@ -953,5 +955,61 @@ describe("UA-P-0f — documents cross only within one account", () => {
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0).toBe(before);
     expect(control.closed).toContain(laneId);
+  });
+});
+
+describe("DS-5 — system documents and eager replication, at the service seam", () => {
+  it("a system document's commits reach only a peer that spoke VERSION for it", async () => {
+    // A pre-DS-5 desktop knows no system document: a legacy UPDATE for one
+    // would stand a phantom `unknown-doc` decline in ITS sync rows.
+    const { docs, bytes, sync, control } = harness(["peer-a"]);
+    await sync.start();
+    const doc = new LoroDoc();
+    const systemId = randomUUID();
+    docs.registerSystemDoc(systemId, "Library", doc, { persist: async () => {} });
+    doc.getMap("m").set("a", 1);
+    doc.commit(); // opens the lane; its greeting is a VERSION
+    await until(() => control.opened.some((o) => o.docId === systemId), "the system lane");
+    const lane = control.opened.find((o) => o.docId === systemId)?.laneId;
+    doc.getMap("m").set("b", 2);
+    doc.commit(); // the peer has not spoken VERSION: nothing travels
+    await new Promise((r) => setTimeout(r, 60));
+    const updates = () =>
+      bytes.sent.filter((s) => s.laneId === lane && s.kind === DOC_SYNC_RECORD.UPDATE);
+    expect(updates()).toHaveLength(0);
+    // The peer speaks VERSION: it is answered, and the next commit reaches it.
+    const inbound = MESHDATA_INBOUND_LANE_ID_BASE + 7;
+    control.announce({
+      kind: "peerOpened",
+      laneId: inbound,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId: systemId,
+      inbound: true,
+    });
+    bytes.deliver(
+      inbound,
+      encodeDocSyncVersion(
+        { baseEpoch: 0, hasCheckpoint: true, loro: 1 },
+        new LoroDoc().oplogVersion().encode(),
+      ),
+    );
+    await until(() => updates().length === 1, "the VERSION to be answered");
+    doc.getMap("m").set("c", 3);
+    doc.commit();
+    await until(() => updates().length === 2, "the next commit to reach the peer");
+  });
+
+  it("attaching liveness replicates at once: a roster already whole does not wait for its next change", async () => {
+    const { docs, control, sync, peerState } = harness([]);
+    const docId = await seeded(docs);
+    await sync.start();
+    expect(control.opened).toHaveLength(0);
+    peerState.set("peer-a", true);
+    sync.attachLiveness({ list: () => [{ id: "peer-a", online: true }], on: () => () => {} });
+    await until(
+      () => control.opened.some((o) => o.docId === docId && o.peer === "peer-a"),
+      "eager replication on attach",
+    );
   });
 });

@@ -196,6 +196,10 @@ interface Reassembly {
 
 /** Transfers in flight per peer before the oldest is dropped. */
 const MAX_TRANSFERS_PER_PEER = 4;
+/** The most slices one transfer may declare: the reassembly bound at 1 KiB a
+ * slice. A declared count sizes the parts table, so it is bounded on its own,
+ * not only through the byte length. */
+const MAX_CHUNKS_PER_TRANSFER = Math.ceil(DOC_SYNC_MAX_TRANSFER_BYTES / 1024);
 /** A chunked send waits while more than this many bytes are queued. */
 const PACE_WATERMARK_CHUNKS = 2;
 const PACE_DEADLINE_MS = 30_000;
@@ -429,6 +433,9 @@ export class DocSyncService {
     this.#livenessOff?.();
     this.#liveness = liveness;
     this.#livenessOff = liveness.on(() => this.#onLivenessChanged());
+    // DS-5 (DS-D7) — the roster may already be whole by the time it is
+    // attached; replicate now rather than wait for its next real change.
+    this.replicate();
   }
 
   /** Lanes are field-native's to reap when fieldd goes away; this only drops
@@ -909,7 +916,12 @@ export class DocSyncService {
         reason: why,
       });
     };
-    if (byteLength > DOC_SYNC_MAX_TRANSFER_BYTES || index >= count || count > byteLength) {
+    if (
+      byteLength > DOC_SYNC_MAX_TRANSFER_BYTES ||
+      count > MAX_CHUNKS_PER_TRANSFER ||
+      index >= count ||
+      count > byteLength
+    ) {
       refuse("out-of-bounds");
       return;
     }
@@ -1203,6 +1215,10 @@ export class DocSyncService {
         }
         continue;
       }
+      // A SYSTEM document travels only to a peer that spoke VERSION for it: a
+      // pre-DS-5 desktop knows no such document and would stand a phantom
+      // `unknown-doc` decline in its sync rows for every settings edit here.
+      if (this.#docs.isSystemDoc(commit.docId)) continue;
       await this.#send(
         lane.laneId,
         peer,
