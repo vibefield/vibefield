@@ -23,6 +23,15 @@ import type { SettingsDocService } from "./settings-doc";
 //   - revocation-bias is a MERGE-time tie-break — single-replica v1 has no
 //     concurrent merges to break, so apply() is a plain idempotent diff; the
 //     bias lands with the doc-sync track (recorded, thinking-p7);
+//     NOTE 2026-10-01 (the DS landing review, B1): the doc-sync track's host
+//     (DS-5) can merge a peer desktop's settings, and this is where design-06
+//     §4 puts the guard — "PA-32's revocation bias is the merge rule inside
+//     the reconciler". It is not built: an entry merges as one last-writer-wins
+//     value, so a desktop that was offline across a revocation could merge its
+//     whole entry back and apply() would re-grant. So the settings document is
+//     NOT registered with the host (`daemon.ts` mountSystemDocs) and this
+//     single-replica premise still holds. DS-5b builds the per-capability
+//     revocation stamps a grant must postdate, here, before settings cross;
 //   - a failed install parks honestly (logged; §16.6 version-skew) and is
 //     retried on the next reconcile, never crash-looped.
 

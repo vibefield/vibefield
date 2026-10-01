@@ -624,6 +624,17 @@ export class MockMgmtServer {
         reply({ result: { subId, snapshot: { peers: [...this.meshPeers] } } });
         return;
       }
+      case "native.mesh.lane.subscribe": {
+        // The lane table's stream, in the real forwarder's shape (`{subId,
+        // snapshot: {lanes}}`; no lane is open on a fresh floor). The generic
+        // `{}` answer below failed doc sync's start for want of a subId — which
+        // no suite noticed, because a suite needs a meshdata bridge as well to
+        // get that far (the landing review's B1 witness binds one).
+        const subId = `s${this.nextSub++}`;
+        this.issued.push({ sock, subId, method: msg.method });
+        reply({ result: { subId, snapshot: { lanes: [] } } });
+        return;
+      }
       case "native.mesh.store.open": {
         const storeId = String(p["storeId"]);
         reply({ result: this.storeSnapshot(storeId) });

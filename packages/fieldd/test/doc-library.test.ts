@@ -205,6 +205,7 @@ describe("two desktops — the library and settings on the host", () => {
       const settings = new SettingsDocService({ dataDir });
       await settings.ready();
       device.docs.registerSystemDoc(libraryId, "Library", library.doc, library.hostOwner());
+      // The DS-5b witness in waiting: the daemon does not register settings yet (B1).
       device.docs.registerSystemDoc(
         settingsId,
         "Settings",

@@ -38,6 +38,15 @@ import type { SystemDocOwner } from "./doc-service";
 // and the install-set the reconciler applies). Undo stays this device's: the
 // UndoManager tracks local ops only, so a merged peer edit is never undone by
 // ⌘Z here (law 2 holds across devices too).
+//
+// CORRECTED 2026-10-01 (the DS landing review, B1): it does NOT ride the lanes
+// yet. Design-06 §4 lets settings cross only with PA-32's revocation bias as
+// the merge rule inside the install reconciler, and that bias is not built
+// (`install-reconciler.ts`): an install-set entry below is one last-writer-wins
+// value, so a merge could put back a grant another desktop revoked. The daemon
+// registers only the library with the host (`daemon.ts` mountSystemDocs);
+// `hostDoc()`/`hostOwner()` stay for DS-5b, which builds the per-capability
+// revocation stamps and then registers this document.
 
 export interface SettingsDocConfig {
   dataDir: string;
@@ -65,14 +74,21 @@ export class SettingsDocService extends EventEmitter {
     });
   }
 
-  /** DS-5 — the document the Loro-level host merges into. */
+  /** DS-5 — the document the Loro-level host merges into.
+   *
+   * Unused by the daemon until DS-5b (2026-10-01, the DS landing review B1:
+   * settings cross only once PA-32's revocation stamps are the merge rule); the
+   * harness in `doc-library.test.ts` exercises it. */
   hostDoc(): LoroDoc {
     return this.doc;
   }
 
   /** DS-5 — what the host needs after merging a peer's settings: persist (never
    * before this device's own file has loaded — a merge must not be written over
-   * a doc that has not read its disk yet), then tell every section's listeners. */
+   * a doc that has not read its disk yet), then tell every section's listeners.
+   *
+   * Unused by the daemon until DS-5b, like `hostDoc()`; the harness in
+   * `doc-library.test.ts` exercises it. */
   hostOwner(): SystemDocOwner {
     return {
       persist: async () => {

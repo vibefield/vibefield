@@ -12,26 +12,34 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  CONTRACTS_VERSION,
   type DocOpenResult,
   DocRegistryEntry,
   decodeJsonPayload,
   decodeLaneFrame,
   encodeJsonFrame,
   encodeLaneFrame,
+  encodeMeshDataFrame,
   LANE_FRAME,
   LaneErr,
   type LaneFrame,
   LaneHelloOk,
   LanePutOk,
+  MESHDATA_FRAME,
+  MeshDataFrameReader,
   SOCKETS,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, DocumentService, type FielddDaemon } from "../src/index";
+import { systemAccount, systemDocId } from "../src/library-doc";
+import { computeAckMac } from "../src/pairing";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -703,4 +711,106 @@ describe("doc.setSyncIntent (UA-D7)", () => {
     const reloaded = new DocumentService({ dataDir });
     expect(reloaded.syncIntentOf(entry.docId)).toBe("local");
   });
+});
+
+// DS landing review B1 (2026-10-01) — the settings document does NOT ride the
+// Loro host until DS-5b builds PA-32's revocation stamps (design-06 §4: they are
+// the merge rule inside the install reconciler, and it has none yet). A linked
+// daemon with a docHost peer replicates its system documents the moment the
+// roster names that peer; the witness is the floor's own record of the lanes it
+// was asked for (`meshLaneOpens`) — a lane IS the announcement: the library's
+// opens toward the peer, the settings document's never does.
+describe("the system documents a linked desktop hosts (DS-5, the landing review B1)", () => {
+  /** The meshdata bridge field-native would be: it accepts fieldd's HELLO and
+   * proves the pairing secret (WIN-10), so the daemon's doc sync starts. */
+  async function meshDataBridge(dataDir: string): Promise<void> {
+    const secretHex = "ab".repeat(32);
+    const sockets: Socket[] = [];
+    const server = createServer((sock) => {
+      sockets.push(sock);
+      const reader = new MeshDataFrameReader();
+      sock.on("data", (chunk: Buffer) => {
+        for (const frame of reader.push(new Uint8Array(chunk))) {
+          if (frame.kind !== MESHDATA_FRAME.HELLO) continue;
+          const hello = JSON.parse(new TextDecoder().decode(frame.payload)) as {
+            bootId: string;
+            nonce: string;
+          };
+          const proof = { serverMac: computeAckMac(secretHex, hello.nonce, hello.bootId) };
+          sock.write(
+            encodeMeshDataFrame(
+              MESHDATA_FRAME.HELLO_OK,
+              0,
+              new TextEncoder().encode(JSON.stringify(proof)),
+            ),
+          );
+        }
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(nativeEndpoint(dataDir, SOCKETS.MESHDATA), resolve),
+    );
+    cleanup.push(() => {
+      for (const sock of sockets) sock.destroy();
+      server.close();
+    });
+  }
+
+  it("hosts the library alone — the settings document is never announced to a peer", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-doc-sys-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    writeLinkFixture(dataDir); // a linked account: its system documents sync
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+    mock.meshDeviceId = "dev-a";
+    // one self desktop beside this one: the tailnet names it this account's…
+    mock.meshPeers = [
+      {
+        id: "node-b",
+        deviceId: "dev-b",
+        name: "desk-b",
+        online: true,
+        whois: { login: TEST_LOGIN, deviceName: "desk-b.tailnet.ts.net" },
+      },
+    ];
+    // …and its slice says docHost, DS-D7's desktop test
+    mock.storeSlices.set("dev-b", {
+      deviceId: "dev-b",
+      name: "desk-b",
+      platform: "darwin",
+      headless: false,
+      fielddVersion: "0.1.0",
+      contractsVersion: CONTRACTS_VERSION,
+      capabilities: { terminalHost: true, docHost: true, push: false },
+      bootId: "boot-b",
+      publishedAt: Date.now(),
+    });
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    await meshDataBridge(dataDir);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+
+    const account = systemAccount(TEST_LOGIN, undefined);
+    const libraryId = systemDocId("library", account);
+    const settingsId = systemDocId("settings", account);
+    await until(() => daemon.docs.systemDocIds().includes(libraryId), 8000);
+    expect(daemon.docs.systemDocIds()).toEqual([libraryId]);
+    expect(daemon.docs.isSystemDoc(settingsId)).toBe(false);
+
+    // The replication pass ran toward the peer — the library's lane was asked
+    // for. A registered settings document rides the SAME pass, enqueued ahead
+    // of the library (registration order), so its lane would be on record by
+    // now; it is not, and never was.
+    await until(
+      () =>
+        mock.meshLaneOpens.some(
+          (lane) =>
+            lane.protocol === "doc-sync" && lane.peer === "node-b" && lane.docId === libraryId,
+        ),
+      8000,
+    );
+    expect(mock.meshLaneOpens.map((lane) => lane.docId)).not.toContain(settingsId);
+  }, 30_000);
 });
