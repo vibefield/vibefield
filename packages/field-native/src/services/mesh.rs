@@ -278,6 +278,24 @@ impl MeshHandle {
         *self.shared.egress.lock().unwrap() = backend;
     }
 
+    /// DS-1b PROBE SEAM — install a node a test built itself, for the
+    /// `#[ignore]`d real-tailnet probes only.
+    ///
+    /// The floor's own bring-up drives an INTERACTIVE login, so the floor
+    /// cannot join a tailnet headlessly (the wall
+    /// [`Self::force_node_presence_for_tests`] names). The probe harness can:
+    /// it builds a node from the auth key in `.env` (`tests/common/mod.rs`).
+    /// A probe that must witness the FACADE over a REAL node (the egress verbs
+    /// through truffle's RFC 026 egress, `tests/mesh_egress_probe.rs`) hands
+    /// that node here, and every reader of the node watch sees it as the floor's
+    /// own. It sets no posture (`mode()` stays `None`: neither capture's belt
+    /// nor a linked login is claimed), and a teardown drops it like any node.
+    /// Nothing in the product calls it.
+    #[doc(hidden)]
+    pub fn install_node_for_tests(&self, node: Arc<MeshNode>) {
+        self.shared.node.send_replace(Some(node));
+    }
+
     /// The gateway's own health, for a consumer that must decide whether
     /// waiting for a node is still worth doing (GT-4a's terminal mesh). A
     /// `disabled`/`degraded` gateway will never produce one, and its `detail`
