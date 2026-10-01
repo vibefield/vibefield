@@ -22,7 +22,8 @@ import { RpcCallError } from "./native-link";
 //    reads that outcome instead of executing again, and one that arrives while
 //    the first is still running waits for it. A key reused for a DIFFERENT call
 //    (another method, other params) is refused, never answered with a stranger's
-//    outcome.
+//    outcome. A RETRYABLE refusal is the exception (S5, 2026-10-01): nothing
+//    applied, so it leaves no receipt and the same-key retry executes again.
 //  - the CALLER's (`CallerForwardJournal`, PeerLink): what this daemon knows
 //    about its own forwards. A forward that was SENT and then lost its answer
 //    (the link cut mid-flight, or no answer within FORWARD_TIMEOUT_MS) is
@@ -190,6 +191,7 @@ export class OwnerForwardJournal {
       }),
     };
     this.entries.set(id, entry);
+    let retryable = false;
     try {
       const result = await execute();
       entry.state = "applied";
@@ -205,9 +207,19 @@ export class OwnerForwardJournal {
       entry.state = "refused";
       entry.at = this.now();
       entry.error = storedError(error, this.opts.resultBytes ?? RECEIPT_RESULT_BYTES);
+      retryable = entry.error.retryable;
       throw error;
     } finally {
       settle();
+      // S5 (the landing review, 2026-10-01) — a RETRYABLE refusal is not an
+      // outcome: nothing applied, and its own word says asking again may work
+      // (this daemon's UNAVAILABLE "starting", say). Journaled, it was replayed
+      // for RECEIPT_TTL_MS, so a caller that lost the answer and retried with
+      // the same key read the stale refusal for a day. It leaves no receipt:
+      // the entry goes once settled, and the same-key retry executes again. An
+      // arrival that was already waiting on THIS attempt holds the entry and
+      // answers its refusal — never a second, parallel execution.
+      if (retryable && this.entries.get(id) === entry) this.entries.delete(id);
       this.trim();
     }
   }

@@ -127,6 +127,85 @@ describe("the owner's journal", () => {
     expect(journal.receipt("dev-a", KEY)).toMatchObject({ state: "refused", error: "NOT_FOUND" });
   });
 
+  // S5 (the landing review, 2026-10-01) — a retryable refusal applied nothing
+  // and says asking again may work; journaled, the same-key retry read it for
+  // RECEIPT_TTL_MS. It leaves no receipt now.
+  it("a RETRYABLE refusal leaves no receipt: the same-key retry executes again, and can apply", async () => {
+    const { journal } = ownerJournal();
+    let tries = 0;
+    const act = async () => {
+      tries += 1;
+      if (tries === 1)
+        throw new RpcCallError("UNAVAILABLE", "the agent runtime is starting", true, {
+          service: "agents",
+          state: "starting",
+        });
+      return { accepted: true, n: tries };
+    };
+    await expect(journal.run(call(), act)).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+    });
+    expect(journal.receipt("dev-a", KEY)).toBeUndefined();
+    expect(journal.size()).toBe(0);
+    // the retry RUNS (it is not answered from a stale refusal) and applies once
+    expect(await journal.run(call(), act)).toEqual({ accepted: true, n: 2 });
+    expect(await journal.run(call(), act)).toEqual({ accepted: true, n: 2 });
+    expect(tries).toBe(2);
+    expect(journal.receipt("dev-a", KEY)).toMatchObject({ state: "applied" });
+  });
+
+  it("a NON-retryable refusal is still journaled and replayed without executing", async () => {
+    const { journal } = ownerJournal();
+    let tries = 0;
+    const act = async () => {
+      tries += 1;
+      throw new RpcCallError("PRECONDITION_FAILED", "the run already exited", false, {
+        runtimeRunId: "run-1",
+      });
+    };
+    await expect(journal.run(call(), act)).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    await expect(journal.run(call(), act)).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      retryable: false,
+    });
+    expect(tries).toBe(1);
+    expect(journal.receipt("dev-a", KEY)).toMatchObject({
+      state: "refused",
+      error: "PRECONDITION_FAILED",
+    });
+  });
+
+  it("an arrival waiting on a retryable refusal answers THAT refusal — one execution, never two in parallel", async () => {
+    const { journal } = ownerJournal();
+    let tries = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const act = async () => {
+      tries += 1;
+      await gate;
+      throw new RpcCallError("UNAVAILABLE", "the agent runtime is starting", true, {
+        service: "agents",
+        state: "starting",
+      });
+    };
+    const first = journal.run(call(), act);
+    const second = journal.run(call(), act); // the duplicate, while the first runs
+    release();
+    await expect(first).rejects.toMatchObject({ kind: "UNAVAILABLE", retryable: true });
+    await expect(second).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "agents", state: "starting" },
+    });
+    expect(tries).toBe(1);
+    // …and with both answered, nothing is left to replay
+    expect(journal.receipt("dev-a", KEY)).toBeUndefined();
+    expect(journal.size()).toBe(0);
+  });
+
   it("a key reused for a different call is refused and never answered with the other call's outcome", async () => {
     const { journal } = ownerJournal();
     await journal.run(call(), async () => ({ accepted: true }));
